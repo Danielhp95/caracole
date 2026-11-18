@@ -1,21 +1,24 @@
 """A song of yours opened on the library page (card.js, card.css), in a real browser: what you play from it as tiles,
-each source's versions of each as chips that open one drawer under the row of tiles that holds its tile, its
+each with a chevron that opens one drawer right under it (its downloads, then a part a source of its versions), its
 progressions, where else to find it, and its foot, Remove at its end; on the file on disk, and on the page caracole
 serve serves (here, as it writes it: its data and its forms, with no server behind them).
 
 A test adds a script after the page's own (``with_script``), which opens the song's card and notes what it shows
-(``KIT``: ``noteCard``, ``noteDrawer``) into an attribute of the body, read back from the DOM once the page ran.
+(``KIT``: ``noteCard``, ``drawerOf``, ``noteDrawer``) into an attribute of the body, read back from the DOM once the
+page ran.
 """
 
 from __future__ import annotations
 
 import json
+import time
+from contextlib import contextmanager
 from urllib.parse import quote
 
 import pytest
 import test_web_page_again as served_page
 from helpers import cards
-from helpers.browser import CHROMIUM_MARKS, Browser, BrowserError
+from helpers.browser import CHROMIUM_MARKS, FINE_POINTER, Browser, BrowserError
 from helpers.library_songs import EXPORT, LACUERDA, hotel_california, with_versions
 from test_library_page import NOW, attribute_of, dump_dom, page, put, with_script
 
@@ -49,16 +52,14 @@ const noteCard = (title) => {
   const panel = cardOf(line);
   const tiles = Array.from(panel.querySelectorAll(".tiles > .tile")).map((t) => {
     const open = t.querySelector(".tile-open");
+    const more = t.querySelector(":scope > button.tile-more");
+    const link = t.querySelector(":scope > a.tile-source");
     return {
       cls: t.className, name: text(t.querySelector(".tile-name")), from: text(t.querySelector(".tile-from")),
       href: open.getAttribute("href"), said: open.getAttribute("aria-label"), download: open.getAttribute("download"),
-      lead: text(t.querySelector(".tile-versions .lead")),
-      chips: Array.from(t.querySelectorAll(".tile-versions .vchip")).map((c) => ({
-        tag: c.tagName.toLowerCase(), source: c.dataset.source || (c.querySelector("[data-source]") || {}).dataset?.source
-          || null, n: text(c.querySelector(".n")), said: c.getAttribute("aria-label") || text(c.querySelector(".vchip-name")),
-        expanded: c.getAttribute("aria-expanded") })),
-      downloads: Array.from(t.querySelectorAll(".tile-downloads a")).map((a) => ({ text: text(a),
-        said: a.getAttribute("aria-label"), href: a.getAttribute("href"), download: a.getAttribute("download") })),
+      sources: Array.from(t.querySelectorAll(".tile-source [data-source]")).map((m) => m.dataset.source),
+      link: link ? link.getAttribute("href") : null, more: more ? more.getAttribute("aria-label") : null,
+      expanded: more ? more.getAttribute("aria-expanded") : null,
     };
   });
   const parts = Array.from(panel.children).filter((c) => !c.matches(".card-top"))  // the mark at its top: no part
@@ -66,20 +67,36 @@ const noteCard = (title) => {
     c.tagName.toLowerCase());
   return { tiles, parts, foot: Array.from(panel.querySelectorAll(".foot button, .foot a")).map(text) };
 };
-const noteDrawer = (title) => {
+// The song's card opened, and its tile of ``kind``'s drawer (a press of its chevron, unless that drawer shows); the
+// chevron.
+const drawerOf = (title, kind) => {
+  const more = openCardOf(lineOf(title)).querySelector(".tile-" + kind + " > button.tile-more");
+  if (more.getAttribute("aria-expanded") !== "true") more.click();
+  return more;
+};
+// The card's drawer: where it is, what labels it, its downloads, its parts' sources; and what the part of ``source``
+// shows (the first part's, when none is given), as each source's drawer did.
+const noteDrawer = (title, source) => {
   const d = cardOf(lineOf(title)).querySelector(".drawer");
-  return { hidden: d.hidden, id: d.id, what: text(d.querySelector(".drawer-what")),
-    said: text(d.querySelector(".drawer-said")), after: d.previousElementSibling.className,
-    head: Array.from(d.querySelectorAll(".drawer-head button, .drawer-head form")).map(text),
-    rows: Array.from(d.querySelectorAll(".vrow")).map((r) => ({ cls: r.className, ver: text(r.querySelector(".ver")),
+  const parts = Array.from(d.querySelectorAll(":scope > .drawer-part"));
+  const p = (source ? parts.find((x) => x.dataset.source === source) : parts[0]) || null;
+  const q = (sel) => (p ? p.querySelector(sel) : null);
+  const all = (sel) => (p ? Array.from(p.querySelectorAll(sel)) : []);
+  const label = d.getAttribute("aria-labelledby");
+  return { hidden: d.hidden, id: d.id, after: d.previousElementSibling ? d.previousElementSibling.className : null,
+    label: label ? text(document.getElementById(label)) : null, tile: d.dataset.tile || null,
+    files: Array.from(d.querySelectorAll(":scope > .drawer-files a.dl")).map((a) => ({ text: text(a),
+      said: a.getAttribute("aria-label"), href: a.getAttribute("href"), download: a.getAttribute("download") })),
+    parts: parts.map((x) => x.dataset.source),
+    what: text(q(".drawer-what")), said: text(q(".drawer-said")),
+    head: all(".drawer-head button, .drawer-head form").map(text),
+    rows: all(".vrow").map((r) => ({ cls: r.className, ver: text(r.querySelector(".ver")),
       stars: text(r.querySelector(".stars")), note: text(r.querySelector(".note")),
       acts: Array.from(r.querySelectorAll(".vbtns > *")).map(text),
       open: (r.querySelector("a.go") || { getAttribute: () => null }).getAttribute("href") })),
-    rest: text(d.querySelector(".drawer-rest .rest-said")), command: text(d.querySelector(".drawer-rest code")),
-    restButtons: Array.from(d.querySelectorAll(".drawer-rest button")).map(text) };
+    rest: text(q(".drawer-rest .rest-said")), command: text(q(".drawer-rest code")),
+    restButtons: all(".drawer-rest button").map(text) };
 };
-const chipOf = (title, source, kind) => openCardOf(lineOf(title))  // its card opened (made, the first time)
-  .querySelector(".tile" + (kind ? ".tile-" + kind : "") + ' button.vchip[data-source="' + source + '"]');
 const note = (name, value) => document.body.setAttribute("data-" + name, JSON.stringify(value));
 """
 
@@ -120,16 +137,39 @@ def test_tiles_in_order_with_their_open_links(conn, cfg, tmp_path):
     # From the file, a Guitar Pro file and a MusicXML score download under the song's name.
     assert tiles[1]["download"] == "Eagles - Hotel California.gp5" and tiles[0]["download"] is None
     assert tiles[5]["download"] == "Eagles - Hotel California.mxl"
-    assert [t["from"] for t in tiles] == ["Ver 3 · 4.86★ · in use", "guitar-1.gp5", "a text tab", "Tab 1",
+    assert [t["from"] for t in tiles] == ["Ver 3 · ★ 4.86 (408) · in use", "guitar-1.gp5", "a text tab", "Tab 1",
                                           "timed", "Score 1 (MusicXML)"]
-    assert [d["text"] for d in tiles[1]["downloads"]] == [".gp5"] and [d["text"] for d in tiles[2]["downloads"]] == [
-        "Text"]
     assert not any("primary" in t["cls"].split() for t in tiles)  # none first
     # Served with alphaTab, the Guitar Pro tile opens caracole serve's Guitar Pro page.
     served = attribute_of(run(conn, cfg, tmp_path, 'note("card", noteCard("Hotel California"));', controls=SERVED),
                           "data-card")["tiles"][1]
     assert served["href"].startswith("guitar?file=") and served["download"] is None
     assert served["said"] == "Open the Guitar Pro tab of Hotel California"
+
+
+def test_each_tiles_drawer_holds_its_downloads_and_a_part_a_source(conn, cfg, tmp_path):
+    hotel(conn, cfg)
+    script = """const card = noteCard("Hotel California");
+    const kinds = ["sheet", "guitar", "tab", "harmonica", "lyrics", "score"];
+    note("drawers", { more: card.tiles.map((t) => t.more), sources: card.tiles.map((t) => t.sources),
+      stacks: card.tiles.map((t) => t.cls.split(" ").includes("stack")), expanded: card.tiles.map((t) => t.expanded),
+      drawers: kinds.map((k) => { drawerOf("Hotel California", k); const d = noteDrawer("Hotel California");
+        return [d.tile, d.after.split(" ")[1], d.files.map((f) => f.text), d.parts]; }),
+      open: cardOf(lineOf("Hotel California")).querySelectorAll(".drawer:not([hidden])").length });"""
+    shown = attribute_of(run(conn, cfg, tmp_path, script), "data-drawers")
+    assert shown["more"] == ["Chord sheet: its versions and downloads", "Guitar Pro: its files and downloads",
+                             "Guitar tab: its downloads", "Harmonica tab: its downloads", "Lyrics: its downloads",
+                             "Score: its downloads"]
+    assert shown["sources"] == [["ug", "lacuerda"], ["gtptabs", "inbox"], [], ["harptabs"], ["lrclib"], ["inbox"]]
+    assert shown["drawers"] == [
+        ["sheet", "tile-sheet", ["PDF", "Text", "ChordPro", "PDF · G Dorian, capo 0"], ["ug", "lacuerda", "auto"]],
+        ["guitar", "tile-guitar", [".gp5"], ["gtptabs", "inbox"]], ["tab", "tile-tab", ["Text"], []],
+        ["harmonica", "tile-harmonica", ["Text"], []], ["lyrics", "tile-lyrics", ["Text", "Timed (.lrc)"], []],
+        ["score", "tile-score", ["MusicXML"], []]]
+    assert shown["open"] == 1  # one at a time, right after its own tile
+    # More than one version: a small stack. Every drawer closed at first.
+    assert shown["stacks"] == [True, True, False, False, False, False]
+    assert shown["expanded"] == ["false"] * 6
 
 
 def test_lyrics_from_megalobiz_link_back_to_their_page_from_the_tile(conn, cfg, tmp_path):
@@ -144,13 +184,14 @@ def test_lyrics_from_megalobiz_link_back_to_their_page_from_the_tile(conn, cfg, 
         url=url).to_json())
     script = """
     openCard("Hotel California");
-    const chip = cardOf(lineOf("Hotel California")).querySelector(".tile-lyrics .tile-versions .vchip");
-    note("chip", { tag: chip.tagName.toLowerCase(), href: chip.getAttribute("href"), target: chip.target,
-                   rel: chip.rel, said: chip.getAttribute("aria-label"), name: text(chip.querySelector(".vchip-name")) });
+    const link = cardOf(lineOf("Hotel California")).querySelector(".tile-lyrics > a.tile-source");
+    note("link", { tag: link.tagName.toLowerCase(), href: link.getAttribute("href"), target: link.target,
+                   rel: link.rel, said: link.getAttribute("aria-label"),
+                   name: text(link.querySelector(".tile-source-name")), mark: link.querySelector("[data-source]").dataset.source });
     """
-    chip = attribute_of(run(conn, cfg, tmp_path, script), "data-chip")
-    assert chip == {"tag": "a", "href": url, "target": "_blank", "rel": "noopener noreferrer",
-                    "said": "Lyrics: its page on Megalobiz", "name": "Megalobiz"}
+    link = attribute_of(run(conn, cfg, tmp_path, script), "data-link")
+    assert link == {"tag": "a", "href": url, "target": "_blank", "rel": "noopener noreferrer",
+                    "said": "Lyrics: its page on Megalobiz", "name": "Megalobiz", "mark": "megalobiz"}
 
 
 def test_lyrics_from_azlyrics_link_back_to_their_page_from_the_tile(conn, cfg, tmp_path):
@@ -164,11 +205,12 @@ def test_lyrics_from_azlyrics_link_back_to_their_page_from_the_tile(conn, cfg, t
         url=url).to_json())
     script = """
     openCard("Hotel California");
-    const chip = cardOf(lineOf("Hotel California")).querySelector(".tile-lyrics .tile-versions .vchip");
-    note("chip", { href: chip.getAttribute("href"), said: chip.getAttribute("aria-label") });
+    const link = cardOf(lineOf("Hotel California")).querySelector(".tile-lyrics > a.tile-source");
+    note("link", { href: link.getAttribute("href"), said: link.getAttribute("aria-label"),
+                   name: text(link.querySelector(".tile-source-name")) });
     """
-    chip = attribute_of(run(conn, cfg, tmp_path, script), "data-chip")
-    assert chip == {"href": url, "said": "Lyrics: its page on AZLyrics"}
+    link = attribute_of(run(conn, cfg, tmp_path, script), "data-link")
+    assert link == {"href": url, "said": "Lyrics: its page on AZLyrics", "name": "AZLyrics"}
 
 
 def test_a_tab_of_game_music_is_a_tile_of_its_own_opened_as_text(conn, cfg, tmp_path):
@@ -181,81 +223,104 @@ def test_a_tab_of_game_music_is_a_tile_of_its_own_opened_as_text(conn, cfg, tmp_
         keep_file(conn, cfg.library_dir, song=song, version_id=vid, name=f"gametab-{number}.txt", data=f"E|--{number}--|\n".encode(),
                   rank=number)
     update_song(conn, song.id, status="found")
-    card = attribute_of(run(conn, cfg, tmp_path, 'note("card", noteCard("Resting Grounds"));'), "data-card")
-    [tile] = card["tiles"]
+    script = ('note("card", noteCard("Resting Grounds"));\ndrawerOf("Resting Grounds", "gametab");\n'
+              'note("drawer", noteDrawer("Resting Grounds"));')
+    dom = run(conn, cfg, tmp_path, script)
+    [tile] = attribute_of(dom, "data-card")["tiles"]
     folder = "Hollow%20Knight/Resting%20Grounds/"
-    assert (tile["name"], tile["from"], tile["href"], tile["said"], tile["lead"]) == (
-        "Game music tab", "Tab 1", folder + "gametab-1.txt", "Open the game music tab of Resting Grounds", "Tabs")
-    assert [(c["source"], c["n"]) for c in tile["chips"]] == [("gametabs", "2")]
-    assert [d["text"] for d in tile["downloads"]] == ["Text"]
+    assert (tile["name"], tile["from"], tile["href"], tile["said"], tile["more"]) == (
+        "Game music tab", "Tab 1", folder + "gametab-1.txt", "Open the game music tab of Resting Grounds",
+        "Game music tab: its tabs and downloads")
+    assert tile["sources"] == ["gametabs"]
+    drawer = attribute_of(dom, "data-drawer")
+    assert [f["text"] for f in drawer["files"]] == ["Text"]
+    assert (drawer["parts"], drawer["said"]) == (["gametabs"], "2 tabs")
 
 
 def test_the_sheet_tile_downloads_pdf_text_chordpro_and_each_export(conn, cfg, tmp_path):
     hotel(conn, cfg)
-    sheet = attribute_of(run(conn, cfg, tmp_path, 'note("card", noteCard("Hotel California"));'),
-                         "data-card")["tiles"][0]
-    assert [(d["text"], d["href"]) for d in sheet["downloads"]] == [
+    drawer = attribute_of(run(conn, cfg, tmp_path, 'drawerOf("Hotel California", "sheet");\n'
+                                                   'note("drawer", noteDrawer("Hotel California"));'), "data-drawer")
+    files = drawer["files"]
+    assert [(d["text"], d["href"]) for d in files] == [
         ("PDF", HOTEL + "sheet.pdf"), ("Text", HOTEL + "sheet.txt"), ("ChordPro", HOTEL + "sheet.cho"),
         ("PDF · G Dorian, capo 0", HOTEL + quote(EXPORT))]
-    assert all(d["download"] is not None for d in sheet["downloads"])
-    assert sheet["downloads"][0]["said"] == "Download the PDF of Hotel California"
-    assert sheet["downloads"][3]["said"] == "Download the PDF of Hotel California in G Dorian, capo 0"
+    assert all(d["download"] is not None for d in files)
+    assert files[0]["said"] == "Download the PDF of Hotel California"
+    assert files[3]["said"] == "Download the PDF of Hotel California in G Dorian, capo 0"
 
 
-def test_chips_count_versions_per_source(conn, cfg, tmp_path):
-    hotel(conn, cfg)
-    tiles = attribute_of(run(conn, cfg, tmp_path, 'note("card", noteCard("Hotel California"));'), "data-card")["tiles"]
-    chips = {t["name"]: (t["lead"], [(c["tag"], c["source"], c["n"], c["said"]) for c in t["chips"]]) for t in tiles}
-    assert chips["Chord sheet"] == ("Versions", [
-        ("button", "ug", "13", "UG: 13 versions"), ("button", "lacuerda", "2", "LaCuerda: 2 versions"),
-        ("button", "auto", "1", "the audio (auto-chords): 1 version")])  # an auto sheet beside the human one
-    assert chips["Guitar Pro"] == ("Files", [("button", "gtptabs", "1", "gtptabs: 1 file"),
-                                             ("button", "inbox", "1", "your inbox: 1 file")])
-    # One source with one version, nothing to choose: From it, no chevron, no drawer.
-    assert chips["Lyrics"] == ("From", [("span", "lrclib", None, "LRCLIB")])
-    assert chips["Harmonica tab"] == ("From", [("span", "harptabs", None, "harptabs")])
-    assert chips["Score"] == ("From", [("span", "inbox", None, "your inbox")])
-    # More than one version: a small stack.
-    assert [("stack" in t["cls"].split()) for t in tiles] == [True, True, False, False, False, False]
-    assert all(c["expanded"] == "false" for t in tiles for c in t["chips"] if c["tag"] == "button")
-
-
-# Opens the UG chip, then LaCuerda's (one drawer at a time), then LaCuerda's again (closed); notes each step.
-CHIPS = """
-const ug = chipOf("Hotel California", "ug");
-ug.click();
-const first = { drawer: noteDrawer("Hotel California"), ug: ug.getAttribute("aria-expanded"),
-  controls: ug.getAttribute("aria-controls") };
-const lc = chipOf("Hotel California", "lacuerda");
-lc.click();
-const second = { drawer: noteDrawer("Hotel California"), ug: ug.getAttribute("aria-expanded"),
-  lc: lc.getAttribute("aria-expanded") };
-lc.click();
-note("chips", { first, second, closed: noteDrawer("Hotel California").hidden, lc: lc.getAttribute("aria-expanded"),
-  drawers: cardOf(lineOf("Hotel California")).querySelectorAll(".drawer").length });
+# Opens the sheet's drawer, then the Guitar Pro tile's (one drawer at a time), then the Guitar Pro's again (closed);
+# notes each step.
+CHEVRONS = """
+const card = cardOf(openCard("Hotel California"));
+const sheet = drawerOf("Hotel California", "sheet");
+const first = { drawer: noteDrawer("Hotel California"), sheet: sheet.getAttribute("aria-expanded"),
+  controls: sheet.getAttribute("aria-controls"),
+  open: Array.from(card.querySelectorAll(".tile.open")).map((t) => t.className) };
+const guitar = card.querySelector(".tile-guitar > button.tile-more");
+guitar.click();
+const second = { drawer: noteDrawer("Hotel California"), sheet: sheet.getAttribute("aria-expanded"),
+  guitar: guitar.getAttribute("aria-expanded"), open: card.querySelectorAll(".tile.open").length };
+guitar.click();
+note("chevrons", { first, second, closed: noteDrawer("Hotel California").hidden,
+  guitar: guitar.getAttribute("aria-expanded"), drawers: card.querySelectorAll(".drawer").length, open: card.querySelectorAll(".tile.open").length });
 """
 
 
-def test_a_chip_opens_its_drawer_and_another_chip_closes_it(conn, cfg, tmp_path):
+def test_a_tiles_chevron_opens_its_drawer_and_another_closes_it(conn, cfg, tmp_path):
     hotel(conn, cfg)
-    chips = attribute_of(run(conn, cfg, tmp_path, CHIPS), "data-chips")
-    first, second = chips["first"], chips["second"]
-    assert first["ug"] == "true" and first["controls"] == first["drawer"]["id"] and not first["drawer"]["hidden"]
+    chevrons = attribute_of(run(conn, cfg, tmp_path, CHEVRONS), "data-chevrons")
+    first, second = chevrons["first"], chevrons["second"]
+    assert first["sheet"] == "true" and first["controls"] == first["drawer"]["id"] and not first["drawer"]["hidden"]
+    assert (first["drawer"]["label"], first["drawer"]["tile"]) == ("Chord sheet", "sheet")  # named by its tile
+    assert first["drawer"]["after"] == first["open"][0] and first["open"][0].startswith("tile tile-sheet")
     assert first["drawer"]["what"] == "UG · chord sheets"
-    assert second["ug"] == "false" and second["lc"] == "true" and second["drawer"]["what"] == "LaCuerda · chord sheets"
-    assert chips["closed"] is True and chips["lc"] == "false" and chips["drawers"] == 1
+    assert second["sheet"] == "false" and second["guitar"] == "true" and second["open"] == 1
+    assert (second["drawer"]["label"], second["drawer"]["what"]) == ("Guitar Pro", "gtptabs · Guitar Pro files")
+    assert second["drawer"]["after"].startswith("tile tile-guitar")
+    assert chevrons["closed"] is True and chevrons["guitar"] == "false" and chevrons["drawers"] == 1
+    assert chevrons["open"] == 0
+
+
+def test_a_version_with_no_rating_is_new(conn, cfg, tmp_path):
+    song = add_song(conn, "Radiohead", "Creep")
+    v = upsert_version(conn, provider="ug", tab_id="7", song_id=song.id, slot="sheet", kind="chords", rating=0,
+                       votes=0, version=1, label=None,
+                       url="https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-7", raw={}, now="x")
+    keep_file(conn, cfg.library_dir, song=song, version_id=v, name="sheet.txt", data=b"[ch]G[/ch]\nx", rank=1)
+    upsert_version(conn, provider="ug", tab_id="8", song_id=song.id, slot="sheet", kind="chords", rating=4.5, votes=3,
+                   version=2, label=None, url="https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-8", raw={},
+                   now="x")  # a second, not kept: one version alone would say it all, with no part in the drawer
+    put(cfg, song, "sheet.html")
+    update_song(conn, song.id, status="found")
+    script = ('const card = noteCard("Creep");\ndrawerOf("Creep", "sheet");\n'
+              'note("new", { from: card.tiles[0].from, stars: noteDrawer("Creep", "ug").rows.map((r) => r.stars) });')
+    assert attribute_of(run(conn, cfg, tmp_path, script), "data-new") == {"from": "Ver 1 · New · in use",
+                                                                         "stars": ["New"]}
+
+
+def test_a_ug_version_is_named_by_what_differs(conn, cfg, tmp_path):
+    song = hotel(conn, cfg)
+    conn.execute("UPDATE versions SET label = 'acoustic' WHERE song_id = ? AND tab_id = '46191'", (song.id,))
+    script = 'drawerOf("Hotel California", "sheet");\nnote("drawer", noteDrawer("Hotel California", "ug"));'
+    rows = attribute_of(run(conn, cfg, tmp_path, script), "data-drawer")["rows"]
+    assert [(r["ver"], r["note"]) for r in rows] == [("Ver 3", "All the lyrics · our pick"),
+                                                     ("Ver 4", "Acoustic · 80% of the lyrics"),
+                                                     ("Ver 5", "50% of the lyrics")]
 
 
 def test_the_ug_drawer_lists_the_kept_versions_and_counts_the_rest(conn, cfg, tmp_path):
     from helpers.cli_lines import parsed
 
     hotel(conn, cfg)
-    drawer = attribute_of(run(conn, cfg, tmp_path, 'chipOf("Hotel California", "ug").click();\n'
-                                                   'note("drawer", noteDrawer("Hotel California"));'), "data-drawer")
+    drawer = attribute_of(run(conn, cfg, tmp_path, 'drawerOf("Hotel California", "sheet");\n'
+                                                   'note("drawer", noteDrawer("Hotel California", "ug"));'),
+                          "data-drawer")
     assert drawer["said"] == "13 on UG · 3 in your logbook"
     rows = drawer["rows"]
     assert [(r["ver"], r["stars"]) for r in rows] == [
-        ("Ver 3", "4.86★ · 408 votes"), ("Ver 4", "4.75★ · 850 votes"), ("Ver 5", "4.70★ · 800 votes")], rows
+        ("Ver 3", "★ 4.86 (408)"), ("Ver 4", "★ 4.75 (850)"), ("Ver 5", "★ 4.70 (800)")], rows
     assert [r["note"] for r in rows] == ["All the lyrics · our pick", "80% of the lyrics",
                                          "50% of the lyrics"]
     assert [r["acts"] for r in rows] == [["In use", "Open"], ["Open"], ["Open"]]  # the file chooses nothing
@@ -271,8 +336,8 @@ def test_the_ug_drawer_lists_the_kept_versions_and_counts_the_rest(conn, cfg, tm
 
 def test_the_lacuerda_and_auto_drawers_list_theirs(conn, cfg, tmp_path):
     hotel(conn, cfg)
-    script = ('chipOf("Hotel California", "lacuerda").click();\nconst lc = noteDrawer("Hotel California");\n'
-              'chipOf("Hotel California", "auto").click();\nnote("drawers", [lc, noteDrawer("Hotel California")]);')
+    script = ('drawerOf("Hotel California", "sheet");\n'
+              'note("drawers", [noteDrawer("Hotel California", "lacuerda"), noteDrawer("Hotel California", "auto")]);')
     lc, auto = attribute_of(run(conn, cfg, tmp_path, script), "data-drawers")
     assert lc["said"] == "2 versions seen"
     assert [(r["ver"], r["note"], r["acts"], r["open"]) for r in lc["rows"]] == [
@@ -283,9 +348,9 @@ def test_the_lacuerda_and_auto_drawers_list_theirs(conn, cfg, tmp_path):
     assert row["open"] == HOTEL + "sheet%20%28auto%29.html" and row["note"] == "PDF · Text · ChordPro"
 
 
-def test_a_files_chip_lists_that_sources_files(conn, cfg, tmp_path):
+def test_a_files_part_lists_that_sources_files(conn, cfg, tmp_path):
     hotel(conn, cfg)
-    script = 'chipOf("Hotel California", "inbox", "guitar").click();\nnote("drawer", noteDrawer("Hotel California"));'
+    script = 'drawerOf("Hotel California", "guitar");\nnote("drawer", noteDrawer("Hotel California", "inbox"));'
     drawer = attribute_of(run(conn, cfg, tmp_path, script, controls=SERVED), "data-drawer")
     assert (drawer["what"], drawer["said"]) == ("your inbox · Guitar Pro files", "1 file")
     [row] = drawer["rows"]
@@ -293,11 +358,12 @@ def test_a_files_chip_lists_that_sources_files(conn, cfg, tmp_path):
     assert row["open"].startswith("guitar?file=")
 
 
-def test_escape_closes_the_drawer_and_gives_the_focus_back_to_its_chip(conn, cfg, tmp_path):
-    # UG's drawer opened, the focus on its first Open: Escape closes it, the focus back on its chip; so does its ✕.
+def test_escape_closes_the_drawer_and_gives_the_focus_back_to_its_chevron(conn, cfg, tmp_path):
+    # The sheet's drawer opened, the focus on its first Open: Escape closes it, the focus back on its chevron; so does
+    # its ✕; and on its chevron, Escape too.
     hotel(conn, cfg)
-    path = write_library_page(cfg.library_dir, with_script(page(conn, cfg),
-                                                           "(() => {\n" + KIT + "\nwindow.openCard = openCard;\n})();"))
+    kit = "(() => {\n" + KIT + "\nObject.assign(window, { openCard, cardOf, lineOf });\n})();"
+    path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), kit))
     try:
         browser = Browser(tmp_path / "chrome")
     except BrowserError as e:
@@ -305,36 +371,50 @@ def test_escape_closes_the_drawer_and_gives_the_focus_back_to_its_chip(conn, cfg
     with browser:
         browser.open(path.as_uri())
         browser.js('openCard("Hotel California")')
-        browser.click('.tile-sheet button.vchip[data-source="ug"]')
+        browser.click(".tile-sheet > button.tile-more")
         assert browser.wait("!document.querySelector('.drawer').hidden")
         browser.js("document.querySelector('.drawer a.go').focus()")
         browser.press("Escape")
         assert browser.wait("document.querySelector('.drawer').hidden")
-        assert browser.js("document.activeElement.dataset.source") == "ug"
+        assert browser.js("document.activeElement.matches('.tile-sheet > button.tile-more')") is True
         assert browser.js("document.activeElement.getAttribute('aria-expanded')") == "false"
-        browser.click('.tile-sheet button.vchip[data-source="ug"]')
+        assert browser.js("document.querySelectorAll('.tile.open').length") == 0
+        browser.click(".tile-sheet > button.tile-more")
+        assert browser.js("document.querySelector('.drawer .drawer-close').getAttribute('aria-label')") == (
+            "Close: Chord sheet")
         browser.click(".drawer .drawer-close")
         assert browser.wait("document.querySelector('.drawer').hidden")
-        assert browser.js("document.activeElement.dataset.source") == "ug"
+        assert browser.js("document.activeElement.matches('.tile-sheet > button.tile-more')") is True
+        # On its chevron, outside the drawer, Escape closes it too, the focus staying there; and the card stays open.
+        browser.press("Enter")
+        assert browser.wait("!document.querySelector('.drawer').hidden")
+        browser.press("Escape")
+        assert browser.wait("document.querySelector('.drawer').hidden")
+        assert browser.js("document.activeElement.matches('.tile-sheet > button.tile-more')") is True
+        assert browser.js("document.activeElement.getAttribute('aria-expanded')") == "false"
+        assert browser.js("cardOf(lineOf('Hotel California')).checkVisibility()") is True
 
 
-# Notes every fetch the page makes and every resource it loads while each chip opens and closes its drawer.
+# Notes every fetch the page makes and every resource it loads while each tile's chevron opens and closes its drawer.
 QUIET = """
 const asked = [];
 const real = window.fetch;
 window.fetch = (...args) => { asked.push(String(args[0])); return real(...args); };
 const loaded = performance.getEntriesByType("resource").length;
 openCard("Hotel California");
-for (const chip of cardOf(lineOf("Hotel California")).querySelectorAll("button.vchip")) { chip.click(); chip.click(); }
+for (const more of cardOf(lineOf("Hotel California")).querySelectorAll("button.tile-more")) {
+  more.click();
+  more.click();
+}
 note("quiet", { asked, loaded: performance.getEntriesByType("resource").length - loaded,
-  chips: cardOf(lineOf("Hotel California")).querySelectorAll("button.vchip").length });
+  chevrons: cardOf(lineOf("Hotel California")).querySelectorAll("button.tile-more").length });
 """
 
 
 def test_opening_a_drawer_sends_no_request(conn, cfg, tmp_path):
     hotel(conn, cfg)
     quiet = attribute_of(run(conn, cfg, tmp_path, QUIET, controls=SERVED), "data-quiet")
-    assert quiet == {"asked": [], "loaded": 0, "chips": 5}, quiet
+    assert quiet == {"asked": [], "loaded": 0, "chevrons": 6}, quiet
 
 
 # --- what a card shows of a song with no sheet, a text tab, a score, links elsewhere ---------------------------
@@ -374,37 +454,46 @@ def test_a_text_tab_alone_is_a_guitar_tab_tile(conn, cfg, tmp_path):
     keep_file(conn, cfg.library_dir, song=creep, version_id=tab, name="tab.txt", data=b"e|--0--|", rank=1)
     put(cfg, creep, "sheet.pdf")
     update_song(conn, creep.id, status="found")
-    tiles = attribute_of(run(conn, cfg, tmp_path, 'note("card", noteCard("Creep"));'), "data-card")["tiles"]
-    guitar = tiles[1]
+    dom = run(conn, cfg, tmp_path, 'note("card", noteCard("Creep"));\ndrawerOf("Creep", "tab");\n'
+                                   'note("drawer", noteDrawer("Creep"));')
+    guitar = attribute_of(dom, "data-card")["tiles"][1]
     assert (guitar["name"], guitar["href"], guitar["said"]) == (
         "Guitar tab", "Radiohead/Creep/tab.txt", "Open the guitar tab of Creep")
-    assert guitar["lead"] == "From" and [c["source"] for c in guitar["chips"]] == ["ug"]
-    assert [d["text"] for d in guitar["downloads"]] == ["Text"]
+    assert guitar["sources"] == ["ug"] and guitar["more"] == "Guitar tab: its downloads"
+    drawer = attribute_of(dom, "data-drawer")
+    assert [d["text"] for d in drawer["files"]] == ["Text"] and drawer["parts"] == []
 
 
 def test_a_score_you_filed_is_a_tile(conn, cfg, tmp_path):
     song = add_song(conn, "Eagles", "Desperado")
     put(cfg, song, "sheet.pdf", "score-1.pdf", "score-1.mxl", "score-2.pdf")
     update_song(conn, song.id, status="found")
-    tiles = attribute_of(run(conn, cfg, tmp_path, 'note("card", noteCard("Desperado"));'), "data-card")["tiles"]
-    score = tiles[1]
+    dom = run(conn, cfg, tmp_path, 'note("card", noteCard("Desperado"));\ndrawerOf("Desperado", "score");\n'
+                                   'note("drawer", noteDrawer("Desperado"));')
+    score = attribute_of(dom, "data-card")["tiles"][1]
     # It opens the first, in inbox.py's order of formats: MusicXML, a download; a PDF the browser shows opens.
     assert (score["name"], score["href"], score["said"]) == ("Score", "Eagles/Desperado/score-1.mxl",
                                                             "Download the score of Desperado")
     assert score["download"] == "Eagles - Desperado.mxl"
-    assert [d["text"] for d in score["downloads"]] == ["MusicXML", "PDF", "PDF"]
     assert "stack" in score["cls"].split()
+    drawer = attribute_of(dom, "data-drawer")
+    assert [d["text"] for d in drawer["files"]] == ["MusicXML", "PDF", "PDF"]
+    # Put there by hand, from no site: no mark on the tile, and one part of their own, a row a file.
+    assert score["sources"] == [] and drawer["parts"] == [""] and len(drawer["rows"]) == 3
 
 
 def test_an_auto_sheet_alone_is_its_own_tile_in_its_colour(conn, cfg, tmp_path):
     zebra = add_song(conn, "宋冬野", "斑马，斑马")
     put(cfg, zebra, "sheet (auto).html", "sheet (auto).pdf", "sheet (auto).txt")
     update_song(conn, zebra.id, status="found")
-    [tile] = attribute_of(run(conn, cfg, tmp_path, 'note("card", noteCard("斑马，斑马"));'), "data-card")["tiles"]
+    dom = run(conn, cfg, tmp_path, 'note("card", noteCard("斑马，斑马"));\ndrawerOf("斑马，斑马", "sheet");\n'
+                                   'note("drawer", noteDrawer("斑马，斑马"));')
+    [tile] = attribute_of(dom, "data-card")["tiles"]
     assert tile["name"] == "Auto sheet" and tile["from"] == "from the recording"
     assert "auto" in tile["cls"].split() and "primary" not in tile["cls"].split()
-    assert [d["text"] for d in tile["downloads"]] == ["PDF", "Text"]
-    assert tile["lead"] == "From" and [c["source"] for c in tile["chips"]] == ["auto"]
+    assert tile["sources"] == ["auto"] and tile["more"] == "Auto sheet: its downloads"
+    drawer = attribute_of(dom, "data-drawer")
+    assert [d["text"] for d in drawer["files"]] == ["PDF", "Text"] and drawer["parts"] == []
 
 
 # --- the foot -------------------------------------------------------------------------------------------------
@@ -443,8 +532,8 @@ def test_remove_says_remove_and_is_red_and_last(conn, cfg, tmp_path):
 
 def test_the_file_page_offers_no_change_but_the_command_that_fetches_versions(conn, cfg, tmp_path):
     hotel(conn, cfg)
-    script = ('chipOf("Hotel California", "ug").click();\nnote("card", noteCard("Hotel California"));\n'
-              'note("drawer", noteDrawer("Hotel California"));\n'
+    script = ('drawerOf("Hotel California", "sheet");\nnote("card", noteCard("Hotel California"));\n'
+              'note("drawer", noteDrawer("Hotel California", "ug"));\n'
               'note("forms", cardOf(lineOf("Hotel California")).querySelectorAll("form").length);')
     dom = run(conn, cfg, tmp_path, script)
     card, drawer = attribute_of(dom, "data-card"), attribute_of(dom, "data-drawer")
@@ -485,26 +574,57 @@ const panel = cardOf(line);
 const mid = (n) => { const b = n.getBoundingClientRect(); return Math.round(b.top + b.height / 2); };
 note("rows", Array.from(panel.querySelectorAll(".tiles > .tile")).map((t) => ({
   name: text(t.querySelector(".tile-name")), height: Math.round(t.getBoundingClientRect().height),
-  mids: [t.querySelector(".tile-open"), t.querySelector(".tile-versions"), t.querySelector(".tile-downloads")]
+  mids: [t.querySelector(".tile-open"), t.querySelector(".tile-source"), t.querySelector(".tile-more")]
     .filter(Boolean).map(mid),
-  mark: !!t.querySelector(".tile-versions .vchip [data-source]"),
+  mark: !!t.querySelector(".tile-source [data-source]"),
   visible: Array.from(panel.querySelectorAll(".foot button, .foot a, .foot summary")).filter((n) => n.checkVisibility())
     .map((n) => text(n)) })));
 """
 
 
-def test_a_tile_is_one_row_and_its_source_keeps_its_mark_beside_its_name(conn, cfg, tmp_path):
-    # What you play from, a row each: its name and version, the source it came from with that source's mark, its
-    # downloads at the end. Under the card's foot only Fetch again, Add to a songbook and ⋯ show.
+@pytest.mark.parametrize(("size", "touch"), [("360,780", True), ("390,844", True), (cards.IN_PLACE, False),
+                                             ("1280,900", False)])
+def test_a_tile_is_one_row_and_its_source_keeps_its_mark_beside_its_name(conn, cfg, tmp_path, size, touch):
+    # What you play from, a row each at every width: its name and version, the marks of where it came from, its
+    # chevron at the end; 56 to 64 px tall on a touch screen, 48 px at most with a mouse, whether the card is under its
+    # line (a phone, a laptop under 1200 px) or in the pane beside the list (1280). Under the card's foot only Fetch
+    # again, Use LaCuerda's sheet, Add to a songbook and ⋯ show.
     hotel(conn, cfg)
-    # A card under its line, in the 800 px column a laptop has under 1200 px (from 1200 px it is in the pane, which lane
-    # 3b's container lays out), where a tile's name may take two lines.
-    rows = attribute_of(run(conn, cfg, tmp_path, TILE_ROWS, controls=SERVED, size=cards.IN_PLACE), "data-rows")
-    assert rows and all(r["height"] <= 80 for r in rows), rows
-    assert all(max(r["mids"]) - min(r["mids"]) <= 16 for r in rows), rows  # one line
+    rows = attribute_of(run(conn, cfg, tmp_path, TILE_ROWS, controls=SERVED, size=size, touch=touch), "data-rows")
+    assert rows and all(max(r["mids"]) - min(r["mids"]) <= 16 for r in rows), rows  # one row
+    assert all(56 <= r["height"] <= 64 if touch else r["height"] <= 48 for r in rows), rows
     [sheet] = [r for r in rows if r["name"] == "Chord sheet"]
-    assert sheet["mark"] is True, sheet  # "From" the source's icon and its name
+    assert sheet["mark"] is True, sheet  # the marks of where its versions came from
     assert rows[0]["visible"] == ["Fetch again", "Use LaCuerda's sheet", "Add to a songbook…", "⋯"], rows[0]["visible"]
+
+
+# The sheet's tile and the score's: whether each shows its arrow or its download glyph, and the sheet's version line as
+# it shows (innerText leaves out what is hidden) and whether it is cut.
+PHONE_TILE = """
+const card = cardOf(openCard("Hotel California")), q = (sel) => card.querySelector(sel);
+const from = q(".tile-sheet .tile-from"), rated = from.querySelector(".tile-rated");
+note("tile", { opens: q(".tile-sheet .tile-go").checkVisibility(), downloads: q(".tile-score .tile-go").checkVisibility(),
+  glyph: q(".tile-score .tile-go svg").getAttribute("class"), text: text(from), shown: from.innerText,
+  fits: from.scrollWidth <= from.clientWidth, whole: rated ? getComputedStyle(rated).display : null });
+"""
+
+
+@pytest.mark.parametrize(("size", "touch"), [("360,780", True), ("390,844", True), ("1200,900", False),
+                                             ("1280,900", False)])
+def test_a_phones_tile_keeps_a_downloads_glyph_and_its_version_whole(conn, cfg, tmp_path, size, touch):
+    # On a phone a tile that opens leaves out its arrow for its name and version, but one that downloads keeps its
+    # download glyph, so it never looks like one that opens; the sheet's version is the one in use (its tile shows no
+    # other), so "in use" goes too, and "Ver 3 · ★ 4.86 (408)" fits uncut. Its rating is shown whole or not at all.
+    # With a mouse a tile keeps both at any width: in the pane at 1200 px, its tiles under 400 px, as at 1280.
+    hotel(conn, cfg)
+    tile = attribute_of(run(conn, cfg, tmp_path, PHONE_TILE, controls=SERVED, size=size, touch=touch), "data-tile")
+    assert tile["downloads"] is True and "glyph-download" in tile["glyph"].split(), tile
+    assert tile["text"] == "Ver 3 · ★ 4.86 (408) · in use", tile  # what a screen reader is told, whatever the width
+    assert tile["fits"] is True and tile["whole"] == "inline-block", tile
+    if touch:  # a phone's tile
+        assert tile["opens"] is False and tile["shown"] == "Ver 3 · ★ 4.86 (408)", tile
+    else:  # the pane's, with a mouse
+        assert tile["opens"] is True and tile["shown"] == "Ver 3 · ★ 4.86 (408) · in use", tile
 
 
 MANY = """
@@ -530,7 +650,7 @@ def test_progressions_are_short_chips_four_and_a_button_for_the_rest(conn, cfg, 
     assert many["after"] == 6 and many["gone"] is True, many
 
 
-# --- its layout: 390 px and a desktop, the drawer under its tile's row ----------------------------------------
+# --- its layout: 390 px and a desktop, the drawer right under its tile ----------------------------------------
 
 LAYOUT = """
 const line = openCard("Hotel California");
@@ -538,57 +658,133 @@ const panel = cardOf(line);
 const tiles = Array.from(panel.querySelectorAll(".tiles > .tile"));
 const box = (n) => { const b = n.getBoundingClientRect(); return [Math.round(b.left), Math.round(b.right),
   Math.round(b.top), Math.round(b.bottom)]; };
+const css = getComputedStyle;
 const at = (kind) => {
-  chipOf("Hotel California", kind === "guitar" ? "gtptabs" : "ug", kind).click();
-  const drawer = panel.querySelector(".drawer");
-  const point = parseFloat(drawer.style.getPropertyValue("--point")) + panel.querySelector(".tiles").getBoundingClientRect().left;
-  return { after: drawer.previousElementSibling.className, drawer: box(drawer), point,
-    tile: box(panel.querySelector(".tile-" + kind)), last: box(tiles[tiles.length - 1]) };
+  drawerOf("Hotel California", kind);
+  const drawer = panel.querySelector(".drawer"), tile = panel.querySelector(".tile-" + kind);
+  return { after: drawer.previousElementSibling.className, drawer: box(drawer), tile: box(tile),
+    corners: [css(tile).borderBottomLeftRadius, css(tile).borderBottomRightRadius, css(drawer).borderTopLeftRadius,
+      css(drawer).borderTopRightRadius],
+    stack: [css(tile, "::before").content, css(tile, "::after").content], stacked: tile.classList.contains("stack"),
+    score: box(panel.querySelector(".tile-score")) };
 };
 note("layout", { sheet: at("sheet"), guitar: at("guitar"), tiles: tiles.map(box),
   wide: [document.documentElement.scrollWidth, innerWidth] });
 """
 
 
-@pytest.mark.parametrize("size", ["390,844", "1280,900"])
-def test_the_card_fits_with_the_drawer_under_its_tile(conn, cfg, tmp_path, size):
+@pytest.mark.parametrize(("size", "touch"), [("320,640", True), ("390,844", True), ("640,900", False),
+                                             ("1280,900", False)])
+def test_the_card_fits_with_the_drawer_under_its_tile(conn, cfg, tmp_path, size, touch):
     hotel(conn, cfg)
-    layout = attribute_of(run(conn, cfg, tmp_path, LAYOUT, size=size, controls=SERVED), "data-layout")
+    layout = attribute_of(run(conn, cfg, tmp_path, LAYOUT, size=size, controls=SERVED, touch=touch), "data-layout")
     wide, width = layout["wide"]
-    assert wide <= width, layout
+    assert wide <= width, layout  # no sideways scroll
     for kind in ("sheet", "guitar"):
         at = layout[kind]
         left, right, _, bottom = at["tile"]
-        assert left <= at["point"] <= right, (kind, at)  # its pointer over its tile
-        assert at["drawer"][2] >= bottom, (kind, at)  # under it
-    # One tile a row, on a phone and from 720 px: the drawer right under its own, the tiles after it under the drawer.
+        assert at["after"].startswith("tile tile-" + kind), (kind, at)  # its tile's next sibling
+        assert abs(at["drawer"][2] - bottom) <= 1, (kind, at)  # touching it, right under it
+        assert abs(at["drawer"][0] - left) <= 1 and abs(at["drawer"][1] - right) <= 1, (kind, at)  # its edges
+        assert at["corners"] == ["0px"] * 4, (kind, at)  # one box: the tile's bottom corners and its top square
+        assert at["stacked"] is True and at["stack"] == ["none", "none"], (kind, at)  # no stack under it while open
+        assert at["score"][2] >= at["drawer"][3], (kind, at)  # the tiles after it under its drawer
+    # One tile a row, on a phone, a small tablet's width and from 720 px.
     assert len({t[0] for t in layout["tiles"]}) == 1 and len({t[2] for t in layout["tiles"]}) == len(layout["tiles"])
-    assert layout["sheet"]["after"].startswith("tile tile-sheet")
-    assert layout["guitar"]["after"].startswith("tile tile-guitar")
-    assert layout["tiles"][4][2] >= layout["guitar"]["drawer"][3], layout  # the score's row under the guitar's drawer
 
 
-def test_a_drawer_left_open_in_a_folded_card_is_placed_again_when_the_card_opens_after_a_resize(conn, cfg, tmp_path):
-    # Folded, the card's tiles measure nothing: a resize then (a phone turned) waits for the card to open again.
-    import tempfile
-    from pathlib import Path
+# The sheet's drawer opened: where its downloads lie, in rows, and its ✕.
+CLOSE_ROOM = """
+openCard("Hotel California");
+drawerOf("Hotel California", "sheet");
+const d = cardOf(lineOf("Hotel California")).querySelector(".drawer");
+const box = (n) => { const b = n.getBoundingClientRect(); return [b.left, b.right, b.top, b.bottom]; };
+note("room", { close: box(d.querySelector(".drawer-close")),
+  files: Array.from(d.querySelectorAll(".drawer-files > *")).map(box), drawer: box(d) });
+"""
 
+
+@pytest.mark.parametrize(("size", "touch"), [("390,844", True), ("1280,900", False)])
+def test_a_drawers_downloads_leave_room_for_its_close_and_wrap_under_it(conn, cfg, tmp_path, size, touch):
+    # The ✕ at the drawer's top right is in the way of its downloads' first row alone: they never lie under it, and on
+    # a phone's touch screen the sheet's Download, PDF, Text, ChordPro and its export take two rows, not three.
     hotel(conn, cfg)
-    html = build_library_page(conn, cfg, Overrides(), NOW, controls=SERVED)
-    path = write_library_page(cfg.library_dir, with_script(html, "(() => {\n" + KIT +
-                                                           "\nwindow.kit = { openCard, chipOf, lineOf }; window.cardOf = cardOf;\n})();"))
-    after = "cardOf(kit.lineOf('Hotel California')).querySelector('.drawer').previousElementSibling.className"
-    with Browser(Path(tempfile.mkdtemp(prefix="profile-", dir=tmp_path)), width=1280, height=900) as b:
-        b.open(path.as_uri())
-        assert b.wait("!!window.kit && !!document.querySelector('#list .line-more')", 15)
-        b.js("kit.openCard('Hotel California'); kit.chipOf('Hotel California', 'gtptabs', 'guitar').click()")
-        assert b.js(after).startswith("tile tile-guitar")  # a row a tile: right under its own
-        b.js("kit.lineOf('Hotel California').querySelector('.line-more').click()")  # folded, its drawer left open
-        b.js("window.resized = 0; addEventListener('resize', () => { window.resized += 1; })")  # after the page's own
-        b.send("Emulation.setDeviceMetricsOverride", width=390, height=844, deviceScaleFactor=1, mobile=False)
-        assert b.wait("innerWidth === 390 && window.resized > 0")  # the page heard it while the card was folded
-        b.js("kit.openCard('Hotel California')")
-        assert b.wait(f"{after}.startsWith('tile tile-guitar')"), b.js(after)  # one a row: right under its own
+    room = attribute_of(run(conn, cfg, tmp_path, CLOSE_ROOM, controls=SERVED, size=size, touch=touch), "data-room")
+    cl, cr, ct, cb = room["close"]
+    assert not [f for f in room["files"] if f[0] < cr and f[1] > cl and f[2] < cb and f[3] > ct], room
+    assert all(f[1] <= room["drawer"][1] for f in room["files"]), room  # inside it
+    mids = sorted((f[2] + f[3]) / 2 for f in room["files"])
+    rows = [m for n, m in enumerate(mids) if n == 0 or m - mids[n - 1] > 8]  # each row's first middle
+    if touch:
+        assert len(rows) == 2, room
+        assert abs(rows[0] - (ct + cb) / 2) <= 2, room  # the first row level with the ✕
+
+
+# --- the card at the pane's width: as it reads in place ------------------------------------------------------
+
+PANE = """
+const line = openCard("Hotel California");  // from 1200 px its card goes into lane 1's #card-pane, 400-480 px wide
+const card = cardOf(line), pane = document.getElementById("card-pane");
+drawerOf("Hotel California", "sheet");
+const box = (n) => n.getBoundingClientRect();
+const row = card.querySelector('.drawer-part[data-source="ug"] .vrow');
+note("pane", { inPane: pane.contains(card), width: pane.clientWidth, outer: pane.offsetWidth, wide: pane.scrollWidth,
+  stacked: box(row.querySelector(".vbtns")).top >= box(row.querySelector(".ver")).bottom - 0.5,
+  buttons: Array.from(card.querySelectorAll(".vrow .vbtns > *")).map((b) => Math.round(box(b).height)),
+  rows: Array.from(card.querySelectorAll(".tile")).map((t) => Math.round(box(t).height)) });
+"""
+
+
+@pytest.mark.parametrize("controls", [SERVED, None], ids=["served", "file"])
+@pytest.mark.parametrize("size", ["1200,900", "1280,900", "1440,900"])
+def test_the_card_fits_the_laptops_pane_on_a_wide_screen(conn, cfg, tmp_path, size, controls):
+    # In the pane a card is as narrow as a phone's: its version rows stacked (their words, then their buttons, each
+    # on one line), its tiles a row each, nothing wider than the pane, whatever the window.
+    hotel(conn, cfg)
+    pane = attribute_of(run(conn, cfg, tmp_path, PANE, controls=controls, size=size), "data-pane")
+    assert pane["inPane"] and 400 <= pane["outer"] <= 480 and pane["wide"] <= pane["width"], pane
+    assert pane["stacked"] is True and all(h <= 48 for h in pane["rows"]), pane
+    assert pane["buttons"] and all(h <= 32 for h in pane["buttons"]), pane  # "Use this one" never wraps
+
+
+WIDE_ROWS = """
+const card = cardOf(openCard("Hotel California"));
+drawerOf("Hotel California", "sheet");
+const box = (n) => n.getBoundingClientRect();
+note("wide", Array.from(card.querySelectorAll(".vrow")).map((r) => box(r.querySelector(".vbtns")).top
+  < box(r.querySelector(".ver")).bottom));
+"""
+
+
+def test_a_version_takes_one_row_in_a_card_560_px_wide(conn, cfg, tmp_path):
+    # Under its line on a laptop under 1200 px the card is about 780 px wide: a version's number, rating, note and
+    # buttons side by side, as they were from 720 px; the card's own width decides it, never the window's.
+    hotel(conn, cfg)
+    wide = attribute_of(run(conn, cfg, tmp_path, WIDE_ROWS, controls=SERVED, size=cards.IN_PLACE), "data-wide")
+    assert wide and all(wide), wide
+
+
+BOX = """
+const line = openCard("Hotel California"), card = cardOf(line), css = getComputedStyle;
+note("box", { inPane: document.getElementById("card-pane").contains(card), selected: line.classList.contains("selected"),
+  line: css(line).marginTop, card: [css(card).rowGap, css(card).paddingBottom], foot: css(card.querySelector(".foot")).display,
+  tokens: [css(card).getPropertyValue("--card-gap").trim(), css(card).getPropertyValue("--card-pad-end").trim()],
+  edge: [css(line).borderLeftWidth, css(line).borderTopLeftRadius] });
+"""
+
+
+@pytest.mark.parametrize("size", ["1280,900", cards.IN_PLACE])
+def test_the_cards_box_is_its_panels_own_and_a_selected_line_is_no_empty_card(conn, cfg, tmp_path, size):
+    hotel(conn, cfg)
+    box = attribute_of(run(conn, cfg, tmp_path, BOX, controls=SERVED, size=size), "data-box")
+    assert box["card"] == ["14px", "14px"] and box["foot"] == "flex", box  # .line-panel.song-card's, in place or not
+    assert box["tokens"] == ["14px", "14px"], box  # card.css's --card-gap and --card-pad-end, which library.css reads
+    if size == "1280,900":  # the card in the pane: its line, selected, isn't raised as an empty card
+        assert box["inPane"] and box["selected"] and box["line"] == "0px", box
+        assert box["edge"] == ["0px", "0px"], box  # no card's edge or corners: a line as its neighbours are
+    else:  # in place, the opened line is raised as today
+        assert not box["inPane"] and box["line"] == "6px", box
+        assert box["edge"] == ["1px", "12px"], box
 
 
 @pytest.mark.parametrize("size", ["390,844", "1280,900"])
@@ -596,7 +792,7 @@ def test_the_card_meets_touch_targets_with_a_drawer_open(conn, cfg, tmp_path, si
     from helpers.targets import ARTIST_NAMES, noted, noting, small_targets
 
     hotel(conn, cfg)
-    script = 'openCard("Hotel California");\nchipOf("Hotel California", "ug").click();\n' + noting(
+    script = 'openCard("Hotel California");\ndrawerOf("Hotel California", "sheet");\n' + noting(
         "data-short", small_targets(ARTIST_NAMES))
     dom = run(conn, cfg, tmp_path, script, size=size, controls=SERVED, touch=True)
     assert noted(dom, "data-short") == []
@@ -605,7 +801,7 @@ def test_the_card_meets_touch_targets_with_a_drawer_open(conn, cfg, tmp_path, si
 # The contrast of each text the card shows against the first solid background under it, in its theme.
 READS = """
 openCard("Hotel California");
-chipOf("Hotel California", "ug").click();
+drawerOf("Hotel California", "sheet");
 const rgb = (t) => (/^rgba?\\(([\\d.]+),\\s*([\\d.]+),\\s*([\\d.]+)(?:,\\s*([\\d.]+))?\\)$/.exec(t) || []).slice(1).map(Number);
 const lum = (c) => { const f = (v) => (v / 255 <= 0.04045 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4);
   return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };
@@ -614,7 +810,7 @@ const behind = (n) => { for (let at = n; at; at = at.parentElement) { const c = 
 const ratio = (n) => { const [hi, lo] = [lum(rgb(getComputedStyle(n).color)), lum(behind(n))].sort((a, b) => b - a);
   return Math.round((hi + 0.05) / (lo + 0.05) * 100) / 100; };
 const reads = {};
-for (const sel of [".tile-name", ".tile-from", ".tile-versions .lead", ".vchip .n", ".dl", ".drawer-said", ".vrow .ver",
+for (const sel of [".tile-name", ".tile-from", ".drawer-files .lead", ".drawer .dl", ".drawer-said", ".vrow .ver",
   ".vrow .stars", ".vrow .note", ".inuse", ".drawer-rest", ".card-label", ".facts", ".btn.remove", ".tile-ico",
   ".line-plays .play", ".line-plays .play .n"]) {
   const n = (sel.startsWith(".line-plays") ? lineOf("Hotel California") : cardOf(lineOf("Hotel California"))).querySelector(sel);
@@ -654,7 +850,7 @@ def test_a_line_drawn_again_keeps_its_card_open_and_its_drawer_closed(conn, cfg,
     item = f'article.line[data-id="{song.id}"]'
     browser.open(base)
     browser.click(item + " .line-more")
-    browser.click(card(browser, item) + ' .tile-sheet button.vchip[data-source="ug"]')
+    browser.click(card(browser, item) + " .tile-sheet > button.tile-more")
     assert browser.wait(f"!document.querySelector('{card(browser, item)} .drawer').hidden")
     browser.js(f"[...document.querySelectorAll('{card(browser, item)} .foot button')].find((b) => b.textContent === 'Fetch again')"
                ".click()")
@@ -663,8 +859,9 @@ def test_a_line_drawn_again_keeps_its_card_open_and_its_drawer_closed(conn, cfg,
     assert browser.js(f"document.querySelector('{item} .line-more').getAttribute('aria-expanded')") == "true"
     assert browser.js(f"document.querySelector('{card(browser, item)}').hidden") is False
     assert browser.js(f"document.querySelector('{card(browser, item)} .drawer').hidden") is True
-    assert browser.js(f"[...document.querySelectorAll('{card(browser, item)} button.vchip')].map((c) => "
-                      "c.getAttribute('aria-expanded'))") == ["false"] * 5
+    assert browser.js(f"[...document.querySelectorAll('{card(browser, item)} button.tile-more')].map((c) => "
+                      "c.getAttribute('aria-expanded'))") == ["false"] * 6
+    assert browser.js(f"document.querySelectorAll('{card(browser, item)} .tile.open').length") == 0
 
 
 # --- served: what a drawer's versions do ---------------------------------------------------------------------
@@ -752,12 +949,14 @@ def versions_served(cfg):
     queue.stop()
 
 
-def drawer_of(browser, song, source):
-    """The song's card opened, and its chip of ``source`` on its sheet tile, its drawer then shown; its line's
-    selector."""
+UG, LC = '.drawer-part[data-source="ug"]', '.drawer-part[data-source="lacuerda"]'  # the sheet drawer's parts
+
+
+def drawer_of(browser, song):
+    """The song's card opened, and its sheet tile's drawer, then shown; its line's selector."""
     item = f'article.line[data-id="{song.id}"]'
     browser.click(item + " .line-more")
-    browser.click(card(browser, item) + f' .tile-sheet button.vchip[data-source="{source}"]')
+    browser.click(card(browser, item) + " .tile-sheet > button.tile-more")
     assert browser.wait(f"!document.querySelector('{card(browser, item)} .drawer').hidden")
     return item
 
@@ -776,11 +975,11 @@ def test_use_this_one_posts_choose_with_the_tab(conn, cfg, versions_served, brow
     base, posts, _ = versions_served
     song = hotel(conn, cfg)
     browser.open(base)
-    item = drawer_of(browser, song, "ug")
-    assert browser.js(f"[...document.querySelectorAll('{card(browser, item)} .vrow')].map((r) => [...r.querySelectorAll("
-                      "'.vbtns button, .vbtns .inuse')].map((b) => b.textContent))") == [
+    item = drawer_of(browser, song)
+    assert browser.js(f"[...document.querySelectorAll('{card(browser, item)} {UG} .vrow')].map((r) => "
+                      "[...r.querySelectorAll('.vbtns button, .vbtns .inuse')].map((b) => b.textContent))") == [
         ["In use"], ["Use this one"], ["Use this one"]]
-    press(browser, item, "Use this one")
+    press(browser, item, "Use this one", UG)
     assert posts.next(0) == ("/versions/choose", {"csrf": "tok", "song": str(song.id), "identity": song.key, "tab": "46191"})
     # Its request shows on the song's line, as a lookup's does.
     assert browser.wait(f"!!document.querySelector('{item} .progress')?.textContent")
@@ -798,14 +997,14 @@ def test_fetch_them_posts_keep_more_and_says_fetch_n_more(conn, cfg, versions_se
             keep_file(conn, cfg.library_dir, song=few, version_id=vid, name="sheet.txt", data=b"G\n", rank=1)
     update_song(conn, few.id, status="found")
     browser.open(base)
-    item = drawer_of(browser, song, "ug")
-    rest = f"document.querySelector('{card(browser, item)} .drawer-rest')"
+    item = drawer_of(browser, song)
+    rest = f"document.querySelector('{card(browser, item)} {UG} .drawer-rest')"
     assert browser.js(f"{rest}.querySelector('.rest-said').textContent") == "10 more on UG, not kept"
     assert browser.js(f"{rest}.querySelector('button').getAttribute('aria-label')") == (
         "Fetch 6 more versions of Hotel California from UG")
-    other = drawer_of(browser, few, "ug")
-    assert browser.js(f"[...document.querySelectorAll('{card(browser, other)} .drawer-rest button')].map((b) => b.textContent)") == [
-        "Fetch them"]
+    other = drawer_of(browser, few)
+    assert browser.js(f"[...document.querySelectorAll('{card(browser, other)} {UG} .drawer-rest button')]"
+                      ".map((b) => b.textContent)") == ["Fetch them"]
     press(browser, item, "Fetch 6 more")
     assert posts.next(0) == ("/versions/keep-more", {"csrf": "tok", "song": str(song.id), "identity": song.key})
 
@@ -814,20 +1013,20 @@ def test_after_keep_more_the_drawer_counts_again_from_the_jobs_view(conn, cfg, v
     base, posts, runner = versions_served
     song = hotel(conn, cfg)
     browser.open(base)
-    item = drawer_of(browser, song, "ug")
+    item = drawer_of(browser, song)
     press(browser, item, "Fetch 6 more")
     posts.next(0)
     # Once its job is over, the line is drawn again from what the library has: two more kept, eight left.
     assert browser.wait(f"document.querySelector('{item} .progress')?.dataset.tone === 'ready'", timeout=20)
     assert runner.ran == [("versions", "--keep-more", "--progress", "--", "Eagles", "Hotel California")]
     assert browser.js(f"document.querySelector('{card(browser, item)} .drawer').hidden") is True  # closed, as it was drawn again
-    browser.click(card(browser, item) + ' .tile-sheet button.vchip[data-source="ug"]')
+    browser.click(card(browser, item) + " .tile-sheet > button.tile-more")
     assert browser.wait(f"!document.querySelector('{card(browser, item)} .drawer').hidden")
-    assert browser.js(f"document.querySelector('{card(browser, item)} .drawer-said').textContent") == (
+    assert browser.js(f"document.querySelector('{card(browser, item)} {UG} .drawer-said').textContent") == (
         "13 on UG · 5 in your logbook")
-    assert browser.js(f"document.querySelector('{card(browser, item)} .drawer-rest .rest-said').textContent") == (
+    assert browser.js(f"document.querySelector('{card(browser, item)} {UG} .drawer-rest .rest-said').textContent") == (
         "8 more on UG, not kept")
-    assert browser.js(f"document.querySelectorAll('{card(browser, item)} .vrow').length") == 5
+    assert browser.js(f"document.querySelectorAll('{card(browser, item)} {UG} .vrow').length") == 5
 
 
 def test_back_to_caracoles_pick_only_when_pinned(conn, cfg, versions_served, browser):
@@ -836,12 +1035,12 @@ def test_back_to_caracoles_pick_only_when_pinned(conn, cfg, versions_served, bro
     base, posts, _ = versions_served
     song = hotel(conn, cfg)
     browser.open(base)
-    item = drawer_of(browser, song, "ug")
-    assert browser.js(f"document.querySelector('{card(browser, item)} .drawer-head').textContent").count("Back") == 0
+    item = drawer_of(browser, song)
+    assert browser.js(f"document.querySelector('{card(browser, item)} .drawer').textContent").count("Back") == 0
     add_pin(cfg.overrides_file, song.display, ["https://tabs.ultimate-guitar.com/tab/eagles/hotel-california-chords-46191"])
     browser.open(base)
-    item = drawer_of(browser, song, "ug")
-    press(browser, item, "Back to our pick", ".drawer-head")
+    item = drawer_of(browser, song)
+    press(browser, item, "Back to our pick", UG + " .drawer-head")
     assert posts.next(0) == ("/versions/clear", {"csrf": "tok", "song": str(song.id), "identity": song.key})
 
 
@@ -849,8 +1048,8 @@ def test_lacuerda_use_this_one_posts_the_lookup_with_its_page(conn, cfg, version
     base, posts, _ = versions_served
     song = hotel(conn, cfg)
     browser.open(base)
-    item = drawer_of(browser, song, "lacuerda")
-    press(browser, item, "Use this one")
+    item = drawer_of(browser, song)
+    press(browser, item, "Use this one", LC)
     assert posts.next(0) == ("/lookup", {"csrf": "tok", "song": str(song.id), "identity": song.key, "lacuerda": LACUERDA[0]})
 
 
@@ -862,10 +1061,328 @@ def test_lacuerda_use_this_one_waits_for_a_pin_to_go(conn, cfg, versions_served,
     song = hotel(conn, cfg)
     add_pin(cfg.overrides_file, song.display, ["https://tabs.ultimate-guitar.com/tab/eagles/hotel-california-chords-46191"])
     browser.open(base)
-    item = drawer_of(browser, song, "lacuerda")
-    buttons = f"[...document.querySelectorAll('{card(browser, item)} .drawer button')].map((b) => b.textContent)"
+    item = drawer_of(browser, song)
+    buttons = f"[...document.querySelectorAll('{card(browser, item)} {LC} button')].map((b) => b.textContent)"
     assert "Use this one" not in browser.js(buttons)
-    assert browser.js(f"document.querySelector('{card(browser, item)} .drawer .pin-note').textContent") == (
-        "Your UG choice is in use. Back to our pick first.")
-    press(browser, item, "Back to our pick")
+    # Its note says where the one Back to our pick is: the UG part's, above it, never a second button of its own.
+    assert "Back to our pick" not in browser.js(buttons)
+    assert browser.js(f"document.querySelector('{card(browser, item)} {LC} .pin-note').textContent") == (
+        "Your UG choice is in use: Back to our pick, above, first.")
+    every = f"[...document.querySelectorAll('{card(browser, item)} .drawer button')].map((b) => b.textContent)"
+    assert browser.js(every).count("Back to our pick") == 1
+    press(browser, item, "Back to our pick", UG)
     assert posts.next(0) == ("/versions/clear", {"csrf": "tok", "song": str(song.id), "identity": song.key})
+
+
+# --- a calm card ------------------------------------------------------------------------------------------------
+
+CALM = """
+const line = openCard("Hotel California"), card = cardOf(line);  // the card wherever it is (1d.1): the pane at 1280
+drawerOf("Hotel California", "sheet");
+// card.css's own: base.css's .btn and code are lane 1f's (and the radii it gives them).
+const parts = [...line.querySelectorAll(".line-plays, .line-plays *"),
+  ...card.querySelectorAll(".tiles, .tiles *, .card-sites *, .progressions *, .find-elsewhere *, .foot, .foot *")]
+  .filter((n) => !n.closest(".btn, code"));
+const probe = (v) => { const s = document.createElement("span"); s.style.color = v; document.body.appendChild(s);
+  return getComputedStyle(s).color; };
+const tile = card.querySelector(".tile.open"), drawer = card.querySelector(".drawer");
+note("calm", { tile: [getComputedStyle(tile).borderTopStyle, getComputedStyle(tile).borderBottomStyle],
+  drawer: getComputedStyle(drawer).borderLeftColor, border: probe("var(--border)"), accent: probe("var(--accent)"),
+  weights: [".tile-name", ".drawer-what"].map((s) => getComputedStyle(card.querySelector(s)).fontWeight),
+  radii: [...new Set(parts.map((n) => getComputedStyle(n).borderTopLeftRadius))].sort() });
+"""
+
+
+@pytest.mark.parametrize("touch", [False, True], ids=["pane", "phone"])
+def test_the_card_is_calm(conn, cfg, tmp_path, touch):
+    hotel(conn, cfg)
+    calm = attribute_of(run(conn, cfg, tmp_path, CALM, controls=SERVED, touch=touch,
+                            size="390,844" if touch else "1280,900"), "data-calm")
+    assert calm["tile"] == ["none", "none"] and calm["weights"] == ["600", "600"], calm  # no outline, titles at 600
+    assert calm["drawer"] == calm["border"] != calm["accent"], calm  # the drawer's edge is --border's
+    assert set(calm["radii"]) <= {"0px", "4px", "8px", "12px", "999px"}, calm
+
+
+# --- the ⋯ menu and Back --------------------------------------------------------------------------------------
+
+MORE = "document.querySelector('{card} details.foot-more')"  # the card wherever it is: cards.open_card's selector
+OURS = "Boolean(history.state && history.state.caracoleMenu)"
+
+
+@contextmanager
+def more_menu(conn, cfg, versions_served, tmp_path, *, touch=True, width=None):
+    """The page in a Browser (a phone's, touch, or a laptop's; ``width`` another, a tablet's 1280 on touch), Hotel
+    California's card open, then its ⋯; yields the browser, the menu's expression, and history's length and address
+    before the ⋯. The card is found through tests/helpers/cards.py: under its line on the phone, in #card-pane from
+    1200 px. The menu is open once its ``toggle`` reached the page's listeners (a test's own, added after card.js's,
+    has heard it)."""
+    base, _, _ = versions_served
+    song = hotel(conn, cfg)
+    with Browser(tmp_path / "chrome", width=width or (390 if touch else 1280), height=844, mobile=touch,
+                 args=() if touch else FINE_POINTER) as b:
+        b.open(base)
+        cards.install(b)
+        card = cards.open_card(b, f'article.line[data-id="{song.id}"]')
+        before = (b.js("history.length"), b.js("location.href"))
+        menu = MORE.format(card=card)
+        b.js(f"{menu}.addEventListener('toggle', () => {{ window.menuToggled = true; }}, {{ once: true }})")
+        b.click(card + " details.foot-more > summary")
+        assert b.wait(f"{menu}.open && window.menuToggled === true")
+        yield b, menu, before
+
+
+def test_on_a_touch_screen_back_closes_the_more_menu_and_nothing_else(conn, cfg, versions_served, tmp_path):
+    with more_menu(conn, cfg, versions_served, tmp_path) as (b, menu, (length, href)):
+        assert b.js("history.length") == length + 1 and b.js(OURS) is True
+        b.js("history.back()")
+        assert b.wait(f"!{menu}.open")
+        assert b.js(f"{menu}.closest('article').querySelector('.line-more').getAttribute('aria-expanded')") == "true"
+        assert b.js("location.href") == href and b.js(OURS) is False
+
+
+def test_on_a_tablet_back_closes_the_more_menu_in_the_pane_and_the_card_stays(conn, cfg, versions_served, tmp_path):
+    with more_menu(conn, cfg, versions_served, tmp_path, width=1280) as (b, menu, (length, href)):
+        line_more = f"document.querySelector(`.line-more[aria-controls='${{{menu}.closest('.song-card').id}}']`)"
+        assert b.js(f"!!{menu}.closest('#card-pane')") is True  # the pane's card, on a touch screen
+        assert b.js("history.length") == length + 1 and b.js(OURS) is True
+        b.js("history.back()")
+        assert b.wait(f"!{menu}.open")
+        assert b.js(f"!!{menu}.closest('#card-pane')") is True
+        assert b.js(f"{line_more}.getAttribute('aria-expanded')") == "true"
+        assert b.js("location.href") == href and b.js(OURS) is False
+
+
+def test_closing_the_more_menu_with_escape_takes_its_history_entry_back(conn, cfg, versions_served, tmp_path):
+    with more_menu(conn, cfg, versions_served, tmp_path) as (b, menu, _):
+        b.press("Escape")
+        assert b.wait(f"!{menu}.open && !{OURS}")
+
+
+def test_an_entry_pushed_as_the_menu_closes_stays_and_the_menus_is_skipped(conn, cfg, versions_served, tmp_path):
+    # A tap elsewhere closes the menu, and another part of the page pushes an entry of its own (lane 1's search would).
+    with more_menu(conn, cfg, versions_served, tmp_path) as (b, menu, _):
+        b.js("document.addEventListener('click', () => history.pushState({ other: 1 }, ''), { once: true });"
+             "document.body.click()")
+        assert b.wait(f"!{menu}.open && history.state && history.state.other === 1")
+        b.js("history.back()")  # one press: the other's entry, and the menu's behind it, skipped
+        assert b.wait(f"!(history.state && history.state.other) && !{OURS}")
+        assert b.js(f"{menu}.open") is False
+
+
+def test_a_menu_opened_as_another_closes_takes_its_entry(conn, cfg, versions_served, tmp_path):
+    # Two cards open on a phone, one's ⋯ open: a tap on the other's ⋯ closes the first and opens the second in the
+    # first's step, so one Back closes it and leaves no step of the first's behind.
+    base, _, _ = versions_served
+    song, other = hotel(conn, cfg), add_song(conn, "Radiohead", "Creep")
+    with Browser(tmp_path / "chrome", width=390, height=844, mobile=True) as b:
+        b.open(base)
+        first = cards.open_card(b, f'article.line[data-id="{song.id}"]')
+        second = cards.open_card(b, f'article.line[data-id="{other.id}"]')
+        one, two = MORE.format(card=first), MORE.format(card=second)
+        length = b.js("history.length")
+        b.click(first + " details.foot-more > summary")
+        assert b.wait(f"{one}.open && {OURS}")
+        b.js(f"{two}.addEventListener('toggle', () => {{ window.secondToggled = true; }}, {{ once: true }})")
+        b.click(second + " details.foot-more > summary")
+        assert b.wait(f"!{one}.open && {two}.open && window.secondToggled === true")
+        assert b.js("history.length") == length + 1 and b.js(OURS) is True
+        b.js("history.back()")
+        assert b.wait(f"!{two}.open && !{OURS}")
+        assert b.js("history.state") is None and b.js(f"{one}.open") is False
+
+
+def test_a_menu_whose_card_is_drawn_again_takes_its_entry_back(conn, cfg, versions_served, tmp_path):
+    # Its song's request over while its ⋯ is open (Fetch again sent with no press, which would close the menu): the
+    # card is drawn again, its menu closed, and no step of the menu's is left for Back to take.
+    with more_menu(conn, cfg, versions_served, tmp_path) as (b, menu, (length, href)):
+        b.js(f"window.oldMenu = {menu}; [...{menu}.closest('.foot').querySelectorAll('form')]"
+             ".find((f) => f.textContent.includes('Fetch again')).requestSubmit()")
+        assert b.wait("!window.oldMenu.isConnected", timeout=20)
+        assert b.wait(f"!{OURS}") and b.js("history.state") is None and b.js("location.href") == href
+        assert b.js("document.querySelectorAll('details.foot-more[open]').length") == 0
+
+
+def test_after_a_reload_a_new_menus_entry_is_never_taken_for_the_one_left_under_it(conn, cfg, versions_served,
+                                                                                  tmp_path):
+    # Reloaded with its ⋯ open, the page is on the menu's entry; a menu opened then pushes one of its own, which Back
+    # takes as it would any.
+    with more_menu(conn, cfg, versions_served, tmp_path) as (b, _, _):
+        b.js("window.before = true; location.reload()")
+        assert b.wait("window.before === undefined && document.readyState === 'complete'")
+        assert b.js(OURS) is True  # the entry the reload left
+        card = cards.open_card(b, "article.line")
+        menu = MORE.format(card=card)
+        b.js(f"{menu}.addEventListener('toggle', () => {{ window.menuToggled = true; }}, {{ once: true }})")
+        b.click(card + " details.foot-more > summary")
+        assert b.wait(f"{menu}.open && window.menuToggled === true")
+        b.js("history.back()")
+        assert b.wait(f"!{menu}.open")
+
+
+def test_with_a_mouse_the_more_menu_pushes_nothing(conn, cfg, versions_served, tmp_path):
+    with more_menu(conn, cfg, versions_served, tmp_path, touch=False) as (b, _, (length, _)):  # its card in the pane
+        assert b.js("history.length") == length and b.js(OURS) is False
+
+
+@contextmanager
+def searched_menu(conn, cfg, versions_served, tmp_path):
+    """A phone's page searching "hotel" (search mode, its one step), Hotel California's card open from the results,
+    then its ⋯; yields the browser, the menu's expression and the page's address (before its fragment).
+    ``window.stay`` is set, so that a test tells the page staying from another document."""
+    base, _, _ = versions_served
+    song = hotel(conn, cfg)
+    with Browser(tmp_path / "chrome", width=390, height=844, mobile=True) as b:
+        b.open(base)
+        cards.install(b)
+        b.click("#q")
+        b.type("hotel")  # search mode: one step, { search: 1 }
+        assert b.wait("document.body.classList.contains('search-mode') && history.state && history.state.search === 1")
+        found = "document.getElementById('found')"  # the sites' answer drawn, so that nothing moves under the tap
+        assert b.wait(f"{found}.dataset.query === 'hotel' && {found}.getAttribute('aria-busy') !== 'true'")
+        card = cards.open_card(b, f'article.line[data-id="{song.id}"]')
+        menu = MORE.format(card=card)
+        b.js(f"{menu}.addEventListener('toggle', () => {{ window.menuToggled = true; }}, {{ once: true }})")
+        b.click(card + " details.foot-more > summary")
+        assert b.wait(f"{menu}.open && window.menuToggled === true")
+        b.js("window.stay = 1")
+        yield b, menu, base
+
+
+# Out of search on the page it was on: search's steps and the menu's taken back, none more, no menu left open (its
+# card may be drawn again out of search).
+LEFT_SEARCH = ("window.stay === 1 && !document.body.classList.contains('search-mode') && history.state === null && "
+               "document.querySelectorAll('details.foot-more[open]').length === 0")
+
+
+def test_in_search_mode_the_menus_entry_is_one_step_more_and_the_arrow_leaves_search(conn, cfg, versions_served,
+                                                                                    tmp_path):
+    # "Where the lanes meet" 1 and 2: pushed in search mode, the entry counts one step more than the one under it.
+    with searched_menu(conn, cfg, versions_served, tmp_path) as (b, _, base):
+        assert b.js(f"{OURS} && history.state.search === 2") is True
+        b.click("#leave")  # ← takes back both steps: search left, nothing of the menu's left behind
+        assert b.wait(LEFT_SEARCH)
+        assert b.js("location.origin + location.pathname") == base
+
+
+def test_the_arrow_pressed_as_the_menu_closes_takes_back_its_steps_and_no_more(conn, cfg, versions_served, tmp_path):
+    # The ← heard after the menu's closing (its toggle first, as on a slow phone): the ← takes the menu's step back
+    # with search's, and the menu takes back nothing more, so the page stays.
+    with searched_menu(conn, cfg, versions_served, tmp_path) as (b, menu, base):
+        b.js(f"{menu}.addEventListener('toggle', () => document.getElementById('leave').click(), {{ once: true }});"
+             f"{menu}.open = false")
+        assert b.wait(LEFT_SEARCH)
+        assert b.js("location.origin + location.pathname") == base
+
+
+@pytest.mark.parametrize("cache", [True, False], ids=["bfcache", "reloaded"])
+def test_a_link_tapped_while_the_menu_is_open_opens_its_page_and_back_passes_over_its_entry(conn, cfg, versions_served,
+                                                                                         tmp_path, cache):
+    # The Chord sheet's tile tapped with ⋯ open: the press closes the menu and opens the sheet, the menu's step left
+    # where it is, marked closed. Back from the sheet lands on it in a document shown again, with the back-forward
+    # cache or loaded anew (this browser, driven over DevTools, loads it anew: the second case is the one run, the
+    # first by hand), and steps back over it: one Back, the card's page as it was.
+    base, _, _ = versions_served
+    song = hotel(conn, cfg)
+    args = () if cache else ("--disable-back-forward-cache",)
+    with Browser(tmp_path / "chrome", width=390, height=844, mobile=True, args=args) as b:
+        b.open(base)
+        cards.install(b)
+        card = cards.open_card(b, f'article.line[data-id="{song.id}"]')
+        href = b.js("location.href")
+        index = b.js("navigation.currentEntry.index")
+        menu = MORE.format(card=card)
+        b.js(f"{menu}.addEventListener('toggle', () => {{ window.menuToggled = true; }}, {{ once: true }})")
+        b.click(card + " details.foot-more > summary")
+        assert b.wait(f"{menu}.open && window.menuToggled === true")
+        card = "#" + b.js(f"{menu}.closest('.song-card').id")
+        sheet = b.js(f"document.querySelector('{card} .tile-sheet a.tile-open').href")
+        b.js("window.marker = 1")
+        b.click(card + " .tile-sheet a.tile-open")
+        assert b.wait(f"location.href === {json.dumps(sheet)} && document.readyState === 'complete'")
+        b.js("history.back()")
+        assert b.wait(f"location.href === {json.dumps(href)} && document.readyState === 'complete' && "
+                      f"navigation.currentEntry.index === {index} && !{OURS}")
+        time.sleep(0.5)  # and it stays there
+        assert b.js(f"navigation.currentEntry.index === {index} && !{OURS}") is True
+
+
+def test_a_page_shown_again_after_the_back_forward_cache_closes_a_leaving_menu_the_ordinary_way(
+        conn, cfg, versions_served, tmp_path):
+    # A menu open when the page is cached and shown again: Escape takes its entry back as on any other page.
+    with more_menu(conn, cfg, versions_served, tmp_path) as (b, menu, (length, _)):
+        b.js("dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));"
+             "dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))")
+        b.press("Escape")
+        assert b.wait(f"!{menu}.open && history.state === null && history.length === {length + 1}")
+        assert b.js(OURS) is False
+
+
+def test_a_download_chosen_in_the_menu_takes_its_step_back(conn, cfg, versions_served, tmp_path):
+    # Served, info.json downloads: the page stays, and so the menu takes its step back as when it closes otherwise.
+    put(cfg, hotel(conn, cfg), "info.json")
+    with more_menu(conn, cfg, versions_served, tmp_path) as (b, menu, (_, href)):
+        saved = tmp_path / "saved"
+        saved.mkdir()
+        b._send("Browser.setDownloadBehavior", behavior="allow", downloadPath=str(saved))
+        b.js("window.stay = 1")
+        b.click("#" + b.js(f"{menu}.closest('.song-card').id") + " .foot-menu a.info-file")
+        assert b.wait(f"!{menu}.open && history.state === null && window.stay === 1")
+        assert b.js("location.href") == href
+        deadline = time.time() + 10
+        while time.time() < deadline and not [f for f in saved.iterdir() if not f.name.endswith(".crdownload")]:
+            time.sleep(0.1)
+        assert [f.name for f in saved.iterdir() if not f.name.endswith(".crdownload")], "the file was saved"
+
+
+@pytest.mark.parametrize("cache", [True, False], ids=["bfcache", "reloaded"])
+def test_on_the_file_page_the_menus_info_json_opens(conn, cfg, tmp_path, cache):
+    # A page opened as a file downloads nothing: its info.json opens, and the menu's step is left for it, never
+    # taken back (a history.back() issued as the link is followed would cancel it). Back from it, cached or loaded
+    # anew, steps over the menu's step.
+    put(cfg, hotel(conn, cfg), "info.json")
+    path = write_library_page(cfg.library_dir, page(conn, cfg))
+    args = () if cache else ("--disable-back-forward-cache",)
+    with Browser(tmp_path / "chrome", width=390, height=844, mobile=True, args=args) as b:
+        b.open(path.as_uri())
+        card = cards.open_card(b, "#list article.line")
+        index = b.js("navigation.currentEntry.index")
+        menu = MORE.format(card=card)
+        b.js(f"{menu}.addEventListener('toggle', () => {{ window.menuToggled = true; }}, {{ once: true }})")
+        b.click(card + " details.foot-more > summary")
+        assert b.wait(f"{menu}.open && window.menuToggled === true && {OURS}")
+        info = b.js(f"document.querySelector('{card} .foot-menu a.info-file').href")
+        b.click(card + " .foot-menu a.info-file")
+        assert b.wait(f"location.href === {json.dumps(info)} && document.readyState === 'complete'")
+        time.sleep(0.6)  # a late cancelling step back would have undone it by now
+        assert b.js("location.href") == info and b.js("navigation.currentEntry.index") == index + 2
+        b.js("history.back()")
+        assert b.wait(f"location.href.startsWith({json.dumps(path.as_uri())}) && document.readyState === 'complete'")
+        assert b.wait(f"navigation.currentEntry.index === {index} && !{OURS}")  # the menu's step passed over
+
+
+def test_forward_passes_over_a_closed_menus_entry_too(conn, cfg, versions_served, tmp_path):
+    # Behind an entry another part of the page pushed as the menu closed: Back passes over the menu's entry, and so
+    # does Forward, the way the browser went.
+    with more_menu(conn, cfg, versions_served, tmp_path) as (b, menu, _):
+        b.js("document.addEventListener('click', () => history.pushState({ other: 1 }, ''), { once: true });"
+             "document.body.click()")
+        assert b.wait(f"!{menu}.open && history.state && history.state.other === 1")
+        b.js("history.back()")
+        assert b.wait(f"!(history.state && history.state.other) && !{OURS}")
+        b.js("history.forward()")
+        assert b.wait("Boolean(history.state && history.state.other === 1)")
+
+
+def test_where_history_refuses_a_push_the_more_menu_still_opens_and_closes(conn, cfg, tmp_path):
+    # The file page (⋯ holds info.json there), on a browser that refuses pushState for a file: no error.
+    put(cfg, hotel(conn, cfg), "info.json")
+    path = write_library_page(cfg.library_dir, page(conn, cfg))
+    with Browser(tmp_path / "chrome", width=390, height=844, mobile=True) as b:
+        b.open(path.as_uri())
+        b.js("history.pushState = () => { throw new DOMException('refused', 'SecurityError'); };"
+             "window.errors = 0; addEventListener('error', () => { window.errors += 1; })")
+        b.click("#list .line .line-more")
+        b.click("#list .line details.foot-more > summary")
+        assert b.wait("document.querySelector('#list details.foot-more').open")
+        b.press("Escape")
+        assert b.wait("!document.querySelector('#list details.foot-more').open") and b.js("window.errors") == 0
