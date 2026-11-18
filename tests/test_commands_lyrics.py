@@ -970,6 +970,64 @@ def test_lacuerda_search_that_the_index_or_your_library_answers_sends_no_request
     assert result.stdout.startswith("Found already: ") and sites.lacuerda.requests == [SODA]
 
 
+# --- another lookup in the lane --------------------------------------------------------------------------
+
+
+def test_a_lacuerda_search_checks_its_gate_and_sends_in_one_turn(tmp_path, sites, quick, monkeypatch):
+    # In the lane, its gate (asked, answered, the hour, a failure, the hour's automatic searches) is read under the
+    # lock and spent on its one request, its client's first: no turn between them, in which another lookup in the
+    # lane could spend it.
+    turns: list[int] = []
+    in_the_lane: list[bool] = []
+    asked = sites.lacuerda.handler
+
+    def handler(request):
+        in_the_lane.append(bool(_common._lane))
+        return asked(request)
+
+    def turn(cfg, conn=None) -> bool:
+        turns.append(1)
+        return False
+
+    monkeypatch.setattr(sites.lacuerda, "handler", handler)
+    monkeypatch.setattr(_common, "pass_turn", turn)
+    sites.lacuerda.pages[SEARCH_URL] = tiza_answer()
+
+    result = run(tmp_path, "lacuerda", "--search", "corazon de tiza", "--auto", "--progress")
+
+    assert result.exit_code == 0, result.output
+    assert result.stdout.splitlines()[-1] == "Searched: LaCuerda has 2 songs for “corazon de tiza”, in the index."
+    assert turns == [] and len(sites.lacuerda.requests) == 1  # its one request, its client's first: no turn
+    assert in_the_lane == [True]
+
+
+def test_a_lacuerda_artist_pages_good_run_is_its_own_clients(tmp_path, sites, quick, monkeypatch):
+    # Two lookups started in one second share a run id: the other's errors are never this one's, which LaCuerda
+    # answered.
+    now = datetime(2026, 10, 19, 12, 0, tzinfo=UTC)
+    monkeypatch.setattr("caracole.commands.lyrics.utcnow", lambda: now)
+    sites.lacuerda.pages[SODA] = (LACUERDA_FIXTURES / "artist.html").read_text(encoding="utf-8")
+    (tmp_path / "state").mkdir()
+    conn = open_db(tmp_path)
+    try:
+        record_block(conn, "lacuerda", now - timedelta(days=10), "403")  # one strike, its cooldown long over
+        conn.executemany("INSERT INTO events (run, at, provider, url, status, decision) VALUES (?, ?, ?, ?, ?, ?)",
+                         [(_common.lookup_run_id(now), now.strftime("%Y-%m-%dT%H:%M:%SZ"), "lacuerda",
+                           f"{SODA}theirs-{i}", 502, "error") for i in range(50)])
+        conn.commit()
+    finally:
+        conn.close()
+
+    result = run(tmp_path, "lacuerda", "--artist", "soda_stereo")
+
+    assert result.stdout == "Read: LaCuerda's page of Soda Stereo lists 14 songs.\n", result.output
+    conn = open_db(tmp_path)
+    try:
+        assert get_state(conn, "lacuerda").strikes == 0
+    finally:
+        conn.close()
+
+
 # --- the pages -----------------------------------------------------------------------------
 
 STALE = "as an earlier run left it\n"

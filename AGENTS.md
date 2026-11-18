@@ -1596,7 +1596,9 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     either itself;
   - it records its own good run where its Python does: `Health.recordOk` after `Health.answeredAny` of its run
     (`LookupWords.lookupRunOf(c.now)`, `searchRunId` for LaCuerda's search), or after any request where versions_cmd.py
-    counts them;
+    counts them; the computer's lane commands count their own client's answers since lane 6
+    (`PoliteClient.answered_any`, two lookups of one second sharing a run id there), the phone, one job at a time, its
+    run's;
   - `versions --keep` and `--keep-more`: the runner begins the song stage and finds the song, the command says from
     `{"song": …}` on, and at its `pdf` and `pages` running events (versions_cmd.py's: a version kept, pdf then pages;
     any other outcome past its refusals, pages alone) the runner makes the song's pages and ends both stages in the
@@ -3257,8 +3259,10 @@ picks one).
   - a file per waiting process, touched every `TICKET_BEAT` s while it tries for the lock, and dropped once it holds
     it;
   - one its process left, or untouched for `TICKET_STALE` s, a lookup killed while it waited, no longer counts.
-- Lookups take the lock in the lane (`exclusive(..., lane=True)`, which implies `interactive`), `caracole get`'s
-  (get.py `_Lookup.run`) among them:
+- Lookups take the lock in the lane (`exclusive(..., lane=True)`, which implies `interactive`): `caracole get`
+  (get.py `_Lookup.run`), `ug --link` (commands/ug.py `_read`), `lacuerda --search` and `--artist`, and `harptabs
+  --artist` (commands/lyrics.py), the five
+  (`test_commands_lock.py::test_lookups_take_the_lock_in_the_lane_what_the_owner_asked_for_now_as_a_lookup_and_bulk_work_neither`):
   - a shared flock of `state_dir/caracole.lock.lane` (`LANE_NAME`) from before they ask for the lock until they let
     go of it (`_release`), so a lookup run in a process that goes on, or whose acquire was interrupted, leaves it;
   - their tickets named `lane.<time.time_ns(), 20 digits>.<pid>` (`LANE_TICKET`), taken oldest first, a ticket
@@ -3279,6 +3283,18 @@ picks one).
     at a turn (another caracole took it out, or merged it into one of the same name) ends it as a refusal, its song
     stage saying so and the stages left skipped, never a bug (`_Lookup._left`,
     `::test_a_song_that_left_the_book_at_a_turn_ends_the_lookup_in_its_song_stages_words`);
+  - `ug --link` passes a turn between a tab's page and its artist's lists (its `stage` callback, as the artist stage
+    starts after a tab's), and reads overrides.toml again after it (`overrides_since`); the others only in their
+    client's pauses. What each reads before a request and writes after it: LaCuerda's search checks its gate (asked,
+    answered, the hour, a failure, the hour's automatic searches) and sends its one request, its client's first, in
+    one turn; `ug --link`'s `known` decides only before its first request, and kv `ug:link-failed` is read and written
+    after its last, with no turn between; `lacuerda --artist` and `harptabs --artist` store each page as they read it.
+    Each one's good run is its own client's (`PoliteClient.answered_any`)
+    (`test_commands_ug.py::test_a_ug_link_takes_a_turn_between_its_tab_page_and_its_artists_lists`,
+    `::test_a_ug_links_good_run_is_its_own_clients`,
+    `test_commands_lyrics.py::test_a_lacuerda_search_checks_its_gate_and_sends_in_one_turn`,
+    `::test_a_lacuerda_artist_pages_good_run_is_its_own_clients`,
+    `test_commands_harptabs.py::test_an_artist_pages_good_run_is_its_own_clients`);
   - two lookups of one song, one from a terminal beside serve's, interleave their writes to it by turns (serve never
     runs two jobs of a song): accepted (the spec's part 3);
   - a caracole that isn't in the lane, once it has the lock, lets go of it while the lane holds anyone and waits for

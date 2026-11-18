@@ -1919,7 +1919,7 @@ A page caracole can't write ends the command with status 1 and
 **One caracole at a time.** The commands that ask the sites for pages or write
 the library hold caracole's lock, `caracole.lock` in the state folder, while they
 work, so no two budgets are ever spent side by side: `run` from start to end,
-`get`, `index build` and `refresh`, `fetch`, `lyrics`, `lacuerda`, `gtptabs`,
+`get`, `ug`, `index build` and `refresh`, `fetch`, `lyrics`, `lacuerda`, `gtptabs`,
 `harptabs`, `gametabs`, `musescore`, `youtube`, `render`, `match`, `scan`, `todo`, `sync`, `add`,
 `search --add`, `autochords` and the `songbook` commands that change a songbook
 or render one. A
@@ -1933,7 +1933,8 @@ lock: if the caracole it waited for was blocked, it sends that site nothing and
 exits 0. Its first request to a site also waits out the pause after the last
 request any caracole sent there, so the pauses hold whichever caracole sends.
 
-A lookup (`caracole get`) never waits behind a whole run: it says
+A lookup (`caracole get`, `ug --link`, `lacuerda --search` and `--artist`,
+`harptabs --artist`) never waits behind a whole run: it says
 `Another caracole is running (pid 4242: run); it lets a lookup go first at its
 next pause, or between two songs.`, and the run, which spends most of its time in its 2.5–5 second
 pauses (its youtube step, in its 3.75–7.5 seconds between two yt-dlp runs), lets go
@@ -1961,6 +1962,20 @@ longer waited for after five seconds. The run lets lookups alone go first: a
 command that isn't one (`caracole fetch`, `render`, `sync`, …) still waits for
 the whole run, even when it started before the lookup came, and the run holds
 `caracole.lock.handoff` in the state folder while a lookup has the lock.
+Lookups take turns with the lock among themselves, a request or a stage each,
+so two or three at once all move and each site still gets one request at a
+time. They take it in a lane of their own, `caracole.lock.lane` in the state
+folder: while a lookup runs there or waits for its turn, no other caracole takes
+the lock, not even between two turns, so a run, a command asked for now or one
+from a terminal waits for the lane to empty. After a turn a lookup counts the
+hour's lookups again, sends nothing to a site the other was turned back by, and
+waits the pause after the other's last request there; `get` reads
+overrides.toml and its song again, and `ug --link` reads overrides.toml again
+between a tab's page and its artist's lists.
+LaCuerda's search checks what keeps it from asking and asks in one turn. A
+lookup still waits for a sync, an import, an index merge or a YouTube sheet's
+models, which hold the lock to their end: rare, and minutes at worst (the
+owner's choice of 2026-11-18).
 What you ask for now waits as a lookup does and says the same, so that a lookup
 `caracole serve` queues after it never waits behind the whole run either: `add`,
 `remove`, `review`, `fetch --song`, `render --song`, `youtube --song` (its

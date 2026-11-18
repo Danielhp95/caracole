@@ -451,6 +451,7 @@ class _Took(Exception):
 
 
 VIDEO = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+TAB_URL = "https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-4169"
 # caracole serve queues these for the owner, one at a time: a lookup queued after one must not wait behind
 # the whole nightly run that one waits for, so each announces itself as a lookup does and is handed the lock
 # at the run's next pause ("A lookup never waits behind a whole nightly run").
@@ -473,7 +474,13 @@ ASKED_NOW = [
 BULK = [("run",), ("fetch",), ("render",), ("youtube",), ("lyrics",), ("match",), ("sync",)]
 # The lookups: in the lane, where they take turns with the lock, a request or a stage each, and no other caracole
 # takes it while one is there.
-LANE = [("get", "Radiohead", "Creep")]
+LANE = [
+    ("get", "Radiohead", "Creep"),
+    ("ug", f"--link={TAB_URL}", "--progress"),
+    ("lacuerda", "--search=calamaro flaca", "--progress"),
+    ("lacuerda", "--artist=andres-calamaro"),
+    ("harptabs", "--artist=Radiohead"),
+]
 
 
 @pytest.mark.parametrize("args", [*LANE, *ASKED_NOW, *BULK], ids=" ".join)

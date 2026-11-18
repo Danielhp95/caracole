@@ -219,3 +219,85 @@ def test_the_hours_lookups_spent_asks_nothing(tmp_path, sites):
 def test_a_text_that_is_no_ug_link_exits_2_and_asks_nothing(tmp_path, sites):
     result = run(tmp_path, "--link", "https://www.ultimate-guitar.com/explore")
     assert result.exit_code == 2 and sites.ug.requests == []
+
+
+# --- another lookup in the lane --------------------------------------------------------------------------------
+
+
+def test_a_ug_link_takes_a_turn_between_its_tab_page_and_its_artists_lists(tmp_path, sites, monkeypatch):
+    # Once the tab's page is read, the next lookup in the lane goes first, before its artist's lists, never in a
+    # transaction; what it wrote meanwhile in overrides.toml (a tab blocked) is what the lists are read with.
+    import typer
+
+    from caracole.overrides import add_block
+    from caracole.ug import fetch
+
+    monkeypatch.setattr(_common, "_handoffs", _common.handoffs())  # put back as it was after the test
+    in_a_transaction: list[bool] = []
+
+    def turn(cfg, conn=None) -> bool:
+        typer.echo("turn")  # beside the --progress lines
+        in_a_transaction.append(conn is None or conn.in_transaction)
+        if len(in_a_transaction) > 1:  # the turns of its client's pauses: nobody waits
+            return False
+        _common._handoffs += 1  # the other lookup had the lock, and wrote overrides.toml
+        add_block(cfg.overrides_file, 5000001)
+        return True
+
+    read_again: list = []
+    real_since = _common.overrides_since
+
+    def overrides_since(cfg, overrides, handed):
+        again = real_since(cfg, overrides, handed)
+        if again is not overrides:
+            read_again.append(again)
+        return again
+
+    read_with: list = []
+    real_read = fetch.read_artist_page
+
+    def read_artist_page(ctx, base, *args, **kwargs):
+        read_with.append(ctx.overrides)
+        return real_read(ctx, base, *args, **kwargs)
+
+    monkeypatch.setattr(_common, "pass_turn", turn)
+    monkeypatch.setattr(_common, "overrides_since", overrides_since)
+    monkeypatch.setattr(fetch, "read_artist_page", read_artist_page)
+
+    result = run(tmp_path, "--link", FOUND, "--progress")
+
+    assert result.exit_code == 0, result.output
+    said = [(e["stage"], e["state"]) if (e := read_progress_line(line)) else line
+            for line in result.stdout.splitlines()]
+    assert said[said.index("turn") - 1] == ("tab", "done") and said[said.index("turn") + 1] == ("artist", "running")
+    assert not any(in_a_transaction)
+    assert len(read_again) == 1 and read_with == read_again and 5000001 in read_again[0].block
+    assert result.stdout.splitlines()[-1] == READ
+
+
+def test_a_ug_links_good_run_is_its_own_clients(tmp_path, sites, monkeypatch):
+    # Two lookups started in one second share a run id: the other's errors are never this one's, which UG answered.
+    from datetime import UTC, datetime, timedelta
+
+    from caracole.health import get_state, record_block
+
+    now = datetime(2026, 10, 19, 12, 0, tzinfo=UTC)
+    monkeypatch.setattr("caracole.commands.ug.utcnow", lambda: now)
+    (tmp_path / "state").mkdir()
+    conn = database(tmp_path)
+    try:
+        record_block(conn, "ug", now - timedelta(days=10), "403")  # one strike, its cooldown long over
+        conn.executemany("INSERT INTO events (run, at, provider, url, status, decision) VALUES (?, ?, ?, ?, ?, ?)",
+                         [(_common.lookup_run_id(now), now.strftime("%Y-%m-%dT%H:%M:%SZ"), "ug", f"{TAB}theirs-{i}",
+                           502, "error") for i in range(50)])
+    finally:
+        conn.close()
+
+    result = run(tmp_path, "--link", FOUND)
+
+    assert result.stdout.splitlines()[-1] == READ, result.output
+    conn = database(tmp_path)
+    try:
+        assert get_state(conn, "ug").strikes == 0
+    finally:
+        conn.close()

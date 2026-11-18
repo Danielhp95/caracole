@@ -1,16 +1,19 @@
 """Helpers shared by command modules: config, database, the run lock, clients, pages, clock.
 
 Two paces (``config.ProviderPolicy``). Bulk work, every command but ``caracole
-get``, ``caracole lacuerda --artist`` and ``caracole lacuerda --search``, keeps
-a provider's ``delay`` (2.5-5 s for UG) between any two requests to it,
+get``, ``caracole versions``, ``caracole ug --link``, ``caracole lacuerda
+--artist`` and ``--search`` and ``caracole harptabs --artist``, keeps a
+provider's ``delay`` (2.5-5 s for UG) between any two requests to it,
 whichever caracole sent them, and its ``budget`` a run. An interactive lookup
-(``caracole get``: one song asked for just now; ``caracole lacuerda
---artist``: one LaCuerda artist's page; ``caracole lacuerda --search``: one
-query of LaCuerda's search) takes
-``make_client(..., interactive=True)``: ``lookup_delay`` (0.125-0.375 s)
-between two requests, ``lookup_requests`` for the song, and ``lookup_per_hour``
-for every lookup of the last hour together, counted from ``events`` (runs named
-``lookup:…``).
+(``caracole get``: one song asked for just now; ``caracole ug --link``: a UG
+page pasted; ``caracole lacuerda --artist``: one LaCuerda artist's page;
+``caracole lacuerda --search``: one query of LaCuerda's search; ``caracole
+harptabs --artist``: one harptabs.com artist's page; ``caracole versions
+--keep`` and ``--keep-more``: a song's versions kept now) takes
+``make_client(..., interactive=True)``: ``lookup_delay``
+(0.125-0.375 s) between two requests, ``lookup_requests`` for the song, and
+``lookup_per_hour`` for every lookup of the last hour together, counted from
+``events`` (runs named ``lookup:…``).
 
 One caracole at a time, but a lookup never waits behind a whole nightly run:
 it announces itself in ``state_dir/caracole.lock.waiting/`` (``exclusive(...,
@@ -27,10 +30,15 @@ a lookup does, so that a lookup queued behind it never waits behind the whole ru
 holding the lock, it hands it to the lane's lookups alone, at its own hand-over
 points (a yt-dlp pause, a YouTube sheet before its models, ``fetch --song``'s
 pauses), and takes it back once the lane is empty.
-Lookups take the lock in a lane of their own (``exclusive(..., lane=True)``, a shared
-flock of ``caracole.lock.lane``): while one is there, no other caracole takes the lock.
-They take turns at it (``pass_turn``): before each request but a client's first, and
-between two stages, one lets the next in the lane have it, and takes it back in turn.
+
+The interactive lookups (``get``, ``ug --link``, ``lacuerda --artist`` and
+``--search``, ``harptabs --artist``) take the lock in a lane of their own
+(``exclusive(..., lane=True)``, a shared flock of ``caracole.lock.lane``): while
+one is there, no other caracole takes the lock. They take turns at it
+(``pass_turn``): before each request but a client's first, and between two
+stages (``get``'s, and ``ug --link``'s tab page and its artist's lists), one lets
+the next in the lane have it, and takes it back in turn. Each one's good run is
+what its own client was answered (``PoliteClient.answered_any``).
 """
 
 from __future__ import annotations
