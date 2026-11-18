@@ -3461,7 +3461,9 @@ def test_a_lines_states_fit_its_line_and_its_pick_opens_the_picker_where_it_is(c
         assert line["out"] == [] and line["over"] == [], (title, line)
     # A line with a request's line is one line taller than the rest, no more.
     plain = max(line["height"] for title, line in states["lines"].items() if title != "Bohemian Rhapsody")
-    assert plain < states["lines"]["Bohemian Rhapsody"]["height"] <= plain + 30, states
+    # The queued line holds Cancel, a button of 32 px (44 on a touch screen) that the line grows to hold, as a
+    # removal's Undo does; the limit of 30 predates a button in it.
+    assert plain < states["lines"]["Bohemian Rhapsody"]["height"] <= plain + 30 + 14, states
     assert states["open"] and states["panel"] and states["expanded"] == "true", states
     assert states["focus"] == "radiohead/creep", states
 

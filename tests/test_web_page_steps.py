@@ -482,6 +482,75 @@ def test_a_queued_request_says_its_place_with_cancel_beside_it(cfg, live, tmp_pa
         runner.go()
 
 
+def _queued_behind_creep(cfg, runner, page, base):
+    """Creep looked up and held; Wonderwall's Fetch queued behind it. Returns Wonderwall's line selector."""
+    runner.script = FROM_UG
+    creep_line = line_of(creep(cfg))
+    conn = db.connect(cfg.db_path)
+    try:
+        wonder = add_song(conn, "Oasis", "Wonderwall")
+    finally:
+        conn.close()
+    wonderwall = line_of(wonder)
+    page.open(base)
+    page.click(f"{creep_line} .line-more")
+    page.click(f"{creep_line} .line-action form.fetch button")
+    wait_for(page, bar_of(creep_line), ["done", "done", "running", "waiting", "waiting", "waiting", "waiting"])
+    page.click(f"{wonderwall} .line-more")
+    page.click(f"{wonderwall} .line-action form.fetch button")
+    wait_for(page, f"document.querySelector('{wonderwall} .progress').textContent",
+             "Queued · 1 request ahead…·Cancel")
+    return wonderwall
+
+
+def test_cancel_touches_no_neighbouring_target_and_stays_in_its_line(cfg, live, tmp_path):
+    base, runner = live
+    with driven(tmp_path, 390) as page:
+        wonderwall = _queued_behind_creep(cfg, runner, page, base)
+        # Cancel's box meets no line's play tiles or chevron (every line's, its own too), and lies in its own line.
+        clashes = page.js("(() => { const b = document.querySelector("
+                          f"'{wonderwall} .progress button.cancel').getBoundingClientRect(); "
+                          "const hit = (r) => r.left < b.right && b.left < r.right && r.top < b.bottom && b.top < r.bottom; "
+                          "return [...document.querySelectorAll('#list .line-plays > *, #list .line-more')]"
+                          ".filter((e) => e.getClientRects().length && hit(e.getBoundingClientRect()))"
+                          ".map((e) => e.className); })()")
+        assert clashes == [], clashes
+        inside = page.js("(() => { const b = document.querySelector("
+                         f"'{wonderwall} .progress button.cancel').getBoundingClientRect(); "
+                         f"const l = document.querySelector('{wonderwall}').getBoundingClientRect(); "
+                         "return b.top >= l.top - 0.5 && b.bottom <= l.bottom + 0.5; })()")
+        assert inside
+        runner.go()
+        runner.go()
+
+
+@pytest.mark.parametrize("refusal", ["409", "none"])
+def test_a_cancel_the_server_refuses_or_never_answers_says_so_and_leaves_no_dead_button(cfg, live, tmp_path, refusal):
+    base, runner = live
+    with driven(tmp_path, 1280) as page:
+        wonderwall = _queued_behind_creep(cfg, runner, page, base)
+        answer = ("Promise.resolve(new Response(JSON.stringify({error: 'Already over: nothing to cancel.'}), "
+                  "{status: 409}))" if refusal == "409" else "Promise.reject(new TypeError('offline'))")
+        page.js("(() => { const real = window.fetch; window.fetch = (u, o) => String(u).includes('/jobs/cancel') ? "
+                f"{answer} : real(u, o); return true; }})()")
+        # The poll draws the queued line again within 100 ms: watch every text the line takes.
+        page.js("(() => { window.texts = []; const p = document.querySelector("
+                f"'{wonderwall} .progress'); new MutationObserver(() => window.texts.push(p.textContent))"
+                ".observe(p, {subtree: true, childList: true, characterData: true}); return true; })()")
+        page.click(f"{wonderwall} .progress button.cancel")
+        said = ("Already over: nothing to cancel." if refusal == "409"
+                else "No answer from caracole serve. Is it running?")
+        assert page.wait(f"window.texts.includes({json.dumps(said)})"), page.js("window.texts")
+        # The next view of the job draws its queued line again, with a Cancel that works.
+        wait_for(page, f"document.querySelector('{wonderwall} .progress').textContent",
+                 "Queued · 1 request ahead…·Cancel")
+        assert page.js(f"document.querySelector('{wonderwall} .progress button.cancel').disabled") is False
+        # While it said so, no button was left on the line (a dead, disabled one).
+        assert all("Cancel" not in t for t in page.js("window.texts") if t == said)
+        runner.go()
+        runner.go()
+
+
 @pytest.mark.parametrize("width", [1280, 390])
 def test_a_search_results_get_it_shows_the_bar_in_its_row_then_the_song_as_yours(cfg, live, tmp_path, width):
     base, runner = live
