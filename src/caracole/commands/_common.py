@@ -779,17 +779,29 @@ def _locked_client() -> type[PoliteClient]:
         has had the lock, in this client's pause or another's of the process, it sends
         nothing more to a site that blocked the lookup, and waits the whole pause after
         the lookup's last request to its site, not only after its own (``_after_a_lookup``).
+
+        A lookup's in the lane (``lane``) passes a turn at the start of its pause before each
+        request but its first (``pass_turn``), so the next lookup in the lane uses the pause.
+        After a turn, in its pause or between two of its lookup's stages, it keeps what the other
+        left as bulk work's does (its block, the pause after its last request), and its budget is
+        cut to what is left: of ``lookup_per_hour``, every lookup's of the last hour, less its
+        ``reserve`` (after the sheet, get.py keeps ``SHEETS_SHARE`` of the hour for sheets), and
+        of the UTC day's ``per_day``; spent, its next request is never sent (``BudgetExhausted``,
+        one ``budget`` event), and ``kept_back`` says when the reserve had a part in the cut.
         """
 
         def __init__(self, *args, lock: Path, cfg: Config | None = None,
-                     conn: sqlite3.Connection | None = None, yields: bool = False, seen: int | None = None,
-                     **kwargs):
+                     conn: sqlite3.Connection | None = None, yields: bool = False, lane: bool = False,
+                     seen: int | None = None, **kwargs):
             super().__init__(*args, **kwargs)
             self._lock: Path | None = lock
             self._cfg = cfg
             self._conn = conn
             self._yields = yields and cfg is not None
+            self._lane = lane and cfg is not None and conn is not None
             self._seen = _handoffs if seen is None else seen  # the handoffs this client has looked at
+            self.reserve = 0  # of lookup_per_hour, what a turn's cut leaves for sheets (get.py, after the sheet)
+            self.kept_back = False  # whether a turn's cut came from the reserve: get.py says it was kept for sheets
 
         @property
         def handoffs(self) -> int:
@@ -809,26 +821,51 @@ def _locked_client() -> type[PoliteClient]:
             _patient_sleep(self._cfg, self._conn, seconds, again, self._sleep)
 
         def _pause(self, url: str) -> None:
+            if self._lane and self.requests_made > 0:  # never before its first request
+                assert self._cfg is not None
+                pass_turn(self._cfg, self._conn)  # the next lookup in the lane goes first, in this pause
             self._after_a_lookup(url)  # one had the lock since this client last looked
             super()._pause(url)
             self._after_a_lookup(url)  # one went first in this very pause, which began again after it
 
         def _after_a_lookup(self, url: str) -> None:
-            """What a lookup this process let go first left, once there was one since the client last looked,
-            before its next request: a block the lookup met (health.py, as the lookup recorded it) is this
-            client's too, and nothing is sent; else the pause runs from the last request any caracole sent
-            the site (kv ``http:last_request:``), the lookup's included, when that is later than its own."""
-            if not self._yields or self._conn is None or self._seen == _handoffs:
+            """What a lookup this process let go first, or the lookup whose turn it was, left, once there was one
+            since the client last looked, before its next request: a block the lookup met (health.py, as the
+            lookup recorded it) is this client's too, and nothing is sent; else the pause runs from the last
+            request any caracole sent the site (kv ``http:last_request:``), the lookup's included, when that is
+            later than its own; and a lane client's budget is what the other left (``_within_what_is_left``)."""
+            if not (self._yields or self._lane) or self._conn is None or self._seen == _handoffs:
                 return
             self._seen = _handoffs
             if is_cooling(self._conn, self.provider, self._wall_clock()):
-                self._blocked = ProviderBlocked(self.provider, url, None, "met by a lookup caracole let go first")
+                met = "met by a lookup caracole let go first" if self._yields else "met by another lookup at its turn"
+                self._blocked = ProviderBlocked(self.provider, url, None, met)
                 raise self._blocked
             last = _last_request(self._conn, self.provider)
             if last is not None:
                 at = self._clock() - max(0.0, time.time() - last)
                 if self._last_request is None or at > self._last_request:
                     self._last_request = at
+            if self._lane:
+                self._within_what_is_left(url)
+
+        def _within_what_is_left(self, url: str) -> None:
+            """A lane client's budget after another lookup's turn, read again as ``lookup_policy`` and
+            ``within_the_day`` read it when the client was made, the other's requests now among them: no more
+            than what the last hour's lookups left of ``lookup_per_hour`` less its ``reserve``, nor than what the
+            UTC day left of a ``per_day``. Spent, ``BudgetExhausted`` before the request, its one ``budget``
+            event; ``kept_back`` once the reserve had a part in the cut."""
+            assert self._cfg is not None and self._conn is not None
+            now = self._wall_clock()
+            used = lookup_requests_used(self._conn, self.provider, now)
+            hour = self.requests_made + max(0, self._cfg.provider(self.provider).lookup_per_hour - self.reserve - used)
+            self.kept_back = self.kept_back or (self.reserve > 0 and hour < self.policy.budget)
+            budget = min(self.policy.budget, hour)
+            if self.policy.per_day is not None:
+                day = self.policy.per_day - requests_today(self._conn, self.provider, now)
+                budget = min(budget, self.requests_made + max(0, day))
+            self.policy = replace(self.policy, budget=budget)
+            self._check_budget(url)
 
         def close(self) -> None:
             try:
@@ -957,7 +994,10 @@ def make_client(
     ``fetch --song`` takes it, to the lane's lookups alone). ``interactive``, a lookup's
     (``caracole get``), keeps ``lookup_policy``: a gap of a quarter of a second, and a
     few requests; its run id starts with ``lookup:`` so the hourly budget counts
-    them, and it never hands the lock over. Bulk work's tries a connection that fails before any byte is
+    them, and it never hands the lock over. A lookup's client in the lane (its process holds
+    the lock in the lane) passes a turn before each request but its first, and after one keeps
+    what the other left: its block, its last request's pause, the hour, the day and its
+    ``reserve``. Bulk work's tries a connection that fails before any byte is
     sent again for up to ``CONNECT_PATIENCE`` (a run that starts as the laptop wakes, before its Wi-Fi has
     an address); a lookup's says at once. Either way, a site with a ``per_day``
     (Megalobiz) gets no more than what the UTC day leaves of it (``within_the_day``).
@@ -991,6 +1031,7 @@ def make_client(
             cfg=cfg,
             conn=conn,
             yields=not interactive,
+            lane=interactive and lock in _lane,
             seen=seen,
             connect_patience=0.0 if interactive else CONNECT_PATIENCE,
         )

@@ -2759,7 +2759,11 @@ picks one).
     between two requests to a provider;
   - a budget of `lookup_requests` (6) requests to it for the song;
   - and at most `lookup_per_hour` (60) for every lookup of the last hour together (`_common.lookup_policy`, counting
-    the `events` of runs named `lookup:…`).
+    the `events` of runs named `lookup:…`), read again after each turn (`_LockedClient` in the lane: the hour, the
+    day, and after the sheet its `reserve`), so two lookups at once never pass it together: what the other spent
+    in its turn cuts the next request, which is never sent, one `budget` event
+    (`test_commands_lane.py::test_after_a_turn_a_lookups_client_keeps_to_what_the_hour_and_the_day_leave`,
+    `::test_after_the_sheet_a_turn_keeps_the_reserve_for_sheets`, `::test_the_hour_holds_for_two_lookups`).
 - What follows the sheet, which the nightly run would do anyway (get.py's `ug` stage, LaCuerda for a song with a
   sheet), spends only what leaves `get.SHEETS_SHARE` (half) of that hour's requests for sheets
   (`_Lookup.after_the_sheet`).
@@ -2797,8 +2801,12 @@ picks one).
 
 #### Either pace
 
-- One request at a time per provider (a synchronous client, and the lock below), redirect hops included; UG's
-  artist directory alone has several in flight, the owner's choice above.
+- One request at a time per provider (a synchronous client, and the lock below; two lookups at once pass the lock
+  between two requests, a lane client's turn coming at the start of its pause before each request but its first,
+  and after one its pause runs from the other's last request and a block the other met stops it:
+  `test_commands_lane.py::test_two_lookups_requests_alternate_and_a_site_sees_one_at_a_time`,
+  `::test_one_lookups_block_stops_the_other_before_its_next_request`), redirect hops included; UG's artist
+  directory alone has several in flight, the owner's choice above.
 - A request answered with a redirect is a request sent, followed or not: `_common._SENT` and `Pace.SENT` count its
   `redirect` event in the hour's, the day's and `http:last_request:`.
 - A connection that fails before any byte is sent (`httpx.ConnectError`: no address, no route) is tried again only
@@ -2849,6 +2857,8 @@ picks one).
   (`_LockedClient._after_a_lookup`), and `record_block` adds no strike for a cooldown that began after its caller did,
   as `record_ok` clears none
   (`test_commands_common.py::test_bulk_work_sends_nothing_more_to_a_site_that_blocked_a_lookup_it_let_go_first`).
+  So is one the other lookup in the lane met at its turn: one block, one strike
+  (`test_commands_lane.py::test_one_lookups_block_stops_the_other_before_its_next_request`).
 
 #### robots.txt
 

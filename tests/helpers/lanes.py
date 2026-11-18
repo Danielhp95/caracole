@@ -28,6 +28,13 @@ Each of those two asks for ``https://tabs.ultimate-guitar.com/tab/<name>/<i>``, 
 ``start <name> <t> <url>`` and ``end <name> <t> <status>`` around each request (200 "ok", 403 for a URL ending in
 ``/block``), and ends ``done <name> <t> <handoffs>`` (its client's ``handoffs``), still holding the lock. Their
 database is ``cfg.db_path``: a test that gives them one already migrated (the ``conn`` fixture) starts them sooner.
+
+- ``LOOKUP`` (name, count, block=-1): a lookup in the lane, ``exclusive(cfg, f"get {name}", lane=True)``, and its
+  interactive UG client (``make_client(cfg, conn, "ug", lookup_run_id(now), interactive=True)``), which passes a turn
+  before each request but its first, sending ``count`` requests through the same transport, the one of index
+  ``block`` to a URL ending in ``/block`` (-1, none). It ends ``done``, ``spent`` (``BudgetExhausted``) or
+  ``blocked`` (``ProviderBlocked``, recorded by ``record_block(conn, "ug", now, str(e))`` as get.py's asking records
+  one), each ``<word> <name> <t> <requests_made>``, still holding the lock.
 """
 
 from __future__ import annotations
@@ -125,6 +132,29 @@ with _common.exclusive(cfg, "run"):
 QUEUE_JOB = _HEAD + _SITE + _GO + """
 with _common.exclusive(cfg, f"fetch --song {name}", interactive=True):
 """ + _REQUESTS
+
+LOOKUP = _HEAD + _SITE + """
+from datetime import UTC, datetime
+
+from caracole.health import record_block
+from caracole.http import BudgetExhausted, ProviderBlocked
+""" + _GO + """
+now = datetime.now(UTC)
+count, block = int(args[1]), int(args[2]) if len(args) > 2 else -1
+with _common.exclusive(cfg, f"get {name}", lane=True):
+    client = _common.make_client(cfg, conn, "ug", _common.lookup_run_id(now), interactive=True)
+    try:
+        for i in range(count):
+            client.get(f"https://tabs.ultimate-guitar.com/tab/{name}/{'block' if i == block else i}")
+        word = "done"
+    except BudgetExhausted:
+        word = "spent"
+    except ProviderBlocked as e:
+        record_block(conn, "ug", now, str(e))  # as get.py's asking records it
+        word = "blocked"
+    say(word, client.requests_made)
+    client.close()
+"""
 
 
 class Record(NamedTuple):

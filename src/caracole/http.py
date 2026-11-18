@@ -192,6 +192,7 @@ _CACHED_STATUSES = (200, 404)
 # The waits before each new try of a connection that failed before any byte was sent, while a client's patience lasts.
 _CONNECT_WAITS = (2.0, 4.0, 8.0, 16.0, 30.0)
 _KEPT_HEADERS = ("etag", "last-modified", "content-type", "location")
+_FAILED = ("error", "blocked")  # a request's events that are no answer, as health.answered_any counts them
 # Markers of a real challenge page. Normal UG pages also load Cloudflare's
 # "/cdn-cgi/challenge-platform/" bot-management script, so that string alone
 # is NOT evidence of a challenge.
@@ -423,7 +424,8 @@ class PoliteClient:
     - Before every network request except the first, it pauses for a random
       time in ``policy.delay``, minus the time already elapsed. A subclass may spend the pause otherwise
       (``_wait``): commands/_common.py's hands caracole's lock to a waiting lookup.
-    - ``policy.budget`` network requests per run; after that ``BudgetExhausted``.
+    - ``policy.budget`` network requests per run; after that ``BudgetExhausted``, with one ``budget`` event
+      (``_check_budget``, which a subclass that cuts the budget between two requests asks again).
     - A URL robots.txt disallows (``robots_disallows``) is never requested: when
       no cached answer is served, ``RobotsClosed``. Nor is a string httpx can't
       parse as a URL, which is a ``ProviderError`` at once.
@@ -454,6 +456,8 @@ class PoliteClient:
       Nothing else is tried again: a request that may have reached the site (an error reading its
       answer, a timeout) is the request's error at once. A retry is the same request: no event, and
       no more of the budget.
+    - ``answered_any``: whether the site answered any request it sent, from its own count of those that failed
+      (an ``error`` or a ``blocked`` event), as ``health.answered_any`` reads a run's from ``events``.
     """
 
     def __init__(
@@ -479,6 +483,7 @@ class PoliteClient:
         self.policy = policy
         self.cache_root = cache_dir / "http" / provider
         self.requests_made = 0
+        self._failed = 0  # requests sent and answered with an error or a block (``_event``)
         self._sleep = sleep
         self._rng = rng or random.Random()
         self._on_event = on_event
@@ -594,6 +599,14 @@ class PoliteClient:
         sent, nothing is counted, and it works whatever the budget, a block or a cooldown."""
         return cached_answer(self.cache_root, url, accept=accept)
 
+    def answered_any(self) -> bool:
+        """Whether the site answered at least one of the requests this client sent it: more were sent than
+        failed with an error or a block, as ``health.answered_any`` counts a run's in ``events``. Only then did
+        its work go well (``record_ok``): one whose every request failed (UG answering 502, say) is no success,
+        and one that sent nothing has nothing to say. Its own count, so two lookups whose run ids are alike (two
+        started in one second) never read each other's errors."""
+        return self.requests_made > self._failed
+
     def close(self) -> None:
         self._http.close()
 
@@ -654,15 +667,21 @@ class PoliteClient:
             raise ProviderBlocked(self.provider, url, self._blocked.status, "blocked earlier this run")
         if self._unavailable:
             raise ProviderUnavailable(self.provider, url, None, "too many errors this run")
+        self._check_budget(url)
+
+        self._pause(str(request.url))
+        self.requests_made += 1
+        self._last_request = self._clock()
+
+    def _check_budget(self, url: str) -> None:
+        """The budget a request to ``url`` must keep: spent, ``BudgetExhausted``, said once in a ``budget`` event
+        (the first time). ``_claim`` asks before the pause, and a subclass that cuts ``policy.budget`` in the pause
+        (commands/_common.py's lane client, after another lookup's turn) asks again."""
         if self.requests_made >= self.policy.budget:
             if not self._budget_reported:
                 self._budget_reported = True
                 self._event(url, None, "budget", f"budget of {self.policy.budget} requests spent")
             raise BudgetExhausted(self.provider)
-
-        self._pause(str(request.url))
-        self.requests_made += 1
-        self._last_request = self._clock()
 
     def _transmit(self, url: str, request: httpx.Request) -> httpx.Response:
         """A request ``_claim`` cleared, sent: a connection that fails before any byte is sent tried again while the
@@ -734,6 +753,8 @@ class PoliteClient:
                                         used=self.requests_made, budget=self.policy.budget))
 
     def _event(self, url: str, status: int | None, decision: str, message: str | None) -> None:
+        if decision in _FAILED:  # a request sent that the site answered with no answer: ``answered_any``
+            self._failed += 1
         if self._on_event is not None:
             self._on_event(Event(provider=self.provider, url=url, status=status, decision=decision, message=message))
 
@@ -812,6 +833,10 @@ class ParallelClient(PoliteClient):
     def _fail(self, url: str, status: int | None, message: str) -> None:
         with self._lock:
             super()._fail(url, status, message)
+
+    def _event(self, url: str, status: int | None, decision: str, message: str | None) -> None:
+        with self._lock:  # its workers make events: the count of failed requests is kept under its lock
+            super()._event(url, status, decision, message)
 
     def get_many(self, urls: Sequence[str | tuple[str, Mapping[str, Any]]],
                  **get: Any) -> Iterator[tuple[str, Response | BaseException]]:

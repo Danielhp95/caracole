@@ -1,6 +1,7 @@
 """The lane at caracole's lock (commands/_common.py): lookups taking turns, everyone else waiting for an empty
 lane, and what holds the lock handing it to the lane: what the owner asked for now, to the lane's lookups alone,
-and bulk work, which takes it back once the lane is empty."""
+and bulk work, which takes it back once the lane is empty; and a lookup's client in the lane, which passes a turn
+before each request but its first and keeps, after one, what the other left of the hour and the day."""
 
 from __future__ import annotations
 
@@ -14,7 +15,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
-from helpers.lanes import BULK, HOLD, QUEUE_JOB, TURNS, WAITER, Record, config_file, records, start, wait_for
+from helpers.lanes import BULK, HOLD, LOOKUP, QUEUE_JOB, TURNS, WAITER, Record, config_file, records, start, wait_for
 from helpers.locks import waiting_for
 
 from caracole import db
@@ -527,3 +528,205 @@ def test_a_nightly_run_that_let_a_queue_job_in_gives_it_back_at_its_next_pause(c
     _, q_second = said(log, "start", "q")
     _, r_second, _ = said(log, "start", "r")
     assert turn_l.t < q_second.t < r_second.t  # q handed to the lane, then had it back before the run did
+
+
+# --- a lookup's client in the lane ---------------------------------------------------------------------
+
+URLS = {"ug": "https://tabs.ultimate-guitar.com/tab/{}",
+        "megalobiz": "https://api.megalobiz.com/api/public/v1/search?q={}"}
+
+
+def answering(monkeypatch) -> list[str]:
+    """Every site answering 200, each request recorded, as it is sent; no pause slept."""
+    import httpx
+
+    seen: list[str] = []
+
+    def answer(request):
+        seen.append(str(request.url))
+        return httpx.Response(200, text="ok")
+
+    monkeypatch.setattr(_common, "transport_for", lambda provider: httpx.MockTransport(answer))
+    monkeypatch.setattr(_common, "sleep", lambda seconds: None)
+    return seen
+
+
+def lookups_an_hour(cfg, n: int):
+    """``cfg`` with UG's ``lookup_per_hour`` ``n``."""
+    from dataclasses import replace
+
+    return replace(cfg, providers={**cfg.providers, "ug": replace(cfg.provider("ug"), lookup_per_hour=n)})
+
+
+def another_lookups_turn(conn, provider: str, monkeypatch, *, lookups: int, others: int) -> list[int]:
+    """``pass_turn`` faked as the turn of another lookup in the lane: it had the lock (a handoff counted) and sent the
+    provider ``lookups`` requests of its own run (``lookup:…``) and ``others`` of a nightly run's, now. The turns
+    taken, recorded."""
+    monkeypatch.setattr(_common, "_handoffs", _common._handoffs)  # put back as it was after the test
+    turns: list[int] = []
+
+    def turn(cfg_, conn_=None) -> bool:
+        turns.append(1)
+        _common._handoffs += 1
+        at = _common.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        url = URLS[provider].format("theirs")
+        conn.executemany("INSERT INTO events (run, at, provider, url, status, decision) VALUES (?, ?, ?, ?, ?, ?)",
+                         [("lookup:2026-11-18T12:00:00Z", at, provider, url, 200, "ok")] * lookups
+                         + [("2026-11-18T03:30:00Z", at, provider, url, 200, "ok")] * others)
+        return True
+
+    monkeypatch.setattr(_common, "pass_turn", turn)
+    return turns
+
+
+def budget_events(conn, provider: str) -> int:
+    """How many times a client said the provider's budget was spent (its ``budget`` events)."""
+    return conn.execute("SELECT COUNT(*) FROM events WHERE provider = ? AND decision = 'budget'",
+                        (provider,)).fetchone()[0]
+
+
+def test_a_lookups_client_passes_no_turn_before_its_first_request(cfg, conn, monkeypatch):
+    seen = answering(monkeypatch)
+    turns: list[int] = []
+
+    def nobody_waits(cfg_, conn_=None) -> bool:
+        turns.append(len(seen))  # how many requests the site had seen when the client asked
+        return False
+
+    monkeypatch.setattr(_common, "pass_turn", nobody_waits)
+    with exclusive(cfg, "get A - B", lane=True):
+        client = _common.make_client(cfg, conn, "ug", _common.lookup_run_id(_common.utcnow()), interactive=True)
+        try:
+            for n in range(2):
+                client.get(URLS["ug"].format(n))
+        finally:
+            client.close()
+    assert len(seen) == 2
+    assert turns == [1]  # one turn, before the second: none as the client is made, nor before its first
+    client = _common.make_client(cfg, conn, "ug", _common.lookup_run_id(_common.utcnow()), interactive=True)
+    try:
+        for n in range(2, 4):
+            client.get(URLS["ug"].format(n))
+    finally:
+        client.close()
+    assert len(seen) == 4 and turns == [1]  # a lookup outside the lane takes no turn
+
+
+@pytest.mark.parametrize("provider, lookups, others", [("ug", 7, 0), ("megalobiz", 0, 899)],
+                         ids=["the hour", "the day"])
+def test_after_a_turn_a_lookups_client_keeps_to_what_the_hour_and_the_day_leave(cfg, conn, monkeypatch, provider,
+                                                                                lookups, others):
+    from caracole.http import BudgetExhausted
+
+    cfg = lookups_an_hour(cfg, 8)  # Megalobiz keeps its 60 an hour; its day is 900
+    seen = answering(monkeypatch)
+    turns = another_lookups_turn(conn, provider, monkeypatch, lookups=lookups, others=others)
+    with exclusive(cfg, "get A - B", lane=True):
+        client = _common.make_client(cfg, conn, provider, _common.lookup_run_id(_common.utcnow()), interactive=True)
+        try:
+            client.get(URLS[provider].format(1))
+            with pytest.raises(BudgetExhausted):  # the other spent what the hour or the day left
+                client.get(URLS[provider].format(2))
+        finally:
+            client.close()
+    assert turns == [1]
+    assert len(seen) == 1  # the next request never sent
+    assert budget_events(conn, provider) == 1
+    assert not client.kept_back  # no reserve: the hour's or the day's cut, not one kept for sheets
+
+
+def test_after_the_sheet_a_turn_keeps_the_reserve_for_sheets(cfg, conn, monkeypatch):
+    from caracole.http import BudgetExhausted
+
+    cfg = lookups_an_hour(cfg, 8)
+    seen = answering(monkeypatch)
+    another_lookups_turn(conn, "ug", monkeypatch, lookups=3, others=0)
+    with exclusive(cfg, "get A - B", lane=True):
+        client = _common.make_client(cfg, conn, "ug", _common.lookup_run_id(_common.utcnow()), interactive=True)
+        client.reserve = 4  # after the sheet, get.py's ceil(8 × SHEETS_SHARE) kept for sheets
+        try:
+            client.get(URLS["ug"].format(1))
+            assert not client.kept_back
+            with pytest.raises(BudgetExhausted):  # 8 an hour, 4 sent, 4 kept for sheets: none left for it
+                client.get(URLS["ug"].format(2))
+        finally:
+            client.close()
+    assert client.kept_back
+    assert len(seen) == 1 and budget_events(conn, "ug") == 1
+
+
+def lookup_lines(log: Path) -> dict[str, Record]:
+    """Each lookup's last line, by its name: done, spent or blocked."""
+    return {r.name: r for r in records(log) if r.word in ("done", "spent", "blocked")}
+
+
+@pytest.mark.slow
+def test_two_lookups_requests_alternate_and_a_site_sees_one_at_a_time(cfg, conn, tmp_path):
+    config, log = config_file(cfg, tmp_path, "lookup_delay = [0.2, 0.2]"), tmp_path / "lane.log"
+    go = {name: tmp_path / f"go-{name}" for name in "ab"}
+    with processes() as started:
+        started += [start(LOOKUP, config, log, name, 4, go=go[name]) for name in "ab"]
+        a, b = started
+        for name in "ab":
+            wait_for(log, "ready", name)
+        for path in go.values():
+            path.touch()
+        assert a.wait(30) == 0 and b.wait(30) == 0, (tmp_path / "lane.log.err").read_text()
+    starts = [r for r in records(log) if r.word == "start"]
+    ends = [r for r in records(log) if r.word == "end"]
+    first_start = {name: next(r.t for r in starts if r.name == name) for name in "ab"}
+    assert len(starts) == len(ends) == 8
+    assert abs(first_start["a"] - first_start["b"]) < 1.0  # both move at once
+    assert sum(x.name != y.name for x, y in zip(starts, starts[1:])) >= 3  # by turns
+    assert all(s.t >= e.t for s, e in zip(starts[1:], ends))  # none overlaps the one before
+    assert all(y.t - x.t >= 0.2 - 0.01 for x, y in zip(starts, starts[1:]))  # whichever process sent it
+    assert {name: r.word for name, r in lookup_lines(log).items()} == {"a": "done", "b": "done"}
+
+
+def both_in_the_lane_a_first(cfg, go: dict[str, Path], a: subprocess.Popen, b: subprocess.Popen) -> None:
+    """``a`` and ``b`` asked while another caracole holds the lock, ``a`` first, so each waits in the lane, ``a``
+    ahead; then the lock let go for both at once."""
+    with another_caracole(cfg):
+        go["a"].touch()
+        assert until(lambda: len(_common.lane_tickets(cfg)) == 1, lambda: a.poll() is None)
+        go["b"].touch()
+        assert until(lambda: len(_common.lane_tickets(cfg)) == 2, lambda: b.poll() is None)
+
+
+@pytest.mark.slow
+def test_the_hour_holds_for_two_lookups(cfg, conn, tmp_path):
+    config = config_file(cfg, tmp_path, "lookup_per_hour = 8\nlookup_delay = [0.1, 0.1]")
+    log = tmp_path / "lane.log"
+    go = {name: tmp_path / f"go-{name}" for name in "ab"}
+    with processes() as started:
+        started += [start(LOOKUP, config, log, name, 6, go=go[name]) for name in "ab"]
+        a, b = started
+        for name in "ab":
+            wait_for(log, "ready", name)
+        both_in_the_lane_a_first(cfg, go, a, b)
+        assert a.wait(30) == 0 and b.wait(30) == 0, (tmp_path / "lane.log.err").read_text()
+    starts = [r for r in records(log) if r.word == "start"]
+    last_lines = lookup_lines(log).values()
+    assert len(starts) == 8  # 8 an hour, for the two together, each wanting 6
+    assert {word for word, *_ in last_lines} == {"spent"}
+    assert sum(int(r.rest[0]) for r in last_lines) == 8
+
+
+@pytest.mark.slow
+def test_one_lookups_block_stops_the_other_before_its_next_request(cfg, conn, tmp_path):
+    from caracole.health import get_state
+
+    config, log = config_file(cfg, tmp_path), tmp_path / "lane.log"
+    go = {name: tmp_path / f"go-{name}" for name in "ab"}
+    with processes() as started:
+        started += [start(LOOKUP, config, log, "a", 3, 1, go=go["a"]), start(LOOKUP, config, log, "b", 3, go=go["b"])]
+        a, b = started
+        for name in "ab":
+            wait_for(log, "ready", name)
+        both_in_the_lane_a_first(cfg, go, a, b)
+        assert a.wait(30) == 0 and b.wait(30) == 0, (tmp_path / "lane.log.err").read_text()
+    starts = [r for r in records(log) if r.word == "start"]
+    assert [s.name for s in starts] == ["a", "b", "a"]  # b's second never sent
+    assert starts[-1].rest[0].endswith("/block")
+    assert {name: r.word for name, r in lookup_lines(log).items()} == {"a": "blocked", "b": "blocked"}
+    assert get_state(conn, "ug").strikes == 1  # one block, one strike
