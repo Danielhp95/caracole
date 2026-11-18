@@ -491,6 +491,41 @@ def test_back_closes_the_question_and_leaves_the_settings_under_it(tmp_path):
         assert b.js(SHOWN["settings"]) is True
 
 
+# --- a harmonica tab's page ---------------------------------------------------------------------------------------
+
+@in_chromium
+def test_on_a_harmonica_page_aa_and_the_necks_sheet_are_one_entry_each(tmp_path):
+    from test_viewer_harptab_browser import opened, with_sheet
+
+    with opened(tmp_path, with_sheet(tmp_path), **PHONE) as b:
+        base = entries(b)
+        assert base[0] == base[1] - 1
+        b.click("#size")
+        assert b.wait(SIZES_SHOWN)
+        assert until(b, (base[0] + 1, base[1] + 1)) == (base[0] + 1, base[1] + 1)
+        back(b)
+        assert b.wait(SIZES_HIDDEN)
+        assert until(b, (base[0], base[1] + 1)) == (base[0], base[1] + 1)
+        b.click("#necks-open")
+        assert b.wait("!document.getElementById('necks').hidden && document.getElementById('necks').dataset.sheet")
+        assert until(b, (base[0] + 1, base[1] + 1)) == (base[0] + 1, base[1] + 1)
+        back(b)
+        assert b.wait(HIDDEN["necks sheet"])
+        assert b.js(OPENER["necks sheet"]) is True
+        assert until(b, (base[0], base[1] + 1)) == (base[0], base[1] + 1)
+        b.click("#necks-open")
+        assert b.wait("!document.getElementById('necks').hidden")
+        b.click("#size")  # Aa takes the sheet's place
+        assert b.wait(f"{SIZES_SHOWN} && {HIDDEN['necks sheet']}")
+        assert until(b, (base[0] + 1, base[1] + 1)) == (base[0] + 1, base[1] + 1)
+        b.click("#size")
+        assert b.wait(SIZES_HIDDEN)
+        b.click("#necks-open")
+        assert b.wait("!document.getElementById('necks').hidden")
+        b.click("#h-up")
+        assert b.js("history.state && history.state.caracoleLayer") == 1
+
+
 # --- every viewer page ---------------------------------------------------------------------------------------------
 
 def inlined(name: str) -> str:

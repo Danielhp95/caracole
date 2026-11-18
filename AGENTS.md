@@ -1030,6 +1030,9 @@ It is rows.js's, shared by both pages:
   - below 900 px one layer at a time (opening one closes every other, but for a `nested` one, opened over another and
     leaving it open); from 900 px the rails (the settings, Harmony, the versions) one at a time, a card beside them;
     `DOCKED` (panel, card, harmony, vList, necksEl) docks at the foot on a phone, the top one of them (`dock()`);
+  - a harmonica tab's page (harptab.js) has two, `"sizes"` (Aa) and `"sheet"` (the necks' sheet): `layers`,
+    `openLayer(name, opener)`, `closeLayer(name, refocus)`, one at a time below 900 px, Aa giving way to the sheet at
+    every width, Escape closing the top one; it has no More panel;
   - `history.scrollRestoration` is `manual` from a layer's entry on, so a step down leaves the song scrolled where it
     is, and `auto` again once the page is back at its own entry, for a reload;
   - a history that refuses entries (a `pushState` that throws) turns it off: the layers open and close as before,
