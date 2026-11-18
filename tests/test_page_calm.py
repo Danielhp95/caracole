@@ -217,3 +217,46 @@ def test_no_outline_around_the_list_or_the_key(conn, cfg, library, live, tmp_pat
         page.type("wonder")
         assert page.wait(SHOWN % json.dumps("#results .rows article.row") + " >= 2", timeout=20)
         calm_in(page, "the lookup page", {".rows": 1, "lines": 2, "titles": 2, "keys": 1})
+
+
+@pytest.mark.parametrize("size", [(390, 844), (1280, 900)], ids=["phone", "laptop"])
+def test_caracole_serves_own_pages_have_the_same_four_radii(cfg, conn, live, tmp_path, size):  # noqa: F811
+    """The pick, the removal, a message page, the lookup page with results and the Guitar Pro page (with alphaTab):
+    no corner radius but the four. Their own radii come to the tokens (base.css's, which each page inlines first)."""
+    import test_web_guitar_browser as guitar
+    from helpers import browser
+    from helpers.guitar import SYNTHETIC, alphatab_dir
+    from helpers.targets import noted, noting
+    from test_web_pages import pages
+
+    from caracole.web.pages import page as message_page
+
+    width, height = size
+    static = dict(pages())
+    static["message"] = message_page("Not found", "<p>No such song.</p>")
+    for name, html in static.items():
+        path = tmp_path / f"{name}.html"
+        path.write_text(html.replace("</body>", f"<script>{noting('data-odd', odd_radii(()))}</script>\n</body>"),
+                        encoding="utf-8")
+        dom = browser.dump_dom(path.as_uri(), size, mobile=width < 500)
+        assert noted(dom, "data-odd") == [], name
+    base, _ = live
+    index_songs(cfg, [("soda-stereo", "de-musica-ligera", 2)])
+    with driven(tmp_path, width) as page:
+        page.open(base + "lookup")
+        page.type("musica ligera")
+        assert page.wait("document.querySelectorAll('#results .hit').length >= 1", timeout=20), page.js("document.body.innerText")
+        assert page.js(odd_radii(())) == [], "the lookup page"
+    if alphatab_dir() is None:
+        return
+    server, _, url = guitar.serving(cfg, conn, SYNTHETIC.read_bytes())
+    try:
+        page = guitar.opened(tmp_path, url, width=width, height=height, mobile=width < 500)
+        try:
+            assert page.wait(guitar.RENDERED, 30)
+            assert page.js(odd_radii(("#score",))) == [], "the Guitar Pro page"
+        finally:
+            page.close()
+    finally:
+        server.shutdown()
+        server.server_close()

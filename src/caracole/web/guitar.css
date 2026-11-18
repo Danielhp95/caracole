@@ -9,7 +9,7 @@
   font-weight: 600; }
 .tempo input { width: 7.5rem; height: 44px; margin: 0; accent-color: var(--accent); }
 .tempo output { min-width: 3.2em; color: var(--text); font-variant-numeric: tabular-nums; }
-.view { display: inline-flex; margin: 0; padding: 0; border: 1px solid var(--control-edge); border-radius: 11px;
+.view { display: inline-flex; margin: 0; padding: 0; border: 1px solid var(--control-edge); border-radius: var(--radius-m);
   overflow: hidden; }
 .view label { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 44px;
   min-height: 44px; padding: 0 12px;
@@ -27,20 +27,20 @@
    no text of. */
 .gp-tracks { display: flex; flex-wrap: wrap; gap: 6px 8px; min-width: 0; }
 .track { display: inline-flex; flex: none; align-items: stretch; border: 1px solid var(--control-edge);
-  border-radius: 11px; background: var(--surface); -webkit-user-select: none; user-select: none;
+  border-radius: var(--radius-m); background: var(--surface); -webkit-user-select: none; user-select: none;
   -webkit-touch-callout: none; }
 .track button { display: inline-flex; align-items: center; min-height: 44px; margin: 0; border: 0; background: none;
   color: var(--text); font: inherit; cursor: pointer; }
 .track button:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
 .track .mute { justify-content: center; width: 44px; padding: 0; border-right: 1px solid var(--border-strong);
-  border-radius: 10px 0 0 10px; color: var(--muted); }
+  border-radius: var(--radius-m) 0 0 var(--radius-m); color: var(--muted); }
 .track .mute:hover { color: var(--text); }
 .track .mute svg, .tracks-list .mute svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round;
   stroke-linejoin: round; }
 .track .mute .cone, .tracks-list .mute .cone { fill: currentColor; }
 .track .mute .cross, .tracks-list .mute .cross { display: none; }
 .track .show { flex-direction: column; align-items: flex-start; justify-content: center; max-width: 13rem;
-  padding: 2px 12px; border-radius: 0 10px 10px 0; font-size: .88rem; font-weight: 600; line-height: 1.2;
+  padding: 2px 12px; border-radius: 0 var(--radius-m) var(--radius-m) 0; font-size: .88rem; font-weight: 600; line-height: 1.2;
   text-align: left; }
 .track .show .name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .track .show .kind { color: var(--muted); font-size: .74rem; font-weight: 500; white-space: nowrap; }
@@ -61,14 +61,14 @@
 .tracks-open .count { flex: none; color: var(--muted); font-size: .88rem; font-weight: 500; white-space: nowrap; }
 .tracks-sheet { position: fixed; inset: auto 0 0 0; box-sizing: border-box; width: 100%; max-width: none; height: auto;
   max-height: 70vh; margin: 0; padding: 0; overflow: hidden; border: 0; border-top: 1px solid var(--border-strong);
-  border-radius: 16px 16px 0 0; background: var(--surface); color: var(--text); }
+  border-radius: var(--radius-l) var(--radius-l) 0 0; background: var(--surface); color: var(--text); }
 .tracks-sheet[open] { display: flex; flex-direction: column; }
 @keyframes sheet-up { from { transform: translateY(100%); } to { transform: none; } }
 @media (prefers-reduced-motion: no-preference) {
   .tracks-sheet[open] { animation: sheet-up .2s ease-out; }
 }
 .tracks-sheet::backdrop { background: rgb(0 0 0 / 45%); }
-.tracks-sheet .grip { flex: none; width: 40px; height: 4px; margin: 8px auto 0; border-radius: 2px;
+.tracks-sheet .grip { flex: none; width: 40px; height: 4px; margin: 8px auto 0; border-radius: var(--radius-s);
   background: var(--border-strong); }
 .tracks-head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px;
   padding: 4px 16px 4px 20px; }
@@ -92,7 +92,7 @@
 .tracks-list .muted .name { text-decoration: line-through; text-decoration-thickness: 1.5px; color: var(--muted); }
 .gp-status { min-height: 1.45em; margin: 10px 0 0; color: var(--muted); font-size: .9rem; }
 .gp-status.failed { color: var(--failed); font-weight: 600; }
-.score { isolation: isolate; margin-top: 10px; overflow: hidden; border: 1px solid var(--border); border-radius: 14px;
+.score { isolation: isolate; margin-top: 10px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-l);
   background: var(--surface); }
 .at-cursor-bar { background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .at-cursor-beat { width: 3px; background: var(--accent); }
