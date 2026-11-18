@@ -3895,8 +3895,8 @@ def test_a_laptop_screen_shows_about_twenty_lines_under_the_bar_and_a_phone_two_
     wide = noted(dom, "data-lines")
     assert wide["page"] == 1280 and len(wide["heights"]) == 32 and wide["scroll"] <= wide["page"], wide
     assert set(wide["rows"]) == {1}, wide  # a song a line
-    # 28 px a line with its buttons, no more: a mouse's chips are 28 px, a pixel's slack.
-    assert max(wide["heights"]) <= 29, wide
+    # 30 px a line with its buttons, no more: a mouse's icon tiles are 30 px, a pixel's slack.
+    assert max(wide["heights"]) <= 31, wide
     # Read down under the bar, a laptop's screen (713 px of it the page's) holds about twenty lines and the names of
     # their artists: 18 and 3 today, with their buttons, a line to spare.
     view = noted(dom, "data-view")
