@@ -1,4 +1,5 @@
-.list section.artist, .list .line, .requested .line { scroll-margin-top: 108px; }  /* below the bar kept at the top */
+.list section.artist, .list .line, .requested .line { scroll-margin-top: calc(var(--bar-h) + 8px); }  /* below the
+   bar kept at the top (--bar-h: library.css) */
 @media (min-width: 720px) {
   .jump { flex-wrap: wrap; overflow: visible; }
   .searchbar { margin: 0 -24px; padding: 12px 24px 8px; }

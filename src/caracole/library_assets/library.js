@@ -938,6 +938,7 @@
   const refill = (old, fresh) => {
     const was = chevronOf(old);
     if (was && was.getAttribute("aria-expanded") === "true") openCard(fresh);
+    if (was) awayGone(was);  // it leaves the page: fresh's is watched in its place
     if (shownSongs.has(fresh)) shownSongs.set(old, shownSongs.get(fresh));
     else shownSongs.delete(old);
     const kept = old.querySelector(".progress");
@@ -1300,10 +1301,10 @@
   // where else to find it and its progressions. Made the first time the chevron opens it (rows.js foldMore), once a
   // line, from the song and its request as they are then: a card first opened while the song's request waits or runs
   // has no Fetch again and a picker that only lists; one first opened while its removal counts down has its forms'
-  // buttons waiting with the line's (countdownIn).
-  const cardFor = (s) => {
+  // buttons waiting with the line's (countdownIn). ``chevron``: its line's, which its head's close presses.
+  const cardFor = (s, chevron) => {
     const id = Number(s.id);
-    const more = [cardHead(s)];
+    const more = [cardHead(s, chevron)];
     const facts = factsOf(s);
     if (facts) more.push(facts);
     // The picker, or the note that says why there is none.
@@ -1356,28 +1357,68 @@
     if (r) for (const part of more) if (part instanceof Element) holdForms(part, r);
     return more;
   };
-  // A card's head: the song's name and artist, and a close button. Hidden until the laptop's pane shows it (the line
-  // says the same, so a screen reader hears it once); the pane's heading, its button closing the card.
-  const cardHead = (s) => {
+  // A card's head: the song's name and artist, as the line shows them, and a close button. In place it shows only
+  // while its line's chevron is under the bar kept at the top (watchAway), and a screen reader never hears it there
+  // (the line says the same, so it hears it once), the chevron the keyboard's way to close; the pane's heading, its
+  // button closing the card. Its close presses the chevron of the line it is on now (refill moves it into the line
+  // drawn before).
+  const cardHead = (s, chevron) => {
     const head = el("div", "card-head");
     head.setAttribute("aria-hidden", "true");
     const inner = head.appendChild(el("div", "card-head-in"));
-    const name = inner.appendChild(el("h2", "card-name", shownName(s, s.title)));
+    const title = shownName(s, s.title);
+    const name = inner.appendChild(el("h2", "card-name", title));
     name.id = "card-name-" + s.id;
     const artists = listOf(s.artists);
     const by = artists.length > 1 ? artists.join(", ") : shownName(s, s.artist);
     if (by) name.appendChild(el("span", "card-by", " \u00b7 " + by));
     const close = inner.appendChild(el("button", "card-close"));
     close.type = "button";
-    close.setAttribute("aria-label", "Close " + String(s.title));
+    close.setAttribute("aria-label", "Close " + String(title));
     close.setAttribute("tabindex", "-1");
     close.appendChild(glyphFor("close"));
     close.addEventListener("click", () => {
-      const line = document.querySelector('#list article.line[data-id="' + s.id + '"]');
-      const chevron = line && line.querySelector(":scope > .line-more");
-      if (chevron && chevron.getAttribute("aria-expanded") === "true") chevron.click();
+      if (chevron) closeCard(chevron.parentNode);
     });
     return head;
+  };
+  // While a card open in place is still on the screen but its line's chevron has gone under the bar kept at the top,
+  // its head shows, stuck under the bar (``head-away`` on the card, library.css): one IntersectionObserver, whose
+  // screen begins under the bar (its height, which the bar's ResizeObserver gives it), watches the chevron of each
+  // card open in place; it reads no layout. A card closed in place, however it was, brings its line back into view,
+  // under the bar (its scroll-margin-top, library-screens.css), with no motion where less is asked for.
+  const awayCards = new Map();  // a chevron -> its card, open in place
+  let awayWatch = null;
+  const awayGone = (chevron) => {
+    const card = awayCards.get(chevron);
+    if (card) card.classList.remove("head-away");
+    awayCards.delete(chevron);
+    if (awayWatch) awayWatch.unobserve(chevron);
+  };
+  // A line a search leaves out keeps its card open, and its chevron watched for when it shows again.
+  const awaySeen = (seen) => {
+    for (const entry of seen) {
+      const card = awayCards.get(entry.target);
+      if (card) card.classList.toggle("head-away", entry.target.isConnected && !entry.isIntersecting
+        && Boolean(entry.rootBounds) && entry.boundingClientRect.top < entry.rootBounds.top);
+    }
+  };
+  const watchAway = (barHeight) => {
+    if (!("IntersectionObserver" in window)) return;
+    if (awayWatch) awayWatch.disconnect();
+    awayWatch = new IntersectionObserver(awaySeen, { rootMargin: "-" + Math.round(barHeight) + "px 0px 0px 0px" });
+    for (const chevron of awayCards.keys()) awayWatch.observe(chevron);
+  };
+  const cardToggled = (open, card, chevron) => {
+    const line = chevron && chevron.parentNode;
+    if (!line || card.parentNode !== line) return;  // not in place
+    if (open) {
+      awayCards.set(chevron, card);
+      if (awayWatch) awayWatch.observe(chevron);
+      return;
+    }
+    awayGone(chevron);
+    if (line.isConnected) line.scrollIntoView({ block: "nearest", behavior: smooth() });
   };
   // A song's line: its title, then a button for each thing it holds to play from (card.js plays: its sheet, its Guitar
   // Pro file, its tab, its harmonica tab..., each opening it at once, none first), its status when it needs
@@ -1386,6 +1427,7 @@
   // first time it opens.
   const lineFor = (s) => {
     const id = Number(s.id);
+    let chevron = null;  // its line's, once drawn
     const control = serverAction(s, canPick(s));
     const action = control.held ? control.action : null;
     const artists = listOf(s.artists);
@@ -1401,9 +1443,11 @@
       keyText: keyed ? keyText(s) : "",
       badges: status ? [status] : [],
       action,
-      more: () => cardFor(s),
+      more: () => cardFor(s, chevron),
+      onToggle: (open, card) => cardToggled(open, card, chevron),
       onSearch: () => searchFor(String(s.artist)),  // the name searches for them, served or from a file
     });
+    chevron = line.querySelector(":scope > .line-more");
     line.dataset.id = String(s.id);  // the Select mode finds the song's line by it
     shownSongs.set(line, s);
     line.querySelector(":scope > .line-panel").classList.add("song-card");
@@ -2031,6 +2075,18 @@
     new IntersectionObserver((seen) => {
       bar.classList.toggle("stuck", !seen[seen.length - 1].isIntersecting);
     }).observe(edge);
+  }
+  // Its height, --bar-h, where a card's head sticks and what a jump leaves above a line; and the screen under it, where
+  // the chevrons of the cards open in place are watched (watchAway).
+  if (bar && "ResizeObserver" in window) {
+    new ResizeObserver((seen) => {
+      const box = seen[seen.length - 1].borderBoxSize;
+      const height = box && box[0] ? box[0].blockSize : bar.offsetHeight;
+      document.documentElement.style.setProperty("--bar-h", height + "px");
+      watchAway(height);
+    }).observe(bar);
+  } else {
+    watchAway(0);
   }
   input.value = state.q;
   input.addEventListener("input", () => {

@@ -68,7 +68,10 @@
 .check { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-weight: 600; cursor: pointer; }
 .check input { width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
 .hint { margin: 0; color: var(--muted); font-size: .85rem; }
-/* Kept at the top, side to side across the page, with an edge once the page scrolls under it (.stuck). */
+/* Kept at the top, side to side across the page, with an edge once the page scrolls under it (.stuck). Its height,
+   --bar-h (library.js measures it: 0px until then), is where what sticks under it sticks, and what a jump to a line
+   leaves above it (library-screens.css). */
+:root { --bar-h: 0px; }
 .searchbar { position: sticky; top: 0; z-index: 2; margin: 0 -16px; padding: 10px 16px 8px; background: var(--bg); }
 .searchbar.stuck { box-shadow: 0 1px 0 var(--border-strong), 0 8px 16px -10px rgb(0 0 0 / 35%); }
 .bar-edge { height: 0; }
@@ -339,10 +342,23 @@ form.youtube-sheet .f { flex: 1 1 260px; }
 .empty { margin: 32px 0 8px; font-size: 1.05rem; }
 .empty-hint { margin: 0; color: var(--muted); }
 
-/* A card's head (cardHead): its name, artist and close button; the laptop's pane shows it (stage 1d.4), until then
-   the line says it all. */
-.card-head { display: none; }
-.card-head-in { display: flex; align-items: baseline; gap: .5rem; }
-.card-name { flex: 1 1 auto; min-width: 0; margin: 0; font-size: 1.1rem; font-weight: 600; overflow-wrap: anywhere; }
-.card-by { font-weight: 400; color: var(--muted, inherit); }
-.card-close { flex: none; }
+/* A card's head (cardHead): its name, artist and close button. In place it takes no room and sticks under the bar
+   kept at the top the whole length of the card (its panel a flex column, rows.css), shown only while its line's
+   chevron is under the bar (library.js: .head-away); else the line says it all. One line, cut short; no transition. */
+.line-panel > .card-head { display: block; position: sticky; top: var(--bar-h); z-index: 1; height: 0; }
+/* In place its own place is a screen above the card, over its line's chevron however tall the line, so that it is
+   stuck under the bar the moment it shows; the card's first part gets that back, less the head's margin under it and
+   the card's gap (card.css's 14px), so the card is laid out as with no head. That margin, its 45px less the card's
+   14px of padding, lets it go as the card's end comes up under the bar: it goes with it, never past it. */
+.line > .line-panel.song-card > .card-head { margin: -100vh 0 31px; }
+.line > .line-panel.song-card > .card-head + * { margin-top: calc(100vh - 31px - 14px); }
+.card-head-in { position: absolute; top: 0; left: 0; right: 0; display: flex; align-items: center; gap: .5rem;
+  min-height: 44px; border-bottom: 1px solid var(--border); background: var(--card); visibility: hidden; }
+.head-away > .card-head > .card-head-in { visibility: visible; }
+.card-name { flex: 1 1 auto; min-width: 0; margin: 0; overflow: hidden; font-size: 1.05rem; font-weight: 600;
+  line-height: 1.3; white-space: nowrap; text-overflow: ellipsis; }
+.card-by { font-weight: 400; color: var(--muted); }
+.card-close { flex: none; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0;
+  border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; }
+.card-close:hover { background: var(--raised); color: var(--text); }
+.card-close svg.glyph { width: 18px; height: 18px; }

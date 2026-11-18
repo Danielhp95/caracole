@@ -1018,9 +1018,17 @@ It is rows.js's, shared by both pages:
     `resultRow`'s `more` a function): until then its panel, `.line-panel.song-card`, is empty and hidden, the
     chevron's `aria-controls` naming it (test_library_card_place.py);
   - its parts in the phone's order, at every width: `cardHead` (`.card-head` > `.card-head-in` > `h2.card-name` and
-    `.card-close`, `aria-hidden` and tabindex -1 in place, `display: none` until stage 1d.4 shows it), the facts, what
-    needs you, the tiles, the foot (Fetch again, Use LaCuerda's sheet, Add to a songbook…, ⋯), the Files group, On the
-    sites, Elsewhere, Progressions (test_library_card_place.py);
+    `.card-close`, `aria-hidden` and tabindex -1 in place), the facts, what needs you, the tiles, the foot (Fetch
+    again, Use LaCuerda's sheet, Add to a songbook…, ⋯), the Files group, On the sites, Elsewhere, Progressions
+    (test_library_card_place.py);
+  - in place, its head takes no room and sticks under the search bar (`--bar-h` on `:root`, the bar's height, which
+    a ResizeObserver writes; the panel a flex column, so it sticks the whole card): shown (`head-away` on the card)
+    only while its line's chevron is under the bar, one IntersectionObserver over the chevrons of the cards open in
+    place (library.js `watchAway`, `cardToggled`: no layout read); its own place is a screen above the card (a
+    negative top margin, which the card's next part's top margin gives back: library.css, the card laid out as with
+    no head), so it is stuck the moment it shows, and goes with the card's end; a card closed in place, however,
+    scrolls its line back into view under the bar (`scrollIntoView` `nearest`, `scroll-margin-top`
+    `calc(var(--bar-h) + 8px)`, `smooth()`: at once with reduced motion) (test_library_card_place.py);
   - a tile for each thing to play from, every one alike, each source's versions a chip whose drawer reads the page's
     data alone, never a request;
   - its UG versions not kept are counted (`versions.rest`, `sheet_versions.may_keep`), and Fetch them keeps them,
