@@ -276,7 +276,7 @@ LOOKUP = "get"  # the command of a lookup
 
 def lookup_steps(artist: str, title: str, *, album: str | None = None, duration_ms: int | None = None,
                  ug: str | None = None, tab: str | None = None, lacuerda: str | None = None,
-                 harptabs: str | None = None, gametabs: str | None = None,
+                 harptabs: str | None = None, gametabs: str | None = None, ireal: str | None = None,
                  songbooks: bool = True) -> list[tuple[str, tuple[str, ...]]]:
     """Look one song up now: ``caracole get --progress``, one process for every stage (get.py)."""
     from caracole.wanted import format_duration
@@ -298,6 +298,8 @@ def lookup_steps(artist: str, title: str, *, album: str | None = None, duration_
         args.append(f"--harptabs={harptabs}")
     if gametabs:
         args.append(f"--gametabs={gametabs}")
+    if ireal:
+        args.append(f"--ireal={ireal}")
     return [("Fetching", (*args, "--", artist, title))]
 
 
@@ -535,15 +537,16 @@ def ahead(jobs: Sequence[Job], job: Job) -> int:
 
 
 def _pick(steps: Sequence[Step]) -> tuple[str, ...]:
-    """The Ultimate Guitar song and tab, the LaCuerda song, the harptabs.com tab and the gametabs.net tab, a lookup's
-    ``caracole get`` was given (``--ug``, ``--tab``, ``--lacuerda``, ``--harptabs``, ``--gametabs``), and what a ``caracole versions`` does (``--choose``,
+    """The Ultimate Guitar song and tab, the LaCuerda song, the harptabs.com tab, the gametabs.net tab and the iReal Pro
+    chart a lookup's ``caracole get`` was given (``--ug``, ``--tab``, ``--lacuerda``, ``--harptabs``, ``--gametabs``,
+    ``--ireal``), and what a ``caracole versions`` does (``--choose``,
     ``--keep``, ``--keep-more``, ``--clear``), if any."""
     picked: list[str] = []
     for step in steps:
         options = _options(step.args)
         if step.args[:1] == (LOOKUP,):
             picked += [arg for arg in options
-                       if arg.startswith(("--ug=", "--tab=", "--lacuerda=", "--harptabs=", "--gametabs="))]
+                       if arg.startswith(("--ug=", "--tab=", "--lacuerda=", "--harptabs=", "--gametabs=", "--ireal="))]
         elif step.args[:1] == (VERSIONS,):
             picked += [arg for arg in options
                        if arg.startswith(("--choose=", "--keep=")) or arg in ("--clear", "--keep-more")]

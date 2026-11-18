@@ -499,6 +499,31 @@ def test_cli_index_stats_says_how_far_gametabs_nets_game_index_has_got(tmp_path)
     ]
 
 
+def test_cli_index_stats_says_how_far_irealpros_index_has_got(tmp_path):
+    from helpers.ireal_site import JAZZ_1460, fixture
+
+    from caracole.ireal import page_url, parse_page_url, parse_thread_page
+    from caracole.ireal_index import store_thread_page
+
+    from datetime import UTC, datetime
+
+    conn = connect(tmp_path)
+    try:
+        conn.execute("INSERT INTO ireal_index (path, thread, slug, key, sitemap) VALUES (?, ?, ?, ?, 'sitemap-1')",
+                     parse_page_url(page_url(JAZZ_1460)))
+        store_thread_page(conn, parse_thread_page(fixture("thread_jazz-1460-standards.12753.html")),
+                          datetime(2026, 11, 18, tzinfo=UTC))
+        conn.commit()
+    finally:
+        conn.close()
+    result = run(tmp_path, "index", "stats")
+    assert result.exit_code == 0, result.output
+    assert result.output.splitlines() == [
+        "The index is empty: run `caracole index build`.",
+        "iReal Pro's forum: 1 thread, 1 of 1 playlists read, 14 charts; caracole ireal --index reads the rest.",
+    ]
+
+
 # --- caracole match ---------------------------------------------------------------------------------
 
 

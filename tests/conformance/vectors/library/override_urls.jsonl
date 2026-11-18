@@ -26,6 +26,7 @@
 {"args":["Soda Stereo - De Música Ligera"],"fn":"caracole.overrides.override_key","out":"soda-stereo/de-musica-ligera"}
 {"args":["Soda Stereo - Persiana Americana"],"fn":"caracole.overrides.override_key","out":"soda-stereo/persiana-americana"}
 {"args":["Some Artist - Some Interlude"],"fn":"caracole.overrides.override_key","out":"some-artist/some-interlude"}
+{"args":["Thad Jones - Groove Merchant"],"fn":"caracole.overrides.override_key","out":"thad-jones/groove-merchant"}
 {"args":["Yuzo Koshiro - Fillmore"],"fn":"caracole.overrides.override_key","out":"yuzo-koshiro/fillmore"}
 {"args":["[\"https://youtu.be/XFkzRNyygfk\"]"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got '[\"https://youtu.be/XFkzRNyygfk\"]'"}
 {"args":["[gametabs] https://gametabs.net/tabs/actraiser/fillmore"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got '[gametabs] https://gametabs.net/tabs/actraiser/fillmore'"}
@@ -35,6 +36,7 @@
 {"args":["[version] 'Radiohead - Creep': "],"fn":"caracole.overrides.override_key","out":"version-radiohead/creep"}
 {"args":["\\[gametabs\\] 'Yuzo Koshiro - Fillmore': expected a gametabs.net tab"],"fn":"caracole.overrides.override_key","out":"gametabs-yuzo-koshiro/fillmore-expected-a-gametabs-net-tab"}
 {"args":["\\[harptabs\\] 'Billy Joel - Piano Man': expected a harptabs.com tab"],"fn":"caracole.overrides.override_key","out":"harptabs-billy-joel/piano-man-expected-a-harptabs-com-tab"}
+{"args":["\\[ireal\\] 'Erroll Garner - Misty': expected an iReal Pro forum's thr"],"fn":"caracole.overrides.override_key","out":"ireal-erroll-garner/misty-expected-an-ireal-pro-forums-thr"}
 {"args":["\\[lacuerda\\] 'Estopa - Como Camarón': expected a LaCuerda song"],"fn":"caracole.overrides.override_key","out":"lacuerda-estopa/como-camaron-expected-a-lacuerda-song"}
 {"args":["\\[reject\\] 'Radiohead - Creep': expected \\\"ug-artist/ug-song\\\""],"fn":"caracole.overrides.override_key","out":"reject-radiohead/creep-expected-ug-artist-ug-song"}
 {"args":["\\[youtube\\] 'Radiohead - Creep': expected a YouTube video's address \\(https://www.youtube.com/watch\\?v=…\\) or \\\"none\\\""],"fn":"caracole.overrides.override_key","out":"youtube-radiohead/creep-expected-a-youtube-videos-address-https-www-youtube-com-watch-v-or-none"}
@@ -292,6 +294,7 @@
 {"args":["Soda Stereo - De Música Ligera"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'Soda Stereo - De Música Ligera'"}
 {"args":["Soda Stereo - Persiana Americana"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'Soda Stereo - Persiana Americana'"}
 {"args":["Some Artist - Some Interlude"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'Some Artist - Some Interlude'"}
+{"args":["Thad Jones - Groove Merchant"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'Thad Jones - Groove Merchant'"}
 {"args":["Yuzo Koshiro - Fillmore"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'Yuzo Koshiro - Fillmore'"}
 {"args":["[\"https://youtu.be/XFkzRNyygfk\"]"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: '[\"https://youtu.be/XFkzRNyygfk\"]'"}
 {"args":["[gametabs] https://gametabs.net/tabs/actraiser/fillmore"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: '[gametabs] https://gametabs.net/tabs/actraiser/fillmore'"}
@@ -301,6 +304,7 @@
 {"args":["[version] 'Radiohead - Creep': "],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: \"[version] 'Radiohead - Creep': \""}
 {"args":["\\[gametabs\\] 'Yuzo Koshiro - Fillmore': expected a gametabs.net tab"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: \"\\\\[gametabs\\\\] 'Yuzo Koshiro - Fillmore': expected a gametabs.net tab\""}
 {"args":["\\[harptabs\\] 'Billy Joel - Piano Man': expected a harptabs.com tab"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: \"\\\\[harptabs\\\\] 'Billy Joel - Piano Man': expected a harptabs.com tab\""}
+{"args":["\\[ireal\\] 'Erroll Garner - Misty': expected an iReal Pro forum's thr"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: \"\\\\[ireal\\\\] 'Erroll Garner - Misty': expected an iReal Pro forum's thr\""}
 {"args":["\\[lacuerda\\] 'Estopa - Como Camarón': expected a LaCuerda song"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: \"\\\\[lacuerda\\\\] 'Estopa - Como Camarón': expected a LaCuerda song\""}
 {"args":["\\[reject\\] 'Radiohead - Creep': expected \\\"ug-artist/ug-song\\\""],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: '\\\\[reject\\\\] \\'Radiohead - Creep\\': expected \\\\\"ug-artist/ug-song\\\\\"'"}
 {"args":["\\[youtube\\] 'Radiohead - Creep': expected a YouTube video's address \\(https://www.youtube.com/watch\\?v=…\\) or \\\"none\\\""],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: '\\\\[youtube\\\\] \\'Radiohead - Creep\\': expected a YouTube video\\'s address \\\\(https://www.youtube.com/watch\\\\?v=…\\\\) or \\\\\"none\\\\\"'"}
@@ -558,6 +562,7 @@
 {"args":["Soda Stereo - De Música Ligera"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["Soda Stereo - Persiana Americana"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["Some Artist - Some Interlude"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
+{"args":["Thad Jones - Groove Merchant"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["Yuzo Koshiro - Fillmore"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["[\"https://youtu.be/XFkzRNyygfk\"]"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["[gametabs] https://gametabs.net/tabs/actraiser/fillmore"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
@@ -567,6 +572,7 @@
 {"args":["[version] 'Radiohead - Creep': "],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["\\[gametabs\\] 'Yuzo Koshiro - Fillmore': expected a gametabs.net tab"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["\\[harptabs\\] 'Billy Joel - Piano Man': expected a harptabs.com tab"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
+{"args":["\\[ireal\\] 'Erroll Garner - Misty': expected an iReal Pro forum's thr"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["\\[lacuerda\\] 'Estopa - Como Camarón': expected a LaCuerda song"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["\\[reject\\] 'Radiohead - Creep': expected \\\"ug-artist/ug-song\\\""],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["\\[youtube\\] 'Radiohead - Creep': expected a YouTube video's address \\(https://www.youtube.com/watch\\?v=…\\) or \\\"none\\\""],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
@@ -824,6 +830,7 @@
 {"args":["Soda Stereo - De Música Ligera"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["Soda Stereo - Persiana Americana"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["Some Artist - Some Interlude"],"fn":"caracole.overrides.artist_page_address","out":null}
+{"args":["Thad Jones - Groove Merchant"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["Yuzo Koshiro - Fillmore"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["[\"https://youtu.be/XFkzRNyygfk\"]"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["[gametabs] https://gametabs.net/tabs/actraiser/fillmore"],"fn":"caracole.overrides.artist_page_address","out":null}
@@ -833,6 +840,7 @@
 {"args":["[version] 'Radiohead - Creep': "],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["\\[gametabs\\] 'Yuzo Koshiro - Fillmore': expected a gametabs.net tab"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["\\[harptabs\\] 'Billy Joel - Piano Man': expected a harptabs.com tab"],"fn":"caracole.overrides.artist_page_address","out":null}
+{"args":["\\[ireal\\] 'Erroll Garner - Misty': expected an iReal Pro forum's thr"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["\\[lacuerda\\] 'Estopa - Como Camarón': expected a LaCuerda song"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["\\[reject\\] 'Radiohead - Creep': expected \\\"ug-artist/ug-song\\\""],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["\\[youtube\\] 'Radiohead - Creep': expected a YouTube video's address \\(https://www.youtube.com/watch\\?v=…\\) or \\\"none\\\""],"fn":"caracole.overrides.artist_page_address","out":null}
@@ -1090,6 +1098,7 @@
 {"args":["Soda Stereo - De Música Ligera"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["Soda Stereo - Persiana Americana"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["Some Artist - Some Interlude"],"fn":"caracole.overrides._artist_url_value","out":null}
+{"args":["Thad Jones - Groove Merchant"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["Yuzo Koshiro - Fillmore"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["[\"https://youtu.be/XFkzRNyygfk\"]"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["[gametabs] https://gametabs.net/tabs/actraiser/fillmore"],"fn":"caracole.overrides._artist_url_value","out":null}
@@ -1099,6 +1108,7 @@
 {"args":["[version] 'Radiohead - Creep': "],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["\\[gametabs\\] 'Yuzo Koshiro - Fillmore': expected a gametabs.net tab"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["\\[harptabs\\] 'Billy Joel - Piano Man': expected a harptabs.com tab"],"fn":"caracole.overrides._artist_url_value","out":null}
+{"args":["\\[ireal\\] 'Erroll Garner - Misty': expected an iReal Pro forum's thr"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["\\[lacuerda\\] 'Estopa - Como Camarón': expected a LaCuerda song"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["\\[reject\\] 'Radiohead - Creep': expected \\\"ug-artist/ug-song\\\""],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["\\[youtube\\] 'Radiohead - Creep': expected a YouTube video's address \\(https://www.youtube.com/watch\\?v=…\\) or \\\"none\\\""],"fn":"caracole.overrides._artist_url_value","out":null}
@@ -1356,6 +1366,7 @@
 {"args":["Soda Stereo - De Música Ligera"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["Soda Stereo - Persiana Americana"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["Some Artist - Some Interlude"],"fn":"caracole.overrides.pasted_tab_id","out":null}
+{"args":["Thad Jones - Groove Merchant"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["Yuzo Koshiro - Fillmore"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["[\"https://youtu.be/XFkzRNyygfk\"]"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["[gametabs] https://gametabs.net/tabs/actraiser/fillmore"],"fn":"caracole.overrides.pasted_tab_id","out":null}
@@ -1365,6 +1376,7 @@
 {"args":["[version] 'Radiohead - Creep': "],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["\\[gametabs\\] 'Yuzo Koshiro - Fillmore': expected a gametabs.net tab"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["\\[harptabs\\] 'Billy Joel - Piano Man': expected a harptabs.com tab"],"fn":"caracole.overrides.pasted_tab_id","out":null}
+{"args":["\\[ireal\\] 'Erroll Garner - Misty': expected an iReal Pro forum's thr"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["\\[lacuerda\\] 'Estopa - Como Camarón': expected a LaCuerda song"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["\\[reject\\] 'Radiohead - Creep': expected \\\"ug-artist/ug-song\\\""],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["\\[youtube\\] 'Radiohead - Creep': expected a YouTube video's address \\(https://www.youtube.com/watch\\?v=…\\) or \\\"none\\\""],"fn":"caracole.overrides.pasted_tab_id","out":null}
@@ -1622,6 +1634,7 @@
 {"args":["Soda Stereo - De Música Ligera"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'Soda Stereo - De Música Ligera'"}
 {"args":["Soda Stereo - Persiana Americana"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'Soda Stereo - Persiana Americana'"}
 {"args":["Some Artist - Some Interlude"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'Some Artist - Some Interlude'"}
+{"args":["Thad Jones - Groove Merchant"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'Thad Jones - Groove Merchant'"}
 {"args":["Yuzo Koshiro - Fillmore"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'Yuzo Koshiro - Fillmore'"}
 {"args":["[\"https://youtu.be/XFkzRNyygfk\"]"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got '[\"https://youtu.be/XFkzRNyygfk\"]'"}
 {"args":["[gametabs] https://gametabs.net/tabs/actraiser/fillmore"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got '[gametabs] https://gametabs.net/tabs/actraiser/fillmore'"}
@@ -1631,6 +1644,7 @@
 {"args":["[version] 'Radiohead - Creep': "],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got \"[version] 'Radiohead - Creep': \""}
 {"args":["\\[gametabs\\] 'Yuzo Koshiro - Fillmore': expected a gametabs.net tab"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got \"\\\\[gametabs\\\\] 'Yuzo Koshiro - Fillmore': expected a gametabs.net tab\""}
 {"args":["\\[harptabs\\] 'Billy Joel - Piano Man': expected a harptabs.com tab"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got \"\\\\[harptabs\\\\] 'Billy Joel - Piano Man': expected a harptabs.com tab\""}
+{"args":["\\[ireal\\] 'Erroll Garner - Misty': expected an iReal Pro forum's thr"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got \"\\\\[ireal\\\\] 'Erroll Garner - Misty': expected an iReal Pro forum's thr\""}
 {"args":["\\[lacuerda\\] 'Estopa - Como Camarón': expected a LaCuerda song"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got \"\\\\[lacuerda\\\\] 'Estopa - Como Camarón': expected a LaCuerda song\""}
 {"args":["\\[reject\\] 'Radiohead - Creep': expected \\\"ug-artist/ug-song\\\""],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got '\\\\[reject\\\\] \\'Radiohead - Creep\\': expected \\\\\"ug-artist/ug-song\\\\\"'"}
 {"args":["\\[youtube\\] 'Radiohead - Creep': expected a YouTube video's address \\(https://www.youtube.com/watch\\?v=…\\) or \\\"none\\\""],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got '\\\\[youtube\\\\] \\'Radiohead - Creep\\': expected a YouTube video\\'s address \\\\(https://www.youtube.com/watch\\\\?v=…\\\\) or \\\\\"none\\\\\"'"}
@@ -1888,6 +1902,7 @@
 {"args":["Soda Stereo - De Música Ligera"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'Soda Stereo - De Música Ligera'"}
 {"args":["Soda Stereo - Persiana Americana"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'Soda Stereo - Persiana Americana'"}
 {"args":["Some Artist - Some Interlude"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'Some Artist - Some Interlude'"}
+{"args":["Thad Jones - Groove Merchant"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'Thad Jones - Groove Merchant'"}
 {"args":["Yuzo Koshiro - Fillmore"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'Yuzo Koshiro - Fillmore'"}
 {"args":["[\"https://youtu.be/XFkzRNyygfk\"]"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got '[\"https://youtu.be/XFkzRNyygfk\"]'"}
 {"args":["[gametabs] https://gametabs.net/tabs/actraiser/fillmore"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got '[gametabs] https://gametabs.net/tabs/actraiser/fillmore'"}
@@ -1897,6 +1912,7 @@
 {"args":["[version] 'Radiohead - Creep': "],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got \"[version] 'Radiohead - Creep': \""}
 {"args":["\\[gametabs\\] 'Yuzo Koshiro - Fillmore': expected a gametabs.net tab"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got \"\\\\[gametabs\\\\] 'Yuzo Koshiro - Fillmore': expected a gametabs.net tab\""}
 {"args":["\\[harptabs\\] 'Billy Joel - Piano Man': expected a harptabs.com tab"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got \"\\\\[harptabs\\\\] 'Billy Joel - Piano Man': expected a harptabs.com tab\""}
+{"args":["\\[ireal\\] 'Erroll Garner - Misty': expected an iReal Pro forum's thr"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got \"\\\\[ireal\\\\] 'Erroll Garner - Misty': expected an iReal Pro forum's thr\""}
 {"args":["\\[lacuerda\\] 'Estopa - Como Camarón': expected a LaCuerda song"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got \"\\\\[lacuerda\\\\] 'Estopa - Como Camarón': expected a LaCuerda song\""}
 {"args":["\\[reject\\] 'Radiohead - Creep': expected \\\"ug-artist/ug-song\\\""],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got '\\\\[reject\\\\] \\'Radiohead - Creep\\': expected \\\\\"ug-artist/ug-song\\\\\"'"}
 {"args":["\\[youtube\\] 'Radiohead - Creep': expected a YouTube video's address \\(https://www.youtube.com/watch\\?v=…\\) or \\\"none\\\""],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got '\\\\[youtube\\\\] \\'Radiohead - Creep\\': expected a YouTube video\\'s address \\\\(https://www.youtube.com/watch\\\\?v=…\\\\) or \\\\\"none\\\\\"'"}
@@ -2154,6 +2170,7 @@
 {"args":["Soda Stereo - De Música Ligera"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'Soda Stereo - De Música Ligera'"}
 {"args":["Soda Stereo - Persiana Americana"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'Soda Stereo - Persiana Americana'"}
 {"args":["Some Artist - Some Interlude"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'Some Artist - Some Interlude'"}
+{"args":["Thad Jones - Groove Merchant"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'Thad Jones - Groove Merchant'"}
 {"args":["Yuzo Koshiro - Fillmore"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'Yuzo Koshiro - Fillmore'"}
 {"args":["[\"https://youtu.be/XFkzRNyygfk\"]"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got '[\"https://youtu.be/XFkzRNyygfk\"]'"}
 {"args":["[gametabs] https://gametabs.net/tabs/actraiser/fillmore"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got '[gametabs] https://gametabs.net/tabs/actraiser/fillmore'"}
@@ -2163,6 +2180,7 @@
 {"args":["[version] 'Radiohead - Creep': "],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got \"[version] 'Radiohead - Creep': \""}
 {"args":["\\[gametabs\\] 'Yuzo Koshiro - Fillmore': expected a gametabs.net tab"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got \"\\\\[gametabs\\\\] 'Yuzo Koshiro - Fillmore': expected a gametabs.net tab\""}
 {"args":["\\[harptabs\\] 'Billy Joel - Piano Man': expected a harptabs.com tab"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got \"\\\\[harptabs\\\\] 'Billy Joel - Piano Man': expected a harptabs.com tab\""}
+{"args":["\\[ireal\\] 'Erroll Garner - Misty': expected an iReal Pro forum's thr"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got \"\\\\[ireal\\\\] 'Erroll Garner - Misty': expected an iReal Pro forum's thr\""}
 {"args":["\\[lacuerda\\] 'Estopa - Como Camarón': expected a LaCuerda song"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got \"\\\\[lacuerda\\\\] 'Estopa - Como Camarón': expected a LaCuerda song\""}
 {"args":["\\[reject\\] 'Radiohead - Creep': expected \\\"ug-artist/ug-song\\\""],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got '\\\\[reject\\\\] \\'Radiohead - Creep\\': expected \\\\\"ug-artist/ug-song\\\\\"'"}
 {"args":["\\[youtube\\] 'Radiohead - Creep': expected a YouTube video's address \\(https://www.youtube.com/watch\\?v=…\\) or \\\"none\\\""],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got '\\\\[youtube\\\\] \\'Radiohead - Creep\\': expected a YouTube video\\'s address \\\\(https://www.youtube.com/watch\\\\?v=…\\\\) or \\\\\"none\\\\\"'"}
@@ -2420,6 +2438,7 @@
 {"args":["Soda Stereo - De Música Ligera"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'Soda Stereo - De Música Ligera'"}
 {"args":["Soda Stereo - Persiana Americana"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'Soda Stereo - Persiana Americana'"}
 {"args":["Some Artist - Some Interlude"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'Some Artist - Some Interlude'"}
+{"args":["Thad Jones - Groove Merchant"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'Thad Jones - Groove Merchant'"}
 {"args":["Yuzo Koshiro - Fillmore"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'Yuzo Koshiro - Fillmore'"}
 {"args":["[\"https://youtu.be/XFkzRNyygfk\"]"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got '[\"https://youtu.be/XFkzRNyygfk\"]'"}
 {"args":["[gametabs] https://gametabs.net/tabs/actraiser/fillmore"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got '[gametabs] https://gametabs.net/tabs/actraiser/fillmore'"}
@@ -2429,6 +2448,7 @@
 {"args":["[version] 'Radiohead - Creep': "],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got \"[version] 'Radiohead - Creep': \""}
 {"args":["\\[gametabs\\] 'Yuzo Koshiro - Fillmore': expected a gametabs.net tab"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got \"\\\\[gametabs\\\\] 'Yuzo Koshiro - Fillmore': expected a gametabs.net tab\""}
 {"args":["\\[harptabs\\] 'Billy Joel - Piano Man': expected a harptabs.com tab"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got \"\\\\[harptabs\\\\] 'Billy Joel - Piano Man': expected a harptabs.com tab\""}
+{"args":["\\[ireal\\] 'Erroll Garner - Misty': expected an iReal Pro forum's thr"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got \"\\\\[ireal\\\\] 'Erroll Garner - Misty': expected an iReal Pro forum's thr\""}
 {"args":["\\[lacuerda\\] 'Estopa - Como Camarón': expected a LaCuerda song"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got \"\\\\[lacuerda\\\\] 'Estopa - Como Camarón': expected a LaCuerda song\""}
 {"args":["\\[reject\\] 'Radiohead - Creep': expected \\\"ug-artist/ug-song\\\""],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got '\\\\[reject\\\\] \\'Radiohead - Creep\\': expected \\\\\"ug-artist/ug-song\\\\\"'"}
 {"args":["\\[youtube\\] 'Radiohead - Creep': expected a YouTube video's address \\(https://www.youtube.com/watch\\?v=…\\) or \\\"none\\\""],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got '\\\\[youtube\\\\] \\'Radiohead - Creep\\': expected a YouTube video\\'s address \\\\(https://www.youtube.com/watch\\\\?v=…\\\\) or \\\\\"none\\\\\"'"}
@@ -2686,6 +2706,7 @@
 {"args":["Soda Stereo - De Música Ligera"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["Soda Stereo - Persiana Americana"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["Some Artist - Some Interlude"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
+{"args":["Thad Jones - Groove Merchant"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["Yuzo Koshiro - Fillmore"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["[\"https://youtu.be/XFkzRNyygfk\"]"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["[gametabs] https://gametabs.net/tabs/actraiser/fillmore"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
@@ -2695,6 +2716,7 @@
 {"args":["[version] 'Radiohead - Creep': "],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["\\[gametabs\\] 'Yuzo Koshiro - Fillmore': expected a gametabs.net tab"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["\\[harptabs\\] 'Billy Joel - Piano Man': expected a harptabs.com tab"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
+{"args":["\\[ireal\\] 'Erroll Garner - Misty': expected an iReal Pro forum's thr"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["\\[lacuerda\\] 'Estopa - Como Camarón': expected a LaCuerda song"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["\\[reject\\] 'Radiohead - Creep': expected \\\"ug-artist/ug-song\\\""],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["\\[youtube\\] 'Radiohead - Creep': expected a YouTube video's address \\(https://www.youtube.com/watch\\?v=…\\) or \\\"none\\\""],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
@@ -2952,6 +2974,7 @@
 {"args":["Soda Stereo - De Música Ligera"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["Soda Stereo - Persiana Americana"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["Some Artist - Some Interlude"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
+{"args":["Thad Jones - Groove Merchant"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["Yuzo Koshiro - Fillmore"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["[\"https://youtu.be/XFkzRNyygfk\"]"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["[gametabs] https://gametabs.net/tabs/actraiser/fillmore"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
@@ -2961,6 +2984,7 @@
 {"args":["[version] 'Radiohead - Creep': "],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["\\[gametabs\\] 'Yuzo Koshiro - Fillmore': expected a gametabs.net tab"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["\\[harptabs\\] 'Billy Joel - Piano Man': expected a harptabs.com tab"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
+{"args":["\\[ireal\\] 'Erroll Garner - Misty': expected an iReal Pro forum's thr"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["\\[lacuerda\\] 'Estopa - Como Camarón': expected a LaCuerda song"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["\\[reject\\] 'Radiohead - Creep': expected \\\"ug-artist/ug-song\\\""],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["\\[youtube\\] 'Radiohead - Creep': expected a YouTube video's address \\(https://www.youtube.com/watch\\?v=…\\) or \\\"none\\\""],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}

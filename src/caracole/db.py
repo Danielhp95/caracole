@@ -29,6 +29,9 @@ Tables (plan §5, plus ``kv``):
 - ``ug_directory``: every artist UG's letter listings name, with their page's address, their tabs, and when caracole
   last saw them there and read their page; their keys join ``ug_artists``, so a word of their names is one of the
   artist vocabulary's (schema 16, ug/directory.py).
+- ``ireal_index``: the threads iReal Pro's forum's sitemaps list; ``ireal_threads`` and ``ireal_charts``: the thread
+  pages caracole read, and the charts each held, with their titles and composers (schema 17, ireal_fetch.py,
+  ireal_index.py).
 - ``versions``: every sheet or tab version seen for a song, and the version of each Guitar Pro
   file or score it keeps (gtptabs.com's, your inbox's).
 - ``files``: files kept in the library, with their SHA-256.
@@ -49,7 +52,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 16
+SCHEMA_VERSION = 17
 
 _SCHEMA_V1 = """
 CREATE TABLE IF NOT EXISTS songs (
@@ -601,10 +604,50 @@ AND NOT EXISTS (SELECT 1 FROM ug_directory WHERE artist_key = old.artist_key) BE
 END;
 """
 
+# iReal Pro's forum (ireal.py). ireal_index: each thread its sitemaps list, by its path ("threads/<slug>.<id>/"), its
+# id, its slug and the slug's key (ireal.slug_key_of), which a title's key begins (site_index.py fills it). ireal_threads:
+# each thread page caracole read, its title ('' for a page gone, 404), its forum's path, how many charts it held, and
+# when. ireal_charts: each chart those pages hold, by its page, its post's id and its place in the post (from 1), its
+# title as the chart writes it and that title's key (ireal.title_key), its composer (last name first) and that name's
+# key (normalize.slug_key: a search's words, accents folded), style and key as the app writes them, and the playlist it
+# came in ('' for a link of one tune).
+_SCHEMA_V17 = """
+CREATE TABLE IF NOT EXISTS ireal_index (
+  path TEXT PRIMARY KEY,
+  thread INTEGER NOT NULL,
+  slug TEXT NOT NULL,
+  key TEXT NOT NULL,
+  sitemap TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ireal_index_key ON ireal_index(key);
+CREATE TABLE IF NOT EXISTS ireal_threads (
+  path TEXT PRIMARY KEY,
+  thread INTEGER NOT NULL,
+  title TEXT NOT NULL DEFAULT '',
+  forum TEXT NOT NULL DEFAULT '',
+  charts INTEGER NOT NULL DEFAULT 0,
+  read_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS ireal_charts (
+  page TEXT NOT NULL,
+  post INTEGER NOT NULL,
+  place INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  title_key TEXT NOT NULL,
+  composer TEXT NOT NULL DEFAULT '',
+  composer_key TEXT NOT NULL DEFAULT '',
+  style TEXT NOT NULL DEFAULT '',
+  key TEXT NOT NULL DEFAULT '',
+  playlist TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY (page, post, place)
+);
+CREATE INDEX IF NOT EXISTS ireal_charts_title ON ireal_charts(title_key);
+"""
+
 _MIGRATIONS = {1: _SCHEMA_V1, 2: _SCHEMA_V2, 3: _SCHEMA_V3, 4: _SCHEMA_V4, 5: _SCHEMA_V5, 6: _SCHEMA_V6,
                7: _SCHEMA_V7, 8: _SCHEMA_V8, 9: _SCHEMA_V9, 10: _SCHEMA_V10, 11: _SCHEMA_V11, 12: _SCHEMA_V12,
                13: _SCHEMA_V13, 14: _SCHEMA_V14, 15: _SCHEMA_V15,
-               16: _SCHEMA_V16}
+               16: _SCHEMA_V16, 17: _SCHEMA_V17}
 
 
 class DatabaseTooNew(sqlite3.DatabaseError):

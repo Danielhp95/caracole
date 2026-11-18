@@ -42,6 +42,10 @@ Tables:
 - ``[gametabs]``: "Artist - Title" → the gametabs.net tab (its page) you picked
   (``GameTabsPick``): gametabs_fetch.py keeps that tab for the song, as its next
   ``gametab-N.txt`` beside any it has, whatever game or composer its page names.
+- ``[ireal]``: "Artist - Title" → the chart of iReal Pro's forum you picked: its thread's page, and the post that
+  holds it (``#post-N``) or none, for the thread's chart of the song's title (``IRealPick``): ireal_fetch.py keeps that
+  chart as the song's sheet, in place of any but one you pinned on Ultimate Guitar or picked on LaCuerda, and no
+  other site's fetch replaces it.
 - ``[harmonica]``: "Artist - Title" → a table of the song's harmonica tabs (``harmonica-1.txt``) and how
   each is read, whatever caracole guesses (``add_harmonica``, caracole serve's page of readings, ``caracole
   harmonica``): a notation's name ("signs", "brackets", "letters", "signs after", "barrett"), "legend" (the
@@ -86,7 +90,7 @@ _SCHEME = re.compile(r"[a-z][a-z0-9+.-]*://", re.IGNORECASE)
 ARTIST_PAGE_SHAPE = f"{_ARTIST_HOST}/artist/…"
 TAB_PAGE_SHAPE = f"{_TAB_HOST}/tab/…"
 _TABLES = {"alias", "match", "artist_url", "pin", "transpose", "ignore", "block", "reject", "youtube", "lacuerda",
-           "harptabs", "gametabs", "azlyrics", "version", "harmonica"}
+           "harptabs", "gametabs", "ireal", "azlyrics", "version", "harmonica"}
 _HARMONICA_TAB = re.compile(r"harmonica-[1-9][0-9]{0,3}\.txt")  # a harmonica tab's name, as inbox.py keeps it
 # How messages and the to-do page write a YouTube video's address, and the value that says "no video".
 VIDEO_SHAPE = "https://www.youtube.com/watch?v=…"
@@ -108,6 +112,14 @@ _GAMETABS_HOST = re.compile(r"(?:www\.)?gametabs\.net")
 _GAMETABS_PATH = re.compile(r"/tabs/([a-z0-9_-]{1,200})/([a-z0-9_-]{1,200})")
 GAMETABS_BASE = "https://gametabs.net"
 GAMETABS_PAGE_SHAPE = f"{GAMETABS_BASE}/tabs/<game>/<tab>"
+# iReal Pro's forum: a thread's first page, /threads/<slug>.<id>/, and a post of it as its anchor (#post-N) or its own
+# path (/threads/<slug>.<id>/post-N), as the forum links one (ireal.py).
+_IREAL_HOST = re.compile(r"forums\.irealpro\.com")
+_IREAL_PATH = re.compile(
+    r"/threads/([a-z0-9_-]{1,250})\.([1-9][0-9]{0,9})(?:/post-([1-9][0-9]{0,11})|/(page-[1-9][0-9]{0,5}))?/?")
+_IREAL_ANCHOR = re.compile(r"post-([1-9][0-9]{0,11})")
+IREAL_BASE = "https://forums.irealpro.com"
+IREAL_PAGE_SHAPE = f"{IREAL_BASE}/threads/<slug>.<id>/"
 _TWICE = re.compile(r"Cannot declare (\(.*\)) twice")  # tomllib's words for a table declared twice
 # A version as a viewer's address writes it, and how long one may be: every chord's shape and swap is a few hundred.
 VERSION_SHAPE = "t=2&mode=dorian&capo=0"
@@ -141,6 +153,7 @@ class Overrides:
     lacuerda: Mapping[str, LaCuerdaPick] = field(default_factory=dict)
     harptabs: Mapping[str, HarpTabsPick] = field(default_factory=dict)
     gametabs: Mapping[str, GameTabsPick] = field(default_factory=dict)
+    ireal: Mapping[str, IRealPick] = field(default_factory=dict)
     azlyrics: Mapping[str, str] = field(default_factory=dict)  # the page's address, as caracole asks for it
     version: Mapping[str, str] = field(default_factory=dict)
     harmonica: Mapping[str, Mapping[str, str | Mapping[str, str]]] = field(default_factory=dict)
@@ -212,6 +225,59 @@ class GameTabsPick:
     def url(self) -> str:
         """Its page: as caracole writes the pick and asks for it."""
         return f"{GAMETABS_BASE}/{self.path}"
+
+
+@dataclass(frozen=True)
+class IRealPick:
+    """A chart of iReal Pro's forum you picked (``[ireal]``): its thread's slug and id, and the post that holds it
+    (None: the thread's chart of the song's title, as ireal_fetch.py chooses one)."""
+
+    slug: str
+    thread: int
+    post: int | None = None
+
+    @property
+    def path(self) -> str:
+        """Its thread's page's path, as the forum's index keeps it (``threads/groove-merchant-thad-jones.9518/``)."""
+        return f"threads/{self.slug}.{self.thread}/"
+
+    @property
+    def url(self) -> str:
+        """Its thread's page, or its post's own address (``…/post-N``), which the forum sends to whichever page holds
+        it: as caracole writes the pick."""
+        return f"{IREAL_BASE}/{self.path}" + (f"post-{self.post}" if self.post is not None else "")
+
+    def holds(self, tab_id: str) -> bool:
+        """Whether a chart, by its tab id (``thread/post/place``, as ireal_fetch.py records it), is the one picked:
+        of its thread, and of its post when it names one."""
+        thread, _, rest = tab_id.partition("/")
+        post = rest.partition("/")[0]
+        return thread == str(self.thread) and (self.post is None or post == str(self.post))
+
+
+def ireal_pick_from_url(url: Any) -> IRealPick:
+    """The chart of iReal Pro's forum a thread page's address names (``IRealPick``), written as an address bar shows
+    it: without ``https://``, a post's anchor or its own path, a query; a later page's with its post's anchor
+    (``…/page-2#post-N``) is that post's, which ireal_fetch.py finds on whichever page holds it, and a later page's
+    alone names no chart."""
+    text = url.strip() if isinstance(url, str) else ""
+    if text and not _SCHEME.match(text):
+        text = f"https://{text}"
+    try:
+        parts = urlsplit(text)
+    except ValueError:
+        parts = None
+    found = anchor = None
+    if parts is not None and parts.scheme in ("http", "https") and _IREAL_HOST.fullmatch(parts.netloc.lower()):
+        found = _IREAL_PATH.fullmatch(parts.path)
+        anchor = _IREAL_ANCHOR.fullmatch(parts.fragment)
+    if found is None:
+        raise OverridesError(f"expected an iReal Pro forum's thread ({IREAL_PAGE_SHAPE}), got {url!r}")
+    post = found.group(3) or (anchor.group(1) if anchor else None)
+    if found.group(4) and not post:
+        raise OverridesError(f"expected an iReal Pro forum's thread ({IREAL_PAGE_SHAPE}), got {url!r}: a later page "
+                             f"of it names no chart, its post's address does (…/{found.group(4)}#post-N)")
+    return IRealPick(found.group(1), int(found.group(2)), int(post) if post else None)
 
 
 def gametabs_pick_from_url(url: Any) -> GameTabsPick:
@@ -439,6 +505,7 @@ def _parse(data: Mapping[str, Any]) -> Overrides:
     lacuerda = _read_picks(data, "lacuerda", lacuerda_pick_from_url, "a LaCuerda song's page")
     harptabs = _read_picks(data, "harptabs", harptabs_pick_from_url, "a harptabs.com tab's page")
     gametabs = _read_picks(data, "gametabs", gametabs_pick_from_url, "a gametabs.net tab's page")
+    ireal = _read_picks(data, "ireal", ireal_pick_from_url, "an iReal Pro forum's thread")
     azlyrics = _read_picks(data, "azlyrics", azlyrics_page_from_url)
     version = _read_entries(data, "version", _version)
     harmonica = _read_harmonica(data)
@@ -446,7 +513,7 @@ def _parse(data: Mapping[str, Any]) -> Overrides:
         alias=alias, match=match, artist_url=artist_url, pin=pin, transpose=transpose,
         ignore=ignore, block=block, pin_urls=pin_urls, reject=reject,
         artist_url_names=artist_url_names, youtube=youtube, lacuerda=lacuerda, harptabs=harptabs, gametabs=gametabs,
-        azlyrics=azlyrics, version=version, harmonica=harmonica, tables=frozenset(data),
+        ireal=ireal, azlyrics=azlyrics, version=version, harmonica=harmonica, tables=frozenset(data),
     )
 
 
@@ -780,6 +847,14 @@ def add_gametabs(path: Path, display: str, url: str) -> None:
     _set_entry(path, "gametabs", display, gametabs_pick_from_url(url).url)
 
 
+def add_ireal(path: Path, display: str, url: str) -> None:
+    """Set the song's ``[ireal]`` entry: the chart of iReal Pro's forum at ``url``, written as caracole writes it
+    (``IRealPick.url``). The song's entry is found by its key, as the table is read, so the song written another way
+    changes the entry it has; the same pick again writes nothing."""
+    override_key(display)
+    _set_entry(path, "ireal", display, ireal_pick_from_url(url).url)
+
+
 def add_version(path: Path, display: str, query: str | None) -> None:
     """Set the song's ``[version]`` entry to ``query`` (a viewer's address, its "#" left out), or with None
     take the song's entries out: the song then plays as its ``[transpose]``, else as written.
@@ -936,8 +1011,8 @@ def add_block(path: Path, tab_id: int) -> None:
 # --- a unit whole, as a sync between two caracoles takes it (peer_sync.py) ---------------------------------------
 
 # The tables an entry of which is about one song, keyed by its "Artist - Title"; ``[ignore] songs`` is the other.
-SONG_TABLES = ("match", "pin", "transpose", "reject", "youtube", "lacuerda", "harptabs", "gametabs", "azlyrics",
-               "version", "harmonica")
+SONG_TABLES = ("match", "pin", "transpose", "reject", "youtube", "lacuerda", "harptabs", "gametabs", "ireal",
+               "azlyrics", "version", "harmonica")
 
 
 def song_entries(overrides: Overrides, key: str) -> dict[str, Any]:
@@ -957,7 +1032,7 @@ def song_entries(overrides: Overrides, key: str) -> dict[str, Any]:
             value = sorted(f"{a}/{s}" for a, s in value)
         elif table == "youtube":
             value = NO_VIDEO if value is None else watch_url(value)
-        elif table in ("lacuerda", "harptabs", "gametabs"):
+        elif table in ("lacuerda", "harptabs", "gametabs", "ireal"):
             value = value.url
         elif table == "harmonica":
             value = {tab: dict(spec) if isinstance(spec, Mapping) else spec for tab, spec in value.items()}

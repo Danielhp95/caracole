@@ -7,14 +7,15 @@ Every site caracole asks that is on (``shown``), in one order (``ORDER``), is on
   page of its title (a possible match), YouTube the audio of its auto sheet;
 - ``none``: it was asked and had nothing: UG's index matched nothing (``not_found``), LaCuerda was asked
   (``lacuerda_checked_at``), LRCLIB's lyrics missing (or none timed, where Megalobiz's came: its lyrics show on the
-  song's card, not as a mark), the misses of gtptabs.com, harptabs.com and gametabs.net (kv
+  song's card, not as a mark), the misses of iReal Pro's forum, gtptabs.com, harptabs.com and gametabs.net (kv
   ``<site>:checked:<song id>``, which a song with a file from there never reads as one), MuseScore's index read and no
   page of its title, nothing on YouTube that fits;
 - ``unasked``: not asked yet: the nightly run gets there.
 
 Each with ``said``, its tooltip and its name for a screen reader: "harptabs.com: has it", "Ultimate Guitar: nothing for
 it (looked 2026-10-16)", "gtptabs.com: not asked yet". YouTube is a site only for a song on its route (with no human
-sheet, where auto-chords is): ``youtube`` names those.
+sheet, where auto-chords is): ``youtube`` names those. iReal Pro's forum, asked only for a song the sheet sites left
+without a sheet, is a mark once it was asked or gave the song's chart.
 """
 
 from __future__ import annotations
@@ -27,12 +28,13 @@ from caracole.config import Config
 from caracole.songs import Song
 
 HAVE, NONE, UNASKED = "have", "none", "unasked"
-ORDER = ("ug", "lacuerda", "lrclib", "gtptabs", "harptabs", "gametabs", "musescore", "youtube")
-NAMES = {"ug": "UG", "lacuerda": "LaCuerda", "lrclib": "LRCLIB", "gtptabs": "gtptabs", "harptabs": "harptabs",
-         "gametabs": "gametabs", "musescore": "MuseScore", "youtube": "YouTube"}
-# The steps' own kv prefixes of a miss (gtptabs_fetch.py, harptabs_fetch.py, gametabs_fetch.py: their CHECKED_PREFIX),
-# written here so the page imports none of the steps.
-CHECKED = {"gtptabs": "gtptabs:checked:", "harptabs": "harptabs:checked:", "gametabs": "gametabs:checked:"}
+ORDER = ("ug", "lacuerda", "ireal", "lrclib", "gtptabs", "harptabs", "gametabs", "musescore", "youtube")
+NAMES = {"ug": "UG", "lacuerda": "LaCuerda", "ireal": "iReal Pro", "lrclib": "LRCLIB", "gtptabs": "gtptabs",
+         "harptabs": "harptabs", "gametabs": "gametabs", "musescore": "MuseScore", "youtube": "YouTube"}
+# The steps' own kv prefixes of a miss (ireal_fetch.py, gtptabs_fetch.py, harptabs_fetch.py, gametabs_fetch.py: their
+# CHECKED_PREFIX), written here so the page imports none of the steps.
+CHECKED = {"ireal": "ireal:checked:", "gtptabs": "gtptabs:checked:", "harptabs": "harptabs:checked:",
+           "gametabs": "gametabs:checked:"}
 _YOUTUBE = {"downloaded": HAVE, "chords": HAVE, "missing": NONE, "unusable": NONE, "queued": UNASKED,
             "blocked": UNASKED}  # youtube_fetch.py's states; "declined", your [youtube] "none", leaves it out
 
@@ -101,6 +103,8 @@ def song_sites(song: Song, sites: tuple[str, ...], *, origins: Mapping[str, str]
             if youtube not in _YOUTUBE:
                 continue
             state = _YOUTUBE[youtube]
+        if site == "ireal" and state == UNASKED:
+            continue  # asked only for a song the sheet sites left without a sheet: a mark once it was
         marks.append({"source": site, "state": state, "said": _said(site, state, looked, song)})
     return marks
 

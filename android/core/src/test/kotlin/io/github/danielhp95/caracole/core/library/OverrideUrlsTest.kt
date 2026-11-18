@@ -1,11 +1,13 @@
 package io.github.danielhp95.caracole.core.library
 
+import io.github.danielhp95.caracole.core.library.internal.overrides.Addresses
 import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.replays.OverridesReplay
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
+import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * The addresses a user pastes, read as overrides.py, youtube_urls.py and ug/sitemap.py read them: every reader over
@@ -50,5 +52,17 @@ class OverrideUrlsTest {
                      OverrideUrls.parseTabUrl(url))
         assertEquals("guitar-pro", OverrideUrls.classifyTabUrl("https://tabs.ultimate-guitar.com/tab/a/b-guitar-pro-1"))
         assertNull(OverrideUrls.parseTabUrl("https://tabs.ultimate-guitar.com/tab/1"))
+    }
+
+    @Test fun aLaterPageOfAThreadNamesThePostItsAnchorDoesAndNoChartAlone() {
+        // overrides.ireal_pick_from_url's, which no record shows: tests/test_overrides.py holds the same.
+        assertEquals(IRealPick("misty", 3861, 99001), Addresses.irealPickFromUrl(
+            JsonPrimitive("https://forums.irealpro.com/threads/misty.3861/page-3#post-99001")))
+        val e = assertFailsWith<OverridesError> {
+            Addresses.irealPickFromUrl(JsonPrimitive("https://forums.irealpro.com/threads/misty.3861/page-3"))
+        }
+        assertEquals("expected an iReal Pro forum's thread (https://forums.irealpro.com/threads/<slug>.<id>/), got " +
+                     "'https://forums.irealpro.com/threads/misty.3861/page-3': a later page of it names no chart, " +
+                     "its post's address does (…/page-3#post-N)", e.message)
     }
 }

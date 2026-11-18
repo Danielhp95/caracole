@@ -1,5 +1,5 @@
-"""``caracole lyrics``, ``lacuerda``, ``gtptabs``, ``harptabs``, ``gametabs`` and ``musescore``: one step of the
-nightly run, by hand.
+"""``caracole lyrics``, ``lacuerda``, ``ireal``, ``gtptabs``, ``harptabs``, ``gametabs`` and ``musescore``: one step of
+the nightly run, by hand.
 
 Each makes the same pass as its ``caracole run`` step, with a client of its own:
 this run's budget, and the HTTP cache the nightly run uses too; the lacuerda step's
@@ -33,7 +33,11 @@ their client's pause before each request but its first; LaCuerda's search checks
 sends its one request in one turn. Each one's good run is what its own client was answered.
 ``caracole gametabs --index`` reads gametabs.net's game pages into its local index
 (gametabs_index.py), the games of your songs first, the same way: their tabs' composers and
-instruments, so that a song is found by its composer.
+instruments, so that a song is found by its composer. ``caracole ireal`` reads iReal Pro's forum's sitemaps and
+its curated playlist when due, then keeps a chart as the sheet of each song the sheet sites left with none, as the
+run's ireal step does; ``caracole ireal --index`` reads its playlists into its local index (ireal_index.py), the
+curated one first, then the jazz forum's, the same way, at the bulk pace with a budget of its own, going on where it
+stopped the next time, even for an empty library.
 
 Every command module is imported on every start, so the passes are imported
 inside the commands.
@@ -75,6 +79,9 @@ if TYPE_CHECKING:
     from caracole.harptabs_fetch import HarpTabsStats
     from caracole.harptabs_index import ArtistPassStats, IndexState
     from caracole.http import Client
+    from caracole.ireal_fetch import IRealStats
+    from caracole.ireal_index import IndexState as IRealIndexState
+    from caracole.ireal_index import PlaylistStats
     from caracole.lacuerda_fetch import LaCuerdaStats
     from caracole.lacuerda_index import IndexStats
     from caracole.lyrics import LyricsStats
@@ -83,7 +90,7 @@ if TYPE_CHECKING:
 
 # Each provider's command, for the lock.
 _COMMANDS = {"lrclib": "lyrics", "megalobiz": "lyrics", "azlyrics": "lyrics", "lacuerda": "lacuerda", "gtptabs": "gtptabs",
-             "harptabs": "harptabs", "gametabs": "gametabs", "musescore": "musescore"}
+             "harptabs": "harptabs", "gametabs": "gametabs", "musescore": "musescore", "ireal": "ireal"}
 LACUERDA_SEARCHES_PER_HOUR = 20  # lacuerda_search.SEARCHES_PER_HOUR, for the help, which imports no pass
 
 
@@ -192,6 +199,29 @@ def register(app: typer.Typer) -> None:
             _gametabs_index(cfg, budget)
         else:
             _gametabs(cfg)
+
+    @app.command("ireal")
+    def ireal_cmd(
+        ctx: typer.Context,
+        index: bool = typer.Option(
+            False, "--index",
+            help="Instead, read iReal Pro's forum's playlists into its local index (their charts' titles and "
+                 "composers): the curated Jazz 1460 Standards first, then the jazz forum's, going on where the last "
+                 "one stopped.",
+        ),
+        budget: int | None = typer.Option(
+            None, "--budget", metavar="N", min=1,
+            help=f"With --index: the requests it may send (default {BUILD_BUDGET}, at the bulk pace).",
+        ),
+    ) -> None:
+        """Keep a chord chart from iReal Pro's forum as the sheet of each song the sheet sites left with none."""
+        if budget is not None and not index:
+            _common.fail("--budget goes with --index", 2)
+        cfg = load_cfg(ctx, builds_index="ireal --index" if index else None)
+        if index:
+            _ireal_index(cfg, budget)
+        else:
+            _ireal(cfg)
 
     @app.command("musescore")
     def musescore_cmd(ctx: typer.Context) -> None:
@@ -623,6 +653,94 @@ def _gametabs(cfg: Config) -> None:
         typer.echo("Songs with an error are tried again next run.")
     if s.budget_exhausted:
         _budget_spent(cfg, "gametabs")
+
+
+def _ireal(cfg: Config) -> None:
+    """Read iReal Pro's forum's sitemaps and its curated playlist when due, keep the charts the songs need as their
+    sheets, then print the counts."""
+    from caracole.ireal_fetch import ireal_sheets
+    from caracole.ireal_index import PlaylistStats, playlist_pass
+    from caracole.overrides import load_overrides
+    from caracole.songs import list_songs
+
+    if not cfg.provider("ireal").enabled:
+        typer.echo("iReal Pro's forum is off ([providers.ireal] enabled = false); nothing was asked.")
+        return
+    overrides = load_ovr(cfg)
+
+    def run(conn: sqlite3.Connection, client: Client, now: datetime) -> tuple[PlaylistStats, IRealStats]:
+        from caracole.ireal_fetch import IRealStats
+
+        wanted = any(s.status != "ignored" and s.key not in overrides.ignore for s in list_songs(conn))
+        handed = _common.handoffs()  # a lookup may go first in the playlist's pauses: the sheets read overrides again
+        first = playlist_pass(conn, client, now, first=1) if wanted else PlaylistStats()
+        sheets = (ireal_sheets(conn, client, cfg.library_dir, cfg.rank, now,
+                               overrides=_common.overrides_since(cfg, overrides, handed), refresh_index=False,
+                               reload_overrides=lambda: load_overrides(cfg.overrides_file))
+                  if not first.budget_exhausted else IRealStats(budget_exhausted=True))
+        return first, sheets
+
+    def ran(result: tuple[PlaylistStats, IRealStats]) -> bool:
+        first, s = result
+        return bool(first.sitemaps or first.read or first.errors or s.tried or s.errors or s.budget_exhausted)
+
+    result = _provider_pass(cfg, "ireal", run, overrides, ran)
+    if result is None:
+        return
+    if not ran(result):
+        typer.echo("No song to look up on iReal Pro's forum.")
+        return
+    first, s = result
+    if first.sitemaps:
+        typer.echo(f"Index: {plural(first.sitemaps, 'sitemap')} read.")
+    if first.read:
+        typer.echo("Index: the Jazz 1460 Standards read.")
+    counts = f"{s.tried} tried, {plural(s.kept, 'chart')} kept, {s.missing} not on iReal Pro's forum"
+    typer.echo(f"iReal Pro's forum: {counts}, {plural(s.errors + first.errors, 'error')}")
+    if s.errors:
+        typer.echo("Songs with an error are tried again next run.")
+    if s.budget_exhausted or first.budget_exhausted:
+        _budget_spent(cfg, "ireal")
+
+
+def _ireal_index(cfg: Config, budget: int | None) -> None:
+    """Read iReal Pro's forum's playlists into its index, the sitemaps first when due, a budget at a time (its own,
+    ``--budget``), then say how far the index has got."""
+    from dataclasses import replace
+
+    from caracole.ireal_index import index_state, playlist_pass
+
+    if not cfg.provider("ireal").enabled:
+        typer.echo("iReal Pro's forum is off ([providers.ireal] enabled = false); nothing was asked.")
+        return
+    overrides = load_ovr(cfg)
+    p = cfg.provider("ireal")
+    policy = replace(p, budget=budget if budget is not None else max(BUILD_BUDGET, p.budget))
+
+    def run(conn: sqlite3.Connection, client: Client, now: datetime) -> tuple[PlaylistStats, IRealIndexState]:
+        return playlist_pass(conn, client, now), index_state(conn)
+
+    def ran(result: tuple[PlaylistStats, IRealIndexState]) -> bool:
+        s = result[0]
+        return bool(s.sitemaps or s.forums or s.read or s.errors or s.budget_exhausted)
+
+    result = _provider_pass(cfg, "ireal", run, overrides, ran, policy=policy, command="ireal --index")
+    if result is None:
+        return
+    s, now = result
+    held = (f"{now.playlists_read:,} of {plural(now.playlists, 'playlist')} read, {plural(now.charts, 'chart')} in "
+            f"the index")
+    if not ran(result):
+        typer.echo(f"iReal Pro's forum's index is up to date: {held}.")
+        return
+    if s.sitemaps:
+        typer.echo(f"Index: iReal Pro's forum's {plural(s.sitemaps, 'sitemap')} read.")
+    gone = f", {s.gone} gone" if s.gone else ""
+    errors = f", {plural(s.errors, 'error')} (asked for again next time)" if s.errors else ""
+    typer.echo(f"iReal Pro's forum: {plural(s.read, 'playlist page')} read{gone}{errors}; {held}.")
+    if s.budget_exhausted:
+        typer.echo(f"The budget of {plural(policy.budget, 'request')} is spent: caracole ireal --index reads the "
+                   "rest the next time.")
 
 
 def _gametabs_index(cfg: Config, budget: int | None) -> None:

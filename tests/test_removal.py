@@ -294,3 +294,20 @@ def test_a_removal_deletes_the_songs_tabs_from_gametabs_and_their_record_but_a_f
     assert not (folder / "gametab-1.txt").exists() and (folder / "gametab-2.txt").read_text(encoding="utf-8") == "my own"
     for key in (f"gametabs:checked:{song.id}", f"gametabs:checked:{song.id}:pick"):
         assert db.kv_get(conn, key) is None, key
+
+
+def test_a_removal_deletes_the_songs_irealpro_chart_and_its_records(conn, cfg):
+    song = creep(conn, cfg)
+    folder = song_dir(cfg.library_dir, song)
+    chart = version(conn, song, "9518/38106/1", "chords", provider="ireal")
+    for name, data in (("sheet.json", b'{"provider": "ireal"}\n'), ("sheet.txt", b"| Bb7 | Eb7 |\n")):
+        keep_file(conn, cfg.library_dir, song=song, version_id=chart, name=name, data=data, rank=1)
+    db.kv_set(conn, f"ireal:checked:{song.id}", "2026-11-18T03:30:00Z")
+    db.kv_set(conn, f"ireal:checked:{song.id}:pick", "https://forums.irealpro.com/threads/x.9518/#post-38106")
+
+    plan, result = plan_and_remove(conn, cfg, song)
+
+    assert {"sheet.json", "sheet.txt"} <= set(plan.delete)
+    assert not (folder / "sheet.txt").exists() and not (folder / "sheet.json").exists()
+    for key in (f"ireal:checked:{song.id}", f"ireal:checked:{song.id}:pick"):
+        assert db.kv_get(conn, key) is None, key

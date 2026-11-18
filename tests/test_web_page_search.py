@@ -1514,8 +1514,8 @@ def test_a_site_turned_off_or_empty_is_named_in_the_rest(cfg, live, browser):
 
 
 def everywhere(cfg):
-    """Piano Man on every site: UG's, gtptabs.com's, LaCuerda's, MuseScore's, harptabs.com's (Billy Joel's page read)
-    and gametabs.net's indexes, and in your library."""
+    """Piano Man on every site: UG's, gtptabs.com's, LaCuerda's, MuseScore's, harptabs.com's (Billy Joel's page read),
+    gametabs.net's and iReal Pro's forum's indexes, and in your library."""
     from caracole import lacuerda_index as li
     from caracole.gametabs import parse_page_url
     from caracole.lacuerda import LCSong
@@ -1528,6 +1528,17 @@ def everywhere(cfg):
     conn.execute("INSERT INTO gametabs_index (path, kind, game, slug, page, key, slug_key, sitemap) "
                  "VALUES (?, ?, ?, ?, ?, ?, ?, 'sitemap_1.xml')",
                  tuple(parse_page_url("https://gametabs.net/tabs/piano-game/piano-man")))
+    from datetime import UTC, datetime
+
+    from helpers.ireal_site import link, thread_page
+
+    from caracole.ireal import parse_thread_page
+    from caracole.ireal_index import store_thread_page
+
+    path = "threads/piano-man-billy-joel.77/"
+    store_thread_page(conn, parse_thread_page(thread_page("Piano Man - Billy Joel", [
+        (7, [link([("Piano Man", "Joel Billy", "Waltz", "C", "[T34C   |G/B   Z ")])])], path=path)),
+        datetime(2026, 11, 18, tzinfo=UTC))
     conn.commit()
     conn.close()
     library(cfg, ("Billy Joel", "Piano Man"))
@@ -1564,9 +1575,9 @@ def test_on_a_laptop_the_sites_are_named_in_full_where_the_row_fits_one_line(cfg
     # fitted again as the window narrows and widens.
     everywhere(cfg)
     search(browser, "piano man")
-    assert browser.wait(f"{answer_to('piano man')} && document.querySelectorAll('#bar-counts > li').length === 7")
+    assert browser.wait(f"{answer_to('piano man')} && document.querySelectorAll('#bar-counts > li').length === 8")
     assert [m[0] for m in browser.js(COUNT_MARKS)] == ["library", "ug", "gtptabs", "lacuerda", "musescore",
-                                                       "harptabs", "gametabs"]
+                                                       "harptabs", "gametabs", "ireal"]
     fits = (f"(() => {{ const r = {NAMED}; return r.lines === 1 && r.short === (r.namedLines > 1) && "
             "r.named !== r.short; })()")
     for width in (760, 1280, 760):

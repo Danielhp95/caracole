@@ -2058,7 +2058,7 @@ def test_the_search_says_where_it_looked_a_chip_a_site_with_its_detail(app, conn
     record_block(conn, "musescore", datetime(2026, 10, 19, tzinfo=UTC), "HTTP 403: a challenge")
     looked = as_json(get(app, "/api/search?q=lynrd"))["looked"]
     # UG, gtptabs.com, LaCuerda, MuseScore, harptabs.com, gametabs.net: done, done, partial (the letters read whole run
-    # up to C), blocked, empty, empty.
+    # up to C), blocked, empty, empty. iReal Pro's forum, its index holding no thread read, none.
     assert [(s["source"], s["state"], s["label"]) for s in looked] == [
         ("ug", "done", "UG ✓"), ("gtptabs", "done", "gtptabs.com ✓"), ("lacuerda", "partial", "LaCuerda: up to C"),
         ("musescore", "blocked", "MuseScore turned us back"), ("harptabs", "empty", "harptabs.com: empty"),
@@ -2142,6 +2142,57 @@ def test_the_search_gives_gametabs_nets_tracks_and_their_tabs_and_none_while_it_
     off = dataclasses.replace(cfg, providers={**cfg.providers, "gametabs": ProviderPolicy(20, (0.25, 0.25), False)})
     data = as_json(get(WebApp(off, JobQueue(Recorder()), allowed=ALLOWED, csrf="tok"), "/api/search?q=resting+grounds"))
     assert data["gametabs"] == []
+
+
+def test_the_search_says_how_far_irealpros_index_has_got_its_mark_last(app, cfg, conn):
+    # Nothing at all before any thread is read (a fallback is no site a search misses); in part while some playlists
+    # aren't read; whole once they are; off while it is turned off.
+    import dataclasses
+
+    from test_search import ireal_index
+
+    from caracole.config import ProviderPolicy
+
+    def mark(on=app):
+        looked = as_json(get(on, "/api/search?q=misty"))["looked"]
+        assert looked[-1]["source"] == "ireal" and looked[-2]["source"] == "gametabs"
+        return {k: looked[-1][k] for k in ("name", "state", "label", "detail")}
+
+    before = as_json(get(app, "/api/search?q=misty"))
+    assert "ireal" not in before and "ireal" not in [s["source"] for s in before["looked"]]
+    ireal_index(conn)  # the curated playlist and a thread read; the jazz forum's page not yet
+    assert mark() == {"name": "iReal Pro", "state": "partial", "label": "iReal Pro: 1 of 1 playlists",
+                      "detail": "iReal Pro's forum's playlists are being read: 1 of 1 so far; caracole ireal --index "
+                                "reads the rest."}
+    from caracole.db import kv_set_json
+
+    kv_set_json(conn, "ireal:forums", {"forums/jazz.6/": {"read_at": "2026-11-18T00:00:00Z", "sticky": []}})
+    conn.commit()
+    assert mark() == {"name": "iReal Pro", "state": "done", "label": "iReal Pro ✓",
+                      "detail": "iReal Pro's forum: our copy of its playlists and the threads read, searched whole."}
+    off = dataclasses.replace(cfg, providers={**cfg.providers, "ireal": ProviderPolicy(20, (2.5, 5.0), False)})
+    assert mark(WebApp(off, JobQueue(Recorder()), allowed=ALLOWED, csrf="tok"))["state"] == "off"
+
+
+def test_the_search_gives_irealpros_charts_and_none_while_it_is_turned_off(app, cfg, conn):
+    import dataclasses
+
+    from test_search import ireal_index
+
+    from caracole.config import ProviderPolicy
+
+    ireal_index(conn)
+    song = add_song(conn, "Thad Jones", "Groove Merchant")
+    conn.commit()
+    data = as_json(get(app, "/api/search?q=groove+merchant"))
+    [hit] = data["ireal"]
+    assert (hit["source"], hit["artist"], hit["title"], hit["uploads"], hit["page"]) == (
+        "ireal", "Thad Jones", "Groove Merchant", 2, "threads/groove-merchant-thad-jones.9518/")
+    assert hit["url"] == "https://forums.irealpro.com/threads/groove-merchant-thad-jones.9518/#post-38106"
+    assert (hit["artist_key"], hit["title_key"], hit["song"]) == ("thad-jones", "groove-merchant", song.id)
+    off = dataclasses.replace(cfg, providers={**cfg.providers, "ireal": ProviderPolicy(20, (2.5, 5.0), False)})
+    data = as_json(get(WebApp(off, JobQueue(Recorder()), allowed=ALLOWED, csrf="tok"), "/api/search?q=misty"))
+    assert data["ireal"] == []
 
 
 def test_a_search_the_ug_index_answers_badly_says_what_to_paste_for_an_artist_it_cant_see(app, conn):

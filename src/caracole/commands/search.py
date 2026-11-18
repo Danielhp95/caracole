@@ -19,7 +19,9 @@ line that looks the song up keeping that tab, and its tabs by title alone, whose
 page read names (search.py ``search_harptabs``); then how far its artist index has got.
 gametabs.net's group follows, unnumbered: its tracks of games, each with the ``caracole get
 --gametabs`` line that looks the song up keeping that tab (search.py ``search_gametabs``), then
-how far its game index has got.
+how far its game index has got. iReal Pro's forum's group comes last, unnumbered: its charts of jazz standards by
+title and composer, each with the ``caracole get --ireal`` line that looks the song up keeping that chart as its
+sheet (search.py ``search_ireal``), then how far its playlists are read.
 
 A query may be an artist alone or a title alone (``search.find_index``): when
 an artist leads, its most tabbed songs come first, then the songs titled like
@@ -54,6 +56,7 @@ from caracole.commands._common import exclusive, fail, load_cfg, open_db
 LACUERDA = "On LaCuerda (offline index)"
 HARPTABS = "On harptabs.com (offline index)"
 GAMETABS = "On gametabs.net (offline index)"
+IREAL = "On iReal Pro's forum (offline index)"
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -258,6 +261,9 @@ def _search(cfg: Config, conn: sqlite3.Connection, ask: _Ask, limit: int, key: s
         typer.echo(line)
     typer.echo(f"\n{GAMETABS}")
     for line in _gametabs_listing(cfg, conn, ask, limit):
+        typer.echo(line)
+    typer.echo(f"\n{IREAL}")
+    for line in _ireal_listing(cfg, conn, ask, limit):
         typer.echo(line)
     if ug is not None and ask.artist is None and ask.title is None:
         _print_suggestions(cfg, conn, ask, ug, lacuerda, [hit for hit, _ in library])
@@ -662,6 +668,40 @@ def _gametabs_lines(hit: SiteHit) -> str:
                                                                    else []))
     return (f"  {_tag('gametabs')}{hit.artist} - {hit.title} · {said}\n     {hit.url}\n"
             f"     caracole get --gametabs {hit.url} {_quote(hit.artist)} {_quote(hit.title)}")
+
+
+def _ireal_listing(cfg: Config, conn: sqlite3.Connection, ask: _Ask, limit: int) -> list[str]:
+    """iReal Pro's forum's index's answer as the search prints it, unnumbered: its charts by title and composer, at
+    most ``limit``; with ``--artist``, those of that composer; with ``--title``, those of that title. Then how far its
+    playlists are read, while they aren't all. Nothing but why, while it is turned off or its index is empty."""
+    from caracole.ireal_index import index_state
+    from caracole.search import search_ireal
+
+    if not cfg.provider("ireal").enabled:
+        return ["  iReal Pro's forum is turned off in caracole.toml."]
+    state = index_state(conn)
+    if not state.read:
+        return ["  Nothing yet: iReal Pro's forum's index is empty: the nightly run reads its playlists (caracole "
+                "ireal --index reads them now)."]
+    if ask.artist is not None:
+        hits = [h for h in search_ireal(conn, f"{ask.artist} {ask.text}".strip(), limit) if h.via != "title"]
+    elif ask.title is not None:
+        hits = [h for h in search_ireal(conn, ask.title, limit) if h.via == "title"]
+    else:
+        hits = search_ireal(conn, ask.text, limit)
+    lines = [_ireal_lines(h) for h in hits] or ["  nothing matches"]
+    if not state.complete:
+        lines += ["", _fill(f"iReal Pro's forum's playlists are still being read: {state.playlists_read:,} of "
+                            f"{state.playlists:,} so far; caracole ireal --index reads the rest.")]
+    return lines
+
+
+def _ireal_lines(hit: SiteHit) -> str:
+    """A chart of iReal Pro's forum: its composer and title, its charts, its thread's page, and the line that looks
+    the song up keeping it as the sheet."""
+    artist = hit.artist or "Unknown"
+    return (f"  {_tag('ireal')}{artist} - {hit.title} · {_count(hit.uploads, 'chart')}\n     {hit.url}\n"
+            f"     caracole get --ireal {hit.url} {_quote(artist)} {_quote(hit.title)}")
 
 
 def _count(n: int, thing: str) -> str:

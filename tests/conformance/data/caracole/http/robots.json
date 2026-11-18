@@ -307,6 +307,16 @@
    "/watch_queue_ajax",
    "/youtubei/"
   ],
+  "forums.irealpro.com": [
+   "/search/",
+   "/login/",
+   "/register/",
+   "/members/",
+   "/whats-new/",
+   "/misc/",
+   "/find-new/",
+   "/account/"
+  ],
   "tabs.ultimate-guitar.com": [
    "/forum/",
    "/tab/print?",

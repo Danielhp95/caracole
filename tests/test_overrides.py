@@ -977,3 +977,69 @@ def test_azlyrics_takes_a_lyrics_page_alone(tmp_path, value):
     p.write_text(f'[azlyrics]\n"pomme - mononoke" = {value}\n', encoding="utf-8")
     with pytest.raises(OverridesError, match="AZLyrics lyrics page"):
         load_overrides(p)
+
+
+def test_ireal_names_the_chart_you_picked_there(tmp_path):
+    from caracole.overrides import IRealPick
+
+    p = write(tmp_path, """
+[ireal]   # the iReal Pro forum's chart a song's sheet comes from
+"Thad Jones - Groove Merchant" = "https://forums.irealpro.com/threads/groove-merchant-thad-jones.9518/#post-38106"
+"Ella Fitzgerald - Misty" = "forums.irealpro.com/threads/jazz-1460-standards.12753/"
+"Jerome Richardson - Groove Merchant" = "https://forums.irealpro.com/threads/groove-merchant-jerome-richardson.14294/post-48070"
+""")
+    o = load_overrides(p)
+    assert o.ireal == {
+        "thad-jones/groove-merchant": IRealPick("groove-merchant-thad-jones", 9518, 38106),
+        "ella-fitzgerald/misty": IRealPick("jazz-1460-standards", 12753),
+        "jerome-richardson/groove-merchant": IRealPick("groove-merchant-jerome-richardson", 14294, 48070)}
+    pick = o.ireal["thad-jones/groove-merchant"]
+    # Written as the post's own address, which the forum sends to whichever page of the thread holds it.
+    assert pick.url == "https://forums.irealpro.com/threads/groove-merchant-thad-jones.9518/post-38106"
+    assert pick.path == "threads/groove-merchant-thad-jones.9518/"
+    assert pick.holds("9518/38106/1") and not pick.holds("9518/23346/1") and not pick.holds("14294/38106/1")
+    assert o.ireal["ella-fitzgerald/misty"].holds("12753/31492/8")
+    assert o.ireal["ella-fitzgerald/misty"].url == "https://forums.irealpro.com/threads/jazz-1460-standards.12753/"
+    assert Overrides().ireal == {}
+
+
+def test_a_later_page_of_a_thread_names_the_post_its_anchor_does_and_no_chart_alone():
+    # The post is found on whichever page holds it (ireal_fetch.py asks its own address): its pick is the post's.
+    from caracole.overrides import IRealPick, ireal_pick_from_url
+
+    assert ireal_pick_from_url("https://forums.irealpro.com/threads/misty.3861/page-3#post-99001") == IRealPick(
+        "misty", 3861, 99001)
+    with pytest.raises(OverridesError, match=r"a later page of it names no chart, its post's address does "
+                                             r"\(…/page-3#post-N\)"):
+        ireal_pick_from_url("https://forums.irealpro.com/threads/misty.3861/page-3")
+
+
+@pytest.mark.parametrize("value", [
+    "https://forums.irealpro.com/forums/jazz.6/", "https://forums.irealpro.com/threads/misty.3861/page-2",
+    "https://forums.irealpro.com/posts/38106/", "https://forums.irealpro.com/members/orrpa.8006/",
+    "https://example.com/threads/misty-erroll-garner.3861/", "ftp://forums.irealpro.com/threads/misty.3861/",
+    "irealb://Misty", "misty", ""])
+def test_an_ireal_entry_that_is_no_thread_says_what_it_takes(tmp_path, value):
+    from caracole.overrides import ireal_pick_from_url
+
+    with pytest.raises(OverridesError, match="iReal Pro forum's thread"):
+        ireal_pick_from_url(value)
+    p = write(tmp_path, f'[ireal]\n"Erroll Garner - Misty" = "{value}"\n')
+    with pytest.raises(OverridesError, match=r"\[ireal\] 'Erroll Garner - Misty': expected an iReal Pro forum's thr"):
+        load_overrides(p)
+
+
+def test_add_ireal_writes_the_picks_address_in_the_songs_one_entry(tmp_path):
+    from caracole.overrides import IRealPick, add_ireal, song_entries
+
+    p = write(tmp_path, '# mine\n[ireal]\n"thad jones - groove merchant" = "https://forums.irealpro.com/threads/x.1/"\n')
+    add_ireal(p, "Thad Jones - Groove Merchant",
+              "forums.irealpro.com/threads/groove-merchant-thad-jones.9518/post-38106")
+    text = p.read_text()
+    assert text.startswith("# mine\n")
+    assert ('"thad jones - groove merchant" = '
+            '"https://forums.irealpro.com/threads/groove-merchant-thad-jones.9518/post-38106"') in text
+    o = load_overrides(p)
+    assert o.ireal == {"thad-jones/groove-merchant": IRealPick("groove-merchant-thad-jones", 9518, 38106)}
+    assert song_entries(o, "thad-jones/groove-merchant") == {
+        "ireal": "https://forums.irealpro.com/threads/groove-merchant-thad-jones.9518/post-38106"}

@@ -95,7 +95,9 @@ their title alone, as MuseScore's pages. ``harptabs_artist`` and ``harptabs_song
 one of its artists and their songs. ``search_gametabs`` reads gametabs.net's (``gametabs_index``, from its
 sitemaps, and the game pages caracole read, gametabs_index.py): a track of a game a hit (``SiteHit``, the game as
 its artist, its tabs the most viewed first in ``tabs``), by its game, its title or a composer of its tabs (a game
-page's alone say who). ``gtptabs_songs`` counts the songs gtptabs.com's index lists by an
+page's alone say who). ``search_ireal`` reads iReal Pro's forum's (``ireal_charts``, the charts of the thread pages
+caracole read, its playlists' first, ireal_index.py): a chart's title by one composer a hit, the composer as its
+artist, first name first, by its title or its composer. ``gtptabs_songs`` counts the songs gtptabs.com's index lists by an
 artist, for an artist the query names. They only read the local tables: nothing here asks gtptabs.com or MuseScore
 anything, and MuseScore's pages are for the user to open. ``search_lacuerda`` reads
 LaCuerda's (``lacuerda_index``, from its listings of every artist and the artist pages
@@ -1486,6 +1488,55 @@ def _gametabs_tracks(conn: sqlite3.Connection,
         if key:
             tracks.setdefault((game, key), []).append(_GameTab(path, title, row or ()))
     return tracks, names
+
+
+def search_ireal(conn: sqlite3.Connection, query: str, limit: int = SITE_ROWS) -> list[SiteHit]:
+    """iReal Pro's forum's charts in its index that match ``query``, best first, by any reading, as the index's songs
+    are scored: the charts of one title by one composer a hit (``uploads`` counts them), the composer as its artist,
+    first name first (``ireal.composer_name``), the title as people write it ("The Girl From Ipanema"); its ``url`` the
+    thread's at the post of its best chart (the curated playlist's, else the oldest thread's latest post, as
+    ireal_fetch.py ranks them), ``page`` that thread's path. Ties go to the most charts. It reads the tables alone: the
+    charts of the thread pages caracole read (a thread the sitemaps name, never read, holds none it knows)."""
+    from caracole.ireal import JAZZ_1460, composer_name
+
+    patterns = _patterns(name_words(query))
+    queries = _queries(query)
+    if not patterns or not queries:
+        return []
+    likes = " OR ".join("c.title_key LIKE ? OR c.composer_key LIKE ?" for _ in patterns)  # both folded keys
+    groups: dict[tuple[str, str], list[tuple]] = {}
+    for page, thread, post, place, title, key, composer in conn.execute(
+            f"SELECT c.page, t.thread, c.post, c.place, c.title, c.title_key, c.composer FROM ireal_charts c "
+            f"JOIN ireal_threads t ON t.path = c.page WHERE {likes} ORDER BY +c.page LIMIT ?",
+            (*(p for pattern in patterns for p in (pattern, pattern)), SITE_ROWS_READ)):
+        groups.setdefault((key, composer), []).append((page != JAZZ_1460, thread, -post, place, page, post, title))
+    scored = []
+    for (key, composer), charts in groups.items():
+        charts.sort()
+        *_, page, post, title = charts[0]
+        name = composer_name(composer)
+        shown = _article_first(title)
+        score, via = _names_reading(queries, list(dict.fromkeys([name, composer])) if composer else [""], shown)
+        if score >= MIN_SCORE:
+            scored.append((round(score, 1), len(charts), shown, name, key, page, post, via))
+    scored.sort(key=lambda s: (-s[0], -s[1], s[2], s[3]))
+    return [_ireal_hit(*s) for s in scored[:max(limit, 0)]]
+
+
+def _article_first(title: str) -> str:
+    """A title iReal Pro writes with its article last ("Girl From Ipanema, The"), as people write it."""
+    m = re.match(r"^(.*\S)\s*,\s*(the|a|an)\s*$", title, re.IGNORECASE)
+    return f"{m.group(2)} {m.group(1)}" if m else title
+
+
+def _ireal_hit(score: float, charts: int, title: str, name: str, key: str, page: str, post: int, via: str) -> SiteHit:
+    """A chart's title by one composer, as ``search_ireal`` gives it."""
+    from caracole.ireal import page_url
+    from caracole.normalize import identity_key
+
+    return SiteHit("ireal", title, f"{page_url(page)}#post-{post}", score, artist=name,
+                   artist_key=identity_key(name, "").partition("/")[0], title_key=key, uploads=charts, via=via,
+                   page=page)
 
 
 def _gametabs_reading(queries: list[_Query], name: str, game: str, key: str,

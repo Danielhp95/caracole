@@ -11,7 +11,8 @@ library of:
 - lyrics (LRCLIB, then Megalobiz for timed ones, AZLyrics for plain ones where neither has any);
 - PDFs (ChordPro);
 - Guitar Pro files (downloaded from gtptabs.com, or filed from what the user drops into `_inbox/`);
-- harmonica tabs (harptabs.com).
+- harmonica tabs (harptabs.com);
+- chord charts of jazz standards (iReal Pro's forum), as the sheet of a song the sheet sites left with none.
 
 For a song nobody has charted, `caracole autochords` writes a sheet from audio with local models (torch, optional):
 
@@ -55,6 +56,7 @@ Below the table, a section for each step whose modules have more to say.
 | azlyrics | azlyrics.py, azlyrics_fetch.py |
 | fetch | ug/fetch.py, ug/page.py, ug/artist.py, ug/artist_tabs.py, rank.py, coverage.py, versions.py, sheet_versions.py |
 | lacuerda | lacuerda.py, lacuerda_fetch.py, lacuerda_index.py, lacuerda_search.py |
+| ireal | ireal.py, ireal_fetch.py, ireal_index.py |
 | scan | music.py (Music/), inbox.py (`_inbox/`), musicxml.py |
 | gtptabs | gtptabs.py (URLs, parsing), gtptabs_fetch.py (the step) |
 | harptabs | harptabs.py, harptabs_fetch.py, harptabs_index.py |
@@ -165,6 +167,85 @@ sitemaps list by bare ids alone, and the fetch their page.
   - `store_search`: what its search answered.
 - lacuerda_search.py: its own search, one query at the lookup pace, `caracole lacuerda --search`.
   - `gate`: whether the pages may send it.
+
+#### ireal
+
+iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-18 (Politeness, below):
+
+- ireal.py: URLs, its sitemaps' threads (`IndexRow`, a slug's key `slug_key_of`, which a title's key begins:
+  `begins_with`, words alone), a title's key (`title_key`: "Girl From Ipanema, The" is "The Girl From Ipanema", a
+  leading article dropped), and:
+  - a thread page read (`parse_thread_page`: its title, forum, posts, each post's charts, a link quoted in a reply
+    never the reply's) and the jazz forum's page (`parse_forum_page`: its sticky threads, the playlists);
+  - a chart link read (`parse_link`, `irealb://` and the older `irealbook://`, a playlist's name last; `unscramble`,
+    the documented scramble, its own inverse);
+  - a tune's chart as a sheet in UG's markup (`Tune.chart`): bars four a line between bar lines, which the sheet's
+    page draws as cells (5c, viewer/sheet.py `bars`), a section, an ending or the coda a `[label]`, notes (comments, To
+    Coda, a time) a line under theirs after a blank one, `x` and `r` the bars before written out, an empty bar the last
+    chord before it held on (after an opening bar line and before a closing one too), an alternative chord and the
+    app's layout marks left out; chords named as sheets name them (`chord_name`: C^7 Cmaj7, D-7 Dm7, Bh7 Bm7b5, the
+    app's own `C*-^*`); the composer first name first (`composer_name`);
+  - a tune that reads no chord, or more than `UNREAD_MOST` characters that read as nothing (a link cut short inside a
+    block leaves its end scrambled), is `IRealParseError`, the one error the decoder raises on any input (the review's
+    fuzz: random music and every cut of the real pages' tunes; "T4", a time of one digit at the music's end, once an
+    IndexError).
+- ireal_index.py: the thread pages read into `ireal_threads` and `ireal_charts` (schema 17, a composer's folded key
+  `composer_key` for searches), and `playlist_pass`: the sitemaps when due, the curated Jazz 1460 Standards
+  (`ireal.JAZZ_1460`) first, the jazz forum's page (`ireal.PLAYLIST_FORUMS`, kv `ireal:forums`), its sticky threads,
+  each again after 30 days, a thread's first page alone; `index_state`; `ensure_current_keys` (kv
+  `ireal:charts:keys`). A page's `read_at` is when the site answered it: `read_thread` stores a copy from the cache
+  only where the index lacks it, at its fetch's time, so a song's read of a playlist from the cache never puts off
+  the playlist's next read (test_ireal_fetch.py, the review's sequence).
+- ireal_fetch.py: the step, `ireal_sheets`.
+  - Its songs: no human sheet kept (after UG and LaCuerda; one with an auto sheet alone among them), not asked in 30
+    days (kv `ireal:checked:`), a candidate in the index (never a request); a kept chart the library lost written
+    again.
+  - A chart is the song's (`_matching`) only when it is titled as the song is and one of its artists is the chart's
+    composer or the name its thread's slug gives after the title (`composer_fits`, `names_an_artist`, words in any
+    order: "Jones Thad"), or it comes from the Jazz 1460 Standards (`ireal.JAZZ_1460`), where the title alone is
+    enough ("Bill Evans - Autumn Leaves"); the jazz forum's other playlists (practice exercises, fusion, gypsy jazz…)
+    need the composer as any thread does; an `[ireal]` pick always counts. The rulings of 2026-11-18, after a title
+    alone gave "Ren - Patience" Guns N' Roses' chart and "Jorge Rivera-Herrans - Open Arms" Journey's
+    (test_ireal_fetch.py `NAMESAKES`).
+  - A song's artists (`artist_names`, the re-review's ruling of 2026-11-18): each artist whole, by its
+    `normalize.name_forms`; and each one a line names among several, between " / ", " & ", ", ", " and ", " with ",
+    " feat. " or " ft. " (any case), a whole name when it is two words or more ("Thad Jones / Count Basie", "Thad Jones &
+    Mel Lewis"), a surname alone when it is one, meeting a composer's first word as iReal Pro writes them, last name
+    first (`composer_surnames`), or a slug's last word, never a suffix (jr, sr, ii, iii, iv): "Simon & Garfunkel" is
+    Paul Simon's, "Sam & Dave" no Dave Brubeck's, "Harry Connick, Jr." no Grover Washington Jr.'s; "Hall & Oates" is
+    Jim Hall's, and "Crosby, Stills, Nash & Young" Victor Young's, a title and a surname both matching (accepted).
+  - `candidates`: the pages read that hold a chart of the song (the cache's, no request), then the threads whose slug
+    names one of the song's artists after the title, then those of the title alone, the oldest first, never one that
+    names someone else, `CANDIDATES` (3) pages at most; none more once a chart whose composer is the song's artist is
+    in hand.
+  - A chart is read only once it is the song's (`_charts_of`): one that won't is passed over, logged, and only when
+    every chart that would be the song's won't is the song's turn that `IRealParseError`, never a miss.
+  - Every chart of the song a version (provider `ireal`, kind `chords`, tab id `<thread>/<post>/<place>`); the best
+    (`best`: the artist's composer, the curated playlist's, a thread naming its composer, the oldest thread, its
+    latest post) the sheet, `sheet.txt` and `sheet.json` (its `tune` as the link gave it), its version's
+    `tonality_name` the tune's key; its coverage scored as any sheet's, so UG's or LaCuerda's sheet with words replaces
+    it (`versions.replaces_sheet`), unless `[ireal]` picked it (ug/fetch.py `_sheet_slot`, lacuerda_fetch.py
+    `_charted`).
+  - `[ireal]`: a chart you picked (a thread, `#post-N` its post, a later page's `…/page-K#post-N` that post; written
+    as the post's own address, `…/post-N`, `IRealPick.url`, Picks.kt alike, as a later page's chart links), kept in
+    place of any sheet but a UG `[pin]` or a `[lacuerda]` pick; a post its thread's first page doesn't hold is found
+    by asking its own address, which the forum redirects to its page (`_post_page`, each hop a request), read out of
+    the index; a later page's address alone names no chart (overrides.py, Addresses.kt).
+  - After a lookup its client let go first, overrides.toml read again (`reload_overrides`, as LaCuerda's pass does):
+    before the next song, and a song whose turn a handoff came in kept only while it still is one to try with the
+    pick the turn read.
+- Its step `ireal` (pipeline.py, after lacuerda); in a lookup, the sheet stage's last resort (get.py `_ireal`: after
+  UG's and LaCuerda's, its pick `--ireal` first, "from iReal Pro" its running detail, `SHEET_FROM`), no stage of its
+  own; its command `caracole ireal [--index] [--budget N]` (commands/lyrics.py); `search.search_ireal`
+  (`/api/search`'s `ireal`, and its mark last in `looked`, both once its index holds a thread read,
+  search_routes.py `_ireal_read`); a card's site mark once it was asked or gave the chart (song_sites.py); its mark
+  `IR`.
+- Its index is the computer's alone: it isn't in `index_transfer.SITES`, so no export, merge or sync carries it, and
+  the phone's tables of it (schema 17) stay empty; a song's chart, its versions and `[ireal]` travel in its unit. A
+  lookup with nothing to ask there (`ireal_fetch.wants_a_chart`, no request, no client, no kv) says and writes nothing
+  of it, so the phone, whose lookup never asks it, answers alike; its search gives no `ireal`, as an empty index's.
+- What it adds to the conformance corpus is kept to a few KB (vectors/web's budget): nothing while its index is empty
+  or a song has nothing to ask there.
 
 #### harptabs
 
@@ -608,7 +689,7 @@ sitemaps list by bare ids alone, and the fetch their page.
 - `elsewhere`: the service when a caracole with no config named (no `--config`, no `CARACOLE_CONFIG`) would use
   another database than its. Then, unless the root `--home`:
   - `_common.load_cfg` refuses a command that builds an index (`builds_index=`, its words: run, index build and
-    refresh, gtptabs, musescore, harptabs, gametabs and lacuerda `--index`, ug `--directory`) with status 2;
+    refresh, gtptabs, musescore, harptabs, gametabs, ireal and lacuerda `--index`, ug `--directory`) with status 2;
   - and any other says `warning` once before it writes (`_common.warn_elsewhere`, as it first takes the lock, or as
     add and serve write first).
 - The standard library alone.
@@ -1354,6 +1435,8 @@ It is rows.js's, shared by both pages:
   - UG's sitemap index and the artist pages caracole read (ug/artist_tabs.py);
   - gtptabs.com's, MuseScore's, LaCuerda's, harptabs.com's (its sitemap's and the artist pages read,
     harptabs_index.py) and gametabs.net's tables (its sitemaps' and the game pages read, gametabs_index.py);
+  - iReal Pro's forum's charts of the thread pages read (`search_ireal`, ireal_index.py), a chart's title by one
+    composer a hit, the composer its artist;
   - the tombstones of removed songs (`search_removed`: never `lead` or `best`, shown with the `caracole add` line that
     brings one back, and in `/api/search`'s `removed`, which the library page shows with Add again);
   - UG's artist directory (`directory_artists`, ug/directory.py's table): an artist the query names whole whose page
@@ -2930,6 +3013,9 @@ picks one).
     the library has a song, artist pages with what is left, `harptabs_index.artist_pass`);
   - `gametabs` 20 requests (its sitemap index and six children, then a song's candidates, `gametabs_fetch.CANDIDATES`
     (4) at most, then, once the library has a song, game pages with what is left, `gametabs_index.game_pass`);
+  - `ireal` 20 requests (its sitemap index and six children and the curated playlist, once in 30 days, then a song's
+    candidates, `ireal_fetch.CANDIDATES` (3) thread pages at most, then, once the library has a song, the jazz forum's
+    page and its playlists with what is left, `ireal_index.playlist_pass`);
   - `youtube` 6 yt-dlp runs;
   - `ytimg` 20 requests (YouTube's image host: the thumbnail of a video suggested for a search, one image a video,
     youtube_search.py).
@@ -2938,7 +3024,7 @@ picks one).
 - Then `BudgetExhausted`.
 - Between any two requests to a provider, a random pause from its `delay`, each a quarter of what it was before
   2026-11-03, the owner's choice that day ("wait times divided by 4"; the budgets and limits are as they were):
-  - 2.5–5 s for UG, LaCuerda, gtptabs.com, MuseScore and harptabs.com;
+  - 2.5–5 s for UG, LaCuerda, gtptabs.com, MuseScore, harptabs.com and iReal Pro's forum (which asks no pace);
   - 0.25–0.5 s for LRCLIB;
   - 0.5–1 s for Megalobiz (0.5–0.75 s a lookup's): its API allows 30 a minute, which caracole can now go past, by
     the owner's choice (a 429 is a block, as at any site);
@@ -3074,7 +3160,7 @@ picks one).
 #### Turning a provider off
 
 - Only a provider in `config.SWITCHABLE` (`megalobiz`, `azlyrics`, `gtptabs`, `musescore`, `harptabs`, `gametabs`,
-  `youtube`, `ytimg`, and a shared link's `itunes`, `spotify`, `tidal`, `youtube-oembed`) can be turned off
+  `ireal`, `youtube`, `ytimg`, and a shared link's `itunes`, `spotify`, `tidal`, `youtube-oembed`) can be turned off
   (`enabled = false`): then it gets no client and its step is skipped (`ytimg` off: a suggested video's row without
   its thumbnail; a shared link's service off: the phone's share page says so, and asks it nothing).
 
@@ -3109,6 +3195,8 @@ picks one).
   - nor gametabs.net's `/api/`, `/tabs?*` (its filters) or `/preparing-tab-file-download` (every attachment, behind a
     login);
   - nor azlyrics.com's `/search/`, `/suggest/`, `/song/` or `/lyricsdb/` (tests/fixtures/azlyrics/robots.txt);
+  - nor forums.irealpro.com's `/search/`, `/login/`, `/register/`, `/members/`, `/whats-new/`, `/misc/`, `/find-new/` or
+    `/account/` (tests/fixtures/ireal/robots.txt, 2026-11-18);
   - nor i.ytimg.com's `/sb/`;
   - nor, for a link shared to the phone, itunes.apple.com's `/*/lookup?`, `/search*` and `/WebObjects/*`,
     open.spotify.com's `/embed/`, `/download/` and `/local/`, spotify.link's and spotify.app.link's `/_r/`, or
@@ -3184,6 +3272,21 @@ picks one).
 - YouTube's oEmbed for a link shared to the phone (provider `youtube-oembed`, the owner's choice of 2026-11-10) is no
   yt-dlp run and no part of this exception: one request a video, robots.txt honoured (its `/oembed` is open).
 - Everything else keeps honouring robots.txt; widen nothing here without the owner, and copy it to no other site.
+
+#### iReal Pro's forum, the owner's choice
+
+- The owner's go of 2026-11-18, after a probe and a smoke test (22 requests, caracole's own user agent, 6 s apart, no
+  block): "Go for adding ireal forum as a new source", for jazz standards, "as ultimate guitar and la-cuerda are not
+  great with them".
+- Its terms (`/help/terms/`) say nothing of bots, scraping or reading: "You retain copyright over the Content", and no
+  one may "submit or link to any Content which … risks copyright infringement"; no `/ai.txt` or `/llms.txt`. So it is
+  no exception; caracole keeps every rule above there, its robots.txt (no Crawl-delay) among them.
+- Provider `ireal` (ireal.py, ireal_fetch.py, ireal_index.py) keeps a chart as the sheet of the songs of wanted.txt and a
+  lookup's song alone, the sheet sites having none: never a thread for a song nobody asked for, and its playlists'
+  thread pages, which robots.txt allows, read for their charts' titles and composers, each once in 30 days, never a
+  mirror. Never its search, its members' pages, its attachments or a login.
+- The iReal Pro app is paid; the forum's charts are free to anyone, and caracole draws its own chord grid, none of the
+  app's paid parts (its backing tracks, its playback): no paywall is worked around.
 
 #### The second exception: a site whose terms forbid automated access, where the owner chose it
 
@@ -3319,6 +3422,10 @@ picks one).
   gone, 404), asked about again after 30 days (gametabs_fetch.py,
   `test_gametabs_fetch.py::test_a_page_that_wont_parse_is_an_error_never_a_miss`); and of its game pages only one that
   answers 404 loses its tabs (gametabs_index.py).
+- On iReal Pro's forum only candidates that all answered, none holding a chart that is the song's (or gone, 404),
+  asked about again after 30 days (ireal_fetch.py,
+  `test_ireal_fetch.py::test_a_page_that_wont_parse_is_an_error_never_a_miss`); and of its playlists only a page that
+  answers 404 loses its charts (ireal_index.py).
 - On YouTube only a search that answered without a video that fits (youtube_fetch.py,
   `test_youtube_fetch.py::test_an_error_is_no_miss_and_the_song_waits_for_the_next_run`).
 - Of LaCuerda's listings only a page that answers 404 loses its artists, never one that errs or won't parse
@@ -3402,7 +3509,8 @@ picks one).
   - So are `ug_artist_tabs`' keys and forms (`artist_tabs.ensure_current_keys`, at its next store or backfill, which
     the match step and every lookup call).
   - And `gametabs_game_tabs`' title keys from their titles (`gametabs_index.ensure_current_keys`, before the step, a
-    lookup or a game pass).
+    lookup or a game pass), and `ireal_charts`' from theirs (`ireal_index.ensure_current_keys`, before a pass or a
+    store); `ireal_index`'s are its sitemaps', made again with them.
 - Name new per-song kv keys `<prefix><song id>` (or `<prefix><song id>:<more>`) and add the prefix to
   `songs._PER_SONG_KV`, so a merge or a removal deletes them (`songs.delete_song_kv`).
 

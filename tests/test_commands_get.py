@@ -161,6 +161,7 @@ def test_get_records_the_lacuerda_song_you_pick(config, sites, conn, tmp_path):
     (["--lacuerda", f"{TAB}radiohead/creep-chords-103", "Radiohead - Creep"], "--lacuerda"),
     (["--harptabs", "https://www.harptabs.com/artist/9/radiohead", "Radiohead - Creep"], "--harptabs"),
     (["--gametabs", "https://gametabs.net/tabs/actraiser", "Yuzo Koshiro - Fillmore"], "--gametabs"),
+    (["--ireal", "https://forums.irealpro.com/forums/jazz.6/", "Thad Jones - Groove Merchant"], "--ireal"),
     (["--duration", "soon", "Radiohead - Creep"], "--duration"),
 ])
 def test_get_refuses_what_isnt_a_song_with_status_2(config, sites, args, said):

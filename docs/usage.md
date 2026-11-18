@@ -100,6 +100,10 @@ delay = [2.5, 5]
 enabled = true                    # false: caracole asks gametabs.net nothing
 budget = 20
 delay = [0.25, 0.25]              # four requests a second
+[providers.ireal]                 # chord charts of jazz standards, as a sheet the sheet sites lack
+enabled = true                    # false: caracole asks iReal Pro's forum nothing
+budget = 20
+delay = [2.5, 5]
 [providers.youtube]               # the audio of songs nobody has charted, with auto-chords
 enabled = true                    # false: caracole runs no yt-dlp; on only with auto-chords
 budget = 6                        # yt-dlp runs per run, each a search or a download
@@ -205,7 +209,9 @@ tabs), and it adds about 25 MB to it. Schema 13 adds gametabs.net's index and th
 pages, empty until the nightly run, or `caracole gametabs` and `caracole gametabs --index`, reads
 them (see [caracole gametabs](#one-step-at-a-time)). Schema 16 adds UG's artist directory, empty
 until `caracole ug --directory`, or the nightly run, reads it (see [UG's artist
-directory](#ugs-artist-directory)).
+directory](#ugs-artist-directory)). Schema 17 adds iReal Pro's forum's index (its sitemaps'
+threads) and the charts of the thread pages caracole read, empty until the nightly run, or `caracole
+ireal` and `caracole ireal --index`, reads them (see [caracole ireal](#one-step-at-a-time)).
 The ukulele chords need no change of schema: an index built before reads Ultimate Guitar's
 ukulele sitemaps at its next refresh (see [caracole index build](#caracole-index-build)). A state
 folder caracole can't use ends a command with status
@@ -221,7 +227,7 @@ under `[ntfy]`, which an older caracole read, is now an unknown key like any
 other: delete it, and the token.
 
 **Providers** are exactly `ug`, `lrclib`, `megalobiz`, `azlyrics`, `lacuerda`, `gtptabs`, `musescore`,
-`harptabs`, `gametabs`, `youtube` and `ytimg` (YouTube's image host, for the thumbnail of a video
+`harptabs`, `gametabs`, `ireal` (iReal Pro's forum), `youtube` and `ytimg` (YouTube's image host, for the thumbnail of a video
 the library page suggests for a search), and `itunes`, `spotify`, `tidal` and `youtube-oembed`, the
 services the phone asks once about a link shared to it that names no song (your choice of 10 November
 2026; android/README.md, "Sharing a song from a music app"): no run or command of the computer asks
@@ -257,9 +263,9 @@ robots.txt's closed paths, the cache, the blocks and cooldowns. YouTube's image 
 by default, your choice: a suggested video's thumbnail comes right after its search, one image a
 video, its own cooldown after a block, apart from YouTube's. AZLyrics has none either, your choice too: a song's
 two requests come one right after the other. Only Megalobiz, AZLyrics, gtptabs.com, MuseScore, harptabs.com,
-gametabs.net, YouTube, YouTube's image host and the phone's four services of a shared link can be turned
-off: with `enabled = false` under `[providers.megalobiz]`, `[providers.azlyrics]`, `[providers.gtptabs]`, `[providers.musescore]`,
-`[providers.harptabs]`, `[providers.gametabs]`, `[providers.youtube]`, `[providers.ytimg]`, `[providers.itunes]`,
+gametabs.net, iReal Pro's forum, YouTube, YouTube's image host and the phone's four services of a shared link can be
+turned off: with `enabled = false` under `[providers.megalobiz]`, `[providers.azlyrics]`, `[providers.gtptabs]`,
+`[providers.musescore]`, `[providers.harptabs]`, `[providers.gametabs]`, `[providers.ireal]`, `[providers.youtube]`, `[providers.ytimg]`, `[providers.itunes]`,
 `[providers.spotify]`, `[providers.tidal]` or `[providers.youtube-oembed]`, caracole sends
 that site nothing, the nightly run skips
 its step, and the to-do page's Provider health says it is off (the phone's services have no step and no line there:
@@ -317,6 +323,38 @@ of a second there, your choice), caracole's own
 user agent, the paces and budgets, and a block (a 403, a 429 or a challenge)
 honoured with a cooldown and one alert, never worked around. It keeps the tabs
 of your own songs alone, for you, never a mirror of the site.
+
+**Chord charts of jazz standards** come from iReal Pro's forum (forums.irealpro.com), where the users of the iReal
+Pro app post charts, one song a thread or a playlist of many, its "Jazz 1460 Standards" thread among them (1,460
+standards, curated by its moderators). They are for the songs Ultimate Guitar and LaCuerda left without a sheet:
+for each, caracole looks for a chart titled as it is that is its own: one whose composer is your line's artist (iReal
+Pro writes "Jones Thad"), or in a thread named for the title and your line's artist
+(`groove-merchant-thad-jones` for `Thad Jones - Groove Merchant`), or in the Jazz 1460 Standards, where the title
+alone is enough: standards are filed by composer, and your line may name a singer (`Bill Evans - Autumn Leaves` gets
+Kosma's standard). A title alone elsewhere is another song of that name as often as not, so `Ren - Patience` gets no
+Guns N' Roses chart and `Count Basie - Groove Merchant` none, and the jazz forum's other playlists (practice
+exercises, fusion, gypsy jazz…) need the composer as any thread does (a chart you pick, `[ireal]`, is yours whoever
+wrote it). A line that names several artists is each of them: `Thad Jones / Count Basie - Groove Merchant` and `Thad
+Jones & Mel Lewis - Groove Merchant` get Thad Jones's chart (between " / ", " & ", ", ", " and ", " with ", " feat. "
+or " ft. "), and an artist of one word among them is a surname alone (iReal Pro writes the composer last name
+first): `Simon & Garfunkel` meets Paul Simon's chart, but `Sam & Dave` never Dave Brubeck's, nor `Harry Connick, Jr.`
+Grover Washington Jr.'s; `Hall & Oates` does meet Jim Hall's of a title of theirs. A chart that won't read (no chord in it, or its link cut short) is passed over, and only when every chart
+that would be your song's won't is the song left for the next night, as after any error. It reads the charts of the
+thread pages it read first, the curated playlist's among them, from the cache with no request, then the threads its
+sitemaps name for your song (the title and your artist, else the title alone), three pages at most; each chart of the
+song is a version, and the best, the song's sheet: one whose composer is your line's artist (iReal Pro
+writes "Jones Thad"), then the curated playlist's, then a thread named for its composer, then the oldest thread, its
+latest post (a repost is most often a correction). The chart is kept as `sheet.txt` and `sheet.json`, its bars four a
+line between bar lines, which the sheet's page draws as cells, its sections, endings and coda as labels, the tune's
+key as the sheet's, its composer, style and time on its first line; a repeated bar is written out. A chart has no
+words: a sheet from Ultimate Guitar or LaCuerda that covers your song's lyrics replaces it, unless you picked it
+(`[ireal]`). caracole reads the forum's playlists into its local index too (`caracole ireal --index`, a budget at a
+time, and the nightly run with what its budget leaves), so that a song meets a chart whose thread isn't named for it.
+Its terms say nothing of bots; reading it is your choice of 18 November 2026, on every rule caracole keeps: its
+robots.txt's closed paths (its search, accounts and members' pages), caracole's own user agent, the paces and
+budgets, a block honoured with a cooldown and one alert. The app is paid; the forum's charts are free to anyone, and
+caracole draws its own grid, none of the app's paid parts. A chart's alternative chords (drawn small in the app) and
+its marks of layout are left out.
 
 **Model files** for auto-chords come from `[autochords]`, else the
 environment. The `autochords` package's wrapper sets the variables to the
@@ -609,7 +647,11 @@ In order:
    a cooldown, `the Ultimate Guitar tab you pinned is kept over your LaCuerda
    pick`), then what Ultimate Guitar gave.
    Without one there, LaCuerda's, for a song LaCuerda would be asked about
-   tonight. From here on the sheet is readable.
+   tonight; without one from either, **iReal Pro's forum**'s chart, for a song
+   its index has one of (a jazz standard, say: see [Chord charts of jazz
+   standards](#configuration)), or the chart you picked (`--ireal URL`, its
+   thread's address, with `#post-N` for one post's, recorded under `[ireal]`),
+   asked first. From here on the sheet is readable.
 4. **The PDF**, as `caracole render` makes it, for this song alone: another
    song's failed PDF, or one waiting for a CJK font, isn't this one's.
 5. **The lyrics**, from LRCLIB.
@@ -1018,7 +1060,9 @@ artist directory: 41,200 of about 175,000 artists, 9 of 27 listings read whole;
 sitemap is read, how far its artist index has got: `harptabs.com: 1204 of 10428 artist pages read, 5130 tabs; caracole
 harptabs --index reads the rest.`, and once gametabs.net's sitemaps are read,
 how far its game index has got: `gametabs.net: 93 of 1658 game pages read, 512
-tabs; caracole gametabs --index reads the rest.`
+tabs; caracole gametabs --index reads the rest.`, and once iReal Pro's forum's sitemaps are read, how far its
+playlists are: `iReal Pro's forum: 13,071 threads, 2 of 7 playlists read, 1,512 charts; caracole ireal --index reads
+the rest.`
 
 An index built in one database moves into another with **`caracole index
 export`** and **`caracole index merge`** (see [caracole index export and
@@ -1130,6 +1174,11 @@ configuration it would take, and why it waits.
    artists (the most songs its listings count first) not read in 30 days, 10 a
    night at most, so that a search finds their songs; the summary says how many
    (`4 popular artist pages read, 0 errors`).
+   Then **ireal**: a chart from iReal Pro's forum as the sheet of each song the
+   sheet sites left with none: its sitemaps and the curated Jazz 1460 Standards
+   first (when due), then the songs, then the forum's other playlists with what
+   the budget leaves (see [caracole ireal](#one-step-at-a-time)). Only once the
+   library has a song.
 8. **scan**: link purchases in Music/, and file Guitar Pro downloads.
 9. **gtptabs**: download a Guitar Pro file from gtptabs.com for each song that
    has none. It comes after the scan, so a file you dropped into `_inbox/` is
@@ -1246,6 +1295,13 @@ one request each, and are read again after 30 days: what the budget leaves
 reads about ten a night, so the whole index (about 1,660 pages) is `caracole
 gametabs --index`'s, which at a quarter of a second a request spends some 7 minutes in pauses.
 
+iReal Pro's forum gets at most 20 requests a run, 2.5–5 seconds apart (it asks no pace). The first run spends seven
+on its sitemap index and six sitemaps (about 26 MB, most of them members, whose pages caracole never reads), read again
+after 30 days with their validators, then one on the Jazz 1460 Standards (about 780 KB) and one on the jazz forum's
+page, each again after 30 days. A song costs the thread pages named for its title not read yet, three at most, none
+once a chart by its line's artist is in hand; a page read is cached for good. The forum's other playlists, about six
+pages, take what the budget leaves; `caracole ireal --index` reads them at once.
+
 MuseScore gets at most 10 requests a run, 2.5–5 seconds apart, all for its song
 sitemaps: an index and 18 files of about 40,000 song pages each, read over two
 nights, the second going on where the first stopped, then again each month with
@@ -1300,7 +1356,8 @@ redirect to one: UG's search, download and print pages, and a few tab pages
 (`/ru/`) and each artist's "Download all" archive (`/storage/`); harptabs.com's
 search, its API and its pages' data for scripts (`/*?*_rsc=`); gametabs.net's
 API, its filters (`/tabs?…`), the pages behind its login and every
-attachment's download (`/preparing-tab-file-download`); MuseScore's
+attachment's download (`/preparing-tab-file-download`); iReal Pro's forum's search, accounts and members'
+pages (`/search/`, `/login/`, `/members/`…); MuseScore's
 search, downloads, oEmbed endpoint and `/api/jmuse`, which serves a score's
 pages, audio and MIDI. A tab at such a page, or at a page UG redirects to one, is
 no candidate, and neither is a link in UG's data that isn't a valid address:
@@ -1628,6 +1685,35 @@ and cache.
   it a budget that ends before night (the whole index, about 1,660 pages, is
   some 7 minutes of pauses: `--budget 1700`). A cooldown, a block or a spent budget exits
   0; `--budget` goes with `--index` alone (exit 2).
+- **`caracole ireal`** keeps a chord chart from iReal Pro's forum as the sheet of
+  each song Ultimate Guitar and LaCuerda left with none (a song with an auto
+  sheet alone among them), newest songs first, as the run's ireal step does: its
+  sitemaps (an index and six children, its threads by their slugs,
+  `/threads/groove-merchant-thad-jones.9518/`) when it never read them, or last
+  did 30 days ago, and the Jazz 1460 Standards, then each song a chart caracole
+  read is of, or a thread's slug is named for (its title and its artist, or its
+  title alone; see [Chord charts of jazz standards](#configuration)). It never
+  uses the forum's search. A song none of whose candidates holds its chart is
+  asked about again
+  after 30 days (and a thread read is no candidate again); a song with an error,
+  next run. It prints `iReal Pro's forum: 2 tried, 1 chart kept, 1 not on iReal
+  Pro's forum, 0 errors`, after `Index: 6 sitemaps read.` and `Index: the Jazz
+  1460 Standards read.` when it read them. With the forum turned off it asks
+  nothing and says so. A cooldown, a block or a spent budget exits 0.
+
+  **`caracole ireal --index`** reads the forum's playlists into its local index
+  instead, even for an empty library: the sitemaps first when due, then the
+  Jazz 1460 Standards, then the jazz forum's page, whose sticky threads are its
+  playlists (gypsy jazz, Dixieland, fusion, contemporary jazz, the Jazz 1460's New
+  50 and its individual songs…), then each of those, each page again after 30
+  days, a thread's first page alone. It asks at the bulk pace with a budget of
+  its own: `--budget N` requests, 100 by default, and goes on where the last one
+  stopped. It prints `iReal Pro's forum: 7 playlist pages read; 7 of 7 playlists
+  read, 1,512 charts in the index.`, or `iReal Pro's forum's index is up to
+  date: …` when nothing was due. A page that answers 404 keeps no chart (`1
+  gone`); one that won't parse, or any other error, leaves what the index held
+  of it. A cooldown, a block or a spent budget exits 0; `--budget` goes with
+  `--index` alone (exit 2).
 - **`caracole musescore`** reads MuseScore's song sitemaps into the local index
   the to-do page's MuseScore links come from, when it never has, or last did 30
   days ago; it asks for nothing else, and downloads nothing. It prints
@@ -2650,7 +2736,8 @@ beside it opens that page, from its tile and its row, its text a download.
 
 Under the tiles, **On the sites**: each site that is on, a small mark of its own
 (Ultimate Guitar, LaCuerda, LRCLIB, gtptabs.com, harptabs.com, gametabs.net,
-MuseScore, and YouTube for a song caracole takes the audio of): in its colours
+MuseScore, YouTube for a song caracole takes the audio of, and iReal Pro's
+forum once it was asked about the song or gave its chart): in its colours
 where the site has the song (MuseScore's a possible match, by the title), grey
 where it was asked and had nothing, fainter on a dashed edge where it wasn't
 asked yet, its tooltip saying which ("Ultimate Guitar: nothing for it (looked
@@ -4165,6 +4252,19 @@ got (`gametabs.net's game pages are still being read: 93 of 1,658 game pages so
 far; caracole gametabs --index reads the rest.`); turned off, or before its
 sitemaps are read, it says so.
 
+**On iReal Pro's forum** follows, last, unnumbered, from its local index: the charts of the thread pages caracole
+has read (its playlists, `caracole ireal --index`, and the threads read for your songs). A chart's title by one
+composer is a line, the composer as its artist, first name first, found by its title or its composer: how many
+charts, the best one's post, and the `caracole get --ireal` line that looks the song up now keeping that chart as its
+sheet (`[ireal]` in overrides.toml):
+
+    [iReal] Thad Jones - Groove Merchant · 2 charts
+       https://forums.irealpro.com/threads/groove-merchant-thad-jones.9518/#post-38106
+       caracole get --ireal https://forums.irealpro.com/threads/groove-merchant-thad-jones.9518/#post-38106 "Thad Jones" "Groove Merchant"
+
+A thread its sitemaps name and caracole hasn't read is no line. While its playlists aren't all read, the group ends
+with how far it has got; turned off, or before any is read, it says so.
+
 `--key KEY` keeps only your songs in that key (see
 [The song's key](#the-songs-key)), with or without QUERY; without it, your
 songs in the key, by name. It lists up to `--limit` of them, and says how many
@@ -4375,7 +4475,9 @@ the library, sent as they are: they carry no badge.
   each one's state too ("0 on 4 more: LaCuerda · index in part, up to C;
   MuseScore · turned us back; harptabs.com · index empty; gametabs.net · index
   empty"). When every count is 0, yours too, there is no row at all: the
-  list's own line says nothing was found. On a laptop (from 720 px wide) each site that found something is
+  list's own line says nothing was found. iReal Pro's forum has a mark, last,
+  only once caracole has read a thread page of it (its playlists, or a
+  thread read for your songs). On a laptop (from 720 px wide) each site that found something is
   named in full beside its icon ("Ultimate Guitar 7") while the whole row fits
   on one line, and by its icon alone when it wouldn't, as on a phone; it fits
   itself again as the window narrows or widens. A screen reader hears each
@@ -5575,6 +5677,9 @@ tab_ids = [1601668]
 [gametabs]     # the gametabs.net tab a song's tab of game music comes from
 "Hollow Knight - Resting Grounds" = "https://gametabs.net/tabs/hollow-knight/resting-grounds-2"
 
+[ireal]        # the iReal Pro forum's chart a song's sheet comes from
+"Thad Jones - Groove Merchant" = "https://forums.irealpro.com/threads/groove-merchant-thad-jones.9518/post-38106"
+
 [harmonica]    # how a song's harmonica tab is read, whatever caracole guesses
 "Cowboy Bebop - Spokey Dokey" = {"harmonica-1.txt" = "letters"}
 "Little Walter - Juke" = {"harmonica-1.txt" = {as = "signs", "*" = "bend"}}
@@ -5743,6 +5848,19 @@ tab_ids = [1601668]
   one. A tab you name is asked for at once; one gone from the site (404) is
   asked for again after 30 days. Fetch on a gametabs.net row of caracole
   serve's search, and `caracole get --gametabs`, write it.
+- **`[ireal]`** names the chart of iReal Pro's forum you picked for the song: its
+  thread's page, with its post's anchor (`#post-38106`, or the post's own address,
+  `…/post-38106`, or a later page's with the anchor, `…/page-3#post-38106`) for one
+  post's chart, else the thread's chart of the song's title (or its one chart); a
+  later page's address alone names no chart, and says so. The nightly ireal pass
+  reads the thread's first page, and for a post a later page holds, asks the
+  post's address, which the forum sends to that page (a request for each hop), and keeps
+  the chart as the song's sheet, in place of any but a tab you pinned on Ultimate
+  Guitar or a sheet you picked on LaCuerda, and no other site's sheet replaces it.
+  A chart you name is asked for at once. Fetch on an iReal Pro row of caracole
+  serve's search, and `caracole get --ireal`, write it, a post's chart as the
+  post's own address (`…/post-38106`), which lands on whichever page holds it; a
+  chart kept from a later page links there too.
 - **`[harmonica]`** says how each of a song's harmonica tabs is read, by its
   file's name (`harmonica-1.txt`): a notation (`"signs"`, harptabs.com's own;
   `"brackets"`; `"letters"`; `"signs after"`; `"barrett"`), `"legend"` (the
@@ -6189,7 +6307,7 @@ library_dir = "/var/lib/caracole/library"
 Where it is, caracole on its home defaults:
 
 - **builds no index**: `caracole run`, `index build`, `index refresh`,
-  `gtptabs`, `musescore`, `harptabs --index`, `gametabs --index`, `lacuerda
+  `gtptabs`, `musescore`, `harptabs --index`, `gametabs --index`, `ireal --index`, `lacuerda
   --index` and `ug --directory` exit 2 before they write or ask anything, naming both places, with
   the two ways on: `sudo caracole-admin gametabs --index` builds the service's,
   `caracole --home gametabs --index` the home one all the same;

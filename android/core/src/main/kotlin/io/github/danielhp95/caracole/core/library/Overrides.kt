@@ -35,6 +35,7 @@ data class Overrides(
     val lacuerda: Map<String, LaCuerdaPick> = emptyMap(),
     val harptabs: Map<String, HarpTabsPick> = emptyMap(),
     val gametabs: Map<String, GameTabsPick> = emptyMap(),
+    val ireal: Map<String, IRealPick> = emptyMap(),
     val azlyrics: Map<String, String> = emptyMap(),
     val version: Map<String, String> = emptyMap(),
     val harmonica: Map<String, Map<String, JsonElement>> = emptyMap(),
@@ -54,6 +55,7 @@ data class Overrides(
         "lacuerda" -> lacuerda.isNotEmpty()
         "harptabs" -> harptabs.isNotEmpty()
         "gametabs" -> gametabs.isNotEmpty()
+        "ireal" -> ireal.isNotEmpty()
         "azlyrics" -> azlyrics.isNotEmpty()
         "version" -> version.isNotEmpty()
         "harmonica" -> harmonica.isNotEmpty()
@@ -78,7 +80,8 @@ data class Overrides(
     companion object {
         /** overrides._TABLES. */
         private val TABLES = setOf("alias", "match", "artist_url", "pin", "transpose", "ignore", "block", "reject",
-                                   "youtube", "lacuerda", "harptabs", "gametabs", "azlyrics", "version", "harmonica")
+                                   "youtube", "lacuerda", "harptabs", "gametabs", "ireal", "azlyrics", "version",
+                                   "harmonica")
 
         private class Entry(val key: String, val written: String, val value: JsonElement) {
             val where: String get() = PyStr.repr(written)
@@ -174,6 +177,7 @@ data class Overrides(
             val lacuerda = picks(of("lacuerda"), "lacuerda", "a LaCuerda song's page", Addresses::lacuerdaPickFromUrl)
             val harptabs = picks(of("harptabs"), "harptabs", "a harptabs.com tab's page", Addresses::harptabsPickFromUrl)
             val gametabs = picks(of("gametabs"), "gametabs", "a gametabs.net tab's page", Addresses::gametabsPickFromUrl)
+            val ireal = picks(of("ireal"), "ireal", "an iReal Pro forum's thread", Addresses::irealPickFromUrl)
             val azlyrics = picks(of("azlyrics"), "azlyrics", null, Addresses::azlyricsPageFromUrl)
             val version = LinkedHashMap<String, String>()
             for (e in of("version")) version[e.key] = Readers.version(e.value, "[version] ${e.where}", keyVersion)
@@ -190,7 +194,8 @@ data class Overrides(
             return Overrides(
                 alias = alias, match = match, artistUrl = artistUrl, pin = pin, transpose = transpose, ignore = ignore,
                 block = block, pinUrls = pinUrls, reject = reject, artistUrlNames = artistUrlNames, youtube = youtube,
-                lacuerda = lacuerda, harptabs = harptabs, gametabs = gametabs, azlyrics = azlyrics, version = version,
+                lacuerda = lacuerda, harptabs = harptabs, gametabs = gametabs, ireal = ireal, azlyrics = azlyrics,
+                version = version,
                 harmonica = harmonica, tables = by.keys.toSet(),
             )
         }

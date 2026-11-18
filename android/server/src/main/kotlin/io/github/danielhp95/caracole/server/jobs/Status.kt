@@ -142,7 +142,7 @@ object Status {
     internal const val WAITING = "waiting for the book"  // get.py's song stage while the lock is held
 
     /** get.py's SHEET_FROM's words, a running sheet stage's line by its site. */
-    internal val SHEET_LINES = listOf("from LaCuerda", "from UG").associateWith { "Fetching $it" }
+    internal val SHEET_LINES = listOf("from LaCuerda", "from UG", "from iReal Pro").associateWith { "Fetching $it" }
 
     /** How `caracole lacuerda --artist` and `--search` (and `harptabs --artist`, `youtube --search`) end, by what
      * the site answered, and the line's tone. */

@@ -1,0 +1,11 @@
+User-agent: *
+Disallow: /search/
+Disallow: /login/
+Disallow: /register/
+Disallow: /members/
+Disallow: /whats-new/
+Disallow: /misc/
+Disallow: /find-new/
+Disallow: /account/
+
+Sitemap: https://forums.irealpro.com/sitemap.php

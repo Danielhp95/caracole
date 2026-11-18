@@ -98,7 +98,7 @@ def test_a_site_turned_off_is_left_out(conn, cfg):
     assert list(sites_of(conn, off, s)) == ["ug", "lacuerda", "lrclib", "gtptabs", "harptabs"]
 
 
-@pytest.mark.parametrize("module", ["gtptabs_fetch", "harptabs_fetch", "gametabs_fetch"])
+@pytest.mark.parametrize("module", ["gtptabs_fetch", "harptabs_fetch", "gametabs_fetch", "ireal_fetch"])
 def test_the_misses_are_read_under_each_steps_own_prefix(module):
     import importlib
 
@@ -120,3 +120,17 @@ def test_lyrics_from_megalobiz_leave_lrclib_with_nothing_timed(conn, cfg):
     sites = sites_of(conn, cfg, s)
     assert "megalobiz" not in sites
     assert sites["lrclib"] == ("none", "LRCLIB: nothing timed · looked 15/10/26")
+
+
+def test_irealpro_is_a_mark_once_it_was_asked_or_gave_the_songs_chart(conn, cfg):
+    # Asked only for a song the sheet sites left without a sheet: never "not asked yet" on every other card.
+    from caracole.db import kv_set
+
+    asked = add_song(conn, "Ren", "Patience")
+    kv_set(conn, f"ireal:checked:{asked.id}", "2026-11-18T03:30:00Z")
+    sites = sites_of(conn, cfg, asked)
+    assert list(sites)[:3] == ["ug", "lacuerda", "ireal"]
+    assert sites["ireal"] == ("none", "iReal Pro: not there · looked 18/11/26")
+    charted = add_song(conn, "Thad Jones", "Groove Merchant")
+    kept(conn, cfg, charted, "ireal", "sheet.txt")
+    assert sites_of(conn, cfg, charted)["ireal"] == ("have", "iReal Pro: has it")

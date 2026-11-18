@@ -306,6 +306,11 @@ ROBOTS_DISALLOW: Mapping[str, tuple[str, ...]] = {
         "/get_midroll_info", "/live_chat", "/login", "/qr", "/results", "/signup", "/t/terms", "/timedtext_video",
         "/verify_age", "/watch_ajax", "/watch_fragments_ajax", "/watch_popup", "/watch_queue_ajax", "/youtubei/",
     ),
+    # iReal Pro's forum (tests/fixtures/ireal/robots.txt, 2026-11-18): its search, its accounts and its members'
+    # pages; no Crawl-delay. The threads, the forums and the sitemaps are open.
+    "forums.irealpro.com": (
+        "/search/", "/login/", "/register/", "/members/", "/whats-new/", "/misc/", "/find-new/", "/account/",
+    ),
     "tabs.ultimate-guitar.com": (
         "/forum/", "/tab/print?", "/components/", "/contribution/", "/user/tab/", "/download/public/",
         "/tab/download", "/tab/track/", "/tab/applicature/transpose", "/user/tab/view?*",

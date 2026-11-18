@@ -264,10 +264,10 @@ function show(data, text) {
   const objects = (value) => (Array.isArray(value) ? value : []).filter(x => x && typeof x === "object");
   const lcArtists = objects(data.lacuerda_artists), lc = objects(data.lacuerda);
   const htArtists = objects(data.harptabs_artists), ht = objects(data.harptabs);
-  const gt = objects(data.gametabs);
+  const gt = objects(data.gametabs), ir = objects(data.ireal);
   const ugListed = objects(data.ug_directory);  // the artists UG's listings name, their page not read yet
   const n = data.library.length + data.index.length + artists.length + lcArtists.length + lc.length + htArtists.length +
-    ht.length + gt.length + ugListed.length;
+    ht.length + gt.length + ir.length + ugListed.length;
   // The artists and the songs it may have meant first ("Did you mean", a row each), whatever else it found: an
   // artist's row, whose Their songs lists their songs; a song's, as the search's rows of it are (suggestedSong).
   const meant = rowKit.didYouMean(data.suggest, (s) => openSuggested(s), suggestedSong);
@@ -296,6 +296,8 @@ function show(data, text) {
                                                                                 ...ht.map(htSong)]));
   // gametabs.net's: its tracks of games, the game the artist, with its mark and their instruments' badges.
   if (gt.length) results.append(...group("On gametabs", gt.map(htSong)));
+  // iReal Pro's forum's: its charts of standards, the composer the artist, a Get it keeping one as the sheet.
+  if (ir.length) results.append(...group("On iReal Pro", ir.map(htSong)));
   // What the search says beside its results, as the library page says it (ROWS_SCRIPT's): nothing found, a band,
   // "Nothing for “…” in your songs or the sites' indexes", over one row: the query, and Look up (the form by name) where a row's Get it is; under its
   // "⋯", Ask LaCuerda for a name under a letter its listings aren't read to yet, whose page may say, and why it may not
@@ -674,7 +676,7 @@ backToResults.addEventListener("click", () => { expand(); window.scrollTo({top: 
 function lookUp(pick, display) {
   const body = new URLSearchParams({csrf});
   // a song of yours by its id and its identity key, as the library page sends them (web/app.py same_song)
-  for (const name of ["song", "identity", "artist", "title", "ug", "tab", "lacuerda", "harptabs", "gametabs"]) {
+  for (const name of ["song", "identity", "artist", "title", "ug", "tab", "lacuerda", "harptabs", "gametabs", "ireal"]) {
     if (pick[name]) body.set(name, pick[name]);
   }
   openReader(display, "Asking for it…");

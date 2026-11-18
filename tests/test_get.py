@@ -91,7 +91,7 @@ def sites(monkeypatch) -> Sites:
 def write_cfg(tmp_path: Path, extra: str = ""):
     providers = "".join(f"[providers.{p}]\ndelay = [0, 0]\nlookup_delay = [0, 0]\n{extra if p == 'ug' else ''}"
                         for p in ("ug", "lrclib", "megalobiz", "lacuerda", "gtptabs", "musescore", "harptabs",
-                                  "gametabs"))
+                                  "gametabs", "ireal"))
     path = tmp_path / "caracole.toml"
     path.write_text(f'data_dir = "{tmp_path}"\n{providers}', encoding="utf-8")
     return load_config(path, env={"HOME": str(tmp_path / "home")})
@@ -1481,3 +1481,53 @@ def test_the_words_of_a_caracole_with_no_pdfs_are_get_pys_own_and_the_computer_s
     source = Path(get.__file__).read_text(encoding="utf-8")
     for name in ("ADDED", "NO_PDFS", "PAGES_MADE", "LIBRARY_PAGE"):
         assert source.count(name) == 1, f"get.py uses {name}: it is the phone's alone"
+
+
+def ireal_index(conn, *paths: str) -> None:
+    """iReal Pro's forum's index as the nightly run reads its sitemaps: its threads, by their paths."""
+    from caracole.ireal import page_url, parse_page_url
+
+    conn.executemany("INSERT INTO ireal_index (path, thread, slug, key, sitemap) VALUES (?, ?, ?, ?, 'sitemap-1')",
+                     [parse_page_url(page_url(p)) for p in paths])
+
+
+def test_a_lookup_of_a_standard_the_sheet_sites_lack_keeps_its_chart_from_irealpro(cfg, conn, sites):
+    from helpers.ireal_site import BASE, THAD_JONES, fixture
+
+    ireal_index(conn, THAD_JONES)
+    sites.pages[f"{BASE}/{THAD_JONES}"] = (200, fixture("thread_groove-merchant-thad-jones.9518.html"))
+
+    result, progress = look_up(cfg, sites=sites, artist="Thad Jones", title="Groove Merchant")
+
+    # The sheet stage: neither UG nor LaCuerda has it, so it asks iReal Pro's forum.
+    assert progress.states()["sheet"] == "done" and result.details["sheet"] == "chart kept from iReal Pro"
+    assert [u for u in sites.requests if "irealpro" in u] == [f"{BASE}/{THAD_JONES}"]  # no sitemap: the night's
+    here = folder(cfg, "Thad Jones", "Groove Merchant")
+    assert "| [ch]Bb7[/ch] | [ch]Eb7[/ch]" in json.loads((here / "sheet.json").read_text(encoding="utf-8"))["content"]
+    assert result.sheet == here / "sheet.txt"  # readable at once, before the lyrics are asked
+    assert (here / "sheet.pdf").is_file()
+
+
+def test_a_lookup_with_the_chart_you_picked_on_irealpro_records_the_pick(cfg, conn, sites):
+    from helpers.ireal_site import BASE, THAD_JONES, fixture
+
+    from caracole.overrides import IRealPick
+
+    sites.pages[f"{BASE}/{THAD_JONES}"] = (200, fixture("thread_groove-merchant-thad-jones.9518.html"))
+    picked = f"{BASE}/{THAD_JONES}#post-23346"  # in no index: the pick alone names it
+
+    result, progress = look_up(cfg, sites=sites, artist="Thad Jones", title="Groove Merchant", ireal=picked)
+
+    assert result.details["sheet"] == "chart kept from iReal Pro"
+    assert f"[ireal] {BASE}/{THAD_JONES}post-23346" in result.details["song"]  # the post's own address
+    assert load_overrides(cfg.overrides_file).ireal == {
+        "thad-jones/groove-merchant": IRealPick("groove-merchant-thad-jones", 9518, 23346)}
+
+
+def test_a_lookup_of_a_song_with_a_sheet_asks_irealpro_nothing(cfg, conn, sites):
+    serve_creep(sites, conn)
+
+    result, progress = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+
+    assert "ireal" not in progress.states() and not [u for u in sites.requests if "irealpro" in u]
+    assert "ireal" not in result.requests  # nothing to ask: no client made

@@ -768,6 +768,30 @@ def test_a_version_13_database_stores_a_tab_renamed_to_a_new_key_of_words_it_kno
     assert columns(path.with_name("caracole.sqlite.v13.bak"), "ug_index")[1] == 13
 
 
+def test_a_version_16_database_gains_ireal_tables_and_keeps_its_rows(tmp_path):
+    # As UG's artist directory left it: schema 16, with a gametabs.net row.
+    path = tmp_path / "state" / "caracole.sqlite"
+    path.parent.mkdir()
+    old = sqlite3.connect(path)
+    old.executescript("".join(db._MIGRATIONS[n] for n in range(1, 17)) + "\nPRAGMA user_version = 16;")
+    old.execute("INSERT INTO gametabs_index VALUES ('tabs/actraiser', 'game', 'actraiser', '', 1, 'actraiser', "
+                "'actraiser', 'sitemap_1')")
+    old.commit()
+    old.close()
+
+    c = db.connect(path)
+    assert c.execute("PRAGMA user_version").fetchone()[0] == NOW
+    assert c.execute("SELECT path FROM gametabs_index").fetchall()[0][0] == "tabs/actraiser"
+    assert columns(path, "ireal_index")[0] == ["path", "thread", "slug", "key", "sitemap"]
+    assert columns(path, "ireal_threads")[0] == ["path", "thread", "title", "forum", "charts", "read_at"]
+    assert columns(path, "ireal_charts")[0] == [
+        "page", "post", "place", "title", "title_key", "composer", "composer_key", "style", "key", "playlist"]
+    for table in ("ireal_index", "ireal_threads", "ireal_charts"):
+        assert c.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 0
+    c.close()
+    assert columns(path.with_name("caracole.sqlite.v16.bak"), "ireal_index") == ([], 16)
+
+
 def test_a_database_gets_an_id_of_its_own_once_and_keeps_it(tmp_path):
     # Schema 15: each database's id among the caracoles it syncs with (peer_sync.py), made once.
     one, two = db.connect(tmp_path / "a" / "caracole.sqlite"), db.connect(tmp_path / "b" / "caracole.sqlite")

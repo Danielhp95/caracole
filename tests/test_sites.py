@@ -395,7 +395,9 @@ def test_each_line_says_its_pace_its_robots_and_its_terms(conn, cfg):
     assert line(data, "harptabs")["terms"] == site("harptabs").terms
     assert line(data, "ug")["name"] == "UG"
     assert line(data, "lrclib")["indexed"] is None and line(data, "lrclib")["asked"] == "Asked song by song"
-    assert data["totals"] == {"sites": 10, "indexed": 0, "kept": 0}
+    assert data["totals"] == {"sites": 11, "indexed": 0, "kept": 0}
+    assert line(data, "ireal")["pace"] == "2.5–5 s between requests" and line(data, "ireal")["terms"] is None
+    assert line(data, "ireal")["robots"]["paths"][0] == ["/search/", "its search"]
 
 
 def test_a_partial_index_reads_indexing(conn, cfg):
@@ -408,7 +410,7 @@ def test_a_partial_index_reads_indexing(conn, cfg):
 # --- the final review's fixes -----------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("key", ["gtptabs", "musescore", "harptabs", "gametabs"])
+@pytest.mark.parametrize("key", ["gtptabs", "musescore", "harptabs", "gametabs", "ireal"])
 def test_a_sitemap_index_read_in_part_reads_indexing(conn, cfg, key):
     # Read a budget at a time across nights: until every sitemap is, its count is partial, never OK.
     assert line(sites_data(conn, cfg, [], NOW), key)["status"]["state"] == "indexing"

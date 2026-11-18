@@ -15,7 +15,7 @@ internal object SongKv {
     val PER_SONG = listOf(
         "render:", "render:files:", "render:export:", "render:progressions:", "ug:artist_page_checked:",
         "lyrics:failed:", "megalobiz:checked:", "azlyrics:checked:",
-        "autochords:failed:", "gtptabs:checked:", "harptabs:checked:", "gametabs:checked:", "ug:blocked:", "youtube:",
+        "autochords:failed:", "gtptabs:checked:", "harptabs:checked:", "gametabs:checked:", "ireal:checked:", "ug:blocked:", "youtube:",
         "sheet_versions:same:",
         "sheet_versions:yours:", "sheet_versions:unkeepable:",
     )

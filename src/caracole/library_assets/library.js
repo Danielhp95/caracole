@@ -2919,7 +2919,7 @@
       ? SUGGESTED_SITES.map((source) => [source, x.song[source]]).filter(([, row]) => row && typeof row === "object")
       : []);
     for (const row of [...objects(data.index), ...objects(data.gtptabs), ...objects(data.lacuerda), ...htSongs,
-      ...objects(data.gametabs),
+      ...objects(data.gametabs), ...objects(data.ireal),
       ...ugArtists.flatMap((a) => objects(a.top)), ...lcArtists.flatMap((a) => objects(a.top)),
       ...htArtists.flatMap((a) => objects(a.top)), ...meant.flatMap((x) => meantRows(x).map(([, r]) => r))]) {
       const i = yourSong(row);
@@ -2942,6 +2942,7 @@
       ...htArtists.map((a) => ["artist", "harptabs", a]),
       ...htSongs.map((h) => ["song", "harptabs", h]),
       ...objects(data.gametabs).map((h) => ["song", "gametabs", h]),  // gametabs.net's tracks, the game the artist
+      ...objects(data.ireal).map((h) => ["song", "ireal", h]),  // iReal Pro's forum's charts, the composer the artist
     ]) {
       if (kind === "artist") addArtist(model, source, row);
       else addSong(model, source, row);
@@ -2971,10 +2972,10 @@
   // How many songs of each site the results show (the marks under the box count them: drawCounts): a line each that
   // has the site's row, but a song it may have meant; an artist the query names there none of whose songs is listed,
   // one; a title alone (MuseScore's pages, harptabs.com's tabs by their title), one.
-  const FOUND_SITES = ["ug", "gtptabs", "lacuerda", "harptabs", "gametabs"];
+  const FOUND_SITES = ["ug", "gtptabs", "lacuerda", "harptabs", "gametabs", "ireal"];
   const foundNow = (model) => {
     const n = { ug: 0, gtptabs: 0, lacuerda: 0, musescore: model.titles.length, harptabs: model.harps.length,
-      gametabs: 0 };
+      gametabs: 0, ireal: 0 };
     for (const item of model.items.values()) {
       if (!item.meant) for (const source of FOUND_SITES) if (item[source]) n[source] += 1;
     }
@@ -3021,7 +3022,7 @@
     let item = model.items.get(key);
     if (!item) {
       item = { key, mine: undefined, ug: null, lacuerda: null, gtptabs: null, harptabs: null, gametabs: null,
-        removed: null };
+        ireal: null, removed: null };
       model.items.set(key, item);
       g.items.push(item);
     }
@@ -4580,7 +4581,7 @@
     };
     // Get it: the song looked up now (POST /lookup, one caracole get), to its sheet; a version picked under its chevron too.
     getIt = (pick, display, row, go) => askFrom("lookup", pick, ["song", "identity", "artist", "title", "ug", "tab",
-      "lacuerda", "harptabs", "gametabs"], row, go, (answer) => answer.view);
+      "lacuerda", "harptabs", "gametabs", "ireal"], row, go, (answer) => answer.view);
     // Add for tonight's run: the song into wanted.txt under the site's names (POST /request, not fetched now).
     later = (pick, display, row, go) => askFrom("request", pick, ["artist", "title", "lacuerda"], row, go,
       (answer) => answer.job);

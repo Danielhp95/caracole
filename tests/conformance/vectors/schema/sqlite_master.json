@@ -116,6 +116,18 @@
    "type": "index"
   },
   {
+   "name": "ireal_charts_title",
+   "sql": "CREATE INDEX ireal_charts_title ON ireal_charts(title_key)",
+   "tbl_name": "ireal_charts",
+   "type": "index"
+  },
+  {
+   "name": "ireal_index_key",
+   "sql": "CREATE INDEX ireal_index_key ON ireal_index(key)",
+   "tbl_name": "ireal_index",
+   "type": "index"
+  },
+  {
    "name": "lacuerda_index_artist",
    "sql": "CREATE INDEX lacuerda_index_artist ON lacuerda_index(artist_key)",
    "tbl_name": "lacuerda_index",
@@ -203,6 +215,24 @@
    "name": "sqlite_autoindex_harptabs_index_1",
    "sql": null,
    "tbl_name": "harptabs_index",
+   "type": "index"
+  },
+  {
+   "name": "sqlite_autoindex_ireal_charts_1",
+   "sql": null,
+   "tbl_name": "ireal_charts",
+   "type": "index"
+  },
+  {
+   "name": "sqlite_autoindex_ireal_index_1",
+   "sql": null,
+   "tbl_name": "ireal_index",
+   "type": "index"
+  },
+  {
+   "name": "sqlite_autoindex_ireal_threads_1",
+   "sql": null,
+   "tbl_name": "ireal_threads",
    "type": "index"
   },
   {
@@ -359,6 +389,24 @@
    "name": "harptabs_index",
    "sql": "CREATE TABLE harptabs_index (\n  path TEXT PRIMARY KEY,\n  kind TEXT NOT NULL,\n  page_id INTEGER NOT NULL,\n  key TEXT NOT NULL,\n  sitemap TEXT NOT NULL\n)",
    "tbl_name": "harptabs_index",
+   "type": "table"
+  },
+  {
+   "name": "ireal_charts",
+   "sql": "CREATE TABLE ireal_charts (\n  page TEXT NOT NULL,\n  post INTEGER NOT NULL,\n  place INTEGER NOT NULL,\n  title TEXT NOT NULL,\n  title_key TEXT NOT NULL,\n  composer TEXT NOT NULL DEFAULT '',\n  composer_key TEXT NOT NULL DEFAULT '',\n  style TEXT NOT NULL DEFAULT '',\n  key TEXT NOT NULL DEFAULT '',\n  playlist TEXT NOT NULL DEFAULT '',\n  PRIMARY KEY (page, post, place)\n)",
+   "tbl_name": "ireal_charts",
+   "type": "table"
+  },
+  {
+   "name": "ireal_index",
+   "sql": "CREATE TABLE ireal_index (\n  path TEXT PRIMARY KEY,\n  thread INTEGER NOT NULL,\n  slug TEXT NOT NULL,\n  key TEXT NOT NULL,\n  sitemap TEXT NOT NULL\n)",
+   "tbl_name": "ireal_index",
+   "type": "table"
+  },
+  {
+   "name": "ireal_threads",
+   "sql": "CREATE TABLE ireal_threads (\n  path TEXT PRIMARY KEY,\n  thread INTEGER NOT NULL,\n  title TEXT NOT NULL DEFAULT '',\n  forum TEXT NOT NULL DEFAULT '',\n  charts INTEGER NOT NULL DEFAULT 0,\n  read_at TEXT NOT NULL\n)",
+   "tbl_name": "ireal_threads",
    "type": "table"
   },
   {

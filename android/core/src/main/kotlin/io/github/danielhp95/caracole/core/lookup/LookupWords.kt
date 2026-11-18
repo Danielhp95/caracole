@@ -44,14 +44,15 @@ object LookupWords {
     val NAMES: Map<String, String> = linkedMapOf(
         "ug" to "Ultimate Guitar", "lrclib" to "LRCLIB", "megalobiz" to "Megalobiz", "azlyrics" to "AZLyrics",
         "lacuerda" to "LaCuerda", "gtptabs" to "gtptabs.com", "musescore" to "MuseScore", "harptabs" to "harptabs.com",
-        "gametabs" to "gametabs.net",
+        "gametabs" to "gametabs.net", "ireal" to "iReal Pro's forum",
     )
 
     /** get.SHEETS_SHARE: of an hour's lookup requests to a site, the share kept for sheets. */
     const val SHEETS_SHARE = 0.5
 
     /** get.SHEET_FROM: a running sheet stage's detail once it asks a site, which the Requests tab's line reads. */
-    val SHEET_FROM: Map<String, String> = linkedMapOf("lacuerda" to "from LaCuerda", "ug" to "from UG")
+    val SHEET_FROM: Map<String, String> = linkedMapOf("lacuerda" to "from LaCuerda", "ug" to "from UG",
+                                                     "ireal" to "from iReal Pro")
 
     /** get.MATCH_NOT_FOUND: how the match stage begins for a song the offline index lacks. */
     const val MATCH_NOT_FOUND = "not in UG's index"

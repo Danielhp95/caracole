@@ -313,7 +313,8 @@ def _to_try(
     if not (kept is not None and kept.provider == PROVIDER and _lost(conn, library_dir, song.id)):
         if not stamps.before(song.lacuerda_checked_at, cutoff):  # asked about in the last 30 days
             return False
-        if kept is not None and (_complete(kept.coverage, rank) or _pinned(overrides, song, kept)):
+        if kept is not None and (_complete(kept.coverage, rank) or _pinned(overrides, song, kept)
+                                 or _charted(overrides, song, kept)):
             return False
     return may_ask(song)
 
@@ -393,6 +394,13 @@ def _pinned(overrides: Overrides | None, song: Song, kept: VersionRow) -> bool:
     if overrides is None or kept.provider != "ug" or not kept.tab_id.isdigit():
         return False
     return int(kept.tab_id) in overrides.pin.get(song.key, ())
+
+
+def _charted(overrides: Overrides | None, song: Song, kept: VersionRow) -> bool:
+    """Whether the kept sheet is the chart of iReal Pro's forum you picked for the song (``[ireal]``), which no sheet
+    LaCuerda finds replaces (a LaCuerda sheet you pick does)."""
+    chart = overrides.ireal.get(song.key) if overrides is not None and kept.provider == "ireal" else None
+    return chart is not None and chart.holds(kept.tab_id)
 
 
 # --- asking LaCuerda --------------------------------------------------------------------

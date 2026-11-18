@@ -1036,8 +1036,8 @@ def _sheet_slot(run: _SongRun, pinned: list[int] | None, kinds: tuple[str, ...] 
     A sheet another site gave (LaCuerda's) is replaced only as the shared rule
     says (``versions.replaces_sheet``): ratings can't be compared across sites,
     so coverage alone decides, and a tie keeps it. A pin is your decision and
-    always wins; so is the LaCuerda sheet you picked (``[lacuerda]``), which no
-    sheet but a pin replaces. The sheet kept becomes the slot's only pick, and a
+    always wins; so are the LaCuerda sheet you picked (``[lacuerda]``) and the
+    chart you picked on iReal Pro's forum (``[ireal]``), which no sheet but a pin replaces. The sheet kept becomes the slot's only pick, and a
     complete one retires the auto-chords sheet.
 
     The other versions scored are kept beside it (``_keep_beside``): no request more. A pinned
@@ -1092,8 +1092,10 @@ def _sheet_slot(run: _SongRun, pinned: list[int] | None, kinds: tuple[str, ...] 
     assert c.version_id is not None
     kept = _kept_version(run.conn, run.song.id, SHEET_FILES[0])
     chosen = run.ctx.overrides.lacuerda.get(run.song.key)
+    charted = run.ctx.overrides.ireal.get(run.song.key)
     if (kept is not None and kept.provider != PROVIDER and pinned is None
             and ((chosen is not None and kept.provider == "lacuerda" and chosen.holds(kept.tab_id))
+                 or (charted is not None and kept.provider == "ireal" and charted.holds(kept.tab_id))
                  or not replaces_sheet(c.coverage, kept.coverage, policy.coverage_threshold))):
         set_picks(run.conn, run.song.id, kinds, [])  # the other site's sheet stays the pick
         keep_beside(None)

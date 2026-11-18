@@ -54,6 +54,7 @@ PROVIDER_NAMES: Mapping[str, str] = {
     "musescore": "MuseScore",
     "harptabs": "harptabs.com",
     "gametabs": "gametabs.net",
+    "ireal": "iReal Pro's forum",
     "youtube": "YouTube",
     "ytimg": "YouTube's images",
 }

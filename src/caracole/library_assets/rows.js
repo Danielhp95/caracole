@@ -607,6 +607,22 @@ const caracoleRows = (icons, does) => {
         badges: [...(mine ? [{ kind: "found", text: "In your logbook" }] : []), ...instrumentBadges(gameInstruments(hit))],
         action: main, more });
       nameDoes(row, main, mine ? "Fetch " + display + " again" : "Fetch " + display);
+    } else if (hit.source === "ireal") {  // iReal Pro's forum's chart of a standard: its composer is its artist
+      const mine = yours(hit);
+      const artist = String(hit.artist || "");
+      const display = mine ? String(mine.display || "") : artist + " - " + title;
+      const pick = Object.assign(mine ? { song: mine.id, identity: mine.identity } : { artist, title },
+        https(hit.url) ? { ireal: String(hit.url) } : {});
+      const main = button(mine ? "Fetch again" : "Fetch", "small primary", (e) => get(pick, display, row, e.currentTarget),
+        (mine ? "Fetch " + display + " again" : "Fetch " + display) + " with its iReal Pro chart");
+      main.title = "Fetches the song and keeps this iReal Pro chart as its sheet";
+      const more = [{ heading: "On iReal Pro", links: [{ label: "Its thread", href: hit.url, source: "ireal" }] }];
+      const opens = mine ? opener(mine.links) : null;
+      if (opens) more.push({ heading: "In your logbook", links: [{ label: opens.label, href: opens.href, source: opens.source }] });
+      row = resultRow({ title, artist, onSearch: searchesFor(artist), source: "ireal",
+        facts: many(Number(hit.uploads) || 1, "chart"),
+        badges: mine ? [{ kind: "found", text: "In your logbook" }] : [], action: main, more });
+      nameDoes(row, main, mine ? "Fetch " + display + " again" : "Fetch " + display);
     } else if (own.call(TITLE_SITES, String(hit.source))) {  // MuseScore's or harptabs.com's: a title alone
       const site = TITLE_SITES[hit.source];
       row = resultRow({ title, artist: "Same title, maybe another song", source: hit.source,
@@ -658,9 +674,10 @@ const caracoleRows = (icons, does) => {
     const gtp = rowOf(it.gtptabs);
     const ht = rowOf(it.harptabs);
     const gt = rowOf(it.gametabs);
-    const mine = [ug, lc, gtp, ht, gt].map(yours).find(Boolean) || null;  // a song of yours the page has no line of yet
+    const ir = rowOf(it.ireal);
+    const mine = [ug, lc, gtp, ht, gt, ir].map(yours).find(Boolean) || null;  // a song of yours the page has no line of yet
     const gone = mine ? null : rowOf(it.removed);
-    const first = ug || lc || gtp || ht || gt || gone || {};
+    const first = ug || lc || gtp || ht || gt || ir || gone || {};
     const title = String(first.title || "");
     const artist = String(first.artist || "");
     const display = mine ? String(mine.display || "") : artist + " - " + title;
@@ -669,6 +686,7 @@ const caracoleRows = (icons, does) => {
     const sheet = chords ? { lacuerda: String(lc.url) } : {};
     const harp = ht && https(ht.url) ? { harptabs: String(ht.url) } : null;
     const game = gt && https(gt.url) ? { gametabs: String(gt.url) } : null;
+    const chart = ir && https(ir.url) ? { ireal: String(ir.url) } : null;  // iReal Pro's chart, kept as the sheet
     const a = acts && typeof acts === "object" ? acts : {};
     let line = null;
     const here = () => line;
@@ -678,14 +696,15 @@ const caracoleRows = (icons, does) => {
       main = fetchIcon("Add " + display + " again", (e) => a.again(back, display, here(), e.currentTarget));
       main.title = "Back into wanted.txt, and fetched";
     } else {
-      const chosen = ug ? pick({ ug: ug.ug }) : chords ? pick(sheet) : harp ? pick(harp) : game ? pick(game)
-        : pick(sheet);
+      const chosen = ug ? pick({ ug: ug.ug }) : chords ? pick(sheet) : chart ? pick(chart) : harp ? pick(harp)
+        : game ? pick(game) : pick(sheet);
       main = fetchIcon((mine ? "Fetch " + display + " again" : "Fetch " + display) + (ug ? " from UG"
-        : chords ? " from LaCuerda" : harp ? " with its harptabs harmonica tab"
+        : chords ? " from LaCuerda" : chart ? " with its iReal Pro chart" : harp ? " with its harptabs harmonica tab"
           : game ? " with its gametabs tab" : gtp ? " with a Guitar Pro file from gtptabs" : ""),
       (e) => a.get(chosen, display, here(), e.currentTarget));
       main.title = ug ? "Fetches songs"
         : chords ? "Fetches the song and keeps this LaCuerda sheet"
+        : chart ? "Fetches the song and keeps this iReal Pro chart as its sheet"
         : harp ? "Fetches the song and keeps this harptabs tab"
         : game ? "Fetches the song and keeps this gametabs tab"
         : gtp ? "Fetches the sheet, then a Guitar Pro file from gtptabs"
@@ -709,6 +728,18 @@ const caracoleRows = (icons, does) => {
       more.push(box);
     }
     if (gtp) more.push({ heading: "On gtptabs", links: [{ label: "Its page", href: gtp.url, source: "gtptabs" }] });
+    if (ir) {  // iReal Pro's chart: its thread, and a Get it that keeps it when the line's own button is another site's
+      const box = el("div", "row-group");
+      box.appendChild(el("p", "subhead", "On iReal Pro"));
+      const actions = el("div", "actions");
+      if (chart && (ug || chords || gone)) {
+        actions.appendChild(button("Fetch with this chart", "small", (e) => a.get(pick(chart), display, here(), e.currentTarget),
+          "Fetch " + display + ", keeping iReal Pro's chart as its sheet"));
+      }
+      actions.appendChild(link({ label: "Its thread", href: ir.url, source: "ireal" }, "btn small", true));
+      box.appendChild(actions);
+      more.push(box);
+    }
     if (ht) {  // its harmonica tabs, each a Get it that keeps that tab (the line's own button may be another site's)
       const tabs = listOf(ht.tabs).filter((t) => t && typeof t === "object" && https(t.url));
       if (tabs.length) more.push(harpTabsOf(tabs, display, (t, go) => a.get(pick({ harptabs: String(t.url) }), display, here(), go)));
@@ -725,11 +756,13 @@ const caracoleRows = (icons, does) => {
       lc ? "LaCuerda ×" + (Number(lc.versions) || 1) + (chords ? "" : " no chords") : "",
       gtp ? "Guitar Pro file" + ((Number(gtp.uploads) || 1) > 1 ? " ×" + Number(gtp.uploads) : "") : "",
       ht ? "harmonica tab" + ((Number(ht.uploads) || 1) > 1 ? " ×" + Number(ht.uploads) : "") : "",
-      gt ? "game tab" + ((Number(gt.uploads) || 1) > 1 ? " ×" + Number(gt.uploads) : "") : ""];
+      gt ? "game tab" + ((Number(gt.uploads) || 1) > 1 ? " ×" + Number(gt.uploads) : "") : "",
+      ir ? "iReal Pro chart" + ((Number(ir.uploads) || 1) > 1 ? " ×" + Number(ir.uploads) : "") : ""];
     const badges = gone ? [{ kind: "removed", text: "Removed " + shortDate(gone.removed_at) }]
       : mine ? [{ kind: "found", text: "In your logbook" }] : [];
     line = resultRow({ dense: true, title, artist, onSearch: searchesFor(artist),
-      sources: [ug && "ug", lc && "lacuerda", gtp && "gtptabs", ht && "harptabs", gt && "gametabs"].filter(Boolean),
+      sources: [ug && "ug", lc && "lacuerda", ir && "ireal", gtp && "gtptabs", ht && "harptabs", gt && "gametabs"]
+        .filter(Boolean),
       facts: facts.filter(Boolean).join(" · "),
       badges: [...badges, ...instrumentBadges([...(ug ? ugInstruments(ug.counts) : []), ...(ht ? ["harmonica"] : []),
         ...(gt && !ug && !lc && !gtp && !ht ? gameInstruments(gt) : [])])],
@@ -738,7 +771,9 @@ const caracoleRows = (icons, does) => {
     if (held(mine)) line.classList.add("have");
     if (gone) line.classList.add("removed-hit");
     line.dataset.hit = String(it.key || "");
-    line.dataset.source = ug ? "ug" : lc ? "lacuerda" : gtp ? "gtptabs" : ht ? "harptabs" : gt ? "gametabs" : "removed";
+    // The source its Fetch keeps first (``chosen``'s order), then the line's others.
+    line.dataset.source = ug ? "ug" : chords ? "lacuerda" : chart ? "ireal" : harp ? "harptabs" : game ? "gametabs"
+      : lc ? "lacuerda" : gtp ? "gtptabs" : ht ? "harptabs" : gt ? "gametabs" : ir ? "ireal" : "removed";
     if (ug) line.dataset.ug = String(ug.ug || "");
     nameDoes(line, main, gone ? "Add " + display + " again" : mine ? "Fetch " + display + " again" : "Fetch " + display);
     return line;
@@ -1127,7 +1162,7 @@ const caracoleRows = (icons, does) => {
   // names, by the identity key's two parts), and an artist none of whose songs is listed (a LaCuerda artist whose page
   // caracole hasn't read) one; a row with no keys (a MuseScore page) one.
   const FOUND_IN = { ug: ["index", "artists"], gtptabs: ["gtptabs"], lacuerda: ["lacuerda", "lacuerda_artists"],
-    musescore: ["musescore"], harptabs: ["harptabs", "harptabs_artists"], gametabs: ["gametabs"] };
+    musescore: ["musescore"], harptabs: ["harptabs", "harptabs_artists"], gametabs: ["gametabs"], ireal: ["ireal"] };
   const rowsOf = (value) => listOf(value).filter((x) => x && typeof x === "object");
   const foundOn = (data, source) => {
     const [songs, artists] = own.call(FOUND_IN, source) ? FOUND_IN[source] : [];

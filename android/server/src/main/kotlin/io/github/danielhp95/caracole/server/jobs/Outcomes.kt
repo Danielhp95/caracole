@@ -72,7 +72,7 @@ object Outcomes {
     val SITE_NAMES: Map<String, String> = linkedMapOf(
         "UG" to "Ultimate Guitar", "LRCLIB" to "LRCLIB", "Megalobiz" to "Megalobiz", "AZLyrics" to "AZLyrics",
         "LaCuerda" to "LaCuerda", "gtptabs" to "gtptabs.com", "MuseScore" to "MuseScore", "harptabs" to "harptabs.com",
-        "gametabs" to "gametabs.net", YOUTUBE_SOURCE to "YouTube", "auto" to "auto-chords", "inbox" to "your inbox",
+        "gametabs" to "gametabs.net", "iReal" to "iReal Pro's forum", YOUTUBE_SOURCE to "YouTube", "auto" to "auto-chords", "inbox" to "your inbox",
     )
 
     /** A request of other commands: each command's step, by what it does. */
@@ -98,7 +98,7 @@ object Outcomes {
     private const val GTPTABS_KEPT = "Guitar Pro file downloaded"  // get.py's
 
     /** A running sheet stage's site, by its words (get.py's SHEET_FROM, icons.tag). */
-    internal val ASKS = mapOf("from LaCuerda" to "LaCuerda", "from UG" to "UG")
+    internal val ASKS = mapOf("from LaCuerda" to "LaCuerda", "from UG" to "UG", "from iReal Pro" to "iReal")
 
     /** What a stage leaves for tonight's run when it ends in a wait or an error: its name, and its verb. */
     internal val WHAT = mapOf(
