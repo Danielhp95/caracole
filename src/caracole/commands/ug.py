@@ -6,9 +6,10 @@ page alone (``/artist/…``): an interactive lookup, at the lookup pace (as ``ca
 lookup's budget, within the hour's lookups, no ntfy alert), what caracole serve's library page sends by itself for a UG
 link pasted into its box (web/ug_link_routes.py). Every list read is kept for searches (ug/artist_tabs.py), so a search
 then finds every song of that artist: UG's sitemaps name many of them by a bare id alone. ug/link.py does the work.
-It takes caracole's lock in the lookups' lane (``_common.exclusive(..., lane=True)``), and lets the next lookup there go
-first between a tab's page and its artist's lists (``pass_turn``), reading overrides.toml again after, as in its client's
-pause before each request but its first; its good run is what its own client was answered.
+It takes caracole's lock in the lookups' lane (``_common.exclusive(..., lane=True)``), reads overrides.toml once it holds
+it, and lets the next lookup there go first between a tab's page and its artist's lists (``pass_turn``), reading
+overrides.toml again after, as in its client's pause before each request but its first; its good run is what its own
+client was answered.
 
 A link caracole knows already (its tab's song, or its artist's page read), one of a type caracole keeps nothing of,
 and one UG answered 404 for are said with no request. A cooldown, a block, a spent budget and an error say so and exit
@@ -165,8 +166,9 @@ def _read(cfg: Config, link, *, progress: bool) -> None:
         typer.echo(line)
 
     stage(first, "running", "asking Ultimate Guitar")
-    overrides = load_ovr(cfg)
     with exclusive(cfg, f"ug --link {link.url}", lane=True), closing(open_db(cfg)) as conn:
+        # Read once the lock is held: what the lane's lookups before it wrote while it waited is what it reads with
+        overrides = load_ovr(cfg)
         now = utcnow()
         was = known(cfg, conn, link, now)
         if was.state in ("found", "other", "gone"):

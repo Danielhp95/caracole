@@ -275,6 +275,40 @@ def test_a_ug_link_takes_a_turn_between_its_tab_page_and_its_artists_lists(tmp_p
     assert result.stdout.splitlines()[-1] == READ
 
 
+def test_a_ug_link_reads_overrides_toml_as_it_is_once_it_holds_the_lock(tmp_path, sites, monkeypatch):
+    # In the lane it may wait for the lock behind other lookups, which write overrides.toml meanwhile (a tab
+    # blocked): its tab's page is read with overrides.toml as it is once it holds the lock, never as it was before.
+    from contextlib import contextmanager
+
+    from caracole.commands import ug
+    from caracole.overrides import add_block
+    from caracole.ug import fetch
+
+    real_exclusive = ug.exclusive
+
+    @contextmanager
+    def exclusive(cfg, *args, **kwargs):
+        add_block(cfg.overrides_file, 5000001)  # the caracole that held the lock while this one waited wrote it
+        with real_exclusive(cfg, *args, **kwargs):
+            yield
+
+    read_with: list = []
+    real_read = fetch.read_tab_page
+
+    def read_tab_page(ctx, *args, **kwargs):
+        read_with.append(ctx.overrides)
+        return real_read(ctx, *args, **kwargs)
+
+    monkeypatch.setattr(ug, "exclusive", exclusive)
+    monkeypatch.setattr(fetch, "read_tab_page", read_tab_page)
+
+    result = run(tmp_path, "--link", FOUND)
+
+    assert result.exit_code == 0, result.output
+    assert len(read_with) == 1 and 5000001 in read_with[0].block
+    assert result.stdout.splitlines()[-1] == READ
+
+
 def test_a_ug_links_good_run_is_its_own_clients(tmp_path, sites, monkeypatch):
     # Two lookups started in one second share a run id: the other's errors are never this one's, which UG answered.
     from datetime import UTC, datetime, timedelta
