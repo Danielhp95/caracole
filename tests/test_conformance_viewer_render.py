@@ -32,8 +32,8 @@ credit off the viewer); Chinese sheets in Simplified and in Traditional characte
 LaCuerda's sheet; a sheet that can't be read (the song failed); a song with no sheet, and one ignored; a library that
 holds the computer's PDFs and their records (never linked, read or deleted: info.json's ``render`` null), whose human
 sheet then leaves (its .cho and page gone, the PDFs left); a ukulele sheet and every other kind a song keeps (Guitar
-Pro and Power Tab files, a text tab, a game music tab, a score in two formats), which its page's ``kinds`` names, one
-let go.
+Pro and Power Tab files, a text tab, a game music tab, a score in three formats), which its page's ``kinds`` names in
+the card's order, one let go.
 
 Regenerate with ``CARACOLE_CORPUS=write`` (tests/conformance/README.md).
 """
@@ -96,7 +96,7 @@ CONSTANTS = {
     "KIND_SCORE": render._KIND_SCORE.pattern,
     "GAMETAB_FILE": inbox.GAMETAB_FILE.pattern,
     "TAB": render._TAB,
-    "SCORE_FORMATS": dict(render._SCORE_FORMATS),
+    "SCORE_FORMATS": [list(item) for item in render._SCORE_FORMATS.items()],  # in order: the card lists them so
     "INBOX": INBOX,
 }
 
@@ -347,17 +347,20 @@ def case_computers_pdfs(w: World) -> list[dict]:
 
 
 def case_kinds(w: World) -> list[dict]:
-    """A ukulele sheet and every other kind a song keeps, which its page names (render.py ``_kinds_data``); then its
-    text tab let go."""
+    """A ukulele sheet and every other kind a song keeps, which its page names (render.py ``_kinds_data``), in the
+    card's order, never by name (guitar-10 after guitar-2, score-1.mid after score-1.mscz); then its text tab let
+    go."""
     song = add_song(w.conn, "Placeholder Band", "Every Kind")
     ug_sheet(w, song, SODA, tab=94001, tonality="G", kind="ukulele")
     for name, data, provider, kind, tab_id in (
             ("guitar-1.gp5", b"FICHIER GUITAR PRO v5.00 synthetic", "gtptabs", "guitar-pro", "1202"),
             ("guitar-2.ptb", b"ptab synthetic", "inbox", "power", "power"),
+            ("guitar-10.gp4", b"FICHIER GUITAR PRO v4.06 synthetic", "inbox", "guitar-pro", "guitar-pro"),
             ("tab.txt", "e|--0--| synthetic\n", "ug", "tabs", "94002"),
             ("gametab-1.txt", "e|--3--| synthetic\n", "gametabs", "gametab", "synthetic-game/main-theme"),
             ("score-1.pdf", b"%PDF-1.4 a synthetic score\n", "inbox", "score", "score"),
-            ("score-1.mscz", b"PK synthetic score", "inbox", "score", "score")):
+            ("score-1.mscz", b"PK synthetic score", "inbox", "score", "score"),
+            ("score-1.mid", b"MThd synthetic score", "inbox", "score", "score")):
         _keep(w, song, _version(w, song, provider, tab_id, kind, slot="guitar"), name, data)
     return [{"render": None}, {"drop": [song.id, "tab.txt"]}, {"render": [song.id]}]
 
@@ -545,8 +548,8 @@ def test_the_kinds_case_names_a_ukulele_sheet_and_every_kind_but_the_one_let_go(
     kinds = json.loads(re.search(r'<script type="application/json" id="song">(.*?)</script>', page, re.S)[1])["kinds"]
     assert (kinds["sheet"], kinds["page"]) == ("ukulele", "sheet.html")
     assert [(g["kind"], [i["name"] for i in g["items"]]) for g in kinds["groups"]] == [
-        ("guitar", ["guitar-1.gp5", "guitar-2.ptb"]), ("gametab", ["gametab-1.txt"]),
-        ("score", ["score-1.mscz", "score-1.pdf"])]
+        ("guitar", ["guitar-1.gp5", "guitar-2.ptb", "guitar-10.gp4"]), ("gametab", ["gametab-1.txt"]),
+        ("score", ["score-1.mscz", "score-1.pdf", "score-1.mid"])]
 
 
 def test_the_vectors_are_within_reason():

@@ -63,7 +63,8 @@ object RenderNames {
     val KIND_SCORE_RE: Regex by lazy { PyRegex.compile(KIND_SCORE) }
     val GAMETAB_FILE_RE: Regex by lazy { PyRegex.compile(GAMETAB_FILE) }
 
-    /** render._SCORE_FORMATS: a score's format by its extension, as the library card names it. */
+    /** render._SCORE_FORMATS: a score's format by its extension, as the library card names it, in the order it lists
+     * a score's formats (inbox.SCORE_EXTENSIONS'). */
     val SCORE_FORMATS: Map<String, String> = linkedMapOf(
         ".mscz" to "MuseScore", ".mxl" to "MusicXML", ".musicxml" to "MusicXML", ".pdf" to "PDF", ".mid" to "MIDI",
         ".midi" to "MIDI")

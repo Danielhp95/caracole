@@ -79,7 +79,8 @@ object RenderReplay : AreaReplay {
             "YOUTUBE" to RenderNames.YOUTUBE, "IGNORED" to RenderNames.IGNORED, "KINDS" to RenderNames.KINDS,
             "KIND_GUITAR" to RenderNames.KIND_GUITAR, "KIND_SCORE" to RenderNames.KIND_SCORE,
             "GAMETAB_FILE" to RenderNames.GAMETAB_FILE, "TAB" to RenderNames.TAB,
-            "SCORE_FORMATS" to RenderNames.SCORE_FORMATS, "INBOX" to RenderNames.INBOX,
+            "SCORE_FORMATS" to RenderNames.SCORE_FORMATS.map { (ext, name) -> listOf(ext, name) },
+            "INBOX" to RenderNames.INBOX,
         )
         misses.check(want.keys == got.keys) { "constants: names ${got.keys}, Python's ${want.keys}" }
         for ((name, value) in got) {

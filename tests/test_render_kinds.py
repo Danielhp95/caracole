@@ -5,6 +5,7 @@ library card names it (library_assets/card.js ``things``), which the viewer's ve
 from __future__ import annotations
 
 from caracole import library_page, render as render_module
+from caracole.inbox import SCORE_EXTENSIONS
 from caracole.library import keep_file, song_dir
 from caracole.sheet_versions import version_names
 from caracole.versions import upsert_version
@@ -14,6 +15,7 @@ from helpers.ug_pages import version_dict
 from test_render_all import auto_sheet
 from test_render_harmonica import FETCHED, data_of, keep_sheet, keep_tab, render
 from test_render_versions import keep_text, sheet, ug_version
+from test_viewer_harpfit import a_tab
 
 VERSION_TAB = 39144
 
@@ -25,7 +27,7 @@ KINDS = {"sheet": "sheet", "page": "sheet.html", "groups": [
     {"kind": "harmonica", "items": [{"name": "harmonica-1.txt", "label": "Harmonica tab 1 · harptabs",
                                      "page": "harmonica-1.html"}]},
     {"kind": "gametab", "items": [{"name": "gametab-1.txt", "label": "Game music tab 1 · gametabs"}]},
-    # by N, then by name, as the card lists a score's formats
+    # by N, then in SCORE_EXTENSIONS' order, as the card lists a score's formats
     {"kind": "score", "items": [{"name": "score-1.mscz", "label": "Score 1 (MuseScore)", "download": "Artist - Title.mscz"},
                                 {"name": "score-1.pdf", "label": "Score 1 (PDF)"}]}]}
 
@@ -116,5 +118,29 @@ def test_a_song_with_nothing_else_has_its_sheet_alone(conn, cfg):
     assert kinds_of(cfg, song) == {"sheet": "sheet", "page": "sheet.html", "groups": []}
 
 
+def test_items_are_in_the_cards_order(conn, cfg):
+    """Each kind's files as the card lists them (library_page.py ``_numbered``, ``_scores``): by N as a number, so
+    guitar-10 after guitar-2, and a score's formats by N, then in SCORE_EXTENSIONS' order, never by name (score-1.mid
+    after score-1.mscz)."""
+    song = add_song(conn, "Artist", "Title")
+    keep_sheet(conn, cfg, song)
+    for n in (10, 2):  # each its own bytes: the library keeps one text under one name
+        keep(conn, cfg, song, f"guitar-{n}.gp5", f"FICHIER GUITAR PRO v5.00 synthetic {n}".encode(),
+             provider="inbox", kind="guitar-pro", tab_id="guitar-pro", rank=n)
+        keep_tab(conn, cfg, song, a_tab(before=f"tab {n}\n"), number=n)
+    for name in ("score-2.pdf", "score-1.mid", "score-1.pdf", "score-1.mxl", "score-1.mscz"):
+        keep(conn, cfg, song, name, f"synthetic {name}".encode(), provider="inbox", kind="score", tab_id="score")
+    render(conn, cfg)
+    names = {g["kind"]: [i["name"] for i in g["items"]] for g in kinds_of(cfg, song)["groups"]}
+    assert names == {"guitar": ["guitar-2.gp5", "guitar-10.gp5"],
+                     "harmonica": ["harmonica-2.txt", "harmonica-10.txt"],
+                     "score": ["score-1.mscz", "score-1.mxl", "score-1.pdf", "score-1.mid", "score-2.pdf"]}
+    kept = set(names["guitar"] + names["harmonica"] + names["score"])
+    assert names["guitar"] == library_page._numbered(library_page._GUITAR, kept)
+    assert names["harmonica"] == library_page._numbered(library_page._HARMONICA, kept)
+    assert names["score"] == library_page._scores(kept)
+
+
 def test_the_score_formats_are_the_library_cards():
     assert render_module._SCORE_FORMATS == library_page._SCORE_FORMATS
+    assert list(render_module._SCORE_FORMATS) == list(SCORE_EXTENSIONS)  # in the order the card lists them

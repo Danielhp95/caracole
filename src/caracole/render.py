@@ -842,7 +842,8 @@ def _versions_data(conn: sqlite3.Connection, versions: list[SheetVersion], one: 
 
 # What a song keeps to play from beside its chord sheet, as its library card names it (library_page.py ``_label``,
 # library_assets/card.js ``things``): its kinds in the card's order, a kind's files by these names, the scores' formats
-# by their extension (library_page._SCORE_FORMATS', which test_render_kinds.py holds equal to this copy).
+# by their extension, in the order the card lists them (library_page._SCORE_FORMATS', which test_render_kinds.py holds
+# equal to this copy, and inbox.SCORE_EXTENSIONS').
 _KINDS = ("guitar", "tab", "harmonica", "gametab", "score")
 _KIND_GUITAR = re.compile(r"guitar-(\d+)(\.[A-Za-z0-9]+)")
 _KIND_SCORE = re.compile(r"score-(\d+)(\.[a-z]+)")
@@ -854,12 +855,14 @@ _TAB = "tab.txt"  # UG's text tab (ug/fetch.py)
 def _kinds_data(conn: sqlite3.Connection, song: Song, files: Mapping[str, KeptFile],
                 tabs: list[HarmonicaFile]) -> dict[str, Any]:
     """What every viewer of the song says of what it keeps to play from (its data's ``kinds``), as its library card
-    names it: ``sheet``, its chord sheet's kind ("ukulele" for one of UG's Ukulele Chords, ``sheet_versions.sheet_kind``;
-    "sheet" for any other; None for none); ``page``, the viewer its sheet opens in ("sheet.html" with a human sheet,
-    else "sheet (auto).html", else None); and ``groups``, each other kind (``_KINDS``) of its kept ``files``
-    (``kept_files``) it keeps one of, in the card's order: ``guitar`` (``inbox.guitar_files``), ``tab`` (UG's text tab),
-    ``harmonica`` (its harmonica ``tabs``), ``gametab`` and ``score`` (inbox.py's formats). Each group's ``items``, by N
-    then name, are ``{"name", "label"}``, the card's label ("Guitar Pro 1 · gtptabs", "Power Tab 2", "Guitar tab · UG",
+    names it: ``sheet``, its chord sheet's kind ("ukulele" for one of UG's Ukulele Chords,
+    ``sheet_versions.sheet_kind``; "sheet" for any other; None for none); ``page``, the viewer its sheet opens in
+    ("sheet.html" with a human sheet, else "sheet (auto).html", else None); and ``groups``, each other kind
+    (``_KINDS``) of its kept ``files`` (``kept_files``) it keeps one of, in the card's order: ``guitar``
+    (``inbox.guitar_files``), ``tab`` (UG's text tab), ``harmonica`` (its harmonica ``tabs``), ``gametab`` and
+    ``score`` (inbox.py's formats). Each group's ``items``, in the card's order (by N, then by name; a score's formats
+    by N, then in ``_SCORE_FORMATS``' order, inbox.SCORE_EXTENSIONS': library_page.py ``_numbered`` and ``_scores``),
+    are ``{"name", "label"}``, the card's label ("Guitar Pro 1 · gtptabs", "Power Tab 2", "Guitar tab · UG",
     "Score 1 (PDF)"), with the source its version came from as ``icons.SOURCES`` names it (none for the inbox, nor for
     a score, as the card's); a Guitar Pro or Power Tab file's with its ``browser`` (``GuitarFile.in_browser``) and its
     ``download``, the name it downloads under (download_names.py), as a score's but a PDF's; a harmonica tab's with its
@@ -872,28 +875,29 @@ def _kinds_data(conn: sqlite3.Connection, song: Song, files: Mapping[str, KeptFi
     def download(name: str) -> str:
         return download_name(song.artist, clean_title(song.title), name)
 
-    found: dict[str, list[tuple[int, str, dict[str, Any]]]] = {kind: [] for kind in _KINDS}
+    # Each item by (N, then its place among a score's formats, 0 for the other kinds, then its name)
+    found: dict[str, list[tuple[int, int, str, dict[str, Any]]]] = {kind: [] for kind in _KINDS}
     for f in guitar_files(conn, song.id):
         if f.name in files and (m := _KIND_GUITAR.fullmatch(f.name)):
             kind = "Power Tab" if m.group(2).lower() == ".ptb" else "Guitar Pro"
-            found["guitar"].append((int(m.group(1)), f.name, {
+            found["guitar"].append((int(m.group(1)), 0, f.name, {
                 "name": f.name, "label": said(f"{kind} {m.group(1)}", files[f.name]), "browser": f.in_browser,
                 "download": download(f.name)}))
     if _TAB in files:
-        found["tab"].append((0, _TAB, {"name": _TAB, "label": said("Guitar tab", files[_TAB])}))
+        found["tab"].append((0, 0, _TAB, {"name": _TAB, "label": said("Guitar tab", files[_TAB])}))
     for t in tabs:
         if t.name in files and (m := HARMONICA_FILE.fullmatch(t.name)):
-            found["harmonica"].append((int(m.group(1)), t.name, {
+            found["harmonica"].append((int(m.group(1)), 0, t.name, {
                 "name": t.name, "label": said(f"Harmonica tab {m.group(1)}", files[t.name]), "page": t.page}))
     for name, kept in files.items():
         if m := GAMETAB_FILE.fullmatch(name):
-            found["gametab"].append((int(m.group(1)), name, {
+            found["gametab"].append((int(m.group(1)), 0, name, {
                 "name": name, "label": said(f"Game music tab {m.group(1)}", kept)}))
         elif (m := _KIND_SCORE.fullmatch(name)) and m.group(2) in _SCORE_FORMATS:
-            found["score"].append((int(m.group(1)), name, {
+            found["score"].append((int(m.group(1)), list(_SCORE_FORMATS).index(m.group(2)), name, {
                 "name": name, "label": f"Score {m.group(1)} ({_SCORE_FORMATS[m.group(2)]})",
                 **({} if m.group(2) == ".pdf" else {"download": download(name)})}))
-    groups = [{"kind": kind, "items": [item for _, _, item in sorted(items, key=lambda each: each[:2])]}
+    groups = [{"kind": kind, "items": [item for *_, item in sorted(items, key=lambda each: each[:3])]}
               for kind, items in found.items() if items]
     human, auto = files.get(HUMAN_SHEET), files.get(AUTO_SHEET)
     sheet = None if human is None and auto is None else "ukulele" if sheet_kind(conn, song.id) == "ukulele" else "sheet"
@@ -1798,8 +1802,9 @@ def _write_viewer(song: Song, text: str, page: Path, pdf: Path | None, *, key: t
     PDF is: at ``transpose``, in the song's own version (``start``) when it has one, and takes the sheet's
     key (``keys.sheet_keys``) when it has one; with ``export``, it offers Export PDF of this version;
     ``versions`` lists the song's versions, ``kinds`` what else it keeps to play from (``_kinds_data``), and
-    ``guitar`` its Guitar Pro files caracole serve shows in the browser (``inbox.guitar_files``), and ``harmonica`` its harmonica tabs (``inbox.harmonica_files``); ``twin``, the
-    sheet's PDF in Traditional characters, which the PDF's link opens while the viewer shows them, when it is there;
+    ``guitar`` its Guitar Pro files caracole serve shows in the browser (``inbox.guitar_files``), and ``harmonica``
+    its harmonica tabs (``inbox.harmonica_files``); ``twin``, the sheet's PDF in Traditional characters, which the
+    PDF's link opens while the viewer shows them, when it is there;
     ``video``, the YouTube video an auto sheet's audio came from, which it draws under its notice.
     A viewer that hasn't changed isn't written again.
 
