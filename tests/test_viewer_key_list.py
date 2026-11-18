@@ -250,10 +250,11 @@ def test_a_sheet_with_no_key_has_no_list(tmp_path):
     with viewer(tmp_path, written(tmp_path, NO_KEY)) as b:
         start = entries(b)
         disabled = b.js("document.querySelector('#key-now').disabled")
+        popup = b.js("document.querySelector('#key-now').getAttribute('aria-haspopup')")  # none: it opens nothing
         b.click("#key-now")
         time.sleep(0.3)
         look = [b.js(LOOK), b.js(KEYS), entries(b)]
-    assert disabled
+    assert disabled and popup is None
     assert not look[0]["open"] and look[0]["expanded"] == "false" and look[0]["depth"] == 0
     assert look[1] == [] and look[2] == start
 

@@ -1319,7 +1319,9 @@ It is rows.js's, shared by both pages:
   chords as written on this instrument (`writtenAt()`: the sheet's capo folded in on one with no capo), the first
   `.key-as` "· as written" across its row; `chooseKey(k)` transposes there the nearest way (`step`, the capo kept),
   then closes it. A layer in `DOCKED` and `rails`; book.js's `busy()` keeps the arrows with it; the harmonica tab's
-  page has none (test_viewer_key_list.py).
+  page has none (test_viewer_key_list.py). A button being no live region, `#key-status` (page.py, beside
+  `#scroll-status`, outside the bar) says the key's line as − and + move it (viewer.js `sayKey`: not on load, nor
+  while the settings' outputs or the key's own name say it; test_viewer_bar.py).
 - **The rail of necks** (from 1200 px) is the overlay, overlay.js's:
   - two tabs, Guitar first on a sheet and Harmonica first on a harmonica tab's page, the tab shown kept for that page
     alone;

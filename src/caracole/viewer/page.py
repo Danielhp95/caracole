@@ -958,8 +958,10 @@ def _words(text: str) -> list[str]:
 # titles; Aa and Scroll keep a name that holds their word (Text size, Auto-scroll).
 # The pill steers the scroll once it starts, above the bar's place, the bar out of the way while the song moves: its
 # first button counts down (a ring and the seconds), pauses (❚❚) and resumes (▶); the status line says so to a screen
-# reader. The settings, the key list and the card are dialogs that are not modal: nothing dims the song or takes it
-# out of reach while they are open (viewer.js).
+# reader, and the key's (``key-status``, beside it and outside the bar, which is hidden while it is away and in full
+# screen) says the key's whole line as − and + move it, the key being a button and no live region. The settings, the
+# key list and the card are dialogs that are not modal: nothing dims the song or takes it out of reach while they are
+# open (viewer.js).
 # The bar is marked data-controls, what full screen hides (html[data-full], viewer.css), with the header's facts and
 # the rail of necks; full screen's handle (``_HANDLE``, after the pill: a thin bar at the window's foot, "Show
 # controls") brings them back.
@@ -1051,6 +1053,7 @@ _CONTROLS = """<div class="bar" id="bar" data-controls hidden role="region" aria
 <button type="button" class="end" id="pill-end" aria-label="Stop scrolling">×</button>
 </div>
 """ + _HANDLE + """<p class="vh" id="scroll-status" role="status"></p>
+<p class="vh" id="key-status" role="status"></p>
 <section class="sheet-ui panel" id="panel" hidden role="dialog" aria-labelledby="panel-title" aria-describedby="panel-sum">
 <header class="ui-head"><div class="ui-title"><h2 id="panel-title" tabindex="-1">Settings</h2>
 <p class="sum" id="panel-sum"></p></div>

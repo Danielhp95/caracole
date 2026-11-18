@@ -3383,7 +3383,9 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   sounds in, over "key" until you transpose. On the narrowest screen "capo
   2" sits over "+1"; a key too long for its room ("Ab mixolydian") is a
   little smaller, and cut short only where even that is too long. A screen reader
-  hears the whole line ("Fm shapes (+1) · capo 2 · sounds Gm"). **Tap the
+  hears the whole line ("Fm shapes (+1) · capo 2 · sounds Gm") as the key's
+  name, and again each time − or + moves it (with the settings open, their
+  Transpose says it). **Tap the
   key** for the twelve keys in the song's mode, the key as written first
   ("Am · as written", across its row; on the piano, the harmonica and the
   winds, the key the song sounds in), the one you play marked: tap one and

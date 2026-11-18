@@ -1019,6 +1019,21 @@
     const line = headerLine();
     if (line) fact("inst", String(inst().name || inst().id)).textContent = line;
   };
+  // The key's whole line said to a screen reader as it moves (#key-status, a status line outside the bar: the key is
+  // the key list's button, no live region): as − and + move it. Nothing as the page opens (its first line is where it
+  // starts) nor for a render that moves nothing (the text size); and nothing where something else says it: the
+  // settings' Transpose and Capo (outputs) while they are open, and the key's own name as a key chosen from the list
+  // gives it the focus back (``keyQuiet``). Then the line is cleared, so the next one said is a change, even to the
+  // line said last.
+  let keySaid = null, keyQuiet = false;
+  const sayKey = (line) => {
+    if (keySaid === null || line === keySaid) {
+      keySaid = line;
+      return;
+    }
+    keySaid = line;
+    $("key-status").textContent = keyQuiet || !panel.hidden ? "" : line;
+  };
   const render = () => {
     if (state.capo === sheetCapo) state.capo = null;  // the sheet's own again
     keepPositions();
@@ -1041,6 +1056,7 @@
     keyUnder = [words, changed];
     fitKey();
     $("key-full").textContent = keyLabel(true);
+    sayKey(keyLabel(true));
     drawHead();
     drawFacts();
 
@@ -2057,11 +2073,17 @@
   // A key chosen: the song transposed there the nearest way, as Easy keys moves it (a tritone at most, up or down; the
   // capo stays where it is), so the bar says what moved (keyShort); then the list closed, the focus on the key.
   const chooseKey = (k) => {
-    step(wrapT(state.t + mod12(k - moved() + 6) - 6));
+    keyQuiet = true;  // the key's name says it as it takes the focus
+    try {
+      step(wrapT(state.t + mod12(k - moved() + 6) - 6));
+    } finally {
+      keyQuiet = false;
+    }
     close(keyList);
     keyNow.focus({ preventScroll: true });
   };
   keyNow.disabled = !key;
+  if (!key) keyNow.removeAttribute("aria-haspopup");  // it opens nothing
   keyNow.addEventListener("click", () => {
     if (inSight(keyList)) {
       close(keyList);

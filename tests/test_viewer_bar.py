@@ -117,6 +117,11 @@ def test_the_bar_is_on_the_page_hidden_until_the_script_runs():
     # list (test_viewer_key_list.py).
     assert re.search(r'<button type="button" class="now" id="key-now" aria-haspopup="dialog" aria-controls="key-list"'
                      r' aria-expanded="false">.*id="key-full"', controls)
+    # A button is no live region, as the <output> it was: the key's line is said as it moves by a status line of its
+    # own, beside the scroll's, outside the bar (hidden while it is away, and in full screen) and outside the key.
+    assert ('<p class="vh" id="scroll-status" role="status"></p>\n'
+            '<p class="vh" id="key-status" role="status"></p>') in html
+    assert 'id="key-status"' not in controls and html.index('id="key-status"') > html.index('<div class="pill"')
     # Aa opens the size, there with the size it shows; ⋯ the settings.
     assert re.search(r'id="size"[^>]*aria-expanded="false" aria-controls="sizes"', controls)
     assert re.search(r'<span class="sizes" id="sizes" role="group" aria-label="Text size" hidden>', controls)
@@ -202,6 +207,43 @@ def test_minus_and_plus_transpose_a_semitone_at_a_time(tmp_path):
     assert up["full"] == "Ab shapes (+1) · capo 2 · sounds Bb"
     assert down["hash"] == "#t=-1" and down["main"] == down["chord"] == "F#" and down["sub"] == "capo 2 · −1"
     assert not up["panel"] and not down["panel"] and up["where"] == down["where"] == "shown"  # nothing opened
+
+
+STATUS = "document.querySelector('#key-status').textContent"
+
+
+@in_chromium
+def test_minus_and_plus_are_said_to_a_screen_reader_and_nothing_else_is(tmp_path):
+    # #key-status says the key's whole line as − and + move it; nothing as the page opens, nothing for a change of text
+    # size, and nothing where something else says it: the settings' Transpose (an output) while they are open, the key's
+    # own name as a key chosen from the list gives it the focus back. Then it is cleared, so the next line said is a
+    # change, even to the one said last.
+    with viewer(tmp_path, written(tmp_path, UG_CHO)) as b:
+        loaded = b.js(STATUS)
+        b.click("#size")
+        b.click("#bigger")
+        sized = b.js(STATUS)
+        b.click("#t-up")
+        up = [b.js(STATUS), bar(b)["full"]]
+        b.click("#t-down")
+        down = [b.js(STATUS), bar(b)["full"]]
+        b.click("#key-now")
+        assert b.wait("!document.querySelector('#key-list').hidden")
+        b.click('#key-items button[data-k="1"]')
+        assert b.wait("document.querySelector('#key-list').hidden")
+        chosen = [b.js(STATUS), bar(b)["full"], bar(b)["focus"]]
+        b.click("#t-down")  # back to the line said last: said again
+        again = [b.js(STATUS), bar(b)["full"]]
+        b.click("#more")
+        assert b.wait("!document.querySelector('#panel').hidden")
+        b.click("#up")
+        settings = [b.js(STATUS), b.js("document.querySelector('#shift').textContent")]
+    assert loaded == "" and sized == ""
+    assert up == ["Ab shapes (+1) · capo 2 · sounds Bb"] * 2
+    assert down == ["G shapes · capo 2 · sounds A"] * 2
+    assert chosen == ["", "Ab shapes (+1) · capo 2 · sounds Bb", "key-now"]  # its name says it as it takes the focus
+    assert again == ["G shapes · capo 2 · sounds A"] * 2
+    assert settings == ["", "Abcapo 2 · +1"]  # the settings' Transpose says it
 
 
 @in_chromium
