@@ -282,7 +282,8 @@ def test_the_served_page_has_the_request_form_and_its_token(conn, cfg):
 
 
 def bar_of(html):
-    found = re.search(r'<div class="searchbar"[^>]*>.*?<p class="bar-status"[^>]*></p>\s*</div>\n</div>', html, re.S)
+    found = re.search(r'<div class="searchbar"[^>]*>.*?<p class="bar-status"[^>]*></p>\s*</div>\s*'
+                      r'(?:<section class="recent".*?</section>\s*)?</div>', html, re.S)
     assert found, html[:3000]
     return found.group(0)
 
@@ -4130,3 +4131,11 @@ def test_building_the_page_sends_no_request(conn, cfg, monkeypatch):
     monkeypatch.setattr(common, "transport_for", no_requests)
     add_song(conn, "Radiohead", "Creep")
     assert data_of(page(conn, cfg))["sites"]["list"]
+
+
+def test_the_viewport_lets_the_keyboard_resize_the_page(conn, cfg):
+    from caracole.library_page import WebControls
+
+    meta = '<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">'
+    assert meta in page(conn, cfg)
+    assert meta in build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok"))

@@ -115,10 +115,13 @@ identity its ``data-hit``) and MuseScore's pages (``titleLine``); for the
 lookup page, rows (``ugHit``, ``artistHit``, ``siteHit``, ``siteArtist`` and
 ``siteArtistSongs``, LaCuerda's artists and their songs); and for both what a
 search says beside its results: under the box, what each site found, a mark and a
-count each, your songs first (``countMarks``, from ``looked`` and the answer's rows;
-``countsSaid``, the same in words for the line a screen reader hears); for a query
-that found nothing on the sites, a line of the list under a quiet band, "Not on
-the sites" (``nothingFound``: the query, and Request where a song's Open is; under
+count each, your songs first, then the sites that found something, named in full
+where the row fits on one line (``fitCounts``), then the rest in one quiet mark,
+"0 on N more", and no row at all when every count is 0 (``countMarks``, from
+``looked`` and the answer's rows, drawn by ``drawCountMarks``; ``countsSaid``, the
+same in words for the line a screen reader hears); for a query
+that found nothing on the sites, a line of the list under a quiet band, "Nothing
+for “…” in your songs or the sites' indexes" (``nothingFound``: the query, and Request after it; under
 its chevron, Ask LaCuerda · 1 request for a name under a letter LaCuerda's listings
 aren't read to yet, and "Why can't caracole find it?" folded, from ``unseen``);
 under results, those two in a line of their own (``notesLine``); and, on the lookup

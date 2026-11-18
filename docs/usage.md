@@ -2760,6 +2760,27 @@ caracole takes none for an option. `caracole serve` serves the same page, where 
 sites have too, under the same artist headers, with Fetch, and a form to
 request a song by name (see below).
 
+**Searching is a step of its own**, on the file and served alike. As the box takes
+the focus (a tap, a click, `/`), or while it holds a search, a ← shows at its
+left ("Back to your songs" to a screen reader), at every width. The ←, or the
+browser's Back (Android's too), leaves the search: the box empty, the list as
+it was before you searched, the box no longer focused, so a phone puts its
+keyboard away. Focusing the empty box is one step of the browser's history;
+typing adds none, and an artist's name pressed while you search is one more,
+which Back takes back one at a time and the ← all at once. The × at the box's
+right clears the text and keeps the focus in the box: you are still
+searching. Escape in the empty box leaves the search as the ← does. The
+empty box, focused, lists the songs you opened last (up to five, newest first,
+title then artist: "Recently opened"), kept in this browser; a tap opens the
+song and keeps the box's focus; typing hides the list. A tap
+elsewhere leaves the box but not the search, its ← still there. There is no
+Back to your songs row over the results. On a phone the logo and tabs
+slide away while you search, so the box and its results take the screen, and
+come back when you leave; with reduced motion they go at once. The Show all
+buttons of a filter reset leave the search box alone. Scrolling the
+results with a finger puts the keyboard away (the search goes on, its ← still
+there); a laptop's wheel leaves the focus in the box.
+
 On a touch screen every button, fold, chip, menu and letter is at least 44
 pixels each way, for a thumb (but an artist's name, on its band or as a line's
 overline, 24 pixels: see above), and so are each line's buttons, its
@@ -2932,8 +2953,10 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   the settings or the links.
 - **On a wide screen** (1100 px or more: a laptop), the song reads down one
   column, centred, in slightly larger text. A song short enough for the
-  window to show it whole in two columns is shown in two, side by side; a
-  longer one stays in one, as it would otherwise run down the first column
+  window to show it whole in two columns is shown in two, side by side,
+  spread across the window with only 5% of its width left empty on each side
+  (of the room beside the rail of necks, where it is open), so wider
+  columns let more songs fit whole; a longer one stays in one, as it would otherwise run down the first column
   and back up the second. The viewer measures again when the window or the
   text size changes, and when the settings' rail opens beside the song. From
   1200 px the rail of necks (below) takes 345 px on the left, and the song is
@@ -4218,37 +4241,55 @@ the library, sent as they are: they carry no badge.
   two phones, or the library page and the lookup page) each wait their turn
   and get their answer (`/api/search`'s `box`, an id each search box makes). The
   line under the box says "Searching sites" until the first answer comes.
-  Then it is a row of marks, one a place searched, each with how many songs it
-  found there: your songs first (the results' own, by caracole's logo), then
-  Ultimate Guitar, gtptabs.com, LaCuerda, MuseScore, harptabs.com and
-  gametabs.net, each by its own icon (else its letters: UG, GT, LC, MS, HT,
-  GM). A site counts its songs as the results' lines show them (those "+ N
-  more" lists too): an artist's most tabbed songs among them, a song once,
-  and an artist none of whose songs is listed (a LaCuerda artist whose page
-  caracole hasn't read) once. One that found something is in the text's colour,
-  one that found nothing quieter, at 0. A mark also says how far caracole's copy
-  of the site's index has got, in a colour and a glyph: amber with a pie cut
-  where it is read in part (LaCuerda, while the nightly run still reads its
-  listings; harptabs.com, its artist pages; gametabs.net, its game pages, which
-  name each tab's composers), red with a ban and no count where a site blocks
-  caracole (MuseScore), a dashed edge where its index is empty yet, and "off" on
-  a dashed edge where it is turned off in caracole.toml. Each mark's tooltip
-  says it in words, then why, in one line ("0 on LaCuerda: index in part, up to
-  C", then "LaCuerda's index is being read: 2,957 artists so far, with #,
-  A–C read whole; the nightly run reads the rest."); a screen reader hears each
-  mark that way ("7 on Ultimate Guitar"), and, as an answer comes, the counts
-  that aren't 0 ("1 of your songs · 7 on Ultimate Guitar · 5 on gametabs.net").
-  A mark is no button. While the next query's answer comes the row dims, and
-  what follows an answer (an artist's songs listed by "+ N more", an error) is
-  said in words after the marks. Nothing under the results says it again: only
-  Ask LaCuerda, and "Why isn't it found?", when they apply.
+  Then it is a row of marks: your songs first (the results' own, by caracole's
+  logo, with how many), then each site that found something, in the order
+  caracole searches them (Ultimate Guitar, gtptabs.com, LaCuerda, MuseScore,
+  harptabs.com, gametabs.net), each by its own icon (else its letters: UG, GT,
+  LC, MS, HT, GM) and how many songs it found there, in the text's colour; then
+  one quiet mark for all the rest, "0 on 4 more". A site counts its songs as
+  the results' lines show them (those "+ N more" lists too): an artist's most
+  tabbed songs among them, a song once, and an artist none of whose songs is
+  listed (a LaCuerda artist whose page caracole hasn't read) once. A site's
+  mark also says how far caracole's copy of its index has got, in a colour and
+  a glyph: amber with a pie cut where it is read in part (LaCuerda, while the
+  nightly run still reads its listings; harptabs.com, its artist pages;
+  gametabs.net, its game pages, which name each tab's composers). Its tooltip
+  says it in words, then why, in one line ("7 on LaCuerda · index in part, up
+  to C", then "LaCuerda's index is being read: 2,957 artists so far, with #,
+  A–C read whole; the nightly run reads the rest."). The rest's mark takes in
+  every site at 0, whatever its state: one whose index is empty yet, one read
+  in part, one that blocks caracole (MuseScore) and one turned off in
+  caracole.toml, which is searched nowhere; its tooltip has a line each, then
+  why, as a site's mark has ("0 on harptabs.com · index empty", "0 on
+  MuseScore · turned us back", "gametabs.net: off"), and a screen reader hears
+  each one's state too ("0 on 4 more: LaCuerda · index in part, up to C;
+  MuseScore · turned us back; harptabs.com · index empty; gametabs.net · index
+  empty"). When every count is 0, yours too, there is no row at all: the
+  list's own line says nothing was found. On a laptop (from 720 px wide) each site that found something is
+  named in full beside its icon ("Ultimate Guitar 7") while the whole row fits
+  on one line, and by its icon alone when it wouldn't, as on a phone; it fits
+  itself again as the window narrows or widens. A screen reader hears each
+  mark as its tooltip's first line ("7 on Ultimate Guitar"), and, as an answer
+  comes, the counts that aren't 0 ("1 of your songs · 7 on Ultimate Guitar · 5
+  on gametabs.net"; "Nothing in your songs or the sites' indexes" when they all
+  are, "1 of your songs · nothing in the sites' indexes" when yours alone
+  aren't), then a site that blocks caracole, row or no row ("… · MuseScore
+  turned us back"); one you turned off is said only in the rest's mark. A mark
+  is no button. While the next query's answer comes the row
+  dims, and what follows an answer (an artist's songs listed by "+ N more", an
+  error) is said in words after the marks. Nothing under the results says it
+  again: only Ask LaCuerda, and "Why isn't it found?", when they apply.
 
   When a query finds nothing on the sites, the list ends with a line of its
-  own, under a quiet band, "Not on the sites": the query in its quotes, and
-  **Request** where a song's Open is, which opens the request form below,
-  filled in from the query (the form shows only then: one Request); the marks
-  under the box say where caracole looked, every site at 0, and a screen reader
-  hears "Not on the sites". Its
+  own, under a quiet band that says where caracole looked ("Nothing for
+  “zzzqqq” in your songs or the sites' indexes", or "… in the sites' indexes"
+  alone while some of your songs match): the query as the line's title, and
+  **Request** after it (under it on a phone), the one filled button, which opens
+  the request form below,
+  filled in from the query (the form shows only then: one Request); under the
+  box, no row of marks at all unless some of your songs match (then yours, and
+  the sites in one mark at 0), and a screen reader hears "Nothing in your songs
+  or the sites' indexes" ("1 of your songs · nothing in the sites' indexes"). Its
   chevron holds the rest: Ask LaCuerda · 1 request, only while LaCuerda's
   listings don't reach the name's letter (LaCuerda's search first, as under
   results), and "Why isn't it found?", folded: Ultimate Guitar's
@@ -4265,8 +4306,8 @@ the library, sent as they are: they carry no badge.
   then "Their 7 songs on UG ›", which lists their songs in the band (fifty of
   Ultimate Guitar's, with "+ N more", or those LaCuerda's or harptabs.com's
   index holds, or the offer to read their page), with no request; what a
-  screen reader hears under the box names the first: "Not on the sites ·
-  did you mean Stephen Foster?", "… · did you mean Beautiful Dreamer by Stephen
+  screen reader hears under the box names the first: "Nothing in your songs or
+  the sites' indexes · did you mean Stephen Foster?", "… · did you mean Beautiful Dreamer by Stephen
   Foster?". Enter
   still only moves to the first line. Searching asks no site anything: it reads the indexes
   alone (5–25 ms a query on Ultimate Guitar's, up to about 0.15 s for very
@@ -4313,13 +4354,14 @@ the library, sent as they are: they carry no badge.
   search, above, is the one request it may send): it moves to
   the first result's line (once the query's answer is in), from which Tab goes
   on to its name and its button; Fetch, or a click or a key on the name,
-  does. Escape, or Back to your songs (over results; a search that found
-  nothing on the sites has none), goes back to
+  does. Escape goes back to
   the list with your search and buttons as they were (Escape again clears the
-  search; Enter, or typing on, brings the results back), and the box's × back
-  to all your songs; either way a song asked for there has its line (see
-  below); ↓ goes from the box to the first result's button. The address keeps
-  it (`#q=wonderwall&all=1`).
+  search, and once more, in the empty box, leaves it; Enter, or typing on,
+  brings the results back); the box's × goes back to all your songs, the focus
+  kept in the box, still searching; the ← at the box's left, or Back, leaves
+  the search (Searching is a step of its own, above); each way a song asked
+  for there has its line (see below); ↓ goes from the box to the first
+  result's button. The address keeps it (`#q=wonderwall&all=1`).
 
   **Fetch**, the download icon at a line's end (named "Fetch Oasis - Wonderwall
   from UG" to a screen reader and as a tooltip; **Fetch again**
@@ -4350,9 +4392,10 @@ the library, sent as they are: they carry no badge.
   list, or beside a line's title, puts their name in the search box and
   searches it as typing it would (their group first, with their songs, as a
   name typed whole leads), which asks no site, only the offline indexes; the
-  focus goes to the box, Escape goes back to your songs, and the browser's Back
+  focus goes to the box, Escape goes back to your songs, the browser's Back
   to the list as it was before it (its search, Show, sort and key, as its
-  address had them). A newer answer drawn while it goes (a search typed on)
+  address had them), and the ← out of the search, the name's step with the
+  rest. A newer answer drawn while it goes (a search typed on)
   keeps the line where it has the song, with its request line; one it hasn't
   moves the request under the box as its line ("Just requested"), its request
   line going on there. A song your library has already, under its own names
@@ -4372,8 +4415,8 @@ the library, sent as they are: they carry no badge.
   page, and it waits for no Ultimate Guitar review of other artists' songs of
   its title), and the nightly run looks it up (not a song under one of UG's
   `misc-…` names, which are no one's: request it by name as you know it).
-  Back to your songs, a song new to the library gets a line of its own under
-  the box ("Just requested").
+  Back in your songs (Escape, ×, ←), a song new to the library gets a line of
+  its own under the box ("Just requested").
 
   **A song you removed** (`caracole remove`, or Remove on the page) that the
   query matches shows in its artist's group as "Removed 2026-10-20", with

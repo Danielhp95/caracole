@@ -55,9 +55,8 @@ const caracoleRows = (icons, does) => {
     check: ["M5 12.5l4.5 4.5L19 7.5"],
     close: ["M6 6l12 12M18 6L6 18"],
     plus: ["M12 5v14M5 12h14"],
-    // an index read in part: a pie with a slice cut; a site that blocks caracole: a ban
+    // an index read in part: a pie with a slice cut
     part: ["M12 3v9h9", "M21 12a9 9 0 1 1-9-9"],
-    blocked: ["M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0", "M5.6 5.6l12.8 12.8"],
   };
   const SVG = "http://www.w3.org/2000/svg";
   // A glyph (``name``, of GLYPHS) as inline SVG, a text's height unless a stylesheet sizes it: named ``label`` for a
@@ -1007,7 +1006,7 @@ const caracoleRows = (icons, does) => {
       entered = query;
       return null;
     };
-    // The results left (Escape, Back to your songs): an Enter waiting for the answer is taken back, and the settle's
+    // The results left (Escape, the ←, the ×): an Enter waiting for the answer is taken back, and the settle's
     // timer sends nothing, as nothing of the sites is on the screen; back in them, the next answer arms it again.
     const leave = () => {
       entered = null;
@@ -1097,13 +1096,17 @@ const caracoleRows = (icons, does) => {
   };
   // Where caracole looked (``looked``: a site each, its ``source``, ``name``, ``state``, ``label`` and one line of
   // ``detail``) and what it found there, as the row of marks under a search box (countMarks): your songs first, by
-  // the page's own logo, then each site's (sourceMark), in the order caracole searches them, and the count beside
-  // it (foundOn): in the text's colour where it found some, muted where it found none, and where it wasn't searched
-  // none, and its state in a glyph as well as a colour, never in a colour alone: amber and a pie with a slice cut where
-  // its index is read in part, red and a ban where it blocks caracole, "off" on a dashed edge turned off, a dashed edge
-  // where its index is empty yet. A mark is no control: its name for a screen reader says it all ("0 on LaCuerda · index in part,
-  // up to C"), its tooltip that and its detail, which is its description too. countsSaid says the counts in words,
-  // those that aren't 0, for the line a screen reader hears as the answer comes.
+  // the page's own logo, then each site that found something (sourceMark), in the order caracole searches them, its
+  // name in full from 720 px where the row has room for it on one line (fitCounts), and the count beside it (foundOn),
+  // in the text's colour, its state in a glyph as well as a colour, never in a colour alone: amber and a pie with a
+  // slice cut where its index is read in part, a dashed edge where it is empty yet. Then the others, whatever their
+  // state, in one quiet mark, "0 on 4 more": a site at 0, one that blocks caracole, one turned off (it is searched
+  // nowhere, so it finds nothing); each one's name and state in its words for a screen reader ("MuseScore · turned
+  // us back"), its count, state and detail in its tooltip ("0 on MuseScore · turned us back", "gametabs.net: off").
+  // No row at all when every count is 0 (the list's line says so). A mark is no control: its name for a screen reader
+  // says it all ("7 on LaCuerda · index in part, up to C"), its tooltip that and its detail, which is its description
+  // too. drawCountMarks draws the row for both pages; countsSaid says the counts in words, those that aren't 0, and a
+  // site that blocks caracole, for the line a screen reader hears as the answer comes.
   const STATES = ["done", "partial", "empty", "blocked", "off"];
   const SEARCHED = ["done", "partial", "empty"];
   const stateOf = (s) => (STATES.indexOf(s.state) >= 0 ? s.state : "off");
@@ -1137,17 +1140,21 @@ const caracoleRows = (icons, does) => {
   };
   const number = (n) => Number(n || 0).toLocaleString("en");
   const yoursSaid = (n) => number(n) + " of your songs";
-  const countSaid = (s, n) => {
+  // A site's name and its state in words ("LaCuerda · index in part, up to C", "MuseScore · turned us back",
+  // "gametabs.net: off"; its name alone where its index was searched whole), and that after its count ("0 on
+  // MuseScore · turned us back"; "gametabs.net: off", which was searched nowhere).
+  const siteSaid = (s) => {
     const name = siteName(s);
     const state = stateOf(s);
-    if (state === "blocked") return name + ": turned us back";
+    if (state === "blocked") return name + " · turned us back";
     if (state === "off") return name + ": off";
-    if (state === "empty") return number(n) + " on " + name + " · index empty";
-    if (state !== "partial") return number(n) + " on " + name;
+    if (state === "empty") return name + " · index empty";
+    if (state !== "partial") return name;
     const label = String(s.label || "");
     const how = label.indexOf(name + ": ") === 0 ? label.slice(name.length + 2) : "";
-    return number(n) + " on " + name + " · index in part" + (how && how !== "in part" ? ", " + how : "");
+    return name + " · index in part" + (how && how !== "in part" ? ", " + how : "");
   };
+  const countSaid = (s, n) => (stateOf(s) === "off" ? siteSaid(s) : number(n) + " on " + siteSaid(s));
   const named = (mark, said) => {
     if (mark.localName === "img") {
       mark.setAttribute("alt", said);
@@ -1159,19 +1166,30 @@ const caracoleRows = (icons, does) => {
     mark.removeAttribute("title");  // the mark's item's, around it: with its detail
     return mark;
   };
+  const shownOnly = (node) => {
+    node.setAttribute("aria-hidden", "true");  // the mark's name says it
+    return node;
+  };
   const countOf = (item, n) => {
     item.dataset.n = String(Number(n) || 0);
-    const count = el("span", "count-n", number(n));
-    count.setAttribute("aria-hidden", "true");  // the mark's name says it
-    item.appendChild(count);
+    item.appendChild(shownOnly(el("span", "count-n", number(n))));
   };
-  // The marks of an answer (``data``, /api/search's), each a list's item; ``yours``, how many of your songs it shows,
-  // for the first (none where it is null); ``found``, what each site's count is where the page counts it itself (the
-  // library page, its lines: those "+ N more" listed too), else foundOn's.
+  // What each site of an answer (``d``, /api/search's) found: its songs where the page counts them itself (``found``:
+  // the library page, its lines, those "+ N more" listed too), else foundOn's; none where it wasn't searched (blocked,
+  // or turned off). In ``looked``'s order, each with its state.
   const foundIn = (d, found, source) => (found && own.call(found, source) ? Number(found[source]) || 0
     : foundOn(d, source));
+  const foundAt = (d, found) => sitesOf(d.looked).map((s) => {
+    const state = stateOf(s);
+    const source = String(s.source || "");
+    return { s, state, source, n: SEARCHED.indexOf(state) >= 0 ? foundIn(d, found, source) : 0 };
+  });
+  // The marks of an answer (``data``), each a list's item; ``yours``, how many of your songs it shows, for the first
+  // (none where it is null); ``found``, as foundAt has it. None at all when every count is 0.
   const countMarks = (data, yours, found) => {
     const d = data && typeof data === "object" ? data : {};
+    const sites = foundAt(d, found);
+    if (!(Number(yours) > 0) && sites.every((x) => !(x.n > 0))) return [];
     const items = [];
     if (yours !== null && yours !== undefined) {
       const said = yoursSaid(yours);
@@ -1185,10 +1203,12 @@ const caracoleRows = (icons, does) => {
       countOf(item, yours);
       items.push(item);
     }
-    for (const s of sitesOf(d.looked)) {
-      const state = stateOf(s);
-      const source = String(s.source || "");
-      const n = foundIn(d, found, source);
+    const rest = [];
+    for (const { s, state, source, n } of sites) {
+      if (!(n > 0)) {
+        rest.push(s);
+        continue;
+      }
       const said = countSaid(s, n);
       const item = el("li", "count-mark");
       Object.assign(item.dataset, { source, state });
@@ -1196,26 +1216,69 @@ const caracoleRows = (icons, does) => {
       item.appendChild(named(mark, said));
       item.title = s.detail ? said + "\n" + String(s.detail) : said;
       if (s.detail) mark.setAttribute("aria-description", String(s.detail));
-      if (SEARCHED.indexOf(state) >= 0) countOf(item, n);
+      item.appendChild(shownOnly(el("span", "count-name", siteName(s))));
+      countOf(item, n);
       if (state === "partial") item.appendChild(glyph("part"));
-      if (state === "blocked") item.appendChild(glyph("blocked"));
-      if (state === "off") {
-        const off = el("span", "count-off", "off");
-        off.setAttribute("aria-hidden", "true");
-        item.appendChild(off);
-      }
+      items.push(item);
+    }
+    if (rest.length) {
+      const said = "0 on " + number(rest.length) + " more";
+      const item = el("li", "count-mark rest");
+      Object.assign(item.dataset, { source: "rest", n: "0" });
+      item.append(shownOnly(el("span", "count-rest", said)),
+        el("span", "visually-hidden", said + ": " + rest.map(siteSaid).join("; ")));
+      item.title = rest.map((s) => countSaid(s, 0) + (s.detail ? "\n" + String(s.detail) : "")).join("\n\n");
       items.push(item);
     }
     return items;
   };
+  // Whether the row's marks name their sites in full (shown from 720 px): only while they all fit on one line, else
+  // the list is ``short``, their marks alone; fitted again as the list's room changes (its parent's width, once a
+  // frame: a fit inside the observer's callback would resize what it observes).
+  const fitted = typeof WeakSet === "function" ? new WeakSet() : null;
+  const fitCounts = (list) => {
+    if (!list) return;
+    if (fitted && !fitted.has(list) && typeof ResizeObserver === "function") {
+      fitted.add(list);
+      let asked = false;
+      const watch = new ResizeObserver(() => {
+        if (asked) return;
+        asked = true;
+        requestAnimationFrame(() => {
+          asked = false;
+          fitCounts(list);
+        });
+      });
+      watch.observe(list);
+      if (list.parentElement) watch.observe(list.parentElement);
+    }
+    list.classList.remove("short");
+    const name = list.querySelector(".count-name");
+    if (!name || !name.getClientRects().length) return;
+    const tops = new Set(Array.from(list.children, (item) => item.offsetTop));
+    if (tops.size > 1) list.classList.add("short");
+  };
+  // The row of an answer's marks drawn into ``list`` (a ``ul.counts``), for both pages: hidden when there are none,
+  // its sites named where they fit. The marks drawn.
+  const drawCountMarks = (list, data, yours, found) => {
+    const items = countMarks(data, yours, found);
+    list.replaceChildren(...items);
+    list.hidden = !items.length;
+    fitCounts(list);
+    return items;
+  };
   // The same in words, the sites that found something alone: "1 of your songs · 7 on Ultimate Guitar · 5 on
-  // gametabs.net", or "Nothing on the sites".
+  // gametabs.net", or "Nothing in your songs or the sites' indexes" ("1 of your songs · nothing in the sites'
+  // indexes"); then a site that blocks caracole, whether or not a row shows ("… · MuseScore turned us back"). One
+  // turned off, the owner's own choice, goes unsaid here: the rest's words and its tooltip say it.
   const countsSaid = (data, yours, found) => {
     const d = data && typeof data === "object" ? data : {};
     const mine = Number(yours) > 0 ? [yoursSaid(yours)] : [];
-    const sites = sitesOf(d.looked).map((s) => [siteName(s), foundIn(d, found, String(s.source || ""))])
-      .filter(([, n]) => n > 0).map(([name, n]) => number(n) + " on " + name);
-    return mine.concat(sites.length ? sites : [mine.length ? "not on the sites" : "Not on the sites"])
+    const at = foundAt(d, found);
+    const sites = at.filter((x) => x.n > 0).map((x) => number(x.n) + " on " + siteName(x.s));
+    const blocked = at.filter((x) => x.state === "blocked").map((x) => siteName(x.s) + " turned us back");
+    return mine.concat(sites.length ? sites
+      : [mine.length ? "nothing in the sites' indexes" : "Nothing in your songs or the sites' indexes"], blocked)
       .join(" · ");
   };
   // Why the query may name an artist the Ultimate Guitar index can't see (``unseen``), folded: what to paste into
@@ -1258,9 +1321,10 @@ const caracoleRows = (icons, does) => {
       : "LaCuerda's list doesn't reach " + letter + " yet. We read its page for “" + name + "”, 1 request.";
     return go;
   };
-  // A search that found nothing on the sites (``data``, for ``query``), as a line of the list: a quiet band, "Not on
-  // the sites", over one line, the library page's (``does.dense``) or a row, the lookup page's: the query in its
-  // quotes, and where a song's Open sits, the request by name (``does.request``: "Request", else ``does.requestText``,
+  // A search that found nothing on the sites (``data``, for ``query``), as a line of the list: a quiet band, "Nothing
+  // for “query” in your songs or the sites' indexes" (``does.yours``: songs of yours the search shows, then "in the
+  // sites' indexes" alone), over one line, the library page's (``does.dense``) or a row, the lookup page's: the query,
+  // and where a song's Open sits, the request by name (``does.request``: "Request", else ``does.requestText``,
   // named ``does.requestLabel``); where caracole looked is the row of marks under the box (countMarks), each site at
   // 0, and no more here. Its chevron ("⋯" on a row) holds the rest: Ask LaCuerda while
   // LaCuerda's listings don't reach the name (``does.ask(button, box)``, LaCuerda's search first while its gate,
@@ -1271,11 +1335,12 @@ const caracoleRows = (icons, does) => {
     const box = el("section", "nothing");
     box.dataset.query = String(query);
     rowSerial += 1;
-    const head = el("h2", does.dense ? "miss-band" : "group miss-band", "Not on the sites");
+    const head = el("h2", does.dense ? "miss-band" : "group miss-band",
+      "Nothing for “" + query + "” in " + (does.yours ? "" : "your songs or ") + "the sites' indexes");
     head.id = "nothing-" + rowSerial;
     box.setAttribute("aria-labelledby", head.id);
     const said = String(does.requestLabel || "Request “" + query + "” by name");
-    const request = button(String(does.requestText || "Request"), "small primary", () => does.request(), said);
+    const request = button(String(does.requestText || "Request"), "small primary miss-request", () => does.request(), said);
     request.title = said + ": opens the form, filled from the search";
     const rest = el("div", "row-group miss-more");
     const actions = el("div", "actions");
@@ -1285,7 +1350,7 @@ const caracoleRows = (icons, does) => {
     const why = whyUnseen(d.unseen, query);
     if (why) actions.appendChild(why);
     rest.appendChild(actions);
-    const line = resultRow({ dense: Boolean(does.dense), title: "“" + query + "”", action: request,
+    const line = resultRow({ dense: Boolean(does.dense), title: String(query), action: request,
       more: actions.childNodes.length ? [rest] : [] });
     line.classList.add("miss");
     const more = does.unfolded ? line.querySelector(".line-more, .row-more") : null;
@@ -1314,5 +1379,5 @@ const caracoleRows = (icons, does) => {
   return { resultRow, sourceMark, siteMarks, glyph, link, safeHref, titleLink, artistSearch, button, fetchIcon, many,
     shortDate, counts, opener, instrumentBadges, ugHit, artistHit,
     siteHit, siteArtist, siteArtistSongs, readArtistPage, searchLaCuerda, lacuerdaSearcher, readOutcome, indexLine, titleLine,
-    songsOn, meantName, didYouMean, countMarks, countsSaid, nothingFound, notesLine };
+    songsOn, meantName, didYouMean, countMarks, fitCounts, drawCountMarks, countsSaid, nothingFound, notesLine };
 };
