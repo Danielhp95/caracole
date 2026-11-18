@@ -1101,12 +1101,12 @@ const caracoleRows = (icons, does) => {
   // in the text's colour, its state in a glyph as well as a colour, never in a colour alone: amber and a pie with a
   // slice cut where its index is read in part, a dashed edge where it is empty yet. Then the others, whatever their
   // state, in one quiet mark, "0 on 4 more": a site at 0, one that blocks caracole, one turned off (it is searched
-  // nowhere, so it finds nothing); their names in its words for a screen reader, each one's count and state in its
-  // tooltip ("0 on MuseScore · turned us back", "gametabs.net: off"). No row at all when every count is 0 (the list's
-  // line says so). A mark is no control: its name for a screen reader says it all ("7 on LaCuerda · index in part, up
-  // to C"), its tooltip that and its detail, which is its description too. drawCountMarks draws the row for both
-  // pages; countsSaid says the counts in words, those that aren't 0, for the line a screen reader hears as the answer
-  // comes.
+  // nowhere, so it finds nothing); each one's name and state in its words for a screen reader ("MuseScore · turned
+  // us back"), its count, state and detail in its tooltip ("0 on MuseScore · turned us back", "gametabs.net: off").
+  // No row at all when every count is 0 (the list's line says so). A mark is no control: its name for a screen reader
+  // says it all ("7 on LaCuerda · index in part, up to C"), its tooltip that and its detail, which is its description
+  // too. drawCountMarks draws the row for both pages; countsSaid says the counts in words, those that aren't 0, and a
+  // site that blocks caracole or is off, for the line a screen reader hears as the answer comes.
   const STATES = ["done", "partial", "empty", "blocked", "off"];
   const SEARCHED = ["done", "partial", "empty"];
   const stateOf = (s) => (STATES.indexOf(s.state) >= 0 ? s.state : "off");
@@ -1140,17 +1140,21 @@ const caracoleRows = (icons, does) => {
   };
   const number = (n) => Number(n || 0).toLocaleString("en");
   const yoursSaid = (n) => number(n) + " of your songs";
-  const countSaid = (s, n) => {
+  // A site's name and its state in words ("LaCuerda · index in part, up to C", "MuseScore · turned us back",
+  // "gametabs.net: off"; its name alone where its index was searched whole), and that after its count ("0 on
+  // MuseScore · turned us back"; "gametabs.net: off", which was searched nowhere).
+  const siteSaid = (s) => {
     const name = siteName(s);
     const state = stateOf(s);
-    if (state === "blocked") return number(n) + " on " + name + " · turned us back";
+    if (state === "blocked") return name + " · turned us back";
     if (state === "off") return name + ": off";
-    if (state === "empty") return number(n) + " on " + name + " · index empty";
-    if (state !== "partial") return number(n) + " on " + name;
+    if (state === "empty") return name + " · index empty";
+    if (state !== "partial") return name;
     const label = String(s.label || "");
     const how = label.indexOf(name + ": ") === 0 ? label.slice(name.length + 2) : "";
-    return number(n) + " on " + name + " · index in part" + (how && how !== "in part" ? ", " + how : "");
+    return name + " · index in part" + (how && how !== "in part" ? ", " + how : "");
   };
+  const countSaid = (s, n) => (stateOf(s) === "off" ? siteSaid(s) : number(n) + " on " + siteSaid(s));
   const named = (mark, said) => {
     if (mark.localName === "img") {
       mark.setAttribute("alt", said);
@@ -1222,8 +1226,8 @@ const caracoleRows = (icons, does) => {
       const item = el("li", "count-mark rest");
       Object.assign(item.dataset, { source: "rest", n: "0" });
       item.append(shownOnly(el("span", "count-rest", said)),
-        el("span", "visually-hidden", said + ": " + rest.map(siteName).join(", ")));
-      item.title = rest.map((s) => countSaid(s, 0)).join("\n");
+        el("span", "visually-hidden", said + ": " + rest.map(siteSaid).join("; ")));
+      item.title = rest.map((s) => countSaid(s, 0) + (s.detail ? "\n" + String(s.detail) : "")).join("\n\n");
       items.push(item);
     }
     return items;
@@ -1265,13 +1269,18 @@ const caracoleRows = (icons, does) => {
   };
   // The same in words, the sites that found something alone: "1 of your songs · 7 on Ultimate Guitar · 5 on
   // gametabs.net", or "Nothing in your songs or the sites' indexes" ("1 of your songs · nothing in the sites'
-  // indexes").
+  // indexes"); then a site that wasn't searched, and why, whether or not a row shows ("… · MuseScore turned us back",
+  // "… · gametabs.net is off").
   const countsSaid = (data, yours, found) => {
     const d = data && typeof data === "object" ? data : {};
     const mine = Number(yours) > 0 ? [yoursSaid(yours)] : [];
-    const sites = foundAt(d, found).filter((x) => x.n > 0).map((x) => number(x.n) + " on " + siteName(x.s));
+    const at = foundAt(d, found);
+    const sites = at.filter((x) => x.n > 0).map((x) => number(x.n) + " on " + siteName(x.s));
+    const unsearched = at.filter((x) => x.state === "blocked" || x.state === "off")
+      .map((x) => siteName(x.s) + (x.state === "blocked" ? " turned us back" : " is off"));
     return mine.concat(sites.length ? sites
-      : [mine.length ? "nothing in the sites' indexes" : "Nothing in your songs or the sites' indexes"]).join(" · ");
+      : [mine.length ? "nothing in the sites' indexes" : "Nothing in your songs or the sites' indexes"], unsearched)
+      .join(" · ");
   };
   // Why the query may name an artist the Ultimate Guitar index can't see (``unseen``), folded: what to paste into
   // overrides.toml, and the line that adds a song by its title.

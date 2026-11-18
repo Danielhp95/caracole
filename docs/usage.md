@@ -4224,12 +4224,13 @@ the library, sent as they are: they carry no badge.
   A–C read whole; the nightly run reads the rest."). The rest's mark takes in
   every site at 0, whatever its state: one whose index is empty yet, one read
   in part, one that blocks caracole (MuseScore) and one turned off in
-  caracole.toml, which is searched nowhere; its tooltip has a line each ("0 on
-  harptabs.com · index empty", "0 on MuseScore · turned us back",
-  "gametabs.net: off"), and a screen reader hears their names ("0 on 4 more:
-  LaCuerda, MuseScore, harptabs.com, gametabs.net"). When every count is 0,
-  yours too, there is no row at all: the list's own line says nothing was
-  found. On a laptop (from 720 px wide) each site that found something is
+  caracole.toml, which is searched nowhere; its tooltip has a line each, then
+  why, as a site's mark has ("0 on harptabs.com · index empty", "0 on
+  MuseScore · turned us back", "gametabs.net: off"), and a screen reader hears
+  each one's state too ("0 on 4 more: LaCuerda · index in part, up to C;
+  MuseScore · turned us back; harptabs.com · index empty; gametabs.net · index
+  empty"). When every count is 0, yours too, there is no row at all: the
+  list's own line says nothing was found. On a laptop (from 720 px wide) each site that found something is
   named in full beside its icon ("Ultimate Guitar 7") while the whole row fits
   on one line, and by its icon alone when it wouldn't, as on a phone; it fits
   itself again as the window narrows or widens. A screen reader hears each
@@ -4237,7 +4238,9 @@ the library, sent as they are: they carry no badge.
   comes, the counts that aren't 0 ("1 of your songs · 7 on Ultimate Guitar · 5
   on gametabs.net"; "Nothing in your songs or the sites' indexes" when they all
   are, "1 of your songs · nothing in the sites' indexes" when yours alone
-  aren't). A mark is no button. While the next query's answer comes the row
+  aren't), then a site that blocks caracole or is turned off, row or no row
+  ("… · MuseScore turned us back", "… · gametabs.net is off"). A mark is no
+  button. While the next query's answer comes the row
   dims, and what follows an answer (an artist's songs listed by "+ N more", an
   error) is said in words after the marks. Nothing under the results says it
   again: only Ask LaCuerda, and "Why isn't it found?", when they apply.
