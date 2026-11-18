@@ -234,11 +234,16 @@ def test_caracole_serves_own_pages_have_the_same_four_radii(cfg, conn, live, tmp
     width, height = size
     static = dict(pages())
     static["message"] = message_page("Not found", "<p>No such song.</p>")
+    # What each page must show, and how many, so that a page that drew nothing fails rather than passes unmeasured.
+    drawn = {"pick": (".pick-form .choice, .pick-form .btn", 3), "remove": (".confirm .btn", 2),
+             "message": ("header.top .navlink, .page > p", 2)}
     for name, html in static.items():
+        selector, floor = drawn[name]
+        script = noting("data-odd", odd_radii(())) + noting("data-shown", SHOWN % json.dumps(selector))
         path = tmp_path / f"{name}.html"
-        path.write_text(html.replace("</body>", f"<script>{noting('data-odd', odd_radii(()))}</script>\n</body>"),
-                        encoding="utf-8")
+        path.write_text(html.replace("</body>", f"<script>{script}</script>\n</body>"), encoding="utf-8")
         dom = browser.dump_dom(path.as_uri(), size, mobile=width < 500)
+        assert noted(dom, "data-shown") >= floor, (name, selector, noted(dom, "data-shown"))
         assert noted(dom, "data-odd") == [], name
     base, _ = live
     index_songs(cfg, [("soda-stereo", "de-musica-ligera", 2)])
@@ -248,13 +253,14 @@ def test_caracole_serves_own_pages_have_the_same_four_radii(cfg, conn, live, tmp
         assert page.wait("document.querySelectorAll('#results .hit').length >= 1", timeout=20), page.js("document.body.innerText")
         assert page.js(odd_radii(())) == [], "the lookup page"
     if alphatab_dir() is None:
-        return
+        pytest.skip("the Guitar Pro page needs alphaTab (CARACOLE_ALPHATAB_DIR)")
     server, _, url = guitar.serving(cfg, conn, SYNTHETIC.read_bytes())
     try:
         page = guitar.opened(tmp_path, url, width=width, height=height, mobile=width < 500)
         try:
             assert page.wait(guitar.RENDERED, 30)
-            assert page.js(odd_radii(("#score",))) == [], "the Guitar Pro page"
+            # alphaTab's own drawing inside the score is left out, caracole's container around it measured.
+            assert page.js(odd_radii(("#score *",))) == [], "the Guitar Pro page"
         finally:
             page.close()
     finally:
