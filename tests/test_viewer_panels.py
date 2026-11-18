@@ -511,6 +511,7 @@ def test_harmony_guitar_pro_and_export_are_rows_at_the_end(tmp_path):
         b.click("#more")
         served_rows = b.js(PLACES)
     assert folded["rows"] == [
+        ["full-open", "Hide controls", "full screen", None, None],
         ["harmony-open", "Harmony", "progressions, scales", None, None],
         ["", "Guitar Pro tab 1", "download", "guitar-1.gp5", "Synthetic - In E.gp5"],
         ["", "Guitar Pro tab 2", "download", "guitar-2.gpx", "Synthetic - In E (2).gpx"],
@@ -520,10 +521,11 @@ def test_harmony_guitar_pro_and_export_are_rows_at_the_end(tmp_path):
     assert unfolded["file"][0] == "caracole render --song 'Synthetic - In E' --version 'mode=dorian&capo=2'"
     assert harmony == [False, True]  # Harmony › opens its panel in the settings' place
     assert [row[:3] for row in served_rows["rows"]] == [
+        ["full-open", "Hide controls", "full screen"],
         ["harmony-open", "Harmony", "progressions, scales"], ["", "Guitar Pro tab", "in the browser"],
         ["export", "Export PDF", "D Major"]]
-    assert served_rows["rows"][1][3] == "/guitar?file=" + "Artist%2FFiles%2Fguitar-1.gp5"
-    assert served_rows["rows"][2][3].startswith("/export.pdf?sheet=Artist%2FFiles%2Fsheet.html&t=-2")
+    assert served_rows["rows"][2][3] == "/guitar?file=" + "Artist%2FFiles%2Fguitar-1.gp5"
+    assert served_rows["rows"][3][3].startswith("/export.pdf?sheet=Artist%2FFiles%2Fsheet.html&t=-2")
 
 
 @in_chromium

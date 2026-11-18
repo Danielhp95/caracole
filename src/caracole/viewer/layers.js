@@ -25,6 +25,15 @@
   //                    browser's history refused on file:) turns it off for good: the layers still open and close, and
   //                    Back leaves the page.
   //
+  //   doubleTap(root, skip, then)
+  //                    then(event) on a double tap on root: two clicks within DOUBLE_MS (350) ms and DOUBLE_PX
+  //                    (30) px of each other, neither on an element inside what the selector skip matches (a click
+  //                    there starts none), a keyboard's click (detail 0) never counting. The sheet viewer's full
+  //                    screen, by a double tap beside the song.
+  //   MARGIN_SKIP      the selector of what a double tap beside the song skips: the song's own elements (a chord, a
+  //                    word, a tab, the title, the facts, the notes, the credit, the foot) and every control. The
+  //                    sheet viewer passes it as it is, the harmonica tab's page with its own elements added.
+  //
   // The marker is an entry's state's caracoleLayer, an integer from 1; every history.replaceState in viewer/'s
   // scripts passes history.state, never null, so that an entry keeps its depth through what the page writes into its
   // address.
@@ -99,5 +108,28 @@
     });
   };
 
-  window.caracoleLayers = Object.freeze({ history: layerHistory });
+  const DOUBLE_MS = 350, DOUBLE_PX = 30;
+  const MARGIN_SKIP = "a, button, input, select, textarea, summary, label, [role=button], [tabindex], .c, .s, .w, .y, .m, "
+    + "pre, h1, h2, h3, .artist, .facts, .versions, .sheet-ui, .bar, .pill, .handle, .necks, .strip, .tip, details, .notice, "
+    + ".credit, .foot, .pager";
+  const doubleTap = (root, skip, then) => {
+    let last = null;  // the click before, a double tap's first: when and where
+    // On what skip matches, by the click's path as it was dispatched: a handler before this one may have drawn its
+    // target anew (a neck's dot picked), out of the page.
+    const skipped = (e) => Boolean(skip) && e.composedPath().some((n) => n instanceof Element && n.matches(skip));
+    root.addEventListener("click", (e) => {
+      if (!e.detail || !(e.target instanceof Element) || skipped(e)) {
+        last = null;
+        return;
+      }
+      if (last && e.timeStamp - last.t <= DOUBLE_MS && Math.hypot(e.clientX - last.x, e.clientY - last.y) <= DOUBLE_PX) {
+        last = null;
+        then(e);
+        return;
+      }
+      last = { t: e.timeStamp, x: e.clientX, y: e.clientY };
+    });
+  };
+
+  window.caracoleLayers = Object.freeze({ history: layerHistory, doubleTap, DOUBLE_MS, DOUBLE_PX, MARGIN_SKIP });
 })();

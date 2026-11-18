@@ -466,6 +466,20 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
   .pill[data-state="counting"] .ring .arc { animation: drain 3s linear forwards; }
 }
 @keyframes drain { to { stroke-dashoffset: 100; } }
+/* Full screen (viewer.js: html[data-full], a layer): every control marked data-controls (the bar), the header's facts
+   and the why go, and the rail of necks with them, so that the song has the screen; a thin handle stays at the
+   window's foot, its bar a grip, a thumb's target on a touch screen, and a tap on it brings them back. Printed, a page
+   is the whole page, whatever the screen shows. */
+@media screen { html[data-full] :is([data-controls], .facts, .why) { display: none !important; } }
+.handle { position: fixed; z-index: 8; left: 50%; bottom: 0; transform: translateX(-50%); width: 96px;
+  height: calc(28px + env(safe-area-inset-bottom)); padding: 0 0 env(safe-area-inset-bottom); border: 0;
+  background: none; cursor: pointer; transition: opacity .15s ease; -webkit-tap-highlight-color: transparent; }
+.handle::before { content: ""; display: block; width: 40px; height: 5px; margin: 0 auto; border-radius: 3px;
+  background: var(--muted); opacity: .7; }
+.handle:focus-visible { outline-offset: -3px; }  /* inside its box, the window's foot under it */
+@media (pointer: coarse) { .handle { height: calc(48px + env(safe-area-inset-bottom)); } }
+@starting-style { .handle { opacity: 0; } }  /* it fades in as it shows */
+@media (prefers-reduced-motion: reduce) { .handle { transition: none; } }
 .vh { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%);
   white-space: nowrap; border: 0; }
 /* The settings and a chord's card, beside the song and never over it: nothing dims it. On a phone each
@@ -823,7 +837,7 @@ a.ver-main .ver-name { color: var(--accent); }
   .diagram[data-kind="keys"], .diagram[data-kind="keys"] svg { width: 220px; }
 }
 @media print {
-  .bar, .pill, .sheet-ui, .tip, .back, .necks, .strip, .foot, .noscript, .versions { display: none !important; }
+  .bar, .pill, .handle, .sheet-ui, .tip, .back, .necks, .strip, .foot, .noscript, .versions { display: none !important; }
   body { background: #fff; color: #000; }
   .page { max-width: none; padding: 0; }
   .c { color: #b4441e; }

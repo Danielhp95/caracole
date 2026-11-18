@@ -866,6 +866,9 @@ def _words(text: str) -> list[str]:
 # above the bar's place, the bar out of the way while the song moves: its first button counts down (a
 # ring and the seconds), pauses (❚❚) and resumes (▶); the status line says so to a screen reader. The settings and the card are dialogs that are not
 # modal: nothing dims the song or takes it out of reach while they are open (viewer.js).
+# The bar is marked data-controls, what full screen hides (html[data-full], viewer.css), with the header's facts and
+# the rail of necks; full screen's handle (``_HANDLE``, after the pill: a thin bar at the window's foot, "Show
+# controls") brings them back.
 #
 # The settings, top to bottom, grouped by space rather than headings: "Settings" and a line of what is set (the key
 # and mode played, the capo, the instrument: viewer.js); Transpose and Capo side by side, each labelled over its
@@ -876,8 +879,8 @@ def _words(text: str) -> list[str]:
 # rail shows), and on a sheet with Chinese its characters, Simplified or Traditional (a segmented control, each named
 # in its own characters too), then Pinyin; the instrument, a menu, and the strum's loudness, four speakers, on
 # one line, and the instrument's own rows (instruments.js) under it; after a rule, the places to go, a row each (›
-# opens something here, ↗ leaves the page): Harmony, the song's Guitar Pro files (``_GUITAR_ROW``) and Export PDF
-# (``_EXPORT_ROW``, a sheet's alone); and after another, Reset all, quiet.
+# opens something here, ↗ leaves the page): Hide controls (``_FULL_ROW``, full screen), Harmony, the song's Guitar Pro
+# files (``_GUITAR_ROW``) and Export PDF (``_EXPORT_ROW``, a sheet's alone); and after another, Reset all, quiet.
 # Each kind of control has one look: a stepper for a number, a segmented control for one of a few, pills for one of
 # many, a switch for on or off, a row with › or ↗ for a place to go.
 #
@@ -891,6 +894,11 @@ def _words(text: str) -> list[str]:
 _UNDO = ('<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/>'
          '<path d="M3 3v5h5"/></svg>')  # ↺, a Reset's: an arc and its arrowhead
 _GO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>'  # ›, a place here
+# Hide controls: full screen, the controls hidden for reading (viewer.js), the first of the places to go.
+_FULL_ROW = ('<div id="full-row"><button type="button" class="goto" id="full-open"><span class="goto-lab">Hide controls'
+             '</span><span class="goto-v">full screen' + _GO + '</span></button></div>\n')
+# Full screen's handle at the window's foot, hidden until it is on: a tap on it brings the controls back.
+_HANDLE = '<button type="button" class="handle" id="handle" hidden aria-label="Show controls"></button>\n'
 _HARMONY_ROW = ('<div id="harmony-row" hidden><button type="button" class="goto" id="harmony-open" aria-haspopup="dialog" '
                 'aria-controls="harmony"><span class="goto-lab">Harmony</span><span class="goto-v">progressions, scales'
                 + _GO + '</span></button></div>\n')
@@ -904,7 +912,7 @@ _EXPORT_ROW = ("""<div id="export-row"><a class="goto" id="export"><span class="
 """)
 
 
-_CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Controls">
+_CONTROLS = """<div class="bar" id="bar" data-controls hidden role="region" aria-label="Controls">
 <div class="bar-in">
 <button type="button" class="tool necks-toggle" id="necks-toggle" hidden aria-label="Chord necks" aria-pressed="true" aria-controls="necks"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M3 2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm0 1.5a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5V4a.5.5 0 0 0-.5-.5zM3.5 4.5h3v7h-3z"/></svg></button>
 <span class="keys" id="keys" role="group" aria-label="Transpose">
@@ -933,7 +941,7 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <button type="button" class="step" id="pill-faster" data-speed="1" aria-label="Faster">+</button>
 <button type="button" class="end" id="pill-end" aria-label="Stop scrolling">×</button>
 </div>
-<p class="vh" id="scroll-status" role="status"></p>
+""" + _HANDLE + """<p class="vh" id="scroll-status" role="status"></p>
 <section class="sheet-ui panel" id="panel" hidden role="dialog" aria-labelledby="panel-title" aria-describedby="panel-sum">
 <header class="ui-head"><div class="ui-title"><h2 id="panel-title" tabindex="-1">Settings</h2>
 <p class="sum" id="panel-sum"></p></div>
@@ -967,7 +975,7 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <span class="vh" id="strum-hint">Tap a chord or its shape to hear it.</span></span></div>
 <div class="inst-panel" id="inst-panel" hidden></div></div>
 <div class="places ruled" id="places">
-""" + _HARMONY_ROW + """</div>
+""" + _FULL_ROW + _HARMONY_ROW + """</div>
 <div class="panel-end ruled"><button type="button" class="quiet" id="reset-all">Reset all</button></div>
 </section>
 <section class="sheet-ui card" id="card" hidden role="dialog" aria-labelledby="card-name">

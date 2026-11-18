@@ -3171,7 +3171,21 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   one opened last first. What you change with one open (the key, the capo, a
   shape) stays as it closes, in the address too, and the song stays where you
   scrolled it under it. A page whose history the browser refuses opens and
-  closes them all the same, and Back leaves it.
+  closes them all the same, and Back leaves it. Full screen (below) is one of
+  them too.
+- **Full screen**: **Hide controls** (full screen ›), the first of the
+  settings' places to go, or a double tap beside the song (in its margins, or
+  beside a line's end, never on a word, a chord, the title or a control: two
+  taps or clicks within 350 ms and 30 px of each other), hides the bar, the key
+  line under the title and the rail of necks (and the necks' sheet), so the
+  song has the screen; a thin handle stays at the foot of the screen. A tap on
+  it, Escape or Back brings them back, the focus on ⋯ when Hide controls hid
+  them; a double tap while they are hidden does nothing. It is one step of the history, as the
+  layers above are: on a phone a chord's card opened in full screen takes its
+  place, the controls back with it; from 900 px wide the card opens over it,
+  and Back closes the card first. Hiding them stops no scrolling by itself,
+  and the pill stays; in a songbook ← and → still go from song to song.
+  Printed, the page is whole.
 - **The settings** (⋯), headed by what is set ("D Dorian · capo 2 · Guitar":
   the key of the shapes you play in the mode played, the capo, the instrument;
   "As written" or "Transposed +2" for a song whose key caracole can't tell),
@@ -3258,8 +3272,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   whose Circle & keyboard opens this tooltip, with the chords' names alone too.
   A song whose key caracole can't tell offers chords alone (the numerals
   greyed), and says so.
-- **Harmony ›** (in the settings, with Guitar Pro tab and Export PDF after a
-  rule, near their foot) opens a panel in their place, docked at the
+- **Harmony ›** (in the settings, after Hide controls and with Guitar Pro tab
+  and Export PDF after a rule, near their foot) opens a panel in their place, docked at the
   foot on a phone and a rail on the right from 900 px wide: the key the
   numerals are read in and where it came from, the key's neck on a phone (on
   a laptop it heads the rail of necks), and each section's progression in

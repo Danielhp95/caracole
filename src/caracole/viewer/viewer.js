@@ -859,6 +859,7 @@
   const vList = $("version-list");  // a sheet's versions (below); the songbook has none
   const rails = [panel, harmony, vList].filter(Boolean);  // from 900 px wide, beside the song: one at a time
   const more = $("more"), sizes = $("sizes"), sizeButton = $("size"), shapesButton = $("shapes");
+  const handle = $("handle");  // full screen's, at the window's foot (below)
   const button = (text, pressed, onClick, small) => {
     const b = document.createElement("button");
     b.type = "button";
@@ -1203,7 +1204,7 @@
   const railWide = window.matchMedia("(min-width: 1200px)");
   const necksButton = $("necks-toggle"), necksChip = $("necks-chip"), sheetButton = $("necks-open");
   const railCan = () => Boolean(necksEl) && Boolean(overlay) && count > 0 && railWide.matches;
-  const railOn = () => railCan() && state.necks;
+  const railOn = () => railCan() && state.necks && !doc.dataset.full;  // full screen: the song the whole width
   const sheetCan = () => Boolean(necksEl) && Boolean(overlay) && count > 0 && !railWide.matches;
   let sheetAt = null;  // the phone's sheet: "half", "full", or null while it is closed
   const shownAs = (name) => {  // the chords the sheet shows by this name, by index
@@ -1300,7 +1301,8 @@
     close: () => close(necksEl),
   }) : null;
   const drawNecks = () => {
-    const can = railCan(), on = railOn(), phone = sheetCan() && sheetAt !== null;
+    // Full screen hides the sheet, as it does the rail: open under it, it is back with the controls.
+    const can = railCan(), on = railOn(), phone = sheetCan() && sheetAt !== null && !doc.dataset.full;
     if (necksButton) {
       necksButton.hidden = !can;
       necksButton.setAttribute("aria-pressed", on ? "true" : "false");
@@ -1722,14 +1724,15 @@
   // to what opened it when it was in there. The overlay's sheet is one of them below 1200 px (above), docked
   // at the foot up to 1199 px, the focus on its tab shown as it opens. Each one open is an entry of the browser's
   // history (layers.js): Back, a phone's or the app's, closes the one on top as Escape does, and leaves the page only
-  // once none is open.
+  // once none is open. Full screen is one too (below), its element the handle, which takes the focus as it opens.
   const pageEl = document.querySelector(".page");
   const wide = window.matchMedia("(min-width: 900px)");
   const calm = window.matchMedia("(prefers-reduced-motion: reduce)");
   const layers = [];  // the open ones, the last on top: {el, opener, nested}
   const topLayer = () => (layers.length ? layers[layers.length - 1].el : null);
   const inSight = (which) => !which.hidden && (wide.matches || topLayer() === which);
-  const landing = (which) => (which === necksEl ? rail.landing() : which.querySelector("h2"));
+  const landing = (which) => (which === necksEl ? rail.landing()
+    : which === handle ? handle : which.querySelector("h2"));
   // Those that dock at the foot on a phone, above the bar: the one of them on top is docked.
   const DOCKED = [panel, card, harmony, vList, necksEl].filter(Boolean);
   const dockedTop = () => {
@@ -1749,7 +1752,8 @@
   // scroll pauses and resumes. Paused, or at the end of the song, it is back, under the pill. The overlay's
   // sheet docks there up to 1199 px; over the whole screen, the pill rides over its foot (necks-full, viewer.css).
   function dock() {
-    const there = !wide.matches ? dockedTop() : sheetAt !== null && !railWide.matches ? necksEl : null;
+    const there = !wide.matches ? dockedTop()
+      : sheetAt !== null && !railWide.matches && !doc.dataset.full ? necksEl : null;  // full screen hides the sheet
     const away = moving() && !there;
     if (bar.hidden !== away) {
       bar.hidden = away;
@@ -1766,6 +1770,9 @@
       doc.style.removeProperty("--dock");
     }
   }
+  // The bar's top, or the window's foot while it is out of sight (away, hidden, or full screen's).
+  const barTop = () => (bar.hidden || bar.classList.contains("away") || doc.dataset.full ? window.innerHeight
+    : bar.getBoundingClientRect().top);
   // From 900 px wide the card is a popover by its chord: under it, or above it where the bar leaves
   // no room below, and across it, within the song's column. It is placed in the page, so it goes
   // with its chord as the page scrolls.
@@ -1774,7 +1781,7 @@
     const a = anchor().getBoundingClientRect();
     const column = pageEl.getBoundingClientRect();
     const width = card.offsetWidth, height = card.offsetHeight, gap = 8;
-    const floor = bar.hidden || bar.classList.contains("away") ? window.innerHeight : bar.getBoundingClientRect().top;
+    const floor = barTop();
     let top = a.bottom + gap;
     if (top + height > floor - gap && a.top - gap - height >= gap) top = a.top - gap - height;
     const left = Math.max(column.left + gap, Math.min(a.left - 16, column.right - gap - width));
@@ -1809,10 +1816,11 @@
     if (which !== sizes) close(sizes, false);  // Aa gives way to any other, at every width
     if (which === necksEl) drawNecks();  // drawn as the sheet, sheetAt set
     else if (which === ask) ask.showModal();
+    else if (which === handle) fullScreen(true);
     else which.hidden = false;
     slide(false);  // the bar it sits on
     restack();
-    pauseScroll();
+    if (which !== handle) pauseScroll();  // full screen is for reading: a song scrolling by itself goes on
     const to = landing(which);
     if (to) to.focus({ preventScroll: true });
   };
@@ -1827,6 +1835,8 @@
       drawNecks();
     } else if (which === ask) {
       ask.close();
+    } else if (which === handle) {
+      fullScreen(false);
     } else {
       which.hidden = true;
     }
@@ -1838,6 +1848,16 @@
     if (!to && opener && which === card) to = anchor();  // the strip drew its button anew
     if (!to && topLayer()) to = landing(topLayer());
     if (to) to.focus({ preventScroll: true });
+  };
+  // Full screen on or off (below): its handle, and the rail and the song's columns in the width it leaves.
+  const fullScreen = (on) => {
+    if (on) doc.dataset.full = "on";
+    else delete doc.dataset.full;
+    handle.hidden = !on;
+    drawNecks();
+    if (!harmony.hidden) drawHarmony();  // the key's neck: in the rail, or in the panel
+    layout();
+    if (!on) fitKey();  // the bar back: its key measured again
   };
   // Every one but ``keep``.
   const closeAll = (keep) => {
@@ -1869,6 +1889,24 @@
     close(harmony);
     open(panel, more);
   });
+
+  // --- full screen: the song alone, the controls hidden for reading ----------------------------------------------
+  // The settings' Hide controls, or a double tap beside the song (layers.js's doubleTap: on none of the song's own
+  // elements nor a control, MARGIN_SKIP), hides every control marked data-controls (the bar), the header's facts and
+  // the rail of necks (railOn: the song takes the width), html[data-full] (viewer.css); a thin handle stays at the
+  // window's foot. It is a layer of the stack above: the handle, Escape or Back brings everything back, the focus on
+  // ⋯ when Hide controls hid them. On a phone a layer opened over it (a chord's card) takes its place, the controls
+  // back; from 900 px one opens over it. A double tap in full screen does nothing.
+  $("full-open").addEventListener("click", () => {
+    close(panel);
+    open(handle, more);
+  });
+  handle.addEventListener("click", () => close(handle));
+  if (window.caracoleLayers) {
+    window.caracoleLayers.doubleTap(document, window.caracoleLayers.MARGIN_SKIP, () => {
+      if (!doc.dataset.full) open(handle, null);
+    });
+  }
 
   // In the focus order the card comes after its chord, wherever it is on the page: Tab from its last
   // control goes on to what follows the chord, and Shift+Tab from its first back to the chord.
@@ -2102,7 +2140,7 @@
     if (!tipOf || tip.hidden) return;
     const a = (tipOf.querySelector(".nm") || tipOf).getBoundingClientRect();
     const width = tip.offsetWidth, height = tip.offsetHeight, gap = 8;
-    const floor = bar.hidden || bar.classList.contains("away") ? window.innerHeight : bar.getBoundingClientRect().top;
+    const floor = barTop();
     let top = a.bottom + gap;
     if (top + height > floor - gap && a.top - gap - height >= gap) top = a.top - gap - height;
     const left = Math.max(gap, Math.min(a.left - 12, doc.clientWidth - gap - width));

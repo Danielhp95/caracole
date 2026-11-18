@@ -157,6 +157,13 @@ def tap(b: Browser, selector: str) -> None:
     within a finger's reach: Chrome hit-tests a touch over an area, and a word beside a chord's larger
     target would open the chord's card. On the element's last line of text, as a word's box reaches up
     into the row of chords; one of the sheet's clear of the bar and the pill, at the foot."""
+    x, y = spot(b, selector)
+    b.send("Input.dispatchTouchEvent", type="touchStart", touchPoints=[{"x": x, "y": y}])
+    b.send("Input.dispatchTouchEvent", type="touchEnd", touchPoints=[])
+
+
+def spot(b: Browser, selector: str) -> list[float]:
+    """Where ``tap`` puts its finger on the first element ``selector`` finds in view: its ``x`` and ``y``."""
     clear = 120 if selector.startswith("#sheet") else 0
     box = b.js(f"""(() => {{
       const at = (r) => [r.x + r.width / 2, r.bottom - Math.min(8, r.height / 2)];
@@ -170,5 +177,4 @@ def tap(b: Browser, selector: str) -> None:
           return !(hit && hit.closest(".c")); }}); }});
       return el ? at(el.getBoundingClientRect()) : null; }})()""")
     assert box, f"nothing in view is {selector}"
-    b.send("Input.dispatchTouchEvent", type="touchStart", touchPoints=[{"x": box[0], "y": box[1]}])
-    b.send("Input.dispatchTouchEvent", type="touchEnd", touchPoints=[])
+    return box
