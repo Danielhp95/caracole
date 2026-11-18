@@ -4,8 +4,9 @@ It listens on 127.0.0.1 unless ``--address`` says otherwise: a LAN or tailnet
 address, or 0.0.0.0. It answers only to an IP address and the names it knows
 (localhost, the machine's name, and ``--allow-host``). There is no sign-in:
 whoever can reach it can read the library and request songs, so it belongs on a
-network you trust. A request runs the caracole command line, one command at a
-time, under caracole's lock. Its pages name the library, and a library that isn't
+network you trust. A request runs the caracole command line under caracole's
+lock: the queue's one command at a time, and up to ``LANE`` lookups beside it,
+which take turns with the lock (web/jobs.py). Its pages name the library, and a library that isn't
 the usual one (in a temporary folder, or ``--label``) carries a badge on them
 (library_name.py). Its requests' history is kept in the state folder, its
 own file, and read back when it starts again (web/history.py). The server code is imported inside the command, as every
@@ -60,7 +61,7 @@ def _serve(cfg: Config, config_path: Path | None, address: str, port: int, allow
     from caracole.web import server
     from caracole.web.app import WebApp
     from caracole.web.history import FILE_NAME, History
-    from caracole.web.jobs import CaracoleRunner, JobQueue
+    from caracole.web.jobs import LANE, CaracoleRunner, JobQueue
     from caracole.web.security import allowed_hosts
 
     try:
@@ -71,9 +72,10 @@ def _serve(cfg: Config, config_path: Path | None, address: str, port: int, allow
     if label is not None and len(label.strip()) > LABEL_LIMIT:
         fail(f"--label: {LABEL_LIMIT} characters at most", 2)
     badge = scratch_badge(cfg, label=label, config_path=config_path)
-    # Its requests' history, its own file in the state folder, read back from the last server's (history.py)
+    # Its requests' history, its own file in the state folder, read back from the last server's (history.py); its
+    # lookups in a lane of their own beside the queue, LANE at once, taking turns with the lock
     queue = JobQueue(CaracoleRunner(config_path, home=config_path is None),
-                     history=History(cfg.state_dir / FILE_NAME))
+                     history=History(cfg.state_dir / FILE_NAME), lane=LANE)
     app = WebApp(cfg, queue, allowed=hosts, badge=badge)
     typer.echo("It answers to " + ", ".join(sorted(hosts)) + " and any IP address; --allow-host adds a name.")
     if badge is not None:

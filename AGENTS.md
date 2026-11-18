@@ -1286,7 +1286,11 @@ It is rows.js's, shared by both pages:
 ##### Jobs and requests
 
 - Beyond a wanted.txt line, every change runs as a `caracole` command queued in jobs.py (One caracole at a time,
-  below).
+  below): in the queue, one at a time, or in the lookups' lane (`jobs.lane_of`: a lookup, a pasted UG link,
+  LaCuerda's search, an artist's page), up to `LANE` (3) at once on workers of their own (`caracole-lane-N`), started
+  at once unless the song has a job in the queue. The queue's worker starts a job only while no lane job runs or
+  waits, a lane worker the first lane job whose song has no job running (`JobQueue._next`): a song never has two jobs
+  running, and its own job keeps its order (`test_web_jobs.py::test_a_songs_own_job_keeps_its_order`).
 - The one line a request shows is status.py's, read from the job's steps and the song's state, never from which
   commands ran: a step's label is that line while it runs ("Adding to the book…").
 - The library page's Requests tab (its label Journal), its last, says that line its own way (outcome.py): `#tab=requests`,
@@ -1321,9 +1325,9 @@ It is rows.js's, shared by both pages:
   - Nothing for a request's first second (`outcome.BAR_AFTER`, decided by the server, so a reload agrees): no steps
     until it has run one at the view's `now` (one a `/jobs.json` answer, `jobs_routes.views`, the phone's
     `JobsRoutes`), and none ever for one over within it, frozen or not.
-- Cancel takes a request that hasn't started out of the queue (`JobQueue.cancel`, never one that runs, with the jobs
-  `submit_all` queued `together` with it), keeping it in the history as over ("cancelled"), so a page that follows it
-  hears it ended.
+- Cancel takes a request that hasn't started out of the queue (`JobQueue.cancel`, a lookup waiting for a slot in the
+  lane among them, never one that runs, with the jobs `submit_all` queued `together` with it), keeping it in the
+  history as over ("cancelled"), so a page that follows it hears it ended.
 - Try again queues a finished one's steps again (a removal's asks its question again).
 - **A sandboxed viewer reaches a form** only through a GET page of the server's own, whose form posts with the token:
   - `/versions` (versions_routes.py: Make this the one, Keep and Back to our pick,
@@ -3367,8 +3371,9 @@ picks one).
 #### `serve` never takes it
 
 - It reads like `search` and appends to wanted.txt like `add`, and runs every other change as a `caracole` command in
-  a child process, one at a time (web/jobs.py), since the lock is re-entrant within a process and its threads would
-  share it.
+  a child process, since the lock is re-entrant within a process and its threads would share it: one at a time in the
+  queue, and up to `LANE` lookups beside it, which take turns with the lock (web/jobs.py; `CaracoleRunner` keeps a
+  process a running command, and `JobQueue.stop` ends them all, each request `INTERRUPTED`).
 - A removal too, `caracole remove --yes`, once the line's five seconds with Undo are over (the library page's script;
   without it, a page of its own), having asked what goes (`removal.plan_removal`, which only reads, and
   `removal.brief`); its job's song key is `remove:<key>` (`jobs.REMOVING`), so it never joins the song's add or fetch.

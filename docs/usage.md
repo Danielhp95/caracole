@@ -4671,10 +4671,15 @@ the library, sent as they are: they carry no badge.
   on the line's row; once it is over, the skipped steps fold into one last
   line, "Skipped: PDF, Songbooks". Ready, the list folds away with the bar.
 
-  A request that waits behind another says its place ("Queued · 1 request
+  A lookup (Get it, Fetch, Fetch again, Fetch it now, a pasted UG link,
+  LaCuerda's search, an artist's page) starts at once beside the request that
+  runs, unless its song has a request in the queue, which it waits behind;
+  three at most run at once, and a fourth waits with its place and
+  **Cancel**. Any other request waits for the one that runs and for the
+  lookups. A request that waits says its place ("Queued · 1 request
   ahead…") with **Cancel** beside it, which takes it out of the queue as the
-  Journal's does (the line says Cancelled and the song's Fetch is back); the
-  one that runs is never stopped.
+  Journal's does (the line says Cancelled and the song's Fetch is back); one
+  that runs is never stopped.
 
   A song asked for again shows on the line it has there already, and a
   refused request's line goes at the next request. A request still on its
@@ -4940,14 +4945,17 @@ the library, sent as they are: they carry no badge.
   it again. Made again with those ticks under another name, the new
   songbook takes its line; its Forget takes it off the tab.
 
-Every request runs the `caracole` command line, one command at a time, so the
-server is never more aggressive than you at a terminal: each command takes
-caracole's lock, keeps the pause after the last request any caracole sent, and
-keeps the budgets and cooldowns. A lookup keeps the interactive pace (about a
-second between two requests to a site, six for the song, sixty an hour), and
-a nightly run holding the lock lets it go first at its next pause. The
-queue holds 20 requests and one per song: asking again for a song gives its
-request, and Fetch on a song whose request only adds it fetches it too.
+Every request runs the `caracole` command line, the queue's one command at a
+time and up to three lookups beside it, which take turns with caracole's lock
+([One caracole at a time](#one-step-at-a-time)), so the server is never more aggressive than you at a
+terminal: each command takes caracole's lock, keeps the pause after the last
+request any caracole sent, and keeps the budgets and cooldowns. A lookup keeps
+the interactive pace (about a second between two requests to a site, six for
+the song, sixty an hour), and a nightly run holding the lock lets it go first
+at its next pause. The
+queue holds 20 requests and one per song, and the lookups' lane three running
+and ten waiting of its own: asking again for a song gives its request, and
+Fetch on a song whose request only adds it fetches it too.
 A request is in wanted.txt as soon as it's made, so a full queue or a restart
 loses no song, and the Journal keeps its history across a restart (above). A songbook change waits in the queue like a request; the same
 change sent twice is queued once. The server writes no songbook itself: the

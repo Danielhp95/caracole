@@ -100,3 +100,11 @@ def test_registering_the_command_imports_no_server_code():
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True,
                          env={"PYTHONPATH": subprocess_pythonpath(src)})
     assert out.stdout.strip() == "[]"
+
+
+def test_its_lookups_run_in_a_lane_of_their_own(tmp_path, started):
+    from caracole.web.jobs import LANE
+
+    result = invoke(tmp_path)
+    assert result.exit_code == 0, result.output
+    assert started["app"].queue.lanes == LANE
