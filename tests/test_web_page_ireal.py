@@ -8,6 +8,7 @@ and Thad Jones's Groove Merchant thread read (test_search.py's ``ireal_index``).
 
 from __future__ import annotations
 
+import pytest
 from helpers.browser import CHROMIUM_MARKS
 from test_web_page_harptabs import browser, live, search  # noqa: F401  (its fixtures: caracole serve, a Chromium)
 from test_web_page_search import posted
@@ -75,3 +76,26 @@ def test_the_lookup_page_lists_irealpros_charts_last(cfg, live, browser):  # noq
     args = posted(queue)
     assert f"--ireal={THREAD}groove-merchant-thad-jones.9518/post-38106" in args
     assert args[-2:] == ("Thad Jones", "Groove Merchant")
+
+
+@pytest.mark.parametrize("width", [390, 1280], ids=["phone", "laptop"])
+def test_irealpros_lines_and_rows_keep_the_calm_pages_look(cfg, live, tmp_path, width):  # noqa: F811
+    # Stage 1f's look (test_page_calm.py) on iReal Pro's lines and rows: no corner radius but the four (its IR mark's a
+    # token, ``--radius-s``), no outline around the results, a title semi-bold, a key in muted bold letters.
+    from helpers.targets import odd_radii
+    from test_page_calm import calm_in
+    from test_web_page_steps import driven
+
+    base, _, _ = live
+    ireal(cfg)
+    with driven(tmp_path, width) as page:
+        search(page, base, "misty")
+        assert page.wait(f"{IR_ROWS}.filter((h) => h.checkVisibility()).length >= 1", timeout=20)
+        mark = f"{IR_ROWS}[0].querySelector('.line-sources .source')"
+        assert page.js(f"[{mark}.dataset.source, getComputedStyle({mark}).borderTopLeftRadius]") == ["ireal", "4px"]
+        assert page.js(odd_radii()) == [], "the library page's search"
+        calm_in(page, "the library page's search", {"#results .groups": 1, "results' titles": 1})
+        page.open(base + "lookup?q=groove+merchant")
+        assert page.wait(f"{IR_ROWS}.filter((h) => h.checkVisibility()).length === 1", timeout=20)
+        assert page.js(odd_radii()) == [], "the lookup page"
+        calm_in(page, "the lookup page", {".rows": 1, "lines": 1, "titles": 1})
