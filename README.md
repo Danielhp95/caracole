@@ -17,7 +17,7 @@ or on paper.
 - **Sheets for your songs:** chords and ukulele chords from Ultimate Guitar and LaCuerda;
   lyrics from LRCLIB, then Megalobiz for timed ones and AZLyrics for plain ones; Guitar Pro
   files from gtptabs.com; harmonica tabs from harptabs.com; video game music tabs from
-  gametabs.net; links to MuseScore's scores.
+  gametabs.net; chord charts of jazz standards from iReal Pro's forum; links to MuseScore's scores.
 - **Chords for the uncharted:** an optional add-on works them out from the audio of a song you
   bought, of a few songs a night from YouTube, or of a video you paste on the library page.
 - **Made for playing:** transpose, capo and mode; chord shapes for guitar, ukulele (high G,
