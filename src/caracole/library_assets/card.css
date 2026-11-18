@@ -1,72 +1,109 @@
-/* A song of yours opened (card.js): its line and what its chevron unfolds, one card raised over the list, its
-   border the line's and the next line's edge; removed while open, its line keeps that box (library.js). A site's
+/* A song of yours opened (card.js) under its line: its line and what its chevron unfolds, one card raised over the
+   list, its border the line's and the next line's edge; removed while open, its line keeps that box (library.js). A
+   line whose card is in the laptop's pane (.selected, library.css) is no card: its card is beside the list. A site's
    song in the search keeps its plain panel. */
-.line:not(.hit):has(> .line-more[aria-expanded="true"]), .line.card-gone { margin: 6px 6px 8px;
-  border: 1px solid var(--border-strong); border-radius: 12px; background: var(--card); box-shadow: var(--card-shadow); }
-.line:not(.hit):has(> .line-more[aria-expanded="true"]) + .line, .line.card-gone + .line { border-top: 0; }
-.line:not(.hit) > .line-panel { gap: 14px; padding: 4px 8px 14px 0; }
+.line:not(.hit):not(.selected):has(> .line-more[aria-expanded="true"]), .line.card-gone { margin: 6px 6px 8px;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-l, 12px); background: var(--card); box-shadow: var(--card-shadow); }
+.line:not(.hit):not(.selected):has(> .line-more[aria-expanded="true"]) + .line, .line.card-gone + .line {
+  border-top: 0; }
+/* The card itself, wherever it is (under its line, in the pane): its parts' gap and its bottom padding, which
+   library.css's head and pane rules read. */
+.line-panel.song-card { --card-gap: 14px; --card-pad-end: 14px; gap: var(--card-gap);
+  padding: 4px 8px var(--card-pad-end) 0; }
 .card-label { margin: 0 0 8px; color: var(--muted); font-size: .72rem; font-weight: 700; letter-spacing: .08em;
   text-transform: uppercase; }
 .card-label em { margin-left: 8px; font-style: normal; font-weight: 500; letter-spacing: 0; text-transform: none; }
 
-/* What you play from it: a tile each, its body opening what it holds, its chips its versions per source, its formats
-   downloads along its foot; every one alike, its glyph in the accent as its line's button has it, none first, an auto
-   sheet's in its own colour. More than one version: a small stack under it. */
-.tiles { position: relative; z-index: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(15.5rem, 1fr));
-  align-items: start; gap: 16px 12px; }
-.tile { position: relative; display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--border);
-  border-radius: 12px; background: var(--surface); }
-.tile-open { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 10px;
-  padding: 12px 12px 10px; border-radius: 11px 11px 0 0; color: inherit; text-decoration: none; }
+/* What you play from it: a tile each, a row each, one row at every width: its body opening what it holds (its name,
+   its version), then the marks of where its versions came from and a chevron that opens its drawer right under it;
+   every one alike, its glyph in the accent as its line's button has it, none first, an auto sheet's in its own colour.
+   More than one version: a small stack under it. The tiles are a container (``tiles``): what is inside them is laid
+   out by the card's own width, never the window's, so the card reads the same in the laptop's pane as under its
+   line. */
+.tiles { container: tiles / inline-size; position: relative; z-index: 0; display: grid;
+  grid-template-columns: minmax(0, 1fr); align-items: start; gap: 8px; }
+.tile { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center;
+  column-gap: 8px; min-width: 0; padding-right: 6px; border-radius: var(--radius-l, 12px);
+  background: var(--surface); }
+.tile-open { grid-column: 1; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center;
+  gap: 10px; padding: 5px 4px 5px 10px; border-radius: var(--radius-l, 12px) 0 0 var(--radius-l, 12px); color: inherit; text-decoration: none; }
 .tile-open:hover .tile-name { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
-.tile-ico { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; background: var(--raised);
+.tile-ico { display: grid; place-items: center; width: 34px; height: 34px; border-radius: var(--radius-m, 8px); background: var(--raised);
   color: var(--accent); }
 .tile-ico svg.glyph { width: 20px; height: 20px; }
 .tile-words { display: grid; min-width: 0; }
-.tile-name { font-weight: 650; line-height: 1.3; }
-.tile-from { overflow: hidden; color: var(--muted); font-size: .78rem; white-space: nowrap; text-overflow: ellipsis; }
+.tile-name { font-weight: 600; line-height: 1.25; }
+.tile-from { overflow: hidden; color: var(--muted); font-size: .78rem; line-height: 1.2; white-space: nowrap;
+  text-overflow: ellipsis; }
+.tile-rated { display: inline-block; }  /* a rating shown whole or not at all, never cut inside its number */
 .tile-go { display: grid; color: var(--muted); }
 .tile-go svg.glyph { width: 18px; height: 18px; }
-.tile.auto { border-color: color-mix(in srgb, var(--auto) 60%, transparent); }
+/* A phone's tile (on a touch screen, under 400 px): its name and version the room of the arrow of a tile that opens (a
+   download's glyph kept), and the sheet's version without "in use" (the one a tile shows always is), so "Ver 3 ·
+   ★ 4.86 (408)" fits; with a mouse a tile keeps both at any width, the laptop's pane at 1200 px (tiles under 400 px)
+   too. Under 300 px (a phone 360 px wide or less) its parts a little closer. */
+@media (pointer: coarse) {
+  @container tiles (max-width: 399px) {
+    .tile-open:has(> .tile-go > .glyph-open) { grid-template-columns: auto minmax(0, 1fr); }
+    .tile-go:has(> .glyph-open), .tile-in-use { display: none; }
+  }
+}
+@container tiles (max-width: 299px) {
+  .tile { column-gap: 6px; }
+  .tile > .tile-open { gap: 8px; padding-left: 8px; }
+}
 .tile.auto .tile-ico { color: var(--auto); }
 .tile.auto .tile-go { color: var(--auto); }
-.tile.stack::before, .tile.stack::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: -5px;
-  z-index: -1; height: 8px; border: 1px solid var(--border); border-top: 0; border-radius: 0 0 11px 11px;
+.tile.stack::before, .tile.stack::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: -4px;
+  z-index: -1; height: 8px; border-radius: 0 0 var(--radius-l, 12px) var(--radius-l, 12px);
   background: var(--sunk); }
-.tile.stack::after { left: 20px; right: 20px; bottom: -9px; background: var(--card); }
-.tile-versions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 12px 10px; }
-.tile-versions .lead { min-width: 3.6rem; color: var(--muted); font-size: .76rem; font-weight: 650; }
-.vchip { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; margin: 0; padding: 0 8px 0 6px;
-  border: 1px solid var(--border-strong); border-radius: 8px; background: var(--sunk); color: var(--text); font: inherit;
-  font-size: .8rem; font-weight: 600; white-space: nowrap; cursor: pointer; }
-.vchip .n { font-variant-numeric: tabular-nums; }
-.vchip svg.glyph { width: 14px; height: 14px; color: var(--muted); }
-.vchip:hover { border-color: var(--control-edge); }
-.vchip[aria-expanded="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); }
-.vchip[aria-expanded="true"] svg.glyph { transform: rotate(180deg); color: var(--accent); }
-.vchip.one { color: var(--muted); border-style: dashed; cursor: default; }
-.tile-downloads { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: auto; padding: 8px 12px;
-  border-top: 1px solid var(--border); border-radius: 0 0 11px 11px; background: var(--sunk); }
+.tile.stack::after { left: 20px; right: 20px; bottom: -7px; background: var(--card); }
+/* Its drawer open: the tile and the drawer one box, the drawer's edge the border's colour, the tile no outline of its
+   own; a stack's sheets gone, the drawer listing its versions. */
+.tile.open { border-radius: var(--radius-l, 12px) var(--radius-l, 12px) 0 0; }
+.tile.open > .tile-open { border-bottom-left-radius: 0; }
+.tile.open::before, .tile.open::after { content: none; }
+/* Where its versions came from: their marks; or the one page its lyrics link back to (Megalobiz's, AZLyrics'), its
+   mark and its name. */
+.tile-source { grid-column: 2; display: flex; align-items: center; gap: 4px; min-width: 0; min-height: 32px;
+  color: var(--muted); font-size: .8rem; font-weight: 600; text-decoration: none; white-space: nowrap; }
+a.tile-source:hover .tile-source-name { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
+/* A site's mark in the card is 4 px at every size (rows.css's letters give 5). */
+.tile-source .source, .drawer-head .source { border-radius: var(--radius-s, 4px); }
+/* Its chevron, at the tile's end: turned while its drawer shows, in the accent. */
+.tile-more { grid-column: 3; display: grid; place-items: center; width: 32px; height: 32px; margin: 0; padding: 0;
+  border: 1px solid transparent; border-radius: var(--radius-m, 8px); background: transparent; color: var(--muted);
+  cursor: pointer; }
+.tile-more:hover { border-color: var(--border); background: var(--raised); color: var(--text); }
+.tile-more svg.glyph { width: 18px; height: 18px; }
+.tile-more[aria-expanded="true"] { border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 13%, transparent); color: var(--accent); }
+.tile-more[aria-expanded="true"] svg.glyph { transform: rotate(180deg); }
 .dl { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-size: .8rem; font-weight: 600;
   text-decoration: none; white-space: nowrap; }
 .dl:hover { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
 .dl svg.glyph { flex: none; width: 13px; height: 13px; }
 
-/* One source's versions, opened from its chip: under the row of tiles that holds its tile, its pointer over that tile
-   (card.js sets --point), a row a version. */
-.drawer { position: relative; grid-column: 1 / -1; margin-top: -4px; border: 1px solid var(--accent);
-  border-radius: 12px; background: var(--surface); }
-.drawer::before { content: ""; position: absolute; top: -7px; left: calc(var(--point, 48px) - 6px); width: 12px;
-  height: 12px; transform: rotate(45deg); border-top: 1px solid var(--accent); border-left: 1px solid var(--accent);
-  background: var(--surface); }
-.drawer-head { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
-  min-height: 46px; padding: 8px 48px 8px 12px; border-bottom: 1px solid var(--border); }
-.drawer-what { margin: 0; font-size: .95rem; font-weight: 650; }
+/* A tile's drawer, opened from its chevron, right under it, touching it (the tiles' gap taken back), as wide: its
+   downloads, then a part a source of its versions (its head, a row a version), its ✕ at its top right. */
+.drawer { position: relative; margin-top: -8px; border: 1px solid var(--border);
+  border-radius: 0 0 var(--radius-l, 12px) var(--radius-l, 12px); background: var(--surface); }
+/* Its downloads, a row, wrapped where they don't fit: the ✕'s room is kept on the rows beside it alone, by a float
+   as tall as the ✕ reaches (a flex row would keep it on every row). */
+.drawer-files { display: flow-root; padding: 8px 0 8px 12px; }  /* the ✕'s float kept inside it */
+.drawer-files::before { content: ""; float: right; width: 34px; height: 29px; }
+.drawer-files > * { margin: 2px 14px 2px 0; vertical-align: middle; }
+.drawer-files .lead { display: inline-block; color: var(--muted); font-size: .76rem; font-weight: 650; }
+.drawer-part + .drawer-part, .drawer-files + .drawer-part { border-top: 1px solid var(--border); }
+.drawer-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-height: 46px;
+  padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.drawer-close + .drawer-part > .drawer-head { padding-right: 48px; }  /* room for the ✕ */
+.drawer-what { margin: 0; font-size: .95rem; font-weight: 600; }
 .drawer-said { color: var(--muted); font-size: .84rem; }
 .drawer-head form { margin: 0; }
 .drawer-head .pin-note { flex: 1 1 100%; margin: 0; color: var(--review); font-size: .84rem; }
-.drawer-close { position: absolute; top: 7px; right: 8px; display: grid; place-items: center; width: 30px;
-  height: 30px; margin: 0; padding: 0; border: 1px solid transparent; border-radius: 8px; background: transparent;
+.drawer-close { position: absolute; top: 7px; right: 8px; z-index: 1; display: grid; place-items: center; width: 30px;
+  height: 30px; margin: 0; padding: 0; border: 1px solid transparent; border-radius: var(--radius-m, 8px); background: transparent;
   color: var(--muted); cursor: pointer; }
 .drawer-close:hover { border-color: var(--border); background: var(--raised); color: var(--text); }
 .drawer-close svg.glyph { width: 18px; height: 18px; }
@@ -74,8 +111,9 @@
 .vrow { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "ver stars" "note note" "act act";
   align-items: center; gap: 4px 12px; min-height: 46px; padding: 8px 12px; }
 .vrow + .vrow { border-top: 1px solid var(--border); }
-.vrow .ver { grid-area: ver; font-weight: 650; }
+.vrow .ver { grid-area: ver; font-weight: 600; }
 .vrow .stars { grid-area: stars; color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; }
+.vrow .stars .new { color: var(--muted); font-weight: 650; }
 .vrow .stars b { color: var(--wanted); font-weight: 650; }
 .vrow .note { grid-area: note; min-width: 0; color: var(--muted); font-size: .84rem; }
 .vrow .note b { color: var(--found); font-weight: 600; }
@@ -83,10 +121,10 @@
 .vrow .note:empty { display: none; }
 .vbtns { grid-area: act; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .vbtns form { margin: 0; }
-.vrow .btn { min-height: 30px; padding: 0 11px; border-radius: 8px; font-size: .82rem; font-weight: 600; }
+.vrow .btn { min-height: 30px; padding: 0 11px; border-radius: var(--radius-m, 8px); font-size: .82rem; font-weight: 600; }
 .vrow .btn.go { border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: transparent;
   color: var(--accent); }
-.inuse { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 0 10px; border-radius: 8px;
+.inuse { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 0 10px; border-radius: var(--radius-m, 8px);
   background: var(--found-bg); color: var(--found); font-size: .8rem; font-weight: 700; }
 .inuse svg.glyph { width: 14px; height: 14px; }
 .vrow.cur { background: linear-gradient(90deg, color-mix(in srgb, var(--found) 9%, transparent), transparent 60%); }
@@ -94,11 +132,13 @@
 .drawer-rest { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px;
   border-top: 1px solid var(--border); color: var(--muted); font-size: .85rem; }
 .drawer-rest form { margin: 0; }
-@media (max-width: 719px) {  /* on a phone the source's mark, beside what it lists, its counts under that */
+/* A card under 560 px (a phone's, the laptop's pane): a version's number and rating, its note under them, its
+   buttons under that; a part's source's mark beside what it lists, its counts under that. Wider, one row each. */
+@container tiles (max-width: 559px) {
   .drawer-head { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; }
   .drawer-head > :not(.source):not(.drawer-what) { grid-column: 2; justify-self: start; }
 }
-@media (min-width: 720px) {
+@container tiles (min-width: 560px) {
   .vrow { grid-template-columns: 5.5rem 9.5rem minmax(0, 1fr) auto; grid-template-areas: "ver stars note act"; }
   .vrow .note { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .vbtns { justify-content: flex-end; }
@@ -111,13 +151,13 @@
 /* Its progressions: chips with a search's mark, which find your songs that play one, unlike a file or an action. */
 .progs { display: flex; flex-wrap: wrap; gap: 8px; }
 .prog { display: inline-flex; align-items: center; gap: 7px; min-height: 32px; margin: 0; padding: 0 12px 0 10px;
-  border: 1px solid var(--border); border-radius: 999px; background: var(--sunk); color: var(--text); font: inherit;
+  border: 1px solid var(--border); border-radius: var(--radius-pill, 999px); background: var(--sunk); color: var(--text); font: inherit;
   font-size: .88rem; font-weight: 550; cursor: pointer; }
 .prog:hover { border-color: var(--control-edge); }
 .prog svg.glyph { flex: none; width: 14px; height: 14px; color: var(--artist); }
 .prog-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .prog { max-width: 16rem; }
-.progs-more { min-height: 32px; padding: 0 11px; border: 1px dashed var(--border-strong); border-radius: 999px; background: none; color: var(--muted);
+.progs-more { min-height: 32px; padding: 0 11px; border: 1px dashed var(--border-strong); border-radius: var(--radius-pill, 999px); background: none; color: var(--muted);
   font: inherit; font-size: .85rem; font-weight: 650; cursor: pointer; }
 .progs-more:hover { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
 .find-elsewhere { display: grid; gap: 6px; }
@@ -137,7 +177,7 @@
 .foot-more-btn { min-width: 38px; padding: 0 10px; font-size: 1.15rem; line-height: 1; color: var(--muted); }
 .foot-more[open] > .foot-more-btn { border-color: var(--control-edge); background: var(--raised); color: var(--text); }
 .foot-menu { position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 3; display: grid; gap: 4px; min-width: 12.5rem;
-  padding: 6px; border: 1px solid var(--border-strong); border-radius: 12px; background: var(--surface);
+  padding: 6px; border: 1px solid var(--border-strong); border-radius: var(--radius-l, 12px); background: var(--surface);
   box-shadow: var(--pop-shadow); }
 .foot-menu form { margin: 0; }
 .foot-menu .btn, .foot-menu .info-file { justify-content: flex-start; width: 100%; }
@@ -148,28 +188,21 @@
 .btn.remove svg.glyph { color: var(--failed); }
 .btn.remove:hover { border-color: var(--failed); background: var(--failed-bg); }
 
-/* From 720 px what you play from is a row each, not a grid of tiles: its name and version, the source it came from (its
-   mark and name, which opens that source's versions), its formats at the end, wrapping where the row is too narrow
-   for them all (a sheet's PDF exports). A phone keeps the tile. */
-@media (min-width: 720px) {
-  .tiles { grid-template-columns: 1fr; gap: 8px; }
-  .tile { flex-direction: row; align-items: center; gap: 4px 16px; }
-  .tile-open { flex: 1 1 auto; padding: 8px 4px 8px 12px; border-radius: 11px 0 0 11px; }
-  .tile-versions { flex: none; padding: 0; }
-  .tile-downloads { flex: 0 1 auto; justify-content: flex-end; min-width: 0; margin: 0 12px 0 0; padding: 0; border: 0;
-    border-radius: 0; background: none; }
-}
-
-/* A thumb's targets: every chip, download, button and close of the card, 44 px. */
+/* A thumb's targets: every chevron, link, download, button and close of the card, 44 px; a tile 58 px tall. */
 @media (pointer: coarse) {
-  .vchip, .dl, .prog, .vrow .btn, .inuse, .info-file, .progs-more { min-height: 44px; }
+  .dl, .prog, .vrow .btn, .inuse, .info-file, .progs-more, a.tile-source { min-height: 44px; }
   .foot-more-btn { min-width: 44px; }
   .dl { min-width: 44px; justify-content: center; }
-  .drawer-head { padding-right: 60px; }
-  .drawer-close { top: 1px; width: 44px; height: 44px; }
+  .tile-open { padding: 9px 4px 9px 10px; }
+  .tile-ico { width: 38px; height: 38px; border-radius: var(--radius-m, 8px); }
+  .tile-more { width: 44px; height: 44px; }
+  .drawer-close + .drawer-part > .drawer-head { padding-right: 60px; }
+  .drawer-files { padding-top: 0; padding-bottom: 0; }  /* its first row level with the ✕ */
+  .drawer-files::before { width: 46px; height: 46px; }
+  .drawer-close { top: 2px; width: 44px; height: 44px; }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .vchip svg.glyph { transition: transform .15s; }
+  .tile-more svg.glyph { transition: transform .15s; }
 }
 
 /* A song's line's buttons (card.js plays) */
@@ -188,7 +221,7 @@
 .play-site { color: var(--muted); font-weight: 600; }
 .play .n { margin-left: 2px; color: var(--n-ink, var(--muted)); font-variant-numeric: tabular-nums; }
 .play .marks { display: none; position: absolute; right: 0; bottom: 0; gap: 2px; }
-.play .marks > .source { width: var(--mark-size); height: var(--mark-size); border: 0; border-radius: 3px;
+.play .marks > .source { width: var(--mark-size); height: var(--mark-size); border: 0; border-radius: var(--radius-s, 4px);
   background: var(--raised); box-shadow: 0 0 0 2px var(--surface); font-size: 6px; line-height: var(--mark-size);
   vertical-align: 0; }
 .play .marks > img.source { padding: 1px; }
@@ -214,11 +247,11 @@
   .play-words { display: none; }
   .play svg.glyph { width: 24px; height: 24px; }
   .play .n { position: absolute; top: 3px; right: 3px; min-width: var(--mark-size); height: var(--mark-size);
-    padding: 0 3px; border-radius: calc(var(--mark-size) / 2); background: var(--raised);
+    padding: 0 3px; border-radius: var(--radius-pill, 999px); background: var(--raised);
     box-shadow: 0 0 0 1px var(--border-strong); color: var(--text); margin: 0; font-size: 10px; font-weight: 700;
     line-height: var(--mark-size); text-align: center; }
   .play .marks { display: flex; right: 3px; bottom: 3px; }
   .play .marks > .source { width: auto; min-width: 16px; height: 16px; padding: 0 2px; font-size: 8px;
-    line-height: 16px; border-radius: 4px; }
+    line-height: 16px; border-radius: var(--radius-s, 4px); }
   .play .marks > img.source { width: 16px; padding: 1px; }
 }

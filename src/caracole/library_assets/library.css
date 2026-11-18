@@ -151,13 +151,10 @@
   #card-pane .steps > .step-list { display: grid; }
   /* The line whose card the pane holds (aria-current): a wash of the accent over the surface, never the play buttons'
      own --raised, so they keep their shape, the accent along its edge, with none of the box of a card opened under its
-     line (card.css's), its card being beside it; so a song removed from there moves nothing. The box's reset is a
-     crossing with Task 3b.4, which deletes it once card.css's box keys on :not(.selected). */
-  #library-view .line.selected { margin: 0; border: 0; border-top: 1px solid var(--border); border-radius: 0;
-    background: color-mix(in srgb, var(--accent) 8%, var(--surface)); box-shadow: inset 3px 0 0 var(--accent); }
-  #library-view .lines > .line.selected:first-child,
-  #library-view .lines > .run:first-child > .line.selected:first-child { border-top: 0; }
-  #library-view .line.selected + .line { border-top: 1px solid var(--border); }
+     line (card.css's box is a line's but a .selected one's), its card being beside it; so a song removed from there
+     moves nothing. */
+  #library-view .line.selected { background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+    box-shadow: inset 3px 0 0 var(--accent); }
 }
 .searching-all .toolbar, .searching-all .jump, .searching-all .count, .searching-all .list { display: none; }
 .waiting-sites .results .request, .waiting-sites .footer { display: none; }

@@ -753,11 +753,25 @@ The pages caracole writes and serves are index.html, sheet.html, songbook.html a
 - **The page's history**, every script of the library page's
   (docs/superpowers/plans/2026-11-17-library-page-redesign.md, "Where the lanes meet" 1):
   - every `history.replaceState` passes `history.state`, never `null`;
-  - a script that pushes an entry pushes an object with a marker of its own (tabs.js `tab`, search's `search`), and
-    any entry pushed while `body.search-mode` is on also carries `search: (Number(history.state &&
-    history.state.search) || 0) + 1`, never `search` spread from `history.state`;
+  - a script that pushes an entry pushes an object with a marker of its own (tabs.js `tab`, search's `search`,
+    card.js's `caracoleMenu`), and any entry pushed while `body.search-mode` is on also carries `search:
+    (Number(history.state && history.state.search) || 0) + 1`, never `search` spread from `history.state`;
   - a `popstate` handler acts on its own marker alone, and a `pushState` that throws falls back quietly (the change
     made in place, with no step).
+  - A card's ⋯ menu (card.js `caracoleMenus`, its one `popstate` listener): on a touch screen (`(pointer: coarse)`)
+    opening it pushes `{ caracoleMenu: n }` (n a serial), with `search` one more than the entry under it in search
+    mode, at the same address, so Back (or the ← of search) closes it and leaves the card open; closed otherwise
+    (a choice in it, Escape, a press elsewhere, its card drawn again), it takes its entry back once the press's own
+    handlers ran, so an entry another script pushed meanwhile stays; never `history.back()` for a press that leaves
+    the page or steps back (a same-window link but a download, a download too on a page opened as a file, search's
+    `#leave` while the entry is search's; the Navigation API's `navigate` and `pagehide` besides), whose entry stays,
+    replaced as `{ …its fields, caracoleMenu: "closed" }`; Back passes over a closed menu's entry, and Forward too
+    where `navigation.currentEntry.index` says the way; Back from the page a link opened lands on it in a document shown
+    again, which steps back over it on `pageshow` (`history.back()` for a closed entry, or any menu's entry of a page
+    loaded as `back_forward` or shown again from the back-forward cache, where `leaving` is reset and a closing menu's frozen
+    timer may still be pending; Forward onto
+    one from another page spends a step: the direction isn't told); a reload with a menu open leaves its entry the page's (one
+    Back spent); a mouse pushes nothing; no other script copies `caracoleMenu` into its entries (test_library_card.py).
 - **Enter in a search box never spends a request on a guess**:
   - on the lookup page it acts only on `/api/search`'s `best` (or opens the leading artist's songs);
   - on the library page, whose served bar searches `/api/search` as you type (which asks no site), it only moves the
@@ -1074,16 +1088,15 @@ It is rows.js's, shared by both pages:
     `scroll-margin-top` `calc(var(--bar-h) + 8px)`, `smooth()`: at once with reduced motion), and the head's close
     gives the chevron the focus (test_library_card_place.py);
   - a crossing with card.css: lane 1's head rule (library.css) reads card.css's gap between a song card's parts and
-    its bottom padding as `var(--card-gap, 14px)` and `var(--card-pad-end, 14px)`, today's values; Task 3b.4, which
-    keys the card's box to `.line-panel.song-card`, defines the two tokens there once, and its rules use them. For
+    its bottom padding as `var(--card-gap, 14px)` and `var(--card-pad-end, 14px)`, which card.css defines once, on
+    `.line-panel.song-card` (the card wherever it is: its gap and padding), and its rules use. For
     Task 1d.6: `.line-panel > .card-head` (sticky, height 0) and `.card-head-in` (absolute, hidden until
     `.head-away`) aren't scoped to in place, only the head's margins are (`.line > .line-panel.song-card >
     .card-head`): the pane undoes both (`#card-pane .card-head`, `.card-head-in`: static, shown);
   - from 1200 px in the pane, `#card-pane` (library.js `selectLine`, through rows.js foldMore's `onToggle`,
     `cardToggled`): opening a line's card moves it there, the line `.selected` and `aria-current="true"` (filled with
     `color-mix(in srgb, var(--accent) 8%, var(--surface))`, never the play buttons' `--raised`, the accent along its
-    edge; no opened card's box: `#library-view .line.selected`'s margin and border reset, a crossing with Task 3b.4,
-    which deletes it once card.css's box keys on `:not(.selected)`), the card's head its
+    edge; no opened card's box: card.css's box, an opened line's, keys on `:not(.selected)`), the card's head its
     heading (out of `aria-hidden`, its close tabbable, the pane `aria-labelledby` its name), the focus on its
     `.card-name` when the chevron's click came from a key (`isTrusted`, `detail` 0); closing it, another line's opening,
     or its line no longer shown after `render` and `drawGroups` (`keepSelected`) puts it back right after the
@@ -1101,10 +1114,16 @@ It is rows.js's, shared by both pages:
     `inItem(item, selector)`, which the forms posted in place, a removal's held buttons and focus, `paint`, the picker
     and Recently opened go through;
   - the pane's own rules, library.css's `#card-pane …` (its card's padding and gap, its head, `.foot-menu` opening
-    downward, the steps), the one way lane 1 names a card's part; the tiles' layout in the pane's 400–480 px is lane
-    3b's container's;
-  - a tile for each thing to play from, every one alike, each source's versions a chip whose drawer reads the page's
-    data alone, never a request;
+    downward, the steps), the one way lane 1 names a card's part; what is inside the tiles is laid out by the card's
+    width, never the window's (card.css: `.tiles` a container, `container: tiles / inline-size`, its `@container
+    tiles` rules: a version's four columns from a card 560 px wide, stacked below), so the card reads the same in the
+    pane's 400–480 px as under its line (test_library_card.py);
+  - a tile for each thing to play from, every one alike, one row at every width (its body, its sources' marks, its
+    chevron: on a touch screen 56–64 px tall from a 360 px phone, a long name wrapping at 320; 48 at most with a
+    mouse; on a touch screen under 400 px no open arrow, a download's glyph kept, and the sheet's version without "in
+    use", a mouse keeping both at any width, the pane's at 1200 px too; its rating, `.tile-rated`, whole or not at
+    all), its chevron opening its drawer under it, touching it (its downloads, then a part a source of its versions),
+    which reads the page's data alone, never a request;
   - its UG versions not kept are counted (`versions.rest`, `sheet_versions.may_keep`), and Fetch them keeps them,
     `caracole versions --keep-more`, within a lookup's budget (test_library_card.py).
 

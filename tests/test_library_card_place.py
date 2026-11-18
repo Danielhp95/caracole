@@ -246,7 +246,7 @@ LANDED = ("new Promise((done) => { const at = scrollY; requestAnimationFrame(() 
 
 
 def _long_card(conn, cfg):
-    """Hotel California, whose UG drawer makes its card taller than a phone's screen, and the songs after it: the
+    """Hotel California, whose sheet's drawer makes its card taller than a phone's screen, and the songs after it: the
     file's address and the song."""
     song = hotel(conn, cfg)
     for n in range(14):  # Radiohead's, after Eagles: room to scroll once the card is closed
@@ -266,9 +266,9 @@ def _phone(tmp_path, url, song, size=PHONE):
 
 
 def _open_long(b):
-    """Hotel California's card opened, its UG drawer too: taller than the screen."""
+    """Hotel California's card opened, its sheet's drawer too: taller than the screen."""
     b.js("openCardOf(line)")
-    b.js("""cardOf(line).querySelector('.tile-sheet button.vchip[data-source="ug"]').click()""")
+    b.js("cardOf(line).querySelector('.tile-sheet > button.tile-more').click()")
     assert b.wait("!cardOf(line).querySelector('.drawer').hidden")
     assert b.js("cardOf(line).getBoundingClientRect().height > innerHeight")
 
