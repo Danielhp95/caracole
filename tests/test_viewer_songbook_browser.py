@@ -59,6 +59,31 @@ def test_the_arrows_stay_in_the_song_while_a_panel_is_open(tmp_path, panel):
 
 
 
+
+def test_from_1200_px_a_progression_playing_from_the_rail_keeps_the_arrows_and_stopped_lets_them_go(tmp_path):
+    """The rail is no layer: with its Harmony tab shown, ← and → go from song to song, but not while a progression
+    plays from it (book.js busy(): #harmony[data-playing])."""
+    book = _songbook(tmp_path, [BookSong("One", "Synthetic", cho=PROG_SONG, id="aaaa"),
+                                BookSong("Two", "Synthetic", cho=IN_E, id="bbbb")])
+    with open_viewer(tmp_path, book + "#song-1", **DESKTOP) as b:
+        b.js(FAKE_SOUND)
+        harmony_tab(b)
+        b.js(PLAY)
+        b.js("document.querySelector('#harmony .prog-play').focus()")  # on ■, as a tap on ▶ leaves it
+        b.js("window.before = true")
+        key(b, "ArrowRight", 39)
+        time.sleep(0.5)
+        held = b.js(f"[location.hash.split('=')[0], window.before === true, {PLAYING},"
+                    " document.getElementById('harmony').hasAttribute('data-playing')]")
+        b.js(PLAY)  # ■
+        stopped = b.js("document.getElementById('harmony').hasAttribute('data-playing')")
+        key(b, "ArrowRight", 39)
+        assert b.wait("!window.before && document.documentElement?.dataset.ready === '1'")
+        moved = b.js("location.hash.split('=')[0]")
+    assert held == ["#song-1", True, "Stop", True]
+    assert stopped is False and moved == "#song-2"
+
+
 class _Tab:
     """Another tab of ``b``'s browser, in its browser context: the same storage."""
 

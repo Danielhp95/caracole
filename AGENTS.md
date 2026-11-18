@@ -1328,10 +1328,13 @@ It is rows.js's, shared by both pages:
     shown kept for that page alone (test_viewer_overlay.py);
   - Harmony (D12 B), a sheet's with a key (viewer.js `hasHarmony`, where the settings' Harmony row was: no Harmony
     panel, no row), is the page's own pane, overlay.js's `page.harmony(pane)`, drawn on each draw while it shows
-    (`harmonyPane`: `#harmony-key`, the key's neck, which then leaves the Guitar tab, `#tempo-row`, `#progs`), each
-    control with a `data-f` the focus comes back to; leaving it (`page.left`, another tab; `close(necksEl)`;
-    `showNecks(false)`; `drawNecks()` drawing no Harmony pane while one plays) stops every sound, as the panel's ✕ did
-    (`stopPlaying(true)`; test_viewer_harmony_tab.py, test_viewer_sound.py);
+    (`harmonyPane`: `#harmony-key`, the key's neck, which then leaves the Guitar tab where the necks are the instrument
+    played's, `necksAt().played`, else stays heading it, `#tempo-row`, `#progs`), each control with a `data-f` the
+    focus comes back to, its sizes the rail's `--nk` times the phone's (text in em, targets and room in
+    `calc(… * var(--nk))`); leaving it (`page.left`, another tab; `close(necksEl)`; `showNecks(false)`; `drawNecks()`
+    drawing no Harmony pane while one plays) stops every sound, as the panel's ✕ did (`stopPlaying(true)`), and while
+    one plays `#harmony[data-playing]` keeps a songbook's arrows (book.js `busy()`; test_viewer_harmony_tab.py,
+    test_viewer_sound.py, test_viewer_songbook_browser.py);
   - viewer.js and harptab.js hand it what they look up, and Harmonica's notes, scales and harps are harp.py's tables,
     by steps above the tonic as the song sounds, a transposition moving every harp and a capo none
     (test_viewer_harp.py, test_viewer_overlay.py, test_viewer_harptab_browser.py).

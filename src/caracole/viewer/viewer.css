@@ -304,23 +304,35 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
 .tip-hear svg { fill: currentColor; stroke: none; }
 /* The Harmony tab (viewer.js), the overlay's third: the key the numerals are read in, the key's neck, the tempo, and
    each section's progression, a button to its section, ▶ beside it, and its songs, and those of each named progression
-   it contains; the numeral playing marked. A section's heading names its progression. */
+   it contains; the numeral playing marked. A section's heading names its progression. Its sizes are --nk times the
+   page's, as the rest of the rail's are (1 in the phone's sheet): its text in em, its targets and room in
+   calc(… * var(--nk)), the shared controls' (.hint, .lab, .row, .stepper, .round, .link) scoped to the pane. */
 .progs { margin: 0; padding: 0; list-style: none; }
-.prog { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0 8px; padding: 6px 0;
-  border-top: 1px solid var(--border); }
-.prog-go { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 44px; padding: 4px 0;
-  border: 0; border-radius: 8px; background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; }
-.prog-sec { color: var(--muted); font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-.prog-nums { font-size: 1.05rem; font-weight: 700; overflow-wrap: anywhere; }
+.prog { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0 calc(8px * var(--nk));
+  padding: calc(6px * var(--nk)) 0; border-top: 1px solid var(--border); }
+.prog-go { display: flex; flex-direction: column; align-items: flex-start; gap: calc(2px * var(--nk));
+  min-height: calc(44px * var(--nk)); padding: calc(4px * var(--nk)) 0; border: 0; border-radius: 8px; background: none;
+  color: inherit; font: inherit; text-align: start; cursor: pointer; }
+.prog-sec { color: var(--muted); font-size: .72em; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.prog-nums { font-size: 1.05em; font-weight: 700; overflow-wrap: anywhere; }
 .pn { border-radius: 4px; }
 .pn.on { background: var(--mark); box-shadow: 0 0 0 2px var(--mark); }
 .prog-x { margin-left: .45em; color: var(--muted); font-weight: 600; }
 .prog-var { white-space: nowrap; }
-.prog-about { color: var(--muted); font-size: .82rem; }
+.prog-about { color: var(--muted); font-size: .82em; }
 .prog-about:empty { display: none; }
-.prog-songs, .prog-named { grid-column: 1 / -1; justify-self: start; font-size: .85rem; }
-.hint-inline { color: var(--muted); font-size: .82rem; }
+.prog-songs, .prog-named { grid-column: 1 / -1; justify-self: start; }
+.prog > .link { font-size: .85em; }  /* over .link's font: inherit: a line under the numerals, smaller than they are */
+.hint-inline { color: var(--muted); font-size: .82em; }
 #harmony-key { margin: calc(10px * var(--nk)) 0 0; }
+.necks .harmony .hint { font-size: .82em; }
+.necks .harmony .lab { min-width: calc(92px * var(--nk)); font-size: .85em; }
+.necks .harmony .row { gap: calc(8px * var(--nk)) calc(10px * var(--nk)); padding: calc(10px * var(--nk)) 0; }
+.necks .harmony .stepper { gap: calc(6px * var(--nk)); }
+.necks .harmony .stepper button { min-width: calc(44px * var(--nk)); min-height: calc(44px * var(--nk));
+  padding: 0 calc(12px * var(--nk)); font-size: .95em; }
+.necks .harmony .round { min-width: calc(44px * var(--nk)); min-height: calc(44px * var(--nk)); font-size: 1.3em; }
+.necks .harmony .link { min-height: calc(44px * var(--nk)); padding: 0 calc(4px * var(--nk)); }
 .lbl .prog-of { font-weight: 600; letter-spacing: 0; text-transform: none; }
 /* With the script, a chord may reach over the words after it (.tight); the script widens
    a column only where two chords would touch. It sits in its column's row, a line in its size

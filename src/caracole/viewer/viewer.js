@@ -1301,8 +1301,8 @@
   // --- the key's neck: its scale, or its pentatonic box, across the frets, the tonic marked ------------
   // In the key shown, of the shapes played on the instrument ``it`` (``s`` semitones from the sheet's key): with a
   // capo, the frets count from it, as the chords' necks do. The Harmony tab's first (overlay.js draws it), or the
-  // Guitar tab's on a sheet with no Harmony tab. Scale or Pentatonic switches it; the overlay's draw keeps the focus on
-  // the switch (its data-f).
+  // Guitar tab's on a sheet with no Harmony tab or an instrument with no neck (the guitar's then, at its capo). Scale
+  // or Pentatonic switches it; the overlay's draw keeps the focus on the switch (its data-f).
   const keySpec = (s = shift(), it = inst()) => ({
     name: keyName(s), tonic: mod12(key.tonic + s), tonicName: names(s)[mod12(key.tonic + s)],
     scale: table("keyScale") || [], pentatonic: table("pentatonic") || [],
@@ -1318,16 +1318,17 @@
   // --- the overlay: a wide screen's rail, on the left, Guitar, Harmonica and Harmony -------------------
   // From 1200 px wide (viewer.css), overlay.js draws it, its Guitar tab first and shown when the page opens. Guitar:
   // each chord the sheet shows, once, in the order it first comes (two chords shown by one name are one; on a sheet
-  // with no Harmony tab, the key's neck first), with every position of it along a neck and a legend naming them, on
-  // the instrument played (a ukulele's four strings), or the guitar's on one with no neck (the piano, the harmonica,
-  // the winds: then at the guitar's capo). Picking one, on the neck or in the legend, makes it the shape the strip
-  // and the chord's card show, at every place of that chord, kept with the rest (state.at); one of the guitar's for
-  // another instrument holds for the rail alone. Harmonica: the harps for the song as it sounds (a harmonica takes no
-  // capo; a transposition moves every harp), the harp chosen (harpAt, above the tonic; until one is tapped, the one
-  // the song's harmonica tab plays on, else the first harp.py's choices pick), the key on it and each chord's holes,
-  // harp.py's tables looked up. Harmony, on a sheet with a key to read numerals in (hasHarmony): the key's neck, then
-  // each section's progression (harmonyPane, below). Hide, at the rail's top, and the bar's button (after the key,
-  // from 1200 px) show it or hide it (state.necks), the two always in step; hidden, the song has the whole width.
+  // with no Harmony tab or an instrument with no neck, the key's neck first), with every position of it along a neck
+  // and a legend naming them, on the instrument played (a ukulele's four strings), or the guitar's on one with no neck
+  // (the piano, the harmonica, the winds: then at the guitar's capo). Picking one, on the neck or in the legend, makes
+  // it the shape the strip and the chord's card show, at every place of that chord, kept with the rest (state.at); one
+  // of the guitar's for another instrument holds for the rail alone. Harmonica: the harps for the song as it sounds (a
+  // harmonica takes no capo; a transposition moves every harp), the harp chosen (harpAt, above the tonic; until one is
+  // tapped, the one the song's harmonica tab plays on, else the first harp.py's choices pick), the key on it and each
+  // chord's holes, harp.py's tables looked up. Harmony, on a sheet with a key to read numerals in (hasHarmony): the
+  // key's neck (on the instrument played's necks), then each section's progression (harmonyPane, below). Hide, at the
+  // rail's top, and the bar's button (after the key, from 1200 px) show it or hide it (state.necks), the two always in
+  // step; hidden, the song has the whole width.
   // Narrower, the phone's sheet: the bar's neck (after the key) slides the same overlay up from the bar over half the
   // screen (sheetAt), docked there as the settings are (a layer, on a phone in the place of the one open), the song
   // readable and scrollable above it and its end coming up above it; its handle takes it to the whole screen and back,
@@ -1384,8 +1385,9 @@
       const shapes = shapesOf(rep, s, it);
       return { name, list: shapes.list, mine: shapes.mine, chosen: played ? state.at[c] || 0 : railAt[name] || 0 };
     });
+    // The key's neck: Harmony's where the necks are the instrument's played, else the Guitar tab's head still.
     return { name: String(it.tab || it.name || "Guitar"), strings: (it.tuning || []).length || 6, chords,
-      key: key && data.keyScale && !hasHarmony ? keySpec(s, it) : null };  // the key's neck: Harmony's, where it is
+      key: key && data.keyScale && !(hasHarmony && played) ? keySpec(s, it) : null };
   };
   // A chord's row in one of harp.py's tables by chord: the sheet's in the mode played, else its alternative's.
   const sameRep = (a, b) => Array.isArray(a) && Array.isArray(b) && a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
@@ -2491,7 +2493,10 @@
     return found && found.available !== false && typeof found.play === "function" ? found : null;
   };
   const soundsNow = () => musicOf(state) + "|" + state.inst;
+  // The one playing marked, and the tab's data-playing while one plays (book.js keeps a songbook's arrows for it).
   const drawPlaying = () => {
+    const box = document.getElementById("harmony");
+    if (box) box.toggleAttribute("data-playing", Boolean(playing));
     for (const li of document.querySelectorAll("#progs > .prog")) {
       const mine = Boolean(playing) && playing.n === Number(li.dataset.n);
       const play = li.querySelector(".prog-play");
@@ -2550,7 +2555,7 @@
   };
   // Drawn into the overlay's pane (overlay.js) each time it draws the tab, every control with the data-f the focus
   // comes back to: bpm-down, bpm-up, and of section n prog-go:n, prog-play:n, prog-songs:n and prog-named:n:j (its
-  // j-th Songs with …); the neck's switch keeps keyNeck's.
+  // j-th Songs with …); the neck's switch keeps keyNeck's. The key's neck only on the necks of the instrument played.
   const harmonyPane = (pane) => {
     // Transposed, or another capo, mode, swap, shape or instrument: what it plays is no longer the page's chords.
     if (playing && playing.sounds !== soundsNow()) stopPlaying();
@@ -2564,10 +2569,8 @@
       return node;
     };
     make(box, "p", "hint", "In " + keyWords() + ".").id = "harmony-key";
-    if (data.keyScale) {
-      const { it, s } = necksAt();
-      box.appendChild(overlay.keyNeck(keySpec(s, it)));
-    }
+    const necks = necksAt();  // on an instrument with no neck, the guitar's key neck heads the Guitar tab instead
+    if (data.keyScale && necks.played) box.appendChild(overlay.keyNeck(keySpec(necks.s, necks.it)));
     const synth = state.vol > 0 ? synthesis() : null;  // Sound off: no ▶ that would play nothing
     const tempo = make(box, "div", "row");
     tempo.id = "tempo-row";

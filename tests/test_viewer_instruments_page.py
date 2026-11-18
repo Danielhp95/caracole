@@ -266,7 +266,8 @@ def test_the_rail_of_necks_has_four_strings_on_a_ukulele_and_the_guitars_on_the_
     shapes = chord_shapes(UKULELE, parse_chord("C"))
     assert dots == sum(sum(1 for f in p[0] if f != "x") for p in shapes)
     assert piano["shown"] and piano["button"] and padding != "0px"
-    assert piano["tabs"] == ["Guitar", "Harmonica", "Harmony"] and piano["strings"] == guitar["strings"]
+    # the guitar's necks, headed by the guitar's key neck: the piano has none of its own for the Harmony tab
+    assert piano["tabs"] == ["Guitar", "Harmonica", "Harmony"] and piano["strings"] == [6] + guitar["strings"]
     assert piano["names"] == guitar["names"]  # the guitar's chords, as its capo names them
 
 

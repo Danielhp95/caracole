@@ -3152,8 +3152,9 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   chords-db's shapes, and so does a capo moved off the sheet's fret. The
   legend's own lines stay as written in any key, capo or mode: "Am x02210"
   names that shape, and Am stays Am there.
-- **The key on the neck**: the rail's first neck (below) shows the key's
-  scale across the frets, the tonic larger in rust, and Scale or the key's
+- **The key on the neck**: the first neck of the overlay's Harmony tab
+  (below; of its Guitar tab where there is no Harmony tab, or on an
+  instrument with no neck) shows the key's scale across the frets, the tonic larger in rust, and Scale or the key's
   pentatonic box (Major pentatonic for a major key, Minor pentatonic for a
   minor one). It follows the key, the mode and the capo, in the key of the
   shapes you play: with a capo, its frets count from the capo, as the chords'
@@ -3178,8 +3179,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   whose key caracole can tell; without one, the first two); a sheet opens on
   Guitar, and the tab you choose holds for that page alone. **Guitar** is a
   neck per chord (the key's neck heads Harmony, below, or Guitar on a page
-  with no Harmony tab): it lists each chord of the song once, in the order it
-  first comes, with a
+  with no Harmony tab or on an instrument with no neck): it lists each chord
+  of the song once, in the order it first comes, with a
   guitar neck (frets 0 to 15, the high e on top) showing every shape of it in
   a colour of its own, the tab's own ringed (a note several shapes play is a
   smaller dot for each, side by side in the fret, the first shape leftmost,
@@ -3536,8 +3537,9 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   neck's sheet on a phone or a tablet, above; the settings have no row for
   it), on a sheet whose key caracole can tell: the key the numerals are read
   in and where it came from, the key's neck (its scale, or its pentatonic
-  box: **Scale** or the pentatonic switches it; on an instrument with no
-  neck, the guitar's at its capo), and each section's progression in
+  box: **Scale** or the pentatonic switches it; on the piano, the harmonica
+  and the winds, which have no neck, it heads the Guitar tab's guitar necks
+  instead, at the guitar's capo), and each section's progression in
   numerals, one cycle of it with the times it is played ("I–V–vi–IV ×4"; "×8,
   one variation" when a pass plays it otherwise, with a chord changed, or one
   added or left out, or, in a cycle of four chords or more, a chord changed
@@ -3583,7 +3585,9 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   sounds. Leaving the tab stops every sound, a chord tapped too: another
   tab, the sheet closed (✕, Escape, Back, the neck, or another panel opening
   in its place on a phone), the rail hidden or full screen, or the window
-  narrowed past the rail.
+  narrowed past the rail. In a songbook a progression playing keeps ← and →
+  (and a swipe) in its song, as the sheet does while it is open; stopped,
+  the rail's tab lets them go from song to song again.
   **Songs with this progression** opens the library
   page with the songs that have it (`index.html#prog=I%20V%20vi%20IV`), and
   **Songs with the pop progression**, under a section that plays it within

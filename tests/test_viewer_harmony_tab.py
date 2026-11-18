@@ -130,6 +130,51 @@ def test_the_keys_neck_heads_the_harmony_tab_and_the_guitar_tab_has_the_chords_a
     assert harmonica_page == "Am scale"  # with no Harmony tab, the Guitar tab heads with it still
 
 
+# The Harmony tab's parts: each one's font size, and the targets' least height (getComputedStyle's px).
+SIZES = """(() => { const q = (s) => document.querySelector('#harmony ' + s), px = (e, p) => parseFloat(getComputedStyle(e)[p]);
+  const fonts = {key: '#harmony-key', lab: '.lab', inline: '.hint-inline', bpm: '#bpm', sec: '.prog-sec',
+    nums: '.prog-nums', about: '.prog-about', songs: '.prog-songs', named: '.prog-named', neck: '.kn-name'};
+  const targets = {step: '#bpm-up', play: '.prog-play', go: '.prog-go', songs: '.prog-songs'};
+  const out = {};
+  for (const [k, s] of Object.entries(fonts)) out[k] = px(q(s), 'fontSize');
+  for (const [k, s] of Object.entries(targets)) out['tall:' + k] = px(q(s), 'minHeight');
+  return out; })()"""
+# The capo on 2: G shapes, sounding A.
+CAPO = "{title: Capo}\n{artist: Synthetic}\n{key: G}\n{capo: 2}\n{comment: Verse}\n[G]made [D]up [Em]words [C]here\n"
+
+
+@in_chromium
+def test_the_rails_harmony_tab_is_fifteen_percent_larger_than_the_phones_its_links_smaller_than_its_numerals(tmp_path):
+    # The rail's rule (--nk), its text and targets alike; in the phone's sheet the page's own sizes.
+    with viewer(tmp_path, written(tmp_path, SONG)) as b:
+        harmony_tab(b)
+        phone = b.js(SIZES)
+    with viewer(tmp_path, written(tmp_path, SONG, name="Rail"), **DESKTOP) as b:
+        harmony_tab(b)
+        rail = b.js(SIZES)
+    assert phone["nums"] == 16.8 and phone["sec"] == pytest.approx(11.52) and phone["songs"] == pytest.approx(13.6)
+    assert all(phone[k] == 44 for k in phone if k.startswith("tall:")), phone
+    for what, size in phone.items():
+        assert rail[what] == pytest.approx(size * 1.15, abs=0.5), (what, phone, rail)
+    for sizes in (phone, rail):  # the links a line under the numerals, smaller than they are
+        assert sizes["songs"] == sizes["named"] < sizes["nums"], sizes
+
+
+@in_chromium
+def test_on_an_instrument_with_no_neck_the_keys_neck_heads_the_guitar_tab_not_harmony(tmp_path):
+    first = "(() => { const g = document.querySelector('#necks .ov-pane > .kn'); return g && g.querySelector('.kn-name').textContent; })()"
+    found = {}
+    for inst in ("guitar", "piano"):
+        with viewer(tmp_path, written(tmp_path, CAPO, name=inst) + "#inst=" + inst, **DESKTOP) as b:
+            guitar = b.js(first)
+            harmony_tab(b)
+            found[inst] = [guitar, b.js("document.getElementById('harmony-key').textContent"),
+                           b.js("document.querySelector('#harmony .kn') && document.querySelector('#harmony .kn-name').textContent")]
+    assert found["guitar"] == [None, "In the key of G (from the sheet).", "G scale"]
+    # On the piano the key is A, as it sounds; the guitar's necks, at its capo, play G shapes: their key's neck heads them.
+    assert found["piano"] == ["G scale", "In the key of A (from the sheet).", None]
+
+
 @in_chromium
 def test_on_a_phone_the_harmony_tab_lists_each_sections_progression(tmp_path):
     with viewer(tmp_path, written(tmp_path, SONG)) as b:
