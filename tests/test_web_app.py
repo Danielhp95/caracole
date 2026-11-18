@@ -2057,12 +2057,12 @@ def test_the_search_says_where_it_looked_a_chip_a_site_with_its_detail(app, conn
     lacuerda_index(conn, letters=("_num", "a", "b", "c"))
     record_block(conn, "musescore", datetime(2026, 10, 19, tzinfo=UTC), "HTTP 403: a challenge")
     looked = as_json(get(app, "/api/search?q=lynrd"))["looked"]
-    # UG, gtptabs.com, LaCuerda, MuseScore, harptabs.com, gametabs.net: done, done, partial (the letters read whole run
-    # up to C), blocked, empty, empty.
+    # UG, gtptabs.com, LaCuerda, MuseScore, harptabs.com, gametabs.net, iReal Pro: done, done, partial (the letters
+    # read whole run up to C), blocked, empty, empty, empty.
     assert [(s["source"], s["state"], s["label"]) for s in looked] == [
         ("ug", "done", "UG ✓"), ("gtptabs", "done", "gtptabs.com ✓"), ("lacuerda", "partial", "LaCuerda: up to C"),
         ("musescore", "blocked", "MuseScore turned us back"), ("harptabs", "empty", "harptabs.com: empty"),
-        ("gametabs", "empty", "gametabs.net: empty")]
+        ("gametabs", "empty", "gametabs.net: empty"), ("ireal", "empty", "iReal Pro: empty")]
     detail = {s["source"]: s["detail"] for s in looked}
     assert detail["lacuerda"] == ("LaCuerda's index is being read: 2 artists so far, with #, A–C read whole; "
                                   "tonight's run reads the rest.")

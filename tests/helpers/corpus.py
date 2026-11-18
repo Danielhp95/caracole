@@ -48,7 +48,7 @@ REGENERATE = "CARACOLE_CORPUS=write nix develop -c pytest -q -n 0 tests/test_con
 FIXTURE_TABLES = (
     "songs", "versions", "files", "removed", "events", "ug_index", "ug_artist_tabs", "ug_directory", "lacuerda_index",
     "gtptabs_index", "musescore_index", "harptabs_index", "harptabs_artists", "harptabs_artist_tabs",
-    "gametabs_index", "gametabs_games", "gametabs_game_tabs",
+    "gametabs_index", "gametabs_games", "gametabs_game_tabs", "ireal_index", "ireal_threads", "ireal_charts",
 )
 PHONE_TABLES = ("phone_overrides", "phone_songbooks")
 # Filled by ug_index's and ug_keys' triggers as the rows go in: never dumped, so a replay numbers them alike.
