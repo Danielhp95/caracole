@@ -559,3 +559,79 @@ def test_a_line_far_down_is_placed_once_its_run_shows_and_no_skipped_run_is_laid
         assert forced == [] and b.js("window.__forced") == [], forced
     finally:
         b.close()
+
+
+# --- no action reads the layout of more lines when the library grows ---------------------------------------------
+
+# Before the page's scripts: each layout read of an element inside #list (getBoundingClientRect, getClientRects,
+# checkVisibility, getComputedStyle, the offset*, client* and scroll* getters) counted, by the action in hand.
+READS = r"""(() => {
+  window.__reads = 0;
+  const inList = (e) => e && e.nodeType === 1 && e.closest && e.closest("#list") !== null;
+  for (const name of ["getBoundingClientRect", "getClientRects", "checkVisibility"]) {
+    const real = Element.prototype[name];
+    Element.prototype[name] = function () { if (inList(this)) window.__reads += 1; return real.apply(this, arguments); };
+  }
+  const style = window.getComputedStyle;
+  window.getComputedStyle = function (e) { if (inList(e)) window.__reads += 1; return style.apply(this, arguments); };
+  const getters = [];
+  for (const proto of [Element.prototype, HTMLElement.prototype]) {
+    for (const name of Object.getOwnPropertyNames(proto)) {
+      if (!/^(offset|client|scroll)(Width|Height|Top|Left)$/.test(name)) continue;
+      const d = Object.getOwnPropertyDescriptor(proto, name);
+      if (!d || !d.get) continue;
+      Object.defineProperty(proto, name, { ...d, get() { if (inList(this)) window.__reads += 1; return d.get.call(this); } });
+    }
+  }
+})();"""
+
+
+def _reads_per_action(tmp_path, url):
+    b = _open(tmp_path, url, PHONE, before=READS)
+    counts = {}
+    try:
+        counts["load"] = b.js("window.__reads")
+
+        def action(name, run):
+            b.js("window.__reads = 0")
+            run()
+            b.js(FRAMES)
+            b.js(FRAMES)
+            counts[name] = b.js("window.__reads")
+
+        def type_ra():
+            b.js("document.querySelector('#q').focus()")
+            b.type("ra")
+            assert b.wait("document.querySelector('#q').value === 'ra'")
+
+        def open_card():
+            b.js("document.querySelector('#q').blur()")
+            b.js("scrollTo(0, 0)")
+            assert b.wait("document.querySelector('#list article.line > .line-more') !== null")
+            b.js("document.querySelector('#list article.line > .line-more').click()")
+
+        def clear():
+            b.js("(() => { const q = document.querySelector('#q'); q.value = ''; "
+                 "q.dispatchEvent(new Event('input', { bubbles: true })); })()")
+
+        action("type ra", type_ra)
+        action("open a card", open_card)
+        action("clear the box", clear)
+        action("scroll to the end", lambda: b.js("scrollTo(0, document.scrollingElement.scrollHeight)"))
+    finally:
+        b.close()
+    return counts
+
+
+def test_no_action_reads_the_layout_of_more_lines_with_more_songs(tmp_path_factory):
+    from helpers.big_library import build
+
+    counts = {}
+    for songs in (200, 2000):
+        url = build(tmp_path_factory.mktemp(f"reads{songs}") / "lib", songs).resolve().as_uri()
+        counts[songs] = _reads_per_action(tmp_path_factory.mktemp(f"chrome{songs}"), url)
+    print(counts)
+    for action, few in counts[200].items():
+        many = counts[2000][action]
+        assert few <= 12 and many <= 12, (action, counts)
+        assert abs(many - few) <= 2, (action, counts)
