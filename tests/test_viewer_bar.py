@@ -149,8 +149,8 @@ def test_the_bar_is_on_the_page_hidden_until_the_script_runs():
      (MINOR, "#t=3", "D#m", "+3", True, "Key D#m · +3"),
      (MINOR, "#t=2&capo=2", "Cm", "capo 2", True, "Cm shapes · capo 2 · sounds Dm"),  # the capo plays it: no move
      (UG_CHO, "#capo=0", "A", "no capo · +2", True, "Key A · no capo · +2"),  # the chords two frets up
-     (UG_CHO, "#mode=mixolydian&t=1", "Ab mixolydian", "capo 2 · +1", True,
-      "Ab mixolydian shapes · capo 2 · sounds Bb mixolydian · +1"),
+     (UG_CHO, "#mode=mixolydian&t=1", "Ab mixolydian", "capo 2 · +1", True,  # the move the shapes', not the sound's
+      "Ab mixolydian shapes (+1) · capo 2 · sounds Bb mixolydian"),
      (UG_CHO, "#inst=piano", "A", "key", False, "Key A"),  # the capo folded in: no move of yours
      (NO_KEY, "", "Transpose", "capo 1", False, "Transpose · capo 1")],
     ids=["capo", "capo-on-open-shapes", "no-capo", "transposed", "capo-plays-it", "capo-off", "mode", "piano",
@@ -197,7 +197,7 @@ def test_minus_and_plus_transpose_a_semitone_at_a_time(tmp_path):
         down = bar(b)
     assert (before["main"], before["chord"], before["hash"]) == ("G", "G", "")
     assert (up["main"], up["sub"], up["chord"], up["hash"]) == ("Ab", "capo 2 · +1", "Ab", "#t=1")
-    assert up["full"] == "Ab shapes · capo 2 · sounds Bb · +1"
+    assert up["full"] == "Ab shapes (+1) · capo 2 · sounds Bb"
     assert down["hash"] == "#t=-1" and down["main"] == down["chord"] == "F#" and down["sub"] == "capo 2 · −1"
     assert not up["panel"] and not down["panel"] and up["where"] == down["where"] == "shown"  # nothing opened
 
@@ -482,12 +482,38 @@ def test_the_bar_fits_a_phone_and_a_desktop_and_the_song_ends_above_it(tmp_path)
 
 @in_chromium
 def test_the_key_under_it_is_never_cut_short_by_a_fraction_of_a_pixel(tmp_path):
-    # Measured to the fraction of a pixel, which scrollWidth rounds away: at 360 px "capo 2" whole, never "capo…".
-    with viewer(tmp_path, written(tmp_path, UG_CHO), width=360, height=740) as b:
-        seen = b.js("""(() => { const d = document.querySelector('#key-now .d'), text = document.createRange();
-          text.selectNodeContents(d);
-          return [d.textContent, text.getBoundingClientRect().width <= d.getBoundingClientRect().width]; })()""")
-    assert seen == ["capo 2", True]
+    # At 344 px "no capo · +2" is a fraction of a pixel wider than its room, which scrollWidth rounds away (it says the
+    # line fits): measured to the fraction, "no capo" over "+2", each whole, rather than "no capo · …".
+    edge = """(() => { const d = document.querySelector('#key-now .d'), kept = [...d.childNodes];
+      const cls = d.className, range = document.createRange();
+      d.classList.remove('stack');
+      d.textContent = 'no capo · +2';
+      range.selectNodeContents(d);
+      const over = range.getBoundingClientRect().width - d.getBoundingClientRect().width;
+      const rounded = d.scrollWidth <= d.clientWidth;
+      d.textContent = '';
+      d.append(...kept);
+      d.className = cls;
+      return [over, rounded]; })()"""
+    lines = """[...document.querySelectorAll('#key-now .d > span')].map((e) => { const text = document.createRange();
+      text.selectNodeContents(e);
+      return [e.textContent, text.getBoundingClientRect().width <= e.getBoundingClientRect().width]; })"""
+    with viewer(tmp_path, written(tmp_path, UG_CHO) + "#capo=0", width=344, height=740) as b:
+        over, rounded = b.js(edge)
+        seen = b.js(lines)
+    assert 0 < over < 1 and rounded, (over, rounded)  # the edge this guards: over by a fraction scrollWidth hides
+    assert seen == [["no capo", True], ["+2", True]]
+
+
+@in_chromium
+def test_a_move_past_an_octave_is_said_within_one(tmp_path):
+    # caracole's [transpose] is −11 to 11; a page made with more still says the move within an octave (26: "+2").
+    page = tmp_path / "Artist" / "Far" / "sheet.html"
+    page.parent.mkdir(parents=True)
+    page.write_text(build_viewer(MINOR, transpose=26), encoding="utf-8")
+    with viewer(tmp_path, page.as_uri()) as b:
+        seen = [bar(b)[k] for k in ("main", "sub", "full")]
+    assert seen == ["Dm", "+2", "Key Dm · +2"]
 
 
 @in_chromium

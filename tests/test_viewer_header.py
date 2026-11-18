@@ -238,6 +238,7 @@ def test_a_songbook_song_draws_its_facts_too(tmp_path):
     # Its [transpose]: two up, as the bar says it.
     assert second == [["tuning", "E A D G B E"], ["capo", "none"], ["key", "Bm (+2) · from the tab"]]
     assert first == [["tuning", "E A D G B E"], ["capo", "2"], ["key", "G shapes · sounds A · key from the sheet"]]
-    # A fret lower, the chords you see a semitone up from the sheet's G, as the bar's "capo 1 · +1"
+    # A fret lower, the chords you see a semitone up from the sheet's G, as the bar's "capo 1 · +1": the shapes moved,
+    # the song still sounds in A
     assert lower == [["tuning", "E A D G B E"], ["capo", "1"],
-                     ["key", f"{shapes} shapes · sounds A (+1) · key from the sheet"]]
+                     ["key", f"{shapes} shapes (+1) · sounds A · key from the sheet"]]

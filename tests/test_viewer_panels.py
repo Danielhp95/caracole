@@ -255,10 +255,26 @@ def test_transpose_reset_goes_back_to_the_pdfs_transposition(tmp_path):
     assert pdf == ["capo 2 · +2", False] and zero == ["capo 2", True] and back == ["capo 2 · +2", False]
 
 
+# The settings' Transpose on a phone: each of its lines [its text, whole: no wider than its box (to the fraction of a
+# pixel) and inside the stepper], its word's lines, and whether its stepper is as tall as the Capo's beside it.
+SHIFT_WHOLE = """(() => { const out = document.getElementById('shift'), o = out.getBoundingClientRect();
+  const lines = [...out.children].map((e) => { const text = document.createRange(); text.selectNodeContents(e);
+    const box = e.getBoundingClientRect();
+    return [e.textContent,
+            text.getBoundingClientRect().width <= box.width && box.top >= o.top && box.bottom <= o.bottom]; });
+  const d = document.createRange(); d.selectNodeContents(out.querySelector('.d'));
+  const rows = new Set([...d.getClientRects()].map((r) => Math.round(r.top))).size;
+  const level = out.parentElement.getBoundingClientRect().height
+    === document.getElementById('capo-at').parentElement.getBoundingClientRect().height;
+  return [lines, rows, level]; })()"""
+
+
 @in_chromium
 def test_the_settings_say_the_transposition_as_the_bar_does(tmp_path):
     from test_viewer_bar import MINOR  # in Cm, with no capo
 
+    # Heard whole: the key and the word, neither hidden from a screen reader (the settings have no line of their own).
+    assert '<output id="shift"><span class="k">0</span><span class="d"></span></output>' in build_viewer(MINOR)
     with viewer(tmp_path, written(tmp_path, MINOR) + "#t=2") as b:
         b.click("#more")
         moved = b.js(SHIFT_SAID)
@@ -270,8 +286,22 @@ def test_the_settings_say_the_transposition_as_the_bar_does(tmp_path):
     with viewer(tmp_path, written(tmp_path, NO_KEY, name="Riffs") + "#t=2") as b:
         b.click("#more")
         keyless = b.js(SHIFT_SAID)
+    with viewer(tmp_path, written(tmp_path, NO_KEY, name="Riffs") + "#capo=0") as b:
+        b.click("#more")
+        keyless_off = [b.js(SHIFT_SAID), b.js("document.querySelector('#key-now .d').textContent")]
     assert moved == ["Dm", "+2"] and capo == ["Cm", "capo 2"] and bar == capo
-    assert keyless == ["+2", ""]  # no key to name: the semitones alone
+    assert keyless == ["+2", ""]  # no key to name: how far the chords moved alone
+    assert keyless_off == [["+1", ""], "no capo · +1"]  # its capo off: the chords a fret up, as the bar says
+    # On a 360 px phone, the count with a capo is whole, on two lines where one has no room ("capo 2 ·" over "+1"),
+    # its stepper no taller than the Capo's; on a 390 px one, on one line.
+    for fragment, said, width, rows in (("#t=1", ["Ab", "capo 2 · +1"], 360, 2),
+                                        ("#capo=0", ["A", "no capo · +2"], 360, 2),
+                                        ("#t=1", ["Ab", "capo 2 · +1"], 390, 1)):
+        with viewer(tmp_path, written(tmp_path, UG_CHO, name=f"Narrow{fragment[1:4]}{width}") + fragment, width=width,
+                    height=740) as b:
+            b.click("#more")
+            seen = b.js(SHIFT_WHOLE)
+        assert seen == [[[said[0], True], [said[1], True]], rows, True], (fragment, width, seen)
 
 
 @in_chromium

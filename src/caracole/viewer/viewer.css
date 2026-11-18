@@ -427,7 +427,8 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
 .now .k { font-weight: 700; }
 .now .d { color: var(--muted); font-size: .72rem; }
 .now .d:empty { display: none; }
-/* What changed the chords you see, once you changed it (a move, another capo): in the accent (viewer.js keyShort). */
+/* What changed the chords you see, when the chords shown moved from the sheet as written (a move, another capo): in
+   the accent (viewer.js keyShort). */
 .now .d.changed { color: var(--accent); font-weight: 700; }
 /* Too narrow for the capo and the transposition on one line: one over the other, closer together, so the
    three lines keep within the buttons' height. */
@@ -592,7 +593,10 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
 /* Transpose's value as the bar's key says it: the key, and under it what changed ("capo 2 · +1", "key"). */
 #panel .stepper output .k, #panel .stepper output .d { display: block; overflow: hidden; text-overflow: ellipsis;
   white-space: nowrap; }
-#panel .stepper output .d { color: var(--muted); font-size: .72rem; font-weight: 400; }
+/* The word wraps where one line has no room ("capo 2 ·" over "+1" on a 360 px phone), close enough that the three
+   lines keep within the stepper's height; never clipped (its words are short: none is cut). */
+#panel .stepper output .d { overflow: visible; color: var(--muted); font-size: .72rem; font-weight: 400;
+  line-height: 1.05; white-space: normal; }
 #panel .stepper output .d:empty { display: none; }
 /* The easier capos and an instrument's easy keys, under them: a small label, then the pills. */
 .opts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: -2px 0 12px; }

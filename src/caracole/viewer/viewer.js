@@ -491,8 +491,11 @@
   // How far the chords you see moved from the sheet as written, by your hand, in semitones: the shapes' move on an
   // instrument that takes a capo (so a sheet's capo taken off moves them up as many frets: "no capo · +2"), the
   // transposition alone on one that takes none (the sheet's capo folded in is no move of yours). Within an octave, as
-  // the bar, the settings and the header's Key say it; 0 for none.
-  const moved = () => wrapT(takesCapo() ? shift() : state.t);
+  // the bar, the settings and the header's Key say it (whatever the count, the remainder: 26 is "+2"); 0 for none.
+  const moved = () => {
+    const s = takesCapo() ? shift() : state.t;
+    return s - 12 * Math.trunc(s / 12);
+  };
   const names = (s) => (key ? data.names[modeNow()][mod12(key.tonic + s)] : data.names[""]).split(" ");
   const keyName = (s) => (key ? data.keyNames[modeNow()][mod12(key.tonic + s)] : "");
   const choices = () => state.alt[modeNow()] || {};
@@ -527,7 +530,8 @@
   // Where the song is played, as Cifra Club's key line says it: with a capo, the key of the
   // shapes, the capo and the key the song sounds in ("Em shapes · capo 2 · sounds F#m"), as
   // "Key Em" alone would read as the song's key; with none, the key. Each part is
-  // [before, in bold, after, where the key came from]; ``after`` follows the key it sounds in. keyLabel's,
+  // [before, in bold, after, where the key came from]; ``after`` follows the shapes with a capo, the key with none
+  // (how far the chords you see moved: never by the key it sounds in, which a capo may keep). keyLabel's,
   // as the PDF's line under the title is (page.py key_line_text); the header says it on two lines,
   // Capo and Key (keyFacts).
   const keyLine = (after) => {
@@ -535,29 +539,29 @@
     if (!key) return capo ? [["Capo ", String(capo), "", ""]] : saysNoCapo() ? [["No capo", "", "", ""]] : [];
     const sounds = keyName(state.t + sheetCapo);
     if (!capo) return [["Key ", sounds, after, key.from]].concat(saysNoCapo() ? [["no capo", "", "", ""]] : []);
-    return [["", keyName(shift()), " shapes", ""], ["capo ", String(capo), "", ""], ["sounds ", sounds, after, ""]]
+    return [["", keyName(shift()), " shapes" + after, ""], ["capo ", String(capo), "", ""], ["sounds ", sounds, "", ""]]
       .concat(key.from ? [["", "", "", "key " + key.from]] : []);
   };
   // The same as one line of text, for a screen reader in the bar (``withMove``: with how far the chords moved,
-  // moved()); without a key, Transpose and the move, then the capo.
+  // moved()): with a capo, the move by the shapes ("Ab shapes (+1) · capo 2 · sounds Bb"); with none, last ("Key A ·
+  // no capo · +2"); without a key, Transpose, then the capo and the move in the bar's order ("Transpose · no capo ·
+  // +1").
   const keyLabel = (withMove) => {
-    const shown = withMove && moved() ? signed(moved()) : "";
-    if (!key) {
-      const capo = capoNow();
-      return ["Transpose" + (shown ? " " + shown : "")]
-        .concat(capo ? ["capo " + capo] : saysNoCapo() ? ["no capo"] : []).join(" · ");
-    }
-    return keyLine("").filter((part) => part[1] || !part[3]).map((part) => part[0] + part[1] + part[2])
-      .concat(shown ? [shown] : []).join(" · ");
+    const move = withMove && moved() ? signed(moved()) : "";
+    if (!key) return ["Transpose"].concat(capoWords(), move ? [move] : []).join(" · ");
+    const byShapes = capoNow() > 0;
+    return keyLine(move && byShapes ? " (" + move + ")" : "").filter((part) => part[1] || !part[3])
+      .map((part) => part[0] + part[1] + part[2]).concat(move && !byShapes ? [move] : []).join(" · ");
   };
   // The header's Key line, in keyLine's parts, with no capo in it (its Capo line says it), as page.py's facts_html
   // writes it for the sheet as written: with no capo the key the song sounds in ("A · from the tab"); with one the key
   // of the shapes and the key it sounds in ("G shapes · sounds A · key from the tab"); ``after``, how far the chords
-  // moved (moved()), after the key it sounds in (" (+1)").
+  // moved (moved(), " (+1)"), after the key with no capo ("A (+2)"), after the shapes with one ("Ab shapes (+1) ·
+  // sounds A"): the move is the chords', never the sound's.
   const keyFacts = (after) => {
     const sounds = keyName(state.t + sheetCapo);
     if (!capoNow()) return [["", sounds, after, key.from]];
-    return [["", keyName(shift()), " shapes", ""], ["sounds ", sounds, after, ""]]
+    return [["", keyName(shift()), " shapes" + after, ""], ["sounds ", sounds, "", ""]]
       .concat(key.from ? [["", "", "", "key " + key.from]] : []);
   };
   // The header's Tuning line: the instrument's open strings, in the order its box draws them, each named as a sheet
@@ -574,8 +578,9 @@
   };
   // What changed the chords you see from the sheet as written, in words: the capo that plays them ("capo 2"; "no
   // capo" for a sheet's capo taken off), then how far they moved (moved(): "+2").
-  const changes = () => (takesCapo() && capoNow() > 0 ? ["capo " + capoNow()] : saysNoCapo() && capoNow() === 0
-    ? ["no capo"] : []).concat(moved() ? [signed(moved())] : []);
+  const capoWords = () => (takesCapo() && capoNow() > 0 ? ["capo " + capoNow()] : saysNoCapo() && capoNow() === 0
+    ? ["no capo"] : []);
+  const changes = () => capoWords().concat(moved() ? [signed(moved())] : []);
   // In short, for the bar, between − and +: [the key you play, the words under it, whether you changed it]. The key of
   // the shapes ("Transpose" for a sheet with no key), and under it what changed (changes()), else "key"
   // (["G", ["capo 2"], false], ["A", ["no capo", "+2"], true], ["Cm", ["key"], false]); changed once you moved the
@@ -1037,8 +1042,8 @@
     drawHead();
     drawFacts();
 
-    // The settings' Transpose says it as the bar does: the key over its words; with no key, the semitones alone.
-    $("shift").querySelector(".k").textContent = key ? main : signed(state.t);
+    // The settings' Transpose says it as the bar does: the key over its words; with no key, how far the chords moved.
+    $("shift").querySelector(".k").textContent = key ? main : signed(moved());
     $("shift").querySelector(".d").textContent = key ? words.join(" · ") : "";
     showReset($("reset-t"), state.t !== (Number(data.transpose) || 0));  // the PDF's transposition, else none
     $("capo-at").textContent = String(capoNow());

@@ -3252,10 +3252,12 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   the title names it); **Capo**, none or its fret, as set now; and **Key**,
   how the song is played. With a capo, the Key line names the key of the
   shapes you play and the key the song sounds in: "Em shapes · sounds F#m".
-  With none, the key alone: "Em". Moved, the key it sounds in says how far
-  the chords you see moved from the sheet as written, as the bar does:
-  "F#m (+2)" two up, "A (+2)" for a sheet's capo 2 taken off (its G shapes
-  played as A). Each says where the key came from. A sheet of
+  With none, the key alone: "Em". Moved, the Key line says how far the
+  chords you see moved from the sheet as written, as the bar does: after the
+  key with no capo ("F#m (+2)" two up; "A (+2)" for a sheet's capo 2 taken
+  off, its G shapes played as A), after the shapes with one ("Ab shapes (+1)
+  · sounds A" for that capo moved down a fret: the song still sounds in A).
+  Each says where the key came from. A sheet of
   words alone has no facts, so none says its capo either (its PDF's line does).
   The piano, the harmonica, the flute and the recorder take no capo and have
   no strings: no Tuning or Capo line, and the Key line names the key the song
@@ -3381,7 +3383,7 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   sounds in, over "key" until you transpose. On the narrowest screen "capo
   2" sits over "+1"; a key too long for its room ("Ab mixolydian") is a
   little smaller, and cut short only where even that is too long. A screen reader
-  hears the whole line ("Em shapes · capo 2 · sounds F#m · +1"). **The
+  hears the whole line ("Fm shapes (+1) · capo 2 · sounds Gm"). **The
   neck** opens the overlay as a sheet on a phone or a tablet (above). The
   strip of every chord's shape (below) is **All chord shapes** in ⋯, on
   every screen; the bar has no button for it. **Aa** opens a small box over the bar with the text
@@ -3442,7 +3444,7 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   Escape or Back closes the card first, then the settings; each gives the
   focus back to what opened it. Among them, side by side: **Transpose**, as − and + do, its value said as the bar's
   key says it, the key over the same word ("Dm" over "+2", "Cm" over "capo 2", "Em" over "key"; for a song with no
-  key, the semitones alone, "+2"); ↺ Reset, by it
+  key, how far its chords moved alone, "+2"), its word wrapping onto a second line on a narrow phone; ↺ Reset, by it
   while it differs, goes back to the song's
   `[transpose]`, where the viewer starts, like the PDF. A song with a version
   of its own (`[version]`, Make this my version) starts in it, key, capo, mode,

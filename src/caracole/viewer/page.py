@@ -1046,7 +1046,7 @@ _CONTROLS = """<div class="bar" id="bar" data-controls hidden role="region" aria
 <div class="num" id="t-row"><div class="num-top"><span id="t-lab">Transpose</span>
 <button type="button" class="undo" id="reset-t" hidden aria-label="Reset transpose">""" + _UNDO + """Reset</button></div>
 <span class="stepper" role="group" aria-labelledby="t-lab"><button type="button" id="down" aria-label="Down a semitone">−</button>
-<output id="shift"><span class="k">0</span><span class="d" aria-hidden="true"></span></output><button type="button" id="up" aria-label="Up a semitone">+</button></span></div>
+<output id="shift"><span class="k">0</span><span class="d"></span></output><button type="button" id="up" aria-label="Up a semitone">+</button></span></div>
 <div class="num" id="capo-row"><div class="num-top"><span id="capo-lab">Capo</span>
 <button type="button" class="undo" id="reset-capo" hidden aria-label="Reset capo">""" + _UNDO + """Reset</button></div>
 <span class="stepper" role="group" aria-labelledby="capo-lab"><button type="button" id="capo-down" aria-label="Capo down a fret">−</button>
