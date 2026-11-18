@@ -14,7 +14,7 @@ measured against what is around it alone.
 Each is a JavaScript expression whose value is that list, for ``Browser.js``, or for ``noting``: a
 script a test adds to the page (``with_script``), which writes the value into an attribute of the
 body for ``noted`` to read back from ``dump_dom``. ``UNFOLD`` opens every fold and every row's and
-line's "⋯" first, so that what they hold is measured too.
+line's chevron (a card opened as a click opens it) first, so that what they hold is measured too.
 """
 
 from __future__ import annotations
@@ -116,8 +116,10 @@ _WEAK = r"""
 """
 
 UNFOLD = """
+for (const more of document.querySelectorAll(".line-more"))
+  if (more.getAttribute("aria-expanded") !== "true") more.click();
+for (const panel of document.querySelectorAll(".row-panel")) panel.hidden = false;
 for (const fold of document.querySelectorAll("details")) fold.open = true;
-for (const panel of document.querySelectorAll(".row-panel, .line-panel")) panel.hidden = false;
 """
 
 

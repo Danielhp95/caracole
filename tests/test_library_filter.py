@@ -8,7 +8,7 @@ import json
 from datetime import UTC, datetime
 
 import pytest
-from helpers import browser
+from helpers import browser, cards
 from helpers.browser import CHROMIUM_MARKS
 
 from caracole.library import keep_file, song_dir
@@ -284,6 +284,7 @@ def test_new_songbook_starts_picking_in_the_library_as_it_was_left(shelf, tmp_pa
     count = "document.querySelector('.pick-count').textContent"
     with browser.Browser(tmp_path / "chrome", width=size[0], height=size[1], mobile=size[0] < 500) as page:
         page.open(shelf.as_uri() + "#show=wanted")
+        cards.install(page)
         page.click("#tab-songbooks")
         page.click("#songbooks .new-book")
         assert page.wait("document.body.classList.contains('selecting') && !document.querySelector('.pickbar').hidden")
@@ -297,7 +298,8 @@ def test_new_songbook_starts_picking_in_the_library_as_it_was_left(shelf, tmp_pa
         page.js("[...document.querySelectorAll('#list article.line')].find((l) => l.querySelector('h3').textContent === "
                 "'Wonderwall').querySelector('.line-more').id = 'wonderwall-more'")
         page.click("#wonderwall-more")
-        page.js("[...document.querySelectorAll('#list .line-panel button')].find((b) => b.checkVisibility() && "
+        page.js("[...cardOf([...document.querySelectorAll('#list .line')].find((l) => l.querySelector('h3')"
+                ".textContent === 'Wonderwall')).querySelectorAll('button')].find((b) => b.checkVisibility() && "
                 "b.textContent === 'Add to a songbook…').id = 'add-to-book'")
         page.click("#add-to-book")
         assert page.wait(f"document.body.classList.contains('selecting') && {count} === '2 selected'"), page.js(count)

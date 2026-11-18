@@ -14,6 +14,7 @@ from urllib.parse import quote
 
 import pytest
 import test_web_page_again as served_page
+from helpers import cards
 from helpers.browser import CHROMIUM_MARKS, Browser, BrowserError
 from helpers.library_songs import EXPORT, LACUERDA, hotel_california, with_versions
 from test_library_page import NOW, attribute_of, dump_dom, page, put, with_script
@@ -34,19 +35,18 @@ HOTEL = "Eagles/Hotel%20California/"
 
 # What the tests' scripts share: a song's card opened by its title, its tiles and the order of its parts noted, and
 # its drawer's.
-KIT = r"""
+KIT = cards.KIT + r"""
 const text = (n) => (n ? n.textContent.replace(/\s+/g, " ").trim() : null);
 const lineOf = (title) => Array.from(document.querySelectorAll("#list .line"))
   .find((l) => l.querySelector("h3").textContent === title);
 const openCard = (title) => {
   const line = lineOf(title);
-  const more = line.querySelector(".line-more");
-  if (more.getAttribute("aria-expanded") !== "true") more.click();
+  openCardOf(line);
   return line;
 };
 const noteCard = (title) => {
   const line = openCard(title);
-  const panel = line.querySelector(".line-panel");
+  const panel = cardOf(line);
   const tiles = Array.from(panel.querySelectorAll(".tiles > .tile")).map((t) => {
     const open = t.querySelector(".tile-open");
     return {
@@ -66,7 +66,7 @@ const noteCard = (title) => {
   return { tiles, parts, foot: Array.from(panel.querySelectorAll(".foot button, .foot a")).map(text) };
 };
 const noteDrawer = (title) => {
-  const d = lineOf(title).querySelector(".drawer");
+  const d = cardOf(lineOf(title)).querySelector(".drawer");
   return { hidden: d.hidden, id: d.id, what: text(d.querySelector(".drawer-what")),
     said: text(d.querySelector(".drawer-said")), after: d.previousElementSibling.className,
     head: Array.from(d.querySelectorAll(".drawer-head button, .drawer-head form")).map(text),
@@ -77,7 +77,7 @@ const noteDrawer = (title) => {
     rest: text(d.querySelector(".drawer-rest .rest-said")), command: text(d.querySelector(".drawer-rest code")),
     restButtons: Array.from(d.querySelectorAll(".drawer-rest button")).map(text) };
 };
-const chipOf = (title, source, kind) => lineOf(title)
+const chipOf = (title, source, kind) => cardOf(lineOf(title))
   .querySelector(".tile" + (kind ? ".tile-" + kind : "") + ' button.vchip[data-source="' + source + '"]');
 const note = (name, value) => document.body.setAttribute("data-" + name, JSON.stringify(value));
 """
@@ -143,7 +143,7 @@ def test_lyrics_from_megalobiz_link_back_to_their_page_from_the_tile(conn, cfg, 
         url=url).to_json())
     script = """
     openCard("Hotel California");
-    const chip = lineOf("Hotel California").querySelector(".tile-lyrics .tile-versions .vchip");
+    const chip = cardOf(lineOf("Hotel California")).querySelector(".tile-lyrics .tile-versions .vchip");
     note("chip", { tag: chip.tagName.toLowerCase(), href: chip.getAttribute("href"), target: chip.target,
                    rel: chip.rel, said: chip.getAttribute("aria-label"), name: text(chip.querySelector(".vchip-name")) });
     """
@@ -163,7 +163,7 @@ def test_lyrics_from_azlyrics_link_back_to_their_page_from_the_tile(conn, cfg, t
         url=url).to_json())
     script = """
     openCard("Hotel California");
-    const chip = lineOf("Hotel California").querySelector(".tile-lyrics .tile-versions .vchip");
+    const chip = cardOf(lineOf("Hotel California")).querySelector(".tile-lyrics .tile-versions .vchip");
     note("chip", { href: chip.getAttribute("href"), said: chip.getAttribute("aria-label") });
     """
     chip = attribute_of(run(conn, cfg, tmp_path, script), "data-chip")
@@ -231,7 +231,7 @@ const second = { drawer: noteDrawer("Hotel California"), ug: ug.getAttribute("ar
   lc: lc.getAttribute("aria-expanded") };
 lc.click();
 note("chips", { first, second, closed: noteDrawer("Hotel California").hidden, lc: lc.getAttribute("aria-expanded"),
-  drawers: lineOf("Hotel California").querySelectorAll(".drawer").length });
+  drawers: cardOf(lineOf("Hotel California")).querySelectorAll(".drawer").length });
 """
 
 
@@ -324,9 +324,9 @@ const real = window.fetch;
 window.fetch = (...args) => { asked.push(String(args[0])); return real(...args); };
 const loaded = performance.getEntriesByType("resource").length;
 openCard("Hotel California");
-for (const chip of lineOf("Hotel California").querySelectorAll("button.vchip")) { chip.click(); chip.click(); }
+for (const chip of cardOf(lineOf("Hotel California")).querySelectorAll("button.vchip")) { chip.click(); chip.click(); }
 note("quiet", { asked, loaded: performance.getEntriesByType("resource").length - loaded,
-  chips: lineOf("Hotel California").querySelectorAll("button.vchip").length });
+  chips: cardOf(lineOf("Hotel California")).querySelectorAll("button.vchip").length });
 """
 
 
@@ -359,7 +359,7 @@ def test_musescore_links_show_beside_a_sheet_too(conn, cfg, tmp_path):
     conn.execute("INSERT INTO musescore_index VALUES (?, ?, ?, '18')",
                  parse_song_url("https://musescore.com/song/hotel_california-1234"))
     script = ('note("card", noteCard("Hotel California"));\n'
-              'note("elsewhere", text(lineOf("Hotel California").querySelector(".find-elsewhere")));')
+              'note("elsewhere", text(cardOf(lineOf("Hotel California")).querySelector(".find-elsewhere")));')
     dom = run(conn, cfg, tmp_path, script)
     assert attribute_of(dom, "data-card")["parts"] == ["facts", "tiles", "card-sites", "find-elsewhere", "foot"]
     elsewhere = attribute_of(dom, "data-elsewhere")
@@ -410,7 +410,7 @@ def test_an_auto_sheet_alone_is_its_own_tile_in_its_colour(conn, cfg, tmp_path):
 
 REMOVE = """
 const card = noteCard("Hotel California");
-const more = lineOf("Hotel California").querySelector(".foot > details.foot-more");
+const more = cardOf(lineOf("Hotel California")).querySelector(".foot > details.foot-more");
 const go = more.querySelector("form.remove button");
 const closed = { open: more.open, shown: go.checkVisibility(), said: more.querySelector("summary").getAttribute("aria-label") };
 more.open = true;
@@ -422,7 +422,7 @@ probe.style.color = failed;
 document.body.appendChild(probe);
 note("remove", { foot: card.foot, said: go.getAttribute("aria-label"), color: style.color,
   failed: getComputedStyle(probe).color, background: style.backgroundColor, border: style.borderTopColor,
-  last: lineOf("Hotel California").querySelector(".foot").lastElementChild.className, closed, opened,
+  last: cardOf(lineOf("Hotel California")).querySelector(".foot").lastElementChild.className, closed, opened,
   menu: more.querySelector(".foot-menu").lastElementChild.className });
 """
 
@@ -444,7 +444,7 @@ def test_the_file_page_offers_no_change_but_the_command_that_fetches_versions(co
     hotel(conn, cfg)
     script = ('chipOf("Hotel California", "ug").click();\nnote("card", noteCard("Hotel California"));\n'
               'note("drawer", noteDrawer("Hotel California"));\n'
-              'note("forms", lineOf("Hotel California").querySelectorAll("form").length);')
+              'note("forms", cardOf(lineOf("Hotel California")).querySelectorAll("form").length);')
     dom = run(conn, cfg, tmp_path, script)
     card, drawer = attribute_of(dom, "data-card"), attribute_of(dom, "data-drawer")
     assert card["foot"] == ["Add to a songbook…"]  # no Fetch again, no Remove
@@ -455,9 +455,10 @@ def test_the_file_page_offers_no_change_but_the_command_that_fetches_versions(co
 
 PROGS = """
 const line = openCard("Synthetic Song");
-const chips = Array.from(line.querySelectorAll(".progressions .prog"));
-const before = { label: text(line.querySelector(".progressions .card-label").firstChild),
-  em: text(line.querySelector(".progressions .card-label em")), hint: line.querySelector(".progressions .card-label").title,
+const panel = cardOf(line);
+const chips = Array.from(panel.querySelectorAll(".progressions .prog"));
+const before = { label: text(panel.querySelector(".progressions .card-label").firstChild),
+  em: text(panel.querySelector(".progressions .card-label em")), hint: panel.querySelector(".progressions .card-label").title,
   chips: chips.map((c) => [text(c), c.getAttribute("aria-label"), !!c.querySelector("svg.glyph-search")]) };
 chips[0].click();
 note("progs", { before, hash: location.hash,
@@ -479,13 +480,14 @@ def test_progressions_are_search_chips_that_filter(conn, cfg, tmp_path):
 
 TILE_ROWS = """
 const line = openCard("Hotel California");
+const panel = cardOf(line);
 const mid = (n) => { const b = n.getBoundingClientRect(); return Math.round(b.top + b.height / 2); };
-note("rows", Array.from(line.querySelectorAll(".tiles > .tile")).map((t) => ({
+note("rows", Array.from(panel.querySelectorAll(".tiles > .tile")).map((t) => ({
   name: text(t.querySelector(".tile-name")), height: Math.round(t.getBoundingClientRect().height),
   mids: [t.querySelector(".tile-open"), t.querySelector(".tile-versions"), t.querySelector(".tile-downloads")]
     .filter(Boolean).map(mid),
   mark: !!t.querySelector(".tile-versions .vchip [data-source]"),
-  visible: Array.from(line.querySelectorAll(".foot button, .foot a, .foot summary")).filter((n) => n.checkVisibility())
+  visible: Array.from(panel.querySelectorAll(".foot button, .foot a, .foot summary")).filter((n) => n.checkVisibility())
     .map((n) => text(n)) })));
 """
 
@@ -529,15 +531,16 @@ def test_progressions_are_short_chips_four_and_a_button_for_the_rest(conn, cfg, 
 
 LAYOUT = """
 const line = openCard("Hotel California");
-const tiles = Array.from(line.querySelectorAll(".tiles > .tile"));
+const panel = cardOf(line);
+const tiles = Array.from(panel.querySelectorAll(".tiles > .tile"));
 const box = (n) => { const b = n.getBoundingClientRect(); return [Math.round(b.left), Math.round(b.right),
   Math.round(b.top), Math.round(b.bottom)]; };
 const at = (kind) => {
   chipOf("Hotel California", kind === "guitar" ? "gtptabs" : "ug", kind).click();
-  const drawer = line.querySelector(".drawer");
-  const point = parseFloat(drawer.style.getPropertyValue("--point")) + line.querySelector(".tiles").getBoundingClientRect().left;
+  const drawer = panel.querySelector(".drawer");
+  const point = parseFloat(drawer.style.getPropertyValue("--point")) + panel.querySelector(".tiles").getBoundingClientRect().left;
   return { after: drawer.previousElementSibling.className, drawer: box(drawer), point,
-    tile: box(line.querySelector(".tile-" + kind)), last: box(tiles[tiles.length - 1]) };
+    tile: box(panel.querySelector(".tile-" + kind)), last: box(tiles[tiles.length - 1]) };
 };
 note("layout", { sheet: at("sheet"), guitar: at("guitar"), tiles: tiles.map(box),
   wide: [document.documentElement.scrollWidth, innerWidth] });
@@ -570,8 +573,8 @@ def test_a_drawer_left_open_in_a_folded_card_is_placed_again_when_the_card_opens
     hotel(conn, cfg)
     html = build_library_page(conn, cfg, Overrides(), NOW, controls=SERVED)
     path = write_library_page(cfg.library_dir, with_script(html, "(() => {\n" + KIT +
-                                                           "\nwindow.kit = { openCard, chipOf, lineOf };\n})();"))
-    after = "kit.lineOf('Hotel California').querySelector('.drawer').previousElementSibling.className"
+                                                           "\nwindow.kit = { openCard, chipOf, lineOf }; window.cardOf = cardOf;\n})();"))
+    after = "cardOf(kit.lineOf('Hotel California')).querySelector('.drawer').previousElementSibling.className"
     with Browser(Path(tempfile.mkdtemp(prefix="profile-", dir=tmp_path)), width=1280, height=900) as b:
         b.open(path.as_uri())
         assert b.wait("!!window.kit && !!document.querySelector('#list .line-more')", 15)
@@ -611,7 +614,7 @@ const reads = {};
 for (const sel of [".tile-name", ".tile-from", ".tile-versions .lead", ".vchip .n", ".dl", ".drawer-said", ".vrow .ver",
   ".vrow .stars", ".vrow .note", ".inuse", ".drawer-rest", ".card-label", ".facts", ".btn.remove", ".tile-ico",
   ".line-plays .play", ".line-plays .play .n"]) {
-  const n = lineOf("Hotel California").querySelector(sel);
+  const n = (sel.startsWith(".line-plays") ? lineOf("Hotel California") : cardOf(lineOf("Hotel California"))).querySelector(sel);
   reads[sel] = n ? ratio(n) : null;
 }
 note("reads", reads);
@@ -631,6 +634,12 @@ def test_the_card_reads_in_both_themes(conn, cfg, tmp_path, scheme):
     assert weak == {}, (scheme, reads)
 
 
+def card(browser, item):
+    """The selector of the open card of the line ``item`` finds (opened if it is not): the card moves, so it is found
+    again by its chevron each time it is read."""
+    return cards.open_card(browser, item)
+
+
 # --- served: a line drawn again ---------------------------------------------------------------------------------
 
 
@@ -642,16 +651,16 @@ def test_a_line_drawn_again_keeps_its_card_open_and_its_drawer_closed(conn, cfg,
     item = f'article.line[data-id="{song.id}"]'
     browser.open(base)
     browser.click(item + " .line-more")
-    browser.click(item + ' .tile-sheet button.vchip[data-source="ug"]')
-    assert browser.wait(f"!document.querySelector('{item} .drawer').hidden")
-    browser.js(f"[...document.querySelectorAll('{item} .foot button')].find((b) => b.textContent === 'Fetch again')"
+    browser.click(card(browser, item) + ' .tile-sheet button.vchip[data-source="ug"]')
+    assert browser.wait(f"!document.querySelector('{card(browser, item)} .drawer').hidden")
+    browser.js(f"[...document.querySelectorAll('{card(browser, item)} .foot button')].find((b) => b.textContent === 'Fetch again')"
                ".click()")
     posted.next(0)
     assert browser.wait(f"document.querySelector('{item} .progress')?.dataset.tone === 'ready'", timeout=20)
     assert browser.js(f"document.querySelector('{item} .line-more').getAttribute('aria-expanded')") == "true"
-    assert browser.js(f"document.querySelector('{item} .line-panel').hidden") is False
-    assert browser.js(f"document.querySelector('{item} .drawer').hidden") is True
-    assert browser.js(f"[...document.querySelectorAll('{item} button.vchip')].map((c) => "
+    assert browser.js(f"document.querySelector('{card(browser, item)}').hidden") is False
+    assert browser.js(f"document.querySelector('{card(browser, item)} .drawer').hidden") is True
+    assert browser.js(f"[...document.querySelectorAll('{card(browser, item)} button.vchip')].map((c) => "
                       "c.getAttribute('aria-expanded'))") == ["false"] * 5
 
 
@@ -745,19 +754,19 @@ def drawer_of(browser, song, source):
     selector."""
     item = f'article.line[data-id="{song.id}"]'
     browser.click(item + " .line-more")
-    browser.click(item + f' .tile-sheet button.vchip[data-source="{source}"]')
-    assert browser.wait(f"!document.querySelector('{item} .drawer').hidden")
+    browser.click(card(browser, item) + f' .tile-sheet button.vchip[data-source="{source}"]')
+    assert browser.wait(f"!document.querySelector('{card(browser, item)} .drawer').hidden")
     return item
 
 
 def press(browser, item, words, where=".drawer"):
     """The button of the song's ``where`` that says ``words``, pressed as a hand would."""
-    found = (f"[...document.querySelectorAll('{item} {where} button')].find((b) => b.textContent === "
+    found = (f"[...document.querySelectorAll('{card(browser, item)} {where} button')].find((b) => b.textContent === "
              f"{json.dumps(words)})")
-    assert browser.wait(f"!!({found})"), browser.js(f"[...document.querySelectorAll('{item} {where} button')]"
+    assert browser.wait(f"!!({found})"), browser.js(f"[...document.querySelectorAll('{card(browser, item)} {where} button')]"
                                                    ".map((b) => b.textContent)")
     browser.js(f"({found}).dataset.pressMe = '1'")
-    browser.click(f"{item} {where} button[data-press-me]")
+    browser.click(f"{card(browser, item)} {where} button[data-press-me]")
 
 
 def test_use_this_one_posts_choose_with_the_tab(conn, cfg, versions_served, browser):
@@ -765,7 +774,7 @@ def test_use_this_one_posts_choose_with_the_tab(conn, cfg, versions_served, brow
     song = hotel(conn, cfg)
     browser.open(base)
     item = drawer_of(browser, song, "ug")
-    assert browser.js(f"[...document.querySelectorAll('{item} .vrow')].map((r) => [...r.querySelectorAll("
+    assert browser.js(f"[...document.querySelectorAll('{card(browser, item)} .vrow')].map((r) => [...r.querySelectorAll("
                       "'.vbtns button, .vbtns .inuse')].map((b) => b.textContent))") == [
         ["In use"], ["Use this one"], ["Use this one"]]
     press(browser, item, "Use this one")
@@ -787,12 +796,12 @@ def test_fetch_them_posts_keep_more_and_says_fetch_n_more(conn, cfg, versions_se
     update_song(conn, few.id, status="found")
     browser.open(base)
     item = drawer_of(browser, song, "ug")
-    rest = f"document.querySelector('{item} .drawer-rest')"
+    rest = f"document.querySelector('{card(browser, item)} .drawer-rest')"
     assert browser.js(f"{rest}.querySelector('.rest-said').textContent") == "10 more on UG, not kept"
     assert browser.js(f"{rest}.querySelector('button').getAttribute('aria-label')") == (
         "Fetch 6 more versions of Hotel California from UG")
     other = drawer_of(browser, few, "ug")
-    assert browser.js(f"[...document.querySelectorAll('{other} .drawer-rest button')].map((b) => b.textContent)") == [
+    assert browser.js(f"[...document.querySelectorAll('{card(browser, other)} .drawer-rest button')].map((b) => b.textContent)") == [
         "Fetch them"]
     press(browser, item, "Fetch 6 more")
     assert posts.next(0) == ("/versions/keep-more", {"csrf": "tok", "song": str(song.id), "identity": song.key})
@@ -808,14 +817,14 @@ def test_after_keep_more_the_drawer_counts_again_from_the_jobs_view(conn, cfg, v
     # Once its job is over, the line is drawn again from what the library has: two more kept, eight left.
     assert browser.wait(f"document.querySelector('{item} .progress')?.dataset.tone === 'ready'", timeout=20)
     assert runner.ran == [("versions", "--keep-more", "--progress", "--", "Eagles", "Hotel California")]
-    assert browser.js(f"document.querySelector('{item} .drawer').hidden") is True  # closed, as it was drawn again
-    browser.click(item + ' .tile-sheet button.vchip[data-source="ug"]')
-    assert browser.wait(f"!document.querySelector('{item} .drawer').hidden")
-    assert browser.js(f"document.querySelector('{item} .drawer-said').textContent") == (
+    assert browser.js(f"document.querySelector('{card(browser, item)} .drawer').hidden") is True  # closed, as it was drawn again
+    browser.click(card(browser, item) + ' .tile-sheet button.vchip[data-source="ug"]')
+    assert browser.wait(f"!document.querySelector('{card(browser, item)} .drawer').hidden")
+    assert browser.js(f"document.querySelector('{card(browser, item)} .drawer-said').textContent") == (
         "13 on UG · 5 in your logbook")
-    assert browser.js(f"document.querySelector('{item} .drawer-rest .rest-said').textContent") == (
+    assert browser.js(f"document.querySelector('{card(browser, item)} .drawer-rest .rest-said').textContent") == (
         "8 more on UG, not kept")
-    assert browser.js(f"document.querySelectorAll('{item} .vrow').length") == 5
+    assert browser.js(f"document.querySelectorAll('{card(browser, item)} .vrow').length") == 5
 
 
 def test_back_to_caracoles_pick_only_when_pinned(conn, cfg, versions_served, browser):
@@ -825,7 +834,7 @@ def test_back_to_caracoles_pick_only_when_pinned(conn, cfg, versions_served, bro
     song = hotel(conn, cfg)
     browser.open(base)
     item = drawer_of(browser, song, "ug")
-    assert browser.js(f"document.querySelector('{item} .drawer-head').textContent").count("Back") == 0
+    assert browser.js(f"document.querySelector('{card(browser, item)} .drawer-head').textContent").count("Back") == 0
     add_pin(cfg.overrides_file, song.display, ["https://tabs.ultimate-guitar.com/tab/eagles/hotel-california-chords-46191"])
     browser.open(base)
     item = drawer_of(browser, song, "ug")
@@ -851,9 +860,9 @@ def test_lacuerda_use_this_one_waits_for_a_pin_to_go(conn, cfg, versions_served,
     add_pin(cfg.overrides_file, song.display, ["https://tabs.ultimate-guitar.com/tab/eagles/hotel-california-chords-46191"])
     browser.open(base)
     item = drawer_of(browser, song, "lacuerda")
-    buttons = f"[...document.querySelectorAll('{item} .drawer button')].map((b) => b.textContent)"
+    buttons = f"[...document.querySelectorAll('{card(browser, item)} .drawer button')].map((b) => b.textContent)"
     assert "Use this one" not in browser.js(buttons)
-    assert browser.js(f"document.querySelector('{item} .drawer .pin-note').textContent") == (
+    assert browser.js(f"document.querySelector('{card(browser, item)} .drawer .pin-note').textContent") == (
         "Your UG choice is in use. Back to our pick first.")
     press(browser, item, "Back to our pick")
     assert posts.next(0) == ("/versions/clear", {"csrf": "tok", "song": str(song.id), "identity": song.key})

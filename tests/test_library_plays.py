@@ -102,7 +102,7 @@ def test_the_line_has_no_open_and_its_title_no_link_nor_its_sites_marks(conn, cf
     note("line", { action: line.querySelector(".line-action").childElementCount,
       titleLink: line.querySelector(":scope > a.line-title, :scope > .line-title a.title-link") !== null,
       sitesOnLine: line.querySelector(":scope > .line-meta .line-sites") !== null,
-      sitesInCard: line.querySelector(":scope > .line-panel .card-sites .line-sites") !== null,
+      sitesInCard: cardOf(line).querySelector(".card-sites .line-sites") !== null,
       holds: line.querySelector(".line-holds") !== null });
     """
     shown = attribute_of(run(conn, cfg, tmp_path, script, controls=WebControls(csrf="tok")), "data-line")
@@ -170,7 +170,7 @@ def test_the_title_opens_the_card_as_the_chevron_does_and_a_button_never_does(co
     const line = lineOf("Hotel California");
     const more = line.querySelector(":scope > .line-more");
     const state = () => ({ expanded: more.getAttribute("aria-expanded"),
-      shown: !line.querySelector(":scope > .line-panel").hidden });
+      shown: !cardOf(line).hidden });
     const play = line.querySelector(".line-plays a");
     play.addEventListener("click", (e) => e.preventDefault());  // the test stays on the page
     play.click();

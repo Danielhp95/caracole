@@ -15,6 +15,7 @@ from dataclasses import replace
 from urllib.parse import quote, urlencode
 
 import pytest
+from helpers import cards
 from helpers.browser import CHROMIUM_MARKS, Browser, BrowserError
 from helpers.guitar import SYNTHETIC, SYNTHETIC_TEX, alphatab_dir, export_alphatex, keep_guitar
 
@@ -906,11 +907,11 @@ def test_the_served_library_page_opens_it(served, tmp_path):
     page = opened(tmp_path, base)
     try:
         assert page.wait("!!document.querySelector('.line-more')", 15)
-        page.click(".line-more")
-        opener = "document.querySelector('.tile-guitar a.tile-open')"  # the card's Guitar Pro tile
+        card = cards.open_card(page, "#list .line")
+        opener = f"document.querySelector('{card} .tile-guitar a.tile-open')"  # the card's Guitar Pro tile
         assert page.wait(f"!!{opener}")
         assert page.js(f"{opener}.href") == url
-        assert page.js("[...document.querySelectorAll('.tile-guitar a.dl')].some((a) => "
+        assert page.js(f"[...document.querySelectorAll('{card} .tile-guitar a.dl')].some((a) => "
                        "a.getAttribute('href').endsWith('guitar-1.gp'))")
         page.js(f"{opener}.click()")
         assert page.wait("location.pathname === '/guitar'", 15)

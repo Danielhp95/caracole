@@ -8,6 +8,7 @@ import threading
 import time
 
 import pytest
+from helpers import cards
 from helpers.browser import CHROMIUM_MARKS, Browser, BrowserError
 from helpers.guitar import keep_guitar
 
@@ -64,9 +65,9 @@ def test_a_guitar_pro_file_saves_under_its_songs_name(served, tmp_path, label, n
         page._send("Browser.setDownloadBehavior", behavior="allow", downloadPath=str(downloads))
         page.open(served)
         assert page.wait("!!document.querySelector('.line-more')", 15)
-        page.click(".line-more")
-        page.click(".tile-guitar button.vchip")  # its files, in the card's drawer: each one's Download
-        link = (f"[...document.querySelectorAll('.drawer a[download]')]"
+        card = cards.open_card(page, "#list .line")
+        page.click(f"{card} .tile-guitar button.vchip")  # its files, in the card's drawer: each one's Download
+        link = (f"[...document.querySelectorAll('{card} .drawer a[download]')]"
                 f".find((a) => a.getAttribute('aria-label').startsWith('Download ' + {label!r}))")
         assert page.wait(f"!!{link}")
         assert page.js(f"{link}.getAttribute('download')") == name

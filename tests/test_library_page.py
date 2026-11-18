@@ -7,7 +7,7 @@ from pathlib import Path
 from urllib.parse import quote, unquote
 
 import pytest
-from helpers import browser
+from helpers import browser, cards
 from helpers.browser import in_chromium
 from typer.testing import CliRunner
 
@@ -1054,6 +1054,21 @@ def dump_dom(path: Path, tmp_path: Path, fragment: str = "", size: str = "1280,9
                             mobile=width < NARROWEST_WINDOW, touch=touch, media=media)
 
 
+def dump_opened(path: Path, tmp_path: Path, fragment: str = "", size: str = cards.IN_PLACE, **how) -> str:
+    """``dump_dom`` of the page with every song's card opened first (a script after the page's own), in a window whose
+    cards open under their lines (``cards.IN_PLACE``), so that a test reads each through ``cards.card_of``."""
+    script = "(() => {\n" + cards.KIT + (
+        '\nfor (const l of document.querySelectorAll("#list .line")) if (l.querySelector(".line-more")) openCardOf(l);'
+        "\n})();")
+    opened = path.with_name("opened-" + path.name)
+    # Beside the page: its relative addresses stay what they were.
+    opened.write_text(with_script(path.read_text(encoding="utf-8"), script), encoding="utf-8")
+    try:
+        return dump_dom(opened, tmp_path, fragment, size, **how)
+    finally:
+        opened.unlink()
+
+
 def listing(dom: str) -> str:
     """The rendered song list (the DOM dump also holds the page's own script text)."""
     found = re.search(r'<main[^>]*id="list"[^>]*>(.*?)</main>', dom, re.S)
@@ -1074,11 +1089,19 @@ def titles_in(shown: str) -> list[str]:
     return re.findall(r"<h3[^>]*>([^<]*)</h3>", shown)
 
 
-def panel_of(line: str) -> str:
-    """What a line's "⋯" holds."""
-    found = re.search(r'<div class="line-panel"[^>]*>.*', line, re.S)
-    assert found, line
-    return found.group(0)
+def line_with_card(dom: str, title: str) -> str:
+    """The line headed ``title`` and its card, wherever the page puts it: the line's markup, then the card's unless the
+    line holds it."""
+    line = line_of(listing(dom), title)
+    card = cards.card_of(dom, title)
+    return line if not card or card in line else line + card
+
+
+def line_without_card(dom: str, title: str) -> str:
+    """The line headed ``title`` as the list draws it, its card left out."""
+    line = line_of(listing(dom), title)
+    card = cards.card_of(dom, title)
+    return line.replace(card, "", 1) if card else line
 
 
 @in_chromium
@@ -1344,13 +1367,14 @@ def test_the_served_page_offers_a_remove_on_every_line(conn, cfg, tmp_path):
     going = add_song(conn, "Oasis", "Wonderwall")
     controls = WebControls(csrf="tok", removing=frozenset({going.id}))
     path = write_library_page(cfg.library_dir, build_library_page(conn, cfg, Overrides(), NOW, controls=controls))
-    shown = listing(dump_dom(path, tmp_path))
+    dom = dump_opened(path, tmp_path)
+    shown = listing(dom)
     forms = re.findall(r'<form[^>]*action="/remove"[^>]*>(.*?)</form>', shown, re.S)
     assert sorted(re.search(r'name="song" value="(\d+)"', f).group(1) for f in forms) == sorted(
         str(s.id) for s in (wanted, found, ignored))
     assert all('name="csrf" value="tok"' in f and ">Remove</button>" in f for f in forms)
     assert 'aria-label="Remove Creep by Radiohead from your logbook"' in shown
-    going = line_of(shown, "Wonderwall")
+    going = line_with_card(dom, "Wonderwall")
     assert "Removing…" in going and "/remove" not in going
     assert "/fetch" not in going  # a fetch now would run before the removal and fetch for nothing
     # The page on disk has no server to remove anything.
@@ -1381,10 +1405,10 @@ def test_a_found_songs_menu_looks_it_up_again_served_and_never_on_the_file(conn,
         (found, "estopa", "como_camaron"), (wanted, "andres_calamaro", "flaca"), (ignored, "mecano", "hijo"),
         (going, "oasis", "wonderwall"))})
     controls = WebControls(csrf="tok", removing=frozenset({going.id}))
-    shown = listing(dump_dom(write_library_page(cfg.library_dir, build_library_page(
-        conn, cfg, picks, NOW, controls=controls)), tmp_path))
+    dom = dump_opened(write_library_page(cfg.library_dir, build_library_page(
+        conn, cfg, picks, NOW, controls=controls)), tmp_path)
     forms = {title: re.findall(r'<form[^>]*class="again"[^>]*action="/lookup"[^>]*>(.*?)</form>',
-                               panel_of(line_of(shown, title)), re.S)
+                               cards.card_of(dom, title), re.S)
              for title in ("Como Camarón", "Creep", "Flaca", "Hijo de la Luna", "Wonderwall")}
     camaron = forms["Como Camarón"]
     assert [re.search(r">([^<]+)</button>", f).group(1) for f in camaron] == ["Fetch again", "Use LaCuerda's sheet"]
@@ -1696,7 +1720,7 @@ def test_the_file_shows_a_reviews_candidates_and_the_line_that_picks_one(conn, c
     index_tabs(conn, (1, "radiohead", "creep", "chords"), (3, "radiohead", "creep", "tabs"))
     in_review(conn)
     path = write_library_page(cfg.library_dir, page(conn, cfg))
-    card = line_of(listing(dump_dom(path, tmp_path)), "Crep")
+    card = line_with_card(dump_opened(path, tmp_path), "Crep")
     picker = re.search(r'<details class="picker">.*?</details>', card, re.S).group(0)
     assert re.search(r"<summary[^>]*>3 candidates</summary>", picker)
     names = re.findall(r'<span class="choice-name">([^<]*)</span>', picker)
@@ -1719,12 +1743,12 @@ def test_the_served_page_picks_a_candidate_with_a_form_in_place_of_review_first(
     update_song(conn, bare.id, review=True)
     controls = WebControls(csrf='t"k', held=frozenset({s.id, bare.id}))
     html = build_library_page(conn, cfg, Overrides(), NOW, controls=controls)
-    shown = listing(dump_dom(write_library_page(cfg.library_dir, html), tmp_path))
-    card = line_of(shown, "Crep")
+    dom = dump_opened(write_library_page(cfg.library_dir, html), tmp_path)
+    card = line_with_card(dom, "Crep")
     assert "Review first" not in card and "/fetch" not in card
     # Its button opens the picker, under its "⋯", folded as "3 candidates".
     assert re.search(r'<div class="line-action"><button class="btn small line-pick"[^>]*>Pick the match</button>', card)
-    assert re.search(r'<summary class="picker-open"[^>]*>3 candidates</summary>', panel_of(card))
+    assert re.search(r'<summary class="picker-open"[^>]*>3 candidates</summary>', cards.card_of(dom, "Crep"))
     form = re.search(r'<form[^>]*action="/review"[^>]*>(.*?)</form>', card, re.S)
     assert form and 'method="post"' in form.group(0)
     fields = form.group(1)
@@ -1737,7 +1761,7 @@ def test_the_served_page_picks_a_candidate_with_a_form_in_place_of_review_first(
     assert re.search(r'<button[^>]*type="submit"[^>]*>Pick</button>', fields)
     assert "None of these" in fields
     # A review with no candidate keeps its note and the button that says why it can't be fetched.
-    plain = line_of(shown, "Bohemian Rhapsody")
+    plain = line_with_card(dom, "Bohemian Rhapsody")
     assert re.search(r"<button[^>]*disabled[^>]*>Review first</button>", plain) and "picker" not in plain
 
 
@@ -1750,7 +1774,7 @@ def test_the_served_picker_of_a_song_being_fetched_is_read_only_until_its_reques
     s = in_review(conn)
     controls = WebControls(csrf="tok", busy=frozenset({s.id}), active=1, held=frozenset({s.id}))
     html = build_library_page(conn, cfg, Overrides(), NOW, controls=controls)
-    card = line_of(listing(dump_dom(write_library_page(cfg.library_dir, html), tmp_path)), "Crep")
+    card = line_with_card(dump_opened(write_library_page(cfg.library_dir, html), tmp_path), "Crep")
     # The card's one form is its foot's Remove…: no pick, and no input but Remove's.
     assert re.findall(r'<form[^>]*action="([^"]*)"', card) == ["/remove"]
     picker = re.search(r'<details class="picker">.*?</details>', card, re.S).group(0)
@@ -1776,7 +1800,7 @@ def test_the_served_picker_is_read_only_while_any_request_of_its_song_waits(conn
            "details": "jobs?job=4#job-4"}
     controls = WebControls(csrf="tok", active=2, held=frozenset({s.id}), jobs=(job,))
     html = build_library_page(conn, cfg, Overrides(), NOW, controls=controls)
-    card = line_of(listing(dump_dom(write_library_page(cfg.library_dir, html), tmp_path)), "Crep")
+    card = line_with_card(dump_opened(write_library_page(cfg.library_dir, html), tmp_path), "Crep")
     assert re.findall(r'<form[^>]*action="([^"]*)"', card) == ["/remove"]
     picker = re.search(r'<details class="picker">.*?</details>', card, re.S).group(0)
     assert "<input" not in picker
@@ -1793,7 +1817,7 @@ def test_a_found_song_in_review_gets_the_picker_too(conn, cfg, tmp_path):
     s = in_review(conn)
     update_song(conn, s.id, status="found")
     html = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok", held=frozenset({s.id})))
-    card = line_of(listing(dump_dom(write_library_page(cfg.library_dir, html), tmp_path)), "Crep")
+    card = line_with_card(dump_opened(write_library_page(cfg.library_dir, html), tmp_path), "Crep")
     assert 'data-status="found"' in card and "/fetch" not in card
     form = re.search(r'<form[^>]*action="/review"[^>]*>(.*?)</form>', card, re.S)
     assert form and f'name="song" value="{s.id}"' in form.group(1)
@@ -1803,10 +1827,9 @@ def test_a_found_song_in_review_gets_the_picker_too(conn, cfg, tmp_path):
 
 # Opens the first picker from its line's "⋯", by its summary, as a click or Enter does, then notes where the focus
 # went.
-OPEN_PICKER = """
-(() => {
-  const picker = document.querySelector("#list details.picker");
-  picker.closest("article").querySelector(".line-more").click();
+OPEN_PICKER = "(() => {" + cards.KIT + """
+  const picker = openCardOf(document.querySelector("#list details.picker").closest("article"))
+    .querySelector("details.picker");
   picker.querySelector("summary").click();
   setTimeout(() => {
     const focus = document.activeElement;
@@ -1971,11 +1994,12 @@ def test_the_served_line_of_a_song_not_found_links_to_its_search_hits(conn, cfg,
     lost = add_song(conn, "Radio Head", "Crep")
     update_song(conn, lost.id, match_decision="not_found")
     html = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok"))
-    card = line_of(listing(dump_dom(write_library_page(cfg.library_dir, html), tmp_path)), "Crep")
+    dom = dump_opened(write_library_page(cfg.library_dir, html), tmp_path)
+    card = line_with_card(dom, "Crep")
     assert re.search(rf'<a class="btn small" href="/review\?song={lost.id}"[^>]*>Look in index</a>',
-                     panel_of(card))
+                     cards.card_of(dom, "Crep"))
     assert "/fetch" in card  # its artist's UG page may have it: Fetch now still asks
-    on_file = line_of(listing(dump_dom(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path)), "Crep")
+    on_file = line_with_card(dump_opened(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path), "Crep")
     assert "/review" not in on_file
     # The file can't search: it names the line that lists the hits, numbered as --pick takes them.
     hint = re.search(r'<p class="pick-hint">(.*?)</p>', on_file, re.S)
@@ -2105,13 +2129,14 @@ def test_on_the_file_no_name_gets_a_song(conn, cfg, tmp_path, fragment):
 
 @in_chromium
 def test_a_wanted_songs_auto_sheet_is_its_button_beside_fetch_now(conn, cfg, tmp_path):
-    line = line_of(listing(dump_dom(served_auto_sheet(conn, cfg), tmp_path)), "斑马，斑马")
+    dom = dump_opened(served_auto_sheet(conn, cfg), tmp_path)
+    line = line_with_card(dom, "斑马，斑马")
     # Fetch now is the line's one primary button, the download glyph; the auto sheet's button opens it, in its own
     # colour, and its tile leads the card.
     assert re.search(r'<div class="line-action"><form[^>]*action="/fetch"', line), line
     assert line.count("btn small primary line-fetch") == 1 and line.count("primary") == 1, line
     assert re.search(r'<a class="play play-sheet auto" ' + AUTO_VIEWER, line), line
-    first = re.search(r'<div class="tile ([^"]*)"><a class="tile-open" ([^>]*)>', panel_of(line))
+    first = re.search(r'<div class="tile ([^"]*)"><a class="tile-open" ([^>]*)>', cards.card_of(dom, "斑马，斑马"))
     assert first and first.group(1).split() == ["tile-sheet", "auto"] and re.search(AUTO_VIEWER, first.group(2)), line
 
 
@@ -2149,10 +2174,10 @@ def test_a_result_rows_title_opens_what_its_href_says(conn, cfg, tmp_path):
 @in_chromium
 def test_a_line_opens_each_thing_from_its_button_and_its_files_wait_under_its_chevron(conn, cfg, tmp_path):
     filed_library(conn, cfg)
-    shown = listing(dump_dom(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path))
+    dom = dump_dom(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path)  # closed: read as it is
 
-    creep = line_of(shown, "Creep")
-    top, menu = creep.split('class="line-panel"', 1)
+    top = line_without_card(dom, "Creep")
+    menu = cards.card_of(dom, "Creep").split('class="line-panel"', 1)[1]
     # A button each for its sheet, its Guitar Pro file, its tab: no other link on its line.
     assert [h for h, _ in play_links(top)] == ["Radiohead/Creep/sheet.html", "Radiohead/Creep/guitar-1.gp5",
                                                "Radiohead/Creep/tab.txt"]
@@ -2167,12 +2192,12 @@ def test_a_line_opens_each_thing_from_its_button_and_its_files_wait_under_its_ch
                                                                            "Lyrics"]
     assert '<p class="subhead">Files</p>' not in menu  # nothing left over
     # A sheet with no viewer opens its PDF, its tile too; nothing else to list.
-    wonderwall = line_of(shown, "Wonderwall")
+    wonderwall = line_without_card(dom, "Wonderwall")
     assert [h for h, _ in play_links(wonderwall)] == ["Oasis/Wonderwall/sheet.pdf"]
-    assert set(re.findall(r'<a [^>]*href="(Oasis/Wonderwall/[^"]*)"', panel_of(wonderwall))) == {
+    assert set(re.findall(r'<a [^>]*href="(Oasis/Wonderwall/[^"]*)"', cards.card_of(dom, "Wonderwall"))) == {
         "Oasis/Wonderwall/sheet.pdf"}
     # A song with no file has nothing to open.
-    yesterday = line_of(shown, "Yesterday")
+    yesterday = line_with_card(dom, "Yesterday")
     assert "line-plays" not in yesterday and "tile" not in yesterday
 
 
@@ -2194,15 +2219,16 @@ def test_a_lines_menu_lists_the_sheets_versions_apart_from_its_files(conn, cfg, 
     keep_sheet_json(conn, cfg, plain, "Words\n", raw={"tonality_name": "G"}, tab_id=2)
     update_song(conn, plain.id, status="found")
     put(cfg, plain, "sheet.html", "sheet.pdf")
-    shown = listing(dump_dom(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path))
+    dom = dump_opened(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path)
 
-    soda = line_of(shown, "De Música Ligera")
+    soda = line_without_card(dom, "De Música Ligera")
     assert [h for h, _ in play_links(soda)] == ["Soda%20Stereo/De%20M%C3%BAsica%20Ligera/sheet.html"]
-    downloads = re.findall(r'<a class="dl" href="([^"]*)"[^>]*>.*?</svg>([^<]*)</a>', panel_of(soda), re.S)
+    downloads = re.findall(r'<a class="dl" href="([^"]*)"[^>]*>.*?</svg>([^<]*)</a>',
+                           cards.card_of(dom, "De Música Ligera"), re.S)
     assert [label for _, label in downloads] == ["PDF", "Text", "PDF · B Minor, capo 2", "PDF · G Dorian, capo 0"]
     assert downloads[3][0] == "Soda%20Stereo/De%20M%C3%BAsica%20Ligera/sheet%20%28G%20Dorian%2C%20capo%200%29.pdf"
     # A song with no export has none.
-    assert "PDF · " not in line_of(shown, "Creep")
+    assert "PDF · " not in line_with_card(dom, "Creep")
 
 
 def wonderwall(conn, cfg, *, pages=("sheet.html", "version-39144.html")):
@@ -2435,11 +2461,11 @@ def test_a_lines_menu_lists_its_kept_versions_each_opening_its_page_and_the_titl
     assert [r["open"] for r in drawer["rows"]] == ["Oasis/Wonderwall/sheet.html", "Oasis/Wonderwall/version-39144.html",
                                                    "Oasis/Wonderwall/version-27596.txt"]
     # The line's sheet button still opens the one, sheet.html, counting the three, and the export is the sheet's.
-    shown = listing(dump_dom(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path))
-    line = line_of(shown, "Wonderwall")
+    dom = dump_opened(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path)
+    line = line_without_card(dom, "Wonderwall")
     assert play_links(line)[0] == ("Oasis/Wonderwall/sheet.html",
                                    "Open the chord sheet of Wonderwall, from UG, 3 versions"), line
-    assert ">PDF · G Dorian, capo 0</a>" in line
+    assert ">PDF · G Dorian, capo 0</a>" in cards.card_of(dom, "Wonderwall")
 
 
 @in_chromium
@@ -2490,9 +2516,11 @@ def test_on_a_phone_files_open_with_a_tap_the_title_opens_the_card_and_tab_goes_
         assert phone.js(f"Math.min(...Array.from({q}.querySelectorAll('.line-plays a')).map((a) => "
                         "Math.min(a.getBoundingClientRect().width, a.getBoundingClientRect().height)))") >= 44
         phone.click(line + " .line-more")
-        assert phone.wait(f"!{q}.querySelector('.line-panel').hidden")
-        heights = phone.js(f"Array.from({q}.querySelectorAll('.line-panel a')).map((a) => a.getBoundingClientRect().height)")
-        files = phone.js(f"new Set(Array.from({q}.querySelectorAll('.line-panel a')).map((a) => a.href)).size")
+        cards.install(phone)
+        card = f"document.querySelector('#' + cardOf({q}).id)"
+        assert phone.wait(f"!{card}.hidden")
+        heights = phone.js(f"Array.from({card}.querySelectorAll('a')).map((a) => a.getBoundingClientRect().height)")
+        files = phone.js(f"new Set(Array.from({card}.querySelectorAll('a')).map((a) => a.href)).size")
         # The nine files filed_library keeps, each reached from the card, each a thumb's target.
         assert files == 9 and min(heights) >= 44, (files, heights)
         # From the line, Tab goes to its first button, its sheet's: the title is no stop of its own, and a tap on it
@@ -2502,7 +2530,7 @@ def test_on_a_phone_files_open_with_a_tap_the_title_opens_the_card_and_tab_goes_
         assert phone.js("document.activeElement.getAttribute('aria-label')") == (
             "Open the chord sheet of Creep, from UG")
         phone.click(line + " .line-title h3")
-        assert phone.wait(f"{q}.querySelector('.line-panel').hidden")
+        assert phone.wait(f"{card}.hidden")
         phone.click(line + " .line-plays a")
         assert phone.wait("location.pathname.endsWith('/Radiohead/Creep/sheet.html')")
 
@@ -2678,10 +2706,11 @@ def row_of(shown: str, title: str) -> str:
 @in_chromium
 def test_a_line_shows_its_title_a_button_for_what_it_holds_its_key_and_main_action(conn, cfg, tmp_path):
     sourced_library(conn, cfg)
-    shown = listing(dump_dom(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path))
+    dom = dump_dom(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path)  # closed: read as it is
+    shown = listing(dom)
     assert shown.count('<article class="line') == 4
-    creep = line_of(shown, "Creep")
-    top = creep.split('class="line-panel"', 1)[0]
+    creep = line_with_card(dom, "Creep")
+    top = line_without_card(dom, "Creep")
     # A button for its sheet, marked with where it came from; its lyrics none; found, it needs no badge.
     assert re.search(r'<h3[^>]*>Creep</h3>', top)
     assert play_links(top) == [("Radiohead/Creep/sheet.pdf", "Open the chord sheet of Creep, from UG")]
@@ -2691,17 +2720,18 @@ def test_a_line_shows_its_title_a_button_for_what_it_holds_its_key_and_main_acti
     assert re.search(r'<div class="line-action"></div>', creep), creep  # no Open: its button opens it
     # Which sites have it (song_sites.py), in its card.
     sites = re.search(r'<div class="card-sites"><p class="card-label">On the sites</p><span class="line-sites">(.*?)'
-                      r'</span></div>', panel_of(creep))
-    assert sites and 'data-source="ug" data-state="have"' in sites.group(1), panel_of(creep)
+                      r'</span></div>', cards.card_of(dom, "Creep"))
+    assert sites and 'data-source="ug" data-state="have"' in sites.group(1), cards.card_of(dom, "Creep")
     # The rest waits behind a small button, closed.
     more = re.search(r'<button class="line-more"[^>]*aria-expanded="false"[^>]*aria-controls="([^"]+)"', creep)
     assert more and re.search(rf'<div class="line-panel" id="{more.group(1)}" hidden', creep)
-    assert ">More: Creep<" in creep and "Lyrics" in panel_of(creep)
-    soda = line_of(shown, "De Música Ligera")
-    assert 'aria-label="from LaCuerda"' in panel_of(soda)
+    assert ">More: Creep<" in creep and "Lyrics" in cards.card_of(dom, "Creep")
+    soda = line_without_card(dom, "De Música Ligera")
+    assert 'aria-label="from LaCuerda"' in cards.card_of(dom, "De Música Ligera")
     assert play_links(soda)[0][1] == "Open the chord sheet of De Música Ligera, from LaCuerda"
-    wonderwall = line_of(shown, "Wonderwall")
-    assert ">Wanted<" in wonderwall and "line-action" in wonderwall and "Find the chords" in panel_of(wonderwall)
+    wonderwall = line_without_card(dom, "Wonderwall")
+    assert ">Wanted<" in wonderwall and "line-action" in wonderwall and "Find the chords" in cards.card_of(
+        dom, "Wonderwall")
 
 
 # Measures the lines: each one's height, its artist's width and whole width, and how many lines its parts take (by
@@ -2763,10 +2793,10 @@ def test_an_auto_sheet_from_youtube_audio_shows_where_it_came_from(conn, cfg, tm
     update_song(conn, bought.id, status="found")
     html = page(conn, on)
     assert songs_of(html)["Radiohead - Creep"]["source"] == "youtube"
-    shown = listing(dump_dom(write_library_page(on.library_dir, html), tmp_path))
+    dom = dump_opened(write_library_page(on.library_dir, html), tmp_path)
 
-    line = line_of(shown, "Creep")
-    top = line.split('class="line-panel"', 1)[0]
+    line = line_with_card(dom, "Creep")
+    top = line_without_card(dom, "Creep")
     # Its line's button is its auto sheet's, in the auto sheet's colour, marked with where it came from (YouTube),
     # its name saying it is an auto sheet, for a screen reader and as its tooltip: no badge. Which sites have it is
     # its card's (YouTube's among them, on its route).
@@ -2774,17 +2804,17 @@ def test_an_auto_sheet_from_youtube_audio_shows_where_it_came_from(conn, cfg, tm
     assert re.search(r'<a class="play play-sheet auto" ', top), top
     assert re.findall(r'class="source[^"]*"[^>]*data-source="([^"]*)"', top) == ["youtube"], top
     assert 'class="badge' not in top
-    sites = re.search(r'<span class="line-sites">(.*?)</span></div>', panel_of(line))
+    sites = re.search(r'<span class="line-sites">(.*?)</span></div>', cards.card_of(dom, "Creep"))
     assert sites and 'title="YouTube: has it" data-source="youtube" data-state="have"' in sites.group(1), line
     # The video waits behind the line's chevron, with the rest of what a card said; its text says it came from there.
-    note = re.search(r'<p class="youtube">(.*?)</p>', panel_of(line), re.S)
+    note = re.search(r'<p class="youtube">(.*?)</p>', cards.card_of(dom, "Creep"), re.S)
     assert note and note.group(1).startswith("Auto sheet from YouTube audio · <a"), line
     assert 'href="https://www.youtube.com/watch?v=XFkzRNyygfk"' in note.group(1)
     assert "Creep (Radiohead - Topic) ↗" in note.group(1)
-    assert 'aria-label="from YouTube"' in panel_of(line)
-    zebra = line_of(shown, "斑马，斑马")
+    assert 'aria-label="from YouTube"' in cards.card_of(dom, "Creep")
+    zebra = line_without_card(dom, "斑马，斑马")
     assert re.search(r'<a class="play play-sheet auto" ', zebra), zebra
-    assert 'aria-label="from the audio (auto-chords)"' in panel_of(zebra)
+    assert 'aria-label="from the audio (auto-chords)"' in cards.card_of(dom, "斑马，斑马")
     assert [said for _, said in play_links(zebra)] == ["Open the auto sheet of 斑马，斑马, from the audio (auto-chords)"]
 
 
@@ -2951,13 +2981,13 @@ def test_the_line_renderer_takes_any_result_in_a_real_browser(conn, cfg, tmp_pat
 # Notes each line's parts outside its panel: its badges, the glyphs of what it holds (each one's name, tooltip, class
 # and element), the marks of where it came from, its key as shown, and its fold button (its glyph, its name, and
 # whether it still says "⋯").
-LINE_PARTS = """
-(() => {
+LINE_PARTS = "(() => {" + cards.KIT + """
   const parts = {};
   const outside = (l, selector) => Array.from(l.querySelectorAll(selector)).filter((n) => !n.closest(".line-panel"));
   for (const l of document.querySelectorAll("#list .line, #results .line")) {
     const plays = l.querySelector(".line-title > .line-plays");
     const more = l.querySelector(".line-more");
+    const card = more ? openCardOf(l) : null;
     const shown = l.querySelector(".line-key [aria-hidden]");
     const chevron = more ? more.querySelector("svg") : null;
     parts[l.querySelector("h3").textContent] = {
@@ -2968,7 +2998,7 @@ LINE_PARTS = """
         glyph: a.querySelector("svg.glyph") ? a.querySelector("svg.glyph").getAttribute("class") : null })) : null,
       marks: outside(l, ".source").filter((m) => !m.closest(".line-sites") && !m.closest(".play"))
         .map((m) => m.dataset.source),
-      sites: Array.from(l.querySelectorAll(".line-sites .source")).map((m) => [m.dataset.source, m.dataset.state,
+      sites: Array.from(card ? card.querySelectorAll(".line-sites .source") : []).map((m) => [m.dataset.source, m.dataset.state,
         m.title, m.getAttribute(m.localName === "img" ? "alt" : "aria-label")]),
       key: shown ? shown.textContent : null,
       more: more ? { glyph: chevron ? chevron.getAttribute("class") : null,
@@ -3203,8 +3233,7 @@ def test_a_badge_never_covers_the_key_column(conn, cfg, tmp_path, width):
 # then every line's marks measured as drawn (their box and the outline around it): its sites' (siteMarks), a hit's
 # sources'; their cell, the line's other parts, the line, and the first box around each mark that cuts what overflows
 # it. Then Hotel California's card, opened, its marks the same way.
-MARKS_DRAWN = """
-(() => {
+MARKS_DRAWN = "(() => {" + cards.KIT + """
   const hit = window.caracole.resultRow({ dense: true, title: "Take It Easy",
     sources: ["ug", "lacuerda", "gtptabs", "harptabs", "gametabs"],
     badges: [{ kind: "found", text: "In your logbook" }], facts: "chords ×9 · tabs ×2 · LaCuerda ×2" });
@@ -3232,10 +3261,12 @@ MARKS_DRAWN = """
   const mark = (m) => ({ source: m.dataset.source, box: drawn(m), cut: cutBy(m),
     icon: m.localName === "img" ? content(m) : null });
   // A song of yours' sites' marks are its card's: each card opened. A site's song's are on its line, beside its parts.
-  for (const more of document.querySelectorAll("#list .line:not(.hit) > .line-more")) more.click();
+  for (const line of document.querySelectorAll("#list .line:not(.hit)")) if (line.querySelector(".line-more")) openCardOf(line);
   const parts = ".line-title, .line-by, .line-status, .line-key, .line-action, .line-more";
   const lines = Array.from(document.querySelectorAll("#list .line")).map((l) => {
-    const cell = l.querySelector(":scope > .line-panel .card-sites > .line-sites, :scope > .line-meta .line-sources");
+    const card = cardOf(l);
+    const cell = (card && card.querySelector(".card-sites > .line-sites")) ||
+      l.querySelector(":scope > .line-meta .line-sources");
     const around = cell && cell.closest(".card-sites") ? [cell.closest(".card-sites").querySelector(".card-label")]
       : Array.from(l.querySelectorAll(parts));
     return { title: l.querySelector("h3").textContent, line: box(l), cell: cell ? box(cell) : null,
@@ -3246,7 +3277,7 @@ MARKS_DRAWN = """
   const page = [document.documentElement.scrollWidth, document.documentElement.clientWidth];
   const hotel = Array.from(document.querySelectorAll("#list .line")).find((l) => l.querySelector("h3").textContent ===
     "Hotel California");
-  const card = Array.from(hotel.querySelectorAll(".line-panel .source")).filter((m) => m.checkVisibility()).map(mark);
+  const card = Array.from(cardOf(hotel).querySelectorAll(".source")).filter((m) => m.checkVisibility()).map(mark);
   document.body.setAttribute("data-marks", JSON.stringify({ lines, card, page }));
 })();
 """
@@ -3344,18 +3375,17 @@ def test_the_file_lines_show_a_reviews_candidates_and_a_song_not_founds_line(con
     in_review(conn)
     lost = add_song(conn, "The Beatles", "Yesterday")
     update_song(conn, lost.id, match_decision="not_found")
-    shown = listing(dump_dom(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path))
-    crep = panel_of(line_of(shown, "Crep"))
+    dom = dump_opened(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path)
+    crep = cards.card_of(dom, "Crep")
     assert re.search(r'<details class="picker"', crep) and "<form" not in crep
     assert "<code>caracole review --song 'Radio Head - Crep'</code>" in crep
-    hint = re.search(r'<p class="pick-hint">(.*?)</p>', panel_of(line_of(shown, "Yesterday")), re.S)
+    hint = re.search(r'<p class="pick-hint">(.*?)</p>', cards.card_of(dom, "Yesterday"), re.S)
     assert hint and "<code>caracole review --song 'The Beatles - Yesterday'</code>" in hint.group(1)
 
 
 # Measures each line (its height, whether a part of it leaves it or covers another), then opens Crep's picker from
 # its line's button and notes where the focus went and how wide the page got.
-LINE_STATES = """
-(() => {
+LINE_STATES = "(() => {" + cards.KIT + """
   const box = (n) => n.getBoundingClientRect();
   const lines = Array.from(document.querySelectorAll("#list .line"));
   const measured = {};
@@ -3380,10 +3410,11 @@ LINE_STATES = """
   const crep = lines.find((l) => l.querySelector("h3").textContent === "Crep");
   crep.querySelector(".line-action button").click();
   setTimeout(() => {
-    const picker = crep.querySelector("details.picker");
+    const card = cardOf(crep);
+    const picker = card.querySelector("details.picker");
     const at = document.activeElement;
     document.body.setAttribute("data-states", JSON.stringify({
-      lines: measured, open: picker.open, panel: !picker.closest(".line-panel").hidden,
+      lines: measured, open: picker.open, panel: !card.hidden,
       expanded: crep.querySelector(".line-more").getAttribute("aria-expanded"),
       focus: at && at.name === "pick" ? at.value : null,
       scroll: document.documentElement.scrollWidth, page: window.innerWidth,
@@ -3860,8 +3891,7 @@ def test_a_laptop_screen_shows_about_twenty_lines_under_the_bar_and_a_phone_two_
 # Clicks through what a line offers on the served page, and notes each step: Pick the match opens the picker under
 # its "⋯", the focus on the first candidate; Remove… counts down on the line, the focus on Undo, which keeps the
 # song; + New songbook (Select) puts a box on each line; Add to a songbook… picks the song in it.
-LINE_CLICKS = """
-(() => {
+LINE_CLICKS = "(() => {" + cards.KIT + """
   const notes = {};
   const lineOf = (title) => Array.from(document.querySelectorAll("#list article.line"))
     .find((l) => l.querySelector("h3").textContent === title);
@@ -3870,18 +3900,18 @@ LINE_CLICKS = """
   crep.querySelector(".line-action .line-pick").click();
   setTimeout(() => {
     const at = document.activeElement;
-    notes.pick = { panel: !crep.querySelector(".line-panel").hidden, open: crep.querySelector("details.picker").open,
+    notes.pick = { panel: !cardOf(crep).hidden, open: cardOf(crep).querySelector("details.picker").open,
                    expanded: crep.querySelector(".line-more").getAttribute("aria-expanded"),
                    focus: at && at.name === "pick" ? at.value : null };
     const soda = lineOf("De Música Ligera");
-    soda.querySelector(".line-more").click();
-    soda.querySelector("form.remove button").click();
+    const sodaCard = openCardOf(soda);
+    sodaCard.querySelector("form.remove button").click();
     const line = soda.querySelector(".progress");
     notes.countdown = { text: line.textContent, focus: document.activeElement.textContent,
-                        waits: soda.querySelector("form.remove button").disabled };
+                        waits: sodaCard.querySelector("form.remove button").disabled };
     document.activeElement.click();  // Undo
     notes.undone = { text: soda.querySelector(".progress").textContent, focus: document.activeElement.textContent,
-                     sends: !soda.querySelector("form.remove button").disabled };
+                     sends: !sodaCard.querySelector("form.remove button").disabled };
     document.querySelector(".new-book").click();
     const boxes = Array.from(document.querySelectorAll("#list article.line .pick")).filter((p) => p.checkVisibility());
     const r = boxes[0].getBoundingClientRect();
@@ -3889,8 +3919,7 @@ LINE_CLICKS = """
                      size: [Math.round(r.width), Math.round(r.height)] };
     document.querySelector(".pick-done").click();
     const queued = lineOf("Bohemian Rhapsody");
-    queued.querySelector(".line-more").click();
-    Array.from(queued.querySelectorAll(".line-panel button")).find((b) => b.textContent === "Add to a songbook…").click();
+    Array.from(openCardOf(queued).querySelectorAll("button")).find((b) => b.textContent === "Add to a songbook…").click();
     notes.book = { selecting: document.body.classList.contains("selecting"),
                    count: document.querySelector(".pick-count").textContent, picked: queued.classList.contains("picked") };
     say();
@@ -3917,36 +3946,36 @@ def test_every_action_a_card_had_is_on_the_line_or_its_menu(conn, cfg, tmp_path)
     assert '<article class="row' not in shown
 
     # In review, with candidates: Pick the match is its button, the picker under its "⋯".
-    crep = line_of(shown, "Crep")
+    crep = line_with_card(dom, "Crep")
     assert re.search(r'<div class="line-action"><button class="btn small line-pick"[^>]*>Pick the match</button>', crep)
     assert ">Needs review<" in crep and "Review first" not in crep and "/fetch" not in crep
-    assert re.search(r'<form[^>]*action="/review"', crep.split('class="line-panel"', 1)[1])
+    assert re.search(r'<form[^>]*action="/review"', cards.card_of(dom, "Crep"))
     # Being removed: it says so where its button was, with no fetch and no other removal.
-    going = line_of(shown, "Wonderwall")
+    going = line_with_card(dom, "Wonderwall")
     assert re.search(r'<div class="line-action"><a class="line-busy" href="#tab=requests"[^>]*>Removing…</a>', going)
     assert "/fetch" not in going and "/remove" not in going
     # Its request queued: its line says how it goes, a line of its own, Details and all.
-    queued = line_of(shown, "Bohemian Rhapsody")
+    queued = line_with_card(dom, "Bohemian Rhapsody")
     line = re.search(r'<p class="progress"[^>]*>(.*?)</p>', queued, re.S)
     assert line and 'role="status"' in line.group(0) and "Queued behind 1 request…" in line.group(1)
     assert 'href="jobs?job=4#job-4"' in line.group(1) and "/fetch" not in queued
     # Not found: Fetch now still asks; no badge; in its card, UG's mark says it had nothing, it looks in the index, and
     # finds the chords elsewhere.
-    lost = line_of(shown, "Yesterday")
+    lost = line_without_card(dom, "Yesterday")
     assert re.search(r'<div class="line-action"><form[^>]*action="/fetch"', lost) and ">Not found<" not in lost
-    assert 'data-source="ug" data-state="none"' in lost.split('class="line-panel"', 1)[1]
-    menu = lost.split('class="line-panel"', 1)[1]
+    menu = cards.card_of(dom, "Yesterday")
+    assert 'data-source="ug" data-state="none"' in menu
     assert re.search(rf'href="/review\?song={s["lost"].id}"[^>]*>Look in index</a>', menu)
     assert "Scores on MuseScore" in menu and "Find the chords" in menu and "yesterday-680101 (maybe)" in menu
     # Found: a button for its sheet and its key on the line, no other action and no badge; its files, its key in
     # words, its transposition, Add to a songbook… and Remove under its chevron.
-    soda = line_of(shown, "De Música Ligera")
+    soda = line_with_card(dom, "De Música Ligera")
     assert re.search(r'<div class="line-action"></div>', soda), soda
     assert re.search(r'<span class="line-key"[^>]*>', soda) and "Key A minor (from the tab)" in soda
-    top = soda.split('class="line-panel"', 1)[0]
+    top = line_without_card(dom, "De Música Ligera")
     assert [said for _, said in play_links(top)] == ["Open the chord sheet of De Música Ligera, from UG"]
     assert 'class="badge' not in top
-    menu = soda.split('class="line-panel"', 1)[1]
+    menu = cards.card_of(dom, "De Música Ligera")
     assert 'aria-label="Download the Text of De Música Ligera"' in menu and "−2" in menu
     assert 'aria-label="Open the lyrics of De Música Ligera"' in menu and "Guitar Pro" not in menu
     assert ">Add to a songbook…</button>" in menu and re.search(r'<form[^>]*action="/remove"', menu)

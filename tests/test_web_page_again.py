@@ -16,6 +16,7 @@ import time
 from urllib.parse import parse_qs, quote
 
 import pytest
+from helpers import cards
 from helpers.browser import CHROMIUM_MARKS, Browser, BrowserError
 from test_web_page_lacuerda import LC, lacuerda
 from test_web_page_search import sites
@@ -134,7 +135,7 @@ def line(song) -> str:
 
 def menu_button(song, label: str) -> str:
     """The expression for the button ``label`` under the song's line's "⋯", or null."""
-    return (f"[...document.querySelectorAll({json.dumps(line(song) + ' .line-panel button')})]"
+    return (f"[...(({cards.card_js(line(song))}) || document.createElement('div')).querySelectorAll('button')]"
             f".find((b) => b.textContent === {json.dumps(label)}) || null")
 
 
@@ -144,7 +145,7 @@ def press_in_menu(browser, song, label: str) -> None:
     browser.click(line(song) + " .line-more")
     assert browser.wait(f"({menu_button(song, label)}) !== null")
     browser.js(f"({menu_button(song, label)}).dataset.pressMe = '1'")
-    browser.click(line(song) + " .line-panel button[data-press-me]")
+    browser.click(cards.open_card(browser, line(song)) + " button[data-press-me]")
 
 
 # The tones of a lookup's line that went as asked: queued, running, then kept (status.py); never "failed", which a
@@ -238,12 +239,12 @@ def test_the_bars_search_finding_lacuerdas_sheet_of_a_song_offers_it_under_its_m
     # The search's LaCuerda row of it is folded into your song's line, which offers that sheet now, its "⋯" still
     # open under your hand.
     assert browser.wait(f"({menu_button(song, USE)}) !== null")
-    panel = json.dumps(line(song) + " .line-panel")
+    panel = cards.card_js(line(song))
     more = json.dumps(line(song) + " .line-more")
-    assert browser.js(f"document.querySelector({panel}).hidden") is False
+    assert browser.js(f"{panel}.hidden") is False
     assert browser.js(f"document.querySelector({more}).getAttribute('aria-expanded')") == "true"
     browser.js(f"({menu_button(song, USE)}).dataset.pressMe = '1'")
-    browser.click(line(song) + " .line-panel button[data-press-me]")
+    browser.click(cards.open_card(browser, line(song)) + " button[data-press-me]")
     body = posted.next(0)
     assert parse_qs(body.decode()) == {"csrf": ["tok"], "song": [str(song.id)], "identity": [song.key],
                                        "lacuerda": [LC + "estopa/como_camaron"]}

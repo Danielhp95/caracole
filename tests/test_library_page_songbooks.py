@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from helpers import cards
 
 from caracole.library_page import WebControls, build_library_page, write_library_page
 from caracole.overrides import Overrides
@@ -471,9 +472,9 @@ def test_the_select_bars_style_leaves_a_reviews_picker_as_it_is(library, tmp_pat
     crep = add_song(conn, "Radio Head", "Crep")
     update_song(conn, crep.id, review=True, match_decision="review", match_candidates=[
         {"artist_key": "radiohead", "song_key": "creep", "score": 89.4, "step": "fuzzy_artist"}])
-    out = run_in_page(page(conn, cfg, WebControls(csrf="tok")), cfg, tmp_path, """
-      const card = qa("#list article").find((a) => a.querySelector("h3").textContent === "Crep");
-      card.querySelector(".line-more").click();
+    out = run_in_page(page(conn, cfg, WebControls(csrf="tok")), cfg, tmp_path, cards.KIT + """
+      const line = qa("#list article").find((a) => a.querySelector("h3").textContent === "Crep");
+      const card = openCardOf(line);
       card.querySelector("details.picker").open = true;
       const form = card.querySelector("details.picker form");
       const radio = form.querySelector("input[type=radio]");
