@@ -4624,7 +4624,8 @@ the library, sent as they are: they carry no badge.
     Lyrics, Extras (Ultimate Guitar's second pass, its sheets scored and its
     tab, LaCuerda's sheet, gtptabs.com's Guitar Pro file and harptabs.com's
     harmonica tab) and Songbooks,
-    the same steps the library page draws on a song's line, here as chips,
+    the same steps the library page draws on an open song's card, here as
+    the same list, one line a step (its name, the site, what it found),
     each step the
     lookup has from its start (no Songbooks when Fetch the missing songs makes
     the songbook after): a step that ended with nothing to do for the song,
@@ -4646,8 +4647,9 @@ the library, sent as they are: they carry no badge.
   - **Today** and **Earlier** (by when each ended, in the server's time
     zone): the requests that are over, newest first, each with its outcome as
     a coloured word, the reason in a sentence when there is one, a lookup's
-    steps (or a sheet from a YouTube video's) as it left them, each saying what
-    it found, the time it ended and its next step; a lookup cancelled before
+    steps (or a sheet from a YouTube video's) as it left them, one line a step,
+    each saying what it found, the skipped ones folded into one last line,
+    "Skipped: Sheet, PDF", the time it ended and its next step; a lookup cancelled before
     it ran has no steps, and a request of other commands keeps its one line:
     - **Ready** · **Open**, its sheet; a reason says what waits for tonight's
       run, in the site's own answer ("LRCLIB answered 503: the lyrics wait

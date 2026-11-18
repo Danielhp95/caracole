@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import time
 import threading
+from pathlib import Path
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -590,7 +591,12 @@ DRAWN = """
       ids: Array.from(document.querySelectorAll("#requests li.req")).map((li) => li.id),
       library: document.getElementById("library-view").hidden,
       selected: document.querySelector("[role=tab][aria-selected=true]").id,
-      chips: Array.from(document.querySelectorAll("#req-6 .step-chip")).map((c) => c.textContent),
+      list: Array.from(document.querySelectorAll("#req-6 .step-list > li")).map((li) => [li.className,
+        li.querySelector(".step-glyph").textContent, (li.querySelector(".step-name") || li.lastChild).textContent]),
+      over: Array.from(document.querySelectorAll("#req-5 .step-list > li")).map((li) => [li.className,
+        (li.querySelector(".step-name") || li.lastChild).textContent]),
+      radii: Array.from(document.querySelectorAll("#requests *")).filter((n) => n.checkVisibility())
+        .map((n) => getComputedStyle(n).borderTopLeftRadius),
       says: Array.from(document.querySelectorAll("#requests .req-says")).map((s) => [s.textContent, s.dataset.tone]),
       actions: Array.from(document.querySelectorAll("#req-5 .req-next .btn, #req-4 .req-next .btn"))
         .map((b) => [b.textContent, b.tagName, b.closest("form") ? b.closest("form").getAttribute("action")
@@ -624,9 +630,14 @@ def test_the_tab_draws_every_request_and_fits_a_phone_with_five_tabs_in_light_an
                                                  "tab-sync"]  # Sync last
         assert shown["groups"] == ["Now", "Today"]
         assert shown["ids"] == ["req-6", "req-7", "req-5", "req-4", "req-3", "req-2"]
-        assert shown["chips"] == ["✓ Song: done", "✓ Match Ultimate Guitar: done", "✓ Sheet Ultimate Guitar: done",
-                                  "PDF: running",
-                                  "Lyrics: waiting", "Extras: waiting", "Songbooks: waiting"]
+        assert shown["list"] == [["step done", "✓", "Song"], ["step done", "✓", "Match · Ultimate Guitar"],
+                                 ["step done", "✓", "Sheet · Ultimate Guitar"], ["step running", "◐", "PDF"],
+                                 ["step waiting", "○", "Lyrics"], ["step waiting", "○", "Extras"],
+                                 ["step waiting", "○", "Songbooks"]]
+        assert shown["over"] == [["step done", "Song"], ["step done", "Match · Ultimate Guitar"],
+                                 ["step done", "Lyrics"], ["step done", "Extras"], ["step done", "Songbooks"],
+                                 ["step skipped-all", "Skipped: Sheet, PDF"]]
+        assert set(shown["radii"]) <= {"0px", "4px", "8px", "12px", "999px"}, shown["radii"]
         assert shown["says"][:3] == [["Making the PDF…", "running"], ["Queued · next", "queued"],
                                      ["Not on the sites", "missing"]]
         assert shown["actions"] == [["Fetch from there", "BUTTON", "/lookup"],
@@ -761,3 +772,10 @@ def test_cancel_try_again_and_output_work_in_the_tab_and_a_link_to_it_stays_on_t
                            "location.hash]") == [True, "req-3", "#tab=requests"]
     finally:
         runner.go.set()
+
+
+def test_requests_js_draws_its_steps_with_librarys_one_list():
+    import re
+    text = (Path(__file__).parent.parent / "src/caracole/library_assets/requests.js").read_text()
+    assert "stepChips" not in text
+    assert re.search(r"\b(function|const|let)\s+stepList\b", text) is None

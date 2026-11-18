@@ -52,14 +52,6 @@
 .step-name b { font-weight: 600; }
 .step-found { flex: 1 1 0; min-width: 0; color: var(--muted); font-weight: 400; overflow-wrap: anywhere; }
 @media (max-width: 719px) { .step-found { flex-basis: 100%; } }
-.step-chips { display: flex; flex-wrap: wrap; gap: 5px; margin: 0; padding: 0; list-style: none; }
-.step-chip { min-width: 0; padding: 2px 9px; border: 1px solid transparent; border-radius: 7px; background: var(--raised);
-  color: var(--muted); font-size: .78rem; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
-.step-chip b { font-weight: 750; }
-.step-chip.done { color: var(--found); background: var(--found-bg); }
-.step-chip.running { border-color: var(--auto); color: var(--auto); background: var(--auto-bg); font-weight: 750; }
-.step-chip.failed { color: var(--failed); background: var(--failed-bg); }
-.step-chip.plain { border: 1px dashed var(--control-edge); background: transparent; }
 /* A request that waits: Cancel beside its place (library.js cancelButton), a text button as the removal's Undo. */
 .progress .cancel { min-height: 32px; margin: 0; padding: 0 6px; border: 0; border-radius: var(--radius-m, 8px);
   background: none; color: inherit; font: inherit; font-weight: 700; text-decoration: underline;

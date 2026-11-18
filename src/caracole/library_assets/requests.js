@@ -1,6 +1,6 @@
 // The Requests tab, on the page caracole serve serves (the file on disk has none): every request the server
 // remembers, as /requests.json gives them (web/feed.py). Under Now, the request that runs, with how long ago it
-// started, its line and its steps (steps.css's chips, as a song's line draws them), and those queued under it, each
+// started, its line and its steps (library.js's list of them, as a song's open card draws it), and those queued under it, each
 // with Cancel; then what ended, newest first under Today and Earlier, each with its outcome as a coloured word, its
 // reason, its next step (a link, or a form) and when it ended. Every request keeps its Output folded away: what it
 // ran, and what each command printed, which the tab asks for once it is opened (?open=N). #tab=requests&job=N opens
@@ -86,29 +86,12 @@
     while (parent.children.length > nodes.length) parent.lastElementChild.remove();
   };
 
-  // A running lookup's steps (outcome.py's), as library.js draws them under a song's line: those done ticked, the
-  // one that runs lit and the current step, those to come grey, a failed one crossed; a plain one its name alone,
-  // and a skipped one in its place.
-  const MARKS = { done: "✓ ", failed: "✕ " };
-  const STATES = ["waiting", "running", "done", "failed", "plain", "skipped"];
-  const stepChips = (chips) => {
-    const box = el("ol", "step-chips");
-    box.setAttribute("aria-label", "Steps");
-    for (const c of chips) {
-      const state = STATES.indexOf(c.state) >= 0 ? String(c.state) : "waiting";
-      const chip = el("li", "step-chip " + state);
-      if (state === "running") chip.setAttribute("aria-current", "step");
-      if (MARKS[state]) {
-        const mark = el("span", null, MARKS[state]);
-        mark.setAttribute("aria-hidden", "true");
-        chip.appendChild(mark);
-      }
-      chip.appendChild(document.createTextNode(String(c.name)));
-      if (c.site) chip.append(" ", el("b", null, String(c.site)));
-      if (state !== "plain") chip.appendChild(el("span", "visually-hidden", ": " + state));
-      box.appendChild(chip);
-    }
-    return box;
+  // A request's steps (outcome.py's): the list library.js draws under a song's open card, one line a step (its
+  // ``stepList``, never a copy of it here); a finished request's skipped steps folded into one last line. Without
+  // library.js, their names as plain words.
+  const stepsOf = (chips, over) => {
+    if (lib && typeof lib.stepList === "function") return lib.stepList(chips, over);
+    return el("p", "req-reason", chips.map((c) => String(c.name)).join(", "));
   };
 
   const refuse = (item, text) => {
@@ -237,7 +220,7 @@
     item.appendChild(line);
     if (typeof r.reason === "string" && r.reason) item.appendChild(el("p", "req-reason", r.reason));
     const chips = listOf(r.steps).filter((c) => c && typeof c === "object" && c.name);
-    if (chips.length) item.appendChild(stepChips(chips));
+    if (chips.length) item.appendChild(stepsOf(chips, state !== "running" && state !== "queued"));
     const actions = listOf(r.actions).map(actionOf).filter(Boolean);
     const when = r.when && typeof r.when === "object" ? r.when : null;
     if (actions.length || when) {
@@ -291,7 +274,7 @@
       const params = new URLSearchParams(location.hash.slice(1));
       if (params.has("job")) {
         params.delete("job");
-        history.replaceState(null, "", "#" + params.toString());
+        history.replaceState(history.state, "", "#" + params.toString());
       }
     } catch (err) {
       // A malformed address, or a local file: nothing to drop.
