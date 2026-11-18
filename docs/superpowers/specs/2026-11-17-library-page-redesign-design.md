@@ -216,6 +216,34 @@ These change details, not decisions: the share of one-song artists in the owner'
 lookup times (whether 1 s is the right threshold); the keyboard's height in the WebView on the owner's Sony
 XQ-DQ72; frame times on 2,000 songs. Lane 1e measures the last before and after.
 
+**2,000 songs on a phone.** `python -m tests.helpers.big_library measure` (tests/helpers/big_library.py) builds a library
+of 2,000 songs with no request (55 % of the artists with one song, one artist with 150, 5 % Chinese titles, a Guitar Pro
+file on every fifth song and a harmonica tab on every ninth) and loads its index.html in headless Chromium at 390 x 844
+with touch, the CPU 4x slower (`Emulation.setCPUThrottlingRate`); each number is the median of three loads. "Before 1d"
+is the page built from the commit before stage 1d merged (`--src`, f4832539), "before 1e" the page at stage 1d's merge
+(77a547a7); "after 1e" is filled in when the stage is done. Taken on 2026-11-18 on a loaded machine (load average
+4 to 14 over the runs, 12 cores), so a difference of 10 to 20 % between two runs is noise; the sizes (nodes, heap) are
+not. The scroll goes to the end of the list at 800 px a frame; "open" is a chevron in the middle of the list clicked,
+to the next frame; "type" is "a" typed in the search box, to the second frame after its input event.
+
+| | before 1d | before 1e | after 1e |
+|---|---|---|---|
+| drawn (body loses `drawing`) | 4,062 ms | 2,938 ms | |
+| first contentful paint | 4,980 ms | 4,256 ms | |
+| script time | 2,105 ms | 1,039 ms | |
+| layout time (4 layouts) | 1,098 ms | 1,089 ms | |
+| style recalculation | 1,015 ms | 1,229 ms | |
+| DOM nodes | 294,098 | 84,295 | |
+| JS heap | 18.9 MB | 18.3 MB | |
+| scroll: frames, p50 / p95 / max | 135, 117 / 167 / 267 ms | 135, 100 / 150 / 183 ms | |
+| scroll: frames over 50 ms, long tasks | 130, 130 | 130, 130 | |
+| open a card (chevron to next frame) | 487 ms | 408 ms | |
+| type "a" (input to second frame) | 3,376 ms | 2,647 ms | |
+| owner's phone (Sony XQ-DQ72, Chrome remote DevTools) | not taken | not taken | |
+
+Frame times are multiples of 16.7 ms (the headless compositor's 60 Hz). What 1d gained is the nodes: a card is built when
+it opens, so 210,000 nodes fewer on the page.
+
 ## Left to the builder
 
 How each stage is tested and in what order within its lane; the exact sizes and radii not stated above; animation

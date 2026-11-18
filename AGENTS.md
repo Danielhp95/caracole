@@ -2655,6 +2655,11 @@ nix develop ./android -c gradle -p android test    # the Android side: :mirror, 
 CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py   # the phone and the computer synced
 ```
 
+- `python -m tests.helpers.big_library measure [--songs N] [--src PATH] [--runs N] [--out FILE]` (in `nix develop`, from
+  the repository's root): a library of 2,000 songs built with no request (tests/helpers/big_library.py) and index.html's
+  numbers on a phone (390 x 844, touch, CPU 4x slower) as JSON: the page drawn, the scroll's frames, a card opened, a
+  letter typed; `--src` builds the page with another checkout's `src/`. The spec's "Measurements before building" holds
+  the table the long-lists stage is judged by.
 - tests/test_android_e2e.py, marked `android_e2e` and `slow`, is skipped unless `CARACOLE_ANDROID_E2E=1`: the goal's
   scenario (docs/android_port.md), a computer built by tests/helpers/e2e_library.py with no request and real `caracole
   serve` processes, the phone android/e2e's `PhoneScenarioTest` on the JVM, a Gradle run a phase.
