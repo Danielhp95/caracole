@@ -557,7 +557,8 @@ def pass_turn(cfg: Config, conn: sqlite3.Connection | None = None) -> bool:
     try:
         ticket = _announce(cfg, what, lane=True)
     except OSError as e:
-        logging.getLogger(__name__).info("No turn: no ticket can be written in %s: %s.", WAITING_DIR, _reason(e))
+        logging.getLogger(__name__).warning("No turn: no ticket can be written in %s: %s.", WAITING_DIR,
+                                            _reason(e))
         return False
     try:
         fcntl.flock(fd, fcntl.LOCK_UN)

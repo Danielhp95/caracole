@@ -302,14 +302,16 @@ def test_two_lookups_in_the_lane_take_turns_at_the_lock(cfg, tmp_path):
         a, b = started
         for name in "ab":
             wait_for(log, "ready", name)
-        go_at = time.time()
-        for path in go.values():
-            path.touch()
+        with another_caracole(cfg):  # both asked while the lock is held: each waits in the lane, its ticket posted
+            for path in go.values():
+                path.touch()
+            assert until(lambda: len(_common.lane_tickets(cfg)) == 2,
+                         lambda: a.poll() is None and b.poll() is None)
+        released_at = time.time()
         assert a.wait(30) == 0 and b.wait(30) == 0, (tmp_path / "lane.log.err").read_text()
-    turns = [r for r in records(log) if r.word == "turn"]
-    assert len(turns) == 12
-    assert {r.name for r in turns[:2]} == {"a", "b"} and turns[1].t - go_at < 2.0  # both move at once
-    assert sum(x.name != y.name for x, y in zip(turns, turns[1:])) >= 5  # by turns, not one after the other
+    names = [r.name for r in records(log) if r.word == "turn"]
+    assert names in (list("ab" * 6), list("ba" * 6))  # by turns, from the first: the other waits at each one
+    assert wait_for(log, "turn", names[1]) - released_at < 2.0  # both move at once, the lock free
 
 
 @pytest.mark.slow
