@@ -670,14 +670,31 @@
   // step, then the step in hand, its site and its place, "Sheet · Ultimate Guitar · 3 of 7" (``at``, ``count``),
   // which is what a screen reader hears; while a nightly run holds the book (``waits``), "Waiting for the book · 1 of
   // 7", the step drawn waiting. Anywhere else (the tray, a set list) and once it is over, its words.
+  // A request that waits, on a served page (the view's id): Cancel beside its place takes it out of the queue
+  // (POST /jobs/cancel, the Journal's), never one that runs. Answered, the line says Cancelled, as the next view does;
+  // refused or unanswered, what went wrong, and the next view draws the line again.
+  const cancelButton = (p, view) => {
+    const b = el("button", "cancel", "Cancel");
+    b.type = "button";
+    b.setAttribute("aria-label", "Cancel " + String(view.display || "request"));
+    b.addEventListener("click", () => {
+      b.disabled = true;
+      postTo("/jobs/cancel", new URLSearchParams({ csrf: String(server.csrf || ""), job: String(view.id) })).then(
+        (answer) => showLine(p, answer.ok ? { line: { tone: "cancelled", text: "Cancelled" } } : failure(answer), true),
+        () => showLine(p, UNREACHABLE, true));
+    });
+    return b;
+  };
   const showLine = (p, view, onLine) => {
     const line = view && view.line && typeof view.line === "object" ? view.line : {};
     const to = line.link && typeof line.link === "object" ? line.link : null;
     const more = typeof line.details === "string" ? line.details : "";
     const chips = chipsOf(view);
     const barred = Boolean(onLine && line.tone === "running" && view && isActive(view) && chips.length);
+    const cancels = Boolean(onLine && server && line.tone === "queued" && view && view.state === "queued"
+      && Number.isInteger(view.id));
     const key = (barred ? ["bar", JSON.stringify(chips.map((c) => [c.name, c.site, c.state])), view.at, view.count,
-      view.waits === true] : [line.tone, line.text, to ? to.href : "", more]).map(String).join("|");
+      view.waits === true] : [line.tone, line.text, to ? to.href : "", more, cancels ? view.id : ""]).map(String).join("|");
     if (p.dataset.key === key) return;
     const focused = p !== document.activeElement && p.contains(document.activeElement);
     p.dataset.key = key;
@@ -699,6 +716,11 @@
       const a = link(go, null, false);
       if (go === to) a.addEventListener("click", (e) => pickHere(e, p));
       p.appendChild(a);
+    }
+    if (cancels) {
+      const dot = el("span", "dot", "·");
+      dot.setAttribute("aria-hidden", "true");
+      p.append(dot, cancelButton(p, view));
     }
     if (focused) focusOn(p);  // its link is gone: the focus stays on the line
   };

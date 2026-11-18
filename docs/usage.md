@@ -4590,6 +4590,11 @@ the library, sent as they are: they carry no badge.
   on the line's row; once it is over, the skipped steps fold into one last
   line, "Skipped: PDF, Songbooks". Ready, the list folds away with the bar.
 
+  A request that waits behind another says its place ("Queued · 1 request
+  ahead…") with **Cancel** beside it, which takes it out of the queue as the
+  Journal's does (the line says Cancelled and the song's Fetch is back); the
+  one that runs is never stopped.
+
   A song asked for again shows on the line it has there already, and a
   refused request's line goes at the next request. A request still on its
   way when you reload the page keeps its line. When the server stops

@@ -60,3 +60,12 @@
 .step-chip.running { border-color: var(--auto); color: var(--auto); background: var(--auto-bg); font-weight: 750; }
 .step-chip.failed { color: var(--failed); background: var(--failed-bg); }
 .step-chip.plain { border: 1px dashed var(--control-edge); background: transparent; }
+/* A request that waits: Cancel beside its place (library.js cancelButton), a text button as the removal's Undo. */
+.progress .cancel { min-height: 32px; margin: -6px 0; padding: 0 6px; border: 0; border-radius: var(--radius-m, 8px);
+  background: none; color: inherit; font: inherit; font-weight: 700; text-decoration: underline;
+  text-underline-offset: 2px; cursor: pointer; }
+.progress .cancel:hover { background: var(--raised); }
+.progress .cancel:disabled { opacity: .6; cursor: default; }
+/* 44 px to touch; its height beyond the text's hangs out of the line's box (the negative margins), so that a queued line
+   stays one line taller. */
+@media (pointer: coarse) { .progress .cancel { min-width: 44px; min-height: 44px; margin: -12px 0; } }

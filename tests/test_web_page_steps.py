@@ -447,6 +447,42 @@ def test_a_lookup_waiting_for_the_book_says_so_on_its_bar(cfg, live, tmp_path):
 
 
 @pytest.mark.parametrize("width", [1280, 390])
+def test_a_queued_request_says_its_place_with_cancel_beside_it(cfg, live, tmp_path, width):
+    base, runner = live
+    runner.script = FROM_UG
+    creep_line = line_of(creep(cfg))
+    conn = db.connect(cfg.db_path)
+    try:
+        wonder = add_song(conn, "Oasis", "Wonderwall")
+    finally:
+        conn.close()
+    wonderwall = line_of(wonder)
+    with driven(tmp_path, width) as page:
+        page.open(base)
+        page.click(f"{creep_line} .line-more")
+        page.click(f"{creep_line} .line-action form.fetch button")
+        wait_for(page, bar_of(creep_line), ["done", "done", "running", "waiting", "waiting", "waiting", "waiting"])
+        page.click(f"{wonderwall} .line-more")
+        page.click(f"{wonderwall} .line-action form.fetch button")
+        # Behind Creep's lookup, held at its sheet: its place, and Cancel beside it.
+        wait_for(page, f"document.querySelector('{wonderwall} .progress').textContent",
+                 "Queued · 1 request ahead…·Cancel")
+        button = f"{wonderwall} .progress button.cancel"
+        assert page.js(f"document.querySelector('{button}').getAttribute('aria-label')") == "Cancel Oasis - Wonderwall"
+        if width < 500:  # a touch screen: a target of 44 px at least
+            box = page.js(f"(() => {{ const r = document.querySelector('{button}').getBoundingClientRect(); "
+                          "return [r.width, r.height]; })()")
+            assert box[1] >= 44 and box[0] >= 44, box
+        page.click(button)
+        wait_for(page, f"document.querySelector('{wonderwall} .progress').textContent", "Cancelled")
+        assert page.wait(f"!!document.querySelector('{wonderwall} form.fetch button')")  # its Fetch is back
+        assert page.js(bar_of(creep_line))[2] == "running"  # the one that runs is never stopped
+        assert page.js("document.documentElement.scrollWidth <= window.innerWidth")
+        runner.go()
+        runner.go()
+
+
+@pytest.mark.parametrize("width", [1280, 390])
 def test_a_search_results_get_it_shows_the_bar_in_its_row_then_the_song_as_yours(cfg, live, tmp_path, width):
     base, runner = live
     runner.script = FROM_UG
