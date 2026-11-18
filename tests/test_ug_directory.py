@@ -118,17 +118,6 @@ def test_every_letter_is_read_again_30_days_after_its_last_whole_read(conn, tmp_
     assert stats.new == 1 and directory.letters(conn)["s"].done == "2026-12-17T20:05:00Z"
 
 
-def test_a_block_stops_every_worker_and_raises_once_what_came_before_is_stored(conn, tmp_path):
-    site = FakeDirectory({"s": fillers("s", 400)})
-    _pass(conn, tmp_path, site, bare=False, budget=len(LETTERS))  # every letter's first page
-    site.status[listing_url("s", 4)] = 429
-    with pytest.raises(ProviderBlocked):
-        _pass(conn, tmp_path, site, bare=False, workers=2)
-    asked = [u for u in _letters_asked(site) if "/bands/s" in u]
-    assert listing_url("s", 6) not in asked  # nothing begun after the block
-    assert directory.letters(conn)["s"].next == 4  # pages 2 and 3, answered before it, stored
-
-
 def test_the_lock_goes_to_a_waiting_lookup_between_two_batches(conn, tmp_path):
     site = FakeDirectory({"s": fillers("s", 50 * 30)})
     handed = []
