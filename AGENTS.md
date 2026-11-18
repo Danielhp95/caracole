@@ -181,35 +181,54 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     the documented scramble, its own inverse);
   - a tune's chart as a sheet in UG's markup (`Tune.chart`): bars four a line between bar lines, which the sheet's
     page draws as cells (5c, viewer/sheet.py `bars`), a section, an ending or the coda a `[label]`, notes (comments, To
-    Coda, a time) a line under theirs after a blank one, `x` and `r` the bars before written out, an alternative chord
-    and the app's layout marks left out; chords named as sheets name them (`chord_name`: C^7 Cmaj7, D-7 Dm7, Bh7
-    Bm7b5); the composer first name first (`composer_name`).
-- ireal_index.py: the thread pages read into `ireal_threads` and `ireal_charts` (schema 17), and `playlist_pass`: the
-  sitemaps when due, the curated Jazz 1460 Standards (`ireal.JAZZ_1460`) first, the jazz forum's page
-  (`ireal.PLAYLIST_FORUMS`, kv `ireal:forums`), its sticky threads, each again after 30 days, a thread's first page
-  alone; `index_state`; `ensure_current_keys` (kv `ireal:charts:keys`).
+    Coda, a time) a line under theirs after a blank one, `x` and `r` the bars before written out, an empty bar the last
+    chord before it held on (after an opening bar line and before a closing one too), an alternative chord and the
+    app's layout marks left out; chords named as sheets name them (`chord_name`: C^7 Cmaj7, D-7 Dm7, Bh7 Bm7b5, the
+    app's own `C*-^*`); the composer first name first (`composer_name`);
+  - a tune that reads no chord, or more than `UNREAD_MOST` characters that read as nothing (a link cut short inside a
+    block leaves its end scrambled), is `IRealParseError`, the one error the decoder raises on any input (the review's
+    fuzz: random music and every cut of the real pages' tunes; "T4", a time of one digit at the music's end, once an
+    IndexError).
+- ireal_index.py: the thread pages read into `ireal_threads` and `ireal_charts` (schema 17, a composer's folded key
+  `composer_key` for searches), and `playlist_pass`: the sitemaps when due, the curated Jazz 1460 Standards
+  (`ireal.JAZZ_1460`) first, the jazz forum's page (`ireal.PLAYLIST_FORUMS`, kv `ireal:forums`), its sticky threads,
+  each again after 30 days, a thread's first page alone; `index_state`; `ensure_current_keys` (kv
+  `ireal:charts:keys`). A page's `read_at` is when the site answered it: `read_thread` stores a copy from the cache
+  only where the index lacks it, at its fetch's time, so a song's read of a playlist from the cache never puts off
+  the playlist's next read (test_ireal_fetch.py, the review's sequence).
 - ireal_fetch.py: the step, `ireal_sheets`.
   - Its songs: no human sheet kept (after UG and LaCuerda; one with an auto sheet alone among them), not asked in 30
     days (kv `ireal:checked:`), a candidate in the index (never a request); a kept chart the library lost written
     again.
   - A chart is the song's (`_matching`) only when it is titled as the song is and one of its artists is the chart's
     composer or the name its thread's slug gives after the title (`composer_fits`, `names_an_artist`, words in any
-    order: "Jones Thad"), or it comes from a curated jazz playlist (the Jazz 1460 Standards and the jazz forum's
-    playlist threads, `ireal_index.playlists`), where the title alone is enough ("Bill Evans - Autumn Leaves"); an
-    `[ireal]` pick always counts. The owner's ruling of 2026-11-18, after a title alone gave "Ren - Patience" Guns N'
-    Roses' chart and "Jorge Rivera-Herrans - Open Arms" Journey's (test_ireal_fetch.py `NAMESAKES`).
+    order: "Jones Thad"), or it comes from the Jazz 1460 Standards (`ireal.JAZZ_1460`), where the title alone is
+    enough ("Bill Evans - Autumn Leaves"); the jazz forum's other playlists (practice exercises, fusion, gypsy jazz…)
+    need the composer as any thread does; an `[ireal]` pick always counts. The rulings of 2026-11-18, after a title
+    alone gave "Ren - Patience" Guns N' Roses' chart and "Jorge Rivera-Herrans - Open Arms" Journey's
+    (test_ireal_fetch.py `NAMESAKES`).
+  - A song's artists are each artist whole and each one a line names among several, between " / ", " & ", ", ",
+    " and ", " with ", " feat. " or " ft. " (any case), each by its `normalize.name_forms` (`artist_names`): "Thad
+    Jones / Count Basie" and "Thad Jones & Mel Lewis" are Thad Jones's too.
   - `candidates`: the pages read that hold a chart of the song (the cache's, no request), then the threads whose slug
     names one of the song's artists after the title, then those of the title alone, the oldest first, never one that
     names someone else, `CANDIDATES` (3) pages at most; none more once a chart whose composer is the song's artist is
     in hand.
+  - A chart is read only once it is the song's (`_charts_of`): one that won't is passed over, logged, and only when
+    every chart that would be the song's won't is the song's turn that `IRealParseError`, never a miss.
   - Every chart of the song a version (provider `ireal`, kind `chords`, tab id `<thread>/<post>/<place>`); the best
     (`best`: the artist's composer, the curated playlist's, a thread naming its composer, the oldest thread, its
     latest post) the sheet, `sheet.txt` and `sheet.json` (its `tune` as the link gave it), its version's
     `tonality_name` the tune's key; its coverage scored as any sheet's, so UG's or LaCuerda's sheet with words replaces
     it (`versions.replaces_sheet`), unless `[ireal]` picked it (ug/fetch.py `_sheet_slot`, lacuerda_fetch.py
     `_charted`).
-  - `[ireal]`: a chart you picked (a thread, `#post-N` its post), kept in place of any sheet but a UG `[pin]` or a
-    `[lacuerda]` pick.
+  - `[ireal]`: a chart you picked (a thread, `#post-N` its post, a later page's `…/page-K#post-N` that post), kept in
+    place of any sheet but a UG `[pin]` or a `[lacuerda]` pick; a post its thread's first page doesn't hold is found
+    by asking its own address, which the forum redirects to its page (`_post_page`, each hop a request), read out of
+    the index; a later page's address alone names no chart (overrides.py, Addresses.kt).
+  - After a lookup its client let go first, overrides.toml read again (`reload_overrides`, as LaCuerda's pass does):
+    before the next song, and a song whose turn a handoff came in kept only while it still is one to try with the
+    pick the turn read.
 - Its step `ireal` (pipeline.py, after lacuerda); in a lookup, the sheet stage's last resort (get.py `_ireal`: after
   UG's and LaCuerda's, its pick `--ireal` first, "from iReal Pro" its running detail, `SHEET_FROM`), no stage of its
   own; its command `caracole ireal [--index] [--budget N]` (commands/lyrics.py); `search.search_ireal`
@@ -3374,7 +3393,7 @@ picks one).
   gone, 404), asked about again after 30 days (gametabs_fetch.py,
   `test_gametabs_fetch.py::test_a_page_that_wont_parse_is_an_error_never_a_miss`); and of its game pages only one that
   answers 404 loses its tabs (gametabs_index.py).
-- On iReal Pro's forum only candidates that all answered, none holding a chart of the song's title (or gone, 404),
+- On iReal Pro's forum only candidates that all answered, none holding a chart that is the song's (or gone, 404),
   asked about again after 30 days (ireal_fetch.py,
   `test_ireal_fetch.py::test_a_page_that_wont_parse_is_an_error_never_a_miss`); and of its playlists only a page that
   answers 404 loses its charts (ireal_index.py).

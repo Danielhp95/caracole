@@ -329,11 +329,15 @@ Pro app post charts, one song a thread or a playlist of many, its "Jazz 1460 Sta
 standards, curated by its moderators). They are for the songs Ultimate Guitar and LaCuerda left without a sheet:
 for each, caracole looks for a chart titled as it is that is its own: one whose composer is your line's artist (iReal
 Pro writes "Jones Thad"), or in a thread named for the title and your line's artist
-(`groove-merchant-thad-jones` for `Thad Jones - Groove Merchant`), or one of the jazz playlists caracole reads (the
-Jazz 1460 Standards and the jazz forum's playlist threads), where the title alone is enough: standards are filed by
-composer, and your line may name a singer (`Bill Evans - Autumn Leaves` gets Kosma's standard). A title alone
-elsewhere is another song of that name as often as not, so `Ren - Patience` gets no Guns N' Roses chart and `Count
-Basie - Groove Merchant` none (a chart you pick, `[ireal]`, is yours whoever wrote it). It reads the charts of the
+(`groove-merchant-thad-jones` for `Thad Jones - Groove Merchant`), or in the Jazz 1460 Standards, where the title
+alone is enough: standards are filed by composer, and your line may name a singer (`Bill Evans - Autumn Leaves` gets
+Kosma's standard). A title alone elsewhere is another song of that name as often as not, so `Ren - Patience` gets no
+Guns N' Roses chart and `Count Basie - Groove Merchant` none, and the jazz forum's other playlists (practice
+exercises, fusion, gypsy jazz…) need the composer as any thread does (a chart you pick, `[ireal]`, is yours whoever
+wrote it). A line that names several artists is each of them: `Thad Jones / Count Basie - Groove Merchant` and `Thad
+Jones & Mel Lewis - Groove Merchant` get Thad Jones's chart (between " / ", " & ", ", ", " and ", " with ", " feat. "
+or " ft. "). A chart that won't read (no chord in it, or its link cut short) is passed over, and only when every chart
+that would be your song's won't is the song left for the next night, as after any error. It reads the charts of the
 thread pages it read first, the curated playlist's among them, from the cache with no request, then the threads its
 sitemaps name for your song (the title and your artist, else the title alone), three pages at most; each chart of the
 song is a version, and the best, the song's sheet: one whose composer is your line's artist (iReal Pro
@@ -5838,8 +5842,11 @@ tab_ids = [1601668]
   serve's search, and `caracole get --gametabs`, write it.
 - **`[ireal]`** names the chart of iReal Pro's forum you picked for the song: its
   thread's page, with its post's anchor (`#post-38106`, or the post's own address,
-  `…/post-38106`) for one post's chart, else the thread's chart of the song's
-  title (or its one chart). The nightly ireal pass reads that page alone and keeps
+  `…/post-38106`, or a later page's with the anchor, `…/page-3#post-38106`) for one
+  post's chart, else the thread's chart of the song's title (or its one chart); a
+  later page's address alone names no chart, and says so. The nightly ireal pass
+  reads the thread's first page, and for a post a later page holds, asks the
+  post's address, which the forum sends to that page (a request for each hop), and keeps
   the chart as the song's sheet, in place of any but a tab you pinned on Ultimate
   Guitar or a sheet you picked on LaCuerda, and no other site's sheet replaces it.
   A chart you name is asked for at once. Fetch on an iReal Pro row of caracole
