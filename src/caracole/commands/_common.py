@@ -787,7 +787,8 @@ def _locked_client() -> type[PoliteClient]:
         cut to what is left: of ``lookup_per_hour``, every lookup's of the last hour, less its
         ``reserve`` (after the sheet, get.py keeps ``SHEETS_SHARE`` of the hour for sheets), and
         of the UTC day's ``per_day``; spent, its next request is never sent (``BudgetExhausted``,
-        one ``budget`` event), and ``kept_back`` says when the reserve had a part in the cut.
+        one ``budget`` event), and ``kept_back`` says when the reserve had a part in the cut: when the
+        budget would be more without it.
         """
 
         def __init__(self, *args, lock: Path, cfg: Config | None = None,
@@ -854,16 +855,22 @@ def _locked_client() -> type[PoliteClient]:
             ``within_the_day`` read it when the client was made, the other's requests now among them: no more
             than what the last hour's lookups left of ``lookup_per_hour`` less its ``reserve``, nor than what the
             UTC day left of a ``per_day``. Spent, ``BudgetExhausted`` before the request, its one ``budget``
-            event; ``kept_back`` once the reserve had a part in the cut."""
+            event. A turn that cuts it says whether the reserve had a part in the cut (``kept_back``): whether
+            the budget would be more without it; the hour spent whole, or the day, is no reserve's."""
             assert self._cfg is not None and self._conn is not None
             now = self._wall_clock()
             used = lookup_requests_used(self._conn, self.provider, now)
-            hour = self.requests_made + max(0, self._cfg.provider(self.provider).lookup_per_hour - self.reserve - used)
-            self.kept_back = self.kept_back or (self.reserve > 0 and hour < self.policy.budget)
-            budget = min(self.policy.budget, hour)
-            if self.policy.per_day is not None:
-                day = self.policy.per_day - requests_today(self._conn, self.provider, now)
-                budget = min(budget, self.requests_made + max(0, day))
+            per_hour = self._cfg.provider(self.provider).lookup_per_hour
+            day = (None if self.policy.per_day is None
+                   else self.policy.per_day - requests_today(self._conn, self.provider, now))
+
+            def cut(reserve: int) -> int:
+                budget = min(self.policy.budget, self.requests_made + max(0, per_hour - reserve - used))
+                return budget if day is None else min(budget, self.requests_made + max(0, day))
+
+            budget = cut(self.reserve)
+            if budget < self.policy.budget:  # this turn's cut: the reserve's, or the hour's or the day's
+                self.kept_back = budget < cut(0)
             self.policy = replace(self.policy, budget=budget)
             self._check_budget(url)
 

@@ -471,24 +471,28 @@ ASKED_NOW = [
 ]
 # Bulk work: the nightly run's steps, or a pass over the whole library by hand, waits for the whole run.
 BULK = [("run",), ("fetch",), ("render",), ("youtube",), ("lyrics",), ("match",), ("sync",)]
+# The lookups: in the lane, where they take turns with the lock, a request or a stage each, and no other caracole
+# takes it while one is there.
+LANE = [("get", "Radiohead", "Creep")]
 
 
-@pytest.mark.parametrize("args", [*ASKED_NOW, *BULK], ids=" ".join)
-def test_what_the_owner_asked_for_just_now_takes_the_lock_as_a_lookup_and_bulk_work_doesnt(
+@pytest.mark.parametrize("args", [*LANE, *ASKED_NOW, *BULK], ids=" ".join)
+def test_lookups_take_the_lock_in_the_lane_what_the_owner_asked_for_now_as_a_lookup_and_bulk_work_neither(
         tmp_path, config, sites, conn, monkeypatch, args):
     a_song_to_match(tmp_path, sites, conn)
     monkeypatch.setattr("caracole.youtube_fetch.route_problem", lambda cfg: None)  # as with auto-chords
-    took: list[tuple[str, bool]] = []
+    took: list[tuple[str, bool, bool]] = []
 
     def acquire(cfg, what, *, fatal=True, interactive=False, lane=False, on_wait=None):
-        took.append((what, interactive))
+        took.append((what, interactive, lane))
         raise _Took
 
     monkeypatch.setattr(_common, "_acquire", acquire)
     result = CliRunner().invoke(build_app(), ["--config", str(config), *args])
     assert took, result.output
     assert isinstance(result.exception, _Took), result.output
-    assert took[0][1] is (args in ASKED_NOW), took
+    kind = (True, True) if args in LANE else (True, False) if args in ASKED_NOW else (False, False)
+    assert took[0][1:] == kind, took  # (interactive, lane)
 
 
 def test_a_command_holding_the_lock_as_asked_now_hands_it_to_the_lane_alone(tmp_path, config, monkeypatch):

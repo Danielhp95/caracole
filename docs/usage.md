@@ -650,7 +650,9 @@ When that cuts Ultimate Guitar short, a matched song is marked to fetch, as
 `caracole fetch --song` marks it, so the nightly run fetches it even if it was
 fetched before.
 A nightly run that holds caracole's lock lets the lookup go first at its next
-pause ([One caracole at a time](#one-step-at-a-time)).
+pause ([One caracole at a time](#one-step-at-a-time)). Two lookups at once take
+turns with the lock, a request or a stage each, so both move and each site still
+gets one request at a time; the hour's lookups are counted again after each turn.
 
 Options:
 
@@ -1958,7 +1960,9 @@ What you ask for now waits as a lookup does and says the same, so that a lookup
 `caracole serve` queues after it never waits behind the whole run either: `add`,
 `remove`, `review`, `fetch --song`, `render --song`, `youtube --song` (its
 `--sheet` and `--none` too), `youtube --search` and `youtube --video`. Holding the
-lock as a lookup, such a command lets nothing else go first in its own pauses.
+lock, such a command lets a lookup go first there (a yt-dlp pause, a YouTube
+sheet before its models, `fetch --song`'s pauses), and gets the lock back once
+the lookups are done; another command asked for now waits for its end.
 A songbook change, asked for now as a lookup is, waits the same way and says
 the same: `caracole songbook make`, `add`, `remove`, `move`, `set`, `rename`,
 `delete` and `render`, so a songbook you make (from a terminal, or on

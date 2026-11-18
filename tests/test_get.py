@@ -549,6 +549,165 @@ def test_a_lookup_waiting_for_the_lock_says_where_it_is_let_in(cfg, conn, sites)
     assert "a fetch goes first at its next pause" in said
 
 
+# --- another lookup in the lane --------------------------------------------------------------------------
+
+
+def test_a_lookup_passes_a_turn_before_each_stage_never_inside_one(cfg, conn, sites, monkeypatch):
+    # Another lookup in the lane goes first between two stages, and in a client's pause: never in a transaction.
+    from caracole.get import LookupRequest
+    from caracole.get import look_up as run
+
+    serve_creep(sites, conn)
+    heard: list = []
+    turns: list[bool] = []  # whether the lookup's connection was in a transaction at each turn
+
+    def turn(cfg_, conn_=None) -> bool:
+        heard.append("turn")
+        turns.append(conn_.in_transaction)
+        return False  # nobody waits in the lane
+
+    class Heard(Progress):
+        def stage(self, name, state, detail=""):
+            super().stage(name, state, detail)
+            heard.append((state, name))
+
+    monkeypatch.setattr(_common, "pass_turn", turn)
+    result = run(cfg, LookupRequest(artist="Radiohead", title="Creep"), Heard(sites), runner=FakeRunner(), now=NOW)
+
+    assert result.sheet is not None
+    for name in ("match", "sheet", "pdf", "lyrics", "ug", "lacuerda", "gtptabs", "harptabs", "gametabs", "pages",
+                 "songbooks"):
+        assert heard[heard.index(("running", name)) - 1] == "turn", name
+    assert heard.count("turn") > 11  # and before each request but a client's first
+    assert not any(in_transaction for in_transaction in turns)
+
+
+def test_after_a_turn_a_lookup_reads_overrides_and_its_song_again(cfg, conn, sites, monkeypatch):
+    # At its turn, the other lookup in the lane pins its own song's tab and changes this song's row: what this one
+    # does next keeps to the row as it is now, and its index.html shows the other's pin.
+    from caracole.get import _Lookup
+    from caracole.overrides import add_pin, override_key
+    from caracole.songs import update_song
+
+    from conftest import add_song
+
+    serve_creep(sites, conn)
+    creep = add_song(conn, "Radiohead", "Creep")
+    update_song(conn, creep.id, ug_dirty=False)
+    monkeypatch.setattr(_common, "_handoffs", _common.handoffs())  # put back as it was after the test
+    turns: list[int] = []
+
+    def turn(cfg_, conn_=None) -> bool:
+        turns.append(1)
+        if len(turns) > 1:
+            return False
+        _common._handoffs += 1  # the other lookup had the lock, and wrote as its own lookup does
+        add_pin(cfg.overrides_file, "Oasis - Wonderwall", [f"{TAB}oasis/wonderwall-chords-4169"])
+        update_song(conn, creep.id, ug_dirty=True)
+        return True
+
+    seen_dirty: list[bool] = []
+    real_match = _Lookup.match
+
+    def match(self):
+        seen_dirty.append(self.song.ug_dirty)
+        return real_match(self)
+
+    written: list = []
+
+    def write_pages(conn_, cfg_, overrides, now):
+        written.append(overrides)
+
+    monkeypatch.setattr(_common, "pass_turn", turn)
+    monkeypatch.setattr(_Lookup, "match", match)
+    monkeypatch.setattr("caracole.todo.write_pages", write_pages)
+
+    look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+
+    assert seen_dirty == [True]  # the match stage read the song's row again
+    assert written and written[-1].pin[override_key("Oasis - Wonderwall")] == (4169,)  # index.html's overrides
+
+
+def test_a_lookups_good_run_is_its_own_clients_not_another_lookups_of_the_same_second(cfg, conn, sites):
+    # Two lookups started in one second share a run id: the other's errors are never this one's, which UG answered.
+    from datetime import timedelta
+
+    from caracole.commands._common import lookup_run_id
+
+    record_block(conn, "ug", NOW - timedelta(days=10), "403")  # one strike, its cooldown long over
+    serve_creep(sites, conn)
+    stamp = NOW.strftime("%Y-%m-%dT%H:%M:%SZ")
+    conn.executemany("INSERT INTO events (run, at, provider, url, status, decision) VALUES (?, ?, ?, ?, ?, ?)",
+                     [(lookup_run_id(NOW), stamp, "ug", f"{TAB}theirs-{i}", 502, "error") for i in range(50)])
+
+    result, _ = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+
+    assert result.sheet is not None and sites.ug()  # UG answered this lookup
+    assert get_state(conn, "ug").strikes == 0
+
+
+def test_what_follows_the_sheet_sets_its_ug_clients_reserve(cfg, conn, sites, monkeypatch):
+    # What the reserve does after a turn is test_commands_lane.py's test_after_the_sheet_a_turn_keeps_the_reserve_for_sheets.
+    import math
+
+    from caracole.get import SHEETS_SHARE
+
+    serve_creep(sites, conn)
+    clients: dict = {}
+    real = _common.make_client
+
+    def make_client(cfg_, conn_, provider, run_id, **kwargs):
+        clients[provider] = real(cfg_, conn_, provider, run_id, **kwargs)
+        return clients[provider]
+
+    monkeypatch.setattr(_common, "make_client", make_client)
+
+    look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+
+    assert clients["ug"].reserve == math.ceil(cfg.provider("ug").lookup_per_hour * SHEETS_SHARE)
+    assert clients["lrclib"].reserve == 0  # the lyrics are no part of what follows the sheet
+
+
+@pytest.mark.parametrize("theirs, said", [
+    (30, "half this hour's 60 asks of Ultimate Guitar are spent; the rest is kept for sheets"),
+    (59, "no more asks of Ultimate Guitar this hour (60 spent)"),
+], ids=["its share for sheets", "the whole hour"])
+def test_after_a_turn_what_follows_the_sheet_says_what_cut_it(cfg, conn, sites, monkeypatch, theirs, said):
+    # The other lookup in the lane spends UG's hour in the turn the ug stage's client gives it before its first
+    # request: the half left for sheets is said as kept for sheets, the whole hour spent as the hour's.
+    serve_creep(sites, conn)
+    monkeypatch.setattr(_common, "_handoffs", _common.handoffs())  # put back as it was after the test
+    running: list[str] = []
+    turned: list[int] = []
+
+    class Heard(Progress):
+        def stage(self, name, state, detail=""):
+            super().stage(name, state, detail)
+            if state == "running":
+                running.append(name)
+
+    def turn(cfg_, conn_=None) -> bool:
+        if running[-1:] != ["ug"] or turned:
+            return False
+        turned.append(1)
+        _common._handoffs += 1
+        at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        conn.executemany("INSERT INTO events (run, at, provider, url, status, decision) VALUES (?, ?, ?, ?, ?, ?)",
+                         [("lookup:2026-11-18T12:00:00Z", at, "ug", f"{TAB}theirs-{i}", 200, "ok")
+                          for i in range(theirs)])
+        return True
+
+    monkeypatch.setattr(_common, "pass_turn", turn)
+    from caracole.get import LookupRequest
+    from caracole.get import look_up as run
+
+    result = run(cfg, LookupRequest(artist="Radiohead", title="Creep"), Heard(sites), runner=FakeRunner(), now=NOW)
+
+    assert turned and len(sites.ug()) == 1  # the sheet's, and the ug stage's first never sent
+    assert result.states["ug"] == "skipped"
+    assert result.details["ug"] == f"{said}; tonight's run does the rest"
+
+
 # --- errors are never misses ---------------------------------------------------------------------------
 
 

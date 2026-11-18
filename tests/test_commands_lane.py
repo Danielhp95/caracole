@@ -655,6 +655,27 @@ def test_after_the_sheet_a_turn_keeps_the_reserve_for_sheets(cfg, conn, monkeypa
     assert len(seen) == 1 and budget_events(conn, "ug") == 1
 
 
+def test_a_turn_after_which_the_hour_is_spent_whole_is_no_reserve_kept_for_sheets(cfg, conn, monkeypatch):
+    # The other lookup spent all the hour left: the cut would come without the reserve too, so it is the hour's, and
+    # get.py says so, never that the rest is kept for sheets.
+    from caracole.http import BudgetExhausted
+
+    cfg = lookups_an_hour(cfg, 8)
+    seen = answering(monkeypatch)
+    another_lookups_turn(conn, "ug", monkeypatch, lookups=7, others=0)
+    with exclusive(cfg, "get A - B", lane=True):
+        client = _common.make_client(cfg, conn, "ug", _common.lookup_run_id(_common.utcnow()), interactive=True)
+        client.reserve = 4
+        try:
+            client.get(URLS["ug"].format(1))
+            with pytest.raises(BudgetExhausted):  # 8 an hour, 8 sent: none left, reserve or not
+                client.get(URLS["ug"].format(2))
+        finally:
+            client.close()
+    assert not client.kept_back
+    assert len(seen) == 1 and budget_events(conn, "ug") == 1
+
+
 def lookup_lines(log: Path) -> dict[str, Record]:
     """Each lookup's last line, by its name: done, spent or blocked."""
     return {r.name: r for r in records(log) if r.word in ("done", "spent", "blocked")}

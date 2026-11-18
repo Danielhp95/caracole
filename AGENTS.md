@@ -2766,7 +2766,10 @@ picks one).
     `::test_after_the_sheet_a_turn_keeps_the_reserve_for_sheets`, `::test_the_hour_holds_for_two_lookups`).
 - What follows the sheet, which the nightly run would do anyway (get.py's `ug` stage, LaCuerda for a song with a
   sheet), spends only what leaves `get.SHEETS_SHARE` (half) of that hour's requests for sheets
-  (`_Lookup.after_the_sheet`).
+  (`_Lookup.after_the_sheet`), its client's `reserve` that share after a turn too; a turn's cut is said as kept for
+  sheets only where the reserve made it (`kept_back`: the budget would be more without it), the hour spent whole as
+  the hour's (`test_get.py::test_after_a_turn_what_follows_the_sheet_says_what_cut_it`,
+  `test_commands_lane.py::test_a_turn_after_which_the_hour_is_spent_whole_is_no_reserve_kept_for_sheets`).
 - Then `BudgetExhausted`: the rest waits for the nightly run.
 - Nothing else is looser for a lookup, and a lookup never runs yt-dlp.
 
@@ -3254,7 +3257,8 @@ picks one).
   - a file per waiting process, touched every `TICKET_BEAT` s while it tries for the lock, and dropped once it holds
     it;
   - one its process left, or untouched for `TICKET_STALE` s, a lookup killed while it waited, no longer counts.
-- Lookups take the lock in the lane (`exclusive(..., lane=True)`, which implies `interactive`):
+- Lookups take the lock in the lane (`exclusive(..., lane=True)`, which implies `interactive`), `caracole get`'s
+  (get.py `_Lookup.run`) among them:
   - a shared flock of `state_dir/caracole.lock.lane` (`LANE_NAME`) from before they ask for the lock until they let
     go of it (`_release`), so a lookup run in a process that goes on, or whose acquire was interrupted, leaves it;
   - their tickets named `lane.<time.time_ns(), 20 digits>.<pid>` (`LANE_TICKET`), taken oldest first, a ticket
@@ -3265,6 +3269,13 @@ picks one).
     writes its own (the newest), lets go, takes the lock back when its ticket heads the lane, writes its record back
     and counts a handoff (`handoffs()`), so whatever reads again after a handoff reads again after a turn; killed or
     interrupted as it waits, it leaves no ticket and writes no record, and the next in the lane takes the lock;
+  - `caracole get` passes a turn before each stage (`_Lookup._turn`, never inside one), and after a turn, there or in
+    a client's pause, reads overrides.toml and its song again (`_Lookup.handed`, `overrides_since`), so its
+    index.html shows a tab the other pinned; its good run is what its own clients were answered
+    (`PoliteClient.answered_any`), never another lookup's errors under the same second's run id
+    (`test_get.py::test_a_lookup_passes_a_turn_before_each_stage_never_inside_one`,
+    `::test_after_a_turn_a_lookup_reads_overrides_and_its_song_again`,
+    `::test_a_lookups_good_run_is_its_own_clients_not_another_lookups_of_the_same_second`);
   - two lookups of one song, one from a terminal beside serve's, interleave their writes to it by turns (serve never
     runs two jobs of a song): accepted (the spec's part 3);
   - a caracole that isn't in the lane, once it has the lock, lets go of it while the lane holds anyone and waits for
@@ -3277,7 +3288,7 @@ picks one).
 - So does everything else caracole serve queues that the owner asked for just now, so a lookup queued behind it in
   serve's one-at-a-time queue never waits behind the whole run either: `add`, `remove`, `review`, `fetch --song`,
   `render --song`, `youtube --song` (`--sheet`, `--none`), `youtube --search` and `--video`
-  (`test_commands_lock.py::test_what_the_owner_asked_for_just_now_takes_the_lock_as_a_lookup_and_bulk_work_doesnt`,
+  (`test_commands_lock.py::test_lookups_take_the_lock_in_the_lane_what_the_owner_asked_for_now_as_a_lookup_and_bulk_work_neither`,
   `test_web_jobs.py::test_a_lookup_queued_behind_an_add_never_waits_behind_the_whole_nightly_run`).
   - A process holding the lock as asked for now hands it to the lane's lookups alone (`hand_over`), at its hand-over
     points (a yt-dlp pause, a YouTube sheet before its models, `fetch --song`'s pauses), taking the gate only if it is

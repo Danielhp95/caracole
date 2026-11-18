@@ -59,10 +59,16 @@ lookup's or the hour's) and a provider's error leave the song to the nightly
 run; neither is a failure, and neither makes a song not found. Nor is a file
 that would go where another song, whose name makes the same folder, keeps one
 (``library.SharedFolder``): the stage fails, saying so, and nothing is written
-over it. The lookup holds
-caracole's lock throughout, and a nightly run that holds it lets the lookup go
-first at its next pause, or between two songs for work that sends no request
-(auto-chords, the PDF pass; ``_common.hand_over``).
+over it. The lookup takes caracole's lock in the lookups' lane (``exclusive(...,
+lane=True)``), and a nightly run that holds it lets the lookup go first at its
+next pause, or between two songs for work that sends no request (auto-chords,
+the PDF pass; ``_common.hand_over``). Another lookup in the lane takes turns with
+it (``_common.pass_turn``): this one lets it go first before each request but a
+client's first, and between two stages (``_turn``), never inside one, and after
+a turn reads overrides.toml and its song again, as the other may have pinned a
+tab or written the song's row. Its good run at a site is what its own client was
+answered (``answered_any``), never read by its run id, which another lookup of
+the same second shares.
 """
 
 from __future__ import annotations
@@ -232,7 +238,7 @@ class _Stop(Exception):
 class _Lookup:
     def __init__(self, cfg: Config, request: LookupRequest, progress: Progress, *, runner: Callable,
                  now: datetime | None, clock: Callable[[], float]):
-        from caracole.commands._common import lookup_run_id, utcnow
+        from caracole.commands._common import handoffs, lookup_run_id, utcnow
 
         self.cfg, self.request, self.progress = cfg, request, progress
         self.runner, self.clock = runner, clock
@@ -252,6 +258,9 @@ class _Lookup:
         self.overrides = None
         self.song = None
         self.sheet_version: int | None = None
+        # The handoffs (``_common.handoffs``) the overrides and the song were read at: a turn since, they are read
+        # again (``_turn``). Now's, so that a stage run with no ``run`` reads nothing again.
+        self.handed = handoffs()
 
     # --- reporting --------------------------------------------------------------------------------
 
@@ -262,7 +271,9 @@ class _Lookup:
         self.progress.stage(name, state, detail)
 
     def stage(self, name: str, run: Callable[[], tuple[str, str] | str | None]) -> None:
-        """Run one stage; what it returns is its end, ``(state, detail)`` or a detail of ``done``."""
+        """Run one stage, after a turn (``_turn``); what it returns is its end, ``(state, detail)`` or a detail of
+        ``done``."""
+        self._turn()
         self._report(name, "running")
         self.running = name
         try:
@@ -280,6 +291,22 @@ class _Lookup:
         state, detail = out if isinstance(out, tuple) else ("done", out or "")
         self._report(name, state, detail)
         self._check_readable()
+
+    def _turn(self) -> None:
+        """Between two stages, the next lookup in the lane goes first (``pass_turn``: none waits, or this one isn't
+        in the lane, and nothing happens), outside any transaction. After a turn, here or in a client's pause
+        since the last stage, overrides.toml and the song are read again, as the other lookup may have pinned a
+        tab or written the song's row: what this one does next keeps to them, and its index.html shows them."""
+        from caracole.commands._common import handoffs, overrides_since, pass_turn
+        from caracole.songs import get_song
+
+        pass_turn(self.cfg, self.conn)
+        if handoffs() == self.handed:
+            return
+        self.overrides = overrides_since(self.cfg, self.overrides, self.handed)
+        if self.song is not None:
+            self.song = get_song(self.conn, self.song.id)
+        self.handed = handoffs()
 
     # --- clients and the sites ------------------------------------------------------------------------
 
@@ -330,7 +357,8 @@ class _Lookup:
         except BudgetExhausted as e:
             self._owed(provider)
             p = self.cfg.provider(e.provider)
-            if e.provider in self.kept_for_sheets:
+            # Kept for sheets: by the cut after_the_sheet made, or by the reserve after another lookup's turn
+            if e.provider in self.kept_for_sheets or getattr(client, "kept_back", False):
                 spent = self._kept_for_sheets(e.provider)
             elif client.policy.budget < p.lookup_requests:
                 spent = f"no more asks of {NAMES[e.provider]} this hour ({p.lookup_per_hour} spent)"
@@ -361,16 +389,19 @@ class _Lookup:
     def after_the_sheet(self, provider: str, work: Callable[[Any], tuple[str, str] | str]) -> tuple[str, str] | str:
         """Ask a site for what follows the sheet, which the nightly run would do anyway: within what leaves
         ``SHEETS_SHARE`` of the hour's lookup requests to it for sheets, so an evening of songs looked up
-        on the spot keeps getting them."""
+        on the spot keeps getting them. The client keeps that share (its ``reserve``) when it counts the
+        hour again after another lookup's turn."""
         from caracole.commands._common import lookup_requests_used
 
         p = self.cfg.provider(provider)
-        left = p.lookup_per_hour - math.ceil(p.lookup_per_hour * SHEETS_SHARE) - lookup_requests_used(self.conn, provider)
+        reserve = math.ceil(p.lookup_per_hour * SHEETS_SHARE)
+        left = p.lookup_per_hour - reserve - lookup_requests_used(self.conn, provider)
         if left <= 0 and self._usable(provider) is None:
             self._owed(provider)  # cut short as a spent budget cuts it: owed a fetch at night
             return "skipped", f"{self._kept_for_sheets(provider)}; tonight's run does the rest"
 
         def within(client) -> tuple[str, str] | str:
+            client.reserve = reserve  # the share for sheets, kept after a turn too (a lane client's)
             if client.requests_made + left < client.policy.budget:  # no stage after it asks this site for a sheet
                 client.policy = replace(client.policy, budget=client.requests_made + left)
                 self.kept_for_sheets.add(provider)
@@ -894,8 +925,8 @@ class _Lookup:
 
     def run(self) -> LookupResult:
         from caracole import db
-        from caracole.commands._common import exclusive
-        from caracole.health import answered_any, record_ok
+        from caracole.commands._common import exclusive, handoffs
+        from caracole.health import record_ok
         from caracole.overrides import OverridesError, load_overrides
         from caracole.songs import ensure_current_keys
         from caracole.ug.fetch import note_looked_up
@@ -906,11 +937,12 @@ class _Lookup:
             self.progress.stage("song", "running", f"waiting for the book ({holder}); a fetch goes first "
                                                    "at its next pause")
 
-        with exclusive(self.cfg, f"get {self.request.display}", interactive=True, on_wait=waiting):
+        with exclusive(self.cfg, f"get {self.request.display}", lane=True, on_wait=waiting):
             try:  # once the lock is held: what another caracole wrote while this one waited is read
                 self.overrides = load_overrides(self.cfg.overrides_file)
             except OverridesError as e:
                 return self._refuse(f"Can't read overrides.toml: {e}")
+            self.handed = handoffs()
             with closing(db.connect(self.cfg.db_path)) as conn:
                 self.conn = conn
                 ensure_current_keys(conn)
@@ -926,9 +958,10 @@ class _Lookup:
                                        ("songbooks", self.songbooks)):
                         self.stage(name, work)
                     note_looked_up(conn, self.song.id)
-                    for provider, client in self.clients.items():  # a site that answered: a good run
-                        if provider not in self.blocked and answered_any(conn, self.run_id, provider,
-                                                                         client.requests_made):
+                    # A site that answered this lookup's own client: a good run (another lookup of the same
+                    # second has the same run id, so its errors are never read as this one's)
+                    for provider, client in self.clients.items():
+                        if provider not in self.blocked and client.answered_any():
                             record_ok(conn, provider, self.now)
                 finally:
                     for provider, client in self.clients.items():
