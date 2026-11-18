@@ -16,8 +16,7 @@
 // stays, marked { caracoleMenu: "closed" }, never taken back then, which would cancel the one or add a step to the
 // other. Back and Forward pass over a closed menu's entry, the way the browser went; so does Back from the page a
 // link opened, which lands on it in a document shown again (``pageshow``, with the back-forward cache or without;
-// Forward onto one from another page spends a step, its direction not being told; a page cached with its menu open
-// comes back with it open). A menu opened as another closes
+// Forward onto one from another page spends a step, its direction not being told). A menu opened as another closes
 // takes that one's entry. A reload with a menu open leaves its entry the page's (one Back spent on it). With a mouse a
 // menu is no step, and a browser that refuses the step opens and closes it all the same.
 const caracoleMenus = (() => {
@@ -65,8 +64,10 @@ const caracoleMenus = (() => {
     if (e.persisted) leaving = false;
     const entry = history.state && history.state[MENU];
     if (shown || !entry) return;
-    const back = !e.persisted && performance.getEntriesByType("navigation").some((n) => n.type === "back_forward");
-    if (entry === CLOSED || back) history.back();  // a menu's entry the press left, or one the page left open
+    // The page came back to its entry (cached, so its timers, a closing menu's among them, were frozen; or loaded anew):
+    // a menu's entry that nothing here shows open is stepped over.
+    const back = e.persisted || performance.getEntriesByType("navigation").some((n) => n.type === "back_forward");
+    if (entry === CLOSED || back) history.back();
   });
   const show = (more, n) => {
     shown = { more, n };

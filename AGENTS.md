@@ -768,7 +768,8 @@ The pages caracole writes and serves are index.html, sheet.html, songbook.html a
     replaced as `{ …its fields, caracoleMenu: "closed" }`; Back passes over a closed menu's entry, and Forward too
     where `navigation.currentEntry.index` says the way; Back from the page a link opened lands on it in a document shown
     again, which steps back over it on `pageshow` (`history.back()` for a closed entry, or any menu's entry of a page
-    loaded as `back_forward`; a cached page comes back with its menu open, `leaving` reset when `persisted`; Forward onto
+    loaded as `back_forward` or shown again from the back-forward cache, where `leaving` is reset and a closing menu's frozen
+    timer may still be pending; Forward onto
     one from another page spends a step: the direction isn't told); a reload with a menu open leaves its entry the page's (one
     Back spent); a mouse pushes nothing; no other script copies `caracoleMenu` into its entries (test_library_card.py).
 - **Enter in a search box never spends a request on a guess**:

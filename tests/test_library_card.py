@@ -1308,8 +1308,8 @@ def test_a_download_chosen_in_the_menu_takes_its_step_back(conn, cfg, versions_s
 @pytest.mark.parametrize("cache", [True, False], ids=["bfcache", "reloaded"])
 def test_on_the_file_page_the_menus_info_json_opens(conn, cfg, tmp_path, cache):
     # A page opened as a file downloads nothing: its info.json opens, and the menu's step is left for it, never
-    # taken back (a history.back() issued as the link is followed would cancel it). Back from it: the page cached
-    # comes back with its menu open, its step the menu's; loaded anew it steps over that step.
+    # taken back (a history.back() issued as the link is followed would cancel it). Back from it, cached or loaded
+    # anew, steps over the menu's step.
     put(cfg, hotel(conn, cfg), "info.json")
     path = write_library_page(cfg.library_dir, page(conn, cfg))
     args = () if cache else ("--disable-back-forward-cache",)
@@ -1322,17 +1322,13 @@ def test_on_the_file_page_the_menus_info_json_opens(conn, cfg, tmp_path, cache):
         b.click(card + " details.foot-more > summary")
         assert b.wait(f"{menu}.open && window.menuToggled === true && {OURS}")
         info = b.js(f"document.querySelector('{card} .foot-menu a.info-file').href")
-        b.js("window.marker = 1")
         b.click(card + " .foot-menu a.info-file")
         assert b.wait(f"location.href === {json.dumps(info)} && document.readyState === 'complete'")
         time.sleep(0.6)  # a late cancelling step back would have undone it by now
         assert b.js("location.href") == info and b.js("navigation.currentEntry.index") == index + 2
         b.js("history.back()")
         assert b.wait(f"location.href.startsWith({json.dumps(path.as_uri())}) && document.readyState === 'complete'")
-        if b.js("window.marker === 1"):  # the page cached: it comes back as it was, its menu open on its step
-            assert b.js(f"navigation.currentEntry.index === {index + 1} && {OURS}") is True
-        else:
-            assert b.js(f"navigation.currentEntry.index === {index} && !{OURS}") is True
+        assert b.wait(f"navigation.currentEntry.index === {index} && !{OURS}")  # the menu's step passed over
 
 
 def test_forward_passes_over_a_closed_menus_entry_too(conn, cfg, versions_served, tmp_path):
