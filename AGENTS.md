@@ -1014,6 +1014,9 @@ It is rows.js's, shared by both pages:
   how many; the lyrics none), Fetch's download glyph where it has one (rows.js `fetchIcon`, a site's
   song's Fetch too), its key and its chevron, one row on a phone and a laptop (test_library_plays.py). Its title and
   its chevron open it as a card (card.js `caracoleCard`, card.css):
+  - made the first time it opens, from the song and its request as they are then (library.js `cardFor`, rows.js
+    `resultRow`'s `more` a function): until then its panel, `.line-panel.song-card`, is empty and hidden, the
+    chevron's `aria-controls` naming it (test_library_card_place.py);
   - a tile for each thing to play from, every one alike, each source's versions a chip whose drawer reads the page's
     data alone, never a request;
   - its UG versions not kept are counted (`versions.rest`, `sheet_versions.may_keep`), and Fetch them keeps them,

@@ -507,6 +507,7 @@
   const REMOVE_WAIT = 5;  // seconds
   const REMOVE_SECOND = paced("undo", REMOVE_WAIT * 1000) / REMOVE_WAIT;  // ms each of them lasts
   const removals = new Map();  // song id -> its removal counting down (startRemoval)
+  const shownSongs = new WeakMap();  // a song's line -> the song's data it shows (lineFor; refill carries it over)
   const removeForm = (s) => {
     const form = songForm("remove", "/remove", s);
     const back = form.appendChild(hidden("back", ""));
@@ -529,8 +530,19 @@
     const own = i === undefined ? [] : [lines.get(i)];
     return own.concat([r.spot]).filter((item, n, all) => item && all.indexOf(item) === n);
   };
+  // The buttons of ``node``'s forms wait while a removal (``r``) counts down: each disabled, and given back when it is
+  // undone or refused (stopRemoval); one disabled already is left as it is.
+  const holdForms = (node, r) => {
+    for (const b of node.querySelectorAll("form button")) {
+      if (!b.disabled) {
+        b.disabled = true;
+        r.held.add(b);
+      }
+    }
+  };
   // A removal's line while it counts down: a screen reader hears it once ("Removing Creep in 5 seconds."), the
-  // seconds left are for the eye; then Undo, and what goes. The item's other buttons wait meanwhile.
+  // seconds left are for the eye; then Undo, and what goes. The item's other buttons wait meanwhile, and those of its
+  // card, made the first time it opens, once it is (cardFor).
   const countdownIn = (item, r) => {
     const s = r.song;
     const p = progressIn(item);
@@ -549,12 +561,7 @@
     undo.addEventListener("click", () => undoRemoval(Number(s.id)));
     p.append(shown, el("span", "visually-hidden", "Removing " + String(s.title) + " in " + REMOVE_WAIT +
       " seconds."), dot, undo, el("span", "goes", r.brief));
-    for (const b of item.querySelectorAll("form button")) {
-      if (!b.disabled) {
-        b.disabled = true;
-        r.held.add(b);
-      }
-    }
+    holdForms(item, r);
     return undo;
   };
   const eachLine = (id, r, part, text) => {
@@ -860,31 +867,49 @@
     }
     return p;
   };
-  // A song in review's line sends you to its picker (review?song=ID): on a line that has the picker, it opens
-  // that one, where you are, rather than the picker's own page. The list of requests has none: it goes there.
+  // A song in review's line sends you to its picker (review?song=ID): on a line whose card has the picker (canPick),
+  // it opens that one, where you are, rather than the picker's own page. The list of requests has none: it goes there.
   const pickHere = (e, p) => {
     const item = p.closest("article");
-    const box = item && item.querySelector("details.picker");
+    const s = item ? shownSongs.get(item) : null;
     const href = e.currentTarget.getAttribute("href") || "";
-    if (!box || !box.querySelector("form") || !/^review\?song=\d+$/.test(href)) return;
-    e.preventDefault();
-    showPicker(box);
+    if (!s || !canPick(s) || !/^review\?song=\d+$/.test(href)) return;
+    if (showPicker(item)) e.preventDefault();
   };
-  // Opens a picker where it is, in its line's panel (its chevron's), which opens first. Opened, the picker
-  // takes the focus to its first candidate (its toggle); open already, the focus goes there.
-  const showPicker = (box) => {
-    const panel = box.closest(".line-panel");
-    if (panel && panel.hidden) {
-      const more = panel.parentNode.querySelector(":scope > .line-more");
-      if (more) more.setAttribute("aria-expanded", "true");
-      panel.hidden = false;
-    }
+  // A line's card (its chevron's panel, wherever the page puts it: ``aria-controls`` names it), opened or closed by
+  // its chevron, as a hand would, unless it is so already: opened the first time, it is made (cardFor). None for an
+  // item with no chevron.
+  const chevronOf = (item) => (item ? item.querySelector(":scope > .line-more") : null);
+  const cardIn = (item) => {
+    const more = chevronOf(item);
+    if (!more) return null;
+    const id = more.getAttribute("aria-controls");
+    return (item.isConnected && document.getElementById(id)) || Array.from(item.children).find((c) => c.id === id)
+      || null;
+  };
+  const openCard = (item) => {
+    const more = chevronOf(item);
+    if (more && more.getAttribute("aria-expanded") !== "true") more.click();
+    return cardIn(item);
+  };
+  const closeCard = (item) => {
+    const more = chevronOf(item);
+    if (more && more.getAttribute("aria-expanded") === "true") more.click();
+  };
+  // Opens a line's picker where it is, in its card, which opens first (made, the first time). Opened, the picker
+  // takes the focus to its first candidate (its toggle); open already, the focus goes there. Whether its card has a
+  // picker to pick with.
+  const showPicker = (item) => {
+    const shown = openCard(item);
+    const box = shown && shown.querySelector("details.picker");
+    if (!box || !box.querySelector("form")) return false;
     if (!box.open) {
       box.open = true;
-      return;
+      return true;
     }
     const first = box.querySelector("input[name=pick]:checked") || box.querySelector("input[name=pick]");
     if (first) first.focus();
+    return true;
   };
   const focusOn = (p) => {
     p.tabIndex = -1;
@@ -908,15 +933,13 @@
   };
   // The line old, drawn again as fresh (lineFor's) where it is, around its own request line, which never leaves
   // the page, and its steps under it, which the request's next view draws again; returns old. The focus, if it was on
-  // something of old's that goes, moves to that line. Opened, it stays open, a drawer of its card closed.
+  // something of old's that goes, moves to that line. Opened, it stays open (its card made again, from fresh's song),
+  // a drawer of its card closed; closed, its card waits to be made until it opens.
   const refill = (old, fresh) => {
-    const was = old.querySelector(":scope > .line-more");
-    const more = fresh.querySelector(":scope > .line-more");
-    const panel = fresh.querySelector(":scope > .line-panel");
-    if (was && was.getAttribute("aria-expanded") === "true" && more && panel) {
-      more.setAttribute("aria-expanded", "true");
-      panel.hidden = false;
-    }
+    const was = chevronOf(old);
+    if (was && was.getAttribute("aria-expanded") === "true") openCard(fresh);
+    if (shownSongs.has(fresh)) shownSongs.set(old, shownSongs.get(fresh));
+    else shownSongs.delete(old);
     const kept = old.querySelector(".progress");
     if (!kept) {
       if (old.parentNode) old.replaceWith(fresh);
@@ -1025,12 +1048,18 @@
     }
     return !server && s.notFound && s.status === "wanted" ? notFoundHint(s) : null;
   };
+  // Whether a song's picker picks (what makes makePicker draw a form, and its line's Pick the match): served, a song
+  // in review with candidates, and no request of it waiting or running (POST /review would refuse a pick then).
+  const canPick = (s) => {
+    if (!server || !SHOWS.review(s) || !listOf(s.candidates).length) return false;
+    const job = jobOfSong(s.id);
+    return !busy.has(Number(s.id)) && !(job && isActive(job));
+  };
   const makePicker = (s) => {
     const cands = listOf(s.candidates).filter((c) => c && c.ref);
     const box = el("details", "picker");
     const question = "Which UG song is “" + String(s.title) + "” by " + String(s.artist) + "?";
-    const job = server ? jobOfSong(s.id) : null;
-    const pickable = Boolean(server) && !busy.has(Number(s.id)) && !(job && isActive(job));
+    const pickable = canPick(s);
     const many = plural(cands.length, "candidate");
     const summary = el("summary", pickable ? "btn picker-open" : "picker-open", pickable ? "Pick the match" : many);
     if (pickable) summary.appendChild(el("span", "picker-n", "· " + many));
@@ -1113,8 +1142,8 @@
   // song's fetch (Fetch now's download icon), or the button that opens its picker; Removing… while caracole removes
   // it; no button at all (``action`` null) while its request, or its removal, waits or runs, as the line's request
   // line then says how it goes. Not held, none: what the song holds has a button each after its title (card.js
-  // plays), on the file too.
-  const serverAction = (s, picker) => {
+  // plays), on the file too. ``pickable``: its card's picker picks (canPick).
+  const serverAction = (s, pickable) => {
     const held = (action) => ({ held: true, action });
     if (server && removing.has(Number(s.id))) {
       const job = jobOfSong(s.id);
@@ -1127,13 +1156,13 @@
     if (server && s.status === "wanted") {
       const job = jobOfSong(s.id);
       if ((job && isActive(job)) || busy.has(Number(s.id))) return held(null);
-      if (s.fetchable === false && picker && picker.querySelector("form")) {
-        // caracole fetch would refuse it until the match is picked: this opens the picker, in the line's panel.
+      if (s.fetchable === false && pickable) {
+        // caracole fetch would refuse it until the match is picked: this opens the line's card, then its picker.
         const pick = el("button", "btn small line-pick", "Pick the match");
         pick.type = "button";
         pick.setAttribute("aria-label", "Pick the match for " + String(s.title) + " by " + String(s.artist));
         pick.title = "Which UG song is this";
-        pick.addEventListener("click", () => showPicker(picker));
+        pick.addEventListener("click", () => showPicker(pick.closest("article")));
         return held(pick);
       }
       if (s.fetchable === false) return held(reviewFirst("btn small"));
@@ -1264,14 +1293,14 @@
         "Fetches the song and keeps this LaCuerda sheet", String(x.href)) : null),
     };
   };
-  // A song's line: its title, then a button for each thing it holds to play from (card.js plays: its sheet, its Guitar
-  // Pro file, its tab, its harmonica tab..., each opening it at once, none first), its status when it needs
-  // something, its key, its main action (Fetch now's download icon, where it has one); and under its chevron, which
-  // its title opens too, its card (card.js): its facts, then what needs you (its picker or what to do about its
-  // match, where its audio comes from, a LaCuerda pick, Look in the index), what you play from it as tiles and their
-  // versions' drawer, which sites have it, its progressions, where else to find it, and its foot (Fetch again, Use
-  // LaCuerda's sheet, Add to a songbook…, info.json, Remove).
-  const lineFor = (s) => {
+  // A song's card (card.js), under its line's chevron, which its title opens too: its facts, then what needs you (its
+  // picker or what to do about its match, where its audio comes from, a LaCuerda pick, Look in the index), what you
+  // play from it as tiles and their versions' drawer, which sites have it, its progressions, where else to find it, and
+  // its foot (Fetch again, Use LaCuerda's sheet, Add to a songbook…, info.json, Remove). Made the first time the
+  // chevron opens it (rows.js foldMore), once a line, from the song and its request as they are then: a card first
+  // opened while the song's request waits or runs has no Fetch again and a picker that only lists; one first opened
+  // while its removal counts down has its forms' buttons waiting with the line's (countdownIn).
+  const cardFor = (s) => {
     const id = Number(s.id);
     const more = [];
     const facts = factsOf(s);
@@ -1317,13 +1346,24 @@
     const elsewhere = card.findElsewhere([{ heading: "Find the chords", links: s.links },
       { heading: "Scores on MuseScore", links: s.museScore }, { heading: "Buy the track, for an auto sheet", links: s.buy }]);
     if (elsewhere) more.push(elsewhere);
-    const control = serverAction(s, picker);
-    const action = control.held ? control.action : null;
     const asked = server ? jobOfSong(id) : null;
     const again = server && !removing.has(id) && !busy.has(id) && !(asked && isActive(asked)) ? againActions(s) : null;
     const foot = card.foot(s, { actions: [again], book: byIndex.has(id) ? bookButton(s) : null, info,
       remove: server && !removing.has(id) ? removeForm(s) : null });  // removing: its action says so
     if (foot) more.push(foot);
+    const r = removals.get(id);  // counting down: its buttons wait as the line's do, until it is undone
+    if (r) for (const part of more) if (part instanceof Element) holdForms(part, r);
+    return more;
+  };
+  // A song's line: its title, then a button for each thing it holds to play from (card.js plays: its sheet, its Guitar
+  // Pro file, its tab, its harmonica tab..., each opening it at once, none first), its status when it needs
+  // something, its key, its main action (Fetch now's download icon, where it has one), how its request goes and its
+  // removal's countdown; and its chevron, which its title opens too, whose card (``song-card``) cardFor makes the
+  // first time it opens.
+  const lineFor = (s) => {
+    const id = Number(s.id);
+    const control = serverAction(s, canPick(s));
+    const action = control.held ? control.action : null;
     const artists = listOf(s.artists);
     const keyed = typeof s.key === "string" && s.key;
     const status = statusOf(s);
@@ -1337,10 +1377,12 @@
       keyText: keyed ? keyText(s) : "",
       badges: status ? [status] : [],
       action,
-      more,
+      more: () => cardFor(s),
       onSearch: () => searchFor(String(s.artist)),  // the name searches for them, served or from a file
     });
     line.dataset.id = String(s.id);  // the Select mode finds the song's line by it
+    shownSongs.set(line, s);
+    line.querySelector(":scope > .line-panel").classList.add("song-card");
     // Its title opens its card as its chevron does, a tap's convenience (the chevron is the keyboard's); never one of
     // its buttons, which open what they hold. The line it is in by then (refill moves it into the line drawn before).
     const named = line.querySelector(":scope > .line-title");

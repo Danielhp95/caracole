@@ -77,7 +77,7 @@ const noteDrawer = (title) => {
     rest: text(d.querySelector(".drawer-rest .rest-said")), command: text(d.querySelector(".drawer-rest code")),
     restButtons: Array.from(d.querySelectorAll(".drawer-rest button")).map(text) };
 };
-const chipOf = (title, source, kind) => cardOf(lineOf(title))
+const chipOf = (title, source, kind) => openCardOf(lineOf(title))  // its card opened (made, the first time)
   .querySelector(".tile" + (kind ? ".tile-" + kind : "") + ' button.vchip[data-source="' + source + '"]');
 const note = (name, value) => document.body.setAttribute("data-" + name, JSON.stringify(value));
 """

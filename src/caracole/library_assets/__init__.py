@@ -21,10 +21,11 @@ file, and none of it loads anything from the network.
   sites that found something (named in full from 720 px while the row fits on one line, ``fitCounts``), then the
   rest in one quiet mark, "0 on N more"; no row when every count is 0.
 - card.css and card.js (``caracoleCard``): a song of yours opened on index.html, a card under its line (library.js
-  ``lineFor`` puts its parts in the line's panel): what you play from it as tiles, each source's versions of each as
-  chips that open one drawer under the row of tiles that holds its tile, its progressions, where else to find it, and
-  its foot, Remove at its end. Drawn from the page's data alone: a chip or a drawer asks nothing of anyone; what a
-  drawer's versions do (Use this one, Fetch them, Back to our pick) library.js makes, served.
+  ``cardFor`` puts its parts in the line's panel, the first time it opens): what you play from it as tiles, each
+  source's versions of each as chips that open one drawer under the row of tiles that holds its tile, its
+  progressions, where else to find it, and its foot, Remove at its end. Drawn from the page's data alone: a chip or a
+  drawer asks nothing of anyone; what a drawer's versions do (Use this one, Fetch them, Back to our pick) library.js
+  makes, served.
 - library.css, library-screens.css and library.js: index.html's own. library.css sets the bands: ``--band-h`` (34 px,
   an artist's, one line, their count on its right) and ``--fold-h`` (64 px, a folded line's: an artist of one line,
   library.js ``artistGroup``'s ``folded``, has no band, their name the line's overline over its title, rows.css's

@@ -229,11 +229,11 @@ def test_the_bars_search_finding_lacuerdas_sheet_of_a_song_offers_it_under_its_m
     song = camaron(cfg)
     browser.open(base)
     assert browser.wait(f"document.querySelector({json.dumps(line(song))}) !== null")
-    # Nothing tells the page LaCuerda has it, yet.
-    assert browser.js(menu_button(song, USE)) is None
-    assert browser.js(f"({menu_button(song, 'Fetch again')}) !== null")
-    # Its "⋯" open, the search begins.
+    # Its "⋯" open: nothing tells the page LaCuerda has it, yet.
     browser.click(line(song) + " .line-more")
+    assert browser.wait(f"({menu_button(song, 'Fetch again')}) !== null")
+    assert browser.js(menu_button(song, USE)) is None
+    # The search begins.
     browser.js("document.getElementById('q').focus()")
     browser.type("como camaron")
     # The search's LaCuerda row of it is folded into your song's line, which offers that sheet now, its "⋯" still

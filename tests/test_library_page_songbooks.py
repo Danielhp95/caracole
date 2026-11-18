@@ -707,8 +707,10 @@ def test_on_the_file_the_command_to_run_folds_away_beside_copy(library, tmp_path
     conn, cfg = library
     hysteria = next(s for s in data_of(page(conn, cfg))["songs"] if s["title"] == "Hysteria")
     update_song(conn, hysteria["id"], match_decision="not_found")  # its line says what to run to find it
-    out = run_in_page(page(conn, cfg), cfg, tmp_path, PICK + BAR + """
-      const hint = card("Hysteria").querySelector(".pick-hint").checkVisibility();
+    # Its card open before picking: the command in it is put away while picking.
+    opened = cards.KIT + 'openCardOf(qa("#list article").find((a) => a.querySelector("h3").textContent === "Hysteria"));'
+    out = run_in_page(page(conn, cfg), cfg, tmp_path, opened + PICK + BAR + """
+      const hint = cardOf(card("Hysteria")).querySelector(".pick-hint").checkVisibility();
       pick("Creep"); pick("Hysteria");  // the bar's fields there (unfolded on a phone by + New songbook)
       const before = bar().height;
       q(".pick-name").value = "Friday set";

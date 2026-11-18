@@ -1172,7 +1172,7 @@ def test_a_lines_youtube_note_links_its_video_in_a_real_browser(conn, cfg, tmp_p
         "video": {"id": "XFkzRNyygfk", "title": "Creep", "channel": "Radiohead - Topic"}, "source": "search",
         "audio": str(audio)})
     path = write_library_page(on.library_dir, page(conn, on))
-    shown = listing(dump_dom(path, tmp_path))
+    shown = cards.card_of(dump_opened(path, tmp_path), "Creep")
     note = re.search(r'<p class="youtube">(.*?)</p>', shown, re.S)
     assert note, shown[-2000:]
     assert note.group(1).startswith("Audio from YouTube · auto-chords works out the chords next · <a")
@@ -1216,7 +1216,7 @@ def test_the_commands_the_file_names_quote_each_word_so_no_shell_expands_it(conn
     lost = add_song(conn, "It's", "$5! `ls` \"y\"")
     update_song(conn, lost.id, match_decision="not_found")
     path = write_library_page(cfg.library_dir, page(conn, cfg))
-    shown = listing(dump_dom(path, tmp_path))
+    shown = listing(dump_opened(path, tmp_path))  # the cards opened, under their lines
     codes = [html_module.unescape(c) for c in re.findall(r"<code>(.*?)</code>", shown, re.S)]
     review = [c for c in codes if c.startswith("caracole review --song")]
     assert review == ["caracole review --song 'It'\\''s - $5! `ls` \"y\"'",  # by artist
@@ -1379,7 +1379,7 @@ def test_the_served_page_offers_a_remove_on_every_line(conn, cfg, tmp_path):
     assert "/fetch" not in going  # a fetch now would run before the removal and fetch for nothing
     # The page on disk has no server to remove anything.
     path = write_library_page(cfg.library_dir, build_library_page(conn, cfg, Overrides(), NOW))
-    assert "/remove" not in listing(dump_dom(path, tmp_path))
+    assert "/remove" not in listing(dump_opened(path, tmp_path))  # its cards opened, made as they open
 
 
 @in_chromium
@@ -1420,8 +1420,8 @@ def test_a_found_songs_menu_looks_it_up_again_served_and_never_on_the_file(conn,
     assert [re.search(r">([^<]+)</button>", f).group(1) for f in forms["Flaca"]] == ["Use LaCuerda's sheet"]
     assert forms["Hijo de la Luna"] == [] and forms["Wonderwall"] == []
     # The page on disk has no server to look anything up.
-    on_file = listing(dump_dom(write_library_page(cfg.library_dir, build_library_page(conn, cfg, picks, NOW)),
-                               tmp_path))
+    on_file = listing(dump_opened(write_library_page(cfg.library_dir, build_library_page(conn, cfg, picks, NOW)),
+                                  tmp_path))  # its cards opened, made as they open
     assert "/lookup" not in on_file and "Fetch again" not in on_file and "LaCuerda's sheet" not in on_file
 
 
@@ -1662,11 +1662,12 @@ def test_the_address_shows_the_songs_with_a_progression_in_any_of_its_readings(c
 
 # Shows a progression from a song's "⋯", then every song again with the line's Show all.
 PROG_CLICK = """
-(() => {
+(() => {""" + cards.KIT + """
   const line = Array.from(document.querySelectorAll("#list article")).find((a) =>
     a.querySelector("h3").textContent === "Synthetic Song");
-  const go = Array.from(line.querySelectorAll(".progressions button")).map((b) => b.textContent);
-  line.querySelector(".progressions button").click();
+  const card = openCardOf(line);
+  const go = Array.from(card.querySelectorAll(".progressions button")).map((b) => b.textContent);
+  card.querySelector(".progressions button").click();
   const titles = () => Array.from(document.querySelectorAll("#list article h3")).map((h) => h.textContent).sort();
   const after = {buttons: go, titles: titles(), hash: location.hash, line: document.getElementById("prog").textContent};
   document.querySelector("#prog button").click();
@@ -1828,8 +1829,7 @@ def test_a_found_song_in_review_gets_the_picker_too(conn, cfg, tmp_path):
 # Opens the first picker from its line's "⋯", by its summary, as a click or Enter does, then notes where the focus
 # went.
 OPEN_PICKER = "(() => {" + cards.KIT + """
-  const picker = openCardOf(document.querySelector("#list details.picker").closest("article"))
-    .querySelector("details.picker");
+  const picker = openCardOf(document.querySelector("#list article.line")).querySelector("details.picker");
   picker.querySelector("summary").click();
   setTimeout(() => {
     const focus = document.activeElement;
@@ -2174,17 +2174,21 @@ def test_a_result_rows_title_opens_what_its_href_says(conn, cfg, tmp_path):
 @in_chromium
 def test_a_line_opens_each_thing_from_its_button_and_its_files_wait_under_its_chevron(conn, cfg, tmp_path):
     filed_library(conn, cfg)
-    dom = dump_dom(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path)  # closed: read as it is
+    path = write_library_page(cfg.library_dir, page(conn, cfg))
+    dom = dump_dom(path, tmp_path)  # closed: read as it is
+    opened = dump_opened(path, tmp_path)  # every card opened, made as it opens
 
     top = line_without_card(dom, "Creep")
-    menu = cards.card_of(dom, "Creep").split('class="line-panel"', 1)[1]
+    menu = cards.card_of(opened, "Creep")
     # A button each for its sheet, its Guitar Pro file, its tab: no other link on its line.
     assert [h for h, _ in play_links(top)] == ["Radiohead/Creep/sheet.html", "Radiohead/Creep/guitar-1.gp5",
                                                "Radiohead/Creep/tab.txt"]
     assert link_texts(top) == [], top
-    # Every file of its folder under its chevron, closed: its card's tiles open and download them, info.json at its
-    # foot. No Guitar Pro version of UG's: caracole picks none there.
-    assert re.search(r'<button class="line-more"[^>]*aria-expanded="false"', top) and re.search(r'^[^>]*hidden', menu)
+    # Every file of its folder under its chevron, closed (its card not made until it opens): its card's tiles open
+    # and download them, info.json at its foot. No Guitar Pro version of UG's: caracole picks none there.
+    assert re.search(r'<button class="line-more"[^>]*aria-expanded="false"', top)
+    assert re.fullmatch(r'<div class="line-panel song-card" id="line-more-\d+" hidden(="")?></div>',
+                        cards.card_of(dom, "Creep")), cards.card_of(dom, "Creep")
     reached = {unquote(h).rsplit("/", 1)[1] for h in re.findall(r'<a [^>]*href="(Radiohead/Creep/[^"]*)"', menu)}
     assert reached == {"sheet.html", "sheet.pdf", "sheet.txt", "sheet.cho", "lyrics.txt", "lyrics.lrc", "guitar-1.gp5",
                        "tab.txt", "info.json"}, reached
@@ -2194,10 +2198,10 @@ def test_a_line_opens_each_thing_from_its_button_and_its_files_wait_under_its_ch
     # A sheet with no viewer opens its PDF, its tile too; nothing else to list.
     wonderwall = line_without_card(dom, "Wonderwall")
     assert [h for h, _ in play_links(wonderwall)] == ["Oasis/Wonderwall/sheet.pdf"]
-    assert set(re.findall(r'<a [^>]*href="(Oasis/Wonderwall/[^"]*)"', cards.card_of(dom, "Wonderwall"))) == {
+    assert set(re.findall(r'<a [^>]*href="(Oasis/Wonderwall/[^"]*)"', cards.card_of(opened, "Wonderwall"))) == {
         "Oasis/Wonderwall/sheet.pdf"}
     # A song with no file has nothing to open.
-    yesterday = line_with_card(dom, "Yesterday")
+    yesterday = line_with_card(opened, "Yesterday")
     assert "line-plays" not in yesterday and "tile" not in yesterday
 
 
@@ -2706,7 +2710,9 @@ def row_of(shown: str, title: str) -> str:
 @in_chromium
 def test_a_line_shows_its_title_a_button_for_what_it_holds_its_key_and_main_action(conn, cfg, tmp_path):
     sourced_library(conn, cfg)
-    dom = dump_dom(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path)  # closed: read as it is
+    path = write_library_page(cfg.library_dir, page(conn, cfg))
+    dom = dump_dom(path, tmp_path)  # closed: read as it is
+    opened = dump_opened(path, tmp_path)  # every card opened, made as it opens
     shown = listing(dom)
     assert shown.count('<article class="line') == 4
     creep = line_with_card(dom, "Creep")
@@ -2720,18 +2726,18 @@ def test_a_line_shows_its_title_a_button_for_what_it_holds_its_key_and_main_acti
     assert re.search(r'<div class="line-action"></div>', creep), creep  # no Open: its button opens it
     # Which sites have it (song_sites.py), in its card.
     sites = re.search(r'<div class="card-sites"><p class="card-label">On the sites</p><span class="line-sites">(.*?)'
-                      r'</span></div>', cards.card_of(dom, "Creep"))
-    assert sites and 'data-source="ug" data-state="have"' in sites.group(1), cards.card_of(dom, "Creep")
-    # The rest waits behind a small button, closed.
+                      r'</span></div>', cards.card_of(opened, "Creep"))
+    assert sites and 'data-source="ug" data-state="have"' in sites.group(1), cards.card_of(opened, "Creep")
+    # The rest waits behind a small button, closed: its card, empty and hidden, is made as it opens.
     more = re.search(r'<button class="line-more"[^>]*aria-expanded="false"[^>]*aria-controls="([^"]+)"', creep)
-    assert more and re.search(rf'<div class="line-panel" id="{more.group(1)}" hidden', creep)
-    assert ">More: Creep<" in creep and "Lyrics" in cards.card_of(dom, "Creep")
+    assert more and re.search(rf'<div class="line-panel song-card" id="{more.group(1)}" hidden(="")?></div>', creep)
+    assert ">More: Creep<" in creep and "Lyrics" in cards.card_of(opened, "Creep")
     soda = line_without_card(dom, "De Música Ligera")
-    assert 'aria-label="from LaCuerda"' in cards.card_of(dom, "De Música Ligera")
+    assert 'aria-label="from LaCuerda"' in cards.card_of(opened, "De Música Ligera")
     assert play_links(soda)[0][1] == "Open the chord sheet of De Música Ligera, from LaCuerda"
     wonderwall = line_without_card(dom, "Wonderwall")
     assert ">Wanted<" in wonderwall and "line-action" in wonderwall and "Find the chords" in cards.card_of(
-        dom, "Wonderwall")
+        opened, "Wonderwall")
 
 
 # Measures the lines: each one's height, its artist's width and whole width, and how many lines its parts take (by
@@ -3896,6 +3902,7 @@ LINE_CLICKS = "(() => {" + cards.KIT + """
   const lineOf = (title) => Array.from(document.querySelectorAll("#list article.line"))
     .find((l) => l.querySelector("h3").textContent === title);
   const say = () => document.body.setAttribute("data-clicks", JSON.stringify(notes));
+  for (const title of ["Wonderwall", "Yesterday"]) openCardOf(lineOf(title));  // the cards the DOM is read for
   const crep = lineOf("Crep");
   crep.querySelector(".line-action .line-pick").click();
   setTimeout(() => {
@@ -4056,7 +4063,7 @@ def test_there_is_no_cards_rows_switch(conn, cfg, tmp_path):
     html = page(conn, cfg)
     for gone in ('id="view-toggle"', 'id="view-panel"', "data-view=", ">Cards<", ">Rows<"):
         assert gone not in html, gone
-    for name in ("makeCard", "cardFor", "songRow", "rowFor", "VIEWS"):
+    for name in ("makeCard", "songRow", "rowFor", "VIEWS"):  # cardFor is a line's card now, made as it opens
         assert not re.search(rf"\b{name}\b", _PAGE_SCRIPT), name
     script = (noting("data-jump", JUMP_TO_R) + 'document.querySelector("[data-show=all]").click();\n'
               + noting("data-hash", "location.hash"))
@@ -4083,7 +4090,7 @@ def test_lines_meet_touch_and_contrast(conn, cfg, tmp_path, size):
               + noting("data-weak", weak_edges("#q")))
     html = with_script(every_control(conn, cfg), script)
     dom = dump_dom(write_library_page(cfg.library_dir, html), tmp_path, size=size, touch=True)
-    assert re.search(r'class="line-panel"[^>]*id="line-more-\d+"(?! hidden)', dom)
+    assert re.search(r'class="line-panel song-card"[^>]*id="line-more-\d+"(?! hidden)', dom)
     short, floor, weak = noted(dom, "data-short"), noted(dom, "data-floor"), noted(dom, "data-weak")
     assert short == [] and floor == [] and weak == [], (short, floor, weak)
 
@@ -4127,11 +4134,15 @@ def test_the_lines_read_in_dark_mode(conn, cfg, tmp_path):
     from helpers.targets import UNFOLD, noted, noting, weak_edges
 
     sourced_library(conn, cfg)  # marks of every kind: an icon, LaCuerda's letters, the audio's glyph
-    script = noting("data-reads", READS) + UNFOLD + noting("data-weak", weak_edges("#q"))
+    # The lines read closed; a card's mark (LaCuerda's letters) once the cards are open, as they are made then.
+    script = (noting("data-reads", READS) + UNFOLD + noting("data-opened", READS)
+              + noting("data-weak", weak_edges("#q")))
     path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), script))
     for size, scheme in (("390,844", "light"), ("390,844", "dark"), ("1280,800", "light"), ("1280,800", "dark")):
         dom = dump_dom(path, tmp_path, size=size, media={"prefers-color-scheme": scheme})
         reads = noted(dom, "data-reads")
+        assert reads["mark"] is None, reads  # closed, a card is not made yet
+        reads["mark"] = noted(dom, "data-opened")["mark"]
         texts = {name: value for name, value in reads.items() if name not in ("box", "play")}
         assert all(value is not None and value >= 4.5 for value in texts.values()), (size, scheme, reads)
         # A button of what a line holds, on a phone too: a graphic (WCAG 1.4.11).

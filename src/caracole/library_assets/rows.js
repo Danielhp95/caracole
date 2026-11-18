@@ -206,9 +206,14 @@ const caracoleRows = (icons, does) => {
   // What a row's "⋯" button or a line's chevron shows (``more``), folded under it: the button and its panel, named
   // for the ``kind`` of item ("row-more", "row-panel"), go at the item's end; nothing more to show, no button. A line
   // unfolds in place, so its button is a chevron, which turns while it is open (rows.css), never "⋯", a menu's mark.
-  const foldMore = (item, title, more, kind) => {
-    const extra = listOf(more).map(linkGroup).filter(Boolean);
-    if (!extra.length) return;
+  // ``more`` a function: what it returns is made the first time the button opens it (``built``), so the button is
+  // always drawn and its panel, empty and hidden until then, has its id from the start, which the button names.
+  // ``onToggle(open, panel, event)``: after every open or close (``event``, the click), the panel shown or hidden.
+  const foldMore = (item, title, more, kind, onToggle) => {
+    const later = typeof more === "function";
+    const extra = later ? [] : listOf(more).map(linkGroup).filter(Boolean);
+    if (!later && !extra.length) return;
+    let built = !later;
     const panel = el("div", kind + "-panel");
     rowSerial += 1;
     panel.id = kind + "-more-" + rowSerial;
@@ -227,10 +232,15 @@ const caracoleRows = (icons, does) => {
       button.appendChild(dots);
     }
     button.appendChild(el("span", "visually-hidden", "More: " + title));
-    button.addEventListener("click", () => {
+    button.addEventListener("click", (e) => {
       const open = button.getAttribute("aria-expanded") !== "true";
+      if (open && !built) {
+        built = true;
+        panel.append(...listOf(more()).map(linkGroup).filter(Boolean));
+      }
       button.setAttribute("aria-expanded", String(open));
       panel.hidden = !open;
+      if (typeof onToggle === "function") onToggle(open, panel, e);
     });
     item.appendChild(button);
     item.appendChild(panel);
@@ -285,7 +295,7 @@ const caracoleRows = (icons, does) => {
     const main = mainAction(r);
     if (main) action.appendChild(main);
     line.appendChild(action);
-    foldMore(line, title, r.more, "line");
+    foldMore(line, title, r.more, "line", r.onToggle);
     return line;
   };
   const resultRow = (result) => {
@@ -317,7 +327,7 @@ const caracoleRows = (icons, does) => {
     const main = mainAction(r);
     if (main) action.appendChild(main);
     row.appendChild(action);
-    foldMore(row, title, r.more, "row");
+    foldMore(row, title, r.more, "row", r.onToggle);
     return row;
   };
 
