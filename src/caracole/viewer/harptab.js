@@ -574,8 +574,9 @@
   // The song's line under the artist and the list it opens, a layer of the stack above ("list"): a sheet from the
   // bottom on a phone, docked on the bar; from 900 px a popover under the line, placed by kinds.js. Served (caracole
   // serve sent this page, as viewer.js tells), its versions are kept and chosen on the song's sheet (sheetPath, its
-  // path in the library), none for a song with no sheet; each link to another of the song's pages takes the screen's
-  // choices along, as ‹ Chord sheet does.
+  // path in the library), none for a song with no sheet, and its Guitar Pro files open on caracole serve's Guitar Pro
+  // page by the song's folder, this page's own (folder), sheet or none; each link to another of the song's pages
+  // takes the screen's choices along, as ‹ Chord sheet does.
   const served = location.protocol !== "file:" && location.hostname !== "appassets.androidplatform.net";
   const libraryPath = (() => {
     try {
@@ -588,6 +589,7 @@
     kinds = window.caracoleKinds.attach({
       data, here: libraryPath.split("/").pop(), served,
       sheetPath: sheetOf === null ? undefined : libraryPath.split("/").slice(0, -1).concat([sheetOf]).join("/"),
+      folder: libraryPath.split("/").slice(0, -1).join("/") || undefined,
       carry: (page) => encodeURIComponent(page) + screenChoices(),
       open: (el, opener) => openLayer("list", opener),
       close: () => closeLayer("list"),

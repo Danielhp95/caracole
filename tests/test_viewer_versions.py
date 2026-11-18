@@ -908,7 +908,8 @@ def test_a_tab_with_no_sheet_and_nothing_else_has_no_line(tmp_path):
 @in_chromium
 def test_a_tab_of_a_song_with_no_sheet_lists_its_kinds_with_no_sheet_path(tmp_path):
     # No sheet (kinds' page null): the line and the list show the song's other kinds, and nothing they hold names a
-    # sheet that isn't there, from a file or served.
+    # sheet that isn't there, from a file or served; served, its Guitar Pro file still opens on caracole serve's
+    # Guitar Pro page, the song's folder read from this page's own address.
     pages = harmonica_pages(tmp_path, None, NO_SHEET)
     found = {}
     with viewer(tmp_path, pages["harmonica-2.html"].as_uri()) as b:
@@ -921,7 +922,10 @@ def test_a_tab_of_a_song_with_no_sheet_lists_its_kinds_with_no_sheet_path(tmp_pa
         assert shown["nav"] and shown["line"] == "Harmonica · Tab 2 of 2", where
         assert shown["icons"] == [["guitar", "1"], ["harmonica", "2"]] and shown["rows"] == [], where
         assert [kind for kind, *_ in groups] == ["guitar", "harmonica"], where  # no Chords: no sheet
-        assert groups[0][2] == [["Guitar Pro 1 · gtptabs", "guitar-1.gp5", "Artist - Title.gp5", None]], where
+        assert groups[0][2] == {
+            "file": [["Guitar Pro 1 · gtptabs", "guitar-1.gp5", "Artist - Title.gp5", None]],
+            "served": [["Guitar Pro 1 · gtptabs · in the browser", "/guitar?file=Artist%2FTitle%2Fguitar-1.gp5", None,
+                        None]]}[where], where
         assert groups[1][2] == [["Harmonica tab 1 · harptabs", "harmonica-1.html", None, None],
                                 ["Harmonica tab 2 · harptabs · this page", None, None, "page"]], where
         assert said and not any("null" in text or "undefined" in text for text in said), (where, said)

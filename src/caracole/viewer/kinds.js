@@ -24,9 +24,12 @@
   //                    versions its own. o: here, this page's file name ("sheet.html"); served, whether
   //                    caracole serve sent it (its /versions page then keeps a version, or makes one the one); sheetPath,
   //                    the page's path in the library ("Artist/Title/sheet.html"), absent for a page of a song with no
-  //                    sheet; carry(page), the address of another page of the song from this one, with what the reader
-  //                    chose for the screen (the text size, the scroll speed, the rail of necks...); open(el, opener)
-  //                    and close(el), the page's layers (the list is one); inSight(el), whether a layer is in sight.
+  //                    sheet; folder, the song's folder in the library ("Artist/Title"), for caracole serve's Guitar
+  //                    Pro page alone, else sheetPath's (a harmonica tab's page of a song with no sheet gives its own:
+  //                    the versions' Keep still needs sheetPath); carry(page), the address of another page of the song
+  //                    from this one, with what the reader chose for the screen (the text size, the scroll speed, the
+  //                    rail of necks...); open(el, opener) and close(el), the page's layers (the list is one);
+  //                    inSight(el), whether a layer is in sight.
   //                    Returns { links(), place() }: links() writes each link to another page of the song again,
   //                    with what carry gives now (the page calls it as the reader's choices change); place() puts
   //                    the list, while it is open, where it goes from 900 px wide, a popover under the line
@@ -280,8 +283,10 @@
       groupsBox.appendChild(section);
       return section;
     };
-    // The song's folder in the library, for caracole serve's Guitar Pro page; none for a page of no sheet.
-    const folder = sheetPath ? sheetPath.split("/").slice(0, -1).join("/") : null;
+    // The song's folder in the library, for caracole serve's Guitar Pro page alone: the page's own (o.folder), else
+    // its sheet's; none for a page that names neither.
+    const folder = typeof o.folder === "string" && o.folder ? o.folder
+      : sheetPath ? sheetPath.split("/").slice(0, -1).join("/") : null;
     // Where another kind's row goes: a harmonica tab's page, in this tab, with the reader's choices for the screen;
     // served, a Guitar Pro file caracole serve draws, its Guitar Pro page (/guitar?file=…, "in the browser", as the
     // settings' row); any other file the file itself, a Guitar Pro or Power Tab file and a score but a PDF saved under

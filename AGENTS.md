@@ -1101,9 +1101,10 @@ It is rows.js's, shared by both pages:
     them;
     `DOCKED` (panel, card, harmony, vList, necksEl) docks at the foot on a phone, the top one of them (`dock()`);
   - a harmonica tab's page (harptab.js) has `"sizes"` (Aa), `"sheet"` (the necks' sheet), `"list"` (the versions
-    list) and `"full"`: `layers`, `openLayer(name, opener)`, `closeLayer(name, refocus)`, one at a time below 900 px,
-    Aa giving way to the sheet and the list at every width, the top of the sheet and the list docked on a phone
-    (`topDocked`, `docked`, `dock`, `restack`), Escape closing the top one; it has no More panel;
+    list) and `"full"`: `layers`, `openLayer(name, opener)`, `closeLayer(name, refocus)`, one at a time below 900 px;
+    from 900 px the list and the sheet open together, either over the other (the sheet closing full screen, the list
+    opening over it); Aa giving way to the sheet and the list at every width, the top of the sheet and the list docked
+    on a phone (`topDocked`, `docked`, `dock`, `restack`), Escape closing the top one; it has no More panel;
   - `history.scrollRestoration` is `manual` from a layer's entry on, so a step down leaves the song scrolled where it
     is, and `auto` again once the page is back at its own entry, for a reload;
   - a history that refuses entries (a `pushState` that throws) turns it off: the layers open and close as before,
