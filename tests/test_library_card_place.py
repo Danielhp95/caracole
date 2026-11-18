@@ -943,3 +943,121 @@ def test_a_folded_lines_buttons_are_placed_again_whatever_it_was_meanwhile(conn,
         assert b.wait(under)
     finally:
         b.close()
+
+
+# --- the pane's forms act on the song's line (served) ------------------------------------------------------------
+
+from test_web_page import QUICK, FakeCaracole, serve  # noqa: E402,F401  (serve: a fixture)
+
+
+class _Held(FakeCaracole):
+    """FakeCaracole whose ``get`` waits for ``release`` (a test sees the request running)."""
+
+    def __init__(self, cfg):
+        import threading
+
+        super().__init__(cfg)
+        self.release = threading.Event()
+
+    def __call__(self, args, emit):
+        if args[0] == "get":
+            self.release.wait(30)
+        return super().__call__(args, emit)
+
+
+def _served_pane(serve, cfg, conn, tmp_path, runner):  # noqa: F811
+    """Radiohead's Creep found and Karma Police, served at 1280 x 900, Creep selected: the page and the song."""
+    creep = add_song(conn, "Radiohead", "Creep")
+    put(cfg, creep, "sheet.pdf")
+    update_song(conn, creep.id, status="found")
+    other = add_song(conn, "Radiohead", "Karma Police")
+    put(cfg, other, "sheet.pdf")
+    update_song(conn, other.id, status="found")
+    url = serve(runner, "(() => {})();\n", timers=QUICK)
+    try:
+        b = Browser(tmp_path / "chrome", width=1280, height=900)
+    except BrowserError as e:
+        pytest.skip(f"chromium couldn't run: {e}")
+    b.open(url)
+    cards.install(b)
+    b.js(PANE)
+    b.js("openCardOf(lineOf('Creep'))")
+    assert b.wait("inPane('Creep')")
+    return b, creep
+
+
+def _pane_form(b, selector):
+    return f"document.querySelector('#card-pane {selector}')"
+
+
+def test_fetch_again_from_the_pane_follows_on_the_songs_line(serve, cfg, conn, tmp_path):  # noqa: F811
+    runner = _Held(cfg)
+    b, creep = _served_pane(serve, cfg, conn, tmp_path, runner)
+    try:
+        b.click("#card-pane .actions.again button")
+        progress = json.dumps(_line(creep) + " .progress")
+        assert b.wait(f"(() => {{ const p = document.querySelector({progress}); return Boolean(p && "
+                      "['queued', 'running'].includes(p.dataset.tone)); })()"), b.js("document.body.innerText.slice(0, 200)")
+        sent = [p for p in runner.posted if p[1].startswith("/lookup")]
+        assert len(sent) == 1
+        from urllib.parse import parse_qs
+
+        form = parse_qs(sent[0][2].decode())
+        assert form["song"] == [str(creep.id)] and form["identity"] == [creep.key], form
+        assert b.wait(f"{_pane_form(b, '.actions.again')} === null"), b.js("pane().outerHTML.slice(0, 300)")
+        assert b.js("inPane('Creep')")
+    finally:
+        runner.release.set()
+        b.close()
+
+
+def test_remove_from_the_pane_counts_down_on_the_line_and_undo_keeps_it(serve, cfg, conn, tmp_path):  # noqa: F811
+    runner = FakeCaracole(cfg)
+    b, creep = _served_pane(serve, cfg, conn, tmp_path, runner)
+    try:
+        b.js("document.querySelector('#card-pane .foot-more').open = true")
+        b.click("#card-pane form.remove button")
+        progress = json.dumps(_line(creep) + " .progress")
+        assert b.wait(f"(() => {{ const p = document.querySelector({progress}); return Boolean(p && "
+                      "/Removing in \\d s/.test(p.textContent) && p.textContent.includes('Undo')); })()"), \
+            b.js(f"document.querySelector({progress}) && document.querySelector({progress}).textContent")
+        # (QUICK's half second: the count may already be over by the time it is asked, so the buttons are read at
+        # the moment the countdown was seen, below, and Undo is what the test presses.)
+        assert b.js(f"{_pane_form(b, 'form.remove button')}.disabled") is True
+        b.click(_line(creep) + " .progress button.undo")
+        assert b.wait(f"document.querySelector({progress}).textContent.includes('Not removed')"), \
+            b.js(f"document.querySelector({progress}).textContent")
+        assert b.wait(f"{_pane_form(b, 'form.remove button')}.disabled === false")
+        assert not [c for c in runner.calls if c[0] == "remove"]
+    finally:
+        b.close()
+
+
+def test_a_song_removed_from_the_pane_empties_it(serve, cfg, conn, tmp_path):  # noqa: F811
+    runner = FakeCaracole(cfg)
+    b, creep = _served_pane(serve, cfg, conn, tmp_path, runner)
+    try:
+        b.js("document.querySelector('#card-pane .foot-more').open = true")
+        b.click("#card-pane form.remove button")
+        b.js(f"window.song = document.querySelector({json.dumps(_line(creep))})")  # the line's node, once gone
+        assert b.wait("window.song.querySelector('.progress') && window.song.querySelector('.progress').textContent "
+                      "=== 'Removed'", timeout=20), b.js("window.song.querySelector('.progress') && "
+                                                         "window.song.querySelector('.progress').textContent")
+        assert b.wait("!pane().querySelector('.line-panel') && empty() && empty().checkVisibility()"), \
+            b.js("pane().outerHTML.slice(0, 300)")
+    finally:
+        b.close()
+
+
+def test_add_to_a_songbook_from_the_pane_starts_select_with_the_song(serve, cfg, conn, tmp_path):  # noqa: F811
+    runner = FakeCaracole(cfg)
+    b, creep = _served_pane(serve, cfg, conn, tmp_path, runner)
+    try:
+        b.js("[...document.querySelectorAll('#card-pane button')].find((x) => x.textContent.includes('Add to a songbook')).dataset.pressMe = '1'")
+        b.click("#card-pane button[data-press-me]")
+        assert b.wait("document.body.classList.contains('selecting')")
+        assert b.wait(f"(() => {{ const box = document.querySelector({json.dumps(_line(creep))} "
+                      "+ ' input[type=checkbox]'); return Boolean(box && box.checked); })()"), \
+            b.js(f"document.querySelector({json.dumps(_line(creep))}).outerHTML.slice(0, 400)")
+    finally:
+        b.close()
