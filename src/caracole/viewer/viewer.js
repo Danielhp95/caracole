@@ -521,8 +521,9 @@
   // Where the song is played, as Cifra Club's key line says it: with a capo, the key of the
   // shapes, the capo and the key the song sounds in ("Em shapes · capo 2 · sounds F#m"), as
   // "Key Em" alone would read as the song's key; with none, the key. Each part is
-  // [before, in bold, after, where the key came from]; ``moved`` says the transposition.
-  // page.py writes the same line for the sheet as written.
+  // [before, in bold, after, where the key came from]; ``moved`` says the transposition. keyLabel's,
+  // as the PDF's line under the title is (page.py key_line_text); the header says it on two lines,
+  // Capo and Key (keyFacts).
   const keyLine = (moved) => {
     const capo = capoNow();
     if (!key) return capo ? [["Capo ", String(capo), "", ""]] : saysNoCapo() ? [["No capo", "", "", ""]] : [];
@@ -542,6 +543,28 @@
     }
     return keyLine("").filter((part) => part[1] || !part[3]).map((part) => part[0] + part[1] + part[2])
       .concat(shown ? [shown] : []).join(" · ");
+  };
+  // The header's Key line, in keyLine's parts, with no capo in it (its Capo line says it), as page.py's facts_html
+  // writes it for the sheet as written: with no capo the key the song sounds in ("A · from the tab"); with one the key
+  // of the shapes and the key it sounds in ("G shapes · sounds A · key from the tab"); ``moved``, the transposition's
+  // words after the key it sounds in (" (+1)").
+  const keyFacts = (moved) => {
+    const sounds = keyName(state.t + sheetCapo);
+    if (!capoNow()) return [["", sounds, moved, key.from]];
+    return [["", keyName(shift()), " shapes", ""], ["sounds ", sounds, moved, ""]]
+      .concat(key.from ? [["", "", "", "key " + key.from]] : []);
+  };
+  // The header's Tuning line: the instrument's open strings, in the order its box draws them, each named as a sheet
+  // with no key names a note (data.names[""]): the guitar's "E A D G B E", a ukulele's "G C E A"; on the guitar the
+  // tuning the sheet's notes name (data.tuningName, "Drop D"), as its PDF says it. "" on one with no strings (the
+  // piano, the harmonica, the winds).
+  const tuningNow = () => {
+    const i = inst();
+    if (i.kind !== "strings") return "";
+    if (i.id === "guitar" && typeof data.tuningName === "string" && data.tuningName) return data.tuningName;
+    const plain = String((data.names && data.names[""]) || "").split(" ");
+    const notes = (Array.isArray(i.tuning) ? i.tuning : []).map((n) => plain[mod12(n)] || "");
+    return notes.length && notes.every(Boolean) ? notes.join(" ") : "";
   };
   // In short, for the bar, between − and +: the key you play, and under it what it is, the capo
   // and the transposition (["Em", "shapes", ["capo 2"]], ["Em", "key", ["+1"]]); the key it sounds
@@ -787,7 +810,7 @@
       return null;
     }
   };
-  // Its line under the key line: "" for none.
+  // Its line in the header's facts, under the Key line (drawFacts): "" for none.
   const headerLine = () => {
     const parts = partsOf();
     if (!parts || typeof parts.header !== "function") return "";
@@ -942,6 +965,45 @@
       if (Number.isInteger(n) && n > 0 && sign !== "" && keptAt.signs[i] === sign) setAt(i, n);
     }
   }
+  // The song's facts under its title as it is played, drawn again on every change in page.py's facts_html markup
+  // (which writes them for the sheet as written, on the guitar), so that nothing moves as the script runs: a
+  // div.fact a line, named by its data-fact, a dt and a dd. Tuning on an instrument with strings (tuningNow), Capo on
+  // one that takes a capo ("none", or its fret), Key where the sheet has one (keyFacts, the transposition said after
+  // the key it sounds in: " (+1)"), and the instrument's own line where its script gives one (instruments.js
+  // register's header), the instrument's name its label: "Harmonica  G harp (1st position) · C harp (2nd)". A sheet
+  // with no chords has no facts, and nothing is drawn.
+  const drawFacts = () => {
+    const box = $("facts");
+    if (!box) return;
+    box.textContent = "";
+    const fact = (name, label) => {
+      const row = box.appendChild(document.createElement("div"));
+      row.className = "fact";
+      row.dataset.fact = name;
+      row.appendChild(document.createElement("dt")).textContent = label;
+      return row.appendChild(document.createElement("dd"));
+    };
+    const strings = tuningNow();
+    if (strings) fact("tuning", "Tuning").textContent = strings;
+    if (takesCapo()) fact("capo", "Capo").textContent = capoNow() ? String(capoNow()) : "none";
+    if (key) {
+      const said = fact("key", "Key");
+      keyFacts(state.t ? " (" + signed(state.t) + ")" : "").forEach((f, n) => {
+        if (n) said.appendChild(document.createTextNode(" · "));
+        if (f[0]) said.appendChild(document.createTextNode(f[0]));
+        if (f[1]) said.appendChild(document.createElement("b")).textContent = f[1];
+        if (f[2]) said.appendChild(document.createTextNode(f[2]));
+        if (f[3]) {
+          if (f[0] || f[1]) said.appendChild(document.createTextNode(" · "));  // "A · from the tab"
+          const from = said.appendChild(document.createElement("span"));
+          from.className = "from";
+          from.textContent = f[3];
+        }
+      });
+    }
+    const line = headerLine();
+    if (line) fact("inst", String(inst().name || inst().id)).textContent = line;
+  };
   const render = () => {
     if (state.capo === sheetCapo) state.capo = null;  // the sheet's own again
     keepPositions();
@@ -965,31 +1027,7 @@
     fitKey();
     $("key-full").textContent = keyLabel(true);
     drawHead();
-    const box = $("facts") || document.createElement("p");  // a sheet with no chords has none (page.py facts_html)
-    box.textContent = "";
-    keyLine(state.t ? " (" + signed(state.t) + ")" : "").forEach((f, n) => {
-      if (n) box.appendChild(document.createTextNode(" · "));
-      if (f[0]) box.appendChild(document.createTextNode(f[0]));
-      if (f[1]) {
-        const b = document.createElement("b");
-        b.textContent = f[1];
-        box.appendChild(b);
-      }
-      if (f[2]) box.appendChild(document.createTextNode(f[2]));
-      if (f[3]) {
-        if (f[0] || f[1]) box.appendChild(document.createTextNode(" · "));  // "Key D · from the tab"
-        const from = document.createElement("span");
-        from.className = "from";
-        from.textContent = f[3];
-        box.appendChild(from);
-      }
-    });
-    const header = headerLine();  // an instrument's own line (instruments.js register): under the key line
-    if (header) {
-      const line = box.appendChild(document.createElement("span"));
-      line.className = "inst-line";
-      line.textContent = header;
-    }
+    drawFacts();
 
     $("shift").textContent = signed(state.t);
     showReset($("reset-t"), state.t !== (Number(data.transpose) || 0));  // the PDF's transposition, else none

@@ -317,8 +317,8 @@ sitemaps list by bare ids alone, and the fetch their page.
     a key's scale and a chord's notes as they read them.
   - harp.py and winds.py, each with its `tables` in a viewer's data, for **winds.js**, which registers the Harmonica,
     the Flute and the Recorder with instruments.js:
-    - the harmonica's line under the key line, a chord's holes on the card and the strip, its settings row (a harp of
-      the line chosen, each chord on it, the song's `harmonicaTabs` linked);
+    - the harmonica's line in the header's facts (Harmonica: the harps for the song), a chord's holes on the card and
+      the strip, its settings row (a harp of the line chosen, each chord on it, the song's `harmonicaTabs` linked);
     - the winds' fingerings of a chord's notes and their row (A–G or Do–Si, the recorder's baroque or German, the
       key's scale);
     - the notes heard in strum.js's `reed`, `flute` and `recorder` voices.
@@ -330,7 +330,7 @@ sitemaps list by bare ids alone, and the fetch their page.
     - `chord_shapes`, what the viewer shows a chord on one;
     - and version.py's `for_instrument`, the capo folded in on one that takes none.
   - **instruments.js**: their box and keyboard and `window.caracoleInstruments`, where another instrument's script
-    registers its drawing, a header line and a settings row.
+    registers its drawing, a line of the header's facts and a settings row.
 - **songbook.py**: songbooks.toml: a song is a string, or a table with its own `Setting`, `instrument` among its parts
   (`caracole songbook set --instrument`, the Songbooks tab's chip; `_run_strings`, the strings its PDF draws).
   - `SongbookSong`, `Songbook.songs`, `.texts`.
@@ -2136,7 +2136,7 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 - The sheet page (pages): `viewer.pages.SheetPage` is viewer/page.py's builder, byte for byte: `build(ViewerInputs)`
   writes `build_viewer`'s page (the data's members in Python's order, `names` kept in its place; the policy of each
   inlined file's hash, `ViewerAssets.Page.SHEET`), `viewerCsp` its header, and the frame book.py and harptab_page.py
-  reuse, under Python's names (`page`, `readSong`, `songHtml`, `sheetHtml`, `preambleHtml`, `sectionHtml`, `facts`,
+  reuse, under Python's names (`page`, `readSong`, `songHtml`, `sheetHtml`, `preambleHtml`, `sectionHtml`, `factsHtml`,
   `footer`, `namesTable`, `zhAttr`, `artistLine`, `pdfLine`, `words`, `CONTROLS`, `LIBRARY_PAGE`).
   - Its HTML and constants are page.py's, data/caracole/viewer/page.json, which tests/test_conformance_viewer_pages.py
     writes from the module (`_CONTROLS`, `_SHEET_CONTROLS`, `_VERSIONS`…, chords-db's notice, `_META_POLICY` run over

@@ -40,6 +40,10 @@ def data_of(html: str) -> dict:
     return json.loads(found.group(1))
 
 
+# The header's facts as the script draws them (viewer.js drawFacts): each line's name and its value's text.
+FACTS = '[...document.querySelectorAll("#facts .fact")].map((r) => [r.dataset.fact, r.querySelector("dd").textContent])'
+
+
 def facts_of(html: str) -> dict[str, str]:
     """The header's facts (page.py ``facts_html``), each line's value as HTML by its name: tuning, capo, key; none for
     a sheet with no facts."""
@@ -531,17 +535,16 @@ def test_the_bar_and_the_settings_say_what_the_key_line_says(tmp_path, cho, labe
 
 
 @in_chromium
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="viewer.js draws the facts' lines from task 5b.3 (drawFacts); until then it writes its one "
-                          "key line over them")
 @pytest.mark.parametrize("cho", [UG_CHO, WALL, MINOR], ids=["capo", "capo-on-open-shapes", "no-capo"])
 def test_the_script_draws_the_facts_the_page_came_with(tmp_path, cho):
-    # The script draws the lines the page came with, so nothing moves as it runs.
+    # The script draws the lines the page came with, so nothing moves as it runs: the same words, the same markup.
     html = build_viewer(cho)
-    rows = run_in_page(html, tmp_path, """
-      out = [...document.querySelectorAll("#facts .fact")].map((r) => [r.dataset.fact, r.querySelector("dd").textContent]);
-    """)
+    rows, marked = run_in_page(html, tmp_path, """
+      out = [FACTS, [...document.querySelectorAll("#facts .fact")].map((r) => [r.dataset.fact, r.innerHTML])];
+    """.replace("FACTS", FACTS))
     assert rows == [[fact, unescape(re.sub(r"<[^>]+>", "", value))] for fact, value in facts_of(html).items()]
+    marked = [[fact, unescape(inner)] for fact, inner in marked]  # the harness's attribute escapes the markup
+    assert marked == [[fact, f"<dt>{fact.capitalize()}</dt><dd>{value}</dd>"] for fact, value in facts_of(html).items()]
 
 
 def test_the_guitar_pro_files_beside_the_page_are_named_for_the_song_they_download_as():
@@ -594,7 +597,9 @@ def test_the_page_works_served_in_a_sandbox(tmp_path):
 def test_transposing_renames_every_chord(tmp_path):
     dom = dump_dom(build_viewer(UG_CHO), tmp_path, "#t=2")
     assert chord_texts(dom) == {"0": "A", "1": "E", "2": "F#m", "3": "D", "4": "A/C#", "5": "Bm", "6": "G"}
-    assert "<b>A</b> shapes · capo <b>2</b> · sounds <b>B</b> (+2)" in dom  # the sheet has capo 2
+    # The sheet has capo 2: the Capo line says it, the Key line the shapes and the sound, moved.
+    assert "<dt>Capo</dt><dd>2</dd>" in dom
+    assert '<dd><b>A</b> shapes · sounds <b>B</b> (+2) · <span class="from">key from the sheet</span></dd>' in dom
     dom = dump_dom(build_viewer(UG_CHO), tmp_path, "#t=-4")  # down to Eb: flats
     assert chord_texts(dom)["2"] == "Cm" and chord_texts(dom)["0"] == "Eb"
 
@@ -603,7 +608,8 @@ def test_transposing_renames_every_chord(tmp_path):
 def test_a_capo_shows_the_shapes_to_play(tmp_path):
     dom = dump_dom(build_viewer(UG_CHO), tmp_path, "#t=3&capo=3")  # Bb shapes; capo 3: A shapes
     assert chord_texts(dom)["0"] == "A"
-    assert "<b>A</b> shapes · capo <b>3</b> · sounds <b>C</b> (+3)" in dom
+    assert "<dt>Capo</dt><dd>3</dd>" in dom
+    assert '<dd><b>A</b> shapes · sounds <b>C</b> (+3) · <span class="from">key from the sheet</span></dd>' in dom
 
 
 @in_chromium
@@ -611,11 +617,11 @@ def test_a_capo_may_come_off(tmp_path):
     out = run_in_page(build_viewer(UG_CHO), tmp_path, """
       const chips = [...document.querySelectorAll("#capo .chip")].map((b) => b.textContent);
       [...document.querySelectorAll("#capo .chip")][0].click();
-      out = [chips, q('#sheet .c[data-c="0"]').textContent, q("#facts").textContent];
-    """, "#t=-2")  # G shapes with capo 2, down two: F shapes, sounding G
+      out = [chips, q('#sheet .c[data-c="0"]').textContent, FACTS];
+    """.replace("FACTS", FACTS), "#t=-2")  # G shapes with capo 2, down two: F shapes, sounding G
     chips, chord, facts = out
     assert chips == ["No capoG shapes", "Capo 3E shapes"]
-    assert chord == "G" and facts == "Key G (−2) · from the sheet · no capo"
+    assert chord == "G" and facts == [["tuning", "E A D G B E"], ["capo", "none"], ["key", "G (−2) · from the sheet"]]
 
 
 @in_chromium
@@ -631,14 +637,15 @@ def test_every_song_has_a_capo_to_move(tmp_path):
       q("#capo-down").click();
       q("#capo-down").click();
       q("#capo-down").click();  // no lower than none
-      const off = look().concat([q("#facts").textContent]);
+      const off = look().concat([FACTS]);
       for (let i = 0; i < 4; i++) q("#capo-up").click();
       const four = look().concat([q("#mode-hint").textContent]);
       q("#reset-capo").click();
       out = [shown, offered, off, four, look()];
-    """)
+    """.replace("FACTS", FACTS))
     assert shown and offered == 0
-    assert off == ["F#m7", "Key F#m · no capo", "0", "#capo=0", "Key F#m · guessed from the chords · no capo"]
+    assert off == ["F#m7", "Key F#m · no capo", "0", "#capo=0",
+                   [["tuning", "E A D G B E"], ["capo", "none"], ["key", "F#m · guessed from the chords"]]]
     assert four == ["Dm7", "Dm shapes · capo 4 · sounds F#m", "4", "#capo=4", "natural minor"]
     assert back == ["Em7", "Em shapes · capo 2 · sounds F#m", "2", ""]
 
@@ -646,13 +653,14 @@ def test_every_song_has_a_capo_to_move(tmp_path):
 @in_chromium
 def test_a_sheet_with_no_key_moves_its_capo_too(tmp_path):
     before, after = run_in_page(build_viewer("{title: T}\n{artist: A}\n{capo: 1}\n[(G)]la [H7]lo\n"), tmp_path, """
-      const before = [q("#facts").textContent, q("#key-full").textContent];
+      const before = [FACTS, q("#key-full").textContent];
       q("#more").click();
       q("#capo-down").click();
-      out = [before, [q("#facts").textContent, q("#key-full").textContent, location.hash]];
-    """)
-    assert before == ["Capo 1", "Transpose · capo 1"]
-    assert after == ["No capo", "Transpose · no capo", "#capo=0"]
+      out = [before, [FACTS, q("#key-full").textContent, location.hash]];
+    """.replace("FACTS", FACTS))
+    # No key: no Key line, the Capo line alone says the capo.
+    assert before == [[["tuning", "E A D G B E"], ["capo", "1"]], "Transpose · capo 1"]
+    assert after == [[["tuning", "E A D G B E"], ["capo", "none"]], "Transpose · no capo", "#capo=0"]
 
 
 def phone_tab(browser, url: str, width: int = 390, height: int = 844):

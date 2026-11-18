@@ -306,6 +306,20 @@ def test_the_mouse_over_a_numeral_shows_its_line_in_the_key_shown(tmp_path):
     assert moved["key"] == "In the key of D (from the sheet)."
 
 
+# Elsewhere, for a finger: the height down the middle of a phone's screen (x 200) farthest from the tooltip, every
+# control and the song's chords and numerals (a tap beside one may land on it), and how far that is: never a fixed
+# point, which the tooltip may cover, above its numeral or below it, as the header's height moves the song.
+ELSEWHERE = """(() => { const near = '#tip, a, button, [tabindex], summary, select, #sheet .c, #sheet .nm';
+  const hot = [...document.querySelectorAll(near)].map((e) => e.getBoundingClientRect()).filter((r) => r.width && r.height);
+  let best = [0, 0];
+  for (let y = 0; y < innerHeight; y++) {
+    const far = Math.min(...hot.map((r) => Math.hypot(Math.max(r.left - 200, 0, 200 - r.right),
+                                                       Math.max(r.top - y, 0, y - r.bottom))));
+    if (far > best[1]) best = [y, far];
+  }
+  return best; })()"""
+
+
 @in_chromium
 def test_a_finger_on_a_numeral_shows_its_line_and_on_the_name_the_card(tmp_path):
     with open_viewer(tmp_path, written(tmp_path, IN_C) + "#nm=both", **PHONE) as b:
@@ -317,7 +331,9 @@ def test_a_finger_on_a_numeral_shows_its_line_and_on_the_name_the_card(tmp_path)
         escaped = b.js(TIP)
         tap_at(b, x, y)
         assert b.wait("!document.getElementById('tip').hidden")
-        tap_at(b, 200, 60)  # elsewhere
+        y, far = b.js(ELSEWHERE)
+        assert far >= 16, (y, far)
+        tap_at(b, 200, y)  # elsewhere
         elsewhere = b.js(TIP)
         name = b.js("""(() => { const c = document.querySelectorAll('#sheet .c')[12]; const r = document.createRange();
           r.selectNodeContents(c.firstChild); const box = r.getBoundingClientRect();

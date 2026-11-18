@@ -29,6 +29,8 @@ written ``\\u003c``:
   there when its address names no version (``t``, ``mode``, ``capo``, ``alt``, ``at``);
   ``capoSheet``: the sheet's own capo; ``tuningName``: the tuning its notes name ("Drop D": ``sheet.split_preamble``,
   the PDF's rule), for the header's Tuning line (``facts_html``), where they name one;
+- ``names[""]``: each pitch class's name with no key (``theory.spelling(None)``), on every page: the chords' names on a
+  sheet with no key, and an instrument's strings on the header's Tuning line (viewer.js ``tuningNow``);
 - for each mode of the key's tonic: ``mapped`` chords (``theory.map_chord``),
   their ``alts`` (``theory.alternatives``), ``names`` (each pitch class's name in
   that mode on each tonic, ``theory.spelling``), ``keyNames``, and ``capo`` hints
@@ -524,7 +526,6 @@ def _data(sheet: Sheet, chords: list[Chord | None], key: Key | None, origin: str
     alts_by_mode: dict[str, list[list[Chord]]] = {}
     if key is not None:
         data["modes"] = list(MODES)
-        data["names"] = {}
         for mode in MODES:
             in_mode = Key(key.tonic, mode)
             mapped = mapped_by_mode[mode] = [None if c is None else map_chord(c, key, mode) for c in chords]

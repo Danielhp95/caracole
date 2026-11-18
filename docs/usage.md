@@ -3065,18 +3065,21 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   there is no rail and no button for it, but the neck (narrowed with the
   keyboard's focus in the rail, the focus goes to the bar).
 - **The song's facts**, under the title, on three lines, each a label and its
-  value: **Tuning**, the guitar's strings (E A D G B E) or the tuning the
-  sheet's notes name ("Drop D", as the PDF's line under the title names it);
-  **Capo**, none or its fret; and **Key**, how the song is played. With a
-  capo, the Key line names the key of the shapes you play and the key the
-  song sounds in: "Em shapes · sounds F#m". With none, the key alone: "Em".
-  Each says where the key came from. A sheet of words alone has no facts. On
-  the piano, the harmonica, the flute and the recorder, which take no capo,
-  the Key line names the key the song sounds in ("F#m"), and the chords are
-  named as they sound (F#m, not Em): the guitar's capo comes back with the
-  guitar. On the harmonica a
-  second line names the harps for the song, each in its position: "Harmonica:
-  G harp (1st position) · C harp (2nd)" (below).
+  value, as you play the song: **Tuning**, the instrument's open strings (the
+  guitar's E A D G B E, a ukulele's G C E A, the baritone's D G B E), on the
+  guitar the tuning the sheet's notes name ("Drop D", as the PDF's line under
+  the title names it); **Capo**, none or its fret, as set now; and **Key**,
+  how the song is played. With a capo, the Key line names the key of the
+  shapes you play and the key the song sounds in: "Em shapes · sounds F#m".
+  With none, the key alone: "Em". Transposed, the key it sounds in says how
+  far it moved: "F#m (+2)". Each says where the key came from. A sheet of
+  words alone has no facts, so none says its capo either (its PDF's line does).
+  The piano, the harmonica, the flute and the recorder take no capo and have
+  no strings: no Tuning or Capo line, and the Key line names the key the song
+  sounds in ("F#m"), the chords named as they sound (F#m, not Em): the
+  guitar's capo comes back with the guitar. On the harmonica a line under the
+  Key line, **Harmonica**, names the harps for the song, each in its position:
+  "G harp (1st position) · C harp (2nd)" (below).
 - **Instrument**, a menu in the settings: Guitar (the default), Ukulele (G C E A, the
   G string high), Ukulele, low G, Baritone ukulele (D G B E), Piano,
   Harmonica, Flute and Recorder. It
@@ -3096,11 +3099,12 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   the first and second inversions (‹ ›), the right hand around middle C and
   the bass, the root or a slash chord's, for the left hand below it. The rail
   of necks (below) draws a ukulele's four strings, and the piano has none.
-  The **Harmonica** is a 10-hole diatonic harp in Richter tuning. The key line
-  names the harps that play the song, two or three, best first, each with its
-  position, numbered round the circle of fifths (1st: the harp in the song's
-  key; 2nd, "cross harp": a harp a fourth above the song; 3rd, "slant harp": a
-  whole tone below; and the mode the harp plays in from the 3rd on: "E harp
+  The **Harmonica** is a 10-hole diatonic harp in Richter tuning. Its line in
+  the song's facts names the harps that play the song, two or three, best
+  first, each with its position, numbered round the circle of fifths (1st: the
+  harp in the song's key; 2nd, "cross harp": a harp a fourth above the song;
+  3rd, "slant harp": a whole tone below; and the mode the harp plays in from
+  the 3rd on: "E harp
   (3rd position, dorian)"). A song in a major key lists the 1st position, then
   the 2nd; a song in another mode, the positions that suit it (the 3rd, 4th
   and 5th for a minor one), those that play the most of its chords first. Its

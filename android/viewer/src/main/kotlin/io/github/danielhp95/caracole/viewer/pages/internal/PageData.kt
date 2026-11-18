@@ -19,11 +19,11 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
 /**
- * page._data: the song's data block, its members in Python's order (a member Python sets again, `names` for a sheet
- * with a key, keeps its place, as a dict's key does), each the module's answer the viewer packages give: each chord
- * as the script reads it (`rep`), each mode's chords, alternatives, names and capo hints, the fingerings and
- * instruments the page needs, the sheet's own shapes, harmony's, the harmonica's and the winds' tables, and a Chinese
- * sheet's pinyin and characters. viewer/page.py's docstring says what each member is.
+ * page._data: the song's data block, its members in Python's order (a member filled in later, a mode's `names` after
+ * the names with no key, keeps its place, as a dict's key does), each the module's answer the viewer packages give:
+ * each chord as the script reads it (`rep`), each mode's chords, alternatives, names and capo hints, the fingerings
+ * and instruments the page needs, the sheet's own shapes, harmony's, the harmonica's and the winds' tables, and a
+ * Chinese sheet's pinyin and characters. viewer/page.py's docstring says what each member is.
  */
 internal object PageData {
     fun data(sheet: Sheet, chords: List<Chord?>, key: Key?, origin: String?, transpose: Int): LinkedHashMap<String, JsonElement> {
@@ -48,7 +48,8 @@ internal object PageData {
         data["capoSheet"] = int(sheet.capo)
         val mapped = LinkedHashMap<String, JsonElement>()
         val alts = LinkedHashMap<String, JsonElement>()
-        var names = linkedMapOf<String, JsonElement>("" to JsonPrimitive(Theory.spelling(null).joinToString(" ")))
+        // Every page's: the names with no key, the chords' on a sheet with no key and an instrument's strings.
+        val names = linkedMapOf<String, JsonElement>("" to JsonPrimitive(Theory.spelling(null).joinToString(" ")))
         val keyNames = LinkedHashMap<String, JsonElement>()
         val capo = LinkedHashMap<String, JsonElement>()
         data["modes"] = JsonArray(emptyList())
@@ -62,7 +63,6 @@ internal object PageData {
         val altsByMode = LinkedHashMap<String, List<List<Chord>>>()
         if (key != null) {
             data["modes"] = JsonArray(Theory.MODES.map(::JsonPrimitive))
-            names = LinkedHashMap()
             for (mode in Theory.MODES) {
                 val inMode = Key(key.tonic, mode)
                 val inKey = chords.map { c -> c?.let { Theory.mapChord(it, key, mode) } }
