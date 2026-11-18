@@ -2730,8 +2730,9 @@ caracole takes none for an option. `caracole serve` serves the same page, where 
 sites have too, under the same artist headers, with Fetch, and a form to
 request a song by name (see below).
 
-On a touch screen every button, fold, chip, menu, letter and artist's name is
-at least 44 pixels each way, for a thumb, and so are each line's buttons, its
+On a touch screen every button, fold, chip, menu and letter is at least 44
+pixels each way, for a thumb (but an artist's name, on its band or as a line's
+overline, 24 pixels: see above), and so are each line's buttons, its
 Fetch and its chevron (its title, beside them, is as tall): a phone shows
 about eleven songs to a screen. With a mouse they keep their compact sizes. Fields, menus and the
 Select boxes have an edge you can see against the page, in light and dark mode
