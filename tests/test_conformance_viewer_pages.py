@@ -24,7 +24,8 @@ a mark, or null), ``{"chords": [int or string, …]}``, ``{"text": …}``, ``{"t
 - ``artist_line(artist, names)``, ``pdf_line(files)`` (``files`` as ``[[name, label, twin or null], …]``),
   ``zh_attr(text, names)``: their HTML; ``names_table(chinese, texts)``: the table, or null;
 - ``_words(texts)`` (a batch): each text cut as the page cuts it (``_lyric_texts``);
-- ``_facts(key, [[origin, capo], …])``: the key line's HTML for each (``key`` null for a sheet with none);
+- ``facts_html(key, [[origin, capo, tuning, chords, suffix], …])``: the song's facts' HTML for each (``key`` null for
+  a sheet with none, ``tuning`` null for one whose notes name none, one of ``TUNINGS``);
 - ``_footer(links)``, ``_page(title, body, styles, scripts, names)``: their HTML;
 - ``viewer_csp(page)``: ``page`` as ``{"base64": …}``, the header;
 - ``shown_html(chords, pre, sections)`` (this module's): ``_preamble_html(pre, chords)`` (null for no ``pre``) and
@@ -97,6 +98,8 @@ STARTS = ("t=2", "t=-1&mode=dorian", "t=0&mode=aeolian&capo=3", "capo=2&alt=0.1-
 GUITARS = (["guitar-1.gp5"], ["guitar-1.gp5", "guitar-2.gpx"], ["guitar-3.gp"],
            ["guitar-1.ptb", "guitar-2.gp4", "guitar-10.gp5"])
 HARPS = (0, 7, 2, 10, 19, -5)
+# The tunings facts_html is given: none named, the sheet's notes', one to escape.
+TUNINGS = (None, "Drop D", 'Open <G> & "low"')
 CHANNELS = ("Placeholder Records", "Canal Inventado", "合成频道", "")
 EDGE_ARTISTS = ("", "AC/DC", "Guns N' Roses", "Simon & Garfunkel", "宋冬野", "a b/c?d#e%f&g=h+i", "Ünïcødé Ñame",
                 "<script>alert(1)</script>", '"Quoted" Band', "~._-", "李宗盛 (Jonathan Lee)", "  spaced  ", "💿 Emoji",
@@ -262,10 +265,18 @@ def parts_records() -> list[dict[str, Any]]:
         batch = texts[start:start + WORDS_BATCH]
         records.append({"fn": P + "_words", "args": [batch], "out": [page._words(t) for t in batch]})
     origins = (None, "from the tab", "estimated from the chords", "from the sheet", "from <b>x & y</b>")
-    for key in [None, *viewer_corpus.keys()]:
-        cases = [[rng.choice(origins), capo] for capo in (0, rng.choice((1, 2, 3, 5)), rng.choice((7, 9, 11, 12)))]
-        records.append({"fn": P + "_facts", "args": [key_json(key), cases],
-                        "out": [page._facts(key, origin, capo) for origin, capo in cases]})
+    for n, key in enumerate([None, *viewer_corpus.keys()]):
+        # capos 0 and 2, and one higher drawn; each a tuning, whether the sheet has chords and a suffix drawn; the
+        # first two keys every way
+        if n < 2:
+            cases = [[rng.choice(origins), capo, tuning, chords, suffix] for capo in (0, 2) for tuning in TUNINGS
+                     for chords in (True, False) for suffix in ("", "-3")]
+        else:
+            cases = [[rng.choice(origins), capo, rng.choice(TUNINGS), rng.random() > 0.1, rng.choice(("", "-3"))]
+                     for capo in (0, 2, rng.choice((1, 3, 5, 7, 9, 11, 12)))]
+        records.append({"fn": P + "facts_html", "args": [key_json(key), cases],
+                        "out": [page.facts_html(key, origin, capo, tuning, chords=chords, suffix=suffix)
+                                for origin, capo, tuning, chords, suffix in cases]})
     for links in ("", page.pdf_line([("sheet.pdf", "PDF", "sheet (Traditional).pdf")])):
         records.append({"fn": P + "_footer", "args": [links], "out": page._footer(links)})
     frames = [("Song · Artist", "<p>x</p>\n", ("a{}",), ("1", "2"), None),
@@ -361,6 +372,10 @@ EXTRA_SHEETS = (
     ("empty", ""),
     ("no-artist", "{title: Alone}\n{comment: Verse}\nWords with no chords at all\n"),
     ("untitled", "{artist: Somebody}\n[Am]La [Dm]la\n"),
+    # the tuning the notes name: the header's Tuning line and the data's tuningName
+    ("tuned", "{title: Tuned}\n{artist: The Placeholders}\n{key: Dm}\nTuning: Drop D\n\n"
+              "{comment: Verse}\n[Dm]Words to sing\n{comment: Chorus}\n[F]More words\n"),
+    ("tuning-label", "{title: Open}\n{capo: 2}\n(Tuning: DADGAD & <low>)\n\n{comment: Verse}\n[D]La [G]la\n"),
 )
 
 

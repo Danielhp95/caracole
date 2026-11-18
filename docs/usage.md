@@ -1670,9 +1670,9 @@ and cache.
   `sheet.cho`, `sheet.pdf` and `sheet.html` next to every kept sheet, or the
   one song's with `--song`, in the song's own version: its `[version]` (Make
   this my version, below), else transposed as `[transpose]` says, else as written.
-  The PDF has one line under the title: the artist and the viewer's key line
-  ("Soda Stereo · Bm shapes · capo 2 · sounds C#m", or "Soda Stereo · Key Bm"
-  without a capo), then a capo or a tuning the tab's notes name
+  The PDF has one line under the title: the artist and the viewer's Capo and
+  Key lines on one line ("Soda Stereo · Bm shapes · capo 2 · sounds C#m", or
+  "Soda Stereo · Key Bm" without a capo), then a capo or a tuning the tab's notes name
   ("Soda Stereo · Key Bm · half step down"): a capo they name for a sheet
   with none of its own, only where its chords are played where the sheet
   writes them (a version in another key or capo plays them elsewhere, and
@@ -3064,13 +3064,17 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   Harmony panel shows the key's neck, as on a narrower screen. Below 1200 px
   there is no rail and no button for it, but the neck (narrowed with the
   keyboard's focus in the rail, the focus goes to the bar).
-- **The key line** under the title says how the song is played. With a capo,
-  it names the key of the shapes you play, the capo and the key the song
-  sounds in: "Em shapes · capo 2 · sounds F#m". With none, the key alone:
-  "Key Em". Each says where the key came from. On the piano, the harmonica,
-  the flute and the recorder, which take no capo, it names the key the song
-  sounds in ("Key F#m"), and the chords are named as they sound (F#m, not
-  Em): the guitar's capo comes back with the guitar. On the harmonica a
+- **The song's facts**, under the title, on three lines, each a label and its
+  value: **Tuning**, the guitar's strings (E A D G B E) or the tuning the
+  sheet's notes name ("Drop D", as the PDF's line under the title names it);
+  **Capo**, none or its fret; and **Key**, how the song is played. With a
+  capo, the Key line names the key of the shapes you play and the key the
+  song sounds in: "Em shapes · sounds F#m". With none, the key alone: "Em".
+  Each says where the key came from. A sheet of words alone has no facts. On
+  the piano, the harmonica, the flute and the recorder, which take no capo,
+  the Key line names the key the song sounds in ("F#m"), and the chords are
+  named as they sound (F#m, not Em): the guitar's capo comes back with the
+  guitar. On the harmonica a
   second line names the harps for the song, each in its position: "Harmonica:
   G harp (1st position) · C harp (2nd)" (below).
 - **Instrument**, a menu in the settings: Guitar (the default), Ukulele (G C E A, the
@@ -3199,8 +3203,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
 - **Full screen**: **Hide controls** (full screen ›), the first of the
   settings' places to go, or a double tap beside the song (in its margins, or
   beside a line's end, never on a word, a chord, the title or a control: two
-  taps or clicks within 350 ms and 30 px of each other), hides the bar, the key
-  line under the title and the rail of necks (and the necks' sheet), so the
+  taps or clicks within 350 ms and 30 px of each other), hides the bar, the
+  song's facts under the title and the rail of necks (and the necks' sheet), so the
   song has the screen; a thin handle stays at the foot of the screen. A tap on
   it, Escape or Back brings them back, the focus on ⋯ when Hide controls hid
   them; a double tap while they are hidden does nothing. It is one step of the history, as the

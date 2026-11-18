@@ -27,7 +27,8 @@ written ``\\u003c``:
   own version (overrides.toml's ``[version]``, "Make this my version"), as the
   viewer's address writes it (viewer/version.py), or null for none: the script starts
   there when its address names no version (``t``, ``mode``, ``capo``, ``alt``, ``at``);
-  ``capoSheet``: the sheet's own capo;
+  ``capoSheet``: the sheet's own capo; ``tuningName``: the tuning its notes name ("Drop D": ``sheet.split_preamble``,
+  the PDF's rule), for the header's Tuning line (``facts_html``), where they name one;
 - for each mode of the key's tonic: ``mapped`` chords (``theory.map_chord``),
   their ``alts`` (``theory.alternatives``), ``names`` (each pitch class's name in
   that mode on each tonic, ``theory.spelling``), ``keyNames``, and ``capo`` hints
@@ -124,6 +125,7 @@ from caracole.viewer.sheet import (
     is_legend,
     parse_sheet,
     preamble_section,
+    split_preamble,
     written,
 )
 from caracole.viewer.theory import (
@@ -326,8 +328,8 @@ def build_viewer(
     names = names_table("hanzi" in data, [title, sheet.artist, page_title])
     return _page(
         page_title,
-        _body(sheet, title, song_key, origin, pdf, export=export, guitar=bool(guitar), names=names,
-              pdf_traditional=pdf_traditional, credit=video is not None)
+        _body(sheet, title, song_key, origin, pdf, tuning=data.get("tuningName"), export=export,
+              guitar=bool(guitar), names=names, pdf_traditional=pdf_traditional, credit=video is not None)
         + json_block("song", data) + (json_block("song-names", names) if names else ""),
         styles=(style,),
         scripts=(_sound(), _overlay(), _instruments(), _winds(), _layers(), script),
@@ -439,11 +441,15 @@ def _page(title: str, body: str, *, styles: tuple[str, ...], scripts: tuple[str,
 def _read_song(cho: str, key: str | None, key_source: str | None,
                transpose: int) -> tuple[Sheet, Key | None, str | None, dict[str, Any]]:
     """A ChordPro sheet as its page shows it: the sheet read, the key of its shapes and where that came
-    from in words (``_song_key``), and the data its block gives the script (``_data``)."""
+    from in words (``_song_key``), and the data its block gives the script (``_data``), with ``tuningName``, the
+    tuning its notes name (``split_preamble``, the PDF's rule: pdf_text.py), when they name one."""
     sheet = parse_sheet(cho)
     chords = [parse_chord(name, strict=False) for name in sheet.chords]
     song_key, origin = _song_key(sheet, chords, key, key_source)
-    return sheet, song_key, origin, _data(sheet, chords, song_key, origin, transpose)
+    data = _data(sheet, chords, song_key, origin, transpose)
+    if (tuning := split_preamble(cho.splitlines()).tuning) is not None:
+        data["tuningName"] = tuning
+    return sheet, song_key, origin, data
 
 
 def viewer_key(cho: str, key: str | None = None, key_source: str | None = None) -> Key | None:
@@ -643,27 +649,43 @@ def _given_shapes(sheet: Sheet) -> list[tuple[Chord, Position]]:
 # --- the page ------------------------------------------------------------------------------------
 
 
-def _facts(key: Key | None, origin: str | None, capo: int) -> str:
-    """The key line under the title, as HTML, as viewer.js writes it for the sheet as written.
+# The guitar's open strings, low to high, as the Tuning line names them for a sheet that names no tuning of its own
+GUITAR_STRINGS = " ".join(spelling(None)[n % 12] for n in instruments.GUITAR.tuning)
 
-    With a capo it says the key of the shapes played, the capo and the key the song sounds in,
-    as Cifra Club's key line does ("Em shapes · capo 2 · sounds F#m"): "Key Em" alone would read
-    as the song's key. Without one, the key ("Key Em"). Each says where the key came from.
+
+def facts_html(key: Key | None, origin: str | None, capo: int, tuning: str | None, *, chords: bool,
+               suffix: str = "") -> str:
+    """The song's facts under its title, as HTML, for the sheet as written on the guitar: a ``dl.facts`` (``#facts``,
+    a songbook's song's ``#facts-N`` by ``suffix``) of its lines, each a ``div.fact`` named by its ``data-fact``, a
+    ``dt`` and a ``dd``, as viewer.js redraws them for the song as it is played.
+
+    Tuning: ``tuning``, the one the sheet's notes name (``sheet.split_preamble``, the PDF's rule), else the guitar's
+    strings (``GUITAR_STRINGS``). Capo: "none", or its fret. Key, where the sheet has one: with no capo the key
+    ("Am"), with one the key of the shapes played and the key the song sounds in, as Cifra Club's key line says it
+    ("Em shapes · sounds F#m"): "Key Em" alone would read as the song's key; each says where the key came from
+    (``origin``). A sheet with no chords (``chords``) has no facts: "".
     """
-    source = escape(origin or "")
-    if key is None:
-        return f"Capo <b>{capo}</b>" if capo else ""
-    if not capo:
-        return f"Key <b>{escape(key_name(key))}</b>" + (f' · <span class="from">{source}</span>' if source else "")
-    return (
-        f"<b>{escape(key_name(key))}</b> shapes · capo <b>{capo}</b> · sounds <b>{escape(key_name(sounding(key, capo)))}</b>"
-        + (f' · <span class="from">key {source}</span>' if source else "")
-    )
+    if not chords:
+        return ""
+    rows = [("tuning", "Tuning", escape(tuning or GUITAR_STRINGS)), ("capo", "Capo", str(capo) if capo else "none")]
+    if key is not None:
+        source = escape(origin or "")
+        if not capo:
+            said = f"<b>{escape(key_name(key))}</b>" + (f' · <span class="from">{source}</span>' if source else "")
+        else:
+            said = (f"<b>{escape(key_name(key))}</b> shapes · sounds <b>{escape(key_name(sounding(key, capo)))}</b>"
+                    + (f' · <span class="from">key {source}</span>' if source else ""))
+        rows.append(("key", "Key", said))
+    return (f'<dl class="facts" id="facts{suffix}">\n'
+            + "".join(f'<div class="fact" data-fact="{fact}"><dt>{label}</dt><dd>{value}</dd></div>\n'
+                      for fact, label, value in rows)
+            + "</dl>\n")
 
 
 def key_line_text(key: Key | None, capo: int | None) -> str:
-    """The key line in words, as ``_facts`` writes it without its markup and where the key came from:
-    "Em shapes · capo 2 · sounds F#m", "Key Em", "Capo 2" for a sheet with no key, else ""."""
+    """The key line in words, the PDF's (pdf_text.py's subtitle): the page's Capo and Key lines (``facts_html``) on
+    one line, without where the key came from: "Em shapes · capo 2 · sounds F#m", "Key Em", "Capo 2" for a sheet with
+    no key, else ""."""
     capo = capo or 0
     if key is None:
         return f"Capo {capo}" if capo else ""
@@ -673,15 +695,16 @@ def key_line_text(key: Key | None, capo: int | None) -> str:
 
 
 def _body(sheet: Sheet, title: str, key: Key | None, origin: str | None, pdf: str | None, *,
-          export: bool = True, guitar: bool = False, names: Mapping[str, Mapping[str, str]] | None = None,
-          pdf_traditional: str | None = None, credit: bool = False) -> str:
+          tuning: str | None = None, export: bool = True, guitar: bool = False,
+          names: Mapping[str, Mapping[str, str]] | None = None, pdf_traditional: str | None = None,
+          credit: bool = False) -> str:
     pdf_link = pdf_line([(pdf, "PDF", pdf_traditional)]) if pdf else ""
     return (
         '<div class="page">\n<header class="head">\n'
         f'<a class="back" href="{LIBRARY_PAGE}" aria-label="Library" title="Library">‹</a>\n'
         f"<h1{zh_attr(title, names)}>{escape(title)}</h1>\n"
         + artist_line(sheet.artist, names)
-        + f'<p class="facts" id="facts">{_facts(key, origin, sheet.capo or 0)}</p>\n'
+        + facts_html(key, origin, sheet.capo or 0, tuning, chords=bool(sheet.chords))
         + _VERSIONS
         + "</header>\n"
         + _song_html(sheet, credit=credit)

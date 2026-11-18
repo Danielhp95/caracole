@@ -48,12 +48,12 @@ from caracole.viewer.page import (
     _overlay,
     _winds,
     _sound,
-    _facts,
     _footer,
     _page,
     _read_song,
     _song_html,
     artist_line,
+    facts_html,
     is_chinese,
     names_table,
     pdf_line,
@@ -195,7 +195,8 @@ def _song(song: BookSong, n: int, total: int, prev: tuple[int, str] | None,
         + f'<p class="pos">Song {n} of {total}</p>\n'
         + f'<h2 class="title" id="title-{n}"{zh_attr(song.title, names)}>{escape(song.title)}</h2>\n'
         + artist_line(song.artist, names)
-        + f'<p class="facts" id="facts-{n}">{_facts(key, origin, sheet.capo or 0)}</p>\n</header>\n'
+        + facts_html(key, origin, sheet.capo or 0, data.get("tuningName"), chords=bool(sheet.chords), suffix=f"-{n}")
+        + "</header>\n"
         + _song_html(sheet, f"-{n}", song.title)
         + _pager("Songs, end of sheet", prev, nxt, names)  # at the end of a long sheet, no scrolling back up
     )

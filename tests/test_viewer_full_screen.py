@@ -39,6 +39,20 @@ STATE = """(() => { const q = (id) => document.getElementById(id), doc = documen
     dock: doc.dataset.dock || null, focus: document.activeElement ? document.activeElement.id : ''}; })()"""
 
 
+# The phone's left padding beside the song, the point of it farthest from a control or a chord ([y, how far]), so that
+# the browser's touch adjustment (some 16 px round a finger) never moves a tap there onto a chord, wherever the
+# header's height puts the song's lines.
+BESIDE = """(() => { const hot = [...document.querySelectorAll('a, button, [tabindex], [role=button], summary')]
+    .map((e) => e.getBoundingClientRect()).filter((r) => r.width && r.height);
+  let best = [0, 0];
+  for (let y = Math.max(document.getElementById('sheet').getBoundingClientRect().top, 0); y < innerHeight - 150; y++) {
+    const far = Math.min(...hot.map((r) => Math.hypot(Math.max(r.left - 4, 0, 4 - r.right),
+                                                       Math.max(r.top - y, 0, y - r.bottom))));
+    if (far > best[1]) best = [y, far];
+  }
+  return best; })()"""
+
+
 def hide_controls(b: Browser) -> None:
     """The settings' Hide controls, as a reader presses it: ⋯, then its row."""
     b.click("#more")
@@ -120,7 +134,9 @@ def test_a_double_tap_beside_the_song_hides_the_controls(tmp_path):
         time.sleep(0.5)
         assert b.js(NOT_FULL) is True
         assert b.js("document.getElementById('card').hidden") is True  # on them: no chord's card
-        double_tap(b, 4, 420)  # the page's left padding, beside the song
+        y, far = b.js(BESIDE)
+        assert far >= 16, (y, far)
+        double_tap(b, 4, y)  # the page's left padding, beside the song
         assert b.wait(FULL)
         assert until(b, (2, 3)) == (2, 3)  # one entry
         assert b.js("getComputedStyle(document.getElementById('bar')).display") == "none"

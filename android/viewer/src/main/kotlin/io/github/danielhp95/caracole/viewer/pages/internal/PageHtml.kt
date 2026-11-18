@@ -4,6 +4,7 @@ import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.py.PyText
 import io.github.danielhp95.caracole.core.py.PyUnicode
 import io.github.danielhp95.caracole.core.py.PyUrl
+import io.github.danielhp95.caracole.viewer.shapes.Instruments
 import io.github.danielhp95.caracole.viewer.sheet.Blank
 import io.github.danielhp95.caracole.viewer.sheet.ChordRow
 import io.github.danielhp95.caracole.viewer.sheet.Item
@@ -23,7 +24,7 @@ internal typealias Names = Map<String, Map<String, String>>
 
 /**
  * viewer/page.py's markup, function by function: the sheet as static HTML (each text escaped as html.escape does),
- * the key line, the artist's line, the files' links and the footer. Lengths, spaces and widths are Python's, in code
+ * the song's facts, the artist's line, the files' links and the footer. Lengths, spaces and widths are Python's, in code
  * points (PyUnicode).
  */
 internal object PageHtml {
@@ -52,17 +53,43 @@ internal object PageHtml {
             "<span${zhAttr(artist, names)}>${escape(artist)}</span></a></p>\n"
     }
 
-    /** _facts: the key line under the title, as viewer.js writes it for the sheet as written. */
-    fun facts(key: Key?, origin: String?, capo: Int): String {
-        val source = escape(origin ?: "")
-        if (key == null) return if (capo != 0) "Capo <b>$capo</b>" else ""
-        if (capo == 0) {
-            return "Key <b>${escape(Theory.keyName(key))}</b>" +
-                (if (source.isNotEmpty()) " · <span class=\"from\">$source</span>" else "")
+    /** GUITAR_STRINGS: the guitar's open strings, low to high, as the Tuning line names them ("E A D G B E"). */
+    val GUITAR_STRINGS: String by lazy {
+        val names = Theory.spelling(null)
+        Instruments.GUITAR.tuning.joinToString(" ") { names[Math.floorMod(it, 12)] }
+    }
+
+    /** facts_html: the song's facts under its title, for the sheet as written on the guitar: a `dl.facts` (`#facts`,
+     * a songbook's song's `#facts-N` by [suffix]) of its Tuning ([tuning], the one the sheet's notes name, else
+     * [GUITAR_STRINGS]), its Capo ("none", or its fret) and, where it has one, its Key (the key alone with no capo;
+     * with one, the shapes' key and the one the song sounds in), each a `div.fact` of a `dt` and a `dd`; "" for a sheet
+     * with no [chords]. */
+    fun factsHtml(key: Key?, origin: String?, capo: Int, tuning: String?, chords: Boolean, suffix: String = ""): String {
+        if (!chords) return ""
+        val rows = mutableListOf(
+            Triple("tuning", "Tuning", escape(tuning?.takeIf { it.isNotEmpty() } ?: GUITAR_STRINGS)),
+            Triple("capo", "Capo", if (capo != 0) capo.toString() else "none"),
+        )
+        if (key != null) {
+            val source = escape(origin ?: "")
+            val said = if (capo == 0) {
+                "<b>${escape(Theory.keyName(key))}</b>" +
+                    (if (source.isNotEmpty()) " · <span class=\"from\">$source</span>" else "")
+            } else {
+                "<b>${escape(Theory.keyName(key))}</b> shapes · sounds " +
+                    "<b>${escape(Theory.keyName(Theory.sounding(key, capo)))}</b>" +
+                    (if (source.isNotEmpty()) " · <span class=\"from\">key $source</span>" else "")
+            }
+            rows += Triple("key", "Key", said)
         }
-        return "<b>${escape(Theory.keyName(key))}</b> shapes · capo <b>$capo</b> · sounds " +
-            "<b>${escape(Theory.keyName(Theory.sounding(key, capo)))}</b>" +
-            (if (source.isNotEmpty()) " · <span class=\"from\">key $source</span>" else "")
+        return buildString {
+            append("<dl class=\"facts\" id=\"facts").append(suffix).append("\">\n")
+            for ((fact, label, value) in rows) {
+                append("<div class=\"fact\" data-fact=\"").append(fact).append("\"><dt>").append(label)
+                    .append("</dt><dd>").append(value).append("</dd></div>\n")
+            }
+            append("</dl>\n")
+        }
     }
 
     /** _footer: the links to the files beside the page, chords-db's credit and licence, and a word on privacy. */

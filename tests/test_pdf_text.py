@@ -223,15 +223,26 @@ def test_a_sheet_without_notes_keeps_every_line():
         (UG_CHO, "G shapes · capo 2 · sounds A"),
         (WALL, "Em shapes · capo 2 · sounds F#m"),
         (MINOR, "Key Cm"),
-        ("{title: No key}\n{capo: 3}\nwords alone\n", "Capo 3"),
+        ("{title: No key}\n{capo: 3}\n[Xq]words alone\n", "Capo 3"),
         ("{title: Nothing}\nwords alone\n", ""),
     ],
     ids=["capo", "capo-on-open-shapes", "no-capo", "no-key", "nothing"],
 )
 def test_key_line_text_matches_the_viewers_facts(cho, label):
-    # The viewer's key line, its markup and where the key came from left out.
-    facts = re.search(r'<p class="facts" id="facts">(.*?)</p>', build_viewer(cho), re.S).group(1)
-    said = unescape(re.sub(r"<[^>]+>", "", re.sub(r'(?: · )?<span class="from">.*?</span>', "", facts))).strip()
+    # The viewer's Capo and Key lines on one line, their markup and where the key came from left out ("Key Em" with no
+    # capo; with one, the capo between the shapes and the sound). A sheet of words alone has no facts on its page.
+    found = re.search(r'<dl class="facts" id="facts">\n(.*?)</dl>', build_viewer(cho), re.S)
+    rows = dict(re.findall(r'data-fact="(\w+)"><dt>\w+</dt><dd>(.*?)</dd>', found.group(1))) if found else {}
+    words = {fact: unescape(re.sub(r"<[^>]+>", "", re.sub(r'(?: · )?<span class="from">.*?</span>', "", value))).strip()
+             for fact, value in rows.items()}
+    capo, key = words.get("capo", "none"), words.get("key", "")
+    if not key:
+        said = "" if capo == "none" else f"Capo {capo}"
+    elif capo == "none":
+        said = f"Key {key}"
+    else:
+        shapes, sounds = key.split(" · ")
+        said = f"{shapes} · capo {capo} · {sounds}"
     assert key_line_text(viewer_key(cho), parse_sheet(cho).capo) == said == label
 
 

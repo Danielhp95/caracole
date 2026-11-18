@@ -25,7 +25,7 @@ data class BookSong(val title: String, val artist: String, val cho: String? = nu
 
 /**
  * viewer/book.py: a songbook as one page for the phone, songbook.html, byte for byte as `build_songbook` writes it for
- * the same inputs, over the sheet page's frame (SheetPage: `_page`, `_read_song`, `_song_html`, `_facts`, `_footer`,
+ * the same inputs, over the sheet page's frame (SheetPage: `_page`, `_read_song`, `_song_html`, `facts_html`, `_footer`,
  * `names_table`, `zh_attr`, `artist_line`, `pdf_line` and `_CONTROLS`, page.py's own, from caracole/viewer/page.json);
  * book.py's HTML is its own functions', ported each by name. Its stylesheets and scripts are ViewerAssets.Page.SONGBOOK's
  * (book.css, book.js before the viewer's). Every answer is held by vectors/viewer/songbook_pages.jsonl.
@@ -123,7 +123,8 @@ object SongbookPage {
             "<p class=\"pos\">Song $n of $total</p>\n" +
             "<h2 class=\"title\" id=\"title-$n\"${SheetPage.zhAttr(song.title, names)}>${PyText.escape(song.title)}</h2>\n" +
             SheetPage.artistLine(song.artist, names) +
-            "<p class=\"facts\" id=\"facts-$n\">${SheetPage.facts(read.key, read.origin, read.sheet.capo ?: 0)}</p>\n" +
+            SheetPage.factsHtml(read.key, read.origin, read.sheet.capo ?: 0, (data["tuningName"] as? JsonPrimitive)?.content,
+                                chords = read.sheet.chords.isNotEmpty(), suffix = "-$n") +
             "</header>\n" +
             SheetPage.songHtml(read.sheet, "-$n", song.title) +
             pager("Songs, end of sheet", prev, next, names)  // at the end of a long sheet, no scrolling back up

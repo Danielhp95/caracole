@@ -96,10 +96,15 @@ def test_each_song_says_where_it_is_and_links_its_neighbours():
 
 def test_each_song_says_what_its_capo_means_as_its_sheet_html_does():
     html = page()
-    first = re.search(r'<p class="facts" id="facts-1">(.*?)</p>', html).group(1)
-    minor = re.search(r'<p class="facts" id="facts-3">(.*?)</p>', html).group(1)
-    assert first == '<b>G</b> shapes · capo <b>2</b> · sounds <b>A</b> · <span class="from">key from the sheet</span>'
-    assert minor == 'Key <b>Am</b> · <span class="from">from the tab</span>'
+
+    def facts(n: int) -> dict[str, str]:
+        found = re.search(rf'<dl class="facts" id="facts-{n}">\n(.*?)</dl>\n', html, re.S).group(1)
+        return dict(re.findall(r'<div class="fact" data-fact="(\w+)"><dt>\w+</dt><dd>(.*?)</dd></div>', found))
+
+    assert facts(1) == {"tuning": "E A D G B E", "capo": "2",
+                        "key": '<b>G</b> shapes · sounds <b>A</b> · <span class="from">key from the sheet</span>'}
+    assert facts(3) == {"tuning": "E A D G B E", "capo": "none",
+                        "key": '<b>Am</b> · <span class="from">from the tab</span>'}
 
 
 def test_the_pager_is_above_each_sheet_and_after_it_too():

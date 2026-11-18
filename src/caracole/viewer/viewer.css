@@ -108,10 +108,19 @@ a { color: inherit; }
 .artist a:hover, .artist a:focus-visible { color: var(--text); text-decoration: underline; }
 .artist a:focus-visible { outline: none; }
 .artist a:focus-visible > span { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 2px; }
+/* The header's facts: a harmonica tab's one line (harptab_page.py, p.facts); a sheet's three, Tuning, Capo and Key
+   (page.py facts_html, dl.facts), each a label and its value, the labels muted in a column as wide as the longest,
+   a value in the text's colour, wrapping anywhere rather than widen a phone's page (a long tuning the notes name). */
 .facts { margin: 8px 0 0; color: var(--muted); font-size: .88rem; }
 .facts:empty { display: none; }
 .facts b { color: var(--text); font-weight: 650; }
 .facts .from { font-size: .8rem; }
+dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 10px 0 0; padding-top: 8px;
+  border-top: 1px solid var(--border); font-size: .9rem; }
+dl.facts .fact { display: contents; }
+dl.facts dt { color: var(--muted); }
+dl.facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; color: var(--text); }
+dl.facts .from { color: var(--muted); }
 /* The versions of the sheet, under the key line: ‹ the line that opens the list ›. An end has no address,
    and fades. The line wraps on a narrow screen rather than widen the page. */
 .versions { display: flex; align-items: center; gap: 2px; margin: 6px 0 0 -12px; }
@@ -761,7 +770,6 @@ a.ver-main .ver-name { color: var(--accent); }
 .card[data-kind="keys"] .shape { grid-template-columns: 84px 84px; }
 .card[data-kind="keys"] .shape .round { justify-self: center; width: 44px; }
 .strip svg.kb { width: 132px; }
-.facts .inst-line { display: block; margin-top: 2px; }
 .inst-panel:empty { display: none; }
 .inst-panel > .hint { margin: 0; }
 /* The harmonica and the winds (winds.js): a harp's ten holes, those a chord plays lit; a flute's keys or a

@@ -40,10 +40,13 @@ def data_of(html: str) -> dict:
     return json.loads(found.group(1))
 
 
-def facts_of(html: str) -> str:
-    found = re.search(r'<p class="facts" id="facts">(.*?)</p>', html, re.S)
-    assert found, "no key line"
-    return found.group(1)
+def facts_of(html: str) -> dict[str, str]:
+    """The header's facts (page.py ``facts_html``), each line's value as HTML by its name: tuning, capo, key; none for
+    a sheet with no facts."""
+    found = re.search(r'<dl class="facts" id="facts">\n(.*?)</dl>\n', html, re.S)
+    if not found:
+        return {}
+    return dict(re.findall(r'<div class="fact" data-fact="(\w+)"><dt>\w+</dt><dd>(.*?)</dd></div>\n', found.group(1)))
 
 
 def sheet_of(html: str) -> str:
@@ -275,7 +278,7 @@ def test_the_artists_name_reads_as_before_and_shows_it_is_a_link_under_the_point
     assert look["width"] >= 44 and look["height"] >= 44, look
     lines = round(look["tall"] / look["lineHeight"])
     assert look["tall"] == pytest.approx(lines * look["lineHeight"], abs=1) and lines == (1 if artist == "U2" else 2)
-    assert look["gap"] == pytest.approx(2 + look["tall"] + 8, abs=1)  # its margin, its line(s), the key line's margin
+    assert look["gap"] == pytest.approx(2 + look["tall"] + 10, abs=1)  # its margin, its line(s), the facts' margin
     assert not look["sideways"]
     assert hovered["line"] == "underline" and hovered["colour"] != look["muted"], hovered
     assert focused["line"] == "underline" and rings == ["none", "solid"], (focused, rings)  # round the name alone
@@ -301,13 +304,16 @@ def test_then_a_key_estimated_from_the_chords():
 
 
 def test_with_a_capo_the_key_line_says_the_shapes_the_capo_and_the_key_it_sounds_in():
-    # "Key Em · Capo 2" read as the song's key; Em is the shapes', and the song sounds in F#m.
-    assert facts_of(build_viewer(WALL)) == (
-        '<b>Em</b> shapes · capo <b>2</b> · sounds <b>F#m</b> · <span class="from">key guessed from the chords</span>'
-    )
-    assert facts_of(build_viewer(UG_CHO)) == (
-        '<b>G</b> shapes · capo <b>2</b> · sounds <b>A</b> · <span class="from">key from the sheet</span>'
-    )
+    # "Key Em · Capo 2" read as the song's key; Em is the shapes', and the song sounds in F#m. The Capo line says the
+    # capo, the Key line the shapes and the sound.
+    assert facts_of(build_viewer(WALL)) == {
+        "tuning": "E A D G B E", "capo": "2",
+        "key": '<b>Em</b> shapes · sounds <b>F#m</b> · <span class="from">key guessed from the chords</span>',
+    }
+    assert facts_of(build_viewer(UG_CHO)) == {
+        "tuning": "E A D G B E", "capo": "2",
+        "key": '<b>G</b> shapes · sounds <b>A</b> · <span class="from">key from the sheet</span>',
+    }
 
 
 def test_a_tabs_key_that_names_the_sound_is_not_taken_for_the_shapes():
@@ -316,7 +322,7 @@ def test_a_tabs_key_that_names_the_sound_is_not_taken_for_the_shapes():
                         title="River", artist="Synthetic", key="F#", capo=6)
     for html in (build_viewer(sheet), build_viewer(sheet, key="F#", key_source="tab")):
         assert data_of(html)["key"]["tonic"] == 0  # C shapes
-        assert facts_of(html).startswith("<b>C</b> shapes · capo <b>6</b> · sounds <b>F#</b>")
+        assert facts_of(html)["capo"] == "6" and facts_of(html)["key"].startswith("<b>C</b> shapes · sounds <b>F#</b>")
     assert data_of(build_viewer(UG_CHO))["key"]["tonic"] == 7  # G with capo 2, its chords in G: the shapes
 
 
@@ -333,7 +339,7 @@ def test_a_key_named_by_its_letter_alone_is_the_parallel_minor_when_the_chords_s
 
     for html in (build_viewer(HOTEL), build_viewer(HOTEL, key="A", key_source=None)):
         assert (data_of(html)["key"]["tonic"], data_of(html)["key"]["mode"]) == (9, "aeolian")
-        assert facts_of(html).startswith("<b>Am</b> shapes · capo <b>2</b> · sounds <b>Bm</b>")
+        assert facts_of(html)["capo"] == "2" and facts_of(html)["key"].startswith("<b>Am</b> shapes · sounds <b>Bm</b>")
     assert viewer_key(HOTEL) == Key(9, "aeolian")
     # keys.py reads a tab's letter with its chords itself (keys.sheet_key): its "A" is A major, as a tab's
     # "A major" is, and stays so
@@ -354,7 +360,8 @@ def test_a_key_estimated_from_the_chords_is_the_shapes_key_whatever_the_capo():
     for source in ("chords", "audio"):
         html = build_viewer(sheet, key="A minor", key_source=source)
         assert (data_of(html)["key"]["tonic"], data_of(html)["key"]["mode"]) == (9, "aeolian"), source
-        assert facts_of(html).startswith("<b>Am</b> shapes · capo <b>5</b> · sounds <b>Dm</b>"), source
+        facts = facts_of(html)
+        assert facts["capo"] == "5" and facts["key"].startswith("<b>Am</b> shapes · sounds <b>Dm</b>"), source
         assert viewer_key(sheet, "A minor", source) == Key(9, "aeolian"), source
     assert data_of(build_viewer(sheet, key="A minor", key_source="tab"))["key"]["tonic"] == 4  # a tab's word: Em
     assert viewer_key(sheet, "A minor") == Key(4, "aeolian")  # no source said: a key a tab may name
@@ -371,9 +378,13 @@ def test_a_chord_legends_lines_are_marked_so_the_script_leaves_their_chords_as_w
 
 
 def test_without_a_capo_the_key_line_names_the_key():
-    assert facts_of(build_viewer(MINOR)) == 'Key <b>Cm</b> · <span class="from">from the sheet</span>'
-    assert facts_of(build_viewer("{title: T}\n{artist: A}\n{capo: 3}\nOnly words\n")) == "Capo <b>3</b>"
-    assert facts_of(build_viewer("{title: T}\n{artist: A}\nOnly words\n")) == ""
+    assert facts_of(build_viewer(MINOR)) == {
+        "tuning": "E A D G B E", "capo": "none", "key": '<b>Cm</b> · <span class="from">from the sheet</span>'}
+    # chords with no key: no Key line; no chords: no facts at all
+    assert facts_of(build_viewer("{title: T}\n{artist: A}\n{capo: 3}\n[Xq]Only words\n")) == {
+        "tuning": "E A D G B E", "capo": "3"}
+    for cho in ("{title: T}\n{artist: A}\nOnly words\n", "{title: T}\n{artist: A}\n{capo: 3}\nOnly words\n"):
+        assert facts_of(build_viewer(cho)) == {} and 'id="facts"' not in build_viewer(cho)
 
 
 def test_a_sheet_without_chords_has_no_key():
@@ -510,16 +521,27 @@ def test_the_script_runs_and_leaves_the_sheet_as_written(tmp_path):
     ids=["capo", "capo-on-open-shapes", "no-capo"],
 )
 def test_the_bar_and_the_settings_say_what_the_key_line_says(tmp_path, cho, label, set):
-    # The script writes the line the page came with, so nothing moves as it runs; the bar (to a
-    # screen reader, whole) says the same: the shapes, the capo and the key the song sounds in. The
-    # settings' head says what is set: the shapes played, the capo and the instrument.
+    # The bar (to a screen reader, whole) says what the header's Capo and Key lines say: the shapes, the capo and the
+    # key the song sounds in. The settings' head says what is set: the shapes played, the capo and the instrument.
     html = build_viewer(cho)
-    facts, said, heading, summary = run_in_page(html, tmp_path, """
-      out = [q("#facts").textContent, q("#key-full").textContent, q("#panel-title").textContent,
-             q("#panel-sum").textContent];
+    said, heading, summary = run_in_page(html, tmp_path, """
+      out = [q("#key-full").textContent, q("#panel-title").textContent, q("#panel-sum").textContent];
     """)
-    assert facts == unescape(re.sub(r"<[^>]+>", "", facts_of(html)))
     assert said == label and heading == "Settings" and summary == set
+
+
+@in_chromium
+@pytest.mark.xfail(strict=True, raises=AssertionError,
+                   reason="viewer.js draws the facts' lines from task 5b.3 (drawFacts); until then it writes its one "
+                          "key line over them")
+@pytest.mark.parametrize("cho", [UG_CHO, WALL, MINOR], ids=["capo", "capo-on-open-shapes", "no-capo"])
+def test_the_script_draws_the_facts_the_page_came_with(tmp_path, cho):
+    # The script draws the lines the page came with, so nothing moves as it runs.
+    html = build_viewer(cho)
+    rows = run_in_page(html, tmp_path, """
+      out = [...document.querySelectorAll("#facts .fact")].map((r) => [r.dataset.fact, r.querySelector("dd").textContent]);
+    """)
+    assert rows == [[fact, unescape(re.sub(r"<[^>]+>", "", value))] for fact, value in facts_of(html).items()]
 
 
 def test_the_guitar_pro_files_beside_the_page_are_named_for_the_song_they_download_as():

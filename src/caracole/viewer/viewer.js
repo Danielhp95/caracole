@@ -965,7 +965,7 @@
     fitKey();
     $("key-full").textContent = keyLabel(true);
     drawHead();
-    const box = $("facts");
+    const box = $("facts") || document.createElement("p");  // a sheet with no chords has none (page.py facts_html)
     box.textContent = "";
     keyLine(state.t ? " (" + signed(state.t) + ")" : "").forEach((f, n) => {
       if (n) box.appendChild(document.createTextNode(" · "));
