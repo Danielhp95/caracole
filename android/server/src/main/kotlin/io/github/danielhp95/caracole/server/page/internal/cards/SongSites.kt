@@ -18,14 +18,14 @@ internal object SongSites {
     const val UNASKED = "unasked"
 
     /** song_sites.ORDER and NAMES. */
-    val ORDER = listOf("ug", "lacuerda", "lrclib", "gtptabs", "harptabs", "gametabs", "musescore", "youtube")
-    private val NAMES = mapOf("ug" to "UG", "lacuerda" to "LaCuerda", "lrclib" to "LRCLIB",
+    val ORDER = listOf("ug", "lacuerda", "ireal", "lrclib", "gtptabs", "harptabs", "gametabs", "musescore", "youtube")
+    private val NAMES = mapOf("ug" to "UG", "lacuerda" to "LaCuerda", "ireal" to "iReal Pro", "lrclib" to "LRCLIB",
                               "gtptabs" to "gtptabs", "harptabs" to "harptabs", "gametabs" to "gametabs",
                               "musescore" to "MuseScore", "youtube" to "YouTube")
 
     /** song_sites.CHECKED: the steps' kv prefixes of a miss. */
-    private val CHECKED = linkedMapOf("gtptabs" to "gtptabs:checked:", "harptabs" to "harptabs:checked:",
-                                      "gametabs" to "gametabs:checked:")
+    private val CHECKED = linkedMapOf("ireal" to "ireal:checked:", "gtptabs" to "gtptabs:checked:",
+                                      "harptabs" to "harptabs:checked:", "gametabs" to "gametabs:checked:")
 
     /** song_sites._YOUTUBE: a song's state on YouTube's route, its mark ("declined" none). */
     private val YOUTUBE = mapOf("downloaded" to HAVE, "chords" to HAVE, "missing" to NONE, "unusable" to NONE,

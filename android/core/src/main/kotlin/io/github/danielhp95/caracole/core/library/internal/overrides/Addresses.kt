@@ -3,6 +3,7 @@ package io.github.danielhp95.caracole.core.library.internal.overrides
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.GameTabsPick
 import io.github.danielhp95.caracole.core.library.HarpTabsPick
+import io.github.danielhp95.caracole.core.library.IRealPick
 import io.github.danielhp95.caracole.core.library.LaCuerdaPick
 import io.github.danielhp95.caracole.core.library.OverridesError
 import io.github.danielhp95.caracole.core.library.TabUrlRow
@@ -48,6 +49,13 @@ internal object Addresses {
     private val GAMETABS_HOST by lazy { PyRegex.compile("(?:www\\.)?gametabs\\.net") }
     private val GAMETABS_PATH by lazy { PyRegex.compile("/tabs/([a-z0-9_-]{1,200})/([a-z0-9_-]{1,200})") }
     const val GAMETABS_BASE = "https://gametabs.net"
+    private val IREAL_HOST by lazy { PyRegex.compile("forums\\.irealpro\\.com") }
+    private val IREAL_PATH by lazy {
+        PyRegex.compile("/threads/([a-z0-9_-]{1,250})\\.([1-9][0-9]{0,9})(?:/post-([1-9][0-9]{0,11}))?/?")
+    }
+    private val IREAL_ANCHOR by lazy { PyRegex.compile("post-([1-9][0-9]{0,11})") }
+    const val IREAL_BASE = "https://forums.irealpro.com"
+    const val IREAL_PAGE_SHAPE = "$IREAL_BASE/threads/<slug>.<id>/"
     const val GAMETABS_PAGE_SHAPE = "$GAMETABS_BASE/tabs/<game>/<tab>"
 
     // youtube_urls.py
@@ -192,6 +200,20 @@ internal object Addresses {
         }
         found ?: throw OverridesError("expected a gametabs.net tab's page ($GAMETABS_PAGE_SHAPE), got ${PyValues.repr(url)}")
         return GameTabsPick(found.groupValues[1], found.groupValues[2])
+    }
+
+    /** overrides.ireal_pick_from_url. */
+    fun irealPickFromUrl(url: JsonElement): IRealPick {
+        val parts = pickParts(url)
+        var found: MatchResult? = null
+        var anchor: MatchResult? = null
+        if (http(parts) && PyRe.fullmatch(IREAL_HOST, PyText.lower(parts!!.netloc)) != null) {
+            found = PyRe.fullmatch(IREAL_PATH, parts.path)
+            anchor = PyRe.fullmatch(IREAL_ANCHOR, parts.fragment)
+        }
+        found ?: throw OverridesError("expected an iReal Pro forum's thread ($IREAL_PAGE_SHAPE), got ${PyValues.repr(url)}")
+        val post = found.groupValues[3].ifEmpty { anchor?.groupValues?.get(1).orEmpty() }
+        return IRealPick(found.groupValues[1], found.groupValues[2].toLong(), post.ifEmpty { null }?.toLong())
     }
 
     fun azlyricsPageFromUrl(url: JsonElement): String {

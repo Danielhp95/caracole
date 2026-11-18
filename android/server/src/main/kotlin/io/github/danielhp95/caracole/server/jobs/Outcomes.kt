@@ -56,7 +56,7 @@ object Outcomes {
     /** A lookup's steps (get.py's STAGES), each a name and the stages it stands for. */
     val LOOKUP_STEPS: List<Pair<String, List<String>>> = listOf(
         "Song" to listOf("song"), "Match" to listOf("match"), "Sheet" to listOf("sheet"), "PDF" to listOf("pdf"),
-        "Lyrics" to listOf("lyrics"), "Extras" to listOf("ug", "lacuerda", "gtptabs", "harptabs", "gametabs"),
+        "Lyrics" to listOf("lyrics"), "Extras" to listOf("ug", "lacuerda", "ireal", "gtptabs", "harptabs", "gametabs"),
         "Songbooks" to listOf("songbooks"),
     )
 
@@ -72,7 +72,7 @@ object Outcomes {
     val SITE_NAMES: Map<String, String> = linkedMapOf(
         "UG" to "Ultimate Guitar", "LRCLIB" to "LRCLIB", "Megalobiz" to "Megalobiz", "AZLyrics" to "AZLyrics",
         "LaCuerda" to "LaCuerda", "gtptabs" to "gtptabs.com", "MuseScore" to "MuseScore", "harptabs" to "harptabs.com",
-        "gametabs" to "gametabs.net", YOUTUBE_SOURCE to "YouTube", "auto" to "auto-chords", "inbox" to "your inbox",
+        "gametabs" to "gametabs.net", "iReal" to "iReal Pro's forum", YOUTUBE_SOURCE to "YouTube", "auto" to "auto-chords", "inbox" to "your inbox",
     )
 
     /** A request of other commands: each command's step, by what it does. */
@@ -105,7 +105,7 @@ object Outcomes {
         "sheet" to ("the sheet" to "waits"), "lyrics" to ("the lyrics" to "wait"),
         "ug" to ("its other versions and tab" to "wait"), "lacuerda" to ("LaCuerda's sheet" to "waits"),
         "gtptabs" to ("the Guitar Pro file" to "waits"), "harptabs" to ("the harmonica tab" to "waits"),
-        "gametabs" to ("the game music tab" to "waits"),
+        "gametabs" to ("the game music tab" to "waits"), "ireal" to ("the iReal Pro chart" to "waits"),
     )
 
     // How get.py words them (_Lookup.asking, _usable), as outcome.py reads them.

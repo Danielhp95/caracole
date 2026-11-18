@@ -33,6 +33,7 @@ object LookupWords {
         "lyrics" to "Lyrics",
         "ug" to "UG: versions scored, tab",
         "lacuerda" to "LaCuerda",
+        "ireal" to "Chart from iReal Pro",
         "gtptabs" to "Guitar Pro file from gtptabs",
         "harptabs" to "Harmonica tab from harptabs",
         "gametabs" to "Game music tab from gametabs",
@@ -44,7 +45,7 @@ object LookupWords {
     val NAMES: Map<String, String> = linkedMapOf(
         "ug" to "Ultimate Guitar", "lrclib" to "LRCLIB", "megalobiz" to "Megalobiz", "azlyrics" to "AZLyrics",
         "lacuerda" to "LaCuerda", "gtptabs" to "gtptabs.com", "musescore" to "MuseScore", "harptabs" to "harptabs.com",
-        "gametabs" to "gametabs.net",
+        "gametabs" to "gametabs.net", "ireal" to "iReal Pro's forum",
     )
 
     /** get.SHEETS_SHARE: of an hour's lookup requests to a site, the share kept for sheets. */
@@ -58,6 +59,7 @@ object LookupWords {
     const val GTPTABS_KEPT = "Guitar Pro file downloaded"
     const val HARPTABS_KEPT = "harmonica tab kept"
     const val GAMETABS_KEPT = "game music tab kept"
+    const val IREAL_KEPT = "chart kept from iReal Pro"
 
     /** get.NOT_IN_INDEX: the sheet stage's detail for a song Ultimate Guitar can't be asked about. */
     const val NOT_IN_INDEX = "not in UG's index, and its artist's UG page is unknown"
@@ -248,7 +250,8 @@ object LookupWords {
     val SHORT: Map<String, String> = linkedMapOf(
         "song" to "Song", "match" to "Match", "sheet" to "Sheet", "pdf" to "PDF", "lyrics" to "Lyrics",
         "audio" to "Audio", "chords" to "Chords", "ug" to "Ultimate Guitar", "lacuerda" to "LaCuerda",
-        "gtptabs" to "gtptabs.com", "harptabs" to "harptabs.com", "gametabs" to "gametabs.net", "pages" to "Pages",
+        "gtptabs" to "gtptabs.com", "harptabs" to "harptabs.com", "gametabs" to "gametabs.net", "ireal" to "iReal Pro",
+        "pages" to "Pages",
         "songbooks" to "Songbooks",
     )
 

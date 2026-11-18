@@ -89,7 +89,7 @@ class ApiSearchTest {
         /** search_routes._found_for's members. */
         val KEYS = listOf(
             "query", "library", "index", "artists", "lead", "best", "hint", "progression", "unseen", "names", "removed",
-            "gtptabs", "musescore", "harptabs", "harptabs_artists", "gametabs", "lacuerda", "ug_directory",
+            "gtptabs", "musescore", "harptabs", "harptabs_artists", "gametabs", "ireal", "lacuerda", "ug_directory",
             "lacuerda_artists", "lacuerda_unlisted", "lacuerda_leads", "lacuerda_search", "youtube", "suggest", "skipped",
             "partial", "looked",
         )

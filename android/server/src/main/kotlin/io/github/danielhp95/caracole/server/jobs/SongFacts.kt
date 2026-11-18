@@ -282,7 +282,7 @@ data class SongFacts(val sheet: String? = null, val review: Boolean = false, val
         private val TAGS = mapOf(
             "ug" to "UG", "lacuerda" to "LaCuerda", "lrclib" to "LRCLIB", "megalobiz" to "Megalobiz",
             "azlyrics" to "AZLyrics", "gtptabs" to "gtptabs", "musescore" to "MuseScore", "harptabs" to "harptabs",
-            "gametabs" to "gametabs", "youtube" to "YouTube", "auto" to "auto", "inbox" to "inbox",
+            "gametabs" to "gametabs", "ireal" to "iReal", "youtube" to "YouTube", "auto" to "auto", "inbox" to "inbox",
         )
 
         // --- what the local indexes have elsewhere: outcome.elsewhere ----------------------------------------

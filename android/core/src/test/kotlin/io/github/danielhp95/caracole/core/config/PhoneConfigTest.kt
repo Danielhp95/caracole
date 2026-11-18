@@ -37,7 +37,7 @@ class PhoneConfigTest {
         assertEquals(MatchPolicy(), PhoneConfig.DEFAULTS.match)
         assertEquals(RankPolicy(), PhoneConfig.DEFAULTS.rank)
         assertEquals("caracole/0.1 (personal tab library)", PhoneConfig.DEFAULTS.userAgent)
-        assertEquals(setOf("azlyrics", "gametabs", "gtptabs", "harptabs", "itunes", "megalobiz", "musescore", "spotify",
+        assertEquals(setOf("azlyrics", "gametabs", "gtptabs", "harptabs", "ireal", "itunes", "megalobiz", "musescore", "spotify",
                            "tidal", "youtube", "youtube-oembed", "ytimg"),
                      PhoneConfig.SWITCHABLE)
         // A shared link's services (core.share.ShareLinks), on, each a share's requests at most, no bulk work.

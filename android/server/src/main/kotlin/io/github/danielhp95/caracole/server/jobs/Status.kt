@@ -109,6 +109,7 @@ object Status {
         "lyrics" to "Fetching lyrics",
         "ug" to "Fetching from UG",
         "lacuerda" to "Fetching from LaCuerda",
+        "ireal" to "Fetching from iReal Pro",
         "gtptabs" to "Fetching from gtptabs",
         "harptabs" to "Fetching from harptabs",
         "gametabs" to "Fetching from gametabs",

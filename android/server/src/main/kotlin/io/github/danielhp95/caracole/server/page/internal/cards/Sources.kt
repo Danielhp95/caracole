@@ -15,7 +15,7 @@ internal object Sources {
 
     /** icons.SOURCES' keys: the places a file comes from, the sites and the audio model and the inbox. */
     val KEYS: Set<String> = setOf("ug", "lacuerda", "lrclib", "megalobiz", "azlyrics", "gtptabs", "musescore",
-                                  "harptabs", "gametabs", "youtube", AUTO, INBOX)
+                                  "harptabs", "gametabs", "ireal", "youtube", AUTO, INBOX)
 
     const val HUMAN_SHEET = "sheet.txt"
     const val AUTO_SHEET = "sheet (auto).txt"

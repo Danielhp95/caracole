@@ -75,7 +75,7 @@
 {"row":{"key":"ug:index:refreshed_at","value":"2026-10-28T03:30:00Z"},"table":"kv"}
 {"row":{"key":"ug:sitemaps","value":"{\"1\": {\"etag\": \"\\\"1-28\\\"\", \"last_modified\": null, \"indexed_at\": \"2026-10-28T03:30:00Z\", \"rows\": 3, \"tabs\": {\"urls\": 3, \"indexed\": 3, \"bare\": 0, \"other\": {}, \"closed\": 0, \"unrecognized\": 0}}, \"2\": {\"etag\": \"\\\"2-19\\\"\", \"last_modified\": null, \"indexed_at\": \"2026-10-19T03:30:00Z\", \"rows\": 1, \"tabs\": {\"urls\": 1, \"indexed\": 1, \"bare\": 0, \"other\": {}, \"closed\": 0, \"unrecognized\": 0}}, \"3\": {\"etag\": \"\\\"3-28\\\"\", \"last_modified\": null, \"indexed_at\": \"2026-10-28T03:30:00Z\", \"rows\": 1, \"tabs\": {\"urls\": 1, \"indexed\": 1, \"bare\": 0, \"other\": {}, \"closed\": 0, \"unrecognized\": 0}}}"},"table":"kv"}
 {"row":{"key":"format","value":"1"},"table":"caracole_export"}
-{"row":{"key":"schema","value":"16"},"table":"caracole_export"}
+{"row":{"key":"schema","value":"17"},"table":"caracole_export"}
 {"row":{"key":"keys","value":"2"},"table":"caracole_export"}
 {"row":{"key":"caracole","value":"0.1.0"},"table":"caracole_export"}
 {"row":{"key":"exported_at","value":"2026-11-03T12:00:00Z"},"table":"caracole_export"}

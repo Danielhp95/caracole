@@ -54,6 +54,7 @@ object JobCommands {
         "lyrics" to "Lyrics",
         "ug" to "UG: versions scored, tab",
         "lacuerda" to "LaCuerda",
+        "ireal" to "Chart from iReal Pro",
         "gtptabs" to "Guitar Pro file from gtptabs",
         "harptabs" to "Harmonica tab from harptabs",
         "gametabs" to "Game music tab from gametabs",
@@ -162,7 +163,7 @@ object JobCommands {
     /** Look one song up now: `caracole get --progress`, one process for every stage (get.py). */
     fun lookupSteps(artist: String, title: String, album: String? = null, durationMs: Long? = null,
                     ug: String? = null, tab: String? = null, lacuerda: String? = null, harptabs: String? = null,
-                    gametabs: String? = null, songbooks: Boolean = true): List<Command> {
+                    gametabs: String? = null, songbooks: Boolean = true, ireal: String? = null): List<Command> {
         val args = mutableListOf(LOOKUP, "--progress")
         if (!songbooks) args += "--no-songbooks"  // Get the missing songs makes the songbook once, after them all
         if (!album.isNullOrEmpty()) args += "--album=$album"
@@ -172,6 +173,7 @@ object JobCommands {
         if (!lacuerda.isNullOrEmpty()) args += "--lacuerda=$lacuerda"
         if (!harptabs.isNullOrEmpty()) args += "--harptabs=$harptabs"
         if (!gametabs.isNullOrEmpty()) args += "--gametabs=$gametabs"
+        if (!ireal.isNullOrEmpty()) args += "--ireal=$ireal"
         return listOf(Command("Fetching", args + listOf("--", artist, title)))
     }
 
@@ -297,7 +299,7 @@ object JobCommands {
     /** The song's identity key in a job's key: a removal's and a sheet from YouTube's have theirs after a prefix. */
     fun songKeyOf(jobKey: String): String = jobKey.removePrefix(REMOVING).removePrefix(YOUTUBE_SHEET)
 
-    private val PICKED_BY_LOOKUP = listOf("--ug=", "--tab=", "--lacuerda=", "--harptabs=", "--gametabs=")
+    private val PICKED_BY_LOOKUP = listOf("--ug=", "--tab=", "--lacuerda=", "--harptabs=", "--gametabs=", "--ireal=")
 
     /** The Ultimate Guitar song and tab, the LaCuerda song, the harptabs.com tab and the gametabs.net tab a lookup was
      * given, and what a `caracole versions` does (`--choose`, `--keep`, `--keep-more`, `--clear`), if any. */

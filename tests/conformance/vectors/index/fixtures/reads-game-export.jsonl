@@ -8,7 +8,7 @@
 {"row":{"composers":"[\"Yuzo Koshiro\"]","game":"actraiser","instruments":"[]","page":"tabs/actraiser","path":"tabs/actraiser/fillmore","place":0,"rating":null,"title":"Fillmore","title_key":"fillmore","views":0},"table":"gametabs_game_tabs"}
 {"row":{"key":"gametabs:games:keys","value":"2"},"table":"kv"}
 {"row":{"key":"format","value":"1"},"table":"caracole_export"}
-{"row":{"key":"schema","value":"16"},"table":"caracole_export"}
+{"row":{"key":"schema","value":"17"},"table":"caracole_export"}
 {"row":{"key":"keys","value":"2"},"table":"caracole_export"}
 {"row":{"key":"caracole","value":"0.1.0"},"table":"caracole_export"}
 {"row":{"key":"exported_at","value":"2026-11-03T12:00:00Z"},"table":"caracole_export"}
