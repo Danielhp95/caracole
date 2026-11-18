@@ -2,7 +2,7 @@
 
 One line a site (``SITES``, icons.SOURCES' order less the audio model and the inbox, which are no site): what it is
 for, robots.txt in a sentence, the closed paths worth naming with what each closes, and its terms where the owner
-chose to read it all the same (AGENTS.md's two exceptions, harptabs.com and gametabs.net, and YouTube). Those words
+chose to read it all the same (AGENTS.md's exceptions, harptabs.com, gametabs.net and AZLyrics, and YouTube). Those words
 are written here by hand; the paths are caracole's own table's (``http.ROBOTS_DISALLOW``, pinned to each live
 robots.txt by tests), so the page never names a rule caracole doesn't keep. YouTube is the one site whose named paths
 aren't in that table: caracole goes against them, by the owner's choice, and its sentence says so.
@@ -87,6 +87,10 @@ SITES: tuple[Site, ...] = (
          (("/api/", "its API"), ("/tabs?*", "filtered lists"),
           ("/preparing-tab-file-download", "downloads (a login's)")),
          terms="Its terms forbid bots. Read by your choice since 28/10/26."),
+    Site("ireal", "Chord charts of jazz standards", "forums.irealpro.com", ("forums.irealpro.com",),
+         "Closes its search, its accounts and its members' pages, and asks no pace. We read its sitemaps, its "
+         "playlists and the threads named for your songs.",
+         (("/search/", "its search"), ("/members/", "members' pages"), ("/login/", "logins"))),
     Site("youtube", "Audio for auto-chords", "youtube.com", (),
          "Closes /results and /youtubei/, which yt-dlp uses: we go against them, by your choice.",
          (("/results", "search results"), ("/youtubei/", "the player's API")),
@@ -265,6 +269,15 @@ def index_figures(conn: sqlite3.Connection) -> dict[str, Figures]:
     pages = game_pages(conn)
     figures["gametabs"] = (Indexed(tracks, "tracks", f"{tabs:,} tabs of {games:,} games"),
                            Progress(pages.read, pages.pages, "game pages read") if pages.pages else None)
+
+    # The titles of the charts of the thread pages read (its playlists', a song's thread's), and how many playlists.
+    from caracole.ireal_index import index_state as ireal_state
+
+    charted = _one(conn, "SELECT COUNT(DISTINCT title_key) FROM ireal_charts")
+    ireal = ireal_state(conn)
+    figures["ireal"] = (Indexed(charted, "songs", f"{ireal.charts:,} charts of {ireal.read:,} threads read · "
+                                                   f"{ireal.threads:,} threads in its sitemaps"),
+                        Progress(ireal.playlists_read, ireal.playlists, "playlists read") if ireal.read else None)
     return figures
 
 
@@ -326,7 +339,7 @@ _LYRICS = ("lyrics.txt", "lyrics.lrc")
 _FILES = {"gtptabs": (re.compile(r"guitar-\d+\..+"), "Guitar Pro files"),
           "harptabs": (re.compile(r"harmonica-\d+\.txt"), "harmonica tabs"),
           "gametabs": (re.compile(r"gametab-\d+\.txt"), "tabs")}
-_SHEETS = {"ug": "sheets", "lacuerda": "sheets", "youtube": "auto sheets"}
+_SHEETS = {"ug": "sheets", "lacuerda": "sheets", "ireal": "sheets", "youtube": "auto sheets"}
 _ONE = {"sheets": "sheet", "auto sheets": "auto sheet", "Guitar Pro files": "Guitar Pro file", "links": "link",
         "harmonica tabs": "harmonica tab", "tabs": "tab", "songs": "song", "tracks": "track", "requests": "request",
         "yt-dlp runs": "yt-dlp run"}
@@ -405,11 +418,11 @@ def _whole(conn: sqlite3.Connection, key: str) -> bool:
         from caracole.ug.index import index_state
 
         return index_state(conn) == "complete"
-    from caracole import gametabs_fetch, gtptabs_fetch, harptabs_fetch, musescore_fetch
+    from caracole import gametabs_fetch, gtptabs_fetch, harptabs_fetch, ireal_fetch, musescore_fetch
     from caracole.site_index import complete_at
 
     read = {"gtptabs": gtptabs_fetch.SITE, "musescore": musescore_fetch.SITE, "harptabs": harptabs_fetch.SITE,
-            "gametabs": gametabs_fetch.SITE}
+            "gametabs": gametabs_fetch.SITE, "ireal": ireal_fetch.SITE}
     return key not in read or complete_at(conn, read[key]) is not None
 
 

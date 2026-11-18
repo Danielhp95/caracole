@@ -32,8 +32,9 @@
                           harptabs.com artist's songs the index holds (their page's path), and whether
                           caracole read their page
     POST /lookup          look a song up now: the UG song (``ug``) or tab (``tab``), the LaCuerda
-                          song (``lacuerda``), the harptabs.com tab (``harptabs``) or the gametabs.net
-                          tab (``gametabs``), you picked; a song by its ``artist`` and ``title``, or one text,
+                          song (``lacuerda``), the harptabs.com tab (``harptabs``), the gametabs.net
+                          tab (``gametabs``) or the iReal Pro chart (``ireal``), you picked; a song by its
+                          ``artist`` and ``title``, or one text,
                           ``q``, read as song_names.py reads it
     POST /lacuerda/artist read a LaCuerda artist's page into its index, by ``slug`` or ``name``:
                           ``caracole lacuerda --artist`` queued, a request per slug tried, usually one
@@ -84,7 +85,11 @@ listings, with the letters read so far, and harptabs.com's while its artist page
 first, each with the instruments and composers its game's page said; none while gametabs.net is turned off; its
 mark among ``looked``'s says how far its game pages are read). A song's Get it on a gametabs.net row looks the song up
 and keeps that tab
-(``gametabs``: ``caracole get --gametabs``, recorded under ``[gametabs]``).
+(``gametabs``: ``caracole get --gametabs``, recorded under ``[gametabs]``). Of iReal Pro's forum it reads the charts of
+the thread pages caracole read (``search.search_ireal``: ``ireal``, a chart's title by its composer, the composer its
+artist, ``page`` its thread; none while it is turned off; its mark among ``looked``'s says how far its playlists are
+read); a song's Get it on its row keeps that chart as the song's sheet (``ireal``: ``caracole get --ireal``, recorded
+under ``[ireal]``).
 ``looked`` says the same of every site, Ultimate Guitar's index too, as the
 pages' marks show it (``_looked``: a state, a short label, a line of detail), and
 ``unseen`` (``search.bare_id_unseen``) what ``hint`` says of an artist UG's
@@ -416,6 +421,8 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
             "harptabs_artists": [_harptabs_artist_json(app, conn, a, songs) for a in kept.harp_artists],
             # gametabs.net's tracks of games, the game as the artist, each with its tabs
             "gametabs": _gametabs_rows(app, conn, kept.gametabs, songs),
+            # iReal Pro's forum's charts, the composer as the artist: a lookup keeps one as the sheet
+            "ireal": _gtptabs_rows(app, conn, kept.ireal, songs, page=True),
             "lacuerda": _lacuerda_rows(app, conn, kept.lacuerda, songs),
             # the artists UG's listings name whose page caracole hasn't read: Read their page on UG (POST /ug/link)
             "ug_directory": [_directory_json(app, conn, d) for d in kept.directory],
@@ -461,17 +468,19 @@ class IndexAnswers:
     lacuerda: list[SiteHit]
     gametabs: list[SiteHit]
     directory: list[DirectoryHit] = field(default_factory=list)
+    ireal: list[SiteHit] = field(default_factory=list)
     close: list[Suggestion] | None = None
 
 
 def _index_answers(app: WebApp, conn: sqlite3.Connection, q: str, left_out: set[str]) -> IndexAnswers:
     """The offline indexes' answers for ``q``: those kept, ``CACHE_SECONDS`` old at most, else made now and kept,
-    none of a site ``left_out`` (nor of gametabs.net while it is turned off)."""
+    none of a site ``left_out`` (nor of gametabs.net or iReal Pro's forum while it is turned off)."""
     from caracole.search import (
         directory_artists,
         search_gametabs,
         search_gtptabs,
         search_harptabs,
+        search_ireal,
         search_lacuerda,
         search_musescore,
     )
@@ -490,8 +499,9 @@ def _index_answers(app: WebApp, conn: sqlite3.Connection, q: str, left_out: set[
     harp_artists, harptabs = search_harptabs(conn, q, songs=SITE_HITS) if "harptabs" not in left_out else ([], [])
     lc_artists, lacuerda = search_lacuerda(conn, q, songs=SITE_HITS) if "lacuerda" not in left_out else ([], [])
     gametabs = search_gametabs(conn, q, SITE_HITS) if app.cfg.provider("gametabs").enabled else []
+    ireal = search_ireal(conn, q, SITE_HITS) if app.cfg.provider("ireal").enabled else []
     kept = IndexAnswers(index_found, index, artists, hint, unseen, gtptabs, musescore, harp_artists, harptabs,
-                        lc_artists, lacuerda, gametabs, directory)
+                        lc_artists, lacuerda, gametabs, directory, ireal=ireal)
     app._found[q] = (time.monotonic(), kept)
     while len(app._found) > CACHE_SIZE:
         app._found.popitem(last=False)
@@ -615,11 +625,11 @@ def _after_reads(app: WebApp) -> None:
 
 
 def _gtptabs_rows(app: WebApp, conn: sqlite3.Connection, hits: Sequence[SiteHit],
-                  songs: list[Song]) -> list[dict[str, Any]]:
+                  songs: list[Song], *, page: bool = False) -> list[dict[str, Any]]:
     """gtptabs.com's pages as the page draws them; one your library has (``_Mine``, by its names) names it,
-    so that Get it looks it up as that song."""
+    so that Get it looks it up as that song. iReal Pro's forum's charts alike, with their thread's ``page``."""
     return [{"source": h.source, "artist": h.artist, "title": h.title, "url": h.url, "uploads": h.uploads,
-             "score": h.score, "via": h.via, **_keys(h.artist, h.title), **mine}
+             "score": h.score, "via": h.via, **({"page": h.page} if page else {}), **_keys(h.artist, h.title), **mine}
             for h, mine in zip(hits, _owners(app, conn, hits, songs))]
 
 
@@ -830,6 +840,7 @@ def _looked(app: WebApp, conn: sqlite3.Connection, skipped: list[dict[str, str]]
             state, label, detail = "empty", f"{name}: empty", f"{name}'s {why.removeprefix('its ')}."
         looked.append({"source": source, "name": name, "state": state, "label": label, "detail": detail})
     looked.append(_gametabs_looked(app, conn))
+    looked.append(_ireal_looked(app, conn))
     return looked
 
 
@@ -853,6 +864,29 @@ def _gametabs_looked(app: WebApp, conn: sqlite3.Connection) -> dict[str, str]:
                           "caracole gametabs --index reads the rest."}
     return {**mark, "state": "done", "label": f"{name} ✓",
             "detail": f"{name}: our copy of its index, searched whole."}
+
+
+def _ireal_looked(app: WebApp, conn: sqlite3.Connection) -> dict[str, str]:
+    """iReal Pro's forum's mark among ``looked``: turned off, its index empty before its playlists are read (its charts
+    are those of the thread pages caracole read), in part while some aren't (ireal_index.py, "1 of 7 playlists"),
+    else whole."""
+    from caracole.ireal_index import index_state
+
+    name = "iReal Pro"
+    mark = {"source": "ireal", "name": name}
+    if not app.cfg.provider("ireal").enabled:
+        return {**mark, "state": "off", "label": f"{name}: off", "detail": f"iReal Pro's forum is off in caracole.toml."}
+    state = index_state(conn)
+    if not state.read:
+        return {**mark, "state": "empty", "label": f"{name}: empty",
+                "detail": "iReal Pro's forum's index is empty: tonight's run reads its playlists."}
+    if not state.complete:
+        return {**mark, "state": "partial",
+                "label": f"{name}: {state.playlists_read:,} of {state.playlists:,} playlists",
+                "detail": f"iReal Pro's forum's playlists are being read: {state.playlists_read:,} of "
+                          f"{state.playlists:,} so far; caracole ireal --index reads the rest."}
+    return {**mark, "state": "done", "label": f"{name} ✓",
+            "detail": "iReal Pro's forum: our copy of its playlists and the threads read, searched whole."}
 
 
 def _rows(app: WebApp, conn: sqlite3.Connection, mine: Sequence[LibraryHit], index: list[dict[str, Any]],

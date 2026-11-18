@@ -2434,6 +2434,27 @@ def test_a_lacuerda_sheet_you_picked_stays_whatever_ugs_covers(conn, tmp_path):
     assert out.sheet == 101 and "sheet 101" in read(tmp_path, song, "sheet.txt")
 
 
+def test_an_irealpro_chart_you_picked_stays_and_one_you_didnt_gives_way_to_a_sheet_with_words(conn, tmp_path):
+    # A chart holds no words: coverage 0 of a song with lyrics. UG's sheet that covers them replaces it, unless you
+    # picked the chart (``[ireal]``).
+    from caracole.overrides import IRealPick
+
+    song = accepted(conn)
+    keep_other_sheet(conn, tmp_path, song, provider="ireal", kind="chords", name="sheet.txt", coverage=0.0,
+                     tab_id="9518/38106/1")
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"))
+    ug = FakeUG()
+    ug.tab(v(101), content=sheet("sheet 101", LINES[:5]))
+    picked = Overrides(ireal={song.key: IRealPick("groove-merchant-thad-jones", 9518, 38106)})
+
+    out = process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, picked), song)
+
+    assert out.sheet is None and read(tmp_path, song, "sheet.txt") == "ireal sheet"
+    update_song(conn, song.id, ug_dirty=True)
+    out = process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), get_song(conn, song.id))
+    assert out.sheet == 101 and "sheet 101" in read(tmp_path, song, "sheet.txt")
+
+
 def test_a_kept_ug_sheet_becomes_the_only_pick_of_the_sheet_slot(conn, tmp_path):
     # Picks are cleared across every sheet kind: chords, acordes and auto.
     song = accepted(conn)

@@ -486,6 +486,49 @@ def gametabs_index(conn) -> None:
         store_game_page(conn, f"tabs/{game}", parse_game_page(fixture(f"game_{game}.html")), now)
 
 
+def ireal_index(conn) -> None:
+    """iReal Pro's forum's index: the captured sitemap's threads, and the Jazz 1460 Standards and Thad Jones's Groove
+    Merchant thread read."""
+    from datetime import UTC, datetime
+
+    from helpers.ireal_site import fixture
+
+    from caracole.ireal import parse_page_url, parse_thread_page
+    from caracole.ireal_index import store_thread_page
+    from caracole.ug.sitemap import iter_locs
+
+    rows = [r for r in map(parse_page_url, iter_locs(fixture("sitemap-1.xml").encode())) if r is not None]
+    conn.executemany("INSERT INTO ireal_index (path, thread, slug, key, sitemap) VALUES (?, ?, ?, ?, 'sitemap-1')", rows)
+    now = datetime(2026, 11, 18, tzinfo=UTC)
+    for name in ("thread_jazz-1460-standards.12753.html", "thread_groove-merchant-thad-jones.9518.html"):
+        store_thread_page(conn, parse_thread_page(fixture(name)), now)
+
+
+def test_ireal_finds_a_chart_by_its_title_its_composer_named_first_name_first(conn):
+    from caracole.search import search_ireal
+
+    ireal_index(conn)
+    hit = search_ireal(conn, "misty")[0]
+    assert (hit.source, hit.title, hit.artist, hit.url, hit.uploads, hit.via, hit.page, hit.score) == (
+        "ireal", "Misty", "Erroll Garner", "https://forums.irealpro.com/threads/jazz-1460-standards.12753/#post-31492",
+        1, "title", "threads/jazz-1460-standards.12753/", 100.0)
+    # A title iReal Pro writes with its article last reads as people write it.
+    assert search_ireal(conn, "the girl from ipanema")[0].title == "The Girl From Ipanema"
+    # By its composer and its title together; the two charts of one thread are one hit, its latest post's address.
+    groove = search_ireal(conn, "thad jones groove merchant")[0]
+    assert (groove.title, groove.artist, groove.uploads, groove.via, groove.url) == (
+        "Groove Merchant", "Thad Jones", 2, "both",
+        "https://forums.irealpro.com/threads/groove-merchant-thad-jones.9518/#post-38106")
+    assert search_ireal(conn, "garner")[0].title == "Misty"  # by the composer alone
+    assert search_ireal(conn, "nothing like this") == []
+
+
+def test_ireal_reads_the_charts_of_the_pages_read_alone(conn):
+    from caracole.search import search_ireal
+
+    assert search_ireal(conn, "misty") == []  # an empty index answers nothing, and asks no site
+
+
 def test_gametabs_finds_a_track_by_its_game_and_title_its_tabs_one_hit(conn):
     from caracole.search import GameTabHit, search_gametabs
 
@@ -2335,6 +2378,29 @@ def test_cli_says_why_gametabs_net_is_left_out(tmp_path):
     seed(tmp_path).commit()
     gt = run(tmp_path, "search", "fillmore").output.partition("On gametabs.net (offline index)")[2]
     assert "Nothing yet: gametabs.net's index is empty" in gt
+
+
+def test_cli_lists_irealpros_charts_last_each_with_the_line_that_keeps_it_as_the_sheet(tmp_path):
+    (tmp_path / "lib").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "state").mkdir(parents=True, exist_ok=True)
+    conn = seed(tmp_path)
+    ireal_index(conn)
+    conn.commit()
+    out = run(tmp_path, "search", "groove merchant").output
+    assert out.index("On gametabs.net (offline index)") < out.index("On iReal Pro's forum (offline index)")
+    ir = out.partition("On iReal Pro's forum (offline index)")[2]
+    page = "https://forums.irealpro.com/threads/groove-merchant-thad-jones.9518/#post-38106"
+    assert (f"  [iReal] Thad Jones - Groove Merchant · 2 charts\n     {page}\n"
+            f'     caracole get --ireal {page} "Thad Jones" "Groove Merchant"\n') in ir
+    assert "iReal Pro's forum's playlists are still being read: 1 of 1 so far" in " ".join(ir.split())
+
+
+def test_cli_says_why_irealpros_forum_is_left_out(tmp_path):
+    (tmp_path / "lib").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "state").mkdir(parents=True, exist_ok=True)
+    seed(tmp_path).commit()
+    ir = run(tmp_path, "search", "misty").output.partition("On iReal Pro's forum (offline index)")[2]
+    assert "Nothing yet: iReal Pro's forum's index is empty" in ir
 
 
 # --- caracole search: harptabs.com's offline index ---------------------------------------------

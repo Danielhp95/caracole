@@ -927,6 +927,23 @@ def test_a_sheet_you_pinned_is_never_replaced(conn, tmp_path):
     assert files_of(conn, song) == {"sheet.txt": ug_vid, "sheet.json": ug_vid}
 
 
+def test_a_chart_you_picked_on_irealpro_is_never_replaced(conn, tmp_path):
+    from caracole.overrides import IRealPick
+
+    song = spanish_song(conn)
+    vid = upsert_version(conn, provider="ireal", tab_id="9518/38106/1", song_id=song.id, slot="sheet", kind="chords",
+                         rating=0, votes=0, version=1, label=None, url="https://forums.irealpro.com/threads/x.9518/",
+                         raw={}, now="2026-10-01T00:00:00Z")
+    set_coverage(conn, vid, 0.0)
+    keep_file(conn, tmp_path / "lib", song=song, version_id=vid, name="sheet.txt", data=b"| C |\n", rank=1)
+    site = FakeLaCuerda()
+    picked = Overrides(ireal={song.key: IRealPick("groove-merchant-thad-jones", 9518)})
+    assert run_with(site, conn, tmp_path, picked) == LaCuerdaStats()
+    assert site.requests == []
+    # A chart you didn't pick is a sheet like any: LaCuerda's covers more of the words.
+    assert run_with(site, conn, tmp_path, Overrides()).kept == 1
+
+
 def test_a_pin_of_another_tab_leaves_the_sheet_open_to_lacuerda(conn, tmp_path):
     # A pinned text tab, say: the sheet slot isn't pinned.
     song = spanish_song(conn)

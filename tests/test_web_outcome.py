@@ -95,7 +95,8 @@ def test_each_step_names_its_site_in_full_and_says_what_it_found():
 
 def test_harptabs_coms_stage_is_part_of_the_extras_step_and_says_what_waits_in_its_words():
     # The lookup's last site, after gtptabs.com: Extras runs until it is over, and a spent budget says its harmonica tab.
-    extras = {name: ("done", "") for name in ("song", "match", "sheet", "pdf", "lyrics", "ug", "lacuerda", "gtptabs")}
+    extras = {name: ("done", "") for name in ("song", "match", "sheet", "pdf", "lyrics", "ug", "lacuerda", "ireal",
+                                              "gtptabs")}
     running = lookup(stages=extras | {"harptabs": ("running", "")})
     assert Chip("Extras", "running") in steps(running)
     assert Chip("Extras", "running", "", "harmonica tab kept") in steps(lookup(stages=extras | {
@@ -109,8 +110,8 @@ def test_harptabs_coms_stage_is_part_of_the_extras_step_and_says_what_waits_in_i
 
 
 def test_gametabs_nets_stage_is_the_extras_steps_last_and_says_what_waits_in_its_words():
-    extras = {name: ("done", "") for name in ("song", "match", "sheet", "pdf", "lyrics", "ug", "lacuerda", "gtptabs",
-                                              "harptabs")}
+    extras = {name: ("done", "") for name in ("song", "match", "sheet", "pdf", "lyrics", "ug", "lacuerda", "ireal",
+                                              "gtptabs", "harptabs")}
     assert Chip("Extras", "running") in steps(lookup(stages=extras | {"gametabs": ("running", "")}))
     assert Chip("Extras", "done", "", "game music tab kept") in steps(lookup(stages=extras | {
         "gametabs": ("done", "game music tab kept")}))
@@ -118,6 +119,15 @@ def test_gametabs_nets_stage_is_the_extras_steps_last_and_says_what_waits_in_its
                                            "the rest")})
     assert said(spent, SongFacts(sheet="Muse/Hysteria/sheet.html")).reason == (
         "This fetch's 6 asks of gametabs.net are spent. The game music tab waits until tonight.")
+
+
+def test_irealpros_stage_is_one_of_the_extras_steps_and_says_what_waits_in_its_words():
+    extras = {name: ("done", "") for name in ("song", "match", "sheet", "pdf", "lyrics", "ug", "lacuerda")}
+    assert Chip("Extras", "running") in steps(lookup(stages=extras | {"ireal": ("running", "")}))
+    spent = ended({"ireal": ("skipped", "this fetch's 6 asks of iReal Pro's forum are spent; tonight's run does "
+                                        "the rest")})
+    assert said(spent, SongFacts(sheet="Muse/Hysteria/sheet.html")).reason == (
+        "This fetch's 6 asks of iReal Pro's forum are spent. The iReal Pro chart waits until tonight.")
 
 
 def test_a_lookups_steps_are_fixed_when_it_starts_and_a_skipped_one_keeps_its_place():

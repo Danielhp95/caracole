@@ -33,7 +33,7 @@ def test_a_song_never_asked_has_every_site_grey_and_unasked_in_their_order(conn,
     s = add_song(conn, "Eagles", "Desperado")
     sites = sites_of(conn, cfg, s)
     # The sites on by default; YouTube only where its route runs, which needs auto-chords.
-    assert list(sites) == ["ug", "lacuerda", "lrclib", "gtptabs", "harptabs", "gametabs", "musescore"]
+    assert list(sites) == ["ug", "lacuerda", "ireal", "lrclib", "gtptabs", "harptabs", "gametabs", "musescore"]
     assert {state for state, _ in sites.values()} == {"unasked"}
     assert sites["harptabs"][1] == "harptabs: not asked yet"
 
@@ -95,10 +95,10 @@ def test_a_site_turned_off_is_left_out(conn, cfg):
     s = add_song(conn, "Eagles", "Desperado")
     off = replace(cfg, providers={**cfg.providers, "gametabs": replace(cfg.provider("gametabs"), enabled=False),
                                   "musescore": replace(cfg.provider("musescore"), enabled=False)})
-    assert list(sites_of(conn, off, s)) == ["ug", "lacuerda", "lrclib", "gtptabs", "harptabs"]
+    assert list(sites_of(conn, off, s)) == ["ug", "lacuerda", "ireal", "lrclib", "gtptabs", "harptabs"]
 
 
-@pytest.mark.parametrize("module", ["gtptabs_fetch", "harptabs_fetch", "gametabs_fetch"])
+@pytest.mark.parametrize("module", ["gtptabs_fetch", "harptabs_fetch", "gametabs_fetch", "ireal_fetch"])
 def test_the_misses_are_read_under_each_steps_own_prefix(module):
     import importlib
 
