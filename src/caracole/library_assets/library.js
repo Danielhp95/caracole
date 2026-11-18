@@ -735,45 +735,82 @@
   // in hand waiting, unlit and steady, as nothing moves.
   const waitsIn = (chips, view) => (view && view.waits === true && Number.isInteger(view.at) && chips[view.at]
     ? chips.map((c, i) => (i === view.at ? Object.assign({}, c, { state: "waiting" }) : c)) : chips);
-  // A lookup's steps as chips under its request line ``p`` once it is no longer a bar (steps.css's, the Requests tab's
-  // markup): those done ticked, the one that runs lit and the current step, those to come grey, a failed one crossed;
-  // a plain one ("Match: not on UG") its name alone, and a skipped one, with nothing to do for the song, in its place.
-  // No live region: the line above says how it goes; this is a list to read. None in the view (a request that runs no
-  // lookup, or ended Ready, its steps folded away), and none while ``p`` is the bar: none drawn. A line with no steps
-  // is no bar either (a removal counting down draws its own words in p).
-  const STEP_MARKS = { done: "✓ ", failed: "✕ " };
-  const stepsAfter = (p) => (p && p.nextElementSibling && p.nextElementSibling.classList.contains("step-chips")
+  // A lookup's steps under its request line ``p`` (steps.css's ``div.steps``, the one sibling right after it, which
+  // refill keeps): once ``p`` is no longer the bar (the request ended otherwise than Ready, or its line says something
+  // else), the bar as it left them, frozen (``.step-bar``: its segments, and the step that failed first and its place,
+  // "Sheet · LaCuerda · 3 of 7"), for a screen reader a picture its name says ("Steps: Song: done; …"); then always the
+  // list of them (stepList), which shows while the line's card is open, in the frozen bar's place. No live region: the
+  // line says how it goes; these are to look at and read. None in the view (a request that runs no lookup, or ended
+  // Ready, its steps folded away): none drawn. A line with no steps is no bar either (a removal counting down draws its
+  // own words in p).
+  const stepsAfter = (p) => (p && p.nextElementSibling && p.nextElementSibling.classList.contains("steps")
     ? p.nextElementSibling : null);
+  const stepSaid = (c) => {
+    const state = stepState(c);
+    return String(c.name) + (c.site ? ", " + String(c.site) : "") + ": " + (state === "plain" ? "done" : state);
+  };
   const drawSteps = (p, view) => {
     const chips = chipsOf(view);
     let box = stepsAfter(p);
-    if (!chips.length) p.classList.remove("barred");
-    if (!chips.length || p.classList.contains("barred")) {
+    if (!chips.length) {
+      p.classList.remove("barred");
       if (box) box.remove();
       return;
     }
-    const key = JSON.stringify(chips.map((c) => [c.name, c.site, c.state]));
+    const barred = p.classList.contains("barred");
+    const over = !isActive(view);
+    const shown = waitsIn(chips, view);
+    const key = JSON.stringify([shown.map((c) => [c.name, c.site, c.state, c.found]), barred, over, view.at,
+      view.count, view.waits === true]);
     if (box && box.dataset.key === key) return;
     if (!box) {
-      box = el("ol", "step-chips");
-      box.setAttribute("aria-label", "Steps");
+      box = el("div", "steps");
       p.after(box);
     }
     box.dataset.key = key;
-    box.replaceChildren(...chips.map((c) => {
+    const parts = [];
+    if (!barred) {
+      const bar = el("div", "step-bar");
+      bar.setAttribute("role", "img");
+      bar.setAttribute("aria-label", "Steps: " + shown.map(stepSaid).join("; "));
+      bar.append(segsOf(shown), ...stepWords(shown, view));
+      parts.push(bar);
+    }
+    parts.push(stepList(shown, over));
+    box.replaceChildren(...parts);
+  };
+  // A request's steps as a list (``ol.step-list``, steps.css's), one line a step in its place: its mark, for the eye
+  // alone (done and plain ✓, the one that runs ◐ and the current step, those to come ○, a skipped one –, a failed one
+  // !), its name and the site it names, its state for a screen reader right after them (a plain one, "Match · not on
+  // UG", done), and what it found. ``over``: the request is over, and its skipped steps, which had nothing to do for the
+  // song, leave their places for one last line, "Skipped: PDF, Songbooks". The one function that draws a list of
+  // steps: the open card's (drawSteps) and the Journal's (requests.js, through window.caracoleLibrary).
+  const STEP_GLYPHS = { done: "✓", plain: "✓", running: "◐", waiting: "○", skipped: "–", failed: "!" };
+  const stepList = (chips, over) => {
+    const steps = el("ol", "step-list");
+    steps.setAttribute("aria-label", "Steps");
+    const skipped = [];
+    for (const c of listOf(chips).filter((x) => x && typeof x === "object" && x.name)) {
       const state = stepState(c);
-      const chip = el("li", "step-chip " + state);
-      if (state === "running") chip.setAttribute("aria-current", "step");
-      if (own.call(STEP_MARKS, state)) {
-        const mark = el("span", null, STEP_MARKS[state]);
-        mark.setAttribute("aria-hidden", "true");
-        chip.appendChild(mark);
+      if (over && state === "skipped") {
+        skipped.push(String(c.name));
+        continue;
       }
-      chip.appendChild(document.createTextNode(String(c.name)));
-      if (c.site) chip.append(" ", el("b", null, String(c.site)));
-      if (state !== "plain") chip.appendChild(el("span", "visually-hidden", ": " + state));
-      return chip;
-    }));
+      const item = steps.appendChild(el("li", "step " + state));
+      if (state === "running") item.setAttribute("aria-current", "step");
+      item.appendChild(el("span", "step-glyph", STEP_GLYPHS[state])).setAttribute("aria-hidden", "true");
+      const name = item.appendChild(el("span", "step-name"));
+      name.appendChild(el("b", null, String(c.name)));
+      if (c.site) name.append(" · " + String(c.site));
+      item.appendChild(el("span", "visually-hidden", ": " + (state === "plain" ? "done" : state)));
+      if (c.found) item.appendChild(el("span", "step-found", String(c.found)));
+    }
+    if (skipped.length) {
+      const item = steps.appendChild(el("li", "step skipped-all"));
+      item.appendChild(el("span", "step-glyph", STEP_GLYPHS.skipped)).setAttribute("aria-hidden", "true");
+      item.append("Skipped: " + skipped.join(", "));
+    }
+    return steps;
   };
   // How a song's request goes on its line, a result's row or #requested's line under the search box: its request
   // line, a bar of its lookup's steps while it runs, and the steps under it once it ended otherwise than Ready. Ended
@@ -3787,6 +3824,7 @@
       track(view);
     },
     showLine,
+    stepList,
     focusOn,
     fold,
   });

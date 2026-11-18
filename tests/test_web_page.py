@@ -416,7 +416,9 @@ def test_several_requests_show_as_one_short_list(serve, cfg, conn, tmp_path):
     assert [said for _, _, said in lines] == ["<span>Ready</span>"] * 3, lines
     assert [href for href, _, _ in lines] == ["Muse/Hysteria/sheet.pdf", "Oasis/Wonderwall/sheet.pdf",
                                               "Radiohead/Creep/sheet.pdf"]
-    assert "step-chips" not in tray.group(1)  # one line each: the songs' lines have the steps
+    # One line each: the songs' lines have the steps, a bar or a list.
+    assert 'class="steps"' not in tray.group(1) and "step-segs" not in tray.group(1)
+    assert "step-chips" not in tray.group(1)
     assert "3 requests" in tray.group(1) and 'href="#tab=requests"' in tray.group(1)  # Journal: the Requests tab
     # One Journal link, the list's own: its lines say how each goes, and the cards link their details.
     assert tray.group(1).count(">Journal<") == 1 and "job=" not in tray.group(1)

@@ -4356,8 +4356,9 @@ the library, sent as they are: they carry no badge.
   Make the sheet, which replaces any audio it had from YouTube. The line then
   says how it goes: once the job has run a second, a bar of its steps, Song,
   Audio (YouTube), Lyrics, Chords and PDF, and the step in hand ("Chords ·
-  4 of 5"); ended otherwise than Ready, its words, with the steps as chips
-  under them. Ready, its title and its Open open
+  4 of 5"); ended otherwise than Ready, its words, with the bar frozen under
+  them and the steps listed in its open card, as for a lookup (below). Ready,
+  its title and its Open open
   `sheet (auto).html`, and the Journal says what the sheet holds ("Chords
   over the lyrics.", "Chords, then the lyrics.", "Chords only, no lyrics."), or
   why the lyrics wait ("No lyrics yet (LRCLIB unavailable); tonight's run tries
@@ -4572,11 +4573,22 @@ the library, sent as they are: they carry no badge.
   - or, when a command failed, its error in one sentence, with a **Details**
     link to what it printed.
 
-  Ended any way but Ready, the line says how in words, and a lookup's steps
-  stay under it as chips, as in the Journal, so that you see which one
-  stopped: those done ticked, a failed one crossed and red, Match: not on UG
-  plain (dashed), each site named in full (Sheet LaCuerda, and once done the
-  site the sheet came from).
+  Ended any way but Ready, the line says how in words, and a lookup's bar
+  stays under them, frozen as the lookup left it, so that you see which step
+  stopped, with the first that failed and its place ("Sheet · LaCuerda · 3 of
+  7"; no words when none failed); a screen reader hears it as a picture named
+  by every step and how it ended ("Steps: Song: done; Match · not on UG: done;
+  Sheet, LaCuerda: failed; …").
+
+  A song's card, open, lists its request's steps in the frozen bar's place, a
+  line a step: ✓ for one done (Match: not on UG too), ◐ for the one that runs,
+  ○ for those to come, ! for a failed one and – for a skipped one, then its
+  name, the site it names in full (Sheet · LaCuerda, and once done the site
+  the sheet came from) and what it found ("in the book", "matched to it", a
+  failure in the site's own words), beside it on a laptop and under it on a
+  phone. While the lookup runs the list follows it under the bar, which stays
+  on the line's row; once it is over, the skipped steps fold into one last
+  line, "Skipped: PDF, Songbooks". Ready, the list folds away with the bar.
 
   A song asked for again shows on the line it has there already, and a
   refused request's line goes at the next request. A request still on its
@@ -4607,8 +4619,8 @@ the library, sent as they are: they carry no badge.
     Lyrics, Extras (Ultimate Guitar's second pass, its sheets scored and its
     tab, LaCuerda's sheet, gtptabs.com's Guitar Pro file and harptabs.com's
     harmonica tab) and Songbooks,
-    the same chips the library page draws under a song's line that ended
-    otherwise than Ready, each step the
+    the same steps the library page draws on a song's line, here as chips,
+    each step the
     lookup has from its start (no Songbooks when Fetch the missing songs makes
     the songbook after): a step that ended with nothing to do for the song,
     such as the PDF of a song with no sheet, keeps its place, skipped, and the

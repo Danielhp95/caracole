@@ -7,10 +7,13 @@ motion is unwelcome), those to come grey, a skipped one an outline, a failed one
 step in hand, the site it names in full and its place among them all, "Sheet · Ultimate Guitar · 3 of 7", which is
 what a screen reader hears, in one row on a laptop and a phone alike, the segments square at their ends.
 Ended Ready, the bar folds away and the line is the song's own, which opens its sheet; ended otherwise, the line says
-how, and the steps stay under it as chips (done ticked, a failed one crossed, Match naming Ultimate Guitar's index or
-"Match · not on UG", plain), to show which step stopped, each in its place. A real ``caracole serve`` answers on a
-socket with the page's timers quick (``WebApp(timers=...)``), and its queue runs ``Staged``: ``caracole get
---progress``'s lines, said a stage at a time, stopping where the test says until it lets it go on.
+how, and the bar stays under it, frozen, to show which step stopped, each in its place, with the step that failed and
+its place ("Sheet · LaCuerda · 3 of 7"). The song's card, open, lists the steps in the bar's place, one a line: each
+one's mark (done and plain ✓, the one that runs ◐, those to come ○, a failed one !, a skipped one –), its name, its
+site and what it found; once the request is over, the skipped ones fold into one last line, "Skipped: PDF,
+Songbooks". A real ``caracole serve`` answers on a socket with the page's timers quick (``WebApp(timers=...)``), and
+its queue runs ``Staged``: ``caracole get --progress``'s lines, said a stage at a time, stopping where the test says
+until it lets it go on.
 """
 from __future__ import annotations
 
@@ -178,11 +181,17 @@ def words_of(item: str) -> str:
 
 
 def steps_of(item: str) -> str:
-    """The expression for the chips under ``item`` (a selector), once its request is over: each one's state and its
-    words as shown (its mark, its name, its site), what a screen reader alone hears left out."""
-    return (f"[...document.querySelectorAll({json.dumps(item + ' .step-chips > li')})].map((c) => {{ "
-            "const shown = c.cloneNode(true); shown.querySelectorAll('.visually-hidden').forEach((n) => n.remove()); "
-            "return [c.className.replace('step-chip ', ''), shown.textContent]; })")
+    """The expression for ``item``'s list of steps: each one's state, glyph, step and site, and what it found."""
+    return (f"[...document.querySelectorAll({json.dumps(item + ' .steps > .step-list > li')})].map((li) => ["
+            "li.className.replace('step ', ''), li.querySelector('.step-glyph').textContent, "
+            "li.querySelector('.step-name') ? li.querySelector('.step-name').textContent : li.lastChild.textContent, "
+            "(li.querySelector('.step-found') || {}).textContent || ''])")
+
+
+def shown(item: str, part: str) -> str:
+    """The expression for whether ``item``'s ``part`` (a selector under it) is drawn: there, and displayed."""
+    return (f"(() => {{ const e = document.querySelector({json.dumps(item + ' ' + part)}); "
+            "return !!e && getComputedStyle(e).display !== 'none'; })()")
 
 
 def colour(var: str) -> str:
@@ -195,12 +204,12 @@ ACCENT = colour("--accent")
 FAILED = colour("--failed")
 
 
-def one_row(page: Browser, item: str) -> None:
-    """``item``'s bar in one row: its segments and its count centred on one line, the count within ``item``'s line,
-    and no page wider than the screen."""
+def one_row(page: Browser, item: str, bar: str = ".progress.barred") -> None:
+    """``item``'s bar (its running one, else ``bar``) in one row: its segments and its count centred on one line, the
+    count within ``item``'s line, and no page wider than the screen."""
     at = page.js(f"(() => {{ const item = document.querySelector({json.dumps(item)}); "
                  "const r = (s) => item.querySelector(s).getBoundingClientRect(); "
-                 "const segs = r('.progress.barred .step-segs'), count = r('.progress.barred .step-count'); "
+                 f"const segs = r('{bar} .step-segs'), count = r('{bar} .step-count'); "
                  "return [segs.top + segs.height / 2, count.top + count.height / 2, count.right, "
                  "item.getBoundingClientRect().right]; })()")
     assert abs(at[0] - at[1]) <= 2, at
@@ -246,7 +255,11 @@ def test_a_running_lookup_is_a_segmented_bar_on_its_line_in_one_row(cfg, live, t
         assert page.js(f"{p}.getAttribute('role')") == "status"
         assert page.js(f"{p}.querySelector('.step-segs').getAttribute('aria-hidden')") == "true"
         assert page.js(f"{p}.querySelector('.step-at b').textContent") == "Sheet"
-        assert page.js(f"document.querySelector('{line} .step-chips, {line} .steps')") is None  # no chips meanwhile
+        # No chips, nor any frozen bar: the list of steps waits under the line for its card to open, and takes no room
+        # meanwhile.
+        assert page.js(f"document.querySelector('{line} .step-chips, {line} .step-bar')") is None
+        assert page.js(shown(line, ".step-list")) is False
+        assert page.js(shown(line, ".steps")) is False
         one_row(page, line)
         assert page.js(f"getComputedStyle(document.querySelector('{line} .seg.running')).animationName") == "step-pulse"
         done = f"getComputedStyle(document.querySelector('{line} .seg.done'))"
@@ -265,7 +278,7 @@ def test_a_running_lookup_is_a_segmented_bar_on_its_line_in_one_row(cfg, live, t
         assert page.wait(f"{p}.dataset.tone === 'ready'", timeout=15)
         assert page.js(f"{p}.classList.contains('barred')") is False
         assert page.js(f"{p}.getBoundingClientRect().height") <= 1
-        assert page.js(f"document.querySelector('{line} .step-segs, {line} .step-chips')") is None
+        assert page.js(f"document.querySelector('{line} .step-segs, {line} .steps, {line} .step-chips')") is None
         assert page.js(f"{p}.textContent") == "Ready"
         assert page.js(f"{p}.querySelector('a')") is None  # no "Ready · Open sheet"
         # Found, it needs no badge: its status is the line's alone, as the page's filters read it.
@@ -278,7 +291,7 @@ def test_a_running_lookup_is_a_segmented_bar_on_its_line_in_one_row(cfg, live, t
         assert page.js("document.documentElement.scrollWidth <= window.innerWidth")
 
 
-def test_a_lookup_that_ends_otherwise_keeps_its_steps_to_show_which_one_stopped(cfg, live, tmp_path):
+def test_a_failed_step_is_red_on_the_running_bar_and_keeps_its_place(cfg, live, tmp_path):
     base, runner = live
     runner.script = NOT_ON_UG_HELD
     conn = db.connect(cfg.db_path)
@@ -306,17 +319,104 @@ def test_a_lookup_that_ends_otherwise_keeps_its_steps_to_show_which_one_stopped(
             "rgba(0, 0, 0, 0)")  # an outline alone
         one_row(page, line)
         runner.go()
-        # Not found: the line says so with its next step, as before, the bar gone, and the steps stay under it as chips;
-        # those that turned out not to apply (no songbook lists it) keep their places, skipped.
+        # Not found: the line says so with its next step, and the bar stays under it, frozen, each step in its place
+        # (those that turned out not to apply, no songbook listing it, skipped); the line itself, its outcome, counts
+        # nothing.
         wait_for(page, f"document.querySelector('{line} .progress').textContent", "Not on the sites·To-do page")
         assert page.js(f"document.querySelector('{line} .progress').classList.contains('barred')") is False
-        wait_for(page, steps_of(line), [["done", "✓ Song"], ["plain", "Match · not on UG"],
-                                        ["failed", "✕ Sheet LaCuerda"], ["skipped", "PDF"], ["done", "✓ Lyrics"],
-                                        ["failed", "✕ Extras"], ["skipped", "Songbooks"]])
-        assert page.js(f"getComputedStyle(document.querySelector('{line} .step-chips .plain')).borderTopStyle") == (
-            "dashed")
-        # Over, the view's count names the step that failed; the line, its outcome, shows none.
-        assert page.js(f"document.querySelector('{line} .progress .step-count, {line} .progress .steps-over')") is None
+        wait_for(page, bar_of(line), ["done", "plain", "failed", "skipped", "done", "failed", "skipped"])
+        assert page.js(f"document.querySelector('{line} .step-chips, {line} .progress .step-count')") is None
+
+
+@pytest.mark.parametrize("width", [1280, 390])
+def test_a_lookup_that_ends_otherwise_keeps_its_bar_frozen_under_its_line(cfg, live, tmp_path, width):
+    base, runner = live
+    runner.script = NOT_ON_UG
+    conn = db.connect(cfg.db_path)
+    song = add_song(conn, "Estopa", "Tu Calorro")
+    conn.close()
+    line = line_of(song)
+    with driven(tmp_path, width) as page:
+        page.open(base)
+        page.click(f"{line} form.fetch button")
+        wait_for(page, bar_of(line), ["done", "plain", "running"] + ["waiting"] * 4)
+        wait_for(page, words_of(line), ["Sheet · LaCuerda", " · 3 of 7"])
+        runner.go()
+        # Not on the sites: its words, and under them the bar as the lookup left it, frozen, with the step that
+        # failed first and its place; for a screen reader, a picture whose name says every step and how it ended.
+        wait_for(page, f"document.querySelector('{line} .progress').textContent", "Not on the sites·To-do page")
+        wait_for(page, bar_of(line), ["done", "plain", "failed", "skipped", "done", "failed", "skipped"])
+        assert page.js(words_of(line)) == ["Sheet · LaCuerda", " · 3 of 7"]
+        bar = f"document.querySelector('{line} .step-bar')"
+        assert page.js(f"{bar}.getAttribute('role')") == "img"
+        assert page.js(f"{bar}.getAttribute('aria-label')") == (
+            "Steps: Song: done; Match · not on UG: done; Sheet, LaCuerda: failed; PDF: skipped; Lyrics: done; "
+            "Extras: failed; Songbooks: skipped")
+        assert page.js(f"document.querySelector('{line} .seg.failed').textContent") == "!"
+        assert page.js(f"{bar}.parentNode.previousElementSibling === document.querySelector('{line} .progress')")
+        assert page.js(f"{bar}.getBoundingClientRect().top >= "
+                       f"document.querySelector('{line} .progress').getBoundingClientRect().bottom - 0.5")
+        one_row(page, line, ".step-bar")
+        assert page.js(shown(line, ".step-list")) is False
+        page.click(f"{line} .line-more")  # the card open: the list in the bar's place
+        assert page.js(shown(line, ".step-bar")) is False
+        assert page.js(shown(line, ".step-list")) is True
+        assert page.js(f"document.querySelector('{line} .step-list').getAttribute('aria-label')") == "Steps"
+        # Each step a line, what it found beside it; over, those skipped fold into one last line.
+        assert page.js(steps_of(line)) == [
+            ["done", "✓", "Song", "in the book"], ["plain", "✓", "Match · not on UG", ""],
+            ["failed", "!", "Sheet · LaCuerda", LACUERDA_FAILS], ["done", "✓", "Lyrics", "found"],
+            ["failed", "!", "Extras", "asked already, for the sheet: " + LACUERDA_FAILS],
+            ["skipped-all", "–", "Skipped: PDF, Songbooks", ""]]
+        items = f"[...document.querySelectorAll('{line} .step-list > li')]"
+        # What a screen reader hears of each: its state after its name (a plain one done), never the glyph.
+        assert page.js(f"{items}.map((li) => (li.querySelector('.visually-hidden') || {{}}).textContent || '')") == [
+            ": done", ": done", ": failed", ": done", ": failed", ""]
+        assert page.js(f"{items}.every((li) => li.querySelector('.step-glyph').getAttribute('aria-hidden') === 'true')")
+        assert page.js(f"document.querySelector('{line} .step-list .step-name b').textContent") == "Song"
+        assert page.js(f"{items}.some((li) => li.hasAttribute('aria-current'))") is False  # none runs now
+        glyph = f"getComputedStyle(document.querySelector('{line} .step.failed .step-glyph')).color"
+        assert page.js(glyph) == page.js(FAILED)
+        assert page.js("document.documentElement.scrollWidth <= window.innerWidth")
+        page.click(f"{line} .line-more")  # closed again: the frozen bar back
+        assert page.js(shown(line, ".step-bar")) is True
+        assert page.js(shown(line, ".step-list")) is False
+
+
+def test_the_open_cards_list_follows_a_running_lookup_and_folds_away_once_ready(cfg, live, tmp_path):
+    base, runner = live
+    runner.script = FROM_UG
+    line = line_of(creep(cfg))
+    with driven(tmp_path, 1280) as page:
+        page.open(base)
+        page.click(f"{line} .line-more")  # Creep's card open
+        page.click(f"{line} .line-action form.fetch button")
+        # Asking Ultimate Guitar for the sheet: the list says the step that runs, those before it ticked with what
+        # they found, those to come waiting; the bar stays on the line's row, over the list.
+        wait_for(page, steps_of(line), [
+            ["done", "✓", "Song", "in the book"], ["done", "✓", "Match · Ultimate Guitar", "matched to it"],
+            ["running", "◐", "Sheet · Ultimate Guitar", ""], ["waiting", "○", "PDF", ""], ["waiting", "○", "Lyrics", ""],
+            ["waiting", "○", "Extras", ""], ["waiting", "○", "Songbooks", ""]])
+        current = f"[...document.querySelectorAll('{line} .step-list > [aria-current]')]"
+        assert page.js(f"{current}.map((li) => [li.getAttribute('aria-current'), li.className])") == [
+            ["step", "step running"]]
+        assert page.js(f"{current}[0].querySelector('.visually-hidden').textContent") == ": running"
+        assert page.js(shown(line, ".progress.barred")) is True
+        assert page.js(f"document.querySelector('{line} .step-bar')") is None
+        assert page.js(f"document.querySelector('{line} .step-list').getBoundingClientRect().top >= "
+                       f"document.querySelector('{line} .progress').getBoundingClientRect().bottom - 0.5")
+        wait_for(page, words_of(line), ["Sheet · Ultimate Guitar", " · 3 of 7"])
+        runner.go()
+        # The sheet kept, from Ultimate Guitar, and what it found; the lyrics now.
+        listed = steps_of(line)
+        wait_for(page, f"(() => {{ const l = {listed}; return [l[2], l[4] && l[4][0]]; }})()",
+                 [["done", "✓", "Sheet · Ultimate Guitar", "tab 1 from Ultimate Guitar"], "running"])
+        runner.go()
+        # Ready: the list folds away with the bar, as on a closed line; the card stays open.
+        p = f"document.querySelector('{line} .progress')"
+        assert page.wait(f"{p}.dataset.tone === 'ready'", timeout=15)
+        assert page.wait(f"!document.querySelector('{line} .steps')", timeout=15)
+        assert page.js(f"document.querySelector('{line} > .line-more').getAttribute('aria-expanded')") == "true"
 
 
 def test_a_lookup_waiting_for_the_book_says_so_on_its_bar(cfg, live, tmp_path):
@@ -325,7 +425,8 @@ def test_a_lookup_waiting_for_the_book_says_so_on_its_bar(cfg, live, tmp_path):
     line = line_of(creep(cfg))
     with driven(tmp_path, 1280) as page:
         page.open(base)
-        page.click(f"{line} form.fetch button")
+        page.click(f"{line} .line-more")  # its card open, which lists the steps as the bar draws them
+        page.click(f"{line} .line-action form.fetch button")
         # A nightly run holds the book: the bar says so in place of the step's name, its place kept, and the step in
         # hand drawn waiting, unlit and steady, as nothing moves.
         wait_for(page, bar_of(line), ["waiting"] * 7)
@@ -335,10 +436,14 @@ def test_a_lookup_waiting_for_the_book_says_so_on_its_bar(cfg, live, tmp_path):
         song = f"getComputedStyle(document.querySelector('{line} .seg'))"
         assert page.js(f"{song}.animationName") == "none"
         assert page.js(f"{song}.backgroundColor") != page.js(ACCENT)
+        # The card's list the same: Song waiting, no step running.
+        wait_for(page, f"{steps_of(line)}[0]", ["waiting", "○", "Song", ""])
+        assert page.js(f"document.querySelector('{line} .step-list > [aria-current]')") is None
         runner.go()
         # The book its own: the song found, the sheet asked of Ultimate Guitar, the step's name again.
         wait_for(page, bar_of(line), ["done", "done", "running", "waiting", "waiting", "waiting", "waiting"])
         wait_for(page, words_of(line), ["Sheet · Ultimate Guitar", " · 3 of 7"])
+        wait_for(page, f"{steps_of(line)}[2]", ["running", "◐", "Sheet · Ultimate Guitar", ""])
 
 
 @pytest.mark.parametrize("width", [1280, 390])
@@ -355,7 +460,8 @@ def test_a_search_results_get_it_shows_the_bar_in_its_row_then_the_song_as_yours
         row = RYAN
         wait_for(page, bar_of(row), ["done", "done", "running", "waiting", "waiting", "waiting", "waiting"])
         wait_for(page, words_of(row), ["Sheet · Ultimate Guitar", " · 3 of 7"])
-        assert page.js(f"document.querySelector(\"{row} .step-chips\")") is None
+        assert page.js(f"document.querySelector(\"{row} .step-chips, {row} .step-bar\")") is None
+        assert page.js(shown(row, ".step-list")) is False  # a row has no card to list them in
         one_row(page, row)
         runner.go()
         wait_for(page, words_of(row), ["Lyrics", " · 5 of 7"])
@@ -367,7 +473,7 @@ def test_a_search_results_get_it_shows_the_bar_in_its_row_then_the_song_as_yours
         assert page.wait(f"{line}.querySelector('.progress').dataset.tone === 'ready'", timeout=15)
         assert page.wait(f"!!{line}.querySelector('.line-plays a.play-sheet')")
         assert page.js(f"{line}.querySelector('h3').textContent") == "Wonderwall"
-        assert page.js(f"{line}.querySelector('.step-segs, .step-chips')") is None
+        assert page.js(f"{line}.querySelector('.step-segs, .steps, .step-chips')") is None
         assert page.js(f"{line}.querySelector('.progress a')") is None
         assert page.js(f"{line}.querySelector('.progress').getBoundingClientRect().height") <= 1
         assert page.js("document.documentElement.scrollWidth <= window.innerWidth")

@@ -926,8 +926,8 @@ It is rows.js's, shared by both pages:
 - `/jobs.json` gives them again once a job is over (`jobs_routes.views`: a songbook's change, a lookup, which makes
   the songbooks its song is in again, or a removal; a LaCuerda artist's read changes none).
 - library.js lends it `window.caracoleLibrary` (`track`, `showLine`, `focusOn`, and `fold`, the search's
-  normalize.fold, for Add a song) and tells it every job's view (`caracole:job`) and the songbooks
-  (`caracole:songbooks`).
+  normalize.fold, for Add a song; and `stepList`, requests.js's) and tells it every job's view (`caracole:job`) and
+  the songbooks (`caracole:songbooks`).
 - library.js posts the Select bar's songbook too, and gives the bar its ticks back when that make fails
   (`caracole:unmade`; the songbook stays on the tab until it is made, under its name or with those ticks under
   another, or its Forget is pressed: songbooks.js `letGo`).
@@ -1255,15 +1255,18 @@ It is rows.js's, shared by both pages:
   (`BAR_AFTER`), its line, a song's or a result's row, is a bar of them, library.js `showLine`'s `barred`: a segment
   a step, `segsOf`, then the step in hand, its site and `count`, `stepWords`, "Sheet · Ultimate Guitar · 3 of 7",
   what a screen reader hears; while a nightly run holds the book, the view's `waits`, "Waiting for the book · 1 of
-  7", that step drawn waiting, `waitsIn`; ended otherwise than Ready, its words and the steps as chips under them,
-  `drawSteps`), never the rest: a finished one's outcome, a reason from its stages and its
-  song's state (never made up: Not on the sites says UG has no chords only once the fetch asked it,
-  `SongFacts.asked_ug`), and its next step.
+  7", that step drawn waiting, `waitsIn`; ended otherwise than Ready, its words, and under them that bar frozen,
+  `drawSteps`' `.step-bar`, a picture for a screen reader, named by every step and its state; and the list of the
+  steps, `stepList`, also `window.caracoleLibrary.stepList`, the one function that draws one (a line a step: its
+  mark, name, site and what it found; once over, the skipped ones folded into one last line), shown in the frozen
+  bar's place while the song's card is open, following a running lookup under its bar), never the rest: a finished
+  one's outcome, a reason from its stages and its song's state (never made up: Not on the sites says UG has no
+  chords only once the fetch asked it, `SongFacts.asked_ug`), and its next step.
   - Its steps are every one the lookup has from its start, a step whose every stage ended skipped kept in its place
     (`skipped`), so the total only rises; a sync's, a take's and a request of commands still leave a skipped one out.
   - `at` and `count` ("3 of 7") are the step in hand (`outcome._in_hand`): while it runs the running step, else the
-    first waiting, else the last; once over the first that failed, else none; the bar shows them only while the
-    request runs. `waits`, true, right after them, while that step's running stage waits for the book
+    first waiting, else the last; once over the first that failed, else none; the bar shows them while the request
+    runs, and the frozen bar once it is over. `waits`, true, right after them, while that step's running stage waits for the book
     (`outcome._waits_for_the_book`: its detail begins as status.py's `_WAITING`, the test `_stage_line` makes for
     "Waiting for the book…"; the phone's `Outcomes.waitsForTheBook`, by the same rule though it takes no lock).
   - Each step (`outcome.Chip`, `{name, site, state, found}`) names its site in full (`site`, `outcome.SITE_NAMES`

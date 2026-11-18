@@ -5,13 +5,17 @@
    7". Those done, and a plain one (over and no failure, "Match: not on UG"), in the accent; the one that runs at half,
    pulsing where motion is welcome; those to come grey; a skipped one, with nothing to do for the song, an outline; a
    failed one red and taller, its "!" in it. The segments' ends are square.
-   As chips: the Requests tab's running card, and a song's line, or a result's row, under its words once its lookup
-   ended otherwise than Ready (library.js drawSteps). Those done ticked in the found colour, the one that runs lit,
-   those to come grey, a failed one red; a plain one dashed and muted. The site a step names is bold: "Sheet
-   LaCuerda". */
-.progress.barred { display: flex; align-items: center; gap: 8px; overflow: hidden; color: var(--muted);
+   Under the line (library.js drawSteps, ``.steps``): once its lookup ended otherwise than Ready, that bar as it left
+   them, frozen (``.step-bar``), with the step that failed first; and the list of them (``.step-list``, library.js
+   stepList), which shows while the song's card is open, in the frozen bar's place, the bar of a lookup that runs
+   staying on the line's row above it: a line a step, its mark (done and plain ✓, running ◐, waiting ○, skipped –,
+   failed !), its name and its site, and what it found, quieter; once over, the skipped ones folded into one last line.
+   As chips: the Requests tab's running card. Those done ticked in the found colour, the one that runs lit, those to
+   come grey, a failed one red; a plain one dashed and muted. The site a step names is bold: "Sheet LaCuerda". */
+.progress.barred, .step-bar { display: flex; align-items: center; gap: 8px; overflow: hidden; color: var(--muted);
   font-weight: 500; white-space: nowrap; }
 .progress.barred::before { content: none; }  /* the line's dot: the bar says it runs */
+.step-bar { font-size: .85rem; }
 .step-segs { display: flex; flex: none; align-items: center; gap: 3px; width: 112px; }
 /* Each one, kept under .step-segs: filter.css's .seg is the Filter panel's segmented control. */
 .step-segs > .seg { display: block; flex: 1 1 0; min-width: 0; height: 6px; padding: 0; border: 0; border-radius: 0;
@@ -28,6 +32,26 @@
   .step-segs > .seg.running { animation: step-pulse 1.2s ease-in-out infinite; }
   @keyframes step-pulse { 50% { opacity: .2; } }
 }
+/* Under the line, across it, as its request line is; nothing shown (the line the bar, its card closed), no room taken.
+   Its card open, the list in the frozen bar's place. */
+.line > .steps { grid-column: 1 / -1; margin: 3px 0 4px; }
+.row > .steps { grid-column: 2 / -1; margin: 3px 0 2px; }
+.steps:not(:has(> .step-bar)), .steps > .step-list { display: none; }
+.line:has(> .line-more[aria-expanded="true"]) > .steps { display: block; }
+.line:has(> .line-more[aria-expanded="true"]) > .steps > .step-list { display: grid; }
+.line:has(> .line-more[aria-expanded="true"]) > .steps > .step-bar { display: none; }
+.step-list { gap: 2px; margin: 0; padding: 0; list-style: none; font-size: .85rem; }
+/* A step's line: its mark hanging in the margin, its name whole, what it found beside it (on a phone, under it). */
+.step { position: relative; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; min-width: 0;
+  padding-left: calc(1.1em + 8px); }
+.step-glyph { position: absolute; top: 0; left: 0; width: 1.1em; text-align: center; }
+.step.done .step-glyph, .step.plain .step-glyph, .step.running .step-glyph { color: var(--accent); }
+.step.failed .step-glyph { color: var(--failed); }
+.step.waiting, .step.skipped, .step.skipped-all { color: var(--muted); }
+.step.running { font-weight: 600; }
+.step-name b { font-weight: 600; }
+.step-found { flex: 1 1 0; min-width: 0; color: var(--muted); font-weight: 400; overflow-wrap: anywhere; }
+@media (max-width: 719px) { .step-found { flex-basis: 100%; } }
 .step-chips { display: flex; flex-wrap: wrap; gap: 5px; margin: 0; padding: 0; list-style: none; }
 .step-chip { min-width: 0; padding: 2px 9px; border: 1px solid transparent; border-radius: 7px; background: var(--raised);
   color: var(--muted); font-size: .78rem; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
