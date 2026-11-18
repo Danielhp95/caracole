@@ -155,7 +155,8 @@ const partsOf = (title) => {
   const foot = panel.querySelector(".foot");
   const head = panel.querySelector(".card-head");
   return {
-    parts: Array.from(panel.children).map((c) => c.className.split(" ").find((x) => x !== "row-group") ||
+    parts: Array.from(panel.children).filter((c) => !c.matches(".card-top"))  // the mark at its top: no part
+      .map((c) => c.className.split(" ").find((x) => x !== "row-group") ||
       c.tagName.toLowerCase()),
     foot: foot ? Array.from(foot.querySelectorAll("button, a, summary")).filter((c) => !c.closest(".foot-menu")).map(text) : [],
     menu: foot ? Array.from(foot.querySelectorAll(".foot-menu button, .foot-menu a")).map(text) : [],
@@ -203,26 +204,31 @@ def test_a_cards_parts_come_in_the_phones_order(conn, cfg, tmp_path, size):
 
 PHONE = {"width": 390, "height": 844, "mobile": True}
 # The page's script's names for a test's: Hotel California's line (``song``), its chevron, its card's head and the
-# bar kept at the top. ``chevronAt(y)`` scrolls until the chevron's middle is at ``y(…)`` on the screen (the bar
-# sticks on the way, so y is asked again each step); ``geometry()`` notes where each is.
+# bar kept at the top. ``chevronAt(y)`` scrolls until the chevron's middle is at ``y(…)`` on the screen, ``topAt(y)``
+# until the card's top is (the bar sticks on the way, so y is asked again each step); ``geometry()`` notes where each
+# is; ``settled()``, two frames and a task on, once the page's observers have said what they saw.
 PLACE = r"""
 window.line = document.querySelector('#list article.line[data-id="SONG"]');
 window.chevron = () => line.querySelector(":scope > .line-more");
 window.bar = () => document.querySelector(".searchbar").getBoundingClientRect();
 window.headIn = () => cardOf(line).querySelector(".card-head-in");
-window.chevronAt = (y) => {
+window.scrollTill = (at, y) => {
   for (let i = 0; i < 8; i += 1) {
-    const r = chevron().getBoundingClientRect();
-    const by = (r.top + r.bottom) / 2 - y();
+    const by = at() - y();
     if (Math.abs(by) < 0.5) break;
     scrollBy(0, by);
   }
 };
+window.chevronAt = (y) => scrollTill(() => { const r = chevron().getBoundingClientRect(); return (r.top + r.bottom) / 2; }, y);
+window.topAt = (y) => scrollTill(() => cardOf(line).getBoundingClientRect().top, y);
+window.settled = () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() =>
+  setTimeout(() => done(true), 50))));
 window.geometry = () => {
   const name = headIn().querySelector(".card-name");
   const c = chevron().getBoundingClientRect();
   return { shown: headIn().checkVisibility({ visibilityProperty: true }), head: headIn().getBoundingClientRect().top,
            bar: bar().bottom, barTop: bar().top, chevron: [c.top, c.bottom], line: line.getBoundingClientRect().top,
+           card: [cardOf(line).getBoundingClientRect().top, cardOf(line).getBoundingClientRect().bottom],
            middle: innerHeight / 2, lines: name.clientHeight / parseFloat(getComputedStyle(name).lineHeight),
            expanded: chevron().getAttribute("aria-expanded") };
 };
@@ -272,10 +278,11 @@ def _tap(b, x, y):
 
 @pytest.mark.parametrize("size", ["390,844", "320,640"])  # at 320 px its line is taller: its buttons in a column
 def test_a_long_cards_head_sticks_under_the_bar_and_closes_it(conn, cfg, tmp_path, size):
-    # A card longer than the screen, scrolled until its line's chevron is under the bar kept at the top: its head
-    # (its name, its close) sticks right under the bar, one line, as far as the card goes, and goes with its end,
-    # never past it; its close closes it, and its line comes back into view under the bar. At the top again with
-    # the card open, the head is gone: the line says it all there.
+    # A card longer than the screen, scrolled until its top, and so all of its line, is under the bar kept at the
+    # top: its head (its name, its close) sticks right under the bar, one line, as far as the card goes, and goes with
+    # its end, never past it, and not at all once the card is wholly above the screen; its close closes it, its line
+    # comes back into view under the bar, and the focus is on the line's chevron. At the top again with the card open,
+    # the head is gone: the line says it all there.
     width, height = (int(n) for n in size.split(","))
     url, song = _long_card(conn, cfg)
     b = _phone(tmp_path, url, song, size={"width": width, "height": height, "mobile": True})
@@ -286,10 +293,10 @@ def test_a_long_cards_head_sticks_under_the_bar_and_closes_it(conn, cfg, tmp_pat
                         ".getBoundingClientRect().top - card.getBoundingClientRect().top - "
                         "parseFloat(getComputedStyle(card).paddingTop); })()")) < 0.5
         assert b.js(SHOWN) is False  # its line in view: no head
-        b.js("chevronAt(() => bar().bottom - 30)")
+        b.js("topAt(() => bar().bottom - 10)")
         assert b.wait(SHOWN), b.js("geometry()")
         at = b.js("geometry()")
-        assert at["barTop"] == 0 and at["chevron"][1] < at["bar"], at  # the bar stuck, the chevron under it
+        assert at["barTop"] == 0 and at["card"][0] < at["bar"], at  # the bar stuck, the card's top under it
         assert abs(at["head"] - at["bar"]) <= 1 and at["lines"] <= 1.5, at
         # Further down the card, the head still under the bar; at the card's end, it goes with it.
         b.js("scrollBy(0, cardOf(line).getBoundingClientRect().bottom - bar().bottom - 200)")
@@ -298,15 +305,41 @@ def test_a_long_cards_head_sticks_under_the_bar_and_closes_it(conn, cfg, tmp_pat
         b.js("scrollBy(0, cardOf(line).getBoundingClientRect().bottom - bar().bottom - 20)")
         assert b.js("headIn().getBoundingClientRect().bottom <= cardOf(line).getBoundingClientRect().bottom + 0.5"), \
             b.js("[headIn().getBoundingClientRect().bottom, cardOf(line).getBoundingClientRect().bottom]")
+        # The card wholly above the screen: no head, whose card isn't there to be closed.
+        b.js("scrollBy(0, cardOf(line).getBoundingClientRect().bottom + 100)")
+        assert b.wait("!cardOf(line).classList.contains('head-away')"), b.js("geometry()")
         b.js("scrollTo(0, 0)")
         assert b.wait(f"!{SHOWN}"), b.js("geometry()")
-        b.js("chevronAt(() => bar().bottom - 30)")
+        b.js("topAt(() => bar().bottom - 10)")
         assert b.wait(SHOWN), b.js("geometry()")
         x, y = b.js("(() => { const r = cardOf(line).querySelector('.card-close').getBoundingClientRect(); "
                     "return [r.x + r.width / 2, r.y + r.height / 2]; })()")
         _tap(b, x, y)
         assert b.wait("chevron().getAttribute('aria-expanded') === 'false'"), b.js("geometry()")
         assert b.wait(LANDED), b.js("geometry()")
+        assert b.js("document.activeElement === chevron()"), b.js("document.activeElement.outerHTML.slice(0, 120)")
+    finally:
+        b.close()
+
+
+def test_at_320_px_no_head_lies_over_the_lines_buttons_still_showing(conn, cfg, tmp_path):
+    # At 320 px Hotel California's buttons stand in a column beside its title: its chevron under the bar, those
+    # buttons still show under it, and no head lies over them; a tap there is the button's. Once the card's top is
+    # under the bar too, the head shows.
+    url, song = _long_card(conn, cfg)
+    b = _phone(tmp_path, url, song, size={"width": 320, "height": 640, "mobile": True})
+    try:
+        _open_long(b)
+        b.js("chevronAt(() => bar().bottom - 30)")
+        play = ("[...line.querySelectorAll('.line-plays > .play')].find((p) => "
+                "p.getBoundingClientRect().top > bar().bottom + 2)")
+        assert b.js(f"Boolean({play})"), b.js("geometry()")  # a button of the line's still on the screen
+        assert b.js("settled()") and b.js(SHOWN) is False, b.js("geometry()")
+        assert b.js(f"(() => {{ const p = {play}; const r = p.getBoundingClientRect(); "
+                    "const at = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); "
+                    "return Boolean(at && at.closest('.play') === p); })()"), b.js("geometry()")
+        b.js("topAt(() => bar().bottom - 10)")
+        assert b.wait(SHOWN), b.js("geometry()")
     finally:
         b.close()
 
@@ -345,6 +378,51 @@ def test_with_reduced_motion_closing_lands_at_once(conn, cfg, tmp_path):
         assert b.js(BACK), b.js("geometry()")
     finally:
         b.close()
+
+
+def test_a_running_requests_line_and_steps_are_never_under_the_head(cfg, live, lookup, browser):
+    # Served, a lookup of Hotel California running with its card open: its request's line and its steps sit between
+    # its title's row and its card. While they show, no head lies over them; once they too are under the bar, it does.
+    base, _ = live
+    conn = db.connect(cfg.db_path)
+    try:
+        song = hotel(conn, cfg)
+        for n in range(14):
+            add_song(conn, "Radiohead", f"Song {n:02d}")
+        conn.commit()
+    finally:
+        conn.close()
+    lookup.hold.clear()
+    browser.send("Emulation.setDeviceMetricsOverride", width=390, height=844, deviceScaleFactor=1, mobile=True)
+    try:
+        browser.open(base)
+        sent = browser.js("fetch('/lookup', { method: 'POST', headers: { Accept: 'application/json' }, "
+                          "body: new URLSearchParams(" + json.dumps({"csrf": "tok", "song": str(song.id),
+                                                                     "identity": song.key}) + ") })"
+                          ".then((r) => r.status)")
+        assert sent == 202, sent
+        browser.open(base)  # the page that loads now follows the request
+        cards.install(browser)
+        browser.js(PLACE.replace("SONG", str(song.id)))
+        assert browser.wait("(() => { const p = line.querySelector(':scope > .progress'); "
+                            "return Boolean(p && ['queued', 'running'].includes(p.dataset.tone)); })()")
+        _open_long(browser)
+        steps = "line.querySelector(':scope > .steps')"
+        assert browser.wait(f"Boolean({steps}) && {steps}.checkVisibility()", timeout=15), \
+            browser.js("line.outerHTML.slice(0, 400)")
+        # The chevron under the bar, the request's line and its steps still showing: no head over them.
+        browser.js("chevronAt(() => bar().bottom - 30)")
+        assert browser.js(f"{steps}.getBoundingClientRect().bottom > bar().bottom + 10"), browser.js("geometry()")
+        assert browser.js("settled()") and browser.js(SHOWN) is False, browser.js("geometry()")
+        assert browser.js(f"(() => {{ const r = {steps}.getBoundingClientRect(); "
+                          "const at = document.elementFromPoint(r.x + r.width / 2, Math.max(r.top, bar().bottom) + 4); "
+                          f"return Boolean(at && {steps}.contains(at)); }})()"), browser.js("geometry()")
+        # Their bottom under the bar too, and the card's top: the head.
+        browser.js("topAt(() => bar().bottom - 10)")
+        assert browser.js(f"{steps}.getBoundingClientRect().bottom < bar().bottom"), browser.js("geometry()")
+        assert browser.wait(SHOWN), browser.js("geometry()")
+    finally:
+        lookup.hold.set()
 
 
 def test_at_320_px_a_chinese_or_long_name_stays_one_line(conn, cfg, tmp_path):

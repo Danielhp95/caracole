@@ -1358,10 +1358,10 @@
     return more;
   };
   // A card's head: the song's name and artist, as the line shows them, and a close button. In place it shows only
-  // while its line's chevron is under the bar kept at the top (watchAway), and a screen reader never hears it there
+  // once the whole of its line is under the bar kept at the top (watchAway), and a screen reader never hears it there
   // (the line says the same, so it hears it once), the chevron the keyboard's way to close; the pane's heading, its
   // button closing the card. Its close presses the chevron of the line it is on now (refill moves it into the line
-  // drawn before).
+  // drawn before), and gives that chevron the focus.
   const cardHead = (s, chevron) => {
     const head = el("div", "card-head");
     head.setAttribute("aria-hidden", "true");
@@ -1378,43 +1378,65 @@
     close.setAttribute("tabindex", "-1");
     close.appendChild(glyphFor("close"));
     close.addEventListener("click", () => {
-      if (chevron) closeCard(chevron.parentNode);
+      if (!chevron) return;
+      closeCard(chevron.parentNode);
+      chevron.focus({ preventScroll: true });  // the line's own close, where the head's was
     });
     return head;
   };
-  // While a card open in place is still on the screen but its line's chevron has gone under the bar kept at the top,
-  // its head shows, stuck under the bar (``head-away`` on the card, library.css): one IntersectionObserver, whose
-  // screen begins under the bar (its height, which the bar's ResizeObserver gives it), watches the chevron of each
-  // card open in place; it reads no layout. A card closed in place, however it was, brings its line back into view,
-  // under the bar (its scroll-margin-top, library-screens.css), with no motion where less is asked for.
-  const awayCards = new Map();  // a chevron -> its card, open in place
+  // While a card open in place is on the screen, and its line, all of it (the title's row, the request's line and its
+  // steps), is under the bar kept at the top, its head shows, stuck under the bar (``head-away`` on the card,
+  // library.css), so that it never lies over a part of the line still showing. One IntersectionObserver, whose screen
+  // begins under the bar (its height, which the bar's ResizeObserver gives it), watches each card open in place and the
+  // mark at the top of it (``.card-top``, library.css: where the card begins, under the line): the head shows while the
+  // mark is above that screen and the card still in it. It reads no layout. A card closed in place, however it was,
+  // brings its line back into view, under the bar (its scroll-margin-top, library-screens.css), with no motion where
+  // less is asked for.
+  const awayCards = new Map();  // a chevron -> its card open in place: { card, top, above, on }
+  const awayOf = new Map();  // a card, or the mark at its top -> its chevron
   let awayWatch = null;
   const awayGone = (chevron) => {
-    const card = awayCards.get(chevron);
-    if (card) card.classList.remove("head-away");
+    const away = awayCards.get(chevron);
+    if (!away) return;
+    away.card.classList.remove("head-away");
     awayCards.delete(chevron);
-    if (awayWatch) awayWatch.unobserve(chevron);
+    for (const target of [away.card, away.top]) {
+      awayOf.delete(target);
+      if (awayWatch) awayWatch.unobserve(target);
+    }
   };
-  // A line a search leaves out keeps its card open, and its chevron watched for when it shows again.
+  // A line a search leaves out keeps its card open, and its card watched for when it shows again.
   const awaySeen = (seen) => {
     for (const entry of seen) {
-      const card = awayCards.get(entry.target);
-      if (card) card.classList.toggle("head-away", entry.target.isConnected && !entry.isIntersecting
-        && Boolean(entry.rootBounds) && entry.boundingClientRect.top < entry.rootBounds.top);
+      const away = awayCards.get(awayOf.get(entry.target));
+      if (!away) continue;
+      if (entry.target === away.card) away.on = entry.isIntersecting;
+      else away.above = !entry.isIntersecting && Boolean(entry.rootBounds)
+        && entry.boundingClientRect.top < entry.rootBounds.top;
+      away.card.classList.toggle("head-away", away.card.isConnected && away.above && away.on);
     }
   };
   const watchAway = (barHeight) => {
     if (!("IntersectionObserver" in window)) return;
     if (awayWatch) awayWatch.disconnect();
     awayWatch = new IntersectionObserver(awaySeen, { rootMargin: "-" + Math.round(barHeight) + "px 0px 0px 0px" });
-    for (const chevron of awayCards.keys()) awayWatch.observe(chevron);
+    for (const target of awayOf.keys()) awayWatch.observe(target);
   };
   const cardToggled = (open, card, chevron) => {
     const line = chevron && chevron.parentNode;
     if (!line || card.parentNode !== line) return;  // not in place
     if (open) {
-      awayCards.set(chevron, card);
-      if (awayWatch) awayWatch.observe(chevron);
+      let top = card.querySelector(":scope > .card-top");
+      if (!top) {
+        top = card.appendChild(el("span", "card-top"));
+        top.setAttribute("aria-hidden", "true");
+      }
+      awayGone(chevron);
+      awayCards.set(chevron, { card, top, above: false, on: false });
+      for (const target of [card, top]) {
+        awayOf.set(target, chevron);
+        if (awayWatch) awayWatch.observe(target);
+      }
       return;
     }
     awayGone(chevron);
@@ -2084,7 +2106,7 @@
       const height = box && box[0] ? box[0].blockSize : bar.offsetHeight;
       document.documentElement.style.setProperty("--bar-h", height + "px");
       watchAway(height);
-    }).observe(bar);
+    }).observe(bar, { box: "border-box" });
   } else {
     watchAway(0);
   }
@@ -4276,6 +4298,7 @@
           const id = Number(view.id);
           const shown = spots.has(id) ? [id, spots.get(id)] : spotOf(view);
           if (shown) {  // asked for again: its line says how it goes, where it is, still in the page
+            if (chevronOf(spot)) awayGone(chevronOf(spot));  // it leaves the page
             spot.remove();
             spot = shown[1];
             if (shown[0] !== id) spots.delete(shown[0]);

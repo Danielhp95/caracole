@@ -2652,11 +2652,12 @@ again); and at the far end a **⋯** that opens info.json, a quiet download, and
 served, **Remove**, in red (Escape, or a press elsewhere, closes it). A line
 drawn again (a request over) keeps its card open, its drawer closed.
 
-A card longer than the screen keeps its name in sight: once you scroll its line, chevron and all, up under
-the search bar, the card's head sticks right under the bar, its name and artist on one line (cut short when
-long) and a close button, and goes with the card's end as that comes up under the bar. While the line is in
-view the head isn't there: the line says the same. However you close a card, its line comes back into view,
-just under the search bar, at once when your system asks for less motion.
+A card longer than the screen keeps its name in sight: once you scroll its line, all of it (its buttons, and
+a request's line and steps under it), up under the search bar, the card's head sticks right under the bar, its
+name and artist on one line (cut short when long) and a close button, and goes with the card's end as that
+comes up under the bar. While any of the line shows, the head isn't there, so it never lies over the line: the
+line says the same. However you close a card, its line comes back into view, just under the search bar, at
+once when your system asks for less motion, and the focus is on its chevron.
 
 An artist of two or more songs has them under a band 34 px tall: their name in
 the artist's colour (cut short with an ellipsis, on one line) and, on its right,

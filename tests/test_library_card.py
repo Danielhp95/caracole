@@ -61,7 +61,8 @@ const noteCard = (title) => {
         said: a.getAttribute("aria-label"), href: a.getAttribute("href"), download: a.getAttribute("download") })),
     };
   });
-  const parts = Array.from(panel.children).map((c) => c.className.split(" ").find((x) => x !== "row-group") ||
+  const parts = Array.from(panel.children).filter((c) => !c.matches(".card-top"))  // the mark at its top: no part
+    .map((c) => c.className.split(" ").find((x) => x !== "row-group") ||
     c.tagName.toLowerCase());
   return { tiles, parts, foot: Array.from(panel.querySelectorAll(".foot button, .foot a")).map(text) };
 };
