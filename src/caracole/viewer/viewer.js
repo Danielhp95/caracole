@@ -1942,13 +1942,18 @@
   // from 1200 px, the toolbar at the top.
   const barTop = () => (toolbar.wide.matches || bar.hidden || bar.classList.contains("away") || doc.dataset.full
     ? window.innerHeight : bar.getBoundingClientRect().top);
-  // The toolbar's foot in the window from 1200 px (0 at least: 0 in full screen, where it shows nothing); 0 narrower,
-  // where the window's top is clear.
-  const barFoot = () => (toolbar.wide.matches ? Math.max(0, bar.getBoundingClientRect().bottom) : 0);
+  // The top of the window's room for a popover: from 1200 px, while the toolbar is stuck to the window's top, its foot;
+  // else the window's top (the toolbar unstuck under the title is the page's, and a card open over it is a layer over
+  // the page, which shows its pills again as it closes; in full screen it shows nothing). 0 narrower.
+  const barFoot = () => {
+    if (!toolbar.wide.matches) return 0;
+    const r = bar.getBoundingClientRect();
+    return r.top <= 0.5 ? Math.max(0, r.bottom) : 0;
+  };
   // From 900 px wide the card is a popover by its chord: under it, or above it where the bar leaves
-  // no room below and the room above clears the toolbar, and across it, within the song's column. It is placed in the
-  // page, so it goes with its chord as the page scrolls. So is the versions list, a popover under its line (kinds.js's
-  // place).
+  // no room below and the room above clears the stuck toolbar, and across it, within the song's column. It is placed in
+  // the page, so it goes with its chord as the page scrolls. So is the versions list, a popover under its line
+  // (kinds.js's place).
   function place() {
     if (kinds) kinds.place();
     if (card.hidden || !wide.matches) return;
@@ -2035,6 +2040,7 @@
     drawNecks();
     layout();
     if (!on) fitKey();  // the bar back: its key measured again
+    toolbar.edge();  // from 1200 px, the pill under the toolbar again, or at the top with none
   };
   // Every one but ``keep``.
   const closeAll = (keep) => {
@@ -2148,7 +2154,7 @@
   });
   // A short screen (a phone on its side): full screen by itself, with no history entry (layers.js's autoFull).
   const auto = window.caracoleLayers ? window.caracoleLayers.autoFull({
-    handle, idle: () => layers.length === 0, changed: () => { drawNecks(); layout(); },
+    handle, idle: () => layers.length === 0, changed: () => { drawNecks(); layout(); toolbar.edge(); },
   }) : { end() {} };
   if (window.caracoleLayers) {
     window.caracoleLayers.doubleTap(document, window.caracoleLayers.MARGIN_SKIP, () => {

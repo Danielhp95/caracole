@@ -166,11 +166,10 @@ CARD_PLACE = """(() => Object.fromEntries(["card", "card-name", "prev", "diagram
 
 
 @in_chromium
-@pytest.mark.parametrize("size", ["390,844", "1280,1000"], ids=["phone", "desktop"])
+@pytest.mark.parametrize("size", ["390,844", "1280,800"], ids=["phone", "desktop"])
 def test_stepping_from_the_tabs_shape_to_chords_dbs_never_moves_the_card(tmp_path, size):
     # The card stands on the foot of the screen: a note on the tab's shape alone would move it, and ‹ ›
-    # from under the thumb, between two taps. The laptop's window tall enough for the card under its chord, which from
-    # 1200 px goes above it only where it clears the toolbar under the title (test_viewer_toolbar.py).
+    # from under the thumb, between two taps.
     with Chromium(tmp_path / "profile", size=size) as browser:
         tab = opened(browser, build_viewer(LEGEND), tmp_path, f"#chord={CADD9}")
         places, notes = [tab.eval(CARD_PLACE)], [tab.eval(CARD)["note"]]

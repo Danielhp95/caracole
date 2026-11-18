@@ -63,9 +63,9 @@
   //                    wrote it (before what followed it then: the pill), at the foot. Moved, it keeps the focus on the
   //                    control that had it. edge() writes --toolbar-bottom on <html> while wide: the toolbar's bottom
   //                    edge in the window, in px, 0 at least (0 where it shows nothing: full screen), which the
-  //                    stylesheet puts the autoscroll pill under; narrow, it takes it off. place() calls it, and the
-  //                    page calls it as it scrolls and resizes. It writes to the bar's place and to <html>'s
-  //                    --toolbar-bottom alone.
+  //                    stylesheet puts the autoscroll pill under; narrow, it takes it off; only when that changes.
+  //                    place() calls it, and the page calls it as it scrolls and resizes and as full screen comes and
+  //                    goes. It writes to the bar's place and to <html>'s --toolbar-bottom alone.
   //
   // The marker is an entry's state's caracoleLayer, an integer from 1; every history.replaceState in viewer/'s
   // scripts passes history.state, never null, so that an entry keeps its depth through what the page writes into its
@@ -219,12 +219,13 @@
   const toolbar = (bar, head) => {
     const doc = document.documentElement, wide = matchMedia(TOOLBAR);
     const home = bar.parentNode, next = bar.nextSibling;  // where the page wrote it
+    let written = null;  // what --toolbar-bottom holds now, as this wrote it: none
     const edge = () => {
-      if (!wide.matches) {
-        doc.style.removeProperty("--toolbar-bottom");
-        return;
-      }
-      doc.style.setProperty("--toolbar-bottom", Math.max(0, Math.round(bar.getBoundingClientRect().bottom)) + "px");
+      const value = wide.matches ? Math.max(0, Math.round(bar.getBoundingClientRect().bottom)) + "px" : null;
+      if (value === written) return;  // as it is: no style written as the page scrolls on, the toolbar stuck
+      written = value;
+      if (value === null) doc.style.removeProperty("--toolbar-bottom");
+      else doc.style.setProperty("--toolbar-bottom", value);
     };
     const place = () => {
       const after = wide.matches ? head() : null;

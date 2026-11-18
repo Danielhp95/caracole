@@ -579,17 +579,20 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
    autoscroll counts down and runs it is asleep (data-asleep, viewer.js and harptab.js): out of sight with its room
    kept, so the song doesn't jump, the pill under it (--toolbar-bottom: its bottom edge in the window, layers.js), Aa's
    box under Aa. No bar at the foot: --foot is the safe area alone. The full-screen handle stays at the window's foot,
-   as at every width. */
+   as at every width, and full screen keeps no room for the toolbar it hides. The key's pill keeps its floor (− and +
+   at their 44 px, the key between them at three quarters of its longest, "Ab mixolydian"); where a rail on either
+   side leaves the row no room for every tool's word beside it, the tools are their icons alone, each still named by
+   its word, kept for a screen reader (the container query on .bar-in). */
 @media screen and (min-width: 1200px) {
   :root { --foot: env(safe-area-inset-bottom); --toolbar: 56px; }
-  html { scroll-padding-top: calc(var(--toolbar) + 8px); }
+  html:not([data-full]) { scroll-padding-top: calc(var(--toolbar) + 8px); }
   .bar { position: sticky; z-index: 6; top: 0; left: auto; right: auto; bottom: auto; margin-top: 10px; padding: 6px 0;
     border: 0; background: var(--bg); box-shadow: none; transition: none; }
   .bar.away { transform: none; }
   .bar[data-asleep] { visibility: hidden; }
-  .bar-in { justify-content: flex-start; gap: 8px; max-width: none; margin: 0; }
-  .keys { flex: 0 1 220px; height: 44px; max-width: 220px; border-radius: 22px; background: var(--surface);
-    box-shadow: inset 0 0 0 1px var(--border); }
+  .bar-in { justify-content: flex-start; gap: 8px; max-width: none; margin: 0; container: toolbar / inline-size; }
+  .keys { flex: 0 1 220px; height: 44px; min-width: 172px; max-width: 220px; border-radius: 22px;
+    background: var(--surface); box-shadow: inset 0 0 0 1px var(--border); }
   .keys .step { height: 44px; border-radius: 22px; }
   .bar button.now { height: 44px; border-radius: 10px; }
   .bar .tool { flex-direction: row; gap: 7px; width: auto; height: 44px; padding: 0 15px 0 12px; border-radius: 22px;
@@ -602,6 +605,12 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
   .bar .play[aria-pressed="true"] .disc { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--accent); }
   .sizes { top: calc(100% + 10px); bottom: auto; }
   .pill { top: calc(var(--toolbar-bottom, 0px) + 12px); bottom: auto; }
+  @container toolbar (max-width: 37.5rem) {
+    .bar .tool { justify-content: center; min-width: 44px; padding: 0 13px; }
+    .bar .tool .bw { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
+      clip-path: inset(50%); white-space: nowrap; }
+    .bar .tool:is([aria-pressed="true"], [aria-expanded="true"]) { color: var(--accent); }  /* as its word would say */
+  }
 }
 .ui-head { display: flex; align-items: center; gap: 8px; }
 /* Room for two lines, as tall as the close button: a heading that wraps at one capo and not at

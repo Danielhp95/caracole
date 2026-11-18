@@ -702,7 +702,8 @@ def test_on_a_desktop_a_chords_card_is_a_popover_by_the_chord(tmp_path):
     assert scrolled["card"]["top"] == second["card"]["top"] - 120  # it goes with its chord as the page scrolls
     assert closed["card"] is None and back  # the focus back on the chord that opened it
     assert above["card"]["bottom"] <= low[2] and above["card"]["bottom"] >= low[2] - 16
-    assert above["card"]["top"] >= max(0, above["bar"]["bottom"])  # clear of the toolbar
+    # in the window, and clear of the toolbar where it is stuck to the window's top (test_viewer_toolbar.py)
+    assert above["card"]["top"] >= (above["bar"]["bottom"] if above["bar"]["top"] <= 0 else 0)
 
 
 @in_chromium

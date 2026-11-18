@@ -1379,16 +1379,21 @@ It is rows.js's, shared by both pages:
   - viewer.css's `@media screen and (min-width: 1200px)` block: sticky at the window's top once the title scrolls
     away, on the page's background, `z-index` 6 (over the song, under every layer and popover), a row of pills in the
     phone's order, none pushed to the end, 56 px tall (`--toolbar`); `--foot` is the safe area alone there, and
-    `html`'s `scroll-padding-top` keeps what is brought into view below it; the bar's `html[data-panel]` inset is
-    below 1200 px alone;
+    `html:not([data-full])`'s `scroll-padding-top` keeps what is brought into view below it; the bar's
+    `html[data-panel]` inset is below 1200 px alone;
+  - the key's pill keeps its floor (`min-width` 172 px: − and + at 44, the key at three quarters of "Ab mixolydian"),
+    and where a rail on either side leaves `.bar-in` (a container, `toolbar`) under 37.5 rem, the tools are their
+    icons alone, their words visually hidden, still their names;
   - it never slides away (the scroll handlers slide the bar below 1200 px alone); while autoscroll counts down and runs
     it is `bar[data-asleep]` (`visibility: hidden`, its room kept: viewer.js `dock()`, harptab.js `showScroll()`, at
-    every width, where below 1200 px viewer.js hides the bar and harptab.js slides it), and `edge()` writes
-    `--toolbar-bottom` on `<html>` (on scroll and resize too), which puts the pill under it;
-  - a card or a numeral's tooltip goes above its chord only where it clears the toolbar (`place()`, `placeTip()`:
-    `barFoot()` the ceiling, the window's foot the floor, `barTop()`); `layout()` takes `--toolbar` off the window's
-    room for columns (`toolbarRoom()`, none in full screen); full screen hides it as the bar (`data-controls`), its
-    handle staying at the window's foot.
+    every width, where below 1200 px viewer.js hides the bar and harptab.js slides it, harptab.js's `showScroll()`
+    again as the window crosses 1200 px), and `edge()` writes `--toolbar-bottom` on `<html>`, only when it changes (on
+    scroll, resize and full screen's coming and going too), which puts the pill under it;
+  - a card or a numeral's tooltip goes above its chord only where it clears the toolbar while it is stuck to the
+    window's top (`place()`, `placeTip()`: `barFoot()` the ceiling, else the window's top: a card may cover the unstuck
+    toolbar's pills while it is open; the window's foot the floor, `barTop()`); `layout()` takes `--toolbar` off the
+    window's room for columns (`toolbarRoom()`, none in full screen); full screen hides it as the bar
+    (`data-controls`), its handle staying at the window's foot.
 - **The song's end**: `.page`'s padding is the bar's room (`--foot`), which `layout()` measures columns against (from
   1200 px less the toolbar's at the top); the half screen of over-scroll is `.page::after`, never in it, and print
   drops it.

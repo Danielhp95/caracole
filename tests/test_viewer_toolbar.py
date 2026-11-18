@@ -226,6 +226,115 @@ def test_the_aa_box_and_a_chords_card_open_below_the_toolbar(tmp_path):
     assert chord[3] + 8 + height > 640 - 8 and chord[2] - 8 - height >= 8, (chord, height)
 
 
+def test_on_a_songs_first_screen_a_chords_card_is_wholly_in_the_window(tmp_path):
+    # At the page's top the toolbar under the title isn't stuck: it is the page's, as the title is, and a card with no
+    # room under its chord goes above it, over the toolbar's pills while it is open, never off the window's foot.
+    # Stuck, the toolbar is the card's ceiling (test_the_aa_box_and_a_chords_card_open_below_the_toolbar).
+    box = "document.getElementById('card').getBoundingClientRect().toJSON()"
+    with viewer(tmp_path, written(tmp_path, LONG), **DESKTOP) as b:
+        first = b.js("""(() => { const r = document.querySelector('#sheet .c').getBoundingClientRect();
+          return [r.x + r.width / 2, r.y + r.height / 2]; })()""")
+        click_at(b, *first)
+        assert b.wait("!document.getElementById('card').hidden")
+        height = b.js("document.getElementById('card').offsetHeight")
+        b.press("Escape")
+        assert b.wait("document.getElementById('card').hidden")
+        chord = b.js("""(() => { const all = [...document.querySelectorAll('#sheet .c')].filter((c) => {
+            const r = c.getBoundingClientRect(); return r.top > 0 && r.bottom < innerHeight; });
+          const best = all.reduce((a, e) => Math.abs(e.getBoundingClientRect().top - 500)
+            < Math.abs(a.getBoundingClientRect().top - 500) ? e : a);
+          const r = best.getBoundingClientRect();
+          return [r.x + r.width / 2, r.y + r.height / 2, r.top, r.bottom]; })()""")
+        bar = seen(b)
+        click_at(b, chord[0], chord[1])
+        assert b.wait("!document.getElementById('card').hidden")
+        frames(b)
+        card = b.js(box)
+        y = b.js("scrollY")
+    assert y == 0 and bar["bar"]["top"] > 0, bar  # the toolbar under the title, not stuck
+    # No room under it in the window; room above it, but only over the toolbar's place
+    assert chord[3] + 8 + height > 800 - 8 and chord[2] - 8 - height >= 8, (chord, height)
+    assert chord[2] - 8 - height < bar["bar"]["bottom"] + 8, (chord, height, bar["bar"])
+    assert card["top"] >= 0 and card["bottom"] <= 800, (card, chord)  # wholly in the window
+    assert card["bottom"] <= chord[2], (card, chord)  # above its chord
+
+
+# The toolbar's pills as laid out, and the names a screen reader hears for its tools (Chromium's accessibility tree).
+PILLS = """(() => { const bar = document.getElementById('bar').getBoundingClientRect();
+  const pills = [document.getElementById('keys'), ...document.querySelectorAll('#bar .tool')]
+    .filter((e) => e.getClientRects().length);
+  const r = (e) => e.getBoundingClientRect();
+  return {ids: pills.map((e) => e.id), lefts: pills.map((e) => r(e).left), rights: pills.map((e) => r(e).right),
+    tops: pills.map((e) => r(e).top), bar: bar.toJSON(), keys: r(document.getElementById('keys')).width,
+    now: r(document.getElementById('key-now')).width,
+    words: [...document.querySelectorAll('#bar .tool .bw')].filter((e) => e.closest('.tool').getClientRects().length)
+      .map((e) => r(e).width)}; })()"""
+
+
+def tool_names(b) -> list[str]:
+    """The name Chromium gives each tool of the bar shown (its accessibility tree), in order."""
+    b.send("Accessibility.enable")
+    names = []
+    for id_ in b.js("[...document.querySelectorAll('#bar .tool')].filter((e) => e.getClientRects().length)"
+                    ".map((e) => e.id)"):
+        found = b.send("Runtime.evaluate", expression=f"document.getElementById({id_!r})")
+        node = b.send("Accessibility.getPartialAXTree", objectId=found["result"]["objectId"], fetchRelatives=False)
+        names.append(node["nodes"][0]["name"]["value"])
+    return names
+
+
+def apart(m: dict) -> None:
+    """No pill over another, all in the toolbar's one row, the key's pill and its key at their floor."""
+    assert all(right <= left + 0.5 for right, left in zip(m["rights"], m["lefts"][1:])), m
+    assert m["lefts"][0] >= m["bar"]["left"] and m["rights"][-1] <= m["bar"]["right"] + 0.5, m
+    assert max(m["tops"]) - min(m["tops"]) <= 1, m
+    assert m["keys"] >= 172 - 0.5 and m["now"] >= 84 - 0.5, m  # − and + at 44 px, the key between them
+
+
+def test_beside_two_rails_the_tools_are_their_icons_and_the_key_keeps_its_room(tmp_path):
+    # At 1200 px, the rail of necks on the left and the key list's, or the settings', on the right: the row has no room
+    # for every tool's word beside the key, so the tools are their icons alone, each still named by its word.
+    with viewer(tmp_path, written(tmp_path, LONG), width=1200, height=800, mobile=False) as b:
+        roomy, roomy_names = b.js(PILLS), tool_names(b)
+        b.click("#key-now")
+        assert b.wait("!document.getElementById('key-list').hidden")
+        keys = b.js(PILLS)
+        b.click("#more")  # the settings' rail in the key list's place
+        assert b.wait("!document.getElementById('panel').hidden && document.getElementById('key-list').hidden")
+        settings, settings_names = b.js(PILLS), tool_names(b)
+        rails = b.js("[document.documentElement.dataset.necks, document.documentElement.dataset.panel]")
+    words = ["Shapes", "Text", "Auto-scroll", "More"]  # Text and Scroll by their aria-labels' words
+    assert rails == ["1", "open"]
+    for m in (roomy, keys, settings):
+        apart(m)
+        assert m["ids"] == ["keys", "necks-toggle", "size", "scroll", "more"], m
+    assert all(w > 10 for w in roomy["words"]), roomy  # one rail: every word beside its icon
+    assert all(w <= 1 for w in keys["words"]) and all(w <= 1 for w in settings["words"]), (keys, settings)
+    assert [n.split()[0] for n in roomy_names] == [n.split()[0] for n in settings_names], (roomy_names, settings_names)
+    assert [n.split()[0] for n in settings_names] == ["Shapes", "Text", "Auto-scroll", "More"] == words
+
+
+def test_in_full_screen_nothing_keeps_the_toolbars_room(tmp_path):
+    room = """[getComputedStyle(document.documentElement).scrollPaddingTop,
+      getComputedStyle(document.documentElement).getPropertyValue('--toolbar-bottom').trim()]"""
+    with viewer(tmp_path, written(tmp_path, LONG), **DESKTOP) as b:
+        b.js("window.scrollTo(0, 1500)")
+        frames(b)
+        before = b.js(room)
+        b.click("#more")
+        assert b.wait("!document.getElementById('panel').hidden")
+        b.click("#full-open")
+        assert b.wait("document.documentElement.dataset.full === 'on'")
+        full = b.js(room)
+        b.press("Escape")
+        assert b.wait("!document.documentElement.dataset.full")
+        frames(b)
+        after = b.js(room)
+    assert before == ["64px", "56px"], before
+    assert full == ["auto", "0px"], full  # no toolbar: nothing brought into view is kept below one, the pill at the top
+    assert after == before, after
+
+
 def songbook(tmp_path: Path) -> str:
     songs = [BookSong("Long Song", "Synthetic", cho=LONG, id="aaaa"),
              BookSong("Sections", "Synthetic", cho=SECTIONS, id="bbbb")]
@@ -257,11 +366,17 @@ def test_a_harmonica_tabs_page_has_the_toolbar_too(tmp_path):
         frames(b)
         moving = seen(b)
         pill = b.js("document.getElementById('pill').getBoundingClientRect().top")
+        # Narrowed below 1200 px as it moves: the bar at the foot, slid away, never over the moving tab.
+        b.send("Emulation.setDeviceMetricsOverride", width=1100, height=800, deviceScaleFactor=1, mobile=False)
+        assert b.wait("innerWidth === 1100")
+        frames(b)
+        narrow = seen(b) | {"state": b.js("document.getElementById('pill').dataset.state")}
     under_the_title(m)
     assert m["ids"] == ["h-down", "h-up", "necks-toggle", "notes", "size", "scroll"], m
     assert stuck["bar"]["top"] == 0 and stuck["visible"] == "visible" and not stuck["away"], stuck
     assert moving["visible"] == "hidden" and moving["asleep"] and moving["bar"]["top"] == 0, moving
     assert pill >= moving["bar"]["bottom"], (pill, moving)
+    assert narrow["state"] in ("counting", "running") and narrow["next"] == "pill" and narrow["away"], narrow
 
 
 def test_both_pages_place_the_toolbar_through_layers_js():

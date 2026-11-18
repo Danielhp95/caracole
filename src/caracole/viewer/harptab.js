@@ -236,6 +236,11 @@
   const vList = $("version-list"), verNow = $("ver-now");  // the versions list and its line (kinds.js, below)
   let kinds = null;  // what kinds.js attached: its links() and place()
   const wide = window.matchMedia("(min-width: 1200px)");
+  // From 1200 px the bar is a toolbar under the tab's title, as the viewer's (layers.js's toolbar, viewer.css), back at
+  // the foot below it.
+  const bar = $("bar");
+  const toolbar = window.caracoleLayers ? window.caracoleLayers.toolbar(bar, () => document
+    .querySelector(".page > header.head")) : { wide: window.matchMedia("not all"), place() {}, edge() {} };
   let sheetAt = null;  // the phone's sheet: "half", "full", or null while it is closed
   const mod12 = (n) => ((n % 12) + 12) % 12;
   const picks = {};  // a shape picked on a chord's neck: the page's alone
@@ -550,13 +555,14 @@
     else delete doc.dataset.full;
     handle.hidden = !on;
     drawRail();
+    toolbar.edge();  // from 1200 px, the pill under the toolbar again, or at the top with none
   };
   handle.addEventListener("click", () => {
     if (doc.dataset.full === "auto") auto.end();
     else closeLayer("full");
   });
   const auto = window.caracoleLayers ? window.caracoleLayers.autoFull({
-    handle, idle: () => layers.length === 0, changed: drawRail,
+    handle, idle: () => layers.length === 0, changed: () => { drawRail(); toolbar.edge(); },
   }) : { end() {} };
   if (window.caracoleLayers) {
     window.caracoleLayers.doubleTap(document, window.caracoleLayers.MARGIN_SKIP + ", .h, .rp, .legend, .why", () => {
@@ -603,14 +609,11 @@
   // Off, counting down (3 s, for your hands to get to the harp; pressed again, it starts at once), running, or
   // paused; the pill steers it, above the bar's place (from 1200 px under the toolbar). A finger on the page, the
   // wheel, a key that scrolls, a scroll by hand or the end of the tab pauses it.
-  const bar = $("bar"), pill = $("pill"), go = $("go");
-  // From 1200 px the bar is a toolbar under the tab's title, as the viewer's (layers.js's toolbar, viewer.css), back at
-  // the foot below it.
-  const toolbar = window.caracoleLayers ? window.caracoleLayers.toolbar(bar, () => document
-    .querySelector(".page > header.head")) : { wide: window.matchMedia("not all"), place() {}, edge() {} };
+  const pill = $("pill"), go = $("go");
+  // Across 1200 px: the toolbar under the title, or the bar back at the foot, away while the tab moves by itself.
   toolbar.wide.addEventListener("change", () => {
     toolbar.place();
-    bar.classList.remove("away");
+    showScroll();
   });
   const COUNTDOWN = 3000;
   const scroll = { state: "off", from: 0, travelled: 0, last: 0, at: 0, ends: 0, timer: 0, loop: 0 };

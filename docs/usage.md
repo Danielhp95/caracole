@@ -3381,9 +3381,11 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   title scrolls away it sticks to the top of the window, and the song keeps
   room for it (what a link or a section brings into view comes up below it).
   It never slides away; while the song scrolls by itself it is out of sight,
-  its room kept, so the song doesn't jump, and the pill sits under it. Tab
-  reaches it right after the title. Narrower than 1200 px it is the bar at
-  the foot again. − and +
+  its room kept, so the song doesn't jump, and the pill sits under it. Beside
+  two rails (the necks and the settings or the key list) on a window too
+  narrow for every word, the tools show their icons alone. Tab reaches it
+  right after the title. Narrower than 1200 px it is the bar at the foot
+  again. − and +
   move every
   chord, its shapes and the key a semitone at a time, with the key you play
   between them in short and, under it, what changed the chords you see from
