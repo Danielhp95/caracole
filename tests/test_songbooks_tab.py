@@ -793,6 +793,39 @@ def test_select_makes_a_songbook_and_the_tab_opens_on_it(serve, cfg, library, tm
         assert page.js(OWN_MOVES.format(moved=MOVED, tab=tab)) == [], page.js("window.shifts")
 
 
+def test_new_songbook_takes_the_step_out_of_the_library_back_so_one_back_after_make_is_the_library(
+        serve, cfg, library, tmp_path):
+    # The page's history, from the library as it opened (A): the Songbooks tab is a step out of it (B, tabs.js's
+    # { tab: 1 }); + New songbook takes that step back, as the Library tab does, the library shown at once and its
+    # name field ready (A again, B after it); Make opens the songbook made, a step out again (C in B's place). So
+    # one Back is the library, and the one after leaves the page: never a second library entry for a Back that
+    # changes nothing.
+    url, _ = serve(Fake(cfg))
+    marked = "Boolean(history.state && history.state.tab)"
+    with opened(tmp_path, 390, 844) as page:
+        page.open(url)
+        n = page.js("history.length")
+        page.click("#tab-songbooks")
+        assert page.wait("window.caracoleTabs.current() === 'songbooks'")
+        assert page.js(f"[history.length, {marked}]") == [n + 1, True]
+        page.click("#songbooks .new-book")
+        assert page.wait(f"document.body.classList.contains('selecting') && !{marked}")
+        assert page.js(f"[window.caracoleTabs.current(), history.length, {SHOWN}('#list')]") == ["library", n + 1, True]
+        assert page.js("document.activeElement === document.querySelector('.pick-name')")
+        page.click('#list [data-id="%d"] .pick' % library["Creep"].id)
+        page.click(".pick-name")
+        page.type("Beach nights")
+        page.click(".pickbar-form button[type=submit]")
+        assert page.wait(f"{SHOWN}('#songbooks') && document.querySelector('#songbooks .book h2').textContent === "
+                         "'Beach nights'", timeout=10)
+        assert page.js(f"[history.length, {marked}]") == [n + 1, True]
+        page.js("window.before = true; history.back()")
+        assert page.wait(f"window.caracoleTabs.current() === 'library' && {SHOWN}('#list')")
+        assert page.js(f"[history.length, {marked}, window.before]") == [n + 1, False, True]
+        page.js("setTimeout(() => history.back(), 0)")  # nothing of the page's left before it: the browser's blank page
+        assert page.wait("window.before === undefined && document.readyState === 'complete'")
+
+
 def test_select_adds_to_a_songbook_there_is_and_the_tab_opens_on_it(serve, cfg, library, tmp_path):
     hold = threading.Event()
     url, posted = serve(Fake(cfg, hold=hold))

@@ -1034,8 +1034,11 @@ It is rows.js's, shared by both pages:
   remembered as `fromLibrary` (popstate sets it again from that marker, so Forward to the step makes Library Back
   again); between the other tabs each replaces the one before; the Library tab (clicked, or reached with the
   tablist's keys) while `fromLibrary` is `history.back()` and nothing else (pressed again before popstate, the same
-  Back), its focus given back once popstate shows it. An address that names a tab (the page's first, Back, Forward)
-  shows it with no step, and a `pushState` that throws changes the tab in place (test_library_tabs.py).
+  Back), its focus given back once popstate shows it; the library shown by a script or a link meanwhile
+  (songbooks.js's + New songbook) takes that step back too (`back()`), the library shown at once, so what the script
+  does next lands on it, and popstate showing nothing again (test_songbooks_tab.py). An address that names a tab (the
+  page's first, Back, Forward) shows it with no step, and a `pushState` that throws changes the tab in place
+  (test_library_tabs.py).
   - Every `history.replaceState` of library.js, tabs.js, songbooks.js and sync.js passes `history.state`, never
     `null`, so an entry's marker survives the page's own address writes.
 

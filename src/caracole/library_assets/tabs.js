@@ -12,9 +12,10 @@
 // Back: leaving the library for another tab is a step of the browser's history, an entry of this script's own
 // ({ tab: 1 }, with search mode's count beside it while body.search-mode is on: one more of its steps), so Back
 // returns to the library; between the other tabs each replaces the one before, and the library's tab pressed (or
-// reached with the keys) while that step is there takes it back (history.back()) rather than adding another. An
-// address that names a tab, as the page opens or with Back or Forward, shows it with no step; a browser that refuses
-// the step (a local file's) changes the tab all the same. Every address written in place keeps the entry's state.
+// reached with the keys, or the library shown by a script or a link) while that step is there takes it back
+// (history.back()) rather than adding another. An address that names a tab, as the page opens or with Back or
+// Forward, shows it with no step; a browser that refuses the step (a local file's) changes the tab all the same.
+// Every address written in place keeps the entry's state.
 (() => {
   "use strict";
   const list = document.querySelector(".masthead .tabs[role=tablist]");
@@ -63,9 +64,14 @@
   };
   // ``options``: ``focus``, the tab takes the focus (its keys); ``words``, the address that asked for it; ``pop``,
   // Back or Forward showed it, and ``load``, the page opened at it: no step either way.
+  // The library shown by a script or a link while the step out of it is there (songbooks.js's + New songbook, from the
+  // Songbooks tab): that step is taken back (back()), as the library's tab takes it, so that no second entry of the
+  // library is left for Back to land on; the library shows at once all the same, so that what the script does next
+  // (Select, its name field) is there, and popstate, finding it shown, shows nothing again.
   const show = (name, options) => {
     const opts = options || {};
     const to = names.indexOf(name) >= 0 ? name : first;
+    const stepBack = to === first && !opts.pop && !opts.load && back(false);
     for (const tab of tabs) {
       const on = nameOf(tab) === to;
       tab.setAttribute("aria-selected", String(on));
@@ -76,7 +82,7 @@
     document.body.dataset.tab = to;
     const from = current;
     current = to;
-    save(from === first && to !== first && !opts.pop && !opts.load ? "push" : "replace");
+    if (!stepBack) save(from === first && to !== first && !opts.pop && !opts.load ? "push" : "replace");
     if (to === first) fromLibrary = false;  // back in the library however it came: no step of it to take back
     if (opts.focus) tabs[names.indexOf(to)].focus({ preventScroll: true });
     // A row that scrolls sideways shows the chosen tab whole (the row alone: scrollIntoView would move the page).
