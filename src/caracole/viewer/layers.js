@@ -43,6 +43,13 @@
   //                    is called after either. It makes no history entry. Returns { end() }: ends an "auto" (the
   //                    handle's tap, Escape, any layer opened) and keeps it ended until SHORT changes again.
   //
+  //   placeUnder(pop, anchor)
+  //                    a popover's place under what opens it, measured from the two boxes as they are now: pop's
+  //                    --pop-top and --pop-left (px, in the page's coordinates: the page's stylesheet sets it absolute
+  //                    at them, so that it scrolls with the page) put it UNDER_GAP (6) px under anchor's box, its left
+  //                    edge on the anchor's, kept UNDER_EDGE (8) px inside .page's box (the window's on a page with
+  //                    none) on either side. The versions list's, from 900 px wide. It writes to pop alone.
+  //
   // The marker is an entry's state's caracoleLayer, an integer from 1; every history.replaceState in viewer/'s
   // scripts passes history.state, never null, so that an entry keeps its depth through what the page writes into its
   // address.
@@ -171,6 +178,18 @@
     });
   };
 
-  window.caracoleLayers = Object.freeze({ history: layerHistory, doubleTap, autoFull, SHORT, DOUBLE_MS, DOUBLE_PX,
-    MARGIN_SKIP });
+  const UNDER_GAP = 6, UNDER_EDGE = 8;
+  const placeUnder = (pop, anchor) => {
+    if (!(pop instanceof HTMLElement) || !(anchor instanceof Element)) return;
+    const a = anchor.getBoundingClientRect();
+    const page = document.querySelector(".page");
+    const box = page ? page.getBoundingClientRect() : { left: 0, right: document.documentElement.clientWidth };
+    const left = Math.max(box.left + UNDER_EDGE, Math.min(a.left, box.right - UNDER_EDGE - pop.offsetWidth));
+    // Its top on a whole pixel at or below the anchor's foot: the gap never less than UNDER_GAP.
+    pop.style.setProperty("--pop-top", Math.ceil(a.bottom + window.scrollY) + UNDER_GAP + "px");
+    pop.style.setProperty("--pop-left", Math.round(left + window.scrollX) + "px");
+  };
+
+  window.caracoleLayers = Object.freeze({ history: layerHistory, doubleTap, autoFull, placeUnder, SHORT, DOUBLE_MS,
+    DOUBLE_PX, MARGIN_SKIP, UNDER_GAP, UNDER_EDGE });
 })();

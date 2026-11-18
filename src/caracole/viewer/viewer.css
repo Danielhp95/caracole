@@ -499,8 +499,9 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
    docks at the foot, on the bar (--foot: its height; the bar stays while one is docked, even as the song
    scrolls by itself, the pill above), the settings in at most 45 % of the screen and the card in about
    200 px; the one opened last hides the other until it closes. The page leaves room under the song for it
-   (--dock: its height, from the script), so the song's end comes up above it. From 900 px wide, the
-   settings are a rail beside the song and the card a popover by its chord (below). */
+   (--dock: its height, from the script), so the song's end comes up above it: the versions list too, a sheet
+   from the bottom. From 900 px wide, the settings are a rail beside the song, and the card a popover by its
+   chord and the versions list one under its line (below). */
 :root { --foot: calc(53px + env(safe-area-inset-bottom)); --rail: 360px; --pill: 0px; }
 html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
 .sheet-ui { position: fixed; z-index: 7; left: 0; right: 0; bottom: var(--foot); max-width: 620px; max-height: 45vh;
@@ -833,7 +834,9 @@ a.ver-main .ver-name { color: var(--accent); }
   [data-columns="2"] .sheet { columns: 2 28em; column-gap: clamp(56px, 4vw, 96px); }
 }
 /* From 900 px wide: the settings a rail beside the song, which moves over for it, and the card a
-   popover by its chord, placed in the page by the script (--pop-top, --pop-left). Both may be open. */
+   popover by its chord, placed in the page by the script (--pop-top, --pop-left). Both may be open. So is
+   the versions list, a popover under its line (layers.js placeUnder: 6 px under #ver-now, at its left), beside
+   the rail and moving nothing, its rows scrolling within it past 60 % of the window. */
 @media screen and (min-width: 900px) {
   .sheet-ui:not(.top) { visibility: visible; }
   .sheet-ui.panel { top: 0; bottom: 0; left: auto; right: 0; width: var(--rail); max-width: none; max-height: none;
@@ -854,6 +857,10 @@ a.ver-main .ver-name { color: var(--accent); }
   .diagram svg.wd { width: 32px; }
   .card[data-kind="keys"] .shape { grid-template-columns: 106px 106px; }
   .diagram[data-kind="keys"], .diagram[data-kind="keys"] svg { width: 220px; }
+  /* The list is a .panel too (its head's room): its rail's edges, padding and shadow are the card's here. */
+  #version-list { position: absolute; top: var(--pop-top); left: var(--pop-left); right: auto; bottom: auto;
+    width: min(380px, calc(100vw - 32px)); max-height: 60vh; padding: 6px 16px 14px; border: 1px solid var(--border);
+    border-radius: 14px; box-shadow: 0 8px 28px rgb(0 0 0 / .18); }
 }
 @media print {
   .bar, .pill, .handle, .sheet-ui, .tip, .back, .necks, .strip, .foot, .noscript, .versions { display: none !important; }

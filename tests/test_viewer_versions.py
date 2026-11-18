@@ -15,15 +15,18 @@ import http.server
 import json
 import re
 import threading
+import time
 from contextlib import contextmanager
 from copy import deepcopy
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
+import pytest
+
 from helpers.browser import Browser, in_chromium
 from helpers.targets import small_targets
 from helpers.version_pages import CHO, EVERY_KIND, KINDS, UG, WONDERWALL, entry, folder
-from helpers.viewer_pages import viewer
+from helpers.viewer_pages import back, entries, viewer
 
 from caracole import render
 from caracole.sheet_versions import SheetVersion, as_data
@@ -581,43 +584,92 @@ def test_served_the_list_links_to_caracole_serves_versions_page(tmp_path):
 # --- the list's place, on a phone and a laptop -----------------------------------------------------
 
 
+# Where the list is, and how it is drawn: its box and the version line's, the bar's top, its position and its edges,
+# the song's column and whether a rail is open beside the song (html's data-panel).
+PLACED = """(() => {
+  const list = document.querySelector('#version-list'), s = getComputedStyle(list);
+  const r = list.getBoundingClientRect(), now = document.querySelector('#ver-now').getBoundingClientRect();
+  const bar = document.querySelector('#bar').getBoundingClientRect();
+  const sheet = document.querySelector('#sheet').getBoundingClientRect();
+  return {top: r.top, bottom: r.bottom, left: r.left, right: r.right, width: r.width, height: r.height,
+          under: r.top - now.bottom, from: r.left - now.left, barTop: bar.top, position: s.position,
+          edges: [s.borderTopWidth, s.borderRightWidth, s.borderBottomWidth, s.borderLeftWidth],
+          radius: s.borderBottomLeftRadius, column: [sheet.left, sheet.width],
+          panel: document.documentElement.dataset.panel || null, depth: (history.state || {}).caracoleLayer || 0};
+})()"""
+
+
+def history_at(b: Browser, want: tuple[int, int]) -> tuple[int, int]:
+    """The tab's history (``entries``) once it is ``want``, or as it is 10 s on: the browser hears of an entry the page
+    pushed, or of a step it took, a moment after."""
+    deadline = time.monotonic() + 10
+    found = entries(b)
+    while found != want and time.monotonic() < deadline:
+        time.sleep(0.03)
+        found = entries(b)
+    return found
+
+
 @in_chromium
-def test_on_a_phone_the_list_docks_at_the_foot_with_thumb_sized_targets_and_no_sideways_scroll(tmp_path):
+@pytest.mark.parametrize("width", [390, 320])
+def test_on_a_phone_the_list_is_a_sheet_from_the_bottom_and_back_closes_it(tmp_path, width):
     versions = deepcopy(WONDERWALL)
     versions["list"][1]["note"] = "a tabber's note that runs on " * 12
-    pages = folder(tmp_path, versions)
-    with viewer(tmp_path, pages["version-39144.html"].as_uri(), **PHONE) as b:
+    pages = folder(tmp_path, versions, kinds=EVERY_KIND)
+    with viewer(tmp_path, pages["version-39144.html"].as_uri(), **{**PHONE, "width": width}) as b:
         closed = seen(b)
         small_switcher = b.js(small_targets("#version-list *, .bar *, .foot *, .head .back, .sheet *"))
         open_list(b)
+        assert b.wait("(history.state || {}).caracoleLayer === 1")
         shown = seen(b)
-        box = b.js("(() => { const r = document.querySelector('#version-list').getBoundingClientRect();"
-                   " const bar = document.querySelector('#bar').getBoundingClientRect();"
-                   " return {bottom: r.bottom, barTop: bar.top, height: r.height}; })()")
+        box = b.js(PLACED)
         small = b.js(small_targets(":not(#version-list):not(#version-list *)"))
-        b.press("Escape")
+        opened = history_at(b, (2, 3))
+        back(b)
         assert b.wait("document.querySelector('#version-list').hidden")
-        back = b.js("document.activeElement.id")
+        after = history_at(b, (1, 3))
+        assert b.wait("document.activeElement === document.querySelector('#ver-now')")
     assert not closed["sideways"] and not shown["sideways"]
     assert small_switcher == [] and small == []
-    assert abs(box["bottom"] - box["barTop"]) <= 1 and box["height"] <= 844 * 0.45 + 1
-    assert back == "ver-now"
+    # Fixed at the foot, docked on the bar, the screen's width and at most 45 % of its height.
+    assert box["position"] == "fixed" and abs(box["bottom"] - box["barTop"]) <= 1
+    assert box["left"] >= 0 and box["right"] <= width and box["height"] <= 844 * 0.45 + 1
+    assert opened == (2, 3) and after == (1, 3)  # one entry, and Back takes it off
 
 
 @in_chromium
-def test_on_a_laptop_the_list_is_a_rail_and_one_rail_at_a_time(tmp_path):
-    pages = folder(tmp_path, WONDERWALL)
-    with viewer(tmp_path, pages["sheet.html"].as_uri(), **DESKTOP) as b:
+def test_on_a_laptop_the_list_is_a_popover_under_the_line(tmp_path):
+    pages = folder(tmp_path, WONDERWALL, kinds=EVERY_KIND)
+    with viewer(tmp_path, pages["sheet.html"].as_uri(), **{**DESKTOP, "height": 600}) as b:
+        before = b.js(PLACED)
         open_list(b)
-        rail = b.js("(() => { const r = document.querySelector('#version-list').getBoundingClientRect();"
-                    " return {right: r.right - document.documentElement.clientWidth, width: r.width, top: r.top,"
-                    " rail: document.documentElement.dataset.panel}; })()")
+        alone = b.js(PLACED)
+        b.js("scrollTo(0, 120)")
+        assert b.wait("scrollY === 120")
+        scrolled = b.js(PLACED)
+        b.press("Escape")
+        assert b.wait("document.querySelector('#version-list').hidden")
+        b.js("scrollTo(0, 0)")
         b.click("#more")
         assert b.wait("!document.querySelector('#panel').hidden")
-        after = b.js("[document.querySelector('#version-list').hidden, document.documentElement.dataset.panel,"
+        open_list(b)
+        assert b.wait("(history.state || {}).caracoleLayer === 2")
+        beside = b.js(PLACED)
+        at = history_at(b, (3, 4))
+        back(b)
+        assert b.wait("document.querySelector('#version-list').hidden")
+        after = b.js("[document.querySelector('#panel').hidden, document.documentElement.dataset.panel,"
                      " document.querySelector('#ver-now').getAttribute('aria-expanded')]")
-    assert rail == {"right": 0, "width": 360, "top": 0, "rail": "open"}
-    assert after == [True, "open", "false"]
+    # Under the line, 6 px below it, at its left, in the page: it scrolls with the page.
+    assert alone["position"] == "absolute" and 6 <= alone["under"] <= 8 and abs(alone["from"]) <= 1
+    assert alone["width"] == 380 and alone["height"] <= 600 * 0.6 + 1
+    assert alone["edges"] == ["1px"] * 4 and alone["radius"] == "14px"
+    assert alone["panel"] is None and alone["column"] == before["column"]  # no rail: the song's column unchanged
+    assert 6 <= scrolled["under"] <= 8 and abs(scrolled["from"]) <= 1 and scrolled["top"] == alone["top"] - 120
+    # Beside the settings' rail, which stays open: the list over it in the history, Back closing the list first.
+    assert 6 <= beside["under"] <= 8 and abs(beside["from"]) <= 1 and beside["panel"] == "open"
+    assert beside["right"] <= 1280 - 360 and at == (3, 4)  # the page, the settings, the list
+    assert after == [False, "open", "false"]
 
 
 def test_the_fixture_has_the_shape_render_writes():

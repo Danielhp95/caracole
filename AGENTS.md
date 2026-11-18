@@ -1046,8 +1046,13 @@ It is rows.js's, shared by both pages:
   attaches it with its layers and `carry`, its `vAddress`) draws, from a sheet viewer's data `versions`
   (sheet_versions.as_data, with each entry's `this` and the one's provider, `sheet`) and `kinds` (render.py
   `_kinds_data`), the version line under the artist ("Chords · Ver 3 of 13 · ★ 4.86 (408)") with an icon a kind the
-  song keeps and how many, and the list it opens, a rail like the settings and never beside them; no ‹ ›, the list
-  opens each kept version (test_viewer_versions.py); the songbook has neither.
+  song keeps and how many, and the list it opens; no ‹ ›, the list opens each kept version (test_viewer_versions.py);
+  the songbook has neither.
+  - The list's place: on a phone a sheet from the bottom, docked on the bar as the settings are (one of `DOCKED`);
+    from 900 px a popover under the line, never a rail (no `data-panel`: the song's column stays), beside the settings
+    or Harmony: kinds.js's `place()` calls layers.js's `placeUnder(list, #ver-now)` (its `--pop-top` and
+    `--pop-left`, 6 px under the line's box, at its left, kept 8 px inside `.page`'s box, in the page's coordinates,
+    so it scrolls with the page), which viewer.js's `place()` calls as a layer opens or closes and the window resizes.
   - The list is a group a kind (`#kind-groups`, `section.kind-group[data-kind]`, `h3.kind-head`): Chords first
     (`#ver-acts`, `#ver-items`: every version UG has, or the chord sheet alone), then each other kind in the card's
     order, a row each named as the card names it, a tap from the list: a harmonica tab's page with `carry`, a Guitar
@@ -1079,7 +1084,8 @@ It is rows.js's, shared by both pages:
   - every `history.replaceState` in viewer/'s scripts passes `history.state`, never `null`, so an entry keeps its
     depth through what the page writes into its address;
   - below 900 px one layer at a time (opening one closes every other, but for a `nested` one, opened over another and
-    leaving it open); from 900 px the rails (the settings, Harmony, the versions) one at a time, a card beside them;
+    leaving it open); from 900 px the rails (the settings, Harmony) one at a time, a card and the versions list beside
+    them;
     `DOCKED` (panel, card, harmony, vList, necksEl) docks at the foot on a phone, the top one of them (`dock()`);
   - a harmonica tab's page (harptab.js) has two, `"sizes"` (Aa) and `"sheet"` (the necks' sheet): `layers`,
     `openLayer(name, opener)`, `closeLayer(name, refocus)`, one at a time below 900 px, Aa giving way to the sheet at

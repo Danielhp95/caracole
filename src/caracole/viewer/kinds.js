@@ -27,8 +27,10 @@
   //                    and close(el), the page's layers (the list is one); inSight(el), whether a layer is in sight.
   //                    Returns { links(), place() }: links() writes each link to another page of the song again,
   //                    with what carry gives now (the page calls it as the reader's choices change); place() puts
-  //                    the list where it goes (the page's stylesheet does today: at the foot on a phone, a rail from
-  //                    900 px).
+  //                    the list, while it is open, where it goes from 900 px wide, a popover under the line
+  //                    (layers.js's placeUnder, under #ver-now: the page calls it as a layer opens or closes, a rail
+  //                    among them, and as the window resizes); below, the page's stylesheet docks it at the foot, a
+  //                    sheet from the bottom, and place() does nothing.
   //
   // The list (page.py _VERSION_LIST's #kind-groups) is a group a kind, section.kind-group[data-kind], each headed by
   // h3.kind-head (its glyph, its name, how many) over an ol.vers of li.ver rows, each row's .ver-main a link where it
@@ -353,9 +355,13 @@
       const mine = vList.querySelector("[aria-current]");  // this page's, in sight
       if (mine) vList.scrollTop = Math.max(0, mine.parentElement.offsetTop - vList.clientHeight / 3);
     });
+    const wide = matchMedia("(min-width: 900px)");
     return Object.freeze({
       links,
-      place() { /* the page's stylesheet places the list today: docked at the foot on a phone, a rail from 900 px */ },
+      place() {
+        if (vList.hidden || !wide.matches || !window.caracoleLayers) return;
+        window.caracoleLayers.placeUnder(vList, now);
+      },
     });
   };
 

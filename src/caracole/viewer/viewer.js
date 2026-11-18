@@ -880,7 +880,8 @@
   // --- drawing the page --------------------------------------------------------------------------
   const bar = $("bar"), panel = $("panel"), card = $("card"), pill = $("pill"), go = $("go"), harmony = $("harmony");
   const vList = $("version-list");  // a sheet's versions (below); the songbook has none
-  const rails = [panel, harmony, vList].filter(Boolean);  // from 900 px wide, beside the song: one at a time
+  let kinds = null;  // its line and its list, kinds.js's (below)
+  const rails = [panel, harmony].filter(Boolean);  // from 900 px wide, beside the song: one at a time
   const more = $("more"), sizes = $("sizes"), sizeButton = $("size"), shapesButton = $("shapes");
   const handle = $("handle");  // full screen's, at the window's foot (below)
   const button = (text, pressed, onClick, small) => {
@@ -1757,9 +1758,9 @@
   // Neither is modal: nothing dims the song and the page stays within reach, so you see the chords
   // change as you transpose and tap one chord after another. On a phone each docks at the foot, above
   // the bar, one at a time (opening one closes the one open), and the song scrolls under it; from 900 px wide
-  // (viewer.css) the settings are a rail beside the song and the card a popover by its chord. Each
-  // takes the focus as it opens (its heading); Escape closes the one on top, and the focus goes back
-  // to what opened it when it was in there. The overlay's sheet is one of them below 1200 px (above), docked
+  // (viewer.css) the settings are a rail beside the song, the card a popover by its chord and the versions list
+  // one under its line. Each takes the focus as it opens (its heading); Escape closes the one on top, and the focus
+  // goes back to what opened it when it was in there. The overlay's sheet is one of them below 1200 px (above), docked
   // at the foot up to 1199 px, the focus on its tab shown as it opens. Each one open is an entry of the browser's
   // history (layers.js): Back, a phone's or the app's, closes the one on top as Escape does, and leaves the page only
   // once none is open. Full screen is one too (below), its element the handle, which takes the focus as it opens.
@@ -1813,8 +1814,9 @@
     : bar.getBoundingClientRect().top);
   // From 900 px wide the card is a popover by its chord: under it, or above it where the bar leaves
   // no room below, and across it, within the song's column. It is placed in the page, so it goes
-  // with its chord as the page scrolls.
+  // with its chord as the page scrolls. So is the versions list, a popover under its line (kinds.js's place).
   function place() {
+    if (kinds) kinds.place();
     if (card.hidden || !wide.matches) return;
     const a = anchor().getBoundingClientRect();
     const column = pageEl.getBoundingClientRect();
@@ -1832,7 +1834,7 @@
     more.setAttribute("aria-expanded", panel.hidden ? "false" : "true");
     sizeButton.setAttribute("aria-expanded", sizes.hidden ? "false" : "true");
     if (vList) $("ver-now").setAttribute("aria-expanded", vList.hidden ? "false" : "true");
-    if (rails.every((which) => which.hidden)) delete doc.dataset.panel;  // the settings', the Harmony panel's, the versions'
+    if (rails.every((which) => which.hidden)) delete doc.dataset.panel;  // the settings', the Harmony panel's
     else doc.dataset.panel = "open";
     if (wide.matches && rail !== doc.dataset.panel) layout();  // the song's column narrows beside the rail
     place();
@@ -1840,8 +1842,8 @@
     layerHistory.sync(layers.length);  // an entry each, once this task is done
   };
   // ``nested``: one that opens over another and leaves it open (Export PDF's question over the settings). On a phone
-  // any other closes every one open first; from 900 px the rails (the settings, the Harmony panel, the versions) are one
-  // at a time, a card beside them.
+  // any other closes every one open first; from 900 px the rails (the settings, the Harmony panel) are one at a time,
+  // a card and the versions list beside them.
   const open = (which, opener, nested = false) => {
     auto.end();  // a short screen's full screen of itself gives way to any layer
     const at = layers.findIndex((layer) => layer.el === which);
@@ -2477,8 +2479,9 @@
   $("bpm-up").addEventListener("click", () => setBpm(state.bpm + BPM.step));
   // --- the version line and its list (kinds.js) --------------------------------------------------
   // Under the artist, which of the song's versions this page is and an icon a kind it keeps to play from; the line
-  // opens the list of them (a layer). A link to another of the song's pages takes the text size and the scroll speed
-  // along, and the screen's choices (the key and the rest are each sheet's own): vAddress, kinds.js's carry.
+  // opens the list of them (a layer: a sheet from the bottom on a phone, a popover under the line from 900 px, placed
+  // by place() above). A link to another of the song's pages takes the text size and the scroll speed along, and the
+  // screen's choices (the key and the rest are each sheet's own): vAddress, kinds.js's carry.
   const vAddress = (page) => {
     const params = new URLSearchParams();
     if (state.fs !== FS.start) params.set("fs", String(state.fs));
@@ -2487,7 +2490,7 @@
     const fragment = params.toString();
     return encodeURIComponent(page) + (fragment ? "#" + fragment : "");
   };
-  const kinds = window.caracoleKinds ? window.caracoleKinds.attach({ data, here: pageName(), served,
+  kinds = window.caracoleKinds ? window.caracoleKinds.attach({ data, here: pageName(), served,
     sheetPath: sheetPath(), carry: vAddress, open, close, inSight }) : null;
 
   // --- Aa: the text size, in a box beside the song -------------------------------------------------
