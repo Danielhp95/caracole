@@ -401,6 +401,24 @@ def test_the_list_shows_every_version_and_opens_the_kept_ones(tmp_path):
 
 
 @in_chromium
+def test_a_version_with_no_votes_is_new_as_the_library_card_says_it(tmp_path):
+    versions = deepcopy(WONDERWALL)
+    rows = versions["list"]
+    rows[3].update(rating=0, votes=0)  # UG's unrated tab
+    rows[4].update(rating=4.5, votes=0)  # a rating with no votes
+    rows[5].update(rating=4.85, votes="81")  # votes as a string
+    rows[6].pop("rating")  # no rating at all
+    pages = folder(tmp_path, versions)
+    with viewer(tmp_path, pages["version-39144.html"].as_uri()) as b:
+        open_list(b)
+        shown = seen(b)["rows"]
+    assert shown[3]["text"].startswith("Ver 4 · New") and "0.00" not in shown[3]["text"]
+    assert shown[4]["text"].startswith("Ver 5 · New")
+    assert shown[5]["text"].startswith("Ver 6 · ★ 4.85 (81)")
+    assert shown[6]["text"].startswith("Ver 7 · New")
+
+
+@in_chromium
 def test_the_list_groups_every_kind_in_the_cards_order(tmp_path):
     # Chords, today's versions, then a group for each other kind the song keeps, the library card's, in its order: each
     # row named as the card names it, a tap from the list. From a file, a Guitar Pro file is the file itself, saved
