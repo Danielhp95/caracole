@@ -1,8 +1,9 @@
 """Stage 1f, a calmer page (library_assets/), in Chromium: four corner radii, one set of tokens in base.css; no outline
 around the list or the key, one weight a role.
 
-The page is served (a real server, a lookup running and one queued), so that the tray, the Requests tab, the Songbooks
-tab, the Sync sheet and a search's results hold what is measured: each state names what must be shown, and how many.
+The page is served (a real server, a lookup running and one queued), so that a song's card, the tray, the Requests tab,
+the Songbooks tab, the Sync sheet and a search's results hold what is measured: each state names what must be shown, and
+how many; every element shown is measured, no lane left out.
 The list's outline is measured on the page opened as a file too, by artist and by title, and on the lookup page."""
 
 from __future__ import annotations
@@ -26,10 +27,6 @@ from caracole.versions import upsert_version
 from conftest import add_song
 
 pytestmark = CHROMIUM_MARKS
-
-# The elements of a lane not merged yet (the card's, lane 3b's, whose own radii come to the tokens with its merge).
-OTHER_LANES = (".line-panel", ".play")
-
 
 # What a state shows: a selector, and at least how many of it are rendered (checkVisibility), so that a state that
 # drew nothing fails rather than passes by having nothing to measure.
@@ -61,11 +58,11 @@ def library(conn, cfg):
 
 
 def odd_in(page, where: str, selector: str, floor: int) -> None:
-    """Wait for ``selector`` to be rendered ``floor`` times or more, then: no corner radius but the four, but in the
-    lanes not merged yet."""
+    """Wait for ``selector`` to be rendered ``floor`` times or more, then: no corner radius but the four, anywhere on
+    the page."""
     shown = SHOWN % json.dumps(selector)
     assert page.wait(f"{shown} >= {floor}", timeout=20), (where, selector, page.js(shown))
-    assert page.js(odd_radii(OTHER_LANES)) == [], where
+    assert page.js(odd_radii()) == [], where
 
 
 @pytest.mark.parametrize("size", [(390, 844), (1280, 900)], ids=["phone", "laptop"])
@@ -96,6 +93,20 @@ def test_the_library_page_has_four_corner_radii(library, live, tmp_path, size, s
         odd_in(page, "the filter panel", "#filter-panel[open] .seg", 1)
         page.press("Escape")
         assert page.wait("!document.getElementById('filter-panel').open")
+        # A song's card (under its line on a phone, in the pane on a laptop): its tiles, a tile's drawer, the ⋯ menu.
+        wonderwall = page.js("Array.from(document.querySelectorAll('#list article.line')).find((l) => "
+                             "l.querySelector('h3').textContent.includes('Wonderwall')).dataset.id")
+        page.click(f"#list article.line[data-id='{wonderwall}'] .line-more")
+        odd_in(page, "a card", ".song-card .tile", 1)
+        page.click(".song-card .tile-more")
+        odd_in(page, "a tile's drawer", ".song-card .drawer", 1)
+        page.click(".song-card .foot-more-btn")
+        odd_in(page, "the card's ⋯ menu", ".song-card .foot-more[open] .foot-menu", 1)
+        page.click(".song-card .foot-more-btn")  # closed, on a touch screen it takes its history entry back
+        assert page.wait("!document.querySelector('.song-card .foot-more[open]') && "
+                         "!(history.state && history.state.caracoleMenu)")
+        page.click(f"#list article.line[data-id='{wonderwall}'] .line-more")
+        assert page.wait(SHOWN % json.dumps(".song-card .tile") + " === 0")
         # A search's results.
         page.click("#q")
         page.type("wonder")
