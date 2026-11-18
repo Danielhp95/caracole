@@ -2635,7 +2635,9 @@ too, see below): your songs
 the name finds ("Queen" finds ABBA's "Dancing Queen" too), and Back is the list
 as it was before. There is no view of one artist's songs alone, and no tag for
 it. Sorted by title, or by when the songs were added, the lines stand alone,
-without the artists' names over them, each with its own (which does the same).
+each folded as a one-song artist's is: its artist's name a small overline over
+the title on a phone, in its own column from 720 px wide (and a click on it
+does the same as one on the name over a band).
 `#by=` in the address, an artist's name as a sheet viewer's artist line links
 to it (`index.html#by=Soda%20Stereo`), does what pressing their name does, and
 so does an address from before with `#artist=` in it (`#artist=soda-stereo`):

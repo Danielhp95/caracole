@@ -189,7 +189,7 @@ button.plays:hover, button.plays[aria-expanded="true"] { border-color: var(--acc
 /* A line its one-song artist folded into (library.css): on a phone the box beside its artist's overline and its title,
    its buttons and its key beside both; from 720 px its artist in the column a title-sorted line names its own in. */
 @media (max-width: 719px) {
-  .selecting section.artist.folded .line { grid-template-columns: 44px minmax(calc(4rem - 6px), 1fr) auto auto;
+  .selecting section.artist.folded .line, .selecting section.flat .line { grid-template-columns: 44px minmax(calc(4rem - 6px), 1fr) auto auto;
     grid-template-areas: "pick meta plays key" "pick name plays key"; }
 }
 @media (min-width: 720px) {

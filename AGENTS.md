@@ -835,7 +835,8 @@ It is rows.js's, shared by both pages:
   - on a phone library.css's folded grid puts the overline over the title, `.line-title` `display: contents` (its
     `.line-plays` a direct child, card.css's seam: test_library_assets.py), the title's column keeping rows.css's
     4rem; from 720 px the flat line's columns, the overline in `by`; Select mode's are songbooks.css's
-    (test_library_bands.py).
+    (test_library_bands.py); the same rules are `section.flat .line`'s, a list sorted by title or by when they came
+    folding every line.
 - A "Did you mean" band's "Their 7 songs on UG ›" opens that artist's group from `/api/artist`, as "+ N more" does.
 - A song of yours under its ⋯ (Fetch again; Use LaCuerda's sheet, `lacuerdaSheet` or the search's LaCuerda row of it)
   posts `/lookup` exactly as the lookup page's rows of it do (test_web_page_again.py).

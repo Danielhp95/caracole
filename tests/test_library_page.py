@@ -2793,9 +2793,9 @@ def layout_of(dom: str) -> dict:
 
 
 @in_chromium
-def test_a_phones_line_keeps_its_artist_beside_its_status_and_its_key_beside_its_title(conn, cfg, tmp_path):
-    # Sorted by title, a line has no artist's group over it: the fullest second lines, an auto sheet, a key (on the
-    # title's line) and Needs review; a long name beside Needs review.
+def test_a_phones_title_sorted_line_has_its_artist_above_its_title_and_its_status_beside_it(conn, cfg, tmp_path):
+    # Sorted by title, a line is folded, its artist's name over its title: the fullest lines, an auto sheet, a key and
+    # Needs review beside the title; a long name cut.
     abba = add_song(conn, "ABBA", "Dancing Queen")
     auto = upsert_version(conn, provider="auto", tab_id=str(abba.id), song_id=abba.id, slot="sheet", kind="auto",
                           rating=0, votes=0, version=1, label=None, url="file:///x.flac",
@@ -2818,7 +2818,8 @@ def test_a_phones_line_keeps_its_artist_beside_its_status_and_its_key_beside_its
     for short in (abba_line, queen_line):
         assert phone["artists"][short] >= phone["whole"][short] > 30, phone
     assert phone["artists"][florence_line] > 40, phone
-    assert max(phone["lines"]) <= 2 and phone["scroll"] <= phone["page"], phone
+    # Two rows, the artist over the title; the buttons span both, their middle a third "row" of the count.
+    assert max(phone["lines"]) <= 3 and phone["scroll"] <= phone["page"], phone
     # The auto sheet's line says so by its button, as a badge would.
     dancing = line_of(listing(dump_dom(path, tmp_path, "#sort=title")), "Dancing Queen")
     assert [said for _, said in play_links(dancing)] == [
@@ -3840,10 +3841,10 @@ def test_a_laptop_screen_shows_about_twenty_lines_under_the_bar_and_a_phone_two_
         assert max(phone["rows"]) <= 2, (touch, phone)  # two lines a song at most
         assert all(w >= phone["page"] - 40 for w in phone["widths"]), phone
         assert phone["screen"] // max(phone["heights"]) >= (8 if touch else 10), (touch, phone)
-    # Sorted by title, the lines have no artist over them: each says its own, whole or 40 px of it at the least,
-    # still on two lines.
+    # Sorted by title, every line is folded, its artist over its title: each says its own, whole or 40 px of it at the
+    # least, in two rows (the buttons span both, their middle a third "row" of the count), 68 px at most.
     flat = noted(dump_dom(path, tmp_path, "#sort=title", size="390,844"), "data-lines")
-    assert max(flat["rows"]) <= 2 and flat["scroll"] <= flat["page"], flat
+    assert max(flat["rows"]) <= 3 and max(flat["heights"]) <= 68 and flat["scroll"] <= flat["page"], flat
     assert all(shown >= min(whole, 40) for shown, whole in zip(flat["artists"], flat["whole"])), flat
     tablet = noted(dump_dom(path, tmp_path, size="1280,800", touch=True), "data-lines")
     assert set(tablet["rows"]) == {1}, tablet  # one line each, as with a mouse

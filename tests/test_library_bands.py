@@ -63,10 +63,10 @@ def with_sheet(conn, cfg, artist, title):
     return song
 
 
-def drawn(conn, cfg, tmp_path, script, size, touch=False):
+def drawn(conn, cfg, tmp_path, script, size, touch=False, fragment=""):
     html = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok"))
     path = write_library_page(cfg.library_dir, with_script(html, noting("data-noted", script)))
-    return noted(dump_dom(path, tmp_path, size=size, touch=touch), "data-noted")
+    return noted(dump_dom(path, tmp_path, fragment, size=size, touch=touch), "data-noted")
 
 
 # Eagles' one song folded into its line: their band's heading, a screen reader's alone, and the line's overline, their
@@ -101,6 +101,32 @@ def test_a_one_song_artist_folds_into_its_line_under_their_name_as_an_overline(c
     if touch:
         assert bottom <= f["h3top"] + 1 and 60 <= f["line"] <= 68 and height >= 24, f  # above the title; 64 px
     assert f["oasis"] == [False, False] and f["outline"] == [2, 3], f  # a band; an h2 an artist, an h3 a song
+
+
+# Every line of a list sorted by title or by when they came: its overline and its title's top, its box, its h3's right.
+FLAT = """(() => {
+  const box = (n) => n.getBoundingClientRect();
+  return [...document.querySelectorAll('#list section.flat article.line')].map((line) => {
+    const by = line.querySelector('.line-by'), h3 = line.querySelector('h3');
+    return [by.checkVisibility(), by.textContent, getComputedStyle(by).textTransform, box(by).bottom, box(h3).top,
+      box(line).height, box(by).left, box(h3).right]; }); })()"""
+
+
+@in_chromium
+@pytest.mark.parametrize("sort", ["title", "recent"])
+@pytest.mark.parametrize("size,touch", [("390,844", True), ("1280,900", False)])
+def test_a_sorted_list_folds_every_line_its_artist_above_its_title(conn, cfg, tmp_path, sort, size, touch):
+    for artist, title in (("Oasis", "Wonderwall"), ("Oasis", "Live Forever"), ("Eagles", "Desperado"),
+                          ("宋冬野", "安和桥")):
+        with_sheet(conn, cfg, artist, title)
+    lines = drawn(conn, cfg, tmp_path, FLAT, size, touch, "#sort=" + sort)
+    assert len(lines) == 4, lines
+    for shown, text, case, by_bottom, h3_top, height, by_left, h3_right in lines:
+        assert shown and text, lines
+        if touch:  # over the title, the line about 64 px
+            assert case == "uppercase" and by_bottom <= h3_top + 1 and 60 <= height <= 68, lines
+        else:  # in its own column
+            assert by_left > h3_right, lines
 
 
 # Each artist's group: whether it folded, and how tall its band shows.
