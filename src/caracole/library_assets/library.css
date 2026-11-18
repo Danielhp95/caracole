@@ -153,10 +153,13 @@
      own --raised, so they keep their shape, the accent along its edge, with none of the box of a card opened under its
      line (card.css's box is a line's but a .selected one's), its card being beside it; so a song removed from there
      moves nothing. Among a search's results too, over rows.css's later #results .line.have (a song you have's wash and
-     edge), which would otherwise hide it there. */
+     edge), which would otherwise hide it there, and on a stronger wash than theirs, 7 points over base.css's
+     --have-tint (16 %, 22 % dark), so it reads as the one open among them. */
   #library-view .line.selected, #library-view #results .line.selected {
     background: color-mix(in srgb, var(--accent) 8%, var(--surface));
     box-shadow: inset 3px 0 0 var(--accent); }
+  #library-view #results .line.selected {
+    background: color-mix(in srgb, var(--accent) calc(var(--have-tint) + 7%), var(--surface)); }
 }
 .searching-all .toolbar, .searching-all .jump, .searching-all .count, .searching-all .list { display: none; }
 .waiting-sites .results .request, .waiting-sites .footer { display: none; }
