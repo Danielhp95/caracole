@@ -17,7 +17,7 @@ from urllib.parse import parse_qs, quote, urlsplit
 
 import pytest
 from helpers.browser import CHROMIUM_MARKS, Browser, BrowserError
-from helpers.targets import small_targets
+from helpers.targets import ARTIST_NAMES, small_targets
 
 from caracole import db
 from caracole.get import PROGRESS_PREFIX
@@ -1595,13 +1595,13 @@ def test_the_bar_and_its_results_fit_a_phone(cfg, live, phone):
                       "!!document.querySelector('#results .removed-hit')")
     assert phone.js("document.querySelector('#results .filtered').getClientRects().length") == 1
     assert phone.js(NO_SIDEWAYS)
-    small = phone.js(small_targets())
-    assert small == [], small
+    small = phone.js(small_targets(ARTIST_NAMES))
+    assert small == [] and phone.js(small_targets("", least=24)) == [], small
     for line in phone.js("[...document.querySelectorAll('#results .hit')].map((a) => a.getBoundingClientRect().height)"):
         assert line <= 2 * 44 + 12, line  # two lines a song, as yours are
     search(phone, "estopa")  # an artist: their group, and its "+ 3 more by Estopa"
     assert phone.wait(f"{answer_to('estopa')} && !!document.querySelector('#results .more-by')")
-    assert phone.js(NO_SIDEWAYS) and phone.js(small_targets()) == []
+    assert phone.js(NO_SIDEWAYS) and phone.js(small_targets(ARTIST_NAMES)) == [] and phone.js(small_targets("", least=24)) == []
 
 
 # What the miss and a typo's band say, against what is behind them: WCAG's ratio of each text's colour to the first
@@ -1648,7 +1648,7 @@ def test_a_title_suggestion_fits_a_phone(cfg, live, phone):
     assert phone.wait(f"{answer_to('hotl califronia')} && !!document.querySelector('{MEANT_LINE}') && "
                       f"!!document.querySelector('{NOTHING}')")
     assert phone.js(NO_SIDEWAYS)
-    assert phone.js(small_targets()) == []  # the band's name, Their songs, the line's name and Get it, Request
+    assert phone.js(small_targets(ARTIST_NAMES)) == [] and phone.js(small_targets("", least=24)) == []  # the band's name (24 px), Their songs, the line's name and Get it, Request
     assert phone.js(f"document.querySelector('{MEANT_LINE}').getBoundingClientRect().height") <= 2 * 44 + 12
 
 
@@ -1668,11 +1668,11 @@ def test_the_miss_and_a_typos_band_fit_a_phone_and_read_in_light_and_dark(cfg, l
         assert phone.wait(f"{answer_to('lynrd')} && !!document.querySelector('{NOTHING}') && "
                           "!!document.querySelector('#results section.meant')")
         assert phone.js(NO_SIDEWAYS)
-        assert phone.js(small_targets()) == []  # the band's name, Their songs, Request, the chevron: a thumb's each
+        assert phone.js(small_targets(ARTIST_NAMES)) == [] and phone.js(small_targets("", least=24)) == []  # the band's name (24 px), Their songs, Request, the chevron: a thumb's each
         phone.click(f"{NOTHING} .line-more")
         phone.click(f"{NOTHING} details.why-unseen > summary")
         assert phone.wait(f"document.querySelector('{NOTHING} details.why-unseen').open")
-        assert phone.js(NO_SIDEWAYS) and phone.js(small_targets()) == []  # Ask LaCuerda, the fold's summary too
+        assert phone.js(NO_SIDEWAYS) and phone.js(small_targets(ARTIST_NAMES)) == []  # Ask LaCuerda, the fold's summary too
         reads = phone.js(READS)
         weak = {name: value for name, value in reads.items() if name != "box" and (value is None or value < 4.5)}
         assert weak == {}, reads
@@ -1725,7 +1725,7 @@ def test_the_row_of_marks_wraps_cleanly_on_a_phone_and_reads_in_light_and_dark(c
         assert fits["n"] == 7 and fits["inside"] and fits["apart"] and fits["whole"] and fits["lines"] <= 2, fits
         weak = [(what, ratio) for what, ratio in phone.js(COUNT_READS) if ratio < 4.5]
         assert weak == [], weak
-        assert phone.js(small_targets()) == []  # a mark is no control: nothing here to tap
+        assert phone.js(small_targets(ARTIST_NAMES)) == []  # a mark is no control: nothing here to tap
     finally:
         phone.close()
 

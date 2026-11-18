@@ -1385,7 +1385,15 @@
       Number(c.gtptabs) ? "Guitar Pro " + Number(c.gtptabs).toLocaleString("en") : "",
       Number(c.harptabs) ? "Harmonica " + Number(c.harptabs).toLocaleString("en") : "", c.note ? String(c.note) : ""]
       .filter(Boolean);
-    if (said.length) heading.appendChild(el("span", "artist-counts", " · " + said.join(" · ")));
+    if (said.length) {
+      // The counts on the band's right: the separator for a screen reader alone, what shows in a span of its own
+      // (yours alone: its number, with "yours" said in the hidden part).
+      const counts = el("span", "artist-counts");
+      const onlyMine = mine && said.length === 1;
+      counts.appendChild(el("span", "visually-hidden", onlyMine ? " · yours " : " · "));
+      counts.appendChild(el("span", "", onlyMine ? String(mine) : said.join(" · ")));
+      heading.appendChild(counts);
+    }
     section.appendChild(heading);
     const box = el("div", "lines");
     for (const item of listOf(items)) box.appendChild(item);

@@ -2617,6 +2617,11 @@ again); and at the far end a **⋯** that opens info.json, a quiet download, and
 served, **Remove**, in red (Escape, or a press elsewhere, closes it). A line
 drawn again (a request over) keeps its card open, its drawer closed.
 
+An artist of two or more songs has them under a band 34 px tall: their name in
+the artist's colour (cut short with an ellipsis, on one line) and, on its right,
+your count of their songs, small and muted. Every control is 44 px on a touch
+screen but an artist's name, which is 24 px.
+
 An artist's name, over their songs, searches for them: it puts their name in
 the search box and searches as typing it would, from the folder as on the page
 `caracole serve` serves (which searches the sites too, see below): your songs

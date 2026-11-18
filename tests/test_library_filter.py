@@ -233,13 +233,13 @@ def test_below_720px_filter_opens_a_bottom_sheet_with_show_n_songs(shelf, phone)
 
 
 def test_the_sheets_controls_are_a_thumbs_target_on_a_touch_screen(shelf, phone):
-    from helpers.targets import small_targets
+    from helpers.targets import ARTIST_NAMES, small_targets
 
     phone.open(shelf.as_uri())
     phone.click("#filter")
     assert phone.wait(f"{PANEL}.open")
     assert phone.wait(f"Math.abs({PANEL}.getBoundingClientRect().bottom - innerHeight) <= 1")
-    assert phone.js(small_targets()) == []
+    assert phone.js(small_targets(ARTIST_NAMES)) == []
     assert phone.js("document.documentElement.scrollWidth <= innerWidth")
 
 

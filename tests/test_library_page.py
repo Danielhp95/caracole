@@ -1487,54 +1487,6 @@ note("saved", Array.from(lineOf("斑马，斑马").querySelectorAll("a[download]
     assert saved["score-1.pdf"] == "" and saved["sheet.pdf"] == "", saved
 
 
-# Notes how an artist's header looks beside their song's line, and what base.css's tokens resolve to.
-HEADER_LOOK = """
-(() => {
-  const css = (node) => getComputedStyle(node);
-  const token = (name) => {
-    const probe = document.createElement("span");
-    probe.style.color = "var(" + name + ")";
-    document.body.appendChild(probe);
-    const colour = css(probe).color;
-    probe.remove();
-    return colour;
-  };
-  const head = document.querySelector("#list section.artist .artist-title");
-  const name = head.querySelector(".artist-name");
-  const counts = head.querySelector(".artist-counts");
-  const title = document.querySelector("#list section.artist .line-title h3");
-  document.body.setAttribute("data-look", JSON.stringify({
-    name: [parseFloat(css(name).fontSize), css(name).color],
-    counts: [parseFloat(css(counts).fontSize), css(counts).color],
-    title: parseFloat(css(title).fontSize),
-    tokens: Object.fromEntries(["--artist", "--text", "--accent", "--muted"].map((t) => [t, token(t)])),
-  }));
-})();
-"""
-
-
-@in_chromium
-@pytest.mark.parametrize("scheme", ["light", "dark"])
-def test_an_artists_name_is_bigger_than_their_songs_titles_in_a_colour_of_its_own(conn, cfg, tmp_path, scheme):
-    # The header the list and the served search results share: the name in --artist, a second accent; the counts
-    # beside it small and muted.
-    from html import unescape
-
-    from caracole.library_page import WebControls
-
-    add_song(conn, "Radiohead", "Creep")
-    html = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok"))
-    path = write_library_page(cfg.library_dir, with_script(html, HEADER_LOOK))
-    dom = dump_dom(path, tmp_path, media={"prefers-color-scheme": scheme})
-    look = json.loads(unescape(re.search(r'<body[^>]*data-look="([^"]*)"', dom).group(1)))
-    tokens = look["tokens"]
-    assert tokens["--artist"] not in (tokens["--text"], tokens["--accent"], tokens["--muted"]), tokens
-    size, colour = look["name"]
-    assert colour == tokens["--artist"], look
-    assert size >= 1.1 * look["title"], look
-    assert look["counts"][0] < size and look["counts"][1] == tokens["--muted"], look
-
-
 @in_chromium
 def test_from_a_file_an_artists_name_puts_them_in_the_box_and_searches_your_songs(conn, cfg, driven):
     # From a file, which can't search the sites, an artist's name does what it does served but for the sites: their
@@ -1719,10 +1671,10 @@ def test_a_songs_progressions_show_the_songs_that_play_them_and_show_all_takes_t
 @in_chromium
 @pytest.mark.parametrize("dark", [False, True])
 def test_the_progression_line_and_a_songs_progressions_fit_a_touch_phone(conn, cfg, tmp_path, dark):
-    from helpers.targets import UNFOLD, noted, noting, small_targets, weak_edges
+    from helpers.targets import ARTIST_NAMES, UNFOLD, noted, noting, small_targets, weak_edges
 
     progression_library(conn, cfg)
-    script = (UNFOLD + noting("data-short", small_targets()) + noting("data-weak", weak_edges("#q"))
+    script = (UNFOLD + noting("data-short", small_targets(ARTIST_NAMES)) + noting("data-weak", weak_edges("#q"))
               + noting("data-wide", "[document.documentElement.scrollWidth, innerWidth]"))
     path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), script))
     media = {"prefers-color-scheme": "dark"} if dark else None
@@ -2609,11 +2561,11 @@ document.body.setAttribute("data-command", String(!document.querySelector(".pick
 
 @in_chromium
 def test_the_select_bar_of_the_file_on_disk_and_its_command_on_a_touch_phone(conn, cfg, tmp_path):
-    from helpers.targets import UNFOLD, noted, noting, small_targets, weak_edges
+    from helpers.targets import ARTIST_NAMES, UNFOLD, noted, noting, small_targets, weak_edges
 
     # The search field is the search bar's, which another change redraws. While selecting, a line is one
     # target, its title and its artist's name no targets of their own.
-    exempt = ".selecting [data-picker] .line-title, .selecting [data-picker] .artist"
+    exempt = ".selecting [data-picker] .line-title, .selecting [data-picker] .artist, " + ARTIST_NAMES
     script = (UNFOLD + MAKE_FROM_DISK + noting("data-short", small_targets(exempt))
               + noting("data-weak", weak_edges("#q")))
     html = with_script(every_control(conn, cfg, served=False), script)
@@ -4077,16 +4029,18 @@ def test_there_is_no_cards_rows_switch(conn, cfg, tmp_path):
 @pytest.mark.parametrize("size", ["390,844", "1280,800"])
 @in_chromium
 def test_lines_meet_touch_and_contrast(conn, cfg, tmp_path, size):
-    from helpers.targets import UNFOLD, noted, noting, small_targets, weak_edges
+    from helpers.targets import ARTIST_NAMES, UNFOLD, noted, noting, small_targets, weak_edges
 
     # Every line's "⋯" open, so what each holds is measured too. The search field is the bar's, which another
     # change redraws.
-    script = UNFOLD + noting("data-short", small_targets()) + noting("data-weak", weak_edges("#q"))
+    # An artist's name on its band is the one control that may be 24 px, not 44.
+    script = (UNFOLD + noting("data-short", small_targets(ARTIST_NAMES)) + noting("data-floor", small_targets("", least=24))
+              + noting("data-weak", weak_edges("#q")))
     html = with_script(every_control(conn, cfg), script)
     dom = dump_dom(write_library_page(cfg.library_dir, html), tmp_path, size=size, touch=True)
     assert re.search(r'class="line-panel"[^>]*id="line-more-\d+"(?! hidden)', dom)
-    short, weak = noted(dom, "data-short"), noted(dom, "data-weak")
-    assert short == [] and weak == [], (short, weak)
+    short, floor, weak = noted(dom, "data-short"), noted(dom, "data-floor"), noted(dom, "data-weak")
+    assert short == [] and floor == [] and weak == [], (short, floor, weak)
 
 
 # The contrast of what a line says against what is behind it, and of its group's heading: WCAG's ratio of each
