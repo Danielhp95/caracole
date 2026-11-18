@@ -1,7 +1,7 @@
 # Lookups without a queue
 
 Status: written 2026-11-18 from the owner's decisions of that day (.superpowers/sdd/lookup-lane/decisions.md in the main
-checkout), which bind. The rest is this spec's; its own choices are marked *(my call)*. The computer alone: the phone
+checkout), which bind; approved by the owner that day, its one open question answered (last part). The rest is this spec's; its own choices are marked *(my call)*. The computer alone: the phone
 keeps its one queue for now. Paths are under src/caracole/ unless named otherwise, the phone's under
 android/server/src/main/kotlin/io/github/danielhp95/caracole/server/jobs/; lines are main's at afe50f23.
 
@@ -36,7 +36,8 @@ Anti-goals:
 - **Two caracoles write the library at once.** Never: only the lock's holder writes, and the lock changes hands only
   where nothing is half-written (no transaction open, no render or page being written).
 - **A lookup waits minutes behind a YouTube sheet's models or a sync.** Partly met: short jobs and YouTube's pauses
-  let a lookup through; a YouTube sheet's model run and a sync still hold it (part 4, "How far it gets").
+  let a lookup through; a YouTube sheet's model run and a sync still hold it (part 4, "How far it gets"), which the
+  owner accepted for now (last part).
 
 ## What the code does now
 
@@ -359,8 +360,11 @@ Test first; real processes where the lock is the subject, as test_commands_commo
 - The song stage's waiting detail, "…; a fetch goes first at its next pause" (get.py:906-907), wrong behind a sync;
   the line reads only its start.
 
-## Open question for the owner
+## The owner's answer (Q2)
 
-A lookup asked while a sync, an import, an index merge or a YouTube sheet's model run holds the lock still waits for
-it, minutes at worst, its line "Waiting for the book…" (part 4, "How far it gets"). Accept that for now, with the
+Asked: a lookup asked while a sync, an import, an index merge or a YouTube sheet's model run holds the lock still waits
+for it, minutes at worst, its line "Waiting for the book…" (part 4, "How far it gets"). Accept that for now, with the
 models run without the lock as a later step? Proposed: yes.
+
+Answered by the owner on 2026-11-18: "do your propositions, that's rare of a case". So yes: such a lookup waits for
+now, and the spec's *(my call)* choices stand as written (decisions.md).
