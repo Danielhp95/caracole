@@ -178,11 +178,11 @@ def test_the_line_names_the_kept_versions_and_its_list_opens_them_all(config, si
 def test_the_library_pages_menu_lists_the_kept_versions(config, sites, conn, tmp_path):
     looked_up(config, sites, conn, tmp_path)
 
-    # Its card's Ultimate Guitar chip opens its drawer: a row a kept version, the one in use, each opening its page.
+    # Its card's sheet tile opens its drawer: in UG's part, a row a kept version, the one in use, each opening its page.
     from test_library_card import KIT
 
     index = tmp_path / "library" / "index.html"
-    script = 'chipOf("Creep", "ug").click();\nnote("drawer", noteDrawer("Creep"));'
+    script = 'drawerOf("Creep", "sheet");\nnote("drawer", noteDrawer("Creep", "ug"));'
     index.write_text(with_script(index.read_text(encoding="utf-8"), "(() => {\n" + KIT + script + "\n})();"),
                      encoding="utf-8")
     drawer = attribute_of(dump_dom(index.as_uri(), (1280, 800)), "data-drawer")

@@ -2066,8 +2066,8 @@ way, then the next auto-chords run puts each chord over its word.
 - Its **fair use**, which caracole keeps: your songs alone (never a mirror), within its 1,000
   requests a day from one address (caracole stops at 900 a day, see [Two paces](#configure)), every
   answer cached, and a link back to each song's page there wherever its
-  lyrics show: the Lyrics tile of the song's card says **From Megalobiz**, a link to it, and
-  `info.json` has it as `lyrics_from`.
+  lyrics show: the Lyrics tile of the song's card links to it, Megalobiz's mark and **Megalobiz** on
+  the tile's row, and `info.json` has it as `lyrics_from`.
 - Its API also allows **30 requests a minute**, which caracole no longer keeps: its pauses there are
   0.5–1 seconds (a lookup's 0.5–0.75), a quarter of what they were, your choice of 3 November 2026.
   A busy night may meet its 429, a block like any other.
@@ -2092,8 +2092,8 @@ them every 30 days, and its timed lyrics replace them.
   alert goes out, and the page is never cached.
 - Each lyrics page says "Usage of azlyrics.com content by any third-party lyrics provider is prohibited by our
   licensing agreement". caracole asks it by your choice, for your songs alone, keeps nothing but the lyrics of
-  those songs, privately in your library, and links back: the Lyrics tile of the song's card says **From AZLyrics**,
-  a link to its page, and `info.json` has it as `lyrics_from`.
+  those songs, privately in your library, and links back: the Lyrics tile of the song's card links to its page,
+  AZLyrics' mark and **AZLyrics** on the tile's row, and `info.json` has it as `lyrics_from`.
 - `[providers.azlyrics] enabled = false` turns it off.
 
 ## Audio from YouTube
@@ -2579,7 +2579,8 @@ again, Use LaCuerda's sheet, Add to a songbook…, and ⋯ with info.json and Re
 sites have it, where else to find it, and its progressions last.
 
 Then what you play from it, a tile each, all alike, none first (from 720 px a row each: its name and
-version, the source it came from with that source's mark, its formats at the end), in the order of the
+version, the marks of where it came from, its chevron at the end; on a phone the marks and the chevron on
+a row under its name), in the order of the
 line's buttons: its **Chord sheet** (**Auto sheet** in its own colour when that is its only sheet,
 **Ukulele chords** for Ultimate Guitar's Ukulele Chords), its **Guitar Pro**
 file, its **Guitar tab** (a text tab), its
@@ -2589,20 +2590,23 @@ what it holds: the sheet's viewer (else its PDF, else its text); the first
 Guitar Pro file, in the browser when `caracole serve` shows it there (see
 [caracole serve](#caracole-serve)), else a download; the first harmonica tab,
 the text tab and the first game music tab, as text, the lyrics, the first score. Under it, a word of which it is (`Ver 3 · ★ 4.86 (408) ·
-in use`, `LaCuerda`, `from the recording`); a version's rating is written with its votes, `★ 4.86 (408)`, and `New` for one nobody rated; its versions, a chip a source with
-how many (`Versions [UG] 13 [LaCuerda] 2`, `Files [gtptabs] 1 [inbox] 1`), or,
-one source with one version, `From` it; and its formats, downloads: the sheet's
-PDF (and a Chinese sheet's in Traditional characters, `PDF, Traditional`), Text
-and ChordPro, then its PDF exports, each by its version (`PDF · G
-Dorian, capo 0`: see `caracole render --version` and Export PDF of this
-version); a Guitar Pro file's; the text tab's; the lyrics' Text and Timed
-(.lrc); each score's format. A tile with more than one version is drawn as a
-small stack. A Guitar Pro or Power Tab file, and a score but its PDF, downloads
-under its song's name (`Eagles - Hotel California (2).ptb`).
+in use`, `LaCuerda`, `from the recording`); a version's rating is written with its votes, `★ 4.86 (408)`, and `New` for one nobody rated.
+Beside it, the marks of the sites its versions came from (two at most, the one
+in use first: `[UG] [LC]`), or, for lyrics from Megalobiz or AZLyrics, a link
+to their page there, its mark and its name; then its chevron. A tile with more
+than one version is drawn as a small stack. A Guitar Pro or Power Tab file, and
+a score but its PDF, downloads under its song's name (`Eagles - Hotel
+California (2).ptb`).
 
-A chip opens that source's versions in a drawer under the row of tiles that
-holds its tile (on a phone, under the tile); another chip, the chip again, its
-✕ or Escape closes it, and opening one asks nothing of anyone. **Ultimate
+A tile's chevron opens its drawer right under it; another tile's chevron, the
+chevron again, its ✕ or Escape closes it, and opening one asks nothing of
+anyone. First its downloads: the sheet's PDF (and a Chinese sheet's in
+Traditional characters, `PDF, Traditional`), Text and ChordPro, then its PDF
+exports, each by its version (`PDF · G Dorian, capo 0`: see `caracole render
+--version` and Export PDF of this version); a Guitar Pro file's; the text
+tab's; the lyrics' Text and Timed (.lrc); each score's format. Then a part a
+source of its versions, each with its mark, what it lists and how many (none
+for a tile whose one source has one version: its mark says it all). **Ultimate
 Guitar**'s: how many versions the site has and how many caracole keeps (`13
 versions on the site · 3 kept in your library`), then each kept version in rank
 order, with UG's version number, its rating and votes, how much of the lyrics

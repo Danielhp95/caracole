@@ -1,10 +1,10 @@
 // A song of yours on index.html: on its line, a button for each thing to play from (``plays``, rows.js puts them right
 // after its title), and opened, what card.css draws as a card under its line (library.js lineFor puts these parts in
-// its panel): what you play from it as tiles, each source's versions of each as chips that open a drawer, which sites
-// have it, its progressions, the links that find it elsewhere, and its foot. Drawn from the song's data alone, with
-// createElement, createElementNS and textContent: a button opens a file of the library's, and opening a chip or a
-// drawer asks nothing of anyone. ``icons``: the data's sources (icons.py); ``rows``: caracoleRows', whose marks,
-// glyphs and links it shares.
+// its panel): what you play from it as tiles, each with a chevron that opens its drawer right under it (its downloads,
+// then a part a source of its versions), which sites have it, its progressions, the links that find it elsewhere, and
+// its foot. Drawn from the song's data alone, with createElement, createElementNS and textContent: a button opens a
+// file of the library's, and opening a drawer asks nothing of anyone. ``icons``: the data's sources (icons.py);
+// ``rows``: caracoleRows', whose marks, glyphs and links it shares.
 const caracoleCard = (icons, rows) => {
   "use strict";
   const own = Object.prototype.hasOwnProperty;
@@ -83,17 +83,15 @@ const caracoleCard = (icons, rows) => {
     return groups;
   };
 
-  // --- the drawer: one source's versions of what a tile holds, under the row of tiles that holds its tile -------
-  // Its head (the source's mark, what it lists, what it counts, and a ✕), then a row a version: each part of
-  // ``rowsOf`` a Node, or a { ver, stars, note, actions, cls } it draws.
-  const drawerHead = (drawer, source, what, said, extra) => {
+  // --- a tile's drawer: a part a source of its versions --------------------------------------------------------
+  // A part's head (the source's mark, what it lists, what it counts, and its ``extra``: Back to our pick, the pin's
+  // note), then a row a version: a { ver, stars, note, actions, cls } versionRow draws, each of ``note`` and
+  // ``actions`` a Node or a text.
+  const drawerHead = (source, what, said, extra) => {
     const head = el("div", "drawer-head");
     const mark = sourceMark(source);
     if (mark) head.appendChild(mark);
-    const title = el("h4", "drawer-what", what);
-    title.id = idFor("drawer-what");
-    drawer.setAttribute("aria-labelledby", title.id);
-    head.appendChild(title);
+    head.appendChild(el("h4", "drawer-what", what));
     if (said) head.appendChild(el("span", "drawer-said", said));
     for (const node of listOf(extra)) if (node) head.appendChild(node);
     return head;
@@ -140,14 +138,14 @@ const caracoleCard = (icons, rows) => {
 
   // Ultimate Guitar's versions of the sheet (the data's ``versions``): the kept ones in rank order, the one in use,
   // and the rest counted, with what fetches them (``acts``).
-  const ugDrawer = (s, drawer, acts) => {
+  const ugDrawer = (s, part, acts) => {
     const v = s.versions;
     const list = listOf(v.list).filter((x) => x && typeof x === "object");
     const title = String(s.title);
     const ukulele = listOf(s.instruments).indexOf("ukulele") >= 0;
     const extra = [];
     if (v.pinned && acts.clear) extra.push(acts.clear());
-    drawer.appendChild(drawerHead(drawer, "ug", "UG · " + (ukulele ? "ukulele chords" : "chord sheets"),
+    part.appendChild(drawerHead("ug", "UG · " + (ukulele ? "ukulele chords" : "chord sheets"),
       Number(v.total || 0).toLocaleString("en") + " on UG · " + list.length + " in your logbook", extra));
     const ol = el("ol", "vrows");
     for (const x of list) {
@@ -166,7 +164,7 @@ const caracoleCard = (icons, rows) => {
       ol.appendChild(versionRow({ ver, stars: rated(x), note, actions,
         cls: (x.chosen ? "cur" : "") + (x.gone ? " gone" : "") }));
     }
-    drawer.appendChild(ol);
+    part.appendChild(ol);
     const rest = Number(v.rest) || 0;
     if (rest > 0) {
       const more = el("div", "drawer-rest");
@@ -179,13 +177,13 @@ const caracoleCard = (icons, rows) => {
         said.appendChild(el("code", null, acts.keepMoreCommand));
         more.appendChild(said);
       }
-      drawer.appendChild(more);
+      part.appendChild(more);
     }
   };
   // The LaCuerda sheets caracole met for the song (``lacuerdaVersions``), best first: each its page on LaCuerda, its
   // share of the lyrics, and In use for the sheet, else what keeps it (``acts.useLaCuerda``). A UG version you chose
-  // (a [pin]) outranks a LaCuerda pick: while one does, the drawer says so, with what takes it out, and keeps none.
-  const lacuerdaDrawer = (s, drawer, acts) => {
+  // (a [pin]) outranks a LaCuerda pick: while one does, its part says so, with what takes it out, and keeps none.
+  const lacuerdaDrawer = (s, part, acts) => {
     const met = listOf(s.lacuerdaVersions).filter((x) => x && typeof x === "object");
     const title = String(s.title);
     const pinned = Boolean(s.versions && s.versions.pinned) && Boolean(acts.useLaCuerda);
@@ -194,8 +192,8 @@ const caracoleCard = (icons, rows) => {
       extra.push(el("p", "pin-note", "Your UG choice is in use. Back to our pick first."));
       if (acts.clear) extra.push(acts.clear());
     }
-    drawer.appendChild(drawerHead(drawer, "lacuerda", "LaCuerda · chord sheets", many(met.length, "version") +
-      " seen", extra));
+    part.appendChild(drawerHead("lacuerda", "LaCuerda · chord sheets", many(met.length, "version") + " seen",
+      extra));
     const ol = el("ol", "vrows");
     met.forEach((x, n) => {
       const ver = "Version " + (n + 1);
@@ -206,24 +204,24 @@ const caracoleCard = (icons, rows) => {
       ol.appendChild(versionRow({ ver, note: [lyricsShare(null, x.coverage) || "not scored"], actions,
         cls: x.sheet ? "cur" : "" }));
     });
-    drawer.appendChild(ol);
+    part.appendChild(ol);
   };
   // The auto sheet beside a human one (``autoSheet``): its viewer, and its files.
-  const autoDrawer = (s, drawer) => {
+  const autoDrawer = (s, part) => {
     const a = s.autoSheet;
     const title = String(s.title);
-    drawer.appendChild(drawerHead(drawer, "auto", "Auto sheet · from the recording", "made by us from the audio"));
+    part.appendChild(drawerHead("auto", "Auto sheet · from the recording", "made by us from the audio"));
     const ol = el("ol", "vrows");
     const downloads = listOf(a.files).filter((f) => f && f.href)
       .map((f) => downloadLink(f, String(f.label), "Download the auto sheet's " + String(f.label) + " of " + title));
     ol.appendChild(versionRow({ ver: "Auto sheet", note: downloads.length ? downloads : [],
       actions: [openLink(a.href, "Open the auto sheet of " + title)] }));
-    drawer.appendChild(ol);
+    part.appendChild(ol);
   };
   // One source's files of a tile (``group``): a row each, its label, Open where the page shows it, and Download.
-  const filesDrawer = (s, drawer, t, group) => {
+  const filesDrawer = (s, part, t, group) => {
     const title = String(s.title);
-    drawer.appendChild(drawerHead(drawer, group.source, nameOf(group.source) + " · " + t.plural,
+    part.appendChild(drawerHead(group.source, nameOf(group.source) + " · " + t.plural,
       many(group.files.length, t.unit)));
     const ol = el("ol", "vrows");
     for (const f of group.files) {
@@ -234,15 +232,25 @@ const caracoleCard = (icons, rows) => {
       actions.push(downloadLink(f, "Download", "Download " + label + " of " + title));
       ol.appendChild(versionRow({ ver: label, note: [String(f.name)], actions }));
     }
-    drawer.appendChild(ol);
+    part.appendChild(ol);
   };
 
   // --- the tiles ----------------------------------------------------------------------------------------------
-  // A tile: its body opens what it holds (``open``, ``said`` its name for a screen reader), its subtitle says which
-  // (``from``); its row of chips, one a source (``chips``: { source, count, unit, fixed, fill(drawer) }, after its
-  // ``lead``); its formats as downloads (``downloads``). More than one version: a small stack. Every tile alike, none
-  // first; an auto sheet's in its own colour.
-  const tileOf = (t, card) => {
+  // A tile, one thing to play from (``things``): its body opens what it holds (``open``, ``said`` its name for a screen
+  // reader), its subtitle says which (``from``); after it the marks of where its versions came from (``sources``, two
+  // at most, as its line's button), or, for one source that links back to its page (a fixed chip's ``href``:
+  // Megalobiz's or AZLyrics' lyrics), that link; then a chevron, which opens its drawer (``tiles``), when that would
+  // hold anything: its downloads (``downloads``), then a part a source of its versions (``partsOf``). More than one
+  // version: a small stack. Every tile alike, none first; an auto sheet's in its own colour.
+  const MARKS_SHOWN = 2;  // a tile's marks, and its line's button's
+  const UNIT_WORDS = { version: "versions", file: "files", tab: "tabs" };
+  // The parts of a tile's drawer: its chips that list something (``fill``), but a tile's one chip with one version,
+  // which its mark says all of.
+  const partsOf = (t) => {
+    const chips = listOf(t.chips);
+    return chips.length === 1 && chips[0].fixed ? [] : chips.filter((c) => typeof c.fill === "function");
+  };
+  const tileOf = (t) => {
     const box = el("div", "tile tile-" + t.kind + (t.auto ? " auto" : ""));
     const chips = listOf(t.chips);
     if (chips.reduce((n, c) => n + (Number(c.count) || 0), 0) > 1) box.classList.add("stack");
@@ -251,7 +259,8 @@ const caracoleCard = (icons, rows) => {
     const ico = el("span", "tile-ico");
     ico.appendChild(glyph(t.glyph));
     const words = el("span", "tile-words");
-    words.appendChild(el("span", "tile-name", t.name));
+    const name = words.appendChild(el("span", "tile-name", t.name));
+    name.id = idFor("tile");
     if (t.from) {
       const from = words.appendChild(el("span", "tile-from", t.from));
       from.id = idFor("from");
@@ -261,29 +270,33 @@ const caracoleCard = (icons, rows) => {
     go.appendChild(glyph(t.open.download !== undefined ? "download" : "open"));
     open.append(ico, words, go);
     box.appendChild(open);
-    if (chips.length) {
-      const row = el("div", "tile-versions");
-      if (chips.length === 1 && chips[0].fixed) {
-        const c = chips[0];
-        row.appendChild(el("span", "lead", "From"));
-        // A source that links back to its page (``href``: Megalobiz's or AZLyrics' lyrics) is that link.
-        const one = c.href ? anchor(c.href, "vchip one", { external: true }) : el("span", "vchip one");
-        if (c.href) one.setAttribute("aria-label", t.name + ": its page on " + nameOf(c.source));
-        const mark = sourceMark(c.source);
-        if (mark) one.appendChild(mark);
-        one.appendChild(el("span", "vchip-name", nameOf(c.source)));
-        row.appendChild(one);
-      } else {
-        row.appendChild(el("span", "lead", t.lead));
-        for (const c of chips) row.appendChild(card.chip(box, c));
+    const one = chips.length === 1 && chips[0].fixed ? chips[0] : null;
+    if (one && one.href) {
+      const back = anchor(one.href, "tile-source", { external: true });
+      back.setAttribute("aria-label", t.name + ": its page on " + nameOf(one.source));
+      const mark = sourceMark(one.source);
+      if (mark) back.appendChild(mark);
+      back.appendChild(el("span", "tile-source-name", nameOf(one.source)));
+      box.appendChild(back);
+    } else {
+      const marks = el("span", "tile-source");
+      for (const key of listOf(t.sources).slice(0, MARKS_SHOWN)) {
+        const mark = sourceMark(key);
+        if (mark) marks.appendChild(mark);
       }
-      box.appendChild(row);
+      if (marks.childNodes.length) box.appendChild(marks);
     }
-    const downloads = listOf(t.downloads);
-    if (downloads.length) {
-      const strip = el("div", "tile-downloads");
-      for (const d of downloads) strip.appendChild(d);
-      box.appendChild(strip);
+    const holds = [partsOf(t).length ? UNIT_WORDS[t.unit] || "versions" : "",
+      listOf(t.downloads).length ? "downloads" : ""].filter(Boolean);
+    if (holds.length) {
+      const more = el("button", "tile-more");
+      more.type = "button";
+      const said = t.name + ": its " + holds.join(" and ");
+      more.setAttribute("aria-label", said);
+      more.title = said;
+      more.setAttribute("aria-expanded", "false");
+      more.appendChild(glyph("chevron"));
+      box.appendChild(more);
     }
     return box;
   };
@@ -291,12 +304,14 @@ const caracoleCard = (icons, rows) => {
   // What a song of yours holds to play from, in this order: its chord sheet (the human one, else the auto one; UG's
   // Ukulele Chords), its Guitar Pro files, its text tab, its harmonica tabs, its tabs of game music, its lyrics and the
   // scores you filed; a tile each in its card (tiles), and but its lyrics a button each on its line (plays). Each
-  // { kind, glyph, name, open, said, from, lead, chips, downloads, opener, auto, sources, count, unit }: ``sources``,
-  // where its versions came from, the one in use first; ``count``, how many versions of it the card lists (in its
-  // drawers, or as files), in ``unit``s. ``opts``: ``guitar``, caracole serve shows Guitar Pro files (alphaTab);
-  // ``acts``, what a drawer's versions do (Use this one, Fetch them, Back to our pick, LaCuerda's Use this one:
-  // each makes its control; or, from the file, ``keepMoreCommand``, the command that fetches them). ``claimed``,
-  // given, gets every file a tile shows.
+  // { kind, glyph, name, open, said, from, chips, downloads, opener, auto, sources, count, unit }: ``chips``, its
+  // versions a source each ({ source, count, unit, fixed, href, fill(part) }: ``fixed``, one version and nothing to
+  // choose; ``href``, a fixed source's page to link back to; ``fill``, what draws that source's part of its drawer);
+  // ``downloads``, its formats' links; ``sources``, where its versions came from, the one in use first; ``count``, how
+  // many versions of it the card lists (in its drawer, or as files), in ``unit``s. ``opts``: ``guitar``, caracole
+  // serve shows Guitar Pro files (alphaTab); ``acts``, what a drawer's versions do (Use this one, Fetch them, Back to
+  // our pick, LaCuerda's Use this one: each makes its control; or, from the file, ``keepMoreCommand``, the command
+  // that fetches them). ``claimed``, given, gets every file a tile shows.
   const things = (s, opts) => {
     const o = opts || {};
     const acts = o.acts || {};
@@ -325,15 +340,16 @@ const caracoleCard = (icons, rows) => {
       const chips = [];
       if (v && (Number(v.total) > 0 || listOf(v.list).length)) {
         chips.push({ source: "ug", count: Number(v.total) || listOf(v.list).length, unit: "version",
-          fixed: Number(v.total) <= 1 && !(Number(v.rest) > 0), fill: (d) => ugDrawer(s, d, acts) });
+          fixed: Number(v.total) <= 1 && !(Number(v.rest) > 0), fill: (part) => ugDrawer(s, part, acts) });
       }
       const met = listOf(s.lacuerdaVersions);
       if (met.length) {
         chips.push({ source: "lacuerda", count: met.length, unit: "version",
-          fixed: met.length === 1 && Boolean(met[0] && met[0].sheet), fill: (d) => lacuerdaDrawer(s, d, acts) });
+          fixed: met.length === 1 && Boolean(met[0] && met[0].sheet),
+          fill: (part) => lacuerdaDrawer(s, part, acts) });
       }
       if (auto) {
-        chips.push({ source: "auto", count: 1, unit: "version", fixed: false, fill: (d) => autoDrawer(s, d) });
+        chips.push({ source: "auto", count: 1, unit: "version", fixed: false, fill: (part) => autoDrawer(s, part) });
       }
       if (!chips.length && s.source) chips.push({ source: String(s.source), count: 1, fixed: true });
       const downloads = (autoOnly ? AUTO_FILES : SHEET_FILES).map(([n, label]) => [named(n), label])
@@ -350,7 +366,7 @@ const caracoleCard = (icons, rows) => {
       const sources = [s.source, kept ? "ug" : "", met.length ? "lacuerda" : "", auto ? "auto" : ""];
       made.push({ kind: "sheet", glyph: ukulele ? "ukulele" : "sheet", name, auto: autoOnly,
         open: { href: primary.href }, said: "Open the " + name.toLowerCase() + " of " + title, from,
-        lead: "Versions", chips, downloads, sources: distinct(sources), count: listed + (inUse ? 0 : 1),
+        chips, downloads, sources: distinct(sources), count: listed + (inUse ? 0 : 1),
         unit: "version" });
     }
 
@@ -367,17 +383,17 @@ const caracoleCard = (icons, rows) => {
       const t = { kind: "guitar", glyph: "guitar", name: "Guitar Pro", plural: "Guitar Pro files", unit: "file",
         open: shown || { href: first.href, download: typeof first.download === "string" ? first.download : "" },
         said: (shown ? "Open the Guitar Pro tab of " : "Download the Guitar Pro file of ") + title,
-        from: String(first.name), lead: "Files",
+        from: String(first.name),
         downloads: [downloadLink(first, ext, "Download " + plainLabel(first) + " of " + title)],
         opener: (f) => browser(f), count: guitar.length };
       t.chips = bySource(guitar).map((g) => ({ source: g.source, count: g.files.length, unit: "file",
-        fixed: g.files.length === 1, fill: (d) => filesDrawer(s, d, t, g) }));
+        fixed: g.files.length === 1, fill: (part) => filesDrawer(s, part, t, g) }));
       made.push(t);
     }
     if (tab) {
       claim(tab);
       made.push({ kind: "tab", glyph: "guitar", name: "Guitar tab", open: { href: tab.href },
-        said: "Open the guitar tab of " + title, from: tab.source ? nameOf(tab.source) : "a text tab", lead: "From",
+        said: "Open the guitar tab of " + title, from: tab.source ? nameOf(tab.source) : "a text tab",
         chips: tab.source ? [{ source: tab.source, count: 1, fixed: true }] : [],
         downloads: [downloadLink(tab, "Text", "Download the guitar tab of " + title)], count: 1, unit: "tab" });
     }
@@ -389,11 +405,11 @@ const caracoleCard = (icons, rows) => {
       const first = harp[0];
       const t = { kind: "harmonica", glyph: "harmonica", name: "Harmonica tab", plural: "harmonica tabs", unit: "tab",
         open: { href: harpPage(first) || first.href }, said: "Open the harmonica tab of " + title,
-        from: plainLabel(first).replace(/^Harmonica tab/, "Tab"), lead: "Tabs",
+        from: plainLabel(first).replace(/^Harmonica tab/, "Tab"),
         downloads: [downloadLink(first, "Text", "Download " + plainLabel(first) + " of " + title)],
         opener: (f) => ({ href: harpPage(f) || f.href }), count: harp.length };
       t.chips = bySource(harp).map((g) => ({ source: g.source, count: g.files.length, unit: "tab",
-        fixed: g.files.length === 1, fill: (d) => filesDrawer(s, d, t, g) }));
+        fixed: g.files.length === 1, fill: (part) => filesDrawer(s, part, t, g) }));
       made.push(t);
     }
 
@@ -404,15 +420,16 @@ const caracoleCard = (icons, rows) => {
       const first = games[0];
       const t = { kind: "gametab", glyph: "guitar", name: "Game music tab", plural: "game music tabs", unit: "tab",
         open: { href: first.href }, said: "Open the game music tab of " + title,
-        from: plainLabel(first).replace(/^Game music tab/, "Tab"), lead: "Tabs",
+        from: plainLabel(first).replace(/^Game music tab/, "Tab"),
         downloads: [downloadLink(first, "Text", "Download " + plainLabel(first) + " of " + title)],
         opener: (f) => ({ href: f.href }), count: games.length };
       t.chips = bySource(games).map((g) => ({ source: g.source, count: g.files.length, unit: "tab",
-        fixed: g.files.length === 1, fill: (d) => filesDrawer(s, d, t, g) }));
+        fixed: g.files.length === 1, fill: (part) => filesDrawer(s, part, t, g) }));
       made.push(t);
     }
 
-    // Lyrics, plain and timed: LRCLIB's, or Megalobiz's or AZLyrics', whose chip links to their page there (``lyricsFrom``).
+    // Lyrics, plain and timed: LRCLIB's, or Megalobiz's or AZLyrics', whose tile links to their page there
+    // (``lyricsFrom``).
     const lyrics = LYRICS.map(named).filter(Boolean);
     if (lyrics.length) {
       lyrics.forEach(claim);
@@ -425,7 +442,7 @@ const caracoleCard = (icons, rows) => {
       const from = s.lyricsFrom && s.lyricsFrom.source === source && typeof s.lyricsFrom.href === "string"
         ? s.lyricsFrom.href : null;
       made.push({ kind: "lyrics", glyph: "lyrics", name: "Lyrics", open: { href: lyrics[0].href },
-        said: "Open the lyrics of " + title, from: timed ? "timed" : "plain", lead: "From",
+        said: "Open the lyrics of " + title, from: timed ? "timed" : "plain",
         chips: source ? [{ source, count: 1, fixed: true, href: from }] : [], downloads });
     }
 
@@ -439,11 +456,11 @@ const caracoleCard = (icons, rows) => {
       const t = { kind: "score", glyph: "score", name: "Score", plural: "scores", unit: "file",
         open: pdf ? { href: first.href } : { href: first.href, download: typeof first.download === "string"
           ? first.download : "" },
-        said: (pdf ? "Open the score of " : "Download the score of ") + title, from: plainLabel(first), lead: "Files",
+        said: (pdf ? "Open the score of " : "Download the score of ") + title, from: plainLabel(first),
         downloads: scores.map((f) => downloadLink(f, format(f), "Download " + plainLabel(f) + " of " + title)),
         opener: (f) => (/[.]pdf$/i.test(f.name) ? { href: f.href } : null), count: scores.length };
       t.chips = bySource(scores).map((g) => ({ source: g.source, count: g.files.length, unit: "file",
-        fixed: g.files.length === 1, fill: (d) => filesDrawer(s, d, t, g) }));
+        fixed: g.files.length === 1, fill: (part) => filesDrawer(s, part, t, g) }));
       made.push(t);
     }
 
@@ -455,63 +472,61 @@ const caracoleCard = (icons, rows) => {
   };
   const distinct = (keys) => keys.filter((k, n) => typeof k === "string" && k && keys.indexOf(k) === n);
 
-  // A tile each (``things``, the same ``opts``), and the drawer their chips open, one at a time; null for none.
+  // A tile each (``things``, the same ``opts``), and one drawer, which a tile's chevron opens right after its tile
+  // (closing it under another), the chevron again closes, and so do its ✕ and Escape, the focus back on the chevron:
+  // made each time it opens (``fill``), its tile's downloads (made once, in ``things``, and moved into it), then a part
+  // a source (each chip's ``fill``, so a version's buttons are as the song is now), and emptied as it closes. Null for
+  // no tile.
   const tiles = (s, opts) => {
     const made = things(s, opts);
     if (!made.length) return null;
     const box = el("div", "tiles");
-    const drawer = el("div", "drawer");  // a region, named by its head; no section, as a line's group has one
+    const drawer = el("div", "drawer");  // a region, named by its tile; no section, as a line's group has one
     drawer.setAttribute("role", "region");
     drawer.id = idFor("drawer");
     drawer.hidden = true;
-    let opened = null;  // the chip whose drawer shows
+    let opened = null;  // the { tile, more } whose drawer shows
     const close = (focusBack) => {
-      const chip = opened;
+      const was = opened;
       opened = null;
       drawer.hidden = true;
       drawer.replaceChildren();
-      if (chip) {
-        chip.setAttribute("aria-expanded", "false");
-        if (focusBack) chip.focus();
-      }
+      drawer.removeAttribute("aria-labelledby");
+      delete drawer.dataset.tile;
+      if (!was) return;
+      was.tile.classList.remove("open");
+      was.more.setAttribute("aria-expanded", "false");
+      if (focusBack) was.more.focus();
     };
-    const card = {
-      chip: (tileBox, c) => {
-        const chip = el("button", "vchip");
-        chip.type = "button";
-        const said = nameOf(c.source) + ": " + many(c.count, c.unit || "version");
-        chip.title = said;
-        chip.setAttribute("aria-label", said);
-        chip.setAttribute("aria-expanded", "false");
-        chip.setAttribute("aria-controls", drawer.id);
-        chip.dataset.source = c.source;
-        const mark = sourceMark(c.source);
-        if (mark) {
-          mark.removeAttribute("title");
-          chip.appendChild(mark);
-        }
-        chip.appendChild(el("span", "n", c.count));
-        chip.appendChild(glyph("chevron"));
-        chip.addEventListener("click", () => {
-          const was = opened === chip;
-          close(false);
-          if (was) return;
-          const shut = el("button", "drawer-close");
-          shut.type = "button";
-          shut.title = "Close";
-          shut.setAttribute("aria-label", "Close " + said);
-          shut.appendChild(glyph("close"));
-          shut.addEventListener("click", () => close(true));
-          c.fill(drawer);
-          const head = drawer.querySelector(".drawer-head");
-          if (head) head.appendChild(shut);
-          opened = chip;
-          chip.setAttribute("aria-expanded", "true");
-          drawer.hidden = false;
-          place(drawer, tileBox);
-        });
-        return chip;
-      },
+    const fill = (t, tile, more) => {
+      const shut = el("button", "drawer-close");
+      shut.type = "button";
+      shut.title = "Close";
+      shut.setAttribute("aria-label", "Close: " + t.name);
+      shut.appendChild(glyph("close"));
+      shut.addEventListener("click", () => close(true));
+      drawer.replaceChildren(shut);
+      const downloads = listOf(t.downloads);
+      if (downloads.length) {
+        const files = el("div", "drawer-files");
+        files.appendChild(el("span", "lead", "Download"));
+        for (const d of downloads) files.appendChild(d);
+        drawer.appendChild(files);
+      }
+      for (const c of partsOf(t)) {
+        const part = el("section", "drawer-part");
+        part.dataset.source = typeof c.source === "string" ? c.source : "";
+        c.fill(part);
+        drawer.appendChild(part);
+      }
+      const name = tile.querySelector(".tile-name");
+      if (name) drawer.setAttribute("aria-labelledby", name.id);
+      drawer.dataset.tile = t.kind;
+      tile.after(drawer);
+      tile.classList.add("open");
+      more.setAttribute("aria-expanded", "true");
+      drawer.hidden = false;
+      opened = { tile, more };
     };
     drawer.addEventListener("keydown", (e) => {
       if (e.key !== "Escape") return;
@@ -519,41 +534,22 @@ const caracoleCard = (icons, rows) => {
       e.stopPropagation();
       close(true);
     });
-    for (const t of made) box.appendChild(tileOf(t, card));
+    for (const t of made) {
+      const tile = tileOf(t);
+      const more = tile.querySelector(":scope > .tile-more");
+      if (more) {
+        more.setAttribute("aria-controls", drawer.id);
+        more.addEventListener("click", () => {
+          const was = Boolean(opened) && opened.more === more;
+          close(false);
+          if (!was) fill(t, tile, more);
+        });
+      }
+      box.appendChild(tile);
+    }
     box.appendChild(drawer);
-    if (watch) watch.observe(box);
     return box;
   };
-  // The drawer under the row of tiles that holds its tile (on a phone, one tile a row, right under it), its pointer
-  // over the tile: placed when it opens, and again whenever its tiles' width moves them. Their box is watched, not the
-  // window: a folded card's tiles, or a line the search left out, measure nothing, and are placed once they show.
-  const placed = new WeakMap();  // a box of tiles -> its width when its drawer was placed
-  const place = (drawer, tileBox) => {
-    const box = drawer.parentNode;
-    if (!box || !tileBox.isConnected || !tileBox.getClientRects().length) return;
-    drawer.hidden = true;  // out of the rows while they are measured
-    const top = Math.round(tileBox.getBoundingClientRect().top);
-    let last = tileBox;
-    for (const t of box.querySelectorAll(":scope > .tile")) {
-      if (Math.round(t.getBoundingClientRect().top) === top) last = t;
-    }
-    last.after(drawer);
-    drawer.hidden = false;
-    const at = tileBox.getBoundingClientRect();
-    drawer.style.setProperty("--point", Math.round(at.left + at.width / 2 - box.getBoundingClientRect().left) + "px");
-    drawer.dataset.tile = String(Array.from(box.querySelectorAll(":scope > .tile")).indexOf(tileBox));
-    placed.set(box, Math.round(box.getBoundingClientRect().width));
-  };
-  const watch = typeof ResizeObserver === "function" ? new ResizeObserver((entries) => {
-    for (const entry of entries) {
-      const box = entry.target;
-      const width = Math.round(box.getBoundingClientRect().width);
-      if (!width || placed.get(box) === width) continue;  // hidden, or where it was placed
-      const drawer = box.querySelector(":scope > .drawer");
-      const tileBox = drawer && !drawer.hidden ? box.querySelectorAll(":scope > .tile")[Number(drawer.dataset.tile)] : null;
-      if (tileBox) place(drawer, tileBox);
-    }
-  }) : null;
 
   // --- the line's buttons -------------------------------------------------------------------------------------
   // A song's line has a button for each thing it holds to play from but its lyrics (``things``, the same ``opts``),
@@ -564,7 +560,6 @@ const caracoleCard = (icons, rows) => {
   // harptabs.com, 2 tabs"), and ``data-inst`` the Filter panel's instruments it is one of (library.js INSTRUMENTS),
   // which filter.css lights while one is on. None: null.
   const PLAYS = ["sheet", "guitar", "tab", "harmonica", "gametab", "score"];
-  const MARKS_SHOWN = 2;
   const listed = (names) => (names.length > 1 ? names.slice(0, -1).join(", ") + " and " + names[names.length - 1]
     : names.join(""));
   const instOf = (s, t) => (t.kind === "sheet"

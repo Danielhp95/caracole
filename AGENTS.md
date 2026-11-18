@@ -1103,8 +1103,8 @@ It is rows.js's, shared by both pages:
   - the pane's own rules, library.css's `#card-pane …` (its card's padding and gap, its head, `.foot-menu` opening
     downward, the steps), the one way lane 1 names a card's part; the tiles' layout in the pane's 400–480 px is lane
     3b's container's;
-  - a tile for each thing to play from, every one alike, each source's versions a chip whose drawer reads the page's
-    data alone, never a request;
+  - a tile for each thing to play from, every one alike, its chevron opening its drawer under it (its downloads, then
+    a part a source of its versions), which reads the page's data alone, never a request;
   - its UG versions not kept are counted (`versions.rest`, `sheet_versions.may_keep`), and Fetch them keeps them,
     `caracole versions --keep-more`, within a lookup's budget (test_library_card.py).
 

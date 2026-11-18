@@ -43,10 +43,10 @@ unfolds it in place as a card (library_assets/card.js): its facts (the key in wo
 and where it came from, the transposition, the lyrics, when it came), its
 review's picker, where its audio comes from; a tile for each thing it holds, read
 from its ``files``, every one alike: its sheet, its Guitar Pro file, its text tab, its harmonica tab, its tabs of
-game music, its lyrics, a score you filed, each with its formats as downloads (a harmonica tab with its
-page beside it, ``harmonicaPage``: render.py's ``harmonica-N.html``, opens that page, its text a download) (the sheet's PDF
-exports among them, each file's ``version``) and its versions per source as chips,
-which open a drawer: Ultimate Guitar's (``versions``: those kept, the one and those
+game music, its lyrics, a score you filed (a harmonica tab with its page beside it, ``harmonicaPage``: render.py's
+``harmonica-N.html``, opens that page), each with a chevron that opens its drawer under it: its formats as downloads
+(the sheet's PDF exports among them, each file's ``version``), then its versions a part a source:
+Ultimate Guitar's (``versions``: those kept, the one and those
 beside it, sheet_versions.py's, each opening its viewer page, and those not kept
 counted), LaCuerda's (``lacuerdaVersions``), the auto sheet beside a human one
 (``autoSheet``), a source's files; which sites have it, had nothing for it or weren't asked yet (``sites``,
@@ -871,11 +871,11 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
     its PDF is moved by (``render.pdf_transpose``). ``lacuerda``: the LaCuerda sheets caracole met for it, best first
     (``_lacuerda_versions``), its ``lacuerdaVersions``, the first of which is the one ``lacuerdaSheet`` may name
     (``_lacuerda_sheet``). ``versions``: its UG versions as the page counts them, for a song with some recorded for
-    its sheet (``_ug_versions``), its ``versions`` (``_versions_data``): its card's Versions chip of Ultimate Guitar
-    and that chip's drawer, kept ones listed and the rest counted. ``guitar``: the address of caracole serve's Guitar
+    its sheet (``_ug_versions``), its ``versions`` (``_versions_data``): its card's sheet drawer's part of Ultimate
+    Guitar, kept ones listed and the rest counted. ``guitar``: the address of caracole serve's Guitar
     Pro page of each of its Guitar Pro files, by name (``guitar_pages``). ``ukulele``: its sheet is UG's Ukulele
     Chords version (``ukulele_sheets``), which its sheet's files say. ``autoSheet``: an auto sheet beside its human
-    one (``_auto_sheet``), the sheet tile's Auto chip. ``purchase``: its audio is a purchase linked from Music/,
+    one (``_auto_sheet``), the sheet drawer's auto part. ``purchase``: its audio is a purchase linked from Music/,
     which auto-chords works from; ``youtubeSheet``, whether a sheet from a YouTube video is for it (no human sheet,
     not ignored, no purchase: web/youtube_routes.py), which its served card offers.
     """
@@ -945,7 +945,7 @@ def _elsewhere(song: Song, for_buying: bool) -> tuple[list[dict[str, str]], list
     return links, buy
 
 
-# An auto sheet's files beside a human sheet, as its chip's drawer offers them, by the labels it shows.
+# An auto sheet's files beside a human sheet, as the sheet drawer's auto part offers them, by the labels it shows.
 _AUTO_OPENS = ("sheet (auto).html", "sheet (auto).pdf", "sheet (auto).txt")
 _AUTO_FILES = (("sheet (auto).pdf", "PDF"), ("sheet (auto, Traditional).pdf", "PDF, Traditional"),
                ("sheet (auto).txt", "Text"), ("sheet (auto).cho", "ChordPro"))

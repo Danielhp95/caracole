@@ -1500,10 +1500,16 @@ def test_the_written_pages_guitar_pro_links_name_their_song_in_their_download_at
     # header names the file (test_web_downloads.py).
     s = add_song(conn, "宋冬野", "斑马，斑马")
     put(cfg, s, "sheet.pdf", "guitar-1.gp5", "guitar-2.ptb", "score-1.mscz", "score-1.pdf")
-    script = """openCard("斑马，斑马");
-chipOf("斑马，斑马", "", "guitar").click();  // its two files, put there by hand: from no site
-note("saved", Array.from(lineOf("斑马，斑马").querySelectorAll("a[download]")).map((a) =>
-  [a.getAttribute("href").split("/").pop(), a.getAttribute("download")]));"""
+    script = """const saved = [];
+// Each tile's drawer opened in turn, the sheet's, the Guitar Pro files' (put there by hand: from no site) and the
+// scores': what each holds to download.
+for (const kind of ["sheet", "guitar", "score"]) {
+  drawerOf("斑马，斑马", kind);
+  for (const a of cardOf(lineOf("斑马，斑马")).querySelectorAll(".drawer a[download]")) {
+    saved.push([a.getAttribute("href").split("/").pop(), a.getAttribute("download")]);
+  }
+}
+note("saved", saved);"""
     saved = {unquote(name): name_saved for name, name_saved in card_notes(conn, cfg, tmp_path, script, "saved",
                                                                             size=cards.IN_PLACE)}
     assert {name: saved[name] for name in ("guitar-1.gp5", "guitar-2.ptb", "score-1.mscz")} == {
@@ -1962,7 +1968,8 @@ MARKS = """
     name: m.getAttribute("alt") || m.getAttribute("aria-label"), role: m.getAttribute("role"),
     loaded: m.tagName === "IMG" ? m.complete && m.naturalWidth > 0 : null,
     link: m.closest("a") ? m.closest("a").textContent : null,
-    where: m.closest(".vchip") ? "chip" : m.closest("a") ? "link" : m.closest(".line-panel") ? "panel" : "line",
+    where: m.closest(".tile-source") ? "tile" : m.closest("a") ? "link"
+      : m.closest(".line-panel") ? "panel" : "line",
     width: m.getBoundingClientRect().width, font: parseFloat(getComputedStyle(m).fontSize),
     colour: getComputedStyle(m).color, text_colour: getComputedStyle(document.body).color,
   }));
@@ -2025,11 +2032,11 @@ def test_each_file_shows_its_sites_icon_or_badge_in_a_real_browser(conn, cfg, tm
     marks = marks_of(dump_dom(path, tmp_path, size=cards.IN_PLACE))  # every card open, under its line
     ug = [m for m in marks if m["source"] == "ug"]
     assert ug and all(m["tag"] == "img" and m["loaded"] and m["name"] == "from UG" for m in ug), ug
-    # Under a song's chevron, the chips of each tile say where what it holds came from ("From [UG] Ultimate Guitar",
-    # "From [LR] LRCLIB"), and a link elsewhere names its site.
-    assert all(m["where"] in ("chip", "link") for m in marks), marks
-    assert {m["where"] for m in ug} == {"chip"}, ug
-    assert any(m["source"] == "lrclib" and m["where"] == "chip" for m in marks), marks
+    # Under a song's chevron, each tile's marks say where what it holds came from ([UG] [LC], [LR]), and a link
+    # elsewhere names its site.
+    assert all(m["where"] in ("tile", "link") for m in marks), marks
+    assert {m["where"] for m in ug} == {"tile"}, ug
+    assert any(m["source"] == "lrclib" and m["where"] == "tile" for m in marks), marks
     lc = [m for m in marks if m["source"] == "lacuerda"]
     assert lc and all(m["tag"] == "span" and m["role"] == "img" and m["text"] == "LC" and
                       m["name"] == "from LaCuerda" for m in lc), lc
@@ -2186,15 +2193,21 @@ def test_a_line_opens_each_thing_from_its_button_and_its_files_wait_under_its_ch
                                                "Radiohead/Creep/tab.txt"]
     assert link_texts(top) == [], top
     # Every file of its folder under its chevron, closed (its card not made until it opens): its card's tiles open
-    # and download them, info.json at its foot. No Guitar Pro version of UG's: caracole picks none there.
+    # them and their drawers download them, info.json at its foot. No Guitar Pro version of UG's: caracole picks none
+    # there.
     assert re.search(r'<button class="line-more"[^>]*aria-expanded="false"', top)
     assert re.fullmatch(r'<div class="line-panel song-card" id="line-more-\d+" hidden(="")?></div>',
                         cards.card_of(dom, "Creep")), cards.card_of(dom, "Creep")
-    reached = {unquote(h).rsplit("/", 1)[1] for h in re.findall(r'<a [^>]*href="(Radiohead/Creep/[^"]*)"', menu)}
+    hrefs = card_notes(conn, cfg, tmp_path, """const card = openCardOf(lineOf("Creep")), seen = new Set();
+const look = () => { for (const a of card.querySelectorAll("a")) seen.add(a.getAttribute("href")); };
+look();
+for (const more of card.querySelectorAll("button.tile-more")) { more.click(); look(); }  // each tile's drawer in turn
+note("hrefs", [...seen]);""", "hrefs", size=cards.IN_PLACE)
+    reached = {unquote(h).rsplit("/", 1)[1] for h in hrefs if h.startswith("Radiohead/Creep/")}
     assert reached == {"sheet.html", "sheet.pdf", "sheet.txt", "sheet.cho", "lyrics.txt", "lyrics.lrc", "guitar-1.gp5",
                        "tab.txt", "info.json"}, reached
-    assert re.findall(r'<span class="tile-name">([^<]*)</span>', menu) == ["Chord sheet", "Guitar Pro", "Guitar tab",
-                                                                           "Lyrics"]
+    assert re.findall(r'<span class="tile-name"[^>]*>([^<]*)</span>', menu) == [
+        "Chord sheet", "Guitar Pro", "Guitar tab", "Lyrics"]
     assert '<p class="subhead">Files</p>' not in menu  # nothing left over
     # A sheet with no viewer opens its PDF, its tile too; nothing else to list.
     wonderwall = line_without_card(dom, "Wonderwall")
@@ -2228,12 +2241,14 @@ def test_a_lines_menu_lists_the_sheets_versions_apart_from_its_files(conn, cfg, 
 
     soda = line_without_card(dom, "De Música Ligera")
     assert [h for h, _ in play_links(soda)] == ["Soda%20Stereo/De%20M%C3%BAsica%20Ligera/sheet.html"]
-    downloads = re.findall(r'<a class="dl" href="([^"]*)"[^>]*>.*?</svg>([^<]*)</a>',
-                           cards.card_of(dom, "De Música Ligera"), re.S)
-    assert [label for _, label in downloads] == ["PDF", "Text", "PDF · B Minor, capo 2", "PDF · G Dorian, capo 0"]
-    assert downloads[3][0] == "Soda%20Stereo/De%20M%C3%BAsica%20Ligera/sheet%20%28G%20Dorian%2C%20capo%200%29.pdf"
+    drawers = card_notes(conn, cfg, tmp_path, 'note("files", ["De Música Ligera", "Creep"].map((title) => { '
+                         'drawerOf(title, "sheet"); return noteDrawer(title).files; }));', "files",
+                         size=cards.IN_PLACE)
+    soda_files, creep_files = drawers
+    assert [f["text"] for f in soda_files] == ["PDF", "Text", "PDF · B Minor, capo 2", "PDF · G Dorian, capo 0"]
+    assert soda_files[3]["href"] == "Soda%20Stereo/De%20M%C3%BAsica%20Ligera/sheet%20%28G%20Dorian%2C%20capo%200%29.pdf"
     # A song with no export has none.
-    assert "PDF · " not in line_with_card(dom, "Creep")
+    assert [f["text"] for f in creep_files] == ["PDF", "Text"]
 
 
 def wonderwall(conn, cfg, *, pages=("sheet.html", "version-39144.html")):
@@ -2457,8 +2472,8 @@ def test_a_lines_menu_lists_its_kept_versions_each_opening_its_page_and_the_titl
     put(cfg, s, "sheet (G Dorian, capo 0).pdf")
     db.kv_set_json(conn, f"{EXPORT_KV}{s.id}", {
         "G Dorian, capo 0": {"pdf": "sheet (G Dorian, capo 0).pdf", "query": "t=0&mode=dorian"}})
-    drawer = card_notes(conn, cfg, tmp_path, 'chipOf("Wonderwall", "ug").click();\nnote("drawer", noteDrawer("Wonderwall"));',
-                        "drawer")
+    drawer = card_notes(conn, cfg, tmp_path,
+                        'drawerOf("Wonderwall", "sheet");\nnote("drawer", noteDrawer("Wonderwall", "ug"));', "drawer")
     assert drawer["said"] == "4 on UG · 3 in your logbook"
     assert [(r["ver"], r["stars"], r["acts"]) for r in drawer["rows"]] == [
         ("Ver 3", "★ 4.86 (408)", ["In use", "Open"]), ("Ver 1", "★ 4.85 (12,629)", ["Open"]),
@@ -2470,7 +2485,7 @@ def test_a_lines_menu_lists_its_kept_versions_each_opening_its_page_and_the_titl
     line = line_without_card(dom, "Wonderwall")
     assert play_links(line)[0] == ("Oasis/Wonderwall/sheet.html",
                                    "Open the chord sheet of Wonderwall, from UG, 3 versions"), line
-    assert ">PDF · G Dorian, capo 0</a>" in cards.card_of(dom, "Wonderwall")
+    assert "PDF · G Dorian, capo 0" in [f["text"] for f in drawer["files"]]
 
 
 @in_chromium
@@ -2490,10 +2505,9 @@ def test_a_song_whose_sheet_is_lacuerdas_names_it_the_one_over_its_kept_ug_versi
     keep_file(conn, cfg.library_dir, song=s, version_id=ug, name=version_names("85053")[0], data=b"ug", rank=2)
     put(cfg, s, "sheet.html", "version-85053.html")
     script = """const card = noteCard("De Música Ligera");
-chipOf("De Música Ligera", "ug").click();
-const ug = noteDrawer("De Música Ligera");
-chipOf("De Música Ligera", "lacuerda").click();
-note("one", { from: card.tiles[0].from, ug, lc: noteDrawer("De Música Ligera") });"""
+drawerOf("De Música Ligera", "sheet");
+note("one", { from: card.tiles[0].from, ug: noteDrawer("De Música Ligera", "ug"),
+  lc: noteDrawer("De Música Ligera", "lacuerda") });"""
     one = card_notes(conn, cfg, tmp_path, script, "one")
     assert one["from"] == "LaCuerda"
     assert [(r["ver"], r["acts"]) for r in one["ug"]["rows"]] == [("Ver 2", ["Open"])]
@@ -2524,9 +2538,17 @@ def test_on_a_phone_files_open_with_a_tap_the_title_opens_the_card_and_tab_goes_
         cards.install(phone)
         card = f"document.querySelector('#' + cardOf({q}).id)"
         assert phone.wait(f"!{card}.hidden")
-        heights = phone.js(f"Array.from({card}.querySelectorAll('a')).map((a) => a.getBoundingClientRect().height)")
-        files = phone.js(f"new Set(Array.from({card}.querySelectorAll('a')).map((a) => a.href)).size")
-        # The nine files filed_library keeps, each reached from the card, each a thumb's target.
+        # The nine files filed_library keeps, each reached from the card (its tiles, and each tile's drawer opened in
+        # turn), each a thumb's target, as each tile's chevron is.
+        reach = phone.js(f"""(() => {{ const c = {card}, seen = new Set(), heights = [];
+          const look = () => {{ for (const a of c.querySelectorAll('a')) {{ seen.add(a.href);
+            heights.push(a.getBoundingClientRect().height); }} }};
+          look();
+          for (const more of c.querySelectorAll('button.tile-more')) {{
+            heights.push(more.getBoundingClientRect().height); more.click(); look(); }}
+          c.querySelector('button.tile-more[aria-expanded="true"]').click();
+          return [seen.size, heights]; }})()""")
+        files, heights = reach
         assert files == 9 and min(heights) >= 44, (files, heights)
         # From the line, Tab goes to its first button, its sheet's: the title is no stop of its own, and a tap on it
         # folds the card as the chevron does; the sheet's button opens the viewer.
@@ -3914,6 +3936,7 @@ LINE_CLICKS = "(() => {" + cards.KIT + """
                    focus: at && at.name === "pick" ? at.value : null };
     const soda = lineOf("De Música Ligera");
     const sodaCard = openCardOf(soda);
+    sodaCard.querySelector(".tile-sheet > button.tile-more").click();  // its sheet's drawer: its downloads
     sodaCard.querySelector("form.remove button").click();
     const line = soda.querySelector(".progress");
     notes.countdown = { text: line.textContent, focus: document.activeElement.textContent,
