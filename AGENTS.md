@@ -1318,7 +1318,7 @@ It is rows.js's, shared by both pages:
 - **Below 1200 px** the bar's neck (`necks-open`, after the key) slides it up as the phone's sheet (the page's
   `sheet()`, `data-sheet` half or full: its handle and ✕ for Hide), a dialog not modal and, in viewer.js, one of the
   layers docked on the bar (`--dock`):
-  - each page opens with it closed, ▶ leaves it at half, the rail's Hide and the bar's `necks-toggle` don't touch it
+  - each page opens with it closed, Scroll leaves it at half, the rail's Hide and the bar's `necks-toggle` don't touch it
     (test_viewer_overlay_sheet.py);
   - one control each (D11): the rail's button, `necks-toggle`, takes the neck's place after the key from 1200 px, and
     the strip of shapes has no button in the bar, ⋯'s All chord shapes (`strip-toggle`) its one switch

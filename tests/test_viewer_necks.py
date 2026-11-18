@@ -292,7 +292,8 @@ def test_the_rail_and_everything_in_it_is_fifteen_percent_larger_than_it_was(tmp
 # The rail's two toggles: the bar's (shown from 1200 px) and the rail's own Hide at its top.
 TOGGLES = """(() => { const q = (s) => document.querySelector(s), shown = (el) => Boolean(el && el.getClientRects().length);
   const button = q('#necks-toggle');
-  return {button: shown(button), pressed: button.getAttribute('aria-pressed'), named: button.getAttribute('aria-label'),
+  return {button: shown(button), pressed: button.getAttribute('aria-pressed'), named: button.title,
+          word: button.querySelector('.bw') && button.querySelector('.bw').textContent,
           hide: shown(q('#necks .nk-hide')), harmonyNeck: Boolean(q('#harmony-neck .kn')),
           necks: new URLSearchParams(location.hash.slice(1)).get('necks'), focus: document.activeElement.id,
           railNamed: q('#necks') && q('#necks').getAttribute('aria-label')}; })()"""
@@ -312,6 +313,7 @@ def test_the_bars_button_hides_the_rail_and_the_song_takes_the_whole_width(tmp_p
         again = [b.js(RAIL), toggles(b)]
     assert shown[0]["rail"]["width"] == 345 and shown[0]["padding"] == "345px"
     assert shown[1]["button"] and shown[1]["pressed"] == "true" and shown[1]["named"] == "Chord necks"
+    assert shown[1]["word"] == "Shapes"  # its name, what it says under its icon
     assert shown[1]["hide"] and shown[1]["necks"] is None
     assert shown[1]["railNamed"] == "Chord necks"  # the rail by the name its heading and its toggles give it
     rail, said = hidden

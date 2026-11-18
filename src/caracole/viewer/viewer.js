@@ -2627,8 +2627,9 @@
   // change the speed as it runs, ❚❚ pauses and ▶ resumes (after a countdown again), × ends it; the
   // bar is out of the way while it counts down and runs (dock()). A finger on the page, the wheel, a
   // key that scrolls, a scroll by hand, a card opening or the end of the song pauses it: the page and
-  // the bar are yours until you press ▶, which stays within reach with the card open. ▶ closes the settings and the
-  // card, and leaves the overlay's sheet at half the screen, the bar under it and the pill above it.
+  // the bar are yours until you press ▶, which stays within reach with the card open. The bar's Scroll (pressed
+  // while it is on) closes the settings and the card, and leaves the overlay's sheet at half the screen, the bar
+  // under it and the pill above it.
   const COUNTDOWN = 3000;
   const scroll = { state: "off", from: 0, travelled: 0, last: 0, at: 0, ends: 0, timer: 0, loop: 0 };
   const moving = () => scroll.state === "counting" || scroll.state === "running";
@@ -2641,6 +2642,7 @@
     else doc.dataset.pill = scroll.state;  // room under the song for the pill
     dock();  // the bar, away or back
     pill.dataset.state = scroll.state;
+    $("scroll").setAttribute("aria-pressed", scroll.state === "off" ? "false" : "true");  // lit while it is on
     go.setAttribute("aria-label", LABELS[scroll.state] || "Pause");
     $("tick").textContent = scroll.state === "counting"
       ? String(Math.max(1, Math.ceil((scroll.ends - performance.now()) / 1000))) : "";
@@ -2768,7 +2770,7 @@
     go.focus({ preventScroll: true });  // press it again, or Enter, to start at once
   });
   go.addEventListener("click", () => {
-    if (scroll.state !== "running") halfSheet();  // the pill's ▶, as the bar's
+    if (scroll.state !== "running") halfSheet();  // the pill's ▶, as the bar's Scroll
     if (scroll.state === "counting") run();
     else if (scroll.state === "running") pauseScroll();
     else countdown();
@@ -2834,7 +2836,7 @@
   });
   bar.addEventListener("focusin", () => slide(false));
 
-  // Nothing to transpose, no shapes and no other setting for a sheet without chords: Aa and ▶ alone.
+  // Nothing to transpose, no shapes and no other setting for a sheet without chords: Aa and Scroll alone.
   $("keys").hidden = count === 0;
   more.hidden = count === 0;
   showScroll();

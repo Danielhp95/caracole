@@ -475,7 +475,7 @@
   };
 
   // --- the rail, or the phone's sheet -------------------------------------------------------------------------------
-  const SHEET = "Necks and harps";  // the sheet's name, as the bar's neck button says it
+  const SHEET = "Necks and harps";  // the sheet's name, as the bar's neck button's title says it
   const rail = (aside, page) => {
     const ui = { tab: page.first === "harmonica" ? "harmonica" : "guitar", hk: 0, draw: () => draw() };
     const railName = aside.getAttribute("aria-label") || "Chord necks";

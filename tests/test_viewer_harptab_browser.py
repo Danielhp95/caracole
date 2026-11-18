@@ -223,12 +223,13 @@ def test_a_tab_caracole_cant_read_is_its_text_with_aa_and_scrolling_alone(tmp_pa
 def test_scrolling_by_itself_counts_down_then_scrolls_and_stops(tmp_path):
     with opened(tmp_path, written(tmp_path, tab("3489_wonderwall"))) as b:
         b.click("#scroll")
-        assert b.js("document.getElementById('pill').dataset.state") == "counting"
+        assert b.js("[document.getElementById('pill').dataset.state,"
+                    " document.getElementById('scroll').getAttribute('aria-pressed')]") == ["counting", "true"]
         b.click("#go")  # pressed again: at once
         assert b.wait("window.scrollY > 20", 10)
         b.click("#pill-end")
-        assert b.js("[document.getElementById('pill').hidden, document.getElementById('bar').classList.contains('away')]") \
-            == [True, False]
+        assert b.js("[document.getElementById('pill').hidden, document.getElementById('bar').classList.contains('away'),"
+                    " document.getElementById('scroll').getAttribute('aria-pressed')]") == [True, False, "false"]
 
 
 # --- the overlay, from 1200 px: Harmonica first, its harp the page's, then Guitar (overlay.js) ------------------

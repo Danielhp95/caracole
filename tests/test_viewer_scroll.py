@@ -121,8 +121,9 @@ def test_the_pill_is_on_the_page_hidden_until_scrolling_starts():
     assert re.findall(r'class="[^"]*\bbar\b(?!-)', html) == ['class="bar']  # the bar alone
     # A live region outside the pill, there before it shows, says when it starts and stops.
     assert re.search(r'<p class="vh" id="scroll-status" role="status"></p>', html)
-    # ▶ in the bar starts it; the pill's − and + set the speed, a number: no slider without one.
-    assert re.search(r'<button type="button" class="tool play" id="scroll" aria-label="Auto-scroll">', html)
+    # Scroll in the bar starts it; the pill's − and + set the speed, a number: no slider without one.
+    assert re.search(r'<button type="button" class="tool play" id="scroll" aria-label="Auto-scroll" aria-pressed="false">',
+                     html)  # pressed while it is on
     assert 'id="speed"' not in html and 'type="range"' not in html
 
 
@@ -371,6 +372,7 @@ def test_paused_or_at_the_end_the_bar_is_back_under_the_pill(tmp_path):
     assert touched["go"] == "Resume" and touched["bar"] and touched["pill"]
     bar, pill = touched_at["bar"], touched_at["pill"]
     assert bar[3] == 844 and pill[3] <= bar[1]  # the bar at the foot, the pill above it...
+    assert bar[1] == 844 - 63 and pill[3] == bar[1] - 12  # the bar 63 px tall with its words, the pill 12 px over it
     assert pill == running["pill"]  # ...where it was
     assert transposed["go"] == "Resume" and transposed["hash"] == "#t=1"
     assert counting["bar"] is None and counting["pill"] == running["pill"]

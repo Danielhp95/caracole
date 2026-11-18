@@ -40,7 +40,8 @@ SHEET = """(() => {
           sideways: document.documentElement.scrollWidth > document.documentElement.clientWidth,
           inside: aside.scrollWidth <= aside.clientWidth,
           button: Boolean(button && button.getClientRects().length), expanded: button && button.getAttribute('aria-expanded'),
-          buttonNamed: button && button.getAttribute('aria-label'), controls: button && button.getAttribute('aria-controls'),
+          buttonTitle: button && button.title, controls: button && button.getAttribute('aria-controls'),
+          buttonWord: button && button.querySelector('.bw') && button.querySelector('.bw').textContent,
           handle: handle && handle.getAttribute('aria-pressed'), handleNamed: handle && handle.getAttribute('aria-label'),
           close: q('#necks .ov-close') && q('#necks .ov-close').getAttribute('aria-label'),
           hide: Boolean(q('#necks .nk-hide')), rail: Boolean(q('#necks-toggle') && q('#necks-toggle').getClientRects().length),
@@ -99,7 +100,7 @@ def test_the_bars_neck_opens_the_overlay_as_a_sheet_over_half_the_screen(tmp_pat
         rest(b)
         scrolled = [b.js("scrollY"), sheet(b)]
     assert not closed["open"] and closed["button"] and closed["expanded"] == "false" and closed["controls"] == "necks"
-    assert closed["buttonNamed"] == "Necks and harps" and not closed["rail"]
+    assert closed["buttonWord"] == "Shapes" and closed["buttonTitle"] == "Necks and harps" and not closed["rail"]
     assert half["open"] and half["visible"] and half["at"] == "half" and half["expanded"] == "true"
     # A dialog, not a modal one: the song stays within reach
     assert half["role"] == "dialog" and half["named"] == "Necks and harps" and half["modal"] is None
@@ -272,7 +273,7 @@ def test_with_the_half_sheet_open_the_song_scrolls_by_itself_above_it_and_ends_a
         open_sheet(b)
         touch(b, "#necks .ov-grip")
         assert b.wait(FULL)
-        touch(b, "#scroll")  # ▶ keeps the sheet, at half, for the song to show above it
+        touch(b, "#scroll")  # Scroll keeps the sheet, at half, for the song to show above it
         assert b.wait("!document.getElementById('pill').hidden")
         running = [sheet(b), b.js("""(() => { const p = document.getElementById('pill').getBoundingClientRect();
           return p.bottom <= document.getElementById('necks').getBoundingClientRect().top && p.top >= 0; })()""")]
@@ -295,7 +296,7 @@ def test_on_a_phone_the_settings_take_the_sheets_place(tmp_path):
         after = sheet(b)
     assert not instead["open"] and instead["expanded"] == "false"  # one layer at a time, as the settings and the card
     assert not after["open"] and after["at"] is None  # closed for good: it doesn't come back as they close
-    assert after["focus"] == "Settings"  # on ⋯, which opened them
+    assert after["focus"] == "More"  # on ⋯, which opened them, named by its word
 
 
 # --- the bar and the sheet at a phone's widths --------------------------------------------------------------------
@@ -424,7 +425,7 @@ def _long_harmonica_tab(tmp_path) -> str:
 @pytest.mark.parametrize("kind", ["sheet", "harmonica"])
 def test_the_pills_play_takes_the_whole_screen_sheet_back_to_half_as_the_bars_does(tmp_path, kind):
     """Paused under the sheet over the whole screen, the pill's ▶ (riding over the sheet's foot) starts the song moving
-    again: the sheet goes back to half, the song moving above it, as the bar's ▶ leaves it; never out of sight."""
+    again: the sheet goes back to half, the song moving above it, as the bar's Scroll leaves it; never out of sight."""
     import time
 
     pill = "document.getElementById('pill').dataset.state"

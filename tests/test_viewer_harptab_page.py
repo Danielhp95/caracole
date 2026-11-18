@@ -350,3 +350,21 @@ def test_the_page_has_the_overlays_rail_and_its_bars_button():
     assert '<aside class="necks" id="necks" hidden aria-label="Chord necks"></aside>' in html
     assert re.search(r'<div class="bar-in">\n<span class="keys" id="harps"', html)
     assert re.search(r'</span>\n<button type="button" class="tool necks-toggle" id="necks-toggle" hidden', html)
+
+
+def test_the_harmonica_bar_says_shapes_notes_text_and_scroll():
+    from caracole.viewer import harptab_page, page as sheet_page
+
+    bar = harptab_page._BAR
+    for id_, word in [("necks-toggle", "Shapes"), ("necks-open", "Shapes"), ("notes", "Notes"), ("size", "Text"),
+                      ("scroll", "Scroll")]:
+        assert re.search(rf'id="{id_}"[^>]*>(?:(?!</button>).)*<span class="bw">{word}</span></button>', bar), id_
+    # Named by their words, which their names hold: Notes too, never "Note names".
+    assert 'aria-label="Note names"' not in bar and 'aria-label="Chord necks"' not in bar
+    # Scrolling by itself, the viewer's arrow down to a line, pressed while it is on; ▶ is a line's alone.
+    assert bar.count(sheet_page._SCROLL_ICON) == 1 and harptab_page._PLAY_ICON not in bar
+    assert 'id="scroll" aria-label="Auto-scroll" aria-pressed="false"><span class="disc">' in bar
+    html = page(TAB_D, cho=a_song(), key="Am", key_source="tab")
+    assert html.count(harptab_page._PLAY_ICON) == html.count('class="rp"') > 0  # each line's ▶
+    # A tab shown as written keeps the arrow, with no Notes.
+    assert harptab_page._BAR_RAW.count(sheet_page._SCROLL_ICON) == 1 and 'id="notes"' not in harptab_page._BAR_RAW

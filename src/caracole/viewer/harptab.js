@@ -614,6 +614,7 @@
     else doc.dataset.pill = scroll.state;
     bar.classList.toggle("away", moving() && !docked());  // the overlay's sheet, or the list, sits on it
     pill.dataset.state = scroll.state;
+    $("scroll").setAttribute("aria-pressed", scroll.state === "off" ? "false" : "true");  // lit while it is on
     go.setAttribute("aria-label", LABELS[scroll.state] || "Pause");
     $("tick").textContent = scroll.state === "counting"
       ? String(Math.max(1, Math.ceil((scroll.ends - performance.now()) / 1000))) : "";
@@ -715,7 +716,7 @@
     go.focus({ preventScroll: true });
   });
   go.addEventListener("click", () => {
-    if (scroll.state !== "running") halfSheet();  // the pill's ▶, as the bar's
+    if (scroll.state !== "running") halfSheet();  // the pill's ▶, as the bar's Scroll
     if (scroll.state === "counting") run();
     else if (scroll.state === "running") pauseScroll();
     else countdown();

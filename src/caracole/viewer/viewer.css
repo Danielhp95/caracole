@@ -402,8 +402,9 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
   border: 1px solid var(--border); background: var(--surface); color: var(--text); font-weight: 600;
   text-decoration: none; }
 
-/* The bar at the foot: the key between − and +, the necks' button, Aa, ▶ and ⋯, on a background of its own, so it
-   never sits over the words. It slides away as you scroll down (.away) and back as you scroll up;
+/* The bar at the foot: the key between − and +, the necks' button, Aa, Scroll's arrow and ⋯, each of those after the
+   key with its word under it, on a background of its own, so it never sits over the words; 63 px tall with its
+   padding and its line (--foot). It slides away as you scroll down (.away) and back as you scroll up;
    while the song scrolls by itself it is out of the way, back when it pauses, under the pill. */
 .bar { position: fixed; z-index: 8; left: 0; right: 0; bottom: 0;
   padding: 4px max(8px, env(safe-area-inset-right)) calc(4px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
@@ -417,9 +418,9 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
   -webkit-tap-highlight-color: transparent; }
 .bar svg { width: 16px; height: 16px; fill: currentColor; }
 /* − Em +: the song a semitone down or up, its key in short between them; the rest sit at the end. */
-.keys { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; max-width: 240px;
+.keys { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; height: 54px; max-width: 240px;
   border-radius: 12px; background: var(--raised); }
-.keys .step { font-size: 1.35rem; }
+.keys .step { height: 54px; font-size: 1.35rem; }
 .now { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; justify-content: center; padding: 0 2px;
   text-align: center; line-height: 1.2; font-variant-numeric: tabular-nums; }
 .now .k, .now .d { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -431,9 +432,23 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
 .now .d.stack { line-height: 1.05; }
 .now .d.stack > span { display: block; overflow: hidden; text-overflow: ellipsis; }
 .tool { font-weight: 650; }
-.bar .play { border-radius: 50%; background: var(--accent); color: var(--on-accent); }
+/* A tool after the key: its icon over its word, as tall as the key. Every icon has a slot as tall as Scroll's disc,
+   itself in the middle of it, so the icons share a line and the words another. A tool pressed or open says its word
+   in the accent too. */
+.bar .tool { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  height: 54px; }
+.bar .tool > :first-child { flex: none; height: 34px; }
+.bar .tool > .ic { display: grid; place-items: center; }  /* Aa, ♪: a glyph */
+.bw { font-size: .66rem; font-weight: 600; line-height: 1; white-space: nowrap; color: var(--muted); }
+.bar .tool:is([aria-pressed="true"], [aria-expanded="true"]) .bw { color: var(--accent); }
+/* Scroll: an arrow down to a line (page.py's _SCROLL_ICON, a stroke: no fill) in a disc of the accent, ringed in it
+   while it is on, counting down, scrolling or paused (viewer.js: aria-pressed). */
+.bar .play .disc { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%;
+  background: var(--accent); color: var(--on-accent); }
+.bar .play .disc svg { width: 18px; height: 18px; fill: none; }
+.bar .play[aria-pressed="true"] .disc { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent); }
 /* Aa: the text size in a small box over the bar, beside the song (nothing behind it is dimmed). */
-.size-box { position: relative; flex: none; margin-left: auto; }  /* Aa, ▶ and ⋯ at the end, keys or none */
+.size-box { position: relative; flex: none; margin-left: auto; }  /* Aa, Scroll and ⋯ at the end, keys or none */
 /* The necks' button, the first of the tools at the end, right after the key (viewer.js, harptab.js): from 1200 px,
    where there is a rail, the rail of necks shown or hidden, pressed while it shows; below it, where there is none,
    in its place the neck, the overlay's sheet up or down, tinted while the sheet is open. Pressed or open, tinted and
@@ -465,7 +480,7 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
 @media (hover: hover) {
   .bar button:hover, .pill button:hover { background: var(--raised); }
   .keys .step:hover { background: var(--border); }
-  .bar .play:hover, .pill .go:hover { background: var(--accent); }
+  .pill .go:hover { background: var(--accent); }
   .sizes button[aria-disabled="true"]:hover { background: none; }
   .vnow:hover, a.ver-main:hover { background: var(--raised); }  /* a sheet's versions */
 }
@@ -520,7 +535,7 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
    (--dock: its height, from the script), so the song's end comes up above it: the versions list too, a sheet
    from the bottom. From 900 px wide, the settings are a rail beside the song, and the card a popover by its
    chord and the versions list one under its line (below). */
-:root { --foot: calc(53px + env(safe-area-inset-bottom)); --rail: 360px; --pill: 0px; }
+:root { --foot: calc(63px + env(safe-area-inset-bottom)); --rail: 360px; --pill: 0px; }
 html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
 .sheet-ui { position: fixed; z-index: 7; left: 0; right: 0; bottom: var(--foot); max-width: 620px; max-height: 45vh;
   max-height: 45dvh; margin: 0 auto; padding: 6px 16px 14px; overflow-y: auto; overscroll-behavior: contain;

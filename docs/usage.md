@@ -3220,7 +3220,7 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   sheet. A tap on the sheet's handle (the grip at its top, or anywhere
   between its tabs and ✕) takes it to the whole screen and back; ✕, Escape,
   Back or the neck again closes it, and the focus goes back to the neck. Each
-  page opens with it closed, at half the screen. ▶ leaves it open, at half
+  page opens with it closed, at half the screen. Scroll leaves it open, at half
   the screen, the song scrolling above it and the pill above the sheet; on a
   phone the settings or a chord's card open in its place, closing it (one at a
   time: Back and Escape, below).
@@ -3364,8 +3364,10 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   `caracole versions` command that does it, with Copy, and a version not kept
   links to its page on UG.
 - **The bar** at the foot of the page holds what you reach for while
-  playing: `− Em +`, a neck, `Aa`, `▶` and `⋯`; from 1200 px the rail of
-  necks' button takes the neck's place, after the key (both above). − and +
+  playing: `− Em +`, a neck, `Aa`, an arrow down to a line and `⋯`, each
+  after the key with its word under it: **Shapes**, **Text**, **Scroll**
+  and **More**; from 1200 px the rail of necks' button, Shapes too, takes
+  the neck's place, after the key (both above). − and +
   move every
   chord, its shapes and the key a semitone at a time, with the key you play
   between them in short: "Em" over "shapes · capo 2" (or "key" with no
@@ -3378,8 +3380,9 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   strip of every chord's shape (below) is **All chord shapes** in ⋯, on
   every screen; the bar has no button for it. **Aa** opens a small box over the bar with the text
   size and A− and A+, nothing dimmed behind it; a tap anywhere else, or
-  Escape, closes it. **▶** scrolls the song by itself (below). **⋯** opens the
-  settings. The bar slides away as you scroll down the song, and comes back
+  Escape, closes it. **Scroll**, the arrow in a disc, scrolls the song by
+  itself (below), ringed while it is on (counting down, scrolling or
+  paused). **More** (⋯) opens the settings. The bar slides away as you scroll down the song, and comes back
   when you scroll up, tap the page or reach the end, where the song's last
   lines and the footer end above it. It stays while the browser puts you
   back where you were in the song, and while the keyboard's focus is on one
@@ -3630,7 +3633,7 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   a "download", the file itself.
 - **The song's end**: the page scrolls on half a screen more past the last line, so
   the song's last lines come up clear of the bar, to the middle of the screen.
-- **Auto-scroll**: ▶ in the bar counts down 3 seconds to give you
+- **Auto-scroll**: Scroll in the bar counts down 3 seconds to give you
   time to get your hands on the guitar (press the count to start at once),
   then scrolls the song at a steady pace, with the screen kept on where the
   browser allows it. While it is on, a pill steers it, just above the bar's
@@ -3762,7 +3765,8 @@ the library page link it, the tab's text beside it.
   little smaller); after them, from 1200 px the rail's button, and below
   1200 px the neck, the overlay's sheet (below); ♪,
   **Notes**, shows each hole's note on that harp in its place ("F#6");
-  **Aa** the text size, and ▶ scrolls by itself, as in the viewer.
+  **Aa** the text size, and Scroll scrolls by itself, as in the viewer,
+  each with its word under it (Shapes, Notes, Text, Scroll).
 - **Full screen**, as the viewer's: a double tap beside the tab (in its
   margins, never on a hole, a word, a line's ▶, the legend or a control) hides
   the bar, the facts, the "fit the sheet's chords" line and the rail, and a

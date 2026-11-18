@@ -61,8 +61,8 @@ html:not([data-ready]) .rp { display: none; }
   font: .95em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 /* A tab caracole can't read: its text as written, in the viewer's tab box, wrapping rather than widening a phone. */
 .harp-tab.raw .tab { font-size: .82em; white-space: pre-wrap; overflow-wrap: anywhere; }
-/* The bar: the harp between − and +, ♪ (Notes: pressed while each hole's note shows), Aa and ▶. */
-.bar .notes { font-size: 1.25rem; }
+/* The bar: the harp between − and +, ♪ over Notes (pressed while each hole's note shows), Aa and Scroll. */
+.bar .notes .ic { font-size: 1.25rem; }
 .bar .notes[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent);
   box-shadow: inset 0 0 0 1.5px var(--accent); }
 .bar .keys { max-width: 260px; }

@@ -950,7 +950,11 @@ def _words(text: str) -> list[str]:
 # 1200 px, where there is a rail: pressed while it shows, as the rail's own Hide says; a sidebar, drawn as a path),
 # or in its place a neck, the overlay's sheet opened or closed (below 1200 px, where there is no rail: a dialog that
 # is not modal, Guitar and Harmonica, overlay.js; frets and a dot, drawn as a path); Aa, the text size in a box
-# beside it; ▶, scrolling by itself; ⋯, the rest of the settings, where All chord shapes is the strip's one switch.
+# beside it; an arrow down to a line in a disc (``_SCROLL_ICON``), scrolling by itself, pressed while it is on
+# (counting down, scrolling or paused: viewer.js); ⋯, the rest of the settings, where All chord shapes is the strip's
+# one switch. Each of those after the key has its word under its icon (``bw``: Shapes, Text, Scroll, More), which
+# its name holds (WCAG 2.5.3): the necks' two and ⋯ are named by their words alone, with what they do in their
+# titles; Aa and Scroll keep a name that holds their word (Text size, Auto-scroll).
 # The pill steers the scroll once it starts, above the bar's place, the bar out of the way while the song moves: its
 # first button counts down (a ring and the seconds), pauses (❚❚) and resumes (▶); the status line says so to a screen
 # reader. The settings and the card are dialogs that are not modal: nothing dims the song or takes it out of reach
@@ -983,6 +987,10 @@ def _words(text: str) -> list[str]:
 _UNDO = ('<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/>'
          '<path d="M3 3v5h5"/></svg>')  # ↺, a Reset's: an arc and its arrowhead
 _GO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>'  # ›, a place here
+# Scrolling by itself, the bar's (and the harmonica page's, harptab_page._BAR): an arrow down to a line, stroked.
+_SCROLL_ICON = ('<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v8.5M4.5 7 8 10.5 11.5 7M3.5 13.5h9" '
+                'fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>'
+                '</svg>')
 # Hide controls: full screen, the controls hidden for reading (viewer.js), the first of the places to go.
 _FULL_ROW = ('<div id="full-row"><button type="button" class="goto" id="full-open"><span class="goto-lab">Hide controls'
              '</span><span class="goto-v">full screen' + _GO + '</span></button></div>\n')
@@ -1008,18 +1016,18 @@ _CONTROLS = """<div class="bar" id="bar" data-controls hidden role="region" aria
 <output class="now" id="key-now" for="t-down t-up"><span class="k" aria-hidden="true"></span><span class="d" aria-hidden="true"></span><span class="vh" id="key-full"></span></output>
 <button type="button" class="step" id="t-up" aria-label="Up a semitone">+</button>
 </span>
-<button type="button" class="tool necks-toggle" id="necks-toggle" hidden aria-label="Chord necks" aria-pressed="true" aria-controls="necks"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M3 2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm0 1.5a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5V4a.5.5 0 0 0-.5-.5zM3.5 4.5h3v7h-3z"/></svg></button>
-<button type="button" class="tool necks-open" id="necks-open" hidden aria-label="Necks and harps" aria-haspopup="dialog" aria-controls="necks" aria-expanded="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M2.75 4.25h10.5a1.5 1.5 0 0 1 1.5 1.5v4.5a1.5 1.5 0 0 1-1.5 1.5H2.75a1.5 1.5 0 0 1-1.5-1.5v-4.5a1.5 1.5 0 0 1 1.5-1.5zM2.5 5.5v5h11v-5zm2.25 0h1v5h-1zM8 5.5h1v5H8zm3.25 0h1v5h-1zM6.875 7a1 1 0 1 0 0 2a1 1 0 1 0 0-2z"/></svg></button>
+<button type="button" class="tool necks-toggle" id="necks-toggle" hidden title="Chord necks" aria-pressed="true" aria-controls="necks"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M3 2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm0 1.5a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5V4a.5.5 0 0 0-.5-.5zM3.5 4.5h3v7h-3z"/></svg><span class="bw">Shapes</span></button>
+<button type="button" class="tool necks-open" id="necks-open" hidden title="Necks and harps" aria-haspopup="dialog" aria-controls="necks" aria-expanded="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M2.75 4.25h10.5a1.5 1.5 0 0 1 1.5 1.5v4.5a1.5 1.5 0 0 1-1.5 1.5H2.75a1.5 1.5 0 0 1-1.5-1.5v-4.5a1.5 1.5 0 0 1 1.5-1.5zM2.5 5.5v5h11v-5zm2.25 0h1v5h-1zM8 5.5h1v5H8zm3.25 0h1v5h-1zM6.875 7a1 1 0 1 0 0 2a1 1 0 1 0 0-2z"/></svg><span class="bw">Shapes</span></button>
 <span class="size-box" id="size-box">
-<button type="button" class="tool" id="size" aria-label="Text size" aria-expanded="false" aria-controls="sizes">Aa</button>
+<button type="button" class="tool" id="size" aria-label="Text size" aria-expanded="false" aria-controls="sizes"><span class="ic" aria-hidden="true">Aa</span><span class="bw">Text</span></button>
 <span class="sizes" id="sizes" role="group" aria-label="Text size" hidden>
 <button type="button" id="smaller" aria-label="Smaller text" aria-disabled="false">A−</button>
 <output id="fs-now">18 px</output>
 <button type="button" id="bigger" aria-label="Bigger text" aria-disabled="false">A+</button>
 </span>
 </span>
-<button type="button" class="tool play" id="scroll" aria-label="Auto-scroll"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 2.4v11.2c0 .6.7 1 1.2.6l8.8-5.6a.7.7 0 0 0 0-1.2L5.7 1.8c-.5-.4-1.2 0-1.2.6z"/></svg></button>
-<button type="button" class="tool" id="more" aria-label="Settings" aria-haspopup="dialog" aria-controls="panel" aria-expanded="false"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="2.5" cy="8" r="1.6"/><circle cx="8" cy="8" r="1.6"/><circle cx="13.5" cy="8" r="1.6"/></svg></button>
+<button type="button" class="tool play" id="scroll" aria-label="Auto-scroll" aria-pressed="false"><span class="disc">""" + _SCROLL_ICON + """</span><span class="bw">Scroll</span></button>
+<button type="button" class="tool" id="more" title="Settings" aria-haspopup="dialog" aria-controls="panel" aria-expanded="false"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="2.5" cy="8" r="1.6"/><circle cx="8" cy="8" r="1.6"/><circle cx="13.5" cy="8" r="1.6"/></svg><span class="bw">More</span></button>
 </div>
 </div>
 <div class="pill" id="pill" role="group" aria-label="Auto-scroll" hidden>

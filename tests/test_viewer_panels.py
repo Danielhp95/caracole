@@ -611,7 +611,7 @@ def test_on_a_phone_a_chord_tapped_low_on_the_screen_comes_up_above_its_card(tmp
             {"name": "prefers-reduced-motion", "value": "reduce" if reduced else "no-preference"}])
         b.js("scrollTo(0, 900)")
         time.sleep(0.2)
-        low = chord(b, "C", below=844 - 53 - 200, above=844 - 53)  # where the card will be
+        low = chord(b, "C", below=844 - 63 - 200, above=844 - 63)  # where the card will be
         tap_at(b, *low[:2])
         assert b.wait("(() => { const y = scrollY; return new Promise((r) => setTimeout(() => r(scrollY === y), 150)); })()")
         shown = look(b)
@@ -640,7 +640,7 @@ def test_on_a_desktop_a_chords_card_is_a_popover_by_the_chord(tmp_path):
         b.press("Escape")
         closed = look(b)
         back = b.js("document.activeElement === window.picked")
-        low = chord(b, "Am", below=800 - 53 - 200, above=800 - 53)  # near the bar: no room below it
+        low = chord(b, "Am", below=800 - 63 - 200, above=800 - 63)  # near the bar: no room below it
         click_at(b, *low[:2])
         above = look(b)
     for found, at in ((first, g), (second, d)):
@@ -687,7 +687,7 @@ def test_while_the_song_scrolls_by_itself_a_card_docks_on_the_bar_under_the_pill
         b.click("#card .x")
         closed = look(b)
     card, pill = docked["card"], docked["pill"]
-    assert alone["bar"] is None and alone["pill"]["bottom"] == 844 - 53 - 12  # above where the bar was
+    assert alone["bar"] is None and alone["pill"]["bottom"] == 844 - 63 - 12  # above where the bar was
     assert docked["name"] == "C" and paused == "Resume" and not docked["inert"]
     assert card["bottom"] == docked["bar"]["top"] and pill["bottom"] <= card["top"]  # on the bar, the pill above
     # Counting down again with the card open, nothing moves under the thumb: the bar stays under the card.

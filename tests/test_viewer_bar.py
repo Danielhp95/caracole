@@ -1,9 +1,10 @@
 """caracole.viewer: the bar at the foot of the sheet viewer (page.py ``_CONTROLS``, viewer.js).
 
-[− key +] [necks] [neck] [Aa] [▶] [⋯]: the song a semitone down or up, with its key in short; from 1200 px, the rail
+[− key +] [necks] [neck] [Aa] [⇣] [⋯]: the song a semitone down or up, with its key in short; from 1200 px, the rail
 of chord necks shown or hidden (its tests are test_viewer_necks.py's); below 1200 px, in its place, the overlay's sheet
-up or down (test_viewer_overlay_sheet.py's); the text size; scrolling by itself; and the rest of the settings, where
-All chord shapes is the strip's one switch. It slides away as you scroll down, and comes back when you scroll up, tap
+up or down (test_viewer_overlay_sheet.py's); the text size; scrolling by itself, an arrow lit while it is on; and the
+rest of the settings, where All chord shapes is the strip's one switch. Each after the key says its word under its icon
+(Shapes, Text, Scroll, More). It slides away as you scroll down, and comes back when you scroll up, tap
 the page or reach the end. The tests that scroll and tap run in a
 Chromium of their own on real time (helpers/browser.py's ``Browser``).
 """
@@ -21,7 +22,7 @@ from helpers.browser import Browser, in_chromium
 from helpers.viewer_pages import drag, key, rest, tap
 
 from caracole.chordpro import to_chordpro
-from caracole.viewer import build_viewer
+from caracole.viewer import build_viewer, page
 from caracole.viewer.book import BookSong, build_songbook
 
 FIXTURES = Path(__file__).parent / "fixtures" / "chordpro"
@@ -33,6 +34,9 @@ WALL = to_chordpro("[ch]Em7[/ch]      [ch]G[/ch]\nSynthetic words go here\n[ch]D
 NO_KEY = "{title: T}\n{artist: A}\n{capo: 1}\n[(G)]la [H7]lo\n"
 LONG = "{title: Long Song}\n{artist: Synthetic}\n{key: G}\n" + "".join(
     f"[G]Synthetic line [D]number {n} [Em]made up to [C]scroll by\n" for n in range(120))
+
+# The word under each bar button that has one (the key's line is its own).
+WORDS = [("necks-toggle", "Shapes"), ("necks-open", "Shapes"), ("size", "Text"), ("scroll", "Scroll"), ("more", "More")]
 
 # The bar as you see it: there or not, slid away or not, and what it says.
 BAR = """(() => {
@@ -95,11 +99,19 @@ def test_the_bar_is_on_the_page_hidden_until_the_script_runs():
     tag = html[start:html.index(">", start)]
     assert " hidden" in tag and 'role="region"' in tag and 'aria-label="Controls"' in tag
     controls = html[start:html.index('<div class="pill"')]
-    # In the order a keyboard reaches them, each named for a screen reader.
+    # In the order a keyboard reaches them, each named for a screen reader: these by an aria-label, the rest by the
+    # word each shows under its icon, which its name holds (WCAG 2.5.3), what it does in its title.
     assert re.findall(r'<button type="button"[^>]*id="([^"]+)"[^>]*aria-label="([^"]*)"', controls) == [
-        ("t-down", "Down a semitone"), ("t-up", "Up a semitone"), ("necks-toggle", "Chord necks"),
-        ("necks-open", "Necks and harps"), ("size", "Text size"), ("smaller", "Smaller text"),
-        ("bigger", "Bigger text"), ("scroll", "Auto-scroll"), ("more", "Settings")]
+        ("t-down", "Down a semitone"), ("t-up", "Up a semitone"), ("size", "Text size"),
+        ("smaller", "Smaller text"), ("bigger", "Bigger text"), ("scroll", "Auto-scroll")]
+    for id_, word in WORDS:
+        assert re.search(rf'id="{id_}"[^>]*>(?:(?!</button>).)*<span class="bw">{word}</span></button>', controls), id_
+    assert re.search(r'id="necks-toggle" hidden title="Chord necks" aria-pressed="true"', controls)
+    assert re.search(r'id="more" title="Settings" aria-haspopup', controls)
+    # Scrolling by itself, an arrow down to a line in a disc, never ▶, pressed while it is on.
+    assert page._SCROLL_ICON in controls and "M4.5 2.4v11.2" not in controls
+    assert re.search(r'id="scroll" aria-label="Auto-scroll" aria-pressed="false"><span class="disc">'
+                     + re.escape(page._SCROLL_ICON) + '</span>', controls)
     assert 'id="shapes"' not in html  # the strip's one switch is the settings' All chord shapes
     # The key between − and +, in short for the eye and in full for a screen reader.
     assert re.search(r'<output class="now" id="key-now" for="t-down t-up">.*id="key-full"', controls)
@@ -109,7 +121,7 @@ def test_the_bar_is_on_the_page_hidden_until_the_script_runs():
     assert '<output id="fs-now">18 px</output>' in controls
     assert re.search(r'id="more"[^>]*aria-haspopup="dialog" aria-controls="panel" aria-expanded="false"', controls)
     # The neck opens the overlay's sheet, a dialog, below 1200 px (the script shows it there)
-    assert re.search(r'id="necks-open" hidden aria-label="Necks and harps" aria-haspopup="dialog" aria-controls="necks"'
+    assert re.search(r'id="necks-open" hidden title="Necks and harps" aria-haspopup="dialog" aria-controls="necks"'
                      r' aria-expanded="false"', controls)
     # The settings keep the rest: the transposition and its reset, the capo, the mode, the shapes, and
     # Reset everything; the text size and the scrolling are the bar's.
@@ -158,7 +170,7 @@ def test_a_sheet_without_chords_keeps_the_text_size_and_the_scrolling(tmp_path):
     page.write_text(build_viewer("{title: T}\n{artist: A}\nOnly words\n"), encoding="utf-8")
     dom = browser.dump_dom(page.as_uri(), (390, 844))
     assert 'data-ready="1"' in dom and re.search(r'<div class="bar" id="bar"(?![^>]*hidden)', dom)
-    # Nothing to transpose, no shapes and no other setting: no key and no ⋯, but Aa and ▶.
+    # Nothing to transpose, no shapes and no other setting: no key and no ⋯, but Aa and Scroll.
     assert re.search(r'id="keys"[^>]*hidden', dom) and re.search(r'id="more"[^>]*hidden', dom)
     assert re.search(r'id="necks-open"[^>]*hidden', dom)  # no overlay
     assert not re.search(r'id="size"[^>]*hidden', dom) and not re.search(r'id="scroll"[^>]*hidden', dom)
@@ -232,6 +244,51 @@ def test_play_starts_the_scroll_and_the_pill_takes_the_bars_place(tmp_path):
     assert counting["pill"] and counting["where"] == "hidden" and counting["focus"] == "go"
     assert status == "Scrolling in 3 s"
     assert not ended["pill"] and ended["where"] == "shown" and ended["focus"] == "scroll"
+
+
+# Each tool's word as drawn: whole, under its icon and centred on it.
+WORD_UNDER = """(() => [...document.querySelectorAll('#bar .tool')].filter((t) => t.getClientRects().length).map((t) => {
+  const word = t.querySelector('.bw'), icon = t.firstElementChild;
+  if (!word || icon === word) return {id: t.id, word: null};
+  const text = document.createRange();
+  text.selectNodeContents(word);  // to the fraction of a pixel
+  const r = text.getBoundingClientRect(), w = word.getBoundingClientRect(), i = icon.getBoundingClientRect();
+  const b = t.getBoundingClientRect();
+  return {id: t.id, word: word.textContent, whole: r.width <= w.width && r.left >= b.left && r.right <= b.right,
+          under: w.top >= i.bottom - 0.5 && w.bottom <= b.bottom,
+          centred: Math.abs((w.left + w.right) / 2 - (i.left + i.right) / 2) <= 1,
+          top: Math.round(w.top * 10) / 10, middle: Math.round((i.top + i.bottom) * 5) / 10};
+}))()"""
+
+
+@in_chromium
+def test_every_bar_button_says_its_word_under_its_icon(tmp_path):
+    for width, height, mobile in ((390, 844, True), (320, 640, True), (768, 1024, True), (1100, 800, False)):
+        with viewer(tmp_path, written(tmp_path, UG_CHO, name=f"W{width}"), width=width, height=height,
+                    mobile=mobile) as b:
+            seen = b.js(WORD_UNDER)
+        assert [(t["id"], t["word"]) for t in seen] == [w for w in WORDS if w[0] != "necks-toggle"], (width, seen)
+        for tool in seen:
+            assert tool["whole"] and tool["under"] and tool["centred"], (width, tool)
+        # One line of words, and the icons over them on one line too, whatever each icon is.
+        assert len({t["top"] for t in seen}) == 1 and len({t["middle"] for t in seen}) == 1, (width, seen)
+
+
+@in_chromium
+def test_the_scroll_button_is_lit_while_autoscroll_is_on(tmp_path):
+    pressed = "document.getElementById('scroll').getAttribute('aria-pressed')"
+    with viewer(tmp_path) as b:
+        before = b.js(pressed)
+        b.click("#scroll")
+        counting = b.js(pressed)
+        b.click("#go")
+        b.click("#go")  # started, paused: the bar is back
+        paused = b.js(f"""[{pressed}, getComputedStyle(document.querySelector('#scroll .disc')).boxShadow !== 'none',
+          getComputedStyle(document.querySelector('#scroll .bw')).color
+            === getComputedStyle(document.querySelector('#scroll .disc')).backgroundColor]""")
+        b.click("#pill-end")
+        after = b.js(f"[{pressed}, getComputedStyle(document.querySelector('#scroll .disc')).boxShadow]")
+    assert (before, counting, paused, after) == ("false", "true", ["true", True, True], ["false", "none"])
 
 
 @in_chromium
@@ -388,7 +445,7 @@ def test_the_bar_fits_a_phone_and_a_desktop_and_the_song_ends_above_it(tmp_path)
               page: document.documentElement.scrollWidth, smallest: Math.min(...buttons), row,
               ids: shown.map((e) => e.id), main: fits(k), size: parseFloat(getComputedStyle(k).fontSize),
               sub: lines.every(fits), said: lines.map((e) => e.textContent),
-              inside: Math.round(keys.height) === 44 && now.top >= keys.top && now.bottom <= keys.bottom};
+              inside: Math.round(keys.height) === 54 && now.top >= keys.top && now.bottom <= keys.bottom};
     })()"""
     end = """(() => { scrollTo(0, document.documentElement.scrollHeight);
       const last = [...document.querySelectorAll('.foot > *')].pop().getBoundingClientRect();
@@ -399,14 +456,14 @@ def test_the_bar_fits_a_phone_and_a_desktop_and_the_song_ends_above_it(tmp_path)
                     height=height, mobile=mobile) as b:
             m = b.js(measure)
             clear = b.js(end)
-        assert 50 <= m["height"] <= 54 and m["bottom"] == height, (width, m)
+        assert 60 <= m["height"] <= 66 and m["bottom"] == height, (width, m)  # 10 px taller, for the words
         rail = 345 if width >= 1200 else 0  # from 1200 px the rail of necks is on its left
         assert m["left"] == rail and m["right"] == m["client"] and m["page"] <= width, (width, m)
         assert m["smallest"] >= 44 and m["row"], (width, m)  # one row, each a thumb's target, none over another
         # After the key, the rail's toggle from 1200 px; narrower, the neck in its place
         tools = ["t-down", "t-up", "necks-toggle"] if width >= 1200 else ["t-down", "t-up", "necks-open"]
         assert m["ids"] == tools + ["size", "scroll", "more"], (width, m)
-        assert m["inside"], (width, m)  # the key's lines in its box, which is no taller than the buttons
+        assert m["inside"], (width, m)  # the key's lines in its box, as tall as the buttons with their words
         if width >= 390:  # the longest key in short, whole ("Ab mixolydian" over "shapes · capo 2 · +1"), with no
             # guitar beside the neck to take its room
             assert m["main"] and m["sub"] and m["said"] == ["shapes · capo 2 · +1"], (width, m)
