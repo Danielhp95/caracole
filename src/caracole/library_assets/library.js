@@ -334,7 +334,7 @@
   // a song's card (card.js), drawn with them.
   const rowKit = caracoleRows(ICONS, { searchArtist: (name) => searchFor(name) });
   const { sourceMark, glyph, link, resultRow, artistSearch, button, fetchIcon, many, shortDate, indexLine, titleLine,
-    readArtistPage, lacuerdaSearcher, readOutcome, songsOn, meantName, nothingFound, notesLine, countMarks,
+    readArtistPage, lacuerdaSearcher, readOutcome, songsOn, meantName, nothingFound, notesLine, drawCountMarks,
     countsSaid } = rowKit;
   const card = caracoleCard(ICONS, rowKit);
 
@@ -2153,20 +2153,22 @@
   // Ask LaCuerda's, the one LaCuerda button, where the results offer a name's page too; its rows come in a new answer
   // once it is over. On the file, which can ask nothing, Enter shows the line that searches the sites.
   // The line under the box: words, a live region, which the box is described by. ``marks``: the marks beside them
-  // say it (the counts, "Searching the sites…"), so the words are a screen reader's while those show; anything else
-  // shows, after the marks ("Estopa: 60 songs on Ultimate Guitar", an error) or alone.
+  // say it (the counts, "Searching sites" while an answer's marks show), so the words are a screen reader's, as they
+  // are where every count is 0 and no mark shows (the list's line says so); anything else shows, after the marks
+  // ("Estopa: 60 songs on Ultimate Guitar", an error) or alone.
   const say = (text, marks) => {
     barSaid.classList.toggle("counted", Boolean(marks));
     if (barStatus.textContent === text) return;
     barStatus.textContent = text;
     barStatus.title = text;  // one line on a phone: the whole of it on hovering
   };
-  // What each site found, as marks under the box (rows.js countMarks), your songs the results show (``mine``) first,
-  // drawn by drawGroups: the answer on the screen's, while the sites' results show and the box holds no link, and
-  // dimmed while the next answer comes (searching); each site's count its songs as the lines show them (foundNow),
-  // those "+ N more" and Their songs listed since too. The same in words, and the artist or the song it may have
-  // meant, said again once they change, unless what follows the answer is said ("Estopa: 60 songs on Ultimate
-  // Guitar"), which stays until the next. Called with nothing, it only takes them away where they can't show.
+  // What each site found, as marks under the box (rows.js drawCountMarks: none where every count is 0), your songs
+  // the results show (``mine``) first, drawn by drawGroups: the answer on the screen's, while the sites' results show
+  // and the box holds no link, and dimmed while the next answer comes (searching); each site's count its songs as the
+  // lines show them (foundNow), those "+ N more" and Their songs listed since too. The same in words, and the artist
+  // or the song it may have meant, said again once they change, unless what follows the answer is said ("Estopa: 60
+  // songs on Ultimate Guitar"), which stays until the next. Called with nothing, it only takes them away where they
+  // can't show.
   let countsFor = null;  // the answer's data the marks are drawn from, and what they counted
   let countsKey = "";
   const drawCounts = (mine) => {
@@ -2184,8 +2186,7 @@
     const fresh = countsFor !== answer.data;
     countsFor = answer.data;
     countsKey = key;
-    barCounts.replaceChildren(...countMarks(answer.data, mine, found));
-    barCounts.hidden = false;
+    drawCountMarks(barCounts, answer.data, mine, found);
     if (!fresh && !barSaid.classList.contains("counted")) return;  // what followed the answer stays said
     const meant = objects(answer.data.suggest).filter((x) => x.artist);
     say(countsSaid(answer.data, mine, found) + (meant.length ? " · did you mean " + meantName(meant[0]) + "?" : ""),
@@ -3369,7 +3370,7 @@
     const mine = asked;
     if (asking) asking.abort();
     asking = new AbortController();
-    say("Searching sites", true);
+    say("Searching sites", !barCounts.hidden);  // in words until an answer's marks show
     searching(true);
     fetch("api/search?q=" + encodeURIComponent(q) + "&box=" + SEARCH_BOX, {
       signal: asking.signal, cache: "no-store", headers: { Accept: "application/json" },

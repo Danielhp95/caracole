@@ -4206,37 +4206,49 @@ the library, sent as they are: they carry no badge.
   two phones, or the library page and the lookup page) each wait their turn
   and get their answer (`/api/search`'s `box`, an id each search box makes). The
   line under the box says "Searching sites" until the first answer comes.
-  Then it is a row of marks, one a place searched, each with how many songs it
-  found there: your songs first (the results' own, by caracole's logo), then
-  Ultimate Guitar, gtptabs.com, LaCuerda, MuseScore, harptabs.com and
-  gametabs.net, each by its own icon (else its letters: UG, GT, LC, MS, HT,
-  GM). A site counts its songs as the results' lines show them (those "+ N
-  more" lists too): an artist's most tabbed songs among them, a song once,
-  and an artist none of whose songs is listed (a LaCuerda artist whose page
-  caracole hasn't read) once. One that found something is in the text's colour,
-  one that found nothing quieter, at 0. A mark also says how far caracole's copy
-  of the site's index has got, in a colour and a glyph: amber with a pie cut
-  where it is read in part (LaCuerda, while the nightly run still reads its
-  listings; harptabs.com, its artist pages; gametabs.net, its game pages, which
-  name each tab's composers), red with a ban and no count where a site blocks
-  caracole (MuseScore), a dashed edge where its index is empty yet, and "off" on
-  a dashed edge where it is turned off in caracole.toml. Each mark's tooltip
-  says it in words, then why, in one line ("0 on LaCuerda: index in part, up to
-  C", then "LaCuerda's index is being read: 2,957 artists so far, with #,
-  A–C read whole; the nightly run reads the rest."); a screen reader hears each
-  mark that way ("7 on Ultimate Guitar"), and, as an answer comes, the counts
-  that aren't 0 ("1 of your songs · 7 on Ultimate Guitar · 5 on gametabs.net").
-  A mark is no button. While the next query's answer comes the row dims, and
-  what follows an answer (an artist's songs listed by "+ N more", an error) is
-  said in words after the marks. Nothing under the results says it again: only
-  Ask LaCuerda, and "Why isn't it found?", when they apply.
+  Then it is a row of marks: your songs first (the results' own, by caracole's
+  logo, with how many), then each site that found something, in the order
+  caracole searches them (Ultimate Guitar, gtptabs.com, LaCuerda, MuseScore,
+  harptabs.com, gametabs.net), each by its own icon (else its letters: UG, GT,
+  LC, MS, HT, GM) and how many songs it found there, in the text's colour; then
+  one quiet mark for all the rest, "0 on 4 more". A site counts its songs as
+  the results' lines show them (those "+ N more" lists too): an artist's most
+  tabbed songs among them, a song once, and an artist none of whose songs is
+  listed (a LaCuerda artist whose page caracole hasn't read) once. A site's
+  mark also says how far caracole's copy of its index has got, in a colour and
+  a glyph: amber with a pie cut where it is read in part (LaCuerda, while the
+  nightly run still reads its listings; harptabs.com, its artist pages;
+  gametabs.net, its game pages, which name each tab's composers). Its tooltip
+  says it in words, then why, in one line ("7 on LaCuerda · index in part, up
+  to C", then "LaCuerda's index is being read: 2,957 artists so far, with #,
+  A–C read whole; the nightly run reads the rest."). The rest's mark takes in
+  every site at 0, whatever its state: one whose index is empty yet, one read
+  in part, one that blocks caracole (MuseScore) and one turned off in
+  caracole.toml, which is searched nowhere; its tooltip has a line each ("0 on
+  harptabs.com · index empty", "0 on MuseScore · turned us back",
+  "gametabs.net: off"), and a screen reader hears their names ("0 on 4 more:
+  LaCuerda, MuseScore, harptabs.com, gametabs.net"). When every count is 0,
+  yours too, there is no row at all: the list's own line says nothing was
+  found. On a laptop (from 720 px wide) each site that found something is
+  named in full beside its icon ("Ultimate Guitar 7") while the whole row fits
+  on one line, and by its icon alone when it wouldn't, as on a phone; it fits
+  itself again as the window narrows or widens. A screen reader hears each
+  mark as its tooltip's first line ("7 on Ultimate Guitar"), and, as an answer
+  comes, the counts that aren't 0 ("1 of your songs · 7 on Ultimate Guitar · 5
+  on gametabs.net"; "Nothing in your songs or the sites' indexes" when they all
+  are, "1 of your songs · nothing in the sites' indexes" when yours alone
+  aren't). A mark is no button. While the next query's answer comes the row
+  dims, and what follows an answer (an artist's songs listed by "+ N more", an
+  error) is said in words after the marks. Nothing under the results says it
+  again: only Ask LaCuerda, and "Why isn't it found?", when they apply.
 
   When a query finds nothing on the sites, the list ends with a line of its
   own, under a quiet band, "Not on the sites": the query in its quotes, and
   **Request** where a song's Open is, which opens the request form below,
-  filled in from the query (the form shows only then: one Request); the marks
-  under the box say where caracole looked, every site at 0, and a screen reader
-  hears "Not on the sites". Its
+  filled in from the query (the form shows only then: one Request); under the
+  box, no row of marks at all unless some of your songs match (then yours, and
+  the sites in one mark at 0), and a screen reader hears "Nothing in your songs
+  or the sites' indexes" ("1 of your songs · nothing in the sites' indexes"). Its
   chevron holds the rest: Ask LaCuerda · 1 request, only while LaCuerda's
   listings don't reach the name's letter (LaCuerda's search first, as under
   results), and "Why isn't it found?", folded: Ultimate Guitar's
@@ -4253,8 +4265,8 @@ the library, sent as they are: they carry no badge.
   then "Their 7 songs on UG ›", which lists their songs in the band (fifty of
   Ultimate Guitar's, with "+ N more", or those LaCuerda's or harptabs.com's
   index holds, or the offer to read their page), with no request; what a
-  screen reader hears under the box names the first: "Not on the sites ·
-  did you mean Stephen Foster?", "… · did you mean Beautiful Dreamer by Stephen
+  screen reader hears under the box names the first: "Nothing in your songs or
+  the sites' indexes · did you mean Stephen Foster?", "… · did you mean Beautiful Dreamer by Stephen
   Foster?". Enter
   still only moves to the first line. Searching asks no site anything: it reads the indexes
   alone (5–25 ms a query on Ultimate Guitar's, up to about 0.15 s for very

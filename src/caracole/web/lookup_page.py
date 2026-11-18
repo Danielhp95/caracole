@@ -203,17 +203,18 @@ function group(title, rows) {
   for (const row of rows) list.append(row);
   return [el("h2", "group", title), list];
 }
-// The line under the box: words, a live region. ``marks``: the marks beside them say it (the counts, "Searching…"),
-// so the words are a screen reader's while those show; anything else shows, after the marks or alone.
+// The line under the box: words, a live region. ``marks``: the marks beside them say it (the counts, "Searching…"
+// while an answer's marks show), so the words are a screen reader's, as they are where every count is 0 and no mark
+// shows (the results' line says so); anything else shows, after the marks or alone.
 function say(text, marks) {
   saidRow.classList.toggle("counted", Boolean(marks));
   status.textContent = text;
 }
-// What each site found, as marks under the box (ROWS_SCRIPT's countMarks), your songs first: an answer's, or none
-// (null), where the results are no search's (an artist's songs) or there is none yet; dimmed while the next comes.
+// What each site found, as marks under the box (ROWS_SCRIPT's drawCountMarks, the library page's row: none where
+// every count is 0), your songs first: an answer's, or none (null), where the results are no search's (an artist's
+// songs) or there is none yet; dimmed while the next comes.
 function showCounts(data) {
-  counts.replaceChildren(...(data ? rowKit.countMarks(data, data.library.length) : []));
-  counts.hidden = !data;
+  rowKit.drawCountMarks(counts, data, data ? data.library.length : null);
   saidRow.classList.remove("busy");
 }
 // The sticky search box covers the top of the page: what is scrolled into view lands below it.
@@ -234,7 +235,7 @@ function search() {
   const mine = ++typed;
   if (inflight) inflight.abort();
   inflight = new AbortController();
-  say("Searching…", true);
+  say("Searching…", !counts.hidden);  // in words until an answer's marks show
   saidRow.classList.add("busy");
   fetch("/api/search?q=" + encodeURIComponent(text) + "&box=" + SEARCH_BOX,
         {signal: inflight.signal, headers: {"Accept": "application/json"}})

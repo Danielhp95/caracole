@@ -821,14 +821,24 @@ The pages caracole writes and serves are index.html, sheet.html, songbook.html a
 It is rows.js's, shared by both pages:
 
 - `countMarks`: under the box, in the bar kept at the top, what each site found:
-  - your songs' count by the page's logo, then a mark of `looked`'s and a count a site, its songs as the lines show
-    them (`foundOn`; the library page's, library.js `foundNow`, with those "+ N more" listed since);
-  - 0 quieter, a state in a colour and a glyph, never a colour alone, no control.
-- `countsSaid`: the counts in words, the line's live region and the box's description, a screen reader's alone while
-  the marks show: library.js `drawCounts`, lookup_page.py `showCounts`.
+  - your songs' count by the page's logo, then a mark of `looked`'s and a count for each site that found something, in
+    `looked`'s order, its songs as the lines show them (`foundOn`; the library page's, library.js `foundNow`, with those
+    "+ N more" listed since), its name in full (`.count-name`, from 720 px), a state in a colour and a glyph, never a
+    colour alone, no control;
+  - then one quiet mark for every other site, whatever its state (a blocked or turned-off one is searched nowhere: its
+    0 is one of them), `li.count-mark.rest`, "0 on N more", their names for a screen reader, each one's `countSaid`
+    line in its tooltip;
+  - none at all, `[]`, when every count is 0, yours too.
+- `fitCounts`: the names only while the row fits on one line, else the list is `short`, fitted again as the list or
+  its row resizes (a `ResizeObserver` a list, its fit in the next frame).
+- `drawCountMarks(list, data, yours, found)`: the row drawn, hidden when it has no mark, fitted; the one call both
+  pages make for it (library.js `drawCounts`, lookup_page.py `showCounts`).
+- `countsSaid`: the counts in words ("Nothing in your songs or the sites' indexes" when every one is 0), the line's
+  live region and the box's description, a screen reader's alone once the marks said it, and where no mark shows
+  (every count 0) the row takes no room (`.counts-row.counted`).
 - `nothingFound`: a query that found nothing on the sites:
   - a line of the list under a quiet band, "Not on the sites", the query, Request where a song's Open is, the one
-    Request then, its marks the row under the box's;
+    Request then, no marks of its own (and no row under the box unless some of yours match);
   - under its chevron Ask LaCuerda and `unseen` folded.
 - `notesLine`: those two under results.
 - On the lookup page, `didYouMean` (`/api/search`'s `suggest`, a row each, a song's as the search's rows are, before
