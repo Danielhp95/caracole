@@ -2509,17 +2509,23 @@ def test_on_a_phone_files_open_with_a_tap_the_title_opens_the_card_and_tab_goes_
 @in_chromium
 def test_an_artists_name_is_a_button_that_searches_for_them(conn, cfg, tmp_path):
     filed_library(conn, cfg)
+    add_song(conn, "Radiohead", "Karma Police")  # two songs: a band over them; Oasis's one, folded into its line
     path = write_library_page(cfg.library_dir, page(conn, cfg))
     grouped = listing(dump_dom(path, tmp_path))
     head = re.search(r'<section class="artist" data-artist="radiohead"[^>]*><h2[^>]*>(.*?)</h2>', grouped, re.S)
+    folded = re.search(r'<section class="artist folded" data-artist="oasis"[^>]*><h2[^>]*>(.*?)</h2>', grouped, re.S)
     flat = line_of(listing(dump_dom(path, tmp_path, "#sort=title")), "Creep")  # no group over it: its own
-    # The name alone, in the band and on a line no band is over, as served: its title says what it does, and nothing
-    # beside it filters.
-    button = ('<button class="artist artist-search{}" type="button" title="Search Radiohead">'
-              '<span class="artist-name">Radiohead</span></button>')
-    assert button.format("") in head.group(1), head.group(1)
-    assert button.format(" line-by") in flat, flat
-    for shown in (head.group(1), flat):
+    # The name alone, in the band, on a line no band is over and on a folded line, as served: its title says what it
+    # does, and nothing beside it filters. A folded group's heading, a screen reader's, names them with no button.
+    button = ('<button class="artist artist-search{}" type="button" title="Search {}">'
+              '<span class="artist-name">{}</span></button>')
+    assert button.format("", "Radiohead", "Radiohead") in head.group(1), head.group(1)
+    assert button.format(" line-by", "Radiohead", "Radiohead") in flat, flat
+    assert folded.group(1).startswith('<span class="artist-name">Oasis</span>'), folded.group(1)
+    assert "<button" not in folded.group(1), folded.group(1)
+    wonderwall = line_of(grouped, "Wonderwall")
+    assert button.format(" line-by", "Oasis", "Oasis") in wonderwall, wonderwall
+    for shown in (head.group(1), flat, wonderwall):
         assert "filter-mark" not in shown and "artist-only" not in shown and "artist-pair" not in shown, shown
 
 
@@ -3723,9 +3729,9 @@ def test_the_page_waits_unseen_for_its_scripts_and_shows_without_them_all_the_sa
 # --- lines grouped by artist: the library's one view ----------------------------------------------------
 
 
-# Each artist's group as it shows: its key, its heading, its songs' titles and ids, in order.
+# Each artist's group as it shows: its key, its heading, whether it folded, its songs' titles and ids, in order.
 GROUPS = """(() => Array.from(document.querySelectorAll("#list section.artist")).map((s) => ({
-  artist: s.dataset.artist, heading: s.querySelector("h2").textContent,
+  artist: s.dataset.artist, heading: s.querySelector("h2").textContent, folded: s.classList.contains("folded"),
   titles: Array.from(s.querySelectorAll("article.line h3")).map((h) => h.textContent),
   ids: Array.from(s.querySelectorAll("article.line")).map((a) => Number(a.dataset.id)),
 })))()"""
@@ -3747,6 +3753,8 @@ def test_the_library_is_lines_grouped_by_artist_a_to_z(conn, cfg, tmp_path):
     assert [g["heading"] for g in groups] == ["2Pac · yours 1", "The Beatles · yours 1",
                                               "Radiohead · yours 1", "Soda Stereo · yours 2",
                                               "宋冬野 · yours 1"], groups
+    # An artist of one song folds into its line (test_library_bands.py), its heading kept for a screen reader.
+    assert [g["folded"] for g in groups] == [True, True, True, False, True], groups
     soda = groups[3]
     assert soda["artist"] == songs["Soda Stereo - De Música Ligera"]["sortArtist"]
     assert soda["titles"] == ["De Música Ligera", "Persiana Americana"]  # its songs A to Z

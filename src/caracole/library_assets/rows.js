@@ -1,8 +1,9 @@
 
 // Where each thing came from, the pages' glyphs, and a list's rows and lines (``resultRow``): index.html's, and the
 // results of caracole serve's lookup page (web/lookup_page.py), which runs this script before its own.
-// ``does.searchArtist(name)``: what an artist's name on a site's row does (ugHit, siteHit), the search for them, which
-// both pages give (index.html's searchFor, served or from a file; the lookup page's searchArtist).
+// ``does.searchArtist(name)``: what an artist's name on a site's row does (ugHit, siteHit), and on a site's song's line
+// (indexLine: shown where its group folds into it), the search for them, which both pages give (index.html's
+// searchFor, served or from a file; the lookup page's searchArtist).
 const caracoleRows = (icons, does) => {
   "use strict";
   const searchArtist = does && typeof does.searchArtist === "function" ? does.searchArtist : null;
@@ -718,7 +719,7 @@ const caracoleRows = (icons, does) => {
       gt ? "game tab" + ((Number(gt.uploads) || 1) > 1 ? " ×" + Number(gt.uploads) : "") : ""];
     const badges = gone ? [{ kind: "removed", text: "Removed " + shortDate(gone.removed_at) }]
       : mine ? [{ kind: "found", text: "In your logbook" }] : [];
-    line = resultRow({ dense: true, title, artist,
+    line = resultRow({ dense: true, title, artist, onSearch: searchesFor(artist),
       sources: [ug && "ug", lc && "lacuerda", gtp && "gtptabs", ht && "harptabs", gt && "gametabs"].filter(Boolean),
       facts: facts.filter(Boolean).join(" · "),
       badges: [...badges, ...instrumentBadges([...(ug ? ugInstruments(ug.counts) : []), ...(ht ? ["harmonica"] : []),

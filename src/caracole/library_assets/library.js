@@ -1362,14 +1362,19 @@
   // name searches for them, served or from a file (searchFor; not a group that names no artist, ``artist.search``
   // false: MuseScore's). An artist a search may have meant (``artist.meant``, a typo's "Did you mean") says so to a
   // screen reader, and their songs on the site that names them come first in the counts (``counts.theirs``: "7 songs
-  // on UG").
+  // on UG"). Under the lines, the group's tail (``artist.tail``, tailOf's: "+ 57 more by Estopa"), if any.
+  // An artist of one line and nothing else (no tail, no typo's, a group that names an artist) folds into it
+  // (``folded``, library.css): no band, their name the line's overline, which searches for them; the heading stays, a
+  // screen reader's alone, the name in it no button.
   let groupSerial = 0;
   const artistGroup = (artist, items, counts) => {
     const a = artist && typeof artist === "object" ? artist : { name: artist };
     const name = String(a.name || "");
     const c = counts && typeof counts === "object" ? counts : {};
     const mine = Number(c.mine) || 0;
-    const section = el("section", a.meant ? "artist meant" : "artist");
+    const tail = a.tail instanceof Node ? a.tail : null;
+    const folds = listOf(items).length === 1 && !a.meant && !tail && a.search !== false;
+    const section = el("section", a.meant ? "artist meant" : folds ? "artist folded" : "artist");
     section.dataset.artist = String(a.key || "");
     section.tabIndex = -1;  // the A-Z strip moves the focus to it
     const heading = el("h2", "artist-title");
@@ -1377,7 +1382,7 @@
     heading.id = "artist-" + groupSerial;
     section.setAttribute("aria-labelledby", heading.id);
     if (a.meant) heading.appendChild(el("span", "visually-hidden", "Did you mean "));
-    heading.appendChild(name && a.search !== false ? artistSearch(name, () => searchFor(name))
+    heading.appendChild(name && a.search !== false && !folds ? artistSearch(name, () => searchFor(name))
       : el("span", "artist-name", name));
     const said = [c.theirs ? String(c.theirs) : "", mine ? "yours " + mine : "",
       Number(c.ug) ? "UG " + Number(c.ug).toLocaleString("en") : "",
@@ -1398,6 +1403,7 @@
     const box = el("div", "lines");
     for (const item of listOf(items)) box.appendChild(item);
     section.appendChild(box);
+    if (tail) section.appendChild(tail);
     return section;
   };
   // For lists the page doesn't make itself (the served page's type-ahead): the same rows and marks.
@@ -2702,12 +2708,11 @@
       const lc = (g.model && g.model.lacuerda) || {};
       const ht = (g.model && g.model.harptabs) || {};
       const meant = (g.model && g.model.meant) || null;  // an artist it may have meant: their songs counted till listed
-      const section = artistGroup({ key, name: you ? shownName(you, you.artist) : g.model.name, meant: Boolean(meant) },
-        [...theirs.map(lineOf), ...items], { mine: yours.get(key) || 0, ug: ug.songs, lacuerda: lc.songs,
+      const section = artistGroup({ key, name: you ? shownName(you, you.artist) : g.model.name, meant: Boolean(meant),
+        tail }, [...theirs.map(lineOf), ...items], { mine: yours.get(key) || 0, ug: ug.songs, lacuerda: lc.songs,
           gtptabs: Math.max(Number(ug.gtptabs) || 0, Number(lc.gtptabs) || 0), harptabs: ht.songs,
           theirs: meant && !g.model.ug && !g.model.lacuerda && !g.model.harptabs && Number(meant.songs)
             ? songsOn(meant) : "" });
-      if (tail) section.appendChild(tail);
       box.appendChild(section);
     }
     if (model && model.titles.length) {  // MuseScore's pages: a title alone, no artist to put them under

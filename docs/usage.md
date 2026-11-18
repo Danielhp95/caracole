@@ -2619,12 +2619,19 @@ drawn again (a request over) keeps its card open, its drawer closed.
 
 An artist of two or more songs has them under a band 34 px tall: their name in
 the artist's colour (cut short with an ellipsis, on one line) and, on its right,
-your count of their songs, small and muted. Every control is 44 px on a touch
-screen but an artist's name, which is 24 px.
+your count of their songs, small and muted. An artist of one song has no band:
+it folds into the song's line, their name a small overline in capitals, in the
+artist's colour, over the title (cut short on one line), the line about 64 px
+tall on a touch screen; from 720 px wide their name sits in the artist's column,
+as a line sorted by title shows it. So does an artist's group among a search's
+results that holds one line and nothing else, never one with "+ N more" under it
+nor a "Did you mean". Every control is 44 px on a touch screen but an artist's
+name, on its band or as an overline, which is 24 px.
 
-An artist's name, over their songs, searches for them: it puts their name in
-the search box and searches as typing it would, from the folder as on the page
-`caracole serve` serves (which searches the sites too, see below): your songs
+An artist's name, over their songs or over their one song's title, searches
+for them: it puts their name in the search box and searches as typing it would,
+from the folder as on the page `caracole serve` serves (which searches the sites
+too, see below): your songs
 the name finds ("Queen" finds ABBA's "Dancing Queen" too), and Back is the list
 as it was before. There is no view of one artist's songs alone, and no tag for
 it. Sorted by title, or by when the songs were added, the lines stand alone,

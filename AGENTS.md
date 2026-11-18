@@ -825,6 +825,17 @@ It is rows.js's, shared by both pages:
   and one line a song, by the two parts of the identity key (the rows' `artist_key` and `title_key`, an artist's
   `group_key`, a song's `identity` in the page's data), each line rows.js's `indexLine`.
 - A removed song's line asks for it again as the request form does.
+- **Bands and folding**, by what a group holds as each draw makes it (library.js `artistGroup(artist, items, counts)`):
+  - an artist of two lines or more is a 34 px band over them (`--band-h`), the group's tail under them
+    (`artist.tail`, `tailOf`'s: "+ N more", Their songs, a page's read offered);
+  - an artist of one line and nothing else (no tail, no "Did you mean", a group that names an artist: never
+    MuseScore's or harptabs') folds into it (`section.artist.folded`), in the list and the results alike: its heading
+    a screen reader's alone, the name in it no button, and the line's `.line-by` its overline, the name that searches
+    (rows.js `indexLine`'s too, `onSearch`);
+  - on a phone library.css's folded grid puts the overline over the title, `.line-title` `display: contents` (its
+    `.line-plays` a direct child, card.css's seam: test_library_assets.py), the title's column keeping rows.css's
+    4rem; from 720 px the flat line's columns, the overline in `by`; Select mode's are songbooks.css's
+    (test_library_bands.py).
 - A "Did you mean" band's "Their 7 songs on UG ›" opens that artist's group from `/api/artist`, as "+ N more" does.
 - A song of yours under its ⋯ (Fetch again; Use LaCuerda's sheet, `lacuerdaSheet` or the search's LaCuerda row of it)
   posts `/lookup` exactly as the lookup page's rows of it do (test_web_page_again.py).

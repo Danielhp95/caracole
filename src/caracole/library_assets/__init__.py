@@ -24,7 +24,9 @@ file, and none of it loads anything from the network.
   its foot, Remove at its end. Drawn from the page's data alone: a chip or a drawer asks nothing of anyone; what a
   drawer's versions do (Use this one, Fetch them, Back to our pick) library.js makes, served.
 - library.css, library-screens.css and library.js: index.html's own. library.css sets the bands: ``--band-h`` (34 px,
-  an artist's, one line, their count on its right) and ``--fold-h`` (64 px, a folded line's). library-screens.css comes
+  an artist's, one line, their count on its right) and ``--fold-h`` (64 px, a folded line's: an artist of one line,
+  library.js ``artistGroup``'s ``folded``, has no band, their name the line's overline over its title, rows.css's
+  ``.line-by`` in their colour; from 720 px in the flat line's ``by`` column). library-screens.css comes
   after rows.css, as its scroll margin and its thumb's targets are a line's too. filter.css, after
   library.css: the toolbar over the songs (body.html's ``.toolbar``: the filters on as tags, then
   Filter and Sort) and the panel Filter opens (``#filter-panel``, a ``<dialog>``: a popover

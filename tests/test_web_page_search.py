@@ -1789,7 +1789,7 @@ def test_an_artists_name_in_the_results_searches_for_them_and_back_brings_the_qu
     browser.open(base)
     search(browser, "los tontos")
     assert browser.wait(same(LINES, [["C Tangana", [["Los Tontos", "ug"]]]])), browser.js(LINES)
-    name = "#results section.artist h2 button.artist-search"
+    name = "#results section.artist.folded article.line button.artist-search"  # one line: their name its overline
     assert browser.js(f"document.querySelector({json.dumps(name)}).textContent") == "C Tangana"
     browser.click(name)
     # The box says their name, the search runs as typing it would: their group first, every song of theirs in it.
@@ -1813,10 +1813,10 @@ def test_an_artists_name_in_your_list_searches_for_them(cfg, live, browser):
     sites(cfg, ug=C_TANGANA)
     tangana, _ = library(cfg, ("C Tangana", "Demasiadas Mujeres"), ("Radiohead", "Creep"))
     browser.open(base)
-    head = "#list section.artist h2"  # C Tangana's, first
+    head = "#list section.artist h2"  # C Tangana's, first: their one song folded into its line, a screen reader's
     assert browser.js(f"document.querySelector('{head} .artist-name').textContent") == "C Tangana"
     assert browser.js(f"document.querySelector('{head} .artist-only, {head} .filter-mark')") is None  # no funnel
-    browser.click(f"{head} button.artist-search")
+    browser.click("#list section.artist.folded article.line button.artist-search")  # their name, its overline
     assert browser.wait("document.getElementById('found').dataset.query === 'C Tangana'")
     assert browser.js("document.getElementById('q').value") == "C Tangana"
     assert browser.wait(f"{FIRST_GROUP} === 'C Tangana · yours 1 · UG 3'"), browser.js(GROUPS)
@@ -1840,6 +1840,41 @@ def test_an_artists_name_in_your_list_searches_for_them(cfg, live, browser):
                         "!document.getElementById('results').hidden")
     assert browser.wait("document.getElementById('found').dataset.query === 'C Tangana'")
     assert set(asked.queries()) == {"C Tangana"} and queue.snapshot() == []
+
+
+# A search's groups (library.js artistGroup, folded as the list's are: test_library_bands.py): each one's heading,
+# whether it folded or is a typo's, its lines, its tail ("+ N more"), whether its line names the artist.
+RESULTS = """[...document.querySelectorAll('#results section.artist')].map((s) => {
+  const by = s.querySelector('article.line .line-by');
+  return { head: s.querySelector('.artist-title').textContent, folded: s.classList.contains('folded'),
+    meant: s.classList.contains('meant'), lines: s.querySelectorAll('article.line').length,
+    tail: Boolean(s.querySelector('.group-tail')), by: Boolean(by) && by.checkVisibility(),
+    search: Boolean(by) && by.matches('button.artist-search') }; })"""
+
+
+def test_a_results_group_folds_only_when_it_holds_one_line_and_nothing_else(cfg, live, phone):
+    base, queue, asked = live
+    sites(cfg, ug=[("radiohead", "creep", 2), *[("estopa", f"cancion-{n}", 1) for n in range(6)]])
+    phone.open(base)
+    search(phone, "creep")
+    assert phone.wait(f"{answer_to('creep')} && !!document.querySelector('#results .hit')")
+    groups = phone.js(RESULTS)
+    assert [(g["folded"], g["lines"], g["tail"], g["by"], g["search"]) for g in groups] == [
+        (True, 1, False, True, True)], groups  # Radiohead's one line, their name its overline
+    phone.click("#results section.artist.folded article.line .line-by")  # the name searches for them
+    assert phone.wait("document.getElementById('found').dataset.query === 'Radiohead'")
+    assert phone.js("document.getElementById('q').value") == "Radiohead" and queue.snapshot() == []
+    search(phone, "estopa")  # an artist: their group, and its "+ N more by Estopa": a band
+    assert phone.wait(f"{answer_to('estopa')} && !!document.querySelector('#results .more-by')")
+    groups = phone.js(RESULTS)
+    assert [(g["folded"], g["tail"], g["by"]) for g in groups] == [(False, True, False)], groups
+    search(phone, "radiohed")  # a typo's "Did you mean": never folded, whatever it holds
+    assert phone.wait(f"{answer_to('radiohed')} && !!document.querySelector('#results section.meant .their-songs')")
+    phone.click("#results section.meant .their-songs")  # "Their 1 song on UG ›": its one line listed
+    assert phone.wait("document.querySelectorAll('#results section.meant article.line').length === 1")
+    meant = [g for g in phone.js(RESULTS) if g["meant"]]
+    # One line, no tail: a typo's band all the same, its line naming no artist.
+    assert [(g["folded"], g["lines"], g["tail"], g["by"]) for g in meant] == [(False, 1, False, False)], meant
 
 
 def test_an_old_artist_address_searches_for_them_as_their_name_does(cfg, live, browser):

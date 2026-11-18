@@ -1,7 +1,8 @@
 """What a thumb and an eye need of a page's controls, measured in Chromium (helpers/browser.py).
 
 ``small_targets(exempt, least=44)`` lists every control shown that is less than ``least`` px either way (44, a thumb's;
-``ARTIST_NAMES`` is the one kind that may be 24 px, an artist's name on its band, WCAG 2.5.8's minimum): a link, a
+``ARTIST_NAMES`` is the one kind that may be 24 px, an artist's name on its band or, where their one song folds into
+its line, its overline, WCAG 2.5.8's minimum): a link, a
 button, a field, a menu or a fold's summary (a box or a radio counts as its label, the Select mode's
 box as its frame). A link in a line of text is left out, as WCAG 2.5.8 leaves it out, and so is
 whatever the CSS selector ``exempt`` matches.
@@ -35,7 +36,7 @@ const said = (node) => String(node.getAttribute("aria-label") || node.textConten
   .replace(/\s+/g, " ").slice(0, 32);
 """
 
-ARTIST_NAMES = ".artist-title button.artist"
+ARTIST_NAMES = ".artist-title button.artist, section.artist.folded .line-by"
 
 # A JavaScript function ``token(name)``: what a CSS custom property of base.css resolves to, as a computed colour.
 TOKEN_PROBE = """
