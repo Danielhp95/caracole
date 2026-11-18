@@ -875,7 +875,7 @@ def _ireal_looked(app: WebApp, conn: sqlite3.Connection) -> dict[str, str]:
     name = "iReal Pro"
     mark = {"source": "ireal", "name": name}
     if not app.cfg.provider("ireal").enabled:
-        return {**mark, "state": "off", "label": f"{name}: off", "detail": f"iReal Pro's forum is off in caracole.toml."}
+        return {**mark, "state": "off", "label": f"{name}: off", "detail": "iReal Pro's forum is off in caracole.toml."}
     state = index_state(conn)
     if not state.read:
         return {**mark, "state": "empty", "label": f"{name}: empty",
