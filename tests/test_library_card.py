@@ -11,12 +11,13 @@ page ran.
 from __future__ import annotations
 
 import json
+from contextlib import contextmanager
 from urllib.parse import quote
 
 import pytest
 import test_web_page_again as served_page
 from helpers import cards
-from helpers.browser import CHROMIUM_MARKS, Browser, BrowserError
+from helpers.browser import CHROMIUM_MARKS, FINE_POINTER, Browser, BrowserError
 from helpers.library_songs import EXPORT, LACUERDA, hotel_california, with_versions
 from test_library_page import NOW, attribute_of, dump_dom, page, put, with_script
 
@@ -1070,3 +1071,161 @@ def test_lacuerda_use_this_one_waits_for_a_pin_to_go(conn, cfg, versions_served,
     assert browser.js(every).count("Back to our pick") == 1
     press(browser, item, "Back to our pick", UG)
     assert posts.next(0) == ("/versions/clear", {"csrf": "tok", "song": str(song.id), "identity": song.key})
+
+
+# --- the ⋯ menu and Back --------------------------------------------------------------------------------------
+
+MORE = "document.querySelector('{card} details.foot-more')"  # the card wherever it is: cards.open_card's selector
+OURS = "Boolean(history.state && history.state.caracoleMenu)"
+
+
+@contextmanager
+def more_menu(conn, cfg, versions_served, tmp_path, *, touch=True, width=None):
+    """The page in a Browser (a phone's, touch, or a laptop's; ``width`` another, a tablet's 1280 on touch), Hotel
+    California's card open, then its ⋯; yields the browser, the menu's expression, and history's length and address
+    before the ⋯. The card is found through tests/helpers/cards.py: under its line on the phone, in #card-pane from
+    1200 px. The menu is open once its ``toggle`` reached the page's listeners (a test's own, added after card.js's,
+    has heard it)."""
+    base, _, _ = versions_served
+    song = hotel(conn, cfg)
+    with Browser(tmp_path / "chrome", width=width or (390 if touch else 1280), height=844, mobile=touch,
+                 args=() if touch else FINE_POINTER) as b:
+        b.open(base)
+        cards.install(b)
+        card = cards.open_card(b, f'article.line[data-id="{song.id}"]')
+        before = (b.js("history.length"), b.js("location.href"))
+        menu = MORE.format(card=card)
+        b.js(f"{menu}.addEventListener('toggle', () => {{ window.menuToggled = true; }}, {{ once: true }})")
+        b.click(card + " details.foot-more > summary")
+        assert b.wait(f"{menu}.open && window.menuToggled === true")
+        yield b, menu, before
+
+
+def test_on_a_touch_screen_back_closes_the_more_menu_and_nothing_else(conn, cfg, versions_served, tmp_path):
+    with more_menu(conn, cfg, versions_served, tmp_path) as (b, menu, (length, href)):
+        assert b.js("history.length") == length + 1 and b.js(OURS) is True
+        b.js("history.back()")
+        assert b.wait(f"!{menu}.open")
+        assert b.js(f"{menu}.closest('article').querySelector('.line-more').getAttribute('aria-expanded')") == "true"
+        assert b.js("location.href") == href and b.js(OURS) is False
+
+
+def test_on_a_tablet_back_closes_the_more_menu_in_the_pane_and_the_card_stays(conn, cfg, versions_served, tmp_path):
+    with more_menu(conn, cfg, versions_served, tmp_path, width=1280) as (b, menu, (length, href)):
+        line_more = f"document.querySelector(`.line-more[aria-controls='${{{menu}.closest('.song-card').id}}']`)"
+        assert b.js(f"!!{menu}.closest('#card-pane')") is True  # the pane's card, on a touch screen
+        assert b.js("history.length") == length + 1 and b.js(OURS) is True
+        b.js("history.back()")
+        assert b.wait(f"!{menu}.open")
+        assert b.js(f"!!{menu}.closest('#card-pane')") is True
+        assert b.js(f"{line_more}.getAttribute('aria-expanded')") == "true"
+        assert b.js("location.href") == href and b.js(OURS) is False
+
+
+def test_closing_the_more_menu_with_escape_takes_its_history_entry_back(conn, cfg, versions_served, tmp_path):
+    with more_menu(conn, cfg, versions_served, tmp_path) as (b, menu, _):
+        b.press("Escape")
+        assert b.wait(f"!{menu}.open && !{OURS}")
+
+
+def test_an_entry_pushed_as_the_menu_closes_stays_and_the_menus_is_skipped(conn, cfg, versions_served, tmp_path):
+    # A tap elsewhere closes the menu, and another part of the page pushes an entry of its own (lane 1's search would).
+    with more_menu(conn, cfg, versions_served, tmp_path) as (b, menu, _):
+        b.js("document.addEventListener('click', () => history.pushState({ other: 1 }, ''), { once: true });"
+             "document.body.click()")
+        assert b.wait(f"!{menu}.open && history.state && history.state.other === 1")
+        b.js("history.back()")  # one press: the other's entry, and the menu's behind it, skipped
+        assert b.wait(f"!(history.state && history.state.other) && !{OURS}")
+        assert b.js(f"{menu}.open") is False
+
+
+def test_a_menu_opened_as_another_closes_takes_its_entry(conn, cfg, versions_served, tmp_path):
+    # Two cards open on a phone, one's ⋯ open: a tap on the other's ⋯ closes the first and opens the second in the
+    # first's step, so one Back closes it and leaves no step of the first's behind.
+    base, _, _ = versions_served
+    song, other = hotel(conn, cfg), add_song(conn, "Radiohead", "Creep")
+    with Browser(tmp_path / "chrome", width=390, height=844, mobile=True) as b:
+        b.open(base)
+        first = cards.open_card(b, f'article.line[data-id="{song.id}"]')
+        second = cards.open_card(b, f'article.line[data-id="{other.id}"]')
+        one, two = MORE.format(card=first), MORE.format(card=second)
+        length = b.js("history.length")
+        b.click(first + " details.foot-more > summary")
+        assert b.wait(f"{one}.open && {OURS}")
+        b.js(f"{two}.addEventListener('toggle', () => {{ window.secondToggled = true; }}, {{ once: true }})")
+        b.click(second + " details.foot-more > summary")
+        assert b.wait(f"!{one}.open && {two}.open && window.secondToggled === true")
+        assert b.js("history.length") == length + 1 and b.js(OURS) is True
+        b.js("history.back()")
+        assert b.wait(f"!{two}.open && !{OURS}")
+        assert b.js("history.state") is None and b.js(f"{one}.open") is False
+
+
+def test_a_menu_whose_card_is_drawn_again_takes_its_entry_back(conn, cfg, versions_served, tmp_path):
+    # Its song's request over while its ⋯ is open (Fetch again sent with no press, which would close the menu): the
+    # card is drawn again, its menu closed, and no step of the menu's is left for Back to take.
+    with more_menu(conn, cfg, versions_served, tmp_path) as (b, menu, (length, href)):
+        b.js(f"window.oldMenu = {menu}; [...{menu}.closest('.foot').querySelectorAll('form')]"
+             ".find((f) => f.textContent.includes('Fetch again')).requestSubmit()")
+        assert b.wait("!window.oldMenu.isConnected", timeout=20)
+        assert b.wait(f"!{OURS}") and b.js("history.state") is None and b.js("location.href") == href
+        assert b.js("document.querySelectorAll('details.foot-more[open]').length") == 0
+
+
+def test_after_a_reload_a_new_menus_entry_is_never_taken_for_the_one_left_under_it(conn, cfg, versions_served,
+                                                                                  tmp_path):
+    # Reloaded with its ⋯ open, the page is on the menu's entry; a menu opened then pushes one of its own, which Back
+    # takes as it would any.
+    with more_menu(conn, cfg, versions_served, tmp_path) as (b, _, _):
+        b.js("window.before = true; location.reload()")
+        assert b.wait("window.before === undefined && document.readyState === 'complete'")
+        assert b.js(OURS) is True  # the entry the reload left
+        card = cards.open_card(b, "article.line")
+        menu = MORE.format(card=card)
+        b.js(f"{menu}.addEventListener('toggle', () => {{ window.menuToggled = true; }}, {{ once: true }})")
+        b.click(card + " details.foot-more > summary")
+        assert b.wait(f"{menu}.open && window.menuToggled === true")
+        b.js("history.back()")
+        assert b.wait(f"!{menu}.open")
+
+
+def test_with_a_mouse_the_more_menu_pushes_nothing(conn, cfg, versions_served, tmp_path):
+    with more_menu(conn, cfg, versions_served, tmp_path, touch=False) as (b, _, (length, _)):  # its card in the pane
+        assert b.js("history.length") == length and b.js(OURS) is False
+
+
+def test_in_search_mode_the_menus_entry_is_one_step_more_and_the_arrow_leaves_search(conn, cfg, versions_served,
+                                                                                    tmp_path):
+    # "Where the lanes meet" 1 and 2: pushed in search mode, the entry counts one step more than the one under it.
+    base, _, _ = versions_served
+    song = hotel(conn, cfg)
+    with Browser(tmp_path / "chrome", width=390, height=844, mobile=True) as b:
+        b.open(base)
+        cards.install(b)
+        b.click("#q")
+        b.type("hotel")  # search mode: one step, { search: 1 }
+        assert b.wait("document.body.classList.contains('search-mode') && history.state && history.state.search === 1")
+        found = "document.getElementById('found')"  # the sites' answer drawn, so that nothing moves under the tap
+        assert b.wait(f"{found}.dataset.query === 'hotel' && {found}.getAttribute('aria-busy') !== 'true'")
+        card = cards.open_card(b, f'article.line[data-id="{song.id}"]')
+        b.click(card + " details.foot-more > summary")
+        assert b.wait(f"{OURS} && history.state.search === 2")
+        b.click("#leave")  # ← takes back both steps: search left, nothing of the menu's left behind
+        assert b.wait("!document.body.classList.contains('search-mode')")
+        assert b.js("history.state") is None  # its card may be drawn again out of search: no menu of it left open
+        assert b.js("document.querySelectorAll('details.foot-more[open]').length") == 0
+
+
+def test_where_history_refuses_a_push_the_more_menu_still_opens_and_closes(conn, cfg, tmp_path):
+    # The file page (⋯ holds info.json there), on a browser that refuses pushState for a file: no error.
+    put(cfg, hotel(conn, cfg), "info.json")
+    path = write_library_page(cfg.library_dir, page(conn, cfg))
+    with Browser(tmp_path / "chrome", width=390, height=844, mobile=True) as b:
+        b.open(path.as_uri())
+        b.js("history.pushState = () => { throw new DOMException('refused', 'SecurityError'); };"
+             "window.errors = 0; addEventListener('error', () => { window.errors += 1; })")
+        b.click("#list .line .line-more")
+        b.click("#list .line details.foot-more > summary")
+        assert b.wait("document.querySelector('#list details.foot-more').open")
+        b.press("Escape")
+        assert b.wait("!document.querySelector('#list details.foot-more').open") and b.js("window.errors") == 0

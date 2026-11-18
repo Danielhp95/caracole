@@ -753,11 +753,17 @@ The pages caracole writes and serves are index.html, sheet.html, songbook.html a
 - **The page's history**, every script of the library page's
   (docs/superpowers/plans/2026-11-17-library-page-redesign.md, "Where the lanes meet" 1):
   - every `history.replaceState` passes `history.state`, never `null`;
-  - a script that pushes an entry pushes an object with a marker of its own (tabs.js `tab`, search's `search`), and
-    any entry pushed while `body.search-mode` is on also carries `search: (Number(history.state &&
-    history.state.search) || 0) + 1`, never `search` spread from `history.state`;
+  - a script that pushes an entry pushes an object with a marker of its own (tabs.js `tab`, search's `search`,
+    card.js's `caracoleMenu`), and any entry pushed while `body.search-mode` is on also carries `search:
+    (Number(history.state && history.state.search) || 0) + 1`, never `search` spread from `history.state`;
   - a `popstate` handler acts on its own marker alone, and a `pushState` that throws falls back quietly (the change
     made in place, with no step).
+  - A card's ⋯ menu (card.js `caracoleMenus`, its one `popstate` listener): on a touch screen (`(pointer: coarse)`)
+    opening it pushes `{ caracoleMenu: n }` (n a serial), with `search` one more than the entry under it in search
+    mode, at the same address, so Back (or the ← of search) closes it and leaves the card open; closed otherwise
+    (a choice in it, Escape, a press elsewhere, its card drawn again), it takes its entry back once the press's own
+    handlers ran, so an entry another script pushed meanwhile stays, and Back skips the menu's under it; a mouse
+    pushes nothing; no other script copies `caracoleMenu` into its entries (test_library_card.py).
 - **Enter in a search box never spends a request on a guess**:
   - on the lookup page it acts only on `/api/search`'s `best` (or opens the leading artist's songs);
   - on the library page, whose served bar searches `/api/search` as you type (which asks no site), it only moves the

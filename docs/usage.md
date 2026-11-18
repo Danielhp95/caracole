@@ -2667,8 +2667,9 @@ foot, served, **Fetch again** (below) and **Use LaCuerda's sheet**; **Add to a
 songbook…** (see Songbooks, below), for a song the page had when it was loaded
 (one that Fetch or a request brought since has it once the page is loaded
 again); and at the far end a **⋯** that opens info.json, a quiet download, and,
-served, **Remove**, in red (Escape, or a press elsewhere, closes it). A line
-drawn again (a request over) keeps its card open, its drawer closed.
+served, **Remove**, in red (Escape, or a press elsewhere, closes it, and on a
+touch screen Back does too, leaving the card open). A line drawn again (a
+request over) keeps its card open, its drawer closed.
 
 A card longer than the screen keeps its name in sight: once you scroll its line, all of it (its buttons, and
 a request's line and steps under it), up under the search bar, the card's head sticks right under the bar, its

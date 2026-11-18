@@ -5,6 +5,77 @@
 // its foot. Drawn from the song's data alone, with createElement, createElementNS and textContent: a button opens a
 // file of the library's, and opening a drawer asks nothing of anyone. ``icons``: the data's sources (icons.py);
 // ``rows``: caracoleRows', whose marks, glyphs and links it shares.
+//
+// ``caracoleMenus``, card.js's one listener of the browser's history: on a touch screen a card's ⋯ menu opened is a
+// step of its own, { caracoleMenu: n } (n a serial; while searching, one more of search's steps than the entry under
+// it, ``search`` the count under it + 1, never a copy of that entry's), at the address as it is, so that Back closes
+// the menu and leaves its card open. Closed otherwise (a choice in it, Escape, a press elsewhere, its card drawn
+// again), its entry is taken back, once the press's own handlers ran: one of the page's that pushed an entry of its
+// own keeps it, and Back skips the menu's under it later. A menu opened as another closes takes that one's entry.
+// With a mouse a menu is no step, and a browser that refuses the step opens and closes it all the same.
+const caracoleMenus = (() => {
+  "use strict";
+  const MENU = "caracoleMenu";
+  // The serial of the last menu's entry, counted from the page's load time, so that an entry a reload left in the
+  // history (the page reloaded with a menu open) is never taken for a new one's.
+  let menus = Date.now();
+  let shown = null;  // { more, n }: the menu open whose entry is the history's
+  let closing = 0;  // the serial of a menu closed whose entry is still to be taken back
+  const ours = (n) => Boolean(history.state && history.state[MENU] === n);
+  // A menu open whose card is drawn again (its request over) goes with the card it was in: its entry too, as when it
+  // closes. Watched while it is open; a card moved (from its line to the pane) is back in the page by then.
+  const gone = typeof MutationObserver === "function"
+    ? new MutationObserver(() => { if (shown && !shown.more.isConnected) closed(shown.more); }) : null;
+  const show = (more, n) => {
+    shown = { more, n };
+    if (gone) gone.observe(document.body, { childList: true, subtree: true });
+  };
+  const hide = () => {
+    shown = null;
+    if (gone) gone.disconnect();
+  };
+  addEventListener("popstate", () => {
+    if (shown && !ours(shown.n)) {  // Back, or the ← of search, took its entry: it closes
+      const was = shown.more;
+      hide();
+      was.open = false;
+    }
+    if (!shown && history.state && history.state[MENU]) history.back();  // a closed menu's entry: skipped
+  });
+  const opened = (more) => {
+    if (!matchMedia("(pointer: coarse)").matches) return;
+    if (closing && ours(closing)) {  // the entry of a menu that closed as this one opened: this one's now
+      show(more, closing);
+      closing = 0;
+      return;
+    }
+    const n = menus + 1;
+    const entry = { [MENU]: n };
+    if (document.body.classList.contains("search-mode")) {
+      entry.search = (Number(history.state && history.state.search) || 0) + 1;
+    }
+    try {
+      history.pushState(entry, "");
+      menus = n;
+      show(more, n);
+    } catch (err) {
+      // A browser that refuses the step: the menu opens all the same, with none.
+    }
+  };
+  const closed = (more) => {
+    if (!shown || shown.more !== more) return;
+    const n = shown.n;
+    hide();
+    closing = n;
+    setTimeout(() => {  // after the press's own handlers: one that pushed an entry of its own keeps it
+      if (closing !== n) return;  // another menu took it
+      closing = 0;
+      if (ours(n)) history.back();
+    }, 0);
+  };
+  return { opened, closed };
+})();
+
 const caracoleCard = (icons, rows) => {
   "use strict";
   const own = Object.prototype.hasOwnProperty;
@@ -702,7 +773,8 @@ const caracoleCard = (icons, rows) => {
   };
   // The card's foot: what changes the song (``actions``, then ``book``, Add to a songbook…), and at its far end a "⋯"
   // that opens ``info``, info.json, a quiet download, and ``remove``, Remove, alone: neither is what you came to do.
-  // Escape, or a press anywhere else, closes it.
+  // Escape, or a press anywhere else, closes it; on a touch screen it is a step of the browser's history, so Back
+  // does too (caracoleMenus).
   const foot = (s, parts) => {
     const p = parts || {};
     const box = el("div", "foot");
@@ -729,7 +801,11 @@ const caracoleCard = (icons, rows) => {
       for (const node of behind) menu.appendChild(node);
       more.append(summary, menu);
       more.addEventListener("toggle", () => {
-        if (!more.open) return;
+        if (!more.open) {
+          caracoleMenus.closed(more);
+          return;
+        }
+        caracoleMenus.opened(more);
         const away = (e) => { if (!more.contains(e.target)) more.open = false; };
         document.addEventListener("click", away, true);
         more.addEventListener("toggle", () => document.removeEventListener("click", away, true), { once: true });
