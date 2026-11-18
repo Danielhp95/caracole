@@ -183,9 +183,10 @@ dl.facts .from { color: var(--muted); }
 .y:empty::after { content: "\00a0"; }
 .w { display: inline-block; vertical-align: bottom; }
 /* A column fit() widened inside a word ("wo[G][D]rd"): a muted 1 px leader fills the gap at the text's baseline,
-   so the word reads as one and not two. Chords never touch; the gap stays. Never under a reading's ruby. */
-.l:not(.py) .y.ext { display: flex; }
-.l:not(.py) .y.ext::after { content: ""; flex: 1; align-self: flex-end; height: .3em; margin-left: .15em;
+   so the word reads as one and not two. It takes no room (absolute, from the end of the column's own text), so the
+   column keeps its line. Chords never touch; the gap stays. Never under a reading's ruby. */
+.l:not(.py) .y.ext { position: relative; }
+.l:not(.py) .y.ext::before { content: ""; position: absolute; left: var(--ink, 0px); right: 0; bottom: .3em;
   border-bottom: 1px solid var(--muted); }
 .word { display: inline-flex; flex-wrap: wrap; align-items: flex-end; max-width: 100%; vertical-align: bottom; }
 .w::before, .tight .s::before { content: "\00a0"; display: block; font-size: .82em; line-height: calc(1.25 / .82); }

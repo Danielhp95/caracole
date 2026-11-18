@@ -1100,6 +1100,7 @@
     sheetEl.classList.add("tight");
     for (const y of sheetEl.querySelectorAll(".s > .y")) {
       y.style.minWidth = "";
+      y.style.removeProperty("--ink");
       y.classList.remove("ext");
     }
     const space = parseFloat(getComputedStyle(sheetEl).fontSize) * 0.45;
@@ -1127,7 +1128,11 @@
           // The gap opened inside a word ("wo[G][D]rd"): a leader fills it, so the word reads as one.
           const after = kids[k + 1];
           if (after && after.parentElement === col.parentElement && col.parentElement.classList.contains("word")) {
-            col.lastElementChild.classList.add("ext");
+            const y = col.lastElementChild;
+            const ink = document.createRange();  // where the column's own text ends: the leader starts there
+            ink.selectNodeContents(y);
+            y.style.setProperty("--ink", Math.ceil(ink.getBoundingClientRect().width) + "px");
+            y.classList.add("ext");
           }
         }
       });

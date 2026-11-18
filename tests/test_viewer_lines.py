@@ -212,3 +212,29 @@ def test_with_pinyin_too_a_lines_rows_touch_and_lines_stand_apart(tmp_path):
     with open_viewer(tmp_path, written(tmp_path, LONG) + "#py=1", width=390, height=844) as b:
         assert b.wait("document.querySelector('#sheet ruby.py') !== null")
         lines_stand_apart(b.js(ROWS))
+
+
+# The first sung line's chords' tops, its columns' bottoms, and what each extender draws.
+TOPS = """(() => {
+  const line = document.querySelector('#sheet section.sec > p.l');
+  const bottoms = [...line.querySelectorAll('.s, .w')].map((c) => Math.round(c.getBoundingClientRect().bottom));
+  return {chords: [...line.querySelectorAll('.c')].map((c) => Math.round(c.getBoundingClientRect().top)), bottoms,
+          leaders: [...line.querySelectorAll('.y.ext')].map((y) => {
+            const s = getComputedStyle(y, '::before');
+            return {pos: s.position, border: s.borderBottomWidth, left: parseFloat(s.left), width: y.getBoundingClientRect().width,
+                    h: y.getBoundingClientRect().height};
+          })};
+})()"""
+
+
+def test_an_extender_takes_no_room_so_every_chord_of_the_row_stands_at_one_height(tmp_path):
+    cho = "{title: T}\n{artist: A}\n{key: C}\n{comment: Verse}\n[Am]wo[G][D]rd\n"
+    for fs in ("", "#fs=30"):
+        with open_viewer(tmp_path / (fs or "base"), written(tmp_path / (fs or "base"), cho) + fs,
+                         width=390, height=844) as b:
+            seen = b.js(TOPS)
+        assert max(seen["chords"]) - min(seen["chords"]) <= 1, seen  # G does not sink into the lyric row
+        assert max(seen["bottoms"]) - min(seen["bottoms"]) <= 1, seen
+        assert seen["leaders"] and all(x["pos"] == "absolute" and x["border"] == "1px" for x in seen["leaders"]), seen
+        assert all(x["h"] > 10 for x in seen["leaders"]), seen  # each keeps its line's height, empty or not
+        assert seen["leaders"][0]["left"] > 0  # from the end of "wo", not under it
