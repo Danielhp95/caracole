@@ -4677,9 +4677,10 @@ the library, sent as they are: they carry no badge.
   three at most run at once, and a fourth waits with its place and
   **Cancel**. Any other request waits for the one that runs and for the
   lookups. A request that waits says its place ("Queued · 1 request
-  ahead…") with **Cancel** beside it, which takes it out of the queue as the
-  Journal's does (the line says Cancelled and the song's Fetch is back); one
-  that runs is never stopped.
+  ahead…": a lookup counts the lookups before it, any other request every
+  one before it and every lookup, which goes first) with **Cancel** beside
+  it, which takes it out of the queue as the Journal's does (the line says
+  Cancelled and the song's Fetch is back); one that runs is never stopped.
 
   A song asked for again shows on the line it has there already, and a
   refused request's line goes at the next request. A request still on its
@@ -4701,7 +4702,8 @@ the library, sent as they are: they carry no badge.
   gives it, asked again every 1.5 seconds while one waits or runs and every 10
   seconds otherwise, only while the tab shows; its tab counts the requests that
   wait or run:
-  - **Now**: the request that runs, as a card with its song, how long ago it
+  - **Now**: the requests that run, oldest first (the queue's one and up to
+    three lookups beside it), each as a card with its song, how long ago it
     started ("started 12 s ago"), its line ("Making the PDF…") and its
     steps, the one running highlighted and those done ticked: for a lookup,
     Song, Match Ultimate Guitar (or Match: not on UG, plain), Sheet (Sheet
@@ -4718,10 +4720,11 @@ the library, sent as they are: they carry no badge.
     such as the PDF of a song with no sheet, keeps its place, skipped, and the
     Sheet a cooldown, a block or a spent budget stopped is drawn failed; for a
     request of other commands, its commands, leaving out one skipped.
-    Under it, the requests queued, in order ("Queued · next", "Queued · 2nd"),
-    each with **Cancel**, which takes it out of the queue before it starts
-    (`POST /jobs/cancel`; a request that runs is never stopped halfway, and
-    one that is over stays). A cancelled request is over, never run: it stays
+    Under them, the requests queued, in order ("Queued · next", "Queued · 2nd":
+    a lookup's place among the lookups waiting for a slot, any other's in the
+    queue), each with **Cancel**, which takes it out of the queue before it
+    starts (`POST /jobs/cancel`; a request that runs is never stopped halfway,
+    and one that is over stays). A cancelled request is over, never run: it stays
     in the history as **Cancelled**, and the pages that follow it (the library
     page on another device, the lookup and versions pages) say so, the
     song's line getting its Fetch back. Cancelling a request leaves its wanted.txt line:

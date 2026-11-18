@@ -1,9 +1,11 @@
 """The library page's Requests tab, as data: every request the queue remembers, as library_assets/requests.js draws
 it (``GET /requests.json``, jobs_routes.py).
 
-Under **Now**, the request that runs, with how long ago it started, its line and its steps (outcome.py's ``steps``,
-the chips the library page draws under a song's line), and those queued under it in order ("Queued · next",
-"Queued · 2nd"), each with Cancel (``POST /jobs/cancel``); then the finished ones, newest first under **Today** and
+Under **Now**, the requests that run, oldest first (the queue's one, and the lookups the lane runs beside it), each
+with how long ago it started, its line and its steps (outcome.py's ``steps``, the chips the library page draws under a
+song's line), and those queued under them in order, each with its place ("Queued · next", "Queued · 2nd": a lookup's
+among the lookups queued in the lane, any other's among the queue's, ``Job.lane``) and Cancel (``POST
+/jobs/cancel``); then the finished ones, newest first under **Today** and
 **Earlier** (by when each ended, in the server's local time zone), each with its outcome (outcome.py's
 ``Outcome``: a word in its tone, a reason, its next step and the one beside it), a lookup's or a sheet from a
 YouTube video's steps as it left them, right after the reason (outcome.py's ``lists_steps``: one that started), and
@@ -66,7 +68,7 @@ def feed(jobs: list[Job], lines: Mapping[int, Line], *, outcomes: Mapping[int, O
     groups: dict[str, list[dict[str, Any]]] = {"Now": [], "Today": [], "Earlier": []}
     for job in active:
         shown_job = (_running(job, lines.get(job.id), (facts or {}).get(job.id), now) if job.state == "running"
-                     else _queued(job, queued.index(job) + 1))
+                     else _queued(job, [j for j in queued if j.lane == job.lane].index(job) + 1))
         groups["Now"].append(shown_job | {"output": _output(job, opened=job.id in opened)})
     today = now.astimezone().date()
     over = sorted((job for job in jobs if not job.active),
@@ -100,7 +102,8 @@ def _running(job: Job, line: Line | None, facts: SongFacts | None, now: datetime
 
 
 def _queued(job: Job, place: int) -> dict[str, Any]:
-    """A request that waits: its place ("Queued · next", "Queued · 3rd") and Cancel, which takes it out of the queue."""
+    """A request that waits: its place among those queued in its own place, the lane's or the queue's ("Queued ·
+    next", "Queued · 3rd"), and Cancel, which takes it out of the queue."""
     shown_job = _head(job, "queued", f"Queued · {_ordinal(place)}")
     shown_job["actions"] = [{"label": "Cancel", "post": "/jobs/cancel", "fields": {"job": str(job.id)},
                              "aria": f"Cancel {job.display or job.title}", "primary": False}]
