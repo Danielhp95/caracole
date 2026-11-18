@@ -14,8 +14,8 @@ file, and none of it loads anything from the network.
   running request (requests.js), and a song's line, or a search result's row, while its lookup runs (library.js),
   the same markup.
 - rows.css and rows.js (``ROWS_STYLE``, ``ROWS_SCRIPT``): a list's rows and dense lines, the marks
-  of where each thing came from and the pages' glyphs (``glyph``: inline SVG, a stroke in the text's colour, made
-  with createElementNS), ``caracoleRows``: index.html's songs (``resultRow``'s ``dense`` lines)
+  of where each thing came from and the pages' glyphs (``glyph``: inline SVG, a stroke in the text's colour, one
+  ``<use>`` of the page's one hidden sprite of ``<symbol>``s, ``spriteOf``, all made with createElementNS), ``caracoleRows``: index.html's songs (``resultRow``'s ``dense`` lines)
   and its search's results, and those of caracole serve's lookup page (web/lookup_page.py), which runs
   rows.js before its own script. Both draw the count row under their box with its ``drawCountMarks``: yours, the
   sites that found something (named in full from 720 px while the row fits on one line, ``fitCounts``), then the

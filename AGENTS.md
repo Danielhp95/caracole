@@ -1022,7 +1022,9 @@ It is rows.js's, shared by both pages:
   library.css) are lane 1's: test_library_assets.py.
 - A song of yours closes to a line: its title, then a button for each thing to play from, none first (card.js
   `plays`, from `things`, what the card's tiles are made of too: each a link that opens it at once, its instrument's
-  `glyph`, inline SVG made with `createElementNS`, the one address the page names, on a touch screen the marks of the
+  `glyph`, an inline SVG of one `<use>` of the page's one sprite (rows.js `spriteOf`: a hidden `svg.glyph-sprite` with a
+  `<symbol id="glyph-NAME">` for each `GLYPHS` entry, made with `createElementNS` as rows.js starts, so a list of
+  thousands draws no path of its own; `kinds.js`'s copy of `GLYPHS` is held to it), the one address the page names, on a touch screen the marks of the
   sites its versions came from, with a mouse its kind and its site in words (`play-words`: `PLAY_KIND`, `PLAY_SITE`),
   how many; the lyrics none), Fetch's download glyph where it has one (rows.js `fetchIcon`, a site's
   song's Fetch too), its key and its chevron, one row on a phone and a laptop (test_library_plays.py). Its title and

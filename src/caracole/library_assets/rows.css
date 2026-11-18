@@ -287,3 +287,6 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
 #results .rows > .row.have:first-child { border-top-left-radius: 13px; border-top-right-radius: 13px; }
 #results .rows > .row.have:last-child { border-bottom-left-radius: 13px; border-bottom-right-radius: 13px; }
 #results .groups > section:last-child > .lines:last-child > .line.have:last-child { border-radius: 0 0 11px 11px; }
+
+/* The glyphs' one sprite (rows.js glyph): hidden, but still in the page, which each glyph's <use> reads. */
+.glyph-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
