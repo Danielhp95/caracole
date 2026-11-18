@@ -2579,8 +2579,9 @@ again, Use LaCuerda's sheet, Add to a songbook…, and ⋯ with info.json and Re
 sites have it, where else to find it, and its progressions last.
 
 Then what you play from it, a tile each, all alike, none first, a row each and one row at every width (its
-glyph, its name and version, the marks of where it came from, its chevron at the end; on a phone, a tile that
-opens has no arrow after its name, one that downloads keeps its download glyph), in the order of the
+glyph, its name and version, the marks of where it came from, its chevron at the end; on a touch screen, where a
+tile is under 400 px wide (a phone's), one that opens has no arrow after its name and one that downloads keeps its
+download glyph; with a mouse a tile keeps its arrow at any width), in the order of the
 line's buttons: its **Chord sheet** (**Auto sheet** in its own colour when that is its only sheet,
 **Ukulele chords** for Ultimate Guitar's Ukulele Chords), its **Guitar Pro**
 file, its **Guitar tab** (a text tab), its

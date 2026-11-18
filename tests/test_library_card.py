@@ -607,11 +607,13 @@ note("tile", { opens: q(".tile-sheet .tile-go").checkVisibility(), downloads: q(
 """
 
 
-@pytest.mark.parametrize(("size", "touch"), [("360,780", True), ("390,844", True), ("1280,900", False)])
+@pytest.mark.parametrize(("size", "touch"), [("360,780", True), ("390,844", True), ("1200,900", False),
+                                             ("1280,900", False)])
 def test_a_phones_tile_keeps_a_downloads_glyph_and_its_version_whole(conn, cfg, tmp_path, size, touch):
     # On a phone a tile that opens leaves out its arrow for its name and version, but one that downloads keeps its
     # download glyph, so it never looks like one that opens; the sheet's version is the one in use (its tile shows no
     # other), so "in use" goes too, and "Ver 3 · ★ 4.86 (408)" fits uncut. Its rating is shown whole or not at all.
+    # With a mouse a tile keeps both at any width: in the pane at 1200 px, its tiles under 400 px, as at 1280.
     hotel(conn, cfg)
     tile = attribute_of(run(conn, cfg, tmp_path, PHONE_TILE, controls=SERVED, size=size, touch=touch), "data-tile")
     assert tile["downloads"] is True and "glyph-download" in tile["glyph"].split(), tile
@@ -619,7 +621,7 @@ def test_a_phones_tile_keeps_a_downloads_glyph_and_its_version_whole(conn, cfg, 
     assert tile["fits"] is True and tile["whole"] == "inline-block", tile
     if touch:  # a phone's tile
         assert tile["opens"] is False and tile["shown"] == "Ver 3 · ★ 4.86 (408)", tile
-    else:  # the pane's, 400 px and more
+    else:  # the pane's, with a mouse
         assert tile["opens"] is True and tile["shown"] == "Ver 3 · ★ 4.86 (408) · in use", tile
 
 

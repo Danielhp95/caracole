@@ -38,12 +38,15 @@
 .tile-rated { display: inline-block; }  /* a rating shown whole or not at all, never cut inside its number */
 .tile-go { display: grid; color: var(--muted); }
 .tile-go svg.glyph { width: 18px; height: 18px; }
-/* A phone's tile (under 400 px): its name and version the room of the arrow of a tile that opens (a download's glyph
-   kept), and the sheet's version without "in use" (the one a tile shows always is), so "Ver 3 · ★ 4.86 (408)" fits;
-   under 300 px (a phone 360 px wide or less) its parts a little closer. */
-@container tiles (max-width: 399px) {
-  .tile-open:has(> .tile-go > .glyph-open) { grid-template-columns: auto minmax(0, 1fr); }
-  .tile-go:has(> .glyph-open), .tile-in-use { display: none; }
+/* A phone's tile (on a touch screen, under 400 px): its name and version the room of the arrow of a tile that opens (a
+   download's glyph kept), and the sheet's version without "in use" (the one a tile shows always is), so "Ver 3 ·
+   ★ 4.86 (408)" fits; with a mouse a tile keeps both at any width, the laptop's pane at 1200 px (tiles under 400 px)
+   too. Under 300 px (a phone 360 px wide or less) its parts a little closer. */
+@media (pointer: coarse) {
+  @container tiles (max-width: 399px) {
+    .tile-open:has(> .tile-go > .glyph-open) { grid-template-columns: auto minmax(0, 1fr); }
+    .tile-go:has(> .glyph-open), .tile-in-use { display: none; }
+  }
 }
 @container tiles (max-width: 299px) {
   .tile { column-gap: 6px; }
