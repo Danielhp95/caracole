@@ -24,7 +24,7 @@ internal object PageConstants {
     val CREDIT: String by lazy { text("_CREDIT") }
     val VERSIONS: String by lazy { text("_VERSIONS") }
     val VERSION_LIST: String by lazy { text("_VERSION_LIST") }
-    val HARMONY_ROW: String by lazy { text("_HARMONY_ROW") }
+    val FULL_ROW: String by lazy { text("_FULL_ROW") }
     val GUITAR_ROW: String by lazy { text("_GUITAR_ROW") }
     val EXPORT_ROW: String by lazy { text("_EXPORT_ROW") }
     val EXPORT_ASK: String by lazy { text("_EXPORT_ASK") }

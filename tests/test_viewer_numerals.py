@@ -24,7 +24,7 @@ from caracole.viewer.theory import MODES, Key, map_chord, parse_chord, spelling
 
 from helpers.browser import Browser, in_chromium
 from helpers.targets import small_targets
-from helpers.viewer_pages import tap_at, viewer as open_viewer, written
+from helpers.viewer_pages import harmony_tab, tap_at, viewer as open_viewer, written
 
 IN_C = ("{title: In C}\n{artist: Synthetic}\n{key: C}\n{comment: Verse}\n"
         "[C]Made up [G]words to [Am]sing a[F]long\n[C]made up [G]words to [Am]sing a[F]long\n\n"
@@ -426,8 +426,7 @@ def test_a_songbook_song_shows_its_numerals_and_its_harmony(tmp_path):
         b.click("#more")
         b.js("[...document.querySelectorAll('#names > button')][1].click()")
         shown = b.js(SHEET)
-        b.click("#harmony-open")
-        assert b.wait("!document.getElementById('harmony').hidden")
+        harmony_tab(b)  # the overlay's sheet, on its Harmony tab
         progs = b.js("[...document.querySelectorAll('#harmony .prog')].map((p) => [p.querySelector('.prog-nums').textContent, "
                      "p.querySelector('.prog-songs').getAttribute('href')])")
     assert [c["nm"] for c in shown] == AM_NUMERALS

@@ -189,12 +189,12 @@ object SheetPage {
             PageConstants.VERSION_LIST
     }
 
-    /** _with_guitar: [controls] with the Guitar Pro row after Harmony's, when the song has Guitar Pro files. */
+    /** _with_guitar: [controls] with the Guitar Pro row after Hide controls, when the song has Guitar Pro files. */
     private fun withGuitar(controls: String, guitar: Boolean): String {
         if (!guitar) return controls
-        val at = controls.indexOf(PageConstants.HARMONY_ROW)
+        val at = controls.indexOf(PageConstants.FULL_ROW)
         if (at < 0) return controls
-        val end = at + PageConstants.HARMONY_ROW.length
+        val end = at + PageConstants.FULL_ROW.length
         return controls.substring(0, end) + PageConstants.GUITAR_ROW + controls.substring(end)
     }
 

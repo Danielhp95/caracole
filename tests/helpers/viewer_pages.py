@@ -10,7 +10,8 @@ the mouse and the keyboard would: the bar's, the settings', the card's and the s
 
 A finger is touch events (``Input.dispatchTouchEvent``): ``Input.synthesizeScrollGesture`` with a
 touch scrolls nothing in a headless Chromium. Back and Forward are the browser's own, through the tab's history
-(``back``, ``forward``; ``entries``, where it is in it), as its button and a phone's take them.
+(``back``, ``forward``; ``entries``, where it is in it), as its button and a phone's take them. The overlay's Harmony
+tab is a step away at any width: ``harmony_tab(b)``, or ``HARMONY_TAB`` and ``LEAVE_HARMONY`` as JavaScript.
 """
 
 from __future__ import annotations
@@ -25,6 +26,25 @@ from pathlib import Path
 from caracole.viewer import build_viewer
 
 from helpers.browser import Browser, BrowserError
+
+
+# The overlay's Harmony tab shown, at any width: from 1200 px the rail's tab; narrower, the bar's neck first, unless the
+# necks' sheet is open already. An expression, for ``b.js`` as for a tap's (test_viewer_sound.py's ``tapped``).
+HARMONY_TAB = """(() => {
+  if (!matchMedia('(min-width: 1200px)').matches && !document.querySelector('#necks[data-sheet]')) {
+    document.getElementById('necks-open').click();
+  }
+  document.querySelector('#necks [role=tab][data-tab=harmony]').click();
+})()"""
+# The Harmony tab left by the width's own way: the sheet's ✕, or the rail's Hide.
+LEAVE_HARMONY = "document.querySelector('#necks .ov-close, #necks .nk-hide').click()"
+
+
+def harmony_tab(b: Browser) -> None:
+    """The overlay's Harmony tab shown (``HARMONY_TAB``), once it is drawn and its sheet, narrower, has slid up."""
+    b.js(HARMONY_TAB)
+    assert b.wait("document.querySelector('#necks #harmony') !== null"
+                  " && document.getElementById('necks').getAnimations().length === 0")
 
 
 def written(tmp_path: Path, cho: str, name: str = "Title") -> str:

@@ -32,7 +32,7 @@
   const FS = { min: 13, max: 30, step: 2, start: 18 };
   // The scroll's speed, 1 to 30: ``px`` pixels a second a step at the usual text size (see pace()).
   const SPEED = { min: 1, max: 30, start: 6, px: 2 };
-  // The Harmony panel's tempo, in beats a minute: a chord a bar of four.
+  // The Harmony tab's tempo, in beats a minute: a chord a bar of four.
   const BPM = { min: 40, max: 200, start: 80, step: 5 };
   // The capo goes on any fret up to the 11th (past it the shapes come round again), or the sheet's.
   const CAPO_MAX = Math.max(11, Number(data.capoSheet) || 0);
@@ -487,6 +487,15 @@
   const saysNoCapo = () => takesCapo() && sheetCapo > 0;  // "no capo", on an instrument that could take the sheet's
   // The chords are named for the shapes played: with another capo, as many semitones off.
   const shift = () => state.t - (capoNow() - sheetCapo);
+  const wrapT = (t) => (t > 11 ? t - 12 : t < -11 ? t + 12 : t);
+  // How far the chords you see moved from the sheet as written, by your hand, in semitones: the shapes' move on an
+  // instrument that takes a capo (so a sheet's capo taken off moves them up as many frets: "no capo · +2"), the
+  // transposition alone on one that takes none (the sheet's capo folded in is no move of yours). Within an octave, as
+  // the bar, the settings and the header's Key say it (whatever the count, the remainder: 26 is "+2"); 0 for none.
+  const moved = () => {
+    const s = takesCapo() ? shift() : state.t;
+    return s - 12 * Math.trunc(s / 12);
+  };
   const names = (s) => (key ? data.names[modeNow()][mod12(key.tonic + s)] : data.names[""]).split(" ");
   const keyName = (s) => (key ? data.keyNames[modeNow()][mod12(key.tonic + s)] : "");
   const choices = () => state.alt[modeNow()] || {};
@@ -521,37 +530,38 @@
   // Where the song is played, as Cifra Club's key line says it: with a capo, the key of the
   // shapes, the capo and the key the song sounds in ("Em shapes · capo 2 · sounds F#m"), as
   // "Key Em" alone would read as the song's key; with none, the key. Each part is
-  // [before, in bold, after, where the key came from]; ``moved`` says the transposition. keyLabel's,
+  // [before, in bold, after, where the key came from]; ``after`` follows the shapes with a capo, the key with none
+  // (how far the chords you see moved: never by the key it sounds in, which a capo may keep). keyLabel's,
   // as the PDF's line under the title is (page.py key_line_text); the header says it on two lines,
   // Capo and Key (keyFacts).
-  const keyLine = (moved) => {
+  const keyLine = (after) => {
     const capo = capoNow();
     if (!key) return capo ? [["Capo ", String(capo), "", ""]] : saysNoCapo() ? [["No capo", "", "", ""]] : [];
     const sounds = keyName(state.t + sheetCapo);
-    if (!capo) return [["Key ", sounds, moved, key.from]].concat(saysNoCapo() ? [["no capo", "", "", ""]] : []);
-    return [["", keyName(shift()), " shapes", ""], ["capo ", String(capo), "", ""], ["sounds ", sounds, moved, ""]]
+    if (!capo) return [["Key ", sounds, after, key.from]].concat(saysNoCapo() ? [["no capo", "", "", ""]] : []);
+    return [["", keyName(shift()), " shapes" + after, ""], ["capo ", String(capo), "", ""], ["sounds ", sounds, "", ""]]
       .concat(key.from ? [["", "", "", "key " + key.from]] : []);
   };
-  // The same as one line of text, for a screen reader in the bar (``moved``: with the
-  // transposition) and the settings' heading; without a key, Transpose and the capo.
-  const keyLabel = (moved) => {
-    const shown = moved && state.t ? signed(state.t) : "";
-    if (!key) {
-      const capo = capoNow();
-      return ["Transpose" + (shown ? " " + shown : "")]
-        .concat(capo ? ["capo " + capo] : saysNoCapo() ? ["no capo"] : []).join(" · ");
-    }
-    return keyLine("").filter((part) => part[1] || !part[3]).map((part) => part[0] + part[1] + part[2])
-      .concat(shown ? [shown] : []).join(" · ");
+  // The same as one line of text, for a screen reader in the bar (``withMove``: with how far the chords moved,
+  // moved()): with a capo, the move by the shapes ("Ab shapes (+1) · capo 2 · sounds Bb"); with none, last ("Key A ·
+  // no capo · +2"); without a key, Transpose, then the capo and the move in the bar's order ("Transpose · no capo ·
+  // +1").
+  const keyLabel = (withMove) => {
+    const move = withMove && moved() ? signed(moved()) : "";
+    if (!key) return ["Transpose"].concat(capoWords(), move ? [move] : []).join(" · ");
+    const byShapes = capoNow() > 0;
+    return keyLine(move && byShapes ? " (" + move + ")" : "").filter((part) => part[1] || !part[3])
+      .map((part) => part[0] + part[1] + part[2]).concat(move && !byShapes ? [move] : []).join(" · ");
   };
   // The header's Key line, in keyLine's parts, with no capo in it (its Capo line says it), as page.py's facts_html
   // writes it for the sheet as written: with no capo the key the song sounds in ("A · from the tab"); with one the key
-  // of the shapes and the key it sounds in ("G shapes · sounds A · key from the tab"); ``moved``, the transposition's
-  // words after the key it sounds in (" (+1)").
-  const keyFacts = (moved) => {
+  // of the shapes and the key it sounds in ("G shapes · sounds A · key from the tab"); ``after``, how far the chords
+  // moved (moved(), " (+1)"), after the key with no capo ("A (+2)"), after the shapes with one ("Ab shapes (+1) ·
+  // sounds A"): the move is the chords', never the sound's.
+  const keyFacts = (after) => {
     const sounds = keyName(state.t + sheetCapo);
-    if (!capoNow()) return [["", sounds, moved, key.from]];
-    return [["", keyName(shift()), " shapes", ""], ["sounds ", sounds, moved, ""]]
+    if (!capoNow()) return [["", sounds, after, key.from]];
+    return [["", keyName(shift()), " shapes" + after, ""], ["sounds ", sounds, "", ""]]
       .concat(key.from ? [["", "", "", "key " + key.from]] : []);
   };
   // The header's Tuning line: the instrument's open strings, in the order its box draws them, each named as a sheet
@@ -566,33 +576,36 @@
     const notes = (Array.isArray(i.tuning) ? i.tuning : []).map((n) => plain[mod12(n)] || "");
     return notes.length && notes.every(Boolean) ? notes.join(" ") : "";
   };
-  // In short, for the bar, between − and +: the key you play, and under it what it is, the capo
-  // and the transposition (["Em", "shapes", ["capo 2"]], ["Em", "key", ["+1"]]); the key it sounds
-  // in is the key line's.
+  // What changed the chords you see from the sheet as written, in words: the capo that plays them ("capo 2"; "no
+  // capo" for a sheet's capo taken off), then how far they moved (moved(): "+2").
+  const capoWords = () => (takesCapo() && capoNow() > 0 ? ["capo " + capoNow()] : saysNoCapo() && capoNow() === 0
+    ? ["no capo"] : []);
+  const changes = () => capoWords().concat(moved() ? [signed(moved())] : []);
+  // In short, for the bar, between − and +: [the key you play, the words under it, whether you changed it]. The key of
+  // the shapes ("Transpose" for a sheet with no key), and under it what changed (changes()), else "key"
+  // (["G", ["capo 2"], false], ["A", ["no capo", "+2"], true], ["Cm", ["key"], false]); changed once you moved the
+  // chords or the capo, the words then in the accent. The key it sounds in is the key line's.
   const keyShort = () => {
-    const capo = capoNow();
-    const rest = (capo ? ["capo " + capo] : saysNoCapo() ? ["no capo"] : []).concat(state.t ? [signed(state.t)] : []);
-    if (!key) return ["Transpose", "", rest];
-    if (capo) return [keyName(shift()), "shapes", rest];
-    return [keyName(state.t + sheetCapo), "key", rest];
+    const words = changes();
+    return [key ? keyName(shift()) : "Transpose", words.length ? words : key ? ["key"] : [],
+      moved() !== 0 || (takesCapo() && capoNow() !== sheetCapo)];
   };
   // What is set, in words, as version.py's played_label names a version: the key of the shapes played, in the mode
   // played ("D Dorian"; on an instrument with no capo, the key the song sounds in, the capo folded in), or how far a
   // sheet with no key moved ("As written", "Transposed +2"); and the capo, where there is one ("capo 2"), else "".
   const versionWords = () => {
-    const s = shift(), moved = takesCapo() ? state.t : s;
+    const s = shift(), by = takesCapo() ? state.t : s;
     const words = key ? names(s)[mod12(key.tonic + s)] + " " + (MODES[modeNow()] || [modeNow()])[0]
-      : moved ? "Transposed " + signed(moved) : "As written";
+      : by ? "Transposed " + signed(by) : "As written";
     return [words, capoNow() ? "capo " + capoNow() : ""];
   };
   // The key in short and the line under it, fitted to the room between − and +. The key a little
   // smaller where it is too long ("Ab mixolydian" at 360 px), down to three quarters of its size, then
-  // cut short. The line whole where there is room ("shapes · capo 2 · +1"); on a narrow screen the capo
-  // and the transposition alone ("capo 2 · +1"); on the narrowest, each on a line of its own, "capo 2"
-  // over "+1", so that neither is cut off. Fitted again when the bar comes back into view or the window
-  // changes. Measured to the fraction of a pixel, which scrollWidth rounds away: a line 0.4 px too wide
-  // would end in an ellipsis.
-  let keyUnder = ["", []];
+  // cut short. The line whole where there is room ("capo 2 · +1"); on the narrowest, each word on a line
+  // of its own, "capo 2" over "+1", so that neither is cut off. Fitted again when the bar comes back into
+  // view or the window changes. Measured to the fraction of a pixel, which scrollWidth rounds away: a line
+  // 0.4 px too wide would end in an ellipsis.
+  let keyUnder = [[], false];
   const tooWide = (el) => {
     const text = document.createRange();
     text.selectNodeContents(el);
@@ -605,13 +618,13 @@
       const full = parseFloat(getComputedStyle(main).fontSize);
       for (let size = full - 0.5; size >= full * 0.75 && tooWide(main); size -= 0.5) main.style.fontSize = size + "px";
     }
-    const [what, rest] = keyUnder;
+    const [words, changed] = keyUnder;
     line.classList.remove("stack");
-    line.textContent = (what ? [what] : []).concat(rest).join(" · ");
-    if (what && rest.length && tooWide(line)) line.textContent = rest.join(" · ");
-    if (rest.length > 1 && tooWide(line)) {
+    line.classList.toggle("changed", changed);
+    line.textContent = words.join(" · ");
+    if (words.length > 1 && tooWide(line)) {
       line.textContent = "";
-      for (const part of rest) {
+      for (const part of words) {
         const one = document.createElement("span");
         one.textContent = part;
         line.append(one);
@@ -821,7 +834,6 @@
       return "";
     }
   };
-  const wrapT = (t) => (t > 11 ? t - 12 : t < -11 ? t + 12 : t);
   // The Instrument menu, what it says of the one chosen (its title), and what follows the instrument in the settings:
   // Capo on one that takes a capo; Easy keys, nearest the key played first, on one that has them (instruments.py EASY:
   // the ukulele's C, F, G, Bb, Am, Dm), each moving the song there as Transpose does; the row an instrument's script
@@ -878,11 +890,17 @@
   });
 
   // --- drawing the page --------------------------------------------------------------------------
-  const bar = $("bar"), panel = $("panel"), card = $("card"), pill = $("pill"), go = $("go"), harmony = $("harmony");
+  const bar = $("bar"), panel = $("panel"), card = $("card"), pill = $("pill"), go = $("go");
+  // From 1200 px the bar is a toolbar under the song's title (layers.js's toolbar: right after the song's header, a
+  // songbook's shown song's own; viewer.css), back at the foot below it.
+  const toolbar = window.caracoleLayers ? window.caracoleLayers.toolbar(bar, () => sheetEl.parentElement
+    .querySelector(":scope > header.head")) : { wide: window.matchMedia("not all"), place() {}, edge() {} };
   const vList = $("version-list");  // a sheet's versions (below); the songbook has none
   let kinds = null;  // its line and its list, kinds.js's (below)
-  const rails = [panel, harmony].filter(Boolean);  // from 900 px wide, beside the song: one at a time
-  const more = $("more"), sizes = $("sizes"), sizeButton = $("size"), shapesButton = $("shapes");
+  const keyList = $("key-list"), keyNow = $("key-now");  // the twelve keys, and the bar's key that opens them (below)
+  // From 900 px wide, beside the song, one at a time: the settings, the key list.
+  const rails = [panel, keyList].filter(Boolean);
+  const more = $("more"), sizes = $("sizes"), sizeButton = $("size");
   const handle = $("handle");  // full screen's, at the window's foot (below)
   const button = (text, pressed, onClick, small) => {
     const b = document.createElement("button");
@@ -969,10 +987,10 @@
   // The song's facts under its title as it is played, drawn again on every change in page.py's facts_html markup
   // (which writes them for the sheet as written, on the guitar), so that nothing moves as the script runs: a
   // div.fact a line, named by its data-fact, a dt and a dd. Tuning on an instrument with strings (tuningNow), Capo on
-  // one that takes a capo ("none", or its fret), Key where the sheet has one (keyFacts, the transposition said after
-  // the key it sounds in: " (+1)"), and the instrument's own line where its script gives one (instruments.js
-  // register's header), the instrument's name its label: "Harmonica  G harp (1st position) · C harp (2nd)". A sheet
-  // with no chords has no facts, and nothing is drawn.
+  // one that takes a capo ("none", or its fret), Key where the sheet has one (keyFacts, how far the chords you see
+  // moved said after the key it sounds in, as the bar says it: " (+1)"), and the instrument's own line where its
+  // script gives one (instruments.js register's header), the instrument's name its label: "Harmonica  G harp (1st
+  // position) · C harp (2nd)". A sheet with no chords has no facts, and nothing is drawn.
   const drawFacts = () => {
     const box = $("facts");
     if (!box) return;
@@ -989,7 +1007,7 @@
     if (takesCapo()) fact("capo", "Capo").textContent = capoNow() ? String(capoNow()) : "none";
     if (key) {
       const said = fact("key", "Key");
-      keyFacts(state.t ? " (" + signed(state.t) + ")" : "").forEach((f, n) => {
+      keyFacts(moved() ? " (" + signed(moved()) + ")" : "").forEach((f, n) => {
         if (n) said.appendChild(document.createTextNode(" · "));
         if (f[0]) said.appendChild(document.createTextNode(f[0]));
         if (f[1]) said.appendChild(document.createElement("b")).textContent = f[1];
@@ -1004,6 +1022,21 @@
     }
     const line = headerLine();
     if (line) fact("inst", String(inst().name || inst().id)).textContent = line;
+  };
+  // The key's whole line said to a screen reader as it moves (#key-status, a status line outside the bar: the key is
+  // the key list's button, no live region): as − and + move it. Nothing as the page opens (its first line is where it
+  // starts) nor for a render that moves nothing (the text size); and nothing where something else says it: the
+  // settings' Transpose and Capo (outputs) while they are open, and the key's own name as a key chosen from the list
+  // gives it the focus back (``keyQuiet``). Then the line is cleared, so the next one said is a change, even to the
+  // line said last.
+  let keySaid = null, keyQuiet = false;
+  const sayKey = (line) => {
+    if (keySaid === null || line === keySaid) {
+      keySaid = line;
+      return;
+    }
+    keySaid = line;
+    $("key-status").textContent = keyQuiet || !panel.hidden ? "" : line;
   };
   const render = () => {
     if (state.capo === sheetCapo) state.capo = null;  // the sheet's own again
@@ -1022,15 +1055,18 @@
     $("smaller").setAttribute("aria-disabled", state.fs <= FS.min ? "true" : "false");
     $("bigger").setAttribute("aria-disabled", state.fs >= FS.max ? "true" : "false");
 
-    const [main, what, rest] = keyShort();
+    const [main, words, changed] = keyShort();
     $("key-now").querySelector(".k").textContent = main;
-    keyUnder = [what, rest];
+    keyUnder = [words, changed];
     fitKey();
     $("key-full").textContent = keyLabel(true);
+    sayKey(keyLabel(true));
     drawHead();
     drawFacts();
 
-    $("shift").textContent = signed(state.t);
+    // The settings' Transpose says it as the bar does: the key over its words; with no key, how far the chords moved.
+    $("shift").querySelector(".k").textContent = key ? main : signed(moved());
+    $("shift").querySelector(".d").textContent = key ? words.join(" · ") : "";
     showReset($("reset-t"), state.t !== (Number(data.transpose) || 0));  // the PDF's transposition, else none
     $("capo-at").textContent = String(capoNow());
     showReset($("reset-capo"), capoNow() !== sheetCapo);
@@ -1077,14 +1113,13 @@
       return level;
     }) : []);
     $("strip-toggle").setAttribute("aria-pressed", state.strip ? "true" : "false");
-    shapesButton.setAttribute("aria-pressed", state.strip ? "true" : "false");  // the guitar says the same
     drawSpeed();
     drawStrip();
+    drawWords();  // the words in the characters chosen, with their readings: the Harmony tab names its sections so
     drawNecks();  // before layout(), which measures the song beside the rail
-    drawWords();  // and the words in the characters chosen, with their readings
     layout();  // fit() too
     drawHeadings();
-    if (!harmony.hidden) drawHarmony();
+    if (!keyList.hidden) drawKeyList();  // the key played pressed, the keys named in the mode played
     if (!card.hidden) drawCard();  // an open card follows the key, the mode and the capo
     dock();
     save();
@@ -1158,11 +1193,12 @@
     return most;
   };
   // One column, or columns side by side where viewer.css offers them (a wide screen), only for a song the window
-  // then shows whole: the song's end in the last column, and the sheet no taller than the window above the room the
-  // page keeps at its foot for the controls. The fewest columns that do, from two up to as many as fit side by side
-  // (MOST_COLUMNS at most), each at least as wide as the song's widest line within COLUMN_EM: at least 16 em, so that
-  // a song of short lines makes no slivers, and never asked to be more than 24 em, so that a song of long lines reads
-  // as it did in two (the owner's narrower columns, D8), its long lines wrapping. The columns share the page's width
+  // then shows whole: the song's end in the last column, and the sheet no taller than the window less the room the
+  // page keeps at its foot for the controls and, from 1200 px, the toolbar's at its top (--toolbar). The fewest
+  // columns that do, from two up to as many as fit side by side (MOST_COLUMNS at most), each at least as wide as the
+  // song's widest line within COLUMN_EM: at least 16 em, so that a song of short lines makes no slivers, and never
+  // asked to be more than 24 em, so that a song of long lines reads as it did in two (the owner's narrower columns,
+  // D8), its long lines wrapping. The columns share the page's width
   // (viewer.css): the room over widens each. At the reader's own text size, never a smaller one to fit; one column is
   // 3 px larger, and so is a song no count shows whole.
   const MOST_COLUMNS = 5;  // viewer.css lays out two to five
@@ -1176,6 +1212,10 @@
     sheetEl.style.width = "";
     sheetEl.style.columnCount = "";
   };
+  // The toolbar's room at the window's top, from 1200 px where it shows (none in full screen): its height, viewer.css's
+  // --toolbar (no such token below 1200 px).
+  const toolbarRoom = () => (toolbar.wide.matches && !doc.dataset.full
+    ? parseFloat(getComputedStyle(doc).getPropertyValue("--toolbar")) || 0 : 0);
   const layout = () => {
     const y = window.scrollY;
     let count = 1;
@@ -1190,7 +1230,7 @@
       const em = parseFloat(getComputedStyle(sheetEl).fontSize);
       const least = Math.min(COLUMN_EM[1] * em, Math.max(COLUMN_EM[0] * em, line));
       const page = sheetEl.closest(".page") || document.body;
-      const room = window.innerHeight - (parseFloat(getComputedStyle(page).paddingBottom) || 0);
+      const room = window.innerHeight - (parseFloat(getComputedStyle(page).paddingBottom) || 0) - toolbarRoom();
       for (let n = 2; n <= MOST_COLUMNS; n++) {
         doc.dataset.columns = String(n);
         const gap = parseFloat(getComputedStyle(sheetEl).columnGap) || 0;
@@ -1219,10 +1259,17 @@
     fitting = requestAnimationFrame(() => {
       layout();
       fitKey();
+      fitKeys();
       place();
       placeTip();
       dock();
+      toolbar.edge();
     });
+  });
+  // Across 1200 px the bar moves: under the title as a toolbar, or back at the foot, never slid away there.
+  toolbar.wide.addEventListener("change", () => {
+    toolbar.place();
+    slide(false);
   });
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { layout(); fitKey(); }, () => {});
   // The tab's preamble opened or folded again (page.py): the song moves, and may take other columns,
@@ -1268,8 +1315,9 @@
 
   // --- the key's neck: its scale, or its pentatonic box, across the frets, the tonic marked ------------
   // In the key shown, of the shapes played on the instrument ``it`` (``s`` semitones from the sheet's key): with a
-  // capo, the frets count from it, as the chords' necks do. The rail's first neck (overlay.js draws it); on a phone,
-  // the Harmony panel's. Scale or Pentatonic switches it.
+  // capo, the frets count from it, as the chords' necks do. The Harmony tab's first (overlay.js draws it), or the
+  // Guitar tab's on a sheet with no Harmony tab or an instrument with no neck (the guitar's then, at its capo). Scale
+  // or Pentatonic switches it; the overlay's draw keeps the focus on the switch (its data-f).
   const keySpec = (s = shift(), it = inst()) => ({
     name: keyName(s), tonic: mod12(key.tonic + s), tonicName: names(s)[mod12(key.tonic + s)],
     scale: table("keyScale") || [], pentatonic: table("pentatonic") || [],
@@ -1277,37 +1325,33 @@
     // The instrument's strings, each open note's pitch class (data.instruments' tuning, as MIDI notes).
     tuning: Array.isArray(it.tuning) && it.tuning.length ? it.tuning : data.tuning,
     box: state.kn === "penta", onSwitch: (which) => setKeyNeck(which) });
-  const keyNeck = () => overlay.keyNeck(keySpec());
   const setKeyNeck = (which) => {
-    const active = document.activeElement;
-    const from = active && active.closest ? active.closest(".kn") : null;
-    const holder = from ? from.parentElement : null;
     state.kn = which;
     render();
-    const to = holder && holder.querySelector('.kn [aria-pressed="true"]');
-    if (to) to.focus({ preventScroll: true });
   };
 
-  // --- the overlay: a wide screen's rail, on the left, Guitar and Harmonica ---------------------------
+  // --- the overlay: a wide screen's rail, on the left, Guitar, Harmonica and Harmony -------------------
   // From 1200 px wide (viewer.css), overlay.js draws it, its Guitar tab first and shown when the page opens. Guitar:
-  // the key's neck, then each chord the sheet shows, once, in the order it first comes (two chords shown by one name
-  // are one), with every position of it along a neck and a legend naming them, on the instrument played (a ukulele's
-  // four strings), or the guitar's on one with no neck (the piano, the harmonica, the winds: then at the guitar's
-  // capo). Picking one, on the neck or in the legend, makes it the shape the strip and the chord's card show, at
-  // every place of that chord, kept with the rest (state.at); one of the guitar's for another instrument holds for
-  // the rail alone. Harmonica: the harps for the song as it sounds (a harmonica takes no capo; a transposition moves
-  // every harp), the harp chosen (harpAt, above the tonic; until one is tapped, the one the song's harmonica tab
-  // plays on, else the first harp.py's choices pick), the key on it and each chord's holes, harp.py's tables looked
-  // up. Hide, at the rail's top, the bar's button (first in it, from 1200 px) and the settings' Chord necks row show it
-  // or hide it (state.necks), the three always in step; hidden, the song has the whole width.
+  // each chord the sheet shows, once, in the order it first comes (two chords shown by one name are one; on a sheet
+  // with no Harmony tab or an instrument with no neck, the key's neck first), with every position of it along a neck
+  // and a legend naming them, on the instrument played (a ukulele's four strings), or the guitar's on one with no neck
+  // (the piano, the harmonica, the winds: then at the guitar's capo). Picking one, on the neck or in the legend, makes
+  // it the shape the strip and the chord's card show, at every place of that chord, kept with the rest (state.at); one
+  // of the guitar's for another instrument holds for the rail alone. Harmonica: the harps for the song as it sounds (a
+  // harmonica takes no capo; a transposition moves every harp), the harp chosen (harpAt, above the tonic; until one is
+  // tapped, the one the song's harmonica tab plays on, else the first harp.py's choices pick), the key on it and each
+  // chord's holes, harp.py's tables looked up. Harmony, on a sheet with a key to read numerals in (hasHarmony): the
+  // key's neck (on the instrument played's necks), then each section's progression (harmonyPane, below). Hide, at the
+  // rail's top, and the bar's button (after the key, from 1200 px) show it or hide it (state.necks), the two always in
+  // step; hidden, the song has the whole width.
   // Narrower, the phone's sheet: the bar's neck (after the key) slides the same overlay up from the bar over half the
   // screen (sheetAt), docked there as the settings are (a layer, on a phone in the place of the one open), the song
   // readable and scrollable above it and its end coming up above it; its handle takes it to the whole screen and back,
   // and ✕, Escape, Back or the neck again close it, the focus back on the neck. Each page opens with it closed; the
-  // rail's Hide and Chord necks are the rail's alone. Widened past 1200 px, the rail takes its place, on its tab.
+  // rail's Hide and the bar's button are the rail's alone. Widened past 1200 px, the rail takes its place, on its tab.
   const necksEl = $("necks");
   const railWide = window.matchMedia("(min-width: 1200px)");
-  const necksButton = $("necks-toggle"), necksChip = $("necks-chip"), sheetButton = $("necks-open");
+  const necksButton = $("necks-toggle"), sheetButton = $("necks-open");
   const railCan = () => Boolean(necksEl) && Boolean(overlay) && count > 0 && railWide.matches;
   const railOn = () => railCan() && state.necks && !doc.dataset.full;  // full screen: the song the whole width
   const sheetCan = () => Boolean(necksEl) && Boolean(overlay) && count > 0 && !railWide.matches;
@@ -1340,14 +1384,25 @@
   const necksOf = () => (inst().kind === "strings" ? inst() : GUITAR);
   // The guitar at its capo (the one set, else the sheet's), as the chords would be named were it played.
   const guitarShift = () => state.t - ((state.capo === null ? sheetCapo : state.capo) - sheetCapo);
+  // The necks' instrument and how far its chords are from the sheet's: the one played, else the guitar at its capo.
+  const necksAt = () => {
+    const it = necksOf(), played = it === inst();
+    return { it, played, s: played ? shift() : guitarShift() };
+  };
+  // A Harmony tab where the settings' Harmony row was: a key to read the numerals in, and each section's progression.
+  const hasHarmony = Boolean(key) && Boolean(data.numerals) && Boolean(data.progressions);
+  // Its progression playing (below), which drawing the overlay may stop as early as a short screen's full screen:
+  // {n: the section, at: the numeral sounding, handle, sounds: soundsNow() as it started}.
+  let playing = null;
   const guitarTab = () => {
-    const it = necksOf(), played = it === inst(), s = played ? shift() : guitarShift();
+    const { it, played, s } = necksAt();
     const chords = shownOnce(s).map(([c, rep, name]) => {
       const shapes = shapesOf(rep, s, it);
       return { name, list: shapes.list, mine: shapes.mine, chosen: played ? state.at[c] || 0 : railAt[name] || 0 };
     });
+    // The key's neck: Harmony's where the necks are the instrument's played, else the Guitar tab's head still.
     return { name: String(it.tab || it.name || "Guitar"), strings: (it.tuning || []).length || 6, chords,
-      key: key && data.keyScale ? keySpec(s, it) : null };
+      key: key && data.keyScale && !(hasHarmony && played) ? keySpec(s, it) : null };
   };
   // A chord's row in one of harp.py's tables by chord: the sheet's in the mode played, else its alternative's.
   const sameRep = (a, b) => Array.isArray(a) && Array.isArray(b) && a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
@@ -1380,6 +1435,10 @@
     first: "guitar",
     guitar: guitarTab,
     harmonica: harmonicaTab,
+    harmony: hasHarmony ? (pane) => harmonyPane(pane) : undefined,
+    left: (tab) => {
+      if (tab === "harmony") stopPlaying(true);  // as the Harmony panel closed did: every sound, a chord tapped too
+    },
     pick: (name, p) => {
       if (necksOf() === inst()) {
         pickPosition(name, p);
@@ -1416,10 +1475,6 @@
       sheetButton.hidden = !sheetCan();
       sheetButton.setAttribute("aria-expanded", phone ? "true" : "false");
     }
-    if (necksChip) {
-      $("necks-row").hidden = !can;
-      necksChip.setAttribute("aria-pressed", on ? "true" : "false");
-    }
     if (!necksEl) return;
     necksEl.hidden = !on && !phone;
     if (on) doc.dataset.necks = "1";  // the song and the bar move over for it
@@ -1427,7 +1482,11 @@
     if (on || phone) rail.draw();
     else if (rail) rail.empty();
     else necksEl.textContent = "";
+    // The window across 1200 px with the sheet closed, or full screen: no Harmony tab drawn, nothing of it playing.
+    if (playing && !harmonyShown()) stopPlaying(true);
   };
+  // Whether the overlay shows its Harmony tab now.
+  const harmonyShown = () => Boolean(necksEl) && necksEl.querySelector("#harmony") !== null;
   // A position picked for a chord: every place the sheet shows it plays it, and its card, when it shows
   // that chord as it is played, turns to it.
   const pickPosition = (name, p) => {
@@ -1439,15 +1498,16 @@
     if (!card.hidden) drawCard();
     save();
   };
-  // Shown or hidden: the song and the bar move back, or over, and the card follows its chord.
+  // Shown or hidden: the song and the bar move back, or over, and the card follows its chord. Hidden on its Harmony
+  // tab, every sound stops with it.
   const showNecks = (on) => {
+    if (!on && harmonyShown()) stopPlaying(true);
     state.necks = on;
     keepNecks();
     render();
     place();
   };
   if (necksButton) necksButton.addEventListener("click", () => showNecks(!state.necks));
-  if (necksChip) necksChip.addEventListener("click", () => showNecks(!state.necks));
   if (sheetButton) {
     // The neck: the sheet up (on a phone in the place of the settings or a card), or closed where you see it.
     sheetButton.addEventListener("click", () => {
@@ -1462,13 +1522,12 @@
   if (necksEl) {
     // The window widened past 1200 px, or narrowed under it: the rail comes or goes, and the song with it. Widened with
     // the sheet open, the rail takes its place (where it is shown), on its tab, the focus kept in it. Narrowed with the
-    // keyboard's focus in the rail, the focus goes to the bar's first control, where the rail's button was; the sheet
-    // stays closed until the neck is pressed.
+    // keyboard's focus in the rail, the focus goes to the bar's first control, rather than to nothing; the sheet stays
+    // closed until the neck is pressed.
     railWide.addEventListener("change", () => {
       const had = necksEl.contains(document.activeElement);
       if (railWide.matches && sheetAt !== null) dropSheet();
       drawNecks();
-      if (!harmony.hidden) drawHarmony();  // the key's neck: in the rail, or in the panel
       layout();
       place();
       if (had && !necksEl.contains(document.activeElement)) {
@@ -1839,7 +1898,7 @@
   const landing = (which) => (which === necksEl ? rail.landing()
     : which === handle ? handle : which.querySelector("h2"));
   // Those that dock at the foot on a phone, above the bar: the one of them on top is docked.
-  const DOCKED = [panel, card, harmony, vList, necksEl].filter(Boolean);
+  const DOCKED = [panel, card, vList, necksEl, keyList].filter(Boolean);
   const dockedTop = () => {
     for (let i = layers.length - 1; i >= 0; i--) if (DOCKED.indexOf(layers[i].el) >= 0) return layers[i].el;
     return null;
@@ -1856,17 +1915,21 @@
   // the way while the song moves by itself, unless one is docked on it: then nothing moves as the
   // scroll pauses and resumes. Paused, or at the end of the song, it is back, under the pill. The overlay's
   // sheet docks there up to 1199 px; over the whole screen, the pill rides over its foot (necks-full, viewer.css).
+  // From 1200 px the toolbar under the title is asleep meanwhile (data-asleep: out of sight, its room kept, so the
+  // song doesn't jump), never hidden.
   function dock() {
     const there = !wide.matches ? dockedTop()
       : sheetAt !== null && !railWide.matches && !doc.dataset.full ? necksEl : null;  // full screen hides the sheet
     const away = moving() && !there;
-    if (bar.hidden !== away) {
-      bar.hidden = away;
-      if (!away) {
+    const hide = away && !toolbar.wide.matches;
+    if (bar.hidden !== hide) {
+      bar.hidden = hide;
+      if (!hide) {
         slide(false);
         fitKey();
       }
     }
+    bar.toggleAttribute("data-asleep", away);
     if (there) {
       doc.dataset.dock = there === necksEl && sheetAt === "full" ? "necks-full" : there.id;
       doc.style.setProperty("--dock", there.offsetHeight + "px");
@@ -1875,32 +1938,45 @@
       doc.style.removeProperty("--dock");
     }
   }
-  // The bar's top, or the window's foot while it is out of sight (away, hidden, or full screen's).
-  const barTop = () => (bar.hidden || bar.classList.contains("away") || doc.dataset.full ? window.innerHeight
-    : bar.getBoundingClientRect().top);
+  // The bar's top, or the window's foot where it isn't at the foot: out of sight (away, hidden, or full screen's), or,
+  // from 1200 px, the toolbar at the top.
+  const barTop = () => (toolbar.wide.matches || bar.hidden || bar.classList.contains("away") || doc.dataset.full
+    ? window.innerHeight : bar.getBoundingClientRect().top);
+  // The top of the window's room for a popover: from 1200 px, while the toolbar is stuck to the window's top, its foot;
+  // else the window's top (the toolbar unstuck under the title is the page's, and a card open over it is a layer over
+  // the page, which shows its pills again as it closes; in full screen it shows nothing). 0 narrower.
+  const barFoot = () => {
+    if (!toolbar.wide.matches) return 0;
+    const r = bar.getBoundingClientRect();
+    return r.top <= 0.5 ? Math.max(0, r.bottom) : 0;
+  };
   // From 900 px wide the card is a popover by its chord: under it, or above it where the bar leaves
-  // no room below, and across it, within the song's column. It is placed in the page, so it goes
-  // with its chord as the page scrolls. So is the versions list, a popover under its line (kinds.js's place).
+  // no room below and the room above clears the stuck toolbar, and across it, within the song's column. It is placed in
+  // the page, so it goes with its chord as the page scrolls. So is the versions list, a popover under its line
+  // (kinds.js's place).
   function place() {
     if (kinds) kinds.place();
     if (card.hidden || !wide.matches) return;
     const a = anchor().getBoundingClientRect();
     const column = pageEl.getBoundingClientRect();
     const width = card.offsetWidth, height = card.offsetHeight, gap = 8;
-    const floor = barTop();
+    const floor = barTop(), ceiling = barFoot();
     let top = a.bottom + gap;
-    if (top + height > floor - gap && a.top - gap - height >= gap) top = a.top - gap - height;
+    if (top + height > floor - gap && a.top - gap - height >= ceiling + gap) top = a.top - gap - height;
     const left = Math.max(column.left + gap, Math.min(a.left - 16, column.right - gap - width));
     card.style.setProperty("--pop-top", Math.round(top + window.scrollY) + "px");
     card.style.setProperty("--pop-left", Math.round(left + window.scrollX) + "px");
   }
   const restack = () => {
     const rail = doc.dataset.panel;
-    for (const which of [panel, card, harmony, vList, necksEl]) if (which) which.classList.toggle("top", which === topLayer());
+    for (const which of [panel, card, vList, necksEl, keyList]) {
+      if (which) which.classList.toggle("top", which === topLayer());
+    }
     more.setAttribute("aria-expanded", panel.hidden ? "false" : "true");
+    keyNow.setAttribute("aria-expanded", keyList.hidden ? "false" : "true");
     sizeButton.setAttribute("aria-expanded", sizes.hidden ? "false" : "true");
     if (vList) $("ver-now").setAttribute("aria-expanded", vList.hidden ? "false" : "true");
-    if (rails.every((which) => which.hidden)) delete doc.dataset.panel;  // the settings', the Harmony panel's
+    if (rails.every((which) => which.hidden)) delete doc.dataset.panel;  // the settings', the key list's
     else doc.dataset.panel = "open";
     if (wide.matches && rail !== doc.dataset.panel) layout();  // the song's column narrows beside the rail
     place();
@@ -1908,8 +1984,8 @@
     layerHistory.sync(layers.length);  // an entry each, once this task is done
   };
   // ``nested``: one that opens over another and leaves it open (Export PDF's question over the settings). On a phone
-  // any other closes every one open first; from 900 px the rails (the settings, the Harmony panel) are one at a time,
-  // a card and the versions list beside them.
+  // any other closes every one open first; from 900 px the rails (the settings, the key list) are one at a time, a
+  // card and the versions list beside them.
   const open = (which, opener, nested = false) => {
     auto.end();  // a short screen's full screen of itself gives way to any layer
     const at = layers.findIndex((layer) => layer.el === which);
@@ -1938,6 +2014,7 @@
     const active = document.activeElement;
     const mine = refocus && (!active || active === document.body || which.contains(active));
     if (which === necksEl) {
+      if (harmonyShown()) stopPlaying(true);  // closed on its Harmony tab: every sound stops, as the panel's did
       sheetAt = null;
       drawNecks();
     } else if (which === ask) {
@@ -1948,7 +2025,6 @@
       which.hidden = true;
     }
     if (which === card) for (const el of chordEls) el.classList.remove("on");
-    if (which === harmony) stopPlaying(true);
     restack();
     if (!mine) return;  // the focus is somewhere else of yours: it stays there
     let to = opener && opener.isConnected ? opener : null;
@@ -1962,9 +2038,9 @@
     else delete doc.dataset.full;
     handle.hidden = !on;
     drawNecks();
-    if (!harmony.hidden) drawHarmony();  // the key's neck: in the rail, or in the panel
     layout();
     if (!on) fitKey();  // the bar back: its key measured again
+    toolbar.edge();  // from 1200 px, the pill under the toolbar again, or at the top with none
   };
   // Every one but ``keep``.
   const closeAll = (keep) => {
@@ -1988,14 +2064,77 @@
     else if (doc.dataset.full === "auto") auto.end();
   });
   // ⋯ closes the settings where you see them, and opens them otherwise (on a phone in the place of the one open).
-  // The settings and the Harmony panel take one place: either opens in the other's.
   more.addEventListener("click", () => {
     if (inSight(panel)) {
       close(panel);
       return;
     }
-    close(harmony);
     open(panel, more);
+  });
+
+  // --- the key list: the twelve keys, a tap away -----------------------------------------------------------------
+  // The bar's key opens it (page.py _KEY_LIST), and closes it where you see it, as ⋯ the settings: the twelve keys in
+  // the mode played, as data.keyNames names them, from the chords as written on this instrument (writtenAt: on one
+  // with no capo the sheet's capo folded in, the key the song sounds in), the first "· as written", the one the chords
+  // shown moved to pressed (moved()). A layer as the settings are: docked on the bar on a phone, from 900 px the rail
+  // in the settings' place (one rail at a time). A sheet with no key has none to list: the key is disabled.
+  const writtenAt = () => (takesCapo() ? 0 : sheetCapo);
+  const drawKeyList = () => {
+    const box = $("key-items"), at = mod12(moved());
+    for (let k = 0; k < 12; k++) {
+      let item = box.children[k];
+      if (!item) {
+        item = box.appendChild(document.createElement("button"));
+        item.type = "button";
+        item.dataset.k = String(k);
+        if (k === 0) item.className = "key-as";
+        item.addEventListener("click", () => chooseKey(k));
+      }
+      item.textContent = keyName(writtenAt() + k) + (k === 0 ? " · as written" : "");
+      item.setAttribute("aria-pressed", k === at ? "true" : "false");
+    }
+    fitKeys();
+  };
+  // Each key whole in its cell: where a name is too long for four a row (a mode's, "Ab mixolydian", its two words on
+  // two lines, in the rail or on a phone), the eleven a little smaller, all alike, down to three quarters of their
+  // size, as the bar's key is (fitKey); as written has its row. Measured to the fraction of a pixel, in the room
+  // within each one's padding; fitted again as the list opens and as the window changes.
+  const spills = (el) => {
+    const text = document.createRange(), s = getComputedStyle(el);
+    text.selectNodeContents(el);
+    return text.getBoundingClientRect().width > el.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight);
+  };
+  const fitKeys = () => {
+    const items = Array.prototype.slice.call($("key-items").children, 1);
+    for (const item of items) item.style.fontSize = "";
+    if (keyList.hidden || !items.some(spills)) return;
+    const full = parseFloat(getComputedStyle(items[0]).fontSize);
+    for (let size = full - 0.5; size >= full * 0.75 && items.some(spills); size -= 0.5) {
+      for (const item of items) item.style.fontSize = size + "px";
+    }
+  };
+  // A key chosen: the song transposed there the nearest way, as Easy keys moves it (a tritone at most, up or down; the
+  // capo stays where it is), so the bar says what moved (keyShort); then the list closed, the focus on the key.
+  const chooseKey = (k) => {
+    keyQuiet = true;  // the key's name says it as it takes the focus
+    try {
+      step(wrapT(state.t + mod12(k - moved() + 6) - 6));
+    } finally {
+      keyQuiet = false;
+    }
+    close(keyList);
+    keyNow.focus({ preventScroll: true });
+  };
+  keyNow.disabled = !key;
+  if (!key) keyNow.removeAttribute("aria-haspopup");  // it opens nothing
+  keyNow.addEventListener("click", () => {
+    if (inSight(keyList)) {
+      close(keyList);
+      return;
+    }
+    drawKeyList();
+    open(keyList, keyNow);
+    fitKeys();  // laid out now
   });
 
   // --- full screen: the song alone, the controls hidden for reading ----------------------------------------------
@@ -2015,7 +2154,7 @@
   });
   // A short screen (a phone on its side): full screen by itself, with no history entry (layers.js's autoFull).
   const auto = window.caracoleLayers ? window.caracoleLayers.autoFull({
-    handle, idle: () => layers.length === 0, changed: () => { drawNecks(); layout(); },
+    handle, idle: () => layers.length === 0, changed: () => { drawNecks(); layout(); toolbar.edge(); },
   }) : { end() {} };
   if (window.caracoleLayers) {
     window.caracoleLayers.doubleTap(document, window.caracoleLayers.MARGIN_SKIP, () => {
@@ -2064,7 +2203,6 @@
     $("roles").hidden = !can;
     $("roles").setAttribute("aria-pressed", state.roles ? "true" : "false");
     $("names-hint").textContent = can ? "" : "No key found, so no numerals.";
-    $("harmony-row").hidden = !can || !data.progressions;
   }
   $("roles").addEventListener("click", () => {
     state.roles = !state.roles;
@@ -2255,9 +2393,9 @@
     if (!tipOf || tip.hidden) return;
     const a = (tipOf.querySelector(".nm") || tipOf).getBoundingClientRect();
     const width = tip.offsetWidth, height = tip.offsetHeight, gap = 8;
-    const floor = barTop();
+    const floor = barTop(), ceiling = barFoot();
     let top = a.bottom + gap;
-    if (top + height > floor - gap && a.top - gap - height >= gap) top = a.top - gap - height;
+    if (top + height > floor - gap && a.top - gap - height >= ceiling + gap) top = a.top - gap - height;
     const left = Math.max(gap, Math.min(a.left - 12, doc.clientWidth - gap - width));
     tip.style.setProperty("--tip-top", Math.round(top + window.scrollY) + "px");
     tip.style.setProperty("--tip-left", Math.round(left + window.scrollX) + "px");
@@ -2327,15 +2465,15 @@
   tip.addEventListener("pointerover", () => clearTimeout(leaving));
   tip.addEventListener("pointerout", leave);
 
-  // --- the Harmony panel: each section's progression, named, played ------------------------------------
-  // In the settings' place (docked on a phone, a rail from 900 px): the key the numerals are read in, its
-  // neck on a phone (the rail of necks has it on a laptop), and each section's progression (page.py's
-  // ``progressions``): its numerals, one cycle, the times it is played (and how many of those vary it), its
-  // name, the named progressions it plays within it, and how it ends. Tap one to go to its section; ▶ plays it
-  // with strum.js's synthesis (window.caracoleSound, when the page has it), a chord a bar at the tempo set (− and
-  // + change it as it plays), each chord as the page shows it, its shape and the capo, and marks the one playing;
-  // ■ stops it, and closing the panel every sound. Songs with this progression is the library's page, with it
-  // filtered (#prog=), and so is Songs with each one it contains.
+  // --- the Harmony tab: each section's progression, named, played ---------------------------------------
+  // The overlay's third tab (the rail from 1200 px, the phone's sheet narrower), on a sheet with a key (hasHarmony):
+  // the key the numerals are read in, its neck, and each section's progression (page.py's ``progressions``): its
+  // numerals, one cycle, the times it is played (and how many of those vary it), its name, the named progressions it
+  // plays within it, and how it ends. Tap one to go to its section; ▶ plays it with strum.js's synthesis
+  // (window.caracoleSound, when the page has it), a chord a bar at the tempo set (− and + change it as it plays),
+  // each chord as the page shows it, its shape and the capo, and marks the one playing; ■ stops it, and leaving the
+  // tab every sound (another tab, the sheet closed, the rail hidden or gone). Songs with this progression is the
+  // library's page, with it filtered (#prog=), and so is Songs with each one it contains.
   const ENDINGS = { authentic: "an authentic cadence (V–I)", plagal: "a plagal cadence (IV–I)",
     half: "a half cadence (on V)", deceptive: "a deceptive cadence (V–vi)" };
   const counted = (n, word) => n + " " + word + (n === 1 ? "" : "s");
@@ -2384,10 +2522,12 @@
     const found = window.caracoleSound;
     return found && found.available !== false && typeof found.play === "function" ? found : null;
   };
-  let playing = null;  // {n: the section, at: the numeral sounding, handle, sounds: soundsNow() as it started}
   const soundsNow = () => musicOf(state) + "|" + state.inst;
+  // The one playing marked, and the tab's data-playing while one plays (book.js keeps a songbook's arrows for it).
   const drawPlaying = () => {
-    for (const li of $("progs").children) {
+    const box = document.getElementById("harmony");
+    if (box) box.toggleAttribute("data-playing", Boolean(playing));
+    for (const li of document.querySelectorAll("#progs > .prog")) {
       const mine = Boolean(playing) && playing.n === Number(li.dataset.n);
       const play = li.querySelector(".prog-play");
       play.textContent = mine ? "■" : "▶";
@@ -2395,8 +2535,8 @@
       li.querySelectorAll(".pn").forEach((pn, k) => pn.classList.toggle("on", mine && playing.at === k));
     }
   };
-  // ■, another ▶, the song played otherwise (drawHarmony) or the panel closed: the progression stops; the panel
-  // closed (``all``), every sound strum.js still makes too, a chord tapped among them.
+  // ■, another ▶, the song played otherwise (harmonyPane) or the tab left: the progression stops; the tab left
+  // (``all``), every sound strum.js still makes too, a chord tapped among them.
   function stopPlaying(all) {
     const was = playing;
     playing = null;
@@ -2443,106 +2583,98 @@
       drawPlaying();
     }
   };
-  const drawHarmony = () => {
-    if (!key) return;
+  // Drawn into the overlay's pane (overlay.js) each time it draws the tab, every control with the data-f the focus
+  // comes back to: bpm-down, bpm-up, and of section n prog-go:n, prog-play:n, prog-songs:n and prog-named:n:j (its
+  // j-th Songs with …); the neck's switch keeps keyNeck's. The key's neck only on the necks of the instrument played.
+  const harmonyPane = (pane) => {
     // Transposed, or another capo, mode, swap, shape or instrument: what it plays is no longer the page's chords.
     if (playing && playing.sounds !== soundsNow()) stopPlaying();
-    $("harmony-key").textContent = "In " + keyWords() + ".";
-    const neckBox = $("harmony-neck");
-    const inNeck = neckBox.contains(document.activeElement);
-    neckBox.textContent = "";
-    if (!railOn() && data.keyScale && inst().kind === "strings") neckBox.appendChild(keyNeck());  // not in the rail: here
-    if (inNeck) {
-      const to = neckBox.querySelector('[aria-pressed="true"]');
-      if (to) to.focus({ preventScroll: true });
-    }
+    const box = pane.appendChild(document.createElement("div"));
+    box.id = "harmony";
+    box.className = "harmony";
+    const make = (parent, tag, cls, text) => {
+      const node = parent.appendChild(document.createElement(tag));
+      if (cls) node.className = cls;
+      if (text !== undefined) node.textContent = text;
+      return node;
+    };
+    make(box, "p", "hint", "In " + keyWords() + ".").id = "harmony-key";
+    const necks = necksAt();  // on an instrument with no neck, the guitar's key neck heads the Guitar tab instead
+    if (data.keyScale && necks.played) box.appendChild(overlay.keyNeck(keySpec(necks.s, necks.it)));
     const synth = state.vol > 0 ? synthesis() : null;  // Sound off: no ▶ that would play nothing
-    $("tempo-row").hidden = !synth;
-    $("bpm").textContent = String(state.bpm);
-    const list = $("progs");
-    // The focus comes back to the same control of the same row: its row, its class, and which of the row's
-    // controls of that class it is (a row has a Songs with … link for each progression it contains).
-    const active = list.contains(document.activeElement) ? document.activeElement : null;
-    const cls = active && ["prog-go", "prog-play", "prog-songs", "prog-named"].find((c) => active.classList.contains(c));
-    const row = active && active.closest(".prog");
-    const back = cls && row ? [Array.prototype.indexOf.call(list.children, row), cls,
-      Array.prototype.indexOf.call(row.querySelectorAll("." + cls), active)] : null;
-    list.textContent = "";
+    const tempo = make(box, "div", "row");
+    tempo.id = "tempo-row";
+    tempo.hidden = !synth;
+    make(tempo, "span", "lab", "Tempo");
+    const stepper = make(tempo, "span", "stepper");
+    const stepButton = (id, said, text, by) => {
+      const b = make(stepper, "button", "", text);
+      b.type = "button";
+      b.id = id;
+      b.dataset.f = id;
+      b.setAttribute("aria-label", said);
+      b.addEventListener("click", () => setBpm(state.bpm + by));
+    };
+    stepButton("bpm-down", "Slower", "−", -BPM.step);
+    make(stepper, "output", "", String(state.bpm)).id = "bpm";
+    stepButton("bpm-up", "Faster", "+", BPM.step);
+    make(tempo, "span", "hint-inline", "bpm · 1 chord a bar");
+    const list = make(box, "ol", "progs");
+    list.id = "progs";
     const found = table("progressions") || [];
-    $("progs-none").hidden = found.length > 0;
+    const none = make(box, "p", "hint", "No chords we can read.");
+    none.id = "progs-none";
+    none.hidden = found.length > 0;
     for (const row of found) {
       const [n, numerals, repeats, name, ending, pkey, chords, variations] = row;
-      const li = list.appendChild(document.createElement("li"));
-      li.className = "prog";
+      const li = make(list, "li", "prog");
       li.dataset.n = String(n);
-      const go = li.appendChild(document.createElement("button"));
+      const go = make(li, "button", "prog-go");
       go.type = "button";
-      go.className = "prog-go";
-      const part = (cls, text) => {
-        const span = go.appendChild(document.createElement("span"));
-        span.className = cls;
-        if (text !== undefined) span.textContent = text;
-        return span;
-      };
-      part("prog-sec", sectionName(n));
-      const nums = part("prog-nums");
+      go.dataset.f = "prog-go:" + n;
+      make(go, "span", "prog-sec", sectionName(n));
+      const nums = make(go, "span", "prog-nums");
       numerals.forEach((numeral, k) => {
         if (k) nums.appendChild(document.createTextNode("–"));
-        const pn = nums.appendChild(document.createElement("span"));
-        pn.className = "pn";
-        pn.textContent = numeral;
+        make(nums, "span", "pn", numeral);
       });
       if (repeats > 1) {
-        const times = nums.appendChild(document.createElement("span"));
-        times.className = "prog-x";
-        times.textContent = "×" + repeats;
+        const times = make(nums, "span", "prog-x", "×" + repeats);
         if (variations > 0) {  // "×8, 1 variation", the words kept together
           times.appendChild(document.createTextNode(", "));
-          const varied = times.appendChild(document.createElement("span"));
-          varied.className = "prog-var";
-          varied.textContent = counted(variations, "variation");
+          make(times, "span", "prog-var", counted(variations, "variation"));
         }
       }
-      part("prog-about", [name, containsWords(row), ending && ENDINGS[ending] ? "ends on " + ENDINGS[ending] : ""]
-        .filter(Boolean).join(" · "));
+      make(go, "span", "prog-about", [name, containsWords(row), ending && ENDINGS[ending] ? "ends on " + ENDINGS[ending]
+        : ""].filter(Boolean).join(" · "));
       go.addEventListener("click", () => {
         const sec = sectionEls()[n];
         if (sec) sec.scrollIntoView({ block: "start", behavior: calm.matches ? "auto" : "smooth" });
       });
-      const play = li.appendChild(document.createElement("button"));
+      const play = make(li, "button", "round prog-play");
       play.type = "button";
-      play.className = "round prog-play";
+      play.dataset.f = "prog-play:" + n;
       play.hidden = !synth || !Array.isArray(chords);
       play.addEventListener("click", () => playSection(n, repeats, chords || []));
-      const songs = li.appendChild(document.createElement("a"));
-      songs.className = "link prog-songs";
+      const songs = make(li, "a", "link prog-songs", "Songs with this progression");
       songs.href = String(data.library || "") + "#prog=" + encodeURIComponent(pkey);
-      songs.textContent = "Songs with this progression";
-      for (const [cname, , ckey] of containedOf(row)) {
-        const more = li.appendChild(document.createElement("a"));
-        more.className = "link prog-named";
-        more.href = String(data.library || "") + "#prog=" + encodeURIComponent(ckey);
-        more.textContent = "Songs with " + cname;
-      }
+      songs.dataset.f = "prog-songs:" + n;
+      containedOf(row).forEach(([cname, , ckey], j) => {
+        const link = make(li, "a", "link prog-named", "Songs with " + cname);
+        link.href = String(data.library || "") + "#prog=" + encodeURIComponent(ckey);
+        link.dataset.f = "prog-named:" + n + ":" + j;
+      });
     }
     drawPlaying();
-    const again = back && list.children[back[0]] && list.children[back[0]].querySelectorAll("." + back[1])[back[2]];
-    if (again) again.focus({ preventScroll: true });
   };
-  $("harmony-open").addEventListener("click", () => {
-    close(panel);
-    drawHarmony();
-    open(harmony, more);
-  });
-  // The progression playing takes the new tempo from its next strum on.
+  // The progression playing takes the new tempo from its next strum on; the tab shows it where it is drawn.
   const setBpm = (n) => {
     state.bpm = Math.max(BPM.min, Math.min(BPM.max, n));
-    $("bpm").textContent = String(state.bpm);
+    const out = $("bpm");
+    if (out) out.textContent = String(state.bpm);
     if (playing && playing.handle && typeof playing.handle.tempo === "function") playing.handle.tempo(state.bpm);
     save();
   };
-  $("bpm-down").addEventListener("click", () => setBpm(state.bpm - BPM.step));
-  $("bpm-up").addEventListener("click", () => setBpm(state.bpm + BPM.step));
   // --- the version line and its list (kinds.js) --------------------------------------------------
   // Under the artist, which of the song's versions this page is and an icon a kind it keeps to play from; the line
   // opens the list of them (a layer: a sheet from the bottom on a phone, a popover under the line from 900 px, placed
@@ -2614,18 +2746,6 @@
   $("smaller").addEventListener("click", () => { state.fs = Math.max(FS.min, state.fs - FS.step); render(); });
   $("bigger").addEventListener("click", () => { state.fs = Math.min(FS.max, state.fs + FS.step); render(); });
   $("strip-toggle").addEventListener("click", () => { state.strip = !state.strip; render(); });
-  // The guitar in the bar shows the strip, or hides it, as the settings' chip does. The strip is above
-  // the song: shown from further down, the page goes up to it, so the shapes are in view above the bar
-  // (from there, a shape's card; back down by hand). Hidden, the page stays where it is.
-  shapesButton.addEventListener("click", () => {
-    state.strip = !state.strip;
-    render();
-    if (!state.strip) return;
-    const strip = $("strip"), r = strip.getBoundingClientRect();
-    if (r.top < 0 || r.bottom > bar.getBoundingClientRect().top) {
-      strip.scrollIntoView({ block: "nearest", behavior: calm.matches ? "auto" : "smooth" });
-    }
-  });
   $("reset-all").addEventListener("click", () => {
     Object.assign(state, { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null, nm: null,
       necks: true, py: false, trad: false });
@@ -2641,12 +2761,13 @@
 
   // --- scrolling by itself, hands on the guitar ----------------------------------------------------
   // Off, counting down (3 s, for your hands to get to the guitar; pressed again, it starts at
-  // once), running, or paused. While it is on, the pill steers it, above the bar's place: − and +
-  // change the speed as it runs, ❚❚ pauses and ▶ resumes (after a countdown again), × ends it; the
+  // once), running, or paused. While it is on, the pill steers it, above the bar's place (from 1200 px under the
+  // toolbar): − and + change the speed as it runs, ❚❚ pauses and ▶ resumes (after a countdown again), × ends it; the
   // bar is out of the way while it counts down and runs (dock()). A finger on the page, the wheel, a
   // key that scrolls, a scroll by hand, a card opening or the end of the song pauses it: the page and
-  // the bar are yours until you press ▶, which stays within reach with the card open. ▶ closes the settings and the
-  // card, and leaves the overlay's sheet at half the screen, the bar under it and the pill above it.
+  // the bar are yours until you press ▶, which stays within reach with the card open. The bar's Scroll (pressed
+  // while it is on) closes the settings and the card, and leaves the overlay's sheet at half the screen, the bar
+  // under it and the pill above it.
   const COUNTDOWN = 3000;
   const scroll = { state: "off", from: 0, travelled: 0, last: 0, at: 0, ends: 0, timer: 0, loop: 0 };
   const moving = () => scroll.state === "counting" || scroll.state === "running";
@@ -2658,7 +2779,9 @@
     if (scroll.state === "off") delete doc.dataset.pill;
     else doc.dataset.pill = scroll.state;  // room under the song for the pill
     dock();  // the bar, away or back
+    toolbar.edge();  // from 1200 px the pill under the toolbar, wherever it is now
     pill.dataset.state = scroll.state;
+    $("scroll").setAttribute("aria-pressed", scroll.state === "off" ? "false" : "true");  // lit while it is on
     go.setAttribute("aria-label", LABELS[scroll.state] || "Pause");
     $("tick").textContent = scroll.state === "counting"
       ? String(Math.max(1, Math.ceil((scroll.ends - performance.now()) / 1000))) : "";
@@ -2786,7 +2909,7 @@
     go.focus({ preventScroll: true });  // press it again, or Enter, to start at once
   });
   go.addEventListener("click", () => {
-    if (scroll.state !== "running") halfSheet();  // the pill's ▶, as the bar's
+    if (scroll.state !== "running") halfSheet();  // the pill's ▶, as the bar's Scroll
     if (scroll.state === "counting") run();
     else if (scroll.state === "running") pauseScroll();
     else countdown();
@@ -2812,7 +2935,8 @@
   // songbook, putting you back where you were), and none just after a change of key or text size,
   // when the browser keeps the line you were reading in place by scrolling. It stays while the size
   // box or a sheet is open (the overlay's too), and while one of its controls has the keyboard's focus, which would
-  // otherwise go out of sight.
+  // otherwise go out of sight. Below 1200 px alone: from 1200 px the toolbar under the title never slides away (and
+  // Aa's box stays open as you scroll), and goes with the page as it scrolls, the pill under it (toolbar.edge()).
   const reveal = { y: window.scrollY, quiet: 0, touched: false };
   function hush() {
     if (doc.dataset.ready === "1") reveal.quiet = performance.now() + 400;
@@ -2833,6 +2957,11 @@
   }
   window.addEventListener("scroll", () => {
     const y = window.scrollY, dy = y - reveal.y;
+    toolbar.edge();
+    if (toolbar.wide.matches) {
+      reveal.y = y;
+      return;
+    }
     if (y <= 0 || window.innerHeight + y >= document.documentElement.scrollHeight - 2) {
       slide(false);
       reveal.y = y;
@@ -2852,10 +2981,10 @@
   });
   bar.addEventListener("focusin", () => slide(false));
 
-  // Nothing to transpose, no shapes and no other setting for a sheet without chords: Aa and ▶ alone.
+  // Nothing to transpose, no shapes and no other setting for a sheet without chords: Aa and Scroll alone.
   $("keys").hidden = count === 0;
-  shapesButton.hidden = count === 0;
   more.hidden = count === 0;
+  toolbar.place();  // under the title from 1200 px, before it shows
   showScroll();
   render();
   if (hash.get("panel") === "1") open(panel, null);

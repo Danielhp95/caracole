@@ -16,13 +16,14 @@ from caracole.viewer.book import BookSong, build_songbook
 
 from helpers.browser import CHROMIUM_MARKS
 from helpers.viewer_pages import viewer as open_viewer, written
+from test_viewer_harmony_tab import SONG
 from test_viewer_necks import reload
-from test_viewer_panels import LONG, SONG
+from test_viewer_panels import LONG
 
 pytestmark = CHROMIUM_MARKS  # every test here opens a page in Chromium
 
 IN_E = "{title: In E}\n{artist: Synthetic}\n{key: E}\n{comment: Verse}\n[E]la la [A]la la [B7]la la [E]la\n"
-SAID = "[location.hash, document.getElementById('shift').textContent]"
+SAID = "[location.hash, document.querySelector('#shift .d').textContent]"  # the settings' word, the bar's
 DESKTOP = {"width": 1280, "height": 800, "mobile": False}
 
 

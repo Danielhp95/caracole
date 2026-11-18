@@ -1,10 +1,10 @@
 (() => {
   "use strict";
   // A page's layers: what a viewer page opens over its sheet (the settings, Aa, a chord's card, the necks' sheet, the
-  // versions list), each one entry of the browser's history while it is open, so that Back, a phone's or the app's,
-  // closes the one on top rather than leaving the page. Inlined on every viewer page (sheet.html and a kept version's
-  // page, a songbook, a harmonica tab's page) before the page's own script, which calls it. It makes no element of its
-  // own and loads nothing: the standard library alone.
+  // versions list, the key list), each one entry of the browser's history while it is open, so that Back, a phone's or
+  // the app's, closes the one on top rather than leaving the page. Inlined on every viewer page (sheet.html and a kept
+  // version's page, a songbook, a harmonica tab's page) before the page's own script, which calls it. It makes no
+  // element of its own and loads nothing: the standard library alone.
   //
   // window.caracoleLayers:
   //   history(back)    the history's side of a page's layers: { sync(count) }. sync(count) says how many layers are
@@ -53,6 +53,19 @@
   //                    --pop-y, its top in the window as it is placed, which the stylesheet's max-height counts, so
   //                    that it ends above the bar (--foot). The versions list's, from 900 px wide. It writes to pop
   //                    alone.
+  //
+  //   TOOLBAR          the media query from which the bar is a toolbar under the song's title: (min-width: 1200px).
+  //   toolbar(bar, head)
+  //                    the bar's place, written once for the pages: { wide, place(), edge() }. wide is
+  //                    matchMedia(TOOLBAR). place() puts bar right after head() (the song's header.head: a songbook's
+  //                    shown song's own) while wide, in the page's flow, where the page's stylesheet makes it a toolbar
+  //                    that sticks to the window's top once the title scrolls away; while narrow, back where the page
+  //                    wrote it (before what followed it then: the pill), at the foot. Moved, it keeps the focus on the
+  //                    control that had it. edge() writes --toolbar-bottom on <html> while wide: the toolbar's bottom
+  //                    edge in the window, in px, 0 at least (0 where it shows nothing: full screen), which the
+  //                    stylesheet puts the autoscroll pill under; narrow, it takes it off; only when that changes.
+  //                    place() calls it, and the page calls it as it scrolls and resizes and as full screen comes and
+  //                    goes. It writes to the bar's place and to <html>'s --toolbar-bottom alone.
   //
   // The marker is an entry's state's caracoleLayer, an integer from 1; every history.replaceState in viewer/'s
   // scripts passes history.state, never null, so that an entry keeps its depth through what the page writes into its
@@ -202,6 +215,31 @@
     pop.style.setProperty("--pop-y", top + "px");
   };
 
-  window.caracoleLayers = Object.freeze({ history: layerHistory, doubleTap, autoFull, placeUnder, SHORT, DOUBLE_MS,
-    DOUBLE_PX, MARGIN_SKIP, UNDER_GAP, UNDER_EDGE });
+  const TOOLBAR = "(min-width: 1200px)";
+  const toolbar = (bar, head) => {
+    const doc = document.documentElement, wide = matchMedia(TOOLBAR);
+    const home = bar.parentNode, next = bar.nextSibling;  // where the page wrote it
+    let written = null;  // what --toolbar-bottom holds now, as this wrote it: none
+    const edge = () => {
+      const value = wide.matches ? Math.max(0, Math.round(bar.getBoundingClientRect().bottom)) + "px" : null;
+      if (value === written) return;  // as it is: no style written as the page scrolls on, the toolbar stuck
+      written = value;
+      if (value === null) doc.style.removeProperty("--toolbar-bottom");
+      else doc.style.setProperty("--toolbar-bottom", value);
+    };
+    const place = () => {
+      const after = wide.matches ? head() : null;
+      if (after ? after.nextSibling !== bar : bar.parentNode !== home || bar.nextSibling !== next) {
+        const had = bar.contains(document.activeElement) ? document.activeElement : null;
+        if (after) after.after(bar);
+        else home.insertBefore(bar, next);
+        if (had && document.activeElement !== had) had.focus({ preventScroll: true });  // the move took it away
+      }
+      edge();
+    };
+    return Object.freeze({ wide, place, edge });
+  };
+
+  window.caracoleLayers = Object.freeze({ history: layerHistory, doubleTap, autoFull, placeUnder, toolbar, SHORT,
+    TOOLBAR, DOUBLE_MS, DOUBLE_PX, MARGIN_SKIP, UNDER_GAP, UNDER_EDGE });
 })();

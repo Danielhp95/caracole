@@ -393,9 +393,10 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   - **harmony_tables.py**: its answers as the tables a viewer's data carries, per mode, each text naming notes
     written for every transposition, for viewer.js to look up.
   - **strum.js**: a chord's shape strummed in Web Audio, `window.caracoleSound`, each instrument's voice.
-  - **overlay.js**: the rail of a wide screen, Guitar (the necks) and Harmonica (the circle of fifths, the key on the
-    harp chosen, each chord's holes, the slim bar), and narrower the phone's sheet, `window.caracoleOverlay`, which
-    viewer.js and harptab.js draw with what they look up.
+  - **overlay.js**: the rail of a wide screen, Guitar (the necks), Harmonica (the circle of fifths, the key on the
+    harp chosen, each chord's holes, the slim bar) and, on a sheet with a key, Harmony (the page's own pane, viewer.js
+    `harmonyPane`: the key's neck, each section's progression), and narrower the phone's sheet,
+    `window.caracoleOverlay`, which viewer.js and harptab.js draw with what they look up.
   - **harp.py**: the Richter harmonica:
     - its layout in every key, positions by Wikipedia's circle-of-fifths numbering;
     - the overlay's tables by steps above the tonic (`ring`, `holes`, `key_scales`, `outside`, `chord_steps`);
@@ -1276,11 +1277,11 @@ It is rows.js's, shared by both pages:
   - an AudioContext only on a tap (`navigator.userActivation`), suspended when the page is hidden or silent, resumed
     on the next tap.
   - `caracoleSound.play` is what a part that plays chords in sequence calls (its header documents it; the Harmony
-    panel's ▶ does), never another synthesis (test_viewer_sound.py, test_viewer_panels.py).
+    tab's ▶ does), never another synthesis (test_viewer_sound.py, test_viewer_harmony_tab.py).
   - It times a progression on the context's clock alone (a strum it comes to late moves the rest on, never two
     crammed together).
-  - Every stop (■, another ▶ or strum, the panel closed, the page hidden or left) leaves no note to begin and no timer
-    of it, even when the notes cut tell they ended late.
+  - Every stop (■, another ▶ or strum, the Harmony tab left, the page hidden or left) leaves no note to begin and no
+    timer of it, even when the notes cut tell they ended late.
   - A sound asked while the context wakes plays only if nothing was asked after it, and a context woken for nothing
     sleeps again.
   - test_viewer_sound.py's `SCHEDULE` records each note and timer the page makes, and plays a slow device on demand
@@ -1293,7 +1294,7 @@ It is rows.js's, shared by both pages:
   the songbook has neither.
   - The list's place: on a phone a sheet from the bottom, docked on the bar as the settings are (one of `DOCKED`);
     from 900 px a popover under the line, never a rail (no `data-panel`: the song's column stays), beside the settings
-    or Harmony: kinds.js's `place()` calls layers.js's `placeUnder(list, #ver-now)` (its `--pop-top` and
+    or the key list: kinds.js's `place()` calls layers.js's `placeUnder(list, #ver-now)` (its `--pop-top` and
     `--pop-left`, 6 px under the line's box, at its left, in the page's coordinates, so it scrolls with the page),
     which viewer.js's `place()` calls as a layer opens or closes and the window resizes.
   - The popover keeps 8 px within the window less the rails (the room body's padding leaves them: `data-necks`,
@@ -1309,18 +1310,42 @@ It is rows.js's, shared by both pages:
     `GLYPH_OF`, card.js's glyph of each kind, which
     `test_viewer_versions.py::test_the_kind_icons_are_the_library_cards_drawings` holds to rows.js and card.js: a
     library lane that redraws a glyph, or draws a kind with another, fails it, and kinds.js follows.
+- **What moved**: viewer.js's `moved()`, how far the chords shown moved from the sheet as written by your hand (the
+  shapes' move on an instrument that takes a capo, so a sheet's capo taken off is "no capo · +2"; the transposition
+  alone on one that takes none), is the one count the bar's word under its key (`changes()`, `keyShort`), the
+  settings' Transpose and the header's Key say (test_viewer_bar.py, test_viewer_header.py), and the key list marks
+  (`mod12(moved())`).
+- **The key list** (page.py `_KEY_LIST`, `#key-list`): the bar's key is a button (`#key-now`, `aria-expanded`;
+  disabled on a sheet with no key) that opens the twelve keys in the mode played, `data.keyNames`' names from the
+  chords as written on this instrument (`writtenAt()`: the sheet's capo folded in on one with no capo), the first
+  `.key-as` "· as written" across its row; `chooseKey(k)` transposes there the nearest way (`step`, the capo kept),
+  then closes it. A layer in `DOCKED` and `rails`; book.js's `busy()` keeps the arrows with it; the harmonica tab's
+  page has none (test_viewer_key_list.py). A button being no live region, `#key-status` (page.py, beside
+  `#scroll-status`, outside the bar) says the key's line as − and + move it (viewer.js `sayKey`: not on load, nor
+  while the settings' outputs or the key's own name say it; test_viewer_bar.py).
 - **The rail of necks** (from 1200 px) is the overlay, overlay.js's:
-  - two tabs, Guitar first on a sheet and Harmonica first on a harmonica tab's page, the tab shown kept for that page
-    alone;
+  - three tabs on a sheet, Guitar, Harmonica and Harmony, and two on a harmonica tab's page, Harmonica first, the tab
+    shown kept for that page alone (test_viewer_overlay.py);
+  - Harmony (D12 B), a sheet's with a key (viewer.js `hasHarmony`, where the settings' Harmony row was: no Harmony
+    panel, no row), is the page's own pane, overlay.js's `page.harmony(pane)`, drawn on each draw while it shows
+    (`harmonyPane`: `#harmony-key`, the key's neck, which then leaves the Guitar tab where the necks are the instrument
+    played's, `necksAt().played`, else stays heading it, `#tempo-row`, `#progs`), each control with a `data-f` the
+    focus comes back to, its sizes the rail's `--nk` times the phone's (text in em, targets and room in
+    `calc(… * var(--nk))`); leaving it (`page.left`, another tab; `close(necksEl)`; `showNecks(false)`; `drawNecks()`
+    drawing no Harmony pane while one plays) stops every sound, as the panel's ✕ did (`stopPlaying(true)`), and while
+    one plays `#harmony[data-playing]` keeps a songbook's arrows (book.js `busy()`; test_viewer_harmony_tab.py,
+    test_viewer_sound.py, test_viewer_songbook_browser.py);
   - viewer.js and harptab.js hand it what they look up, and Harmonica's notes, scales and harps are harp.py's tables,
     by steps above the tonic as the song sounds, a transposition moving every harp and a capo none
     (test_viewer_harp.py, test_viewer_overlay.py, test_viewer_harptab_browser.py).
 - **Below 1200 px** the bar's neck (`necks-open`, after the key) slides it up as the phone's sheet (the page's
   `sheet()`, `data-sheet` half or full: its handle and ✕ for Hide), a dialog not modal and, in viewer.js, one of the
   layers docked on the bar (`--dock`):
-  - each page opens with it closed, ▶ leaves it at half, the rail's Hide and Chord necks don't touch it;
-  - and below 440 px (a phone, the owner's choice) the neck takes the guitar's place in the bar, the strip then ⋯'s
-    All chord shapes (test_viewer_overlay_sheet.py, test_viewer_bar.py).
+  - each page opens with it closed, Scroll leaves it at half, the rail's Hide and the bar's `necks-toggle` don't touch it
+    (test_viewer_overlay_sheet.py);
+  - one control each (D11): the rail's button, `necks-toggle`, takes the neck's place after the key from 1200 px, and
+    the strip of shapes has no button in the bar, ⋯'s All chord shapes (`strip-toggle`) its one switch
+    (test_viewer_bar.py).
 - **Layers and Back**: layers.js (`window.caracoleLayers`, inlined on every viewer page before its own script) keeps
   a page's layers in the browser's history, one entry each while it is open, marked `history.state.caracoleLayer`
   (its depth, from 1), so Back closes the one on top and leaves the page only once none is open:
@@ -1331,9 +1356,10 @@ It is rows.js's, shared by both pages:
   - every `history.replaceState` in viewer/'s scripts passes `history.state`, never `null`, so an entry keeps its
     depth through what the page writes into its address;
   - below 900 px one layer at a time (opening one closes every other, but for a `nested` one, opened over another and
-    leaving it open); from 900 px the rails (the settings, Harmony) one at a time, a card and the versions list beside
-    them;
-    `DOCKED` (panel, card, harmony, vList, necksEl) docks at the foot on a phone, the top one of them (`dock()`);
+    leaving it open); from 900 px the rails (`rails`: the settings, the key list) one at a time, a card and the
+    versions list beside them;
+    `DOCKED` (panel, card, vList, necksEl, keyList) docks at the foot on a phone, the top one of them
+    (`dock()`);
   - a harmonica tab's page (harptab.js) has `"sizes"` (Aa), `"sheet"` (the necks' sheet), `"list"` (the versions
     list) and `"full"`: `layers`, `openLayer(name, opener)`, `closeLayer(name, refocus)`, one at a time below 900 px;
     from 900 px the list and the sheet open together, either over the other (the sheet closing full screen, the list
@@ -1343,8 +1369,34 @@ It is rows.js's, shared by both pages:
     is, and `auto` again once the page is back at its own entry, for a reload;
   - a history that refuses entries (a `pushState` that throws) turns it off: the layers open and close as before,
     and Back leaves the page (test_viewer_layers.py).
-- **The song's end**: `.page`'s padding is the bar's room (`--foot`), which `layout()` measures columns against;
-  the half screen of over-scroll is `.page::after`, never in it, and print drops it.
+- **From 1200 px the bar is a toolbar** under the song's title (D13 C; test_viewer_toolbar.py), for viewer.js and
+  harptab.js alike through layers.js's `toolbar(bar, head)` (`{ wide, place(), edge() }`, neither script holding a
+  copy):
+  - `place()` puts `#bar` right after `head()` (`.page > header.head`; a songbook's shown song's own, `#sheet`'s
+    parent's `:scope > header.head`) while `wide` (`TOOLBAR`, `(min-width: 1200px)`), back where the page wrote it
+    (before `#pill`) while narrow, the focus kept on the control that had it: at load, and as `wide` changes; the tab
+    order changes with it (the toolbar right after the title);
+  - viewer.css's `@media screen and (min-width: 1200px)` block: sticky at the window's top once the title scrolls
+    away, on the page's background, `z-index` 6 (over the song, under every layer and popover), a row of pills in the
+    phone's order, none pushed to the end, 56 px tall (`--toolbar`); `--foot` is the safe area alone there, and
+    `html:not([data-full])`'s `scroll-padding-top` keeps what is brought into view below it; the bar's
+    `html[data-panel]` inset is below 1200 px alone;
+  - the key's pill keeps its floor (`min-width` 172 px: − and + at 44, the key at three quarters of "Ab mixolydian"),
+    and where a rail on either side leaves `.bar-in` (a container, `toolbar`) under 37.5 rem, the tools are their
+    icons alone, their words visually hidden, still their names;
+  - it never slides away (the scroll handlers slide the bar below 1200 px alone); while autoscroll counts down and runs
+    it is `bar[data-asleep]` (`visibility: hidden`, its room kept: viewer.js `dock()`, harptab.js `showScroll()`, at
+    every width, where below 1200 px viewer.js hides the bar and harptab.js slides it, harptab.js's `showScroll()`
+    again as the window crosses 1200 px), and `edge()` writes `--toolbar-bottom` on `<html>`, only when it changes (on
+    scroll, resize and full screen's coming and going too), which puts the pill under it;
+  - a card or a numeral's tooltip goes above its chord only where it clears the toolbar while it is stuck to the
+    window's top (`place()`, `placeTip()`: `barFoot()` the ceiling, else the window's top: a card may cover the unstuck
+    toolbar's pills while it is open; the window's foot the floor, `barTop()`); `layout()` takes `--toolbar` off the
+    window's room for columns (`toolbarRoom()`, none in full screen); full screen hides it as the bar
+    (`data-controls`), its handle staying at the window's foot.
+- **The song's end**: `.page`'s padding is the bar's room (`--foot`), which `layout()` measures columns against (from
+  1200 px less the toolbar's at the top); the half screen of over-scroll is `.page::after`, never in it, and print
+  drops it.
 - **Columns** (from 1100 px, on the screen alone, viewer.css; test_viewer_layout.py) only where the whole song shows
   that way, its end in the last column (`layout()`): the fewest that do, two to five (`MOST_COLUMNS`), each at least
   the song's widest line (`widest()`: each `.sec > .l` and `.tab` as wide as its content, `.sheet.measure`, after
@@ -1374,7 +1426,7 @@ It is rows.js's, shared by both pages:
     - and `necks=0` in the address, which book.js's `carryScreen` takes on to a songbook's next address, for its
       sandbox with no storage, as a link to another of the song's pages does (a version's in the list, a harmonica
       tab's and its ‹ Chord sheet, viewer.js `screenChoices`, the view's `carry`, harptab.js `backToSheet`);
-    - with its Hide, the bar's button and the settings' row in step (test_viewer_necks.py).
+    - with its Hide and the bar's button in step (test_viewer_necks.py).
   - **Pinyin**: so is the settings' Pinyin (`state.py`, off at first: localStorage `caracole-viewer-pinyin`, `py=1` in
     the address, which `carryScreen` takes on too), each Chinese character's reading over it, between its chord and
     it:

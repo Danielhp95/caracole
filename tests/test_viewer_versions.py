@@ -616,15 +616,18 @@ def test_served_the_list_links_to_caracole_serves_versions_page(tmp_path):
 # --- the list's place, on a phone and a laptop -----------------------------------------------------
 
 
-# Where the list is, and how it is drawn: its box and the version line's, the bar's top, its position and its edges,
-# the song's column and whether a rail is open beside the song (html's data-panel).
+# Where the list is, and how it is drawn: its box and the version line's, the bar's top (the window's foot from 1200 px,
+# where the bar is a toolbar at the top: test_viewer_toolbar.py), its position and its edges, the song's column and
+# whether a rail is open beside the song (html's data-panel).
 PLACED = """(() => {
   const list = document.querySelector('#version-list'), s = getComputedStyle(list);
   const r = list.getBoundingClientRect(), now = document.querySelector('#ver-now').getBoundingClientRect();
   const bar = document.querySelector('#bar').getBoundingClientRect();
+  const foot = getComputedStyle(document.querySelector('#bar')).position === 'fixed';  // at the foot, not the toolbar
   const sheet = document.querySelector('#sheet').getBoundingClientRect();
   return {top: r.top, bottom: r.bottom, left: r.left, right: r.right, width: r.width, height: r.height,
-          under: r.top - now.bottom, from: r.left - now.left, barTop: bar.top, position: s.position,
+          under: r.top - now.bottom, from: r.left - now.left, barTop: foot ? bar.top : innerHeight,
+          position: s.position,
           edges: [s.borderTopWidth, s.borderRightWidth, s.borderBottomWidth, s.borderLeftWidth],
           radius: s.borderBottomLeftRadius, column: [sheet.left, sheet.width],
           panel: document.documentElement.dataset.panel || null, depth: (history.state || {}).caracoleLayer || 0};
@@ -728,10 +731,10 @@ def short_song(tmp_path: Path) -> Path:
 
 @in_chromium
 def test_on_a_short_laptop_window_the_popover_ends_above_the_bar_and_its_head_stays_in_sight(tmp_path):
-    # 1280 × 500: the bar (over the popover) would hide the list's last rows. The page scrolls (half a screen of
-    # over-scroll ends every page), but the popover scrolls with it, its head and its × going up out of sight before its
-    # last rows came up: so the popover ends above the bar, its own scroll reaching its last row, and its head stays at
-    # its top as it scrolls.
+    # 1280 × 500: the window's foot (the bar's top, below 1200 px) would hide the list's last rows. The page scrolls
+    # (half a screen of over-scroll ends every page), but the popover scrolls with it, its head and its × going up out
+    # of sight before its last rows came up: so the popover ends above the window's foot, its own scroll reaching its
+    # last row, and its head stays at its top as it scrolls.
     with viewer(tmp_path, short_song(tmp_path).as_uri(), **{**DESKTOP, "height": 500}) as b:
         open_list(b)
         box = b.js(PLACED)

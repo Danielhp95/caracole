@@ -5,6 +5,8 @@ without breaking the reading order and the autoscroll. It takes the fewest colum
 up to as many as fit side by side (five at most: the owner's ask of 2026-11-18, "so much empty space between the
 two columns"), each at least as wide as the song's widest line, kept between 16 em (no slivers) and 24 em of the
 reader's own text: a song of long lines takes two columns of 24 em as before (the owner's narrower columns, D8).
+The window's room for them is less the page's at its foot and, from 1200 px, the toolbar's at its top
+(test_viewer_toolbar.py).
 """
 
 from __future__ import annotations
@@ -400,7 +402,9 @@ COLUMNS = """(() => {
   const em = parseFloat(style.fontSize);
   return {
     columns: root.dataset.columns, lefts: lefts.size, gap, em, column: (box.width - (n - 1) * gap) / n,
-    height: box.height, room: innerHeight - parseFloat(getComputedStyle(page).paddingBottom),
+    // the window less the page's room at its foot and, from 1200 px, the toolbar's at its top (viewer.js layout())
+    height: box.height, room: innerHeight - parseFloat(getComputedStyle(page).paddingBottom)
+      - (parseFloat(getComputedStyle(root).getPropertyValue("--toolbar")) || 0),
     last: end.left >= box.left + (n - 1) * (box.width + gap) / n - 1, wrapped, widest, widestEm: widest / em,
     sideways: root.scrollWidth > root.clientWidth,
   };
@@ -422,8 +426,42 @@ def in_columns(count: int) -> str:
 
 def shows_whole(seen: dict) -> None:
     assert seen["lefts"] == int(seen["columns"]), seen  # every column holds some of the song
-    assert seen["height"] <= seen["room"] and seen["last"], seen  # the whole song above the bar, its end in the last
+    assert seen["height"] <= seen["room"] and seen["last"], seen  # the whole song in the room, its end in the last
     assert not seen["sideways"], seen
+
+
+def test_from_1200_px_the_columns_show_the_song_whole_under_the_toolbar(tmp_path):
+    # From 1200 px the bar is a toolbar under the title, sticking to the window's top (test_viewer_toolbar.py): the room
+    # for columns is the window less its 56 px (--toolbar) and the page's room at its foot. A window that would hold the
+    # song in two columns with no toolbar, but not under it, takes more columns, or one.
+    MIDDLING = "{title: Middling Song}\n{artist: The Placeholders}\n" + "".join(
+        f"{{comment: Verse {n}}}\n[G]Tiny [D]words\n[C]Sing it [G]out\n\n" for n in range(1, 8))
+    under = """(() => { const sheet = document.getElementById("sheet").getBoundingClientRect();
+      const bar = document.getElementById("bar").getBoundingClientRect();
+      return {top: sheet.top, bottom: sheet.bottom, bar: bar.bottom, stuck: bar.top, window: innerHeight}; })()"""
+    with Chromium(tmp_path / "profile", size=DESKTOP) as browser:
+        tab = opened(browser, build_viewer(MIDDLING), tmp_path)
+        first = tab.eval(COLUMNS)
+        tab.eval("document.getElementById('sheet').scrollIntoView({block: 'start'})")
+        seen = tab.eval(under)
+        two = tab.eval(in_columns(2))["height"]
+        foot = tab.eval("parseFloat(getComputedStyle(document.querySelector('.page')).paddingBottom)")
+        chrome = tab.eval("outerHeight - innerHeight")
+        resize(browser, 1600, round(two + foot + 28 + chrome))  # room for it but for the toolbar's 56 px
+        tab.wait_for(f"innerHeight === {round(two + foot + 28)} && document.documentElement.dataset.columns !== '2'")
+        tight = tab.eval(COLUMNS)
+        resize(browser, 1600, round(two + foot + 56 + 8 + chrome))  # and with them
+        tab.wait_for("document.documentElement.dataset.columns === '2'")
+        roomy = tab.eval(COLUMNS)
+    assert first["columns"] == "2", first
+    assert two + foot + 28 >= 500, two  # the tight window no short screen, whose full screen has no toolbar
+    shows_whole(first)
+    # brought into view, the song whole between the toolbar and the window's foot
+    assert seen["stuck"] == 0 and seen["bar"] <= seen["top"] and seen["bottom"] <= seen["window"] - foot, seen
+    assert tight["columns"] != "2", tight
+    if tight["columns"] != "1":
+        shows_whole(tight)
+    shows_whole(roomy)
 
 
 def test_a_song_of_short_lines_too_tall_for_two_columns_reads_in_three_and_shows_whole(tmp_path):

@@ -22,7 +22,7 @@ or on paper.
   bought, of a few songs a night from YouTube, or of a video you paste on the library page.
 - **Made for playing:** transpose, capo and mode; chord shapes for guitar, ukulele (high G,
   low G, baritone), piano, harmonica, flute and recorder, each strummed or played on a tap;
-  a harmony panel with each chord's Roman numeral and the progressions each section plays;
+  a Harmony tab beside the song with each section's progression in Roman numerals;
   pinyin over Chinese lyrics, in Simplified or Traditional characters; harmonica tabs read
   onto the harp of your choice; Guitar Pro files drawn as score and tab and played in the
   browser; PDFs, and songbooks with each song in your key and on your instrument.
@@ -45,7 +45,7 @@ or on paper.
   <img src="docs/screenshots/phone-pinyin.png" width="260" alt="A Chinese folk song on a phone, with the pinyin of each character between it and its chord">
 </p>
 
-![The Harmony panel: a Roman numeral beside each chord, and each section's progression](docs/screenshots/harmony.png)
+![The Harmony tab beside the song: the key's neck and each section's progression in numerals](docs/screenshots/harmony.png)
 
 ![The Songbooks tab: a set list, each song with the key it is played in](docs/screenshots/songbooks.png)
 

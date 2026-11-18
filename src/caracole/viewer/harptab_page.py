@@ -16,7 +16,7 @@ in the page's style, and its page says so; never an error.
 
 The header names the harp the page starts on and why (harpfit.py ``choose``: with the record, as the tab says,
 harptabs.com's key, for the song's key, or the usual C harp), and the position it plays the song in when the song's
-sheet has a key. The bar at the foot is the viewer's (Aa, ▶ scrolling by itself with its pill), with the harp a
+sheet has a key. The bar at the foot is the viewer's (Aa, Scroll scrolling by itself with its pill), with the harp a
 semitone down or up in place of the transposition (the holes stay: the sound and the notes' names change) and ♪,
 Notes, each hole's note on that harp in its place. The song's title and its artist's name follow the sheet viewer's
 Chinese characters where its chord sheet is Chinese (page.py ``names_table``: a ``song-names`` block), read from
@@ -81,6 +81,7 @@ from caracole.viewer.page import (
     HERE,
     LIBRARY_PAGE,
     _HANDLE,
+    _SCROLL_ICON,
     _VERSION_LIST,
     _VERSIONS,
     _assets,
@@ -501,34 +502,36 @@ def _footer(tab_file: str, url: str | None, *, placed: bool, change: bool = Fals
     )
 
 
-# The bar, hidden until the script runs, in the order a keyboard reaches it: the overlay shown or hidden (from 1200 px,
-# as the viewer's: page.py's _CONTROLS); the harp a semitone down or up, its name
-# and why it was chosen between them; the neck, the overlay's sheet opened or closed (below 1200 px, as the viewer's);
-# ♪, each hole's note on it in its place (pressed while it shows); Aa, the text size in a box beside it; ▶, scrolling
-# by itself. A tab shown as written has the overlay's buttons, Aa and ▶ alone.
+# The bar, hidden until the script runs, in the order a keyboard reaches it: the harp a semitone down or up, its name
+# and why it was chosen between them; right after it, the overlay shown or hidden (from 1200 px, as the viewer's:
+# page.py's _CONTROLS), or in its place the neck, the overlay's sheet opened or closed (below 1200 px, as the
+# viewer's); ♪, each hole's note on it in its place (pressed while it shows); Aa, the text size in a box beside it;
+# the viewer's arrow down to a line (page.py's _SCROLL_ICON), scrolling by itself, pressed while it is on. Each after
+# the harp has its word under its icon, as the viewer's: Shapes, Notes, Text, Scroll. A tab shown as written has the
+# overlay's buttons, Aa and Scroll alone.
 _BAR = """<div class="bar" id="bar" data-controls hidden role="region" aria-label="Controls">
 <div class="bar-in">
-<button type="button" class="tool necks-toggle" id="necks-toggle" hidden aria-label="Chord necks" aria-pressed="true" aria-controls="necks"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M3 2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm0 1.5a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5V4a.5.5 0 0 0-.5-.5zM3.5 4.5h3v7h-3z"/></svg></button>
 <span class="keys" id="harps" role="group" aria-label="Harp">
 <button type="button" class="step" id="h-down" aria-label="Harp down a semitone">−</button>
 <output class="now" id="harp-now" for="h-down h-up"><span class="k" id="harp-name"></span><span class="d" id="harp-why"></span></output>
 <button type="button" class="step" id="h-up" aria-label="Harp up a semitone">+</button>
 </span>
-<button type="button" class="tool necks-open" id="necks-open" hidden aria-label="Necks and harps" aria-haspopup="dialog" aria-controls="necks" aria-expanded="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M2.75 4.25h10.5a1.5 1.5 0 0 1 1.5 1.5v4.5a1.5 1.5 0 0 1-1.5 1.5H2.75a1.5 1.5 0 0 1-1.5-1.5v-4.5a1.5 1.5 0 0 1 1.5-1.5zM2.5 5.5v5h11v-5zm2.25 0h1v5h-1zM8 5.5h1v5H8zm3.25 0h1v5h-1zM6.875 7a1 1 0 1 0 0 2a1 1 0 1 0 0-2z"/></svg></button>
-<button type="button" class="tool notes" id="notes" aria-pressed="false" aria-label="Note names">♪</button>
+<button type="button" class="tool necks-toggle" id="necks-toggle" hidden title="Chord necks" aria-pressed="true" aria-controls="necks"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M3 2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm0 1.5a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5V4a.5.5 0 0 0-.5-.5zM3.5 4.5h3v7h-3z"/></svg><span class="bw">Shapes</span></button>
+<button type="button" class="tool necks-open" id="necks-open" hidden title="Necks and harps" aria-haspopup="dialog" aria-controls="necks" aria-expanded="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M2.75 4.25h10.5a1.5 1.5 0 0 1 1.5 1.5v4.5a1.5 1.5 0 0 1-1.5 1.5H2.75a1.5 1.5 0 0 1-1.5-1.5v-4.5a1.5 1.5 0 0 1 1.5-1.5zM2.5 5.5v5h11v-5zm2.25 0h1v5h-1zM8 5.5h1v5H8zm3.25 0h1v5h-1zM6.875 7a1 1 0 1 0 0 2a1 1 0 1 0 0-2z"/></svg><span class="bw">Shapes</span></button>
+<button type="button" class="tool notes" id="notes" aria-pressed="false"><span class="ic" aria-hidden="true">♪</span><span class="bw">Notes</span></button>
 <span class="size-box" id="size-box">
-<button type="button" class="tool" id="size" aria-label="Text size" aria-expanded="false" aria-controls="sizes">Aa</button>
+<button type="button" class="tool" id="size" aria-label="Text size" aria-expanded="false" aria-controls="sizes"><span class="ic" aria-hidden="true">Aa</span><span class="bw">Text</span></button>
 <span class="sizes" id="sizes" role="group" aria-label="Text size" hidden>
 <button type="button" id="smaller" aria-label="Smaller text" aria-disabled="false">A−</button>
 <output id="fs-now">18 px</output>
 <button type="button" id="bigger" aria-label="Bigger text" aria-disabled="false">A+</button>
 </span>
 </span>
-<button type="button" class="tool play" id="scroll" aria-label="Auto-scroll">""" + _PLAY_ICON + """</button>
+<button type="button" class="tool play" id="scroll" aria-label="Auto-scroll" aria-pressed="false"><span class="disc">""" + _SCROLL_ICON + """</span><span class="bw">Scroll</span></button>
 </div>
 </div>
 """
-_BAR_RAW = (_BAR.replace(_BAR[_BAR.index('<span class="keys"'):_BAR.index('<button type="button" class="tool necks-open"')],
+_BAR_RAW = (_BAR.replace(_BAR[_BAR.index('<span class="keys"'):_BAR.index('<button type="button" class="tool necks-toggle"')],
                          "", 1)
             .replace(_BAR[_BAR.index('<button type="button" class="tool notes"'):_BAR.index('<span class="size-box"')], "", 1))
 

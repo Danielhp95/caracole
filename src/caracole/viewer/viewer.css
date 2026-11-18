@@ -302,26 +302,37 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
   stroke-linejoin: round; }
 .tip-hear { border-color: var(--accent); color: var(--accent); }
 .tip-hear svg { fill: currentColor; stroke: none; }
-/* The Harmony panel (viewer.js), in the settings' place: each section's progression, a button to its section,
-   ▶ beside it, and its songs, and those of each named progression it contains; the numeral playing marked. A
-   section's heading names its progression. */
+/* The Harmony tab (viewer.js), the overlay's third: the key the numerals are read in, the key's neck, the tempo, and
+   each section's progression, a button to its section, ▶ beside it, and its songs, and those of each named progression
+   it contains; the numeral playing marked. A section's heading names its progression. Its sizes are --nk times the
+   page's, as the rest of the rail's are (1 in the phone's sheet): its text in em, its targets and room in
+   calc(… * var(--nk)), the shared controls' (.hint, .lab, .row, .stepper, .round, .link) scoped to the pane. */
 .progs { margin: 0; padding: 0; list-style: none; }
-.prog { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0 8px; padding: 6px 0;
-  border-top: 1px solid var(--border); }
-.prog-go { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 44px; padding: 4px 0;
-  border: 0; border-radius: 8px; background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; }
-.prog-sec { color: var(--muted); font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-.prog-nums { font-size: 1.05rem; font-weight: 700; overflow-wrap: anywhere; }
+.prog { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0 calc(8px * var(--nk));
+  padding: calc(6px * var(--nk)) 0; border-top: 1px solid var(--border); }
+.prog-go { display: flex; flex-direction: column; align-items: flex-start; gap: calc(2px * var(--nk));
+  min-height: calc(44px * var(--nk)); padding: calc(4px * var(--nk)) 0; border: 0; border-radius: 8px; background: none;
+  color: inherit; font: inherit; text-align: start; cursor: pointer; }
+.prog-sec { color: var(--muted); font-size: .72em; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.prog-nums { font-size: 1.05em; font-weight: 700; overflow-wrap: anywhere; }
 .pn { border-radius: 4px; }
 .pn.on { background: var(--mark); box-shadow: 0 0 0 2px var(--mark); }
 .prog-x { margin-left: .45em; color: var(--muted); font-weight: 600; }
 .prog-var { white-space: nowrap; }
-.prog-about { color: var(--muted); font-size: .82rem; }
+.prog-about { color: var(--muted); font-size: .82em; }
 .prog-about:empty { display: none; }
-.prog-songs, .prog-named { grid-column: 1 / -1; justify-self: start; font-size: .85rem; }
-.hint-inline { color: var(--muted); font-size: .82rem; }
-#harmony-key { margin-bottom: 8px; }
-#harmony-neck:empty { display: none; }
+.prog-songs, .prog-named { grid-column: 1 / -1; justify-self: start; }
+.prog > .link { font-size: .85em; }  /* over .link's font: inherit: a line under the numerals, smaller than they are */
+.hint-inline { color: var(--muted); font-size: .82em; }
+#harmony-key { margin: calc(10px * var(--nk)) 0 0; }
+.necks .harmony .hint { font-size: .82em; }
+.necks .harmony .lab { min-width: calc(92px * var(--nk)); font-size: .85em; }
+.necks .harmony .row { gap: calc(8px * var(--nk)) calc(10px * var(--nk)); padding: calc(10px * var(--nk)) 0; }
+.necks .harmony .stepper { gap: calc(6px * var(--nk)); }
+.necks .harmony .stepper button { min-width: calc(44px * var(--nk)); min-height: calc(44px * var(--nk));
+  padding: 0 calc(12px * var(--nk)); font-size: .95em; }
+.necks .harmony .round { min-width: calc(44px * var(--nk)); min-height: calc(44px * var(--nk)); font-size: 1.3em; }
+.necks .harmony .link { min-height: calc(44px * var(--nk)); padding: 0 calc(4px * var(--nk)); }
 .lbl .prog-of { font-weight: 600; letter-spacing: 0; text-transform: none; }
 /* With the script, a chord may reach over the words after it (.tight); the script widens
    a column only where two chords would touch. It sits in its column's row, a line in its size
@@ -402,11 +413,14 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
   border: 1px solid var(--border); background: var(--surface); color: var(--text); font-weight: 600;
   text-decoration: none; }
 
-/* The bar at the foot: the key between − and +, the guitar, Aa, ▶ and ⋯, on a background of its own, so it
-   never sits over the words. It slides away as you scroll down (.away) and back as you scroll up;
-   while the song scrolls by itself it is out of the way, back when it pauses, under the pill. */
-.bar { position: fixed; z-index: 8; left: 0; right: 0; bottom: 0;
-  padding: 4px max(8px, env(safe-area-inset-right)) calc(4px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+/* The bar at the foot: the key between − and +, the necks' button, Aa, Scroll's arrow and ⋯, each of those after the
+   key with its word under it, on a background of its own, so it never sits over the words; 63 px tall with its
+   padding and its line (--foot). It slides away as you scroll down (.away) and back as you scroll up;
+   while the song scrolls by itself it is out of the way, back when it pauses, under the pill. From 1200 px it is a
+   toolbar under the song's title instead (below, after the room it leaves at the foot). */
+.bar { --bar-l: max(8px, env(safe-area-inset-left)); --bar-r: max(8px, env(safe-area-inset-right));
+  position: fixed; z-index: 8; left: 0; right: 0; bottom: 0;
+  padding: 4px var(--bar-r) calc(4px + env(safe-area-inset-bottom)) var(--bar-l);
   border-top: 1px solid var(--border); background: var(--surface); color: var(--text);
   box-shadow: 0 -2px 12px rgb(0 0 0 / .06); transition: transform .2s ease; }
 .bar.away { transform: translateY(calc(100% + 14px)); }  /* its shadow out of sight too */
@@ -416,51 +430,85 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
   border-radius: 12px; background: none; color: inherit; font: inherit; line-height: 1; cursor: pointer;
   -webkit-tap-highlight-color: transparent; }
 .bar svg { width: 16px; height: 16px; fill: currentColor; }
-/* − Em +: the song a semitone down or up, its key in short between them; the rest sit at the end. */
-.keys { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; max-width: 240px;
+/* − Em +: the song a semitone down or up, its key in short between them, a button that opens the key list; the rest
+   sit at the end. */
+.keys { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; height: 54px; max-width: 240px;
   border-radius: 12px; background: var(--raised); }
-.keys .step { font-size: 1.35rem; }
+.keys .step { height: 54px; font-size: 1.35rem; }
 .now { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; justify-content: center; padding: 0 2px;
   text-align: center; line-height: 1.2; font-variant-numeric: tabular-nums; }
 .now .k, .now .d { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .now .k { font-weight: 700; }
 .now .d { color: var(--muted); font-size: .72rem; }
 .now .d:empty { display: none; }
+/* What changed the chords you see, when the chords shown moved from the sheet as written (a move, another capo): in
+   the accent (viewer.js keyShort). */
+.now .d.changed { color: var(--accent); font-weight: 700; }
 /* Too narrow for the capo and the transposition on one line: one over the other, closer together, so the
    three lines keep within the buttons' height. */
 .now .d.stack { line-height: 1.05; }
 .now .d.stack > span { display: block; overflow: hidden; text-overflow: ellipsis; }
+/* The bar's key is a button (the key list's), off .bar button's 44 px box: the room between − and +, as tall as they
+   are; open while the list is, tinted and ringed in the accent as the neck's sheet. A sheet with no key has none. */
+.bar button.now { display: flex; flex: 1 1 auto; align-items: stretch; width: auto; height: 54px; min-width: 0;
+  padding: 0 2px; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.bar button.now[aria-expanded="true"] { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.bar button.now:disabled { cursor: default; }
 .tool { font-weight: 650; }
-.bar .play { border-radius: 50%; background: var(--accent); color: var(--on-accent); }
+/* A tool after the key: its icon over its word, as tall as the key. Every icon has a slot as tall as Scroll's disc,
+   itself in the middle of it, so the icons share a line and the words another. A tool pressed or open says its word
+   in the accent too. */
+.bar .tool { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  height: 54px; }
+.bar .tool > :first-child { flex: none; height: 34px; }
+.bar .tool > .ic { display: grid; place-items: center; }  /* Aa, ♪: a glyph */
+.bw { font-size: .66rem; font-weight: 600; line-height: 1; white-space: nowrap; color: var(--muted); }
+.bar .tool:is([aria-pressed="true"], [aria-expanded="true"]) .bw { color: var(--accent); }
+/* Scroll: an arrow down to a line (page.py's _SCROLL_ICON, a stroke: no fill) in a disc of the accent, ringed in it
+   while it is on, counting down, scrolling or paused (viewer.js: aria-pressed). */
+.bar .play .disc { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%;
+  background: var(--accent); color: var(--on-accent); }
+.bar .play .disc svg { width: 18px; height: 18px; fill: none; }
+.bar .play[aria-pressed="true"] .disc { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent); }
 /* Aa: the text size in a small box over the bar, beside the song (nothing behind it is dimmed). */
-.size-box { position: relative; flex: none; margin-left: auto; }  /* Aa, ▶ and ⋯ at the end, keys or none */
-/* The guitar: the strip of chord shapes, shown while it is pressed: tinted and ringed in the accent (the
-   ring 3:1 at least against the bar, light and dark). The first of the tools at the end; its icon a little
-   larger than the others', since on the slant it fills less of its box. */
-.bar .shapes { margin-left: auto; }
-.bar .shapes:not([hidden]) + .size-box { margin-left: 0; }
-.bar .shapes svg { width: 20px; height: 20px; }
-.bar .shapes[aria-pressed="true"], .bar .necks-toggle[aria-pressed="true"],
-.bar .necks-open[aria-expanded="true"] { background: var(--accent-soft); color: var(--accent);
-  box-shadow: inset 0 0 0 1.5px var(--accent); }
-/* The rail of necks shown or hidden: from 1200 px, where there is a rail (viewer.js), first in the bar, on the
-   rail's side; pressed while it shows, as the guitar is. */
-.bar .necks-toggle svg { width: 18px; height: 18px; }
-/* The neck: the overlay's sheet up or down, below 1200 px, where there is no rail (viewer.js, harptab.js): the first of
-   the tools at the end, right after the key; tinted while the sheet is open. On a phone (below 440 px, the owner's
-   choice) it takes the guitar's place, so the key keeps its room, and the strip of shapes is the settings' All chord
-   shapes; wider, the guitar beside it, with room for the longest key ("Ab mixolydian") a little smaller. */
-.bar .necks-open { margin-left: auto; }
-.bar .necks-open:not([hidden]) ~ .shapes, .bar .necks-open:not([hidden]) ~ .size-box { margin-left: 0; }
-.bar .necks-open svg { width: 18px; height: 18px; }
-@media (max-width: 439px) { .bar .necks-open:not([hidden]) ~ .shapes { display: none; } }
+.size-box { position: relative; flex: none; margin-left: auto; }  /* Aa, Scroll and ⋯ at the end, keys or none */
+/* The necks' button, the first of the tools at the end, right after the key (viewer.js, harptab.js): from 1200 px,
+   where there is a rail, the rail of necks shown or hidden, pressed while it shows; below it, where there is none,
+   in its place the neck, the overlay's sheet up or down, tinted while the sheet is open. Pressed or open, tinted and
+   ringed in the accent (the ring 3:1 at least against the bar, light and dark). The strip of chord shapes is the
+   settings' All chord shapes alone. */
+.bar .necks-toggle, .bar .necks-open { margin-left: auto; }
+.bar .necks-toggle:not([hidden]) ~ .necks-open, .bar .necks-toggle:not([hidden]) ~ .size-box,
+.bar .necks-open:not([hidden]) ~ .size-box { margin-left: 0; }
+.bar .necks-toggle svg, .bar .necks-open svg { width: 18px; height: 18px; }
+.bar .necks-toggle[aria-pressed="true"], .bar .necks-open[aria-expanded="true"] { background: var(--accent-soft);
+  color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); }
 /* A phone: the tools side by side with no gap (each 44 px, its icon in the middle) and the bar closer to
    the screen's edges, so the key between − and + keeps its room: "Ab mixolydian" whole at 390 px. */
 @media (max-width: 419px) {
-  .bar { padding-left: max(4px, env(safe-area-inset-left)); padding-right: max(4px, env(safe-area-inset-right)); }
+  .bar { --bar-l: max(4px, env(safe-area-inset-left)); --bar-r: max(4px, env(safe-area-inset-right)); }
   .bar-in { gap: 0; }
   .keys { margin-right: 2px; }
-  .now { padding: 0; }
+  .now, .bar button.now { padding: 0; }
+}
+/* A finger's 48 px: the bar's and the pill's buttons (a minimum: the tools stay 54 px tall and --foot 63 px). Under
+   380 px a phone keeps its 44 px widths, 48 tall: six of 48 px would leave a 320 px phone's key 24 px. */
+@media (pointer: coarse) {
+  .bar .tool, .keys .step, .sizes button, .pill button { min-width: 48px; min-height: 48px; }
+  .pill .ring { width: 48px; height: 48px; }
+}
+@media (pointer: coarse) and (max-width: 379.98px) {
+  .bar .tool, .keys .step, .sizes button, .pill button { min-width: 44px; }
+  .pill .ring { width: 44px; }
+}
+/* Where the bar spans the screen (a phone's, under 744 px), its corner buttons take taps up to the screen's edges:
+   − at the left, the last tool (More, or the harmonica page's Scroll) at the right, down to the screen's foot. */
+@media (pointer: coarse) and (max-width: 743.98px) {
+  #t-down, #h-down, #more, .bar-in > #scroll:last-child { position: relative; }
+  #t-down::after, #h-down::after { content: ""; position: absolute; top: 0; right: 0;
+    bottom: calc(-4px - env(safe-area-inset-bottom)); left: calc(-1 * var(--bar-l)); }
+  #more::after, .bar-in > #scroll:last-child::after { content: ""; position: absolute; top: 0; left: 0;
+    bottom: calc(-4px - env(safe-area-inset-bottom)); right: calc(-1 * var(--bar-r)); }
 }
 .bar #size[aria-expanded="true"] { background: var(--raised); }
 .sizes { position: absolute; z-index: 1; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%);
@@ -473,15 +521,15 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
    and in the pill alike. */
 @media (hover: hover) {
   .bar button:hover, .pill button:hover { background: var(--raised); }
-  .keys .step:hover { background: var(--border); }
-  .bar .play:hover, .pill .go:hover { background: var(--accent); }
+  .keys .step:hover, .bar button.now:not(:disabled):not([aria-expanded="true"]):hover { background: var(--border); }
+  .pill .go:hover { background: var(--accent); }
   .sizes button[aria-disabled="true"]:hover { background: none; }
   .vnow:hover, a.ver-main:hover { background: var(--raised); }  /* a sheet's versions */
 }
 /* Scrolling by itself: the pill that steers it, above the bar's place (--foot) whether the bar is there
-   or not, and above a sheet docked on the bar. Its first button counts down (a ring that empties, and
-   the seconds), then shows ❚❚, or ▶ when paused; every state is the same size and in the same place,
-   so nothing moves under a thumb. */
+   or not, and above a sheet docked on the bar (from 1200 px under the toolbar, below). Its first button counts
+   down (a ring that empties, and the seconds), then shows ❚❚, or ▶ when paused; every state is the same size and in
+   the same place, so nothing moves under a thumb. */
 .pill { position: fixed; z-index: 8; right: max(16px, env(safe-area-inset-right));
   bottom: calc(var(--foot) + 12px); display: flex; align-items: center; gap: 2px; padding: 3px;
   border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text);
@@ -529,8 +577,9 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
    (--dock: its height, from the script), so the song's end comes up above it: the versions list too, a sheet
    from the bottom. From 900 px wide, the settings are a rail beside the song, and the card a popover by its
    chord and the versions list one under its line (below). */
-:root { --foot: calc(53px + env(safe-area-inset-bottom)); --rail: 360px; --pill: 0px; }
+:root { --foot: calc(63px + env(safe-area-inset-bottom)); --rail: 360px; --pill: 0px; }
 html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
+@media (pointer: coarse) { html[data-pill] { --pill: 68px; } }  /* a finger's 48 px buttons: 56 px and the gap */
 .sheet-ui { position: fixed; z-index: 7; left: 0; right: 0; bottom: var(--foot); max-width: 620px; max-height: 45vh;
   max-height: 45dvh; margin: 0 auto; padding: 6px 16px 14px; overflow-y: auto; overscroll-behavior: contain;
   border: 1px solid var(--border); border-bottom: 0; border-radius: 18px 18px 0 0; background: var(--surface);
@@ -541,6 +590,48 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
   html[data-dock] .page { padding-bottom: calc(var(--dock) + var(--foot) + 19px + var(--pill)); }
   html[data-dock] .pill { bottom: calc(var(--dock) + var(--foot) + 12px); }
   html[data-dock="necks-full"] .pill { bottom: calc(var(--foot) + 12px); }  /* over the foot of the whole-screen sheet */
+}
+/* From 1200 px wide the bar is a toolbar under the song's title: layers.js's toolbar() puts it right after the song's
+   header.head, in the page's flow (a songbook's shown song's own), and back where the page wrote it below 1200 px. A
+   row of pills in the phone's order, none pushed to the end: the key between − and +, its key over its word, then
+   each tool its icon and its word side by side; 56 px tall with its padding (--toolbar). Once the title scrolls away
+   it sticks to the window's top, on the page's background, over the song and under every layer and popover; the sheet
+   keeps room for it, and what is brought into view comes up below it (scroll-padding-top). It never slides away; while
+   autoscroll counts down and runs it is asleep (data-asleep, viewer.js and harptab.js): out of sight with its room
+   kept, so the song doesn't jump, the pill under it (--toolbar-bottom: its bottom edge in the window, layers.js), Aa's
+   box under Aa. No bar at the foot: --foot is the safe area alone. The full-screen handle stays at the window's foot,
+   as at every width, and full screen keeps no room for the toolbar it hides. The key's pill keeps its floor (− and +
+   at their 44 px, the key between them at three quarters of its longest, "Ab mixolydian"); where a rail on either
+   side leaves the row no room for every tool's word beside it, the tools are their icons alone, each still named by
+   its word, kept for a screen reader (the container query on .bar-in). */
+@media screen and (min-width: 1200px) {
+  :root { --foot: env(safe-area-inset-bottom); --toolbar: 56px; }
+  html:not([data-full]) { scroll-padding-top: calc(var(--toolbar) + 8px); }
+  .bar { position: sticky; z-index: 6; top: 0; left: auto; right: auto; bottom: auto; margin-top: 10px; padding: 6px 0;
+    border: 0; background: var(--bg); box-shadow: none; transition: none; }
+  .bar.away { transform: none; }
+  .bar[data-asleep] { visibility: hidden; }
+  .bar-in { justify-content: flex-start; gap: 8px; max-width: none; margin: 0; container: toolbar / inline-size; }
+  .keys { flex: 0 1 220px; height: 44px; min-width: 172px; max-width: 220px; border-radius: 22px;
+    background: var(--surface); box-shadow: inset 0 0 0 1px var(--border); }
+  .keys .step { height: 44px; border-radius: 22px; }
+  .bar button.now { height: 44px; border-radius: 10px; }
+  .bar .tool { flex-direction: row; gap: 7px; width: auto; height: 44px; padding: 0 15px 0 12px; border-radius: 22px;
+    background: var(--surface); box-shadow: inset 0 0 0 1px var(--border); }
+  .bar .tool > :first-child { height: auto; }
+  .bar .necks-toggle, .bar .necks-open, .size-box { margin-left: 0; }
+  .bw { font-size: .84rem; color: var(--text); }
+  .bar .play .disc { width: 26px; height: 26px; }
+  .bar .play .disc svg { width: 15px; height: 15px; }
+  .bar .play[aria-pressed="true"] .disc { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--accent); }
+  .sizes { top: calc(100% + 10px); bottom: auto; }
+  .pill { top: calc(var(--toolbar-bottom, 0px) + 12px); bottom: auto; }
+  @container toolbar (max-width: 37.5rem) {
+    .bar .tool { justify-content: center; min-width: 44px; padding: 0 13px; }
+    .bar .tool .bw { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
+      clip-path: inset(50%); white-space: nowrap; }
+    .bar .tool:is([aria-pressed="true"], [aria-expanded="true"]) { color: var(--accent); }  /* as its word would say */
+  }
 }
 .ui-head { display: flex; align-items: center; gap: 8px; }
 /* Room for two lines, as tall as the close button: a heading that wraps at one capo and not at
@@ -579,8 +670,16 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
   border-radius: 9px;
   background: none; color: var(--text); font-size: 1.15rem; line-height: 1; }
 #panel .stepper button:focus-visible { outline-offset: -3px; }
-#panel .stepper output { flex: 1 1 auto; display: grid; place-items: center; min-width: 0;
-  border-inline: 1px solid var(--border); font-weight: 700; }
+#panel .stepper output { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center; min-width: 0;
+  padding: 0 2px; border-inline: 1px solid var(--border); text-align: center; line-height: 1.2; font-weight: 700; }
+/* Transpose's value as the bar's key says it: the key, and under it what changed ("capo 2 · +1", "key"). */
+#panel .stepper output .k, #panel .stepper output .d { display: block; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+/* The word wraps where one line has no room ("capo 2 ·" over "+1" on a 360 px phone), close enough that the three
+   lines keep within the stepper's height; never clipped (its words are short: none is cut). */
+#panel .stepper output .d { overflow: visible; color: var(--muted); font-size: .72rem; font-weight: 400;
+  line-height: 1.05; white-space: normal; }
+#panel .stepper output .d:empty { display: none; }
 /* The easier capos and an instrument's easy keys, under them: a small label, then the pills. */
 .opts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: -2px 0 12px; }
 .opts-lab { color: var(--muted); font-size: .8rem; font-weight: 600; }
@@ -595,6 +694,18 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
 #panel .chip small { display: inline; font-size: .74rem; font-weight: 500; color: var(--muted); opacity: 1; }
 #panel .chip.orig { padding: 0 11px; border: 2px solid var(--orig-edge); background: var(--orig-bg); }
 #panel .chip.orig[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+/* The key list (#key-list): the twelve keys four a row, as written first across its row, in the song's own mode's
+   look (.chip.orig's edge and fill); the key played in the accent's edge. A key's name wraps at its space where four
+   don't fit a row ("Ab" over "mixolydian"), a little smaller where even that is too long (viewer.js fitKeys). Each
+   44 px tall, a finger's 48 on a touch screen. */
+.keys12 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 4px 0 2px; }
+.keys12 > button { min-width: 0; height: 44px; padding: 0 2px; border: 1px solid var(--border); border-radius: 10px;
+  background: none; color: var(--text); font: inherit; font-size: .9rem; font-weight: 600; line-height: 1.1;
+  cursor: pointer; }
+.keys12 > .key-as { grid-column: 1 / -1; border: 2px solid var(--orig-edge); background: var(--orig-bg); }
+.keys12 > button[aria-pressed="true"] { border: 2px solid var(--accent); }
+@media (hover: hover) { .keys12 > button:not([aria-pressed="true"]):hover { background: var(--raised); } }
+@media (pointer: coarse) { .keys12 > button { height: 48px; } }
 .modes { margin-bottom: 12px; }
 .modeline { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 0 0 8px; }
 .modeline .lab { min-width: 0; font-size: .84rem; }
@@ -892,7 +1003,6 @@ a.ver-main .ver-name { color: var(--accent); }
     border-radius: 0; box-shadow: -2px 0 14px rgb(0 0 0 / .06); }
   #panel { --pad: 20px; }
   html[data-panel] body { padding-right: var(--rail); }
-  html[data-panel] .bar { right: var(--rail); }
   html[data-panel] .pill { right: calc(var(--rail) + 16px); }
   .sheet-ui.card { position: absolute; top: var(--pop-top, 0px); right: auto; bottom: auto; left: var(--pop-left, 0px);
     width: 340px; height: auto; max-width: none; max-height: none; margin: 0; padding-bottom: 14px; overflow: visible;
@@ -945,7 +1055,7 @@ a.ver-main .ver-name { color: var(--accent); }
 .nk-dot.few.chosen, .nk-open.few.chosen { stroke-width: 1.2; }
 
 /* From 1200 px wide: the rail of necks on the left (viewer.js shows it while you keep it shown, and says so in
-   data-necks), which the song and the bar move over for, as they do for the settings' rail on the right. It
+   data-necks), which the song and its toolbar move over for, as they do for the settings' rail on the right. It
    scrolls on its own, and a wheel or a finger at its end leaves the song where it is. Everything in it is
    --nk times the page's sizes (the owner's 15 % more than the first 300 px): the rail, its padding, its text,
    the legends' buttons and swatches and the key's switch; the necks, drawn at its width, grow with it. */
@@ -956,14 +1066,13 @@ a.ver-main .ver-name { color: var(--accent); }
     border-right: 1px solid var(--border); background: var(--surface); font-size: calc(1rem * var(--nk));
     scrollbar-width: thin; }
   html[data-necks] body { padding-left: var(--necks); }
-  html[data-necks] .bar { left: var(--necks); }
 }
-/* Its head, kept at its top as it scrolls: its tabs, Guitar and Harmonica (overlay.js; or its one tab's name), and
-   Hide (the bar's button brings it back), far enough below the rail's top for the keyboard's ring round Hide to show
-   whole. */
+/* Its head, kept at its top as it scrolls: its tabs, Guitar, Harmonica and Harmony (overlay.js; or its one tab's
+   name), and Hide (the bar's button brings it back), far enough below the rail's top for the keyboard's ring round
+   Hide to show whole. */
 .nk-head { position: sticky; z-index: 2; top: 0; margin: 0 calc(-16px * var(--nk));
   padding: calc(6px * var(--nk)) calc(8px * var(--nk)) 0 calc(16px * var(--nk)); background: var(--surface); }
-.nk-row { display: flex; align-items: center; gap: 8px; }
+.nk-row { display: flex; align-items: center; gap: 4px; }
 .nk-title { margin: 0; color: var(--muted); font-size: .72em; font-weight: 700; letter-spacing: .08em;
   text-transform: uppercase; }
 .nk-hide { flex: none; display: grid; place-items: center; width: calc(44px * var(--nk)); height: calc(44px * var(--nk));
@@ -1006,10 +1115,11 @@ a.ver-main .ver-name { color: var(--accent); }
 .sw.p3 { background: var(--p4); }
 .sw.tabs { box-shadow: 0 0 0 1.5px var(--surface), 0 0 0 2.5px var(--text); }  /* ringed, as on the neck */
 
-/* The overlay's tabs (overlay.js): a segmented control in the rail's head, the tab shown raised. */
-.ov-tabs { flex: 0 1 auto; min-width: 0; }
+/* The overlay's tabs (overlay.js): a segmented control in the rail's head, the tab shown raised; three of them
+   (Harmony too) fit beside Hide at 1200 px, its scroll bar beside them, the longest neck's name ("Baritone") too. */
+.ov-tabs { flex: 0 1 auto; min-width: 0; gap: 1px; padding: 2px; }
 .ov-tabs > button { flex: none; min-width: calc(44px * var(--nk)); min-height: calc(38px * var(--nk));
-  padding: 0 calc(12px * var(--nk)); font-size: .8em; }
+  padding: 0 calc(5px * var(--nk)); font-size: .8em; }
 /* The slim bar: once the circle has scrolled out of the rail, it slides in under the head, naming the harp, with
    Change harp, which goes back up to the circle. Out of the way, it is clipped, and inert. */
 .ov-clip { position: absolute; top: 100%; left: 0; right: 0; overflow: hidden; padding-bottom: 8px;
@@ -1045,7 +1155,11 @@ a.ver-main .ver-name { color: var(--accent); }
   .necks[data-sheet] .ov-change, .necks[data-sheet] .ov-tabs > button { min-height: 44px; }
   .necks[data-sheet] .hw { grid-template-columns: min(172px, 54%) minmax(0, 1fr); }
 }
-@media screen and (min-width: 900px) and (max-width: 1199.98px) { html[data-panel] .necks[data-sheet] { right: var(--rail); } }
+/* Up to 1199 px the bar and the necks' sheet at the foot leave the settings' rail its room; from 1200 px the bar is a
+   toolbar in the song's column, which the rail's room in body's padding moves over for. */
+@media screen and (min-width: 900px) and (max-width: 1199.98px) {
+  html[data-panel] .bar, html[data-panel] .necks[data-sheet] { right: var(--rail); }
+}
 @media screen and (max-width: 899.98px) { .necks[data-sheet]:not(.top) { visibility: hidden; } }
 @media (prefers-reduced-motion: no-preference) { .necks[data-sheet] { animation: sheet-up .22s ease-out; } }
 @keyframes sheet-up { from { transform: translateY(100%); } }

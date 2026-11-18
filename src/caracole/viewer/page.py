@@ -944,18 +944,24 @@ def _words(text: str) -> list[str]:
     return words
 
 
-# The bar at the foot of the page, the settings and the chord card the script fills in; hidden
-# until it runs. The bar, in the order a keyboard reaches it: the rail of necks shown or hidden (from 1200 px,
-# where there is a rail: pressed while it shows, as the settings' Chord necks row says; a sidebar, drawn as a
-# path); the song a semitone down or up, its key in short between them (for the eye; whole for a screen
-# reader); a neck, the overlay's sheet opened or closed (below 1200 px, where there is no rail: a dialog that is not
-# modal, Guitar and Harmonica, overlay.js; frets and a dot, drawn as a path); a guitar, the strip of the song's chord
-# shapes shown or hidden (a toggle, pressed while it shows, as the settings' All chord shapes switch is, the two
-# always in step; the body with its waist and sound hole, the neck and the headstock, drawn as paths);
-# Aa, the text size in a box beside it; ▶, scrolling by itself; ⋯, the rest of the settings. The pill steers the scroll once it starts,
-# above the bar's place, the bar out of the way while the song moves: its first button counts down (a
-# ring and the seconds), pauses (❚❚) and resumes (▶); the status line says so to a screen reader. The settings and the card are dialogs that are not
-# modal: nothing dims the song or takes it out of reach while they are open (viewer.js).
+# The bar at the foot of the page, the settings, the key list and the chord card the script fills in; hidden
+# until it runs. The bar, in the order a keyboard reaches it: the song a semitone down or up, its key in short
+# between them (for the eye; whole for a screen reader), a button that opens the key list (``_KEY_LIST``: the twelve
+# keys a tap away; disabled on a sheet with no key); right after it, the rail of necks shown or hidden (from
+# 1200 px, where there is a rail: pressed while it shows, as the rail's own Hide says; a sidebar, drawn as a path),
+# or in its place a neck, the overlay's sheet opened or closed (below 1200 px, where there is no rail: a dialog that
+# is not modal, Guitar and Harmonica, overlay.js; frets and a dot, drawn as a path); Aa, the text size in a box
+# beside it; an arrow down to a line in a disc (``_SCROLL_ICON``), scrolling by itself, pressed while it is on
+# (counting down, scrolling or paused: viewer.js); ⋯, the rest of the settings, where All chord shapes is the strip's
+# one switch. Each of those after the key has its word under its icon (``bw``: Shapes, Text, Scroll, More), which
+# its name holds (WCAG 2.5.3): the necks' two and ⋯ are named by their words alone, with what they do in their
+# titles; Aa and Scroll keep a name that holds their word (Text size, Auto-scroll).
+# The pill steers the scroll once it starts, above the bar's place, the bar out of the way while the song moves: its
+# first button counts down (a ring and the seconds), pauses (❚❚) and resumes (▶); the status line says so to a screen
+# reader, and the key's (``key-status``, beside it and outside the bar, which is hidden while it is away and in full
+# screen) says the key's whole line as − and + move it, the key being a button and no live region. The settings, the
+# key list and the card are dialogs that are not modal: nothing dims the song or takes it out of reach while they are
+# open (viewer.js).
 # The bar is marked data-controls, what full screen hides (html[data-full], viewer.css), with the header's facts and
 # the rail of necks; full screen's handle (``_HANDLE``, after the pill: a thin bar at the window's foot, "Show
 # controls") brings them back.
@@ -965,12 +971,13 @@ def _words(text: str) -> list[str]:
 # stepper, with a Reset by its label while its value differs; the easier capos and an instrument's easy keys; Mode,
 # what the mode played sounds like, and a pill a mode, the song's own marked; after a rule, the chord names (Chords,
 # + Numerals, Numerals), why there are no numerals for a song with no key, and a switch for each thing on or off (a
-# toggle button, pressed while it is on): Role colours, All chord shapes (as the bar's guitar), Chord necks (where the
-# rail shows), and on a sheet with Chinese its characters, Simplified or Traditional (a segmented control, each named
+# toggle button, pressed while it is on): Role colours, All chord shapes (the strip of the song's chord shapes, its
+# one switch), and on a sheet with Chinese its characters, Simplified or Traditional (a segmented control, each named
 # in its own characters too), then Pinyin; the instrument, a menu, and the strum's loudness, four speakers, on
 # one line, and the instrument's own rows (instruments.js) under it; after a rule, the places to go, a row each (›
-# opens something here, ↗ leaves the page): Hide controls (``_FULL_ROW``, full screen), Harmony, the song's Guitar Pro
-# files (``_GUITAR_ROW``) and Export PDF (``_EXPORT_ROW``, a sheet's alone); and after another, Reset all, quiet.
+# opens something here, ↗ leaves the page): Hide controls (``_FULL_ROW``, full screen), the song's Guitar Pro files
+# (``_GUITAR_ROW``) and Export PDF (``_EXPORT_ROW``, a sheet's alone); and after another, Reset all, quiet. Harmony is
+# no place here: it is the overlay's third tab, which viewer.js draws (``harmonyPane``).
 # Each kind of control has one look: a stepper for a number, a segmented control for one of a few, pills for one of
 # many, a switch for on or off, a row with › or ↗ for a place to go.
 #
@@ -984,14 +991,15 @@ def _words(text: str) -> list[str]:
 _UNDO = ('<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/>'
          '<path d="M3 3v5h5"/></svg>')  # ↺, a Reset's: an arc and its arrowhead
 _GO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>'  # ›, a place here
+# Scrolling by itself, the bar's (and the harmonica page's, harptab_page._BAR): an arrow down to a line, stroked.
+_SCROLL_ICON = ('<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v8.5M4.5 7 8 10.5 11.5 7M3.5 13.5h9" '
+                'fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>'
+                '</svg>')
 # Hide controls: full screen, the controls hidden for reading (viewer.js), the first of the places to go.
 _FULL_ROW = ('<div id="full-row"><button type="button" class="goto" id="full-open"><span class="goto-lab">Hide controls'
              '</span><span class="goto-v">full screen' + _GO + '</span></button></div>\n')
 # Full screen's handle at the window's foot, hidden until it is on: a tap on it brings the controls back.
 _HANDLE = '<button type="button" class="handle" id="handle" hidden aria-label="Show controls"></button>\n'
-_HARMONY_ROW = ('<div id="harmony-row" hidden><button type="button" class="goto" id="harmony-open" aria-haspopup="dialog" '
-                'aria-controls="harmony"><span class="goto-lab">Harmony</span><span class="goto-v">progressions, scales'
-                + _GO + '</span></button></div>\n')
 # Export PDF of this version, in words at its right: served, a link to the PDF itself, caracole serve's download
 # (viewer.js); from a file, a row that unfolds the command that makes it, with Copy.
 _EXPORT_ROW = ("""<div id="export-row"><a class="goto" id="export"><span class="goto-lab">Export PDF</span>"""
@@ -1002,26 +1010,37 @@ _EXPORT_ROW = ("""<div id="export-row"><a class="goto" id="export"><span class="
 """)
 
 
+# The key list, which the bar's key opens: the twelve keys in the song's mode, the key as written first (on an
+# instrument with no capo, the key the song sounds in), across its row, the one played pressed; a tap on one transposes
+# the song there (viewer.js drawKeyList, chooseKey). A dialog that is not modal, as the settings are: docked on the bar
+# on a phone, the right-hand rail in the settings' place from 900 px. The harmonica tab's page has none.
+_KEY_LIST = """<section class="sheet-ui panel keylist" id="key-list" hidden role="dialog" aria-labelledby="key-list-title">
+<header class="ui-head"><h2 id="key-list-title" tabindex="-1">Key</h2>
+<button type="button" class="x" data-close aria-label="Close">×</button></header>
+<div class="keys12" id="key-items" role="group" aria-labelledby="key-list-title"></div>
+</section>
+"""
+
+
 _CONTROLS = """<div class="bar" id="bar" data-controls hidden role="region" aria-label="Controls">
 <div class="bar-in">
-<button type="button" class="tool necks-toggle" id="necks-toggle" hidden aria-label="Chord necks" aria-pressed="true" aria-controls="necks"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M3 2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm0 1.5a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5V4a.5.5 0 0 0-.5-.5zM3.5 4.5h3v7h-3z"/></svg></button>
 <span class="keys" id="keys" role="group" aria-label="Transpose">
 <button type="button" class="step" id="t-down" aria-label="Down a semitone">−</button>
-<output class="now" id="key-now" for="t-down t-up"><span class="k" aria-hidden="true"></span><span class="d" aria-hidden="true"></span><span class="vh" id="key-full"></span></output>
+<button type="button" class="now" id="key-now" aria-haspopup="dialog" aria-controls="key-list" aria-expanded="false"><span class="k" aria-hidden="true"></span><span class="d" aria-hidden="true"></span><span class="vh" id="key-full"></span></button>
 <button type="button" class="step" id="t-up" aria-label="Up a semitone">+</button>
 </span>
-<button type="button" class="tool necks-open" id="necks-open" hidden aria-label="Necks and harps" aria-haspopup="dialog" aria-controls="necks" aria-expanded="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M2.75 4.25h10.5a1.5 1.5 0 0 1 1.5 1.5v4.5a1.5 1.5 0 0 1-1.5 1.5H2.75a1.5 1.5 0 0 1-1.5-1.5v-4.5a1.5 1.5 0 0 1 1.5-1.5zM2.5 5.5v5h11v-5zm2.25 0h1v5h-1zM8 5.5h1v5H8zm3.25 0h1v5h-1zM6.875 7a1 1 0 1 0 0 2a1 1 0 1 0 0-2z"/></svg></button>
-<button type="button" class="tool shapes" id="shapes" aria-label="Chord shapes" aria-pressed="false" aria-controls="strip"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.67 12.95A3.2 3.2 0 1 1 3.05 9.33A1.42 1.42 0 0 0 4.07 8.64A2.4 2.4 0 1 1 7.36 11.93A1.42 1.42 0 0 0 6.67 12.95ZM6.77 9.23A1.07 1.07 0 1 0 5.26 10.74A1.07 1.07 0 1 0 6.77 9.23Z"/><path d="M8.03 9.23L12.68 4.58L12.87 4.76L15.7 2.82L13.18 0.3L11.24 3.13L11.42 3.32L6.77 7.97Z"/></svg></button>
+<button type="button" class="tool necks-toggle" id="necks-toggle" hidden title="Chord necks" aria-pressed="true" aria-controls="necks"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M3 2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm0 1.5a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5V4a.5.5 0 0 0-.5-.5zM3.5 4.5h3v7h-3z"/></svg><span class="bw">Shapes</span></button>
+<button type="button" class="tool necks-open" id="necks-open" hidden title="Necks and harps" aria-haspopup="dialog" aria-controls="necks" aria-expanded="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M2.75 4.25h10.5a1.5 1.5 0 0 1 1.5 1.5v4.5a1.5 1.5 0 0 1-1.5 1.5H2.75a1.5 1.5 0 0 1-1.5-1.5v-4.5a1.5 1.5 0 0 1 1.5-1.5zM2.5 5.5v5h11v-5zm2.25 0h1v5h-1zM8 5.5h1v5H8zm3.25 0h1v5h-1zM6.875 7a1 1 0 1 0 0 2a1 1 0 1 0 0-2z"/></svg><span class="bw">Shapes</span></button>
 <span class="size-box" id="size-box">
-<button type="button" class="tool" id="size" aria-label="Text size" aria-expanded="false" aria-controls="sizes">Aa</button>
+<button type="button" class="tool" id="size" aria-label="Text size" aria-expanded="false" aria-controls="sizes"><span class="ic" aria-hidden="true">Aa</span><span class="bw">Text</span></button>
 <span class="sizes" id="sizes" role="group" aria-label="Text size" hidden>
 <button type="button" id="smaller" aria-label="Smaller text" aria-disabled="false">A−</button>
 <output id="fs-now">18 px</output>
 <button type="button" id="bigger" aria-label="Bigger text" aria-disabled="false">A+</button>
 </span>
 </span>
-<button type="button" class="tool play" id="scroll" aria-label="Auto-scroll"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 2.4v11.2c0 .6.7 1 1.2.6l8.8-5.6a.7.7 0 0 0 0-1.2L5.7 1.8c-.5-.4-1.2 0-1.2.6z"/></svg></button>
-<button type="button" class="tool" id="more" aria-label="Settings" aria-haspopup="dialog" aria-controls="panel" aria-expanded="false"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="2.5" cy="8" r="1.6"/><circle cx="8" cy="8" r="1.6"/><circle cx="13.5" cy="8" r="1.6"/></svg></button>
+<button type="button" class="tool play" id="scroll" aria-label="Auto-scroll" aria-pressed="false"><span class="disc">""" + _SCROLL_ICON + """</span><span class="bw">Scroll</span></button>
+<button type="button" class="tool" id="more" title="Settings" aria-haspopup="dialog" aria-controls="panel" aria-expanded="false"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="2.5" cy="8" r="1.6"/><circle cx="8" cy="8" r="1.6"/><circle cx="13.5" cy="8" r="1.6"/></svg><span class="bw">More</span></button>
 </div>
 </div>
 <div class="pill" id="pill" role="group" aria-label="Auto-scroll" hidden>
@@ -1032,6 +1051,7 @@ _CONTROLS = """<div class="bar" id="bar" data-controls hidden role="region" aria
 <button type="button" class="end" id="pill-end" aria-label="Stop scrolling">×</button>
 </div>
 """ + _HANDLE + """<p class="vh" id="scroll-status" role="status"></p>
+<p class="vh" id="key-status" role="status"></p>
 <section class="sheet-ui panel" id="panel" hidden role="dialog" aria-labelledby="panel-title" aria-describedby="panel-sum">
 <header class="ui-head"><div class="ui-title"><h2 id="panel-title" tabindex="-1">Settings</h2>
 <p class="sum" id="panel-sum"></p></div>
@@ -1040,7 +1060,7 @@ _CONTROLS = """<div class="bar" id="bar" data-controls hidden role="region" aria
 <div class="num" id="t-row"><div class="num-top"><span id="t-lab">Transpose</span>
 <button type="button" class="undo" id="reset-t" hidden aria-label="Reset transpose">""" + _UNDO + """Reset</button></div>
 <span class="stepper" role="group" aria-labelledby="t-lab"><button type="button" id="down" aria-label="Down a semitone">−</button>
-<output id="shift">0</output><button type="button" id="up" aria-label="Up a semitone">+</button></span></div>
+<output id="shift"><span class="k">0</span><span class="d"></span></output><button type="button" id="up" aria-label="Up a semitone">+</button></span></div>
 <div class="num" id="capo-row"><div class="num-top"><span id="capo-lab">Capo</span>
 <button type="button" class="undo" id="reset-capo" hidden aria-label="Reset capo">""" + _UNDO + """Reset</button></div>
 <span class="stepper" role="group" aria-labelledby="capo-lab"><button type="button" id="capo-down" aria-label="Capo down a fret">−</button>
@@ -1055,7 +1075,6 @@ _CONTROLS = """<div class="bar" id="bar" data-controls hidden role="region" aria
 <p class="hint" id="names-hint"></p>
 <button type="button" class="switch" id="roles" aria-pressed="true">Role colours<span class="roles" aria-hidden="true"><span class="r-h">home</span> <span class="r-a">away</span> <span class="r-p">pull</span></span></button>
 <button type="button" class="switch" id="strip-toggle" aria-pressed="false" aria-controls="strip">All chord shapes</button>
-<div id="necks-row" hidden><button type="button" class="switch" id="necks-chip" aria-pressed="true" aria-controls="necks">Chord necks</button></div>
 <div id="hanzi-row" hidden><div class="seg" id="hanzi" role="group" aria-label="Chinese characters"><button type="button" id="hanzi-s" aria-pressed="true" aria-controls="sheet"><span>Simplified <span class="zh" lang="zh-Hans">简体</span></span></button>
 <button type="button" id="hanzi-t" aria-pressed="false" aria-controls="sheet"><span>Traditional <span class="zh" lang="zh-Hant">繁體</span></span></button></div></div>
 <div id="pinyin-row" hidden><button type="button" class="switch" id="pinyin-chip" aria-pressed="false" aria-controls="sheet" aria-describedby="pinyin-hint">Pinyin</button>
@@ -1065,10 +1084,10 @@ _CONTROLS = """<div class="bar" id="bar" data-controls hidden role="region" aria
 <span class="vh" id="strum-hint">Tap a chord or its shape to hear it.</span></span></div>
 <div class="inst-panel" id="inst-panel" hidden></div></div>
 <div class="places ruled" id="places">
-""" + _FULL_ROW + _HARMONY_ROW + """</div>
+""" + _FULL_ROW + """</div>
 <div class="panel-end ruled"><button type="button" class="quiet" id="reset-all">Reset all</button></div>
 </section>
-<section class="sheet-ui card" id="card" hidden role="dialog" aria-labelledby="card-name">
+""" + _KEY_LIST + """<section class="sheet-ui card" id="card" hidden role="dialog" aria-labelledby="card-name">
 <header class="ui-head"><h2 id="card-name" tabindex="-1"></h2>
 <button type="button" class="tip-btn card-tip" id="card-tip" hidden>Circle &amp; keyboard</button>
 <button type="button" class="x" data-close aria-label="Close">×</button></header>
@@ -1080,18 +1099,6 @@ _CONTROLS = """<div class="bar" id="bar" data-controls hidden role="region" aria
 <div class="chips" id="alts"></div>
 <div class="actions"><button type="button" class="btn primary" id="use" hidden></button></div>
 <div class="info"><p class="tones" id="card-tones"></p><p class="solo" id="card-scale"></p></div>
-</section>
-<section class="sheet-ui panel harmony" id="harmony" hidden role="dialog" aria-labelledby="harmony-title">
-<header class="ui-head"><h2 id="harmony-title" tabindex="-1">Harmony</h2>
-<button type="button" class="x" data-close aria-label="Close">×</button></header>
-<p class="hint" id="harmony-key"></p>
-<div id="harmony-neck"></div>
-<div class="row" id="tempo-row" hidden><span class="lab">Tempo</span>
-<span class="stepper"><button type="button" id="bpm-down" aria-label="Slower">−</button>
-<output id="bpm">80</output><button type="button" id="bpm-up" aria-label="Faster">+</button></span>
-<span class="hint-inline">bpm · 1 chord a bar</span></div>
-<ol class="progs" id="progs"></ol>
-<p class="hint" id="progs-none" hidden>No chords we can read.</p>
 </section>
 <div class="tip" id="tip" role="tooltip" hidden>
 <div class="tip-head"><span class="tip-chord" id="tip-chord"></span><span class="tip-nm" id="tip-nm"></span><span class="tip-role" id="tip-role"></span></div>
@@ -1130,8 +1137,8 @@ _PLACES_END = '</div>\n<div class="panel-end ruled">'  # where the places to go 
 
 
 def _with_guitar(controls: str, guitar: bool) -> str:
-    """``controls`` with the Guitar Pro row after Harmony's, when the song has Guitar Pro files."""
-    return controls.replace(_HARMONY_ROW, _HARMONY_ROW + _GUITAR_ROW, 1) if guitar else controls
+    """``controls`` with the Guitar Pro row after Hide controls, when the song has Guitar Pro files."""
+    return controls.replace(_FULL_ROW, _FULL_ROW + _GUITAR_ROW, 1) if guitar else controls
 
 
 # Export PDF's question, served, pressed on a version other than the song's own (viewer.js fills it in and opens it): a

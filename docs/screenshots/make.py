@@ -393,7 +393,7 @@ def serve(cfg, port: int = 0):
 # --- the pictures -----------------------------------------------------------------------------------------------
 
 DESKTOP = (1280, 800, False)  # width, height in CSS pixels, a phone's screen
-SHORTER = (1280, 790, False)  # the foot's PDF button under the bar, and the Harmony panel cut between two links
+SHORTER = (1280, 790, False)  # the foot's PDF button under the bar, beside the rail on its Harmony tab
 PHONE = (390, 844, True)
 SETTLED = ("document.readyState === 'complete' && document.fonts.status === 'loaded'"
            " && document.getAnimations().every((a) => a.playState !== 'running')")
@@ -433,11 +433,10 @@ SHOTS = (
         ("wait", "!document.getElementById('panel').hidden"),
         ("js", "document.activeElement.blur()"),
     ), None),
-    ("harmony", "Frederic%20Weatherly/Danny%20Boy/sheet.html#nm=both&necks=0", SHORTER, (
+    ("harmony", "Frederic%20Weatherly/Danny%20Boy/sheet.html#nm=both", SHORTER, (
         ("wait", "document.querySelector('#sheet .c') !== null"),
-        ("click", "#more"),
-        ("click", "#harmony-open"),
-        ("wait", "!document.getElementById('harmony').hidden"),
+        ("click", "#necks [role=tab][data-tab=harmony]"),
+        ("wait", "document.querySelector('#harmony .prog') !== null"),
         ("js", "document.activeElement.blur()"),
     ), None),
     ("phone-chord", "Traditional/Scarborough%20Fair/sheet.html", PHONE, (

@@ -8,7 +8,7 @@ bytes are the stylesheet's as it is.
 The data, ``tests/conformance/data/caracole/viewer/page.json`` (caracole/viewer/page.json on the phone's classpath,
 ``ViewerData.table("page")``; ``viewer_corpus.data_json``), page.py's HTML and its constants under their own names,
 never retyped: ``LIBRARY_PAGE``, ``CREDIT_URL``, ``_NOTICE``, ``_CREDIT``, ``_VERSIONS``, ``_VERSION_LIST``,
-``_HARMONY_ROW``, ``_GUITAR_ROW`` (``_with_guitar`` puts it after the Harmony row, once), ``_EXPORT_ROW``,
+``_FULL_ROW``, ``_GUITAR_ROW`` (``_with_guitar`` puts it after the Hide controls row, once), ``_EXPORT_ROW``,
 ``_EXPORT_ASK``, ``_CONTROLS``, ``_SHEET_CONTROLS`` (the sheet's: the export row and its question), ``_NOTHING`` (the
 header of a page whose policy can't be read); ``credit_notice``, chords-db's notice as the footer prints it
 (``_credit_notice()``); and ``patterns``: ``_META_POLICY`` (a bytes pattern, written as its ASCII text: the phone runs it
@@ -89,7 +89,7 @@ WORDS_BATCH = 100
 WORDS_EVERY = (12, 4)  # of the sheets' texts, one in this many ASCII ones, one in this many others
 SHOWN_SKIPPED = ("qualities", "catalogue")  # tags whose sheets show nothing the others don't
 # The constants of page.py the phone reads, in this order.
-CONSTANTS = ("LIBRARY_PAGE", "CREDIT_URL", "_NOTICE", "_CREDIT", "_VERSIONS", "_VERSION_LIST", "_HARMONY_ROW",
+CONSTANTS = ("LIBRARY_PAGE", "CREDIT_URL", "_NOTICE", "_CREDIT", "_VERSIONS", "_VERSION_LIST", "_FULL_ROW",
              "_GUITAR_ROW", "_EXPORT_ROW", "_EXPORT_ASK", "_CONTROLS", "_SHEET_CONTROLS", "_NOTHING")
 # build_viewer's keywords and their defaults: a record's kw holds the others alone.
 DEFAULTS: dict[str, Any] = {"key": None, "key_source": None, "transpose": 0, "start": None, "pdf": None,
@@ -133,8 +133,8 @@ def test_the_data_reads_back_as_page_py_holds_it():
         assert data[name] == getattr(page, name), name
     # _with_guitar's one replacement, on either set of controls; the sheet's are the shared ones and the export's
     for controls in ("_CONTROLS", "_SHEET_CONTROLS"):
-        assert data[controls].count(data["_HARMONY_ROW"]) == 1
-        assert (data[controls].replace(data["_HARMONY_ROW"], data["_HARMONY_ROW"] + data["_GUITAR_ROW"], 1)
+        assert data[controls].count(data["_FULL_ROW"]) == 1
+        assert (data[controls].replace(data["_FULL_ROW"], data["_FULL_ROW"] + data["_GUITAR_ROW"], 1)
                 == page._with_guitar(getattr(page, controls), True))
     assert data["_EXPORT_ROW"] in data["_SHEET_CONTROLS"] and data["_SHEET_CONTROLS"].endswith(data["_EXPORT_ASK"])
     assert re.compile(data["patterns"]["_META_POLICY"].encode("ascii")).pattern == page._META_POLICY.pattern

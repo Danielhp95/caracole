@@ -223,12 +223,13 @@ def test_a_tab_caracole_cant_read_is_its_text_with_aa_and_scrolling_alone(tmp_pa
 def test_scrolling_by_itself_counts_down_then_scrolls_and_stops(tmp_path):
     with opened(tmp_path, written(tmp_path, tab("3489_wonderwall"))) as b:
         b.click("#scroll")
-        assert b.js("document.getElementById('pill').dataset.state") == "counting"
+        assert b.js("[document.getElementById('pill').dataset.state,"
+                    " document.getElementById('scroll').getAttribute('aria-pressed')]") == ["counting", "true"]
         b.click("#go")  # pressed again: at once
         assert b.wait("window.scrollY > 20", 10)
         b.click("#pill-end")
-        assert b.js("[document.getElementById('pill').hidden, document.getElementById('bar').classList.contains('away')]") \
-            == [True, False]
+        assert b.js("[document.getElementById('pill').hidden, document.getElementById('bar').classList.contains('away'),"
+                    " document.getElementById('scroll').getAttribute('aria-pressed')]") == [True, False, "false"]
 
 
 # --- the overlay, from 1200 px: Harmonica first, its harp the page's, then Guitar (overlay.js) ------------------
@@ -265,7 +266,8 @@ def test_on_a_wide_screen_the_overlay_opens_on_harmonica_on_the_pages_harp(tmp_p
     assert first["centre"] == "Bm" and first["chosen"] == ["D harp, 4th position, aeolian"]
     assert (first["name"], first["tag"]) == ("D harp", "the tab's") and bar == "D harp"
     assert first["plays"] == "Plays A, D and Em; E as Em." and first["card"] == "Bm on a D harp4th position, aeolian"
-    assert named == "Chord necks" and rail[0] == 345 and rail[1] >= 345 + 16 and rail[2] == 345
+    # the bar a toolbar in the tab's column, beside the rail (test_viewer_toolbar.py)
+    assert named == "Chord necks" and rail[0] == 345 and rail[1] >= 345 + 16 and rail[2] == rail[1]
     assert guitar["necks"] == SHAPES and keyneck == "Am scale"  # the sheet's chords as written, on the guitar
 
 
@@ -372,7 +374,7 @@ def test_the_window_narrowed_with_the_focus_in_the_rail_puts_it_on_the_bar(tmp_p
         b.send("Emulation.setDeviceMetricsOverride", width=1100, height=1000, deviceScaleFactor=1, mobile=False)
         assert b.wait("document.getElementById('necks').hidden")
         focus = b.js("document.activeElement.id")
-    assert focus == "h-down"  # the bar's first control, where the rail's button was
+    assert focus == "h-down"  # the bar's first control, rather than nothing
 
 
 def test_the_pages_harp_diagrams_have_draw_above_the_holes_and_blow_below(tmp_path):
@@ -457,3 +459,20 @@ def test_a_harmonica_tabs_rows_keep_their_spacing(tmp_path):
         margin = b.js("""(() => { const l = document.querySelector('.harp-tab .l + .l');
           return parseFloat(getComputedStyle(l).marginTop) / parseFloat(getComputedStyle(l).fontSize); })()""")
     assert abs(margin - 0.12) <= 0.01, margin
+
+
+def test_the_harmonica_pages_corner_buttons_reach_the_screens_edge(tmp_path):
+    hit = """((x, y) => { const e = document.elementFromPoint(x, y);
+      return e && e.closest('button') ? e.closest('button').id : null; })"""
+    with opened(tmp_path, written(tmp_path, tab("588_hotel-california"))) as b:
+        corners = b.js(f"[{hit}(0, innerHeight - 1), {hit}(innerWidth - 1, innerHeight - 1)]")
+        sizes = b.js("[...document.querySelectorAll('#bar button')].filter((e) => e.getClientRects().length)"
+                     ".map((e) => [e.id, e.getBoundingClientRect().width, e.getBoundingClientRect().height])")
+        beside = b.js("""(() => { const hit = (x, y) => { const e = document.elementFromPoint(x, y);
+          const t = e && e.closest('button, output'); return t ? t.id : null; };
+          const y = innerHeight - 30, d = document.querySelector('#h-down').getBoundingClientRect(),
+            s = document.querySelector('#scroll').getBoundingClientRect();
+          return [hit(d.right + 1, y), hit(s.left - 1, y)]; })()""")
+    assert corners == ["h-down", "scroll"]
+    assert beside == ["harp-now", "size"]  # the harp's name right of -, Aa left of Scroll
+    assert all(w >= 48 and h >= 48 for _, w, h in sizes), sizes

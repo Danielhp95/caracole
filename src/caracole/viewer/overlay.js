@@ -1,11 +1,12 @@
 (() => {
   "use strict";
-  // The overlay: the rail on the left of a wide screen (from 1200 px, viewer.css), with two tabs, Guitar and
-  // Harmonica, for the sheet viewer and a songbook (viewer.js) and a harmonica tab's page (harptab.js), which inline
-  // it before their own script; narrower, the phone's sheet, the same overlay slid up from the bar (its neck button)
-  // over half the screen, or the whole of it, a dialog that is not modal. Every element is made with createElement,
-  // createElementNS and textContent; nothing is loaded, nothing sounds, and nothing here computes music theory: each
-  // page hands it what Python made (page.py, harp.py, harptab_page.py), looked up for where the song is played.
+  // The overlay: the rail on the left of a wide screen (from 1200 px, viewer.css), with its tabs, Guitar and
+  // Harmonica, and Harmony on a sheet whose key the page can tell, for the sheet viewer and a songbook (viewer.js) and
+  // a harmonica tab's page (harptab.js, no Harmony), which inline it before their own script; narrower, the phone's
+  // sheet, the same overlay slid up from the bar (its neck button) over half the screen, or the whole of it, a dialog
+  // that is not modal. Every element is made with createElement, createElementNS and textContent; nothing is loaded,
+  // nothing sounds, and nothing here computes music theory: each page hands it what Python made (page.py, harp.py,
+  // harptab_page.py), looked up for where the song is played; the Harmony tab the page draws itself.
   //
   // window.caracoleOverlay:
   //   NECKS                    the browser's name for whether the rail shows ("shown", "hidden"): the screen's
@@ -21,7 +22,8 @@
   //                            {draw(), tab() (the tab shown), empty() (nothing in it, the rail's again: as the
   //                            page hides it), landing() (where the focus goes as the sheet opens: the tab shown,
   //                            else its handle)}. ``page``:
-  //     first                  "guitar" or "harmonica": the tab a page opens on, first in the control too
+  //     first                  "guitar" or "harmonica": the tab a page opens on, first in the control too, the
+  //                            other after it
   //     guitar()               the Guitar tab, or null for none (a harmonica tab's page with no sheet): {name (the
   //                            instrument whose necks, in short: "Guitar", "Ukulele", "Baritone"), strings, key (a
   //                            keyNeck spec, or null),
@@ -38,6 +40,11 @@
   //                              (the 12 harps' entries, by offset: harpForms), notes (its notes, as steps)}]), chosen
   //                              (the harp's offset above the tonic), tabs (the offsets of the harps the song's
   //                              harmonica tabs play on)
+  //     harmony(pane)          optional: the Harmony tab, always the last, which the page draws into ``pane`` (the
+  //                            tab's div.ov-pane) on each draw while it is the tab shown, each of its controls with a
+  //                            data-f that the focus comes back to as it is drawn anew; absent, no Harmony tab
+  //     left(tab)              optional: the tab ``tab`` no longer shown, another one pressed or reached by the
+  //                            arrows, told before that one is drawn
   //     pick(name, p)          position ``p`` of the chord ``name`` picked, on its neck or in its legend
   //     chooseHarp(offset)     a harp tapped on the circle
   //     hide()                 the rail's Hide pressed
@@ -176,8 +183,9 @@
   const topFret = (position) => Math.max(0, ...Array.from(String(position[0])).filter((c) => c !== "x" && c !== "0")
     .map((c) => Number(c) + (Number(position[2]) || 1) - 1));
   // The key's neck: its scale, or its pentatonic box, across the frets, the tonic marked. In the key of the shapes
-  // played: with a capo, the frets count from it, as the chords' necks do. The Guitar tab's first neck; on a phone,
-  // the Harmony panel's (viewer.js). Scale or the pentatonic switches it.
+  // played: with a capo, the frets count from it, as the chords' necks do. The Harmony tab's first (viewer.js draws it
+  // there), or the Guitar tab's where there is no Harmony tab (a harmonica tab's page). Scale or the pentatonic
+  // switches it.
   const keyNeck = (spec) => {
     const box = Boolean(spec.box);
     const steps = (box ? spec.pentatonic : spec.scale) || [];
@@ -204,7 +212,8 @@
     }
     return group;
   };
-  // The Guitar tab: the key's neck, then each chord with every position of it along a neck and a legend naming them.
+  // The Guitar tab: the key's neck (where the page gives it), then each chord with every position of it along a neck
+  // and a legend naming them.
   // A legend is a group of radio buttons: one Tab stop a chord, on the shape played, and the arrows go from shape to
   // shape.
   const guitarPane = (pane, model) => {
@@ -475,17 +484,19 @@
   };
 
   // --- the rail, or the phone's sheet -------------------------------------------------------------------------------
-  const SHEET = "Necks and harps";  // the sheet's name, as the bar's neck button says it
+  const SHEET = "Necks and harps";  // the sheet's name, as the bar's neck button's title says it
   const rail = (aside, page) => {
     const ui = { tab: page.first === "harmonica" ? "harmonica" : "guitar", hk: 0, draw: () => draw() };
     const railName = aside.getAttribute("aria-label") || "Chord necks";
     const sheetNow = () => (typeof page.sheet === "function" ? page.sheet() : null);
     let slim = null, circle = null, head = null;
-    // The tabs, in the page's order: Guitar named for the instrument whose necks it shows.
+    // The tabs, in the page's order: Guitar named for the instrument whose necks it shows, then Harmony, the page's.
     const tabsOf = (guitar) => {
       const both = [["guitar", guitar ? guitar.name || "Guitar" : null], ["harmonica", "Harmonica"]]
         .filter((t) => t[1]);
-      return page.first === "harmonica" ? both.reverse() : both;
+      const tabs = page.first === "harmonica" ? both.reverse() : both;
+      if (typeof page.harmony === "function") tabs.push(["harmony", "Harmony"]);
+      return tabs;
     };
     // The rail's head, kept at its top as it scrolls: the tabs (or, with one, its name) and Hide; under it, once the
     // circle has scrolled out of the rail, the slim bar naming the harp, with Change harp. The sheet's has its handle
@@ -589,6 +600,7 @@
         pane.setAttribute("aria-labelledby", aside.id + "-tab-" + ui.tab);
       }
       if (ui.tab === "guitar") guitarPane(pane, guitar);
+      else if (ui.tab === "harmony") page.harmony(pane);
       else harpPane(pane, m, ui);
       circle = pane.querySelector(".hw");
       aside.scrollTop = fresh ? 0 : scrolled;
@@ -613,7 +625,9 @@
     };
     const showTab = (id) => {
       if (id === ui.tab) return;
+      const was = ui.tab;
       ui.tab = id;
+      if (typeof page.left === "function") page.left(was);
       draw(true);
     };
     aside.addEventListener("scroll", slide, { passive: true });

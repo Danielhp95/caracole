@@ -184,18 +184,20 @@ def test_the_keyboard_reaches_more_after_the_title_and_opens_it(tmp_path):
         browser.open(page.as_uri())
         assert browser.wait("document.documentElement.dataset.ready === '1'")
         focused = []
-        for _ in range(3 + 1 + 1 + 2 + 6):
+        for _ in range(3 + 7 + 1 + 1 + 6):
             browser.press("Tab")
             focused.append(browser.js("document.activeElement.matches('.back') ? 'back'"
                                       " : document.activeElement.matches('.artist a') ? 'artist'"
                                       " : document.activeElement.matches('.pre summary') ? 'more'"
+                                      " : document.activeElement.closest('#bar') ? 'bar'"
                                       " : document.activeElement.closest('#necks') ? 'rail' : 'else'"))
         browser.press("Enter")
         opened_now = browser.js("document.querySelector('#sheet .pre').open")
-    # The title's own: ‹ Library and the artist's name. From 1200 px the rail of necks comes between, on the left: its
-    # tabs (one stop, Guitar's), its Hide, the key's neck's Scale and Pentatonic, then one stop for each of the song's
-    # six chords.
-    assert focused == ["back", "artist", *["rail"] * (1 + 1 + 2 + 6), "more"] and opened_now
+    # The title's own: ‹ Library and the artist's name. From 1200 px the toolbar comes right after them, under the
+    # title (− key +, Shapes, Text, Scroll, More: test_viewer_toolbar.py), then the rail of necks on the left: its tabs
+    # (one stop, Guitar's), its Hide, then one stop for each of the song's six chords (the key's neck is the Harmony
+    # tab's).
+    assert focused == ["back", "artist", *["bar"] * 7, *["rail"] * (1 + 1 + 6), "more"] and opened_now
 
 
 # Printed: which of the notes' lines a reader sees, and whether the fold's own parts show.

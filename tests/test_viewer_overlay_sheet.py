@@ -1,9 +1,9 @@
 """The overlay on a phone (overlay.js): below 1200 px, where there is no rail, the bar's neck button slides it up from
 the bar as a sheet over about half the screen, the song readable and scrollable above it; the sheet's handle takes it
 to the whole screen and back, and ✕ or Escape closes it, the focus back on the button. It holds what the rail holds
-(test_viewer_overlay.py): the Guitar and Harmonica tabs in the page's order, the circle, the key on the harp chosen,
-each chord's card and the slim bar, and on a harmonica tab's page the page's harp both ways. A dialog that is not
-modal: the song stays within reach. Each page opens with it closed. From 1200 px nothing of it shows."""
+(test_viewer_overlay.py): the Guitar, Harmonica and Harmony tabs in the page's order, the circle, the key on the harp
+chosen, each chord's card and the slim bar, and on a harmonica tab's page the page's harp both ways. A dialog that is
+not modal: the song stays within reach. Each page opens with it closed. From 1200 px nothing of it shows."""
 
 from __future__ import annotations
 
@@ -40,7 +40,8 @@ SHEET = """(() => {
           sideways: document.documentElement.scrollWidth > document.documentElement.clientWidth,
           inside: aside.scrollWidth <= aside.clientWidth,
           button: Boolean(button && button.getClientRects().length), expanded: button && button.getAttribute('aria-expanded'),
-          buttonNamed: button && button.getAttribute('aria-label'), controls: button && button.getAttribute('aria-controls'),
+          buttonTitle: button && button.title, controls: button && button.getAttribute('aria-controls'),
+          buttonWord: button && button.querySelector('.bw') && button.querySelector('.bw').textContent,
           handle: handle && handle.getAttribute('aria-pressed'), handleNamed: handle && handle.getAttribute('aria-label'),
           close: q('#necks .ov-close') && q('#necks .ov-close').getAttribute('aria-label'),
           hide: Boolean(q('#necks .nk-hide')), rail: Boolean(q('#necks-toggle') && q('#necks-toggle').getClientRects().length),
@@ -99,7 +100,7 @@ def test_the_bars_neck_opens_the_overlay_as_a_sheet_over_half_the_screen(tmp_pat
         rest(b)
         scrolled = [b.js("scrollY"), sheet(b)]
     assert not closed["open"] and closed["button"] and closed["expanded"] == "false" and closed["controls"] == "necks"
-    assert closed["buttonNamed"] == "Necks and harps" and not closed["rail"]
+    assert closed["buttonWord"] == "Shapes" and closed["buttonTitle"] == "Necks and harps" and not closed["rail"]
     assert half["open"] and half["visible"] and half["at"] == "half" and half["expanded"] == "true"
     # A dialog, not a modal one: the song stays within reach
     assert half["role"] == "dialog" and half["named"] == "Necks and harps" and half["modal"] is None
@@ -108,7 +109,8 @@ def test_the_bars_neck_opens_the_overlay_as_a_sheet_over_half_the_screen(tmp_pat
     assert (half["left"], half["right"]) == (0, half["client"]) and not half["sideways"] and half["inside"]
     assert half["close"] == "Close" and not half["hide"]  # ✕, not the rail's Hide
     assert half["handle"] == "false" and half["handleNamed"] == "Full screen"
-    assert shown["tabs"] == [["Guitar", "true"], ["Harmonica", "false"]] and shown["necks"] == SHAPES
+    assert shown["tabs"] == [["Guitar", "true"], ["Harmonica", "false"], ["Harmony", "false"]]
+    assert shown["necks"] == SHAPES
     assert half["focus"] == "Guitar"  # into it, on the tab shown
     assert scrolled[0] > 100 and scrolled[1]["at"] == "half"
 
@@ -194,7 +196,8 @@ def test_on_a_sheet_guitar_comes_first_and_a_harp_tapped_on_the_circle_is_the_on
         touch(b, "#necks .ov-change")
         assert b.wait("document.getElementById('necks').scrollTop === 0")
         top = seen(b)
-    assert first["tabs"] == [["Guitar", "false"], ["Harmonica", "true"]] and first["centre"] == "Bm"
+    assert first["tabs"] == [["Guitar", "false"], ["Harmonica", "true"], ["Harmony", "false"]]
+    assert first["centre"] == "Bm"
     assert first["chosen"] == ["A harp, 3rd position, dorian"] and first["plays"] == "Plays Bm, A and E."
     assert d["name"] == "D harp" and d["card"] == "Bm on a D harp4th position, aeolian"
     assert [c["name"] for c in d["chords"]] == ["Bm", "F#7", "A", "E", "G", "D", "Em", "F#"]
@@ -272,7 +275,7 @@ def test_with_the_half_sheet_open_the_song_scrolls_by_itself_above_it_and_ends_a
         open_sheet(b)
         touch(b, "#necks .ov-grip")
         assert b.wait(FULL)
-        touch(b, "#scroll")  # ▶ keeps the sheet, at half, for the song to show above it
+        touch(b, "#scroll")  # Scroll keeps the sheet, at half, for the song to show above it
         assert b.wait("!document.getElementById('pill').hidden")
         running = [sheet(b), b.js("""(() => { const p = document.getElementById('pill').getBoundingClientRect();
           return p.bottom <= document.getElementById('necks').getBoundingClientRect().top && p.top >= 0; })()""")]
@@ -295,7 +298,7 @@ def test_on_a_phone_the_settings_take_the_sheets_place(tmp_path):
         after = sheet(b)
     assert not instead["open"] and instead["expanded"] == "false"  # one layer at a time, as the settings and the card
     assert not after["open"] and after["at"] is None  # closed for good: it doesn't come back as they close
-    assert after["focus"] == "Settings"  # on ⋯, which opened them
+    assert after["focus"] == "More"  # on ⋯, which opened them, named by its word
 
 
 # --- the bar and the sheet at a phone's widths --------------------------------------------------------------------
@@ -319,13 +322,16 @@ def test_nothing_overflows_and_every_target_is_a_thumbs_on_a_sheet(tmp_path, wid
         guitar = [sheet(b), b.js(SMALL)]
         to_harmonica(b)
         harmonica = [sheet(b), b.js(SMALL)]
+        touch(b, "#necks [role=tab][data-tab=harmony]")
+        assert b.wait("document.querySelector('#necks .ov-pane').dataset.tab === 'harmony'")
+        harmony = [sheet(b), b.js(SMALL)]
         touch(b, "#necks .ov-grip")
         assert b.wait(FULL)
         full = sheet(b)
     # On a phone the neck after the key, in the guitar's place: the strip is ⋯'s All chord shapes
-    assert bar["ids"] == ["t-down", "t-up", "necks-open", "size", "scroll", "more"], (width, bar)
+    assert bar["ids"] == ["t-down", "key-now", "t-up", "necks-open", "size", "scroll", "more"], (width, bar)
     assert bar["smallest"] >= 44 and bar["row"], (width, bar)
-    for now, small in (guitar, harmonica):
+    for now, small in (guitar, harmonica, harmony):
         assert not now["sideways"] and now["inside"] and small == [], (width, now, small)
     assert not full["sideways"] and full["inside"]
 
@@ -424,7 +430,7 @@ def _long_harmonica_tab(tmp_path) -> str:
 @pytest.mark.parametrize("kind", ["sheet", "harmonica"])
 def test_the_pills_play_takes_the_whole_screen_sheet_back_to_half_as_the_bars_does(tmp_path, kind):
     """Paused under the sheet over the whole screen, the pill's ▶ (riding over the sheet's foot) starts the song moving
-    again: the sheet goes back to half, the song moving above it, as the bar's ▶ leaves it; never out of sight."""
+    again: the sheet goes back to half, the song moving above it, as the bar's Scroll leaves it; never out of sight."""
     import time
 
     pill = "document.getElementById('pill').dataset.state"

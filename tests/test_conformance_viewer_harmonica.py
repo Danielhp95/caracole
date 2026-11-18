@@ -155,7 +155,8 @@ def test_the_data_reads_back_as_the_modules_hold_it():
     assert tuple(data["harpfit"]["WHY"]) == harpfit.WHY and data["harpfit"]["_PITCH"] == harpfit._PITCH
     assert tuple(data["harptab_page"]["_SAID"]) == harpfit.WHY
     assert {k: tuple(v) for k, v in data["harptab_page"]["_BRACKETS"].items()} == harptab_page._BRACKETS
-    assert data["harptab_page"]["_BAR"].count(harptab_page._PLAY_ICON) == 1
+    assert data["harptab_page"]["_BAR"].count(page._SCROLL_ICON) == 1
+    assert harptab_page._PLAY_ICON not in data["harptab_page"]["_BAR"]  # a line's ▶ alone
 
 
 # --- the inputs ---------------------------------------------------------------------------------------------------

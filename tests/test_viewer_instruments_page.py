@@ -169,8 +169,8 @@ def test_on_the_piano_the_capo_is_folded_in_and_the_guitar_gets_it_back(tmp_path
     assert guitar[0] == [["tuning", "E A D G B E"], ["capo", "2"],
                          ["key", "Em shapes · sounds F#m · key from the sheet"]]
     assert guitar[1] == ["Em", "C", "G", "D"]
-    assert moved[0] == [["tuning", "E A D G B E"], ["capo", "3"],
-                        ["key", "D#m shapes · sounds F#m · key from the sheet"]]
+    assert moved[0] == [["tuning", "E A D G B E"], ["capo", "3"],  # the chords you see a semitone down
+                        ["key", "D#m shapes (−1) · sounds F#m · key from the sheet"]]
     assert moved[1] == ["D#m", "B", "F#", "C#"]
     # As it sounds: the key it sounds in, no capo said, the chords named as they sound, no Capo row in the settings
     # nor line in the header, and no Tuning line: the piano has no strings.
@@ -260,13 +260,14 @@ def test_the_rail_of_necks_has_four_strings_on_a_ukulele_and_the_guitars_on_the_
         piano = b.js(RAIL)
         padding = b.js("getComputedStyle(document.body).paddingLeft")
     assert guitar["shown"] and set(guitar["strings"]) == {6} and guitar["button"]
-    assert guitar["tabs"] == ["Guitar", "Harmonica"]
-    assert uke["shown"] and set(uke["strings"]) == {4} and len(uke["strings"]) == 1 + 8  # the key's, then a chord's
-    assert uke["tabs"] == ["Ukulele", "Harmonica"]
+    assert guitar["tabs"] == ["Guitar", "Harmonica", "Harmony"]
+    assert uke["shown"] and set(uke["strings"]) == {4} and len(uke["strings"]) == 8  # a chord's each (the key's: Harmony's)
+    assert uke["tabs"] == ["Ukulele", "Harmonica", "Harmony"]
     shapes = chord_shapes(UKULELE, parse_chord("C"))
     assert dots == sum(sum(1 for f in p[0] if f != "x") for p in shapes)
     assert piano["shown"] and piano["button"] and padding != "0px"
-    assert piano["tabs"] == ["Guitar", "Harmonica"] and piano["strings"] == guitar["strings"]
+    # the guitar's necks, headed by the guitar's key neck: the piano has none of its own for the Harmony tab
+    assert piano["tabs"] == ["Guitar", "Harmonica", "Harmony"] and piano["strings"] == [6] + guitar["strings"]
     assert piano["names"] == guitar["names"]  # the guitar's chords, as its capo names them
 
 
@@ -285,7 +286,7 @@ def test_the_rails_tabs_name_the_neck_in_short_and_fit_at_1200_px(tmp_path, name
     with open_viewer(tmp_path, written(tmp_path, SONG), width=1200, height=800, mobile=False) as b:
         choose(b, name)
         found = b.js(TABS_FIT)
-    assert found == [[tab, True], ["Harmonica", True]]
+    assert found == [[tab, True], ["Harmonica", True], ["Harmony", True]]
 
 
 # --- kept, carried, in the address -----------------------------------------------------------------------------

@@ -222,7 +222,7 @@ What the port takes:
 ### 6. Sheets and what they do
 
 What it is: the sheet viewer. It scrolls, transposes, sets capo and mode, has the guitar and harmonica overlays, the
-Harmony panel, strumming, other instruments (ukulele, piano, harmonica, flute, recorder), pinyin over the words, and
+Harmony tab, strumming, other instruments (ukulele, piano, harmonica, flute, recorder), pinyin over the words, and
 Simplified or Traditional characters.
 
 All of that is JavaScript and is reused unchanged. The viewer computes no music theory itself: it looks every answer

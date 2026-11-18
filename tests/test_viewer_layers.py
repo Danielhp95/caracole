@@ -235,7 +235,7 @@ OPENER = {
     "necks sheet": "document.activeElement === document.getElementById('necks-open')",
     "versions": "document.activeElement === document.getElementById('ver-now')",
 }
-SHIFT = "document.getElementById('shift').textContent"  # the settings' transposition, "+1"
+SHIFT = "document.querySelector('#shift .d').textContent"  # the settings' word: "capo 2 · +1"
 SHEET = "/Artist/Title/sheet.html"  # where caracole serve serves a song's sheet
 
 
@@ -337,7 +337,7 @@ def test_a_change_made_with_a_layer_open_stays_after_back(tmp_path):
         assert b.wait(HIDDEN["settings"])
         assert until(b, (1, 3)) == (1, 3)
         assert b.wait("location.hash === '#t=1'")  # written into the page's own entry too
-        assert b.js(SHIFT) == "+1"
+        assert b.js(SHIFT) == "capo 2 · +1"
 
 
 @in_chromium
@@ -358,7 +358,7 @@ def test_a_change_made_with_a_layer_open_stays_once_it_closes_and_after_a_reload
         assert until(b, (1, 3)) == (1, 3)
         assert b.wait("location.hash === '#t=1'")
         reload(b)
-        assert b.js(f"[location.hash, {SHIFT}]") == ["#t=1", "+1"]
+        assert b.js(f"[location.hash, {SHIFT}]") == ["#t=1", "capo 2 · +1"]
 
 
 @in_chromium
