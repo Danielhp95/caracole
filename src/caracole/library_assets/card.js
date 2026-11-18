@@ -136,6 +136,9 @@ const caracoleCard = (icons, rows) => {
     return a;
   };
 
+  // Whether the sheet's drawer has a part of Ultimate Guitar's versions (``versions``, the data's): UG has some, or
+  // caracole keeps some.
+  const ugListed = (v) => Boolean(v && typeof v === "object" && (Number(v.total) > 0 || listOf(v.list).length));
   // Ultimate Guitar's versions of the sheet (the data's ``versions``): the kept ones in rank order, the one in use,
   // and the rest counted, with what fetches them (``acts``).
   const ugDrawer = (s, part, acts) => {
@@ -182,13 +185,17 @@ const caracoleCard = (icons, rows) => {
   };
   // The LaCuerda sheets caracole met for the song (``lacuerdaVersions``), best first: each its page on LaCuerda, its
   // share of the lyrics, and In use for the sheet, else what keeps it (``acts.useLaCuerda``). A UG version you chose
-  // (a [pin]) outranks a LaCuerda pick: while one does, its part says so, with what takes it out, and keeps none.
+  // (a [pin]) outranks a LaCuerda pick: while one does, its part says so and keeps none; what takes the pin out is the
+  // UG part's Back to our pick, right above it, which its note points to (one button in the drawer), or its own when
+  // the drawer has no UG part.
   const lacuerdaDrawer = (s, part, acts) => {
     const met = listOf(s.lacuerdaVersions).filter((x) => x && typeof x === "object");
     const title = String(s.title);
     const pinned = Boolean(s.versions && s.versions.pinned) && Boolean(acts.useLaCuerda);
     const extra = [];
-    if (pinned) {
+    if (pinned && ugListed(s.versions)) {
+      extra.push(el("p", "pin-note", "Your UG choice is in use: Back to our pick, above, first."));
+    } else if (pinned) {
       extra.push(el("p", "pin-note", "Your UG choice is in use. Back to our pick first."));
       if (acts.clear) extra.push(acts.clear());
     }
@@ -338,7 +345,7 @@ const caracoleCard = (icons, rows) => {
         : autoOnly || s.source === "auto" || s.source === "youtube" ? "from the recording"
         : s.source ? nameOf(s.source) : "";
       const chips = [];
-      if (v && (Number(v.total) > 0 || listOf(v.list).length)) {
+      if (ugListed(v)) {
         chips.push({ source: "ug", count: Number(v.total) || listOf(v.list).length, unit: "version",
           fixed: Number(v.total) <= 1 && !(Number(v.rest) > 0), fill: (part) => ugDrawer(s, part, acts) });
       }
@@ -473,7 +480,8 @@ const caracoleCard = (icons, rows) => {
   const distinct = (keys) => keys.filter((k, n) => typeof k === "string" && k && keys.indexOf(k) === n);
 
   // A tile each (``things``, the same ``opts``), and one drawer, which a tile's chevron opens right after its tile
-  // (closing it under another), the chevron again closes, and so do its ✕ and Escape, the focus back on the chevron:
+  // (closing it under another), the chevron again closes, and so do its ✕ and Escape (in the drawer, or on the chevron
+  // while it shows), the focus back on the chevron:
   // made each time it opens (``fill``), its tile's downloads (made once, in ``things``, and moved into it), then a part
   // a source (each chip's ``fill``, so a version's buttons are as the song is now), and emptied as it closes. Null for
   // no tile.
@@ -528,12 +536,13 @@ const caracoleCard = (icons, rows) => {
       drawer.hidden = false;
       opened = { tile, more };
     };
-    drawer.addEventListener("keydown", (e) => {
-      if (e.key !== "Escape") return;
+    const escape = (e) => {
+      if (e.key !== "Escape" || !opened) return;
       e.preventDefault();
       e.stopPropagation();
       close(true);
-    });
+    };
+    drawer.addEventListener("keydown", escape);
     for (const t of made) {
       const tile = tileOf(t);
       const more = tile.querySelector(":scope > .tile-more");
@@ -543,6 +552,9 @@ const caracoleCard = (icons, rows) => {
           const was = Boolean(opened) && opened.more === more;
           close(false);
           if (!was) fill(t, tile, more);
+        });
+        more.addEventListener("keydown", (e) => {  // its own drawer's: another chevron's Escape is the page's
+          if (opened && opened.more === more) escape(e);
         });
       }
       box.appendChild(tile);

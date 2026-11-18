@@ -2578,9 +2578,9 @@ close button, shown beside the list on a laptop), its facts, what needs you, the
 again, Use LaCuerda's sheet, Add to a songbook…, and ⋯ with info.json and Remove), its other files, which
 sites have it, where else to find it, and its progressions last.
 
-Then what you play from it, a tile each, all alike, none first (from 720 px a row each: its name and
-version, the marks of where it came from, its chevron at the end; on a phone the marks and the chevron on
-a row under its name), in the order of the
+Then what you play from it, a tile each, all alike, none first, a row each and one row at every width (its
+glyph, its name and version, the marks of where it came from, its chevron at the end; on a phone 360 px wide
+or less, without the arrow after its name), in the order of the
 line's buttons: its **Chord sheet** (**Auto sheet** in its own colour when that is its only sheet,
 **Ukulele chords** for Ultimate Guitar's Ukulele Chords), its **Guitar Pro**
 file, its **Guitar tab** (a text tab), its
@@ -2598,25 +2598,31 @@ than one version is drawn as a small stack. A Guitar Pro or Power Tab file, and
 a score but its PDF, downloads under its song's name (`Eagles - Hotel
 California (2).ptb`).
 
-A tile's chevron opens its drawer right under it; another tile's chevron, the
-chevron again, its ✕ or Escape closes it, and opening one asks nothing of
-anyone. First its downloads: the sheet's PDF (and a Chinese sheet's in
-Traditional characters, `PDF, Traditional`), Text and ChordPro, then its PDF
+A tile's chevron opens its drawer right under it, touching it, the tile and its
+drawer one box edged in the accent (a stack's sheets gone while it shows);
+another tile's chevron, the chevron again, its ✕ or Escape (in the drawer, or on
+the chevron) closes it, and opening one asks nothing of anyone. First its
+downloads, wrapping under the ✕: the sheet's PDF, Text and ChordPro, then its PDF
 exports, each by its version (`PDF · G Dorian, capo 0`: see `caracole render
 --version` and Export PDF of this version); a Guitar Pro file's; the text
-tab's; the lyrics' Text and Timed (.lrc); each score's format. Then a part a
+tab's; the lyrics' Text and Timed (.lrc); each score's format. A Chinese sheet's
+PDF in Traditional characters is with the card's other files, under **Files**
+(`Sheet PDF, Traditional`). Then a part a
 source of its versions, each with its mark, what it lists and how many (none
 for a tile whose one source has one version: its mark says it all). **Ultimate
-Guitar**'s: how many versions the site has and how many caracole keeps (`13
-versions on the site · 3 kept in your library`), then each kept version in rank
-order, with UG's version number, its rating and votes, how much of the lyrics
-it has (`Every line of the lyrics`, `80% of the lyrics`, in green when caracole
-counts it whole), first what differs where UG names it (`Acoustic`, `Intro`), the tabber's note, and caracole's pick or your choice: **In
+Guitar**'s, `UG · chord sheets` (`UG · ukulele chords` for Ultimate Guitar's
+Ukulele Chords): how many versions the site has and how many caracole keeps (`13
+on UG · 3 in your logbook`), then each kept version in rank order, with UG's
+version number (`Ver 3`), its rating and votes, how much of the lyrics it has
+(`All the lyrics`, `80% of the lyrics`, in green when caracole counts it whole),
+first what differs where UG names it (`Acoustic`, `Intro`), the tabber's note,
+and caracole's pick or your choice (`our pick`, `your choice`): **In
 use** on the one the title opens, **Open** on each, its own viewer page,
 `version-<tab>.html` (served by caracole serve as a sheet viewer is, while it
 holds what caracole wrote), or its text, `version-<tab>.txt`, until render has
-written the page; a version UG no longer has says so. The versions caracole
-hasn't kept are counted, not listed (`10 more on Ultimate Guitar, not kept`).
+written the page; a version UG no longer has says so (`gone from UG`). The
+versions caracole hasn't kept are counted, not listed (`10 more on UG, not
+kept`).
 On the page `caracole serve` serves, each version but the one has **Use this
 one**, which makes it the sheet, as `caracole versions --choose` does (a
 `[pin]`); while a `[pin]` chooses the sheet, **Back to our pick**, as
@@ -2626,14 +2632,18 @@ budget (**Fetch 6 more** when more are left than one lookup may keep: press it
 again for the next). Each is a request of the song's, which its line shows as a
 lookup's, and once it is over the card counts again. From the folder, the drawer
 gives the command that keeps them, `caracole versions --keep-more 'Eagles -
-Hotel California'`. **LaCuerda**'s: the sheets caracole met there, the most of
-the lyrics first, each with its page (↗), In use on the one that is the sheet
-and, served, Use this one on the others, which looks the song up keeping that
-sheet, as Use LaCuerda's sheet does; while your choice on Ultimate Guitar is in
-use, it says so, with Back to our pick, as a `[pin]` outranks a LaCuerda
-pick. The **auto sheet** beside a human one: its viewer, its PDF, text and
-ChordPro. A Guitar Pro file's, a harmonica tab's or a score's source: a row a
-file, Open where the page shows it, and Download. A harmonica tab with its page
+Hotel California'`. **LaCuerda**'s, `LaCuerda · chord sheets`: the sheets
+caracole met there (`2 versions seen`), the most of the lyrics first, each with
+**Its page ↗**, In use on the one that is the sheet and, served, Use this one on
+the others, which looks the song up keeping that sheet, as Use LaCuerda's sheet
+does; while your choice on Ultimate Guitar is in use, it says so and keeps none,
+as a `[pin]` outranks a LaCuerda pick: `Your UG choice is in use: Back to our
+pick, above, first.`, the one Back to our pick being Ultimate Guitar's part's,
+right above it. The **auto sheet** beside a human one, `Auto sheet · from the
+recording`: its viewer, its PDF (and a Chinese one's in Traditional characters,
+`PDF, Traditional`), text and ChordPro. A Guitar Pro file's, a harmonica tab's or
+a score's source (`gtptabs · Guitar Pro files`, `1 file`): a row a file, Open
+where the page shows it, and Download. A harmonica tab with its page
 beside it opens that page, from its tile and its row, its text a download.
 
 Under the tiles, **On the sites**: each site that is on, a small mark of its own
@@ -2668,7 +2678,9 @@ once when your system asks for less motion, and the focus is on its chevron.
 On a window 1200 px wide or more the library is two columns: the list, 760 px wide, and on its right a pane that
 holds the card of the song you open, which says "Open a song to see its card here." until you do. A song's title or
 its chevron puts its card there, its head across the pane's top (its name, its artist and a close button), and marks
-its line, raised, the accent along its edge; another song's takes its place, and its chevron again, the head's close,
+its line, raised, the accent along its edge; the card reads there as it does on a phone, the pane being about as
+narrow (its tiles a row each, a version's buttons under its number and its rating), with nothing to scroll sideways;
+another song's takes its place, and its chevron again, the head's close,
 or a search or a filter that leaves its line out of the list empties the pane. The pane stays in view under the search
 bar as the list scrolls, and scrolls on its own when the card is longer than the screen; a lookup's steps are listed
 there under the head, while the line keeps the bar of them as the lookup left it. Opened from the keyboard (Enter on

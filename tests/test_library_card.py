@@ -358,10 +358,10 @@ def test_a_files_part_lists_that_sources_files(conn, cfg, tmp_path):
 
 def test_escape_closes_the_drawer_and_gives_the_focus_back_to_its_chevron(conn, cfg, tmp_path):
     # The sheet's drawer opened, the focus on its first Open: Escape closes it, the focus back on its chevron; so does
-    # its ✕.
+    # its ✕; and on its chevron, Escape too.
     hotel(conn, cfg)
-    path = write_library_page(cfg.library_dir, with_script(page(conn, cfg),
-                                                           "(() => {\n" + KIT + "\nwindow.openCard = openCard;\n})();"))
+    kit = "(() => {\n" + KIT + "\nObject.assign(window, { openCard, cardOf, lineOf });\n})();"
+    path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), kit))
     try:
         browser = Browser(tmp_path / "chrome")
     except BrowserError as e:
@@ -383,6 +383,14 @@ def test_escape_closes_the_drawer_and_gives_the_focus_back_to_its_chevron(conn, 
         browser.click(".drawer .drawer-close")
         assert browser.wait("document.querySelector('.drawer').hidden")
         assert browser.js("document.activeElement.matches('.tile-sheet > button.tile-more')") is True
+        # On its chevron, outside the drawer, Escape closes it too, the focus staying there; and the card stays open.
+        browser.press("Enter")
+        assert browser.wait("!document.querySelector('.drawer').hidden")
+        browser.press("Escape")
+        assert browser.wait("document.querySelector('.drawer').hidden")
+        assert browser.js("document.activeElement.matches('.tile-sheet > button.tile-more')") is True
+        assert browser.js("document.activeElement.getAttribute('aria-expanded')") == "false"
+        assert browser.js("cardOf(lineOf('Hotel California')).checkVisibility()") is True
 
 
 # Notes every fetch the page makes and every resource it loads while each tile's chevron opens and closes its drawer.
@@ -572,15 +580,18 @@ note("rows", Array.from(panel.querySelectorAll(".tiles > .tile")).map((t) => ({
 """
 
 
-def test_a_tile_is_one_row_and_its_source_keeps_its_mark_beside_its_name(conn, cfg, tmp_path):
-    # What you play from, a row each: its name and version, the marks of where it came from, its chevron at the end.
-    # Under the card's foot only Fetch again, Add to a songbook and ⋯ show.
+@pytest.mark.parametrize(("size", "touch"), [("360,780", True), ("390,844", True), (cards.IN_PLACE, False),
+                                             ("1280,900", False)])
+def test_a_tile_is_one_row_and_its_source_keeps_its_mark_beside_its_name(conn, cfg, tmp_path, size, touch):
+    # What you play from, a row each at every width: its name and version, the marks of where it came from, its
+    # chevron at the end; 56 to 64 px tall on a touch screen, 48 px at most with a mouse, whether the card is under its
+    # line (a phone, a laptop under 1200 px) or in the pane beside the list (1280). On a phone 360 px wide its name
+    # takes the room of its arrow. Under the card's foot only Fetch again, Use LaCuerda's sheet, Add to a songbook and
+    # ⋯ show.
     hotel(conn, cfg)
-    # A card under its line, in the 800 px column a laptop has under 1200 px (from 1200 px it is in the pane, which lane
-    # 3b's container lays out), where a tile's name may take two lines.
-    rows = attribute_of(run(conn, cfg, tmp_path, TILE_ROWS, controls=SERVED, size=cards.IN_PLACE), "data-rows")
-    assert rows and all(r["height"] <= 80 for r in rows), rows
-    assert all(max(r["mids"]) - min(r["mids"]) <= 16 for r in rows), rows  # one line
+    rows = attribute_of(run(conn, cfg, tmp_path, TILE_ROWS, controls=SERVED, size=size, touch=touch), "data-rows")
+    assert rows and all(max(r["mids"]) - min(r["mids"]) <= 16 for r in rows), rows  # one row
+    assert all(56 <= r["height"] <= 64 if touch else r["height"] <= 48 for r in rows), rows
     [sheet] = [r for r in rows if r["name"] == "Chord sheet"]
     assert sheet["mark"] is True, sheet  # the marks of where its versions came from
     assert rows[0]["visible"] == ["Fetch again", "Use LaCuerda's sheet", "Add to a songbook…", "⋯"], rows[0]["visible"]
@@ -617,32 +628,133 @@ const panel = cardOf(line);
 const tiles = Array.from(panel.querySelectorAll(".tiles > .tile"));
 const box = (n) => { const b = n.getBoundingClientRect(); return [Math.round(b.left), Math.round(b.right),
   Math.round(b.top), Math.round(b.bottom)]; };
+const css = getComputedStyle;
 const at = (kind) => {
   drawerOf("Hotel California", kind);
-  const drawer = panel.querySelector(".drawer");
-  return { after: drawer.previousElementSibling.className, drawer: box(drawer),
-    tile: box(panel.querySelector(".tile-" + kind)), last: box(tiles[tiles.length - 1]) };
+  const drawer = panel.querySelector(".drawer"), tile = panel.querySelector(".tile-" + kind);
+  return { after: drawer.previousElementSibling.className, drawer: box(drawer), tile: box(tile),
+    corners: [css(tile).borderBottomLeftRadius, css(tile).borderBottomRightRadius, css(drawer).borderTopLeftRadius,
+      css(drawer).borderTopRightRadius],
+    stack: [css(tile, "::before").content, css(tile, "::after").content], stacked: tile.classList.contains("stack"),
+    score: box(panel.querySelector(".tile-score")) };
 };
 note("layout", { sheet: at("sheet"), guitar: at("guitar"), tiles: tiles.map(box),
   wide: [document.documentElement.scrollWidth, innerWidth] });
 """
 
 
-@pytest.mark.parametrize("size", ["390,844", "640,900", "1280,900"])
-def test_the_card_fits_with_the_drawer_under_its_tile(conn, cfg, tmp_path, size):
+@pytest.mark.parametrize(("size", "touch"), [("320,640", True), ("390,844", True), ("640,900", False),
+                                             ("1280,900", False)])
+def test_the_card_fits_with_the_drawer_under_its_tile(conn, cfg, tmp_path, size, touch):
     hotel(conn, cfg)
-    layout = attribute_of(run(conn, cfg, tmp_path, LAYOUT, size=size, controls=SERVED), "data-layout")
+    layout = attribute_of(run(conn, cfg, tmp_path, LAYOUT, size=size, controls=SERVED, touch=touch), "data-layout")
     wide, width = layout["wide"]
-    assert wide <= width, layout
+    assert wide <= width, layout  # no sideways scroll
     for kind in ("sheet", "guitar"):
         at = layout[kind]
         left, right, _, bottom = at["tile"]
         assert at["after"].startswith("tile tile-" + kind), (kind, at)  # its tile's next sibling
-        assert at["drawer"][2] >= bottom, (kind, at)  # under it
-        assert at["drawer"][0] <= left + 1 and at["drawer"][1] >= right - 1, (kind, at)  # as wide as it
-    # One tile a row, on a phone, a small tablet's width and from 720 px: the tiles after a drawer under it.
+        assert abs(at["drawer"][2] - bottom) <= 1, (kind, at)  # touching it, right under it
+        assert abs(at["drawer"][0] - left) <= 1 and abs(at["drawer"][1] - right) <= 1, (kind, at)  # its edges
+        assert at["corners"] == ["0px"] * 4, (kind, at)  # one box: the tile's bottom corners and its top square
+        assert at["stacked"] is True and at["stack"] == ["none", "none"], (kind, at)  # no stack under it while open
+        assert at["score"][2] >= at["drawer"][3], (kind, at)  # the tiles after it under its drawer
+    # One tile a row, on a phone, a small tablet's width and from 720 px.
     assert len({t[0] for t in layout["tiles"]}) == 1 and len({t[2] for t in layout["tiles"]}) == len(layout["tiles"])
-    assert layout["tiles"][4][2] >= layout["guitar"]["drawer"][3], layout  # the score's row under the guitar's drawer
+
+
+# The sheet's drawer opened: where its downloads lie, in rows, and its ✕.
+CLOSE_ROOM = """
+openCard("Hotel California");
+drawerOf("Hotel California", "sheet");
+const d = cardOf(lineOf("Hotel California")).querySelector(".drawer");
+const box = (n) => { const b = n.getBoundingClientRect(); return [b.left, b.right, b.top, b.bottom]; };
+note("room", { close: box(d.querySelector(".drawer-close")),
+  files: Array.from(d.querySelectorAll(".drawer-files > *")).map(box), drawer: box(d) });
+"""
+
+
+@pytest.mark.parametrize(("size", "touch"), [("390,844", True), ("1280,900", False)])
+def test_a_drawers_downloads_leave_room_for_its_close_and_wrap_under_it(conn, cfg, tmp_path, size, touch):
+    # The ✕ at the drawer's top right is in the way of its downloads' first row alone: they never lie under it, and on
+    # a phone's touch screen the sheet's Download, PDF, Text, ChordPro and its export take two rows, not three.
+    hotel(conn, cfg)
+    room = attribute_of(run(conn, cfg, tmp_path, CLOSE_ROOM, controls=SERVED, size=size, touch=touch), "data-room")
+    cl, cr, ct, cb = room["close"]
+    assert not [f for f in room["files"] if f[0] < cr and f[1] > cl and f[2] < cb and f[3] > ct], room
+    assert all(f[1] <= room["drawer"][1] for f in room["files"]), room  # inside it
+    mids = sorted((f[2] + f[3]) / 2 for f in room["files"])
+    rows = [m for n, m in enumerate(mids) if n == 0 or m - mids[n - 1] > 8]  # each row's first middle
+    if touch:
+        assert len(rows) == 2, room
+        assert abs(rows[0] - (ct + cb) / 2) <= 2, room  # the first row level with the ✕
+
+
+# --- the card at the pane's width: as it reads in place ------------------------------------------------------
+
+PANE = """
+const line = openCard("Hotel California");  // from 1200 px its card goes into lane 1's #card-pane, 400-480 px wide
+const card = cardOf(line), pane = document.getElementById("card-pane");
+drawerOf("Hotel California", "sheet");
+const box = (n) => n.getBoundingClientRect();
+const row = card.querySelector('.drawer-part[data-source="ug"] .vrow');
+note("pane", { inPane: pane.contains(card), width: pane.clientWidth, outer: pane.offsetWidth, wide: pane.scrollWidth,
+  stacked: box(row.querySelector(".vbtns")).top >= box(row.querySelector(".ver")).bottom - 0.5,
+  buttons: Array.from(card.querySelectorAll(".vrow .vbtns > *")).map((b) => Math.round(box(b).height)),
+  rows: Array.from(card.querySelectorAll(".tile")).map((t) => Math.round(box(t).height)) });
+"""
+
+
+@pytest.mark.parametrize("controls", [SERVED, None], ids=["served", "file"])
+@pytest.mark.parametrize("size", ["1200,900", "1280,900", "1440,900"])
+def test_the_card_fits_the_laptops_pane_on_a_wide_screen(conn, cfg, tmp_path, size, controls):
+    # In the pane a card is as narrow as a phone's: its version rows stacked (their words, then their buttons, each
+    # on one line), its tiles a row each, nothing wider than the pane, whatever the window.
+    hotel(conn, cfg)
+    pane = attribute_of(run(conn, cfg, tmp_path, PANE, controls=controls, size=size), "data-pane")
+    assert pane["inPane"] and 400 <= pane["outer"] <= 480 and pane["wide"] <= pane["width"], pane
+    assert pane["stacked"] is True and all(h <= 48 for h in pane["rows"]), pane
+    assert pane["buttons"] and all(h <= 32 for h in pane["buttons"]), pane  # "Use this one" never wraps
+
+
+WIDE_ROWS = """
+const card = cardOf(openCard("Hotel California"));
+drawerOf("Hotel California", "sheet");
+const box = (n) => n.getBoundingClientRect();
+note("wide", Array.from(card.querySelectorAll(".vrow")).map((r) => box(r.querySelector(".vbtns")).top
+  < box(r.querySelector(".ver")).bottom));
+"""
+
+
+def test_a_version_takes_one_row_in_a_card_560_px_wide(conn, cfg, tmp_path):
+    # Under its line on a laptop under 1200 px the card is about 780 px wide: a version's number, rating, note and
+    # buttons side by side, as they were from 720 px; the card's own width decides it, never the window's.
+    hotel(conn, cfg)
+    wide = attribute_of(run(conn, cfg, tmp_path, WIDE_ROWS, controls=SERVED, size=cards.IN_PLACE), "data-wide")
+    assert wide and all(wide), wide
+
+
+BOX = """
+const line = openCard("Hotel California"), card = cardOf(line), css = getComputedStyle;
+note("box", { inPane: document.getElementById("card-pane").contains(card), selected: line.classList.contains("selected"),
+  line: css(line).marginTop, card: [css(card).rowGap, css(card).paddingBottom], foot: css(card.querySelector(".foot")).display,
+  tokens: [css(card).getPropertyValue("--card-gap").trim(), css(card).getPropertyValue("--card-pad-end").trim()],
+  edge: [css(line).borderLeftWidth, css(line).borderTopLeftRadius] });
+"""
+
+
+@pytest.mark.parametrize("size", ["1280,900", cards.IN_PLACE])
+def test_the_cards_box_is_its_panels_own_and_a_selected_line_is_no_empty_card(conn, cfg, tmp_path, size):
+    hotel(conn, cfg)
+    box = attribute_of(run(conn, cfg, tmp_path, BOX, controls=SERVED, size=size), "data-box")
+    assert box["card"] == ["14px", "14px"] and box["foot"] == "flex", box  # .line-panel.song-card's, in place or not
+    assert box["tokens"] == ["14px", "14px"], box  # card.css's --card-gap and --card-pad-end, which library.css reads
+    if size == "1280,900":  # the card in the pane: its line, selected, isn't raised as an empty card
+        assert box["inPane"] and box["selected"] and box["line"] == "0px", box
+        assert box["edge"] == ["0px", "0px"], box  # no card's edge or corners: a line as its neighbours are
+    else:  # in place, the opened line is raised as today
+        assert not box["inPane"] and box["line"] == "6px", box
+        assert box["edge"] == ["1px", "12px"], box
 
 
 @pytest.mark.parametrize("size", ["390,844", "1280,900"])
@@ -922,7 +1034,11 @@ def test_lacuerda_use_this_one_waits_for_a_pin_to_go(conn, cfg, versions_served,
     item = drawer_of(browser, song)
     buttons = f"[...document.querySelectorAll('{card(browser, item)} {LC} button')].map((b) => b.textContent)"
     assert "Use this one" not in browser.js(buttons)
+    # Its note says where the one Back to our pick is: the UG part's, above it, never a second button of its own.
+    assert "Back to our pick" not in browser.js(buttons)
     assert browser.js(f"document.querySelector('{card(browser, item)} {LC} .pin-note').textContent") == (
-        "Your UG choice is in use. Back to our pick first.")
-    press(browser, item, "Back to our pick", LC)
+        "Your UG choice is in use: Back to our pick, above, first.")
+    every = f"[...document.querySelectorAll('{card(browser, item)} .drawer button')].map((b) => b.textContent)"
+    assert browser.js(every).count("Back to our pick") == 1
+    press(browser, item, "Back to our pick", UG)
     assert posts.next(0) == ("/versions/clear", {"csrf": "tok", "song": str(song.id), "identity": song.key})

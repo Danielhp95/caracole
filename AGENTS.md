@@ -1074,16 +1074,15 @@ It is rows.js's, shared by both pages:
     `scroll-margin-top` `calc(var(--bar-h) + 8px)`, `smooth()`: at once with reduced motion), and the head's close
     gives the chevron the focus (test_library_card_place.py);
   - a crossing with card.css: lane 1's head rule (library.css) reads card.css's gap between a song card's parts and
-    its bottom padding as `var(--card-gap, 14px)` and `var(--card-pad-end, 14px)`, today's values; Task 3b.4, which
-    keys the card's box to `.line-panel.song-card`, defines the two tokens there once, and its rules use them. For
+    its bottom padding as `var(--card-gap, 14px)` and `var(--card-pad-end, 14px)`, which card.css defines once, on
+    `.line-panel.song-card` (the card wherever it is: its gap and padding), and its rules use. For
     Task 1d.6: `.line-panel > .card-head` (sticky, height 0) and `.card-head-in` (absolute, hidden until
     `.head-away`) aren't scoped to in place, only the head's margins are (`.line > .line-panel.song-card >
     .card-head`): the pane undoes both (`#card-pane .card-head`, `.card-head-in`: static, shown);
   - from 1200 px in the pane, `#card-pane` (library.js `selectLine`, through rows.js foldMore's `onToggle`,
     `cardToggled`): opening a line's card moves it there, the line `.selected` and `aria-current="true"` (filled with
     `color-mix(in srgb, var(--accent) 8%, var(--surface))`, never the play buttons' `--raised`, the accent along its
-    edge; no opened card's box: `#library-view .line.selected`'s margin and border reset, a crossing with Task 3b.4,
-    which deletes it once card.css's box keys on `:not(.selected)`), the card's head its
+    edge; no opened card's box: card.css's box, an opened line's, keys on `:not(.selected)`), the card's head its
     heading (out of `aria-hidden`, its close tabbable, the pane `aria-labelledby` its name), the focus on its
     `.card-name` when the chevron's click came from a key (`isTrusted`, `detail` 0); closing it, another line's opening,
     or its line no longer shown after `render` and `drawGroups` (`keepSelected`) puts it back right after the
@@ -1101,10 +1100,14 @@ It is rows.js's, shared by both pages:
     `inItem(item, selector)`, which the forms posted in place, a removal's held buttons and focus, `paint`, the picker
     and Recently opened go through;
   - the pane's own rules, library.css's `#card-pane …` (its card's padding and gap, its head, `.foot-menu` opening
-    downward, the steps), the one way lane 1 names a card's part; the tiles' layout in the pane's 400–480 px is lane
-    3b's container's;
-  - a tile for each thing to play from, every one alike, its chevron opening its drawer under it (its downloads, then
-    a part a source of its versions), which reads the page's data alone, never a request;
+    downward, the steps), the one way lane 1 names a card's part; what is inside the tiles is laid out by the card's
+    width, never the window's (card.css: `.tiles` a container, `container: tiles / inline-size`, its `@container
+    tiles` rules: a version's four columns from a card 560 px wide, stacked below), so the card reads the same in the
+    pane's 400–480 px as under its line (test_library_card.py);
+  - a tile for each thing to play from, every one alike, one row at every width (its body, its sources' marks, its
+    chevron: 56–64 px tall on a touch screen, 48 at most with a mouse), its chevron opening its drawer under it,
+    touching it (its downloads, then a part a source of its versions), which reads the page's data alone, never a
+    request;
   - its UG versions not kept are counted (`versions.rest`, `sheet_versions.may_keep`), and Fetch them keeps them,
     `caracole versions --keep-more`, within a lookup's budget (test_library_card.py).
 

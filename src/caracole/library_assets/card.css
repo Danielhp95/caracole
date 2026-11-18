@@ -1,49 +1,67 @@
-/* A song of yours opened (card.js): its line and what its chevron unfolds, one card raised over the list, its
-   border the line's and the next line's edge; removed while open, its line keeps that box (library.js). A site's
+/* A song of yours opened (card.js) under its line: its line and what its chevron unfolds, one card raised over the
+   list, its border the line's and the next line's edge; removed while open, its line keeps that box (library.js). A
+   line whose card is in the laptop's pane (.selected, library.css) is no card: its card is beside the list. A site's
    song in the search keeps its plain panel. */
-.line:not(.hit):has(> .line-more[aria-expanded="true"]), .line.card-gone { margin: 6px 6px 8px;
+.line:not(.hit):not(.selected):has(> .line-more[aria-expanded="true"]), .line.card-gone { margin: 6px 6px 8px;
   border: 1px solid var(--border-strong); border-radius: 12px; background: var(--card); box-shadow: var(--card-shadow); }
-.line:not(.hit):has(> .line-more[aria-expanded="true"]) + .line, .line.card-gone + .line { border-top: 0; }
-.line:not(.hit) > .line-panel { gap: 14px; padding: 4px 8px 14px 0; }
+.line:not(.hit):not(.selected):has(> .line-more[aria-expanded="true"]) + .line, .line.card-gone + .line {
+  border-top: 0; }
+/* The card itself, wherever it is (under its line, in the pane): its parts' gap and its bottom padding, which
+   library.css's head and pane rules read. */
+.line-panel.song-card { --card-gap: 14px; --card-pad-end: 14px; gap: var(--card-gap);
+  padding: 4px 8px var(--card-pad-end) 0; }
 .card-label { margin: 0 0 8px; color: var(--muted); font-size: .72rem; font-weight: 700; letter-spacing: .08em;
   text-transform: uppercase; }
 .card-label em { margin-left: 8px; font-style: normal; font-weight: 500; letter-spacing: 0; text-transform: none; }
 
-/* What you play from it: a tile each, one a row, its body opening what it holds, then the marks of where its versions
-   came from and a chevron that opens its drawer right under it; every one alike, its glyph in the accent as its line's
-   button has it, none first, an auto sheet's in its own colour. More than one version: a small stack under it. On a
-   phone its body takes the tile's first row, its marks and its chevron the second. */
-.tiles { position: relative; z-index: 0; display: grid; grid-template-columns: minmax(0, 1fr); align-items: start;
-  gap: 16px 12px; }
-.tile { position: relative; display: flex; flex-wrap: wrap; align-items: center; min-width: 0;
-  border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
-.tile-open { flex: 1 0 100%; display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center;
-  gap: 10px; padding: 12px 12px 10px; border-radius: 11px 11px 0 0; color: inherit; text-decoration: none; }
+/* What you play from it: a tile each, a row each, one row at every width: its body opening what it holds (its name,
+   its version), then the marks of where its versions came from and a chevron that opens its drawer right under it;
+   every one alike, its glyph in the accent as its line's button has it, none first, an auto sheet's in its own colour.
+   More than one version: a small stack under it. The tiles are a container (``tiles``): what is inside them is laid
+   out by the card's own width, never the window's, so the card reads the same in the laptop's pane as under its
+   line. */
+.tiles { container: tiles / inline-size; position: relative; z-index: 0; display: grid;
+  grid-template-columns: minmax(0, 1fr); align-items: start; gap: 8px; }
+.tile { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center;
+  column-gap: 8px; min-width: 0; padding-right: 6px; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface); }
+.tile-open { grid-column: 1; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center;
+  gap: 10px; padding: 5px 4px 5px 10px; border-radius: 11px 0 0 11px; color: inherit; text-decoration: none; }
 .tile-open:hover .tile-name { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
-.tile-ico { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; background: var(--raised);
+.tile-ico { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; background: var(--raised);
   color: var(--accent); }
 .tile-ico svg.glyph { width: 20px; height: 20px; }
 .tile-words { display: grid; min-width: 0; }
-.tile-name { font-weight: 650; line-height: 1.3; }
-.tile-from { overflow: hidden; color: var(--muted); font-size: .78rem; white-space: nowrap; text-overflow: ellipsis; }
+.tile-name { font-weight: 650; line-height: 1.25; }
+.tile-from { overflow: hidden; color: var(--muted); font-size: .78rem; line-height: 1.2; white-space: nowrap;
+  text-overflow: ellipsis; }
 .tile-go { display: grid; color: var(--muted); }
 .tile-go svg.glyph { width: 18px; height: 18px; }
+@container tiles (max-width: 299px) {  /* a phone 360 px wide or less: its name the room its arrow took */
+  .tile-open { grid-template-columns: auto minmax(0, 1fr); }
+  .tile-go { display: none; }
+}
 .tile.auto { border-color: color-mix(in srgb, var(--auto) 60%, transparent); }
 .tile.auto .tile-ico { color: var(--auto); }
 .tile.auto .tile-go { color: var(--auto); }
-.tile.stack::before, .tile.stack::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: -5px;
+.tile.stack::before, .tile.stack::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: -4px;
   z-index: -1; height: 8px; border: 1px solid var(--border); border-top: 0; border-radius: 0 0 11px 11px;
   background: var(--sunk); }
-.tile.stack::after { left: 20px; right: 20px; bottom: -9px; background: var(--card); }
+.tile.stack::after { left: 20px; right: 20px; bottom: -7px; background: var(--card); }
+/* Its drawer open: the tile and the drawer one box in the accent, the tile's bottom edge the line between them; a
+   stack's sheets gone, the drawer listing its versions. */
+.tile.open { border-color: var(--accent); border-bottom-color: var(--border); border-radius: 12px 12px 0 0; }
+.tile.open > .tile-open { border-bottom-left-radius: 0; }
+.tile.open::before, .tile.open::after { content: none; }
 /* Where its versions came from: their marks; or the one page its lyrics link back to (Megalobiz's, AZLyrics'), its
    mark and its name. */
-.tile-source { display: flex; align-items: center; gap: 4px; min-width: 0; min-height: 32px; margin: 0 0 6px 12px;
+.tile-source { grid-column: 2; display: flex; align-items: center; gap: 4px; min-width: 0; min-height: 32px;
   color: var(--muted); font-size: .8rem; font-weight: 600; text-decoration: none; white-space: nowrap; }
 a.tile-source:hover .tile-source-name { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
 /* Its chevron, at the tile's end: turned while its drawer shows, in the accent. */
-.tile-more { display: grid; flex: none; place-items: center; width: 32px; height: 32px; margin: 0 6px 6px auto;
-  padding: 0; border: 1px solid transparent; border-radius: var(--radius-m, 8px); background: transparent;
-  color: var(--muted); cursor: pointer; }
+.tile-more { grid-column: 3; display: grid; place-items: center; width: 32px; height: 32px; margin: 0; padding: 0;
+  border: 1px solid transparent; border-radius: var(--radius-m, 8px); background: transparent; color: var(--muted);
+  cursor: pointer; }
 .tile-more:hover { border-color: var(--border); background: var(--raised); color: var(--text); }
 .tile-more svg.glyph { width: 18px; height: 18px; }
 .tile-more[aria-expanded="true"] { border-color: var(--accent);
@@ -54,12 +72,16 @@ a.tile-source:hover .tile-source-name { color: var(--text); text-decoration: und
 .dl:hover { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
 .dl svg.glyph { flex: none; width: 13px; height: 13px; }
 
-/* A tile's drawer, opened from its chevron, right under it: its downloads, then a part a source of its versions (its
-   head, a row a version), its ✕ at its top right. */
-.drawer { position: relative; margin-top: -4px; border: 1px solid var(--accent); border-radius: 12px;
-  background: var(--surface); }
-.drawer-files { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; padding: 10px 48px 10px 12px; }
-.drawer-files .lead { color: var(--muted); font-size: .76rem; font-weight: 650; }
+/* A tile's drawer, opened from its chevron, right under it, touching it (the tiles' gap taken back), as wide: its
+   downloads, then a part a source of its versions (its head, a row a version), its ✕ at its top right. */
+.drawer { position: relative; margin-top: -8px; border: 1px solid var(--accent); border-top: 0;
+  border-radius: 0 0 12px 12px; background: var(--surface); }
+/* Its downloads, a row, wrapped where they don't fit: the ✕'s room is kept on the rows beside it alone, by a float
+   as tall as the ✕ reaches (a flex row would keep it on every row). */
+.drawer-files { padding: 8px 0 8px 12px; }
+.drawer-files::before { content: ""; float: right; width: 34px; height: 29px; }
+.drawer-files > * { margin: 2px 14px 2px 0; vertical-align: middle; }
+.drawer-files .lead { display: inline-block; color: var(--muted); font-size: .76rem; font-weight: 650; }
 .drawer-part + .drawer-part, .drawer-files + .drawer-part { border-top: 1px solid var(--border); }
 .drawer-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-height: 46px;
   padding: 8px 12px; border-bottom: 1px solid var(--border); }
@@ -98,11 +120,13 @@ a.tile-source:hover .tile-source-name { color: var(--text); text-decoration: und
 .drawer-rest { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px;
   border-top: 1px solid var(--border); color: var(--muted); font-size: .85rem; }
 .drawer-rest form { margin: 0; }
-@media (max-width: 719px) {  /* on a phone the source's mark, beside what it lists, its counts under that */
+/* A card under 560 px (a phone's, the laptop's pane): a version's number and rating, its note under them, its
+   buttons under that; a part's source's mark beside what it lists, its counts under that. Wider, one row each. */
+@container tiles (max-width: 559px) {
   .drawer-head { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; }
   .drawer-head > :not(.source):not(.drawer-what) { grid-column: 2; justify-self: start; }
 }
-@media (min-width: 720px) {
+@container tiles (min-width: 560px) {
   .vrow { grid-template-columns: 5.5rem 9.5rem minmax(0, 1fr) auto; grid-template-areas: "ver stars note act"; }
   .vrow .note { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .vbtns { justify-content: flex-end; }
@@ -152,25 +176,18 @@ a.tile-source:hover .tile-source-name { color: var(--text); text-decoration: und
 .btn.remove svg.glyph { color: var(--failed); }
 .btn.remove:hover { border-color: var(--failed); background: var(--failed-bg); }
 
-/* From 720 px a tile is one row: its name and version, the marks of where it came from, its chevron at the end. A
-   phone keeps its marks and chevron on a row under its name. */
-@media (min-width: 720px) {
-  .tiles { gap: 8px; }
-  .tile { flex-wrap: nowrap; gap: 4px 12px; }
-  .tile-open { flex: 1 1 auto; padding: 8px 4px 8px 12px; border-radius: 11px 0 0 11px; }
-  .tile-source { flex: none; margin: 0; }
-  .tile-more { margin: 0 8px 0 0; }
-}
-
-/* A thumb's targets: every chevron, link, download, button and close of the card, 44 px. */
+/* A thumb's targets: every chevron, link, download, button and close of the card, 44 px; a tile 58 px tall. */
 @media (pointer: coarse) {
   .dl, .prog, .vrow .btn, .inuse, .info-file, .progs-more, a.tile-source { min-height: 44px; }
   .foot-more-btn { min-width: 44px; }
   .dl { min-width: 44px; justify-content: center; }
+  .tile-open { padding: 9px 4px 9px 10px; }
+  .tile-ico { width: 38px; height: 38px; border-radius: 10px; }
   .tile-more { width: 44px; height: 44px; }
-  .drawer-files, .drawer-close + .drawer-part > .drawer-head { padding-right: 60px; }
-  .drawer-files { padding-top: 1px; padding-bottom: 1px; }  /* its first row level with the ✕ */
-  .drawer-close { top: 1px; width: 44px; height: 44px; }
+  .drawer-close + .drawer-part > .drawer-head { padding-right: 60px; }
+  .drawer-files { padding-top: 0; padding-bottom: 0; }  /* its first row level with the ✕ */
+  .drawer-files::before { width: 46px; height: 46px; }
+  .drawer-close { top: 2px; width: 44px; height: 44px; }
 }
 @media (prefers-reduced-motion: no-preference) {
   .tile-more svg.glyph { transition: transform .15s; }
