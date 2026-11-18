@@ -3413,8 +3413,7 @@ LINE_STATES = "(() => {" + cards.KIT + """
         }
       }
     }
-    measured[l.querySelector("h3").textContent] = { height: Math.round(lb.height), out, over,
-      plays: Boolean(l.querySelector(".line-plays > .play")) };
+    measured[l.querySelector("h3").textContent] = { height: Math.round(lb.height), out, over };
   }
   const crep = lines.find((l) => l.querySelector("h3").textContent === "Crep");
   crep.querySelector(".line-action button").click();
@@ -3448,10 +3447,8 @@ def test_a_lines_states_fit_its_line_and_its_pick_opens_the_picker_where_it_is(c
     assert states["page"] == int(size.split(",")[0]) and states["scroll"] <= states["page"], states
     for title, line in states["lines"].items():
         assert line["out"] == [] and line["over"] == [], (title, line)
-    # A line with a request's line is one line taller than the rest, no more; from 1200 px a folded line's buttons are
-    # a row of their own too (library.css), so the rest are those with none.
-    plain = max(line["height"] for title, line in states["lines"].items()
-                if title != "Bohemian Rhapsody" and not line["plays"])
+    # A line with a request's line is one line taller than the rest, no more.
+    plain = max(line["height"] for title, line in states["lines"].items() if title != "Bohemian Rhapsody")
     # The queued line holds Cancel, a button of 32 px (44 on a touch screen) that the line grows to hold, as a
     # removal's Undo does; the limit of 30 predates a button in it.
     assert plain < states["lines"]["Bohemian Rhapsody"]["height"] <= plain + 30 + 14, states

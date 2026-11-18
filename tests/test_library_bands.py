@@ -207,8 +207,6 @@ ORDER = """(() => {
     const name = by && (by.querySelector('.artist-name') || by);
     return { title: h3.textContent, h3: [box(h3).right, box(h3).top, box(h3).bottom], by: by && [box(by).left, box(by).right],
       plays: l(plays), key: l(key), more: l(more), pick: l(p), line: [box0.top, box0.bottom, box0.right],
-      h3left: box(h3).left, playsTop: plays && plays.checkVisibility() ? box(plays).top : null,
-      byMid: by && (box(by).top + box(by).bottom) / 2, keyTop: key && box(key).top,
       band: !by || !by.checkVisibility(), cut: h3.scrollWidth > h3.clientWidth,
       byCut: name && name.scrollWidth > name.clientWidth + 1, rem: parseFloat(getComputedStyle(document.documentElement).fontSize),
       page: [document.documentElement.scrollWidth, innerWidth] };
@@ -259,7 +257,8 @@ def _laid(conn, cfg, tmp_path, size, selecting):
 
 
 @in_chromium
-@pytest.mark.parametrize("size", ["1199,900", "1024,900", "800,900", "720,900"])  # from 1200 px, the pane: below
+# 1280 and 1200 beside the pane, the rest one column.
+@pytest.mark.parametrize("size", ["1280,800", "1200,900", "1199,900", "1024,900", "800,900", "720,900"])
 @pytest.mark.parametrize("selecting", [False, True])
 def test_on_a_laptop_a_line_reads_title_artist_tiles_key_chevron(conn, cfg, tmp_path, size, selecting):
     for artist, title in (("Oasis", "Wonderwall"), ("Eagles", "Desperado"), ("Queen", LONG_TITLE),
@@ -280,38 +279,9 @@ def test_a_folded_one_song_artist_reads_title_artist_tiles_and_a_band_keeps_titl
     keyed(conn, cfg, "Eagles", "Desperado")
     keyed(conn, cfg, "Oasis", "Wonderwall")
     keyed(conn, cfg, "Oasis", "Live Forever")
-    lines = drawn(conn, cfg, tmp_path, ORDER, "1024,800")
+    lines = drawn(conn, cfg, tmp_path, ORDER, "1280,800")
     folded = [line for line in lines if line["title"] == "Desperado"]
     _on_one_row(folded)
     for line in lines:
         if line["title"] != "Desperado":  # in a band: no artist on the line, the tiles right after the title
             assert line["band"] and line["h3"][0] <= line["plays"], line
-
-
-@in_chromium
-@pytest.mark.parametrize("size", ["1280,900", "1200,900"])
-@pytest.mark.parametrize("selecting", [False, True])
-def test_beside_the_pane_a_line_reads_title_artist_key_and_its_tiles_under_its_title(conn, cfg, tmp_path, size, selecting):
-    # From 1200 px the list beside the laptop's pane is 760 px: a line keeps its first row the owner's (its title, its
-    # artist right after it, then its key and its chevron) and its buttons go on a row of their own under its title
-    # (where the lanes meet, 12), selecting too, after its box; the title gives way first, the artist keeps its name.
-    for artist, title in (("Oasis", "Wonderwall"), ("Eagles", "Desperado"), ("Queen", LONG_TITLE),
-                          (RED_HOT, LONG_TITLE + " (live)")):
-        keyed(conn, cfg, artist, title)
-    lines = _laid(conn, cfg, tmp_path, size, selecting)
-    assert len(lines) == 4, lines
-    for line in lines:
-        assert line["by"] and line["plays"] is not None and line["key"] is not None, line
-        left, right = line["by"]
-        assert line["h3"][0] <= left + 0.5 and line["h3"][1] <= line["byMid"] <= line["h3"][2], line  # one row
-        assert right < line["key"] and line["keyTop"] < line["h3"][2], line  # the key on it, after the artist
-        assert selecting or line["key"] < line["more"], line
-        assert line["playsTop"] >= line["h3"][2] - 1 and abs(line["plays"] - line["h3left"]) <= 1, line  # under the title
-        assert (line["key"] if selecting else line["more"]) <= line["line"][2] + 0.5, line
-        assert right - left <= 16 * line["rem"] + 1 and line["page"][0] <= line["page"][1], line
-        if selecting:
-            assert line["pick"] is not None and line["pick"] < line["h3left"], line
-        if line["title"].startswith(LONG_TITLE):
-            assert line["cut"] and not line["byCut"], line
-        else:
-            assert not line["cut"] and not line["byCut"], line

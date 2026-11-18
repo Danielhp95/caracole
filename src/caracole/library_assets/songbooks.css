@@ -205,8 +205,10 @@ button.plays:hover, button.plays[aria-expanded="true"] { border-color: var(--acc
   .selecting section.artist:not(.folded) .line { grid-template-columns: 44px minmax(0, 1fr) 6.5rem 2.75rem;
     grid-template-areas: "pick title status key"; }
 }
-@media (min-width: 1200px) {  /* beside the laptop's pane, its buttons under its title (library.css) */
-  .selecting section.artist.folded .line:not(.hit):not(.miss), .selecting section.flat .line:not(.hit):not(.miss) {
+/* Beside the laptop's pane, a line's buttons under its title where they don't fit beside it (library.css). */
+@media (min-width: 1200px) {
+  .selecting section.artist.folded .line.plays-under:not(.hit):not(.miss),
+  .selecting section.flat .line.plays-under:not(.hit):not(.miss) {
     grid-template-columns: 44px minmax(4rem, max-content) fit-content(16rem) minmax(0, 1fr) 6.5rem 2.75rem;
     grid-template-areas: "pick name by . status key" "pick plays plays plays plays ."; }
 }

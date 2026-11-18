@@ -965,9 +965,11 @@
     if (shownSongs.has(fresh)) shownSongs.set(old, shownSongs.get(fresh));
     else shownSongs.delete(old);
     const kept = old.querySelector(".progress");
+    placedAt.delete(old);  // its buttons placed again, as it is now
     if (!kept) {
       if (old.parentNode) old.replaceWith(fresh);
       if (shown) placeAgain(old, fresh, shown);
+      placePlays();
       return fresh;
     }
     const at = document.activeElement;
@@ -989,6 +991,7 @@
     Object.assign(old.dataset, fresh.dataset);
     if (shown) placeAgain(old, old, shown);
     if (focused && old.isConnected) focusOn(kept);
+    placePlays();
     return old;
   };
   const failure = (answer) => ({ line: { tone: "failed", text: (answer.body && answer.body.error) ||
@@ -1594,6 +1597,32 @@
   const keepSelected = () => {
     if (selected && !selected.checkVisibility()) unselect();
   };
+  // From 1200 px a folded or flat line's buttons stay on its row while they fit beside its title and its artist, and
+  // go on a row of their own under the title where they don't (``plays-under``, library.css): measured in the one row,
+  // where they wrap (the last below the first), once a line, and again once the list's width, Select, or the line
+  // itself (refill, an action gone) changes; a line hidden is measured once it shows. Under 1200 px, none.
+  const placedAt = new WeakMap();  // a line -> the list's width (and Select) its buttons were placed at
+  const placePlays = () => {
+    const under = Array.from(libraryView.querySelectorAll(".line.plays-under"));
+    if (!paneWide || !paneWide.matches) {
+      for (const line of under) line.classList.remove("plays-under");
+      return;
+    }
+    const lines = new Set(Array.from(libraryView.querySelectorAll("section.artist.folded .line, section.flat .line"))
+      .filter((line) => !line.matches(".hit, .miss") && line.querySelector(":scope > .line-title > .line-plays")));
+    for (const line of under) if (!lines.has(line)) line.classList.remove("plays-under");  // a band's line now
+    const main = libraryView.querySelector(".lib-main");
+    const at = String(main ? main.clientWidth : 0) + (document.body.classList.contains("selecting") ? " Select" : "");
+    const todo = Array.from(lines).filter((line) => placedAt.get(line) !== at && line.checkVisibility());
+    for (const line of todo) line.classList.remove("plays-under");
+    const wraps = todo.filter((line) => {
+      const chips = line.querySelectorAll(":scope > .line-title > .line-plays > .play");
+      return chips.length > 1 && chips[chips.length - 1].getBoundingClientRect().top
+        > chips[0].getBoundingClientRect().top + 1;
+    });
+    for (const line of todo) placedAt.set(line, at);
+    for (const line of wraps) line.classList.add("plays-under");
+  };
   if (pane) {
     pane.addEventListener("keydown", (e) => {
       if (e.key !== "Escape" || e.defaultPrevented || e.isComposing || !selected) return;
@@ -1605,6 +1634,7 @@
   }
   if (paneWide) {
     paneWide.addEventListener("change", () => {
+      placePlays();
       if (!paneWide.matches) {
         unselect({ keepOpen: true });
         return;
@@ -1615,6 +1645,19 @@
       if (last) selectLine(last.parentNode, awayCards.get(last).card, false);
     });
   }
+  if (pane && "ResizeObserver" in window) {
+    const main = libraryView.querySelector(".lib-main");
+    if (main) new ResizeObserver(() => placePlays()).observe(main);
+  }
+  let wasSelecting = document.body.classList.contains("selecting");
+  new MutationObserver(() => {  // Select on or off: a line's row has its box, and no chevron
+    const now = document.body.classList.contains("selecting");
+    if (now !== wasSelecting) {
+      wasSelecting = now;
+      placePlays();
+    }
+  }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+  document.addEventListener("caracole:tab", () => placePlays());  // a line hidden behind another tab, shown
   // A song's card opened or closed (rows.js foldMore's ``onToggle``, ``e`` its click): from 1200 px in the pane;
   // under its line otherwise, where its head is watched while it is open and closing it brings its line back.
   const cardToggled = (open, card, chevron, e) => {
@@ -2044,6 +2087,7 @@
     if (searchingAll) {
       drawResults(query, false);
       keepSelected();
+      placePlays();
       return;
     }
 
@@ -2142,6 +2186,7 @@
     tell();
     drawResults(query, answerInList);
     keepSelected();  // its line gone from the list: the pane empties
+    placePlays();
   };
 
   // How many songs the search and the progression find, the filters aside: an empty list's Show all brings them.
@@ -3232,6 +3277,7 @@
     drawProgFound();
     notesBox.replaceChildren(...(model && !missed ? notesOf(model) : []));
     keepSelected();
+    placePlays();
   };
   // What the search says beside its results (rows.js), each made once an answer, Ask LaCuerda's state kept from one
   // draw to the next. Ask LaCuerda is the one LaCuerda button: it sends LaCuerda's search while its gate lets one go
@@ -4112,6 +4158,8 @@
       if (button && isActive(view)) {
         if (button.contains(document.activeElement)) focusOn(p);  // the line takes the button's place
         button.remove();
+        placedAt.delete(item);  // its row has the action's room now
+        placePlays();
       }
       const again = inItem(item, ".actions.again");
       if (again && isActive(view)) {  // asked for already: the line is drawn again once it is over

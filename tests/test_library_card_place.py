@@ -695,8 +695,8 @@ def test_opening_a_card_adds_no_history_entry(conn, cfg, tmp_path, size):
         b.close()
 
 
-# Each song line's parts where they are: its h3's box, its artist's and its buttons', its key's and chevron's lefts and
-# rights, every play's box inside the line, and the list's right.
+# Each song line's parts where they are: its h3's box, its artist's (and its middle), its buttons' (left, top, right),
+# its key's and chevron's lefts and rights, every play's box inside the line, and the list's right.
 PARTS = """(() => {
   const r = (n) => n && n.checkVisibility() ? n.getBoundingClientRect() : null;
   const list = document.getElementById('list').getBoundingClientRect();
@@ -706,7 +706,8 @@ PARTS = """(() => {
     const each = [...line.querySelectorAll('.line-plays > .play')].map((p) => p.getBoundingClientRect());
     return [line.querySelector('h3').textContent, {
       h3: [h3.left, h3.right, h3.top, h3.bottom], by: by && [by.left, by.right, (by.top + by.bottom) / 2],
-      plays: plays && [plays.left, plays.top], key: key && [key.left, key.right, key.top], more: more && [more.left, more.right],
+      plays: plays && [plays.left, plays.top, plays.right], key: key && [key.left, key.right, key.top],
+      more: more && [more.left, more.right],
       inside: each.every((p) => p.left >= box.left - 0.5 && p.right <= box.right + 0.5 && p.top >= box.top - 0.5
         && p.bottom <= box.bottom + 0.5), n: each.length, line: [box.left, box.right, box.width],
       cut: line.querySelector('h3').scrollWidth > line.querySelector('h3').clientWidth }];
@@ -715,36 +716,46 @@ PARTS = """(() => {
 
 
 @pytest.mark.parametrize("size", ["1280,900", "1200,900"])
-def test_on_a_laptop_chips_wrap_under_the_title_and_never_push_the_key_off(conn, cfg, tmp_path, size):
-    # Beside the pane, a folded line keeps its first row the owner's (its title, its artist right after it, then its
-    # key and chevron) and its play buttons go on a row of their own under its title: none pushes the key off the line,
-    # and the title keeps its room.
+@pytest.mark.parametrize("selecting", [False, True])
+def test_on_a_laptop_chips_wrap_under_the_title_and_never_push_the_key_off(conn, cfg, tmp_path, size, selecting):
+    # Beside the pane a folded line reads on one row as under 1200 px (its title, its artist right after it, its play
+    # buttons, its key and its chevron) while its buttons fit there; where they don't, they go on a row of their own
+    # under its title, and the first row keeps the title, its artist right after it, the key and the chevron. None
+    # pushes the key off the line, and the title keeps its room; selecting too, after the line's box.
     from test_library_bands import keyed
 
     hotel(conn, cfg)
+    keyed(conn, cfg, "The Beatles", "Yesterday")
     for title in ("Creep", "Karma Police"):
         keyed(conn, cfg, "Radiohead", title)
     width, height = (int(n) for n in size.split(","))
     b = _opened(tmp_path, write_library_page(cfg.library_dir, page(conn, cfg)).as_uri(), {"width": width, "height": height})
     try:
+        if selecting:  # Select on, as + New songbook turns it on: each line gets its box
+            b.js("document.dispatchEvent(new CustomEvent('caracole:new-songbook'))")
+            assert b.wait("document.querySelectorAll('#list .line > .pick').length === 4")
         at = b.js(PARTS)
-        hotel_line, creep, karma = at["Hotel California"], at["Creep"], at["Karma Police"]
+        hotel_line, yesterday, creep = at["Hotel California"], at["Yesterday"], at["Creep"]
         whole = at[""]
-        assert hotel_line["n"] == 5 and creep["n"] == 1, at
-        assert abs(hotel_line["key"][0] - creep["key"][0]) <= 1, at  # the key's column, whatever the buttons
-        for line in (hotel_line, creep, karma):
-            assert line["inside"], line
-            assert line["more"][1] <= whole["list"][1] + 0.5, (line, whole)
-            assert not line["cut"], line  # the title whole
-        assert abs(hotel_line["more"][0] - karma["more"][0]) <= 1 and abs(creep["more"][0] - karma["more"][0]) <= 1, at
-        assert hotel_line["key"][1] <= whole["list"][1] + 0.5, at
-        # Folded (Eagles has one song): the title, its artist right after it on its row, the key there too; the buttons
-        # under the title.
-        h3, by = hotel_line["h3"], hotel_line["by"]
+        assert hotel_line["n"] == 5 and yesterday["n"] == 1 and creep["n"] == 1, at
+        lines = (hotel_line, yesterday, creep, at["Karma Police"])
+        assert max(line["key"][0] for line in lines) - min(line["key"][0] for line in lines) <= 1, at  # one column
+        for line in lines:
+            assert line["inside"] and not line["cut"], line  # every button on the line, the title whole
+            assert line["key"][1] <= whole["list"][1] + 0.5, (line, whole)
+            if not selecting:
+                assert line["key"][1] <= line["more"][0] and line["more"][1] <= whole["list"][1] + 0.5, (line, whole)
+        # Yesterday, folded (The Beatles have one song): one row, its title, its artist, its button, then its key.
+        h3, by, plays = yesterday["h3"], yesterday["by"], yesterday["plays"]
+        assert by and h3[1] <= by[0] + 0.5 and h3[2] <= by[2] <= h3[3], yesterday
+        assert by[1] <= plays[0] + 0.5 and plays[1] < h3[3] and plays[2] <= yesterday["key"][0], yesterday
+        # Hotel California, folded, five buttons that don't fit beside it: its title, its artist right after it and its
+        # key on the first row, the buttons under the title.
+        h3, by, plays = hotel_line["h3"], hotel_line["by"], hotel_line["plays"]
         assert by and h3[1] <= by[0] + 0.5 and h3[2] <= by[2] <= h3[3], hotel_line
         assert hotel_line["key"][2] < h3[3], hotel_line
-        assert hotel_line["plays"][1] >= h3[3] - 1 and abs(hotel_line["plays"][0] - h3[0]) <= 1, hotel_line
-        # In Radiohead's band: the title, then its button beside it where it fits.
+        assert plays[1] >= h3[3] - 1 and abs(plays[0] - h3[0]) <= 1, hotel_line
+        # In Radiohead's band: the title, then its button beside it.
         assert creep["plays"][0] >= creep["h3"][1] and creep["plays"][1] < creep["h3"][3], creep
         assert whole["page"][0] <= whole["page"][1], whole
     finally:

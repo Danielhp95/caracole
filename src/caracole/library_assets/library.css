@@ -277,20 +277,21 @@ section.artist.folded .line-by, section.flat .line-by { flex: 0 1 auto; color: v
   section.artist.folded .line:not(.hit):not(.miss) > .line-title > .line-plays,
   section.flat .line:not(.hit):not(.miss) > .line-title > .line-plays { grid-area: plays; max-width: none; }
 }
-/* From 1200 px, beside the pane (where the lanes meet, 12), the list is 760 px: too narrow for a line's buttons (chips
-   of 100 to 150 px) beside its title, its artist, its key and its chevron. A folded or flat line keeps its first row
-   the owner's (the title, its artist right after it, then the status, the action, the key and the chevron) and its
-   buttons go on a row of their own under the title, wrapping there; a band's line has them beside its title where
-   they fit, else under it. None ever pushes the key off the line, and the title keeps the room they took from it. */
+/* From 1200 px, beside the pane (where the lanes meet, 12), the list is 760 px: a line's buttons (chips of 100 to
+   150 px) may not fit beside its title, its artist, its key and its chevron. A folded or flat line keeps the one row
+   above while they fit; where they don't (library.js placePlays: .plays-under), its first row is the title, its artist
+   right after it, the status, the action, the key and the chevron, and its buttons go on a row of their own under the
+   title, wrapping there. A band's line has them beside its title where they fit, else under it. None ever pushes the
+   key off the line, and the title keeps the room they took from it. */
 @media (min-width: 1200px) {
   .line > .line-title { flex-wrap: wrap; row-gap: 4px; }
   .line > .line-title > .line-plays { max-width: 100%; }
-  section.artist.folded .line:not(.hit):not(.miss),
-  section.flat .line:not(.hit):not(.miss) { grid-template-columns: minmax(4rem, max-content) fit-content(16rem)
-    minmax(0, 1fr) 6.5rem auto 2.75rem var(--line-more); grid-template-rows: minmax(28px, auto);
+  section.artist.folded .line.plays-under:not(.hit):not(.miss),
+  section.flat .line.plays-under:not(.hit):not(.miss) { grid-template-columns: minmax(4rem, max-content)
+    fit-content(16rem) minmax(0, 1fr) 6.5rem auto 2.75rem var(--line-more); grid-template-rows: minmax(28px, auto);
     grid-template-areas: "name by . status act key more" "plays plays plays plays plays . ."; }
-  section.artist.folded .line:not(.hit):not(.miss) > .line-title > .line-plays,
-  section.flat .line:not(.hit):not(.miss) > .line-title > .line-plays { margin: 0 0 6px; }
+  section.artist.folded .line.plays-under:not(.hit):not(.miss) > .line-title > .line-plays,
+  section.flat .line.plays-under:not(.hit):not(.miss) > .line-title > .line-plays { margin: 0 0 6px; }
 }
 @media (max-width: 719px) {
   section.artist.folded .line,

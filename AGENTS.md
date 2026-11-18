@@ -884,11 +884,13 @@ It is rows.js's, shared by both pages:
     4rem; from 720 px the flat line's columns, the overline in `by`; Select mode's are songbooks.css's
     (test_library_bands.py); the same rules are `section.flat .line`'s, a list sorted by title or by when they came
     folding every line;
-  - from 1200 px, in the 760 px list beside the pane (where the lanes meet, 12): a folded or flat line's first row
-    the title, its artist right after it, the status, the action, the key and the chevron, its buttons a row of their
-    own under the title (library.css, songbooks.css selecting); a band's line its buttons beside its title where they
-    fit, else under it (`.line-title` wrapping), so none ever pushes the key off the line (test_library_card_place.py,
-    test_library_bands.py).
+  - from 1200 px, in the 760 px list beside the pane (where the lanes meet, 12): a folded or flat line keeps that one
+    row while its buttons fit; where they don't, `plays-under` (library.js `placePlays`: measured in the one row, where
+    its last button wraps below its first, once a line and again when the list's width, Select or the line changes)
+    makes its first row the title, its artist right after it, the status, the action, the key and the chevron, and its
+    buttons a row of their own under the title (library.css, songbooks.css selecting); a band's line its buttons
+    beside its title where they fit, else under it (`.line-title` wrapping), so none ever pushes the key off the line
+    (test_library_card_place.py, test_library_bands.py).
 - **The card's place**: from 1200 px a song's card is in the laptop's pane, `#card-pane` (body.html's `.lib-cols`, the
   list's `.lib-main` beside it), one at a time, never under its line; under 1200 px under its line, in one column of
   800 px from 720 px (`#library-view`, the masthead keeping the page's width) (library.js, below; library.css).

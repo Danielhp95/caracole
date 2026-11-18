@@ -2667,11 +2667,12 @@ or a search or a filter that leaves its line out of the list empties the pane. T
 bar as the list scrolls, and scrolls on its own when the card is longer than the screen; a lookup's steps are listed
 there under the head, while the line keeps the bar of them as the lookup left it. Opened from the keyboard (Enter on
 the chevron), the focus goes to the song's name in the pane, and Escape there brings it back to the chevron, the card
-staying open. Beside the pane, a line whose artist is on it keeps its title, its artist, its key and its chevron on its
-first row and its buttons on a row under the title; under an artist's band a line's buttons stay beside its title
-where they fit, else go under it. Under 1200 px the library is one column, 800 px wide from 720 px, centred under the
-logo and the tabs, and a card opens under its line; widening or narrowing the window moves an open card between the
-two. Opening or closing a card is no step of Back, at any width, and Select puts the pane away until it is over.
+staying open. Beside the pane, a line whose artist is on it keeps its one row while its buttons fit there; where they
+don't, its title, its artist, its key and its chevron stay on its first row and its buttons go on a row under the
+title; under an artist's band a line's buttons stay beside its title where they fit, else go under it. Under 1200 px
+the library is one column, 800 px wide from 720 px, centred under the logo and the tabs, and a card opens under its
+line; widening or narrowing the window moves an open card between the two. Opening or closing a card is no step of
+Back, at any width, and Select puts the pane away until it is over.
 
 An artist of two or more songs has them under a band 34 px tall: their name in
 the artist's colour (cut short with an ellipsis, on one line) and, on its right,
