@@ -88,9 +88,11 @@ body {
 }
 a { color: inherit; }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-/* At the foot, room for the bar (53 px and the screen's safe area) and a little more, and for the pill
-   above it while it is there (--pill): the song's last lines, and the footer, end above them. */
-.page { max-width: 760px; margin: 0 auto; padding: 0 16px calc(72px + var(--pill) + env(safe-area-inset-bottom)); }
+/* Room for the bar (--foot: its height and the screen's safe area) and a little more, and the pill's while it shows;
+   then half a screen past the song's end (::after), so its last lines can come up to the middle of the screen.
+   Never in the padding: layout() reads that as the bar's room. */
+.page { max-width: 760px; margin: 0 auto; padding: 0 16px calc(var(--foot) + 19px + var(--pill)); }
+.page::after { content: ""; display: block; height: 50vh; }
 
 /* The title block. */
 .head { padding: 6px 0 4px; }
@@ -536,7 +538,7 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
 .sheet-ui:not(.top) { visibility: hidden; }
 @media screen {
   html[data-dock] { scroll-padding-bottom: calc(var(--dock) + var(--foot) + var(--pill) + 8px); }
-  html[data-dock] .page { padding-bottom: calc(var(--dock) + 72px + var(--pill) + env(safe-area-inset-bottom)); }
+  html[data-dock] .page { padding-bottom: calc(var(--dock) + var(--foot) + 19px + var(--pill)); }
   html[data-dock] .pill { bottom: calc(var(--dock) + var(--foot) + 12px); }
   html[data-dock="necks-full"] .pill { bottom: calc(var(--foot) + 12px); }  /* over the foot of the whole-screen sheet */
 }
@@ -899,6 +901,7 @@ a.ver-main .ver-name { color: var(--accent); }
   .bar, .pill, .handle, .sheet-ui, .tip, .back, .necks, .strip, .foot, .noscript, .versions { display: none !important; }
   body { background: #fff; color: #000; }
   .page { max-width: none; padding: 0; }
+  .page::after { content: none; }
   .c { color: #b4441e; }
   .sheet ruby.py > rt { color: #645f57; }
   .tab { background: none; padding: 0; }

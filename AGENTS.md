@@ -1174,6 +1174,8 @@ It is rows.js's, shared by both pages:
     is, and `auto` again once the page is back at its own entry, for a reload;
   - a history that refuses entries (a `pushState` that throws) turns it off: the layers open and close as before,
     and Back leaves the page (test_viewer_layers.py).
+- **The song's end**: `.page`'s padding is the bar's room (`--foot`), which `layout()` measures two columns against;
+  the half screen of over-scroll is `.page::after`, never in it, and print drops it.
 - **Full screen** (the sheet viewer's) is one of those layers, its element the handle (page.py `_HANDLE`,
   `button.handle#handle`, after the pill): `open(handle, opener)` sets `html[data-full="on"]`, which hides every
   element marked `data-controls` (the bar; a new control that full screen hides is marked so, nothing else changes),

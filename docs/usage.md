@@ -3521,6 +3521,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   drawn and played "in the browser" (see
   [Guitar Pro files in the browser](#caracole-serve)); from the folder, it is
   a "download", the file itself.
+- **The song's end**: the page scrolls on half a screen more past the last line, so
+  the song's last lines come up clear of the bar, to the middle of the screen.
 - **Auto-scroll**: ▶ in the bar counts down 3 seconds to give you
   time to get your hands on the guitar (press the count to start at once),
   then scrolls the song at a steady pace, with the screen kept on where the

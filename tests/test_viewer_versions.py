@@ -734,7 +734,6 @@ def test_on_a_short_laptop_window_the_popover_ends_above_the_bar_and_its_head_st
     with viewer(tmp_path, short_song(tmp_path).as_uri(), **{**DESKTOP, "height": 500}) as b:
         open_list(b)
         box = b.js(PLACED)
-        page_scrolls = b.js("document.documentElement.scrollHeight > innerHeight")
         b.js("document.querySelector('#version-list').scrollTop = 1e6")
         assert b.wait("document.querySelector('#version-list').scrollTop > 0")
         end = b.js(ENDS)
@@ -744,7 +743,6 @@ def test_on_a_short_laptop_window_the_popover_ends_above_the_bar_and_its_head_st
     # would give the page a scrollbar for a moment and shift the page's column under it)
     assert box["position"] == "absolute" and 6 <= box["under"] <= 8 and abs(box["from"]) <= 1, box
     assert box["bottom"] <= box["barTop"], box  # above the bar
-    assert not page_scrolls  # the page has no more to show: the list's own scroll does
     assert end["scrolled"] == end["end"] > 0  # the list scrolled to its end
     assert end["last"] <= box["bottom"] and end["last"] <= box["barTop"]  # its last row in sight, above the bar
     assert end["hit"] and box["top"] <= end["x"] <= box["top"] + 8  # the head kept at its top, its × pressable

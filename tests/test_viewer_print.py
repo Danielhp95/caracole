@@ -128,3 +128,20 @@ def test_a_printed_harmonica_tab_has_no_play_buttons(tmp_path):
           .filter((e) => e.getClientRects().length && getComputedStyle(e).visibility === 'visible')
           .map((e) => e.id || e.className)""")
     assert printed == [], printed
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_the_over_scroll_is_left_off_the_paper(tmp_path, kind):
+    after = "getComputedStyle(document.querySelector('.page'), '::after').content"
+    assert _seen_after(tmp_path, kind, "screen", after) == '""'
+    assert _seen_after(tmp_path, kind, "print", after) == "none"
+
+
+def _seen_after(tmp_path: Path, kind: str, media: str, expression: str):
+    url, fragment = _written(tmp_path, kind)
+    with Browser(tmp_path / f"profile-after-{kind}-{media}", width=1280, height=900) as b:
+        b.open(url + fragment)
+        assert b.wait("document.documentElement.dataset.ready === '1'")
+        b.send("Emulation.setEmulatedMedia", media=media)
+        assert b.wait(f"matchMedia('{media}').matches")
+        return b.js(expression)
