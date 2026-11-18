@@ -2480,7 +2480,7 @@ kept in view. Under it the search
 box, which says how many songs there are ("Search 8 songs, or the sites"), with
 **Filter** and **Sort** beside it, icons alone on a phone. The filters on come
 under it, each a tag
-("Wanted ×", "Harmonica ×", "A minor ×", "by Queen ×") that lets it go, then
+("Wanted ×", "Harmonica ×", "A minor ×") that lets it go, then
 **Clear**, which lets them all go, never the search. The search bar stays at the
 top as the page scrolls under it, with an edge to show it. Nothing is said above
 the list until there is something to say: how many songs a search or a filter
@@ -2617,18 +2617,33 @@ again); and at the far end a **⋯** that opens info.json, a quiet download, and
 served, **Remove**, in red (Escape, or a press elsewhere, closes it). A line
 drawn again (a request over) keeps its card open, its drawer closed.
 
-An artist's name, over their songs and marked with a funnel, shows only that
-artist's songs ("Queen" leaves out ABBA's "Dancing Queen"), until you take its
-tag ("by Queen ×") off. On the page `caracole serve` serves, the name searches for the artist
-instead (see below), and the funnel is a button of its own beside it ("Only
-Queen's songs"), which shows their songs alone as the name does from the
-folder. Sorted by title, or by when the songs were added, the lines stand
-alone, without the artists' names over them, each with its own (which does the
-same). `#by=` in the address, an artist's name as a sheet viewer's artist line
-links to it (`index.html#by=Soda%20Stereo`), does what pressing their name does:
-from the folder, their songs alone (else the songs the name finds); served, the
-search for them. A request's line (see [caracole serve](#caracole-serve)) shows under
-the song's, a line of its own. The search, the filters, the sort and the
+An artist of two or more songs has them under a band 34 px tall: their name in
+the artist's colour (cut short with an ellipsis, on one line) and, on its right,
+your count of their songs, small and muted. An artist of one song has no band:
+it folds into the song's line, their name a small overline in capitals, in the
+artist's colour, over the title (cut short on one line), the line about 64 px
+tall on a touch screen; from 720 px wide their name sits in the artist's column,
+as a line sorted by title shows it. So does an artist's group among a search's
+results that holds one line and nothing else, never one with "+ N more" under it
+nor a "Did you mean". Every control is 44 px on a touch screen but an artist's
+name, on its band or as an overline, which is 24 px.
+
+An artist's name, over their songs or over their one song's title, searches
+for them: it puts their name in the search box and searches as typing it would,
+from the folder as on the page `caracole serve` serves (which searches the sites
+too, see below): your songs
+the name finds ("Queen" finds ABBA's "Dancing Queen" too), and Back is the list
+as it was before. There is no view of one artist's songs alone, and no tag for
+it. Sorted by title, or by when the songs were added, the lines stand alone,
+each folded as a one-song artist's is: its artist's name a small overline over
+the title on a phone, in its own column from 720 px wide (and a click on it
+does the same as one on the name over a band).
+`#by=` in the address, an artist's name as a sheet viewer's artist line links
+to it (`index.html#by=Soda%20Stereo`), does what pressing their name does, and
+so does an address from before with `#artist=` in it (`#artist=soda-stereo`):
+the search for them, the address then the search's (`#q=Soda+Stereo`). A
+request's line (see [caracole serve](#caracole-serve)) shows under the song's, a
+line of its own. The search, the filters, the sort and the
 letters all work on the lines, and the address remembers
 them, as it does the rest: a bookmark opens the page as you left it. (An
 address from before, with `#view=rows` in it, opens the lines.)
@@ -2696,7 +2711,7 @@ address keeps an exact key as before (`#key=A%20minor`), a mode alone as
 **Clear all** lets them all go, and the panel says how many songs show
 ("4 songs"). Filter says how many of its filters are on (Filter 1), in the
 accent. When the filters leave no song, the list says which ("No wanted songs
-of Eagles with a harmonica tab in B minor match “hotel”."), with Show all
+with a harmonica tab in B minor match “hotel”."), with Show all
 (Show all 1 match), which lets them all go. **Sort** sorts by artist, by title or by when songs were added.
 Sorted by artist or title, with more than 40 songs shown, a row of letters
 jumps to the first artist under each (by title, the first song). A line under the box says what typing and Enter do.
@@ -2715,8 +2730,9 @@ caracole takes none for an option. `caracole serve` serves the same page, where 
 sites have too, under the same artist headers, with Fetch, and a form to
 request a song by name (see below).
 
-On a touch screen every button, fold, chip, menu, letter, artist's name and funnel is
-at least 44 pixels each way, for a thumb, and so are each line's buttons, its
+On a touch screen every button, fold, chip, menu and letter is at least 44
+pixels each way, for a thumb (but an artist's name, on its band or as a line's
+overline, 24 pixels: see above), and so are each line's buttons, its
 Fetch and its chevron (its title, beside them, is as tall): a phone shows
 about eleven songs to a screen. With a mouse they keep their compact sizes. Fields, menus and the
 Select boxes have an edge you can see against the page, in light and dark mode
@@ -2856,8 +2872,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   songs, as their name there does: served by `caracole serve`, the search for
   them, your songs of theirs and every index's (Ultimate Guitar, LaCuerda,
   gtptabs.com, harptabs.com…) under their header, which asks no site; from the
-  folder, or in caracole's Android app, your songs of theirs alone, with their
-  chip on. It is a plain link (`index.html#by=Soda%20Stereo`), which the
+  folder, or in caracole's Android app, the search of your songs for them, their
+  name in the box. It is a plain link (`index.html#by=Soda%20Stereo`), which the
   server's sandbox follows too, and the browser's Back returns to the sheet
   where you were. It reads as the line it was, muted,
   underlined under the pointer or the keyboard's focus; on a phone it is a
@@ -4024,9 +4040,8 @@ the library, sent as they are: they carry no badge.
   you type, here as on the file, and from the third letter (the second with a
   Chinese character in it) it searches the sites too, a moment after you stop:
   no Enter, and no button. The list and its toolbar make way for the results,
-  your songs among them still keeping to the filters and an artist's name you
-  pressed, which the results' head says ("Your songs
-  here: wanted · by Soda Stereo · in A minor"), with Show all of yours, which
+  your songs among them still keeping to the filters, which the results' head
+  says ("Your songs here: wanted · in A minor"), with Show all of yours, which
   lets every song of yours show, there and in the list; the sites' songs are
   what the sites have, whatever the filters show. A progression typed as
   numerals ("vi IV I V", "i bVII bVI V") or named ("andalusian", "the pop
@@ -4263,9 +4278,8 @@ the library, sent as they are: they carry no badge.
   searches it as typing it would (their group first, with their songs, as a
   name typed whole leads), which asks no site, only the offline indexes; the
   focus goes to the box, Escape goes back to your songs, and the browser's Back
-  to the list as it was before it (its search, artist, Show, sort and key, as
-  its address had them). The funnel beside the name of an artist you have
-  songs of shows those alone. A newer answer drawn while it goes (a search typed on)
+  to the list as it was before it (its search, Show, sort and key, as its
+  address had them). A newer answer drawn while it goes (a search typed on)
   keeps the line where it has the song, with its request line; one it hasn't
   moves the request under the box as its line ("Just requested"), its request
   line going on there. A song your library has already, under its own names

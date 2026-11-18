@@ -1,6 +1,8 @@
 """What a thumb and an eye need of a page's controls, measured in Chromium (helpers/browser.py).
 
-``small_targets(exempt)`` lists every control shown that is less than 44 px either way: a link, a
+``small_targets(exempt, least=44)`` lists every control shown that is less than ``least`` px either way (44, a thumb's;
+``ARTIST_NAMES`` is the one kind that may be 24 px, an artist's name on its band or, where their one song folds into
+its line, its overline, WCAG 2.5.8's minimum): a link, a
 button, a field, a menu or a fold's summary (a box or a radio counts as its label, the Select mode's
 box as its frame). A link in a line of text is left out, as WCAG 2.5.8 leaves it out, and so is
 whatever the CSS selector ``exempt`` matches.
@@ -34,8 +36,24 @@ const said = (node) => String(node.getAttribute("aria-label") || node.textConten
   .replace(/\s+/g, " ").slice(0, 32);
 """
 
+# A folded line on a touch screen: about 64 px, between these.
+FOLDED_LINE = (60, 68)
+ARTIST_NAMES = ".artist-title button.artist, section.artist.folded .line-by"
+
+# A JavaScript function ``token(name)``: what a CSS custom property of base.css resolves to, as a computed colour.
+TOKEN_PROBE = """
+const token = (name) => {
+  const probe = document.createElement("span");
+  probe.style.color = "var(" + name + ")";
+  document.body.appendChild(probe);
+  const colour = getComputedStyle(probe).color;
+  probe.remove();
+  return colour;
+};
+"""
+
 _SMALL = r"""
-((exempt) => {
+((exempt, least) => {
   __NAME__
   // A link among words of its own, in a line of text: WCAG 2.5.8 exempts it.
   const inText = (node) => node.tagName === "A" && getComputedStyle(node).display === "inline" &&
@@ -46,7 +64,7 @@ _SMALL = r"""
     const target = node.matches(".pick input") ? node.parentElement
       : node.matches('input[type="checkbox"], input[type="radio"]') ? node.closest("label") || node : node;
     const box = target.getBoundingClientRect();
-    if (box.width < 43.5 || box.height < 43.5) {
+    if (box.width < least - 0.5 || box.height < least - 0.5) {
       short.push({ what: name(node), said: said(node), width: Math.round(box.width), height: Math.round(box.height) });
     }
   }
@@ -103,9 +121,9 @@ for (const panel of document.querySelectorAll(".row-panel, .line-panel")) panel.
 """
 
 
-def small_targets(exempt: str = "") -> str:
-    """An expression: the controls shown that are less than 44 px either way (``exempt`` left out)."""
-    return _SMALL.replace("__NAME__", _NAME) + f"({json.dumps(exempt)})"
+def small_targets(exempt: str = "", least: int = 44) -> str:
+    """An expression: the controls shown that are less than ``least`` px either way (``exempt`` left out)."""
+    return _SMALL.replace("__NAME__", _NAME) + f"({json.dumps(exempt)}, {least})"
 
 
 def weak_edges(exempt: str = "") -> str:

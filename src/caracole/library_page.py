@@ -57,9 +57,9 @@ row of it: each the ``POST /lookup`` the lookup page sends for the song) and
 Remove. Served, a Guitar Pro file caracole serve shows in the browser (its
 ``guitarPage``, ``guitar_pages``) opens there from its tile and its drawer
 (web/guitar_routes.py); without alphaTab there (``WebControls.guitar``), a note says they are downloads. An
-artist's name, marked with a funnel (``artistFilter``, ROWS_SCRIPT's), shows that
-artist's songs alone. An A-Z strip jumps to the first group (or line) of a letter
-once more than 40 songs show. On a phone the header is short (the numbers beside
+artist's name searches for them (``artistSearch``, ROWS_SCRIPT's; library.js ``searchFor``), served or from a
+file: their name in the box, as typed; no view of one artist's songs alone. An A-Z strip jumps to the first group
+(or line) of a letter once more than 40 songs show. On a phone the header is short (the numbers beside
 the title, then one row of buttons and menus that scrolls sideways), so the first
 song starts on the first screen; the bar stays at the top, with an edge once the
 page scrolls under it. The address remembers the search, the filters, the sort
@@ -89,8 +89,8 @@ song's is (``article.line``: ``.line-title``, ``.line-status``, ``.line-sources`
 ``.line-key``, ``.line-action``, ``.line-more``), to put in a ``<div class="lines">``.
 ``result`` is a plain object, every field optional:
 
-- ``title``, ``artist``: text; ``onArtist``, a function, makes the artist a button that
-  shows it filters (a funnel after the name), as a group's name is; a line shows its
+- ``title``, ``artist``: text; ``onSearch``, a function, makes the artist a button that
+  searches for them (``Search Radiohead``), as a group's name is; a line shows its
   artist only where no artist's group holds it;
 - ``href``: what the title opens, the same way as ``action``'s link; out of the Tab order,
   since the button says what it opens;

@@ -587,11 +587,11 @@ def test_a_drawer_left_open_in_a_folded_card_is_placed_again_when_the_card_opens
 
 @pytest.mark.parametrize("size", ["390,844", "1280,900"])
 def test_the_card_meets_touch_targets_with_a_drawer_open(conn, cfg, tmp_path, size):
-    from helpers.targets import noted, noting, small_targets
+    from helpers.targets import ARTIST_NAMES, noted, noting, small_targets
 
     hotel(conn, cfg)
     script = 'openCard("Hotel California");\nchipOf("Hotel California", "ug").click();\n' + noting(
-        "data-short", small_targets())
+        "data-short", small_targets(ARTIST_NAMES))
     dom = run(conn, cfg, tmp_path, script, size=size, controls=SERVED, touch=True)
     assert noted(dom, "data-short") == []
 

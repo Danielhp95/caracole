@@ -1487,131 +1487,65 @@ note("saved", Array.from(lineOf("斑马，斑马").querySelectorAll("a[download]
     assert saved["score-1.pdf"] == "" and saved["sheet.pdf"] == "", saved
 
 
-# Notes how an artist's header looks beside their song's line, and what base.css's tokens resolve to.
-HEADER_LOOK = """
-(() => {
-  const css = (node) => getComputedStyle(node);
-  const token = (name) => {
-    const probe = document.createElement("span");
-    probe.style.color = "var(" + name + ")";
-    document.body.appendChild(probe);
-    const colour = css(probe).color;
-    probe.remove();
-    return colour;
-  };
-  const head = document.querySelector("#list section.artist .artist-title");
-  const name = head.querySelector(".artist-name");
-  const counts = head.querySelector(".artist-counts");
-  const title = document.querySelector("#list section.artist .line-title h3");
-  document.body.setAttribute("data-look", JSON.stringify({
-    name: [parseFloat(css(name).fontSize), css(name).color],
-    mark: css(head.querySelector(".filter-mark")).backgroundColor,
-    counts: [parseFloat(css(counts).fontSize), css(counts).color],
-    title: parseFloat(css(title).fontSize),
-    tokens: Object.fromEntries(["--artist", "--text", "--accent", "--muted"].map((t) => [t, token(t)])),
-  }));
-})();
-"""
-
-
 @in_chromium
-@pytest.mark.parametrize("scheme", ["light", "dark"])
-def test_an_artists_name_is_bigger_than_their_songs_titles_in_a_colour_of_its_own(conn, cfg, tmp_path, scheme):
-    # The header the list and the served search results share: the name in --artist, a second accent, its funnel
-    # with it; the counts beside it small and muted.
-    from html import unescape
-
-    from caracole.library_page import WebControls
-
-    add_song(conn, "Radiohead", "Creep")
-    html = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok"))
-    path = write_library_page(cfg.library_dir, with_script(html, HEADER_LOOK))
-    dom = dump_dom(path, tmp_path, media={"prefers-color-scheme": scheme})
-    look = json.loads(unescape(re.search(r'<body[^>]*data-look="([^"]*)"', dom).group(1)))
-    tokens = look["tokens"]
-    assert tokens["--artist"] not in (tokens["--text"], tokens["--accent"], tokens["--muted"]), tokens
-    size, colour = look["name"]
-    assert colour == tokens["--artist"] and look["mark"] == colour, look
-    assert size >= 1.1 * look["title"], look
-    assert look["counts"][0] < size and look["counts"][1] == tokens["--muted"], look
-
-
-# Clicks Queen's name over their songs, then notes the titles shown and the chip.
-ARTIST_CLICK = """
-(() => {
-  document.querySelector('#list section.artist[data-artist="queen"] h2 button.artist').click();
-  const titles = Array.from(document.querySelectorAll("#list article h3")).map((h) => h.textContent);
-  const chip = document.getElementById("artist");
-  document.body.setAttribute("data-after", JSON.stringify({titles, chip: chip.hidden ? null : chip.textContent,
-    q: document.getElementById("q").value, hash: location.hash}));
-  chip.click();
-  document.body.setAttribute("data-cleared", String(document.querySelectorAll("#list article").length));
-})();
-"""
+def test_from_a_file_an_artists_name_puts_them_in_the_box_and_searches_your_songs(conn, cfg, driven):
+    # From a file, which can't search the sites, an artist's name does what it does served but for the sites: their
+    # name in the box, searched as typing it would (ABBA's "Dancing Queen" too), a step of the browser's history. No
+    # funnel, and no one-artist view.
+    for artist, title in (("Queen", "Bohemian Rhapsody"), ("Queen", "Don't Stop Me Now"), ("ABBA", "Dancing Queen"),
+                          ("Queens of the Stone Age", "No One Knows")):
+        add_song(conn, artist, title)
+    driven.open(write_library_page(cfg.library_dir, page(conn, cfg)).as_uri())
+    n = driven.js("history.length")
+    driven.click('#list section.artist[data-artist="queen"] h2 button.artist')
+    assert driven.wait("document.getElementById('q').value === 'Queen'")
+    assert driven.js("location.hash") == "#q=Queen" and driven.js("history.length") == n + 1
+    assert {"Bohemian Rhapsody", "Don't Stop Me Now"} <= set(driven.js(SHOWN_TITLES))  # and what else "Queen" finds
+    assert "Dancing Queen" in driven.js(SHOWN_TITLES)
+    assert driven.js("document.querySelector('#artist, .artist-only, .filter-mark, .artist-pair') === null")
+    assert driven.js("document.activeElement.id") == "q"
+    driven.js("history.back()")  # the step before the search
+    assert driven.wait("document.getElementById('q').value === ''")
+    assert driven.wait(f"{SHOWN_TITLES}.length === 4"), driven.js(SHOWN_TITLES)
 
 
-@in_chromium
-def test_an_artists_name_shows_that_artist_alone_not_every_song_with_the_word(conn, cfg, tmp_path):
-    import html as html_module
-
-    add_song(conn, "Queen", "Bohemian Rhapsody")
-    add_song(conn, "Queen", "Don't Stop Me Now")
-    add_song(conn, "ABBA", "Dancing Queen")
-    add_song(conn, "Queens of the Stone Age", "No One Knows")
-    path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), ARTIST_CLICK))
-    dom = dump_dom(path, tmp_path)
-    after = json.loads(html_module.unescape(re.search(r'data-after="([^"]*)"', dom).group(1)))
-    assert sorted(after["titles"]) == ["Bohemian Rhapsody", "Don't Stop Me Now"], after
-    assert after["chip"] == "by Queen" and after["q"] == "" and "artist=queen" in after["hash"]
-    assert re.search(r'data-cleared="4"', dom)  # the chip takes the filter off
-    # From a file, which can't search the sites, the name is the funnel's: no name that searches, no funnel apart.
-    assert "artist-search" not in listing(dom) and "artist-only" not in listing(dom)
-
-    # The address keeps the filter, as it keeps the search.
-    plain = write_library_page(cfg.library_dir, page(conn, cfg))
-    shown = listing(dump_dom(plain, tmp_path, "#artist=queen"))
-    assert shown.count("<article") == 2 and "Dancing Queen" not in shown
-    # A search that only another artist's songs answer says the filter is on, and offers to take it off.
-    shown = listing(dump_dom(plain, tmp_path, "#artist=queen&q=dancing"))
-    assert "No songs of Queen match “dancing”" in shown and "Show all 1 match" in shown
-    assert "caracole search" not in shown
-
-
-# What the page shows once its script ran: the titles, the artist's chip, the box and the address.
+# What the page shows once its script ran: the titles, the box and the address.
 SHOWN_NOW = """
 document.body.setAttribute("data-now", JSON.stringify({
   titles: Array.from(document.querySelectorAll("#list article h3")).map((h) => h.textContent),
-  chip: document.getElementById("artist").hidden ? null : document.getElementById("artist").textContent,
   q: document.getElementById("q").value, hash: location.hash,
   results: !document.getElementById("results").hidden}));
 """
 
 
 @in_chromium
-@pytest.mark.parametrize("by,titles,chip,hash", [
-    ("Queen", ["Bohemian Rhapsody", "Don't Stop Me Now"], "by Queen", "#artist=queen"),
-    ("queen", ["Bohemian Rhapsody", "Don't Stop Me Now"], "by Queen", "#artist=queen"),  # however it is written
-    ("宋冬野", ["斑马，斑马"], "by 宋冬野", "#artist=song-dong-ye"),
+@pytest.mark.parametrize("address,q", [
+    ("#by=Queen", "Queen"), ("#by=queen", "queen"), ("#by=%E5%AE%8B%E5%86%AC%E9%87%8E", "宋冬野"),
+    ("#artist=queen", "Queen"), ("#artist=song-dong-ye", "宋冬野"),  # an address the one-artist view wrote once
 ])
-def test_from_a_file_an_artist_a_sheet_links_to_shows_their_songs_alone(conn, cfg, tmp_path, by, titles, chip, hash):
-    # A sheet viewer's artist line (#by= and their name): from a file, which can't search the sites, and in the Android
-    # app's copy, what the name over their songs does here, the funnel, never every song with the word (ABBA's "Dancing
-    # Queen"); the address then says it as the funnel writes it, in place of the link's.
+def test_from_a_file_an_artist_a_sheet_links_to_is_searched_for_in_your_songs(conn, cfg, tmp_path, address, q):
+    # A sheet viewer's artist line (#by= and their name), from a file and in the Android app's copy, which can't
+    # search the sites: what the name over their songs does here, their name in the box, as typed; the address then
+    # says it as the box writes it, in place of the link's.
     import html as html_module
+    from urllib.parse import urlencode
 
     for artist, title in (("Queen", "Bohemian Rhapsody"), ("Queen", "Don't Stop Me Now"), ("ABBA", "Dancing Queen"),
                           ("Queens of the Stone Age", "No One Knows"), ("宋冬野", "斑马，斑马")):
         add_song(conn, artist, title)
     path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), SHOWN_NOW))
-    dom = dump_dom(path, tmp_path, "#by=" + quote(by, safe=""))
+    dom = dump_dom(path, tmp_path, address)
     now = json.loads(html_module.unescape(re.search(r'data-now="([^"]*)"', dom).group(1)))
-    assert now == {"titles": titles, "chip": chip, "q": "", "hash": hash, "results": False}, now
+    assert now["q"] == q and now["hash"] == "#" + urlencode({"q": q}) and now["results"] is False, now
+    theirs = ["斑马，斑马"] if q == "宋冬野" else ["Bohemian Rhapsody", "Don't Stop Me Now"]
+    assert set(theirs) <= set(now["titles"]), now
 
 
 @in_chromium
 def test_from_a_file_a_sheets_artist_opens_their_songs_and_back_returns_to_the_sheet(conn, cfg, driven):
     # The viewer and the library page as files, as the synced folder and the Android app's copy have them: the artist's
-    # name under the title opens the library page on their songs alone; Back is the sheet again, where it was.
+    # name under the title opens the library page searching your songs for them, as their name there does; Back is
+    # the sheet again, where it was.
     from helpers.rendered import rendered_song
 
     song = rendered_song(conn, cfg, "Queen", "Bohemian Rhapsody")
@@ -1621,9 +1555,9 @@ def test_from_a_file_a_sheets_artist_opens_their_songs_and_back_returns_to_the_s
     assert driven.wait("document.documentElement.dataset.ready === '1'")
     driven.click(".head .artist a")
     assert driven.wait("location.pathname.endsWith('/index.html') && document.readyState === 'complete'")
-    assert driven.wait(f"{SHOWN_TITLES}.join() === 'Bohemian Rhapsody'"), driven.js(SHOWN_TITLES)
-    assert driven.js("document.getElementById('artist').textContent") == "by Queen"
-    assert driven.js("location.hash") == "#artist=queen"
+    assert driven.wait("document.getElementById('q').value === 'Queen'")
+    assert driven.wait(f"{SHOWN_TITLES}.includes('Bohemian Rhapsody')"), driven.js(SHOWN_TITLES)
+    assert driven.js("location.hash") == "#q=Queen"
     assert driven.js("performance.getEntriesByType('resource').length") == 0  # nothing asked of anyone
     driven.js("history.back()")
     assert driven.wait("location.pathname.endsWith('/sheet.html') && document.documentElement.dataset.ready === '1'")
@@ -1640,7 +1574,7 @@ def test_from_a_file_an_artist_with_no_song_of_yours_is_searched_for_in_your_son
     path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), SHOWN_NOW))
     dom = dump_dom(path, tmp_path, "#by=" + quote("Guns N' Roses", safe=""))
     now = json.loads(html_module.unescape(re.search(r'data-now="([^"]*)"', dom).group(1)))
-    assert now == {"titles": [], "chip": None, "q": "Guns N' Roses", "hash": "#q=Guns+N%27+Roses", "results": False}
+    assert now == {"titles": [], "q": "Guns N' Roses", "hash": "#q=Guns+N%27+Roses", "results": False}
     assert "<code>caracole search 'Guns N'\\'' Roses'</code>" in html_module.unescape(listing(dom))
 
 
@@ -1737,10 +1671,10 @@ def test_a_songs_progressions_show_the_songs_that_play_them_and_show_all_takes_t
 @in_chromium
 @pytest.mark.parametrize("dark", [False, True])
 def test_the_progression_line_and_a_songs_progressions_fit_a_touch_phone(conn, cfg, tmp_path, dark):
-    from helpers.targets import UNFOLD, noted, noting, small_targets, weak_edges
+    from helpers.targets import ARTIST_NAMES, UNFOLD, noted, noting, small_targets, weak_edges
 
     progression_library(conn, cfg)
-    script = (UNFOLD + noting("data-short", small_targets()) + noting("data-weak", weak_edges("#q"))
+    script = (UNFOLD + noting("data-short", small_targets(ARTIST_NAMES)) + noting("data-weak", weak_edges("#q"))
               + noting("data-wide", "[document.documentElement.scrollWidth, innerWidth]"))
     path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), script))
     media = {"prefers-color-scheme": "dark"} if dark else None
@@ -2573,19 +2507,26 @@ def test_on_a_phone_files_open_with_a_tap_the_title_opens_the_card_and_tab_goes_
 
 
 @in_chromium
-def test_an_artists_name_shows_it_is_a_filter_over_their_songs_and_on_a_line_alone(conn, cfg, tmp_path):
+def test_an_artists_name_is_a_button_that_searches_for_them(conn, cfg, tmp_path):
     filed_library(conn, cfg)
+    add_song(conn, "Radiohead", "Karma Police")  # two songs: a band over them; Oasis's one, folded into its line
     path = write_library_page(cfg.library_dir, page(conn, cfg))
     grouped = listing(dump_dom(path, tmp_path))
     head = re.search(r'<section class="artist" data-artist="radiohead"[^>]*><h2[^>]*>(.*?)</h2>', grouped, re.S)
+    folded = re.search(r'<section class="artist folded" data-artist="oasis"[^>]*><h2[^>]*>(.*?)</h2>', grouped, re.S)
     flat = line_of(listing(dump_dom(path, tmp_path, "#sort=title")), "Creep")  # no group over it: its own
-    for shown in (head.group(1), flat):
-        who = re.search(r'<button class="artist[^"]*" type="button" title="Radiohead\'s songs">(.*?)</button>',
-                        shown)
-        assert who, shown
-        # The name, then a filter's mark that a screen reader skips: the button's title says what it does.
-        assert who.group(1) == ('<span class="artist-name">Radiohead</span>'
-                                '<span class="filter-mark" aria-hidden="true"></span>'), who.group(1)
+    # The name alone, in the band, on a line no band is over and on a folded line, as served: its title says what it
+    # does, and nothing beside it filters. A folded group's heading, a screen reader's, names them with no button.
+    button = ('<button class="artist artist-search{}" type="button" title="Search {}">'
+              '<span class="artist-name">{}</span></button>')
+    assert button.format("", "Radiohead", "Radiohead") in head.group(1), head.group(1)
+    assert button.format(" line-by", "Radiohead", "Radiohead") in flat, flat
+    assert folded.group(1).startswith('<span class="artist-name">Oasis</span>'), folded.group(1)
+    assert "<button" not in folded.group(1), folded.group(1)
+    wonderwall = line_of(grouped, "Wonderwall")
+    assert button.format(" line-by", "Oasis", "Oasis") in wonderwall, wonderwall
+    for shown in (head.group(1), flat, wonderwall):
+        assert "filter-mark" not in shown and "artist-only" not in shown and "artist-pair" not in shown, shown
 
 
 # --- touch and edges: a thumb's targets, and fields an eye can find ------------------------------------
@@ -2626,11 +2567,11 @@ document.body.setAttribute("data-command", String(!document.querySelector(".pick
 
 @in_chromium
 def test_the_select_bar_of_the_file_on_disk_and_its_command_on_a_touch_phone(conn, cfg, tmp_path):
-    from helpers.targets import UNFOLD, noted, noting, small_targets, weak_edges
+    from helpers.targets import ARTIST_NAMES, UNFOLD, noted, noting, small_targets, weak_edges
 
     # The search field is the search bar's, which another change redraws. While selecting, a line is one
     # target, its title and its artist's name no targets of their own.
-    exempt = ".selecting [data-picker] .line-title, .selecting [data-picker] .artist"
+    exempt = ".selecting [data-picker] .line-title, .selecting [data-picker] .artist, " + ARTIST_NAMES
     script = (UNFOLD + MAKE_FROM_DISK + noting("data-short", small_targets(exempt))
               + noting("data-weak", weak_edges("#q")))
     html = with_script(every_control(conn, cfg, served=False), script)
@@ -2779,7 +2720,10 @@ ROWS = """
   document.body.setAttribute("data-layout", JSON.stringify({
     artists: lines.map((l) => (name(l) ? Math.round(box(name(l)).width) : null)),
     whole: lines.map((l) => (name(l) ? name(l).scrollWidth : null)),
-    lines: lines.map(rows), page: window.innerWidth, scroll: document.documentElement.scrollWidth,
+    lines: lines.map(rows), heights: lines.map((l) => box(l).height),
+    above: lines.map((l) => { const by = l.querySelector(".line-by"), h = l.querySelector("h3");
+      return box(by).bottom <= box(h).top + 1; }),
+    page: window.innerWidth, scroll: document.documentElement.scrollWidth,
   }));
 })();
 """
@@ -2852,9 +2796,9 @@ def layout_of(dom: str) -> dict:
 
 
 @in_chromium
-def test_a_phones_line_keeps_its_artist_beside_its_status_and_its_key_beside_its_title(conn, cfg, tmp_path):
-    # Sorted by title, a line has no artist's group over it: the fullest second lines, an auto sheet, a key (on the
-    # title's line) and Needs review; a long name beside Needs review.
+def test_a_phones_title_sorted_line_has_its_artist_above_its_title_and_its_status_beside_it(conn, cfg, tmp_path):
+    # Sorted by title, a line is folded, its artist's name over its title: the fullest lines, an auto sheet, a key and
+    # Needs review beside the title; a long name cut.
     abba = add_song(conn, "ABBA", "Dancing Queen")
     auto = upsert_version(conn, provider="auto", tab_id=str(abba.id), song_id=abba.id, slot="sheet", kind="auto",
                           rating=0, votes=0, version=1, label=None, url="file:///x.flac",
@@ -2877,7 +2821,11 @@ def test_a_phones_line_keeps_its_artist_beside_its_status_and_its_key_beside_its
     for short in (abba_line, queen_line):
         assert phone["artists"][short] >= phone["whole"][short] > 30, phone
     assert phone["artists"][florence_line] > 40, phone
-    assert max(phone["lines"]) <= 2 and phone["scroll"] <= phone["page"], phone
+    # Two rows, the artist over the title; the buttons span both, their middle a third "row" of the count.
+    from helpers.targets import FOLDED_LINE
+
+    assert all(phone["above"]) and max(phone["heights"]) <= FOLDED_LINE[1], phone
+    assert max(phone["lines"]) <= 3 and phone["scroll"] <= phone["page"], phone
     # The auto sheet's line says so by its button, as a badge would.
     dancing = line_of(listing(dump_dom(path, tmp_path, "#sort=title")), "Dancing Queen")
     assert [said for _, said in play_links(dancing)] == [
@@ -2919,7 +2867,7 @@ def test_a_lines_menu_opens_and_closes_and_its_artists_name_shows_their_songs(co
     notes = json.loads(html_module.unescape(re.search(r'data-notes="([^"]*)"', dom).group(1)))
     assert notes["opened"] == {"expanded": "true", "hidden": False, "tiles": ["Chord sheet", "Guitar tab", "Lyrics"]}, notes
     assert notes["closed"] == {"expanded": "false", "hidden": True}, notes
-    assert notes["artist"]["hash"] == "#artist=radiohead", notes
+    assert notes["artist"]["hash"] == "#q=Radiohead", notes  # their name searched for
     assert sorted(notes["artist"]["titles"]) == ["Creep", "Lucky"], notes
 
 
@@ -3700,9 +3648,9 @@ def test_on_a_phone_the_tags_wrap_under_the_buttons_and_nothing_scrolls_sideways
         song = add_song(conn, artist, title)
         update_song(conn, song.id, status="found" if n else "wanted", review=bool(n == 2))
     served = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok", active=1))
-    phone_page.open(write_library_page(cfg.library_dir, served).as_uri() + "#show=wanted&artist=radiohead")
+    phone_page.open(write_library_page(cfg.library_dir, served).as_uri() + "#show=wanted&inst=harmonica")
     tools = phone_page.js(f"{TOOLS}.map((c) => Math.round(c.getBoundingClientRect().bottom))")
-    tag = phone_page.js("document.getElementById('artist').getBoundingClientRect().top")
+    tag = phone_page.js("document.querySelector('#tags .tag').getBoundingClientRect().top")
     assert len(tools) == 2 and tag >= max(tools), (tools, tag)
     assert phone_page.js("document.documentElement.scrollWidth <= innerWidth")
     assert phone_page.js("document.querySelector('.toolbar').scrollWidth <= document.querySelector('.toolbar').clientWidth")
@@ -3788,9 +3736,9 @@ def test_the_page_waits_unseen_for_its_scripts_and_shows_without_them_all_the_sa
 # --- lines grouped by artist: the library's one view ----------------------------------------------------
 
 
-# Each artist's group as it shows: its key, its heading, its songs' titles and ids, in order.
+# Each artist's group as it shows: its key, its heading, whether it folded, its songs' titles and ids, in order.
 GROUPS = """(() => Array.from(document.querySelectorAll("#list section.artist")).map((s) => ({
-  artist: s.dataset.artist, heading: s.querySelector("h2").textContent,
+  artist: s.dataset.artist, heading: s.querySelector("h2").textContent, folded: s.classList.contains("folded"),
   titles: Array.from(s.querySelectorAll("article.line h3")).map((h) => h.textContent),
   ids: Array.from(s.querySelectorAll("article.line")).map((a) => Number(a.dataset.id)),
 })))()"""
@@ -3812,6 +3760,8 @@ def test_the_library_is_lines_grouped_by_artist_a_to_z(conn, cfg, tmp_path):
     assert [g["heading"] for g in groups] == ["2Pac · yours 1", "The Beatles · yours 1",
                                               "Radiohead · yours 1", "Soda Stereo · yours 2",
                                               "宋冬野 · yours 1"], groups
+    # An artist of one song folds into its line (test_library_bands.py), its heading kept for a screen reader.
+    assert [g["folded"] for g in groups] == [True, True, True, False, True], groups
     soda = groups[3]
     assert soda["artist"] == songs["Soda Stereo - De Música Ligera"]["sortArtist"]
     assert soda["titles"] == ["De Música Ligera", "Persiana Americana"]  # its songs A to Z
@@ -3873,7 +3823,7 @@ def busy_library(conn, cfg):
 
 @in_chromium
 def test_a_laptop_screen_shows_about_twenty_lines_under_the_bar_and_a_phone_two_lines_a_song(conn, cfg, tmp_path):
-    from helpers.targets import noted, noting
+    from helpers.targets import FOLDED_LINE, noted, noting
 
     busy_library(conn, cfg)
     script = noting("data-lines", LINES) + noting("data-view", IN_VIEW)
@@ -3897,10 +3847,10 @@ def test_a_laptop_screen_shows_about_twenty_lines_under_the_bar_and_a_phone_two_
         assert max(phone["rows"]) <= 2, (touch, phone)  # two lines a song at most
         assert all(w >= phone["page"] - 40 for w in phone["widths"]), phone
         assert phone["screen"] // max(phone["heights"]) >= (8 if touch else 10), (touch, phone)
-    # Sorted by title, the lines have no artist over them: each says its own, whole or 40 px of it at the least,
-    # still on two lines.
+    # Sorted by title, every line is folded, its artist over its title: each says its own, whole or 40 px of it at the
+    # least, in two rows (the buttons span both, their middle a third "row" of the count), 68 px at most.
     flat = noted(dump_dom(path, tmp_path, "#sort=title", size="390,844"), "data-lines")
-    assert max(flat["rows"]) <= 2 and flat["scroll"] <= flat["page"], flat
+    assert max(flat["rows"]) <= 3 and max(flat["heights"]) <= FOLDED_LINE[1] and flat["scroll"] <= flat["page"], flat
     assert all(shown >= min(whole, 40) for shown, whole in zip(flat["artists"], flat["whole"])), flat
     tablet = noted(dump_dom(path, tmp_path, size="1280,800", touch=True), "data-lines")
     assert set(tablet["rows"]) == {1}, tablet  # one line each, as with a mouse
@@ -4026,16 +3976,14 @@ def test_filters_key_sort_and_letters_work_on_the_lines(conn, cfg, tmp_path):
         return found
 
     assert titles_in(shown("")) == ["Dancing Queen", "Bohemian Rhapsody", "Don't Stop Me Now", "Creep"]  # by artist
-    assert titles_in(shown("#artist=queen")) == ["Bohemian Rhapsody", "Don't Stop Me Now"]
     assert titles_in(shown("#key=G")) == ["Creep"]
     assert titles_in(shown("#show=wanted")) == ["Creep"]
     assert titles_in(shown("#q=dancing")) == ["Dancing Queen"]
-    assert "Queen · yours 2" in re.sub(r"<[^>]+>", "", shown("#artist=queen"))
-    # Sorted by title or by when they came, the lines stand alone, each with its artist (a filter, as a header's is).
+    # Sorted by title or by when they came, the lines stand alone, each with its artist (a search, as a header's is).
     by_title = shown("#sort=title")
     assert titles_in(by_title) == ["Bohemian Rhapsody", "Creep", "Dancing Queen", "Don't Stop Me Now"]
-    assert 'class="artist"' not in by_title.replace('class="artist line-by"', "")  # no artist's group
-    assert re.search(r'<button class="artist line-by"[^>]*><span class="artist-name">ABBA</span>',
+    assert 'class="artist"' not in by_title  # no artist's group
+    assert re.search(r'<button class="artist artist-search line-by"[^>]*><span class="artist-name">ABBA</span>',
                      line_of(by_title, "Dancing Queen"))
     assert titles_in(shown("#sort=recent")) == ["Creep", "Dancing Queen", "Don't Stop Me Now", "Bohemian Rhapsody"]
     # Whatever the search or a filter leaves out, an artist's header counts every song of theirs you have.
@@ -4096,16 +4044,18 @@ def test_there_is_no_cards_rows_switch(conn, cfg, tmp_path):
 @pytest.mark.parametrize("size", ["390,844", "1280,800"])
 @in_chromium
 def test_lines_meet_touch_and_contrast(conn, cfg, tmp_path, size):
-    from helpers.targets import UNFOLD, noted, noting, small_targets, weak_edges
+    from helpers.targets import ARTIST_NAMES, UNFOLD, noted, noting, small_targets, weak_edges
 
     # Every line's "⋯" open, so what each holds is measured too. The search field is the bar's, which another
     # change redraws.
-    script = UNFOLD + noting("data-short", small_targets()) + noting("data-weak", weak_edges("#q"))
+    # An artist's name on its band is the one control that may be 24 px, not 44.
+    script = (UNFOLD + noting("data-short", small_targets(ARTIST_NAMES)) + noting("data-floor", small_targets("", least=24))
+              + noting("data-weak", weak_edges("#q")))
     html = with_script(every_control(conn, cfg), script)
     dom = dump_dom(write_library_page(cfg.library_dir, html), tmp_path, size=size, touch=True)
     assert re.search(r'class="line-panel"[^>]*id="line-more-\d+"(?! hidden)', dom)
-    short, weak = noted(dom, "data-short"), noted(dom, "data-weak")
-    assert short == [] and weak == [], (short, weak)
+    short, floor, weak = noted(dom, "data-short"), noted(dom, "data-floor"), noted(dom, "data-weak")
+    assert short == [] and floor == [] and weak == [], (short, floor, weak)
 
 
 # The contrast of what a line says against what is behind it, and of its group's heading: WCAG's ratio of each

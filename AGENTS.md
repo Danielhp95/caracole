@@ -825,20 +825,33 @@ It is rows.js's, shared by both pages:
   and one line a song, by the two parts of the identity key (the rows' `artist_key` and `title_key`, an artist's
   `group_key`, a song's `identity` in the page's data), each line rows.js's `indexLine`.
 - A removed song's line asks for it again as the request form does.
+- **Bands and folding**, by what a group holds as each draw makes it (library.js `artistGroup(artist, items, counts)`):
+  - an artist of two lines or more is a 34 px band over them (`--band-h`), the group's tail under them
+    (`artist.tail`, `tailOf`'s: "+ N more", Their songs, a page's read offered);
+  - an artist of one line and nothing else (no tail, no "Did you mean", a group that names an artist: never
+    MuseScore's or harptabs') folds into it (`section.artist.folded`), in the list and the results alike: its heading
+    a screen reader's alone, the name in it no button, and the line's `.line-by` its overline, the name that searches
+    (rows.js `indexLine`'s too, `onSearch`);
+  - on a phone library.css's folded grid puts the overline over the title, `.line-title` `display: contents` (its
+    `.line-plays` a direct child, card.css's seam: test_library_assets.py), the title's column keeping rows.css's
+    4rem; from 720 px the flat line's columns, the overline in `by`; Select mode's are songbooks.css's
+    (test_library_bands.py); the same rules are `section.flat .line`'s, a list sorted by title or by when they came
+    folding every line.
 - A "Did you mean" band's "Their 7 songs on UG ›" opens that artist's group from `/api/artist`, as "+ N more" does.
 - A song of yours under its ⋯ (Fetch again; Use LaCuerda's sheet, `lacuerdaSheet` or the search's LaCuerda row of it)
   posts `/lookup` exactly as the lookup page's rows of it do (test_web_page_again.py).
 - A hit's name there and on the lookup page presses its Fetch (or Add again), disabled while that button is (rows.js
   `nameDoes`): never in place of a title that opens a sheet, and only a click or a key on it.
 - **An artist's name**:
-  - Served, an artist's name (a header's, a line's, a lookup row's) searches for them as typing it would (library.js
-    `searchFor`, a step of the browser's history; lookup_page.py `searchArtist`), which asks no site, and the funnel
-    beside it (rows.js `artistOnly`) shows your songs of theirs alone.
-  - From a file the name is the funnel's (`artistFilter`).
+  - An artist's name (a header's, a line's, a site's row's, a lookup row's) searches for them as typing it would,
+    served or from a file (library.js `searchFor`, a step of the browser's history, which rows.js's
+    `does.searchArtist` is too; lookup_page.py `searchArtist`), which asks no site: rows.js `artistOf(name, onSearch,
+    cls)`, a `button.artist.artist-search`. There is no funnel and no view of one artist's songs alone.
   - A viewer's artist line (sheet.html, a version's page, a songbook's song: page.py `artist_line`) is a plain link to
-    `index.html#by=<name>`, which library.js's `addressed` reads as the same press, served or from a file, then
-    writes its own address in its place (Back is the sheet).
-  - Your songs there keep to the Filter panel's filters and the artist's tag (`kept`), as the list's do.
+    `index.html#by=<name>`, which library.js's `addressed` reads as the same press, served or from a file, as it
+    reads `#artist=<key>`, the one-artist view's address once, then writes its own address in its place (`cameBy`:
+    Back is the sheet).
+  - Your songs there keep to the Filter panel's filters (`kept`), as the list's do.
 
 ##### Songs gone, and the page's tabs
 

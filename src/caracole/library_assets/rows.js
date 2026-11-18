@@ -1,8 +1,9 @@
 
 // Where each thing came from, the pages' glyphs, and a list's rows and lines (``resultRow``): index.html's, and the
 // results of caracole serve's lookup page (web/lookup_page.py), which runs this script before its own.
-// ``does.searchArtist(name)``, where a page can search: what an artist's name on a site's row does (ugHit, siteHit),
-// the search for them.
+// ``does.searchArtist(name)``: what an artist's name on a site's row does (ugHit, siteHit), and on a site's song's line
+// (indexLine: shown where its group folds into it), the search for them, which both pages give (index.html's
+// searchFor, served or from a file; the lookup page's searchArtist).
 const caracoleRows = (icons, does) => {
   "use strict";
   const searchArtist = does && typeof does.searchArtist === "function" ? does.searchArtist : null;
@@ -166,20 +167,7 @@ const caracoleRows = (icons, does) => {
     a.appendChild(heading);
     return a;
   };
-  // An artist's name that shows that artist's songs alone (``whose``, for its title): a button, the name and a
-  // filter's mark (a funnel, drawn by the stylesheet), which a screen reader skips.
-  const artistFilter = (name, whose, onArtist, cls) => {
-    const who = el("button", cls ? "artist " + cls : "artist");
-    who.type = "button";
-    who.title = whose + "'s songs";
-    who.appendChild(el("span", "artist-name", name));
-    const mark = el("span", "filter-mark");
-    mark.setAttribute("aria-hidden", "true");
-    who.appendChild(mark);
-    who.addEventListener("click", onArtist);
-    return who;
-  };
-  // Served, an artist's name searches for them (``onSearch``: the search box filled with it, as typing it would): a
+  // An artist's name that searches for them (``onSearch``: the search box filled with it, as typing it would): a
   // button, the name alone, which a header and a line show as they show a name.
   const artistSearch = (name, onSearch, cls) => {
     const who = el("button", cls ? "artist artist-search " + cls : "artist artist-search");
@@ -189,32 +177,10 @@ const caracoleRows = (icons, does) => {
     who.addEventListener("click", onSearch);
     return who;
   };
-  // Beside it, for an artist you have songs of, the funnel: their songs of yours alone (``onArtist``), a button of its
-  // own, named for what it does.
-  const artistOnly = (whose, onArtist) => {
-    const only = el("button", "artist-only");
-    only.type = "button";
-    only.title = whose + "'s songs";
-    only.setAttribute("aria-label", whose + "'s songs");
-    const mark = el("span", "filter-mark");
-    mark.setAttribute("aria-hidden", "true");
-    only.appendChild(mark);
-    only.addEventListener("click", onArtist);
-    return only;
-  };
-  // A row's or a line's artist (``cls``, its place): served, the name that searches for them (``onSearch``) and the
-  // funnel beside it (``onArtist``); from a file, which can't search the sites, the name is the funnel's
-  // (artistFilter); neither, the name alone.
-  const artistOf = (name, onSearch, onArtist, cls) => {
-    if (typeof onSearch === "function" && typeof onArtist === "function") {
-      const pair = el("span", cls + " artist-pair");
-      pair.append(artistSearch(name, onSearch), artistOnly(name, onArtist));
-      return pair;
-    }
-    if (typeof onSearch === "function") return artistSearch(name, onSearch, cls);
-    if (typeof onArtist === "function") return artistFilter(name, name, onArtist, cls);
-    return el("span", cls, name);
-  };
+  // A row's or a line's artist (``cls``, its place): the name that searches for them (``onSearch``), else the name
+  // alone.
+  const artistOf = (name, onSearch, cls) => (typeof onSearch === "function" ? artistSearch(name, onSearch, cls)
+    : el("span", cls, name));
   const shortKey = (key) => String(key).replace(/ minor$/, "m").replace(/ major$/, "");
   // A key as a row or a line shows it ("Am"), and as a screen reader hears it ("Key A minor (from the tab)").
   const keyMark = (cls, r) => {
@@ -274,8 +240,8 @@ const caracoleRows = (icons, does) => {
     : r.action && typeof r.action === "object" ? link(r.action, "btn small primary", isWeb(r.action.href)) : null);
   // A dense list's line (``dense``): index.html's songs, under their artist's name. Its title, which opens what
   // ``href`` says, and right after it ``plays``, a song of yours' button for each thing to play from (card.js plays:
-  // none of them first); then the artist (where no group above names it: ``onSearch`` and ``onArtist`` make it what a
-  // group's name is, artistOf), the status's badges, and a site's song's marks of where it came from (``sources``,
+  // none of them first); then the artist (where no group above names it: ``onSearch`` makes it what a group's name
+  // is, artistOf), the status's badges, and a site's song's marks of where it came from (``sources``,
   // else ``source``); its key, as a chip; its main action and its chevron. One line from 720px; on a phone the title
   // and its buttons, the action, the key and the chevron, and under them the artist and the badges, when there are
   // any.
@@ -297,7 +263,7 @@ const caracoleRows = (icons, does) => {
     }
     line.appendChild(named);
     const meta = el("div", "line-meta");
-    if (artist) meta.appendChild(artistOf(artist, r.onSearch, r.onArtist, "line-by"));
+    if (artist) meta.appendChild(artistOf(artist, r.onSearch, "line-by"));
     const status = el("span", "line-status");
     for (const badge of listOf(r.badges)) {
       if (badge && badge.text) status.appendChild(el("span", "badge " + String(badge.kind || ""), badge.text));
@@ -337,7 +303,7 @@ const caracoleRows = (icons, does) => {
     // The artist and the key, the status and the badges: one wrapping line under the title on a phone,
     // where badges that don't fit go under the artist, never over it; their own columns on a desktop.
     const sub = el("div", "row-sub");
-    if (artist) sub.appendChild(artistOf(artist, r.onSearch, r.onArtist, "row-artist"));
+    if (artist) sub.appendChild(artistOf(artist, r.onSearch, "row-artist"));
     const meta = el("p", "row-meta");
     if (typeof r.key === "string" && r.key) meta.appendChild(keyMark("row-key", r));
     for (const badge of listOf(r.badges)) {
@@ -753,7 +719,7 @@ const caracoleRows = (icons, does) => {
       gt ? "game tab" + ((Number(gt.uploads) || 1) > 1 ? " ×" + Number(gt.uploads) : "") : ""];
     const badges = gone ? [{ kind: "removed", text: "Removed " + shortDate(gone.removed_at) }]
       : mine ? [{ kind: "found", text: "In your logbook" }] : [];
-    line = resultRow({ dense: true, title, artist,
+    line = resultRow({ dense: true, title, artist, onSearch: searchesFor(artist),
       sources: [ug && "ug", lc && "lacuerda", gtp && "gtptabs", ht && "harptabs", gt && "gametabs"].filter(Boolean),
       facts: facts.filter(Boolean).join(" · "),
       badges: [...badges, ...instrumentBadges([...(ug ? ugInstruments(ug.counts) : []), ...(ht ? ["harmonica"] : []),
@@ -1345,8 +1311,8 @@ const caracoleRows = (icons, does) => {
     if (why) line.appendChild(why);
     return line;
   };
-  return { resultRow, sourceMark, siteMarks, glyph, link, safeHref, titleLink, artistFilter, artistSearch, artistOnly,
-    button, fetchIcon, many, shortDate, counts, opener, instrumentBadges, ugHit, artistHit,
+  return { resultRow, sourceMark, siteMarks, glyph, link, safeHref, titleLink, artistSearch, button, fetchIcon, many,
+    shortDate, counts, opener, instrumentBadges, ugHit, artistHit,
     siteHit, siteArtist, siteArtistSongs, readArtistPage, searchLaCuerda, lacuerdaSearcher, readOutcome, indexLine, titleLine,
     songsOn, meantName, didYouMean, countMarks, countsSaid, nothingFound, notesLine };
 };

@@ -146,20 +146,20 @@ section.artist .lines, section.nothing .lines { border: 0; border-radius: 0; bac
 section.artist + section.artist, .groups > section + section.nothing { border-top: 1px solid var(--border); }
 section.artist:focus { outline: none; }
 section.artist:focus-visible > .artist-title { outline: 3px solid var(--focus); outline-offset: -3px; }
-/* The name bigger than the titles under it, in the second accent (--artist), its funnel and underline with it; the
-   counts beside it small and muted. */
-.artist-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 2px; min-height: 34px; margin: 0;
-  padding: 5px 12px; border-bottom: 1px solid var(--border); background: var(--raised); color: var(--artist);
-  font-size: 1.125rem; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+/* The band of an artist: 34 px, their name in the second accent (--artist) a little bigger than the titles under
+   it, one line cut with an ellipsis, your count small and muted on its right. */
+.list, #found { --band-h: 34px; --fold-h: 64px; }
+.artist-title { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; height: var(--band-h); min-height: 0;
+  margin: 0; padding: 0 12px; border-bottom: 1px solid var(--border); background: var(--raised); color: var(--artist);
+  font-size: .906rem; font-weight: 700; line-height: 1.2; overflow: hidden; }
 section.artist:first-child > .artist-title { border-radius: 11px 11px 0 0; }
+.artist-title .artist-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto;
+  min-width: 0; }
 .artist-title button.artist, .artist-title button.artist:hover { color: var(--artist); font-size: inherit;
-  font-weight: inherit; }
-/* A name that wraps keeps its funnel after its last word, not at the band's far end. */
-.artist-title button.artist { display: block; }
-.artist-title .filter-mark { display: inline-block; margin-left: 5px; }
-.artist-title button.artist-only { align-self: center; color: var(--artist); }
-.artist-title button.artist-only .filter-mark { margin-left: 0; }
-.artist-counts { color: var(--muted); font-size: .82rem; font-weight: 500; letter-spacing: 0; }
+  font-weight: inherit; display: flex; min-width: 0; max-width: 100%; }  /* flex: its name is cut, never under the counts */
+.artist-counts { margin-left: auto; flex: 0 100 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; color: var(--muted); font-size: .78rem; font-weight: 600; letter-spacing: 0; }
+@media (pointer: coarse) { .artist-title button.artist { min-width: 24px; min-height: 24px; } }
 /* A search that found nothing on the sites (rows.js nothingFound): a band as an artist's, as tall, quiet: in the text's
    colour and smaller, over its one line, whose chevron opens a plain panel, as a site's song's does (card.css raises
    a song of yours). */
@@ -170,15 +170,43 @@ section.nothing:first-child > .miss-band { border-radius: 11px 11px 0 0; }
 section.nothing .line.miss:has(> .line-more[aria-expanded="true"]) { margin: 0; border: 0; border-radius: 0;
   background: none; box-shadow: none; }
 section.nothing .line.miss > .line-panel { gap: 6px; padding: 4px 0 8px; }
-/* In an artist's group its header names the artist: its lines leave the name out, and the column with it. */
-section.artist .line-by { display: none; }
+/* In an artist's band its header names the artist: its lines leave the name out, and the column with it. */
+section.artist:not(.folded) .line-by { display: none; }
 @media (min-width: 720px) {
-  section.artist .line { grid-template-columns: minmax(0, 1fr) 6.5rem auto 2.75rem var(--line-more);
+  section.artist:not(.folded) .line { grid-template-columns: minmax(0, 1fr) 6.5rem auto 2.75rem var(--line-more);
     grid-template-areas: "title status act key more"; }
   /* A site's line has no key: its status and counts ("chords ×9 · tabs ×2") take most of that room, its marks the
      rest, the rest where yours are (rows.css). */
-  section.artist .line.hit { grid-template-columns: minmax(0, 1fr) calc(16.5rem - var(--sources-w)) var(--sources-w)
-    4.5rem 2.75rem var(--line-more); grid-template-areas: "title status src act key more"; }
+  section.artist:not(.folded) .line.hit { grid-template-columns: minmax(0, 1fr) calc(16.5rem - var(--sources-w))
+    var(--sources-w) 4.5rem 2.75rem var(--line-more); grid-template-areas: "title status src act key more"; }
+}
+/* An artist of one line folded into it (library.js artistGroup): no band, its heading a screen reader's alone; their
+   name the line's overline, small capitals in their colour, as wide as it is and cut with an ellipsis at its column,
+   a thumb's 24 px. On a phone over the title, the buttons, the action, the key and the chevron beside both, about
+   64 px on a touch screen; from 720 px in the flat line's column of the artist (rows.css's "by"). On a phone its
+   buttons are a column of the grid: rows.css's limit (the title's box less 4rem) would be of their own column here,
+   4rem too narrow for them, so the title's column keeps the 4rem itself (less the 6 px between the columns) and the
+   buttons take the rest, wrapping where more won't fit, as on a band's line. */
+section.artist.folded > .artist-title { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+section.artist.folded:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+section.artist.folded .line-by, section.flat .line-by { flex: 0 1 auto; color: var(--artist); font-size: .72rem; font-weight: 700;
+  letter-spacing: .06em; text-transform: uppercase; line-height: 1.2; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; max-width: 100%; }
+@media (pointer: coarse) { section.artist.folded .line-by, section.flat .line-by { min-height: 24px; } }
+@media (max-width: 719px) {
+  section.artist.folded .line,
+  section.flat .line { grid-template-columns: minmax(calc(4rem - 6px), 1fr) auto auto auto var(--line-more);
+    grid-template-areas: "meta plays act key more" "name plays act key more"; align-content: center; }
+  section.artist.folded .line.gone,
+  section.flat .line.gone { align-content: start; }  /* a song removed: its lines stay where they were */
+  section.artist.folded .line > .line-title,
+  section.flat .line > .line-title { display: contents; }
+  section.artist.folded .line > .line-title > h3,
+  section.flat .line > .line-title > h3 { grid-area: name; }
+  section.artist.folded .line > .line-title > .line-plays,
+  section.flat .line > .line-title > .line-plays { grid-area: plays; max-width: none; }
+  @media (pointer: coarse) { section.artist.folded .line, section.flat .line { min-height: var(--fold-h); } }
 }
 .badge.missing { color: var(--failed); background: var(--failed-bg); }
 /* A song caracole removed while the page was open: it says so, and nothing more, until the page is loaded again. */

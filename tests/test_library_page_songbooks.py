@@ -493,7 +493,7 @@ def test_the_select_bars_style_leaves_a_reviews_picker_as_it_is(library, tmp_pat
 
 
 # Each line's controls that show, but for its box; and what a tap at the middle of its title, its status and its
-# title's box lands on.
+# title's box lands on (a folded line's overline, on a phone, where its title's box is the line's grid: library.css).
 LINE_TARGETS = """
   const landsOn = (line, n) => {
     if (!n) return null;
@@ -502,11 +502,12 @@ LINE_TARGETS = """
     const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
     return hit === line ? "line" : hit ? hit.className || hit.tagName : null;
   };
+  const boxOf = (line) => (line.querySelector(".line-title").getClientRects().length ? line.querySelector(".line-title")
+    : line.querySelector(".line-by"));
   const targets = (line) => ({
     controls: qa("a, button, summary, select, input").filter((n) => line.contains(n) && !n.closest(".pick")
       && n.checkVisibility()).map((n) => n.className),
-    funnel: line.querySelector(".filter-mark").checkVisibility(),
-    taps: [line.querySelector("h3"), line.querySelector(".line-status .badge"), line.querySelector(".line-title")]
+    taps: [line.querySelector("h3"), line.querySelector(".line-status .badge"), boxOf(line)]
       .map((n) => landsOn(line, n)),
   });
 """
@@ -546,15 +547,17 @@ def test_while_selecting_a_line_shows_no_file_or_action_and_a_tap_anywhere_lands
     """, size=size)
     # Before: its buttons, "⋯" and all it holds (files, Fetch now, the picker, the note's link to the to-do page, Add
     # to a songbook…, Remove…), a request's Details. Selecting: the buttons of what it holds alone (none for a song
-    # with nothing), which say what each has and which a tap no more reaches than the rest; a request's line says how
-    # it goes, without its links; a tap anywhere lands on the line, which picks it.
+    # with nothing), which say what each has and which a tap no more reaches than the rest, and a folded line's
+    # artist, its overline (Hysteria's, Crep's), as a title-sorted line's name stays; a request's line says how it
+    # goes, without its links; a tap anywhere lands on the line, which picks it.
     assert min(out["before"]) >= 3 and out["note"] and out["details"], out["before"]
     shown = out["lines"]
     assert shown["Creep"]["controls"] == ["play play-sheet"], shown
     for title in ("Hysteria", "Crep", "Karma Police"):
-        assert shown[title]["controls"] == [], (title, shown[title])
+        name = ["artist artist-search line-by"] if title in ("Hysteria", "Crep") else []
+        assert shown[title]["controls"] == name, (title, shown[title])
     for title, seen in shown.items():
-        assert seen["taps"] == ["line", "line", "line"] and not seen["funnel"], (title, seen)
+        assert seen["taps"] == ["line", "line", "line"], (title, seen)
     assert out["hidden"] == [False, False]
     assert out["after"] == out["before"]  # out of the mode, all back
 
@@ -579,7 +582,7 @@ def test_on_a_phone_a_tap_on_a_line_picks_it_and_opens_nothing(library, tmp_path
         assert phone.wait(f"document.querySelector({json.dumps(creep)}) !== null")
         phone.click("#tab-songbooks")
         phone.click("#songbooks .new-book")  # Select, on the library
-        phone.click(creep + " .line-title")  # the title opens the sheet, but not while selecting
+        phone.click(creep + " .line-by")  # Radiohead's one song, folded: their name searches, but not while selecting
         assert phone.js(picked) == [True, False]
         phone.click(creep + " .line-status")  # nor does its status do anything but untick it
         assert phone.js(picked) == [False, False]

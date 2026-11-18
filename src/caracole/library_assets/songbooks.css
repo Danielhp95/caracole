@@ -171,14 +171,14 @@ button.plays:hover, button.plays[aria-expanded="true"] { border-color: var(--acc
    or lets it go; only its box takes a tap of its own. What opens a file or acts on the song is put away (its
    action, its chevron and what that holds), and so are the links of its request's line (which still says how the
    request goes), so that a pick never opens or fetches anything; a key pressed on what stays (its artist's
-   filter) still does what it says. */
+   name) still does what it says. */
 .selecting [data-picker] { cursor: pointer; -webkit-tap-highlight-color: transparent; -webkit-user-select: none;
   user-select: none; }
 .selecting [data-picker] * { pointer-events: none; }
 .selecting [data-picker] .pick, .selecting [data-picker] .pick * { pointer-events: auto; }
 .selecting [data-picker] > .line-action, .selecting [data-picker] > .line-more,
-.selecting [data-picker] > .line-panel, .selecting [data-picker] .filter-mark, .selecting [data-picker] .artist-only,
-.selecting [data-picker] .progress a, .selecting [data-picker] .progress .dot { display: none; }
+.selecting [data-picker] > .line-panel, .selecting [data-picker] .progress a,
+.selecting [data-picker] .progress .dot { display: none; }
 .selecting [data-picker] button.artist { min-height: 0; }  /* no target of its own: the line is */
 /* A line's box comes first, beside its title (its buttons with it), its key and what is under it (both lines on a
    phone); its action and its chevron wait. */
@@ -186,10 +186,16 @@ button.plays:hover, button.plays[aria-expanded="true"] { border-color: var(--acc
   grid-template-areas: "pick title key" "pick meta meta"; }
 .selecting .line > .pick { grid-area: pick; align-self: center; }
 .selecting .line.picked { background: var(--raised); box-shadow: inset 3px 0 0 var(--accent); }
+/* A line its one-song artist folded into (library.css): on a phone the box beside its artist's overline and its title,
+   its buttons and its key beside both; from 720 px its artist in the column a title-sorted line names its own in. */
+@media (max-width: 719px) {
+  .selecting section.artist.folded .line, .selecting section.flat .line { grid-template-columns: 44px minmax(calc(4rem - 6px), 1fr) auto auto;
+    grid-template-areas: "pick meta plays key" "pick name plays key"; }
+}
 @media (min-width: 720px) {
   .selecting .line { grid-template-columns: 44px minmax(0, 1fr) minmax(0, .6fr) 6.5rem 2.75rem;
     grid-template-areas: "pick title by status key"; }
-  .selecting section.artist .line { grid-template-columns: 44px minmax(0, 1fr) 6.5rem 2.75rem;
+  .selecting section.artist:not(.folded) .line { grid-template-columns: 44px minmax(0, 1fr) 6.5rem 2.75rem;
     grid-template-areas: "pick title status key"; }
 }
 .selecting .page { padding-bottom: 104px; }
