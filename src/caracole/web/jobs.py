@@ -57,8 +57,13 @@ lookup takes the place of the song's waiting add, since ``caracole get`` adds
 the song itself, or follows it once it runs; a version you pick meanwhile
 takes the place of the song's waiting lookup, or follows the running one, and a
 lookup joins the song's Keep it, which never looks it up, or follows it: its
-stages, which share names with Keep it's, start afresh when it does),
-and remembers the last ``keep``
+stages, which share names with Keep it's, start afresh when it does).
+Given ``lane`` (``LANE``), the lookups' lane beside it holds
+``lane`` running and ``lane_waiting`` (``LANE_WAITING``) waiting, its room
+apart from the queue's: a request of the lane's commands alone (``lane_of``: a
+lookup, a pasted UG link, LaCuerda's search, an artist's page on LaCuerda or
+harptabs.com) is the lane's unless its song has a job in the queue, behind
+which it waits in the queue (``Job.lane``, in memory alone). It remembers the last ``keep``
 finished ones (``cancel`` takes one that hasn't started out of the queue, never one
 that runs, and keeps it among those, cancelled), in memory and, given a
 ``history`` (history.py: caracole serve's ``state_dir/requests.jsonl``), in a
@@ -87,7 +92,9 @@ if TYPE_CHECKING:
     from caracole.web.history import History
 
 Runner = Callable[[Sequence[str], Callable[[str], None]], int]
-LIMIT = 20  # jobs waiting or running
+LIMIT = 20  # jobs waiting or running in the queue
+LANE = 3  # the lookups' lane's jobs running at once beside the queue's one (``JobQueue(lane=LANE)``)
+LANE_WAITING = 10  # and those waiting there for a slot, its room apart from the queue's ``LIMIT``
 KEEP = 100  # finished jobs remembered, as the history keeps them (history.py)
 MAX_LINES = 400  # output kept per step: the last lines
 # A job the server stopped before it was over (``JobQueue.stop``, or a restart: history.py), and its step and stage
@@ -96,7 +103,8 @@ INTERRUPTED = "interrupted"
 
 
 class QueueFull(Exception):
-    """The queue holds ``limit`` jobs already."""
+    """The queue holds ``limit`` jobs already, or the lookups' lane its ``lane`` running and ``lane_waiting`` waiting,
+    the request's place."""
 
 
 class JobStarted(Exception):
@@ -157,6 +165,9 @@ class Job:
     # for the Sync tab's summary (jobs_routes.py ``peer_outcome``): in memory alone, never in ``as_json`` nor the
     # history, so a job read back after a restart has none
     report: dict[str, Any] | None = field(default=None, compare=False)
+    # Whether it is the lookups' lane's (``lane_of``, ``JobQueue.submit``), decided as it is queued: in memory alone,
+    # never in ``as_json`` nor the history, as ``report``, so a job read back after a restart is the queue's
+    lane: bool = field(default=False, compare=False)
 
     @property
     def active(self) -> bool:
@@ -470,6 +481,39 @@ def song_key_of(job_key: str) -> str:
     return job_key.removeprefix(REMOVING).removeprefix(YOUTUBE_SHEET)
 
 
+def _in_the_lane(args: Sequence[str]) -> bool:
+    """Whether a step's command is one of the lookups' lane's (``lane_of``)."""
+    options = _options(args)
+    if args[:1] == (LOOKUP,):
+        return "--no-songbooks" not in options
+    if args[:1] == ("ug",):
+        return any(arg.startswith("--link=") for arg in options)
+    if args[:1] == ("lacuerda",):
+        return any(arg.startswith(("--search=", "--artist=")) for arg in options)
+    if args[:1] == ("harptabs",):
+        return any(arg.startswith("--artist=") for arg in options)
+    return False
+
+
+def lane_of(steps: Sequence[tuple[str, Sequence[str]]]) -> bool:
+    """Whether a request of these steps is the lookups' lane's (``JobQueue(lane=…)``), its song's jobs in the queue
+    aside (``JobQueue.submit``): every one a command asked for now that sends a lookup's few requests and takes turns
+    at caracole's lock in the lane (commands/_common.py ``exclusive(..., lane=True)``): ``caracole get``, but for a
+    songbook's Get the missing songs (``--no-songbooks``), which would fill the lane for minutes; ``ug --link``;
+    ``lacuerda --search`` and ``--artist``; ``harptabs --artist``. A yt-dlp run (``youtube``), ``versions``, an add
+    and every other command are the queue's, and so is a request with one of them."""
+    return bool(steps) and all(_in_the_lane(tuple(args)) for _, args in steps)
+
+
+def ahead(jobs: Sequence[Job], job: Job) -> int:
+    """How many requests waiting or running a queued one waits for, of ``jobs`` in any order: a lane job, the lane's
+    before it; a queue job, every one before it and every lane job, which goes first. With no lane job, every one
+    before it, as a queue of no lane counts."""
+    if job.lane:
+        return sum(1 for j in jobs if j.active and j.lane and j.id < job.id)
+    return sum(1 for j in jobs if j.active and j.id != job.id and (j.id < job.id or j.lane))
+
+
 def _pick(steps: Sequence[Step]) -> tuple[str, ...]:
     """The Ultimate Guitar song and tab, the LaCuerda song, the harptabs.com tab and the gametabs.net tab, a lookup's
     ``caracole get`` was given (``--ug``, ``--tab``, ``--lacuerda``, ``--harptabs``, ``--gametabs``), and what a ``caracole versions`` does (``--choose``,
@@ -586,12 +630,16 @@ def review_steps(display: str, *, pick: str | None = None,
 
 class JobQueue:
     """Jobs in order, run by one worker thread (``start``), or by ``run_pending`` in tests; with ``history``, those
-    the last server left read back from it (history.py), and every job saved to it as it changes."""
+    the last server left read back from it (history.py), and every job saved to it as it changes. ``lane``, the
+    lookups' lane's jobs running at once (``LANE``), and ``lane_waiting``, those waiting there: its
+    room, apart from the queue's ``limit``; with ``lane`` 0, none, every request the queue's, as before the lane."""
 
     def __init__(self, runner: Runner, *, limit: int = LIMIT, keep: int = KEEP, max_lines: int = MAX_LINES,
-                 history: History | None = None):
+                 history: History | None = None, lane: int = 0, lane_waiting: int = LANE_WAITING):
         self._runner = runner
         self._limit = limit
+        self._lanes = lane
+        self._lane_waiting = lane_waiting
         self._keep = keep
         self._max_lines = max_lines
         self._lock = threading.Lock()
@@ -627,8 +675,15 @@ class JobQueue:
         the song's lookup that still waits, or comes after the one that runs,
         as a job of its own. ``song_id`` is the library's song the job is about,
         when it is known before the job runs: a removal's, whose song is gone
-        once it is done. Raises QueueFull when ``limit`` jobs are waiting or
-        running.
+        once it is done.
+
+        Given a lane (``lane``), a request of the lane's commands alone (``lane_of``) is the lane's, unless its song
+        (``song_key_of``) has a job waiting or running in the queue (its removal, its sheet from YouTube, a
+        songbook's lookup of it, its Keep it, a pick's review): then it is the queue's, behind that job, by the rules
+        above. A request joins only a job waiting in its own place: a lane request the song's lane job, a queue
+        request never a lane job that waits (it is a job of its own in the queue), though a lane job that does as
+        much is still its answer. Raises QueueFull when its place is full: the queue's ``limit`` jobs waiting or
+        running, or the lane's ``lane`` running and ``lane_waiting`` waiting.
         """
         with self._lock:
             done = self._submit_locked(title, song_key, steps, fetching=fetching, note=note, display=display,
@@ -638,8 +693,9 @@ class JobQueue:
 
     def submit_all(self, requests: Sequence[dict[str, Any]]) -> list[tuple[Job, bool]]:
         """``submit`` of each request (a dict of its arguments: ``title``, ``song_key``, ``steps`` and the options),
-        all or none, under the queue's one lock: when one finds the queue full, QueueFull is raised and the queue
-        is as it was, the jobs the earlier ones joined or queued as before. A request that joins a job already
+        all or none, under the queue's one lock: when one finds its place full (the queue, or the lane: each
+        request's own), QueueFull is raised and the queue is as it was, the jobs the earlier ones joined or queued
+        as before. A request that joins a job already
         queued needs no room. The jobs it makes are queued ``together``: cancelling one cancels those of them
         that haven't started (``cancel``). The copies it gives back were made before that is said."""
         with self._lock:
@@ -670,21 +726,28 @@ class JobQueue:
                        fetching: bool = False, note: str = "", display: str = "",
                        join: bool = True, song_id: int | None = None) -> tuple[Job, bool]:
         """``submit`` under the queue's lock, held by its caller (``submit``, ``submit_all``), by ``submit``'s rules:
-        the song's job that does as much, else its job that still waits, joined, else a job of its own."""
+        its place (the lane or the queue), then the song's job that does as much (in either), else its job that still
+        waits in that place, joined, else a job of its own there, room allowing."""
         new = [Step(label, tuple(args)) for label, args in steps]
+        song = song_key_of(song_key)
+        lane = self._lanes > 0 and lane_of(steps) and not any(
+            job.active and not job.lane and song_key_of(job.song_key) == song for job in self._jobs)
         mine = [job for job in self._jobs if job.active and job.song_key == song_key]
-        waiting = next((job for job in mine if job.state == "queued"), None)
+        waiting = next((job for job in mine if job.state == "queued" and job.lane == lane), None)
         enough = _as_much(mine, waiting, new, fetching=fetching, join=join)
         if enough is not None:
             return copy.deepcopy(enough), False
         if waiting is not None:
             _join(waiting, new, title, note)
             return copy.deepcopy(waiting), False
-        if sum(job.active for job in self._jobs) >= self._limit:
+        if lane:
+            if sum(job.active and job.lane for job in self._jobs) >= self._lanes + self._lane_waiting:
+                raise QueueFull(f"{self._lanes + self._lane_waiting} lookups are running or waiting already")
+        elif sum(job.active and not job.lane for job in self._jobs) >= self._limit:
             raise QueueFull(f"{self._limit} requests are waiting already")
         job = Job(self._next_id, title, song_key, new, fetching=fetching, note=note, display=display or title,
                   stages=_stages(new), song_id=song_id,
-                  song_display=(display or title) if song_id is not None else None)
+                  song_display=(display or title) if song_id is not None else None, lane=lane)
         self._next_id += 1
         self._jobs.append(job)
         self._wake.notify_all()
@@ -725,14 +788,21 @@ class JobQueue:
         with self._lock:
             return next((copy.deepcopy(j) for j in self._jobs if j.id == job_id), None)
 
+    @property
+    def lanes(self) -> int:
+        """The lookups' lane's jobs that run at once (``JobQueue(lane=…)``); 0, no lane."""
+        return self._lanes
+
     def active_count(self) -> int:
+        """The jobs waiting or running, in the queue and in the lane."""
         with self._lock:
             return sum(job.active for job in self._jobs)
 
     def room(self) -> int:
-        """How many more jobs the queue takes now: ``limit``, less those waiting or running."""
+        """How many more jobs the queue takes now: ``limit``, less those waiting or running in it (the lane's
+        room is its own)."""
         with self._lock:
-            return max(0, self._limit - sum(job.active for job in self._jobs))
+            return max(0, self._limit - sum(job.active and not job.lane for job in self._jobs))
 
     def fetching_keys(self) -> set[str]:
         """The songs a waiting or running job will fetch."""
