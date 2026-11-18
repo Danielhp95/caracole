@@ -746,16 +746,32 @@ PARTS = """(() => {
 })()"""
 
 
+# Every other kind a line has a button for, beside a keyed sheet: a Guitar Pro file, a text tab, a harmonica tab, a tab
+# of game music and a score. Six icon tiles, which don't fit beside a long name on a laptop's line beside the pane.
+OTHER_KINDS = ("guitar-1.gp5", "tab.txt", "harmonica-1.txt", "gametab-1.txt", "score-1.mxl")
+
+
+def _six(conn, cfg, artist, title):
+    """A song of yours with a sheet that names its key and a button for every other kind: six on its line."""
+    from test_library_bands import keyed
+
+    song = keyed(conn, cfg, artist, title)
+    put(cfg, song, *OTHER_KINDS)
+    return song
+
+
 @pytest.mark.parametrize("size", ["1280,900", "1200,900"])
 @pytest.mark.parametrize("selecting", [False, True])
 def test_on_a_laptop_chips_wrap_under_the_title_and_never_push_the_key_off(conn, cfg, tmp_path, size, selecting):
     # Beside the pane a folded line reads on one row as under 1200 px (its title, its artist right after it, its play
-    # buttons, its key and its chevron) while its buttons fit there; where they don't, they go on a row of their own
-    # under its title, and the first row keeps the title, its artist right after it, the key and the chevron. None
-    # pushes the key off the line, and the title keeps its room; selecting too, after the line's box.
+    # buttons, its key and its chevron) while its buttons fit there, as Hotel California's five icon tiles do; where
+    # they don't (Suite: Judy Blue Eyes's six, beside Crosby, Stills, Nash & Young's long name), they go on a row of
+    # their own under its title, and the first row keeps the title, its artist right after it, the key and the
+    # chevron. None pushes the key off the line, and the title keeps its room; selecting too, after the line's box.
     from test_library_bands import keyed
 
     hotel(conn, cfg)
+    _six(conn, cfg, "Crosby, Stills, Nash & Young", "Suite: Judy Blue Eyes")
     keyed(conn, cfg, "The Beatles", "Yesterday")
     for title in ("Creep", "Karma Police"):
         keyed(conn, cfg, "Radiohead", title)
@@ -764,28 +780,31 @@ def test_on_a_laptop_chips_wrap_under_the_title_and_never_push_the_key_off(conn,
     try:
         if selecting:  # Select on, as + New songbook turns it on: each line gets its box
             b.js("document.dispatchEvent(new CustomEvent('caracole:new-songbook'))")
-            assert b.wait("document.querySelectorAll('#list .line > .pick').length === 4")
+            assert b.wait("document.querySelectorAll('#list .line > .pick').length === 5")
         at = b.js(PARTS)
-        hotel_line, yesterday, creep = at["Hotel California"], at["Yesterday"], at["Creep"]
+        hotel_line, suite, yesterday, creep = (at["Hotel California"], at["Suite: Judy Blue Eyes"], at["Yesterday"],
+                                               at["Creep"])
         whole = at[""]
-        assert hotel_line["n"] == 5 and yesterday["n"] == 1 and creep["n"] == 1, at
-        lines = (hotel_line, yesterday, creep, at["Karma Police"])
+        assert hotel_line["n"] == 5 and suite["n"] == 6 and yesterday["n"] == 1 and creep["n"] == 1, at
+        lines = (hotel_line, suite, yesterday, creep, at["Karma Police"])
         assert max(line["key"][0] for line in lines) - min(line["key"][0] for line in lines) <= 1, at  # one column
         for line in lines:
             assert line["inside"] and not line["cut"], line  # every button on the line, the title whole
             assert line["key"][1] <= whole["list"][1] + 0.5, (line, whole)
             if not selecting:
                 assert line["key"][1] <= line["more"][0] and line["more"][1] <= whole["list"][1] + 0.5, (line, whole)
-        # Yesterday, folded (The Beatles have one song): one row, its title, its artist, its button, then its key.
-        h3, by, plays = yesterday["h3"], yesterday["by"], yesterday["plays"]
-        assert by and h3[1] <= by[0] + 0.5 and h3[2] <= by[2] <= h3[3], yesterday
-        assert by[1] <= plays[0] + 0.5 and plays[1] < h3[3] and plays[2] <= yesterday["key"][0], yesterday
-        # Hotel California, folded, five buttons that don't fit beside it: its title, its artist right after it and its
-        # key on the first row, the buttons under the title.
-        h3, by, plays = hotel_line["h3"], hotel_line["by"], hotel_line["plays"]
-        assert by and h3[1] <= by[0] + 0.5 and h3[2] <= by[2] <= h3[3], hotel_line
-        assert hotel_line["key"][2] < h3[3], hotel_line
-        assert plays[1] >= h3[3] - 1 and abs(plays[0] - h3[0]) <= 1, hotel_line
+        # Yesterday and Hotel California, folded (The Beatles and the Eagles have one song each): one row, its title,
+        # its artist, its buttons, then its key.
+        for line in (yesterday, hotel_line):
+            h3, by, plays = line["h3"], line["by"], line["plays"]
+            assert by and h3[1] <= by[0] + 0.5 and h3[2] <= by[2] <= h3[3], line
+            assert by[1] <= plays[0] + 0.5 and plays[1] < h3[3] and plays[2] <= line["key"][0], line
+        # Suite: Judy Blue Eyes, folded, six buttons that don't fit beside it: its title, its artist right after it and
+        # its key on the first row, the buttons under the title.
+        h3, by, plays = suite["h3"], suite["by"], suite["plays"]
+        assert by and h3[1] <= by[0] + 0.5 and h3[2] <= by[2] <= h3[3], suite
+        assert suite["key"][2] < h3[3], suite
+        assert plays[1] >= h3[3] - 1 and abs(plays[0] - h3[0]) <= 1, suite
         # In Radiohead's band: the title, then its button beside it.
         assert creep["plays"][0] >= creep["h3"][1] and creep["plays"][1] < creep["h3"][3], creep
         assert whole["page"][0] <= whole["page"][1], whole
@@ -794,22 +813,32 @@ def test_on_a_laptop_chips_wrap_under_the_title_and_never_push_the_key_off(conn,
 
 
 def test_on_a_laptop_a_bands_line_puts_its_buttons_under_its_title_where_they_dont_fit(conn, cfg, tmp_path):
+    # In a band, a line's buttons sit beside its title where they fit (Hotel California's five icon tiles, Desperado's
+    # one) and go under it where they don't (six beside one of Panic! at the Disco's longest titles), the title whole
+    # and the chevron in the same column either way.
     hotel(conn, cfg)
     for title in ("Desperado", "Take It Easy"):
         song = add_song(conn, "Eagles", title)
         put(cfg, song, "sheet.html")
         update_song(conn, song.id, status="found")
+    london = "London Beckoned Songs About Money Written by Machines"
+    _six(conn, cfg, "Panic! at the Disco", london)
+    sins = add_song(conn, "Panic! at the Disco", "I Write Sins Not Tragedies")
+    put(cfg, sins, "sheet.html")
+    update_song(conn, sins.id, status="found")
     for size in ("1280,900", "1200,900"):
         width, height = (int(n) for n in size.split(","))
         b = _opened(tmp_path, write_library_page(cfg.library_dir, page(conn, cfg)).as_uri(),
                     {"width": width, "height": height})
         try:
             at = b.js(PARTS)
-            hotel_line, desperado = at["Hotel California"], at["Desperado"]
-            assert hotel_line["plays"][1] >= hotel_line["h3"][3] - 1, hotel_line  # under the title
-            assert desperado["plays"][0] >= desperado["h3"][1] and desperado["plays"][1] < desperado["h3"][3], desperado
+            long_line, hotel_line, desperado = at[london], at["Hotel California"], at["Desperado"]
+            assert long_line["n"] == 6 and long_line["plays"][1] >= long_line["h3"][3] - 1, long_line  # under the title
+            for line in (hotel_line, desperado):  # beside it
+                assert line["plays"][0] >= line["h3"][1] and line["plays"][1] < line["h3"][3], line
+            assert abs(long_line["more"][0] - desperado["more"][0]) <= 1 and long_line["inside"], at
             assert abs(hotel_line["more"][0] - desperado["more"][0]) <= 1 and hotel_line["inside"], at
-            assert not hotel_line["cut"] and at[""]["page"][0] <= at[""]["page"][1], at
+            assert not long_line["cut"] and not hotel_line["cut"] and at[""]["page"][0] <= at[""]["page"][1], at
         finally:
             b.close()
 
@@ -913,23 +942,24 @@ def test_a_selected_line_keeps_its_buttons_shape_and_its_words_contrast(conn, cf
 
 
 def test_a_folded_lines_buttons_are_placed_again_whatever_it_was_meanwhile(conn, cfg, tmp_path):
-    # Hotel California's five buttons don't fit beside it: under its title whenever it is a folded or flat line beside
-    # the pane, after it was a band's line meanwhile (a search that folds Eagles into it, then none; the list sorted by
-    # title, by artist, by title) or the window narrower.
-    hotel(conn, cfg)
-    for title in ("Desperado", "Take It Easy"):
-        song = add_song(conn, "Eagles", title)
+    # Suite: Judy Blue Eyes's six buttons don't fit beside it and its artist's long name: under its title whenever it
+    # is a folded or flat line beside the pane, after it was a band's line meanwhile (a search that folds Crosby,
+    # Stills, Nash & Young into it, then none; the list sorted by title, by artist, by title) or the window narrower.
+    artist = "Crosby, Stills, Nash & Young"
+    _six(conn, cfg, artist, "Suite: Judy Blue Eyes")
+    for title in ("Helplessly Hoping", "Teach Your Children"):
+        song = add_song(conn, artist, title)
         put(cfg, song, "sheet.html")
         update_song(conn, song.id, status="found")
     b = _opened(tmp_path, write_library_page(cfg.library_dir, page(conn, cfg)).as_uri())
-    under = "lineOf('Hotel California').classList.contains('plays-under')"
-    kind = "[...lineOf('Hotel California').closest('section').classList].filter((c) => c !== 'cv').join(' ')"
+    under = "lineOf('Suite: Judy Blue Eyes').classList.contains('plays-under')"
+    kind = "[...lineOf('Suite: Judy Blue Eyes').closest('section').classList].filter((c) => c !== 'cv').join(' ')"
     lines = "document.querySelectorAll('#list article.line').length"
     try:
         assert b.js(f"[{kind}, {under}]") == ["artist", False]  # a band's line: beside its title, else under it
         b.js("document.getElementById('q').focus()")
         for _ in range(2):  # folded, a band's, folded again
-            b.type("hotel")
+            b.type("suite")
             assert b.wait(f"{lines} === 1 && {under}"), b.js(f"[{kind}, {under}]")
             b.press("Escape")  # the box cleared, the search kept: all three again, under their band
             assert b.wait(f"{lines} === 3 && !{under}"), b.js(f"[{kind}, {under}]")
