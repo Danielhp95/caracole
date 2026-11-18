@@ -3,7 +3,8 @@
 A real ``caracole serve`` (as test_web_page_harptabs.py's ``live``) serves the page, whose bar searches as you type
 and puts iReal Pro's charts in the artist groups with the other sites', the composer as their artist, a chart's title a
 line, its mark; its queue runs ``FakeGet``. The index holds the captured sitemap's threads, the Jazz 1460 Standards
-and Thad Jones's Groove Merchant thread read (test_search.py's ``ireal_index``).
+and Thad Jones's Groove Merchant thread read (test_search.py's ``ireal_index``), or the sitemap's threads alone, known
+by their names (``ireal_sitemaps``), each a line under the by-line its name gives after the query, whose Fetch reads it.
 """
 
 from __future__ import annotations
@@ -29,6 +30,52 @@ def ireal(cfg):
     ireal_index(conn)
     conn.commit()
     conn.close()
+
+
+def sitemaps(cfg):
+    """iReal Pro's forum's index as its sitemaps leave it, no thread read, as test_search.py makes it."""
+    from test_search import ireal_sitemaps
+
+    conn = db.connect(cfg.db_path)
+    ireal_sitemaps(conn)
+    conn.commit()
+    conn.close()
+
+
+def test_a_thread_known_by_its_name_alone_is_a_line_under_its_by_line_whose_fetch_reads_it(cfg, live, browser):  # noqa: F811
+    # "groove merchant": no thread read, its two threads by their names, each a line under the name its slug gives
+    # after the title, the IR mark, a thread not read yet; nothing posted before a Fetch, which looks the song up by
+    # those names with the thread's address as the iReal pick.
+    base, queue, _ = live
+    sitemaps(cfg)
+    search(browser, base, "groove merchant")
+    assert browser.wait(f"{IR_ROWS}.length === 2")
+    said = browser.js(f"{IR_ROWS}.map((h) => [h.querySelector('h3').textContent, h.dataset.source, "
+                      "h.querySelector('.line-sources .source').dataset.source, h.textContent])")
+    assert [s[:3] for s in said] == [["Groove Merchant", "ireal", "ireal"]] * 2
+    assert "Thad Jones" in said[0][3] and "Jerome Richardson" in said[1][3]
+    assert all("thread not read yet" in s[3] for s in said)
+    assert queue.snapshot() == []  # a search asks no site, and nothing is posted before Fetch
+    browser.js(f"{IR_ROWS}[1].querySelector('.line-action button').click()")
+    args = posted(queue)
+    assert args[:3] == ("get", "--progress", f"--ireal={THREAD}groove-merchant-jerome-richardson.14294/")
+    assert args[-2:] == ("Jerome Richardson", "Groove Merchant")
+    # A name the query is in the middle of says no by-line: a title alone, apart, its thread to open.
+    search(browser, base, "thad jones")
+    alone = "#results .hit[data-source=\"ireal\"][data-hit^=\"ireal:\"]"
+    assert browser.wait(f"Boolean(document.querySelector({alone!r}))")
+    assert browser.js(f"document.querySelector({alone!r}).querySelector('h3').textContent") == \
+        "Groove Merchant Thad Jones"
+    assert "a thread not read yet, its name alone" in browser.js(f"document.querySelector({alone!r}).textContent")
+    assert browser.js(f"document.querySelector({alone!r}).querySelector('.line-action a').href") == \
+        f"{THREAD}groove-merchant-thad-jones.9518/"
+    # The lookup page says it alike: a row to open.
+    browser.open(base + "lookup?q=thad+jones")
+    assert browser.wait(f"{IR_ROWS}.length === 1")
+    assert browser.js(f"{IR_ROWS}[0].querySelector('.row-sub').textContent") == "A thread not read yet, its name alone"
+    assert browser.js(f"{IR_ROWS}[0].querySelector('.row-action a').href") == \
+        f"{THREAD}groove-merchant-thad-jones.9518/"
+    assert queue.snapshot()[1:] == []  # the one Fetch pressed alone
 
 
 def test_a_standards_chart_is_a_line_under_its_composer_whose_get_it_keeps_it_as_the_sheet(cfg, live, browser):  # noqa: F811
@@ -69,9 +116,10 @@ def test_the_lookup_page_lists_irealpros_charts_last(cfg, live, browser):  # noq
     base, queue, _ = live
     ireal(cfg)
     browser.open(base + "lookup?q=groove+merchant")
-    assert browser.wait(f"{IR_ROWS}.length === 1")
+    assert browser.wait(f"{IR_ROWS}.length === 2")  # Thad Jones's chart, then Jerome Richardson's thread by its name
     assert browser.js(f"{IR_ROWS}[0].querySelector('.row-title').textContent") == "Groove Merchant"
     assert "2 charts" in browser.js(f"{IR_ROWS}[0].textContent")
+    assert "thread not read yet" in browser.js(f"{IR_ROWS}[1].textContent")
     browser.js(f"{IR_ROWS}[0].querySelector('.row-action button').click()")
     args = posted(queue)
     assert f"--ireal={THREAD}groove-merchant-thad-jones.9518/post-38106" in args
@@ -96,6 +144,6 @@ def test_irealpros_lines_and_rows_keep_the_calm_pages_look(cfg, live, tmp_path, 
         assert page.js(odd_radii()) == [], "the library page's search"
         calm_in(page, "the library page's search", {"#results .groups": 1, "results' titles": 1})
         page.open(base + "lookup?q=groove+merchant")
-        assert page.wait(f"{IR_ROWS}.filter((h) => h.checkVisibility()).length === 1", timeout=20)
+        assert page.wait(f"{IR_ROWS}.filter((h) => h.checkVisibility()).length === 2", timeout=20)
         assert page.js(odd_radii()) == [], "the lookup page"
         calm_in(page, "the lookup page", {".rows": 1, "lines": 1, "titles": 1})

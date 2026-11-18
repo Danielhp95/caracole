@@ -546,6 +546,100 @@ def test_ireal_reads_the_charts_of_the_pages_read_alone(conn):
     assert search_ireal(conn, "misty") == []  # an empty index answers nothing, and asks no site
 
 
+def ireal_sitemaps(conn, *paths: str) -> None:
+    """iReal Pro's forum's index as its sitemaps leave it, no thread read: the captured sitemap's threads, and
+    ``paths`` besides."""
+    from helpers.ireal_site import fixture
+
+    from caracole.ireal import page_url, parse_page_url
+    from caracole.ug.sitemap import iter_locs
+
+    urls = [*iter_locs(fixture("sitemap-1.xml").encode()), *map(page_url, paths)]
+    rows = [r for r in map(parse_page_url, urls) if r is not None]
+    conn.executemany("INSERT INTO ireal_index (path, thread, slug, key, sitemap) VALUES (?, ?, ?, ?, 'sitemap-1')",
+                     rows)
+
+
+@pytest.fixture
+def no_site(monkeypatch):
+    """A client that fails on any request: a search sends none."""
+    from caracole.http import PoliteClient
+
+    def never(*args, **kwargs):
+        raise AssertionError("a search asked a site")
+
+    monkeypatch.setattr(PoliteClient, "get", never)
+
+
+def test_ireal_names_the_threads_its_sitemaps_list_by_their_names_guessed_by_the_query(conn, no_site):
+    # "groove merchant": no thread read, so no chart known, but the sitemaps name two threads whose slugs begin with
+    # it: each a possible match, its title the query's words as the slug spells them, the rest its by-line, the
+    # oldest first.
+    from caracole.search import search_ireal, search_ireal_threads
+
+    ireal_sitemaps(conn)
+    assert search_ireal(conn, "groove merchant") == []
+    hits = search_ireal_threads(conn, "groove merchant")
+    thread = "https://forums.irealpro.com/threads/"
+    assert [(h.source, h.title, h.artist, h.url, h.page, h.via, h.score) for h in hits] == [
+        ("ireal", "Groove Merchant", "Thad Jones", f"{thread}groove-merchant-thad-jones.9518/",
+         "threads/groove-merchant-thad-jones.9518/", "title", 100.0),
+        ("ireal", "Groove Merchant", "Jerome Richardson", f"{thread}groove-merchant-jerome-richardson.14294/",
+         "threads/groove-merchant-jerome-richardson.14294/", "title", 100.0)]
+    assert [(h.artist_key, h.title_key, h.slug) for h in hits] == [
+        ("thad-jones", "groove-merchant", "groove-merchant-thad-jones"),
+        ("jerome-richardson", "groove-merchant", "groove-merchant-jerome-richardson")]
+    # A leading article as the slug spells it, or none where it has none; the query's own spelling of it aside.
+    assert [(h.title, h.artist) for h in search_ireal_threads(conn, "The Girl from Ipanema")] == [
+        ("Girl From Ipanema", "Antiono Carlos Jobim"),
+        ("The Girl From Ipanema", "Garota De Ipanema Jobim De Moraes Gimbel")]
+    # The query whole is the slug: a title with no by-line.
+    assert [(h.title, h.artist) for h in search_ireal_threads(conn, "jazz 1460 standards")] == [
+        ("Jazz 1460 Standards", ""), ("Jazz 1460 Standards", "Individual Songs")]
+    assert search_ireal_threads(conn, "nothing like this") == []
+    assert search_ireal_threads(conn, "gro") == []  # whole words alone: no "groove" in "gro"
+
+
+def test_ireal_names_a_thread_read_by_its_charts_never_by_its_name(conn, no_site):
+    # Thad Jones's thread is read: its charts stand for it; Jerome Richardson's, never read, by its name.
+    from caracole.search import search_ireal, search_ireal_threads
+
+    ireal_index(conn)
+    assert [(h.title, h.artist) for h in search_ireal(conn, "groove merchant")] == [("Groove Merchant", "Thad Jones")]
+    assert [(h.title, h.artist) for h in search_ireal_threads(conn, "groove merchant")] == [
+        ("Groove Merchant", "Jerome Richardson")]
+    # The playlist read is no thread's name either: its tunes are its charts.
+    assert [h.slug for h in search_ireal_threads(conn, "jazz 1460 standards")] == [
+        "jazz-1460-standards-individual-songs"]
+
+
+def test_ireal_names_a_thread_the_query_is_in_the_middle_of_by_its_slugs_words_alone_after_those_it_begins(conn,
+                                                                                                         no_site):
+    # The query's words anywhere in the slug, whole: those that begin with them first, the oldest first, then the
+    # others, whose name says nothing of which words are the title: its words, title-cased, a title with no by-line.
+    from caracole.search import search_ireal_threads
+
+    ireal_sitemaps(conn, "threads/blue-in-green-miles-davis.30000/")
+    hits = search_ireal_threads(conn, "blue")
+    assert [(h.title, h.artist, h.score) for h in hits] == [
+        ("Blue", "Bossa Kenny Dorham", 100.0), ("Blue", "In Green Miles Davis", 100.0),
+        ("Misty Blue Bobby Montgomery", "", 90.0)]
+    assert [(h.title, h.artist, h.artist_key, h.title_key) for h in search_ireal_threads(conn, "thad jones")] == [
+        ("Groove Merchant Thad Jones", "", "", "groove-merchant-thad-jones")]
+    # In any order, as the words of a name: a composer before the title.
+    assert [h.title for h in search_ireal_threads(conn, "jones groove")] == ["Groove Merchant Thad Jones"]
+
+
+def test_ireal_names_eight_threads_at_most(conn, no_site):
+    from caracole.search import THREAD_ROWS, search_ireal_threads
+
+    ireal_sitemaps(conn, *(f"threads/autumn-leaves-take-{n}.{40000 + n}/" for n in range(10)))
+    hits = search_ireal_threads(conn, "autumn leaves")
+    assert THREAD_ROWS == 8 and len(hits) == 8
+    assert hits[0].artist == "Joseph Kosma"  # the oldest first
+    assert [h.title for h in search_ireal_threads(conn, "autumn leaves", 3)] == ["Autumn Leaves"] * 3
+
+
 def test_gametabs_finds_a_track_by_its_game_and_title_its_tabs_one_hit(conn):
     from caracole.search import GameTabHit, search_gametabs
 
@@ -2409,7 +2503,27 @@ def test_cli_lists_irealpros_charts_last_each_with_the_line_that_keeps_it_as_the
     page = "https://forums.irealpro.com/threads/groove-merchant-thad-jones.9518/#post-38106"
     assert (f"  [iReal] Thad Jones - Groove Merchant · 2 charts\n     {page}\n"
             f'     caracole get --ireal {page} "Thad Jones" "Groove Merchant"\n') in ir
+    # Then the threads known by their names alone, the line that reads one and keeps its chart.
+    thread = "https://forums.irealpro.com/threads/groove-merchant-jerome-richardson.14294/"
+    assert (f"  [iReal] Jerome Richardson - Groove Merchant · a thread not read yet, named from its name\n"
+            f"     {thread}\n"
+            f'     caracole get --ireal {thread} "Jerome Richardson" "Groove Merchant"\n') in ir
+    assert ir.index("2 charts") < ir.index("a thread not read yet")
     assert "iReal Pro's forum's playlists are still being read: 1 of 1 so far" in " ".join(ir.split())
+
+
+def test_cli_lists_irealpros_threads_known_by_their_name_a_title_alone_with_no_line_to_fetch_it(tmp_path):
+    # The sitemaps read and no thread: "thad jones" is in the middle of a thread's name, which says nothing of which
+    # words are its title: its address alone, no line (a song needs an artist), and how to fetch it.
+    (tmp_path / "lib").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "state").mkdir(parents=True, exist_ok=True)
+    conn = seed(tmp_path)
+    ireal_sitemaps(conn)
+    conn.commit()
+    ir = run(tmp_path, "search", "thad jones").output.partition("On iReal Pro's forum (offline index)")[2]
+    assert ("  [iReal] Groove Merchant Thad Jones · a thread not read yet, its name alone: search its title to "
+            "fetch it\n     https://forums.irealpro.com/threads/groove-merchant-thad-jones.9518/\n") in ir
+    assert "caracole get --ireal" not in ir and "Nothing yet" not in ir
 
 
 def test_cli_says_why_irealpros_forum_is_left_out(tmp_path):

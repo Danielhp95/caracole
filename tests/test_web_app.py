@@ -2169,7 +2169,8 @@ def test_the_search_says_how_far_irealpros_index_has_got_its_mark_last(app, cfg,
     kv_set_json(conn, "ireal:forums", {"forums/jazz.6/": {"read_at": "2026-11-18T00:00:00Z", "sticky": []}})
     conn.commit()
     assert mark() == {"name": "iReal Pro", "state": "done", "label": "iReal Pro ✓",
-                      "detail": "iReal Pro's forum: our copy of its playlists and the threads read, searched whole."}
+                      "detail": "iReal Pro's forum: our copy of its playlists, the threads read and the names of the "
+                                "threads its sitemaps list, searched whole."}
     off = dataclasses.replace(cfg, providers={**cfg.providers, "ireal": ProviderPolicy(20, (2.5, 5.0), False)})
     assert mark(WebApp(off, JobQueue(Recorder()), allowed=ALLOWED, csrf="tok"))["state"] == "off"
 
@@ -2185,14 +2186,50 @@ def test_the_search_gives_irealpros_charts_and_none_while_it_is_turned_off(app, 
     song = add_song(conn, "Thad Jones", "Groove Merchant")
     conn.commit()
     data = as_json(get(app, "/api/search?q=groove+merchant"))
-    [hit] = data["ireal"]
+    hit, thread = data["ireal"]  # the chart of the thread read, then the thread known by its name alone
     assert (hit["source"], hit["artist"], hit["title"], hit["uploads"], hit["page"]) == (
         "ireal", "Thad Jones", "Groove Merchant", 2, "threads/groove-merchant-thad-jones.9518/")
     assert hit["url"] == "https://forums.irealpro.com/threads/groove-merchant-thad-jones.9518/#post-38106"
     assert (hit["artist_key"], hit["title_key"], hit["song"]) == ("thad-jones", "groove-merchant", song.id)
+    assert "read" not in hit and thread["read"] is False and thread["artist"] == "Jerome Richardson"
     off = dataclasses.replace(cfg, providers={**cfg.providers, "ireal": ProviderPolicy(20, (2.5, 5.0), False)})
     data = as_json(get(WebApp(off, JobQueue(Recorder()), allowed=ALLOWED, csrf="tok"), "/api/search?q=misty"))
     assert data["ireal"] == []
+
+
+def test_the_search_gives_irealpros_threads_known_by_their_names_alone_guessed_by_the_query(app, conn, queue,
+                                                                                            monkeypatch):
+    # The sitemaps read, no thread yet: "groove merchant" is its two threads by their names, each a row of ``ireal``
+    # marked ``read: false``, its names guessed from its slug, its address the thread's, which Fetch posts as the
+    # iReal pick; no count of charts, none being known. A name the query is in the middle of is a title alone: no
+    # by-line, no keys, no song of yours. Nothing asked of any site, nothing queued.
+    from test_search import ireal_sitemaps
+
+    from caracole.commands import _common
+
+    def never(*args, **kwargs):
+        raise AssertionError("a search asked a site, or took the lock")
+
+    monkeypatch.setattr(_common, "make_client", never)
+    monkeypatch.setattr(_common, "exclusive", never)
+    ireal_sitemaps(conn)
+    song = add_song(conn, "Jerome Richardson", "Groove Merchant")
+    conn.commit()
+    data = as_json(get(app, "/api/search?q=groove+merchant"))
+    thread = "https://forums.irealpro.com/threads/"
+    thad, jerome = data["ireal"]
+    assert thad == {"source": "ireal", "read": False, "artist": "Thad Jones", "title": "Groove Merchant",
+                    "url": f"{thread}groove-merchant-thad-jones.9518/", "score": 100.0, "via": "title",
+                    "page": "threads/groove-merchant-thad-jones.9518/", "artist_key": "thad-jones",
+                    "title_key": "groove-merchant", "song": None, "same_artist": False, "library": None}
+    assert (jerome["artist"], jerome["url"], jerome["song"]) == (
+        "Jerome Richardson", f"{thread}groove-merchant-jerome-richardson.14294/", song.id)
+    assert [m for m in data["looked"] if m["source"] == "ireal"][0]["state"] == "partial"  # no playlist read yet
+    [alone] = as_json(get(app, "/api/search?q=thad+jones"))["ireal"]
+    assert alone == {"source": "ireal", "read": False, "title": "Groove Merchant Thad Jones",
+                     "url": f"{thread}groove-merchant-thad-jones.9518/", "score": 90.0,
+                     "page": "threads/groove-merchant-thad-jones.9518/"}
+    assert queue.snapshot() == []
 
 
 def test_a_search_the_ug_index_answers_badly_says_what_to_paste_for_an_artist_it_cant_see(app, conn):

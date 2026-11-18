@@ -4262,8 +4262,19 @@ sheet (`[ireal]` in overrides.toml):
        https://forums.irealpro.com/threads/groove-merchant-thad-jones.9518/#post-38106
        caracole get --ireal https://forums.irealpro.com/threads/groove-merchant-thad-jones.9518/#post-38106 "Thad Jones" "Groove Merchant"
 
-A thread its sitemaps name and caracole hasn't read is no line. While its playlists aren't all read, the group ends
-with how far it has got; turned off, or before any is read, it says so.
+Then the threads its sitemaps name that caracole hasn't read, up to eight whose name holds the words of your query
+(those whose name begins with them first, then the oldest): no chart of one is known, so each is named from its name
+by your query, the words that begin it the title and the rest the by-line, a possible match, with the line that reads
+the thread and keeps its chart as the sheet. A thread read is never one of them: its charts are the lines above.
+
+    [iReal] Jerome Richardson - Groove Merchant · a thread not read yet, named from its name
+       https://forums.irealpro.com/threads/groove-merchant-jerome-richardson.14294/
+       caracole get --ireal https://forums.irealpro.com/threads/groove-merchant-jerome-richardson.14294/ "Jerome Richardson" "Groove Merchant"
+
+A thread whose name your words are in the middle of (`thad jones` in `groove-merchant-thad-jones`) says nothing of
+which words are its title: its address alone, and no line, as a song needs its artist (search its title to fetch it).
+While its playlists aren't all read, the group ends with how far it has got; turned off, or before its sitemaps or a
+playlist are read, it says so.
 
 `--key KEY` keeps only your songs in that key (see
 [The song's key](#the-songs-key)), with or without QUERY; without it, your
@@ -4436,6 +4447,18 @@ the library, sent as they are: they carry no badge.
   a Fetch that keeps that tab, and the line's own Fetch, on a song the other
   sites don't have, keeps the most viewed (a lookup with `--gametabs`,
   recorded under `[gametabs]`; none while gametabs.net is turned off).
+  **iReal Pro's forum**'s charts share them too, the composer as their artist
+  (`iReal Pro chart ×2` on a line), and so do the threads its sitemaps name that
+  caracole hasn't read, up to eight whose name holds your words: each under the
+  by-line its name gives after them ("groove merchant" is Groove Merchant under
+  Thad Jones and under Jerome Richardson, `thread not read yet`, and
+  "Named from the thread's name" under its chevron). Fetch looks the song up by
+  those names and keeps the chart it reads in that thread (a lookup with
+  `--ireal`, recorded under `[ireal]`); nothing is asked of the forum before you
+  press it. A thread whose name your words are in the middle of names no
+  by-line: it comes apart, by its name alone, in an iReal Pro group with its
+  thread to open, as MuseScore's pages do (none while iReal Pro's forum is
+  turned off).
   **Instruments.** A row for one instrument says which, in an outlined badge
   beside its marks: **Ukulele** for an Ultimate Guitar song that has Ukulele
   Chords (its counts say "ukulele chords ×2"), **Harmonica** for a tab of
@@ -4476,8 +4499,8 @@ the library, sent as they are: they carry no badge.
   MuseScore · turned us back; harptabs.com · index empty; gametabs.net · index
   empty"). When every count is 0, yours too, there is no row at all: the
   list's own line says nothing was found. iReal Pro's forum has a mark, last,
-  only once caracole has read a thread page of it (its playlists, or a
-  thread read for your songs). On a laptop (from 720 px wide) each site that found something is
+  only once caracole has read its sitemaps or a thread page of it (its
+  playlists, or a thread read for your songs). On a laptop (from 720 px wide) each site that found something is
   named in full beside its icon ("Ultimate Guitar 7") while the whole row fits
   on one line, and by its icon alone when it wouldn't, as on a phone; it fits
   itself again as the window narrows or widens. A screen reader hears each

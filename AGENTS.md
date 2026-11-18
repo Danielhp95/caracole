@@ -236,16 +236,18 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     pick the turn read.
 - Its step `ireal` (pipeline.py, after lacuerda); in a lookup, the sheet stage's last resort (get.py `_ireal`: after
   UG's and LaCuerda's, its pick `--ireal` first, "from iReal Pro" its running detail, `SHEET_FROM`), no stage of its
-  own; its command `caracole ireal [--index] [--budget N]` (commands/lyrics.py); `search.search_ireal`
-  (`/api/search`'s `ireal`, and its mark last in `looked`, both once its index holds a thread read,
-  search_routes.py `_ireal_read`); a card's site mark once it was asked or gave the chart (song_sites.py); its mark
-  `IR`.
+  own; its command `caracole ireal [--index] [--budget N]` (commands/lyrics.py); `search.search_ireal`, the charts
+  of the threads read, and `search.search_ireal_threads`, the threads its sitemaps name that caracole never read, by
+  their names alone (`/api/search`'s `ireal`, those `read: false` after the charts, and its mark last in `looked`,
+  both once its index holds a thread read or the sitemaps' threads, search_routes.py `_ireal_read`); a card's site
+  mark once it was asked or gave the chart (song_sites.py); its mark `IR`.
 - Its index is the computer's alone: it isn't in `index_transfer.SITES`, so no export, merge or sync carries it, and
   the phone's tables of it (schema 17) stay empty; a song's chart, its versions and `[ireal]` travel in its unit. A
   lookup with nothing to ask there (`ireal_fetch.wants_a_chart`, no request, no client, no kv) says and writes nothing
   of it, so the phone, whose lookup never asks it, answers alike; its search gives no `ireal`, as an empty index's.
 - What it adds to the conformance corpus is kept to a few KB (vectors/web's budget): nothing while its index is empty
-  or a song has nothing to ask there.
+  or a song has nothing to ask there (no fixture's index holds a thread, read or named: the phone's search answers
+  none).
 
 #### harptabs
 
@@ -926,6 +928,18 @@ The pages caracole writes and serves are index.html, sheet.html, songbook.html a
   - their instruments badges, none while it is turned off;
   - its `looked` mark says how far its game pages are read ("gametabs.net: 2 of 7 games", search_routes.py
     `_gametabs_looked`).
+- **iReal Pro's forum's charts and threads** (`search.search_ireal`, `search_ireal_threads`, `/api/search`'s `ireal`)
+  are songs whose artist is their composer, or the by-line a thread's name gives after the query:
+  - a chart a line under its composer, "iReal Pro chart"; a thread caracole never read (`read: false`) a line under
+    its by-line, "thread not read yet", "Named from the thread's name" under its chevron (rows.js
+    `THREAD_SAID`), a song of yours on the same line as ever (a chart's row before a thread's of the same song);
+  - each Fetch the lookup that keeps that chart, a thread's reading it for its chart (`ireal`, the thread's address,
+    `caracole get --ireal`, `[ireal]`): nothing is sent before it;
+  - a thread whose name the query is in the middle of names no by-line: a title alone, apart, in an "iReal Pro"
+    group, its thread to open (rows.js `titleLine`, `TITLE_SITES`; library.js `model.threads`), since a song needs its
+    artist and the slug's words are no chart's title;
+  - its `looked` mark says how far its playlists are read ("iReal Pro: 1 of 7 playlists", search_routes.py
+    `_ireal_looked`).
 
 ##### What a search says beside its results
 
@@ -1436,7 +1450,11 @@ It is rows.js's, shared by both pages:
   - gtptabs.com's, MuseScore's, LaCuerda's, harptabs.com's (its sitemap's and the artist pages read,
     harptabs_index.py) and gametabs.net's tables (its sitemaps' and the game pages read, gametabs_index.py);
   - iReal Pro's forum's charts of the thread pages read (`search_ireal`, ireal_index.py), a chart's title by one
-    composer a hit, the composer its artist;
+    composer a hit, the composer its artist; and the threads its sitemaps name that caracole never read, by their
+    names alone (`search_ireal_threads`, `ThreadHit`: every word of the query's key a word of the slug, a slug that
+    begins with them first, then the oldest, `THREAD_ROWS` (8) at most; a thread read never, its charts standing for
+    it), each named from its slug by the query (where the slug begins with the query's words, those words as the slug
+    spells them the title and the rest the by-line; else the slug's words a title alone), a possible match;
   - the tombstones of removed songs (`search_removed`: never `lead` or `best`, shown with the `caracole add` line that
     brings one back, and in `/api/search`'s `removed`, which the library page shows with Add again);
   - UG's artist directory (`directory_artists`, ug/directory.py's table): an artist the query names whole whose page
@@ -3214,6 +3232,9 @@ picks one).
 
 - A search (`caracole search`, `/api/search`) reads the local indexes alone, `lacuerda_index` among them, asks no site
   and takes no lock (`test_web_app.py::test_a_search_asks_no_site_and_takes_no_lock`).
+- iReal Pro's forum's threads its sitemaps name are found by their names alone (`search.search_ireal_threads`), with
+  no request: a thread is read only by the Fetch the owner presses on its line, a lookup with its `[ireal]` pick
+  (`test_web_app.py::test_the_search_gives_irealpros_threads_known_by_their_names_alone_guessed_by_the_query`).
 - The exceptions are YouTube's first video for a search, under YouTube's exception below, and LaCuerda's own search
   (`/busca.php`, lacuerda_search.py):
   - sent as a queued job at the lookup pace (`caracole lacuerda --search`), one request;
