@@ -1105,9 +1105,10 @@ It is rows.js's, shared by both pages:
     tiles` rules: a version's four columns from a card 560 px wide, stacked below), so the card reads the same in the
     pane's 400–480 px as under its line (test_library_card.py);
   - a tile for each thing to play from, every one alike, one row at every width (its body, its sources' marks, its
-    chevron: 56–64 px tall on a touch screen, 48 at most with a mouse), its chevron opening its drawer under it,
-    touching it (its downloads, then a part a source of its versions), which reads the page's data alone, never a
-    request;
+    chevron: on a touch screen 56–64 px tall from a 360 px phone, a long name wrapping at 320; 48 at most with a
+    mouse; under 400 px no open arrow, a download's glyph kept, and the sheet's version without "in use", its
+    rating, `.tile-rated`, whole or not at all), its chevron opening its drawer under it, touching it (its downloads,
+    then a part a source of its versions), which reads the page's data alone, never a request;
   - its UG versions not kept are counted (`versions.rest`, `sheet_versions.may_keep`), and Fetch them keeps them,
     `caracole versions --keep-more`, within a lookup's budget (test_library_card.py).
 

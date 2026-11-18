@@ -268,7 +268,13 @@ const caracoleCard = (icons, rows) => {
     const words = el("span", "tile-words");
     const name = words.appendChild(el("span", "tile-name", t.name));
     name.id = idFor("tile");
-    if (t.from) {
+    if (t.version) {  // the sheet's version in use: its number, its rating whole or not at all, and "in use"
+      const from = words.appendChild(el("span", "tile-from", t.version.ver));
+      if (t.version.rated) from.append(" · ", el("span", "tile-rated", t.version.rated));
+      from.appendChild(el("span", "tile-in-use", " · in use"));
+      from.id = idFor("from");
+      open.setAttribute("aria-describedby", from.id);
+    } else if (t.from) {
       const from = words.appendChild(el("span", "tile-from", t.from));
       from.id = idFor("from");
       open.setAttribute("aria-describedby", from.id);
@@ -311,9 +317,11 @@ const caracoleCard = (icons, rows) => {
   // What a song of yours holds to play from, in this order: its chord sheet (the human one, else the auto one; UG's
   // Ukulele Chords), its Guitar Pro files, its text tab, its harmonica tabs, its tabs of game music, its lyrics and the
   // scores you filed; a tile each in its card (tiles), and but its lyrics a button each on its line (plays). Each
-  // { kind, glyph, name, open, said, from, chips, downloads, opener, auto, sources, count, unit }: ``chips``, its
-  // versions a source each ({ source, count, unit, fixed, href, fill(part) }: ``fixed``, one version and nothing to
-  // choose; ``href``, a fixed source's page to link back to; ``fill``, what draws that source's part of its drawer);
+  // { kind, glyph, name, open, said, from, version, chips, downloads, opener, auto, sources, count, unit }: ``from``,
+  // which it is; ``version``, the sheet's version in use ({ ver, rated }), which its tile's from line is made of;
+  // ``chips``, its versions a source each ({ source, count, unit, fixed, href, fill(part) }: ``fixed``, one version
+  // and nothing to choose; ``href``, a fixed source's page to link back to; ``fill``, what draws that source's part
+  // of its drawer);
   // ``downloads``, its formats' links; ``sources``, where its versions came from, the one in use first; ``count``, how
   // many versions of it the card lists (in its drawer, or as files), in ``unit``s. ``opts``: ``guitar``, caracole
   // serve shows Guitar Pro files (alphaTab); ``acts``, what a drawer's versions do (Use this one, Fetch them, Back to
@@ -341,7 +349,8 @@ const caracoleCard = (icons, rows) => {
       const name = autoOnly ? "Auto sheet" : ukulele ? "Ukulele chords" : "Chord sheet";
       const v = s.versions && typeof s.versions === "object" ? s.versions : null;
       const one = v ? listOf(v.list).find((x) => x && x.chosen) : null;
-      const from = one ? ["Ver " + (Number(one.number) || "?"), rated(one), "in use"].filter(Boolean).join(" · ")
+      const version = one ? { ver: "Ver " + (Number(one.number) || "?"), rated: rated(one) } : null;
+      const from = version ? [version.ver, version.rated, "in use"].filter(Boolean).join(" · ")
         : autoOnly || s.source === "auto" || s.source === "youtube" ? "from the recording"
         : s.source ? nameOf(s.source) : "";
       const chips = [];
@@ -372,7 +381,7 @@ const caracoleCard = (icons, rows) => {
       const inUse = (s.source === "ug" && kept > 0) || (s.source === "lacuerda" && met.some((x) => x && x.sheet));
       const sources = [s.source, kept ? "ug" : "", met.length ? "lacuerda" : "", auto ? "auto" : ""];
       made.push({ kind: "sheet", glyph: ukulele ? "ukulele" : "sheet", name, auto: autoOnly,
-        open: { href: primary.href }, said: "Open the " + name.toLowerCase() + " of " + title, from,
+        open: { href: primary.href }, said: "Open the " + name.toLowerCase() + " of " + title, from, version,
         chips, downloads, sources: distinct(sources), count: listed + (inUse ? 0 : 1),
         unit: "version" });
     }

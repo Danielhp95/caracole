@@ -35,11 +35,19 @@
 .tile-name { font-weight: 650; line-height: 1.25; }
 .tile-from { overflow: hidden; color: var(--muted); font-size: .78rem; line-height: 1.2; white-space: nowrap;
   text-overflow: ellipsis; }
+.tile-rated { display: inline-block; }  /* a rating shown whole or not at all, never cut inside its number */
 .tile-go { display: grid; color: var(--muted); }
 .tile-go svg.glyph { width: 18px; height: 18px; }
-@container tiles (max-width: 299px) {  /* a phone 360 px wide or less: its name the room its arrow took */
-  .tile-open { grid-template-columns: auto minmax(0, 1fr); }
-  .tile-go { display: none; }
+/* A phone's tile (under 400 px): its name and version the room of the arrow of a tile that opens (a download's glyph
+   kept), and the sheet's version without "in use" (the one a tile shows always is), so "Ver 3 · ★ 4.86 (408)" fits;
+   under 300 px (a phone 360 px wide or less) its parts a little closer. */
+@container tiles (max-width: 399px) {
+  .tile-open:has(> .tile-go > .glyph-open) { grid-template-columns: auto minmax(0, 1fr); }
+  .tile-go:has(> .glyph-open), .tile-in-use { display: none; }
+}
+@container tiles (max-width: 299px) {
+  .tile { column-gap: 6px; }
+  .tile > .tile-open { gap: 8px; padding-left: 8px; }
 }
 .tile.auto { border-color: color-mix(in srgb, var(--auto) 60%, transparent); }
 .tile.auto .tile-ico { color: var(--auto); }
@@ -78,7 +86,7 @@ a.tile-source:hover .tile-source-name { color: var(--text); text-decoration: und
   border-radius: 0 0 12px 12px; background: var(--surface); }
 /* Its downloads, a row, wrapped where they don't fit: the ✕'s room is kept on the rows beside it alone, by a float
    as tall as the ✕ reaches (a flex row would keep it on every row). */
-.drawer-files { padding: 8px 0 8px 12px; }
+.drawer-files { display: flow-root; padding: 8px 0 8px 12px; }  /* the ✕'s float kept inside it */
 .drawer-files::before { content: ""; float: right; width: 34px; height: 29px; }
 .drawer-files > * { margin: 2px 14px 2px 0; vertical-align: middle; }
 .drawer-files .lead { display: inline-block; color: var(--muted); font-size: .76rem; font-weight: 650; }

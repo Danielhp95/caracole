@@ -585,9 +585,8 @@ note("rows", Array.from(panel.querySelectorAll(".tiles > .tile")).map((t) => ({
 def test_a_tile_is_one_row_and_its_source_keeps_its_mark_beside_its_name(conn, cfg, tmp_path, size, touch):
     # What you play from, a row each at every width: its name and version, the marks of where it came from, its
     # chevron at the end; 56 to 64 px tall on a touch screen, 48 px at most with a mouse, whether the card is under its
-    # line (a phone, a laptop under 1200 px) or in the pane beside the list (1280). On a phone 360 px wide its name
-    # takes the room of its arrow. Under the card's foot only Fetch again, Use LaCuerda's sheet, Add to a songbook and
-    # ⋯ show.
+    # line (a phone, a laptop under 1200 px) or in the pane beside the list (1280). Under the card's foot only Fetch
+    # again, Use LaCuerda's sheet, Add to a songbook and ⋯ show.
     hotel(conn, cfg)
     rows = attribute_of(run(conn, cfg, tmp_path, TILE_ROWS, controls=SERVED, size=size, touch=touch), "data-rows")
     assert rows and all(max(r["mids"]) - min(r["mids"]) <= 16 for r in rows), rows  # one row
@@ -595,6 +594,33 @@ def test_a_tile_is_one_row_and_its_source_keeps_its_mark_beside_its_name(conn, c
     [sheet] = [r for r in rows if r["name"] == "Chord sheet"]
     assert sheet["mark"] is True, sheet  # the marks of where its versions came from
     assert rows[0]["visible"] == ["Fetch again", "Use LaCuerda's sheet", "Add to a songbook…", "⋯"], rows[0]["visible"]
+
+
+# The sheet's tile and the score's: whether each shows its arrow or its download glyph, and the sheet's version line as
+# it shows (innerText leaves out what is hidden) and whether it is cut.
+PHONE_TILE = """
+const card = cardOf(openCard("Hotel California")), q = (sel) => card.querySelector(sel);
+const from = q(".tile-sheet .tile-from"), rated = from.querySelector(".tile-rated");
+note("tile", { opens: q(".tile-sheet .tile-go").checkVisibility(), downloads: q(".tile-score .tile-go").checkVisibility(),
+  glyph: q(".tile-score .tile-go svg").getAttribute("class"), text: text(from), shown: from.innerText,
+  fits: from.scrollWidth <= from.clientWidth, whole: rated ? getComputedStyle(rated).display : null });
+"""
+
+
+@pytest.mark.parametrize(("size", "touch"), [("360,780", True), ("390,844", True), ("1280,900", False)])
+def test_a_phones_tile_keeps_a_downloads_glyph_and_its_version_whole(conn, cfg, tmp_path, size, touch):
+    # On a phone a tile that opens leaves out its arrow for its name and version, but one that downloads keeps its
+    # download glyph, so it never looks like one that opens; the sheet's version is the one in use (its tile shows no
+    # other), so "in use" goes too, and "Ver 3 · ★ 4.86 (408)" fits uncut. Its rating is shown whole or not at all.
+    hotel(conn, cfg)
+    tile = attribute_of(run(conn, cfg, tmp_path, PHONE_TILE, controls=SERVED, size=size, touch=touch), "data-tile")
+    assert tile["downloads"] is True and "glyph-download" in tile["glyph"].split(), tile
+    assert tile["text"] == "Ver 3 · ★ 4.86 (408) · in use", tile  # what a screen reader is told, whatever the width
+    assert tile["fits"] is True and tile["whole"] == "inline-block", tile
+    if touch:  # a phone's tile
+        assert tile["opens"] is False and tile["shown"] == "Ver 3 · ★ 4.86 (408)", tile
+    else:  # the pane's, 400 px and more
+        assert tile["opens"] is True and tile["shown"] == "Ver 3 · ★ 4.86 (408) · in use", tile
 
 
 MANY = """

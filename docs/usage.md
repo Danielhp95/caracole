@@ -2579,8 +2579,8 @@ again, Use LaCuerda's sheet, Add to a songbook…, and ⋯ with info.json and Re
 sites have it, where else to find it, and its progressions last.
 
 Then what you play from it, a tile each, all alike, none first, a row each and one row at every width (its
-glyph, its name and version, the marks of where it came from, its chevron at the end; on a phone 360 px wide
-or less, without the arrow after its name), in the order of the
+glyph, its name and version, the marks of where it came from, its chevron at the end; on a phone, a tile that
+opens has no arrow after its name, one that downloads keeps its download glyph), in the order of the
 line's buttons: its **Chord sheet** (**Auto sheet** in its own colour when that is its only sheet,
 **Ukulele chords** for Ultimate Guitar's Ukulele Chords), its **Guitar Pro**
 file, its **Guitar tab** (a text tab), its
@@ -2590,7 +2590,8 @@ what it holds: the sheet's viewer (else its PDF, else its text); the first
 Guitar Pro file, in the browser when `caracole serve` shows it there (see
 [caracole serve](#caracole-serve)), else a download; the first harmonica tab,
 the text tab and the first game music tab, as text, the lyrics, the first score. Under it, a word of which it is (`Ver 3 · ★ 4.86 (408) ·
-in use`, `LaCuerda`, `from the recording`); a version's rating is written with its votes, `★ 4.86 (408)`, and `New` for one nobody rated.
+in use`, on a phone `Ver 3 · ★ 4.86 (408)`, `LaCuerda`, `from the recording`); a version's rating is written with its votes, `★ 4.86 (408)`, and `New` for one nobody rated,
+whole or not at all where the line is too short for it.
 Beside it, the marks of the sites its versions came from (two at most, the one
 in use first: `[UG] [LC]`), or, for lyrics from Megalobiz or AZLyrics, a link
 to their page there, its mark and its name; then its chevron. A tile with more
