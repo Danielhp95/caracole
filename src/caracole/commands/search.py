@@ -21,7 +21,10 @@ gametabs.net's group follows, unnumbered: its tracks of games, each with the ``c
 --gametabs`` line that looks the song up keeping that tab (search.py ``search_gametabs``), then
 how far its game index has got. iReal Pro's forum's group comes last, unnumbered: its charts of jazz standards by
 title and composer, each with the ``caracole get --ireal`` line that looks the song up keeping that chart as its
-sheet (search.py ``search_ireal``), then how far its playlists are read.
+sheet (search.py ``search_ireal``), then the threads its sitemaps name that caracole never read, by their name alone,
+each with the line that reads it and keeps its chart (``search_ireal_threads``: its by-line an artist caracole knows
+its name ends with, or the query that ends it; a title alone with the line to name it yourself), then how far its
+playlists are read.
 
 A query may be an artist alone or a title alone (``search.find_index``): when
 an artist leads, its most tabbed songs come first, then the songs titled like
@@ -64,7 +67,7 @@ if TYPE_CHECKING:
     from caracole.config import Config
     from caracole.keys import SongKey
     from caracole.overrides import Overrides
-    from caracole.search import ArtistHit, IndexHit, LibraryHit, SiteArtist, SiteHit, Suggestion
+    from caracole.search import ArtistHit, IndexHit, LibraryHit, SiteArtist, SiteHit, Suggestion, ThreadHit
     from caracole.songs import Song
 
 _SHELL_SPECIAL = re.compile(r'(["\\$`])')
@@ -672,24 +675,31 @@ def _gametabs_lines(hit: SiteHit) -> str:
 
 def _ireal_listing(cfg: Config, conn: sqlite3.Connection, ask: _Ask, limit: int) -> list[str]:
     """iReal Pro's forum's index's answer as the search prints it, unnumbered: its charts by title and composer, at
-    most ``limit``; with ``--artist``, those of that composer; with ``--title``, those of that title. Then how far its
-    playlists are read, while they aren't all. Nothing but why, while it is turned off or its index is empty."""
+    most ``limit``, then its threads known by their names alone (``THREAD_ROWS`` at most, as many as ``limit``, none
+    that is a chart listed again); with ``--artist``, the charts of that composer and the threads whose name ends with
+    it; with ``--title``, those of that title. Then how far its playlists are read, while they aren't all. Nothing but
+    why, while it is turned off or its index is empty."""
     from caracole.ireal_index import index_state
-    from caracole.search import search_ireal
+    from caracole.search import THREAD_ROWS, search_ireal, search_ireal_threads
 
     if not cfg.provider("ireal").enabled:
         return ["  iReal Pro's forum is turned off in caracole.toml."]
     state = index_state(conn)
-    if not state.read:
+    if not state.read and not state.threads:
         return ["  Nothing yet: iReal Pro's forum's index is empty: the nightly run reads its playlists (caracole "
                 "ireal --index reads them now)."]
+    threads = min(limit, THREAD_ROWS)
     if ask.artist is not None:
-        hits = [h for h in search_ireal(conn, f"{ask.artist} {ask.text}".strip(), limit) if h.via != "title"]
+        query = f"{ask.artist} {ask.text}".strip()
+        hits = [h for h in search_ireal(conn, query, limit) if h.via != "title"]
+        named = [h for h in search_ireal_threads(conn, query, threads, charts=hits) if h.via == "artist"]
     elif ask.title is not None:
         hits = [h for h in search_ireal(conn, ask.title, limit) if h.via == "title"]
+        named = [h for h in search_ireal_threads(conn, ask.title, threads, charts=hits) if h.via == "title"]
     else:
         hits = search_ireal(conn, ask.text, limit)
-    lines = [_ireal_lines(h) for h in hits] or ["  nothing matches"]
+        named = search_ireal_threads(conn, ask.text, threads, charts=hits)
+    lines = [*map(_ireal_lines, hits), *map(_ireal_thread_lines, named)] or ["  nothing matches"]
     if not state.complete:
         lines += ["", _fill(f"iReal Pro's forum's playlists are still being read: {state.playlists_read:,} of "
                             f"{state.playlists:,} so far; caracole ireal --index reads the rest.")]
@@ -702,6 +712,17 @@ def _ireal_lines(hit: SiteHit) -> str:
     artist = hit.artist or "Unknown"
     return (f"  {_tag('ireal')}{artist} - {hit.title} · {_count(hit.uploads, 'chart')}\n     {hit.url}\n"
             f"     caracole get --ireal {hit.url} {_quote(artist)} {_quote(hit.title)}")
+
+
+def _ireal_thread_lines(hit: ThreadHit) -> str:
+    """A thread of iReal Pro's forum known by its name alone: its names as read from it, its page, and the line that
+    reads it and keeps its chart as the sheet; one whose name names no artist caracole knows, a title alone, its page
+    and the line to fetch it under names you write (a song needs its artist)."""
+    if not hit.artist:
+        return (f"  {_tag('ireal')}{hit.title} · a thread not read yet, its name alone\n     {hit.url}\n"
+                f"     fetch it under its names: caracole get --ireal {hit.url} ARTIST TITLE")
+    return (f"  {_tag('ireal')}{hit.artist} - {hit.title} · a thread not read yet, named from its name\n"
+            f"     {hit.url}\n     caracole get --ireal {hit.url} {_quote(hit.artist)} {_quote(hit.title)}")
 
 
 def _count(n: int, thing: str) -> str:

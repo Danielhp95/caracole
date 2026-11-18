@@ -97,9 +97,13 @@ sitemaps, and the game pages caracole read, gametabs_index.py): a track of a gam
 its artist, its tabs the most viewed first in ``tabs``), by its game, its title or a composer of its tabs (a game
 page's alone say who). ``search_ireal`` reads iReal Pro's forum's (``ireal_charts``, the charts of the thread pages
 caracole read, its playlists' first, ireal_index.py): a chart's title by one composer a hit, the composer as its
-artist, first name first, by its title or its composer. ``gtptabs_songs`` counts the songs gtptabs.com's index lists by an
-artist, for an artist the query names. They only read the local tables: nothing here asks gtptabs.com or MuseScore
-anything, and MuseScore's pages are for the user to open. ``search_lacuerda`` reads
+artist, first name first, by its title or its composer; and ``search_ireal_threads`` the threads its sitemaps name
+(``ireal_index``) that caracole never read, by their name alone: a slug that begins with the query's words, then one
+a query of two words or more ends (a composer's name), then one that holds them, eight at most, never one a chart
+found stands for; its by-line an artist caracole knows its name ends with, or the query that ends it, else its words
+a title alone (``ThreadHit``), a possible match, as MuseScore's pages are. ``gtptabs_songs`` counts the songs
+gtptabs.com's index lists by an artist, for an artist the query names. They only read the local tables: nothing here
+asks gtptabs.com or MuseScore anything, and MuseScore's pages are for the user to open. ``search_lacuerda`` reads
 LaCuerda's (``lacuerda_index``, from its listings of every artist and the artist pages
 caracole has read): its songs as ``SiteHit``s, each with the page of the sheet a lookup
 keeps (``sheet``), and the artists the query names as rows of their own (``SiteArtist``),
@@ -188,6 +192,8 @@ TOP_SONGS = 3  # an artist row's most tabbed songs
 ARTIST_ROWS, SONG_ROWS = 3, 8  # what ``find_index`` gives by default
 SITE_ROWS = 5  # a site's pages search_gtptabs and search_musescore give by default
 SITE_ROWS_READ = 2000  # rows of gtptabs_index the prefilter reads, at most
+THREAD_ROWS = 8  # iReal Pro's forum's threads search_ireal_threads names by their name alone, at most
+THREAD_ELSEWHERE = 90.0  # the score of a thread whose name holds the query after its first words (100: it begins so)
 PART = round(PARTIAL_SCALE * 100, 1)  # an artist whose name holds the query's words among others: a part of a name
 WORD_LETTERS = 3  # a query with no word this long (or Chinese word of four letters of pinyin) names no artist in part
 WORD_ARTISTS = 300  # more artists than this hold the query's words: a common word ("band", "john"), no row
@@ -398,6 +404,34 @@ class SiteHit:
     sheet: str | None = None
     tabs: tuple[HarpTabHit | GameTabHit, ...] = ()
     page: str = ""
+
+
+@dataclass(frozen=True)
+class ThreadHit:
+    """A thread of iReal Pro's forum its sitemaps name and caracole never read, whose name holds the query's words
+    (``search_ireal_threads``): a possible match, as MuseScore's pages are, since no chart of it is known.
+
+    Its names are read from its slug (``slug``, "groove-merchant-jerome-richardson"), which says nothing itself of where
+    a title ends and a composer begins (``_thread_hit``): where the slug begins with the query's words, the longest run
+    of its last words that is an artist caracole knows (``_KnownArtists``) after them is its ``artist`` ("Jerome
+    Richardson"), the words before it its ``title`` ("Groove Merchant"; "Misty Roses" before Tim Hardin); where a
+    query of two words or more ends it, the query is its artist (a composer's threads, ``via`` "artist"); else its
+    words are a title alone (``artist`` ""), a possible match to open, never one a lookup is named by. Each as the
+    slug spells it, title-cased. ``url`` is the thread's page, ``page`` its path, ``artist_key`` and ``title_key``
+    the names' identity key's parts (the artist's "" for none); ``score`` and ``via`` as a ``SiteHit``'s (100 for a
+    slug that begins with the query, ``THREAD_ELSEWHERE`` else).
+    """
+
+    title: str
+    artist: str
+    url: str
+    page: str
+    slug: str
+    score: float
+    artist_key: str = ""
+    title_key: str = ""
+    via: str = "title"
+    source: str = "ireal"
 
 
 @dataclass(frozen=True)
@@ -1496,7 +1530,8 @@ def search_ireal(conn: sqlite3.Connection, query: str, limit: int = SITE_ROWS) -
     first name first (``ireal.composer_name``), the title as people write it ("The Girl From Ipanema"); its ``url`` the
     thread's at the post of its best chart (the curated playlist's, else the oldest thread's latest post, as
     ireal_fetch.py ranks them), ``page`` that thread's path. Ties go to the most charts. It reads the tables alone: the
-    charts of the thread pages caracole read (a thread the sitemaps name, never read, holds none it knows)."""
+    charts of the thread pages caracole read (a thread the sitemaps name, never read, holds none it knows: it is
+    ``search_ireal_threads``'s, by its name)."""
     from caracole.ireal import JAZZ_1460, composer_name
 
     patterns = _patterns(name_words(query))
@@ -1537,6 +1572,121 @@ def _ireal_hit(score: float, charts: int, title: str, name: str, key: str, page:
     return SiteHit("ireal", title, f"{page_url(page)}#post-{post}", score, artist=name,
                    artist_key=identity_key(name, "").partition("/")[0], title_key=key, uploads=charts, via=via,
                    page=page)
+
+
+def search_ireal_threads(conn: sqlite3.Connection, query: str, limit: int = THREAD_ROWS, *,
+                         charts: Sequence[SiteHit] = ()) -> list[ThreadHit]:
+    """The threads iReal Pro's forum's sitemaps name (``ireal_index``) whose name holds the query's key
+    (``ireal.title_key``), ``limit`` at most, each a ``ThreadHit`` named from its slug (``_thread_hit``):
+
+    - those whose slug begins with it first; then, for a query of two words or more, those it ends (a composer's
+      threads, the query their by-line); then those it is in the middle of, every word of it a word of the slug, in any
+      order; each the oldest first. A query with no word of three letters or more (an article aside) names none, and
+      one with a shorter word only those it begins: "1", "i", "so" and "the" are in names by the hundred;
+    - a name once (the sitemaps list some twice, by the slug's key), and never a thread caracole read
+      (``ireal_threads``), which its charts stand for (``search_ireal``), nor one that is a chart of ``charts`` (the
+      query's chart hits) again: its slug begins with that chart's title and the words after it hold its composer's
+      ("misty-erroll-garner" beside the Jazz 1460's Misty; a composer spelled otherwise, "gillepsie", stays).
+
+    It reads the tables alone."""
+    from caracole.ireal import page_url, title_key
+
+    key = title_key(query)
+    words = [w for w in key.split("-") if w]
+    if limit <= 0 or not any(len(w) >= 3 and w != "the" for w in words):
+        return []
+    inside = all(len(w) >= 3 for w in words)  # in the middle of a name: no short word
+    # A key's words are what ``[\W_]+`` splits a text into: none holds a LIKE wildcard ("%" or "_").
+    holds = " AND ".join("('-' || i.key || '-') LIKE ?" for _ in words)
+    rows = conn.execute(
+        "SELECT i.path, i.slug, i.key, (i.key = ? OR i.key LIKE ?) AS begins, (? AND i.key LIKE ?) AS ends "
+        f"FROM ireal_index i WHERE (i.key = ? OR i.key LIKE ? OR (? AND {holds})) "
+        "AND NOT EXISTS (SELECT 1 FROM ireal_threads t WHERE t.path = i.path) "
+        "ORDER BY begins DESC, ends DESC, i.thread, i.path LIMIT ?",
+        (key, f"{key}-%", int(len(words) > 1), f"%-{key}", key, f"{key}-%", int(inside),
+         *(f"%-{w}-%" for w in words), SITE_ROWS_READ)).fetchall()
+    known = _KnownArtists(conn)
+    seen: set[str] = set()
+    hits: list[ThreadHit] = []
+    for path, slug, named, begins, ends in rows:
+        if len(hits) >= limit:
+            break
+        if named in seen or _charted(named, charts):
+            continue
+        seen.add(named)
+        hits.append(_thread_hit(path, slug, key, "begins" if begins else "ends" if ends else "", page_url(path), known))
+    return hits
+
+
+def _charted(key: str, charts: Sequence[SiteHit]) -> bool:
+    """Whether a thread's slug (its ``key``) is a chart of ``charts`` again: it begins with the chart's title and the
+    words after it hold every word of its composer's name."""
+    from caracole.ireal import begins_with, composer_words
+
+    for chart in charts:
+        if chart.source == "ireal" and begins_with(key, chart.title_key):
+            composer = composer_words(chart.artist)
+            if composer and composer <= frozenset(key[len(chart.title_key):].split("-")):
+                return True
+    return False
+
+
+class _KnownArtists:
+    """The artists caracole knows by name, whom a thread's by-line may be (``_thread_hit``), asked by a run of a slug's
+    words: a composer of the charts read, by his words in any order (iReal Pro writes him last name first), even of one
+    word ("Traditional"); else, of two words or more, an artist of Ultimate Guitar's (``ug_artists``: its index's and
+    its directory's) or of your library's, by their keys. A name of one word there ("Montgomery", a band) is a surname
+    without its first name as often as not, left in the title. Read lazily, once a search."""
+
+    def __init__(self, conn: sqlite3.Connection):
+        self.conn = conn
+        self._composers: set[frozenset[str]] | None = None
+        self._mine: set[str] | None = None
+
+    def __call__(self, parts: Sequence[str]) -> bool:
+        from caracole.ireal import composer_words
+        from caracole.normalize import ug_slug_key
+
+        if self._composers is None:
+            self._composers = {composer_words(c) for (c,) in self.conn.execute(
+                "SELECT DISTINCT composer FROM ireal_charts WHERE composer != ''")}
+        if composer_words(" ".join(parts)) in self._composers:
+            return True
+        key = ug_slug_key("-".join(parts))
+        if len(key.split("-")) < 2:
+            return False
+        if self._mine is None:
+            self._mine = {k.partition("/")[0] for (k,) in self.conn.execute("SELECT key FROM songs")}
+        return key in self._mine or self.conn.execute(
+            "SELECT 1 FROM ug_artists WHERE artist_key = ?", (key,)).fetchone() is not None
+
+
+def _thread_hit(path: str, slug: str, key: str, how: str, url: str, known: _KnownArtists) -> ThreadHit:
+    """A thread named by its slug as ``search_ireal_threads`` gives it. One that ``begins`` with the query's ``key``:
+    the longest run of its last words that is an artist caracole ``known``s, after the query's own, its by-line, and
+    the words before it its title; one the query ``ends``: the query its by-line, read as the artist, the words before
+    it its title, less a last "by". Else, or none known, its words are its title alone. Each as the slug spells it,
+    title-cased."""
+    from caracole.ireal import slug_key_of
+    from caracole.normalize import identity_key
+
+    parts = [p for p in re.split(r"[-_]+", slug) if p]
+    title, artist, via = parts, [], "title"
+    if how == "begins":
+        start = next((n for n in range(1, len(parts) + 1) if slug_key_of("-".join(parts[:n])) == key), None)
+        cut = next((n for n in range(start, len(parts)) if known(parts[n:])), None) if start else None
+        if cut is not None:
+            title, artist = parts[:cut], parts[cut:]
+    elif how == "ends":
+        cut = next((n for n in range(len(parts) - 1, 0, -1) if slug_key_of("-".join(parts[n:])) == key), None)
+        if cut is not None:
+            title, artist, via = parts[:cut], parts[cut:], "artist"
+    if artist and len(title) > 1 and title[-1].lower() == "by":  # "mean-what-you-say-by-thad-jones"
+        title = title[:-1]
+    shown, by = _title_words("-".join(title)), _title_words("-".join(artist))
+    artist_key, _, title_key = identity_key(by, shown).partition("/")
+    return ThreadHit(shown, by, url, path, slug, 100.0 if how == "begins" else THREAD_ELSEWHERE,
+                     artist_key if by else "", title_key, via)
 
 
 def _gametabs_reading(queries: list[_Query], name: str, game: str, key: str,

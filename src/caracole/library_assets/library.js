@@ -2904,13 +2904,17 @@
   // removed songs it matches first (songs you had), then LaCuerda's artists and songs when it alone has the artist the
   // query names (``lacuerda_leads``), the artists the query names when one leads, Ultimate Guitar's songs, its
   // artists otherwise, LaCuerda's, gtptabs.com's songs, harptabs.com's artists and songs (by an artist whose page
-  // caracole read); MuseScore's pages and harptabs.com's tabs whose artist no page names, titles alone, apart. An artist's group is
+  // caracole read), iReal Pro's charts and threads; MuseScore's pages, harptabs.com's tabs whose artist no page names
+  // and iReal Pro's threads of no by-line, titles alone, apart. An artist's group is
   // keyed by the artist part of its rows' identity keys (``artist_key``; an artist's ``group_key``), a row of a song of
   // yours by your song's artist (``song``, ``same_artist``) putting its artist's rows under your artist (UG's "Song
   // Dongye (宋冬野)" is your 宋冬野); within it, a song (``title_key``) is one item, which each site's row of it is on.
   const mergeSites = (data) => {
+    const alone = (h) => h.read === false && !h.artist;
+    const ireal = objects(data.ireal).filter((h) => !alone(h));
     const model = { groups: new Map(), order: [], items: new Map(), lines: new Map(), alias: new Map(),
       titles: objects(data.musescore), harps: objects(data.harptabs).filter((h) => !h.artist),
+      threads: objects(data.ireal).filter(alone),
       unlisted: data.lacuerda_unlisted && typeof data.lacuerda_unlisted === "object"
         ? data.lacuerda_unlisted : null, meant: [], card: undefined, line: undefined };
     const ugArtists = objects(data.artists);
@@ -2923,7 +2927,7 @@
       ? SUGGESTED_SITES.map((source) => [source, x.song[source]]).filter(([, row]) => row && typeof row === "object")
       : []);
     for (const row of [...objects(data.index), ...objects(data.gtptabs), ...objects(data.lacuerda), ...htSongs,
-      ...objects(data.gametabs), ...objects(data.ireal),
+      ...objects(data.gametabs), ...ireal,
       ...ugArtists.flatMap((a) => objects(a.top)), ...lcArtists.flatMap((a) => objects(a.top)),
       ...htArtists.flatMap((a) => objects(a.top)), ...meant.flatMap((x) => meantRows(x).map(([, r]) => r))]) {
       const i = yourSong(row);
@@ -2946,7 +2950,7 @@
       ...htArtists.map((a) => ["artist", "harptabs", a]),
       ...htSongs.map((h) => ["song", "harptabs", h]),
       ...objects(data.gametabs).map((h) => ["song", "gametabs", h]),  // gametabs.net's tracks, the game the artist
-      ...objects(data.ireal).map((h) => ["song", "ireal", h]),  // iReal Pro's forum's charts, the composer the artist
+      ...ireal.map((h) => ["song", "ireal", h]),  // iReal Pro's forum's charts, the composer the artist
     ]) {
       if (kind === "artist") addArtist(model, source, row);
       else addSong(model, source, row);
@@ -2975,11 +2979,11 @@
   };
   // How many songs of each site the results show (the marks under the box count them: drawCounts): a line each that
   // has the site's row, but a song it may have meant; an artist the query names there none of whose songs is listed,
-  // one; a title alone (MuseScore's pages, harptabs.com's tabs by their title), one.
+  // one; a title alone (MuseScore's pages, harptabs.com's tabs by their title, iReal Pro's threads), one.
   const FOUND_SITES = ["ug", "gtptabs", "lacuerda", "harptabs", "gametabs", "ireal"];
   const foundNow = (model) => {
     const n = { ug: 0, gtptabs: 0, lacuerda: 0, musescore: model.titles.length, harptabs: model.harps.length,
-      gametabs: 0, ireal: 0 };
+      gametabs: 0, ireal: model.threads.length };
     for (const item of model.items.values()) {
       if (!item.meant) for (const source of FOUND_SITES) if (item[source]) n[source] += 1;
     }
@@ -2995,7 +2999,7 @@
   // found nothing there, and says so as a line of the list (nothingFound). An artist it may have meant, once listed,
   // or a name LaCuerda's page was read for, is something; a song it may have meant is not.
   const foundNothing = (model) => Boolean(model) && !Array.from(model.items.values()).some((item) => !item.meant) &&
-    !model.titles.length && !model.harps.length &&
+    !model.titles.length && !model.harps.length && !model.threads.length &&
     !Array.from(model.groups.values()).some((g) => g.ug || g.lacuerda || g.harptabs || g.directory);
   const yourSong = (row) => (row.song === null || row.song === undefined ? undefined : byIndex.get(Number(row.song)));
   const groupOf = (model, key, name) => {
@@ -3423,6 +3427,11 @@
       if (!model.harpLines) model.harpLines = model.harps.map(titleLine);
       box.appendChild(artistGroup({ name: "harptabs", search: false }, model.harpLines,
         { note: many(model.harps.length, "harmonica tab") + " by that title" }));
+    }
+    if (model && model.threads.length) {  // iReal Pro's threads of no by-line: a title alone too
+      if (!model.threadLines) model.threadLines = model.threads.map(titleLine);
+      box.appendChild(artistGroup({ name: "iReal Pro", search: false }, model.threadLines,
+        { note: many(model.threads.length, "thread") + " by that name" }));
     }
     const missed = foundNothing(model);
     const missWas = groupsBox.querySelector(":scope > section.nothing");

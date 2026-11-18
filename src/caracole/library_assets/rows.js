@@ -397,9 +397,13 @@ const caracoleRows = (icons, does) => {
   const instrumentBadges = (instruments) => listOf(instruments)
     .filter((x, n, all) => own.call(INSTRUMENTS, x) && all.indexOf(x) === n)
     .map((x) => ({ kind: "instrument " + x, text: INSTRUMENTS[x] }));
-  // The sites whose index names a title alone, and the instrument their pages are for.
-  const TITLE_SITES = { musescore: { name: "MuseScore", instrument: "score" },
-    harptabs: { name: "harptabs", instrument: "harmonica" } };
+  // The sites whose index names a title alone, the instrument their pages are for, and what a line of one says (iReal
+  // Pro's: a thread unread whose name gives no by-line).
+  const SAME = "same title, maybe another song";
+  const TITLE_SITES = { musescore: { name: "MuseScore", instrument: "score", said: SAME },
+    harptabs: { name: "harptabs", instrument: "harmonica", said: SAME },
+    ireal: { name: "iReal Pro", instrument: "", said: "a thread not read yet, its name alone" } };
+  const alone = (hit) => hit.source === "ireal" && hit.read === false && !hit.artist;
   // An Ultimate Guitar song's instruments, by its tabs per type: ukulele, when UG has its Ukulele Chords.
   const ugInstruments = (c) => (c && typeof c === "object" && Number(c.ukulele) > 0 ? ["ukulele"] : []);
   const counts = (c) => Object.entries(c && typeof c === "object" ? c : {})
@@ -607,25 +611,29 @@ const caracoleRows = (icons, does) => {
         badges: [...(mine ? [{ kind: "found", text: "In your logbook" }] : []), ...instrumentBadges(gameInstruments(hit))],
         action: main, more });
       nameDoes(row, main, mine ? "Fetch " + display + " again" : "Fetch " + display);
-    } else if (hit.source === "ireal") {  // iReal Pro's forum's chart of a standard: its composer is its artist
+    } else if (hit.source === "ireal" && !alone(hit)) {  // iReal Pro's chart, the composer its artist; or a thread
       const mine = yours(hit);
+      const thread = hit.read === false;
       const artist = String(hit.artist || "");
       const display = mine ? String(mine.display || "") : artist + " - " + title;
       const pick = Object.assign(mine ? { song: mine.id, identity: mine.identity } : { artist, title },
         https(hit.url) ? { ireal: String(hit.url) } : {});
       const main = button(mine ? "Fetch again" : "Fetch", "small primary", (e) => get(pick, display, row, e.currentTarget),
-        (mine ? "Fetch " + display + " again" : "Fetch " + display) + " with its iReal Pro chart");
-      main.title = "Fetches the song and keeps this iReal Pro chart as its sheet";
-      const more = [{ heading: "On iReal Pro", links: [{ label: "Its thread", href: hit.url, source: "ireal" }] }];
+        (mine ? "Fetch " + display + " again" : "Fetch " + display) + (thread ? ", reading its iReal Pro thread"
+          : " with its iReal Pro chart"));
+      main.title = thread ? THREAD_FETCH : "Fetches the song and keeps this iReal Pro chart as its sheet";
+      const more = [linkGroup({ heading: "On iReal Pro",
+        links: [{ label: "Its thread", href: hit.url, source: "ireal" }] })];
+      if (thread) more[0].insertBefore(el("p", "hint", THREAD_NAMED), more[0].lastChild);
       const opens = mine ? opener(mine.links) : null;
       if (opens) more.push({ heading: "In your logbook", links: [{ label: opens.label, href: opens.href, source: opens.source }] });
       row = resultRow({ title, artist, onSearch: searchesFor(artist), source: "ireal",
-        facts: many(Number(hit.uploads) || 1, "chart"),
+        facts: thread ? THREAD_SAID : many(Number(hit.uploads) || 1, "chart"),
         badges: mine ? [{ kind: "found", text: "In your logbook" }] : [], action: main, more });
       nameDoes(row, main, mine ? "Fetch " + display + " again" : "Fetch " + display);
-    } else if (own.call(TITLE_SITES, String(hit.source))) {  // MuseScore's or harptabs.com's: a title alone
+    } else if (own.call(TITLE_SITES, String(hit.source))) {  // MuseScore's, harptabs.com's, iReal Pro's: a title alone
       const site = TITLE_SITES[hit.source];
-      row = resultRow({ title, artist: "Same title, maybe another song", source: hit.source,
+      row = resultRow({ title, artist: site.said.charAt(0).toUpperCase() + site.said.slice(1), source: hit.source,
         badges: instrumentBadges([site.instrument]), action: { label: "Open", href: hit.url } });
       const open = row.querySelector(".row-action a");
       if (open) open.setAttribute("aria-label", "Open " + title + " on " + site.name + ", new tab");
@@ -658,6 +666,10 @@ const caracoleRows = (icons, does) => {
   const tabCounts = (c) => Object.entries(c && typeof c === "object" ? c : {})
     .map(([kind, n]) => (own.call(TIMES, kind) ? TIMES[kind] : kind) + " ×" + Number(n || 0)).join(" · ");
   const https = (url) => /^https:[/][/]/i.test(String(url || ""));
+  // An iReal Pro thread never read, named from its name (``read`` false): its words, and its Fetch's.
+  const THREAD_SAID = "thread not read yet";
+  const THREAD_FETCH = "Reads this iReal Pro thread and keeps its chart as the song's sheet";
+  const THREAD_NAMED = "Named from the thread's name: caracole hasn't read it yet.";
   // One song of the offline indexes (``item``): each site's row of it, as /api/search gives them (``ug``, an Ultimate
   // Guitar song; ``lacuerda`` and ``gtptabs``, a song of theirs; ``removed``, a song caracole removed), on one line
   // with each site's mark and its counts, and its identity (``key``) as the line's ``data-hit``. Get it looks the
@@ -687,6 +699,7 @@ const caracoleRows = (icons, does) => {
     const harp = ht && https(ht.url) ? { harptabs: String(ht.url) } : null;
     const game = gt && https(gt.url) ? { gametabs: String(gt.url) } : null;
     const chart = ir && https(ir.url) ? { ireal: String(ir.url) } : null;  // iReal Pro's chart, kept as the sheet
+    const thread = Boolean(ir) && ir.read === false;
     const a = acts && typeof acts === "object" ? acts : {};
     let line = null;
     const here = () => line;
@@ -699,12 +712,13 @@ const caracoleRows = (icons, does) => {
       const chosen = ug ? pick({ ug: ug.ug }) : chords ? pick(sheet) : chart ? pick(chart) : harp ? pick(harp)
         : game ? pick(game) : pick(sheet);
       main = fetchIcon((mine ? "Fetch " + display + " again" : "Fetch " + display) + (ug ? " from UG"
-        : chords ? " from LaCuerda" : chart ? " with its iReal Pro chart" : harp ? " with its harptabs harmonica tab"
+        : chords ? " from LaCuerda" : chart && thread ? ", reading its iReal Pro thread"
+          : chart ? " with its iReal Pro chart" : harp ? " with its harptabs harmonica tab"
           : game ? " with its gametabs tab" : gtp ? " with a Guitar Pro file from gtptabs" : ""),
       (e) => a.get(chosen, display, here(), e.currentTarget));
       main.title = ug ? "Fetches songs"
         : chords ? "Fetches the song and keeps this LaCuerda sheet"
-        : chart ? "Fetches the song and keeps this iReal Pro chart as its sheet"
+        : chart ? (thread ? THREAD_FETCH : "Fetches the song and keeps this iReal Pro chart as its sheet")
         : harp ? "Fetches the song and keeps this harptabs tab"
         : game ? "Fetches the song and keeps this gametabs tab"
         : gtp ? "Fetches the sheet, then a Guitar Pro file from gtptabs"
@@ -731,10 +745,12 @@ const caracoleRows = (icons, does) => {
     if (ir) {  // iReal Pro's chart: its thread, and a Get it that keeps it when the line's own button is another site's
       const box = el("div", "row-group");
       box.appendChild(el("p", "subhead", "On iReal Pro"));
+      if (thread) box.appendChild(el("p", "hint", THREAD_NAMED));
       const actions = el("div", "actions");
       if (chart && (ug || chords || gone)) {
-        actions.appendChild(button("Fetch with this chart", "small", (e) => a.get(pick(chart), display, here(), e.currentTarget),
-          "Fetch " + display + ", keeping iReal Pro's chart as its sheet"));
+        actions.appendChild(button(thread ? "Fetch with this thread" : "Fetch with this chart", "small",
+          (e) => a.get(pick(chart), display, here(), e.currentTarget), "Fetch " + display + (thread
+            ? ", reading iReal Pro's thread for its chart" : ", keeping iReal Pro's chart as its sheet")));
       }
       actions.appendChild(link({ label: "Its thread", href: ir.url, source: "ireal" }, "btn small", true));
       box.appendChild(actions);
@@ -757,7 +773,8 @@ const caracoleRows = (icons, does) => {
       gtp ? "Guitar Pro file" + ((Number(gtp.uploads) || 1) > 1 ? " ×" + Number(gtp.uploads) : "") : "",
       ht ? "harmonica tab" + ((Number(ht.uploads) || 1) > 1 ? " ×" + Number(ht.uploads) : "") : "",
       gt ? "game tab" + ((Number(gt.uploads) || 1) > 1 ? " ×" + Number(gt.uploads) : "") : "",
-      ir ? "iReal Pro chart" + ((Number(ir.uploads) || 1) > 1 ? " ×" + Number(ir.uploads) : "") : ""];
+      ir ? (thread ? THREAD_SAID : "iReal Pro chart" + ((Number(ir.uploads) || 1) > 1 ? " ×" + Number(ir.uploads) : ""))
+        : ""];
     const badges = gone ? [{ kind: "removed", text: "Removed " + shortDate(gone.removed_at) }]
       : mine ? [{ kind: "found", text: "In your logbook" }] : [];
     line = resultRow({ dense: true, title, artist, onSearch: searchesFor(artist),
@@ -778,14 +795,14 @@ const caracoleRows = (icons, does) => {
     nameDoes(line, main, gone ? "Add " + display + " again" : mine ? "Fetch " + display + " again" : "Fetch " + display);
     return line;
   };
-  // A page of a site whose index names a title alone (MuseScore's, a score; harptabs.com's, a harmonica tab: its
-  // ``source``, MuseScore's when none), so a possible match: a link to open, as a search fetches nothing from either.
+  // A page of a site whose index names a title alone (MuseScore's, a score; harptabs.com's, a harmonica tab; iReal
+  // Pro's thread of no by-line: its ``source``, MuseScore's when none), so a possible match: a link to open.
   const titleLine = (h) => {
     const hit = h && typeof h === "object" ? h : {};
     const title = String(hit.title || "");
     const source = own.call(TITLE_SITES, String(hit.source)) ? String(hit.source) : "musescore";
     const site = TITLE_SITES[source];
-    const line = resultRow({ dense: true, title, sources: [source], facts: "same title, maybe another song",
+    const line = resultRow({ dense: true, title, sources: [source], facts: site.said,
       badges: instrumentBadges([site.instrument]), action: { label: "Open", href: hit.url } });
     const open = line.querySelector(".line-action a");
     if (open) open.setAttribute("aria-label", "Open " + title + " on " + site.name + ", new tab");

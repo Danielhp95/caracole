@@ -11,6 +11,7 @@
 {"args":["A - B"],"fn":"caracole.overrides.override_key","out":"a/b"}
 {"args":["Artist - Title"],"fn":"caracole.overrides.override_key","out":"artist/title"}
 {"args":["Billy Joel - Piano Man"],"fn":"caracole.overrides.override_key","out":"billy-joel/piano-man"}
+{"args":["Blue Moon - Richard Rogers"],"fn":"caracole.overrides.override_key","out":"blue-moon/richard-rogers"}
 {"args":["Cowboy Bebop - Spokey Dokey"],"fn":"caracole.overrides.override_key","out":"cowboy-bebop/spokey-dokey"}
 {"args":["Estopa - Como Camarón"],"fn":"caracole.overrides.override_key","out":"estopa/como-camaron"}
 {"args":["Hollow Knight - Resting Grounds"],"fn":"caracole.overrides.override_key","out":"hollow-knight/resting-grounds"}
@@ -279,6 +280,7 @@
 {"args":["A - B"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'A - B'"}
 {"args":["Artist - Title"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'Artist - Title'"}
 {"args":["Billy Joel - Piano Man"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'Billy Joel - Piano Man'"}
+{"args":["Blue Moon - Richard Rogers"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'Blue Moon - Richard Rogers'"}
 {"args":["Cowboy Bebop - Spokey Dokey"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'Cowboy Bebop - Spokey Dokey'"}
 {"args":["Estopa - Como Camarón"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'Estopa - Como Camarón'"}
 {"args":["Hollow Knight - Resting Grounds"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'Hollow Knight - Resting Grounds'"}
@@ -547,6 +549,7 @@
 {"args":["A - B"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["Artist - Title"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["Billy Joel - Piano Man"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
+{"args":["Blue Moon - Richard Rogers"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["Cowboy Bebop - Spokey Dokey"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["Estopa - Como Camarón"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["Hollow Knight - Resting Grounds"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
@@ -815,6 +818,7 @@
 {"args":["A - B"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["Artist - Title"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["Billy Joel - Piano Man"],"fn":"caracole.overrides.artist_page_address","out":null}
+{"args":["Blue Moon - Richard Rogers"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["Cowboy Bebop - Spokey Dokey"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["Estopa - Como Camarón"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["Hollow Knight - Resting Grounds"],"fn":"caracole.overrides.artist_page_address","out":null}
@@ -1083,6 +1087,7 @@
 {"args":["A - B"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["Artist - Title"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["Billy Joel - Piano Man"],"fn":"caracole.overrides._artist_url_value","out":null}
+{"args":["Blue Moon - Richard Rogers"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["Cowboy Bebop - Spokey Dokey"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["Estopa - Como Camarón"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["Hollow Knight - Resting Grounds"],"fn":"caracole.overrides._artist_url_value","out":null}
@@ -1351,6 +1356,7 @@
 {"args":["A - B"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["Artist - Title"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["Billy Joel - Piano Man"],"fn":"caracole.overrides.pasted_tab_id","out":null}
+{"args":["Blue Moon - Richard Rogers"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["Cowboy Bebop - Spokey Dokey"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["Estopa - Como Camarón"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["Hollow Knight - Resting Grounds"],"fn":"caracole.overrides.pasted_tab_id","out":null}
@@ -1619,6 +1625,7 @@
 {"args":["A - B"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'A - B'"}
 {"args":["Artist - Title"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'Artist - Title'"}
 {"args":["Billy Joel - Piano Man"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'Billy Joel - Piano Man'"}
+{"args":["Blue Moon - Richard Rogers"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'Blue Moon - Richard Rogers'"}
 {"args":["Cowboy Bebop - Spokey Dokey"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'Cowboy Bebop - Spokey Dokey'"}
 {"args":["Estopa - Como Camarón"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'Estopa - Como Camarón'"}
 {"args":["Hollow Knight - Resting Grounds"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'Hollow Knight - Resting Grounds'"}
@@ -1887,6 +1894,7 @@
 {"args":["A - B"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'A - B'"}
 {"args":["Artist - Title"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'Artist - Title'"}
 {"args":["Billy Joel - Piano Man"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'Billy Joel - Piano Man'"}
+{"args":["Blue Moon - Richard Rogers"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'Blue Moon - Richard Rogers'"}
 {"args":["Cowboy Bebop - Spokey Dokey"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'Cowboy Bebop - Spokey Dokey'"}
 {"args":["Estopa - Como Camarón"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'Estopa - Como Camarón'"}
 {"args":["Hollow Knight - Resting Grounds"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'Hollow Knight - Resting Grounds'"}
@@ -2155,6 +2163,7 @@
 {"args":["A - B"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'A - B'"}
 {"args":["Artist - Title"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'Artist - Title'"}
 {"args":["Billy Joel - Piano Man"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'Billy Joel - Piano Man'"}
+{"args":["Blue Moon - Richard Rogers"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'Blue Moon - Richard Rogers'"}
 {"args":["Cowboy Bebop - Spokey Dokey"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'Cowboy Bebop - Spokey Dokey'"}
 {"args":["Estopa - Como Camarón"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'Estopa - Como Camarón'"}
 {"args":["Hollow Knight - Resting Grounds"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'Hollow Knight - Resting Grounds'"}
@@ -2423,6 +2432,7 @@
 {"args":["A - B"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'A - B'"}
 {"args":["Artist - Title"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'Artist - Title'"}
 {"args":["Billy Joel - Piano Man"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'Billy Joel - Piano Man'"}
+{"args":["Blue Moon - Richard Rogers"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'Blue Moon - Richard Rogers'"}
 {"args":["Cowboy Bebop - Spokey Dokey"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'Cowboy Bebop - Spokey Dokey'"}
 {"args":["Estopa - Como Camarón"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'Estopa - Como Camarón'"}
 {"args":["Hollow Knight - Resting Grounds"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'Hollow Knight - Resting Grounds'"}
@@ -2691,6 +2701,7 @@
 {"args":["A - B"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["Artist - Title"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["Billy Joel - Piano Man"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
+{"args":["Blue Moon - Richard Rogers"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["Cowboy Bebop - Spokey Dokey"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["Estopa - Como Camarón"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["Hollow Knight - Resting Grounds"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
@@ -2959,6 +2970,7 @@
 {"args":["A - B"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["Artist - Title"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["Billy Joel - Piano Man"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
+{"args":["Blue Moon - Richard Rogers"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["Cowboy Bebop - Spokey Dokey"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["Estopa - Como Camarón"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["Hollow Knight - Resting Grounds"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}

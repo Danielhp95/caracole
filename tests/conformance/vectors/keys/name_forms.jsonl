@@ -5,6 +5,7 @@
 {"args":["\n       caracole add \"<the show or singer>\" \"<the song>\"\n"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["caracole-add-the-show-or-singer-the-song"],"name_forms":["caracole-add-the-show-or-singer-the-song"],"original_part":"caracole add \"<the show or singer>\" \"<the song>\""}}
 {"args":["\n     caracole get --gametabs "],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["caracole-get-gametabs"],"name_forms":["caracole-get-gametabs"],"original_part":"caracole get --gametabs"}}
 {"args":["\n     caracole get --ireal "],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["caracole-get-ireal"],"name_forms":["caracole-get-ireal"],"original_part":"caracole get --ireal"}}
+{"args":["\n     fetch it under its names: caracole get --ireal "],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["fetch-it-under-its-names-caracole-get-ireal"],"name_forms":["fetch-it-under-its-names-caracole-get-ireal"],"original_part":"fetch it under its names: caracole get --ireal"}}
 {"args":["\n  1. [UG] Radiohead - Creep · chords×3"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["1-ug-radiohead-creep-chords-3","1-radiohead-creep-chords-3"],"name_forms":["1-ug-radiohead-creep-chords-3"],"original_part":"1. [UG] Radiohead - Creep · chords×3"}}
 {"args":["\n  2. "],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["2"],"name_forms":["2"],"original_part":"2."}}
 {"args":["\n  Radiohead - Airbag · wanted, no sheet yet · no folder yet"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["radiohead-airbag-wanted-no-sheet-yet-no-folder-yet"],"name_forms":["radiohead-airbag-wanted-no-sheet-yet-no-folder-yet"],"original_part":"Radiohead - Airbag · wanted, no sheet yet · no folder yet"}}
@@ -53,7 +54,10 @@
 {"args":["  [harptabs] Piano Man · same title, maybe another song\n     "],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["harptabs-piano-man-same-title-maybe-another-song","piano-man-same-title-maybe-another-song"],"name_forms":["harptabs-piano-man-same-title-maybe-another-song"],"original_part":"[harptabs] Piano Man · same title, maybe another song"}}
 {"args":["  [harptabs] billy joel - Vienna! · 1 tab, key Bb\n     "],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["harptabs-billy-joel-vienna-1-tab-key-bb","billy-joel-vienna-1-tab-key-bb"],"name_forms":["harptabs-billy-joel-vienna-1-tab-key-bb"],"original_part":"[harptabs] billy joel - Vienna! · 1 tab, key Bb"}}
 {"args":["  [harptabs] billy joel - piano man · 4 tabs, key C\n     "],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["harptabs-billy-joel-piano-man-4-tabs-key-c","billy-joel-piano-man-4-tabs-key-c"],"name_forms":["harptabs-billy-joel-piano-man-4-tabs-key-c"],"original_part":"[harptabs] billy joel - piano man · 4 tabs, key C"}}
+{"args":["  [iReal] Groove Merchant Thad Jones · a thread not read yet, its name alone\n     "],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["ireal-groove-merchant-thad-jones-a-thread-not-read-yet-its-name-alone","groove-merchant-thad-jones-a-thread-not-read-yet-its-name-alone"],"name_forms":["ireal-groove-merchant-thad-jones-a-thread-not-read-yet-its-name-alone"],"original_part":"[iReal] Groove Merchant Thad Jones · a thread not read yet, its name alone"}}
+{"args":["  [iReal] Jerome Richardson - Groove Merchant · a thread not read yet, named from its name\n     "],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["ireal-jerome-richardson-groove-merchant-a-thread-not-read-yet-named-from-its-name","jerome-richardson-groove-merchant-a-thread-not-read-yet-named-from-its-name"],"name_forms":["ireal-jerome-richardson-groove-merchant-a-thread-not-read-yet-named-from-its-name"],"original_part":"[iReal] Jerome Richardson - Groove Merchant · a thread not read yet, named from its name"}}
 {"args":["  [iReal] Thad Jones - Groove Merchant · 2 charts\n     "],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["ireal-thad-jones-groove-merchant-2-charts","thad-jones-groove-merchant-2-charts"],"name_forms":["ireal-thad-jones-groove-merchant-2-charts"],"original_part":"[iReal] Thad Jones - Groove Merchant · 2 charts"}}
+{"args":["  [iReal] Thad Jones - Groove Merchant · a thread not read yet, named from its name\n     "],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["ireal-thad-jones-groove-merchant-a-thread-not-read-yet-named-from-its-name","thad-jones-groove-merchant-a-thread-not-read-yet-named-from-its-name"],"name_forms":["ireal-thad-jones-groove-merchant-a-thread-not-read-yet-named-from-its-name"],"original_part":"[iReal] Thad Jones - Groove Merchant · a thread not read yet, named from its name"}}
 {"args":["  billy joel · harptabs.com · 4 of their songs in the index (7 of their 98 tabs), the most viewed first:"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["billy-joel-harptabs-com-4-of-their-songs-in-the-index-7-of-their-98-tabs-the-most-viewed-first","billy-joel-harptabs-com-4-of-their-songs-in-the-index-the-most-viewed-first"],"name_forms":["billy-joel-harptabs-com-4-of-their-songs-in-the-index-7-of-their-98-tabs-the-most-viewed-first"],"original_part":"billy joel · harptabs.com · 4 of their songs in the index (7 of their 98 tabs), the most viewed first:"}}
 {"args":["  billy joel · harptabs.com · 98 tabs, 7 in the index. The most viewed:\n"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["billy-joel-harptabs-com-98-tabs-7-in-the-index-the-most-viewed"],"name_forms":["billy-joel-harptabs-com-98-tabs-7-in-the-index-the-most-viewed"],"original_part":"billy joel · harptabs.com · 98 tabs, 7 in the index. The most viewed:"}}
 {"args":["  epic - I'm not sorry for loving you · wanted, needs review · no folder yet\n     Did you mean (`caracole review` settles it):\n       94  misc-musicals/epic-the-musical-not-sorry-for-loving-you (catch_all)\n       82  bill-fox/im-not-over-loving-you (title_only)\n       76  cover-0/for-loving-you (title_only)\n"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["epic-im-not-sorry-for-loving-you-wanted-needs-review-no-folder-yet-did-you-mean-caracole-review-settles-it-94-misc-musicals-epic-the-musical-not-sorry-for-loving-you-catch-all-82-bill-fox-im-not-over-loving-you-title-only-76-cover-0-for-loving-you-title-only","epic-im-not-sorry-for-loving-you-wanted-needs-review-no-folder-yet-did-you-mean-94-misc-musicals-epic-the-musical-not-sorry-for-loving-you-82-bill-fox-im-not-over-loving-you-76-cover-0-for-loving-you"],"name_forms":["epic-im-not-sorry-for-loving-you-wanted-needs-review-no-folder-yet-did-you-mean-caracole-review-settles-it-94-misc-musicals-epic-the-musical-not-sorry-for-loving-you-catch-all-82-bill-fox-im-not-over-loving-you-title-only-76-cover-0-for-loving-you-title-only"],"original_part":"epic - I'm not sorry for loving you · wanted, needs review · no folder yet\n     Did you mean (`caracole review` settles it):\n       94  misc-musicals/epic-the-musical-not-sorry-for-loving-you (catch_all)\n       82  bill-fox/im-not-over-loving-you (title_only)\n       76  cover-0/for-loving-you (title_only)"}}
@@ -63,9 +67,11 @@
 {"args":["  … and 1 more: see them with --limit 2"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["1-more-see-them-with-limit-2"],"name_forms":["1-more-see-them-with-limit-2"],"original_part":"… and 1 more: see them with --limit 2"}}
 {"args":["  … and 2 more: see them with --limit 4"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["2-more-see-them-with-limit-4"],"name_forms":["2-more-see-them-with-limit-4"],"original_part":"… and 2 more: see them with --limit 4"}}
 {"args":[" \"Hollow Knight\" \"Resting Grounds\"\n"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["hollow-knight-resting-grounds"],"name_forms":["hollow-knight-resting-grounds"],"original_part":"\"Hollow Knight\" \"Resting Grounds\""}}
+{"args":[" \"Jerome Richardson\" \"Groove Merchant\"\n"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["jerome-richardson-groove-merchant"],"name_forms":["jerome-richardson-groove-merchant"],"original_part":"\"Jerome Richardson\" \"Groove Merchant\""}}
 {"args":[" \"Thad Jones\" \"Groove Merchant\"\n"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["thad-jones-groove-merchant"],"name_forms":["thad-jones-groove-merchant"],"original_part":"\"Thad Jones\" \"Groove Merchant\""}}
 {"args":[" (a request for each spelling of the name tried, usually one)."],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["a-request-for-each-spelling-of-the-name-tried-usually-one"],"name_forms":["a-request-for-each-spelling-of-the-name-tried-usually-one"],"original_part":"(a request for each spelling of the name tried, usually one)."}}
 {"args":[" - Creep"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["creep"],"name_forms":["creep"],"original_part":"- Creep"}}
+{"args":[" ARTIST TITLE\n"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["artist-title"],"name_forms":["artist-title"],"original_part":"ARTIST TITLE"}}
 {"args":[" Band"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["band"],"name_forms":["band"],"original_part":"Band"}}
 {"args":[" GROUP BY artist_key, song_key"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["group-by-artist-key-song-key"],"name_forms":["group-by-artist-key-song-key"],"original_part":"GROUP BY artist_key, song_key"}}
 {"args":[" OR "],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["or"],"name_forms":["or"],"original_part":"OR"}}
@@ -116,8 +122,10 @@
 {"args":["-feast"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["feast"],"name_forms":["feast"],"original_part":"-feast"}}
 {"args":["-the-band"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["band"],"name_forms":["band"],"original_part":"-the-band"}}
 {"args":["-v"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["v"],"name_forms":["v"],"original_part":"-v"}}
+{"args":["."],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":[],"name_forms":[],"original_part":"."}}
 {"args":[".html"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["html"],"name_forms":["html"],"original_part":".html"}}
 {"args":["/"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":[],"name_forms":[],"original_part":"/"}}
+{"args":["/a-song-chords-"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["a-song-chords"],"name_forms":["a-song-chords"],"original_part":"/a-song-chords-"}}
 {"args":["/artist/5550001"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["artist-5550001"],"name_forms":["artist-5550001"],"original_part":"/artist/5550001"}}
 {"args":["/artist/634073"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["artist-634073"],"name_forms":["artist-634073"],"original_part":"/artist/634073"}}
 {"args":["/artist/99"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["artist-99"],"name_forms":["artist-99"],"original_part":"/artist/99"}}
@@ -156,6 +164,7 @@
 {"args":["19 días y 500 noches"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["19-dias-y-500-noches"],"name_forms":["19-dias-y-500-noches"],"original_part":"19 días y 500 noches"}}
 {"args":["19-dias-y-500-noches"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["19-dias-y-500-noches"],"name_forms":["19-dias-y-500-noches"],"original_part":"19-dias-y-500-noches"}}
 {"args":["2"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["2"],"name_forms":["2"],"original_part":"2"}}
+{"args":["2 charts"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["2-charts"],"name_forms":["2-charts"],"original_part":"2 charts"}}
 {"args":["2. "],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["2"],"name_forms":["2"],"original_part":"2."}}
 {"args":["2. [UG] Stone Temple Pilots - Creep"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["2-ug-stone-temple-pilots-creep","2-stone-temple-pilots-creep"],"name_forms":["2-ug-stone-temple-pilots-creep"],"original_part":"2. [UG] Stone Temple Pilots - Creep"}}
 {"args":["2/beatles-the/yesterday.html"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["2-beatles-the-yesterday-html"],"name_forms":["2-beatles-the-yesterday-html"],"original_part":"2/beatles-the/yesterday.html"}}
@@ -177,6 +186,8 @@
 {"args":["<!DOCTYPE html><html><head><title>Oops! We couldn't find that page.</title></head></html>"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["doctype-html-html-head-title-oops-we-couldnt-find-that-page-title-head-html"],"name_forms":["doctype-html-html-head-title-oops-we-couldnt-find-that-page-title-head-html"],"original_part":"<!DOCTYPE html><html><head><title>Oops! We couldn't find that page.</title></head></html>"}}
 {"args":["<name>"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["name"],"name_forms":["name"],"original_part":"<name>"}}
 {"args":["?"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":[],"name_forms":[],"original_part":"?"}}
+{"args":["A Night In Tunisia Dizzy Gillepsie"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["a-night-in-tunisia-dizzy-gillepsie"],"name_forms":["a-night-in-tunisia-dizzy-gillepsie"],"original_part":"A Night In Tunisia Dizzy Gillepsie"}}
+{"args":["A client that fails on any request: a search sends none."],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["a-client-that-fails-on-any-request-a-search-sends-none"],"name_forms":["a-client-that-fails-on-any-request-a-search-sends-none"],"original_part":"A client that fails on any request: a search sends none."}}
 {"args":["A minor"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["a-minor"],"name_forms":["a-minor"],"original_part":"A minor"}}
 {"args":["A song with lyrics that the index didn't find (or that you pinned)."],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["a-song-with-lyrics-that-the-index-didnt-find-or-that-you-pinned","a-song-with-lyrics-that-the-index-didnt-find"],"name_forms":["a-song-with-lyrics-that-the-index-didnt-find-or-that-you-pinned"],"original_part":"A song with lyrics that the index didn't find (or that you pinned)."}}
 {"args":["A, B, E"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["a-b-e"],"name_forms":["a-b-e"],"original_part":"A, B, E"}}
@@ -201,11 +212,13 @@
 {"args":["Airbag"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["airbag"],"name_forms":["airbag"],"original_part":"Airbag"}}
 {"args":["Alejandro Sanz"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["alejandro-sanz"],"name_forms":["alejandro-sanz"],"original_part":"Alejandro Sanz"}}
 {"args":["Alimaña"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["alimana"],"name_forms":["alimana"],"original_part":"Alimaña"}}
+{"args":["All The Things You Are"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["all-the-things-you-are"],"name_forms":["all-the-things-you-are"],"original_part":"All The Things You Are"}}
 {"args":["Alma Corazón y vida"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["alma-corazon-y-vida"],"name_forms":["alma-corazon-y-vida"],"original_part":"Alma Corazón y vida"}}
 {"args":["Alone Again Or"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["alone-again-or"],"name_forms":["alone-again-or"],"original_part":"Alone Again Or"}}
 {"args":["Also an artist"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["also-an-artist"],"name_forms":["also-an-artist"],"original_part":"Also an artist"}}
 {"args":["Am"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["am"],"name_forms":["am"],"original_part":"Am"}}
 {"args":["Amaral"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["amaral"],"name_forms":["amaral"],"original_part":"Amaral"}}
+{"args":["Amazing Grace"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["amazing-grace"],"name_forms":["amazing-grace"],"original_part":"Amazing Grace"}}
 {"args":["Amor "],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["amor"],"name_forms":["amor"],"original_part":"Amor"}}
 {"args":["Anabantha"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["anabantha"],"name_forms":["anabantha"],"original_part":"Anabantha"}}
 {"args":["And And And"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["and-and-and"],"name_forms":["and-and-and"],"original_part":"And And And"}}
@@ -219,6 +232,7 @@
 {"args":["Army Men Sarge039s Heroes"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["army-men-sarge039s-heroes"],"name_forms":["army-men-sarge039s-heroes"],"original_part":"Army Men Sarge039s Heroes"}}
 {"args":["Artista Número "],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["artista-numero"],"name_forms":["artista-numero"],"original_part":"Artista Número"}}
 {"args":["Artists that merely hold the syllable \"ban\" (artist rows and a song row of each), and a Chinese\n    song LaCuerda might hold."],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["artists-that-merely-hold-the-syllable-ban-artist-rows-a-song-row-of-each-a-chinese-song-lacuerda-might-hold","artists-that-merely-hold-the-syllable-ban-a-chinese-song-lacuerda-might-hold"],"name_forms":["artists-that-merely-hold-the-syllable-ban-artist-rows-a-song-row-of-each-a-chinese-song-lacuerda-might-hold"],"original_part":"Artists that merely hold the syllable \"ban\" (artist rows and a song row of each), and a Chinese\n    song LaCuerda might hold."}}
+{"args":["Autumn Leaves"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["autumn-leaves"],"name_forms":["autumn-leaves"],"original_part":"Autumn Leaves"}}
 {"args":["B"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["b"],"name_forms":["b"],"original_part":"B"}}
 {"args":["BEGIN"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["begin"],"name_forms":["begin"],"original_part":"BEGIN"}}
 {"args":["BTS"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["bts"],"name_forms":["bts"],"original_part":"BTS"}}
@@ -226,6 +240,7 @@
 {"args":["Baby Dui Bu Qi"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["baby-dui-bu-qi"],"name_forms":["baby-dui-bu-qi"],"original_part":"Baby Dui Bu Qi"}}
 {"args":["Baby 对不起"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["baby-对不起","baby-dui-bu-qi"],"name_forms":["baby-对不起","baby-dui-bu-qi"],"original_part":"Baby 对不起"}}
 {"args":["Baby 对不起 Baby Dui Bu Qi"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["baby-对不起-baby-dui-bu-qi","baby-dui-bu-qi-baby-dui-bu-qi","baby-对不起","baby-dui-bu-qi"],"name_forms":["baby-对不起-baby-dui-bu-qi","baby-dui-bu-qi-baby-dui-bu-qi","baby-对不起","baby-dui-bu-qi"],"original_part":"Baby 对不起"}}
+{"args":["Ballad"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["ballad"],"name_forms":["ballad"],"original_part":"Ballad"}}
 {"args":["Ban Ma Ban Ma"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["ban-ma-ban-ma"],"name_forms":["ban-ma-ban-ma"],"original_part":"Ban Ma Ban Ma"}}
 {"args":["Banda"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["banda"],"name_forms":["banda"],"original_part":"Banda"}}
 {"args":["Banda MS"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["banda-ms"],"name_forms":["banda-ms"],"original_part":"Banda MS"}}
@@ -244,6 +259,8 @@
 {"args":["Billy Joel Uptown girl"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["billy-joel-uptown-girl"],"name_forms":["billy-joel-uptown-girl"],"original_part":"Billy Joel Uptown girl"}}
 {"args":["Björk"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["bjork"],"name_forms":["bjork"],"original_part":"Björk"}}
 {"args":["Blood Sweat & Tears"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["blood-sweat-tears"],"name_forms":["blood-sweat-tears"],"original_part":"Blood Sweat & Tears"}}
+{"args":["Blue Bossa Kenny Dorham"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["blue-bossa-kenny-dorham"],"name_forms":["blue-bossa-kenny-dorham"],"original_part":"Blue Bossa Kenny Dorham"}}
+{"args":["Blue In Green Miles Davis"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["blue-in-green-miles-davis"],"name_forms":["blue-in-green-miles-davis"],"original_part":"Blue In Green Miles Davis"}}
 {"args":["Blues"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["blues"],"name_forms":["blues"],"original_part":"Blues"}}
 {"args":["Bodyslam"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["bodyslam"],"name_forms":["bodyslam"],"original_part":"Bodyslam"}}
 {"args":["Bohemia Suburbana"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["bohemia-suburbana"],"name_forms":["bohemia-suburbana"],"original_part":"Bohemia Suburbana"}}
@@ -272,6 +289,7 @@
 {"args":["Como Camarón - Estopa"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["como-camaron-estopa"],"name_forms":["como-camaron-estopa"],"original_part":"Como Camarón - Estopa"}}
 {"args":["Como Camarón Estopa"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["como-camaron-estopa"],"name_forms":["como-camaron-estopa"],"original_part":"Como Camarón Estopa"}}
 {"args":["Como El Agua"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["como-el-agua"],"name_forms":["como-el-agua"],"original_part":"Como El Agua"}}
+{"args":["Concert by the Sea"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["concert-by-the-sea"],"name_forms":["concert-by-the-sea"],"original_part":"Concert by the Sea"}}
 {"args":["Corazón Serrano"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["corazon-serrano"],"name_forms":["corazon-serrano"],"original_part":"Corazón Serrano"}}
 {"args":["Corazón de Tiza"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["corazon-de-tiza"],"name_forms":["corazon-de-tiza"],"original_part":"Corazón de Tiza"}}
 {"args":["Corcovado"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["corcovado"],"name_forms":["corcovado"],"original_part":"Corcovado"}}
@@ -361,8 +379,11 @@
 {"args":["Gaviota"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["gaviota"],"name_forms":["gaviota"],"original_part":"Gaviota"}}
 {"args":["Gbm"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["gbm"],"name_forms":["gbm"],"original_part":"Gbm"}}
 {"args":["Get Lucky (feat. Pharrell Williams)"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["get-lucky-feat-pharrell-williams","get-lucky"],"name_forms":["get-lucky-feat-pharrell-williams","get-lucky"],"original_part":"Get Lucky"}}
+{"args":["Girl From Ipanema Antiono Carlos Jobim"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["girl-from-ipanema-antiono-carlos-jobim"],"name_forms":["girl-from-ipanema-antiono-carlos-jobim"],"original_part":"Girl From Ipanema Antiono Carlos Jobim"}}
 {"args":["Green"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["green"],"name_forms":["green"],"original_part":"Green"}}
 {"args":["Groove Merchant"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["groove-merchant"],"name_forms":["groove-merchant"],"original_part":"Groove Merchant"}}
+{"args":["Groove Merchant Jerome Richardson"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["groove-merchant-jerome-richardson"],"name_forms":["groove-merchant-jerome-richardson"],"original_part":"Groove Merchant Jerome Richardson"}}
+{"args":["Groove Merchant Thad Jones"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["groove-merchant-thad-jones"],"name_forms":["groove-merchant-thad-jones"],"original_part":"Groove Merchant Thad Jones"}}
 {"args":["Growing Up"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["growing-up"],"name_forms":["growing-up"],"original_part":"Growing Up"}}
 {"args":["Grupo "],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["grupo"],"name_forms":["grupo"],"original_part":"Grupo"}}
 {"args":["Guitar"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["guitar"],"name_forms":["guitar"],"original_part":"Guitar"}}
@@ -383,6 +404,7 @@
 {"args":["Hysteria"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["hysteria"],"name_forms":["hysteria"],"original_part":"Hysteria"}}
 {"args":["Hysteria - Live"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["hysteria-live"],"name_forms":["hysteria-live"],"original_part":"Hysteria - Live"}}
 {"args":["I"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["i"],"name_forms":["i"],"original_part":"I"}}
+{"args":["I Got Rhythm George Gershwin"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["i-got-rhythm-george-gershwin"],"name_forms":["i-got-rhythm-george-gershwin"],"original_part":"I Got Rhythm George Gershwin"}}
 {"args":["I IV V"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["i-iv-v"],"name_forms":["i-iv-v"],"original_part":"I IV V"}}
 {"args":["I Love You"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["i-love-you"],"name_forms":["i-love-you"],"original_part":"I Love You"}}
 {"args":["I'll Be Yours"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["ill-be-yours"],"name_forms":["ill-be-yours"],"original_part":"I'll Be Yours"}}
@@ -410,12 +432,17 @@
 {"args":["I–V–vi–IV"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["i-v-vi-iv"],"name_forms":["i-v-vi-iv"],"original_part":"I–V–vi–IV"}}
 {"args":["Jarabe de Palo"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["jarabe-de-palo"],"name_forms":["jarabe-de-palo"],"original_part":"Jarabe de Palo"}}
 {"args":["Jay Chou (周杰倫) - 晴天 Qing Tian Sunny Day (ver 1).gp5"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["jay-chou-周杰倫晴天-qing-tian-sunny-day-ver-1-gp5","jay-chou-zhou-jie-lun-qing-tian-qing-tian-sunny-day-ver-1-gp5","jay-chou-周杰伦晴天-qing-tian-sunny-day-ver-1-gp5"],"name_forms":["jay-chou-周杰倫晴天-qing-tian-sunny-day-ver-1-gp5","jay-chou-zhou-jie-lun-qing-tian-qing-tian-sunny-day-ver-1-gp5","jay-chou-周杰伦晴天-qing-tian-sunny-day-ver-1-gp5"],"original_part":"Jay Chou (周杰倫) - 晴天 Qing Tian Sunny Day (ver 1).gp5"}}
+{"args":["Jazz 1460 Standards"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["jazz-1460-standards"],"name_forms":["jazz-1460-standards"],"original_part":"Jazz 1460 Standards"}}
+{"args":["Jazz 1460 Standards Individual Songs"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["jazz-1460-standards-individual-songs"],"name_forms":["jazz-1460-standards-individual-songs"],"original_part":"Jazz 1460 Standards Individual Songs"}}
+{"args":["Jerome Kern"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["jerome-kern"],"name_forms":["jerome-kern"],"original_part":"Jerome Kern"}}
+{"args":["Jerome Richardson"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["jerome-richardson"],"name_forms":["jerome-richardson"],"original_part":"Jerome Richardson"}}
 {"args":["Joaquín"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["joaquin"],"name_forms":["joaquin"],"original_part":"Joaquín"}}
 {"args":["Joaquín Sabina"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["joaquin-sabina"],"name_forms":["joaquin-sabina"],"original_part":"Joaquín Sabina"}}
 {"args":["Joaquín Sabina 19 días y 500 noches"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["joaquin-sabina-19-dias-y-500-noches"],"name_forms":["joaquin-sabina-19-dias-y-500-noches"],"original_part":"Joaquín Sabina 19 días y 500 noches"}}
 {"args":["Jobim Antônio-Carlos"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["jobim-antonio-carlos"],"name_forms":["jobim-antonio-carlos"],"original_part":"Jobim Antônio-Carlos"}}
 {"args":["Joey Yung"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["joey-yung"],"name_forms":["joey-yung"],"original_part":"Joey Yung"}}
 {"args":["Joey Yung (容祖儿) & Eason Chan (陈奕迅)"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["joey-yung-容祖儿-eason-chan-陈奕迅","joey-yung-rong-zu-er-eason-chan-chen-yi-xun"],"name_forms":["joey-yung-容祖儿-eason-chan-陈奕迅","joey-yung-rong-zu-er-eason-chan-chen-yi-xun"],"original_part":"Joey Yung (容祖儿) & Eason Chan (陈奕迅)"}}
+{"args":["Joseph Kosma"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["joseph-kosma"],"name_forms":["joseph-kosma"],"original_part":"Joseph Kosma"}}
 {"args":["Jóga"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["joga"],"name_forms":["joga"],"original_part":"Jóga"}}
 {"args":["KEYS_PER_PATTERN"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["keys-per-pattern"],"name_forms":["keys-per-pattern"],"original_part":"KEYS_PER_PATTERN"}}
 {"args":["Kenshi Yonezu (米津玄師) - Lemon (ver 1).gp5"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["kenshi-yonezu-米津玄師-lemon-ver-1-gp5","kenshi-yonezu-mi-jin-xuan-shi-lemon-ver-1-gp5","kenshi-yonezu-米津玄师-lemon-ver-1-gp5","kenshi-yonezu","米津玄師","米津玄师","mi-jin-xuan-shi","lemon","gp5"],"name_forms":["kenshi-yonezu-米津玄師-lemon-ver-1-gp5","kenshi-yonezu-mi-jin-xuan-shi-lemon-ver-1-gp5","kenshi-yonezu-米津玄师-lemon-ver-1-gp5","kenshi-yonezu","米津玄師","米津玄师","mi-jin-xuan-shi","lemon","gp5"],"original_part":"米津玄師"}}
@@ -487,6 +514,8 @@
 {"args":["Me Gustas Tú"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["me-gustas-tu"],"name_forms":["me-gustas-tu"],"original_part":"Me Gustas Tú"}}
 {"args":["Me Gustas Tú (Con Letra)"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["me-gustas-tu-con-letra","me-gustas-tu"],"name_forms":["me-gustas-tu-con-letra"],"original_part":"Me Gustas Tú (Con Letra)"}}
 {"args":["Me Gustas Tú Con Letra"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["me-gustas-tu-con-letra"],"name_forms":["me-gustas-tu-con-letra"],"original_part":"Me Gustas Tú Con Letra"}}
+{"args":["Mean What You Say"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["mean-what-you-say"],"name_forms":["mean-what-you-say"],"original_part":"Mean What You Say"}}
+{"args":["Mean What You Say By Thad Jones"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["mean-what-you-say-by-thad-jones"],"name_forms":["mean-what-you-say-by-thad-jones"],"original_part":"Mean What You Say By Thad Jones"}}
 {"args":["Metallica"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["metallica"],"name_forms":["metallica"],"original_part":"Metallica"}}
 {"args":["Minor Song"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["minor-song"],"name_forms":["minor-song"],"original_part":"Minor Song"}}
 {"args":["Misc Mashups"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["misc-mashups"],"name_forms":["misc-mashups"],"original_part":"Misc Mashups"}}
@@ -494,6 +523,10 @@
 {"args":["Misc Soundtrack"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["misc-soundtrack"],"name_forms":["misc-soundtrack"],"original_part":"Misc Soundtrack"}}
 {"args":["Misc."],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["misc"],"name_forms":["misc"],"original_part":"Misc."}}
 {"args":["Misty"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["misty"],"name_forms":["misty"],"original_part":"Misty"}}
+{"args":["Misty Blue Bobby Montgomery"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["misty-blue-bobby-montgomery"],"name_forms":["misty-blue-bobby-montgomery"],"original_part":"Misty Blue Bobby Montgomery"}}
+{"args":["Misty Morning"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["misty-morning"],"name_forms":["misty-morning"],"original_part":"Misty Morning"}}
+{"args":["Misty Roses"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["misty-roses"],"name_forms":["misty-roses"],"original_part":"Misty Roses"}}
+{"args":["Misty Roses Tim Hardin"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["misty-roses-tim-hardin"],"name_forms":["misty-roses-tim-hardin"],"original_part":"Misty Roses Tim Hardin"}}
 {"args":["Mix Tape"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["mix-tape"],"name_forms":["mix-tape"],"original_part":"Mix Tape"}}
 {"args":["Muse"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["muse"],"name_forms":["muse"],"original_part":"Muse"}}
 {"args":["Muse - Hysteria"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["muse-hysteria"],"name_forms":["muse-hysteria"],"original_part":"Muse - Hysteria"}}
@@ -516,6 +549,7 @@
 {"args":["Not sure which Ultimate Guitar song"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["not-sure-which-ultimate-guitar-song"],"name_forms":["not-sure-which-ultimate-guitar-song"],"original_part":"Not sure which Ultimate Guitar song"}}
 {"args":["Nothing"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["nothing"],"name_forms":["nothing"],"original_part":"Nothing"}}
 {"args":["Nothing in the offline Ultimate Guitar index matches well."],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["nothing-in-the-offline-ultimate-guitar-index-matches-well"],"name_forms":["nothing-in-the-offline-ultimate-guitar-index-matches-well"],"original_part":"Nothing in the offline Ultimate Guitar index matches well."}}
+{"args":["Nothing yet"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["nothing-yet"],"name_forms":["nothing-yet"],"original_part":"Nothing yet"}}
 {"args":["Nothing yet: LaCuerda's index is empty"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["nothing-yet-lacuerdas-index-is-empty"],"name_forms":["nothing-yet-lacuerdas-index-is-empty"],"original_part":"Nothing yet: LaCuerda's index is empty"}}
 {"args":["Nothing yet: gametabs.net's index is empty"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["nothing-yet-gametabs-nets-index-is-empty"],"name_forms":["nothing-yet-gametabs-nets-index-is-empty"],"original_part":"Nothing yet: gametabs.net's index is empty"}}
 {"args":["Nothing yet: iReal Pro's forum's index is empty"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["nothing-yet-ireal-pros-forums-index-is-empty"],"name_forms":["nothing-yet-ireal-pros-forums-index-is-empty"],"original_part":"Nothing yet: iReal Pro's forum's index is empty"}}
@@ -634,6 +668,8 @@
 {"args":["Simon & Garfunkel"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["simon-garfunkel"],"name_forms":["simon-garfunkel"],"original_part":"Simon & Garfunkel"}}
 {"args":["Simon and Garfunkel"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["simon-garfunkel"],"name_forms":["simon-garfunkel"],"original_part":"Simon and Garfunkel"}}
 {"args":["Sin Documentos"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["sin-documentos"],"name_forms":["sin-documentos"],"original_part":"Sin Documentos"}}
+{"args":["So What Hoo Hah Gerry Mulligan"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["so-what-hoo-hah-gerry-mulligan"],"name_forms":["so-what-hoo-hah-gerry-mulligan"],"original_part":"So What Hoo Hah Gerry Mulligan"}}
+{"args":["So What Miles Davis"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["so-what-miles-davis"],"name_forms":["so-what-miles-davis"],"original_part":"So What Miles Davis"}}
 {"args":["Soda Stereo"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["soda-stereo"],"name_forms":["soda-stereo"],"original_part":"Soda Stereo"}}
 {"args":["Soda Stereo - De Música Ligera"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["soda-stereo-de-musica-ligera"],"name_forms":["soda-stereo-de-musica-ligera"],"original_part":"Soda Stereo - De Música Ligera"}}
 {"args":["Soda Stereo - De Música Ligera (Video Oficial)"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["soda-stereo-de-musica-ligera-video-oficial","soda-stereo-de-musica-ligera"],"name_forms":["soda-stereo-de-musica-ligera-video-oficial"],"original_part":"Soda Stereo - De Música Ligera (Video Oficial)"}}
@@ -709,10 +745,13 @@
 {"args":["Tears in Heaven"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["tears-in-heaven"],"name_forms":["tears-in-heaven"],"original_part":"Tears in Heaven"}}
 {"args":["Tears in Heaven - Acoustic; Live at MTV Unplugged, Bray Film Studios, Windsor, England, UK, 1/16/1992; 2013 Remaster"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["tears-in-heaven-acoustic-live-at-mtv-unplugged-bray-film-studios-windsor-england-uk-1-16-1992-2013-remaster"],"name_forms":["tears-in-heaven-acoustic-live-at-mtv-unplugged-bray-film-studios-windsor-england-uk-1-16-1992-2013-remaster"],"original_part":"Tears in Heaven - Acoustic; Live at MTV Unplugged, Bray Film Studios, Windsor, England, UK, 1/16/1992; 2013 Remaster"}}
 {"args":["Thad Jones"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["thad-jones"],"name_forms":["thad-jones"],"original_part":"Thad Jones"}}
+{"args":["Thad Jones Big Band Charts"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["thad-jones-big-band-charts"],"name_forms":["thad-jones-big-band-charts"],"original_part":"Thad Jones Big Band Charts"}}
 {"args":["Thank You"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["thank-you"],"name_forms":["thank-you"],"original_part":"Thank You"}}
 {"args":["The Beatles"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["beatles"],"name_forms":["beatles"],"original_part":"The Beatles"}}
 {"args":["The Creep"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["creep"],"name_forms":["creep"],"original_part":"The Creep"}}
 {"args":["The Girl From Ipanema"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["girl-from-ipanema"],"name_forms":["girl-from-ipanema"],"original_part":"The Girl From Ipanema"}}
+{"args":["The Girl From Ipanema Garota De Ipanema Jobim De Moraes Gimbel"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["girl-from-ipanema-garota-de-ipanema-jobim-de-moraes-gimbel"],"name_forms":["girl-from-ipanema-garota-de-ipanema-jobim-de-moraes-gimbel"],"original_part":"The Girl From Ipanema Garota De Ipanema Jobim De Moraes Gimbel"}}
+{"args":["The Girl from Ipanema"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["girl-from-ipanema"],"name_forms":["girl-from-ipanema"],"original_part":"The Girl from Ipanema"}}
 {"args":["The Jackson 5"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["jackson-5"],"name_forms":["jackson-5"],"original_part":"The Jackson 5"}}
 {"args":["The Jackson Five"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["jackson-five"],"name_forms":["jackson-five"],"original_part":"The Jackson Five"}}
 {"args":["The Meaning of You"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["meaning-of-you"],"name_forms":["meaning-of-you"],"original_part":"The Meaning of You"}}
@@ -726,6 +765,9 @@
 {"args":["The part of Ultimate Guitar's offline index read so far has no song of theirs"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["part-of-ultimate-guitars-offline-index-read-so-far-has-no-song-of-theirs"],"name_forms":["part-of-ultimate-guitars-offline-index-read-so-far-has-no-song-of-theirs"],"original_part":"The part of Ultimate Guitar's offline index read so far has no song of theirs"}}
 {"args":["Third Band"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["third-band"],"name_forms":["third-band"],"original_part":"Third Band"}}
 {"args":["Three songs whose last render read their progressions: the pop progression in C and in A minor, and a\n    blues; and Creep, whose sheet was never read."],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["three-songs-whose-last-render-read-their-progressions-the-pop-progression-in-c-in-a-minor-a-blues-creep-whose-sheet-was-never-read"],"name_forms":["three-songs-whose-last-render-read-their-progressions-the-pop-progression-in-c-in-a-minor-a-blues-creep-whose-sheet-was-never-read"],"original_part":"Three songs whose last render read their progressions: the pop progression in C and in A minor, and a\n    blues; and Creep, whose sheet was never read."}}
+{"args":["Tim Hardin"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["tim-hardin"],"name_forms":["tim-hardin"],"original_part":"Tim Hardin"}}
+{"args":["Tip Toe"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["tip-toe"],"name_forms":["tip-toe"],"original_part":"Tip Toe"}}
+{"args":["Tip Toe Thad Jones"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["tip-toe-thad-jones"],"name_forms":["tip-toe-thad-jones"],"original_part":"Tip Toe Thad Jones"}}
 {"args":["Traditional"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["traditional"],"name_forms":["traditional"],"original_part":"Traditional"}}
 {"args":["Tregua"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["tregua"],"name_forms":["tregua"],"original_part":"Tregua"}}
 {"args":["Tu Calorro"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["tu-calorro"],"name_forms":["tu-calorro"],"original_part":"Tu Calorro"}}
@@ -737,6 +779,7 @@
 {"args":["Uchiage Hanabi"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["uchiage-hanabi"],"name_forms":["uchiage-hanabi"],"original_part":"Uchiage Hanabi"}}
 {"args":["Ultimate Guitar"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["ultimate-guitar"],"name_forms":["ultimate-guitar"],"original_part":"Ultimate Guitar"}}
 {"args":["Ultimate Guitar through a transport: known pages by URL, UG's 404 page for the rest."],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["ultimate-guitar-through-a-transport-known-pages-by-url-ugs-404-page-for-the-rest"],"name_forms":["ultimate-guitar-through-a-transport-known-pages-by-url-ugs-404-page-for-the-rest"],"original_part":"Ultimate Guitar through a transport: known pages by URL, UG's 404 page for the rest."}}
+{"args":["Ultimate Guitar's index naming the artists of ``keys``, a song each: artists caracole knows by name."],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["ultimate-guitars-index-naming-the-artists-of-keys-a-song-each-artists-caracole-knows-by-name"],"name_forms":["ultimate-guitars-index-naming-the-artists-of-keys-a-song-each-artists-caracole-knows-by-name"],"original_part":"Ultimate Guitar's index naming the artists of ``keys``, a song each: artists caracole knows by name."}}
 {"args":["Un Corazón"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["un-corazon"],"name_forms":["un-corazon"],"original_part":"Un Corazón"}}
 {"args":["Una más"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["una-mas"],"name_forms":["una-mas"],"original_part":"Una más"}}
 {"args":["Unknown Artist"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["unknown-artist"],"name_forms":["unknown-artist"],"original_part":"Unknown Artist"}}
@@ -782,6 +825,7 @@
 {"args":["[LaCuerda]"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["lacuerda"],"name_forms":["lacuerda"],"original_part":"[LaCuerda]"}}
 {"args":["[LaCuerda] Estopa - "],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["lacuerda-estopa","estopa"],"name_forms":["lacuerda-estopa"],"original_part":"[LaCuerda] Estopa -"}}
 {"args":["[LaCuerda] Estopa - Como Camarón"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["lacuerda-estopa-como-camaron","estopa-como-camaron"],"name_forms":["lacuerda-estopa-como-camaron"],"original_part":"[LaCuerda] Estopa - Como Camarón"}}
+{"args":["[T34F   |Bb   Z "],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["t34f-bb-z"],"name_forms":["t34f-bb-z"],"original_part":"[T34F   |Bb   Z"}}
 {"args":["[T44D9   |Ab7   Z "],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["t44d9-ab7-z"],"name_forms":["t44d9-ab7-z"],"original_part":"[T44D9   |Ab7   Z"}}
 {"args":["[artist_url]"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["artist-url"],"name_forms":["artist-url"],"original_part":"[artist_url]"}}
 {"args":["[artist_url]\n"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["artist-url"],"name_forms":["artist-url"],"original_part":"[artist_url]"}}
@@ -807,6 +851,9 @@
 {"args":["`caracole sync`"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["caracole-sync"],"name_forms":["caracole-sync"],"original_part":"`caracole sync`"}}
 {"args":["a"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["a"],"name_forms":["a"],"original_part":"a"}}
 {"args":["a minor"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["a-minor"],"name_forms":["a-minor"],"original_part":"a minor"}}
+{"args":["a night in tunisia"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["a-night-in-tunisia"],"name_forms":["a-night-in-tunisia"],"original_part":"a night in tunisia"}}
+{"args":["a search asked a site"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["a-search-asked-a-site"],"name_forms":["a-search-asked-a-site"],"original_part":"a search asked a site"}}
+{"args":["a thread not read yet"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["a-thread-not-read-yet"],"name_forms":["a-thread-not-read-yet"],"original_part":"a thread not read yet"}}
 {"args":["a-great-big-world"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["a-great-big-world"],"name_forms":["a-great-big-world"],"original_part":"a-great-big-world"}}
 {"args":["a-horse-with-no-name"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["a-horse-with-no-name"],"name_forms":["a-horse-with-no-name"],"original_part":"a-horse-with-no-name"}}
 {"args":["a-song"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["a-song"],"name_forms":["a-song"],"original_part":"a-song"}}
@@ -832,6 +879,7 @@
 {"args":["alejandro sanz"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["alejandro-sanz"],"name_forms":["alejandro-sanz"],"original_part":"alejandro sanz"}}
 {"args":["algo"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["algo"],"name_forms":["algo"],"original_part":"algo"}}
 {"args":["alimana"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["alimana"],"name_forms":["alimana"],"original_part":"alimana"}}
+{"args":["all the things you are"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["all-the-things-you-are"],"name_forms":["all-the-things-you-are"],"original_part":"all the things you are"}}
 {"args":["alma_corazon_y_vida"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["alma-corazon-y-vida"],"name_forms":["alma-corazon-y-vida"],"original_part":"alma_corazon_y_vida"}}
 {"args":["already"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["already"],"name_forms":["already"],"original_part":"already"}}
 {"args":["am"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["am"],"name_forms":["am"],"original_part":"am"}}
@@ -882,6 +930,7 @@
 {"args":["artist_url"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["artist-url"],"name_forms":["artist-url"],"original_part":"artist_url"}}
 {"args":["artista numero 77"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["artista-numero-77"],"name_forms":["artista-numero-77"],"original_part":"artista numero 77"}}
 {"args":["artista-numero-"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["artista-numero"],"name_forms":["artista-numero"],"original_part":"artista-numero-"}}
+{"args":["autumn leaves"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["autumn-leaves"],"name_forms":["autumn-leaves"],"original_part":"autumn leaves"}}
 {"args":["b"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["b"],"name_forms":["b"],"original_part":"b"}}
 {"args":["ba"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["ba"],"name_forms":["ba"],"original_part":"ba"}}
 {"args":["baby"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["baby"],"name_forms":["baby"],"original_part":"baby"}}
@@ -920,6 +969,7 @@
 {"args":["bily joel"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["bily-joel"],"name_forms":["bily-joel"],"original_part":"bily joel"}}
 {"args":["birdo"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["birdo"],"name_forms":["birdo"],"original_part":"birdo"}}
 {"args":["bjork army of me"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["bjork-army-of-me"],"name_forms":["bjork-army-of-me"],"original_part":"bjork army of me"}}
+{"args":["blue"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["blue"],"name_forms":["blue"],"original_part":"blue"}}
 {"args":["bob-dylan"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["bob-dylan"],"name_forms":["bob-dylan"],"original_part":"bob-dylan"}}
 {"args":["bohemia_suburbana"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["bohemia-suburbana"],"name_forms":["bohemia-suburbana"],"original_part":"bohemia_suburbana"}}
 {"args":["bohemia_urbana"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["bohemia-urbana"],"name_forms":["bohemia-urbana"],"original_part":"bohemia_urbana"}}
@@ -1094,11 +1144,18 @@
 {"args":["garner"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["garner"],"name_forms":["garner"],"original_part":"garner"}}
 {"args":["gaviota"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["gaviota"],"name_forms":["gaviota"],"original_part":"gaviota"}}
 {"args":["george-jones"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["george-jones"],"name_forms":["george-jones"],"original_part":"george-jones"}}
+{"args":["get"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["get"],"name_forms":["get"],"original_part":"get"}}
 {"args":["getaddrinfo"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["getaddrinfo"],"name_forms":["getaddrinfo"],"original_part":"getaddrinfo"}}
 {"args":["gimme-three-steps"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["gimme-three-steps"],"name_forms":["gimme-three-steps"],"original_part":"gimme-three-steps"}}
 {"args":["gipsy-kings"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["gipsy-kings"],"name_forms":["gipsy-kings"],"original_part":"gipsy-kings"}}
 {"args":["glove-box"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["glove-box"],"name_forms":["glove-box"],"original_part":"glove-box"}}
+{"args":["gro"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["gro"],"name_forms":["gro"],"original_part":"gro"}}
 {"args":["groove merchant"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["groove-merchant"],"name_forms":["groove-merchant"],"original_part":"groove merchant"}}
+{"args":["groove-merchant"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["groove-merchant"],"name_forms":["groove-merchant"],"original_part":"groove-merchant"}}
+{"args":["groove-merchant-jerome-richardson"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["groove-merchant-jerome-richardson"],"name_forms":["groove-merchant-jerome-richardson"],"original_part":"groove-merchant-jerome-richardson"}}
+{"args":["groove-merchant-jerome-richardson.14294/"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["groove-merchant-jerome-richardson-14294"],"name_forms":["groove-merchant-jerome-richardson-14294"],"original_part":"groove-merchant-jerome-richardson.14294/"}}
+{"args":["groove-merchant-thad-jones"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["groove-merchant-thad-jones"],"name_forms":["groove-merchant-thad-jones"],"original_part":"groove-merchant-thad-jones"}}
+{"args":["groove-merchant-thad-jones.9518/"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["groove-merchant-thad-jones-9518"],"name_forms":["groove-merchant-thad-jones-9518"],"original_part":"groove-merchant-thad-jones.9518/"}}
 {"args":["grupo_"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["grupo"],"name_forms":["grupo"],"original_part":"grupo_"}}
 {"args":["gtptabs"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["gtptabs"],"name_forms":["gtptabs"],"original_part":"gtptabs"}}
 {"args":["gtptabs.com's song pages, as its sitemaps list them (gtptabs.parse_page_url makes the rows)."],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["gtptabs-coms-song-pages-as-its-sitemaps-list-them-gtptabs-parse-page-url-makes-the-rows","gtptabs-coms-song-pages-as-its-sitemaps-list-them"],"name_forms":["gtptabs-coms-song-pages-as-its-sitemaps-list-them-gtptabs-parse-page-url-makes-the-rows"],"original_part":"gtptabs.com's song pages, as its sitemaps list them (gtptabs.parse_page_url makes the rows)."}}
@@ -1106,6 +1163,7 @@
 {"args":["guns-n-roses"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["guns-n-roses"],"name_forms":["guns-n-roses"],"original_part":"guns-n-roses"}}
 {"args":["hamilton my shot"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["hamilton-my-shot"],"name_forms":["hamilton-my-shot"],"original_part":"hamilton my shot"}}
 {"args":["hamilton-my-shot"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["hamilton-my-shot"],"name_forms":["hamilton-my-shot"],"original_part":"hamilton-my-shot"}}
+{"args":["hardin"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["hardin"],"name_forms":["hardin"],"original_part":"hardin"}}
 {"args":["harptabs"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["harptabs"],"name_forms":["harptabs"],"original_part":"harptabs"}}
 {"args":["harptabs.com's artist pages are still being read: 2 of 3 artists so far; caracole harptabs --index reads the rest."],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["harptabs-coms-artist-pages-are-still-being-read-2-of-3-artists-so-far-caracole-harptabs-index-reads-the-rest"],"name_forms":["harptabs-coms-artist-pages-are-still-being-read-2-of-3-artists-so-far-caracole-harptabs-index-reads-the-rest"],"original_part":"harptabs.com's artist pages are still being read: 2 of 3 artists so far; caracole harptabs --index reads the rest."}}
 {"args":["harptabs.com's index: the captured sitemap's rows, Billy Joel's captured artist page (7 of his 98 tabs), and a\n    page of the Beatles' listing two of their 40; Ritchie Valens's page not read."],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["harptabs-coms-index-the-captured-sitemaps-rows-billy-joels-captured-artist-page-7-of-his-98-tabs-a-page-of-the-beatles-listing-two-of-their-40-ritchie-valenss-page-not-read","harptabs-coms-index-the-captured-sitemaps-rows-billy-joels-captured-artist-page-a-page-of-the-beatles-listing-two-of-their-40-ritchie-valenss-page-not-read"],"name_forms":["harptabs-coms-index-the-captured-sitemaps-rows-billy-joels-captured-artist-page-7-of-his-98-tabs-a-page-of-the-beatles-listing-two-of-their-40-ritchie-valenss-page-not-read"],"original_part":"harptabs.com's index: the captured sitemap's rows, Billy Joel's captured artist page (7 of his 98 tabs), and a\n    page of the Beatles' listing two of their 40; Ritchie Valens's page not read."}}
@@ -1138,6 +1196,9 @@
 {"args":["https://acordes.lacuerda.net/"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["https-acordes-lacuerda-net"],"name_forms":["https-acordes-lacuerda-net"],"original_part":"https://acordes.lacuerda.net/"}}
 {"args":["https://acordes.lacuerda.net/epic/not_sorry.shtml"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["https-acordes-lacuerda-net-epic-not-sorry-shtml"],"name_forms":["https-acordes-lacuerda-net-epic-not-sorry-shtml"],"original_part":"https://acordes.lacuerda.net/epic/not_sorry.shtml"}}
 {"args":["https://acordes.lacuerda.net/radiohead/lucky.shtml"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["https-acordes-lacuerda-net-radiohead-lucky-shtml"],"name_forms":["https-acordes-lacuerda-net-radiohead-lucky-shtml"],"original_part":"https://acordes.lacuerda.net/radiohead/lucky.shtml"}}
+{"args":["https://forums.irealpro.com/threads/"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["https-forums-irealpro-com-threads"],"name_forms":["https-forums-irealpro-com-threads"],"original_part":"https://forums.irealpro.com/threads/"}}
+{"args":["https://forums.irealpro.com/threads/groove-merchant-jerome-richardson.14294/"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["https-forums-irealpro-com-threads-groove-merchant-jerome-richardson-14294"],"name_forms":["https-forums-irealpro-com-threads-groove-merchant-jerome-richardson-14294"],"original_part":"https://forums.irealpro.com/threads/groove-merchant-jerome-richardson.14294/"}}
+{"args":["https://forums.irealpro.com/threads/groove-merchant-thad-jones.9518/"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["https-forums-irealpro-com-threads-groove-merchant-thad-jones-9518"],"name_forms":["https-forums-irealpro-com-threads-groove-merchant-thad-jones-9518"],"original_part":"https://forums.irealpro.com/threads/groove-merchant-thad-jones.9518/"}}
 {"args":["https://forums.irealpro.com/threads/groove-merchant-thad-jones.9518/#post-38106"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["https-forums-irealpro-com-threads-groove-merchant-thad-jones-9518-post-38106"],"name_forms":["https-forums-irealpro-com-threads-groove-merchant-thad-jones-9518-post-38106"],"original_part":"https://forums.irealpro.com/threads/groove-merchant-thad-jones.9518/#post-38106"}}
 {"args":["https://forums.irealpro.com/threads/jazz-1460-standards.12753/#post-31492"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["https-forums-irealpro-com-threads-jazz-1460-standards-12753-post-31492"],"name_forms":["https-forums-irealpro-com-threads-jazz-1460-standards-12753-post-31492"],"original_part":"https://forums.irealpro.com/threads/jazz-1460-standards.12753/#post-31492"}}
 {"args":["https://gametabs.net/tabs/final-fantasy-vii/aeris-theme"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["https-gametabs-net-tabs-final-fantasy-vii-aeris-theme"],"name_forms":["https-gametabs-net-tabs-final-fantasy-vii-aeris-theme"],"original_part":"https://gametabs.net/tabs/final-fantasy-vii/aeris-theme"}}
@@ -1168,7 +1229,10 @@
 {"args":["https://www.ultimate-guitar.com/artist/mana_98"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["https-www-ultimate-guitar-com-artist-mana-98"],"name_forms":["https-www-ultimate-guitar-com-artist-mana-98"],"original_part":"https://www.ultimate-guitar.com/artist/mana_98"}}
 {"args":["hyperfanes"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["hyperfanes"],"name_forms":["hyperfanes"],"original_part":"hyperfanes"}}
 {"args":["hyperfanes Somos vikingos veganos"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["hyperfanes-somos-vikingos-veganos"],"name_forms":["hyperfanes-somos-vikingos-veganos"],"original_part":"hyperfanes Somos vikingos veganos"}}
+{"args":["i"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["i"],"name_forms":["i"],"original_part":"i"}}
+{"args":["i got rhythm"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["i-got-rhythm"],"name_forms":["i-got-rhythm"],"original_part":"i got rhythm"}}
 {"args":["i-love-you-baby"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["i-love-you-baby"],"name_forms":["i-love-you-baby"],"original_part":"i-love-you-baby"}}
+{"args":["iReal Pro's forum's index as its sitemaps leave it, no thread read: the captured sitemap's threads, and\n    ``paths`` besides."],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["ireal-pros-forums-index-as-its-sitemaps-leave-it-no-thread-read-the-captured-sitemaps-threads-paths-besides"],"name_forms":["ireal-pros-forums-index-as-its-sitemaps-leave-it-no-thread-read-the-captured-sitemaps-threads-paths-besides"],"original_part":"iReal Pro's forum's index as its sitemaps leave it, no thread read: the captured sitemap's threads, and\n    ``paths`` besides."}}
 {"args":["iReal Pro's forum's index: the captured sitemap's threads, and the Jazz 1460 Standards and Thad Jones's Groove\n    Merchant thread read."],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["ireal-pros-forums-index-the-captured-sitemaps-threads-the-jazz-1460-standards-thad-joness-groove-merchant-thread-read"],"name_forms":["ireal-pros-forums-index-the-captured-sitemaps-threads-the-jazz-1460-standards-thad-joness-groove-merchant-thread-read"],"original_part":"iReal Pro's forum's index: the captured sitemap's threads, and the Jazz 1460 Standards and Thad Jones's Groove\n    Merchant thread read."}}
 {"args":["iReal Pro's forum's playlists are still being read: 1 of 1 so far"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["ireal-pros-forums-playlists-are-still-being-read-1-of-1-so-far"],"name_forms":["ireal-pros-forums-playlists-are-still-being-read-1-of-1-so-far"],"original_part":"iReal Pro's forum's playlists are still being read: 1 of 1 so far"}}
 {"args":["i_main"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["i-main"],"name_forms":["i-main"],"original_part":"i_main"}}
@@ -1180,6 +1244,7 @@
 {"args":["imaginarios/"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["imaginarios"],"name_forms":["imaginarios"],"original_part":"imaginarios/"}}
 {"args":["in april"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["in-april"],"name_forms":["in-april"],"original_part":"in april"}}
 {"args":["in april wonderwall"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["in-april-wonderwall"],"name_forms":["in-april-wonderwall"],"original_part":"in april wonderwall"}}
+{"args":["in tunisia"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["in-tunisia"],"name_forms":["in-tunisia"],"original_part":"in tunisia"}}
 {"args":["in-april"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["in-april"],"name_forms":["in-april"],"original_part":"in-april"}}
 {"args":["index0.html"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["index0-html"],"name_forms":["index0-html"],"original_part":"index0.html"}}
 {"args":["instrumental"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["instrumental"],"name_forms":["instrumental"],"original_part":"instrumental"}}
@@ -1189,6 +1254,10 @@
 {"args":["is not a key"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["is-not-a-key"],"name_forms":["is-not-a-key"],"original_part":"is not a key"}}
 {"args":["jarabe-de-palo/la-flaca"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["jarabe-de-palo-la-flaca"],"name_forms":["jarabe-de-palo-la-flaca"],"original_part":"jarabe-de-palo/la-flaca"}}
 {"args":["javier-calamaro"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["javier-calamaro"],"name_forms":["javier-calamaro"],"original_part":"javier-calamaro"}}
+{"args":["jazz 1460 standards"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["jazz-1460-standards"],"name_forms":["jazz-1460-standards"],"original_part":"jazz 1460 standards"}}
+{"args":["jazz-1460-standards-individual-songs"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["jazz-1460-standards-individual-songs"],"name_forms":["jazz-1460-standards-individual-songs"],"original_part":"jazz-1460-standards-individual-songs"}}
+{"args":["jerome kern"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["jerome-kern"],"name_forms":["jerome-kern"],"original_part":"jerome kern"}}
+{"args":["jerome-richardson"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["jerome-richardson"],"name_forms":["jerome-richardson"],"original_part":"jerome-richardson"}}
 {"args":["joaquin sab"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["joaquin-sab"],"name_forms":["joaquin-sab"],"original_part":"joaquin sab"}}
 {"args":["joaquin sabina"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["joaquin-sabina"],"name_forms":["joaquin-sabina"],"original_part":"joaquin sabina"}}
 {"args":["joaquin sabina 19 dias"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["joaquin-sabina-19-dias"],"name_forms":["joaquin-sabina-19-dias"],"original_part":"joaquin sabina 19 dias"}}
@@ -1202,6 +1271,7 @@
 {"args":["joel"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["joel"],"name_forms":["joel"],"original_part":"joel"}}
 {"args":["jones"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["jones"],"name_forms":["jones"],"original_part":"jones"}}
 {"args":["jose-antonio-mendez"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["jose-antonio-mendez"],"name_forms":["jose-antonio-mendez"],"original_part":"jose-antonio-mendez"}}
+{"args":["joseph-kosma"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["joseph-kosma"],"name_forms":["joseph-kosma"],"original_part":"joseph-kosma"}}
 {"args":["julien-bense"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["julien-bense"],"name_forms":["julien-bense"],"original_part":"julien-bense"}}
 {"args":["karma-police"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["karma-police"],"name_forms":["karma-police"],"original_part":"karma-police"}}
 {"args":["kashmir"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["kashmir"],"name_forms":["kashmir"],"original_part":"kashmir"}}
@@ -1270,6 +1340,8 @@
 {"args":["mar"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["mar"],"name_forms":["mar"],"original_part":"mar"}}
 {"args":["matchbox-twenty"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["matchbox-twenty"],"name_forms":["matchbox-twenty"],"original_part":"matchbox-twenty"}}
 {"args":["me"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["me"],"name_forms":["me"],"original_part":"me"}}
+{"args":["merchant"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["merchant"],"name_forms":["merchant"],"original_part":"merchant"}}
+{"args":["merchant thad"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["merchant-thad"],"name_forms":["merchant-thad"],"original_part":"merchant thad"}}
 {"args":["metalica"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["metalica"],"name_forms":["metalica"],"original_part":"metalica"}}
 {"args":["metalika"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["metalika"],"name_forms":["metalika"],"original_part":"metalika"}}
 {"args":["metallica"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["metallica"],"name_forms":["metallica"],"original_part":"metallica"}}
@@ -1287,6 +1359,7 @@
 {"args":["misc-soundtrack"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["misc-soundtrack"],"name_forms":["misc-soundtrack"],"original_part":"misc-soundtrack"}}
 {"args":["misc-traditional"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["misc-traditional"],"name_forms":["misc-traditional"],"original_part":"misc-traditional"}}
 {"args":["misty"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["misty"],"name_forms":["misty"],"original_part":"misty"}}
+{"args":["montgomery"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["montgomery"],"name_forms":["montgomery"],"original_part":"montgomery"}}
 {"args":["more"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["more"],"name_forms":["more"],"original_part":"more"}}
 {"args":["musescore"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["musescore"],"name_forms":["musescore"],"original_part":"musescore"}}
 {"args":["music"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["music"],"name_forms":["music"],"original_part":"music"}}
@@ -1419,6 +1492,8 @@
 {"args":["sitemap_2.xml"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["sitemap-2-xml"],"name_forms":["sitemap-2-xml"],"original_part":"sitemap_2.xml"}}
 {"args":["skynyrd"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["skynyrd"],"name_forms":["skynyrd"],"original_part":"skynyrd"}}
 {"args":["skynyrd lynyrd"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["skynyrd-lynyrd"],"name_forms":["skynyrd-lynyrd"],"original_part":"skynyrd lynyrd"}}
+{"args":["so"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["so"],"name_forms":["so"],"original_part":"so"}}
+{"args":["so what"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["so-what"],"name_forms":["so-what"],"original_part":"so what"}}
 {"args":["soda"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["soda"],"name_forms":["soda"],"original_part":"soda"}}
 {"args":["soda stereo"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["soda-stereo"],"name_forms":["soda-stereo"],"original_part":"soda stereo"}}
 {"args":["soda-stereo"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["soda-stereo"],"name_forms":["soda-stereo"],"original_part":"soda-stereo"}}
@@ -1490,7 +1565,9 @@
 {"args":["te-para-tres"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["te-para-tres"],"name_forms":["te-para-tres"],"original_part":"te-para-tres"}}
 {"args":["text"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["text"],"name_forms":["text"],"original_part":"text"}}
 {"args":["text,cleaned"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["text-cleaned"],"name_forms":["text-cleaned"],"original_part":"text,cleaned"}}
+{"args":["thad jones"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["thad-jones"],"name_forms":["thad-jones"],"original_part":"thad jones"}}
 {"args":["thad jones groove merchant"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["thad-jones-groove-merchant"],"name_forms":["thad-jones-groove-merchant"],"original_part":"thad jones groove merchant"}}
+{"args":["thad-jones"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["thad-jones"],"name_forms":["thad-jones"],"original_part":"thad-jones"}}
 {"args":["the"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["the"],"name_forms":["the"],"original_part":"the"}}
 {"args":["the beatles"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["beatles"],"name_forms":["beatles"],"original_part":"the beatles"}}
 {"args":["the creep"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["creep"],"name_forms":["creep"],"original_part":"the creep"}}
@@ -1510,9 +1587,26 @@
 {"args":["the-who"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["who"],"name_forms":["who"],"original_part":"the-who"}}
 {"args":["thread_groove-merchant-thad-jones.9518.html"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["thread-groove-merchant-thad-jones-9518-html"],"name_forms":["thread-groove-merchant-thad-jones-9518-html"],"original_part":"thread_groove-merchant-thad-jones.9518.html"}}
 {"args":["thread_jazz-1460-standards.12753.html"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["thread-jazz-1460-standards-12753-html"],"name_forms":["thread-jazz-1460-standards-12753-html"],"original_part":"thread_jazz-1460-standards.12753.html"}}
+{"args":["threads/1-4-rest-added-to-all-exported-files.20227/"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["threads-1-4-rest-added-to-all-exported-files-20227"],"name_forms":["threads-1-4-rest-added-to-all-exported-files-20227"],"original_part":"threads/1-4-rest-added-to-all-exported-files.20227/"}}
+{"args":["threads/amazing-grace-traditional.30002/"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["threads-amazing-grace-traditional-30002"],"name_forms":["threads-amazing-grace-traditional-30002"],"original_part":"threads/amazing-grace-traditional.30002/"}}
+{"args":["threads/autumn-leaves-take-"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["threads-autumn-leaves-take"],"name_forms":["threads-autumn-leaves-take"],"original_part":"threads/autumn-leaves-take-"}}
+{"args":["threads/blue-in-green-miles-davis.30000/"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["threads-blue-in-green-miles-davis-30000"],"name_forms":["threads-blue-in-green-miles-davis-30000"],"original_part":"threads/blue-in-green-miles-davis.30000/"}}
 {"args":["threads/corcovado-antonio-carlos-jobim.501/"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["threads-corcovado-antonio-carlos-jobim-501"],"name_forms":["threads-corcovado-antonio-carlos-jobim-501"],"original_part":"threads/corcovado-antonio-carlos-jobim.501/"}}
+{"args":["threads/groove-merchant-jerome-richardson.14294/"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["threads-groove-merchant-jerome-richardson-14294"],"name_forms":["threads-groove-merchant-jerome-richardson-14294"],"original_part":"threads/groove-merchant-jerome-richardson.14294/"}}
+{"args":["threads/groove-merchant-thad-jones.9518/"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["threads-groove-merchant-thad-jones-9518"],"name_forms":["threads-groove-merchant-thad-jones-9518"],"original_part":"threads/groove-merchant-thad-jones.9518/"}}
+{"args":["threads/i-got-rhythm-george-gershwin.30005/"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["threads-i-got-rhythm-george-gershwin-30005"],"name_forms":["threads-i-got-rhythm-george-gershwin-30005"],"original_part":"threads/i-got-rhythm-george-gershwin.30005/"}}
 {"args":["threads/jazz-1460-standards.12753/"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["threads-jazz-1460-standards-12753"],"name_forms":["threads-jazz-1460-standards-12753"],"original_part":"threads/jazz-1460-standards.12753/"}}
+{"args":["threads/mean-what-you-say-by-thad-jones.30007/"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["threads-mean-what-you-say-by-thad-jones-30007"],"name_forms":["threads-mean-what-you-say-by-thad-jones-30007"],"original_part":"threads/mean-what-you-say-by-thad-jones.30007/"}}
+{"args":["threads/misty-morning-traditional.30001/"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["threads-misty-morning-traditional-30001"],"name_forms":["threads-misty-morning-traditional-30001"],"original_part":"threads/misty-morning-traditional.30001/"}}
+{"args":["threads/take-the-a-train-billy-strayhorn.30006/"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["threads-take-the-a-train-billy-strayhorn-30006"],"name_forms":["threads-take-the-a-train-billy-strayhorn-30006"],"original_part":"threads/take-the-a-train-billy-strayhorn.30006/"}}
+{"args":["threads/thad-jones-big-band-charts.30004/"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["threads-thad-jones-big-band-charts-30004"],"name_forms":["threads-thad-jones-big-band-charts-30004"],"original_part":"threads/thad-jones-big-band-charts.30004/"}}
+{"args":["threads/three-and-one-thad-jones."],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["threads-three-one-thad-jones"],"name_forms":["threads-three-one-thad-jones"],"original_part":"threads/three-and-one-thad-jones."}}
+{"args":["threads/three-and-one-thad-jones.30010/"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["threads-three-one-thad-jones-30010"],"name_forms":["threads-three-one-thad-jones-30010"],"original_part":"threads/three-and-one-thad-jones.30010/"}}
+{"args":["threads/three-one-thad-jones.30013/"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["threads-three-one-thad-jones-30013"],"name_forms":["threads-three-one-thad-jones-30013"],"original_part":"threads/three-one-thad-jones.30013/"}}
+{"args":["threads/tip-toe-thad-jones.30003/"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["threads-tip-toe-thad-jones-30003"],"name_forms":["threads-tip-toe-thad-jones-30003"],"original_part":"threads/tip-toe-thad-jones.30003/"}}
+{"args":["three and one"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["three-one"],"name_forms":["three-one"],"original_part":"three and one"}}
 {"args":["thrill"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["thrill"],"name_forms":["thrill"],"original_part":"thrill"}}
+{"args":["tim-hardin"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["tim-hardin"],"name_forms":["tim-hardin"],"original_part":"tim-hardin"}}
 {"args":["tinto"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["tinto"],"name_forms":["tinto"],"original_part":"tinto"}}
 {"args":["title"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["title"],"name_forms":["title"],"original_part":"title"}}
 {"args":["title,channel,expected"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["title-channel-expected"],"name_forms":["title-channel-expected"],"original_part":"title,channel,expected"}}

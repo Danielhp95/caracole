@@ -87,9 +87,13 @@ mark among ``looked``'s says how far its game pages are read). A song's Get it o
 and keeps that tab
 (``gametabs``: ``caracole get --gametabs``, recorded under ``[gametabs]``). Of iReal Pro's forum it reads the charts of
 the thread pages caracole read (``search.search_ireal``: ``ireal``, a chart's title by its composer, the composer its
-artist, ``page`` its thread; none while it is turned off; its mark among ``looked``'s says how far its playlists are
-read); a song's Get it on its row keeps that chart as the song's sheet (``ireal``: ``caracole get --ireal``, recorded
-under ``[ireal]``).
+artist, ``page`` its thread), then the threads its sitemaps name that caracole never read whose name holds the query
+(``search.search_ireal_threads``, given those charts, none of which a thread stands for again: after them in
+``ireal``, ``read`` false, eight at most, possible matches named from their slug, the by-line an artist caracole knows
+the slug ends with or the query that ends it; a title alone, none known, has no keys and no song of yours); none
+while it is turned off; its mark among ``looked``'s says how far its playlists are read. A song's Get it on a chart's
+row keeps that chart as the song's sheet, and on a thread's reads the thread and keeps its chart (``ireal``, the
+thread's address: ``caracole get --ireal``, recorded under ``[ireal]``).
 ``looked`` says the same of every site, Ultimate Guitar's index too, as the
 pages' marks show it (``_looked``: a state, a short label, a line of detail), and
 ``unseen`` (``search.bare_id_unseen``) what ``hint`` says of an artist UG's
@@ -177,7 +181,16 @@ from caracole.web.pages import Refused
 from caracole.web.status import details_href
 
 if TYPE_CHECKING:
-    from caracole.search import DirectoryHit, IndexFound, IndexHit, LibraryHit, SiteArtist, SiteHit, Suggestion
+    from caracole.search import (
+        DirectoryHit,
+        IndexFound,
+        IndexHit,
+        LibraryHit,
+        SiteArtist,
+        SiteHit,
+        Suggestion,
+        ThreadHit,
+    )
     from caracole.songs import Song
 
 QUERY_LIMIT = 200  # characters of a search
@@ -434,9 +447,10 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
             "youtube": youtube,
             "suggest": [_suggestion_json(app, conn, s, songs) for s in close],
             "skipped": skipped, "partial": partial, "looked": _looked(app, conn, skipped, partial),
-            # iReal Pro's forum's charts, the composer as the artist, once its index holds a thread read (never before:
-            # no member, as its mark among looked)
-            **({"ireal": _gtptabs_rows(app, conn, kept.ireal, songs, page=True)} if _ireal_read(conn) else {})}
+            # iReal Pro's forum's charts, the composer as the artist, then its threads known by their names alone
+            # (``read`` false), once its index holds anything (never before: no member, as its mark among looked)
+            **({"ireal": [*_gtptabs_rows(app, conn, kept.ireal, songs, page=True),
+                          *_ireal_thread_rows(app, conn, kept.ireal_threads, songs)]} if _ireal_read(conn) else {})}
 
 
 def is_link(q: str) -> bool:
@@ -470,6 +484,7 @@ class IndexAnswers:
     gametabs: list[SiteHit]
     directory: list[DirectoryHit] = field(default_factory=list)
     ireal: list[SiteHit] = field(default_factory=list)
+    ireal_threads: list[ThreadHit] = field(default_factory=list)
     close: list[Suggestion] | None = None
 
 
@@ -482,6 +497,7 @@ def _index_answers(app: WebApp, conn: sqlite3.Connection, q: str, left_out: set[
         search_gtptabs,
         search_harptabs,
         search_ireal,
+        search_ireal_threads,
         search_lacuerda,
         search_musescore,
     )
@@ -501,8 +517,9 @@ def _index_answers(app: WebApp, conn: sqlite3.Connection, q: str, left_out: set[
     lc_artists, lacuerda = search_lacuerda(conn, q, songs=SITE_HITS) if "lacuerda" not in left_out else ([], [])
     gametabs = search_gametabs(conn, q, SITE_HITS) if app.cfg.provider("gametabs").enabled else []
     ireal = search_ireal(conn, q, SITE_HITS) if app.cfg.provider("ireal").enabled else []
+    threads = search_ireal_threads(conn, q, charts=ireal) if app.cfg.provider("ireal").enabled else []
     kept = IndexAnswers(index_found, index, artists, hint, unseen, gtptabs, musescore, harp_artists, harptabs,
-                        lc_artists, lacuerda, gametabs, directory, ireal=ireal)
+                        lc_artists, lacuerda, gametabs, directory, ireal=ireal, ireal_threads=threads)
     app._found[q] = (time.monotonic(), kept)
     while len(app._found) > CACHE_SIZE:
         app._found.popitem(last=False)
@@ -634,6 +651,20 @@ def _gtptabs_rows(app: WebApp, conn: sqlite3.Connection, hits: Sequence[SiteHit]
             for h, mine in zip(hits, _owners(app, conn, hits, songs))]
 
 
+def _ireal_thread_rows(app: WebApp, conn: sqlite3.Connection, hits: Sequence[ThreadHit],
+                       songs: list[Song]) -> list[dict[str, Any]]:
+    """iReal Pro's forum's threads known by their names alone (``search.search_ireal_threads``) as the pages draw them,
+    each ``read`` false: one named with a by-line as gtptabs.com's pages are, its song of your library with it, its
+    address the thread's, the iReal pick Fetch posts; one named by a title alone its title, address and path alone, a
+    possible match apart, as harptabs.com's tabs by a title alone are."""
+    named = [h for h in hits if h.artist]
+    owners = iter(_owners(app, conn, named, songs))
+    return [{"source": h.source, "read": False, "artist": h.artist, "title": h.title, "url": h.url, "score": h.score,
+             "via": h.via, "page": h.page, **_keys(h.artist, h.title), **next(owners)} if h.artist else
+            {"source": h.source, "read": False, "title": h.title, "url": h.url, "score": h.score, "page": h.page}
+            for h in hits]
+
+
 def _lacuerda_rows(app: WebApp, conn: sqlite3.Connection, hits: Sequence[SiteHit],
                    songs: list[Song]) -> list[dict[str, Any]]:
     """LaCuerda's songs as the page draws them: its page, the page of the sheet Get it keeps (``sheet``, None
@@ -728,7 +759,8 @@ def _group_key(artist: str) -> str:
     return _keys(artist, "")["artist_key"]
 
 
-def _owners(app: WebApp, conn: sqlite3.Connection, hits: Sequence[SiteHit], songs: list[Song]) -> list[dict[str, Any]]:
+def _owners(app: WebApp, conn: sqlite3.Connection, hits: Sequence[SiteHit | ThreadHit],
+            songs: list[Song]) -> list[dict[str, Any]]:
     """Each site hit's song of your library (``_Mine``, by its names), as ``song`` and ``library`` (its names,
     its status and its card's links), and whether its artist is your song's (``same_artist``); None for one your library
     hasn't."""
@@ -869,14 +901,17 @@ def _gametabs_looked(app: WebApp, conn: sqlite3.Connection) -> dict[str, str]:
 
 
 def _ireal_read(conn: sqlite3.Connection) -> bool:
-    """Whether iReal Pro's forum's index holds a thread page read: till then the answer has no ``ireal`` and no mark
-    of it among ``looked``, a fallback for the songs the sheet sites lack being no site a search is said to miss."""
-    return conn.execute("SELECT 1 FROM ireal_threads LIMIT 1").fetchone() is not None
+    """Whether iReal Pro's forum's index holds anything a search reads, a thread page read or the threads its sitemaps
+    list: till then the answer has no ``ireal`` and no mark of it among ``looked``, a fallback for the songs the sheet
+    sites lack being no site a search is said to miss."""
+    return (conn.execute("SELECT 1 FROM ireal_threads LIMIT 1").fetchone() is not None
+            or conn.execute("SELECT 1 FROM ireal_index LIMIT 1").fetchone() is not None)
 
 
 def _ireal_looked(app: WebApp, conn: sqlite3.Connection) -> dict[str, str]:
-    """iReal Pro's forum's mark among ``looked``, once its index holds a thread read (``_ireal_read``): turned off, in
-    part while some of its playlists aren't read (ireal_index.py, "1 of 7 playlists"), else whole."""
+    """iReal Pro's forum's mark among ``looked``, once its index holds anything (``_ireal_read``): turned off, in part
+    while some of its playlists aren't read (ireal_index.py, "1 of 7 playlists"), else whole: its playlists, the threads
+    read and the names of the threads its sitemaps list."""
     from caracole.ireal_index import index_state
 
     name = "iReal Pro"
@@ -890,7 +925,8 @@ def _ireal_looked(app: WebApp, conn: sqlite3.Connection) -> dict[str, str]:
                 "detail": f"iReal Pro's forum's playlists are being read: {state.playlists_read:,} of "
                           f"{state.playlists:,} so far; caracole ireal --index reads the rest."}
     return {**mark, "state": "done", "label": f"{name} ✓",
-            "detail": "iReal Pro's forum: our copy of its playlists and the threads read, searched whole."}
+            "detail": "iReal Pro's forum: our copy of its playlists, the threads read and the names of the threads its "
+                      "sitemaps list, searched whole."}
 
 
 def _rows(app: WebApp, conn: sqlite3.Connection, mine: Sequence[LibraryHit], index: list[dict[str, Any]],

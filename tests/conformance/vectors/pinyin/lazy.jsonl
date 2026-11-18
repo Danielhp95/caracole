@@ -8397,8 +8397,14 @@
 {"args":["  [harptabs] billy joel - Vienna! · 1 tab, key Bb\n     "],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"ignore"},"out":[]}
 {"args":["  [harptabs] billy joel - piano man · 4 tabs, key C\n     "],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"default"},"out":["  [harptabs] billy joel - piano man · 4 tabs, key C\n     "]}
 {"args":["  [harptabs] billy joel - piano man · 4 tabs, key C\n     "],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"ignore"},"out":[]}
+{"args":["  [iReal] Groove Merchant Thad Jones · a thread not read yet, its name alone\n     "],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"default"},"out":["  [iReal] Groove Merchant Thad Jones · a thread not read yet, its name alone\n     "]}
+{"args":["  [iReal] Groove Merchant Thad Jones · a thread not read yet, its name alone\n     "],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"ignore"},"out":[]}
+{"args":["  [iReal] Jerome Richardson - Groove Merchant · a thread not read yet, named from its name\n     "],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"default"},"out":["  [iReal] Jerome Richardson - Groove Merchant · a thread not read yet, named from its name\n     "]}
+{"args":["  [iReal] Jerome Richardson - Groove Merchant · a thread not read yet, named from its name\n     "],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"ignore"},"out":[]}
 {"args":["  [iReal] Thad Jones - Groove Merchant · 2 charts\n     "],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"default"},"out":["  [iReal] Thad Jones - Groove Merchant · 2 charts\n     "]}
 {"args":["  [iReal] Thad Jones - Groove Merchant · 2 charts\n     "],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"ignore"},"out":[]}
+{"args":["  [iReal] Thad Jones - Groove Merchant · a thread not read yet, named from its name\n     "],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"default"},"out":["  [iReal] Thad Jones - Groove Merchant · a thread not read yet, named from its name\n     "]}
+{"args":["  [iReal] Thad Jones - Groove Merchant · a thread not read yet, named from its name\n     "],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"ignore"},"out":[]}
 {"args":["  billy joel · harptabs.com · 4 of their songs in the index (7 of their 98 tabs), the most viewed first:"],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"default"},"out":["  billy joel · harptabs.com · 4 of their songs in the index (7 of their 98 tabs), the most viewed first:"]}
 {"args":["  billy joel · harptabs.com · 4 of their songs in the index (7 of their 98 tabs), the most viewed first:"],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"ignore"},"out":[]}
 {"args":["  billy joel · harptabs.com · 98 tabs, 7 in the index. The most viewed:\n"],"fn":"pypinyin.lazy_pinyin","kw":{"errors":"default"},"out":["  billy joel · harptabs.com · 98 tabs, 7 in the index. The most viewed:\n"]}
