@@ -2601,7 +2601,7 @@ a score but its PDF, downloads under its song's name (`Eagles - Hotel
 California (2).ptb`).
 
 A tile's chevron opens its drawer right under it, touching it, the tile and its
-drawer one box edged in the accent (a stack's sheets gone while it shows);
+drawer one box, the tile with no outline and the drawer edged in the page's border colour (a stack's sheets gone while it shows);
 another tile's chevron, the chevron again, its ✕ or Escape (in the drawer, or on
 the chevron) closes it, and opening one asks nothing of anyone. First its
 downloads, wrapping under the ✕: the sheet's PDF, Text and ChordPro, then its PDF

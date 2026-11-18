@@ -1074,6 +1074,35 @@ def test_lacuerda_use_this_one_waits_for_a_pin_to_go(conn, cfg, versions_served,
     assert posts.next(0) == ("/versions/clear", {"csrf": "tok", "song": str(song.id), "identity": song.key})
 
 
+# --- a calm card ------------------------------------------------------------------------------------------------
+
+CALM = """
+const line = openCard("Hotel California"), card = cardOf(line);  // the card wherever it is (1d.1): the pane at 1280
+drawerOf("Hotel California", "sheet");
+// card.css's own: base.css's .btn and code are lane 1f's (and the radii it gives them).
+const parts = [...line.querySelectorAll(".line-plays, .line-plays *"),
+  ...card.querySelectorAll(".tiles, .tiles *, .card-sites *, .progressions *, .find-elsewhere *, .foot, .foot *")]
+  .filter((n) => !n.closest(".btn, code"));
+const probe = (v) => { const s = document.createElement("span"); s.style.color = v; document.body.appendChild(s);
+  return getComputedStyle(s).color; };
+const tile = card.querySelector(".tile.open"), drawer = card.querySelector(".drawer");
+note("calm", { tile: [getComputedStyle(tile).borderTopStyle, getComputedStyle(tile).borderBottomStyle],
+  drawer: getComputedStyle(drawer).borderLeftColor, border: probe("var(--border)"), accent: probe("var(--accent)"),
+  weights: [".tile-name", ".drawer-what"].map((s) => getComputedStyle(card.querySelector(s)).fontWeight),
+  radii: [...new Set(parts.map((n) => getComputedStyle(n).borderTopLeftRadius))].sort() });
+"""
+
+
+@pytest.mark.parametrize("touch", [False, True], ids=["pane", "phone"])
+def test_the_card_is_calm(conn, cfg, tmp_path, touch):
+    hotel(conn, cfg)
+    calm = attribute_of(run(conn, cfg, tmp_path, CALM, controls=SERVED, touch=touch,
+                            size="390,844" if touch else "1280,900"), "data-calm")
+    assert calm["tile"] == ["none", "none"] and calm["weights"] == ["600", "600"], calm  # no outline, titles at 600
+    assert calm["drawer"] == calm["border"] != calm["accent"], calm  # the drawer's edge is --border's
+    assert set(calm["radii"]) <= {"0px", "4px", "8px", "12px", "999px"}, calm
+
+
 # --- the ⋯ menu and Back --------------------------------------------------------------------------------------
 
 MORE = "document.querySelector('{card} details.foot-more')"  # the card wherever it is: cards.open_card's selector
