@@ -231,6 +231,11 @@ section.artist.folded .line-by, section.flat .line-by { flex: 0 1 auto; color: v
     minmax(0, 1fr) 6.5rem auto 2.75rem var(--line-more); grid-template-areas: "name by plays . status act key more"; }
   section.artist.folded .line:not(.hit):not(.miss) > .line-title,
   section.flat .line:not(.hit):not(.miss) > .line-title { display: contents; }
+  /* The name's own width is the button's least (capped, so a longer one is cut inside it): the track never shares it. */
+  section.artist.folded .line:not(.hit):not(.miss) > .line-meta > .line-by,
+  section.flat .line:not(.hit):not(.miss) > .line-meta > .line-by { min-width: min-content; }
+  section.artist.folded .line:not(.hit):not(.miss) > .line-meta > .line-by .artist-name,
+  section.flat .line:not(.hit):not(.miss) > .line-meta > .line-by .artist-name { display: block; max-width: 16rem; }
   section.artist.folded .line:not(.hit):not(.miss) > .line-title > h3,
   section.flat .line:not(.hit):not(.miss) > .line-title > h3 { grid-area: name; }
   section.artist.folded .line:not(.hit):not(.miss) > .line-title > .line-plays,

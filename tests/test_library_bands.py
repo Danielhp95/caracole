@@ -208,10 +208,11 @@ ORDER = """(() => {
     return { title: h3.textContent, h3: [box(h3).right, box(h3).top, box(h3).bottom], by: by && [box(by).left, box(by).right],
       plays: l(plays), key: l(key), more: l(more), pick: l(p), line: [box0.top, box0.bottom, box0.right],
       band: !by || !by.checkVisibility(), cut: h3.scrollWidth > h3.clientWidth,
-      byCut: name && name.scrollWidth > name.clientWidth + 1, rem: parseFloat(getComputedStyle(document.documentElement).fontSize) };
+      byCut: name && name.scrollWidth > name.clientWidth + 1, rem: parseFloat(getComputedStyle(document.documentElement).fontSize),
+      page: [document.documentElement.scrollWidth, innerWidth] };
   }); })()"""
 LONG_TITLE = ("A very long song title that goes on and on and on past any reasonable width of a laptop's column. " * 3).strip()
-RED_HOT = "Red Hot Chili Peppers"
+RED_HOT = "Red Hot Chili Peppers Live"
 
 
 def keyed(conn, cfg, artist, title):
@@ -240,6 +241,7 @@ def _on_one_row(lines, selecting=False):
         assert line["line"][0] <= line["h3"][1] and line["h3"][2] <= line["line"][1], line  # one row
         assert (line["key"] if selecting else line["more"]) <= line["line"][2] + 0.5, line  # nothing pushed off it
         assert right - left <= 16 * line["rem"] + 1, line  # the artist's cap
+        assert line["page"][0] <= line["page"][1], line  # nothing sideways
         if selecting:
             assert line["pick"] is not None and line["pick"] < line["h3"][0], line  # the box first
 
@@ -255,7 +257,7 @@ def _laid(conn, cfg, tmp_path, size, selecting):
 
 
 @in_chromium
-@pytest.mark.parametrize("size", ["1280,800", "1024,900"])
+@pytest.mark.parametrize("size", ["1280,800", "1024,900", "800,900", "720,900"])
 @pytest.mark.parametrize("selecting", [False, True])
 def test_on_a_laptop_a_line_reads_title_artist_tiles_key_chevron(conn, cfg, tmp_path, size, selecting):
     for artist, title in (("Oasis", "Wonderwall"), ("Eagles", "Desperado"), ("Queen", LONG_TITLE),
