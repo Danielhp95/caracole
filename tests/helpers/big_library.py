@@ -29,9 +29,12 @@ gives the same bytes.
 Run from the repository's root, in ``nix develop``::
 
     python -m tests.helpers.big_library measure [--songs N] [--src PATH] [--runs N] [--out FILE]
+    python -m tests.helpers.big_library build DIR [--songs N]
 
-builds in a temporary folder and prints the numbers as JSON, each the median of ``--runs`` (3) loads of the page.
-``--src`` builds the page with another checkout's ``src/`` (the commit before a stage merged, to show what it gained).
+``measure`` builds in a temporary folder and prints the numbers as JSON, each the median of ``--runs`` (3) loads of the
+page. ``--src`` builds the page with another checkout's ``src/`` (the commit before a stage merged, to show what it
+gained). ``build`` builds the library in ``DIR`` (which must not exist yet) and prints its index.html's path, to open it
+as a file.
 """
 
 from __future__ import annotations

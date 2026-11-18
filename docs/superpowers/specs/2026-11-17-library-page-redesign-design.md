@@ -174,7 +174,8 @@ The owner chose 2.
 ### Long lists (lane 1)
 
 - `content-visibility: auto` with `contain-intrinsic-size` computed from each group's line count, on artist groups
-  (or runs of 30–50 folded lines), never on single lines; one inline SVG sprite for the icons (`<use>`).
+  (or runs of 30–50 folded lines), never on single lines; one inline SVG sprite for the icons (`<use>`), tried in 1e
+  and reverted, slower on a phone (Measurements before building).
 - No layout reads across many lines. Measured before and after on a synthetic library of 2,000 songs, on a phone.
 
 ### Songbooks (lane 4): removed
@@ -216,33 +217,46 @@ These change details, not decisions: the share of one-song artists in the owner'
 lookup times (whether 1 s is the right threshold); the keyboard's height in the WebView on the owner's Sony
 XQ-DQ72; frame times on 2,000 songs. Lane 1e measures the last before and after.
 
-**2,000 songs on a phone.** `python -m tests.helpers.big_library measure` (tests/helpers/big_library.py) builds a library
-of 2,000 songs with no request (55 % of the artists with one song, one artist with 150, 5 % Chinese titles, a Guitar Pro
-file on every fifth song and a harmonica tab on every ninth) and loads its index.html in headless Chromium at 390 x 844
-with touch, the CPU 4x slower (`Emulation.setCPUThrottlingRate`); each number is the median of three loads. "Before 1d"
-is the page built from the commit before stage 1d merged (`--src`, f4832539), "before 1e" the page at stage 1d's merge
-(77a547a7); "after 1e" is filled in when the stage is done. Taken on 2026-11-18 on a loaded machine (load average
-4 to 14 over the runs, 12 cores), so a difference of 10 to 20 % between two runs is noise; the sizes (nodes, heap) are
-not. The scroll goes to the end of the list at 800 px a frame; "open" is a chevron in the middle of the list clicked,
-to the next frame; "type" is "a" typed in the search box, to the second frame after its input event.
+**2,000 songs on a phone.** `python -m tests.helpers.big_library measure` (tests/helpers/big_library.py) builds a
+library of 2,000 songs with no request (55 % of the artists with one song, one artist with 150, 5 % Chinese titles, a
+Guitar Pro file on every fifth song and a harmonica tab on every ninth) and loads its index.html in headless Chromium at
+390 x 844 with touch, the CPU 4x slower (`Emulation.setCPUThrottlingRate`); each number is the median of three loads.
+"Before 1d" is the page built from the commit before stage 1d merged (`--src`, f4832539), "before 1e" the page at stage
+1d's merge (77a547a7), "after 1e" the page at stage 1e's merge (rebased on 0708e379). Taken on 2026-11-18 on a loaded
+machine (load average 4 to 14 over the runs, 12 cores), so a difference of 10 to 20 % between two runs is noise; the
+sizes (nodes, heap) are not. The scroll goes to the end of the list at 800 px a frame; "open" is a chevron in the middle
+of the list clicked, to the next frame; "type" is "a" typed in the search box, to the second frame after its input
+event.
 
 | | before 1d | before 1e | after 1e |
 |---|---|---|---|
-| drawn (body loses `drawing`) | 4,062 ms | 2,938 ms | |
-| first contentful paint | 4,980 ms | 4,256 ms | |
-| script time | 2,105 ms | 1,039 ms | |
-| layout time (4 layouts) | 1,098 ms | 1,089 ms | |
-| style recalculation | 1,015 ms | 1,229 ms | |
-| DOM nodes | 294,098 | 84,295 | |
-| JS heap | 18.9 MB | 18.3 MB | |
-| scroll: frames, p50 / p95 / max | 135, 117 / 167 / 267 ms | 135, 100 / 150 / 183 ms | |
-| scroll: frames over 50 ms, long tasks | 130, 130 | 130, 130 | |
-| open a card (chevron to next frame) | 487 ms | 408 ms | |
-| type "a" (input to second frame) | 3,376 ms | 2,647 ms | |
-| owner's phone (Sony XQ-DQ72, Chrome remote DevTools) | not taken | not taken | |
+| drawn (body loses `drawing`) | 4,062 ms | 2,938 ms | 1,529 ms |
+| first contentful paint | 4,980 ms | 4,256 ms | 1,908 ms |
+| script time | 2,105 ms | 1,039 ms | 896 ms |
+| layout time (4 layouts) | 1,098 ms | 1,089 ms | 223 ms (7 layouts) |
+| style recalculation | 1,015 ms | 1,229 ms | 331 ms |
+| DOM nodes | 294,098 | 84,295 | 116,043 (84,207 live: below) |
+| JS heap | 18.9 MB | 18.3 MB | 18.1 MB |
+| scroll: frames, p50 / p95 / max | 135, 117 / 167 / 267 ms | 135, 100 / 150 / 183 ms | 135, 67 / 83 / 100 ms |
+| scroll: frames over 50 ms, long tasks | 130, 130 | 130, 130 | 123, 127 |
+| open a card (chevron to next frame) | 487 ms | 408 ms | 112 ms |
+| type "a" (input to second frame) | 3,376 ms | 2,647 ms | 756 ms |
+| owner's phone (Sony XQ-DQ72, Chrome remote DevTools) | not taken | not taken | not taken |
 
 Frame times are multiples of 16.7 ms (the headless compositor's 60 Hz). What 1d gained is the nodes: a card is built when
 it opens, so 210,000 nodes fewer on the page.
+
+What 1e gained is layout: a group or run off the screen is skipped (`content-visibility: auto`), so the page drawn holds
+11,231 layout objects where it held 65,039. "After 1e" was taken at a load average of 10 falling to 4; measured again
+the same morning interleaved with main's page (`--src`, three loads each, the machine busier: main's page drew in 4.6 s,
+not 2.9), stage 1e took drawn 4,633 to 2,633 ms, first paint 6,932 to 3,336, layout 1,837 to 382, style 2,173 to 583,
+scroll p50 / p95 167 / 250 to 133 / 150 ms, open 898 to 175, type "a" 4,851 to 1,531, script flat (1,564 to 1,599). The
+nodes metric counts nodes the collector hasn't freed yet: both pages hold 84,2xx live nodes and read about 116,000 when
+measured before a collection, as the faster page now is.
+
+In Firefox 160 (the owner's desktop browser, headless, at 1280 and at 500 px, its narrowest window), a scroll of up to
+500 px a frame never shows a group whose content is still skipped; at 800 px a frame, 2 paints of 269 at 500 px, none at
+1280; a scrollbar dragged 3,000 px a frame shows one most frames, gone the next, as in Chromium.
 
 One SVG sprite for the glyphs (a `<symbol>` each, every glyph a `<use>`) was built and measured in 1e.2, 10 interleaved
 rounds against the inline paths, 2,000 songs, 390 x 844, 4x CPU, and reverted: style recalculation +290 ms (+23 %),
