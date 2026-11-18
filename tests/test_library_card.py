@@ -11,6 +11,7 @@ page ran.
 from __future__ import annotations
 
 import json
+import time
 from contextlib import contextmanager
 from urllib.parse import quote
 
@@ -1244,18 +1245,47 @@ def test_the_arrow_pressed_as_the_menu_closes_takes_back_its_steps_and_no_more(c
         assert b.js("location.origin + location.pathname") == base
 
 
-def test_a_link_tapped_while_the_menu_is_open_opens_its_page(conn, cfg, versions_served, tmp_path):
+@pytest.mark.parametrize("cache", [True, False], ids=["bfcache", "reloaded"])
+def test_a_link_tapped_while_the_menu_is_open_opens_its_page_and_back_passes_over_its_entry(conn, cfg, versions_served,
+                                                                                         tmp_path, cache):
     # The Chord sheet's tile tapped with ⋯ open: the press closes the menu and opens the sheet, the menu's step left
-    # where it is, marked closed, which Back from the sheet comes back to.
-    with more_menu(conn, cfg, versions_served, tmp_path) as (b, menu, (_, href)):
+    # where it is, marked closed. Back from the sheet lands on it in a document shown again, with the back-forward
+    # cache or loaded anew (this browser, driven over DevTools, loads it anew: the second case is the one run, the
+    # first by hand), and steps back over it: one Back, the card's page as it was.
+    base, _, _ = versions_served
+    song = hotel(conn, cfg)
+    args = () if cache else ("--disable-back-forward-cache",)
+    with Browser(tmp_path / "chrome", width=390, height=844, mobile=True, args=args) as b:
+        b.open(base)
+        cards.install(b)
+        card = cards.open_card(b, f'article.line[data-id="{song.id}"]')
+        href = b.js("location.href")
+        index = b.js("navigation.currentEntry.index")
+        menu = MORE.format(card=card)
+        b.js(f"{menu}.addEventListener('toggle', () => {{ window.menuToggled = true; }}, {{ once: true }})")
+        b.click(card + " details.foot-more > summary")
+        assert b.wait(f"{menu}.open && window.menuToggled === true")
         card = "#" + b.js(f"{menu}.closest('.song-card').id")
         sheet = b.js(f"document.querySelector('{card} .tile-sheet a.tile-open').href")
-        b.js("window.stay = 1")
+        b.js("window.marker = 1")
         b.click(card + " .tile-sheet a.tile-open")
         assert b.wait(f"location.href === {json.dumps(sheet)} && document.readyState === 'complete'")
         b.js("history.back()")
-        assert b.wait(f"location.href === {json.dumps(href)} && document.readyState === 'complete'")
-        assert b.js("history.state") == {"caracoleMenu": "closed"}
+        assert b.wait(f"location.href === {json.dumps(href)} && document.readyState === 'complete' && "
+                      f"navigation.currentEntry.index === {index} && !{OURS}")
+        time.sleep(0.5)  # and it stays there
+        assert b.js(f"navigation.currentEntry.index === {index} && !{OURS}") is True
+
+
+def test_a_page_shown_again_after_the_back_forward_cache_closes_a_leaving_menu_the_ordinary_way(
+        conn, cfg, versions_served, tmp_path):
+    # A menu open when the page is cached and shown again: Escape takes its entry back as on any other page.
+    with more_menu(conn, cfg, versions_served, tmp_path) as (b, menu, (length, _)):
+        b.js("dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));"
+             "dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))")
+        b.press("Escape")
+        assert b.wait(f"!{menu}.open && history.state === null && history.length === {length + 1}")
+        assert b.js(OURS) is False
 
 
 def test_a_download_chosen_in_the_menu_takes_its_step_back(conn, cfg, versions_served, tmp_path):
@@ -1269,22 +1299,40 @@ def test_a_download_chosen_in_the_menu_takes_its_step_back(conn, cfg, versions_s
         b.click("#" + b.js(f"{menu}.closest('.song-card').id") + " .foot-menu a.info-file")
         assert b.wait(f"!{menu}.open && history.state === null && window.stay === 1")
         assert b.js("location.href") == href
+        deadline = time.time() + 10
+        while time.time() < deadline and not [f for f in saved.iterdir() if not f.name.endswith(".crdownload")]:
+            time.sleep(0.1)
+        assert [f.name for f in saved.iterdir() if not f.name.endswith(".crdownload")], "the file was saved"
 
 
-def test_on_the_file_page_the_menus_info_json_opens(conn, cfg, tmp_path):
-    # A page opened as a file downloads nothing: its info.json opens, and the menu's step is left for it.
+@pytest.mark.parametrize("cache", [True, False], ids=["bfcache", "reloaded"])
+def test_on_the_file_page_the_menus_info_json_opens(conn, cfg, tmp_path, cache):
+    # A page opened as a file downloads nothing: its info.json opens, and the menu's step is left for it, never
+    # taken back (a history.back() issued as the link is followed would cancel it). Back from it: the page cached
+    # comes back with its menu open, its step the menu's; loaded anew it steps over that step.
     put(cfg, hotel(conn, cfg), "info.json")
     path = write_library_page(cfg.library_dir, page(conn, cfg))
-    with Browser(tmp_path / "chrome", width=390, height=844, mobile=True) as b:
+    args = () if cache else ("--disable-back-forward-cache",)
+    with Browser(tmp_path / "chrome", width=390, height=844, mobile=True, args=args) as b:
         b.open(path.as_uri())
         card = cards.open_card(b, "#list article.line")
+        index = b.js("navigation.currentEntry.index")
         menu = MORE.format(card=card)
         b.js(f"{menu}.addEventListener('toggle', () => {{ window.menuToggled = true; }}, {{ once: true }})")
         b.click(card + " details.foot-more > summary")
         assert b.wait(f"{menu}.open && window.menuToggled === true && {OURS}")
         info = b.js(f"document.querySelector('{card} .foot-menu a.info-file').href")
+        b.js("window.marker = 1")
         b.click(card + " .foot-menu a.info-file")
-        assert b.wait(f"location.href === {json.dumps(info)}")
+        assert b.wait(f"location.href === {json.dumps(info)} && document.readyState === 'complete'")
+        time.sleep(0.6)  # a late cancelling step back would have undone it by now
+        assert b.js("location.href") == info and b.js("navigation.currentEntry.index") == index + 2
+        b.js("history.back()")
+        assert b.wait(f"location.href.startsWith({json.dumps(path.as_uri())}) && document.readyState === 'complete'")
+        if b.js("window.marker === 1"):  # the page cached: it comes back as it was, its menu open on its step
+            assert b.js(f"navigation.currentEntry.index === {index + 1} && {OURS}") is True
+        else:
+            assert b.js(f"navigation.currentEntry.index === {index} && !{OURS}") is True
 
 
 def test_forward_passes_over_a_closed_menus_entry_too(conn, cfg, versions_served, tmp_path):

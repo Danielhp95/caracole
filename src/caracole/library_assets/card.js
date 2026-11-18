@@ -14,7 +14,10 @@
 // own keeps it. A press that leaves the page (a link opened in this window, a download but on a page opened as a
 // file) or goes back through the history (search's ←, whose steps count the menu's) is left to do it: the entry
 // stays, marked { caracoleMenu: "closed" }, never taken back then, which would cancel the one or add a step to the
-// other. Back and Forward pass over a closed menu's entry, the way the browser went. A menu opened as another closes
+// other. Back and Forward pass over a closed menu's entry, the way the browser went; so does Back from the page a
+// link opened, which lands on it in a document shown again (``pageshow``, with the back-forward cache or without;
+// Forward onto one from another page spends a step, its direction not being told; a page cached with its menu open
+// comes back with it open). A menu opened as another closes
 // takes that one's entry. A reload with a menu open leaves its entry the page's (one Back spent on it). With a mouse a
 // menu is no step, and a browser that refuses the step opens and closes it all the same.
 const caracoleMenus = (() => {
@@ -55,6 +58,16 @@ const caracoleMenus = (() => {
   // closes. Watched while it is open; a card moved (from its line to the pane) is back in the page by then.
   const gone = typeof MutationObserver === "function"
     ? new MutationObserver(() => { if (shown && !shown.more.isConnected) closed(shown.more); }) : null;
+  // The page shown again, from the back-forward cache or loaded (Back from the page a link opened crosses documents,
+  // where no popstate tells): its leaving is over, and when it lands on a closed menu's entry it steps back over it.
+  // Forward onto such an entry from another page lands on it (one step spent), the direction not being told then.
+  addEventListener("pageshow", (e) => {
+    if (e.persisted) leaving = false;
+    const entry = history.state && history.state[MENU];
+    if (shown || !entry) return;
+    const back = !e.persisted && performance.getEntriesByType("navigation").some((n) => n.type === "back_forward");
+    if (entry === CLOSED || back) history.back();  // a menu's entry the press left, or one the page left open
+  });
   const show = (more, n) => {
     shown = { more, n };
     press = null;
