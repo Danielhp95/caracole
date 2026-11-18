@@ -740,8 +740,8 @@ def _render_song(
 
     The versions kept beside the sheet get their pages first (``_render_versions``), so a sheet
     whose PDF fails costs them nothing. The song's UG chords versions are in the viewer of the
-    one (the human sheet's, else an auto sheet's standing alone) and in each version page, and so is what else it
-    keeps to play from (``_kinds_data``).
+    one (the human sheet's, else an auto sheet's standing alone), in each version page and in each harmonica tab's
+    page, and so is what else it keeps to play from (``_kinds_data``).
     Its harmonica tabs get theirs last (``_render_harmonica``), whatever came of the sheets, with the
     text of the sheet it reads (the human one, else the auto one) when that was read.
     """
@@ -819,7 +819,7 @@ def _render_song(
     finally:  # the tabs' pages, whatever came of the sheet's PDF: with the sheet's text read, if it was
         back = HUMAN_OUTPUTS[2] if human is not None else AUTO_OUTPUTS[2] if auto is not None else None
         done.append(_render_harmonica(conn, cfg, overrides, song, folder, tabs, files, primary[0] if primary else None,
-                                      back))
+                                      back, listed, kinds))
     return done
 
 
@@ -1001,14 +1001,17 @@ def _harmonica_pin(overrides: Overrides, song: Song, tab: HarmonicaFile) -> str 
 
 def _render_harmonica(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, song: Song, folder: Path,
                       tabs: list[HarmonicaFile], files: Mapping[str, KeptFile],
-                      sheet: tuple[str, tuple[str | None, str | None]] | None, back: str | None) -> _Done:
+                      sheet: tuple[str, tuple[str | None, str | None]] | None, back: str | None,
+                      listed: dict[str, Any] | None = None, kinds: Mapping[str, Any] | None = None) -> _Done:
     """Write a page for each harmonica tab the song keeps (harptabs_fetch.py), ``harmonica-N.html`` beside its
     ``harmonica-N.txt`` (viewer/harptab_page.py), from the tab's text and what its version says of it (its page, its
     key, its harp, its difficulty, its views, its rating), read as overrides.toml's ``[harmonica]`` has it, else as
     caracole guesses, with the song's chord sheet ``sheet`` (its ChordPro and its key as
     keys.py found it: the human one, else the auto one), for the harp that plays with the record. ``back`` names the
-    song's sheet viewer, which its ‹ Chord sheet opens. Each page is recorded (``_note_written``) and written only
-    when its bytes change.
+    song's sheet viewer, which its ‹ Chord sheet opens. Its version line names the song's UG chords versions
+    (``listed``, ``_versions_data``, none of them the page's: ``_on_page`` with no tab) and what else it keeps
+    (``kinds``, ``_kinds_data``), as its sheet's viewer does. Each page is recorded (``_note_written``) and written
+    only when its bytes change.
 
     The page of a tab no longer kept, or whose text is no longer in the folder (deleted on a synced device), goes
     while it still holds what caracole wrote (``_forget_written``). A page that can't be made or written (its text
@@ -1037,7 +1040,7 @@ def _render_harmonica(conn: sqlite3.Connection, cfg: Config, overrides: Override
             html = build_harmonica_viewer(
                 text, title=clean_title(song.title), artist=song.artist, tab_file=tab.name, url=version.url,
                 page_key=tab.key, harp=tab.harp, pin=_harmonica_pin(overrides, song, tab), facts=raw, cho=cho, key=key,
-                key_source=key_source, back=back)
+                key_source=key_source, back=back, versions=_on_page(listed, None), kinds=kinds)
         except Exception:  # a tab the page can't read must never cost the song's other pages
             log.warning("no viewer for %s: cannot build %s", song.display, tab.page, exc_info=True)
             ok = False

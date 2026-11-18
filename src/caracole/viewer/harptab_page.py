@@ -2,17 +2,17 @@
 page in the sheet viewer's look, written beside it at render time (render.py) and recorded as the viewers are.
 
 It is sheet.html's kind of page (page.py ``_page``): one self-contained file that loads nothing, its policy allowing
-its four scripts (strum.js, overlay.js, layers.js, then harptab.js) and two stylesheets (viewer.css, harptab.css) by
-their hashes, and served in a sandbox (``page.viewer_csp``). The tab is read by harptab.py: each hole over the syllable it is blown
-on, as a chord sits over its syllable on sheet.html (page.py's ``.s`` and ``.w`` columns: a line wraps between its
-words, never parting a hole from its syllable), a blow in the accent colour, a draw in blue with its "−", a bend's
-″ in purple, holes together in their brackets; rows played alone, words sung to the same tune and the tabber's notes
-as they come. What a row's notation couldn't read is shown in its place as written, muted ("$", "(DV)"); an effect
-is a small label on its hole ("wah"), notes run together a ‿ between them, the tab's own legend a block of its own,
-and a row read with low confidence (``Row.trusted``) its text as written. The header says how the tab was read: the
-symbols it used, as it writes them, and whether its own legend said so or caracole guessed, how surely (harptab.py's
-``Reading``). A tab harptab.py can't read (``Tab.readable``) is its text as written, in the page's style, and its
-page says so; never an error.
+its five scripts (strum.js, overlay.js, layers.js, kinds.js, then harptab.js) and two stylesheets (viewer.css,
+harptab.css) by their hashes, and served in a sandbox (``page.viewer_csp``). The tab is read by harptab.py: each hole
+over the syllable it is blown on, as a chord sits over its syllable on sheet.html (page.py's ``.s`` and ``.w``
+columns: a line wraps between its words, never parting a hole from its syllable), a blow in the accent colour, a draw
+in blue with its "−", a bend's ″ in purple, holes together in their brackets; rows played alone, words sung to the
+same tune and the tabber's notes as they come. What a row's notation couldn't read is shown in its place as written,
+muted ("$", "(DV)"); an effect is a small label on its hole ("wah"), notes run together a ‿ between them, the tab's
+own legend a block of its own, and a row read with low confidence (``Row.trusted``) its text as written. The header
+says how the tab was read: the symbols it used, as it writes them, and whether its own legend said so or caracole
+guessed, how surely (harptab.py's ``Reading``). A tab harptab.py can't read (``Tab.readable``) is its text as written,
+in the page's style, and its page says so; never an error.
 
 The header names the harp the page starts on and why (harpfit.py ``choose``: with the record, as the tab says,
 harptabs.com's key, for the song's key, or the usual C harp), and the position it plays the song in when the song's
@@ -23,6 +23,11 @@ Chinese characters where its chord sheet is Chinese (page.py ``names_table``: a 
 the browser's storage or ``trad=1`` in the address, with no row of the page's own. A tap on a hole sounds it (strum.js's reed voice); ▶ at a line's
 end plays it hole by hole, a hole a beat, lighting each (``caracoleSound.play``). ‹ Chord sheet goes back to the
 song's viewer (‹ Library for a song with none), and the tab's text is a tap away at the foot.
+
+Under the artist, the song's version line, as on its sheet's viewer (page.py ``_VERSIONS``, kinds.js): its kind,
+Harmonica, and which of the song's tabs this is ("Harmonica · Tab 1 of 2"), then an icon for each kind the song keeps
+to play from; it opens the list (``_VERSION_LIST``), every one of UG's chords versions of the song, none of them this
+page, and each other kind it keeps, this tab ticked in its group.
 
 From 1200 px, the sheet viewer's overlay (overlay.js) is on the left, Harmonica first and shown: the harps round the
 circle of fifths for the song as its chord sheet sounds, the one chosen the page's own harp both ways (a harp tapped
@@ -53,7 +58,10 @@ holds every answer, made here:
   for a song with no sheet; ``harp``, the Harmonica tab: with the sheet's key, the key as it sounds (``key``,
   ``tonic``, ``names``), harp.py's tables for its mode (``ring``, ``holes``, ``scales``, ``outside``, ``choices``), each
   chord as it sounds with its entries and its notes, and ``tabs``, the page's harp when the record or the tab's words
-  chose it; with none, ``key`` null, the line that says so and ``holes``, each harp's notes for the page's harp's.
+  chose it; with none, ``key`` null, the line that says so and ``holes``, each harp's notes for the page's harp's;
+- ``versions`` and ``kinds``, after it, as a sheet's viewer has them (page.py's data), where render.py gives them: the
+  song's UG chords versions, each entry's ``this`` false (``render._on_page`` with no tab), and what it keeps to play
+  from (``render._kinds_data``), for the version line and its list.
 """
 
 from __future__ import annotations
@@ -73,7 +81,10 @@ from caracole.viewer.page import (
     HERE,
     LIBRARY_PAGE,
     _HANDLE,
+    _VERSION_LIST,
+    _VERSIONS,
     _assets,
+    _kinds,
     _layers,
     _overlay,
     _page,
@@ -122,6 +133,8 @@ def build_harmonica_viewer(
     key: str | None = None,
     key_source: str | None = None,
     back: str | None = None,
+    versions: Mapping[str, Any] | None = None,
+    kinds: Mapping[str, Any] | None = None,
 ) -> str:
     """The page of the harmonica tab ``text`` (a ``harmonica-N.txt``'s body) of the song ``title`` by ``artist``.
 
@@ -132,11 +145,18 @@ def build_harmonica_viewer(
     ``raw``, harptabs.HarpTab.raw). ``cho`` is the song's chord sheet (its human one, else its auto one, as render.py
     writes it), with ``key`` and ``key_source``, its key as keys.py found it: the harp that plays with the record, and
     the song's key for the positions. ``back`` names the song's sheet viewer beside the page ("sheet.html"), which
-    ‹ Chord sheet opens; with none, ‹ Library."""
+    ‹ Chord sheet opens; with none, ‹ Library. ``versions``, the song's UG chords versions (render.py
+    ``_versions_data``, each entry's ``this`` false), and ``kinds``, what else it keeps to play from (render.py
+    ``_kinds_data``), go in its data after ``overlay``, for the version line and its list (kinds.js); without them,
+    its data has neither."""
     tab = parse(text, harp=harp, notation=_pinned(pin, text))
     choice = harpfit.choose(tab, cho=cho, key=key, key_source=key_source, page_key=page_key)
     data = _data(tab, choice)
     data["overlay"] = _overlay_data(choice, cho, key, key_source)
+    if versions is not None:
+        data["versions"] = dict(versions)
+    if kinds is not None:
+        data["kinds"] = dict(kinds)
     page_title = f"{title or 'Untitled'} · harmonica tab"
     # The song's names in the characters its viewer shows its Chinese in, for a song whose sheet is Chinese
     names = names_table(cho is not None and is_chinese(cho), [title or "Untitled", artist, page_title])
@@ -154,11 +174,12 @@ def build_harmonica_viewer(
         + "</div>\n"
         + (_BAR if tab.readable else _BAR_RAW)
         + _PILL
+        + _VERSION_LIST
         + json_block("harp-data", data)
         + (json_block("song-names", names) if names else "")
     )
-    return _page(page_title, body, styles=(style, own_style), scripts=(_sound(), _overlay(), _layers(), script),
-                 names=names)
+    return _page(page_title, body, styles=(style, own_style),
+                 scripts=(_sound(), _overlay(), _layers(), _kinds(), script), names=names)
 
 
 # --- the data ----------------------------------------------------------------------------------------------------
@@ -265,6 +286,7 @@ def _header(title: str, artist: str, tab: Tab, choice: harpfit.Choice, facts: Ma
         + link
         + f"<h1{zh_attr(title or 'Untitled', names)}>{escape(title or 'Untitled')}</h1>\n"
         + artist_line(artist, names)
+        + _VERSIONS
         + (_harp_lines(choice) if tab.readable else
            '<p class="facts" id="facts">Harmonica tab, as written. We can\'t read its notation.</p>\n')
         + (_read_as(tab, facts) if tab.readable else "")

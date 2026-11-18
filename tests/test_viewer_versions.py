@@ -32,6 +32,7 @@ from caracole import render
 from caracole.sheet_versions import SheetVersion, as_data
 from caracole.viewer import build_viewer, page, viewer_csp
 from caracole.viewer.book import BookSong, build_songbook
+from caracole.viewer.harptab_page import build_harmonica_viewer
 
 PHONE = {"width": 390, "height": 844, "mobile": True}
 DESKTOP = {"width": 1280, "height": 800, "mobile": False}
@@ -798,6 +799,161 @@ def test_the_list_open_across_900_px_docks_and_floats_again_with_one_entry(tmp_p
     assert narrow["position"] == "fixed" and abs(narrow["bottom"] - narrow["barTop"]) <= 1 and narrow["depth"] == 1
     assert again["position"] == "absolute" and 6 <= again["under"] <= 8 and abs(again["from"]) <= 1
     assert again["depth"] == 1 and at_wide == at_narrow == at_again == (2, 3) and after == (1, 3)
+
+
+# --- a harmonica tab's page ---------------------------------------------------------------------------------------
+
+HARP_TAB = "4 -4 5 -5 6\nla la la la la\n"
+# KINDS with two harmonica tabs, each with its page.
+TWO_TABS: dict = {**KINDS, "groups": [KINDS["groups"][0], {"kind": "harmonica", "items": [
+    {"name": "harmonica-1.txt", "label": "Harmonica tab 1 · harptabs", "page": "harmonica-1.html"},
+    {"name": "harmonica-2.txt", "label": "Harmonica tab 2 · harptabs", "page": "harmonica-2.html"}]}]}
+# A song with no sheet: a Guitar Pro file and two harmonica tabs.
+NO_SHEET: dict = {"sheet": None, "page": None, "groups": [
+    {"kind": "guitar", "items": [{"name": "guitar-1.gp5", "label": "Guitar Pro 1 · gtptabs", "browser": True,
+                                  "download": "Artist - Title.gp5"}]},
+    TWO_TABS["groups"][1]]}
+# Every address and command the line and the list hold.
+SAID = """[...document.querySelectorAll('#versions a, #version-list a')].map((a) => a.getAttribute('href'))
+  .concat([...document.querySelectorAll('#version-list .cmd')].map((c) => c.textContent))"""
+
+
+def harmonica_pages(tmp_path: Path, versions: dict | None, kinds: dict | None) -> dict[str, Path]:
+    """Each harmonica tab's page of ``kinds`` under Artist/Title/, as render.py writes them: ``versions`` none of its
+    own (every ``this`` false), and its ‹ the sheet's page, or the library's for a song with none."""
+    where = tmp_path / "Artist" / "Title"
+    where.mkdir(parents=True, exist_ok=True)
+    listed = None if versions is None else {**versions, "list": [{**v, "this": False} for v in versions["list"]]}
+    tabs = next((g["items"] for g in (kinds or {}).get("groups", []) if g["kind"] == "harmonica"), [])
+    out = {}
+    for item in tabs or [{"name": "harmonica-1.txt", "page": "harmonica-1.html"}]:
+        html = build_harmonica_viewer(HARP_TAB, title="Synthetic Test Song", artist="The Placeholders",
+                                      tab_file=item["name"], back=(kinds or {}).get("page"), versions=listed,
+                                      kinds=kinds)
+        (where / item["page"]).write_text(html, encoding="utf-8")
+        out[item["page"]] = where / item["page"]
+    return out
+
+
+def thrown(b: Browser) -> list:
+    return [e for e in b.events if e.get("method") == "Runtime.exceptionThrown"]
+
+
+@in_chromium
+def test_a_harmonica_page_has_the_line_and_the_list(tmp_path):
+    # The song's line under the artist: its kind, Harmonica, and which of its tabs this is, then the icons the sheet's
+    # line shows; its list as the sheet's, none of UG's versions this page, and this tab ticked in its group.
+    folder(tmp_path, WONDERWALL, kinds=TWO_TABS)
+    pages = harmonica_pages(tmp_path, WONDERWALL, TWO_TABS)
+    with viewer(tmp_path, pages["harmonica-1.html"].as_uri() + "#necks=0&py=1") as b:
+        line = seen(b)
+        open_list(b)
+        assert b.wait("(history.state || {}).caracoleLayer === 1")
+        shown = seen(b)
+        groups = b.js(GROUPS)
+        focus = b.js("document.activeElement.id")
+        opened = history_at(b, (2, 3))
+        back(b)
+        assert b.wait("document.querySelector('#version-list').hidden")
+        after = history_at(b, (1, 3))
+        refocused = b.js("document.activeElement.id")
+        b.open(pages["harmonica-2.html"].as_uri())
+        assert b.wait("document.documentElement.dataset.ready === '1'")
+        second = seen(b)
+        errors = thrown(b)
+    assert line["nav"] and line["line"] == "Harmonica · Tab 1 of 2" and second["line"] == "Harmonica · Tab 2 of 2"
+    assert line["icons"] == [["sheet", "13"], ["guitar", "2"], ["harmonica", "2"]]
+    assert line["said"] == ["13 chord versions, 2 Guitar Pro files, 2 harmonica tabs"]
+    rows = shown["rows"]
+    assert len(rows) == 13 and all(row["current"] is None for row in rows)  # none of UG's versions is this page
+    assert [row["link"] for row in rows[:3]] == ["sheet.html#necks=0&py=1", "version-39144.html#necks=0&py=1",
+                                                 "version-2161290.html#necks=0&py=1"]
+    assert shown["acts"] == [] and focus == "version-list-title"
+    assert groups[0][0] == "sheet" and groups[-1] == ["harmonica", "Harmonica2", [
+        ["Harmonica tab 1 · harptabs · this page", None, None, "page"],
+        ["Harmonica tab 2 · harptabs", "harmonica-2.html#necks=0&py=1", None, None]]]
+    assert opened == (2, 3) and after == (1, 3) and refocused == "ver-now"
+    assert errors == []
+
+
+@in_chromium
+def test_served_a_harmonica_page_keeps_a_version_through_caracole_serve_on_the_songs_sheet(tmp_path):
+    folder(tmp_path, WONDERWALL, kinds=TWO_TABS)
+    harmonica_pages(tmp_path, WONDERWALL, TWO_TABS)
+    with served(tmp_path) as root, viewer(tmp_path, root + "/Artist/Title/harmonica-1.html") as b:
+        open_list(b)
+        keep = seen(b)["rows"][3]["actions"]
+        guitar = {kind: items for kind, _, items in b.js(GROUPS)}["guitar"]
+        b.click("#ver-items > li:first-child .ver-main")
+        assert b.wait("location.pathname === '/Artist/Title/sheet.html'"
+                      " && document.documentElement.dataset.ready === '1'")
+    assert keep == [["Keep", "/versions?sheet=Artist%2FTitle%2Fsheet.html&tab=504&do=keep"]]
+    assert guitar[0][1] == "/guitar?file=Artist%2FTitle%2Fguitar-1.gp5"  # the song's folder, from its sheet's
+
+
+@in_chromium
+def test_a_tab_with_no_sheet_and_nothing_else_has_no_line(tmp_path):
+    alone = {"sheet": None, "page": None, "groups": [{"kind": "harmonica", "items": [
+        {"name": "harmonica-1.txt", "label": "Harmonica tab 1 · harptabs", "page": "harmonica-1.html"}]}]}
+    for n, kinds in enumerate((alone, None)):
+        pages = harmonica_pages(tmp_path / str(n), None, kinds)
+        with viewer(tmp_path / str(n), pages["harmonica-1.html"].as_uri()) as b:
+            shown = seen(b)
+            b.click("#size")  # the page works as ever
+            assert b.wait("!document.querySelector('#sizes').hidden")
+            errors = thrown(b)
+        assert not shown["nav"] and not shown["list"] and errors == [], kinds
+
+
+@in_chromium
+def test_a_tab_of_a_song_with_no_sheet_lists_its_kinds_with_no_sheet_path(tmp_path):
+    # No sheet (kinds' page null): the line and the list show the song's other kinds, and nothing they hold names a
+    # sheet that isn't there, from a file or served.
+    pages = harmonica_pages(tmp_path, None, NO_SHEET)
+    found = {}
+    with viewer(tmp_path, pages["harmonica-2.html"].as_uri()) as b:
+        open_list(b)
+        found["file"] = [seen(b), b.js(GROUPS), b.js(SAID), thrown(b)]
+    with served(tmp_path) as root, viewer(tmp_path, root + "/Artist/Title/harmonica-2.html") as b:
+        open_list(b)
+        found["served"] = [seen(b), b.js(GROUPS), b.js(SAID), thrown(b)]
+    for where, (shown, groups, said, errors) in found.items():
+        assert shown["nav"] and shown["line"] == "Harmonica · Tab 2 of 2", where
+        assert shown["icons"] == [["guitar", "1"], ["harmonica", "2"]] and shown["rows"] == [], where
+        assert [kind for kind, *_ in groups] == ["guitar", "harmonica"], where  # no Chords: no sheet
+        assert groups[0][2] == [["Guitar Pro 1 · gtptabs", "guitar-1.gp5", "Artist - Title.gp5", None]], where
+        assert groups[1][2] == [["Harmonica tab 1 · harptabs", "harmonica-1.html", None, None],
+                                ["Harmonica tab 2 · harptabs · this page", None, None, "page"]], where
+        assert said and not any("null" in text or "undefined" in text for text in said), (where, said)
+        assert errors == [], where
+
+
+@in_chromium
+def test_on_a_harmonica_page_the_list_docks_on_a_phone_and_floats_under_its_line_on_a_laptop(tmp_path):
+    folder(tmp_path, WONDERWALL, kinds=TWO_TABS)
+    pages = harmonica_pages(tmp_path, WONDERWALL, TWO_TABS)
+    with viewer(tmp_path, pages["harmonica-1.html"].as_uri()) as b:
+        open_list(b)
+        phone = b.js(PLACED) | b.js("({dock: document.documentElement.dataset.dock || null, seen: getComputedStyle("
+                                    "document.querySelector('#version-list')).visibility,"
+                                    " wide: document.documentElement.scrollWidth > innerWidth})")
+        b.click("#necks-open")  # the necks' sheet in its place: one at a time on a phone
+        assert b.wait("document.querySelector('#version-list').hidden")
+        swapped = [b.js("document.documentElement.dataset.dock"), history_at(b, (2, 3))]
+        open_list(b)
+        assert b.wait("document.querySelector('#necks-open').getAttribute('aria-expanded') === 'false'")
+        again = [b.js("document.documentElement.dataset.dock"), history_at(b, (2, 3))]
+    assert phone["position"] == "fixed" and abs(phone["bottom"] - phone["barTop"]) <= 1 and phone["depth"] == 1
+    assert phone["dock"] == "version-list" and phone["seen"] == "visible" and not phone["wide"]
+    assert swapped == ["necks", (2, 3)] and again == ["version-list", (2, 3)]
+    with viewer(tmp_path, pages["harmonica-1.html"].as_uri(), **{**DESKTOP, "height": 500}) as b:
+        open_list(b)
+        laptop = b.js(PLACED) | {"rail": b.js("document.querySelector('#necks').getBoundingClientRect().right")}
+        b.press("Escape")
+        assert b.wait("document.querySelector('#version-list').hidden")
+        focus = b.js("document.activeElement.id")
+    assert laptop["position"] == "absolute" and 6 <= laptop["under"] <= 8 and abs(laptop["from"]) <= 1
+    assert laptop["left"] >= laptop["rail"] + 8 and laptop["bottom"] <= laptop["barTop"] and focus == "ver-now"
 
 
 def test_the_fixture_has_the_shape_render_writes():

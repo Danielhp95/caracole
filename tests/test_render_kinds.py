@@ -61,6 +61,41 @@ def test_every_viewer_of_the_song_names_its_other_kinds(conn, cfg):
     assert members.index("kinds") == members.index("versions") + 1  # right after the versions, on both sides
 
 
+def test_a_harmonica_page_names_the_versions_and_the_kinds(conn, cfg):
+    # A harmonica tab's page has the song's version line and its list, as its sheet's viewer: UG's chords versions,
+    # none of them this page's, and what else the song keeps, right after the overlay's data.
+    song = add_song(conn, "Artist", "Title")
+    keep_sheet(conn, cfg, song)
+    vid, raw = ug_version(conn, song, VERSION_TAB, rating=4.85, votes=12629, number=2)
+    keep_text(conn, cfg, song, vid, raw, sheet("dos"), version_names(str(VERSION_TAB))[:2], 2)
+    keep_everything(conn, cfg, song)
+    render(conn, cfg)
+    folder = song_dir(cfg.library_dir, song)
+    harp = data_of(folder / "harmonica-1.html", "harp-data")
+    on_sheet = data_of(folder / "sheet.html", "song")
+    assert harp["kinds"] == on_sheet["kinds"] == KINDS
+    assert harp["versions"] == {**on_sheet["versions"], "list": [{**v, "this": False}
+                                                                 for v in on_sheet["versions"]["list"]]}
+    assert len(harp["versions"]["list"]) == 2 and any(v["this"] for v in on_sheet["versions"]["list"])
+    members = list(harp)
+    assert members[-3:] == ["overlay", "versions", "kinds"]
+
+
+def test_a_harmonica_page_of_a_song_with_no_sheet_names_its_kinds_alone(conn, cfg):
+    song = add_song(conn, "Artist", "Title")
+    keep_tab(conn, cfg, song)
+    keep(conn, cfg, song, "guitar-1.gp5", b"FICHIER GUITAR PRO v5.00 synthetic", provider="inbox",
+         kind="guitar-pro", tab_id="guitar-pro")
+    render(conn, cfg)
+    harp = data_of(song_dir(cfg.library_dir, song) / "harmonica-1.html", "harp-data")
+    assert "versions" not in harp  # UG lists no version of it
+    assert harp["kinds"] == {"sheet": None, "page": None, "groups": [
+        {"kind": "guitar", "items": [{"name": "guitar-1.gp5", "label": "Guitar Pro 1", "browser": True,
+                                      "download": "Artist - Title.gp5"}]},
+        {"kind": "harmonica", "items": [{"name": "harmonica-1.txt", "label": "Harmonica tab 1 · harptabs",
+                                         "page": "harmonica-1.html"}]}]}
+
+
 def ukulele_sheet(conn, cfg, song) -> None:
     """A sheet of UG's Ukulele Chords type, kept as the fetch keeps one for a song with no chords there."""
     content = "[tab][ch]C[/ch]\r\nmade up words[/tab]\r\n"

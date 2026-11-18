@@ -353,7 +353,16 @@ sitemaps list by bare ids alone, and the fetch their page.
 `harmonica-N.html` comes of `_render_harmonica`, whatever came of the sheet's PDF:
 
 - viewer/harptab_page.py `build_harmonica_viewer`, page.py's `_page` with viewer.css and harptab.css, strum.js,
-  overlay.js and harptab.js.
+  overlay.js, layers.js, kinds.js and harptab.js.
+- **Its version line and list**, the sheet's viewer's (page.py `_VERSIONS` after the artist line, `_VERSION_LIST`
+  after the pill; kinds.js): render.py passes `versions=_on_page(listed, None)` (no `this`) and the song's `kinds`,
+  its data's last members after `overlay`. The line names its kind and which of its kind's pages it is ("Harmonica ·
+  Tab 1 of 2", kinds.js's `hereIn`), its icons the sheet's; the list's Chords group the sheet's, none of it this
+  page, and this tab ticked in its group. harptab.js attaches it with its `"list"` layer (`openLayer`, `closeLayer`,
+  `inSight`), `carry` the screen's choices as ‹ Chord sheet takes them (`screenChoices`), `sheetPath` the song's
+  sheet's path in the library, none for a song with no sheet, so served its versions are kept and chosen on the
+  song's sheet; on a phone the list docks (`.top`, `data-dock="version-list"`), from 900 px a popover
+  (test_viewer_versions.py's section "a harmonica tab's page", test_render_kinds.py).
 - **harptab.py reads the tab**, its holes over syllables in the sheet's `.s` columns:
   - a notation is data (`Notation`, its `Symbol`s: a mark, its meaning, before, after, around or between holes;
     `PRESETS` signs, brackets, letters, signs after, barrett, the commonest first);
@@ -1043,7 +1052,7 @@ It is rows.js's, shared by both pages:
   - test_viewer_sound.py's `SCHEDULE` records each note and timer the page makes, and plays a slow device on demand
     (a resume held, `ended` events late).
 - **Versions**: kinds.js (`window.caracoleKinds`, inlined on a sheet's page after layers.js and before viewer.js, which
-  attaches it with its layers and `carry`, its `vAddress`) draws, from a sheet viewer's data `versions`
+  attaches it with its layers and `carry`, its `vAddress`, and on a harmonica tab's page before harptab.js) draws, from a sheet viewer's data `versions`
   (sheet_versions.as_data, with each entry's `this` and the one's provider, `sheet`) and `kinds` (render.py
   `_kinds_data`), the version line under the artist ("Chords · Ver 3 of 13 · ★ 4.86 (408)") with an icon a kind the
   song keeps and how many, and the list it opens; no ‹ ›, the list opens each kept version (test_viewer_versions.py);
@@ -1091,9 +1100,10 @@ It is rows.js's, shared by both pages:
     leaving it open); from 900 px the rails (the settings, Harmony) one at a time, a card and the versions list beside
     them;
     `DOCKED` (panel, card, harmony, vList, necksEl) docks at the foot on a phone, the top one of them (`dock()`);
-  - a harmonica tab's page (harptab.js) has two, `"sizes"` (Aa) and `"sheet"` (the necks' sheet): `layers`,
-    `openLayer(name, opener)`, `closeLayer(name, refocus)`, one at a time below 900 px, Aa giving way to the sheet at
-    every width, Escape closing the top one; it has no More panel;
+  - a harmonica tab's page (harptab.js) has `"sizes"` (Aa), `"sheet"` (the necks' sheet), `"list"` (the versions
+    list) and `"full"`: `layers`, `openLayer(name, opener)`, `closeLayer(name, refocus)`, one at a time below 900 px,
+    Aa giving way to the sheet and the list at every width, the top of the sheet and the list docked on a phone
+    (`topDocked`, `docked`, `dock`, `restack`), Escape closing the top one; it has no More panel;
   - `history.scrollRestoration` is `manual` from a layer's entry on, so a step down leaves the song scrolled where it
     is, and `auto` again once the page is back at its own entry, for a reload;
   - a history that refuses entries (a `pushState` that throws) turns it off: the layers open and close as before,
@@ -2181,8 +2191,9 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     Chromium's print emulation).
 - A harmonica tab's page (harmonica-page): `viewer.pages.HarmonicaPage`, harptab_page.py's builder, byte for byte:
   `build` writes `build_harmonica_viewer`'s page on SheetPage's frame (`page`, `namesTable`, `isChinese`, `zhAttr`,
-  `artistLine`, `words`, `LIBRARY_PAGE`; `ViewerAssets.Page.HARMONICA`), its data's members in Python's order (`groups` and `rows` filled as the tab
-  is written), and its parts under Python's names (`overlayData`, `harpLines`, `readAs`, `footer`, `a`); and
+  `artistLine`, `words`, `LIBRARY_PAGE`, PageConstants' `VERSIONS` and `VERSION_LIST`; `ViewerAssets.Page.HARMONICA`),
+  its data's members in Python's order (`groups` and `rows` filled as the tab is written, `versions` and `kinds` after
+  `overlay`, SongPass's `renderHarmonica` passing them as render.py does), and its parts under Python's names (`overlayData`, `harpLines`, `readAs`, `footer`, `a`); and
   `viewer.harpfit.HarpFit`, harpfit.py: `pitch`, `words`, `sheetLines`, `recordFit` (PySequence.SequenceMatcher, the
   fits by share then harp), `choose` and `Choice.tabsHarp`, and render.py's `_tab_harps` as `tabHarps` (each
   `HarmonicaTab` a kept tab as render.py reads it; one it can't read, a refused pin among them, gives no harp), the

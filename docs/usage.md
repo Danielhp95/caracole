@@ -3598,6 +3598,16 @@ the library page link it, the tab's text beside it.
   instrument as they came (served, where the browser keeps nothing, the
   address carries them both ways), and **Tab as text**, at the foot, opens
   `harmonica-1.txt`.
+- **The version line**, under the artist, as on the sheet's viewer (above):
+  "Harmonica · Tab 1 of 2" (the tab alone of its song says "Harmonica"), then
+  the song's icons, the sheet's. Tap it for the same list: UG's versions of
+  the song's sheet (none of them this page), each other kind it keeps, this
+  tab ticked under Harmonica. Each page opens from it with the rail hidden,
+  the pinyin, the Chinese characters and the instrument as they came, as ‹
+  Chord sheet does; served, Keep and Back to our pick work on the song's
+  sheet, and a song with no sheet lists its other kinds alone. On a phone the list comes up from the bottom, over the bar, in the
+  place of the overlay's sheet (one at a time); from 900 px it opens under
+  the line. A tab with nothing else beside it has no line.
 - **The overlay**, from 1200 px, as on the sheet viewer, with Harmonica first
   and shown: its harp is the page's, both ways (a harp tapped on the circle is
   the one the page plays and names its notes on, and − and + move the

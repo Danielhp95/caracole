@@ -190,7 +190,7 @@ BUILD_FILES = (
     HERE / "harp.py", HERE / "winds.py", HERE / "winds.js",  # the harmonica, the flute and the recorder
     HERE / "overlay.js",  # the rail on a wide screen, Guitar and Harmonica, on a sheet and a harmonica tab's page
     HERE / "layers.js",  # a page's layers in the browser's history, Back closing the one on top, on every viewer page
-    HERE / "kinds.js",  # the version line, its icon a kind the song keeps, and the list it opens, on a sheet's page
+    HERE / "kinds.js",  # the version line, its icons and its list, on a sheet's and a harmonica tab's page
     # A harmonica tab's page, harmonica-N.html: the tab read, the harp it plays on, the page, its script and style
     *(HERE / name for name in ("harptab.py", "harpfit.py", "harptab_page.py", "harptab.js", "harptab.css")),
     HERE.parent / "inline.py",  # sha256_source, json_block
@@ -276,8 +276,8 @@ def _layers() -> str:
 def _kinds() -> str:
     """kinds.js: the version line under the artist, an icon for each kind the song keeps to play from, the library
     card's glyphs, and the list it opens (``window.caracoleKinds``), inlined after layers.js and before viewer.js,
-    which attaches it, in a sheet.html and a kept version's page; never in a songbook (book.py), whose songs have no
-    versions."""
+    which attaches it, in a sheet.html and a kept version's page, and before harptab.js in a harmonica tab's page
+    (harptab_page.py); never in a songbook (book.py), whose songs have no versions."""
     return (HERE / "kinds.js").read_text(encoding="utf-8")
 
 

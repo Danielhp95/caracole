@@ -184,7 +184,7 @@ internal class SongPass(
                 auto != null -> RenderNames.AUTO_OUTPUTS[2]
                 else -> null
             }
-            renderHarmonica(tabs, files, primary, back)
+            renderHarmonica(tabs, files, primary, back, listed, kinds)
         }
     }
 
@@ -424,10 +424,11 @@ internal class SongPass(
     private fun pinOf(tab: HarmonicaFile): JsonElement? = overrides.harmonica[song.key]?.get(tab.name)
 
     /** render._render_harmonica: a page for each harmonica tab the song keeps, `harmonica-N.html` beside its text,
-     * with the song's chord sheet [sheet] (its ChordPro and its key), [back] the sheet's page; the page of a tab no
-     * longer kept, or whose text is gone from the folder, goes while it is as written. */
+     * with the song's chord sheet [sheet] (its ChordPro and its key), [back] the sheet's page, and its version line's
+     * data: the song's UG chords versions [listed], none of them the page's (`_on_page` with no tab), and its [kinds];
+     * the page of a tab no longer kept, or whose text is gone from the folder, goes while it is as written. */
     private fun renderHarmonica(tabs: List<HarmonicaFile>, files: Map<String, KeptFile>, sheet: Pair<String, SongKey?>?,
-                                back: String?) {
+                                back: String?, listed: JsonObject?, kinds: JsonObject) {
         val pages = HashSet<String>()
         for (tab in tabs) {
             val kept = files[tab.name] ?: continue
@@ -447,7 +448,8 @@ internal class SongPass(
                 HarmonicaPage.build(text, title = Normalize.cleanTitle(song.title), artist = song.artist,
                                     tabFile = tab.name, url = version.url, pageKey = tab.key, harp = tab.harp,
                                     pin = pinOf(tab), facts = version.raw, cho = sheet?.first, key = sheet?.second?.key,
-                                    keySource = sheet?.second?.source, back = back)
+                                    keySource = sheet?.second?.source, back = back,
+                                    versions = onPage(listed, null), kinds = kinds)
             } catch (e: Exception) { // a tab the page can't read must never cost the song's other pages
                 fail("cannot build ${tab.page}")
                 continue

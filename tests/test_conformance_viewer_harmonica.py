@@ -534,7 +534,24 @@ def page_out(html: str) -> dict[str, Any]:
 
 
 DEFAULTS: dict[str, Any] = {"artist": "", "url": None, "page_key": None, "harp": None, "pin": None, "facts": None,
-                            "cho": None, "key": None, "key_source": None, "back": None}
+                            "cho": None, "key": None, "key_source": None, "back": None, "versions": None, "kinds": None}
+# The song's UG chords versions as a harmonica tab's page holds them (render.py ``_on_page`` with no tab: every
+# ``this`` false), and what else it keeps (``_kinds_data``): with a sheet, and with none.
+UG = "https://tabs.ultimate-guitar.com/tab/the-placeholders/synthetic-song-chords-"
+VERSIONS: dict[str, Any] = {"total": 3, "sheet": "ug", "pinned": False, "list": [
+    {"tab": tab, "number": n, "rating": rating, "votes": votes, "label": label, "note": note, "rank": n, "kept": kept,
+     "chosen": n == 1, "gone": n == 3, "page": page, "url": UG + tab, "this": False}
+    for tab, n, rating, votes, label, note, kept, page in (
+        ("1064463", 1, 4.86, 408, None, "a tabber's <note> & more", True, "sheet.html"),
+        ("39144", 2, 4.85, 12629, "acoustic", None, True, "version-39144.html"),
+        ("504", 3, None, None, None, None, False, None))]}
+KINDS: dict[str, Any] = {"sheet": "sheet", "page": "sheet.html", "groups": [
+    {"kind": "guitar", "items": [{"name": "guitar-1.gp5", "label": "Guitar Pro 1 · gtptabs", "browser": True,
+                                  "download": "Placeholder Band - Synthetic Song.gp5"}]},
+    {"kind": "harmonica", "items": [
+        {"name": "harmonica-1.txt", "label": "Harmonica tab 1 · harptabs", "page": "harmonica-1.html"},
+        {"name": "harmonica-2.txt", "label": "Harmonica tab 2 · harptabs", "page": "harmonica-2.html"}]}]}
+NO_SHEET: dict[str, Any] = {"sheet": None, "page": None, "groups": KINDS["groups"]}
 
 
 @functools.cache
@@ -567,6 +584,11 @@ def _pages() -> tuple[tuple[dict[str, str], dict[str, Any]], ...]:
                                 "page_key": "E"}))
     out.append((named("arrows"), {"title": "Arrows", "tab_file": "harmonica-1.txt", "page_key": "C",
                                   "facts": FACTS[1]}))
+    # The version line's data, a song's with a sheet (UG's versions and its kinds) and one's with none (its kinds)
+    out.append((named("sung:2"), {"title": "Synthetic Song", "artist": "Placeholder Band",
+                                  "tab_file": "harmonica-1.txt", "cho": "sung-sheet:2", "back": "sheet.html",
+                                  "versions": VERSIONS, "kinds": KINDS}))
+    out.append((named("tiny"), {"title": "No Sheet", "tab_file": "harmonica-2.txt", "kinds": NO_SHEET}))
     return tuple((ref, {k: v for k, v in kw.items() if v != DEFAULTS.get(k, object())}) for ref, kw in out)
 
 
@@ -635,7 +657,8 @@ def pieces(html: str) -> list[Any]:
     style, _ = page._assets()
     own_style, script = harptab_page._own_assets()
     assets = [("viewer.css", style), ("harptab.css", own_style), ("strum.js", page._sound()),
-              ("overlay.js", page._overlay()), ("layers.js", page._layers()), ("harptab.js", script)]
+              ("overlay.js", page._overlay()), ("layers.js", page._layers()), ("kinds.js", page._kinds()),
+              ("harptab.js", script)]
     out: list[Any] = []
     at = 0
     for name, text in assets:

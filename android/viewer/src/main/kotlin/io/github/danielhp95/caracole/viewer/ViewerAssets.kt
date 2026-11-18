@@ -27,7 +27,10 @@ object ViewerAssets {
             listOf("viewer.css", "book.css"),
             listOf("book.js", "strum.js", "overlay.js", "instruments.js", "winds.js", "layers.js", "viewer.js"),
         ),
-        HARMONICA(listOf("viewer.css", "harptab.css"), listOf("strum.js", "overlay.js", "layers.js", "harptab.js")),
+        HARMONICA(
+            listOf("viewer.css", "harptab.css"),
+            listOf("strum.js", "overlay.js", "layers.js", "kinds.js", "harptab.js"),
+        ),
     }
 
     private val texts = ConcurrentHashMap<String, String>()

@@ -196,7 +196,8 @@ object HarmonicaPageReplay : AreaReplay {
             tabFile = string(kw["tab_file"])!!, url = string(kw["url"]), pageKey = string(kw["page_key"]),
             harp = string(kw["harp"]), pin = kw["pin"]?.takeIf { it !is JsonNull }, facts = kw["facts"] as? JsonObject,
             cho = kw["cho"]?.takeIf { it !is JsonNull }?.let(::text), key = string(kw["key"]),
-            keySource = string(kw["key_source"]), back = string(kw["back"]))
+            keySource = string(kw["key_source"]), back = string(kw["back"]),
+            versions = kw["versions"] as? JsonObject, kinds = kw["kinds"] as? JsonObject)
     }
 
     private fun choiceOf(row: JsonArray): Choice {

@@ -22,6 +22,10 @@
   // shows is the screen's choice, as the sheet viewer's rail: kept for every page (overlay.js's NECKS) and in the
   // address while hidden (necks=0). Narrower, the phone's sheet, as the viewer's: the bar's neck slides the overlay up
   // from the bar over half the screen, its handle to the whole screen and back, ✕, Escape or the neck again closing it.
+  //
+  // Under the artist, the song's version line and the list it opens, as on its sheet's viewer (kinds.js, inlined before
+  // this script, attached below with this page's layers): "Harmonica · Tab 1 of 2", the song's kinds, and UG's
+  // versions, its other tabs and files a tap away, with the screen's choices (as ‹ Chord sheet takes them).
   const $ = (id) => document.getElementById(id);
   const doc = document.documentElement;
   let data;
@@ -109,13 +113,16 @@
   // browser keeps nothing (caracole serve's sandbox) they go both ways. ‹ Library takes none.
   const sheetLink = document.querySelector("a.back[data-sheet]");
   const sheetPage = sheetLink ? sheetLink.getAttribute("href") : "";
-  function backToSheet() {
-    if (!sheetLink) return;
+  // What a link to another page of the song takes along: "#necks=0&py=1", or "".
+  const screenChoices = () => {
     const now = new URLSearchParams(location.hash.slice(1)), params = new URLSearchParams();
     if (!state.necks) params.set("necks", "0");
     for (const name of ["py", "trad", "inst"]) if (now.has(name)) params.set(name, now.get(name));
     const fragment = params.toString();
-    sheetLink.setAttribute("href", sheetPage + (fragment ? "#" + fragment : ""));
+    return fragment ? "#" + fragment : "";
+  };
+  function backToSheet() {
+    if (sheetLink) sheetLink.setAttribute("href", sheetPage + screenChoices());
   }
   const save = () => {
     try {
@@ -136,6 +143,7 @@
       }
     } catch (err) { /* an address the page can't change */ }
     backToSheet();
+    if (kinds) kinds.links();  // the list's links to the song's other pages, with the choices now
   };
 
   // --- a hole's note on the harp chosen --------------------------------------------------------------------------
@@ -225,6 +233,8 @@
   // --- the overlay: Harmonica and Guitar, on a wide screen ------------------------------------------------------
   const over = data.overlay && typeof data.overlay === "object" && data.overlay.harp ? data.overlay : null;
   const aside = $("necks"), necksButton = $("necks-toggle"), sheetButton = $("necks-open");
+  const vList = $("version-list"), verNow = $("ver-now");  // the versions list and its line (kinds.js, below)
+  let kinds = null;  // what kinds.js attached: its links() and place()
   const wide = window.matchMedia("(min-width: 1200px)");
   let sheetAt = null;  // the phone's sheet: "half", "full", or null while it is closed
   const mod12 = (n) => ((n % 12) + 12) % 12;
@@ -281,20 +291,31 @@
     sheetButton.hidden = !rail || wide.matches;
     sheetButton.setAttribute("aria-expanded", phone ? "true" : "false");
     aside.hidden = !on && !phone;
-    aside.classList.toggle("top", phone);  // the one sheet here: always on top (viewer.css)
+    aside.classList.toggle("top", phone && topDocked() !== "list");  // shown below 900 px while on top (viewer.css)
     if (on) doc.dataset.necks = "1";  // the tab and the bar move over for it
     else delete doc.dataset.necks;
     if (on || phone) rail.draw();
     else if (rail) rail.empty();
     else aside.textContent = "";
-    dockSheet();
+    dock();
+    if (kinds) kinds.place();  // the list's popover clear of the rail as it comes or goes
   }
-  // The sheet docked on the bar, as the viewer's settings are: the page leaves room under the tab for it, so its end
-  // comes up above it, and the pill rides above it (--dock, viewer.css), or over the foot of the whole-screen one.
-  function dockSheet() {
-    if (sheetAt !== null && !wide.matches) {
-      doc.dataset.dock = sheetAt === "full" ? "necks-full" : "necks";
-      doc.style.setProperty("--dock", aside.offsetHeight + "px");
+  // The one docked on the bar, as the viewer's settings are: below 900 px the sheet or the versions list, whichever is
+  // on top; up to 1199 px the sheet (from 900 px the list is a popover under its line). The page leaves room under the
+  // tab for it, so its end comes up above it, and the pill rides above it (--dock, viewer.css), or over the foot of the
+  // whole-screen sheet.
+  function docked() {
+    if (!apart.matches) {
+      const top = topDocked();
+      return top === "list" ? vList : top === "sheet" ? aside : null;
+    }
+    return sheetAt !== null && !wide.matches ? aside : null;
+  }
+  function dock() {
+    const there = docked();
+    if (there) {
+      doc.dataset.dock = there === vList ? "version-list" : sheetAt === "full" ? "necks-full" : "necks";
+      doc.style.setProperty("--dock", there.offsetHeight + "px");
     } else if (doc.dataset.dock) {
       delete doc.dataset.dock;
       doc.style.removeProperty("--dock");
@@ -318,7 +339,10 @@
     if (mine) sheetButton.focus({ preventScroll: true });
   }
   sheetButton.addEventListener("click", () => (sheetAt === null ? openLayer("sheet", sheetButton) : closeLayer("sheet")));
-  window.addEventListener("resize", () => dockSheet());
+  window.addEventListener("resize", () => {
+    dock();
+    if (kinds) kinds.place();
+  });
   const showRail = (on) => {
     state.necks = on;
     keepNecks();
@@ -337,6 +361,7 @@
       layerHistory.sync(layers.length);
     }
     drawRail();
+    restack();  // the list on top of what docks, if it was under the sheet
     if (had && !aside.contains(document.activeElement)) {
       const first = Array.from($("bar").querySelectorAll("button")).find((b) => b.getClientRects().length > 0);
       if (first) first.focus({ preventScroll: true });
@@ -421,11 +446,41 @@
     sizes.hidden = !on;
     sizeButton.setAttribute("aria-expanded", on ? "true" : "false");
   };
-  // The layers: what the page opens over its tab (Aa, the overlay's sheet), each one entry of the browser's history
-  // while it is open (layers.js, as viewer.js), the last on top. Below 900 px one at a time; Aa gives way to the sheet
-  // at every width. A Back that takes k entries off closes the k on top.
-  const layers = [];  // {name: "sizes" | "sheet" | "full", opener}
+  // The layers: what the page opens over its tab (Aa, the overlay's sheet, the versions list, full screen), each one
+  // entry of the browser's history while it is open (layers.js, as viewer.js), the last on top. Below 900 px one at a
+  // time; Aa gives way to the sheet and the list at every width, full screen to the sheet. A Back that takes k entries
+  // off closes the k on top.
+  const layers = [];  // {name: "sizes" | "sheet" | "list" | "full", opener}
   const apart = window.matchMedia("(min-width: 900px)");
+  // The top of those that dock on the bar on a phone, the sheet and the list: its name, or null.
+  const topDocked = () => {
+    for (let i = layers.length - 1; i >= 0; i--) {
+      if (layers[i].name === "sheet" || layers[i].name === "list") return layers[i].name;
+    }
+    return null;
+  };
+  // A layer in sight: open, and on top below 900 px, where one shows at a time (kinds.js's line toggles the list so).
+  const inSight = (el) => !el.hidden && (apart.matches || (layers.length > 0 && el === vList
+    && layers[layers.length - 1].name === "list"));
+  // The list shown or hidden; shown, the tab's scrolling paused and the bar back under it (restack does the rest).
+  const showList = (on) => {
+    vList.hidden = !on;
+    if (!on) return;
+    pauseScroll();
+    bar.classList.remove("away");
+  };
+  // After every layer opened or closed: which docked one is on top, the line pressed while the list is open, the dock,
+  // and the list placed (a popover from 900 px).
+  const restack = () => {
+    if (vList) {
+      vList.classList.toggle("top", !vList.hidden && topDocked() === "list");
+      verNow.setAttribute("aria-expanded", vList.hidden ? "false" : "true");
+    }
+    const phone = Boolean(rail) && !wide.matches && sheetAt !== null && !doc.dataset.full;  // as drawRail says
+    aside.classList.toggle("top", phone && topDocked() !== "list");
+    dock();
+    if (kinds) kinds.place();
+  };
   const layerHistory = window.caracoleLayers ? window.caracoleLayers.history((k) => {
     for (let i = 0; i < k && layers.length; i++) closeLayer(layers[layers.length - 1].name);
     save();
@@ -435,12 +490,16 @@
     const at = layers.findIndex((layer) => layer.name === name);
     if (at >= 0) layers.splice(at, 1);  // open already: on top again
     for (const layer of layers.slice().reverse()) {
-      if (!apart.matches || name === "sheet") closeLayer(layer.name, false);
+      const givesWay = (name === "sheet" && layer.name !== "list") || (name === "list" && layer.name === "sizes");
+      if (!apart.matches || givesWay) closeLayer(layer.name, false);
     }
     layers.push({ name, opener: opener instanceof Element ? opener : null });
     if (name === "sheet") openSheet();
     else if (name === "full") fullScreen(true);
+    else if (name === "list") showList(true);
     else showSizes(true);
+    restack();
+    if (name === "list") $("version-list-title").focus({ preventScroll: true });
     layerHistory.sync(layers.length);
   }
   // ``refocus``: the focus goes back where the layer came from, unless it is somewhere else of yours.
@@ -449,7 +508,12 @@
     if (at < 0) return;
     const opener = layers.splice(at, 1)[0].opener;
     if (name === "sheet") closeSheet(refocus);
-    else {
+    else if (name === "list") {
+      const active = document.activeElement;
+      const mine = refocus && (!active || active === document.body || vList.contains(active));
+      showList(false);
+      if (mine) (opener && opener.isConnected ? opener : verNow).focus({ preventScroll: true });
+    } else {
       if (name === "full") {
         fullScreen(false);
         if (refocus && opener && opener.isConnected) opener.focus({ preventScroll: true });
@@ -458,6 +522,7 @@
         if (refocus) sizeButton.focus({ preventScroll: true });
       }
     }
+    restack();
     layerHistory.sync(layers.length);
   }
   sizeButton.addEventListener("click", () => (sizes.hidden ? openLayer("sizes", sizeButton) : closeLayer("sizes")));
@@ -505,6 +570,32 @@
   $("smaller").addEventListener("click", () => setSize(state.fs - FS.step));
   $("bigger").addEventListener("click", () => setSize(state.fs + FS.step));
 
+  // --- the version line and its list (kinds.js) -----------------------------------------------------------------
+  // The song's line under the artist and the list it opens, a layer of the stack above ("list"): a sheet from the
+  // bottom on a phone, docked on the bar; from 900 px a popover under the line, placed by kinds.js. Served (caracole
+  // serve sent this page, as viewer.js tells), its versions are kept and chosen on the song's sheet (sheetPath, its
+  // path in the library), none for a song with no sheet; each link to another of the song's pages takes the screen's
+  // choices along, as ‹ Chord sheet does.
+  const served = location.protocol !== "file:" && location.hostname !== "appassets.androidplatform.net";
+  const libraryPath = (() => {
+    try {
+      return decodeURIComponent(location.pathname.slice(1));
+    } catch (err) { return ""; }
+  })();
+  const sheetOf = data.kinds && typeof data.kinds === "object" && typeof data.kinds.page === "string" && data.kinds.page
+    ? data.kinds.page : null;
+  if (vList && window.caracoleKinds) {
+    kinds = window.caracoleKinds.attach({
+      data, here: libraryPath.split("/").pop(), served,
+      sheetPath: sheetOf === null ? undefined : libraryPath.split("/").slice(0, -1).concat([sheetOf]).join("/"),
+      carry: (page) => encodeURIComponent(page) + screenChoices(),
+      open: (el, opener) => openLayer("list", opener),
+      close: () => closeLayer("list"),
+      inSight,
+    });
+    vList.querySelector("[data-close]").addEventListener("click", () => closeLayer("list"));
+  }
+
   // --- scrolling by itself, as the viewer does -------------------------------------------------------------------
   // Off, counting down (3 s, for your hands to get to the harp; pressed again, it starts at once), running, or
   // paused; the pill steers it, above the bar's place. A finger on the page, the wheel, a key that scrolls, a scroll
@@ -519,7 +610,7 @@
     pill.hidden = scroll.state === "off";
     if (scroll.state === "off") delete doc.dataset.pill;
     else doc.dataset.pill = scroll.state;
-    bar.classList.toggle("away", moving() && sheetAt === null);  // the overlay's sheet sits on it
+    bar.classList.toggle("away", moving() && !docked());  // the overlay's sheet, or the list, sits on it
     pill.dataset.state = scroll.state;
     go.setAttribute("aria-label", LABELS[scroll.state] || "Pause");
     $("tick").textContent = scroll.state === "counting"
@@ -664,7 +755,7 @@
       reveal.y = y;
       return;
     }
-    if (!reveal.touched || !sizes.hidden || sheetAt !== null || bar.contains(document.activeElement)) {
+    if (!reveal.touched || !sizes.hidden || docked() || bar.contains(document.activeElement)) {
       reveal.y = y;
       return;
     }
@@ -683,12 +774,8 @@
   // tab's own legend", "as you set it") is a link to the server's own page of the readings caracole weighs for this
   // tab (/harmonica?page=, its library path), and a tab read by harptabs.com's own key, or shown as written, has a
   // "Change how it's read" link at its foot. From a file, or in caracole's Android app, no server answers: no link.
-  const served = location.protocol !== "file:" && location.hostname !== "appassets.androidplatform.net";
   if (served) {
-    let path = "";
-    try {
-      path = decodeURIComponent(location.pathname.slice(1));
-    } catch (err) { /* an address that can't be read: no link */ }
+    const path = libraryPath;  // "" for an address that can't be read: no link
     const href = "/harmonica?page=" + encodeURIComponent(path);
     const source = $("reading-src"), foot = $("reading-foot");
     if (path && source) {

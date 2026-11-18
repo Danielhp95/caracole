@@ -2,9 +2,9 @@
   "use strict";
   // The version line under a song's title, and the list it opens: which of the song's versions this page is, and an
   // icon for each kind of thing the song keeps to play from, with how many of it. Inlined on a sheet viewer's page
-  // (sheet.html and a kept version's page) after layers.js and before the page's own script, which attaches it; never
-  // in a songbook, whose songs have no versions. It loads nothing: the standard library alone, every element made
-  // with createElement and textContent.
+  // (sheet.html and a kept version's page, viewer.js) and on a harmonica tab's page (harptab.js) after layers.js and
+  // before the page's own script, which attaches it; never in a songbook, whose songs have no versions. It loads
+  // nothing: the standard library alone, every element made with createElement and textContent.
   //
   // window.caracoleKinds:
   //   GLYPHS           the library card's drawings of what a song holds (library_assets/rows.js GLYPHS, copied: the
@@ -19,7 +19,9 @@
   //                    ``this``, the one's provider ``sheet`` and ``pinned``) or ``kinds`` (what else it keeps to play
   //                    from, render.py _kinds_data: ``sheet``, ``page``, ``groups``), and shows it where the versions
   //                    list any version or the song keeps more than this page alone; null on a page with no
-  //                    #versions, or nothing to show. o: here, this page's file name ("sheet.html"); served, whether
+  //                    #versions, or nothing to show. A page that is one of another kind's items (a harmonica tab's,
+  //                    its ``page``) names that kind and which of them it is ("Harmonica · Tab 1 of 2"), none of UG's
+  //                    versions its own. o: here, this page's file name ("sheet.html"); served, whether
   //                    caracole serve sent it (its /versions page then keeps a version, or makes one the one); sheetPath,
   //                    the page's path in the library ("Artist/Title/sheet.html"), absent for a page of a song with no
   //                    sheet; carry(page), the address of another page of the song from this one, with what the reader
@@ -162,6 +164,8 @@
     // each group's but this page's own (a harmonica tab's page is one of its group).
     const elsewhere = (kinds && typeof kinds.page === "string" && kinds.page && kinds.page !== here ? 1 : 0)
       + groups.reduce((n, g) => n + g.items.filter((item) => item.page !== here).length, 0);
+    // The group this page is one of, where it is another kind's page (a harmonica tab's), or null.
+    const hereIn = here ? groups.find((g) => g.items.some((item) => item.page === here)) || null : null;
     if (vRows.length === 0 && elsewhere === 0) return null;
     const counted = (sheetKind ? [[sheetKind, vRows.length ? vTotal : 1]] : [])
       .concat(groups.map((g) => [g.kind, g.items.length]));
@@ -169,8 +173,11 @@
     // --- the line: its kind, which version this page is and its rating; then an icon a kind, with how many ------------
     const drawLine = () => {
       box.hidden = false;
-      const words = [SHEETS[sheetKind] || SHEETS.sheet];
-      if (vHere) {
+      const words = [hereIn ? NAMES[hereIn.kind] : SHEETS[sheetKind] || SHEETS.sheet];
+      if (hereIn) {  // which of its kind's pages: "Tab 1 of 2"
+        const n = hereIn.items.findIndex((item) => item.page === here);
+        if (hereIn.items.length > 1) words.push("Tab " + (n + 1) + " of " + hereIn.items.length);
+      } else if (vHere) {
         if (vTotal > 1) words.push(vName(vHere) + " of " + vTotal);
         if (typeof vHere.label === "string" && vHere.label) words.push(vHere.label);
         words.push(stars(vHere));

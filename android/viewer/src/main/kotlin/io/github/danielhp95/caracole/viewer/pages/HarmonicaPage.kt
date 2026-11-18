@@ -25,6 +25,7 @@ import io.github.danielhp95.caracole.viewer.harptab.Row
 import io.github.danielhp95.caracole.viewer.harptab.Tab
 import io.github.danielhp95.caracole.viewer.harptab.TabSection
 import io.github.danielhp95.caracole.viewer.harptab.Words
+import io.github.danielhp95.caracole.viewer.pages.internal.PageConstants
 import io.github.danielhp95.caracole.viewer.shapes.Instruments
 import io.github.danielhp95.caracole.viewer.sheet.Sheet
 import io.github.danielhp95.caracole.viewer.sheet.SheetView
@@ -46,8 +47,9 @@ import java.math.BigInteger
 /**
  * viewer/harptab_page.py: harmonica-N.html, a harmonica tab caracole kept from harptabs.com as a page in the sheet
  * viewer's look, byte for byte as `build_harmonica_viewer` writes it for the same inputs. It is sheet.html's kind of
- * page (SheetPage's frame: `_page`, `names_table`, `zh_attr`, `artist_line`, `_words`), its stylesheets viewer.css then
- * harptab.css and its scripts strum.js, overlay.js, layers.js then harptab.js (ViewerAssets.Page.HARMONICA); the tab
+ * page (SheetPage's frame: `_page`, `names_table`, `zh_attr`, `artist_line`, `_words`, and page.py's version line and
+ * list, `_VERSIONS` and `_VERSION_LIST`), its stylesheets viewer.css then harptab.css and its scripts strum.js,
+ * overlay.js, layers.js, kinds.js then harptab.js (ViewerAssets.Page.HARMONICA); the tab
  * read by viewer.harptab (HarpTabs.parse) and the harp it starts on chosen by HarpFit.choose. Its HTML is
  * harptab_page.py's: the bar, the bar of a tab shown as written and the pill, and its constants, are data
  * (data/caracole/viewer/harmonica_page.json's `harptab_page`, written from the module), the rest its code here. Its
@@ -91,15 +93,20 @@ object HarmonicaPage {
      * one HarpTabs.pinned refuses, or a legend the tab hasn't got, is read as guessed), [facts] what else it says (the
      * version's raw: `difficulty`, `views`, `rating`). [cho] is the song's chord sheet (its human one, else its auto
      * one), with [key] and [keySource], its key as keys.py found it. [back] names the song's sheet viewer beside the
-     * page, which ‹ Chord sheet opens; with none, ‹ Library.
+     * page, which ‹ Chord sheet opens; with none, ‹ Library. [versions], the song's UG chords versions (render.py
+     * `_versions_data`, each entry's `this` false), and [kinds], what else it keeps to play from (`_kinds_data`), go
+     * in its data after `overlay`, for the version line and its list (kinds.js); without them, its data has neither.
      */
     fun build(text: String, title: String, artist: String = "", tabFile: String, url: String? = null,
               pageKey: String? = null, harp: String? = null, pin: JsonElement? = null, facts: JsonObject? = null,
-              cho: String? = null, key: String? = null, keySource: String? = null, back: String? = null): String {
+              cho: String? = null, key: String? = null, keySource: String? = null, back: String? = null,
+              versions: JsonObject? = null, kinds: JsonObject? = null): String {
         val tab = HarpTabs.parse(text, harp = harp, notation = pinned(pin, text))
         val choice = HarpFit.choose(tab, cho = cho, key = key, keySource = keySource, pageKey = pageKey)
         val data = Data(tab, choice)
         data.overlay = overlayData(choice, cho, key, keySource)
+        data.versions = versions
+        data.kinds = kinds
         val named = title.ifEmpty { "Untitled" }
         val pageTitle = "$named · harmonica tab"
         // The song's names in the characters its viewer shows its Chinese in, for a song whose sheet is Chinese
@@ -117,6 +124,7 @@ object HarmonicaPage {
             .append("</div>\n")
             .append(if (readable) BAR else BAR_RAW)
             .append(PILL)
+            .append(PageConstants.VERSION_LIST)
             .append(Inline.jsonBlock("harp-data", data.json()))
             .append(if (!names.isNullOrEmpty()) Inline.jsonBlock("song-names", namesJson(names)) else "")
             .toString()
@@ -126,12 +134,15 @@ object HarmonicaPage {
 
     // --- the data ------------------------------------------------------------------------------------------------
 
-    /** The page's `harp-data`, its members in Python's order; [groups] and [rows] filled as the tab is written. */
+    /** The page's `harp-data`, its members in Python's order; [groups] and [rows] filled as the tab is written,
+     * [versions] and [kinds] after [overlay] where given. */
     private class Data(tab: Tab, choice: Choice) {
         val head = LinkedHashMap<String, JsonElement>()
         val groups: MutableList<JsonElement>? = if (tab.readable) ArrayList() else null
         val rows: MutableList<JsonElement>? = if (tab.readable) ArrayList() else null
         var overlay: JsonElement = JsonNull
+        var versions: JsonObject? = null
+        var kinds: JsonObject? = null
 
         init {
             val why = LinkedHashMap<String, JsonElement>()
@@ -161,6 +172,8 @@ object HarmonicaPage {
             if (groups != null) out["groups"] = JsonArray(groups)
             if (rows != null) out["rows"] = JsonArray(rows)
             out["overlay"] = overlay
+            versions?.let { out["versions"] = it }
+            kinds?.let { out["kinds"] = it }
             return JsonObject(out)
         }
     }
@@ -262,6 +275,7 @@ object HarmonicaPage {
         return "<header class=\"head\">\n" + link +
             "<h1${SheetPage.zhAttr(named, names)}>${PyText.escape(named)}</h1>\n" +
             SheetPage.artistLine(artist, names) +
+            PageConstants.VERSIONS +
             (if (readable) harpLines(choice) else
                 "<p class=\"facts\" id=\"facts\">Harmonica tab, as written. We can't read its notation.</p>\n") +
             (if (readable) readAs(tab.reading, facts) else "") +
