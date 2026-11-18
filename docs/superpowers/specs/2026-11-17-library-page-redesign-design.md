@@ -244,6 +244,12 @@ to the next frame; "type" is "a" typed in the search box, to the second frame af
 Frame times are multiples of 16.7 ms (the headless compositor's 60 Hz). What 1d gained is the nodes: a card is built when
 it opens, so 210,000 nodes fewer on the page.
 
+One SVG sprite for the glyphs (a `<symbol>` each, every glyph a `<use>`) was built and measured in 1e.2, 10 interleaved
+rounds against the inline paths, 2,000 songs, 390 x 844, 4x CPU, and reverted: style recalculation +290 ms (+23 %),
+drawn +136 ms (+5 %), first paint +326 ms (+8 %), typing "a" +317 ms (+13 %), 14k more nodes and 9.3k more layout
+objects (Chromium's `<use>` instance), script and layout time flat, page +1.6 KB. Don't try it again. Untried: one
+ready-made `<svg>` per name, each glyph a `cloneNode(true)` of it.
+
 ## Left to the builder
 
 How each stage is tested and in what order within its lane; the exact sizes and radii not stated above; animation
