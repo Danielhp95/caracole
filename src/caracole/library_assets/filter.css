@@ -13,15 +13,15 @@
 .toolbar .tags:has(> :not([hidden])) { margin-top: 8px; }
 .tags { display: flex; flex: 1 1 auto; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
 .tools { display: flex; flex: none; align-items: center; gap: 8px; min-width: 0; }
-.bar-row .tool { min-height: 40px; border-radius: 12px; }
+.bar-row .tool { min-height: 40px; border-radius: var(--radius-l); }
 .tool { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 0 12px; border: 1px solid
-  var(--control-edge); border-radius: 10px; background: var(--surface); color: var(--text); font: inherit;
+  var(--control-edge); border-radius: var(--radius-m); background: var(--surface); color: var(--text); font: inherit;
   font-size: .88rem; font-weight: 600; white-space: nowrap; cursor: pointer; }
 .tool:hover { border-color: var(--text); }
 .tool .glyph, .tool-menu .glyph { flex: none; width: 16px; height: 16px; }
 .tool.on { border-color: var(--accent); background: var(--accent-soft); }
 .tool.on > .glyph { color: var(--accent); }
-.filter-n { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px;
+.filter-n { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--radius-pill);
   background: var(--accent); color: var(--on-accent); font-size: .74rem; font-weight: 750; line-height: 1;
   font-variant-numeric: tabular-nums; }
 /* Sort is the native menu, drawn as a button: its glyph over its left end, its order's name the menu's own. */
@@ -30,13 +30,13 @@
 .tool-menu select.tool { padding-left: 35px; -webkit-appearance: none; appearance: none; field-sizing: content;
   min-width: 0; max-width: 100%; }
 .tag { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 6px 0 10px; border: 1px solid
-  color-mix(in srgb, var(--accent) 55%, transparent); border-radius: 999px; background: var(--accent-soft);
+  color-mix(in srgb, var(--accent) 55%, transparent); border-radius: var(--radius-pill); background: var(--accent-soft);
   color: var(--text); font: inherit; font-size: .84rem; font-weight: 600; cursor: pointer; }
 .tag .glyph { flex: none; width: 15px; height: 15px; color: var(--accent); }
 .tag .x { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; color: var(--accent); }
 .tag .x .glyph { width: 12px; height: 12px; }
 .tag:hover .x { background: color-mix(in srgb, var(--accent) 18%, transparent); }
-.clear-filters, .clear-all { min-height: 32px; padding: 0 6px; border: 0; border-radius: 8px; background: none;
+.clear-filters, .clear-all { min-height: 32px; padding: 0 6px; border: 0; border-radius: var(--radius-m); background: none;
   color: var(--accent); font: inherit; font-size: .85rem; font-weight: 650; cursor: pointer; }
 .clear-filters:hover, .clear-all:hover { text-decoration: underline; text-underline-offset: 3px; }
 
@@ -44,18 +44,18 @@
    from the bottom over the page dimmed, ending in Show N songs. */
 .filter-panel { position: absolute; inset: auto; z-index: 4; width: min(400px, calc(100vw - 32px)); max-width: none;
   max-height: none; margin: 0; padding: 14px; overflow: visible; border: 1px solid var(--border-strong);
-  border-radius: 14px; background: var(--surface); color: var(--text); box-shadow: var(--pop-shadow); }
+  border-radius: var(--radius-l); background: var(--surface); color: var(--text); box-shadow: var(--pop-shadow); }
 .filter-panel::before { content: ""; position: absolute; top: -7px; left: calc(var(--arrow, 50%) - 6px); width: 12px;
   height: 12px; transform: rotate(45deg); border-top: 1px solid var(--border-strong);
   border-left: 1px solid var(--border-strong); background: var(--surface); }
 .filter-panel:modal { position: fixed; inset: auto 0 0; width: 100%; max-height: calc(100% - 24px); padding: 8px 16px
   calc(14px + env(safe-area-inset-bottom)); overflow-y: auto; overscroll-behavior: contain; border-width: 1px 0 0;
-  border-radius: 20px 20px 0 0; box-shadow: 0 -16px 40px rgb(0 0 0 / 30%); }
+  border-radius: var(--radius-l) var(--radius-l) 0 0; box-shadow: 0 -16px 40px rgb(0 0 0 / 30%); }
 .filter-panel:modal::before { display: none; }
 .filter-panel::backdrop { background: rgb(0 0 0 / 45%); }
 html.sheet-open { overflow: hidden; }
 .grab { display: none; }
-.filter-panel:modal .grab { display: block; width: 40px; height: 4px; margin: 0 auto 10px; border-radius: 4px;
+.filter-panel:modal .grab { display: block; width: 40px; height: 4px; margin: 0 auto 10px; border-radius: var(--radius-s);
   background: var(--border-strong); }
 .fsec + .fsec { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
 .filter-panel:modal .fsec + .fsec { margin-top: 10px; padding-top: 10px; }
@@ -64,10 +64,10 @@ html.sheet-open { overflow: hidden; }
   text-transform: uppercase; }
 .fhead em { font-size: .74rem; font-style: normal; font-weight: 500; letter-spacing: 0; text-transform: none; }
 /* A segmented control: one of its options, the arrow keys moving between them. */
-.seg { display: flex; gap: 2px; padding: 3px; border: 1px solid var(--border); border-radius: 10px;
+.seg { display: flex; gap: 2px; padding: 3px; border: 1px solid var(--border); border-radius: var(--radius-m);
   background: var(--bg); }
 .seg [role="radio"] { display: inline-flex; flex: 1 1 0; align-items: center; justify-content: center; gap: 5px;
-  min-width: 0; min-height: 30px; padding: 0 6px; border: 0; border-radius: 7px; background: none; color: var(--muted);
+  min-width: 0; min-height: 30px; padding: 0 6px; border: 0; border-radius: var(--radius-m); background: none; color: var(--muted);
   font: inherit; font-size: .84rem; font-weight: 600; white-space: nowrap; cursor: pointer; }
 .seg [role="radio"]:hover { color: var(--text); }
 .seg [aria-checked="true"] { background: var(--seg-on); color: var(--text);
@@ -76,7 +76,7 @@ html.sheet-open { overflow: hidden; }
 /* What a song has something for: any of them on. */
 .fchips { display: flex; flex-wrap: wrap; gap: 6px; }
 .fchip { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 11px; border: 1px solid
-  var(--border-strong); border-radius: 999px; background: var(--surface); color: var(--text); font: inherit;
+  var(--border-strong); border-radius: var(--radius-pill); background: var(--surface); color: var(--text); font: inherit;
   font-size: .84rem; font-weight: 550; white-space: nowrap; cursor: pointer; }
 .fchip .glyph { flex: none; width: 16px; height: 16px; color: var(--muted); }
 .fchip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
@@ -84,7 +84,7 @@ html.sheet-open { overflow: hidden; }
 .fchip:disabled { opacity: .5; cursor: default; }
 /* The twelve tonics, by the circle of fifths: one with no song in the mode chosen dashed. */
 .tonics { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px; margin-top: 8px; }
-.tonics button { min-height: 32px; padding: 0; border: 1px solid var(--border-strong); border-radius: 8px;
+.tonics button { min-height: 32px; padding: 0; border: 1px solid var(--border-strong); border-radius: var(--radius-m);
   background: var(--surface); color: var(--text); font: inherit; font-size: .84rem; font-weight: 650; cursor: pointer; }
 .tonics button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
 .tonics button:disabled { border-style: dashed; color: var(--muted); opacity: .6; cursor: default; }

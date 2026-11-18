@@ -853,19 +853,32 @@ a.ver-main .ver-name { color: var(--accent); }
 .wd-tabs .wd-key { margin-left: 4px; color: var(--muted); font-size: .85rem; }
 .wd-tabs .wd-text { margin-left: 8px; color: var(--muted); font-size: .85rem; }  /* the tab's text, beside its page */
 
-/* A wide screen: one column, centred, in larger text; two side by side only for a song the window
-   shows whole that way (viewer.js measures it, and says so in data-columns). A longer song would
-   run down the first column and back up the second, against the reading order and the autoscroll.
-   Each column of two is at least 24 em of the reader's own text, so two and their gap fit at larger
-   sizes (the owner's narrower columns, D8): never a smaller text to make them fit. */
+/* A wide screen: one column, centred, in larger text; columns side by side only for a song the window
+   shows whole that way, the fewest that do, two to five (viewer.js layout() measures it, and says how
+   many in data-columns). A longer song would run down the first column and back up the next, against
+   the reading order and the autoscroll. Each column is at least as wide as the song's widest line, at
+   least 16 em of the reader's own text and never asked for more than 24 em (the owner's narrower
+   columns, D8): never a smaller text to make them fit. */
 @media (min-width: 1100px) {
   .page { max-width: 860px; }
-  :root:not([data-columns="2"]) .sheet { font-size: calc(var(--fs) + 3px); }
-  /* Two columns span the window, 5% of the room each side (the room beside the rail of necks, which
-     moves the body over for it: a padding's percentage is of that room). */
-  [data-columns="2"] .page { max-width: none; padding-left: 5%; padding-right: 5%; }
-  [data-columns="2"] .sheet { columns: 2 24em; column-gap: clamp(56px, 4vw, 96px); }
+  :root:not([data-columns]) .sheet, :root[data-columns="1"] .sheet { font-size: calc(var(--fs) + 3px); }
 }
+/* The columns span the window, 5% of the room each side (the room beside the rail of necks, which
+   moves the body over for it: a padding's percentage is of that room), and share it: the room over
+   widens each column, never the gap, which is narrower between three or more. On the screen alone:
+   printed, the song is one column. */
+@media screen and (min-width: 1100px) {
+  :root[data-columns]:not([data-columns="1"]) .page { max-width: none; padding-left: 5%; padding-right: 5%; }
+  :root[data-columns="2"] .sheet { column-count: 2; column-gap: clamp(56px, 4vw, 96px); }
+  :root[data-columns="3"] .sheet { column-count: 3; }
+  :root[data-columns="4"] .sheet { column-count: 4; }
+  :root[data-columns="5"] .sheet { column-count: 5; }
+  :root[data-columns="3"] .sheet, :root[data-columns="4"] .sheet, :root[data-columns="5"] .sheet {
+    column-gap: clamp(40px, 2.5vw, 64px); }
+}
+/* layout() measures each of the song's lines as it would run unwrapped: for a moment, as wide as its
+   content (a row of bar cells with its cells at their own width, a tab as wide as its text). */
+.sheet.measure .sec > .l, .sheet.measure .sec > .tab { width: max-content; }
 /* From 900 px wide: the settings a rail beside the song, which moves over for it, and the card a
    popover by its chord, placed in the page by the script (--pop-top, --pop-left). Both may be open. So is
    the versions list, a popover under its line (layers.js placeUnder: 6 px under #ver-now, at its left, within the

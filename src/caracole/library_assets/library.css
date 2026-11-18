@@ -48,17 +48,17 @@
   font-size: .95rem; font-weight: 650; white-space: nowrap; cursor: pointer; }
 .tab:hover { color: var(--text); }
 .tab[aria-selected="true"] { border-bottom-color: var(--accent); color: var(--text); }
-.tab .n { min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--raised); color: var(--muted);
+.tab .n { min-width: 20px; padding: 0 6px; border-radius: var(--radius-pill); background: var(--raised); color: var(--muted);
   font-size: .75rem; line-height: 20px; text-align: center; font-variant-numeric: tabular-nums; }
 .tab .n:empty { display: none; }
-.stat { padding: 3px 10px; border-radius: 999px; background: var(--raised); color: var(--muted); font-size: .82rem;
+.stat { padding: 3px 10px; border-radius: var(--radius-pill); background: var(--raised); color: var(--muted); font-size: .82rem;
   font-variant-numeric: tabular-nums; }
 .stat b { color: var(--text); font-weight: 650; }
-.request { margin: 8px 0 0; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); }
+.request { margin: 8px 0 0; border: 1px solid var(--border); border-radius: var(--radius-l); background: var(--surface); }
 .request > summary { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 16px; cursor: pointer;
   font-weight: 650; list-style: none; }
 .request > summary::-webkit-details-marker { display: none; }
-.plus { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 8px;
+.plus { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: var(--radius-m);
   background: var(--accent); color: var(--on-accent); font-size: 1.15rem; line-height: 1; }
 .plus span { display: inline-block; }
 .request[open] > summary .plus span { transform: rotate(45deg); }  /* the + turns into a ×, the square stays */
@@ -77,17 +77,17 @@
 .bar-edge { height: 0; }
 .field { position: relative; }
 .field input {
-  width: 100%; height: 46px; padding: 0 16px; border-radius: 14px; border: 1px solid var(--border);
+  width: 100%; height: 46px; padding: 0 16px; border-radius: var(--radius-l); border: 1px solid var(--border);
   background: var(--surface); color: var(--text); font: inherit; font-size: 1rem; -webkit-appearance: none; appearance: none;
 }
 .field input::placeholder { color: var(--muted); opacity: 1; }
 .field input:not(:placeholder-shown) { padding-right: 48px; }  /* room for the clear button */
 .field input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
 .field input:focus { border-color: var(--focus); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 30%, transparent); }
-.clear { position: absolute; top: 1px; right: 1px; width: 44px; height: 44px; border: 0; border-radius: 12px;
+.clear { position: absolute; top: 1px; right: 1px; width: 44px; height: 44px; border: 0; border-radius: var(--radius-l);
   background: transparent; color: var(--muted); font-size: 1.5rem; line-height: 1; cursor: pointer; }
 /* Searching (body.search-mode): the ← at the box's left that leaves the search, the text typed after it. */
-.leave { position: absolute; top: 1px; left: 1px; width: 44px; height: 44px; border: 0; border-radius: 12px;
+.leave { position: absolute; top: 1px; left: 1px; width: 44px; height: 44px; border: 0; border-radius: var(--radius-l);
   background: transparent; color: var(--muted); font-size: 1.25rem; line-height: 1; cursor: pointer; }
 .field:has(> .leave:not([hidden])) input { padding-left: 44px; }
 /* On a phone, search takes the screen: the logo and tabs slide away (--mast-h measured by searchMode before the class
@@ -137,7 +137,7 @@
   .lib-main { min-width: 0; }
   .card-pane { display: block; position: sticky; top: calc(var(--bar-h) + 8px); max-width: 480px;
     max-height: calc(100vh - var(--bar-h) - 16px); overflow-y: auto; overscroll-behavior: contain; margin-top: 10px;
-    border: 1px solid var(--border); border-radius: 12px; background: var(--card); box-shadow: var(--shadow); }
+    border: 1px solid var(--border); border-radius: var(--radius-l); background: var(--card); box-shadow: var(--shadow); }
   .pane-empty { margin: 0; padding: 28px 20px; color: var(--muted); font-size: .9rem; text-align: center; }
   /* The card there: its parts in a column, its head the pane's heading, across its top, always shown and never
      stuck (it is in place: above), its "⋯" menu opening downward, under the button, inside the pane. */
@@ -172,7 +172,7 @@
   font-size: .85rem; }
 .searching-all .prog-filter { display: none; }
 .prog-found { margin: 10px 0 0; }
-/* The sites' results: one box of groups, as the list's, your songs and the indexes' under each artist's header, then
+/* The sites' results: groups, as the list's, your songs and the indexes' under each artist's header, then
    the artist's foot: "+ 57 more by Estopa", or the offer to read their page on LaCuerda. */
 #found > .groups { margin-top: 10px; }
 .group-tail { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 2px 4px 4px 12px;
@@ -187,24 +187,22 @@
 .badge.removed { color: var(--ignored); background: var(--ignored-bg); }
 .results .request { margin-top: 20px; }
 .file-answer { display: grid; gap: 8px; max-width: 72ch; margin: 6px 0 12px; padding: 12px 14px;
-  border: 1px solid var(--border); border-radius: 14px; background: var(--surface); font-size: .92rem; }
+  border: 1px solid var(--border); border-radius: var(--radius-l); background: var(--surface); font-size: .92rem; }
 .file-answer p { margin: 0; }
 .command { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .command code { flex: 1 1 240px; padding: 8px 10px; user-select: all; }
 .empty + .btn.primary { margin-top: 4px; }
 .jump { display: flex; gap: 2px; margin: 10px 0 0; padding: 2px 0; overflow-x: auto; scrollbar-width: none; }
 .jump::-webkit-scrollbar { display: none; }
-.jump button { flex: none; min-width: 36px; height: 36px; padding: 0 8px; border: 0; border-radius: 10px;
+.jump button { flex: none; min-width: 36px; height: 36px; padding: 0 8px; border: 0; border-radius: var(--radius-m);
   background: transparent; color: var(--muted); font: inherit; font-size: .9rem; font-weight: 650; cursor: pointer; }
 .jump button:hover { background: var(--raised); color: var(--text); }
 .count { margin: 8px 0 0; color: var(--muted); font-size: .85rem; }
 .count[hidden] { display: none; }
-/* The songs: by artist, one box of groups, each artist's name and how many of their songs are yours on a band over
-   their lines; by title or by when they came, one box of lines. */
-.lines, .groups { border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
-  box-shadow: var(--shadow); }
+/* The songs: by artist, groups, each artist's name and how many of their songs are yours on a band over their lines;
+   by title or by when they came, lines. No box around them, no outline, shadow or fill of their own: the bands and the
+   dividers between lines and groups are the list's shape. */
 .list > .groups, .list > section.flat { margin-top: 10px; }
-section.artist .lines, section.nothing .lines { border: 0; border-radius: 0; background: none; box-shadow: none; }
 section.artist + section.artist, .groups > section + section.nothing { border-top: 1px solid var(--border); }
 /* A long list's groups and lines off the screen aren't laid out (library.js render: each band group of 50 lines or
    fewer, and each run, div.run, of 40 lines or folded artists, is a .cv). Each is as tall as what it holds says
@@ -238,7 +236,6 @@ section.artist:focus-visible > .artist-title { outline: 3px solid var(--focus); 
 .artist-title { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; height: var(--band-h); min-height: 0;
   margin: 0; padding: 0 12px; border-bottom: 1px solid var(--border); background: var(--raised); color: var(--artist);
   font-size: .906rem; font-weight: 700; line-height: 1.2; overflow: hidden; }
-section.artist:first-child > .artist-title { border-radius: 11px 11px 0 0; }
 .artist-title .artist-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto;
   min-width: 0; }
 .artist-title button.artist, .artist-title button.artist:hover { color: var(--artist); font-size: inherit;
@@ -252,7 +249,6 @@ section.artist:first-child > .artist-title { border-radius: 11px 11px 0 0; }
 .miss-band { min-height: 34px; margin: 0; padding: 8px 12px; border-bottom: 1px solid var(--border);
   background: var(--raised); color: var(--text); font-size: .875rem; font-weight: 700; letter-spacing: .02em;
   line-height: 1.3; overflow-wrap: anywhere; }
-section.nothing:first-child > .miss-band { border-radius: 11px 11px 0 0; }
 section.nothing .line.miss:has(> .line-more[aria-expanded="true"]) { margin: 0; border: 0; border-radius: 0;
   background: none; box-shadow: none; }
 section.nothing .line.miss > .line-panel { gap: 6px; padding: 4px 0 8px; }
@@ -349,7 +345,7 @@ section.artist.folded .line-by, section.flat .line-by { flex: 0 1 auto; color: v
 .progress .dot { margin: 0 .4em; opacity: .6; }
 /* A removal counting down: its seconds, Undo, and what goes, under it. */
 .progress .left { font-variant-numeric: tabular-nums; }
-.progress .undo { min-height: 32px; margin: 0; padding: 0 6px; border: 0; border-radius: 8px; background: none;
+.progress .undo { min-height: 32px; margin: 0; padding: 0 6px; border: 0; border-radius: var(--radius-m); background: none;
   color: inherit; font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 2px;
   cursor: pointer; }
 .progress .undo:hover { background: var(--raised); }
@@ -359,16 +355,16 @@ section.artist.folded .line-by, section.flat .line-by { flex: 0 1 auto; color: v
 /* The requests, folded to a pill in the corner over the page's margin, on every width; opened, a list above it. */
 .tray { position: fixed; z-index: 3; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); display: flex;
   flex-direction: column-reverse; width: max-content; max-width: calc(100vw - 32px); border: 1px solid var(--border-strong);
-  border-radius: 999px; background: var(--surface); box-shadow: 0 8px 28px rgb(0 0 0 / 18%); }
-.tray.open { width: min(26rem, calc(100vw - 32px)); border-radius: 16px; }
+  border-radius: var(--radius-pill); background: var(--surface); box-shadow: 0 8px 28px rgb(0 0 0 / 18%); }
+.tray.open { width: min(26rem, calc(100vw - 32px)); border-radius: var(--radius-l); }
 .tray-head { display: flex; align-items: center; gap: 2px; padding: 2px 4px; }
-.tray-toggle { flex: 1; min-width: 0; min-height: 44px; padding: 0 10px; border: 0; border-radius: 12px;
+.tray-toggle { flex: 1; min-width: 0; min-height: 44px; padding: 0 10px; border: 0; border-radius: var(--radius-l);
   background: none; color: var(--text); font: inherit; font-weight: 650; text-align: left; cursor: pointer; }
 .tray-toggle::after { content: "▾"; display: inline-block; margin-left: 6px; color: var(--muted); }
 .tray-toggle[aria-expanded="false"]::after { transform: rotate(180deg); }
 .tray-all { display: inline-flex; align-items: center; min-height: 44px; padding: 0 8px; color: var(--muted);
   font-size: .85rem; font-weight: 600; }
-.tray-close { flex: none; width: 44px; height: 44px; border: 0; border-radius: 12px; background: none;
+.tray-close { flex: none; width: 44px; height: 44px; border: 0; border-radius: var(--radius-l); background: none;
   color: var(--muted); font-size: 1.4rem; line-height: 1; cursor: pointer; }
 .tray-list { display: grid; gap: 8px; max-height: min(40vh, 18rem); margin: 0; padding: 12px 14px 4px;
   overflow-y: auto; list-style: none; }
@@ -386,8 +382,8 @@ form.youtube-sheet .f { flex: 1 1 260px; }
 .youtube-box { margin: 14px 0 0; }
 .youtube-said { margin: 0; }
 .youtube-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px;
-  padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
-.yt-thumb { display: block; width: 120px; height: 90px; object-fit: cover; border-radius: 8px; background: var(--border); }
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-l); background: var(--surface); }
+.yt-thumb { display: block; width: 120px; height: 90px; object-fit: cover; border-radius: var(--radius-m); background: var(--border); }
 .yt-text { min-width: 0; }
 .yt-title { margin: 0; font-size: 1rem; overflow-wrap: anywhere; }
 .yt-label, .yt-meta { margin: 0; color: var(--muted); font-size: .85rem; }
@@ -400,7 +396,7 @@ form.youtube-sheet .f { flex: 1 1 260px; }
 /* A link pasted into the box, a YouTube video's or a UG page's (library.js linkMode): its panel in the results' place. */
 .link-off { display: none !important; }
 .results.link-mode .request { display: none; }
-.link-panel { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 12px;
+.link-panel { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-l);
   background: var(--surface); }
 .link-media { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .link-media:empty { display: none; }
@@ -435,6 +431,6 @@ form.youtube-sheet .f { flex: 1 1 260px; }
   line-height: 1.3; white-space: nowrap; text-overflow: ellipsis; }
 .card-by { font-weight: 400; color: var(--muted); }
 .card-close { flex: none; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0;
-  border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; }
+  border-radius: var(--radius-m); background: transparent; color: var(--muted); cursor: pointer; }
 .card-close:hover { background: var(--raised); color: var(--text); }
 .card-close svg.glyph { width: 18px; height: 18px; }

@@ -11,7 +11,7 @@
 .req-group:first-child .req-head { margin-top: 6px; }
 .req-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .req { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px 12px;
-  padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius-l, 12px); background: var(--surface);
+  padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius-l); background: var(--surface);
   box-shadow: var(--shadow); scroll-margin-top: 16px; }
 .req:focus { outline: none; }
 .req:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -19,7 +19,7 @@
   overflow-wrap: anywhere; }
 .req-song { font-weight: 650; }
 .req-ago { color: var(--muted); font-size: .88rem; }
-.req-says { padding: 2px 10px; border-radius: var(--radius-pill, 999px); font-size: .8rem; font-weight: 650; white-space: nowrap;
+.req-says { padding: 2px 10px; border-radius: var(--radius-pill); font-size: .8rem; font-weight: 650; white-space: nowrap;
   color: var(--ignored); background: var(--ignored-bg); }
 .req-says:is([data-tone="ready"], [data-tone="removed"], [data-tone="done"]) { color: var(--found);
   background: var(--found-bg); }
@@ -37,8 +37,8 @@
 .req.running .req-song { font-size: 1.15rem; }
 /* A request's steps, across the card (library.js's list; its step's padding is steps.css's, for the hanging marks). */
 .req .step-list { display: grid; grid-column: 1 / -1; margin: 2px 0 0; }
-/* Its buttons take the page's medium radius (base.css's .btn is 11 px). */
-.req .btn { border-radius: var(--radius-m, 8px); }
+/* Its buttons take the page's medium radius, whatever base.css's .btn has. */
+.req .btn { border-radius: var(--radius-m); }
 .req-line, .req-reason, .req-output[open], .req.running .req-output { grid-column: 1 / -1; }
 .req-next { grid-column: 1; }
 .req.over .req-output:not([open]), .req.queued .req-output:not([open]) { grid-column: 2; }
@@ -62,13 +62,13 @@
 .req-meta { margin: 2px 0 8px; color: var(--muted); font-size: .85rem; overflow-wrap: anywhere; }
 .req-steps { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .req-steps.stages { margin-bottom: 8px; }  /* a lookup's stages, above the one command that ran them */
-.req-step { padding: 8px 10px; border-radius: var(--radius-m, 8px); background: var(--raised); }
+.req-step { padding: 8px 10px; border-radius: var(--radius-m); background: var(--raised); }
 .req-step .req-meta { margin: 4px 0 0; }
 .req-step-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: .92rem;
   font-weight: 600; }
 .req-note { margin: 6px 0 0; color: var(--review); font-size: .85rem; }
 .req .badge:is(.waiting, .skipped, .cancelled) { color: var(--ignored); background: var(--ignored-bg); }
 .req .badge.interrupted { color: var(--wanted); background: var(--wanted-bg); }  /* the server stopped it */
-.req-output pre { max-height: 22rem; margin: 6px 0 0; padding: 10px; overflow: auto; border-radius: var(--radius-m, 8px);
+.req-output pre { max-height: 22rem; margin: 6px 0 0; padding: 10px; overflow: auto; border-radius: var(--radius-m);
   background: var(--bg); font: .8rem/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   white-space: pre-wrap; overflow-wrap: anywhere; }

@@ -1114,6 +1114,25 @@ It is rows.js's, shared by both pages:
 - index.html's stylesheets, scripts and markup are the .css, .js and .html files of library_assets/, inlined byte for
   byte in the order of `library_page.STYLESHEETS`, `SCRIPTS` and `TEMPLATES`, where a new file is listed
   (test_library_assets.py).
+- **Four corner radii** (stage 1f; base.css `:root`): `--radius-s` 4 px, `--radius-m` 8 px, `--radius-l` 12 px and
+  `--radius-pill` 999 px, besides square and 50 %; every stylesheet takes its radii from them. test_page_calm.py lists
+  the elements shown with another (`helpers.targets.odd_radii`), every one of the page, in each tab, a song's card (its
+  tiles, a tile's drawer, the ⋯ menu), the Filter panel, a search, the Sync sheet and the tray, at 390 and 1280 px,
+  light and dark. steps.css and requests.css (lane 2's) were already on the tokens, with fallbacks
+  (`var(--radius-m, 8px)`), which stage 1f dropped as a named crossing; songbooks.css (the Songbooks tab's) it brought
+  to them. The test serves the page with a lookup running and one queued, a songbook and each tab, and asserts each
+  state drew what it names (it measures elements, never pseudo-elements). caracole serve's own pages, base.css inlined
+  first (a pick, a removal, a message, the lookup page, the Guitar Pro page: pages.py, lookup_page.py, guitar.css),
+  take theirs from the same tokens (`test_caracole_serves_own_pages_have_the_same_four_radii`, alphaTab's drawing
+  inside `#score` left out, its box measured).
+- **No outline around the list** (stage 1f; library.css, rows.css): a list of lines or rows (`.groups`, `.lines`,
+  `.rows`: index.html's list and a search's results, the lookup page's rows) has no border, shadow or fill of its own,
+  the page's background under it: the bands (`--raised`) and the 1 px dividers between lines, rows and groups are its
+  shape, the first band as square as the others. A line's key (`.line-key`, `.row-key`) is plain text, muted and bold,
+  in no box; every song's title is semi-bold (600; a search's results' too, one weight for all), a band's name bold
+  (700) in `--artist`, its count muted. test_page_calm.py's `test_no_outline_around_the_list_or_the_key` measures them
+  on the page opened as a file (by artist and by title), a served search's results and the lookup page, at 390 and
+  1280 px, light and dark, and that each state drew what it names.
 - **A long list** (stage 1e; library.js `render`, library.css `#list .cv`): what is off the screen isn't laid out.
   Each band group of `BIG_GROUP` (50) lines or fewer is a `.cv`, a larger one's lines in runs of `RUN` (40) inside its
   `.lines`, under its band; folded artists in a row, and a flat list's lines, in runs of 40 too (`div.run`, each a
@@ -1303,12 +1322,17 @@ It is rows.js's, shared by both pages:
     is, and `auto` again once the page is back at its own entry, for a reload;
   - a history that refuses entries (a `pushState` that throws) turns it off: the layers open and close as before,
     and Back leaves the page (test_viewer_layers.py).
-- **The song's end**: `.page`'s padding is the bar's room (`--foot`), which `layout()` measures two columns against;
+- **The song's end**: `.page`'s padding is the bar's room (`--foot`), which `layout()` measures columns against;
   the half screen of over-scroll is `.page::after`, never in it, and print drops it.
-- **Two columns** (from 1100 px, viewer.css, test_viewer_layout.py) only where the whole song shows that way
-  (`layout()`), at the reader's own text size, never a smaller one, each at least 24 em (`columns: 2 24em`, the
-  owner's narrower columns, D8), spread across the window with 5 % of the room each side; else one column, `--fs` +
-  3 px.
+- **Columns** (from 1100 px, on the screen alone, viewer.css; test_viewer_layout.py) only where the whole song shows
+  that way, its end in the last column (`layout()`): the fewest that do, two to five (`MOST_COLUMNS`), each at least
+  the song's widest line (`widest()`: each `.sec > .l` and `.tab` as wide as its content, `.sheet.measure`, after
+  `fit()`) within `COLUMN_EM`, 16 em at least and 24 em asked at most (a song of long lines as before, the owner's
+  narrower columns, D8), the owner's ask of 2026-11-18; at the reader's own text size, never a smaller one, spread
+  across the window with 5 % of the room each side, the room over widening the columns (`column-count`), the gap
+  narrower from three; `data-columns` says how many, which viewer.css keys on (`:not([data-columns="1"])` the wide
+  page, a rule a count); else one column, `--fs` + 3 px, as a harmonica tab's page (no `data-columns`). A trial
+  count's `fit()` runs in one column that wide (`fitIn`), never in balanced columns.
 - **Full screen** (the sheet viewer's) is one of those layers, its element the handle (page.py `_HANDLE`,
   `button.handle#handle`, after the pill): `open(handle, opener)` sets `html[data-full="on"]`, which hides every
   element marked `data-controls` (the bar; a new control that full screen hides is marked so, nothing else changes),
