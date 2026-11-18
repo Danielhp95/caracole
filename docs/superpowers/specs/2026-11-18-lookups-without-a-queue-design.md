@@ -1,7 +1,7 @@
 # Lookups without a queue
 
-Status: written 2026-11-18 from the owner's decisions of that day (.superpowers/sdd/lookup-lane/decisions.md in the
-main checkout), which bind. The rest is this spec's; its own choices are marked *(call)*. The computer alone: the phone
+Status: written 2026-11-18 from the owner's decisions of that day (.superpowers/sdd/lookup-lane/decisions.md in the main
+checkout), which bind. The rest is this spec's; its own choices are marked *(my call)*. The computer alone: the phone
 keeps its one queue for now. Paths are under src/caracole/ unless named otherwise, the phone's under
 android/server/src/main/kotlin/io/github/danielhp95/caracole/server/jobs/; lines are main's at afe50f23.
 
@@ -122,9 +122,19 @@ From decisions.md:
 
 ### 1. The lane (web/jobs.py)
 
-A job is the lane's when each of its commands is a lane command. `lane_of(steps)` is a pure function of the steps,
-never stored: the history's format and its corpus stay, and a job that joins another moves with its steps (a lookup
-that takes an add's place).
+A request is the lane's when each of its commands is a lane command (`lane_of(steps)`, the table's last column) and
+its song (`song_key_of`, :468) has no job waiting or running in the queue.
+
+- *(my call)* A lane request for a song that has one goes into the queue as today, behind that job, by today's order and
+  joining rules (`_as_much`, `_join`): a removal (`remove:<key>`), a YouTube sheet (`youtube:<key>`), a Get the
+  missing songs' `get --no-songbooks`, a Keep it or a review's pick waiting. No lane jump past the song's own job, no
+  lane job waiting on a queue job, nothing pulled out of the queue. The owner's case, a song typed or a link pasted
+  with nothing of that song queued, is the lane's.
+- *(my call)* Lane requests join each other by today's rules. A queue request never joins a lane job that waits for a
+  slot: it is a job of its own in the queue, which starts once the lane is idle, so after it. A lane job that does as
+  much is still its answer (`_as_much`).
+- The lane is decided as the job is queued and kept on it in memory alone, never in `as_json` nor the history, as
+  `Job.report` is (:159): the history's format and its corpus stay, and a restart reads no job back waiting.
 
 | Asked from | Route | Command | Goes to |
 |---|---|---|---|
@@ -143,31 +153,38 @@ that takes an add's place).
 
 Its calls:
 
-- *(call)* Every route's `get`, not the search box's alone: a song's Fetch, Fetch again and the request form run the
+- *(my call)* Every route's `get`, not the search box's alone: a song's Fetch, Fetch again and the request form run the
   same command for the same "now", and the joining rules work by song key whichever button sent it.
-- *(call)* The search box's one-request reads join it: LaCuerda's search, which the page sends by itself as you type,
+- *(my call)* The search box's one-request reads join it: LaCuerda's search, which the page sends by itself as you type,
   and an artist's page. Each is one request at the lookup pace, and today waits behind whatever runs as a lookup did.
-- *(call)* YouTube's search and a pasted video stay in the queue: a yt-dlp run holds the lock with no point inside it
+- *(my call)* YouTube's search and a pasted video stay in the queue: a yt-dlp run holds the lock with no point inside it
   to pass a turn, after a 3.75–7.5 s pause, and it is a suggestion, not a song asked for. They let a lookup go first
   in that pause (part 4).
-- *(call)* Get the missing songs' lookups stay in the queue: a 20-song songbook would fill the lane for minutes, with a
-  song typed meanwhile behind it. As `get`s they still take turns at the lock with the lane's (part 2).
-- *(call)* `versions` stays in the queue: it is asked from a sheet's page, and Fetch them spends a lookup's whole
+- *(my call)* Get the missing songs' lookups stay in the queue: a 20-song songbook would fill the lane for minutes, with
+  a song typed meanwhile behind it. As `get`s they still take turns at the lock with the lane's (part 2).
+- *(my call)* `versions` stays in the queue: it is asked from a sheet's page, and Fetch them spends a lookup's whole
   budget.
-- *(call)* `LANE = 3` lane jobs run at once; a fourth waits in the lane, in order. The lock is one, so more at once
-  fetch no faster in all; each starts at once and shows its steps, and a slot costs a Python process (about half a
-  second to start). Two covers a song and another while it runs; three leaves room for a quick set list. `LIMIT`
-  counts both.
+- *(my call; the owner may overrule it)* `LANE = 3` lane jobs run at once; a fourth waits in the lane, in order. The
+  lock is one, so more at once fetch no faster in all; each starts at once and shows its steps, and a slot costs a
+  Python process (about half a second to start). Two covers a song and another while it runs; three leaves room for a
+  quick set list.
+- *(my call)* The lane has its own room, apart from the queue's `LIMIT` (20): `LANE` running and `LANE_WAITING` (10)
+  waiting for a slot, so Get the missing songs filling the queue's 20 never refuses a song typed in the search box.
+  A lane request past that room is refused as a full queue's is now: `QueueFull`, which `WebApp.submit` answers 503
+  "The queue is full" in the route's own words (web/app.py:485-492): a lookup's "… The queue is full: not fetched
+  now. Tonight's run looks for it, or ask again once the queue empties." (web/search_routes.py:268-269), else
+  `QUEUE_FULL`, "The queue is full. Try again once it empties." (app.py:106). A lane request that goes into the queue
+  (above) takes the queue's room; `submit_all` checks each of its requests against its own lane's; `room()` (Get the
+  missing songs') is the queue's, and the Journal's count (`active_count`) counts both.
 
 Its workers, the queue's one as now and `LANE` lane workers, each `_next(lane)`:
 
 - **The queue's worker starts its next job only while no lane job runs or waits.** The lock would make that job wait
   for the lane anyway (part 2), and it says so as Queued rather than as a step that seems to run. And a job queued
   after a lookup that needs what it got still comes after it: Add a song's `songbook add` after its `get`.
-- **A lane worker takes the first queued lane job whose song (`song_key_of`, :468) has no job running**, in either
-  lane: a song's second lookup for another pick, or a lookup asked while its add, removal or YouTube sheet runs, waits.
-- `CaracoleRunner` keeps a process a running command; `terminate` ends them all, and a job's own can be ended (Cancel,
-  part 5). `stop` joins every worker.
+- **A lane worker takes the first queued lane job whose song has no job running**: a song never has two jobs running.
+  A song's second lookup for another pick waits for its first.
+- `CaracoleRunner` keeps a process a running command, and `terminate` ends them all. `stop` joins every worker.
 - `JobQueue(…, lane=0)` is today's queue, its counts and ordinals as now; caracole serve passes `lane=LANE`. The
   corpus's queues (tests/test_conformance_queue.py) stay at 0: they are the phone's one queue.
 
@@ -219,7 +236,7 @@ but polls; bulk work alone blocks holding a flock, on the lock while holding its
   - at the start of a lane client's pause before each request, whatever is left of it (`_LockedClient._pause`,
     commands/_common.py:581, over http.py:711), so the other lookup uses the pause;
   - between two stages (`_Lookup.stage`, get.py:264), and between `ug --link`'s tab page and its artist's lists;
-  - *(call)* not in a new client's first pause (`_pause_after_last_request`, :741), so a gate checked under the lock
+  - *(my call)* not in a new client's first pause (`_pause_after_last_request`, :741), so a gate checked under the lock
     and spent on that client's first request is one turn (LaCuerda's search, commands/lyrics.py:471-500);
   - never inside a render, `write_pages` or a songbook's render: none has a pause.
 - **After a turn, the client**, as `_after_a_lookup` does for bulk: it sends nothing to a site the other lookup was
@@ -231,7 +248,7 @@ but polls; bulk work alone blocks holding a flock, on the lock while holding its
   other may have pinned its own song's tab, which this one's index.html would leave out; and its song's row, as bulk
   work's `as_now` does (provider_pass.py:47).
 - **Its good run** is read from its own clients, each counting what it was answered and its errors and blocks, not
-  from `events` by run id. *(call)* So the run id stays `lookup:<time>`, and with it `lookup_requests_used` (by
+  from `events` by run id. *(my call)* So the run id stays `lookup:<time>`, and with it `lookup_requests_used` (by
   prefix) and the corpus that holds run ids (vectors/pace/run_id.jsonl, vectors/lookup/commands_*.jsonl).
 - **Nothing else.** The first lookup to hold the lock makes the keys current before any turn, so the next one's
   `ensure_current_keys` does nothing. The HTTP cache and the indexes are read at each request and query. The other
@@ -254,12 +271,12 @@ but polls; bulk work alone blocks holding a flock, on the lock while holding its
 ### 5. Same song, Cancel, Try again, the history, a stop
 
 - **Same song**: `submit`'s rules stand: a lookup of a song whose lookup waits or runs is that job; a pick joins the
-  last one with the same pick, or comes after it. Part 1 keeps a song's second job from starting beside its first.
-- **Cancel**: as now for a job that waits, a lane job waiting for a slot among them. *(call, Q3)* A lane job that runs
-  but still waits for the book can be cancelled too: it holds no lock, has written nothing, and the route wrote
-  wanted.txt already, as for a cancelled add. Its process is ended, the job cancelled. A job that has had the lock is
-  never stopped.
-- **Try again**: a new `submit` of the same steps, in their lane.
+  last one with the same pick, or comes after it; a song with a job in the queue keeps its lane requests there
+  (part 1). A song never has two jobs running.
+- **Cancel**: as now, for a job that waits, a lane job waiting for a slot among them. *(my call)* A lane job that runs
+  is never cancelled, as no job that runs is: with three lookups taking turns a running one doesn't wait long, and the
+  corpus and the phone's copies don't move for it.
+- **Try again**: a new `submit` of the same steps, by part 1's rules.
 - **The history**: its format stays; saves stay under the queue's lock, in order; several running jobs are each read
   back interrupted, as history.py does any.
 - **A stop**: `stop` ends every running command and marks each job interrupted. A lookup ended mid-turn drops the lock
@@ -267,11 +284,11 @@ but polls; bulk work alone blocks holding a flock, on the lock while holding its
 
 ### 6. What the pages say, and the corpus
 
-- *(call)* No new word. A lookup taking turns says its running stage's line ("Fetching from UG…"): a turn lasts one
+- *(my call)* No new word. A lookup taking turns says its running stage's line ("Fetching from UG…"): a turn lasts one
   request or one stage of the other, and both move. "Waiting for the book…" keeps its meaning: a lookup that can't
   start its first stage, whoever holds the lock.
-- *(call)* `on_wait` is told once the wait has lasted `WAIT_SAID` (1 s), so a lookup that starts as another passes its
-  turn never flashes "Waiting for the book…". The bar waits `BAR_AFTER` already.
+- *(my call)* `on_wait` is told once the wait has lasted `WAIT_SAID` (1 s), so a lookup that starts as another passes
+  its turn never flashes "Waiting for the book…". The bar waits `BAR_AFTER` already.
 - "Queued · N requests ahead…" counts what it waits for (the queue's `ahead(job)`, as the phone's `queue.ahead`): a
   lane job, the lane's jobs before it; a queue job, every job before it and every lane job that runs or waits. With
   `lane=0`, every job before it, as now.
@@ -297,6 +314,11 @@ Test first; real processes where the lock is the subject, as test_commands_commo
 - **A lookup asked while a long job runs starts at once** (tests/test_web_jobs.py, a fake runner): it runs and ends
   while a queue job still blocks; a queue job asked after it starts only once it has ended; a fourth lane job waits for
   a slot; a song's second job waits for its first.
+- **A song's own job keeps its order**: a removal of a song waits or runs in the queue, then Get it for that song: the
+  lookup is queued in the queue behind the removal, never the lane, runs after it, and brings the song back as new.
+  Get it for a song with nothing queued starts in the lane at once.
+- **The lane's own room**: with the queue's 20 taken by Get the missing songs, a song typed still starts; past
+  `LANE` + `LANE_WAITING`, a lane request is refused in the full queue's words.
 - **Nothing but a lookup takes the lock between two turns**: a removal, and a command that isn't interactive, waiting
   while two lookups take turns, get it only once both have ended.
 - **The nightly run still hands over**: test_commands_common.py:767 and :815 unchanged; handed to one lookup, it takes
@@ -304,14 +326,13 @@ Test first; real processes where the lock is the subject, as test_commands_commo
 - **A queue job hands over at its hand-over point and gets the lock back**, replacing test_commands_lock.py:494 ("hands
   it to no other"): `youtube --search`'s pause; and a nightly run that let it in doesn't keep the lock to its end.
 - **A stop and a restart**: two running requests both interrupted, and read back so.
-- **Cancel** of a lane job that waits for the book (with Q3).
 - The corpus regenerated: no change.
 
 ### 8. The words that change, in the same commit as the code
 
 - AGENTS.md:
   - *Jobs and requests*: "every change runs as a `caracole` command queued in jobs.py": in the queue, one at a time,
-    or in the lookups' lane, up to `LANE` at once, started at once. Its Cancel sentence too, with Q3.
+    or in the lookups' lane, up to `LANE` at once, started at once, unless the song has a job in the queue.
   - *A lookup never waits behind a whole nightly run*: "A process holding the lock as a lookup hands it to no other
     (`hand_over`), since the run waiting to take it back would take it first": part 2's rules.
   - *Bulk work hands the lock over*: "takes it back once the lookup is done": once the lane is empty and no lookup
@@ -324,23 +345,22 @@ Test first; real processes where the lock is the subject, as test_commands_commo
 - Docstrings: web/jobs.py (:46-50), commands/_common.py (:15-26), get.py (:62-65).
 - docs/usage.md: One caracole at a time (:1912-1962: two lookups take turns, and "Holding the lock as a lookup, such a
   command lets nothing else go first in its own pauses", :1960-1961, becomes: it lets a lookup go first there);
-  `caracole get` (:652-653); caracole serve's request lines (:4650-4653: a lookup starts at once; Cancel) and the
-  Journal (:4685: "the requests that run").
+  `caracole get` (:652-653); caracole serve's request lines (:4650-4653: a lookup starts at once, unless its song has a
+  request in the queue; Cancel for one waiting for a slot) and the Journal (:4685: "the requests that run").
 
 ## Left to the builder
 
-- Names: the lane file, `pass_turn`, `LANE`, `WAIT_SAID`; how a lane ticket is told apart and named by its time.
-- Lane worker threads, or a thread a running lane job; how `CaracoleRunner` hands a job its own process.
+- Names: the lane file, `pass_turn`, `LANE`, `LANE_WAITING`, `WAIT_SAID`; how a lane ticket is told apart and named
+  by its time.
+- Lane worker threads, or a thread a running lane job.
 - An audit of the lane commands for a value read before a request and written after it, which a turn could make
   stale (kv `lacuerda:search-failed`, `ug:link-failed`, ug/link.py's `known` at commands/ug.py:160): read it again
   after a turn, or read and write it in one.
 - The song stage's waiting detail, "…; a fetch goes first at its next pause" (get.py:906-907), wrong behind a sync;
   the line reads only its start.
 
-## Open questions for the owner
+## Open question for the owner
 
-1. Three lookups at once, a fourth waiting for one to end? Proposed: yes, `LANE = 3`.
-2. A lookup asked during a sync, an import, or a YouTube sheet's model run waits for it, minutes at worst, its line
-   "Waiting for the book…". Accept that for now, the models without the lock a later step? Proposed: yes.
-3. Cancel a lookup that runs but hasn't had the book yet, by ending a process that has done nothing, though "we never
-   stop a command halfway"? Proposed: yes.
+A lookup asked while a sync, an import, an index merge or a YouTube sheet's model run holds the lock still waits for
+it, minutes at worst, its line "Waiting for the book…" (part 4, "How far it gets"). Accept that for now, with the
+models run without the lock as a later step? Proposed: yes.
