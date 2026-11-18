@@ -450,3 +450,10 @@ def test_a_row_read_with_low_confidence_is_shown_as_written_in_place(tmp_path):
     assert kinds == ["l hl", "gap", "tab asw", "gap", "l hl"]
     assert shown == ["3b 3b 2b 2b\nlo lo lo lo", True, 0, True]
     assert played == 2 and wide[0] <= wide[1]
+
+
+def test_a_harmonica_tabs_rows_keep_their_spacing(tmp_path):
+    with opened(tmp_path, written(tmp_path, tab("124_heart-of-gold"))) as b:
+        margin = b.js("""(() => { const l = document.querySelector('.harp-tab .l + .l');
+          return parseFloat(getComputedStyle(l).marginTop) / parseFloat(getComputedStyle(l).fontSize); })()""")
+    assert abs(margin - 0.12) <= 0.01, margin

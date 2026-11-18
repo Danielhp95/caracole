@@ -165,12 +165,13 @@ def test_the_rail_of_necks_takes_its_width_off_the_room_for_two_columns(tmp_path
 
 
 # Lines that wrap in two columns of today's 1180 px page and run on in the wider ones of a big window.
+# (Six verses and two lines: the song just fills two columns of the wide window, with lines standing .4em apart.)
 WIDE_LINES = "{title: Wide Song}\n{artist: The Placeholders}\n" + "".join(
     f"{{comment: Verse {n}}}\n[G]Made up words for [D]verse {n}, a line that goes on [Em]and on and on, long,\n"
     f"[C]and another one after it that is [G]just as long as it is, or so,\n"
     f"[Em]a third one, the same, [C]for the room it takes up on it,\n[G]and a fourth to [D]close the verse here for now\n\n"
-    for n in range(1, 9)
-)
+    for n in range(1, 7)
+) + "{comment: Verse 7}\n[G]Made up words for [D]verse 7, a line that goes on [Em]and on and on, long,\n[C]and another one after it that is [G]just as long as it is, or so,\n"
 # Where the sheet sits in the room beside the rail of necks (the rail is open from 1200 px wide).
 SPAN = """(() => {
   const sheet = document.getElementById("sheet");

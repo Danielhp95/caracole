@@ -6,6 +6,10 @@ group of its columns (``span.word``), which wraps whole, and keeps the readings'
 
 from __future__ import annotations
 
+import pytest
+
+from caracole.viewer.book import BookSong, build_songbook
+
 from helpers.browser import CHROMIUM_MARKS
 from helpers.viewer_pages import tap_at, viewer as open_viewer, written
 from test_viewer_text_size import LAID_OUT
@@ -160,3 +164,51 @@ def test_with_pinyin_no_leader_is_drawn_under_a_readings_ruby(tmp_path):
         assert leaders, "a gap opened inside the word"
         assert all(width == "0px" for ruby, width in leaders), leaders  # none drawn, ext or not
         assert b.js("document.documentElement.scrollWidth <= document.documentElement.clientWidth") is True
+
+
+HARD_TIMES = ("{title: Hard Times}\n{artist: Stephen Foster}\n{key: D}\n{comment: Verse 1}\n"
+              "[D]Let us pause in [G]life's pleasures and [D]count its many [A]tears,\n"
+              "[D]While we [D]all sup sor[G]row with the [D]poor;\n")
+
+# Each sung line of the first section: its columns grouped into rows by their bottoms (within 2 px), each row's top,
+# bottom and first column's left; the line's left; its font size.
+ROWS = """[...document.querySelectorAll('#sheet section.sec')[0].querySelectorAll(':scope > p.l')].map((line) => {
+  const cols = [...line.querySelectorAll('.s, .w')].map((c) => c.getBoundingClientRect());
+  const rows = [];
+  for (const r of cols) {
+    const row = rows.find((x) => Math.abs(x.bottom - r.bottom) <= 2);
+    if (!row) rows.push({top: r.top, bottom: r.bottom, left: r.left});
+    else { row.top = Math.min(row.top, r.top); row.left = Math.min(row.left, r.left); }
+  }
+  return {rows, left: line.getBoundingClientRect().left, fs: parseFloat(getComputedStyle(line).fontSize)};
+})"""
+
+
+def lines_stand_apart(lines) -> None:
+    first, second = lines[:2]
+    assert len(first["rows"]) >= 2, first  # it wraps at 390 px
+    assert first["rows"][1]["top"] - first["rows"][0]["bottom"] <= 1, first  # a line's rows touch
+    assert abs(second["rows"][0]["top"] - first["rows"][-1]["bottom"] - 0.4 * first["fs"]) <= 1, lines
+    assert all(abs(r["left"] - first["left"]) <= 1 for r in first["rows"]), first  # no hanging indent
+
+
+@pytest.mark.parametrize("where", ["sheet", "songbook"])
+def test_a_wrapped_tail_starts_flush_left_closer_to_its_line_than_the_next_line_is(tmp_path, where):
+    if where == "sheet":
+        url = written(tmp_path, HARD_TIMES)
+    else:
+        html = build_songbook("Campfire", [BookSong("Hard Times", "Stephen Foster", cho=HARD_TIMES, id="aaaa")])
+        path = tmp_path / "Library" / "_songbooks" / "Campfire" / "songbook.html"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(html, encoding="utf-8")
+        url = path.as_uri() + "#song-1"
+    with open_viewer(tmp_path, url, width=390, height=844) as b:
+        lines_stand_apart(b.js(ROWS))
+
+
+def test_with_pinyin_too_a_lines_rows_touch_and_lines_stand_apart(tmp_path):
+    from test_viewer_pinyin import LONG
+
+    with open_viewer(tmp_path, written(tmp_path, LONG) + "#py=1", width=390, height=844) as b:
+        assert b.wait("document.querySelector('#sheet ruby.py') !== null")
+        lines_stand_apart(b.js(ROWS))

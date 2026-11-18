@@ -173,6 +173,9 @@ dl.facts .from { color: var(--muted); }
   text-transform: uppercase; }
 .l { margin: 0; overflow-wrap: anywhere; }
 .l + .l { margin-top: .12em; }
+/* a sung line's wrapped rows sit together, and the next line stands apart by more (D3): its tail never reads as a
+   line of its own. The harmonica tab's page keeps .12em, the design gives it no line rule. */
+.sheet:not(.harp-tab) .l + .l { margin-top: .4em; }
 .s { display: inline-flex; flex-direction: column; vertical-align: bottom; }
 .s > .c, .s > .m { display: block; align-self: flex-start; font-size: .82em; line-height: 1.524; white-space: nowrap; }
 .s > .c { padding-right: .35em; }

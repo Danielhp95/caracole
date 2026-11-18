@@ -2976,6 +2976,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   inside it ("dis·courteously") wraps whole, onto the next row. Where two chords
   inside one word are close ("wo[G][D]rd"), the gap that keeps them apart is
   filled with a thin muted line, so the word still reads as one.
+- A long line's wrapped rows sit close together, starting at the left edge,
+  with more space before the next sung line.
 - **Bars**: an intro or a riff the tab writes in bars ("Am C | G Em |") is a
   row of bar cells, each with its chords and a dot for each beat after a
   chord's first. A bar has four beats, shared evenly. A line of chords
