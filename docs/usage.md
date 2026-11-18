@@ -2991,14 +2991,17 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   harmonica tab's page print in the light colours, even from a screen in dark
   mode, with a 15 mm margin on every side of the paper, and without the bar,
   the settings or the links.
-- **On a wide screen** (1100 px or more: a laptop), the song reads down one
-  column, centred, in slightly larger text. A song short enough for the
-  window to show it whole in two columns is shown in two, side by side,
-  spread across the window with only 5% of its width left empty on each side
-  (of the room beside the rail of necks, where it is open), so wider
-  columns let more songs fit whole; a longer one stays in one, as it would otherwise run down the first column
-  and back up the second. The viewer measures again when the window or the
-  text size changes, and when the settings' rail opens beside the song. From
+- **On a wide screen** (1100 px or more: a laptop), a song short enough for
+  the window to show it whole in two columns is shown in two, side by side,
+  at your text size, each column at least 24 em wide (24 times the text's
+  size), spread across the window with only 5% of its width left empty on
+  each side (of the room beside the rail of necks, where it is open), so wider
+  columns let more songs fit whole. Else the song reads down one column,
+  centred, in slightly larger text: a longer one would otherwise run down the
+  first column and back up the second. Narrow columns let two fit at larger
+  text sizes too (at 1280 px with the rail hidden, up to 22 px). The viewer
+  measures again when the window or the text size changes, and when the
+  settings' rail opens beside the song. From
   1200 px the rail of necks (below) takes 345 px on the left, and the song is
   measured beside it: two columns then need a wider window (at 1280 px a song
   reads in one, at 1600 px two fit as they did at 1280 px without it). Hidden,

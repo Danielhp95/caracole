@@ -1176,6 +1176,10 @@ It is rows.js's, shared by both pages:
     and Back leaves the page (test_viewer_layers.py).
 - **The song's end**: `.page`'s padding is the bar's room (`--foot`), which `layout()` measures two columns against;
   the half screen of over-scroll is `.page::after`, never in it, and print drops it.
+- **Two columns** (from 1100 px, viewer.css, test_viewer_layout.py) only where the whole song shows that way
+  (`layout()`), at the reader's own text size, never a smaller one, each at least 24 em (`columns: 2 24em`, the
+  owner's narrower columns, D8), spread across the window with 5 % of the room each side; else one column, `--fs` +
+  3 px.
 - **Full screen** (the sheet viewer's) is one of those layers, its element the handle (page.py `_HANDLE`,
   `button.handle#handle`, after the pill): `open(handle, opener)` sets `html[data-full="on"]`, which hides every
   element marked `data-controls` (the bar; a new control that full screen hides is marked so, nothing else changes),

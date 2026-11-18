@@ -1140,7 +1140,9 @@
   };
   // One column, or two side by side where viewer.css offers them (a wide screen), only for a song
   // the window then shows whole: the song's end in the second column, and the sheet no taller than
-  // the window above the room the page keeps at its foot for the controls.
+  // the window above the room the page keeps at its foot for the controls. Two columns are at the
+  // reader's own text size, each at least 24 em (viewer.css), never at a smaller size to fit; one
+  // column is 3 px larger.
   const layout = () => {
     const y = window.scrollY;
     doc.dataset.columns = "2";

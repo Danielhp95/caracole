@@ -728,9 +728,10 @@ def short_song(tmp_path: Path) -> Path:
 
 @in_chromium
 def test_on_a_short_laptop_window_the_popover_ends_above_the_bar_and_its_head_stays_in_sight(tmp_path):
-    # 1280 × 500: the bar (over the popover) would hide the list's last rows, and a short song gives the page no
-    # scroll to bring them up: the popover ends above the bar, its own scroll reaching its last row, and its head, with
-    # its ×, stays at its top as it scrolls.
+    # 1280 × 500: the bar (over the popover) would hide the list's last rows. The page scrolls (half a screen of
+    # over-scroll ends every page), but the popover scrolls with it, its head and its × going up out of sight before its
+    # last rows came up: so the popover ends above the bar, its own scroll reaching its last row, and its head stays at
+    # its top as it scrolls.
     with viewer(tmp_path, short_song(tmp_path).as_uri(), **{**DESKTOP, "height": 500}) as b:
         open_list(b)
         box = b.js(PLACED)

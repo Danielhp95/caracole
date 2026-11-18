@@ -1,12 +1,15 @@
 """The sheet viewer on a wide screen: one column, centred, unless the whole song fits the window in two.
 
 A song in two columns runs down the first and back up the second; only a song the window shows
-whole can do that without breaking the reading order and the autoscroll.
+whole can do that without breaking the reading order and the autoscroll. Each column is at least
+24 em of the reader's own text (the owner's narrower columns, D8), so two fit at larger sizes.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
+
+import pytest
 
 from caracole.viewer import build_viewer
 from caracole.viewer.book import BookSong, build_songbook
@@ -91,9 +94,11 @@ def test_the_columns_follow_the_window_and_the_text_size(tmp_path):
         tab.wait_for(f"({LAYOUT}).right === 0")
         resize(browser, 1600, 800)
         tab.wait_for(f"({LAYOUT}).right > 0")
-        tab.eval("document.getElementById('bigger').click()")  # two no longer fit side by side
+        for _ in range(3):  # 24 px: two columns of it no longer fit side by side
+            tab.eval("document.getElementById('bigger').click()")
         seen.append(columns())
-        tab.eval("document.getElementById('smaller').click()")
+        for _ in range(3):
+            tab.eval("document.getElementById('smaller').click()")
         seen.append(columns())
     assert seen == [True, False, True]
 
@@ -103,10 +108,76 @@ def test_text_too_large_for_two_columns_reads_in_one_centred_even_in_a_short_son
     with Chromium(tmp_path / "profile", size=DESKTOP) as browser:
         tab = opened(browser, build_viewer(TINY), tmp_path)
         two = tab.eval(LAYOUT)
-        tab.eval("document.getElementById('bigger').click()")
+        for _ in range(3):  # 24 px
+            tab.eval("document.getElementById('bigger').click()")
         one = tab.eval(LAYOUT)
     assert two["right"] > 0, two
     assert one["right"] == 0 and one["width"] < 900 and one["font"] > 20, one
+
+
+# Each column of two is at least this many em of the sheet's text (viewer.css, the owner's D8).
+COLUMN_EM = 24
+# The room two columns of the sheet have at its text size, and their gap, as layout() measures them: in the
+# two-column layout, whatever the page shows now.
+TWO = """(() => {
+  const root = document.documentElement;
+  const sheet = document.getElementById("sheet");
+  const shown = root.dataset.columns;
+  root.dataset.columns = "2";
+  const style = getComputedStyle(sheet);
+  const seen = { width: sheet.getBoundingClientRect().width, gap: parseFloat(style.columnGap),
+                 em: parseFloat(style.fontSize) };
+  root.dataset.columns = shown;
+  return seen;
+})()"""
+
+
+def fit_side_by_side(room: dict, em: float = COLUMN_EM) -> bool:
+    """Whether two columns of ``em`` em of the room's text, and their gap, fit its width."""
+    return 2 * em * room["em"] + room["gap"] <= room["width"]
+
+
+@pytest.mark.parametrize("size, fragment", [("1199,800", ""), ("1280,800", "#necks=0&"), (DESKTOP, "")],
+                         ids=["1199-no-rail", "1280-rail-hidden", "1600-beside-the-rail"])
+def test_two_columns_hold_at_larger_text_sizes(tmp_path, size, fragment):
+    # A song the window shows whole reads in two columns at every text size two columns of 24 em and their gap
+    # fit the room at, in the reader's own size; at the next size, in one, 3 px larger.
+    seen = {}
+    with Chromium(tmp_path / "profile", size=size) as browser:
+        for fs in range(18, 25):
+            tab = opened(browser, build_viewer(TINY), tmp_path / str(fs), fragment=f"{fragment or '#'}fs={fs}")
+            seen[fs] = tab.eval(LAYOUT) | {"room": tab.eval(TWO)}
+    for fs, at in seen.items():
+        assert at["room"]["em"] == fs, at
+        if fit_side_by_side(at["room"]):
+            assert at["right"] > 0 and at["font"] == fs and at["height"] <= at["window"], (fs, at)
+        else:
+            assert at["right"] == 0 and at["font"] == fs + 3, (fs, at)
+    assert seen[18]["right"] > 0 and seen[24]["right"] == 0, seen  # where they stop fitting lies in between
+    # Sizes where columns of 28 em, the width before, gave one column, and 24 em give two.
+    assert any(at["right"] > 0 and not fit_side_by_side(at["room"], 28) for at in seen.values()), seen
+    if fragment:  # 1280 px with the rail hidden: 21 px reads in two now
+        assert seen[21]["right"] > 0 and seen[22]["right"] > 0 and seen[23]["right"] == 0, seen
+
+
+def test_at_the_default_size_nothing_changes(tmp_path):
+    with Chromium(tmp_path / "profile", size=DESKTOP) as browser:
+        long = opened(browser, build_viewer(LONG), tmp_path / "long").eval(LAYOUT)
+        short = opened(browser, build_viewer(SHORT), tmp_path / "short").eval(LAYOUT)
+    assert long["right"] == 0 and long["font"] == 21, long  # too tall to show whole: one column, larger
+    assert short["right"] > 0 and short["font"] == 18, short
+
+
+def test_the_size_buttons_keep_two_columns_up_to_22_px(tmp_path):
+    # At 1280 px with the rail of necks hidden, two columns of 24 em and their gap fit up to 22 px of text.
+    with Chromium(tmp_path / "profile", size="1280,800") as browser:
+        tab = opened(browser, build_viewer(TINY), tmp_path, fragment="#necks=0")
+        seen = [tab.eval(LAYOUT)]
+        for button in ("bigger", "bigger", "bigger", "smaller"):
+            tab.eval(f"document.getElementById('{button}').click()")
+            seen.append(tab.eval(LAYOUT))
+    two = [(s["right"] > 0, s["font"]) for s in seen]
+    assert two == [(True, 18), (True, 20), (True, 22), (False, 27), (True, 22)], seen
 
 
 def test_measuring_the_columns_never_moves_the_page(tmp_path):

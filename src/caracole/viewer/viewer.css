@@ -855,14 +855,16 @@ a.ver-main .ver-name { color: var(--accent); }
 
 /* A wide screen: one column, centred, in larger text; two side by side only for a song the window
    shows whole that way (viewer.js measures it, and says so in data-columns). A longer song would
-   run down the first column and back up the second, against the reading order and the autoscroll. */
+   run down the first column and back up the second, against the reading order and the autoscroll.
+   Each column of two is at least 24 em of the reader's own text, so two and their gap fit at larger
+   sizes (the owner's narrower columns, D8): never a smaller text to make them fit. */
 @media (min-width: 1100px) {
   .page { max-width: 860px; }
   :root:not([data-columns="2"]) .sheet { font-size: calc(var(--fs) + 3px); }
   /* Two columns span the window, 5% of the room each side (the room beside the rail of necks, which
      moves the body over for it: a padding's percentage is of that room). */
   [data-columns="2"] .page { max-width: none; padding-left: 5%; padding-right: 5%; }
-  [data-columns="2"] .sheet { columns: 2 28em; column-gap: clamp(56px, 4vw, 96px); }
+  [data-columns="2"] .sheet { columns: 2 24em; column-gap: clamp(56px, 4vw, 96px); }
 }
 /* From 900 px wide: the settings a rail beside the song, which moves over for it, and the card a
    popover by its chord, placed in the page by the script (--pop-top, --pop-left). Both may be open. So is
