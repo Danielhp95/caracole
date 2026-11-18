@@ -886,7 +886,8 @@ It is rows.js's, shared by both pages:
     folding every line;
   - from 1200 px, in the 760 px list beside the pane (where the lanes meet, 12): a folded or flat line keeps that one
     row while its buttons fit; where they don't, `plays-under` (library.js `placePlays`: measured in the one row, where
-    its last button wraps below its first, once a line and again when the list's width, Select or the line changes)
+    its last button wraps below its first, once a line, by the list's width, the root's font size and Select, again
+    when the line changes or stops being folded or flat; batched once a frame, `placePlaysSoon`)
     makes its first row the title, its artist right after it, the status, the action, the key and the chevron, and its
     buttons a row of their own under the title (library.css, songbooks.css selecting); a band's line its buttons
     beside its title where they fit, else under it (`.line-title` wrapping), so none ever pushes the key off the line
@@ -1048,14 +1049,18 @@ It is rows.js's, shared by both pages:
     `.head-away`) aren't scoped to in place, only the head's margins are (`.line > .line-panel.song-card >
     .card-head`): the pane undoes both (`#card-pane .card-head`, `.card-head-in`: static, shown);
   - from 1200 px in the pane, `#card-pane` (library.js `selectLine`, through rows.js foldMore's `onToggle`,
-    `cardToggled`): opening a line's card moves it there, the line `.selected` and `aria-current="true"` (no opened
-    card's box: `#library-view .line.selected`, which 3b.4's `:not(.selected)` makes redundant), the card's head its
+    `cardToggled`): opening a line's card moves it there, the line `.selected` and `aria-current="true"` (filled with
+    `color-mix(in srgb, var(--accent) 8%, var(--surface))`, never the play buttons' `--raised`, the accent along its
+    edge; no opened card's box: `#library-view .line.selected`'s margin and border reset, a crossing with Task 3b.4,
+    which deletes it once card.css's box keys on `:not(.selected)`), the card's head its
     heading (out of `aria-hidden`, its close tabbable, the pane `aria-labelledby` its name), the focus on its
     `.card-name` when the chevron's click came from a key (`isTrusted`, `detail` 0); closing it, another line's opening,
     or its line no longer shown after `render` and `drawGroups` (`keepSelected`) puts it back right after the
     line's chevron, closed (`unselect`); `paneWide` (`matchMedia("(min-width: 1200px)")`) crossing down puts it back
     open (watched in place), crossing up takes the card opened last of those in place (`awayCards`' order) and closes
-    the others quietly (`shut`); Escape in the pane that the card's parts left gives the focus to the line's chevron;
+    the others quietly (`shut`; `toWide`, put off while another tab shows, until `caracole:tab` shows the Library);
+    either way the focus on a node of the card moved is given back to it, else to the chevron (`focusAgain`); Escape
+    in the pane that the card's parts left gives the focus to the line's chevron;
     a refilled selected line's new card takes its place (`placeAgain`; none, a song removed: the pane empty and as
     tall as it was); the selected line's steps listed under the head (`showSteps`, a copy of its `.steps >
     .step-list`; steps.css leaves a `.selected` line its frozen bar); a card, opened or closed, adds no history entry

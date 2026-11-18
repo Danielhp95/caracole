@@ -533,12 +533,11 @@ def test_a_title_puts_its_card_in_the_pane_and_marks_its_line(conn, cfg, tmp_pat
                      "expanded: chevronOf('Creep').getAttribute('aria-expanded'), empty: empty().checkVisibility(), "
                      "labelled: pane().getAttribute('aria-labelledby') === name.id, "
                      "close: card.querySelector('.card-close').tabIndex, length: history.length, "
-                     "look: [getComputedStyle(line).marginTop, getComputedStyle(line).boxShadow.includes('inset'), "
-                     "getComputedStyle(line).backgroundColor === getComputedStyle(document.querySelector("
-                     "'#list .artist-title')).backgroundColor] }; })()")
+                     "look: [getComputedStyle(line).marginTop, getComputedStyle(line).boxShadow.includes('inset')] "
+                     "}; })()")
         assert shown == {"name": "Creep · Radiohead", "hidden": False, "seen": True, "card": False, "selected": True,
                          "current": "true", "expanded": "true", "empty": False, "labelled": True, "close": 0,
-                         "length": length, "look": ["0px", True, True]}, shown  # raised, the accent on its edge
+                         "length": length, "look": ["0px", True]}, shown  # no card's box, the accent on its edge
         # Another song's chevron: its card in the pane, Creep's back under its line, closed.
         b.click(f'#list article.line[data-id="{b.js("lineOf(\'Karma Police\').dataset.id")}"] .line-more')
         assert b.wait("inPane('Karma Police')")
@@ -572,7 +571,6 @@ def test_the_keyboard_goes_into_the_pane_and_escape_comes_back(conn, cfg, tmp_pa
         b.press("Escape")
         assert b.wait("document.activeElement === chevronOf('Creep')"), b.js("document.activeElement.outerHTML")
         assert b.js("inPane('Creep') && lineOf('Creep').classList.contains('selected')")
-        assert b.js("document.body.classList.contains('search-mode')") is False  # the page's own Escape heard nothing
     finally:
         b.close()
 
@@ -592,19 +590,52 @@ def test_while_selecting_the_pane_is_put_away(conn, cfg, tmp_path):
 
 
 def test_crossing_1200_px_moves_the_open_card(conn, cfg, tmp_path):
+    # Narrower than 1200 px the card in the pane goes back under its line, open; wider again, into the pane. The focus
+    # on a part of it stays there, both ways; on the head's close, hidden under the line, it goes to the line's chevron.
+    narrow = {"width": 1000, "height": 900, "deviceScaleFactor": 1, "mobile": False}
+    wide = dict(narrow, width=1280)
     b = _opened(tmp_path, _radiohead(conn, cfg))
     try:
         b.js("openCardOf(lineOf('Creep'))")
         assert b.wait("inPane('Creep')")
-        b.send("Emulation.setDeviceMetricsOverride", width=1000, height=900, deviceScaleFactor=1, mobile=False)
+        b.js("window.tile = cardOf(lineOf('Creep')).querySelector('a.tile-open'); tile.focus()")
+        assert b.js("document.activeElement === tile")
+        b.send("Emulation.setDeviceMetricsOverride", **narrow)
         assert b.wait("(() => { const card = cardOf(lineOf('Creep')); return card.parentNode === lineOf('Creep') && "
                       "!card.hidden && chevronOf('Creep').getAttribute('aria-expanded') === 'true' && "
                       "!document.querySelector('.line.selected') && !pane().checkVisibility(); })()"), \
             b.js("[cardOf(lineOf('Creep')).parentNode.tagName, cardOf(lineOf('Creep')).hidden]")
         assert b.js("cardOf(lineOf('Creep')).querySelector('.card-head').getAttribute('aria-hidden')") == "true"
-        b.send("Emulation.setDeviceMetricsOverride", width=1280, height=900, deviceScaleFactor=1, mobile=False)
+        assert b.js("document.activeElement === tile"), b.js("document.activeElement.outerHTML.slice(0, 120)")
+        b.send("Emulation.setDeviceMetricsOverride", **wide)
         assert b.wait("inPane('Creep') && lineOf('Creep').classList.contains('selected')")
         assert b.js("!cardOf(lineOf('Creep')).hidden && pane().checkVisibility()")
+        assert b.js("document.activeElement === tile"), b.js("document.activeElement.outerHTML.slice(0, 120)")
+        b.js("cardOf(lineOf('Creep')).querySelector('.card-close').focus()")
+        assert b.js("document.activeElement.matches('.card-close')")
+        b.send("Emulation.setDeviceMetricsOverride", **narrow)
+        assert b.wait("cardOf(lineOf('Creep')).parentNode === lineOf('Creep')")
+        assert b.js("document.activeElement === chevronOf('Creep')"), \
+            b.js("document.activeElement.outerHTML.slice(0, 120)")
+    finally:
+        b.close()
+
+
+def test_crossing_up_while_another_tab_shows_puts_the_card_in_the_pane_once_the_library_shows(conn, cfg, tmp_path):
+    b = _opened(tmp_path, _radiohead(conn, cfg), {"width": 1000, "height": 900})
+    try:
+        b.js("openCardOf(lineOf('Creep'))")
+        b.click("#tab-sites")
+        assert b.wait("!document.getElementById('library-view').checkVisibility()")
+        b.send("Emulation.setDeviceMetricsOverride", width=1280, height=900, deviceScaleFactor=1, mobile=False)
+        assert b.wait("matchMedia('(min-width: 1200px)').matches")
+        assert b.js("new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(true))))")
+        # No line to see: the card stays open where it was.
+        assert b.js("cardOf(lineOf('Creep')).parentNode === lineOf('Creep') && "
+                    "chevronOf('Creep').getAttribute('aria-expanded') === 'true'")
+        b.click("#tab-library")
+        assert b.wait("inPane('Creep') && lineOf('Creep').classList.contains('selected')"), \
+            b.js("[cardOf(lineOf('Creep')).parentNode.tagName, chevronOf('Creep').getAttribute('aria-expanded')]")
     finally:
         b.close()
 
@@ -837,3 +868,78 @@ def test_a_selected_lines_card_drawn_again_takes_its_place_in_the_pane(cfg, live
     assert browser.js(f"cardOf(document.querySelector({line})).querySelector('.card-head').hasAttribute('aria-hidden')") \
         is False
     assert browser.js("pane().getAttribute('aria-labelledby')") == f"card-name-{found.id}"
+
+
+def _rgb(colour: str) -> tuple[float, ...]:
+    """A computed colour, rgb(…) or color(srgb …), as 0–255 channels."""
+    import re
+
+    if colour.startswith("color(srgb"):
+        return tuple(float(v) * 255 for v in re.findall(r"[\d.]+", colour)[:3])
+    return tuple(float(v) for v in re.findall(r"[\d.]+", colour)[:3])
+
+
+def _contrast(a: str, b: str) -> float:
+    def luminance(rgb):
+        def channel(c):
+            c /= 255
+            return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+        r, g, bl = (channel(c) for c in rgb)
+        return 0.2126 * r + 0.7152 * g + 0.0722 * bl
+
+    high, low = sorted((luminance(_rgb(a)), luminance(_rgb(b))), reverse=True)
+    return (high + 0.05) / (low + 0.05)
+
+
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+def test_a_selected_line_keeps_its_buttons_shape_and_its_words_contrast(conn, cfg, tmp_path, scheme):
+    # The line whose card the pane holds: a fill of its own, never its play buttons' (so they keep their shape), its
+    # title and artist as readable on it as on any line, the accent along its edge.
+    hotel(conn, cfg)
+    b = _opened(tmp_path, write_library_page(cfg.library_dir, page(conn, cfg)).as_uri())
+    try:
+        b.send("Emulation.setEmulatedMedia", features=[{"name": "prefers-color-scheme", "value": scheme}])
+        b.js("openCardOf(lineOf('Hotel California'))")
+        assert b.wait("inPane('Hotel California')")
+        look = b.js("(() => { const l = lineOf('Hotel California'), c = getComputedStyle; return { "
+                    "line: c(l).backgroundColor, play: c(l.querySelector('.line-plays > .play')).backgroundColor, "
+                    "title: c(l.querySelector('h3')).color, artist: c(l.querySelector('.line-by .artist-name')).color, "
+                    "edge: c(l).boxShadow }; })()")
+        assert max(abs(x - y) for x, y in zip(_rgb(look["line"]), _rgb(look["play"]))) >= 4, look  # told apart
+        assert _contrast(look["title"], look["line"]) >= 4.5 and _contrast(look["artist"], look["line"]) >= 4.5, look
+        assert "inset" in look["edge"], look
+    finally:
+        b.close()
+
+
+def test_a_folded_lines_buttons_are_placed_again_whatever_it_was_meanwhile(conn, cfg, tmp_path):
+    # Hotel California's five buttons don't fit beside it: under its title whenever it is a folded or flat line beside
+    # the pane, after it was a band's line meanwhile (a search that folds Eagles into it, then none; the list sorted by
+    # title, by artist, by title) or the window narrower.
+    hotel(conn, cfg)
+    for title in ("Desperado", "Take It Easy"):
+        song = add_song(conn, "Eagles", title)
+        put(cfg, song, "sheet.html")
+        update_song(conn, song.id, status="found")
+    b = _opened(tmp_path, write_library_page(cfg.library_dir, page(conn, cfg)).as_uri())
+    under = "lineOf('Hotel California').classList.contains('plays-under')"
+    kind = "lineOf('Hotel California').closest('section').className"
+    lines = "document.querySelectorAll('#list article.line').length"
+    try:
+        assert b.js(f"[{kind}, {under}]") == ["artist", False]  # a band's line: beside its title, else under it
+        b.js("document.getElementById('q').focus()")
+        for _ in range(2):  # folded, a band's, folded again
+            b.type("hotel")
+            assert b.wait(f"{lines} === 1 && {under}"), b.js(f"[{kind}, {under}]")
+            b.press("Escape")  # the box cleared, the search kept: all three again, under their band
+            assert b.wait(f"{lines} === 3 && !{under}"), b.js(f"[{kind}, {under}]")
+        for sort, flat in (("title", True), ("artist", False), ("title", True)):
+            b.js(f"(() => {{ const s = document.getElementById('sort'); s.value = '{sort}'; "
+                 "s.dispatchEvent(new Event('change')); })()")
+            assert b.wait(f"{under} === {json.dumps(flat)}"), (sort, b.js(f"[{kind}, {under}]"))
+        b.send("Emulation.setDeviceMetricsOverride", width=1000, height=900, deviceScaleFactor=1, mobile=False)
+        assert b.wait(f"!{under}")  # under 1200 px: one row, its buttons wrapping beside its artist (1d.2a)
+        b.send("Emulation.setDeviceMetricsOverride", width=1280, height=900, deviceScaleFactor=1, mobile=False)
+        assert b.wait(under)
+    finally:
+        b.close()

@@ -149,10 +149,12 @@
      place (steps.css), while the line keeps the bar as the lookup left it. */
   #card-pane .steps { display: block; margin: 0; }
   #card-pane .steps > .step-list { display: grid; }
-  /* The line whose card the pane holds (aria-current): raised, the accent along its edge, with none of the box of a
-     card opened under its line (card.css's), its card being beside it; so a song removed from there moves nothing. */
+  /* The line whose card the pane holds (aria-current): a wash of the accent over the surface, never the play buttons'
+     own --raised, so they keep their shape, the accent along its edge, with none of the box of a card opened under its
+     line (card.css's), its card being beside it; so a song removed from there moves nothing. The box's reset is a
+     crossing with Task 3b.4, which deletes it once card.css's box keys on :not(.selected). */
   #library-view .line.selected { margin: 0; border: 0; border-top: 1px solid var(--border); border-radius: 0;
-    background: var(--raised); box-shadow: inset 3px 0 0 var(--accent); }
+    background: color-mix(in srgb, var(--accent) 8%, var(--surface)); box-shadow: inset 3px 0 0 var(--accent); }
   #library-view .line.selected:first-child { border-top: 0; }
   #library-view .line.selected + .line { border-top: 1px solid var(--border); }
 }
