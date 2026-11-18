@@ -1986,6 +1986,10 @@
     input.focus();
   });
   input.addEventListener("focus", enterSearch);
+  // A finger dragging the results puts the keyboard away (a touch in the bar does not); search mode stays on.
+  document.addEventListener("touchmove", (e) => {
+    if (document.activeElement === input && !(e.target.closest && e.target.closest(".searchbar"))) input.blur();
+  }, { passive: true });
   leave.addEventListener("click", backFromSearch);
   for (const b of statusButtons) {
     b.addEventListener("click", () => {

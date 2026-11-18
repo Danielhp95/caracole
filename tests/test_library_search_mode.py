@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 
 import pytest
 from helpers.browser import CHROMIUM_MARKS, Browser, BrowserError
-from test_web_page_search import answer_to, browser, library, live, search, sites  # noqa: F401  (fixtures)
+from test_web_page_search import answer_to, browser, library, live, phone, search, sites  # noqa: F401  (fixtures)
 
 from caracole.library_page import build_library_page, write_library_page
 from caracole.overrides import Overrides
@@ -285,3 +285,43 @@ def test_show_all_of_a_filter_reset_never_enters_search(conn, cfg, tmp_path):
     finally:
         page.close()
 
+
+
+FIRST_RESULT = "document.querySelector('#results article')"
+
+
+def swipe(page, selector, dy):
+    """A finger dragged ``dy`` px over the element ``selector`` finds (touchStart, touchMove, touchEnd)."""
+    x, y = page.js(f"(() => {{ const r = document.querySelector({json.dumps(selector)}).getBoundingClientRect(); "
+                   "return [r.x + r.width / 2, r.y + r.height / 2]; })()")
+    page.send("Input.dispatchTouchEvent", type="touchStart", touchPoints=[{"x": x, "y": y}])
+    page.send("Input.dispatchTouchEvent", type="touchMove", touchPoints=[{"x": x, "y": y + dy}])
+    page.send("Input.dispatchTouchEvent", type="touchEnd", touchPoints=[])
+
+
+def test_scrolling_the_results_on_a_phone_puts_the_keyboard_away_and_stays_in_search(cfg, live, phone):  # noqa: F811
+    base, _, _ = live
+    sites(cfg, ug=[("radiohead", "creep", 4)])
+    phone.open(base)
+    search(phone, "creep")
+    assert phone.wait(f"{answer_to('creep')} && !!{FIRST_RESULT}")
+    assert phone.js("document.activeElement.id") == "q"
+    swipe(phone, "#results article", -150)
+    assert phone.wait("document.activeElement.id !== 'q'")
+    assert phone.js(f"[{MODE}, {BOX}.value]") == [True, "creep"]
+
+
+def test_a_touch_in_the_bar_keeps_the_keyboard_and_a_wheel_on_a_laptop_keeps_the_focus(cfg, live, phone, browser):  # noqa: F811
+    base, _, _ = live
+    sites(cfg, ug=[("radiohead", "creep", 4)])
+    phone.open(base)
+    search(phone, "creep")
+    assert phone.wait(f"{answer_to('creep')} && !!{FIRST_RESULT}")
+    swipe(phone, ".searchbar", -150)
+    assert phone.js("document.activeElement.id") == "q"
+    browser.open(base)
+    search(browser, "creep")
+    assert browser.wait(f"{answer_to('creep')} && !!{FIRST_RESULT}")
+    x, y = browser.js(f"(() => {{ const r = {FIRST_RESULT}.getBoundingClientRect(); return [r.x + 20, r.y + 10]; }})()")
+    browser.send("Input.dispatchMouseEvent", type="mouseWheel", x=x, y=y, deltaX=0, deltaY=150)
+    assert browser.js("document.activeElement.id") == "q"
