@@ -4130,3 +4130,11 @@ def test_building_the_page_sends_no_request(conn, cfg, monkeypatch):
     monkeypatch.setattr(common, "transport_for", no_requests)
     add_song(conn, "Radiohead", "Creep")
     assert data_of(page(conn, cfg))["sites"]["list"]
+
+
+def test_the_viewport_lets_the_keyboard_resize_the_page(conn, cfg):
+    from caracole.library_page import WebControls
+
+    meta = '<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">'
+    assert meta in page(conn, cfg)
+    assert meta in build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok"))
