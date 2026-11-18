@@ -157,6 +157,19 @@ def test_the_line_names_the_kind_the_version_and_its_rating(tmp_path):
 
 
 @in_chromium
+def test_a_tap_on_the_line_the_back_arrow_or_a_version_leaves_no_highlight(tmp_path):
+    # A phone's browser paints a tapped link or button blue until the next tap: the version line, the header's ‹ and
+    # a kept version's row take none, as the bar's buttons, the chords and the rail don't.
+    pages = folder(tmp_path, WONDERWALL, kinds=KINDS)
+    with viewer(tmp_path, pages["version-39144.html"].as_uri(), **PHONE) as b:
+        open_list(b)
+        painted = b.js("['#ver-now', '.head .back', 'a.ver-main'].map((s) =>"
+                       " [s, getComputedStyle(document.querySelector(s)).webkitTapHighlightColor])")
+    assert painted == [["#ver-now", "rgba(0, 0, 0, 0)"], [".head .back", "rgba(0, 0, 0, 0)"],
+                       ["a.ver-main", "rgba(0, 0, 0, 0)"]]
+
+
+@in_chromium
 def test_one_version_and_one_kind_is_no_ver_1_of_1_and_one_icon(tmp_path):
     one = {"total": 1, "sheet": "ug",
            "list": [entry("1064463", 3, 4.86, 408, 1, kept=True, chosen=True, page="sheet.html")]}
@@ -385,6 +398,24 @@ def test_the_list_shows_every_version_and_opens_the_kept_ones(tmp_path):
     assert rows[2]["link"] == "version-2161290.html" and "kept" in rows[2]["text"] and "acoustic" in rows[2]["text"]
     assert rows[3]["link"] is None and "kept" not in rows[3]["text"] and rows[3]["text"].startswith("Ver 4 · New")
     assert "capo 2, easy chords" in rows[4]["text"]
+
+
+@in_chromium
+def test_a_version_with_no_votes_is_new_as_the_library_card_says_it(tmp_path):
+    versions = deepcopy(WONDERWALL)
+    rows = versions["list"]
+    rows[3].update(rating=0, votes=0)  # UG's unrated tab
+    rows[4].update(rating=4.5, votes=0)  # a rating with no votes
+    rows[5].update(rating=4.85, votes="81")  # votes as a string
+    rows[6].pop("rating")  # no rating at all
+    pages = folder(tmp_path, versions)
+    with viewer(tmp_path, pages["version-39144.html"].as_uri()) as b:
+        open_list(b)
+        shown = seen(b)["rows"]
+    assert shown[3]["text"].startswith("Ver 4 · New") and "0.00" not in shown[3]["text"]
+    assert shown[4]["text"].startswith("Ver 5 · New")
+    assert shown[5]["text"].startswith("Ver 6 · ★ 4.85 (81)")
+    assert shown[6]["text"].startswith("Ver 7 · New")
 
 
 @in_chromium
@@ -697,13 +728,13 @@ def short_song(tmp_path: Path) -> Path:
 
 @in_chromium
 def test_on_a_short_laptop_window_the_popover_ends_above_the_bar_and_its_head_stays_in_sight(tmp_path):
-    # 1280 × 500: the bar (over the popover) would hide the list's last rows, and a short song gives the page no
-    # scroll to bring them up: the popover ends above the bar, its own scroll reaching its last row, and its head, with
-    # its ×, stays at its top as it scrolls.
+    # 1280 × 500: the bar (over the popover) would hide the list's last rows. The page scrolls (half a screen of
+    # over-scroll ends every page), but the popover scrolls with it, its head and its × going up out of sight before its
+    # last rows came up: so the popover ends above the bar, its own scroll reaching its last row, and its head stays at
+    # its top as it scrolls.
     with viewer(tmp_path, short_song(tmp_path).as_uri(), **{**DESKTOP, "height": 500}) as b:
         open_list(b)
         box = b.js(PLACED)
-        page_scrolls = b.js("document.documentElement.scrollHeight > innerHeight")
         b.js("document.querySelector('#version-list').scrollTop = 1e6")
         assert b.wait("document.querySelector('#version-list').scrollTop > 0")
         end = b.js(ENDS)
@@ -713,7 +744,6 @@ def test_on_a_short_laptop_window_the_popover_ends_above_the_bar_and_its_head_st
     # would give the page a scrollbar for a moment and shift the page's column under it)
     assert box["position"] == "absolute" and 6 <= box["under"] <= 8 and abs(box["from"]) <= 1, box
     assert box["bottom"] <= box["barTop"], box  # above the bar
-    assert not page_scrolls  # the page has no more to show: the list's own scroll does
     assert end["scrolled"] == end["end"] > 0  # the list scrolled to its end
     assert end["last"] <= box["bottom"] and end["last"] <= box["barTop"]  # its last row in sight, above the bar
     assert end["hit"] and box["top"] <= end["x"] <= box["top"] + 8  # the head kept at its top, its × pressable

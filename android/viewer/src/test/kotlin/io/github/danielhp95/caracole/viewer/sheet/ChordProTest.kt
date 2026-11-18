@@ -94,6 +94,13 @@ class ChordProTest {
                      PyStr.splitlines(ChordPro.toChordPro("[Verse]\n[ch]Em7[/ch]            [ch]G[/ch]\n  Today is gonna be the day\n", "T", "A")).last())
     }
 
+    @Test fun aChordOnlyLineKeepsItsBars() {
+        assertEquals(listOf("[Am] [C] [*|] [G] [Em] [*|]"), body("[ch]Am[/ch]    [ch]C[/ch]   | [ch]G[/ch]    [ch]Em[/ch]  |"))
+        assertEquals(listOf("{comment: Intro}", "[*|] [G] [*||] [D] [*|]"), body("[Intro] | [ch]G[/ch] || [ch]D[/ch] |"))
+        assertEquals(listOf("[Am] [*|] [C] [*|]"), body("[ch]Am[/ch]|[ch]C[/ch]|"))  // glued: a chord's span ends where it begins
+        assertEquals(listOf("[G]Hello [D]there my friend"), body("[ch]G[/ch]  |  [ch]D[/ch]\nHello there my friend"))
+    }
+
     @Test fun wholeSheets() {
         assertEquals(fixture("ug_sheet.cho"),
                      ChordPro.toChordPro(fixture("ug_sheet.txt"), "Synthetic Test Song", "The Placeholders", "G", 2))

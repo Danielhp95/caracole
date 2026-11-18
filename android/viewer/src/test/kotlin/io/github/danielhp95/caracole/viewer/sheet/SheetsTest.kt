@@ -37,6 +37,21 @@ class SheetsTest {
 
     private fun c(i: Int) = Item.Chord(i)
 
+    private fun row(text: String): ChordRow = Sheets.parse("{title: T}\n$text\n").sections[0].lines[0] as ChordRow
+
+    @Test fun aLineOfChordsThatWritesBarsReadsAsBars() {
+        assertEquals(Bars(emptyList(), listOf(listOf(c(0) to 2, c(1) to 2), listOf(c(2) to 2, c(3) to 2)), emptyList()),
+                     Sheets.bars(row("[Am] [C] [*|] [G] [Em] [*|]")))
+        assertEquals(Bars(listOf("x2"), listOf(listOf(c(0) to 2, c(1) to 1, c(2) to 1),
+                                               listOf(c(3) to 1, c(4) to 1, c(1) to 1, c(5) to 1, c(6) to 1)), emptyList()),
+                     Sheets.bars(row("[*x2] [*|] [Am] [C] [G] [*|] [A] [B] [C] [D] [E]")))
+        assertEquals(Bars(emptyList(), listOf(listOf(c(0) to 4), emptyList(), listOf(c(1) to 4)), listOf("x2")),
+                     Sheets.bars(row("[*|:] [Am] [*|] [*|] [E] [*:|] [*x2]")))
+        assertNull(Sheets.bars(row("[G] [D] [*x2]")))
+        assertNull(Sheets.bars(row("[*|] [*N.C.] [*|]")))
+        assertEquals(4, Sheets.BEATS)
+    }
+
     @Test fun aLyricLineIsSplitAtItsChordsAndALineOfChordsAloneIsARow() {
         assertEquals(listOf(Lyrics(listOf(c(0) to "Tiny test ", c(1) to "words go here")),
                             Lyrics(listOf(null to "Made ", c(2) to "up only for a ", c(3) to "parser"))),

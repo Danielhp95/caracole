@@ -13,8 +13,8 @@ members in its order, a set as a sorted array) and its compiled patterns under `
 text, "ignorecase": bool}}`` (``.pattern``, as Python writes it; no flag but IGNORECASE, which core.py.PyRegex reads
 as a leading ``(?i)``, true only for a pattern that doesn't start with its own ``(?i)``):
 
-- ``sheet``: ``_DIRECTIVE``, ``_TOKEN``, ``_FRET``, ``_CHORUS``, ``_TUNING_NAME``, ``_TUNING_LABEL``, ``_CAPO``;
-  ``_ESCAPED_BACKSLASH``, ``COMMENTS``, ``_STANDARD`` and autochords.merge's ``AUTO_MARKER``;
+- ``sheet``: ``_DIRECTIVE``, ``_TOKEN``, ``_FRET``, ``_CHORUS``, ``_TUNING_NAME``, ``_TUNING_LABEL``, ``_CAPO``,
+  ``BAR``; ``BEATS``, ``_ESCAPED_BACKSLASH``, ``COMMENTS``, ``_STANDARD`` and autochords.merge's ``AUTO_MARKER``;
 - ``page``: ``_SOURCES`` and ``_OF_THE_SHAPES``;
 - ``chordpro``: ``_CHORD``, ``_TAB_MARK``, ``_SECTION``, ``_MARK``, ``_CHORD_LINE_REST``, ``_STAFF``,
   ``_SOLFEGE``, ``_LEAD_GAP``, ``_WORD``, ``_MARKUP_START``, ``_DECODED_BACKSLASH``, ``_DIRECTIVE_LIKE``;
@@ -43,8 +43,10 @@ text]``, ``["Tab", [line, …]]`` or ``["B"]`` (Blank); a section ``[label, chor
   them, else its row), "peek": page._peek(pre) (null without a preamble), "keys": [[key, source,
   *page._song_key(sheet, chords, key, source)], …] for the record's own and ``OTHER_KEYS`` seeded of ``SONG_KEYS``,
   "viewer_key": page.viewer_key(cho, key, key_source), "given": page._given_shapes, "shapes": page.shapes_of,
-  "legend": [[i, j], …] each line j of section i that sheet.is_legend reads as a legend's, "legend_lines": each n
-  of ``cho.splitlines()`` sheet.is_legend_line reads as a legend's, "split": sheet.split_preamble(cho.splitlines())}``,
+  "legend": [[i, j], …] each line j of section i that sheet.is_legend reads as a legend's, "bars": [[i, j, {"lead",
+  "cells", "tail"}], …] each line j of section i that sheet.bars reads (``cells`` ``[[[item, beats], …], …]``, an
+  item a chord's index or a mark's text), "legend_lines": each n of ``cho.splitlines()`` sheet.is_legend_line reads
+  as a legend's, "split": sheet.split_preamble(cho.splitlines())}``,
   and by their ``digest`` (the SHA-256 of ``json.dumps``, its defaults): "drawn": page._drawn_lines, "texts":
   page._written_texts, "places": page._places, "played": page._played, "written": [[sheet.written(line) …] a
   section], "directives": [[n, name, value], …] each line n of ``cho.splitlines()`` sheet.directive reads.
@@ -222,7 +224,8 @@ def constants() -> dict:
     return {
         "sheet": {
             "patterns": _patterns(sheet, ("_DIRECTIVE", "_TOKEN", "_FRET", "_CHORUS", "_TUNING_NAME", "_TUNING_LABEL",
-                                          "_CAPO")),
+                                          "_CAPO", "BAR")),
+            "BEATS": sheet.BEATS,
             "_ESCAPED_BACKSLASH": sheet._ESCAPED_BACKSLASH,
             "COMMENTS": sorted(sheet.COMMENTS),
             "_STANDARD": sorted(sheet._STANDARD),
@@ -343,6 +346,11 @@ def given_row(given) -> list:
     return [[chord_row(c), position] for c, position in given]
 
 
+def bars_row(found: sheet.Bars) -> dict:
+    return {"lead": list(found.lead), "cells": [[list(item) for item in cell] for cell in found.cells],
+            "tail": list(found.tail)}
+
+
 def preamble_row(pre: sheet.Preamble) -> dict:
     return {"notes": list(pre.notes), "legend": given_row(pre.legend), "tabs": [list(t) for t in pre.tabs],
             "tuning": pre.tuning, "capo_note": pre.capo_note, "end": pre.end}
@@ -395,6 +403,8 @@ def read_of(cho: str, key: str | None, key_source: str | None, rng: random.Rando
         "written": digest([[sheet.written(line, s.chords) for line in x.lines] for x in s.sections]),
         "legend": [[i, j] for i, x in enumerate(s.sections) for j, line in enumerate(x.lines)
                    if sheet.is_legend(line, s.chords)],
+        "bars": [[i, j, bars_row(found)] for i, x in enumerate(s.sections) for j, line in enumerate(x.lines)
+                 if isinstance(line, ChordRow) and (found := sheet.bars(line)) is not None],
         "directives": digest([[n, *found] for n, line in enumerate(lines)
                               if (found := sheet.directive(line)) is not None]),
         "legend_lines": [n for n, line in enumerate(lines) if sheet.is_legend_line(line)],
@@ -697,6 +707,18 @@ def test_the_sheets_reach_every_kind_of_line_and_every_way_to_a_key():
             "from MusicBrainz Lookup"} <= origins
     assert any(sheet.split_preamble(s.cho.splitlines()).legend for s in viewer_corpus.sheets())
     assert any(sheet.preamble_section(parse_sheet(s.cho)) for s in viewer_corpus.sheets())
+
+
+def test_the_sheets_reach_every_way_to_a_bar():
+    rows = [line for s in viewer_corpus.sheets() for x in parse_sheet(s.cho).sections for line in x.lines
+            if isinstance(line, ChordRow) and any(isinstance(i, str) and sheet.BAR.fullmatch(i) for i in line.items)]
+    found = [b for line in rows if (b := sheet.bars(line)) is not None]
+    assert len(found) < len(rows)  # a line of bars with no chord, which has none
+    cells = [cell for b in found for cell in b.cells]
+    assert any(b.lead for b in found) and any(b.tail for b in found) and () in cells  # marks outside; an empty bar
+    assert any(len(cell) > sheet.BEATS for cell in cells)  # one beat each
+    assert any(len({beats for _, beats in cell}) > 1 for cell in cells)  # shared unevenly
+    assert any(isinstance(item, str) for cell in cells for item, _ in cell)  # a mark in a bar
 
 
 def test_the_capos_reach_every_answer():

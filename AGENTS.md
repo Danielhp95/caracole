@@ -224,7 +224,8 @@ sitemaps list by bare ids alone, and the fetch their page.
 
 #### render
 
-- **chordpro.py**: UG markup to ChordPro.
+- **chordpro.py**: UG markup to ChordPro; a chord-only line keeps its bar lines, as `[*|]` marks (`sheet.BAR`, which
+  the page reads).
 - **render.py**: PDFs.
   - **Chinese sheets**: a Chinese sheet's (`page.written_script`) in Simplified characters, and in Traditional ones
     beside it, `songs.TRADITIONAL_PDFS` (`sheet (Traditional).pdf`, `sheet (auto, Traditional).pdf`).
@@ -1096,6 +1097,11 @@ It is rows.js's, shared by both pages:
   - Nor does harptab.js: a hole's note on any harp is harp.py's `hole_tables` (`hole_note`), its name
     `theory.spelling`'s, a group's effects the data's (`groups[i][2].fx`, which `drawGroup` draws again), how the tab
     was read Python's words (test_viewer_harp.py, test_viewer_harptab_page.py, test_viewer_harptab_notation.py).
+- **A sheet's lines** (page.py `_line_html`): a chord-only line that writes bars (`sheet.BAR`) is a row of
+  `span.barcell`s, each chord's beats from `sheet.bars` (`BEATS` a bar, shared evenly). It is still one
+  `p.l.chords`, so the data's `pinyin` keeps its lines. A word a chord falls inside (`_glued`) is one `span.word`,
+  which wraps whole; a line's columns are `p.l .s, p.l .w`, nested or not (viewer.js `fit()`, viewer.css's pinyin
+  rules), never its children (test_viewer_lines.py).
 - **strum.js**, inlined before viewer.js (and in a songbook), is the one place a page makes sound:
   - a plucked-string synthesis into AudioBuffers, no sample, worklet or request;
   - an AudioContext only on a tap (`navigator.userActivation`), suspended when the page is hidden or silent, resumed
@@ -1168,6 +1174,12 @@ It is rows.js's, shared by both pages:
     is, and `auto` again once the page is back at its own entry, for a reload;
   - a history that refuses entries (a `pushState` that throws) turns it off: the layers open and close as before,
     and Back leaves the page (test_viewer_layers.py).
+- **The song's end**: `.page`'s padding is the bar's room (`--foot`), which `layout()` measures two columns against;
+  the half screen of over-scroll is `.page::after`, never in it, and print drops it.
+- **Two columns** (from 1100 px, viewer.css, test_viewer_layout.py) only where the whole song shows that way
+  (`layout()`), at the reader's own text size, never a smaller one, each at least 24 em (`columns: 2 24em`, the
+  owner's narrower columns, D8), spread across the window with 5 % of the room each side; else one column, `--fs` +
+  3 px.
 - **Full screen** (the sheet viewer's) is one of those layers, its element the handle (page.py `_HANDLE`,
   `button.handle#handle`, after the pill): `open(handle, opener)` sets `html[data-full="on"]`, which hides every
   element marked `data-controls` (the bar; a new control that full screen hides is marked so, nothing else changes),
@@ -2145,10 +2157,10 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     process; an edit there, or to a string literal of tests/test_viewer_theory.py (the theory vectors read them),
     regenerates the corpus.
 - A sheet read, ChordPro and a song's key (sheet-keys): `viewer.sheet`'s `Sheets` (viewer/sheet.py: `parse`,
-  `directive`, `written`, `isLegend`, `isLegendLine`, `preambleSection`, `splitPreamble`), `SheetView` (page.py's
-  reading functions that hold no HTML, below the page, so that a version's and the harp's reading need no page:
-  `shown`, `drawnLines`, `writtenTexts`, `peek`, `places`, `played`, `songKey` and `viewerKey`, `givenShapes` and
-  `shapesOf`), `ChordPro` (chordpro.py, with render.py's `chordProText`, `asLatin` and `needsFontFile` and
+  `directive`, `written`, `isLegend`, `isLegendLine`, `preambleSection`, `splitPreamble`, `bars`), `SheetView`
+  (page.py's reading functions that hold no HTML, below the page, so that a version's and the harp's reading need no
+  page: `shown`, `drawnLines`, `writtenTexts`, `peek`, `places`, `played`, `songKey` and `viewerKey`, `givenShapes`
+  and `shapesOf`), `ChordPro` (chordpro.py, with render.py's `chordProText`, `asLatin` and `needsFontFile` and
   ug/page.py's `decodeTwice`) and `MusicKeys` (keys.py: `sheetKey`, `sheetKeys`, `songKey` and `letterAlone` over the
   phone's `files` and `versions` as core.library reads them, `Kept.keptFiles` and `Versions.get`, each file read only
   as a regular file, never through a link; `SongKey`).

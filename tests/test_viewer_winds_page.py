@@ -243,7 +243,7 @@ def test_no_sideways_scroll_at_390_px_with_each_row_open(tmp_path):
     with open_viewer(tmp_path, written(tmp_path, SONG + "[C13]la [Bb11]la [G7#9]la [Dm9]la\n")) as b:
         for name in ("Harmonica", "Flute", "Recorder"):
             open_on(b, name)
-            wide = b.js("""[document.documentElement.scrollWidth, innerWidth,
+            wide = b.js("""[document.documentElement.scrollWidth, document.documentElement.clientWidth,
               Math.max(...[...document.querySelectorAll('#inst-panel *')].map((e) => e.getBoundingClientRect().right)),
               document.getElementById('panel').getBoundingClientRect().right]""")
             assert wide[0] == wide[1] == 390, name
@@ -254,7 +254,7 @@ def test_the_rows_sit_in_the_settings_rail_on_a_laptop(tmp_path):
     with open_viewer(tmp_path, written(tmp_path, SONG), **DESKTOP) as b:
         for name in ("Harmonica", "Flute"):
             open_on(b, name)
-            seen = b.js("""[document.documentElement.scrollWidth, innerWidth,
+            seen = b.js("""[document.documentElement.scrollWidth, document.documentElement.clientWidth,
               Math.max(...[...document.querySelectorAll('#inst-panel *')].map((e) => e.getBoundingClientRect().right)),
               document.getElementById('panel').getBoundingClientRect().right]""")
             assert seen[0] == seen[1] and seen[2] <= seen[3], name

@@ -308,6 +308,18 @@ def test_repeat_mark_merged_at_its_column():
     )
 
 
+def test_a_chord_only_line_keeps_its_bars_as_marks():
+    assert body("[ch]Am[/ch]    [ch]C[/ch]   | [ch]G[/ch]    [ch]Em[/ch]  |") == ["[Am] [C] [*|] [G] [Em] [*|]"]
+    assert body("|: [ch]Am[/ch] | [ch]E[/ch] :|  x2") == ["[*|:] [Am] [*|] [E] [*:|] [*x2]"]
+    assert body("[Intro] | [ch]G[/ch] || [ch]D[/ch] |") == ["{comment: Intro}", "[*|] [G] [*||] [D] [*|]"]
+    # a bar glued to a chord overlaps none of its span (a chord's span ends where the bar begins): kept
+    assert body("[ch]Am[/ch]|[ch]C[/ch]|") == ["[Am] [*|] [C] [*|]"]
+
+
+def test_bars_over_a_lyric_line_are_left_out_as_before():
+    assert body("[ch]G[/ch]  |  [ch]D[/ch]\nHello there my friend") == ["[G]Hello [D]there my friend"]
+
+
 def test_chord_names_in_running_text_stay_plain():
     content = "CHORDS:[ch]Bm[/ch], [ch]G[/ch], [ch]D[/ch].\n   [ch]B[/ch]|3    [ch]B[/ch]|3"
     assert body(content) == ["CHORDS:Bm, G, D.", "   B|3    B|3"]

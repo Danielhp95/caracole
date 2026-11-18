@@ -123,6 +123,8 @@ from caracole.normalize import clean_title, has_han
 from caracole.page_icon import LINK as PAGE_ICON
 from caracole.viewer import hanzi, harmony_tables, harp, instruments, pinyin, winds
 from caracole.viewer.sheet import (
+    BEATS,
+    Bars,
     Blank,
     ChordRow,
     Line,
@@ -131,6 +133,7 @@ from caracole.viewer.sheet import (
     Sheet,
     Tab,
     Text,
+    bars,
     is_legend,
     parse_sheet,
     preamble_section,
@@ -857,21 +860,54 @@ def _mark_html(mark: str) -> str:
     return f'<i class="m">{escape(mark)}</i>'
 
 
+_BEAT = '<span class="beat" aria-hidden="true">·</span>'
+
+
+def _bars_html(found: Bars, names: list[str]) -> str:
+    """A line of chords alone that writes bars, as a row of bar cells (``sheet.bars``): the marks before its first
+    chord, a ``barcell`` for each bar, each item in it followed by a dot for each of its beats after its first (an
+    empty bar's four), then the marks after its last chord. One ``p.l``, as a line of chords is."""
+    def item(it: int | str) -> str:
+        return _chord_html(it, names) if isinstance(it, int) else _mark_html(it)
+
+    cells = ("".join(item(it) + _BEAT * (beats - 1) for it, beats in cell) if cell else _BEAT * BEATS
+             for cell in found.cells)
+    return ('<p class="l chords bars">' + "".join(_mark_html(m) for m in found.lead)
+            + "".join(f'<span class="barcell">{cell}</span>' for cell in cells)
+            + "".join(_mark_html(m) for m in found.tail) + "</p>")
+
+
 def _line_html(line, names: list[str]) -> str:
     """A line of the sheet as HTML: a chord legend's line (``sheet.is_legend``) is a ``legend``, whose chords
-    viewer.js leaves as written, whatever the version."""
+    viewer.js leaves as written, whatever the version. A line of chords alone that writes bars, and is no legend,
+    is a row of bar cells (``_bars_html``).
+
+    A sung line is a column for each chord (``s``: the chord over its first word) and for each other word (``w``),
+    where a narrow screen may wrap the line. A word a chord falls inside (``_glued``: "dis[E]courteously",
+    "[C]a[G]la[D]bama", "wo[G][D]rd") is one ``span.word`` of its columns, which wraps whole."""
     legend = " legend" if is_legend(line, names) else ""
     if isinstance(line, Lyrics):
-        out = []
-        for head, text in line.parts:
+        texts = [text for _, text in line.parts]
+        groups: list[list[str]] = []  # the columns, a group a word: one alone, or those a chord falls inside
+        for k, (head, text) in enumerate(line.parts):
             words = _words(text)
             if head is not None:
                 top = _chord_html(head, names) if isinstance(head, int) else _mark_html(head)
                 first = escape(words.pop(0)) if words else ""
-                out.append(f'<span class="s">{top}<span class="y">{first}</span></span>')
-            out += [f'<span class="w">{escape(w)}</span>' for w in words]
+                column = f'<span class="s">{top}<span class="y">{first}</span></span>'
+                # the nearest texts either side of the chord, through a part with no text ("wo[G][D]rd")
+                before = next((t for t in reversed(texts[:k]) if t), "")
+                after = next((t for t in texts[k:] if t), "")
+                if groups and _glued(before, after):
+                    groups[-1].append(column)
+                else:
+                    groups.append([column])
+            groups += [[f'<span class="w">{escape(w)}</span>'] for w in words]
+        out = (group[0] if len(group) == 1 else f'<span class="word">{"".join(group)}</span>' for group in groups)
         return f'<p class="l{legend}">{"".join(out)}</p>'
     if isinstance(line, ChordRow):
+        if not legend and (found := bars(line)) is not None:
+            return _bars_html(found, names)
         items = [_chord_html(i, names) if isinstance(i, int) else _mark_html(i) for i in line.items]
         return f'<p class="l chords{legend}">{" ".join(items)}</p>'
     if isinstance(line, Text):
@@ -884,6 +920,13 @@ def _line_html(line, names: list[str]) -> str:
 
 def _wide(ch: str) -> bool:
     return unicodedata.east_asian_width(ch) in ("W", "F")
+
+
+def _glued(before: str, after: str) -> bool:
+    """Whether a chord between ``before`` and ``after``, the nearest texts either side of it, sits inside a word:
+    both are texts, and ``_words`` would cut neither at the end of ``before`` nor at the start of ``after`` (no space
+    and no wide character on either side)."""
+    return bool(before) and bool(after) and not any(ch.isspace() or _wide(ch) for ch in (before[-1], after[0]))
 
 
 def _words(text: str) -> list[str]:

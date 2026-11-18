@@ -514,6 +514,11 @@ EDGE_SHEETS = (
     "{title: Repeats And Bars}\n{artist: The Placeholders}\n{key: A}\n{comment: Intro}\n[A] [*| ][D] [*/ / /] [E7] "
     "[*(x4)]\n[A]  [D]\n{comment: Verse}\n[A]Words [D]and [E7]more [*x2]\n",
     "{title: Auto}\n{artist: The Placeholders}\n{comment: auto-generated, unverified}\n[Am]La [F]la [C]la [G]la\n",
+    "{title: Bars And Beats}\n{artist: The Placeholders}\n{key: Am}\n{comment: Intro}\n[*|:] [Am] [*|] [*|] [E] [*:|] [*x2]\n"
+    "[*x2] [*|] [Am] [C] [G] [*|] [A] [B] [C] [D] [E]\n[Am] [*|] [*N.C.] [*|] [E]\n[*|] [*N.C.] [*|]\n"
+    "{comment: Verse}\n[Am]Words [E]here\n",
+    "{title: Words Glued}\n{artist: The Placeholders}\n{key: C}\n{comment: Verse}\n"
+    "Ala[C]bama dis[E]courteously [C]a[G]la[D]bama wo[G][D]rd 我[C]们 in[*x2]side\n",
 )
 
 

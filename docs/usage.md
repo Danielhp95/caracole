@@ -1686,8 +1686,9 @@ and cache.
   leaves it out); a tuning they name ("half step
   down", "Drop D", "Eb standard") or give after a "Tuning:" label ("Tuning:
   DADGAD"), never one they only talk about, and never standard tuning. Then the chord diagrams above
-  the song, bold rust chords over the lyrics, and section names in small rust
-  capitals (no band). The title is large, the page a clean two columns, and a
+  the song, bold rust chords over the lyrics (a line of chords alone that
+  writes bars prints them as written, "Am C | G Em |"), and section names in
+  small rust capitals (no band). The title is large, the page a clean two columns, and a
   songbook's songs are set the same way: in Adwaita Sans with the packages, the
   title, the chords and the section names bold, a repeat mark italic, a tab in
   Adwaita Mono (see [Fonts in the PDFs](#fonts-in-the-pdfs)). chordpro prints a text of the PDF's own, and `sheet.cho` stays as it
@@ -2971,7 +2972,16 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   never between a chord and its syllable, and a chord reaches over the words
   after it, so the lyrics read without gaps. A chord never reaches past the
   edge of the screen: at the end of a row with less room left than the chord
-  is wide, it goes on to the next row with its words.
+  is wide, it goes on to the next row with its words. A word with a chord
+  inside it ("dis·courteously") wraps whole, onto the next row. Where two chords
+  inside one word are close ("wo[G][D]rd"), the gap that keeps them apart is
+  filled with a thin muted line, so the word still reads as one.
+- A long line's wrapped rows sit close together, starting at the left edge,
+  with more space before the next sung line.
+- **Bars**: an intro or a riff the tab writes in bars ("Am C | G Em |") is a
+  row of bar cells, each with its chords and a dot for each beat after a
+  chord's first. A bar has four beats, shared evenly. A line of chords
+  without bars is spaced evenly, as before. The PDF prints it as written.
 - **The tab's notes**: what a tab says before its first section or its first
   riff (the tabber's comments, a link, a chord legend) is shown small and
   muted, two lines of it; **More** opens the rest, and works without
@@ -2981,14 +2991,17 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   harmonica tab's page print in the light colours, even from a screen in dark
   mode, with a 15 mm margin on every side of the paper, and without the bar,
   the settings or the links.
-- **On a wide screen** (1100 px or more: a laptop), the song reads down one
-  column, centred, in slightly larger text. A song short enough for the
-  window to show it whole in two columns is shown in two, side by side,
-  spread across the window with only 5% of its width left empty on each side
-  (of the room beside the rail of necks, where it is open), so wider
-  columns let more songs fit whole; a longer one stays in one, as it would otherwise run down the first column
-  and back up the second. The viewer measures again when the window or the
-  text size changes, and when the settings' rail opens beside the song. From
+- **On a wide screen** (1100 px or more: a laptop), a song short enough for
+  the window to show it whole in two columns is shown in two, side by side,
+  at your text size, each column at least 24 em wide (24 times the text's
+  size), spread across the window with only 5% of its width left empty on
+  each side (of the room beside the rail of necks, where it is open), so wider
+  columns let more songs fit whole. Else the song reads down one column,
+  centred, in slightly larger text: a longer one would otherwise run down the
+  first column and back up the second. Narrow columns let two fit at larger
+  text sizes too (at 1280 px with the rail hidden, up to 22 px). The viewer
+  measures again when the window or the text size changes, and when the
+  settings' rail opens beside the song. From
   1200 px the rail of necks (below) takes 345 px on the left, and the song is
   measured beside it: two columns then need a wider window (at 1280 px a song
   reads in one, at 1600 px two fit as they did at 1280 px without it). Hidden,
@@ -3511,6 +3524,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   drawn and played "in the browser" (see
   [Guitar Pro files in the browser](#caracole-serve)); from the folder, it is
   a "download", the file itself.
+- **The song's end**: the page scrolls on half a screen more past the last line, so
+  the song's last lines come up clear of the bar, to the middle of the screen.
 - **Auto-scroll**: ▶ in the bar counts down 3 seconds to give you
   time to get your hands on the guitar (press the count to start at once),
   then scrolls the song at a steady pace, with the screen kept on where the

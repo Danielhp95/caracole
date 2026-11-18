@@ -75,6 +75,10 @@ _TOKEN = re.compile(r"\[([^\]]*)\]")
 _FRET = re.compile(r"[0-9]+")  # ASCII digits: str.isdigit takes "²", which int() refuses
 _CHORUS = re.compile(r"(?i)chorus|coro|estribillo|refr[aeá]i?n|副歌")
 _ESCAPED_BACKSLASH = "\\" + "u005c"
+# A bar line ("|", "||", "|:", ":|"), the one rule for it: chordpro.py writes each of a chord-only line's as a mark
+# in its place ("[*|]"), and a ChordRow item that fullmatches it is a bar line, which ``bars`` reads.
+BAR = re.compile(r"[|:]*\|[|:]*")
+BEATS = 4  # a bar's beats, which its chords and marks share (``bars``)
 COMMENTS = {"comment", "c", "comment_italic", "ci", "comment_box", "cb", "highlight"}  # a section's name
 
 
@@ -166,6 +170,49 @@ def _line(line: str, chord) -> Line:
     if all(not text.strip() for _, text in parts):
         return ChordRow([item for item, _ in parts if item is not None])
     return Lyrics(parts)
+
+
+@dataclass(frozen=True)
+class Bars:
+    """A line of chords alone as the bars it writes (``bars``): the marks before its first chord (``lead``), each bar's
+    items with their beats (``cells``: a chord's index or a mark's text, and how many of ``BEATS`` it holds), and the
+    marks after its last chord (``tail``)."""
+
+    lead: tuple[str, ...]
+    cells: tuple[tuple[tuple[int | str, int], ...], ...]
+    tail: tuple[str, ...]
+
+
+def bars(line: ChordRow) -> Bars | None:
+    """A line of chords alone as the bars it writes, or None unless it holds a chord and a bar line (``BAR``).
+
+    The marks before its first chord are its ``lead``, and those after its last its ``tail``, its bar lines there
+    dropped. From the first chord to the last, the items split at each bar line, and each piece is a bar (a cell); a
+    piece with nothing in it, between two bar lines, is an empty bar. In a bar its chords and marks share ``BEATS``,
+    evenly (the first ones one more where they don't divide it), or one beat each where there are more of them. The
+    sheet's page draws each bar as a cell, a chord's beats after its first as dots; a chord legend's line
+    (``is_legend``), which plays nothing, is never drawn as bars."""
+    items = line.items
+    chords = [k for k, item in enumerate(items) if isinstance(item, int)]
+    if not chords or not any(isinstance(item, str) and BAR.fullmatch(item) for item in items):
+        return None
+    first, last = chords[0], chords[-1]
+
+    def marks(part: list[int | str]) -> tuple[str, ...]:
+        return tuple(item for item in part if isinstance(item, str) and not BAR.fullmatch(item))
+
+    pieces: list[list[int | str]] = [[]]
+    for item in items[first:last + 1]:
+        if isinstance(item, str) and BAR.fullmatch(item):
+            pieces.append([])
+        else:
+            pieces[-1].append(item)
+
+    def beats(n: int) -> list[int]:
+        return [BEATS // n + (i < BEATS % n) for i in range(n)] if n <= BEATS else [1] * n
+
+    cells = tuple(tuple(zip(piece, beats(len(piece)), strict=True)) for piece in pieces)
+    return Bars(marks(items[:first]), cells, marks(items[last + 1:]))
 
 
 # --- the preamble --------------------------------------------------------------------------------

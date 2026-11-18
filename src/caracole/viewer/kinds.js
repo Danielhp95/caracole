@@ -149,9 +149,9 @@
     const vOne = vChosen || !own.call(OTHERS, vSource.sheet) ? null : OTHERS[vSource.sheet];
     const vTotal = Number.isInteger(vSource.total) && vSource.total >= vRows.length ? vSource.total : vRows.length;
     const vName = (v) => (Number.isInteger(v.number) ? "Ver " + v.number : "No. " + v.rank);
-    // The line's and the list's: "★ 4.86 (408)", or "New" for a version with no rating yet.
-    const stars = (v) => (typeof v.rating !== "number" || !isFinite(v.rating) ? "New"
-      : "★ " + v.rating.toFixed(2) + (Number.isInteger(v.votes) ? " (" + v.votes.toLocaleString("en-US") + ")" : ""));
+    // The line's and the list's: "★ 4.86 (408)", or "New" for a version with no rating or no votes yet (the card's rule).
+    const stars = (v) => (typeof v.rating !== "number" || !isFinite(v.rating) || !(Number(v.votes) > 0) ? "New"
+      : "★ " + v.rating.toFixed(2) + " (" + Number(v.votes).toLocaleString("en") + ")");
 
     // --- the kinds --------------------------------------------------------------------------------------------------
     // The chord sheet's kind (a page with versions and no ``kinds`` is a chord sheet's), then each other kind the song

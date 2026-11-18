@@ -28,8 +28,13 @@
    "_CAPO": {
     "pattern": "(?i)\\bcapo\\b\\D{0,6}(\\d+)",
     "ignorecase": false
+   },
+   "BAR": {
+    "pattern": "[|:]*\\|[|:]*",
+    "ignorecase": false
    }
   },
+  "BEATS": 4,
   "_ESCAPED_BACKSLASH": "\\u005c",
   "COMMENTS": [
    "c",

@@ -18,6 +18,7 @@ from __future__ import annotations
 import re
 import unicodedata
 
+from caracole.viewer.sheet import BAR
 from caracole.viewer.theory import parse_chord
 
 _CHORD = re.compile(r"\[ch\](.*?)\[/ch\]")
@@ -150,7 +151,8 @@ def to_chordpro(
     - ``[Verse 1]`` becomes ``{comment: Verse 1}``.
     - A ``[tab]`` block holding staff lines, or a run of staff lines outside one,
       becomes ``{start_of_tab}`` … ``{end_of_tab}``, kept verbatim.
-    - Solfège chords get letter names; repeat marks become annotations (``[*x2]``).
+    - Solfège chords get letter names; repeat marks become annotations (``[*x2]``), and so do the bar
+      lines on a chord-only line (``[*|]``).
     - Text ChordPro would misread is escaped (see ``_escape_inline``).
 
     The header carries the title, the artist, the key and capo when given, and an
@@ -257,11 +259,13 @@ def _section(line: str) -> tuple[str, str] | None:
 
 
 def _chord_only(line: str) -> str:
-    return " ".join(token for _, token in _chord_items(line))
+    return " ".join(token for _, token in _chord_items(line, bars=True))
 
 
-def _chord_items(line: str) -> list[tuple[int, str]]:
-    """The chords and marks of a chord line, as (display column, ChordPro token), in order."""
+def _chord_items(line: str, *, bars: bool = False) -> list[tuple[int, str]]:
+    """The chords and marks of a chord line, as (display column, ChordPro token), in order; with ``bars``, its
+    bar lines too, each a mark as written (``[*|]``, ``sheet.BAR``), as a chord-only line keeps them. Over a lyric
+    line they are left out, as they would split its words."""
     line = tag_forgotten(_TAB_MARK.sub("", line))
     plain = ""
     spans: list[tuple[int, int, str]] = []
@@ -277,6 +281,10 @@ def _chord_items(line: str) -> list[tuple[int, str]]:
     for m in _MARK.finditer(plain):
         if not any(s <= m.start() < e for s, e, _ in spans):
             spans.append((m.start(), m.end(), f"[*{m.group().strip()}]"))
+    if bars:
+        for m in BAR.finditer(plain):
+            if not any(s < m.end() and m.start() < e for s, e, _ in spans):
+                spans.append((m.start(), m.end(), f"[*{m.group()}]"))
     columns = display_columns(plain)
     return [(columns[s], token) for s, _, token in sorted(spans) if token]
 

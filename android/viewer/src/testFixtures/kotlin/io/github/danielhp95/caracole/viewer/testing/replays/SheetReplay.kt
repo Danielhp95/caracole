@@ -8,6 +8,7 @@ import io.github.danielhp95.caracole.core.testing.Fixtures
 import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.TestDb
 import io.github.danielhp95.caracole.viewer.shapes.Position
+import io.github.danielhp95.caracole.viewer.sheet.Bars
 import io.github.danielhp95.caracole.viewer.sheet.Blank
 import io.github.danielhp95.caracole.viewer.sheet.ChordPro
 import io.github.danielhp95.caracole.viewer.sheet.ChordRow
@@ -130,6 +131,13 @@ object SheetReplay : AreaReplay {
         check("legend") {
             JsonArray(s.sections.flatMapIndexed { i, x ->
                 x.lines.mapIndexedNotNull { j, line -> if (Sheets.isLegend(line, s.chords)) ints(listOf(i, j)) else null }
+            })
+        }
+        check("bars") {
+            JsonArray(s.sections.flatMapIndexed { i, x ->
+                x.lines.mapIndexedNotNull { j, line ->
+                    (line as? ChordRow)?.let(Sheets::bars)?.let { JsonArray(listOf(JsonPrimitive(i), JsonPrimitive(j), barsRow(it))) }
+                }
             })
         }
         val lines = PyStr.splitlines(cho)
@@ -321,6 +329,15 @@ object SheetReplay : AreaReplay {
         is Item.Chord -> JsonPrimitive(item.index)
         is Item.Mark -> JsonPrimitive(item.text)
     }
+
+    /** The generator's `bars_row`: `{"lead", "cells": [[[item, beats], …], …], "tail"}`. */
+    private fun barsRow(found: Bars): JsonObject = JsonObject(linkedMapOf(
+        "lead" to strings(found.lead),
+        "cells" to JsonArray(found.cells.map { cell ->
+            JsonArray(cell.map { (item, beats) -> JsonArray(listOf(itemRow(item), JsonPrimitive(beats))) })
+        }),
+        "tail" to strings(found.tail),
+    ))
 
     fun givenRow(given: List<Pair<Chord, Position>>): JsonArray =
         JsonArray(given.map { (c, position) -> JsonArray(listOf(TheoryReplay.chord(c), position)) })

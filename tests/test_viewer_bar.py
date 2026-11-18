@@ -549,3 +549,23 @@ def test_a_songbook_songs_guitar_shows_its_shapes(tmp_path):
 def test_the_songbooks_contents_have_no_bar(tmp_path):
     dom = browser.dump_dom(songbook(tmp_path), (390, 844))
     assert 'data-view="contents"' in dom and re.search(r'<div class="bar" id="bar"[^>]*hidden', dom)
+
+
+# --- the song's end ----------------------------------------------------------------------------------
+
+
+@in_chromium
+@pytest.mark.parametrize("kind", ("sheet", "songbook", "harmonica"))
+def test_the_songs_end_comes_up_half_a_screen_clear_of_the_bar(tmp_path, kind):
+    from test_viewer_print import _written as written_kind
+
+    url, fragment = written_kind(tmp_path, kind)
+    for width, height, mobile in ((390, 844, True), (844, 390, True), (1280, 800, False)):
+        with pages.viewer(tmp_path, url + fragment, width=width, height=height, mobile=mobile) as b:
+            m = b.js("""(() => { scrollTo(0, document.documentElement.scrollHeight);
+              const last = [...document.querySelectorAll('.foot > *')].filter((e) => e.getClientRects().length).pop()
+                .getBoundingClientRect();
+              const bar = document.querySelector('#bar'), r = bar.getBoundingClientRect();
+              const floor = bar.hidden || !r.height || bar.classList.contains('away') ? innerHeight : r.top;
+              return {room: floor - last.bottom, half: innerHeight / 2}; })()""")
+        assert m["room"] >= m["half"] - 1, (kind, width, m)

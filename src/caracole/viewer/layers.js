@@ -131,7 +131,7 @@
   const DOUBLE_MS = 350, DOUBLE_PX = 30;
   const MARGIN_SKIP = "a, button, input, select, textarea, summary, label, [role=button], [tabindex], .c, .s, .w, .y, .m, "
     + "pre, h1, h2, h3, .artist, .facts, .versions, .sheet-ui, .bar, .pill, .handle, .necks, .strip, .tip, details, .notice, "
-    + ".credit, .foot, .pager";
+    + ".credit, .foot, .pager, .barcell, .beat";
   const doubleTap = (root, skip, then) => {
     let last = null;  // the click before, a double tap's first: when and where
     // On what skip matches, by the click's path as it was dispatched: a handler before this one may have drawn its
