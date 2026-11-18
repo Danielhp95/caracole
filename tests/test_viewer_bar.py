@@ -518,11 +518,12 @@ def test_the_bar_fits_a_phone_and_a_desktop_and_the_song_ends_above_it(tmp_path)
         assert m["ids"] == ["t-down", "key-now", "t-up", "necks-open", "size", "scroll", "more"], (width, m)
         assert m["inside"], (width, m)  # the key's lines in its box, as tall as the buttons with their words
         # The longest key in short, whole ("Ab mixolydian" over "capo 2 · +1"), with no guitar beside the neck to take
-        # its room; narrower (390 and under, as the buttons grow to 48 px), the key may be a little smaller (on the narrowest cut short); and where one line has no room
+        # its room; narrower, as the buttons grow to 48 px, the key a little smaller (on the narrowest cut short); and where one line has no room
         # for what changed, the capo over the transposition, each whole (as measured at each width).
         assert m["sub"] and m["said"] == (["capo 2", "+1"] if width < 360 else ["capo 2 · +1"]), (width, m)
         if width >= 360:
-            assert m["main"] and ((m["size"] == 16) if width >= 440 else (12 <= m["size"] <= 16)), (width, m)
+            assert m["main"] and ((m["size"] == 16) if width >= 440 else (14 <= m["size"] <= 16) if width == 430
+                       else (13 <= m["size"] <= 16) if width == 390 else (12 <= m["size"] < 16)), (width, m)
         assert clear, width
 
 
@@ -565,12 +566,40 @@ HIT = """((x, y) => { const e = document.elementFromPoint(x, y);
   return e && e.closest('button') ? e.closest('button').id : null; })"""
 
 
+NEIGHBOURS = """(() => { const hit = (x, y) => { const e = document.elementFromPoint(x, y);
+  return e && e.closest('button') ? e.closest('button').id : null; };
+  const y = innerHeight - 30, left = document.querySelector(%r).getBoundingClientRect(),
+    right = document.querySelector(%r).getBoundingClientRect();
+  return [hit(left.right + 1, y), hit(right.left - 1, y)]; })()"""
+
+
 @in_chromium
 def test_the_corner_buttons_reach_the_screens_edge(tmp_path):
-    with viewer(tmp_path) as b:  # 390 × 844, coarse
+    with viewer(tmp_path) as b:  # 390 x 844, coarse
         corners = b.js(f"[{HIT}(0, innerHeight - 1), {HIT}(innerWidth - 1, innerHeight - 1)]")
-        inner = b.js(f"{HIT}(innerWidth / 2, innerHeight - 30)")
-    assert corners == ["t-down", "more"] and inner != "more"
+        # 1 px inside the neighbours: the key just right of -, Scroll just left of More: the extra areas stop there
+        beside = b.js(NEIGHBOURS % ("#t-down", "#more"))
+    assert corners == ["t-down", "more"] and beside == ["key-now", "scroll"]
+
+
+@in_chromium
+@pytest.mark.parametrize(("width", "size"), [(390, 16), (430, 16)])
+def test_a_plain_key_keeps_its_16_px_beside_the_48_px_buttons(tmp_path, width, size):
+    with viewer(tmp_path, written(tmp_path, UG_CHO, name=f"P{width}"), width=width, height=844) as b:
+        got = b.js("parseFloat(getComputedStyle(document.querySelector('#key-now .k')).fontSize)")
+        whole = b.js("(() => { const k = document.querySelector('#key-now .k'); const r = document.createRange();"
+                     " r.selectNodeContents(k); return r.getBoundingClientRect().width <= k.getBoundingClientRect().width; })()")
+    assert got == size and whole
+
+
+@in_chromium
+@pytest.mark.parametrize("width", [320, 360, 390])
+def test_the_text_size_box_fits_a_phone_with_its_48_px_buttons(tmp_path, width):
+    with viewer(tmp_path, written(tmp_path, UG_CHO, name=f"A{width}"), width=width, height=740) as b:
+        b.click("#size")
+        box = b.js("(() => { const r = document.querySelector('#sizes').getBoundingClientRect();"
+                   " return [r.left, r.right, document.documentElement.scrollWidth]; })()")
+    assert box[0] >= 0 and box[1] <= width and box[2] <= width, box
 
 
 @in_chromium

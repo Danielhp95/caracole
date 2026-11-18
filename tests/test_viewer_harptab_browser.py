@@ -468,5 +468,11 @@ def test_the_harmonica_pages_corner_buttons_reach_the_screens_edge(tmp_path):
         corners = b.js(f"[{hit}(0, innerHeight - 1), {hit}(innerWidth - 1, innerHeight - 1)]")
         sizes = b.js("[...document.querySelectorAll('#bar button')].filter((e) => e.getClientRects().length)"
                      ".map((e) => [e.id, e.getBoundingClientRect().width, e.getBoundingClientRect().height])")
+        beside = b.js("""(() => { const hit = (x, y) => { const e = document.elementFromPoint(x, y);
+          return e && e.closest('button') ? e.closest('button').id : null; };
+          const y = innerHeight - 30, d = document.querySelector('#h-down').getBoundingClientRect(),
+            s = document.querySelector('#scroll').getBoundingClientRect();
+          return [hit(d.right + 1, y), hit(s.left - 1, y)]; })()""")
     assert corners == ["h-down", "scroll"]
+    assert beside[0] != "h-down" and beside[1] not in ("scroll", None)
     assert all(w >= 48 and h >= 48 for _, w, h in sizes), sizes
