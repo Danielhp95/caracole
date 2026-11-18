@@ -1,6 +1,11 @@
 
 :root {
   color-scheme: light dark;
+  /* The page's four corner radii: marks and code, controls, boxes and sheets, pills. Every stylesheet takes one. */
+  --radius-s: 4px;
+  --radius-m: 8px;
+  --radius-l: 12px;
+  --radius-pill: 999px;
   --bg: #f6f5f1;
   --surface: #ffffff;
   --raised: #f1efea;
@@ -74,7 +79,7 @@ body {
 }
 a { color: inherit; }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-code { font: .9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padding: 1px 5px; border-radius: 6px;
+code { font: .9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padding: 1px 5px; border-radius: var(--radius-s);
   background: var(--raised); overflow-wrap: anywhere; }
 .page { max-width: 1320px; margin: 0 auto; padding: 0 16px 56px; }
 .masthead { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 16px;
@@ -86,10 +91,10 @@ code { font: .9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padd
 @media (hover: hover) { .app a:hover { text-decoration: underline; text-underline-offset: 3px; } }
 .app .mark { flex: none; width: auto; height: 1.5em; color: var(--text); }
 .links { display: flex; flex-wrap: wrap; gap: 8px; }
-.navlink { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: 999px;
+.navlink { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: var(--radius-pill);
   border: 1px solid var(--border); background: var(--surface); text-decoration: none; font-weight: 600; }
 .navlink:hover { border-color: var(--border-strong); }
-.navlink .n { min-width: 22px; padding: 0 7px; border-radius: 999px; background: var(--accent); color: var(--on-accent);
+.navlink .n { min-width: 22px; padding: 0 7px; border-radius: var(--radius-pill); background: var(--accent); color: var(--on-accent);
   font-size: .78rem; line-height: 22px; text-align: center; font-variant-numeric: tabular-nums; }
 /* The header of the pages caracole serve writes itself (web/top.py): the logo and the name, which lead home, the page's
    title after them, its links at the end, all one line; a muted line under it for what the page is of. On a phone the
@@ -111,7 +116,7 @@ code { font: .9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padd
   padding-left: 12px; border-left: 1px solid var(--border-strong); color: var(--muted); font-size: .95rem;
   font-weight: 600; letter-spacing: normal; line-height: 1.3; text-transform: none; }
 .libname .name { min-width: 0; max-width: 18em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.libname .scratch { flex: none; padding: 1px 9px; border: 1px dashed currentColor; border-radius: 999px;
+.libname .scratch { flex: none; padding: 1px 9px; border: 1px dashed currentColor; border-radius: var(--radius-pill);
   color: var(--wanted); background: var(--wanted-bg); font-size: .72rem; font-weight: 750; letter-spacing: .06em;
   line-height: 1.5; text-transform: uppercase; white-space: nowrap; }
 @media (max-width: 559px) {
@@ -123,7 +128,7 @@ code { font: .9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padd
   .top .app { min-width: 44px; min-height: 44px; justify-content: center; }
 }
 .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 0 13px;
-  border-radius: 11px; border: 1px solid var(--border); background: var(--raised); color: var(--text); font: inherit;
+  border-radius: var(--radius-m); border: 1px solid var(--border); background: var(--raised); color: var(--text); font: inherit;
   font-size: .9rem; font-weight: 550; text-decoration: none; overflow-wrap: anywhere; cursor: pointer; }
 .btn:hover { border-color: var(--border-strong); }
 .btn:disabled { color: var(--muted); border-style: dashed; cursor: default; }
@@ -131,7 +136,7 @@ code { font: .9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padd
   font-weight: 650; }
 .btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
 .btn.small { min-height: 36px; padding: 0 11px; font-size: .85rem; }
-.badge { padding: 2px 9px; border-radius: 999px; font-size: .75rem; font-weight: 650; white-space: nowrap; }
+.badge { padding: 2px 9px; border-radius: var(--radius-pill); font-size: .75rem; font-weight: 650; white-space: nowrap; }
 .badge.found, .badge.done { color: var(--found); background: var(--found-bg); }
 .badge.wanted, .badge.queued, .badge.running { color: var(--wanted); background: var(--wanted-bg); }
 .badge.ignored { color: var(--ignored); background: var(--ignored-bg); }
@@ -140,7 +145,7 @@ code { font: .9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padd
 .badge.failed { color: var(--failed); background: var(--failed-bg); }
 .f { display: grid; gap: 4px; min-width: 0; color: var(--muted); font-size: .85rem; font-weight: 600; }
 .f em { font-style: normal; font-weight: 500; }
-.f input { width: 100%; height: 44px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--control-edge);
+.f input { width: 100%; height: 44px; padding: 0 12px; border-radius: var(--radius-m); border: 1px solid var(--control-edge);
   background: var(--bg); color: var(--text); font: inherit; font-size: 1rem; font-weight: 400; }
 .f input:focus { border-color: var(--focus); outline: none;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 30%, transparent); }

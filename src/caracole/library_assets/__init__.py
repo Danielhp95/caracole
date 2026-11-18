@@ -7,7 +7,9 @@ file, and none of it loads anything from the network.
 - base.css (``BASE_STYLE``): colours, type and buttons, every page's. ``--border`` is the soft
   line of boxes and dividers; ``--control-edge`` the edge that tells a field, a menu or a box from
   what is around it, at 3:1 or more against every background (WCAG 1.4.11). On a touch screen
-  (``pointer: coarse``) every button is a thumb's target, 44 px; a mouse keeps the compact ones.
+  (``pointer: coarse``) every button is a thumb's target, 44 px; a mouse keeps the compact ones. Four corner radii, ``--radius-s`` 4 px (marks, ``code``), ``--radius-m`` 8 px
+  (buttons, fields, chips), ``--radius-l`` 12 px (boxes, panels, sheets) and ``--radius-pill``, are every stylesheet's
+  (square and 50 % besides); a stylesheet writes no other (test_page_calm.py).
 - picker.css (``PICKER_STYLE``): the picker of a song in review's candidates, under a song's "⋯" and on
   the pages caracole serve writes itself (web/pages.py), which build the same markup.
 - steps.css (``STEPS_STYLE``): a request's steps as chips (web/outcome.py's): on index.html the Requests tab's

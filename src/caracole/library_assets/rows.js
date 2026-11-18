@@ -251,9 +251,9 @@ const caracoleRows = (icons, does) => {
   // ``href`` says, and right after it ``plays``, a song of yours' button for each thing to play from (card.js plays:
   // none of them first); then the artist (where no group above names it: ``onSearch`` makes it what a group's name
   // is, artistOf), the status's badges, and a site's song's marks of where it came from (``sources``,
-  // else ``source``); its key, as a chip; its main action and its chevron. One line from 720px; on a phone the title
-  // and its buttons, the action, the key and the chevron, and under them the artist and the badges, when there are
-  // any.
+  // else ``source``); its key, in muted bold letters; its main action and its chevron. One line from 720px; on a phone
+  // the title and its buttons, the action, the key and the chevron, and under them the artist and the badges, when
+  // there are any.
   const denseLine = (r) => {
     const title = String(r.title || "");
     const artist = String(r.artist || "");

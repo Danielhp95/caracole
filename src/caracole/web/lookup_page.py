@@ -85,7 +85,7 @@ if TYPE_CHECKING:
 STYLE = BASE_STYLE + ROWS_STYLE + """
 .page { max-width: 980px; }
 .search { position: sticky; top: 0; z-index: 2; padding: 10px 0; background: var(--bg); }
-.search input { width: 100%; height: 54px; padding: 0 16px; border-radius: 14px; border: 1px solid var(--control-edge);
+.search input { width: 100%; height: 54px; padding: 0 16px; border-radius: var(--radius-l); border: 1px solid var(--control-edge);
   background: var(--surface); color: var(--text); font: inherit; font-size: 1.15rem; box-shadow: var(--shadow); }
 .search input:focus { border-color: var(--focus); outline: none;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 30%, transparent); }
@@ -107,7 +107,7 @@ details.by-name { margin: 22px 0 0; }
 .missed > details.by-name:not([open]) { display: none; }
 details.by-name summary { color: var(--muted); font-size: .9rem; font-weight: 600; cursor: pointer; }
 .by-name form { display: grid; gap: 10px; margin-top: 10px; grid-template-columns: 1fr; }
-.reader { margin: 22px 0 0; padding: 14px 16px; border: 1px solid var(--border); border-radius: 16px;
+.reader { margin: 22px 0 0; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius-l);
   background: var(--surface); box-shadow: var(--shadow); scroll-margin-top: var(--bar, 112px); }
 .reader-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; }
 .reader h2 { margin: 0; font-size: 1.25rem; overflow-wrap: anywhere; }
@@ -117,14 +117,14 @@ details.why ul { margin: 6px 0 0; padding-left: 1.2em; }
 details.why li.failed { color: var(--failed); }
 .said { margin: 4px 0 10px; color: var(--muted); font-size: .9rem; }
 .stages { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; padding: 0; list-style: none; }
-.stage { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px;
+.stage { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: var(--radius-pill);
   background: var(--raised); font-size: .78rem; }
 .stage.running { color: var(--wanted); background: var(--wanted-bg); font-weight: 650; }
 .stage.done { color: var(--found); background: var(--found-bg); }
 .stage.failed { color: var(--failed); background: var(--failed-bg); }
 .stage.skipped, .stage.waiting { color: var(--ignored); }
 .files { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
-pre.sheet { margin: 0; padding: 12px; overflow-x: auto; border-radius: 10px; background: var(--bg);
+pre.sheet { margin: 0; padding: 12px; overflow-x: auto; border-radius: var(--radius-m); background: var(--bg);
   font: .88rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre; }
 @media (min-width: 720px) {
   .by-name form { grid-template-columns: 1fr 1fr auto; align-items: end; }

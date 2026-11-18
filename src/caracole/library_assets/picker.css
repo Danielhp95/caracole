@@ -14,7 +14,7 @@
 .choices { display: grid; gap: 6px; min-width: 0; margin: 0; padding: 0; border: 0; list-style: none; }
 .choices legend { margin: 0 0 6px; padding: 0; font-size: .92rem; font-weight: 650; overflow-wrap: anywhere; }
 .choice { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 4px 8px 4px 10px;
-  border: 1px solid var(--border); border-radius: 12px; background: var(--raised); }
+  border: 1px solid var(--border); border-radius: var(--radius-l); background: var(--raised); }
 .choice:has(input:checked) { border-color: var(--accent); }
 .choice-pick { display: flex; flex: 1; align-items: center; gap: 10px; min-width: 0; min-height: 44px; }
 label.choice-pick { cursor: pointer; }
@@ -23,7 +23,7 @@ label.choice-pick { cursor: pointer; }
 .choice-name { font-size: .92rem; font-weight: 600; overflow-wrap: anywhere; }
 .choice-why { color: var(--muted); font-size: .8rem; overflow-wrap: anywhere; }
 .choice-link { flex: none; display: inline-flex; align-items: center; min-height: 36px; padding: 0 10px;
-  border-radius: 10px; border: 1px solid var(--border); background: var(--surface); font-size: .82rem;
+  border-radius: var(--radius-m); border: 1px solid var(--border); background: var(--surface); font-size: .82rem;
   font-weight: 600; text-decoration: none; }
 .choice-link:hover { border-color: var(--border-strong); }
 .pick-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; }

@@ -54,7 +54,7 @@
 .step-found { flex: 1 1 0; min-width: 0; color: var(--muted); font-weight: 400; overflow-wrap: anywhere; }
 @media (max-width: 719px) { .step-found { flex-basis: 100%; } }
 /* A request that waits: Cancel beside its place (library.js cancelButton), a text button as the removal's Undo. */
-.progress .cancel { min-height: 32px; margin: 0; padding: 0 6px; border: 0; border-radius: var(--radius-m, 8px);
+.progress .cancel { min-height: 32px; margin: 0; padding: 0 6px; border: 0; border-radius: var(--radius-m);
   background: none; color: inherit; font: inherit; font-weight: 700; text-decoration: underline;
   text-underline-offset: 2px; cursor: pointer; }
 .progress .cancel:hover { background: var(--raised); }

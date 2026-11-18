@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 PAGE_STYLE = BASE_STYLE + PICKER_STYLE + """
 .pick-page { max-width: 46rem; }
 .lede { max-width: 72ch; margin: 4px 0 20px; color: var(--muted); }
-.says { padding: 2px 10px; border-radius: 999px; font-size: .8rem; font-weight: 650; white-space: nowrap;
+.says { padding: 2px 10px; border-radius: var(--radius-pill); font-size: .8rem; font-weight: 650; white-space: nowrap;
   color: var(--ignored); background: var(--ignored-bg); }
 .says.ready, .says.removed, .says.done { color: var(--found); background: var(--found-bg); }
 .says.running, .says.added { color: var(--auto); background: var(--auto-bg); }
@@ -45,7 +45,7 @@ PAGE_STYLE = BASE_STYLE + PICKER_STYLE + """
 .confirm { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
 .readings { display: grid; gap: 10px; max-width: 72ch; margin: 0; padding: 0; list-style: none; }
 .reading { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 12px;
-  border: 1px solid var(--border); border-radius: 10px; overflow-wrap: anywhere; }
+  border: 1px solid var(--border); border-radius: var(--radius-m); overflow-wrap: anywhere; }
 .reading.now { border-color: var(--found); }
 .reading .said { flex: 1 1 16rem; font-weight: 600; }
 .reading .q { color: var(--muted); font-size: .85rem; white-space: nowrap; }
