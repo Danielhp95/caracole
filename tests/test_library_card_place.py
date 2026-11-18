@@ -965,15 +965,16 @@ class _Held(FakeCaracole):
         return super().__call__(args, emit)
 
 
-def _served_pane(serve, cfg, conn, tmp_path, runner):  # noqa: F811
-    """Radiohead's Creep found and Karma Police, served at 1280 x 900, Creep selected: the page and the song."""
+def _served_pane(serve, cfg, conn, tmp_path, runner, timers=QUICK):  # noqa: F811
+    """Radiohead's Creep found and Karma Police, served at 1280 x 900, Creep selected: the page and the song.
+    ``timers``: the page's (QUICK unless a test needs a countdown it can't outrun)."""
     creep = add_song(conn, "Radiohead", "Creep")
     put(cfg, creep, "sheet.pdf")
     update_song(conn, creep.id, status="found")
     other = add_song(conn, "Radiohead", "Karma Police")
     put(cfg, other, "sheet.pdf")
     update_song(conn, other.id, status="found")
-    url = serve(runner, "(() => {})();\n", timers=QUICK)
+    url = serve(runner, "(() => {})();\n", timers=timers)
     try:
         b = Browser(tmp_path / "chrome", width=1280, height=900)
     except BrowserError as e:
@@ -1011,9 +1012,14 @@ def test_fetch_again_from_the_pane_follows_on_the_songs_line(serve, cfg, conn, t
         b.close()
 
 
+# Remove's countdown, long enough that no check below can outrun it on a loaded machine (QUICK's half second could
+# end between the wait for "Removing in N s" and the disabled check or the Undo click).
+SLOW_UNDO = {"poll": QUICK["poll"], "undo": 9000}
+
+
 def test_remove_from_the_pane_counts_down_on_the_line_and_undo_keeps_it(serve, cfg, conn, tmp_path):  # noqa: F811
     runner = FakeCaracole(cfg)
-    b, creep = _served_pane(serve, cfg, conn, tmp_path, runner)
+    b, creep = _served_pane(serve, cfg, conn, tmp_path, runner, timers=SLOW_UNDO)
     try:
         b.js("document.querySelector('#card-pane .foot-more').open = true")
         b.click("#card-pane form.remove button")
@@ -1021,8 +1027,6 @@ def test_remove_from_the_pane_counts_down_on_the_line_and_undo_keeps_it(serve, c
         assert b.wait(f"(() => {{ const p = document.querySelector({progress}); return Boolean(p && "
                       "/Removing in \\d s/.test(p.textContent) && p.textContent.includes('Undo')); })()"), \
             b.js(f"document.querySelector({progress}) && document.querySelector({progress}).textContent")
-        # (QUICK's half second: the count may already be over by the time it is asked, so the buttons are read at
-        # the moment the countdown was seen, below, and Undo is what the test presses.)
         assert b.js(f"{_pane_form(b, 'form.remove button')}.disabled") is True
         b.click(_line(creep) + " .progress button.undo")
         assert b.wait(f"document.querySelector({progress}).textContent.includes('Not removed')"), \
