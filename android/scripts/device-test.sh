@@ -6,7 +6,7 @@
 #
 #   --area NAMES    CorpusOnDeviceTest's areas (core, server and viewer.testing's Replays); "all" or an empty
 #                   list: every one
-#   --app           the app's classes: EndToEndTest, PinchTest, SyncSheetTest, ExportImportTest and
+#   --app           the app's classes: EndToEndTest, PinchTest, PedalTest, SyncSheetTest, ExportImportTest and
 #                   PhoneEndToEndTest, each against a computer of its own (tests.helpers.e2e_library in a fresh
 #                   folder)
 #   CLASS[=DIR]     a class of app/src/androidTest (NoSitesTest, LocalServerTest..., or in full:
@@ -212,7 +212,7 @@ run_with_computer() {
 
 if [ "$want_app" = 1 ]; then
     base="$(mktemp -d "${TMPDIR:-/tmp}/caracole-device-XXXXXX")"
-    for name in EndToEndTest PinchTest SyncSheetTest ExportImportTest PhoneEndToEndTest; do
+    for name in EndToEndTest PinchTest PedalTest SyncSheetTest ExportImportTest PhoneEndToEndTest; do
         run_with_computer "$name" "${computer:-$base/$name}"
     done
 fi

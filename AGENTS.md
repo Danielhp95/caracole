@@ -1942,7 +1942,7 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 - `app/src/androidTest/` runs on a device or an emulator alone (the device step, below), under `CaracoleTestRunner`:
   `BundledSqliteTest`, `CorpusOnDeviceTest` (one test per corpus area, `core.testing.Replays`,
   `server.testing.ServerReplays` and `viewer.testing.ViewerReplays`; `-e area NAME[,NAME…]` picks some), `NoSitesTest`,
-  `LocalServerTest`, `EndToEndTest`, `PinchTest`, `SyncSheetTest`, `ExportImportTest` and `PhoneEndToEndTest`, and
+  `LocalServerTest`, `EndToEndTest`, `PinchTest`, `PedalTest`, `SyncSheetTest`, `ExportImportTest` and `PhoneEndToEndTest`, and
   milestones 4–6's: `ColdSearchTest`, `LookupOfflineTest`, `NoNetworkTest`, `RealTransportOnDeviceTest`,
   `LookupOnDeviceTest` and `PagesOnDeviceTest` (with `--sites`), `PagesServedTest`, `SongbooksOnDeviceTest`,
   `VersionsPageTest`, `GuitarPageTest`, `PrintTest`, `ShareTest`, `ShareLinkTest`, `BackupsTest` and `AlertsTest`.
