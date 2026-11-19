@@ -1002,7 +1002,9 @@ def _words(text: str) -> list[str]:
 # toggle button, pressed while it is on): Role colours, All chord shapes (the strip of the song's chord shapes, its
 # one switch), and on a sheet with Chinese its characters, Simplified or Traditional (a segmented control, each named
 # in its own characters too), then Pinyin; the instrument, a menu, and the strum's loudness, four speakers, on
-# one line, and the instrument's own rows (instruments.js) under it; after a rule, the places to go, a row each (›
+# one line, and the instrument's own rows (instruments.js) under it; after a rule, Keep the screen on, the minutes the
+# screen stays on after the last touch in a stepper at its right ("Off", "10 min" … "60 min": screen.js keeps them for
+# every page, viewer.js draws them); after a rule, the places to go, a row each (›
 # opens something here, ↗ leaves the page): Hide controls (``_FULL_ROW``, full screen), the song's Guitar Pro files
 # (``_GUITAR_ROW``) and Export PDF (``_EXPORT_ROW``, a sheet's alone); and after another, Reset all, quiet. Harmony is
 # no place here: it is the overlay's third tab, which viewer.js draws (``harmonyPane``).
@@ -1118,6 +1120,9 @@ _CONTROLS = """<div class="bar" id="bar" data-controls hidden role="region" aria
 <span id="sound-row" hidden><span class="seg icons" id="volumes" role="group" aria-label="Strum volume" aria-describedby="strum-hint"></span>
 <span class="vh" id="strum-hint">Tap a chord or its shape to hear it.</span></span></div>
 <div class="inst-panel" id="inst-panel" hidden></div></div>
+<div class="awake ruled" id="awake-row"><span id="awake-lab">Keep the screen on</span>
+<span class="stepper" role="group" aria-labelledby="awake-lab"><button type="button" id="awake-down" aria-label="Fewer minutes" aria-disabled="false">−</button>
+<output id="awake-at">10 min</output><button type="button" id="awake-up" aria-label="More minutes" aria-disabled="false">+</button></span></div>
 <div class="places ruled" id="places">
 """ + _FULL_ROW + """</div>
 <div class="panel-end ruled"><button type="button" class="quiet" id="reset-all">Reset all</button></div>

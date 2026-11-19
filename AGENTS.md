@@ -397,12 +397,13 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   - **harmony_tables.py**: its answers as the tables a viewer's data carries, per mode, each text naming notes
     written for every transposition, for viewer.js to look up.
   - **strum.js**: a chord's shape strummed in Web Audio, `window.caracoleSound`, each instrument's voice.
-  - **screen.js**: the screen's choices kept for every viewer page (the theme) and the key map (`keys`, below),
-    `window.caracoleScreen`, inlined in the head of every viewer page (`_page`'s `head_scripts`, the Kotlin frame's
+  - **screen.js**: the screen's choices kept for every viewer page (the theme, the minutes the screen stays on), the
+    key map (`keys`, below) and the screen kept on (`awake`, below), `window.caracoleScreen`, inlined in the head of
+    every viewer page (`_page`'s `head_scripts`, the Kotlin frame's
     `headScripts`), so the theme is the page's before its body is drawn; at start-up it touches the root, the address,
     storage and the navigation alone, and what needs the body waits for DOMContentLoaded or reads what the page's
     script gave it (it looks up no element of its own, test_viewer_theme.py; at key time it walks the sheet's lines it
-    was given); no script guards it.
+    was given; it listens to the page only once `awake` is called); no script guards it.
   - **overlay.js**: the rail of a wide screen, Guitar (the necks), Harmonica (the circle of fifths, the key on the
     harp chosen, each chord's holes, the slim bar) and, on a sheet with a key, Harmony (the page's own pane, viewer.js
     `harmonyPane`: the key's neck, each section's progression), and narrower the phone's sheet,
@@ -1529,13 +1530,27 @@ It is rows.js's, shared by both pages:
     - it draws only what `tones` (with each note's pitch class) and `keyScale` give;
     - a chord's card opens it too, by its chord, with the chords' names alone (its Circle & keyboard, viewer.js
       `tipDraws`): test_viewer_numerals.py.
-  - **The theme**: so, last, is Aa's theme, Auto, Light or Dark (screen.js, `html[data-theme]` `light` or `dark`, none
+  - **The theme**: so is Aa's theme, Auto, Light or Dark (screen.js, `html[data-theme]` `light` or `dark`, none
     for Auto, the system's; viewer.css's palette on screen, paper light):
     - localStorage `caracole-viewer-theme` (`auto`, `light`, `dark`), and `theme=` in the address while it isn't Auto,
       which `carryScreen` and `screenChoices` take on (`caracoleScreen.carry`);
     - applied by screen.js in the head, before the body is drawn (no other palette painted first on a slow phone), so
       a songbook's contents follow it too; Reset all leaves it;
     - the library page is not affected (test_viewer_theme.py).
+  - **Keeping the screen on**: so, last, are the minutes the screen stays on after the last touch (D18 C), More's Keep
+    the screen on (`#awake-row`: `#awake-down`, `#awake-at` "Off" or "10 min", `#awake-up`; Off to 60 by 5, 10 by
+    default, `caracoleScreen.MINUTES`); the harmonica tab's page has no control and follows them:
+    - localStorage `caracole-viewer-awake`, and `awake=` in the address while they aren't 10 (`awake=0` for Off), which
+      `carryScreen` and `screenChoices` take on (`caracoleScreen.carry`); Reset all leaves them;
+    - screen.js is the one place a page asks for a screen wake lock (`awake(moving)`, called by viewer.js and
+      harptab.js with their `moving()`, unguarded; its `sync()` again wherever autoscroll starts, pauses or ends):
+      wanted while the page shows and it moves by itself or the minutes haven't passed since the last `touchstart`,
+      `pointerdown`, `keydown`, `wheel` or `scroll` (captured, passive) or the page shown again, `performance.now()`
+      the one clock, one timeout for when they run out; asked again when the page shows again after the browser let
+      go of it (its `release` event); `html[data-awake="1"]` while one is held;
+    - never through `navigator.permissions.query`, whose answer Android's WebView gets wrong ("denied" while it grants
+      the lock); a request refused is asked again at the next touch, key or wheel, never a scroll
+      (test_viewer_awake.py, its fakes helpers/viewer_pages.py's `WAKE_LOCK`, `LONG_TIMERS`, `DENIED`).
 
 #### `commands/`
 

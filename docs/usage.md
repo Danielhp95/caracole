@@ -3688,8 +3688,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   the song's last lines come up clear of the bar, to the middle of the screen.
 - **Auto-scroll**: Scroll in the bar counts down 3 seconds to give you
   time to get your hands on the guitar (press the count to start at once),
-  then scrolls the song at a steady pace, with the screen kept on where the
-  browser allows it. While it is on, a pill steers it, just above the bar's
+  then scrolls the song at a steady pace, the screen kept on all the while
+  (see Keep the screen on, below). While it is on, a pill steers it, just above the bar's
   place (on a laptop, under the toolbar): − and + change the speed (1 to 30)
   as it scrolls, ❚❚ pauses and ▶ goes on after another countdown, and × ends
   it. The bar (or the laptop's toolbar, its room kept) is out of the way
@@ -3726,6 +3726,16 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   necks or a text field has the focus (each keeps its own keys), nor with
   Alt, Ctrl, Shift or ⌘ held, but all of them work in full screen; no key
   changes the version.
+- **Keep the screen on**: while a sheet shows, the screen stays on (where the
+  browser allows it) until 10 minutes after your last touch, key or scroll,
+  and always while it scrolls by itself, so it doesn't go dark between two
+  verses; hidden and shown again, the page keeps it on again. **Keep the
+  screen on** in the settings sets the minutes, from Off (on only while it
+  scrolls) to 60, by 5. The choice is the reader's, as the theme is: the
+  browser keeps it once for every sheet, songbook and harmonica tab's page,
+  and the address keeps it while it isn't 10 (`awake=15`, `awake=0` for Off),
+  which a link to another version and a songbook's next song take on. Reset
+  all leaves it.
 
 The viewer remembers its settings for each song in the browser, the scroll
 speed, the text size, the volume and the shape chosen for each chord among them: a chord
@@ -3735,7 +3745,8 @@ capo, the chord names (`nm=both`, `nm=numerals`), the text size, the scroll spee
 volume in its address too (`sheet.html#t=2&mode=aeolian&fs=20&speed=8&vol=1`), the rail of necks hidden
 (`necks=0`; the browser keeps that once for every page), the pinyin shown (`py=1`, kept so too), the Chinese in
 Traditional characters (`trad=1`, kept so too), the instrument
-(`inst=piano`, kept so too), the theme while it isn't Auto (`theme=dark`, kept so too), and so the shape chosen for a
+(`inst=piano`, kept so too), the theme while it isn't Auto (`theme=dark`, kept so too), the minutes the screen stays
+on while they aren't 10 (`awake=15`, kept so too), and so the shape chosen for a
 chord, on its card or its neck (`at=3.2`: chord 3, its third shape), and the
 chords played instead of others (`alt=ionian.0.7.maj7.`: mode, chord, root,
 suffix, bass), so a reload or
@@ -3848,7 +3859,9 @@ the library page link it, the tab's text beside it.
   a toolbar under the tab's title, as the viewer's. The viewer's keys and
   pedals work here too: Space or Enter starts and stops scrolling, PageDown or
   ↓ turns a screen keeping two lines, PageUp or ↑ turns back (not while Aa,
-  the rail or the versions list has the focus).
+  the rail or the versions list has the focus). The screen stays on as on a
+  sheet, for the minutes the sheets' Keep the screen on keeps (the page has no
+  setting of its own), and always while it scrolls.
 - **Full screen**, as the viewer's: a double tap beside the tab (in its
   margins, never on a hole, a word, a line's ▶, the legend or a control) hides
   the bar, the facts, the "fit the sheet's chords" line and the rail, and a
@@ -3886,8 +3899,9 @@ the library page link it, the tab's text beside it.
   page's both ways.
 
 The page keeps the harp, Notes, the text size and the scroll speed in its
-address too (`harmonica-1.html#harp=A&notes=1&fs=20`), and the theme while it
-isn't Auto (`&theme=dark`).
+address too (`harmonica-1.html#harp=A&notes=1&fs=20`), the theme while it
+isn't Auto (`&theme=dark`) and the minutes the screen stays on while they aren't
+10 (`&awake=15`), which ‹ Chord sheet carries back.
 
 #### caracole harmonica
 
@@ -5564,7 +5578,7 @@ in `Library/_songbooks/<name>/`:
   where the songbook plays it); tap
   a song to open it in the sheet viewer, with everything the viewer does
   (chord shapes, transposition, chords to play instead, modes, scrolling by
-  itself, the artist's name that opens the library page on their songs), each
+  itself, the screen kept on, the artist's name that opens the library page on their songs), each
   song opening where the songbook plays it (on its instrument too) and keeping its
   own settings, its scroll
   speed, text size and chosen shapes among them. What a song opens (the settings, a
@@ -5583,7 +5597,8 @@ in `Library/_songbooks/<name>/`:
   browser's storage: each song keeps its address (`#song-3`), and the
   viewer keeps the song's transposition, mode, capo, text size and scroll
   speed there (`#song-3=&t=2&fs=20&speed=8`), so a reload or Back keeps them, but not your place
-  or its other settings; the next song opens where the songbook plays it.
+  or its other settings; the next song opens where the songbook plays it, with the screen's choices (the
+  theme, the minutes the screen stays on, `awake=15`) carried on.
 - **`songbook.cho`**: every song's ChordPro, in its key, split by
   `{new_song}`, to import into a songbook app such as SongbookPro or OnSong.
   Each song is where the songbook plays it, every chord already written there

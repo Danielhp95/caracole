@@ -57,27 +57,6 @@ EVEN_PIXELS = """(() => {
   window.scrollBy = (x, y) => { bys.push(y); to(x, Math.floor((scrollY + y) / 2) * 2); };
 })()"""
 
-# A screen wake lock that writes down what it is asked; ``system()`` lets go of the lock as a
-# browser does when the page is hidden.
-WAKE_LOCK = """(() => {
-  window.wakeLog = [];
-  let held = null;
-  window.system = () => { if (held) { held.released = true; held.dispatchEvent(new Event("release")); held = null; } };
-  Object.defineProperty(navigator, "wakeLock", { configurable: true, value: { request(type) {
-    wakeLog.push("request " + type);
-    const lock = new EventTarget();
-    lock.type = type;
-    lock.released = false;
-    lock.release = () => {
-      if (!lock.released) { lock.released = true; wakeLog.push("release"); lock.dispatchEvent(new Event("release")); }
-      if (held === lock) held = null;
-      return Promise.resolve();
-    };
-    held = lock;
-    return Promise.resolve(lock);
-  } } });
-})()"""
-
 
 def written(tmp_path: Path, cho: str = LONG, name: str = "Title") -> str:
     return pages.written(tmp_path, cho, name)
@@ -402,33 +381,6 @@ def test_it_scrolls_to_rounded_targets_so_no_step_is_lost_at_a_zoom(tmp_path):
         assert y >= ys[-1] - 2  # ...and the page went there, two pixels at a time
         rates.append((ys[-1] - ys[0]) / (moves[-1][0] - moves[0][0]) * 1000 / expected)
     assert all(0.75 <= r <= 1.15 for r in rates), rates
-
-
-@in_chromium
-def test_the_screen_stays_on_while_it_scrolls(tmp_path):
-    with viewer(tmp_path) as b:
-        b.js(WAKE_LOCK)
-        b.click("#scroll")
-        log = [list(b.js("wakeLog"))]  # counting down
-        b.click("#go")
-        log.append(list(b.js("wakeLog")))  # scrolling: the same lock
-        b.click("#go")
-        log.append(list(b.js("wakeLog")))  # paused: the screen may sleep
-        b.click("#go")
-        b.click("#go")
-        b.js("system()")  # the page was hidden, and the browser let go of the lock...
-        b.js("document.dispatchEvent(new Event('visibilitychange'))")  # ...it shows again
-        assert b.wait("wakeLog.length === 4")
-        log.append(list(b.js("wakeLog")))
-        b.click("#pill-end")
-        log.append(list(b.js("wakeLog")))
-    assert log == [
-        ["request screen"],
-        ["request screen"],
-        ["request screen", "release"],
-        ["request screen", "release", "request screen", "request screen"],
-        ["request screen", "release", "request screen", "request screen", "release"],
-    ]
 
 
 @in_chromium

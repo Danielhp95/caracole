@@ -111,7 +111,7 @@
   // ‹ Chord sheet takes the screen's choices back with it (the rail hidden, and as they came in the address, a sheet's
   // viewer's link here having taken them on: the pinyin, the Chinese characters, the instrument), so that where the
   // browser keeps nothing (caracole serve's sandbox) they go both ways. ‹ Library takes none.
-  const screenKit = window.caracoleScreen;  // screen.js, inlined in the head: the theme, the key map
+  const screenKit = window.caracoleScreen;  // screen.js, inlined in the head: the theme, the keys, the screen on
   const sheetLink = document.querySelector("a.back[data-sheet]");
   const sheetPage = sheetLink ? sheetLink.getAttribute("href") : "";
   // What a link to another page of the song takes along: "#necks=0&py=1", or "".
@@ -648,25 +648,9 @@
       ? String(Math.max(1, Math.ceil((scroll.ends - performance.now()) / 1000))) : "";
     if (said !== undefined) $("scroll-status").textContent = said;
   };
-  let wake = null;
-  const holdScreen = () => {
-    if (wake || !navigator.wakeLock) return;
-    try {
-      navigator.wakeLock.request("screen").then((lock) => {
-        if (!moving()) {
-          lock.release().catch(() => {});
-          return;
-        }
-        wake = lock;
-        lock.addEventListener("release", () => { if (wake === lock) wake = null; });
-      }, () => {});
-    } catch (err) { /* no wake lock here */ }
-  };
-  const letScreenSleep = () => {
-    const lock = wake;
-    wake = null;
-    if (lock) lock.release().catch(() => {});
-  };
+  // The screen stays on while it counts down and scrolls, and as long after the last touch as the sheet pages' Keep
+  // the screen on says (this page has no control of its own): screen.js's.
+  const awake = screenKit.awake(moving);
   const run = () => {
     clearTimeout(scroll.timer);
     scroll.state = "running";
@@ -696,7 +680,7 @@
       requestAnimationFrame(frame);
     };
     showScroll("Scrolling");
-    holdScreen();
+    awake();
     requestAnimationFrame(frame);
   };
   const countdown = () => {
@@ -714,21 +698,21 @@
     };
     tick();
     showScroll("Scrolling in " + COUNTDOWN / 1000 + " s");
-    holdScreen();
+    awake();
   };
   function pauseScroll(said) {
     if (!moving()) return;
     clearTimeout(scroll.timer);
     scroll.state = "paused";
     showScroll(said || "Paused");
-    letScreenSleep();
+    awake();
   }
   const endScroll = () => {
     const mine = pill.contains(document.activeElement);
     clearTimeout(scroll.timer);
     scroll.state = "off";
     showScroll("");
-    letScreenSleep();
+    awake();
     if (mine) $("scroll").focus({ preventScroll: true });
   };
   // The tab moves only in sight: the sheet over the whole screen goes back to half, the tab moving above it.
@@ -778,9 +762,6 @@
     busy,
     sheet,
     steer: [$("scroll"), ...pill.getElementsByTagName("button")],
-  });
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible" && moving()) holdScreen();
   });
 
   // --- the bar: away as you read down the tab, back when you want it ---------------------------------------------

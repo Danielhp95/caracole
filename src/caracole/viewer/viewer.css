@@ -813,6 +813,14 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
 .icons svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round;
   stroke-linejoin: round; }
 .inst-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 6px 0 2px; }
+/* Keep the screen on, after a rule: its words, and at its right the minutes in a stepper, as wide whatever it says
+   ("Off", "10 min" … "60 min"), under the words at the right where a phone has no room for both on one line (a
+   320 px one); an end greyed where the minutes stop (aria-disabled, the focus kept, as Aa's). */
+#awake-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 10px;
+  padding-bottom: 10px; font-size: .92rem; }
+#awake-row .stepper { flex: none; width: 9.25rem; margin-left: auto; }
+#awake-row output { font-variant-numeric: tabular-nums; white-space: nowrap; }
+#panel .stepper button[aria-disabled="true"] { opacity: .35; cursor: default; }
 /* After a rule, the places to go, a full-width row each: its words, and at its right what it holds or where it goes,
    then › (something here: the Harmony panel, Export PDF's page or, from a file, its command, unfolded) or ↗ (away
    from the page: a Guitar Pro file). Its hover reaches a little past the panel's text on either side. */
@@ -833,7 +841,7 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
 .quiet { min-height: 36px; padding: 0 12px; border: 0; border-radius: 9px; background: none; color: var(--muted);
   font: inherit; font-size: .85rem; font-weight: 600; cursor: pointer; }
 @media (hover: hover) {
-  #panel .stepper button:hover, .undo:hover { background: var(--raised); }
+  #panel .stepper button:not([aria-disabled="true"]):hover, .undo:hover { background: var(--raised); }
   #panel .chip:not([aria-pressed="true"]):hover { background: var(--raised); }
   .seg > button:not([aria-pressed="true"]):not([aria-selected="true"]):not(:disabled):hover { color: var(--text); }
   .goto:hover, .quiet:hover, .tip-btn:hover { background: var(--raised); }

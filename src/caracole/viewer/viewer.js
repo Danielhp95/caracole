@@ -257,7 +257,7 @@
       keep("py", "1", state.py);
       keep("trad", "1", state.trad);
       keep("inst", state.inst, state.inst !== "guitar" || Boolean(startInst));
-      screenKit.carry(params);  // the theme, while it isn't Auto
+      screenKit.carry(params);  // the theme while it isn't Auto, the minutes the screen stays on while they aren't 10
       const fragment = params.toString();
       if (fragment !== location.hash.slice(1)) {
         history.replaceState(history.state, "", fragment ? "#" + fragment : location.pathname + location.search);
@@ -284,7 +284,7 @@
     for (const name of ["mine", "sheet"]) version.delete(name);
     if (!served) {
       const quoted = (text) => "'" + text.replace(/'/g, "'\\''") + "'";
-      for (const name of ["fs", "speed", "vol", "necks", "py", "theme"]) version.delete(name);
+      for (const name of ["fs", "speed", "vol", "necks", "py", "theme", "awake"]) version.delete(name);
       cmd.textContent = "caracole render --song " + songNamed()
         + " --version " + quoted(version.toString().replace(/%2C/g, ","));
       link.hidden = true;
@@ -769,9 +769,10 @@
     ? kit.keyboard(position, title, bare, span) : kit.box(position, title, bare));
 
   // The screen's choices, kept once for every page (the rail of necks hidden, the pinyin shown, the Chinese in
-  // Traditional characters, the instrument, and screen.js's: the theme), set in ``params`` as the address keeps them: a
-  // link to another page of the song takes them on (a version's in the list, a harmonica tab's page, and back), so that
-  // where the browser keeps nothing (caracole serve's sandbox) they go with it.
+  // Traditional characters, the instrument, and screen.js's: the theme, the minutes the screen stays on), set in
+  // ``params`` as the address keeps them: a link to another page of the song takes them on (a version's in the list, a
+  // harmonica tab's page, and back), so that where the browser keeps nothing (caracole serve's sandbox) they go with
+  // it.
   function screenChoices(params) {
     if (!state.necks) params.set("necks", "0");
     if (state.py) params.set("py", "1");
@@ -1049,6 +1050,14 @@
       b.setAttribute("aria-pressed", b.id === "theme-" + screenKit.theme() ? "true" : "false");
     }
   };
+  // More's Keep the screen on: the minutes screen.js keeps for every page, Off to 60, each end greyed where it stops
+  // (aria-disabled, as Aa's text size: a button pressed to its end keeps the focus).
+  const drawAwake = () => {
+    const n = screenKit.minutes(), all = screenKit.MINUTES;
+    $("awake-at").textContent = n ? n + " min" : "Off";
+    $("awake-down").setAttribute("aria-disabled", n <= all[0] ? "true" : "false");
+    $("awake-up").setAttribute("aria-disabled", n >= all[all.length - 1] ? "true" : "false");
+  };
   const render = () => {
     if (state.capo === sheetCapo) state.capo = null;  // the sheet's own again
     keepPositions();
@@ -1066,6 +1075,7 @@
     $("smaller").setAttribute("aria-disabled", state.fs <= FS.min ? "true" : "false");
     $("bigger").setAttribute("aria-disabled", state.fs >= FS.max ? "true" : "false");
     drawTheme();
+    drawAwake();
 
     const [main, words, changed] = keyShort();
     $("key-now").querySelector(".k").textContent = main;
@@ -2772,6 +2782,16 @@
     b.addEventListener("click", () => { screenKit.setTheme(b.id.slice("theme-".length)); render(); });
   }
   $("strip-toggle").addEventListener("click", () => { state.shapes = !stripShown(); render(); });
+  // Keep the screen on, a step of the minutes screen.js offers (none past either end), kept for every page by it, and
+  // in the address (save()).
+  const stepAwake = (by) => {
+    const all = screenKit.MINUTES, next = all[all.indexOf(screenKit.minutes()) + by];
+    if (next === undefined) return;
+    screenKit.setMinutes(next);
+    render();
+  };
+  $("awake-down").addEventListener("click", () => stepAwake(-1));
+  $("awake-up").addEventListener("click", () => stepAwake(1));
   $("reset-all").addEventListener("click", () => {
     Object.assign(state, { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null, nm: null,
       necks: true, py: false, trad: false });
@@ -2822,34 +2842,9 @@
     save();
   };
 
-  // The screen stays on while it counts down and scrolls. A browser lets go of the lock when the
-  // page is hidden; it is asked for again when the page shows.
-  let wake = null, asking = false;
-  const holdScreen = () => {
-    if (wake || asking || !navigator.wakeLock) return;
-    asking = true;
-    try {
-      navigator.wakeLock.request("screen").then((lock) => {
-        asking = false;
-        if (!moving()) {
-          lock.release().catch(() => {});
-          return;
-        }
-        wake = lock;
-        lock.addEventListener("release", () => { if (wake === lock) wake = null; });
-      }, () => { asking = false; });
-    } catch (err) {
-      asking = false;  // no wake lock here
-    }
-  };
-  const letScreenSleep = () => {
-    const lock = wake;
-    wake = null;
-    if (lock) lock.release().catch(() => {});
-  };
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible" && moving()) holdScreen();
-  });
+  // The screen stays on while it counts down and scrolls, and as long after the last touch as More's Keep the screen
+  // on says: screen.js's (awake), asked again whenever the scroll starts, pauses or ends.
+  const awake = screenKit.awake(moving);
 
   // The line being sung, lit while it scrolls. data.sung (page.py, sung.py: the song's timed lyrics matched to its
   // lines at render time): for each timed line, in time order, [ms, n], its time and the index in songLines of the
@@ -2925,7 +2920,7 @@
     };
     tick();
     showScroll("Scrolling in " + COUNTDOWN / 1000 + " s");
-    holdScreen();
+    awake();
   };
   // Each frame scrolls to a whole pixel counted from where it began, Math.round(from + travelled),
   // never a pixel on from where the page is: a browser that rounds a scroll to its device pixels
@@ -2963,7 +2958,7 @@
       requestAnimationFrame(frame);
     };
     showScroll("Scrolling");
-    holdScreen();
+    awake();
     requestAnimationFrame(frame);
   };
   function pauseScroll(said) {
@@ -2972,7 +2967,7 @@
     standClock();
     scroll.state = "paused";
     showScroll(said || "Paused");
-    letScreenSleep();
+    awake();
     lightSung();
   }
   const endScroll = () => {
@@ -2983,7 +2978,7 @@
     sungClock.since = null;
     sungClock.started = false;
     showScroll("");
-    letScreenSleep();
+    awake();
     lightSung();
     if (mine) $("scroll").focus({ preventScroll: true });
   };
