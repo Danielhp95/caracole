@@ -95,6 +95,20 @@ def test_the_strip_draws_the_instrument_shown(tmp_path, inst, drawn):
               new Set([...svg.querySelectorAll('[data-string]')].map((m) => m.dataset.string)).size === 4)""")
 
 
+NO_SHAPE = ("{title: Riffs}\n{artist: Synthetic}\n{key: C}\n{comment: Verse}\n"
+            "[N.C.]made up [Xq]words [C]here\n")
+
+
+def test_a_chord_with_no_shape_is_still_a_fingers_width_in_the_strip(tmp_path):
+    # N.C. and a chord no instrument has a shape of are their names alone: shown by default on every phone, each is
+    # still a target a finger finds, as the bar's are (48 px).
+    with open_viewer(tmp_path, written(tmp_path, NO_SHAPE)) as b:
+        seen = strip(b)
+        widths = b.js("[...document.querySelectorAll('#strip button')].map((x) => x.getBoundingClientRect().width)")
+    assert seen["shown"] and seen["names"] == ["N.C.", "Xq", "C"]
+    assert all(w >= 48 for w in widths), widths
+
+
 @pytest.mark.parametrize("size", [{"width": 320, "height": 640}, {"width": 844, "height": 390}])
 def test_the_strip_fits_a_320_px_phone_and_one_on_its_side(tmp_path, size):
     with open_viewer(tmp_path, written(tmp_path, SONG), **size) as b:
