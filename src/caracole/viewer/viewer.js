@@ -996,10 +996,11 @@
   // one that takes a capo ("none", or its fret), Key where the sheet has one (keyFacts, how far the chords you see
   // moved said after the key it sounds in, as the bar says it: " (+1)"), and the instrument's own line where its
   // script gives one (instruments.js register's header), the instrument's name its label: "Harmonica  G harp (1st
-  // position) · C harp (2nd)". A sheet with no chords has no facts, and nothing is drawn.
+  // position) · C harp (2nd)". A sheet with no chords (a tab alone), with nothing to transpose or to play on another
+  // instrument, keeps what page.py wrote: its Capo line as written, where it names a capo, else no facts.
   const drawFacts = () => {
     const box = $("facts");
-    if (!box) return;
+    if (!box || count === 0) return;
     box.textContent = "";
     const fact = (name, label) => {
       const row = box.appendChild(document.createElement("div"));

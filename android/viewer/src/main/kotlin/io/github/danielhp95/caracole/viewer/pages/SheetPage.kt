@@ -168,7 +168,7 @@ object SheetPage {
     val GUITAR_STRINGS: String get() = PageHtml.GUITAR_STRINGS
 
     /** facts_html: the song's facts under its title, as HTML: its Tuning, its Capo and, where it has one, its Key (a
-     * songbook's song's by [suffix], "-3"); "" for a sheet with no [chords]. */
+     * songbook's song's by [suffix], "-3"); for a sheet with no [chords], its Capo alone where it has one, else "". */
     fun factsHtml(key: Key?, origin: String?, capo: Int, tuning: String?, chords: Boolean, suffix: String = ""): String =
         PageHtml.factsHtml(key, origin, capo, tuning, chords, suffix)
 

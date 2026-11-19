@@ -3261,8 +3261,9 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   key with no capo ("F#m (+2)" two up; "A (+2)" for a sheet's capo 2 taken
   off, its G shapes played as A), after the shapes with one ("Ab shapes (+1)
   · sounds A" for that capo moved down a fret: the song still sounds in A).
-  Each says where the key came from. A sheet of
-  words alone has no facts, so none says its capo either (its PDF's line does).
+  Each says where the key came from. A sheet with
+  no chords (a tab alone, or words alone) has its Capo line alone, the fret
+  it is played at as written, where it names one, else no facts.
   The piano, the harmonica, the flute and the recorder take no capo and have
   no strings: no Tuning or Capo line, and the Key line names the key the song
   sounds in ("F#m"), the chords named as they sound (F#m, not Em): the

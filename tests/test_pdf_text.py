@@ -230,7 +230,7 @@ def test_a_sheet_without_notes_keeps_every_line():
 )
 def test_key_line_text_matches_the_viewers_facts(cho, label):
     # The viewer's Capo and Key lines on one line, their markup and where the key came from left out ("Key Em" with no
-    # capo; with one, the capo between the shapes and the sound). A sheet of words alone has no facts on its page.
+    # capo; with one, the capo between the shapes and the sound). A sheet of words alone has its Capo line alone, if any.
     found = re.search(r'<dl class="facts" id="facts">\n(.*?)</dl>', build_viewer(cho), re.S)
     rows = dict(re.findall(r'data-fact="(\w+)"><dt>\w+</dt><dd>(.*?)</dd>', found.group(1))) if found else {}
     words = {fact: unescape(re.sub(r"<[^>]+>", "", re.sub(r'(?: · )?<span class="from">.*?</span>', "", value))).strip()
