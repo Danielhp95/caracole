@@ -20,20 +20,21 @@ the same library.
   render:*:phone, keys:own_versions), "units": {unit: digest} (each song's, which a changed file, version or override
   moves), "info": {path: text} (each info.json)}``.
 
-The cases (``CASES``) between them reach: a UG sheet and its key; the versions kept beside the sheet (their pages,
-one dropped once it leaves), the song's UG versions listed with the one and a ``[pin]``, a Guitar Pro file linked, an
-auto sheet beside the human one (no export, the song's ``[version]`` there without its shapes and swaps), then retired
-(its .cho and page gone, and the PDF names of it, whatever is there); harmonica tabs (their pages, the harp the
-sheet's viewer starts on, each page dropped once its tab leaves or its text is gone); an own version kept by a major
-letter alone on a sheet now read minor, rewritten once (kv ``keys:own_versions``), and one moved by ``[transpose]``;
-an auto sheet that takes lyrics that came after it (``with_plain_lyrics``, its version's ``raw`` lyrics "plain"), one
-beside a human sheet that takes none, one made from a YouTube video's audio (the video drawn from the icons, its
-credit off the viewer); Chinese sheets in Simplified and in Traditional characters (the phone's script record);
-LaCuerda's sheet; a sheet that can't be read (the song failed); a song with no sheet, and one ignored; a library that
-holds the computer's PDFs and their records (never linked, read or deleted: info.json's ``render`` null), whose human
-sheet then leaves (its .cho and page gone, the PDFs left); a ukulele sheet and every other kind a song keeps (Guitar
-Pro and Power Tab files, a text tab, a game music tab, a score in three formats), which its page's ``kinds`` names in
-the card's order, one let go.
+The cases (``CASES``) between them reach: a UG sheet and its key, and its timed lyrics, too few lines to light its page;
+the versions kept beside the sheet (their pages, one dropped once it leaves), the song's UG versions listed with the one
+and a ``[pin]``, a Guitar Pro file linked, the song's timed lyrics lighting the sheet's page, its auto sheet's and a
+kept version's (viewer/sung.py: their data's ``sung``), an auto sheet beside the human one (no export, the song's
+``[version]`` there without its shapes and swaps), then retired (its .cho and page gone, and the PDF names of it,
+whatever is there); harmonica tabs (their pages, the harp the sheet's viewer starts on, each page dropped once its tab
+leaves or its text is gone); an own version kept by a major letter alone on a sheet now read minor, rewritten once (kv
+``keys:own_versions``), and one moved by ``[transpose]``; an auto sheet that takes lyrics that came after it
+(``with_plain_lyrics``, its version's ``raw`` lyrics "plain"), one beside a human sheet that takes none, one made from a
+YouTube video's audio (the video drawn from the icons, its credit off the viewer); Chinese sheets in Simplified and in
+Traditional characters (the phone's script record); LaCuerda's sheet; a sheet that can't be read (the song failed); a
+song with no sheet, and one ignored; a library that holds the computer's PDFs and their records (never linked, read or
+deleted: info.json's ``render`` null), whose human sheet then leaves (its .cho and page gone, the PDFs left); a ukulele
+sheet and every other kind a song keeps (Guitar Pro and Power Tab files, a text tab, a game music tab, a score in three
+formats), which its page's ``kinds`` names in the card's order, one let go.
 
 Regenerate with ``CARACOLE_CORPUS=write`` (tests/conformance/README.md).
 """
@@ -53,6 +54,7 @@ import pytest
 from caracole import canonical, db, inbox, keys, library, render, songs
 from caracole.autochords import ChordSegment, build_sheet
 from caracole.autochords.merge import AUTO_MARKER, youtube_credit
+from caracole.chordpro import to_chordpro
 from caracole.config import load_config
 from caracole.icons import INBOX, YOUTUBE
 from caracole.lyrics import Lyrics
@@ -60,6 +62,8 @@ from caracole.overrides import SONG_TABLES, load_overrides, song_entries
 from caracole.songs import get_song, list_songs, update_song
 from caracole.ug.page import strip_markup
 from caracole.versions import set_coverage, upsert_version
+from caracole.viewer import page
+from caracole.viewer.sheet import parse_sheet
 
 from conftest import add_song, migrated_database
 from helpers import phone_render as phone
@@ -180,8 +184,16 @@ def harmonica_tab(w: World, song, number: int, text: str, *, key: str | None, ha
     _keep(w, song, vid, f"harmonica-{number}.txt", text, number)
 
 
-def store_lyrics(w: World, song, plain: str, *, provider: str = "lrclib", url: str | None = None) -> None:
-    lyrics = Lyrics(plain=plain, synced=None, instrumental=False, duration=None, lrclib_id=None, raw={},
+def sung_lrc(markup: str) -> str:
+    """Timed lyrics of a UG sheet's sung lines (the lines its page draws with words: ``page._drawn_lines`` of its
+    .cho), 4 s apart from 00:00.00, as LRCLIB's would time them."""
+    lines = [line for line in page._drawn_lines(parse_sheet(to_chordpro(markup, title="", artist=""))) if line]
+    return "".join(f"[00:{4 * n:02d}.00]{line}\n" for n, line in enumerate(lines))
+
+
+def store_lyrics(w: World, song, plain: str, *, provider: str = "lrclib", url: str | None = None,
+                 synced: str | None = None) -> None:
+    lyrics = Lyrics(plain=plain, synced=synced, instrumental=False, duration=None, lrclib_id=None, raw={},
                     provider=provider, url=url)
     update_song(w.conn, song.id, lyrics_status="found", lyrics_json=lyrics.to_json())
 
@@ -208,6 +220,8 @@ HOTEL = (  # Hotel California as UG writes it: its key "A", capo 2, its chords A
 HOTEL_OTHER = (  # another tabber's, in B minor with no capo
     "[Verse]\n[tab][ch]Bm[/ch]             [ch]F#[/ch]\nmade up words to sing[/tab]\n"
     "[tab][ch]A[/ch]                 [ch]E[/ch]\nonly for the test[/tab]\n"
+    "[tab][ch]G[/ch]                 [ch]D[/ch]\nand more of them[/tab]\n"
+    "[tab][ch]Em[/ch]                [ch]F#[/ch]\nand back again[/tab]\n"
 )
 HOTEL_THIRD = (  # a third, which the fetch lets go
     "[Verse]\n[tab][ch]Am[/ch]   [ch]E[/ch]\nmade up words to sing[/tab]\n"
@@ -238,6 +252,8 @@ BEATS = [float(n) for n in range(13)]
 def case_ug_sheet(w: World) -> list[dict]:
     song = add_song(w.conn, "Soda Stereo", "De Música Ligera - Remasterizado 2007")
     ug_sheet(w, song, SODA, tab=85053, tonality="G", capo=2)
+    # its timed lyrics: three sung lines, too few to light (viewer/sung.py MIN_LINES), so its page has no sung
+    store_lyrics(w, song, strip_markup(SODA), synced=sung_lrc(SODA))
     return [{"render": None}]
 
 
@@ -255,7 +271,9 @@ def case_versions(w: World) -> list[dict]:
     gtp = _version(w, song, "gtptabs", "1201", "guitar-pro", slot="guitar",
                    url="https://gtptabs.com/tabs/e/eagles/hotel-california-1201.html")
     _keep(w, song, gtp, "guitar-1.gp5", b"FICHIER GUITAR PRO v5.00 synthetic")
-    auto_sheet(w, song, synced=SYNCED)
+    # its timed lyrics, four sung lines, which light the sheet's page, its auto sheet's and version 46191's alike
+    store_lyrics(w, song, strip_markup(HOTEL), synced=sung_lrc(HOTEL))
+    auto_sheet(w, song, synced=sung_lrc(HOTEL))
     w.overrides('[pin]\n"Eagles - Hotel California" = ['
                 f'"{UG}eagles/hotel-california-chords-46190"]\n'
                 '\n[version]\n"Eagles - Hotel California" = "key=Am&capo=2&alt=E7.E&at=Am.x-0-2-2-1-0"\n')
@@ -550,6 +568,29 @@ def test_the_kinds_case_names_a_ukulele_sheet_and_every_kind_but_the_one_let_go(
     assert [(g["kind"], [i["name"] for i in g["items"]]) for g in kinds["groups"]] == [
         ("guitar", ["guitar-1.gp5", "guitar-2.ptb", "guitar-10.gp4"]), ("gametab", ["gametab-1.txt"]),
         ("score", ["score-1.mscz", "score-1.pdf", "score-1.mid"])]
+
+
+def _song_data(page_path: Path) -> dict[str, Any]:
+    return json.loads(re.search(r'<script type="application/json" id="song">(.*?)</script>',
+                                page_path.read_text("utf-8"), re.S)[1])
+
+
+def test_timed_lyrics_light_the_sheets_its_auto_sheets_and_a_versions_page_and_too_few_light_none(tmp_path):
+    for name, lit, unlit in (("versions", ("sheet.html", "sheet (auto).html", "version-46191.html"),
+                              ("version-46192.html",)),
+                             ("ug_sheet", (), ("sheet.html",))):
+        w = World(tmp_path / name)
+        try:
+            CASES[name](w)
+            _settle(w)
+            phone.phone_render(w.conn, w.cfg, song_ids=None)
+            folder = w.folder(list_songs(w.conn)[0])
+            for page_name in lit:
+                assert len(_song_data(folder / page_name)["sung"]) >= 4, (name, page_name)
+            for page_name in unlit:
+                assert "sung" not in _song_data(folder / page_name), (name, page_name)
+        finally:
+            w.close()
 
 
 def test_the_vectors_are_within_reason():

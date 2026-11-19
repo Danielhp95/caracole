@@ -333,8 +333,12 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
       `icons.SOURCES` names it ("Guitar Pro 1 · gtptabs", none for the inbox), a Guitar Pro file's `browser` and
       `download`, a harmonica tab's `page` (`_SCORE_FORMATS`, library_page.py's, test_render_kinds.py); none on an
       auto sheet beside a human one;
-    - and `guitar`, the song's kept Guitar Pro files caracole serve shows in the browser (`inbox.guitar_files`),
-      linked in served settings as Guitar Pro tab.
+    - `guitar`, the song's kept Guitar Pro files caracole serve shows in the browser (`inbox.guitar_files`),
+      linked in served settings as Guitar Pro tab;
+    - and `sung`, its data's last member, the song's timed lyrics (`_timed_lyrics`: its stored LRC, lyrics.py
+      `synced_lines`, read once a song; none for lyrics that can't be read) matched to that page's own lines
+      (viewer/sung.py), on sheet.html, sheet (auto).html and each `version-<tab>.html` alike; none where they meet too
+      few lines.
   - **Exports**: `render_version`, an export: the PDF in a viewer's version of the sheet `export_viewer` names, the
     human one else the auto one, on the instrument its `inst=` names (`export_version`; `sheet (A Major, piano).pdf`),
     while `sheet.pdf` is the guitar's (`on_the_guitar`).
@@ -426,6 +430,14 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     - and version.py's `for_instrument`, the capo folded in on one that takes none.
   - **instruments.js**: their box and keyboard and `window.caracoleInstruments`, where another instrument's script
     registers its drawing, a line of the header's facts and a settings row.
+  - **sung.py**: the song's timed lyrics matched to the sheet's lines, the data's `sung`, `[[ms, n or null], …]`
+    (`sung_lines`; n indexes page.py `_drawn_lines`, the lines `pinyin` reads):
+    - top to bottom, the most lines paired, each as early as it can be: a chorus the sheet writes once lit the first
+      time alone;
+    - two lines meet by `line_key` (normalize.py `name_words` of `simplified`: either Chinese script, accents, case
+      and punctuation folded) at rapidfuzz's `ratio` `LINE_MATCH` (80) or more, imported in `sung_lines` alone;
+    - fewer than `MIN_LINES` (4), or than `MIN_SHARE` (half) of the sheet's lines with words, lights nothing (None);
+    - a time from 0 to under `MAX_SECONDS` (a day) alone, `round(seconds * 1000)` half to even.
 - **songbook.py**: songbooks.toml: a song is a string, or a table with its own `Setting`, `instrument` among its parts
   (`caracole songbook set --instrument`, the Songbooks tab's chip; `_run_strings`, the strings its PDF draws).
   - `SongbookSong`, `Songbook.songs`, `.texts`.

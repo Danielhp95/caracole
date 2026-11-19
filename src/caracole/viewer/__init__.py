@@ -9,6 +9,8 @@
   sheet in Python, for a PDF of what the page shows;
 - pinyin.py reads each Chinese character's pinyin in context, for the page's Pinyin; hanzi.py writes the sheet's
   Chinese in Simplified and in Traditional characters, word by word (OpenCC), for its Chinese characters;
+- sung.py matches the song's timed lyrics to the sheet's lines (``sung_lines``), so the page can light the line
+  being sung;
 - harp.py and winds.py hold the harmonica and the flute and recorder: harp layouts, positions, the chords a
   harp plays and the harps for a song; fingerings and the notes a wind player reads off a sheet;
 - viewer.js and viewer.css are the page's script and stylesheet, inlined; strum.js, inlined before

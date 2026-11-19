@@ -16,5 +16,11 @@
  "patterns": {
   "_META_POLICY": "<meta http-equiv=\"Content-Security-Policy\" content=\"([^\"<>]*)\">",
   "_HEADER_TEXT": "[ -~]+"
+ },
+ "sung": {
+  "LINE_MATCH": 80,
+  "MIN_SHARE": 0.5,
+  "MIN_LINES": 4,
+  "MAX_SECONDS": 86400
  }
 }
