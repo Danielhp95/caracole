@@ -192,7 +192,7 @@ def test_a_hole_tapped_stops_the_line_playing(tmp_path):
 
 @pytest.mark.parametrize(("scheme", "blow", "draw", "background"), [
     ("light", "rgb(180, 68, 30)", "rgb(27, 95, 193)", "rgb(247, 246, 243)"),
-    ("dark", "rgb(240, 137, 92)", "rgb(138, 184, 255)", "rgb(19, 19, 18)"),
+    ("dark", "rgb(240, 137, 92)", "rgb(160, 198, 255)", "rgb(19, 19, 18)"),
 ])
 def test_blow_and_draw_in_the_viewers_colours_light_and_dark(tmp_path, scheme, blow, draw, background):
     with Browser(Path(tempfile.mkdtemp(prefix="profile-", dir=tmp_path)), **PHONE) as b:

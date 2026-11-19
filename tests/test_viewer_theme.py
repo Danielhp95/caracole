@@ -23,6 +23,7 @@ from helpers.browser import in_chromium
 from helpers.version_pages import WONDERWALL, folder
 from helpers.viewer_pages import NO_STORAGE, key, viewer, written
 from test_viewer_necks import reload
+from test_viewer_numerals import IN_C, contrast, middle
 
 SONG = """{title: Theme Song}
 {key: C}
@@ -336,3 +337,51 @@ def test_the_harmonica_tabs_page_offers_the_theme_and_takes_it_back_to_the_sheet
           })()""")
     assert box["left"] >= 0 and box["right"] <= 320 and box["page"] <= 320, box
     assert len(box["heights"]) == 5 and min(box["heights"]) >= 48, box
+
+
+def lightness(colour: str) -> float:
+    """CIE L* of an ``rgb(r, g, b)`` colour."""
+    from test_viewer_numerals import luminance
+    return 116 * luminance(colour) ** (1 / 3) - 16
+
+
+COLOURS = """(() => { const css = (el, p) => getComputedStyle(el)[p];
+  const on = document.querySelector("#sheet .c.on");
+  const root = getComputedStyle(document.documentElement);
+  return {bg: css(document.body, "backgroundColor"), surface: root.getPropertyValue("--surface").trim(),
+    mark: root.getPropertyValue("--mark").trim(), on: on && css(on, "color"), onBg: on && css(on, "backgroundColor"),
+    nms: on ? [...on.querySelectorAll(".nm")].map((n) => css(n, "color")) : [],
+    roles: Object.fromEntries(["h", "a", "p"].map((r) => [r, css(document.querySelector(".nm.r-" + r), "color")]))}; })()"""
+
+
+def hexrgb(h: str) -> str:
+    h = h.lstrip("#")
+    return "rgb(%d, %d, %d)" % tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+@in_chromium
+@pytest.mark.parametrize("system,theme", [("light", ""), ("dark", "&theme=light")])
+def test_a_tapped_chord_reads_at_4_5_to_1_in_the_light_theme(tmp_path, system, theme):
+    with viewer(tmp_path, written(tmp_path, IN_C) + "#nm=both" + theme) as b:
+        b.send("Emulation.setEmulatedMedia", features=[{"name": "prefers-color-scheme", "value": system}])
+        from helpers.viewer_pages import tap_at
+        tap_at(b, *middle(b, "#sheet .c", 2))
+        assert b.wait("!!document.querySelector('#sheet .c.on')")
+        seen = b.js(COLOURS)
+    assert contrast(seen["on"], seen["onBg"]) >= 4.5, seen
+    assert seen["nms"] and all(contrast(n, seen["onBg"]) >= 4.5 for n in seen["nms"]), seen
+
+
+@in_chromium
+@pytest.mark.parametrize("system,theme", [("dark", ""), ("light", "&theme=dark")])
+def test_the_dark_role_colours_differ_in_lightness(tmp_path, system, theme):
+    with viewer(tmp_path, written(tmp_path, IN_C) + "#nm=both" + theme) as b:
+        b.send("Emulation.setEmulatedMedia", features=[{"name": "prefers-color-scheme", "value": system}])
+        assert b.wait("getComputedStyle(document.body).backgroundColor === 'rgb(19, 19, 18)'")
+        seen = b.js(COLOURS)
+    roles = seen["roles"]
+    for role, colour in roles.items():
+        for ground in (seen["bg"], hexrgb(seen["surface"]), hexrgb(seen["mark"])):
+            assert contrast(colour, ground) >= 4.5, (role, colour, ground)
+    ls = sorted(lightness(c) for c in roles.values())
+    assert ls[1] - ls[0] >= 10 and ls[2] - ls[1] >= 10, roles
