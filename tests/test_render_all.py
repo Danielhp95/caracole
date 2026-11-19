@@ -28,16 +28,21 @@ from caracole.cli import build_app
 from caracole.db import kv_get_json, kv_set_json
 from caracole.lacuerda import parse_version_page
 from caracole.library import drop_file, keep_file, song_dir, write_atomic, write_info
+from caracole.lyrics import Lyrics, synced_lines
 from caracole.overrides import Overrides, load_overrides
 from caracole.pdf_text import PDF_TEXT_VERSION
 from caracole.render import STYLE_FILE, RenderStats, render_all, written_file
 from caracole.songs import get_song, update_song
 from caracole.ug.page import strip_markup
 from caracole.versions import set_coverage, upsert_version
+from caracole.viewer import page
+from caracole.viewer.sheet import parse_sheet
+from caracole.viewer.sung import sung_lines
 
 from conftest import add_song
 from helpers.browser import in_chromium
 from helpers.fonts import LATIN_GREEK_CYRILLIC, PDF_FONTS, font_folder, truetype
+from helpers.rendered import rendered_song
 from helpers.ug_pages import version_dict
 
 NOW = datetime(2026, 10, 18, 3, 30, tzinfo=UTC)
@@ -671,6 +676,59 @@ def test_a_viewer_that_cant_be_built_never_costs_the_pdfs(conn, cfg, caplog, mon
     assert "Traceback" in caplog.text and "a bug in the viewer" in caplog.text
     assert "no PDF for" not in caplog.text
     assert kv_get_json(conn, "render:status")["failed"] == ["Soda Stereo - Persiana Americana"]
+
+
+# A UG chords sheet of five sung lines (synthetic words), enough for its timed lyrics to light them (viewer/sung.py)
+SUNG_SHEET = (
+    "[Intro]\r\n[ch]G[/ch]  [ch]D[/ch]\r\n\r\n[Verse]\r\n"
+    + "".join(f"[tab][ch]{chord}[/ch]          [ch]C[/ch]\r\n{words}[/tab]\r\n" for chord, words in (
+        ("G", "Palabras de prueba"), ("D", "solo para el visor"), ("Em", "una tercera línea"),
+        ("C", "y una cuarta más"), ("G", "para cantar al final")))
+)
+
+
+def lrc_of(lines: list[str], *, start: float = 8.0, gap: float = 4.0) -> str:
+    """LRC text of ``lines``, ``gap`` seconds apart from ``start``."""
+    def stamp(t: float) -> str:
+        return f"[{int(t // 60):02d}:{t % 60:05.2f}]"
+    return "".join(f"{stamp(start + gap * k)}{line}\n" for k, line in enumerate(lines))
+
+
+def with_timed_lyrics(conn, song, synced: str) -> None:
+    """The song's lyrics as LRCLIB's, timed as ``synced`` says (its plain words: the LRC's, unread)."""
+    lyrics = Lyrics(plain=synced, synced=synced, instrumental=False, duration=None, lrclib_id=None)
+    update_song(conn, song.id, lyrics_status="found", lyrics_json=lyrics.to_json())
+
+
+def test_a_songs_timed_lyrics_light_its_viewers_lines(conn, cfg):
+    song = rendered_song(conn, cfg, content=SUNG_SHEET)
+    assert "sung" not in viewer_data(viewer_of(cfg, song))  # no lyrics yet
+    cho = (song_dir(cfg.library_dir, song) / "sheet.cho").read_text(encoding="utf-8")
+    drawn = page._drawn_lines(parse_sheet(cho))
+    synced = lrc_of([line for line in drawn if line])
+    with_timed_lyrics(conn, song, synced)
+    auto = add_song(conn, "Placeholder Band", "Synthetic Song", added_at="2026-10-02T00:00:00Z")
+    auto_sheet(conn, cfg, auto, synced=synced)  # its lines laid out over the same timed lyrics
+    with_timed_lyrics(conn, auto, synced)
+    render(conn, cfg)
+    sung = viewer_data(viewer_of(cfg, song))["sung"]
+    assert sung == sung_lines(drawn, synced_lines(synced)) == [
+        [8000, 1], [12000, 2], [16000, 3], [20000, 4], [24000, 5]]  # line 0: the intro's chords
+    auto_sung = viewer_data(viewer_of(cfg, auto, "sheet (auto).html"))["sung"]
+    assert [ms for ms, _ in auto_sung] == [8000, 12000, 16000, 20000, 24000] and None not in [n for _, n in auto_sung]
+
+
+@pytest.mark.parametrize("stored", ["[1, 2]", "lrc of a long minute"], ids=["not-an-object", "a-minute-too-long"])
+def test_lyrics_that_cant_be_read_leave_the_viewer_without_sung_lines(conn, cfg, stored):
+    song = rendered_song(conn, cfg, content=SUNG_SHEET)
+    if stored == "[1, 2]":  # a TypeError
+        update_song(conn, song.id, lyrics_status="found", lyrics_json=stored)
+    else:  # a minute of 400 digits: an OverflowError as its seconds are counted
+        with_timed_lyrics(conn, song, "".join(f"[{'9' * 400}:00.00]Palabras de prueba\n" for _ in range(5)))
+    stats = render(conn, cfg, force=True)
+    assert stats.failed == 0, stats
+    data = viewer_data(viewer_of(cfg, song))
+    assert "sung" not in data and data["chords"]
 
 
 @pytest.mark.parametrize("part", ["viewer_key", "pdf_text"])

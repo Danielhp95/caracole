@@ -139,6 +139,17 @@ def test_a_printed_harmonica_tab_has_no_play_buttons(tmp_path):
     assert printed == [], printed
 
 
+def test_the_line_being_sung_is_lit_on_the_screen_alone(tmp_path):
+    """The line lit while the song scrolls by itself (viewer.js ``lightSung``, ``.l.sung``:
+    test_viewer_sung_browser.py) is the screen's: printed then, no band behind it."""
+    band = """(() => { const l = document.querySelector('#sheet section.sec > p.l'); l.classList.add('sung');
+      const s = getComputedStyle(l); return [s.backgroundColor, s.boxShadow]; })()"""
+    on_screen = _seen_after(tmp_path, "sheet", "screen", band)
+    printed = _seen_after(tmp_path, "sheet", "print", band)
+    assert on_screen[0] == "rgb(253, 241, 228)" and on_screen[1] != "none"
+    assert printed == ["rgba(0, 0, 0, 0)", "none"]
+
+
 @pytest.mark.parametrize("kind", KINDS)
 def test_the_over_scroll_is_left_off_the_paper(tmp_path, kind):
     after = "getComputedStyle(document.querySelector('.page'), '::after').content"

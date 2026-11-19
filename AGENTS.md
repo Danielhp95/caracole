@@ -333,8 +333,12 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
       `icons.SOURCES` names it ("Guitar Pro 1 · gtptabs", none for the inbox), a Guitar Pro file's `browser` and
       `download`, a harmonica tab's `page` (`_SCORE_FORMATS`, library_page.py's, test_render_kinds.py); none on an
       auto sheet beside a human one;
-    - and `guitar`, the song's kept Guitar Pro files caracole serve shows in the browser (`inbox.guitar_files`),
-      linked in served settings as Guitar Pro tab.
+    - `guitar`, the song's kept Guitar Pro files caracole serve shows in the browser (`inbox.guitar_files`),
+      linked in served settings as Guitar Pro tab;
+    - and `sung`, its data's last member, the song's timed lyrics (`_timed_lyrics`: its stored LRC, lyrics.py
+      `synced_lines`, read once a song; none for lyrics that can't be read) matched to that page's own lines
+      (viewer/sung.py), on sheet.html, sheet (auto).html and each `version-<tab>.html` alike; none where they meet too
+      few lines.
   - **Exports**: `render_version`, an export: the PDF in a viewer's version of the sheet `export_viewer` names, the
     human one else the auto one, on the instrument its `inst=` names (`export_version`; `sheet (A Major, piano).pdf`),
     while `sheet.pdf` is the guitar's (`on_the_guitar`).
@@ -393,10 +397,13 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   - **harmony_tables.py**: its answers as the tables a viewer's data carries, per mode, each text naming notes
     written for every transposition, for viewer.js to look up.
   - **strum.js**: a chord's shape strummed in Web Audio, `window.caracoleSound`, each instrument's voice.
-  - **screen.js**: the screen's choices kept for every viewer page (the theme), `window.caracoleScreen`, inlined in
-    the head of every viewer page (`_page`'s `head_scripts`, the Kotlin frame's `headScripts`), so the theme is the
-    page's before its body is drawn; at start-up it touches the root, the address, storage and the navigation alone,
-    and what needs the body waits for DOMContentLoaded; no script guards it.
+  - **screen.js**: the screen's choices kept for every viewer page (the theme, the minutes the screen stays on), the
+    key map (`keys`, below) and the screen kept on (`awake`, below), `window.caracoleScreen`, inlined in the head of
+    every viewer page (`_page`'s `head_scripts`, the Kotlin frame's
+    `headScripts`), so the theme is the page's before its body is drawn; at start-up it touches the root, the address,
+    storage and the navigation alone, and what needs the body waits for DOMContentLoaded or reads what the page's
+    script gave it (it looks up no element of its own, test_viewer_theme.py; at key time it walks the sheet's lines it
+    was given; it listens to the page only once `awake` is called); no script guards it.
   - **overlay.js**: the rail of a wide screen, Guitar (the necks), Harmonica (the circle of fifths, the key on the
     harp chosen, each chord's holes, the slim bar) and, on a sheet with a key, Harmony (the page's own pane, viewer.js
     `harmonyPane`: the key's neck, each section's progression), and narrower the phone's sheet,
@@ -426,6 +433,16 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     - and version.py's `for_instrument`, the capo folded in on one that takes none.
   - **instruments.js**: their box and keyboard and `window.caracoleInstruments`, where another instrument's script
     registers its drawing, a line of the header's facts and a settings row.
+  - **sung.py**: the song's timed lyrics matched to the sheet's lines, the data's `sung`, `[[ms, n or null], …]`
+    (`sung_lines`; n indexes page.py `_drawn_lines`, the lines `pinyin` reads):
+    - top to bottom, the most lines paired, each as early as it can be: a chorus the sheet writes once lit the first
+      time alone;
+    - two lines meet by `line_key` (normalize.py `name_words`, accents, case and punctuation folded; a line that
+      holds Chinese by its pinyin first, `romanize`, as coverage.py compares: either script, 妳 for 你, a tabber's
+      spaces) at rapidfuzz's `ratio` `LINE_MATCH` (80) or more, rapidfuzz imported in `sung_lines` alone, pypinyin
+      only for a line with Chinese;
+    - fewer than `MIN_LINES` (4), or than `MIN_SHARE` (half) of the sheet's lines with words, lights nothing (None);
+    - a time from 0 to under `MAX_SECONDS` (a day) alone, `round(seconds * 1000)` half to even.
 - **songbook.py**: songbooks.toml: a song is a string, or a table with its own `Setting`, `instrument` among its parts
   (`caracole songbook set --instrument`, the Songbooks tab's chip; `_run_strings`, the strings its PDF draws).
   - `SongbookSong`, `Songbook.songs`, `.texts`.
@@ -1377,8 +1394,8 @@ It is rows.js's, shared by both pages:
   - a history that refuses entries (a `pushState` that throws) turns it off: the layers open and close as before,
     and Back leaves the page (test_viewer_layers.py).
 - **From 1200 px the bar is a toolbar** under the song's title (D13 C; test_viewer_toolbar.py), for viewer.js and
-  harptab.js alike through layers.js's `toolbar(bar, head)` (`{ wide, place(), edge() }`, neither script holding a
-  copy):
+  harptab.js alike through layers.js's `toolbar(bar, head)` (`{ wide, place(), edge(), room(pill, docked) }`, neither
+  script holding a copy):
   - `place()` puts `#bar` right after `head()` (`.page > header.head`; a songbook's shown song's own, `#sheet`'s
     parent's `:scope > header.head`) while `wide` (`TOOLBAR`, `(min-width: 1200px)`), back where the page wrote it
     (before `#pill`) while narrow, the focus kept on the control that had it: at load, and as `wide` changes; the tab
@@ -1404,6 +1421,44 @@ It is rows.js's, shared by both pages:
 - **The song's end**: `.page`'s padding is the bar's room (`--foot`), which `layout()` measures columns against (from
   1200 px less the toolbar's at the top); the half screen of over-scroll is `.page::after`, never in it, and print
   drops it.
+- **The line being sung** (viewer.js `lightSung`, viewer.css `.l.sung`; test_viewer_sung_browser.py): while autoscroll
+  is on, the line of `songLines` (the lines `pinyin` reads) that the data's `sung` names at the lyrics' clock:
+  - `sungClock`, in ms (`at`, and `since`, null while it stands): `run()` starts it once the count-in is over
+    (`goClock`), `standClock` stands it in `pauseScroll` and `countdown` (Scroll pressed again while it runs) and while
+    the page is hidden, which draws no frames (`visibilitychange`; it goes on once shown, never while hidden), the line
+    lit staying; `endScroll` puts it back at 0, none lit; the line lit is the last timed line's at or before it, none
+    before the first, nor for one sung nowhere (null);
+  - a tap on a timed line's words, never its chords (whose card opens), while autoscroll is on sets it at the line's
+    first time (`timeOf`); a finger pauses the scroll as ever, a mouse click pauses nothing; the scroll's speed is its
+    own;
+  - a band behind the line, `--sung` (light `#fdf1e4`, dark `#2f2418`, in both dark copies), a box shadow past its
+    edges, so nothing on the line moves and a Chinese line keeps its columns with pinyin; its words and chords 4.5:1
+    on it; no transition; none on paper (`@media print`);
+  - none without `sung` (no timed lyrics, too few lines met) nor in a songbook, whose data carries no lyrics.
+- **Keys and pedals** (D16 B; test_viewer_keys.py): a Bluetooth page turner is a keyboard. **screen.js** holds the key
+  map, one `keydown` listener on the document, which viewer.js and harptab.js bind once,
+  `screenKit.keys({ toggle, pause, room, busy, sheet })`:
+  - Space and Enter `toggle()` autoscroll (the bar's `#scroll` while it is off, else the pill's `#go`), once however
+    long held; on a focused control (`button, a[href], summary, [role=button], [tabindex]`) they are its own press,
+    but on full screen's `#handle`, where they are the map's (the keys work in full screen, D14; viewer.js's
+    `#scroll` closes every layer but the overlay's sheet and full screen, `closeAll(necksEl, handle)`);
+  - PageDown and ↓, PageUp and ↑: `pause()`, then a turn in `room()` (layers.js `toolbar.room(pill, docked)`: from
+    1200 px below the toolbar's height, its bottom once stuck, and the pill under it; narrower above the bar's place,
+    slid away or not, the pill and a docked layer; the bar nothing in full screen), keeping `KEPT` (2) of the
+    sheet's lines (`p`, `pre`) wholly in view, the second-last to the top or the second to the foot (two alone where
+    that moves the page a line or more), else by the room less `KEPT` lines of `LINE` (2.6) em, half of it at least;
+    a song in columns (`html[data-columns]` above 1, the whole song shown: viewer.js `layout()`), its lines in order
+    down one column and up the next, at most to bring `#sheet`'s top to the room's top, never back, and up to the
+    page's top (test_viewer_keys.py's columns test): one `scrollTo` to a whole pixel, never smooth;
+  - `steer`, the bar's `#scroll` and the pill's buttons: a pointer's press takes no focus (`pointerdown` and
+    `mousedown` prevented, the click as ever), so the next Space or Enter stays the map's, never a tapped +'s press
+    again; the keyboard reaches them by Tab as ever, and layer openers (⋯, Aa, the key) take the focus as before;
+  - left alone: another handler's key (`defaultPrevented`: a chord's or a hole's Space, the rail tabs' arrows), an
+    input method's, Alt, Ctrl, Meta or Shift, a text field with the focus, and `busy()` (viewer.js: the focus in a
+    layer of the stack, `#sizes`, `#tip`, `#necks` or a dialog; harptab.js: `#sizes`, `#necks`, `#version-list`;
+    never `#handle`);
+  - ← → are book.js's alone (a songbook's songs, still blocked while any layer is open); a page key never navigates,
+    and no key changes the version; the pages' own `keydown` pauses autoscroll for Home and End alone.
 - **Columns** (from 1100 px, on the screen alone, viewer.css; test_viewer_layout.py) only where the whole song shows
   that way, its end in the last column (`layout()`): the fewest that do, two to five (`MOST_COLUMNS`), each at least
   the song's widest line (`widest()`: each `.sec > .l` and `.tab` as wide as its content, `.sheet.measure`, after
@@ -1475,13 +1530,27 @@ It is rows.js's, shared by both pages:
     - it draws only what `tones` (with each note's pitch class) and `keyScale` give;
     - a chord's card opens it too, by its chord, with the chords' names alone (its Circle & keyboard, viewer.js
       `tipDraws`): test_viewer_numerals.py.
-  - **The theme**: so, last, is Aa's theme, Auto, Light or Dark (screen.js, `html[data-theme]` `light` or `dark`, none
+  - **The theme**: so is Aa's theme, Auto, Light or Dark (screen.js, `html[data-theme]` `light` or `dark`, none
     for Auto, the system's; viewer.css's palette on screen, paper light):
     - localStorage `caracole-viewer-theme` (`auto`, `light`, `dark`), and `theme=` in the address while it isn't Auto,
       which `carryScreen` and `screenChoices` take on (`caracoleScreen.carry`);
     - applied by screen.js in the head, before the body is drawn (no other palette painted first on a slow phone), so
       a songbook's contents follow it too; Reset all leaves it;
     - the library page is not affected (test_viewer_theme.py).
+  - **Keeping the screen on**: so, last, are the minutes the screen stays on after the last touch (D18 C), More's Keep
+    the screen on (`#awake-row`: `#awake-down`, `#awake-at` "Off" or "10 min", `#awake-up`; Off to 60 by 5, 10 by
+    default, `caracoleScreen.MINUTES`); the harmonica tab's page has no control and follows them:
+    - localStorage `caracole-viewer-awake`, and `awake=` in the address while they aren't 10 (`awake=0` for Off), which
+      `carryScreen` and `screenChoices` take on (`caracoleScreen.carry`); Reset all leaves them;
+    - screen.js is the one place a page asks for a screen wake lock (`awake(moving)`, called by viewer.js and
+      harptab.js with their `moving()`, unguarded; its `sync()` again wherever autoscroll starts, pauses or ends):
+      wanted while the page shows and it moves by itself or the minutes haven't passed since the last `touchstart`,
+      `pointerdown`, `keydown`, `wheel` or `scroll` (captured, passive) or the page shown again, `performance.now()`
+      the one clock, one timeout for when they run out; asked again when the page shows again after the browser let
+      go of it (its `release` event); `html[data-awake="1"]` while one is held;
+    - never through `navigator.permissions.query`, whose answer Android's WebView gets wrong ("denied" while it grants
+      the lock); a request refused is asked again at the next touch, key or wheel, never a scroll
+      (test_viewer_awake.py, its fakes helpers/viewer_pages.py's `WAKE_LOCK`, `LONG_TIMERS`, `DENIED`).
 
 #### `commands/`
 
@@ -1873,7 +1942,7 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 - `app/src/androidTest/` runs on a device or an emulator alone (the device step, below), under `CaracoleTestRunner`:
   `BundledSqliteTest`, `CorpusOnDeviceTest` (one test per corpus area, `core.testing.Replays`,
   `server.testing.ServerReplays` and `viewer.testing.ViewerReplays`; `-e area NAME[,NAME…]` picks some), `NoSitesTest`,
-  `LocalServerTest`, `EndToEndTest`, `PinchTest`, `SyncSheetTest`, `ExportImportTest` and `PhoneEndToEndTest`, and
+  `LocalServerTest`, `EndToEndTest`, `PinchTest`, `PedalTest`, `SyncSheetTest`, `ExportImportTest` and `PhoneEndToEndTest`, and
   milestones 4–6's: `ColdSearchTest`, `LookupOfflineTest`, `NoNetworkTest`, `RealTransportOnDeviceTest`,
   `LookupOnDeviceTest` and `PagesOnDeviceTest` (with `--sites`), `PagesServedTest`, `SongbooksOnDeviceTest`,
   `VersionsPageTest`, `GuitarPageTest`, `PrintTest`, `ShareTest`, `ShareLinkTest`, `BackupsTest` and `AlertsTest`.
@@ -2515,12 +2584,17 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   inlined file's hash, `ViewerAssets.Page.SHEET`), `viewerCsp` its header, and the frame book.py and harptab_page.py
   reuse, under Python's names (`page`, `readSong`, `songHtml`, `sheetHtml`, `preambleHtml`, `sectionHtml`, `factsHtml`,
   `footer`, `namesTable`, `zhAttr`, `artistLine`, `pdfLine`, `words`, `CONTROLS`, `LIBRARY_PAGE`).
+  - `build` takes the song's `timed` lyrics (`ViewerInputs.timed`, Lyrics.syncedLines' `(seconds, text)`) and puts
+    their match to the lines it draws (`SheetView.drawnLines`) last in its data, `sung`, `[ms, n or null]` each:
+    `viewer.sung.Sung` is sung.py's (`lineKey`: Normalize.romanize then `nameWords`; `lines`: the longest monotone
+    match by Fuzz.ratio, a time PyFormat.roundHalfEven's), its numbers page.json's `sung` (`PageConstants.SUNG_*`).
   - Its HTML and constants are page.py's, data/caracole/viewer/page.json, which tests/test_conformance_viewer_pages.py
     writes from the module (`_CONTROLS`, `_SHEET_CONTROLS`, `_VERSIONS`…, chords-db's notice, `_META_POLICY` run over
     a page's bytes read as Latin-1); its icon page/icon.json's; `build_version` is Python's alone.
-  - `PagesReplay` (area `pages`): vectors/viewer/pages_parts.jsonl (the frame, function by function), pages-1.jsonl to
-    pages-6.jsonl (every corpus sheet's page with every option, as digests: the page, its body, each data member, its
-    names) and page_whole.json (a small page whole, the files it inlines by name).
+  - `PagesReplay` (area `pages`): vectors/viewer/pages_parts.jsonl (the frame, function by function, and sung.py's
+    `line_key` and `sung_lines`, SungTest its cases by hand), pages-1.jsonl to pages-6.jsonl (every corpus sheet's
+    page with every option, as digests: the page, its body, each data member, its names) and page_whole.json (a small
+    page whole, the files it inlines by name).
   - A page record is the generator's `page_out` and `PagesReplay.out`: `sha256` and `size` of the whole page, `body`
     and `names` as their SHA-256's first 16 hex digits, `data` one string of `member=digest` in the data's order (8 hex
     digits each), so that it pins the members' order too; another lane's page records take that shape.
@@ -2550,7 +2624,9 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   render_all's for the song (`SongPass`: the kept versions' pages, each sheet's .cho and page, an auto sheet's beside
   the human one with no export and none of its shapes and swaps, the harmonica tabs' pages whatever came of the
   sheets, with HarpFit.tabHarps, a viewer's `guitar` from GuitarFiles, inbox.guitar_files' port, and its `kinds`,
-  `_kinds_data`'s, each source's name from `page/empty_library.json`'s `icons`, `PhoneRender.sourceName`), after
+  `_kinds_data`'s, each source's name from `page/empty_library.json`'s `icons`, `PhoneRender.sourceName`, and the
+  song's timed lyrics, `_timed_lyrics`' read once a song, `lyricsFromJson` then `Lyrics.syncedLines`, none for lyrics
+  it can't read, given every page of its sheets and versions), after
   `PlainLyrics` (sheet_lyrics.py) and `OwnVersions` (own_versions_upgraded); a song the mirror serves gets its
   progressions, script and info.json alone, the phone's own pages of it forgotten.
   - `WrittenPages`: kv `render:files:<id>` as render.py records it, each entry's `unit` the song unit's digest it was

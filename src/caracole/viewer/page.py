@@ -79,6 +79,11 @@ written ``\\u003c``:
   caracole serve's Guitar Pro page; or none, and no row. ``guitarDownload``, beside it: the name each saves under,
   from a file (``download_names.download_name``, the title clean as caracole serve names it: "Eagles - Hotel California
   (2).gp5"), its link's ``download``;
+- ``sung``, the last member, for a song whose timed lyrics meet the sheet's lines (render.py ``_timed_lyrics``,
+  sung.py ``sung_lines``): for each timed line, in time order, ``[ms, n]``, its time in milliseconds and the index of
+  the line it is sung on among those the page draws (``_drawn_lines``, as ``pinyin``'s), or null for one the sheet
+  writes nowhere (a chorus sung again, a break); a song with no timed lyrics, or whose lyrics meet too few of its
+  lines, has none;
 - ``harmonicaTabs``: the song's harmonica tabs beside the page (render.py, ``inbox.harmonica_files``: kept from
   harptabs.com), each ``{"name": "harmonica-1.txt", "href": "harmonica-1.txt", "page": "harmonica-1.html"}`` (its
   text, and its page beside it: harptab_page.py), with the ``key`` its page's Key chip named ("C": the song's on
@@ -111,6 +116,7 @@ import hashlib
 import re
 import sys
 import unicodedata
+from collections.abc import Sequence
 from functools import lru_cache
 from html import escape, unescape
 from pathlib import Path
@@ -140,6 +146,7 @@ from caracole.viewer.sheet import (
     split_preamble,
     written,
 )
+from caracole.viewer.sung import sung_lines
 from caracole.viewer.theory import (
     DISPLAY,
     MODES,
@@ -195,6 +202,7 @@ BUILD_FILES = (
     HERE / "layers.js",  # a page's layers in the browser's history, Back closing the one on top, on every viewer page
     HERE / "kinds.js",  # the version line, its icons and its list, on a sheet's and a harmonica tab's page
     HERE / "screen.js",  # the screen's choices, in the head of every viewer page
+    HERE / "sung.py",  # the song's timed lyrics matched to the sheet's lines, the data's sung
     # A harmonica tab's page, harmonica-N.html: the tab read, the harp it plays on, the page, its script and style
     *(HERE / name for name in ("harptab.py", "harpfit.py", "harptab_page.py", "harptab.js", "harptab.css")),
     HERE.parent / "inline.py",  # sha256_source, json_block
@@ -317,6 +325,7 @@ def build_viewer(
     pdf_traditional: str | None = None,
     video: Mapping[str, Any] | None = None,
     kinds: Mapping[str, Any] | None = None,
+    timed: Sequence[Sequence] = (),
 ) -> str:
     """The page for a ChordPro sheet (as caracole writes it).
 
@@ -340,7 +349,11 @@ def build_viewer(
     the data has none. A tab's ``harp``, the pitch class of the harp it plays on (render.py, harpfit.py), is the
     data's ``harpTabs`` instead, by the sheet's key. ``video``, the YouTube video an auto sheet's audio came from
     (render.py ``_video_data``: ``{"title", "href", "channel", "mark"}``), goes in its data as ``video``, and the page
-    gets a place for it under its notice, ``#credit``, which the script fills; without it, neither.
+    gets a place for it under its notice, ``#credit``, which the script fills; without it, neither. ``timed``, the
+    song's timed lyrics (render.py ``_timed_lyrics``: lyrics.py ``synced_lines``' ``(seconds, text)``), matched to
+    the lines the page draws (``_drawn_lines``, the data's ``pinyin``'s), goes in its data as ``sung``, the last
+    member, ``sung.sung_lines``' ``[[ms, n or null], …]``; without them, or where they meet too few of its lines,
+    the data has none.
     """
     sheet, song_key, origin, data = _read_song(cho, key, key_source, transpose)
     data["start"] = start
@@ -360,6 +373,8 @@ def build_viewer(
         data["guitar"] = list(guitar)
         clean = clean_title(sheet.title or "")
         data["guitarDownload"] = [download_name(sheet.artist or "", clean, name) for name in guitar]
+    if timed and (sung := sung_lines(_drawn_lines(sheet), timed)) is not None:
+        data["sung"] = sung
     style, script = _assets()
     title = sheet.title or "Untitled"
     page_title = f"{title} · {sheet.artist}" if sheet.artist else title
@@ -987,7 +1002,9 @@ def _words(text: str) -> list[str]:
 # toggle button, pressed while it is on): Role colours, All chord shapes (the strip of the song's chord shapes, its
 # one switch), and on a sheet with Chinese its characters, Simplified or Traditional (a segmented control, each named
 # in its own characters too), then Pinyin; the instrument, a menu, and the strum's loudness, four speakers, on
-# one line, and the instrument's own rows (instruments.js) under it; after a rule, the places to go, a row each (›
+# one line, and the instrument's own rows (instruments.js) under it; after a rule, Keep the screen on, the minutes the
+# screen stays on after the last touch in a stepper at its right ("Off", "10 min" … "60 min": screen.js keeps them for
+# every page, viewer.js draws them); after a rule, the places to go, a row each (›
 # opens something here, ↗ leaves the page): Hide controls (``_FULL_ROW``, full screen), the song's Guitar Pro files
 # (``_GUITAR_ROW``) and Export PDF (``_EXPORT_ROW``, a sheet's alone); and after another, Reset all, quiet. Harmony is
 # no place here: it is the overlay's third tab, which viewer.js draws (``harmonyPane``).
@@ -1103,6 +1120,9 @@ _CONTROLS = """<div class="bar" id="bar" data-controls hidden role="region" aria
 <span id="sound-row" hidden><span class="seg icons" id="volumes" role="group" aria-label="Strum volume" aria-describedby="strum-hint"></span>
 <span class="vh" id="strum-hint">Tap a chord or its shape to hear it.</span></span></div>
 <div class="inst-panel" id="inst-panel" hidden></div></div>
+<div class="awake ruled" id="awake-row"><span id="awake-lab">Keep the screen on</span>
+<span class="stepper" role="group" aria-labelledby="awake-lab"><button type="button" id="awake-down" aria-label="Fewer minutes" aria-disabled="false">−</button>
+<output id="awake-at">10 min</output><button type="button" id="awake-up" aria-label="More minutes" aria-disabled="false">+</button></span></div>
 <div class="places ruled" id="places">
 """ + _FULL_ROW + """</div>
 <div class="panel-end ruled"><button type="button" class="quiet" id="reset-all">Reset all</button></div>

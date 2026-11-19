@@ -12,8 +12,9 @@ never retyped: ``LIBRARY_PAGE``, ``CREDIT_URL``, ``_NOTICE``, ``_CREDIT``, ``_VE
 ``_EXPORT_ASK``, ``_CONTROLS``, ``_SHEET_CONTROLS`` (the sheet's: the export row and its question), ``_NOTHING`` (the
 header of a page whose policy can't be read); ``credit_notice``, chords-db's notice as the footer prints it
 (``_credit_notice()``); and ``patterns``: ``_META_POLICY`` (a bytes pattern, written as its ASCII text: the phone runs it
-over the page's bytes read as Latin-1, one character a byte) and ``_HEADER_TEXT``, as Python writes them. The page's
-icon is page_icon.py's ``LINK``, caracole/page/icon.json's ``link`` (M2's), which a test here holds to it.
+over the page's bytes read as Latin-1, one character a byte) and ``_HEADER_TEXT``, as Python writes them; and
+``sung``, sung.py's ``LINE_MATCH``, ``MIN_SHARE``, ``MIN_LINES`` and ``MAX_SECONDS``. The page's icon is page_icon.py's
+``LINK``, caracole/page/icon.json's ``link`` (M2's), which a test here holds to it.
 
 The vectors (``helpers.corpus.jsonl``); a key is ``[tonic, mode]``, a sheet's section ``{"label", "chorus", "lines"}``
 and a line one of ``{"lyrics": [[head, text], …]}`` (a head an int, a chord's index into the sheet's chords, a string,
@@ -24,6 +25,12 @@ a mark, or null), ``{"chords": [int or string, …]}``, ``{"text": …}``, ``{"t
 - ``artist_line(artist, names)``, ``pdf_line(files)`` (``files`` as ``[[name, label, twin or null], …]``),
   ``zh_attr(text, names)``: their HTML; ``names_table(chinese, texts)``: the table, or null;
 - ``_words(texts)`` (a batch): each text cut as the page cuts it (``_lyric_texts``);
+- ``caracole.viewer.sung.line_key(texts)`` (a batch): each of those texts' key, then ``SUNG_KEYS``';
+- ``caracole.viewer.sung.sung_lines(drawn, timed)``: the timed lyrics' lines matched to the sheet's (``timed`` as
+  ``[[seconds, text], …]``, the answer ``[[ms, n or null], …]`` or null), for ``SUNG_SHEETS`` of the pages' sheets
+  with timed lyrics (``sheet`` names it; ``drawn`` its ``page._drawn_lines``), then the edges (``_sung_edges``:
+  tests/test_viewer_sung.py's cases, a time past a day or before 0, rounding half to even, either script), so a
+  mismatch names the function before a page's ``sung`` digest does;
 - ``facts_html(key, [[origin, capo, tuning, chords, suffix], …])``: the song's facts' HTML for each (``key`` null for
   a sheet with none, ``tuning`` null for one whose notes name none, one of ``TUNINGS``);
 - ``_footer(links)``, ``_page(title, body, styles, scripts, names, head_scripts)``: their HTML;
@@ -36,15 +43,16 @@ a mark, or null), ``{"chords": [int or string, …]}``, ``{"text": …}``, ``{"t
 ``vectors/viewer/pages-1.jsonl`` to ``pages-<PAGE_FILES>.jsonl``, the pages in that many runs, in order (each file a
 test of its own, a few seconds each): ``build_viewer(cho, **kw)`` for every sheet of ``viewer_corpus.sheets()`` (its
 ``key`` and ``key_source``, and options drawn by ``SEED``: ``transpose``, ``start``, ``pdf`` and ``pdf_traditional``,
-``export``, ``versions``, ``kinds``, ``guitar``, ``harmonica`` with or without a ``harp``, ``video``), then ``EXTRA``
-pages (every option at once, names to escape, a title that would end a script, an empty sheet). ``kw`` holds what isn't
-build_viewer's default; ``sheet`` names the corpus sheet. A page is 200–650 KB, so a record holds its digests (the
-corpus plan's page records): ``out`` is ``{"sha256", "size"}`` of the page's UTF-8, ``body`` (the first ``PART`` hex
-digits of the SHA-256 of the markup between ``<body>\\n`` and the ``song`` block: ``_body``'s), ``data`` (each member of
-the ``song`` block in its order as ``name=digest``, space-separated, the digest the first ``DIGEST`` hex digits of the
-SHA-256 of ``json.dumps(value, ensure_ascii=False, separators=(",", ":"))``, so a mismatch names the member at fault),
-``names`` (the ``song-names`` block's JSON text's, as ``body``'s, or null), and ``written_script`` and ``is_chinese``
-of the sheet.
+``export``, ``versions``, ``kinds``, ``guitar``, ``harmonica`` with or without a ``harp``, ``video``, and for a third of
+them ``timed``, the song's timed lyrics, ``[[seconds, text], …]``, drawn by the sheet's name, ``_timed``), then
+``EXTRA`` pages (every option at once, names to escape, a title that would end a script, an empty sheet). ``kw`` holds
+what isn't build_viewer's default; ``sheet`` names the corpus sheet. A page is 200–650 KB, so a record holds its digests
+(the corpus plan's page records): ``out`` is ``{"sha256", "size"}`` of the page's UTF-8, ``body`` (the first ``PART``
+hex digits of the SHA-256 of the markup between ``<body>\\n`` and the ``song`` block: ``_body``'s), ``data`` (each
+member of the ``song`` block in its order as ``name=digest``, space-separated, the digest the first ``DIGEST`` hex
+digits of the SHA-256 of ``json.dumps(value, ensure_ascii=False, separators=(",", ":"))``, so a mismatch names the
+member at fault), ``names`` (the ``song-names`` block's JSON text's, as ``body``'s, or null), and ``written_script`` and
+``is_chinese`` of the sheet.
 
 ``vectors/viewer/page_whole.json``: ``WHOLE``, one small page kept whole (a sheet with no chords, with a PDF, Guitar
 Pro files, versions, its other kinds, a video and a start): ``pages``, each ``{"fn", "args", "kw", "pieces"}``, the
@@ -70,7 +78,7 @@ from typing import Any
 import pytest
 
 from caracole import page_icon
-from caracole.viewer import page
+from caracole.viewer import page, sung
 from caracole.viewer.sheet import Blank, ChordRow, Lyrics, Section, Tab, Text, parse_sheet
 from caracole.viewer.theory import Key
 from helpers import viewer_corpus
@@ -79,6 +87,7 @@ from helpers.corpus import DATA, check, json_document, jsonl
 MADE_BY = "tests/test_conformance_viewer_pages.py"
 HELPER = "test_conformance_viewer_pages."
 P = "caracole.viewer.page."
+S = "caracole.viewer.sung."
 SEED = viewer_corpus.SEED + 700
 DIGEST = 8  # hex digits of a data member's digest: enough to name the member at fault, an eighth of a SHA-256's
 PART = 16  # those of the body's and the names' digests: the page's own SHA-256 is whole
@@ -94,7 +103,7 @@ CONSTANTS = ("LIBRARY_PAGE", "CREDIT_URL", "_NOTICE", "_CREDIT", "_VERSIONS", "_
 # build_viewer's keywords and their defaults: a record's kw holds the others alone.
 DEFAULTS: dict[str, Any] = {"key": None, "key_source": None, "transpose": 0, "start": None, "pdf": None,
                             "export": True, "versions": None, "guitar": (), "harmonica": (), "pdf_traditional": None,
-                            "video": None, "kinds": None}
+                            "video": None, "kinds": None, "timed": ()}
 STARTS = ("t=2", "t=-1&mode=dorian", "t=0&mode=aeolian&capo=3", "capo=2&alt=0.1-1", "t=5&at=3.2&inst=ukulele")
 GUITARS = (["guitar-1.gp5"], ["guitar-1.gp5", "guitar-2.gpx"], ["guitar-3.gp"],
            ["guitar-1.ptb", "guitar-2.gp4", "guitar-10.gp5"])
@@ -108,6 +117,18 @@ EDGE_ARTISTS = ("", "AC/DC", "Guns N' Roses", "Simon & Garfunkel", "宋冬野", 
 EDGE_WORDS = ("", " ", "  ", "a", "a b", "a  b ", " a", "\ta\tb", "我们一起", "我 们", "a我b", "我a b们", "ｆｕｌｌ ｗｉｄｔｈ",
               "カタカナ テスト", "한국어 노래", "a\u3000b", "\u3000", "x\u00a0y", "😀 smile", "a😀b", "ﾊﾝｶｸ", "—dash—",
               "rock'n'roll", "end. ", "(oh) yeah!", "斑马，斑马", "「引用」です", "x\u200by")
+# sung.py's: the constants the phone reads, its edges' keys, and how many corpus sheets' matches are recorded whole
+SUNG_CONSTANTS = ("LINE_MATCH", "MIN_SHARE", "MIN_LINES", "MAX_SECONDS")
+SUNG_KEYS = ("The river and the sea", "THE", "and", "Driftin' slowly", "drifting  slowly!", "ÀÉÎ Ñandú", "斑馬，斑馬",
+             "愛情說話 聽見", "再給我看看你受傷的尾巴", "我们一起 唱歌", "(…)", "♪ ♪", "1, 2, 3, 4",
+             "斑 马 斑 马 你 不 要 睡 着 啦", "妳好嗎", "等著妳回來", "我们 love you", "沈むように溶けてゆくように")
+SUNG_SHEETS = 20
+SUNG_TAGS = ("chinese", "kana", "auto", "preamble", "legend", "tab", "define", "capo", "edge", "fixture", "catalogue",
+             "mode")
+# Lines of no corpus song: a run of them leaves a sheet's timed lyrics too few matches
+UNRELATED = ("Zebra quartz vexing jumbo fjord", "Nightly crawlers hum beneath pavement",
+             "Quixotic lanterns blink offshore", "Brisk walruses juggle plywood", "Muffled oboes drift past sycamores",
+             "Glowing kettles whistle at dusk")
 
 
 def constants() -> dict[str, Any]:
@@ -116,6 +137,7 @@ def constants() -> dict[str, Any]:
     assert page._META_POLICY.flags == 0 and page._HEADER_TEXT.flags & ~re.UNICODE == 0
     out["patterns"] = {"_META_POLICY": page._META_POLICY.pattern.decode("ascii"),
                        "_HEADER_TEXT": page._HEADER_TEXT.pattern}
+    out["sung"] = {name: getattr(sung, name) for name in SUNG_CONSTANTS}
     return out
 
 
@@ -138,6 +160,7 @@ def test_the_data_reads_back_as_page_py_holds_it():
                 == page._with_guitar(getattr(page, controls), True))
     assert data["_EXPORT_ROW"] in data["_SHEET_CONTROLS"] and data["_SHEET_CONTROLS"].endswith(data["_EXPORT_ASK"])
     assert re.compile(data["patterns"]["_META_POLICY"].encode("ascii")).pattern == page._META_POLICY.pattern
+    assert data["sung"] == {name: getattr(sung, name) for name in SUNG_CONSTANTS}
     # The icon is M2's data: caracole/page/icon.json's link is page_icon.LINK, as the page inlines it.
     icon = json.loads((DATA / "page" / "icon.json").read_text(encoding="utf-8"))
     assert icon["link"] == page_icon.LINK == page.PAGE_ICON
@@ -240,6 +263,101 @@ def _csp_inputs() -> list[bytes]:
     ]
 
 
+def _swapped(rng: random.Random, text: str) -> str:
+    """``text`` with two letters side by side swapped, as a lyrics site's typo; a text of fewer than two as it is."""
+    if len(text) < 2:
+        return text
+    at = rng.randrange(len(text) - 1)
+    return text[:at] + text[at + 1] + text[at] + text[at + 2:]
+
+
+def _timed(rng: random.Random, cho: str, *, unrelated: bool | None = None) -> list[list[Any]]:
+    """Timed lyrics of a sheet as a lyrics site might time them: the lines the page draws with words, its first section
+    with words sung again at the end, one line in five with two letters swapped, one dropped, an empty line (a break)
+    in the middle, 3.5 s apart from 8.0 s; or, for one in four (``unrelated``), its first lines and then a run of
+    another song's, which leaves too few matched."""
+    sections = [[text for text in (page._words_of(line) for line in section.lines
+                                   if isinstance(line, (Lyrics, ChordRow, Text))) if text.strip()]
+                for section in page._shown(parse_sheet(cho))[1]]
+    lines = [text for section in sections for text in section]
+    if unrelated is None:
+        unrelated = rng.random() < 0.25
+    if unrelated:
+        lines = lines[:sung.MIN_LINES - 1] + [f"{rng.choice(UNRELATED)} {n}" for n in range(max(6, len(lines)))]
+    else:
+        lines = lines + next((section for section in sections if section), [])
+        lines = [_swapped(rng, text) if rng.random() < 0.2 else text for text in lines]
+        if len(lines) > 2:
+            del lines[rng.randrange(len(lines))]
+        lines.insert(len(lines) // 2, "")
+    return [[8.0 + 3.5 * n, text] for n, text in enumerate(lines)]
+
+
+def _timed_rng(name: str) -> random.Random:
+    """The draws of a sheet's timed lyrics, by its name: a stream of their own, so the pages' other options stay as
+    they were drawn before ``timed``."""
+    return random.Random(f"{SEED}:timed:{name}")
+
+
+def _sung_edges() -> list[tuple[list[str], list[list[Any]]]]:
+    """test_viewer_sung.py's cases, and the edges of a time."""
+    drawn = ["Synthetic morning on the river", "", "Paper boats are drifting slowly", "Nobody counts the hours",
+             "Sing it back to me", "Over the hills and home"]
+    five = [t for t in drawn if t]
+    ten = [*five, "A sixth line of words", "The seventh one here", "Eight is enough now", "Nine lines and counting",
+           "Ten makes a long song"]
+    zh = ["斑马 斑马 你不要睡着啦", "再给我看看你受伤的尾巴", "我不想去触碰你伤口的疤", "我只想掀起你的头发",
+          "斑马 斑马 你回到了你的家"]
+    zh_trad = ["斑馬，斑馬，你不要睡著啦", "再給我看看你受傷的尾巴", "我不想去觸碰你傷口的疤", "我只想掀起你的頭髮",
+               "斑馬，斑馬，你回到了你的家"]
+
+    def lrc(*lines: str, start: float = 8.0, gap: float = 4.0) -> list[list[Any]]:
+        return [[start + gap * k, text] for k, text in enumerate(lines)]
+
+    return [
+        (drawn, lrc(*five)),
+        (drawn, lrc(five[0], five[1], five[2], five[3], five[4], five[3], five[4])),  # a chorus sung again
+        (drawn, lrc(five[0], "Paper boats are driftin' slowly", "Something else entirely here", five[2], five[3])),
+        (drawn, lrc(*five, five[0])),  # never back up
+        (drawn, lrc(five[0], five[1], "", five[2], five[3], five[4])),  # a break
+        (drawn, lrc(*five[:3], "Other words", "And more of them")),  # 3: under MIN_LINES
+        (drawn, lrc(*five[:4])),
+        (ten, lrc(*ten[:4])),  # 4 of 10: under MIN_SHARE
+        (ten, lrc(*ten[:5])),
+        (drawn, []), ([], lrc(*five)), (["", ""], lrc("", "", "", "", "")),
+        (zh, lrc(*zh_trad)), (zh_trad, lrc(*zh)),
+        # Chinese as its pinyin: a tabber's spaces, 妳 for 你, 著 for 着; and a word changed, 我恨你 for 我爱你
+        (["斑 马 斑 马 你 不 要 睡 着 啦", "你好吗", "你在哪里", "等着你回来", "我爱你"],
+         lrc("斑马斑马你不要睡着啦", "妳好嗎", "妳在哪裡", "等著妳回來", "我恨你")),
+        (drawn, [[0.0, five[0]], [1.5, five[1]], [2.5, five[2]], [86399.999, five[3]], [86400.0, five[4]],
+                 [1e300, five[4]], [-0.5, five[4]]]),  # a time from 0 to under a day alone
+        (drawn, [[0.0005, five[0]], [0.0015, five[1]], [0.0025, five[2]], [12.3456, five[3]], [20, five[4]]]),
+        (drawn, [[s, t] for s, t in lrc(*five, start=0.0, gap=0.1)]),
+        (drawn, lrc(*[t.upper() for t in five])),
+    ]
+
+
+def _sung_inputs() -> list[tuple[str | None, list[str], list[list[Any]]]]:
+    """sung_lines' records: SUNG_SHEETS of the pages' sheets with timed lyrics (one of each of SUNG_TAGS first, one
+    that lights its lines where there is one, then the rest in the corpus's order), then the edges."""
+    timed = {name: kw["timed"] for name, _, kw in _pages() if "timed" in kw and not name.startswith("extra:")}
+    sheets = [s for s in viewer_corpus.sheets() if s.name in timed]
+    lit = {s.name for s in sheets if sung.sung_lines(page._drawn_lines(parse_sheet(s.cho)), timed[s.name])}
+    picked: dict[str, None] = {}
+    for tag in SUNG_TAGS:
+        tagged = [s.name for s in sheets if tag in s.tags and s.name not in picked]
+        found = next((name for name in tagged if name in lit), tagged[0] if tagged else None)
+        if found is not None:
+            picked[found] = None
+    for s in sheets:
+        if len(picked) >= SUNG_SHEETS:
+            break
+        picked[s.name] = None
+    out: list[tuple[str | None, list[str], list[list[Any]]]] = [
+        (s.name, page._drawn_lines(parse_sheet(s.cho)), timed[s.name]) for s in sheets if s.name in picked]
+    return out + [(None, drawn, edge) for drawn, edge in _sung_edges()]
+
+
 def parts_records() -> list[dict[str, Any]]:
     rng = random.Random(SEED)
     records: list[dict[str, Any]] = []
@@ -265,6 +383,13 @@ def parts_records() -> list[dict[str, Any]]:
     for start in range(0, len(texts), WORDS_BATCH):
         batch = texts[start:start + WORDS_BATCH]
         records.append({"fn": P + "_words", "args": [batch], "out": [page._words(t) for t in batch]})
+    keys = list(dict.fromkeys([*texts, *SUNG_KEYS]))
+    for start in range(0, len(keys), WORDS_BATCH):
+        batch = keys[start:start + WORDS_BATCH]
+        records.append({"fn": S + "line_key", "args": [batch], "out": [sung.line_key(t) for t in batch]})
+    for name, drawn, timed in _sung_inputs():
+        records.append({"fn": S + "sung_lines", **({"sheet": name} if name else {}), "args": [drawn, timed],
+                        "out": sung.sung_lines(drawn, timed)})
     origins = (None, "from the tab", "estimated from the chords", "from the sheet", "from <b>x & y</b>")
     for n, key in enumerate([None, *viewer_corpus.keys()]):
         # capos 0 and 2, and one higher drawn; each a tuning, whether the sheet has chords and a suffix drawn; the
@@ -390,6 +515,9 @@ def _options(rng: random.Random, sheet: viewer_corpus.CorpusSheet) -> dict[str, 
         kw["video"] = _video(rng)
     if rng.random() < 0.3:
         kw["kinds"] = _kinds(rng)
+    draws = _timed_rng(sheet.name)
+    if draws.random() < 1 / 3:
+        kw["timed"] = _timed(draws, sheet.cho)
     return {k: v for k, v in kw.items() if v != DEFAULTS[k] and not (v in ((), []) and DEFAULTS[k] == ())}
 
 
@@ -419,6 +547,7 @@ def _extra(rng: random.Random) -> list[tuple[str, str, dict[str, Any]]]:
                                               "groups": [{"kind": k, "items": list(v)} for k, v in KIND_ITEMS.items()]}}
         kw["harmonica"].append({"name": "harmonica-9.txt", "href": "harmonica-9.txt", "page": "harmonica-9.html",
                                 "harp": 4})
+        kw["timed"] = _timed(_timed_rng(f"extra:{sheet.name}"), sheet.cho, unrelated=False)
         out.append((sheet.name, sheet.cho, {k: v for k, v in kw.items() if v is not None}))
     for name, cho in EXTRA_SHEETS:
         out.append((f"extra:{name}", cho, {"pdf": "sheet.pdf", "guitar": GUITARS[1], "export": name != "empty"}))
@@ -496,6 +625,16 @@ def test_the_pages_cover_every_option():
     harped = [(cho, kw) for _, cho, kw in pages
               if any(isinstance(t.get("harp"), int) for t in kw.get("harmonica", ()))]
     assert any(page.viewer_key(cho, kw.get("key"), kw.get("key_source")) is not None for cho, kw in harped)
+    # timed lyrics that light a sheet's lines, and some too few to (an unrelated run, a sheet of few lines), in
+    # either script
+    lit = {name: sung.sung_lines(page._drawn_lines(parse_sheet(cho)), kw["timed"]) is not None
+           for name, cho, kw in pages if "timed" in kw}
+    assert any(lit.values()) and not all(lit.values())
+    assert any(lit.get(s.name) for s in viewer_corpus.sheets() if "chinese" in s.tags)
+    named = [(name, out) for name, drawn, timed in _sung_inputs() if name
+             for out in [sung.sung_lines(drawn, timed)]]
+    assert len(named) == SUNG_SHEETS and any(out is None for _, out in named)
+    assert any(out and "chinese" in viewer_corpus.sheet(name).tags for name, out in named)
 
 
 # --- a page kept whole --------------------------------------------------------------------------------------------

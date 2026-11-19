@@ -10,10 +10,12 @@ import re
 
 from caracole.config import RankPolicy
 from caracole.library import drop_file, keep_file, song_dir
+from caracole.lyrics import Lyrics
 from caracole.overrides import Overrides
 from caracole.removal import plan_removal, remove_song
 from caracole.render import render_all, written_file
 from caracole.sheet_versions import as_data, song_sheet_versions, version_names
+from caracole.songs import update_song
 from caracole.ug.page import strip_markup
 from caracole.versions import mark_gone, set_coverage, upsert_version
 
@@ -61,8 +63,9 @@ def keep_text(conn, cfg, song, vid: int, raw: dict, content: str, names: tuple[s
               data=(json.dumps(body, ensure_ascii=False, indent=2) + "\n").encode("utf-8"), rank=rank)
 
 
-def song_with_versions(conn, cfg, *, kept: tuple[int, ...] = (B, C)):
-    """Wonderwall-like: the sheet (tab 1064463, Ver 3), two versions kept beside it and a fourth listed."""
+def song_with_versions(conn, cfg, *, kept: tuple[int, ...] = (B, C), texts: dict[int, str] | None = None):
+    """Wonderwall-like: the sheet (tab 1064463, Ver 3), two versions kept beside it and a fourth listed; ``texts``,
+    a kept version's text by its tab, in place of its own ``sheet``."""
     song = add_song(conn, "Placeholder Band", "Synthetic Song")
     vid, raw = ug_version(conn, song, SHEET_TAB, rating=4.86, votes=408, number=3, coverage=0.95,
                           version_description="the version that\n  they play live")
@@ -72,7 +75,8 @@ def song_with_versions(conn, cfg, *, kept: tuple[int, ...] = (B, C)):
         vid, raw = ug_version(conn, song, tab, rating=rating, votes=votes, number=number, coverage=coverage,
                               tonality="A" if tab == B else "")
         if tab in kept:
-            keep_text(conn, cfg, song, vid, raw, sheet(str(tab), chords), version_names(str(tab))[:2], rank)
+            text = (texts or {}).get(tab) or sheet(str(tab), chords)
+            keep_text(conn, cfg, song, vid, raw, text, version_names(str(tab))[:2], rank)
     return song
 
 
@@ -167,6 +171,21 @@ def test_a_tabs_key_named_by_its_letter_alone_over_minor_chords_is_minor_on_the_
         assert '<div class="fact" data-fact="capo"><dt>Capo</dt><dd>2</dd></div>' in html, page
         assert '<div class="fact" data-fact="key"><dt>Key</dt><dd><b>Am</b> shapes · sounds <b>Bm</b>' in html, page
     assert json.loads((folder / "info.json").read_text("utf-8"))["key"] == "A minor"
+
+
+def test_a_kept_versions_page_lights_its_own_lines_too(conn, cfg):
+    song = song_with_versions(conn, cfg, texts={B: sheet(str(B)) * 3})  # six sung lines, three verses
+    lines = [f"Palabras de prueba {B}", "solo para el visor"] * 3
+    synced = "".join(f"[00:{3 * k:02d}.00]{line}\n" for k, line in enumerate(lines))
+    lyrics = Lyrics(plain="\n".join(lines), synced=synced, instrumental=False, duration=None, lrclib_id=None)
+    update_song(conn, song.id, lyrics_status="found", lyrics_json=lyrics.to_json())
+    render(conn, cfg)
+    folder = folder_of(cfg, song)
+    assert page_data(folder / version_names(str(B))[2])["sung"] == [
+        [0, 0], [3000, 1], [6000, 2], [9000, 3], [12000, 4], [15000, 5]]
+    # the sheet's own two lines and C's are too few to light (viewer/sung.py MIN_LINES)
+    assert "sung" not in page_data(folder / "sheet.html")
+    assert "sung" not in page_data(folder / version_names(str(C))[2])
 
 
 def test_a_version_page_offers_no_export_the_sheets_does(conn, cfg):

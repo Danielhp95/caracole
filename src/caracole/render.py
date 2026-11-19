@@ -92,7 +92,8 @@ is no longer kept. Every viewer of the song (the one's, and each
 version's) lists the song's UG chords versions in its data's ``versions`` (``_versions_data``), and what else it
 keeps to play from in its ``kinds``, as its library card names them (``_kinds_data``: its sheet's kind and page, its
 Guitar Pro files, its text tab, its harmonica tabs, its game music tabs, its scores); an auto sheet's beside a human
-one has neither.
+one has neither. Every viewer of the song, an auto sheet's too, lights the line being sung by the song's timed lyrics
+(``_timed_lyrics``, read once a song), which it matches to its own lines (its data's ``sung``, viewer/sung.py).
 
 Each harmonica tab the song keeps (harptabs_fetch.py: ``harmonica-N.txt``) gets a page of its own,
 ``harmonica-N.html`` (viewer/harptab_page.py), made from its text with the song's chord sheet (its human
@@ -744,6 +745,9 @@ def _render_song(
     page, and so is what else it keeps to play from (``_kinds_data``).
     Its harmonica tabs get theirs last (``_render_harmonica``), whatever came of the sheets, with the
     text of the sheet it reads (the human one, else the auto one) when that was read.
+
+    Its timed lyrics (``_timed_lyrics``), read once, go to every viewer of its sheets and of its versions, each of
+    which matches them to its own lines (``build_viewer``'s ``timed``, viewer/sung.py).
     """
     files = {f.name: f for f in kept_files(conn, song.id)}
     human, auto = files.get(HUMAN_SHEET), files.get(AUTO_SHEET)
@@ -761,7 +765,9 @@ def _render_song(
     # What else it keeps to play from, which the viewers of its sheet and of its versions name (not an auto sheet's
     # beside a human one, which lists no version either)
     kinds = _kinds_data(conn, song, files, tabs)
-    done: list[_Done] = [_render_versions(conn, cfg, song, files, versions, listed, guitar, kinds)]
+    # Its timed lyrics, which each of its viewers matches to its own sheet's lines (viewer/sung.py)
+    timed = _timed_lyrics(song)
+    done: list[_Done] = [_render_versions(conn, cfg, song, files, versions, listed, guitar, kinds, timed)]
     human_key, auto_key = sheet_keys(conn, cfg.library_dir, song) if human or auto else (None, None)
     chosen = next((v.tab_id for v in versions if v.chosen), None)
     primary: list[tuple[str, tuple[str | None, str | None]]] = []  # the sheet the harmonica tabs' pages read
@@ -791,7 +797,8 @@ def _render_song(
                                   kinds=None if beside else kinds, guitar=guitar,
                                   harmonica=tuple({**h, "harp": harps[h["name"]]} if h["name"] in harps else h
                                                   for h in harmonica),
-                                  video=video, viewer_text=_sheet_cho(song, sheet, credit=False) if video else None)
+                                  video=video, viewer_text=_sheet_cho(song, sheet, credit=False) if video else None,
+                                  timed=timed)
         done.extend([twin, own] if twin is not None else [own])  # the sheet's own last: done[-1] below
         if done[-1].outcome == "rendered":
             _say_if_keyless(overrides, song, text, mine[0], Path(kept.name).stem + ".pdf")
@@ -821,6 +828,20 @@ def _render_song(
         done.append(_render_harmonica(conn, cfg, overrides, song, folder, tabs, files, primary[0] if primary else None,
                                       back, listed, kinds))
     return done
+
+
+def _timed_lyrics(song: Song) -> tuple[tuple[float, str], ...]:
+    """The song's timed lyrics, its stored lyrics' LRC as lyrics.py ``synced_lines`` reads it (``(seconds, text)``, in
+    time order), which its viewers match to their lines; none for a song with no lyrics, or none timed, or whose stored
+    lyrics can't be read (not an object, a stamp past what a float holds): an extra, as the viewer is, which costs the
+    song nothing else."""
+    from caracole.lyrics import song_lyrics, synced_lines
+
+    try:
+        lyrics = song_lyrics(song)
+        return tuple(synced_lines(lyrics.synced)) if lyrics is not None and lyrics.synced else ()
+    except (TypeError, ValueError, OverflowError, RecursionError):
+        return ()
 
 
 # --- the versions kept beside the sheet: a viewer each ----------------------------------
@@ -915,13 +936,14 @@ def _on_page(listed: dict[str, Any] | None, tab: str | None) -> dict[str, Any] |
 
 def _render_versions(conn: sqlite3.Connection, cfg: Config, song: Song, files: Mapping[str, KeptFile],
                      versions: list[SheetVersion], listed: dict[str, Any] | None,
-                     guitar: tuple[str, ...] = (), kinds: Mapping[str, Any] | None = None) -> _Done:
+                     guitar: tuple[str, ...] = (), kinds: Mapping[str, Any] | None = None,
+                     timed: tuple[tuple[float, str], ...] = ()) -> _Done:
     """Write a viewer page for each version kept beside the sheet, ``version-<tab>.html`` (its ``page``),
     from its ``version-<tab>.json`` as the sheet's is from sheet.json, and no ChordPro file or PDF. It offers
     no export: an export is made from the sheet ``export_viewer`` names, so this page's would be the one's PDF.
     Each page starts as the version is written, in its own key (``keys.sheet_key``), names what else the song keeps
-    as the sheet's viewer does (``kinds``, ``_kinds_data``), and is recorded (``_note_written``) and written only when
-    its bytes change.
+    as the sheet's viewer does (``kinds``, ``_kinds_data``), lights its own lines by the song's ``timed`` lyrics
+    (``_timed_lyrics``), and is recorded (``_note_written``) and written only when its bytes change.
 
     The page of a version no longer kept (the fetch let it go) goes while it still holds what caracole wrote
     (``_forget_written``): one changed since, on a synced device, stays, and is forgotten. A page that can't
@@ -931,7 +953,8 @@ def _render_versions(conn: sqlite3.Connection, cfg: Config, song: Song, files: M
     pages = {v.page: v for v in versions if v.page == version_names(v.tab_id)[2]}  # kept, and not the one
     ok = True
     for page, v in pages.items():
-        ok = _render_version(conn, cfg, song, folder, files, v, _on_page(listed, v.tab_id), guitar, kinds) and ok
+        ok = _render_version(conn, cfg, song, folder, files, v, _on_page(listed, v.tab_id), guitar, kinds,
+                             timed) and ok
     left = tuple(name for name in _written(conn, song.id) if tab_of(name) is not None and name not in pages)
     _forget_written(conn, song.id, left, folder)
     return _Done("pages", viewer_failed=not ok)
@@ -939,7 +962,7 @@ def _render_versions(conn: sqlite3.Connection, cfg: Config, song: Song, files: M
 
 def _render_version(conn: sqlite3.Connection, cfg: Config, song: Song, folder: Path, files: Mapping[str, KeptFile],
                     v: SheetVersion, listed: dict[str, Any] | None, guitar: tuple[str, ...] = (),
-                    kinds: Mapping[str, Any] | None = None) -> bool:
+                    kinds: Mapping[str, Any] | None = None, timed: tuple[tuple[float, str], ...] = ()) -> bool:
     """Write the kept version ``v``'s viewer page; False, logged, when it can't be made or written."""
     _, doc, page = version_names(v.tab_id)
     kept = files.get(doc)
@@ -956,7 +979,8 @@ def _render_version(conn: sqlite3.Connection, cfg: Config, song: Song, folder: P
     text = _chordpro_text(sheet.markup, title=clean_title(song.title), artist=song.artist,
                           key=sheet.key, capo=sheet.capo)
     data = _write_viewer(song, text, folder / page, None, key=(found.key, found.source) if found else (None, None),
-                         transpose=0, start=None, export=False, versions=listed, kinds=kinds, guitar=guitar)
+                         transpose=0, start=None, export=False, versions=listed, kinds=kinds, guitar=guitar,
+                         timed=timed)
     if data is None:
         return False
     _note_written(conn, song.id, page, data)
@@ -1599,6 +1623,7 @@ def _render_sheet(
     harmonica: tuple[Mapping[str, Any], ...] = (),
     video: Mapping[str, Any] | None = None,
     viewer_text: str | None = None,
+    timed: tuple[tuple[float, str], ...] = (),
 ) -> tuple[_Done, _Done | None]:
     """Write one sheet's .cho, ``text`` (``_sheet_cho``), render its PDF in ``version`` unless kv ``state_key``
     says it is up to date, and, for a sheet whose words are Chinese, its PDF in Traditional characters beside it
@@ -1612,7 +1637,8 @@ def _render_sheet(
     keeps to play from (``_kinds_data``), or None (an auto sheet beside a human one); ``guitar``, the names of the
     song's Guitar Pro files its viewer links; ``harmonica``, its harmonica tabs, which its viewer names; ``video``, the
     YouTube video an auto sheet's audio came from (``_video_data``), which its viewer draws, made from ``viewer_text``
-    (the .cho without the credit's line that names it) in place of ``text``.
+    (the .cho without the credit's line that names it) in place of ``text``; ``timed``, the song's timed lyrics
+    (``_timed_lyrics``), which its viewer matches to its lines.
 
     The PDF, the viewer and the record of the .cho are made from the text written, never read
     back: a synced device may write there a moment later."""
@@ -1630,7 +1656,7 @@ def _render_sheet(
         page = folder / f"{stem}.html"
         data = _write_viewer(song, viewer_text or text, page, pdf, key=key, transpose=version.t, start=start,
                              export=export, versions=versions, kinds=kinds, guitar=guitar, harmonica=harmonica,
-                             twin=twin, video=video)
+                             twin=twin, video=video, timed=timed)
         if data is not None:
             _note_written(conn, song.id, page.name, data)
         return data is not None
@@ -1799,7 +1825,8 @@ def _write_viewer(song: Song, text: str, page: Path, pdf: Path | None, *, key: t
                   transpose: int, start: str | None, export: bool = True,
                   versions: dict[str, Any] | None = None, kinds: Mapping[str, Any] | None = None,
                   guitar: tuple[str, ...] = (), harmonica: tuple[Mapping[str, Any], ...] = (),
-                  twin: Path | None = None, video: Mapping[str, Any] | None = None) -> bytes | None:
+                  twin: Path | None = None, video: Mapping[str, Any] | None = None,
+                  timed: tuple[tuple[float, str], ...] = ()) -> bytes | None:
     """Write the sheet's viewer (``viewer.build_viewer``) beside its PDF, linking the PDF when
     there is one (a version page has none: ``pdf`` None), and return the page's bytes. It starts where the
     PDF is: at ``transpose``, in the song's own version (``start``) when it has one, and takes the sheet's
@@ -1808,7 +1835,8 @@ def _write_viewer(song: Song, text: str, page: Path, pdf: Path | None, *, key: t
     ``guitar`` its Guitar Pro files caracole serve shows in the browser (``inbox.guitar_files``), and ``harmonica``
     its harmonica tabs (``inbox.harmonica_files``); ``twin``, the sheet's PDF in Traditional characters, which the
     PDF's link opens while the viewer shows them, when it is there;
-    ``video``, the YouTube video an auto sheet's audio came from, which it draws under its notice.
+    ``video``, the YouTube video an auto sheet's audio came from, which it draws under its notice; ``timed``, the
+    song's timed lyrics (``_timed_lyrics``), which it matches to its lines, lighting the one being sung.
     A viewer that hasn't changed isn't written again.
 
     The viewer is an extra: None, logged as "no viewer for", when it can't be built (a bug,
@@ -1820,7 +1848,7 @@ def _write_viewer(song: Song, text: str, page: Path, pdf: Path | None, *, key: t
     try:
         html = build_viewer(text, key=key[0], key_source=key[1], transpose=transpose, start=start, pdf=linked,
                             export=export, versions=versions, guitar=guitar, harmonica=harmonica,
-                            pdf_traditional=traditional, video=video, kinds=kinds)
+                            pdf_traditional=traditional, video=video, kinds=kinds, timed=timed)
     except Exception:  # a sheet the viewer can't read must never cost the PDFs
         log.warning("no viewer for %s: cannot build %s", song.display, page.name, exc_info=True)
         return None

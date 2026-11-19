@@ -18,6 +18,7 @@
   --on-accent: #ffffff;
   --focus: #1f6feb;
   --mark: #fde8cd;
+  --sung: #fdf1e4;  /* the line being sung, behind its words and chords (4.5:1 for both) */
   --fs: 18px;
   --p1: #b4441e;
   --p2: #1f6feb;
@@ -55,6 +56,7 @@
     --on-accent: #1b0e07;
     --focus: #6ea8fe;
     --mark: #4d3416;
+    --sung: #2f2418;
     --p1: #f0895c;
     --p2: #6ea8fe;
     --p3: #5fcf85;
@@ -94,6 +96,7 @@
     --on-accent: #1b0e07;
     --focus: #6ea8fe;
     --mark: #4d3416;
+    --sung: #2f2418;
     --p1: #f0895c;
     --p2: #6ea8fe;
     --p3: #5fcf85;
@@ -218,6 +221,9 @@ dl.facts .from { color: var(--muted); }
 /* a sung line's wrapped rows sit together, and the next line stands apart by more (D3): its tail never reads as a
    line of its own. The harmonica tab's page keeps .12em, the design gives it no line rule. */
 .sheet:not(.harp-tab) .l + .l { margin-top: .4em; }
+/* The line being sung while the song scrolls by itself (viewer.js lightSung): a band behind it, reaching a little past
+   its edges into the room around it, so nothing on the line moves; it goes from one line to the next at once. */
+.l.sung { background: var(--sung); border-radius: 6px; box-shadow: 0 0 0 .2em var(--sung); }
 .s { display: inline-flex; flex-direction: column; vertical-align: bottom; }
 .s > .c, .s > .m { display: block; align-self: flex-start; font-size: .82em; line-height: 1.524; white-space: nowrap; }
 .s > .c { padding-right: .35em; }
@@ -807,6 +813,14 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
 .icons svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round;
   stroke-linejoin: round; }
 .inst-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 6px 0 2px; }
+/* Keep the screen on, after a rule: its words, and at its right the minutes in a stepper, as wide whatever it says
+   ("Off", "10 min" … "60 min"), under the words at the right where a phone has no room for both on one line (a
+   320 px one); an end greyed where the minutes stop (aria-disabled, the focus kept, as Aa's). */
+#awake-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 10px;
+  padding-bottom: 10px; font-size: .92rem; }
+#awake-row .stepper { flex: none; width: 9.25rem; margin-left: auto; }
+#awake-row output { font-variant-numeric: tabular-nums; white-space: nowrap; }
+#panel .stepper button[aria-disabled="true"] { opacity: .35; cursor: default; }
 /* After a rule, the places to go, a full-width row each: its words, and at its right what it holds or where it goes,
    then › (something here: the Harmony panel, Export PDF's page or, from a file, its command, unfolded) or ↗ (away
    from the page: a Guitar Pro file). Its hover reaches a little past the panel's text on either side. */
@@ -827,7 +841,7 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
 .quiet { min-height: 36px; padding: 0 12px; border: 0; border-radius: 9px; background: none; color: var(--muted);
   font: inherit; font-size: .85rem; font-weight: 600; cursor: pointer; }
 @media (hover: hover) {
-  #panel .stepper button:hover, .undo:hover { background: var(--raised); }
+  #panel .stepper button:not([aria-disabled="true"]):hover, .undo:hover { background: var(--raised); }
   #panel .chip:not([aria-pressed="true"]):hover { background: var(--raised); }
   .seg > button:not([aria-pressed="true"]):not([aria-selected="true"]):not(:disabled):hover { color: var(--text); }
   .goto:hover, .quiet:hover, .tip-btn:hover { background: var(--raised); }
@@ -1077,6 +1091,7 @@ a.ver-main .ver-name { color: var(--accent); }
   .page::after { content: none; }
   .c { color: #b4441e; }
   .sheet ruby.py > rt { color: #645f57; }
+  .l.sung { background: none; box-shadow: none; }  /* the line being sung is the screen's */
   .tab { background: none; padding: 0; }
 }
 

@@ -56,16 +56,25 @@
   //
   //   TOOLBAR          the media query from which the bar is a toolbar under the song's title: (min-width: 1200px).
   //   toolbar(bar, head)
-  //                    the bar's place, written once for the pages: { wide, place(), edge() }. wide is
-  //                    matchMedia(TOOLBAR). place() puts bar right after head() (the song's header.head: a songbook's
-  //                    shown song's own) while wide, in the page's flow, where the page's stylesheet makes it a toolbar
-  //                    that sticks to the window's top once the title scrolls away; while narrow, back where the page
-  //                    wrote it (before what followed it then: the pill), at the foot. Moved, it keeps the focus on the
-  //                    control that had it. edge() writes --toolbar-bottom on <html> while wide: the toolbar's bottom
-  //                    edge in the window, in px, 0 at least (0 where it shows nothing: full screen), which the
-  //                    stylesheet puts the autoscroll pill under; narrow, it takes it off; only when that changes.
-  //                    place() calls it, and the page calls it as it scrolls and resizes and as full screen comes and
-  //                    goes. It writes to the bar's place and to <html>'s --toolbar-bottom alone.
+  //                    the bar's place, written once for the pages: { wide, place(), edge(), room(pill, docked) }. wide
+  //                    is matchMedia(TOOLBAR). place() puts bar right after head() (the song's header.head: a
+  //                    songbook's shown song's own) while wide, in the page's flow, where the page's stylesheet makes
+  //                    it a toolbar that sticks to the window's top once the title scrolls away; while narrow, back
+  //                    where the page wrote it (before what followed it then: the pill), at the foot. Moved, it keeps
+  //                    the focus on the control that had it. edge() writes --toolbar-bottom on <html> while wide: the
+  //                    toolbar's bottom edge in the window, in px, 0 at least (0 where it shows nothing: full screen),
+  //                    which the stylesheet puts the autoscroll pill under; narrow, it takes it off; only when that
+  //                    changes. place() calls it, and the page calls it as it scrolls and resizes and as full screen
+  //                    comes and goes. room(pill, docked), the key map's (screen.js keys): the window's room the page's
+  //                    controls leave the song, measured as it is called, { top, bottom } in CSS px. While wide, top is
+  //                    the toolbar's height, its bottom once stuck to the window's top (where a turn down leaves it;
+  //                    above it, unstuck, is the song's title alone), none in full screen, which hides it; and below
+  //                    that the pill (the autoscroll pill) while it shows, as far under it as it is under
+  //                    --toolbar-bottom now; bottom is the window's foot. While narrow, top is 0 and bottom the top of
+  //                    the bar's place at the foot (its height, slid away or not, as a scroll back up brings it; none
+  //                    while it is hidden or in full screen), and above the pill while it shows, and docked's top (the
+  //                    layer docked on the bar, or null) while it shows. It writes to the bar's place and to <html>'s
+  //                    --toolbar-bottom alone.
   //
   // The marker is an entry's state's caracoleLayer, an integer from 1; every history.replaceState in viewer/'s
   // scripts passes history.state, never null, so that an entry keeps its depth through what the page writes into its
@@ -237,7 +246,23 @@
       }
       edge();
     };
-    return Object.freeze({ wide, place, edge });
+    const shown = (el) => el instanceof Element && !el.hidden && el.getClientRects().length > 0;
+    const room = (pill, docked) => {
+      const full = Boolean(doc.dataset.full);
+      if (wide.matches) {
+        let top = full ? 0 : bar.getBoundingClientRect().height;
+        if (shown(pill)) {
+          const under = parseFloat(doc.style.getPropertyValue("--toolbar-bottom")) || 0;
+          top += Math.max(0, pill.getBoundingClientRect().bottom - under);
+        }
+        return { top, bottom: window.innerHeight };
+      }
+      let bottom = window.innerHeight - (full || bar.hidden ? 0 : bar.offsetHeight);
+      if (shown(pill)) bottom = Math.min(bottom, pill.getBoundingClientRect().top);
+      if (shown(docked)) bottom = Math.min(bottom, docked.getBoundingClientRect().top);
+      return { top: 0, bottom };
+    };
+    return Object.freeze({ wide, place, edge, room });
   };
 
   window.caracoleLayers = Object.freeze({ history: layerHistory, doubleTap, autoFull, placeUnder, toolbar, SHORT,

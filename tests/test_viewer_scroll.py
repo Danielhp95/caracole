@@ -57,27 +57,6 @@ EVEN_PIXELS = """(() => {
   window.scrollBy = (x, y) => { bys.push(y); to(x, Math.floor((scrollY + y) / 2) * 2); };
 })()"""
 
-# A screen wake lock that writes down what it is asked; ``system()`` lets go of the lock as a
-# browser does when the page is hidden.
-WAKE_LOCK = """(() => {
-  window.wakeLog = [];
-  let held = null;
-  window.system = () => { if (held) { held.released = true; held.dispatchEvent(new Event("release")); held = null; } };
-  Object.defineProperty(navigator, "wakeLock", { configurable: true, value: { request(type) {
-    wakeLog.push("request " + type);
-    const lock = new EventTarget();
-    lock.type = type;
-    lock.released = false;
-    lock.release = () => {
-      if (!lock.released) { lock.released = true; wakeLog.push("release"); lock.dispatchEvent(new Event("release")); }
-      if (held === lock) held = null;
-      return Promise.resolve();
-    };
-    held = lock;
-    return Promise.resolve(lock);
-  } } });
-})()"""
-
 
 def written(tmp_path: Path, cho: str = LONG, name: str = "Title") -> str:
     return pages.written(tmp_path, cho, name)
@@ -288,6 +267,7 @@ def test_the_pill_steers_the_scroll_without_stopping_it(tmp_path):
 
         b.click("#pill-end")
         ended = look(b)
+        ended_on_chord = b.js("document.activeElement.matches('#sheet .c')")
         time.sleep(0.3)
         ended_still = look(b)["y"] == ended["y"]
         b.js("window.before = true; location.reload()")  # the page loaded again, not the one before it
@@ -301,7 +281,9 @@ def test_the_pill_steers_the_scroll_without_stopping_it(tmp_path):
     assert resumed["go"] == "Start" and resumed["tick"] == "3"  # a countdown again, to get your hands back
     assert card["go"] == "Resume" and card["pill"] and not card["inert"]
     assert after_card["pill"] and not after_card["inert"] and after_card["go"] == "Resume"
-    assert not ended["pill"] and ended["bar"] and ended["focus"] == "scroll" and ended_still
+    # × pressed by the mouse takes no focus (screen.js keys' steer): it stays where it was, on the chord the card
+    # closed back to; pressed from the keyboard, the focus goes to Scroll (test_the_pill_answers_the_keyboard).
+    assert not ended["pill"] and ended["bar"] and ended_on_chord and ended_still
     assert ended["status"] == ""
     assert reloaded["speed"] == "8" and not reloaded["pill"]  # kept; it doesn't start by itself
 
@@ -399,33 +381,6 @@ def test_it_scrolls_to_rounded_targets_so_no_step_is_lost_at_a_zoom(tmp_path):
         assert y >= ys[-1] - 2  # ...and the page went there, two pixels at a time
         rates.append((ys[-1] - ys[0]) / (moves[-1][0] - moves[0][0]) * 1000 / expected)
     assert all(0.75 <= r <= 1.15 for r in rates), rates
-
-
-@in_chromium
-def test_the_screen_stays_on_while_it_scrolls(tmp_path):
-    with viewer(tmp_path) as b:
-        b.js(WAKE_LOCK)
-        b.click("#scroll")
-        log = [list(b.js("wakeLog"))]  # counting down
-        b.click("#go")
-        log.append(list(b.js("wakeLog")))  # scrolling: the same lock
-        b.click("#go")
-        log.append(list(b.js("wakeLog")))  # paused: the screen may sleep
-        b.click("#go")
-        b.click("#go")
-        b.js("system()")  # the page was hidden, and the browser let go of the lock...
-        b.js("document.dispatchEvent(new Event('visibilitychange'))")  # ...it shows again
-        assert b.wait("wakeLog.length === 4")
-        log.append(list(b.js("wakeLog")))
-        b.click("#pill-end")
-        log.append(list(b.js("wakeLog")))
-    assert log == [
-        ["request screen"],
-        ["request screen"],
-        ["request screen", "release"],
-        ["request screen", "release", "request screen", "request screen"],
-        ["request screen", "release", "request screen", "request screen", "release"],
-    ]
 
 
 @in_chromium

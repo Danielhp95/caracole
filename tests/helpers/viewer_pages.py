@@ -12,7 +12,9 @@ A finger is touch events (``Input.dispatchTouchEvent``): ``Input.synthesizeScrol
 touch scrolls nothing in a headless Chromium. Back and Forward are the browser's own, through the tab's history
 (``back``, ``forward``; ``entries``, where it is in it), as its button and a phone's take them. The overlay's Harmony
 tab is a step away at any width: ``harmony_tab(b)``, or ``HARMONY_TAB`` and ``LEAVE_HARMONY`` as JavaScript. A page
-with no storage, as caracole serve's sandbox gives it: ``viewer(..., before=[NO_STORAGE])``.
+with no storage, as caracole serve's sandbox gives it: ``viewer(..., before=[NO_STORAGE])``. A screen wake lock that
+writes down what it is asked, minutes passed in a moment and the permission denied: ``WAKE_LOCK`` (``wakeLog``,
+``system()``), ``LONG_TIMERS`` (``skip(ms)``) and ``DENIED`` (``queried``), for ``before`` too.
 """
 
 from __future__ import annotations
@@ -33,6 +35,65 @@ from helpers.browser import Browser, BrowserError
 NO_STORAGE = """Object.defineProperty(window, 'localStorage', {configurable: true,
   get() { throw new DOMException('The document is sandboxed', 'SecurityError'); }});"""
 
+# A screen wake lock that writes down what it is asked (``wakeLog``: "request screen", "release"); ``system()`` lets go
+# of the lock as a browser does when the page is hidden, writing nothing down. For ``viewer``'s ``before``.
+WAKE_LOCK = """(() => {
+  window.wakeLog = [];
+  let held = null;
+  window.system = () => { if (held) { held.released = true; held.dispatchEvent(new Event("release")); held = null; } };
+  Object.defineProperty(navigator, "wakeLock", { configurable: true, value: { request(type) {
+    wakeLog.push("request " + type);
+    const lock = new EventTarget();
+    lock.type = type;
+    lock.released = false;
+    lock.release = () => {
+      if (!lock.released) { lock.released = true; wakeLog.push("release"); lock.dispatchEvent(new Event("release")); }
+      if (held === lock) held = null;
+      return Promise.resolve();
+    };
+    held = lock;
+    return Promise.resolve(lock);
+  } } });
+})()"""
+
+# Minutes in a moment: every setTimeout of 60 s or more held back (a shorter one runs as ever), ``skip(ms)`` moving
+# ``performance.now()`` on by ``ms`` and running those now due, in the order they fall due; clearTimeout drops one.
+# For ``viewer``'s ``before``, with WAKE_LOCK: ten minutes after the last touch, in a test's second.
+LONG_TIMERS = """(() => {
+  let ahead = 0, ids = 1e9;
+  const now = performance.now.bind(performance);
+  const set = window.setTimeout.bind(window), clear = window.clearTimeout.bind(window);
+  const held = new Map();
+  performance.now = () => now() + ahead;
+  window.setTimeout = (fn, ms, ...args) => {
+    if (!(Number(ms) >= 60000)) return set(fn, ms, ...args);
+    held.set(++ids, { at: performance.now() + Number(ms), fn, args });
+    return ids;
+  };
+  window.clearTimeout = (id) => { if (!held.delete(id)) clear(id); };
+  window.skip = (ms) => {
+    ahead += ms;
+    for (;;) {
+      let due = null;
+      for (const entry of held) if (entry[1].at <= performance.now() && (!due || entry[1].at < due[1].at)) due = entry;
+      if (!due) return;
+      held.delete(due[0]);
+      due[1].fn(...due[1].args);
+    }
+  };
+})()"""
+
+# The permission to keep the screen on answered "denied", as Android's WebView answers it while it grants the lock;
+# ``queried``, how many times the page asked. For ``viewer``'s ``before``.
+DENIED = """(() => {
+  window.queried = 0;
+  const status = Object.assign(new EventTarget(), { name: "screen-wake-lock", state: "denied", onchange: null });
+  Object.defineProperty(navigator, "permissions", { configurable: true, value: { query() {
+    window.queried += 1;
+    return Promise.resolve(status);
+  } } });
+})()"""
+
 # The overlay's Harmony tab shown, at any width: from 1200 px the rail's tab; narrower, the bar's neck first, unless the
 # necks' sheet is open already. An expression, for ``b.js`` as for a tap's (test_viewer_sound.py's ``tapped``).
 HARMONY_TAB = """(() => {
@@ -52,11 +113,12 @@ def harmony_tab(b: Browser) -> None:
                   " && document.getElementById('necks').getAnimations().length === 0")
 
 
-def written(tmp_path: Path, cho: str, name: str = "Title") -> str:
-    """The viewer of ``cho``, written as Artist/<name>/sheet.html under ``tmp_path``; its address."""
+def written(tmp_path: Path, cho: str, name: str = "Title", **options) -> str:
+    """The viewer of ``cho``, written as Artist/<name>/sheet.html under ``tmp_path``; its address. ``options`` are
+    ``build_viewer``'s (``timed=``: the song's timed lyrics)."""
     page = tmp_path / "Artist" / name / "sheet.html"
     page.parent.mkdir(parents=True, exist_ok=True)
-    page.write_text(build_viewer(cho), encoding="utf-8")
+    page.write_text(build_viewer(cho, **options), encoding="utf-8")
     return page.as_uri()
 
 

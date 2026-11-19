@@ -15,6 +15,7 @@ import io.github.danielhp95.caracole.viewer.sheet.Lyrics
 import io.github.danielhp95.caracole.viewer.sheet.Section
 import io.github.danielhp95.caracole.viewer.sheet.Tab
 import io.github.danielhp95.caracole.viewer.sheet.Text
+import io.github.danielhp95.caracole.viewer.sung.Sung
 import io.github.danielhp95.caracole.viewer.theory.Key
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -23,6 +24,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.double
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -43,6 +45,7 @@ object PagesReplay : AreaReplay {
 
     private const val P = "caracole.viewer.page."
     private const val HELPER = "test_conformance_viewer_pages."
+    private const val S = "caracole.viewer.sung."
     private const val SONG = "<script type=\"application/json\" id=\"song\">"
     private const val NAMES = "<script type=\"application/json\" id=\"song-names\">"
 
@@ -52,7 +55,7 @@ object PagesReplay : AreaReplay {
         theWholePageIsPagePys(misses)
     }
 
-    /** vectors/viewer/pages_parts.jsonl: the page's frame, function by function. */
+    /** vectors/viewer/pages_parts.jsonl: the page's frame, function by function, and sung.py's two. */
     fun everyPartIsPagePys(misses: Misses) {
         val counts = HashMap<String, Int>()
         for (record in Corpus.records("viewer/pages_parts.jsonl")) {
@@ -96,10 +99,12 @@ object PagesReplay : AreaReplay {
                         "sections" to JsonArray(a[2].jsonArray.map { JsonPrimitive(SheetPage.sectionHtml(section(it.jsonObject), chords)) }),
                     ))
                 }
+                S + "line_key" -> misses.expect(record) { strings(a[0]).map(Sung::lineKey) }
+                S + "sung_lines" -> misses.expect(record) { sung(Sung.lines(strings(a[0]), timed(a[1]))) }
                 else -> misses.check(false) { "an unknown record: ${record.fn}" }
             }
         }
-        misses.check(counts.size == 10 && (counts["shown_html"] ?: 0) >= 20) { "records of every kind: $counts" }
+        misses.check(counts.size == 12 && (counts["shown_html"] ?: 0) >= 20) { "records of every kind: $counts" }
     }
 
     /** The page files, pages-1.jsonl on, as many as there are. */
@@ -160,9 +165,20 @@ object PagesReplay : AreaReplay {
             guitar = kw["guitar"]?.let(::strings) ?: emptyList(),
             harmonica = kw["harmonica"]?.jsonArray?.map { it.jsonObject } ?: emptyList(),
             pdfTraditional = string("pdf_traditional"), video = kw["video"] as? JsonObject,
-            kinds = kw["kinds"] as? JsonObject,
+            kinds = kw["kinds"] as? JsonObject, timed = kw["timed"]?.let(::timed) ?: emptyList(),
         )
     }
+
+    /** A song's timed lyrics as a record holds them, `[[seconds, text], …]`. */
+    private fun timed(e: JsonElement): List<Pair<Double, String>> = e.jsonArray.map { line ->
+        val (seconds, text) = line.jsonArray
+        seconds.jsonPrimitive.double to text.jsonPrimitive.content
+    }
+
+    /** Sung.lines' answer as sung_lines' JSON: `[[ms, n or null], …]`, or null. */
+    private fun sung(lines: List<Pair<Long, Int?>>?): JsonElement = lines?.let {
+        JsonArray(it.map { (ms, n) -> JsonArray(listOf(JsonPrimitive(ms), n?.let(::JsonPrimitive) ?: JsonNull)) })
+    } ?: JsonNull
 
     /** A page's record, as the generator's `page_out` makes it. */
     fun out(html: String, cho: String): JsonObject {

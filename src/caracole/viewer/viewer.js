@@ -147,8 +147,8 @@
       if (typeof saved.shapes === "boolean") state.shapes = saved.shapes;  // an old record's `strip` says nothing
     }
   } catch (err) { /* no storage: the page still works */ }
-  // The screen's choices screen.js keeps for every viewer page (the theme, Aa's), applied before this script ran:
-  // inlined on every viewer page, so never missing.
+  // The screen's choices screen.js keeps for every viewer page (the theme, Aa's), applied before this script ran, and
+  // its key map, which this script binds (below): inlined on every viewer page, so never missing.
   const screenKit = window.caracoleScreen;
   // The rail of necks is the screen's choice, not a song's: kept once for every sheet, songbook and harmonica tab's
   // page (a name no page's own settings have, as theirs end in its path: overlay.js's), and in the address too, where
@@ -257,7 +257,7 @@
       keep("py", "1", state.py);
       keep("trad", "1", state.trad);
       keep("inst", state.inst, state.inst !== "guitar" || Boolean(startInst));
-      screenKit.carry(params);  // the theme, while it isn't Auto
+      screenKit.carry(params);  // the theme while it isn't Auto, the minutes the screen stays on while they aren't 10
       const fragment = params.toString();
       if (fragment !== location.hash.slice(1)) {
         history.replaceState(history.state, "", fragment ? "#" + fragment : location.pathname + location.search);
@@ -284,7 +284,7 @@
     for (const name of ["mine", "sheet"]) version.delete(name);
     if (!served) {
       const quoted = (text) => "'" + text.replace(/'/g, "'\\''") + "'";
-      for (const name of ["fs", "speed", "vol", "necks", "py", "theme"]) version.delete(name);
+      for (const name of ["fs", "speed", "vol", "necks", "py", "theme", "awake"]) version.delete(name);
       cmd.textContent = "caracole render --song " + songNamed()
         + " --version " + quoted(version.toString().replace(/%2C/g, ","));
       link.hidden = true;
@@ -769,9 +769,10 @@
     ? kit.keyboard(position, title, bare, span) : kit.box(position, title, bare));
 
   // The screen's choices, kept once for every page (the rail of necks hidden, the pinyin shown, the Chinese in
-  // Traditional characters, the instrument, and screen.js's: the theme), set in ``params`` as the address keeps them: a
-  // link to another page of the song takes them on (a version's in the list, a harmonica tab's page, and back), so that
-  // where the browser keeps nothing (caracole serve's sandbox) they go with it.
+  // Traditional characters, the instrument, and screen.js's: the theme, the minutes the screen stays on), set in
+  // ``params`` as the address keeps them: a link to another page of the song takes them on (a version's in the list, a
+  // harmonica tab's page, and back), so that where the browser keeps nothing (caracole serve's sandbox) they go with
+  // it.
   function screenChoices(params) {
     if (!state.necks) params.set("necks", "0");
     if (state.py) params.set("py", "1");
@@ -898,7 +899,8 @@
   // From 1200 px the bar is a toolbar under the song's title (layers.js's toolbar: right after the song's header, a
   // songbook's shown song's own; viewer.css), back at the foot below it.
   const toolbar = window.caracoleLayers ? window.caracoleLayers.toolbar(bar, () => sheetEl.parentElement
-    .querySelector(":scope > header.head")) : { wide: window.matchMedia("not all"), place() {}, edge() {} };
+    .querySelector(":scope > header.head")) : { wide: window.matchMedia("not all"), place() {}, edge() {},
+    room: () => ({ top: 0, bottom: window.innerHeight }) };
   const vList = $("version-list");  // a sheet's versions (below); the songbook has none
   let kinds = null;  // its line and its list, kinds.js's (below)
   const keyList = $("key-list"), keyNow = $("key-now");  // the twelve keys, and the bar's key that opens them (below)
@@ -1048,6 +1050,14 @@
       b.setAttribute("aria-pressed", b.id === "theme-" + screenKit.theme() ? "true" : "false");
     }
   };
+  // More's Keep the screen on: the minutes screen.js keeps for every page, Off to 60, each end greyed where it stops
+  // (aria-disabled, as Aa's text size: a button pressed to its end keeps the focus).
+  const drawAwake = () => {
+    const n = screenKit.minutes(), all = screenKit.MINUTES;
+    $("awake-at").textContent = n ? n + " min" : "Off";
+    $("awake-down").setAttribute("aria-disabled", n <= all[0] ? "true" : "false");
+    $("awake-up").setAttribute("aria-disabled", n >= all[all.length - 1] ? "true" : "false");
+  };
   const render = () => {
     if (state.capo === sheetCapo) state.capo = null;  // the sheet's own again
     keepPositions();
@@ -1065,6 +1075,7 @@
     $("smaller").setAttribute("aria-disabled", state.fs <= FS.min ? "true" : "false");
     $("bigger").setAttribute("aria-disabled", state.fs >= FS.max ? "true" : "false");
     drawTheme();
+    drawAwake();
 
     const [main, words, changed] = keyShort();
     $("key-now").querySelector(".k").textContent = main;
@@ -1573,8 +1584,10 @@
   // or a line of text whole), with its readings where it is a line of the song's; and a section's label, a tab and
   // a line of the notes' peek, each a text node (a label's progression, which the numerals name, follows it).
   const units = [];
+  // The lines of the song's sections, as the page draws them (page.py _drawn_lines): the lines data.pinyin reads and
+  // data.sung lights, by their index.
+  const songLines = Array.from(sheetEl.querySelectorAll(":scope > section.sec > p.l"));
   if (pyCan || hanzi) {
-    const songLines = Array.from(sheetEl.querySelectorAll(":scope > section.sec > p.l"));
     for (const line of sheetEl.querySelectorAll("p.l:not(.chords)")) {
       const nodes = line.querySelector(".y, .w") ? Array.from(line.querySelectorAll(".y, .w"))
         : line.firstElementChild ? [] : [line];
@@ -1933,9 +1946,12 @@
   // sheet docks there up to 1199 px; over the whole screen, the pill rides over its foot (necks-full, viewer.css).
   // From 1200 px the toolbar under the title is asleep meanwhile (data-asleep: out of sight, its room kept, so the
   // song doesn't jump), never hidden.
-  function dock() {
-    const there = !wide.matches ? dockedTop()
+  function dockedNow() {
+    return !wide.matches ? dockedTop()
       : sheetAt !== null && !railWide.matches && !doc.dataset.full ? necksEl : null;  // full screen hides the sheet
+  }
+  function dock() {
+    const there = dockedNow();
     const away = moving() && !there;
     const hide = away && !toolbar.wide.matches;
     if (bar.hidden !== hide) {
@@ -2058,9 +2074,9 @@
     if (!on) fitKey();  // the bar back: its key measured again
     toolbar.edge();  // from 1200 px, the pill under the toolbar again, or at the top with none
   };
-  // Every one but ``keep``.
-  const closeAll = (keep) => {
-    for (const layer of layers.slice().reverse()) if (layer.el !== keep) close(layer.el);
+  // Every one but those in ``keep``.
+  const closeAll = (...keep) => {
+    for (const layer of layers.slice().reverse()) if (keep.indexOf(layer.el) < 0) close(layer.el);
   };
   // The sheet gone with the window widened past 1200 px, where the rail takes its place: the focus left where it is.
   const dropSheet = () => {
@@ -2766,6 +2782,16 @@
     b.addEventListener("click", () => { screenKit.setTheme(b.id.slice("theme-".length)); render(); });
   }
   $("strip-toggle").addEventListener("click", () => { state.shapes = !stripShown(); render(); });
+  // Keep the screen on, a step of the minutes screen.js offers (none past either end), kept for every page by it, and
+  // in the address (save()).
+  const stepAwake = (by) => {
+    const all = screenKit.MINUTES, next = all[all.indexOf(screenKit.minutes()) + by];
+    if (next === undefined) return;
+    screenKit.setMinutes(next);
+    render();
+  };
+  $("awake-down").addEventListener("click", () => stepAwake(-1));
+  $("awake-up").addEventListener("click", () => stepAwake(1));
   $("reset-all").addEventListener("click", () => {
     Object.assign(state, { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null, nm: null,
       necks: true, py: false, trad: false });
@@ -2816,37 +2842,71 @@
     save();
   };
 
-  // The screen stays on while it counts down and scrolls. A browser lets go of the lock when the
-  // page is hidden; it is asked for again when the page shows.
-  let wake = null, asking = false;
-  const holdScreen = () => {
-    if (wake || asking || !navigator.wakeLock) return;
-    asking = true;
-    try {
-      navigator.wakeLock.request("screen").then((lock) => {
-        asking = false;
-        if (!moving()) {
-          lock.release().catch(() => {});
-          return;
-        }
-        wake = lock;
-        lock.addEventListener("release", () => { if (wake === lock) wake = null; });
-      }, () => { asking = false; });
-    } catch (err) {
-      asking = false;  // no wake lock here
-    }
+  // The screen stays on while it counts down and scrolls, and as long after the last touch as More's Keep the screen
+  // on says: screen.js's (awake), asked again whenever the scroll starts, pauses or ends.
+  const awake = screenKit.awake(moving);
+
+  // The line being sung, lit while it scrolls. data.sung (page.py, sung.py: the song's timed lyrics matched to its
+  // lines at render time): for each timed line, in time order, [ms, n], its time and the index in songLines of the
+  // line it is sung on, or null for one the sheet writes nowhere (a chorus sung again, a break); none for a song with
+  // no timed lyrics, or whose lyrics meet too few of its lines, which lights nothing. The lyrics' clock, sungClock
+  // (in ms: at, and since, when it last went on, null while it stands), starts once the count-in is over, stands
+  // while the scroll is paused or counts in again (the line lit stays) and while the page is hidden, and is back at
+  // the start, none lit, once autoscroll ends. The line lit is the one the last timed line at or before the clock
+  // names: none before the first, nor for one sung nowhere. A tap on a timed line's words while autoscroll is on
+  // (never on its chords, whose card opens) sets the clock at that line's first time; a finger pauses the scroll as
+  // ever, a mouse click pauses nothing, so the clock goes on from there. No recording plays: it is a guide at the
+  // song's own times, and the scroll keeps its own speed.
+  const SUNG = (Array.isArray(data.sung) ? data.sung : [])
+    .filter((e) => Array.isArray(e) && Number.isFinite(e[0])
+      && (e[1] === null || (Number.isInteger(e[1]) && e[1] >= 0 && e[1] < songLines.length)))
+    .sort((a, b) => a[0] - b[0]);
+  const timeOf = new Map();  // each line lit, its first time
+  for (const [ms, n] of SUNG) if (n !== null && !timeOf.has(songLines[n])) timeOf.set(songLines[n], ms);
+  const sungClock = { at: 0, since: null, started: false };
+  // The clock stands where the song is (a pause, a count-in again, the page hidden), or goes on from there: never
+  // while the page is hidden, which draws no frames, so the song scrolls no further and the light keeps with it.
+  const standClock = () => {
+    if (sungClock.since === null) return;
+    sungClock.at += performance.now() - sungClock.since;
+    sungClock.since = null;
   };
-  const letScreenSleep = () => {
-    const lock = wake;
-    wake = null;
-    if (lock) lock.release().catch(() => {});
+  const goClock = () => {
+    sungClock.started = true;
+    if (document.visibilityState !== "hidden") sungClock.since = performance.now();
   };
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible" && moving()) holdScreen();
+    if (scroll.state !== "running") return;
+    if (document.visibilityState === "hidden") standClock();
+    else if (sungClock.since === null) goClock();
+  });
+  let lit = null;
+  const lightSung = () => {
+    let line = null;
+    if (scroll.state !== "off" && sungClock.started) {
+      const now = sungClock.at + (sungClock.since === null ? 0 : performance.now() - sungClock.since);
+      for (const [ms, n] of SUNG) {
+        if (ms > now) break;
+        line = n === null ? null : songLines[n];
+      }
+    }
+    if (line === lit) return;
+    if (lit) lit.classList.remove("sung");
+    if (line) line.classList.add("sung");
+    lit = line;
+  };
+  sheet.addEventListener("click", (e) => {
+    const line = scroll.state === "off" || e.target.closest(".c") ? null : e.target.closest("p.l");
+    if (!line || !timeOf.has(line)) return;
+    sungClock.at = timeOf.get(line);
+    sungClock.started = true;
+    if (sungClock.since !== null) sungClock.since = performance.now();  // still scrolling: on from there
+    lightSung();
   });
 
   const countdown = () => {
     clearTimeout(scroll.timer);
+    standClock();  // pressed again while it runs: the clock stands through the count-in, then goes on
     scroll.state = "counting";
     scroll.ends = performance.now() + COUNTDOWN;
     const tick = () => {
@@ -2860,7 +2920,7 @@
     };
     tick();
     showScroll("Scrolling in " + COUNTDOWN / 1000 + " s");
-    holdScreen();
+    awake();
   };
   // Each frame scrolls to a whole pixel counted from where it began, Math.round(from + travelled),
   // never a pixel on from where the page is: a browser that rounds a scroll to its device pixels
@@ -2871,9 +2931,11 @@
     scroll.from = scroll.at = window.scrollY;
     scroll.travelled = 0;
     scroll.last = 0;
+    goClock();  // the lyrics' clock goes on, from where it stood
     const loop = ++scroll.loop;
     const frame = (now) => {
       if (scroll.state !== "running" || loop !== scroll.loop) return;
+      lightSung();
       // Moved some other way (the scroll bar, a search in the page, a link): yours to read.
       if (Math.abs(window.scrollY - scroll.at) > 3) {
         pauseScroll();
@@ -2896,22 +2958,28 @@
       requestAnimationFrame(frame);
     };
     showScroll("Scrolling");
-    holdScreen();
+    awake();
     requestAnimationFrame(frame);
   };
   function pauseScroll(said) {
     if (!moving()) return;
     clearTimeout(scroll.timer);
+    standClock();
     scroll.state = "paused";
     showScroll(said || "Paused");
-    letScreenSleep();
+    awake();
+    lightSung();
   }
   const endScroll = () => {
     const mine = pill.contains(document.activeElement);
     clearTimeout(scroll.timer);
     scroll.state = "off";
+    sungClock.at = 0;  // back at the song's start
+    sungClock.since = null;
+    sungClock.started = false;
     showScroll("");
-    letScreenSleep();
+    awake();
+    lightSung();
     if (mine) $("scroll").focus({ preventScroll: true });
   };
 
@@ -2922,7 +2990,9 @@
     drawNecks();
   };
   $("scroll").addEventListener("click", () => {
-    closeAll(necksEl);  // the overlay's sheet stays, at half the screen, the song moving above it
+    // The overlay's sheet stays, at half the screen, the song moving above it; and so does full screen, where the key
+    // map's Space presses it (the bar hidden).
+    closeAll(necksEl, handle);
     halfSheet();
     close(sizes, false);
     countdown();
@@ -2942,10 +3012,27 @@
     if (!(e.target instanceof Element && e.target.closest("#pill"))) pauseScroll();
   }, { passive: true });
   window.addEventListener("wheel", () => pauseScroll(), { passive: true });
-  const SCROLL_KEYS = ["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End"];
+  // Home and End scroll the page: they pause it. Space, Enter and the four page keys are the key map's (screen.js
+  // keys): Space or Enter starts and stops it (the bar's Scroll while it is off, else the pill's ▶), and a page key
+  // pauses it and turns a screen keeping two lines, measured in the room the bar, the pill and a docked layer leave
+  // (layers.js toolbar's room; in full screen, where the keys work, the bar counts for nothing). They are left to a
+  // layer with the focus (busy: one of the stack's, Aa's box, a numeral's tooltip, the rail of necks or a dialog),
+  // full screen's handle not counted.
   document.addEventListener("keydown", (e) => {
-    const control = e.target instanceof Element && e.target.closest("button, a, [role=button], summary, input");
-    if (SCROLL_KEYS.indexOf(e.key) >= 0 || (e.key === " " && !control)) pauseScroll();
+    if (e.key === "Home" || e.key === "End") pauseScroll();
+  });
+  const busy = () => {
+    const at = document.activeElement instanceof Element ? document.activeElement : null;
+    if (!at || at === handle) return false;
+    return layers.some((layer) => layer.el.contains(at)) || Boolean(at.closest("#sizes, #tip, #necks, dialog"));
+  };
+  screenKit.keys({
+    toggle: () => (scroll.state === "off" ? $("scroll") : go).click(),
+    pause: () => pauseScroll(),
+    room: () => toolbar.room(pill, dockedNow()),
+    busy,
+    sheet: sheetEl,
+    steer: [$("scroll"), ...pill.getElementsByTagName("button")],
   });
 
   // --- the bar: away as you read down the song, back when you want it -----------------------------

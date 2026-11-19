@@ -43,6 +43,15 @@ internal object PageConstants {
     private fun pattern(name: String): Regex =
         PyRegex.compile(data.getValue("patterns").jsonObject.getValue(name).jsonPrimitive.content)
 
+    /** sung.py's numbers, page.json's `sung` (viewer.sung.Sung's): the ratio two lines' keys meet at, the share of the
+     * sheet's lines with words a match must light and the lines it must light at least, and the seconds a timed
+     * line's time stays under; Doubles but [SUNG_MIN_LINES], as Python compares a float with each. */
+    private val sung: JsonObject by lazy { data.getValue("sung").jsonObject }
+    val SUNG_LINE_MATCH: Double by lazy { sung.getValue("LINE_MATCH").jsonPrimitive.content.toDouble() }
+    val SUNG_MIN_SHARE: Double by lazy { sung.getValue("MIN_SHARE").jsonPrimitive.content.toDouble() }
+    val SUNG_MIN_LINES: Int by lazy { sung.getValue("MIN_LINES").jsonPrimitive.content.toInt() }
+    val SUNG_MAX_SECONDS: Double by lazy { sung.getValue("MAX_SECONDS").jsonPrimitive.content.toDouble() }
+
     /** page_icon.LINK: the page's icon, a data: URI, for its head. */
     val ICON: String by lazy {
         val path = "caracole/page/icon.json"
