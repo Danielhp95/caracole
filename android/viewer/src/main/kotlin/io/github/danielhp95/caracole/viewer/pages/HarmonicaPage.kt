@@ -93,9 +93,10 @@ object HarmonicaPage {
      * one HarpTabs.pinned refuses, or a legend the tab hasn't got, is read as guessed), [facts] what else it says (the
      * version's raw: `difficulty`, `views`, `rating`). [cho] is the song's chord sheet (its human one, else its auto
      * one), with [key] and [keySource], its key as keys.py found it. [back] names the song's sheet viewer beside the
-     * page, which ‹ Chord sheet opens; with none, ‹ Library. [versions], the song's UG chords versions (render.py
-     * `_versions_data`, each entry's `this` false), and [kinds], what else it keeps to play from (`_kinds_data`), go
-     * in its data after `overlay`, for the version line and its list (kinds.js); without them, its data has neither.
+     * page, which its ‹ opens (named Chord sheet); with none, it goes to the library (named Library). [versions], the
+     * song's UG chords versions (render.py `_versions_data`, each entry's `this` false), and [kinds], what else it
+     * keeps to play from (`_kinds_data`), go in its data after `overlay`, for the version line and its list (kinds.js);
+     * without them, its data has neither.
      */
     fun build(text: String, title: String, artist: String = "", tabFile: String, url: String? = null,
               pageKey: String? = null, harp: String? = null, pin: JsonElement? = null, facts: JsonObject? = null,

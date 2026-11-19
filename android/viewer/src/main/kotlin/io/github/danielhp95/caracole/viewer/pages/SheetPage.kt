@@ -181,8 +181,8 @@ object SheetPage {
     /** _glued: whether a chord between [before] and [after], the nearest texts either side of it, sits inside a word. */
     fun glued(before: String, after: String): Boolean = PageHtml.glued(before, after)
 
-    /** _body: the page's header (‹ Library, the title, the artist, the version line, the song's facts), the song, the
-     * footer, and the controls; [tuning] the one the sheet's notes name. */
+    /** _body: the page's header (its ‹, named Library, the title, the artist, the version line, the song's facts),
+     * the song, the footer, and the controls; [tuning] the one the sheet's notes name. */
     private fun body(sheet: Sheet, title: String, key: Key?, origin: String?, pdf: String?, tuning: String?,
                      export: Boolean, guitar: Boolean, names: Map<String, Map<String, String>>?, pdfTraditional: String?,
                      credit: Boolean): String {

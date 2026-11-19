@@ -2812,7 +2812,7 @@
   // toolbar): − and + change the speed as it runs, ❚❚ pauses and ▶ resumes (after a countdown again), × ends it; the
   // bar is out of the way while it counts down and runs (dock()). A finger on the page, the wheel, a
   // key that scrolls, a scroll by hand, a card opening or the end of the song pauses it (a song in columns, read in
-  // place, stops moving once it is all in view and pauses by itself no more: columnsEnd): the page and
+  // place, stops moving once it is all in view, and pauses there once its timed lyrics are over: columnsEnd): the page and
   // the bar are yours until you press ▶, which stays within reach with the card open. The bar's Scroll (pressed
   // while it is on) closes the settings and the card, and leaves the overlay's sheet at half the screen, the bar
   // under it and the pill above it.
@@ -2883,10 +2883,23 @@
     else if (sungClock.since === null) goClock();
   });
   let lit = null;
+  const clockNow = () => sungClock.at + (sungClock.since === null ? 0 : performance.now() - sungClock.since);
+  // When the lyrics are over, on their clock: the last timed line's time where the sheet sings it nowhere (LRCLIB's
+  // empty stamp at the lyrics' end, which marks the song's end), else the last timed line's and a grace after it, the
+  // median gap between timed lines, 3 s at least, for that line to be sung; 0 for a song with no timed lyrics.
+  const SUNG_END = (() => {
+    if (!SUNG.length) return 0;
+    const [last, n] = SUNG[SUNG.length - 1];
+    if (n === null) return last;
+    const gaps = SUNG.slice(1).map((e, i) => e[0] - SUNG[i][0]).sort((a, b) => a - b);
+    const half = Math.floor(gaps.length / 2);
+    const median = !gaps.length ? 0 : gaps.length % 2 ? gaps[half] : (gaps[half - 1] + gaps[half]) / 2;
+    return last + Math.max(3000, median);
+  })();
   const lightSung = () => {
     let line = null;
     if (scroll.state !== "off" && sungClock.started) {
-      const now = sungClock.at + (sungClock.since === null ? 0 : performance.now() - sungClock.since);
+      const now = clockNow();
       for (const [ms, n] of SUNG) {
         if (ms > now) break;
         line = n === null ? null : songLines[n];
@@ -2927,9 +2940,10 @@
   // A song in columns (html[data-columns] above 1: the window shows it whole, layout()), whose lines run down one
   // column and back up the next, is read in place: the scroll goes no further than brings the sheet's top to the top
   // of the room the controls leave it (layers.js toolbar's room, as the key map's turn in columns does, screen.js),
-  // never back up, nor past the page's end, and stays there running, the lyrics' clock going on, until ❚❚ or ×: no end
-  // of the song comes to pause it there. The page's scroll position it stops at, a whole pixel; none (Infinity) in one
-  // column.
+  // never back up, nor past the page's end, and stays there running while the lyrics' clock lights its lines, until it
+  // passes their end (SUNG_END); then, or at once for a song with no timed lyrics, it pauses at the song's end, as a
+  // song in one column does at the page's (the screen back to its minutes, the bar back, the loop stopped; the line lit
+  // stays). The page's scroll position it stops at, a whole pixel; none (Infinity) in one column.
   const columnsEnd = () => {
     if (!(Number(doc.dataset.columns) > 1)) return Infinity;
     const { top } = toolbar.room(pill, dockedNow());
@@ -2969,7 +2983,10 @@
           window.scrollTo(0, y);
           scroll.at = window.scrollY;
         }
-        if (most === Infinity && window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) {
+        const end = most === Infinity
+          ? window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2
+          : y >= most && clockNow() >= SUNG_END;  // in columns, at the cap once the lyrics are over
+        if (end) {
           pauseScroll("Paused · end of song");
           return;
         }

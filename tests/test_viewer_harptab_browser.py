@@ -332,8 +332,8 @@ def test_on_a_phone_the_overlay_waits_for_the_bars_neck(tmp_path):
 
 def test_served_with_no_storage_the_screens_choices_go_to_the_tabs_page_and_back(tmp_path):
     # In caracole serve's sandbox the address alone keeps them: the Harmonica row's link to the tab's page takes on the
-    # rail hidden, the pinyin, the Chinese characters and the instrument, as a version's ‹ › do, and ‹ Chord sheet
-    # brings them back.
+    # rail hidden, the pinyin, the Chinese characters and the instrument, as a version's link in the list does, and
+    # its ‹ back to the chord sheet brings them back.
     from caracole.viewer import build_viewer, viewer_csp
     from test_viewer_harptab_page import TAB_D, a_song
     from test_viewer_necks import served

@@ -1474,10 +1474,13 @@ It is rows.js's, shared by both pages:
   narrower from three; `data-columns` says how many, which viewer.css keys on (`:not([data-columns="1"])` the wide
   page, a rule a count); else one column, `--fs` + 3 px, as a harmonica tab's page (no `data-columns`). A trial
   count's `fit()` runs in one column that wide (`fitIn`), never in balanced columns.
-  - Autoscroll reads a song in columns in place (viewer.js `columnsEnd`, test_viewer_scroll.py's columns test): each
+  - Autoscroll reads a song in columns in place (viewer.js `columnsEnd`, test_viewer_scroll.py's columns tests): each
     frame goes no further than brings `#sheet`'s top to the top of `toolbar.room()` (the key map's cap in columns),
-    never back up, nor past the page's end, and stays there running, the lyrics' clock going on; it never pauses by
-    itself there ("Paused · end of song" is one column's alone), ❚❚ and × as ever.
+    never back up, nor past the page's end; there it pauses "Paused · end of song", as one column does at the page's
+    end (`moving()` false: the screen back to its minutes, the bar back, the loop stopped), at once for a song with no
+    `sung`, else once the lyrics' clock passes `SUNG_END` (the last entry's time where it is `[ms, null]`, LRCLIB's
+    empty stamp at the lyrics' end; else the last's and the timed lines' median gap, 3 s at least), running and
+    lighting lines until then.
 - **Full screen** (the sheet viewer's) is one of those layers, its element the handle (page.py `_HANDLE`,
   `button.handle#handle`, after the pill): `open(handle, opener)` sets `html[data-full="on"]`, which hides every
   element marked `data-controls` (the bar; a new control that full screen hides is marked so, nothing else changes),

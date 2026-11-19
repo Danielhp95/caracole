@@ -14,6 +14,8 @@ import time
 from html import unescape
 from pathlib import Path
 
+import pytest
+
 from helpers import browser
 from helpers import viewer_pages as pages
 from helpers.browser import Browser, in_chromium
@@ -392,31 +394,88 @@ IN_VIEW = """(() => { const bar = document.getElementById('bar'), pill = documen
           top: document.getElementById('sheet').getBoundingClientRect().top, room}; })()"""
 
 
+# When the page heard the line lit last become the last timed one, and when autoscroll said it paused at the song's
+# end: ``window.marks`` (``last``, ``end``), on the page's clock.
+MARKS = """(() => {
+  window.marks = {};
+  const lines = [...document.querySelectorAll('#sheet section.sec > p.l')], status = document.getElementById('scroll-status');
+  new MutationObserver(() => {
+    if (marks.last === undefined && lines[lines.length - 1].classList.contains('sung')) marks.last = performance.now();
+  }).observe(document.getElementById('sheet'), {subtree: true, attributes: true, attributeFilter: ['class']});
+  new MutationObserver(() => {
+    if (marks.end === undefined && status.textContent === 'Paused · end of song') marks.end = performance.now();
+  }).observe(status, {childList: true, characterData: true, subtree: true});
+})()"""
+# Every requestAnimationFrame the page asks for from now on, counted (``window.frames``): the scroll's loop asks one a
+# frame while it runs.
+FRAMES = """(() => {
+  window.frames = 0;
+  const raf = window.requestAnimationFrame.bind(window);
+  window.requestAnimationFrame = (fn) => { frames += 1; return raf(fn); };
+})()"""
+QUIET = "new Promise((done) => { const n = frames; setTimeout(() => done(frames - n), 300); })"
+
+
 @in_chromium
-def test_in_columns_it_scrolls_no_further_than_brings_the_sheet_to_the_top_and_the_line_lit_goes_on(tmp_path):
+@pytest.mark.parametrize("ending", ["grace", "empty-stamp"])
+def test_in_columns_it_scrolls_no_further_than_brings_the_sheet_to_the_top_and_pauses_once_the_lyrics_end(
+        tmp_path, ending):
     # A song in columns reads down one column and back up the next: a scroll to the page's end would carry the first
     # column's lines and the next one's first lines out of view. It goes as far as the key map's turn does (the
     # sheet's top at the top of the room the controls leave) and no further; the song is read in place there, the
-    # lyrics' clock going on, and it pauses by itself no more: ❚❚ and × as ever.
-    url = pages.written(tmp_path, COLUMNS, "Title", timed=COLUMN_TIMED) + "#speed=30&necks=0"
+    # lyrics' clock going on until it passes the last timed line, then it pauses as at the end of a song in one column.
+    # The last timed line sung on a line of the sheet: a grace after it, the gaps' median, 3 s at least; LRCLIB's empty
+    # stamp at the end of a song's lyrics (sung nowhere): its time.
+    timed = COLUMN_TIMED + ([(10.0, "")] if ending == "empty-stamp" else [])
+    url = pages.written(tmp_path, COLUMNS, "Title", timed=timed) + "#speed=30&necks=0"
     with viewer(tmp_path, url, width=1280, height=900, mobile=False) as b:
         assert b.js("document.documentElement.dataset.columns") == "2"
         first = b.js(IN_VIEW)
+        b.js(MARKS)
         start_now(b)
         assert b.wait(f"{LIT} >= 16", 12)  # 6.4 s on, at 60 px a second: far past where the sheet's top comes up
         capped = b.js(IN_VIEW)
         assert b.wait(f"{LIT} >= 22", 10)
         later = b.js(IN_VIEW)
-        b.click("#go")
-        paused = b.js(IN_VIEW)
+        assert b.wait("window.marks.end !== undefined", 10)
+        ended, lit, marks = b.js(IN_VIEW), b.js(LIT), b.js("window.marks")
         b.click("#pill-end")
-        ended = b.js(IN_VIEW)
+        off = b.js(IN_VIEW)
     assert first["out"] > 0 and first["y"] == 0  # the title over it: its last lines below the window
     assert capped["state"] == "running" and capped["status"] == "Scrolling" and capped["y"] > 0
     assert capped["out"] == 0 and abs(capped["top"] - capped["room"]) <= 1, capped  # every line in view
-    assert later["state"] == "running" and later["y"] == capped["y"] and later["out"] == 0  # it stays put
-    assert paused["state"] == "paused" and paused["y"] == capped["y"]
-    assert ended["state"] == "off"
+    assert later["state"] == "running" and later["y"] == capped["y"] and later["out"] == 0  # it stays put, running
+    assert ended["state"] == "paused" and ended["y"] == capped["y"]
+    after = marks["end"] - marks["last"]  # the last line lit at 9.2 s
+    if ending == "grace":
+        assert 2900 <= after <= 4500, marks  # 3 s on
+        assert lit == len(COLUMN_LINES) - 1  # the pause keeps it lit
+    else:
+        assert 600 <= after <= 2000, marks  # at 10 s, the empty stamp's
+        assert lit == -1  # sung nowhere, as anywhere in the song: none lit
+    assert off["state"] == "off"
+
+
+@in_chromium
+@pytest.mark.parametrize("width", [1280, 1150], ids=["toolbar", "bar-at-the-foot"])
+def test_in_columns_a_song_with_no_timed_lyrics_pauses_once_the_sheet_reaches_the_top(tmp_path, width):
+    # Nothing to read in place by: there it pauses at the song's end, as a song in one column does at the page's, so the
+    # screen goes back to its minutes, the bar comes back (below 1200 px, where it hid while it scrolled) and the loop
+    # stops.
+    url = pages.written(tmp_path, COLUMNS, "Title") + "#speed=30&necks=0"
+    with viewer(tmp_path, url, width=width, height=900, mobile=False) as b:
+        assert b.js("document.documentElement.dataset.columns") == "2"
+        b.js(FRAMES)
+        start_now(b)
+        assert b.wait("document.getElementById('scroll-status').textContent === 'Paused · end of song'", 10)
+        ended = b.js(IN_VIEW)
+        bar = b.js("(() => { const bar = document.getElementById('bar');"
+                   " return !bar.hidden && bar.getClientRects().length > 0 && !bar.hasAttribute('data-asleep'); })()")
+        quiet = b.js(QUIET)
+    assert ended["state"] == "paused" and ended["y"] > 0 and ended["out"] == 0, ended
+    if width >= 1200:
+        assert abs(ended["top"] - ended["room"]) <= 1, ended  # the sheet's top under the toolbar and the pill
+    assert bar and quiet == 0
 
 
 @in_chromium
