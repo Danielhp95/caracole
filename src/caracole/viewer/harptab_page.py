@@ -507,7 +507,7 @@ def _footer(tab_file: str, url: str | None, *, placed: bool, change: bool = Fals
 # The bar, hidden until the script runs, in the order a keyboard reaches it: the harp a semitone down or up, its name
 # and why it was chosen between them; right after it, the overlay shown or hidden (from 1200 px, as the viewer's:
 # page.py's _CONTROLS), or in its place the neck, the overlay's sheet opened or closed (below 1200 px, as the
-# viewer's); ♪, each hole's note on it in its place (pressed while it shows); Aa, the text size in a box beside it;
+# viewer's); ♪, each hole's note on it in its place (pressed while it shows); Aa, the text size and the theme in a box beside it;
 # the viewer's arrow down to a line (page.py's _SCROLL_ICON), scrolling by itself, pressed while it is on. Each after
 # the harp has its word under its icon, as the viewer's: Shapes, Notes, Text, Scroll. A tab shown as written has the
 # overlay's buttons, Aa and Scroll alone.
@@ -523,10 +523,17 @@ _BAR = """<div class="bar" id="bar" data-controls hidden role="region" aria-labe
 <button type="button" class="tool notes" id="notes" aria-pressed="false"><span class="ic" aria-hidden="true">♪</span><span class="bw">Notes</span></button>
 <span class="size-box" id="size-box">
 <button type="button" class="tool" id="size" aria-label="Text size" aria-expanded="false" aria-controls="sizes"><span class="ic" aria-hidden="true">Aa</span><span class="bw">Text</span></button>
-<span class="sizes" id="sizes" role="group" aria-label="Text size" hidden>
+<span class="sizes" id="sizes" hidden>
+<span class="size-row" role="group" aria-label="Text size">
 <button type="button" id="smaller" aria-label="Smaller text" aria-disabled="false">A−</button>
 <output id="fs-now">18 px</output>
 <button type="button" id="bigger" aria-label="Bigger text" aria-disabled="false">A+</button>
+</span>
+<span class="seg theme" id="theme" role="group" aria-label="Theme">
+<button type="button" id="theme-auto" aria-pressed="true">Auto</button>
+<button type="button" id="theme-light" aria-pressed="false">Light</button>
+<button type="button" id="theme-dark" aria-pressed="false">Dark</button>
+</span>
 </span>
 </span>
 <button type="button" class="tool play" id="scroll" aria-label="Auto-scroll" aria-pressed="false"><span class="disc">""" + _SCROLL_ICON + """</span><span class="bw">Scroll</span></button>

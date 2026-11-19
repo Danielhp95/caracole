@@ -3817,7 +3817,9 @@ the library page link it, the tab's text beside it.
   little smaller); after them, from 1200 px the rail's button, and below
   1200 px the neck, the overlay's sheet (below); ♪,
   **Notes**, shows each hole's note on that harp in its place ("F#6");
-  **Aa** the text size, and Scroll scrolls by itself, as in the viewer,
+  **Aa** the text size and the theme (Auto, Light or Dark, kept for every
+  viewer page, and carried back to the chord sheet by ‹ Chord sheet), and
+  Scroll scrolls by itself, as in the viewer,
   each with its word under it (Shapes, Notes, Text, Scroll). On a laptop it is
   a toolbar under the tab's title, as the viewer's.
 - **Full screen**, as the viewer's: a double tap beside the tab (in its
@@ -3857,7 +3859,8 @@ the library page link it, the tab's text beside it.
   page's both ways.
 
 The page keeps the harp, Notes, the text size and the scroll speed in its
-address too (`harmonica-1.html#harp=A&notes=1&fs=20`).
+address too (`harmonica-1.html#harp=A&notes=1&fs=20`), and the theme while it
+isn't Auto (`&theme=dark`).
 
 #### caracole harmonica
 

@@ -300,3 +300,39 @@ def test_the_text_size_is_as_it_was(tmp_path):
     assert up[-1][3] == "true"
     assert down[:9] == ["28 px", "26 px", "24 px", "22 px", "20 px", "18 px", "16 px", "14 px", "13 px"]
     assert low[0] == "13 px" and low[2] == "true" and low[1] == "#fs=13"
+
+
+UNREADABLE = "Intro\nthis is not a tab at all\njust words\n"
+
+
+@in_chromium
+@pytest.mark.parametrize("stem", ["124_heart-of-gold", None], ids=["read", "as written"])
+def test_the_harmonica_tabs_page_offers_the_theme_and_takes_it_back_to_the_sheet(tmp_path, stem):
+    from test_viewer_harptab_browser import tab
+
+    text = tab(stem) if stem else UNREADABLE
+    path = tmp_path / "Artist" / "Title" / "harmonica-1.html"
+    path.parent.mkdir(parents=True)
+    path.write_text(build_harmonica_viewer(text, title="T", tab_file="harmonica-1.txt", back="sheet.html"),
+                    encoding="utf-8")
+    url = path.as_uri()
+    with viewer(tmp_path, url) as b:
+        system(b, "light")
+        choose(b, "dark")
+        dark = b.js(STATE)
+        href = b.js("document.querySelector('a.back[data-sheet]').getAttribute('href')")
+    assert dark["theme"] == "dark" and dark["bg"] == DARK and dark["pressed"] == ["theme-dark"]
+    assert "theme=dark" in href.split("#", 1)[1], href
+    with viewer(tmp_path, url + "#theme=light") as b:
+        system(b, "dark")
+        named = b.js(STATE)
+    assert named["theme"] == "light" and named["bg"] == LIGHT, named
+    with viewer(tmp_path, url, width=320, height=640) as b:
+        b.click("#size")
+        assert b.wait("!document.getElementById('sizes').hidden")
+        box = b.js("""(() => { const r = document.getElementById('sizes').getBoundingClientRect();
+          return {left: r.left, right: r.right, page: document.documentElement.scrollWidth,
+            heights: [...document.querySelectorAll('#sizes button')].map((e) => e.getBoundingClientRect().height)};
+          })()""")
+    assert box["left"] >= 0 and box["right"] <= 320 and box["page"] <= 320, box
+    assert len(box["heights"]) == 5 and min(box["heights"]) >= 48, box
