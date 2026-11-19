@@ -3700,7 +3700,10 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   scroll by hand or a chord's card pauses it, so the page is yours to read
   until you press ▶, which stays within reach (above the card, on a phone,
   with the bar kept under the card while the song scrolls on);
-  it pauses at the end of the song too. A bigger text
+  it pauses at the end of the song too. A song a laptop shows whole in
+  columns is read in place: it scrolls only until all of it is in view,
+  under the toolbar and the pill, and stays there, the line being sung still
+  lit, until you pause or end it. A bigger text
   scrolls as much faster, so a speed keeps its pace through the song. Where
   the song has timed lyrics (LRCLIB's or Megalobiz's), the line being sung is
   lit while it scrolls: the lyrics' clock starts once the count-in is over,

@@ -2810,7 +2810,8 @@
   // once), running, or paused. While it is on, the pill steers it, above the bar's place (from 1200 px under the
   // toolbar): − and + change the speed as it runs, ❚❚ pauses and ▶ resumes (after a countdown again), × ends it; the
   // bar is out of the way while it counts down and runs (dock()). A finger on the page, the wheel, a
-  // key that scrolls, a scroll by hand, a card opening or the end of the song pauses it: the page and
+  // key that scrolls, a scroll by hand, a card opening or the end of the song pauses it (a song in columns, read in
+  // place, stops moving once it is all in view and pauses by itself no more: columnsEnd): the page and
   // the bar are yours until you press ▶, which stays within reach with the card open. The bar's Scroll (pressed
   // while it is on) closes the settings and the card, and leaves the overlay's sheet at half the screen, the bar
   // under it and the pill above it.
@@ -2922,6 +2923,19 @@
     showScroll("Scrolling in " + COUNTDOWN / 1000 + " s");
     awake();
   };
+  // A song in columns (html[data-columns] above 1: the window shows it whole, layout()), whose lines run down one
+  // column and back up the next, is read in place: the scroll goes no further than brings the sheet's top to the top
+  // of the room the controls leave it (layers.js toolbar's room, as the key map's turn in columns does, screen.js),
+  // never back up, nor past the page's end, and stays there running, the lyrics' clock going on, until ❚❚ or ×: no end
+  // of the song comes to pause it there. The page's scroll position it stops at, a whole pixel; none (Infinity) in one
+  // column.
+  const columnsEnd = () => {
+    if (!(Number(doc.dataset.columns) > 1)) return Infinity;
+    const { top } = toolbar.room(pill, dockedNow());
+    const end = document.documentElement.scrollHeight - window.innerHeight;
+    const up = Math.max(0, sheetEl.getBoundingClientRect().top - top);
+    return Math.max(0, Math.min(end, Math.round(window.scrollY + up)));
+  };
   // Each frame scrolls to a whole pixel counted from where it began, Math.round(from + travelled),
   // never a pixel on from where the page is: a browser that rounds a scroll to its device pixels
   // (WebKit at a zoom other than 100 %, bug 281786) would lose every such step and stall.
@@ -2944,12 +2958,17 @@
       if (scroll.last) {
         // A frame long in coming (a tab in the background) moves no further than a quarter second.
         scroll.travelled += (Math.min(now - scroll.last, 250) / 1000) * pace();
-        const y = Math.round(scroll.from + scroll.travelled);
+        let y = Math.round(scroll.from + scroll.travelled);
+        const most = columnsEnd();
+        if (y > most) {  // held there: on from it at once should the columns go (a window made narrower)
+          y = most;
+          scroll.travelled = most - scroll.from;
+        }
         if (y !== Math.round(scroll.at)) {
           window.scrollTo(0, y);
           scroll.at = window.scrollY;
         }
-        if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) {
+        if (most === Infinity && window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) {
           pauseScroll("Paused · end of song");
           return;
         }

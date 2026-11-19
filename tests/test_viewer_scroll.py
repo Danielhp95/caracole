@@ -362,6 +362,62 @@ def test_paused_or_at_the_end_the_bar_is_back_under_the_pill(tmp_path):
     assert end_at["foot"] <= end_at["pill"][1]  # the song's end clear of both
 
 
+# A song a laptop shows whole in two columns (1280 × 900, the rail of necks hidden): six verses of four lines, each
+# line its own words, timed a line every 0.4 s.
+COLUMN_LINES = [f"{a} {b} over the {c}" for a, b, c in zip(
+    ("Amber", "Birch", "Cedar", "Dune", "Ember", "Fjord", "Grove", "Harbor", "Island", "Juniper", "Kelp", "Lagoon",
+     "Meadow", "Nectar", "Orchard", "Pebble", "Quarry", "River", "Summit", "Tundra", "Upland", "Valley", "Willow",
+     "Yarrow"),
+    ("lanterns", "shadows", "whispers", "embers", "ribbons", "kettles", "pennies", "sparrows", "candles", "mittens",
+     "pillows", "baskets", "fiddles", "anchors", "buttons", "marbles", "ladders", "saddles", "thimbles", "wagons",
+     "barrels", "feathers", "goblets", "hammers"),
+    ("harbor", "island", "meadow", "valley", "river", "summit", "orchard", "lagoon", "quarry", "tundra", "upland",
+     "willow", "grove", "dune", "cedar", "birch", "amber", "ember", "fjord", "juniper", "kelp", "nectar", "pebble",
+     "yarrow"))]
+COLUMNS = "{title: Column Song}\n{artist: Synthetic}\n" + "".join(
+    f"{{comment: Verse {n + 1}}}\n" + "".join(f"[G]{COLUMN_LINES[4 * n + m]} [D]now\n" for m in range(4))
+    for n in range(6))
+COLUMN_TIMED = [(0.4 * k, line + " now") for k, line in enumerate(COLUMN_LINES)]
+LIT = "[...document.querySelectorAll('#sheet section.sec > p.l')].findIndex((l) => l.classList.contains('sung'))"
+# Where the page is, what autoscroll says, how many of the sheet's lines are not wholly in the window, and the
+# sheet's top beside the top of the room the controls leave it (layers.js toolbar.room(): from 1200 px the toolbar's
+# height and the pill under it).
+IN_VIEW = """(() => { const bar = document.getElementById('bar'), pill = document.getElementById('pill');
+  const under = parseFloat(document.documentElement.style.getPropertyValue('--toolbar-bottom')) || 0;
+  const room = bar.getBoundingClientRect().height + Math.max(0, pill.getBoundingClientRect().bottom - under);
+  const out = [...document.querySelectorAll('#sheet p, #sheet pre')].map((el) => el.getBoundingClientRect())
+    .filter((r) => r.top < -1 || r.bottom > innerHeight + 1).length;
+  return {y: scrollY, state: pill.dataset.state, status: document.getElementById('scroll-status').textContent, out,
+          top: document.getElementById('sheet').getBoundingClientRect().top, room}; })()"""
+
+
+@in_chromium
+def test_in_columns_it_scrolls_no_further_than_brings_the_sheet_to_the_top_and_the_line_lit_goes_on(tmp_path):
+    # A song in columns reads down one column and back up the next: a scroll to the page's end would carry the first
+    # column's lines and the next one's first lines out of view. It goes as far as the key map's turn does (the
+    # sheet's top at the top of the room the controls leave) and no further; the song is read in place there, the
+    # lyrics' clock going on, and it pauses by itself no more: ❚❚ and × as ever.
+    url = pages.written(tmp_path, COLUMNS, "Title", timed=COLUMN_TIMED) + "#speed=30&necks=0"
+    with viewer(tmp_path, url, width=1280, height=900, mobile=False) as b:
+        assert b.js("document.documentElement.dataset.columns") == "2"
+        first = b.js(IN_VIEW)
+        start_now(b)
+        assert b.wait(f"{LIT} >= 16", 12)  # 6.4 s on, at 60 px a second: far past where the sheet's top comes up
+        capped = b.js(IN_VIEW)
+        assert b.wait(f"{LIT} >= 22", 10)
+        later = b.js(IN_VIEW)
+        b.click("#go")
+        paused = b.js(IN_VIEW)
+        b.click("#pill-end")
+        ended = b.js(IN_VIEW)
+    assert first["out"] > 0 and first["y"] == 0  # the title over it: its last lines below the window
+    assert capped["state"] == "running" and capped["status"] == "Scrolling" and capped["y"] > 0
+    assert capped["out"] == 0 and abs(capped["top"] - capped["room"]) <= 1, capped  # every line in view
+    assert later["state"] == "running" and later["y"] == capped["y"] and later["out"] == 0  # it stays put
+    assert paused["state"] == "paused" and paused["y"] == capped["y"]
+    assert ended["state"] == "off"
+
+
 @in_chromium
 def test_it_scrolls_to_rounded_targets_so_no_step_is_lost_at_a_zoom(tmp_path):
     # Speed 30 is 60 px a second at the usual text size, and a bigger text scrolls faster in
