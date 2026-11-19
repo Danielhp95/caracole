@@ -3010,13 +3010,18 @@
     drawNecks();
   };
   $("scroll").addEventListener("click", () => {
+    // Pressed by the keyboard (its own focus, which a pointer's press never gives it: screen.js steer), its focus would
+    // go as the bar hides: the pill's ▶ takes it, to be pressed again, or Enter, to start at once. Pressed by the key
+    // map (toggle(), the focus on the page or full screen's handle), it leaves the focus where it is, so that a
+    // pedal's next Space or Enter is the map's again, once however long it is held, never ▶'s own press.
+    const keyed = document.activeElement === $("scroll");
     // The overlay's sheet stays, at half the screen, the song moving above it; and so does full screen, where the key
     // map's Space presses it (the bar hidden).
     closeAll(necksEl, handle);
     halfSheet();
     close(sizes, false);
     countdown();
-    go.focus({ preventScroll: true });  // press it again, or Enter, to start at once
+    if (keyed) go.focus({ preventScroll: true });
   });
   go.addEventListener("click", () => {
     if (scroll.state !== "running") halfSheet();  // the pill's ▶, as the bar's Scroll

@@ -1446,13 +1446,17 @@ It is rows.js's, shared by both pages:
     1200 px below the toolbar's height, its bottom once stuck, and the pill under it; narrower above the bar's place,
     slid away or not, the pill and a docked layer; the bar nothing in full screen), keeping `KEPT` (2) of the
     sheet's lines (`p`, `pre`) wholly in view, the second-last to the top or the second to the foot (two alone where
-    that moves the page a line or more), else by the room less `KEPT` lines of `LINE` (2.6) em, half of it at least;
+    that moves the page a line or more), else by the room less `KEPT` lines of `LINE` (2.6) em, half of it at least,
+    once however long held (a key repeat's `keydown` prevented and nothing more);
     a song in columns (`html[data-columns]` above 1, the whole song shown: viewer.js `layout()`), its lines in order
     down one column and up the next, at most to bring `#sheet`'s top to the room's top, never back, and up to the
     page's top (test_viewer_keys.py's columns test): one `scrollTo` to a whole pixel, never smooth;
   - `steer`, the bar's `#scroll` and the pill's buttons: a pointer's press takes no focus (`pointerdown` and
     `mousedown` prevented, the click as ever), so the next Space or Enter stays the map's, never a tapped +'s press
     again; the keyboard reaches them by Tab as ever, and layer openers (⋯, Aa, the key) take the focus as before;
+    `#scroll` gives the pill's `#go` the focus only when it had it as it was pressed (the keyboard's own press, its
+    focus going as the bar hides: viewer.js, harptab.js), never when `toggle()` pressed it, so a pedal's held Enter
+    stays the map's, one toggle (test_viewer_keys.py's pedal test);
   - left alone: another handler's key (`defaultPrevented`: a chord's or a hole's Space, the rail tabs' arrows), an
     input method's, Alt, Ctrl, Meta or Shift, a text field with the focus, and `busy()` (viewer.js: the focus in a
     layer of the stack, `#sizes`, `#tip`, `#necks` or a dialog; harptab.js: `#sizes`, `#necks`, `#version-list`;

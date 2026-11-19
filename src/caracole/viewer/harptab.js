@@ -722,10 +722,11 @@
     drawRail();
   };
   $("scroll").addEventListener("click", () => {
+    const keyed = document.activeElement === $("scroll");  // pressed by the keyboard: its focus to ▶, as the viewer's
     closeLayer("sizes", false);
     halfSheet();
     countdown();
-    go.focus({ preventScroll: true });
+    if (keyed) go.focus({ preventScroll: true });
   });
   go.addEventListener("click", () => {
     if (scroll.state !== "running") halfSheet();  // the pill's ▶, as the bar's Scroll

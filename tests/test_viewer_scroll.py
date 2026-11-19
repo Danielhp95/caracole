@@ -226,9 +226,10 @@ def test_it_starts_three_seconds_after_start_or_at_once_when_pressed_again(tmp_p
         assert b.wait("window.seen.length === 3 && moves.length > 0", 10)
         again = b.js("window.seen[2]")
 
-    # The pill takes the bar's place, counting down on its first button, which has the focus:
-    # press it again to start at once.
-    assert counting["pill"] and not counting["bar"] and counting["focus"] == "go"
+    # The pill takes the bar's place, counting down on its first button: press it again to start at once. Pressed by
+    # the mouse, Scroll leaves the focus where it was (pressed from the keyboard, the pill's ▶ takes it:
+    # test_the_pill_answers_the_keyboard).
+    assert counting["pill"] and not counting["bar"] and counting["focus"] == ""
     assert counting["go"] == "Start" and counting["tick"] == "3" and counting["icons"] == ["ring", "tick"]
     assert counting["status"] == "Scrolling in 3 s" and counting["y"] == 0
     assert ring == "drain"  # the ring empties as the seconds pass
@@ -305,7 +306,7 @@ def test_a_touch_a_wheel_a_key_or_a_scroll_by_hand_pauses_and_keeps_the_pill(tmp
 
         b.click("#go")
         b.click("#go")
-        key(b, "PageDown", 34)  # with the focus on the pill's button, which scrolls the page all the same
+        key(b, "PageDown", 34)  # the key map's: a pause, then a turn
         keyed = look(b)
 
         b.click("#go")

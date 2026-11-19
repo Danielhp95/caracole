@@ -3722,10 +3722,13 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   or ↓ turns a screen, the last two lines wholly in view coming to the top,
   clear of the bar and the pill (on a laptop, under the toolbar); PageUp or
   ↑ turns back, the first two going to the foot; any of them pauses a
-  scroll. A song a laptop shows whole in columns turns down only as far as
+  scroll. Held down, a key does its thing once: one turn, one start or stop.
+  A song a laptop shows whole in columns turns down only as far as
   brings all of it into view, and back up to the top. Tapping Scroll or one
-  of the pill's buttons leaves the keys to the pedal (from the keyboard, Tab
-  reaches them as ever). In a songbook ← and → change songs, as ever. They
+  of the pill's buttons, or starting the scroll with Space or Enter, leaves
+  the keys to the pedal (from the keyboard, Tab reaches them as ever, and
+  Scroll pressed with Enter puts the focus on the pill's first button). In a
+  songbook ← and → change songs, as ever. They
   do nothing while the settings, a chord's card, Aa, a menu, the rail of
   necks or a text field has the focus (each keeps its own keys), nor with
   Alt, Ctrl, Shift or ⌘ held, but all of them work in full screen; no key

@@ -86,6 +86,18 @@ def press(b: Browser, name: str) -> None:
         key(b, name, CODES[name])
 
 
+def hold(b: Browser, name: str, repeats: int = 4) -> None:
+    """``name`` held down where the focus is, as a pedal or a finger holds it: its key down, then ``repeats`` more of
+    the key repeat's (``KeyboardEvent.repeat``), then up. Space and Enter with their text, as Browser.press sends
+    them, so that a focused button presses itself on each."""
+    code, text = {" ": ("Space", " "), "Enter": ("Enter", "\r")}.get(name, (name, None))
+    number = {" ": 32, "Enter": 13}.get(name) or CODES[name]
+    for n in range(repeats + 1):
+        b.send("Input.dispatchKeyEvent", type="keyDown", key=name, code=code, windowsVirtualKeyCode=number,
+               autoRepeat=n > 0, **({"text": text} if text else {}))
+    b.send("Input.dispatchKeyEvent", type="keyUp", key=name, code=code, windowsVirtualKeyCode=number)
+
+
 def settled(b: Browser) -> None:
     """Two frames on: what the page does as it hears of a scroll (the toolbar's edge, the bar slid) is done."""
     b.js("new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))")
@@ -158,6 +170,28 @@ def test_pagedown_turns_a_screen_keeping_two_lines_and_pageup_turns_back(tmp_pat
     assert status == "off"  # a turn starts nothing
 
 
+@pytest.mark.parametrize("name", ["PageDown", "ArrowDown", "PageUp"])
+def test_a_page_key_held_turns_once(tmp_path, name):
+    # A pedal or a finger held on a page key sends it again and again, the key repeat's: one turn however long it is
+    # held, as Space and Enter start or stop once; the repeats are still the map's (no screen of the browser's own).
+    with opened(tmp_path, written(tmp_path, LONG)) as b:
+        blur(b)
+        press(b, "PageDown")  # from a place a turn back can go back from
+        press(b, "PageDown")
+        start = b.js("scrollY")
+        press(b, name)
+        settled(b)
+        once = b.js("scrollY")
+        b.js(f"scrollTo(0, {start})")
+        settled(b)
+        b.js(HEARD)
+        hold(b, name)
+        settled(b)
+        held, heard = b.js("scrollY"), b.js("heard")
+    assert once != start and held == once, (start, once, held)
+    assert heard == [[name, True]] * 5  # each taken, the first alone turning
+
+
 def test_a_screen_of_too_few_whole_lines_turns_by_its_height_less_two_lines(tmp_path):
     # Text drawn at 40 px on a phone: each line of this sheet wraps to some 340 px, two at most whole in view, filling
     # it. A turn goes on by the room less two lines' worth of the text's size (a chord row and its words, 2.6 em
@@ -217,13 +251,34 @@ def test_space_and_enter_start_and_stop_autoscroll(tmp_path):
     assert heard == [[" ", True], [" ", True], ["Enter", True], ["Enter", True]]
 
 
+@pytest.mark.parametrize("page", ["sheet", "harmonica"])
+def test_a_pedal_keeps_its_keys_once_it_started_the_scroll_and_a_held_enter_toggles_once(tmp_path, page):
+    # Pressed by the map, the bar's Scroll gives the pill's ▶ no focus (the keyboard's own press of a focused Scroll
+    # alone does, its focus going as the bar hides): each Space after it is the map's again, and a pedal that sends a
+    # held Enter, its key repeating, toggles once, never pause and count-in over and over as ▶'s own presses would.
+    url = written(tmp_path, LONG) if page == "sheet" else harmonica_written(tmp_path, tab("588_hotel-california"))
+    with opened(tmp_path, url) as b:
+        b.js(HEARD)
+        b.js("window.pressed = 0; document.addEventListener('click', (e) => {"
+             " if (e.target.closest && e.target.closest('#scroll, #go')) pressed += 1; }, true)")
+        seen = []
+        for _ in range(3):  # no blur between them: where the keys leave the focus
+            press(b, " ")
+            seen.append([b.js(STATE), b.js("document.activeElement === document.body")])
+        b.js("pressed = 0; heard.length = 0")
+        hold(b, "Enter")
+        held = [b.js(STATE), b.js("pressed"), b.js("heard")]
+    assert seen == [["counting", True], ["running", True], ["paused", True]]
+    assert held == ["counting", 1, [["Enter", True]] * 5]
+
+
 @pytest.mark.parametrize("size", [PHONE, LAPTOP], ids=["finger", "mouse"])
 def test_a_pill_button_pressed_by_hand_leaves_the_next_space_to_the_map(tmp_path, size):
     # A browser focuses a button tapped or clicked: the pedal's next Space would press + again rather than pause.
     with opened(tmp_path, written(tmp_path, LONG), **size) as b:
         blur(b)
         press(b, " ")
-        press(b, " ")  # the focus on the pill's ▶: its own press, at once
+        press(b, " ")  # the map's again: at once
         assert b.js(STATE) == "running"
         blur(b)
         if size["mobile"]:
@@ -243,7 +298,7 @@ def test_a_page_key_while_it_scrolls_pauses_it_and_turns(tmp_path):
     with opened(tmp_path, written(tmp_path, LONG)) as b:
         blur(b)
         press(b, " ")
-        press(b, " ")  # the focus on the pill's ▶ now: its own press, at once
+        press(b, " ")  # the map's again: at once
         assert b.js(STATE) == "running"
         assert b.wait("scrollY > 40")
         before, after, _ = turned(b, "PageDown")
@@ -407,7 +462,7 @@ def test_a_songbook_turns_by_page_keys_and_changes_songs_by_arrows(tmp_path):
         press(b, " ")  # counting in, the room for the pill under the song: near its end meanwhile
         b.js("scrollTo(0, document.documentElement.scrollHeight - innerHeight - 20)")
         settled(b)
-        press(b, " ")  # the pill's ▶ has the focus: at once
+        press(b, " ")  # at once
         ended = b.wait("document.getElementById('scroll-status').textContent === 'Paused · end of song'", 5)
     assert stayed and ys[-1] == ys[-2] > 0 and title == "Two" and ended
 
