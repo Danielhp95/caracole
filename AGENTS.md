@@ -2529,12 +2529,17 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   inlined file's hash, `ViewerAssets.Page.SHEET`), `viewerCsp` its header, and the frame book.py and harptab_page.py
   reuse, under Python's names (`page`, `readSong`, `songHtml`, `sheetHtml`, `preambleHtml`, `sectionHtml`, `factsHtml`,
   `footer`, `namesTable`, `zhAttr`, `artistLine`, `pdfLine`, `words`, `CONTROLS`, `LIBRARY_PAGE`).
+  - `build` takes the song's `timed` lyrics (`ViewerInputs.timed`, Lyrics.syncedLines' `(seconds, text)`) and puts
+    their match to the lines it draws (`SheetView.drawnLines`) last in its data, `sung`, `[ms, n or null]` each:
+    `viewer.sung.Sung` is sung.py's (`lineKey`: Normalize.romanize then `nameWords`; `lines`: the longest monotone
+    match by Fuzz.ratio, a time PyFormat.roundHalfEven's), its numbers page.json's `sung` (`PageConstants.SUNG_*`).
   - Its HTML and constants are page.py's, data/caracole/viewer/page.json, which tests/test_conformance_viewer_pages.py
     writes from the module (`_CONTROLS`, `_SHEET_CONTROLS`, `_VERSIONS`…, chords-db's notice, `_META_POLICY` run over
     a page's bytes read as Latin-1); its icon page/icon.json's; `build_version` is Python's alone.
-  - `PagesReplay` (area `pages`): vectors/viewer/pages_parts.jsonl (the frame, function by function), pages-1.jsonl to
-    pages-6.jsonl (every corpus sheet's page with every option, as digests: the page, its body, each data member, its
-    names) and page_whole.json (a small page whole, the files it inlines by name).
+  - `PagesReplay` (area `pages`): vectors/viewer/pages_parts.jsonl (the frame, function by function, and sung.py's
+    `line_key` and `sung_lines`, SungTest its cases by hand), pages-1.jsonl to pages-6.jsonl (every corpus sheet's
+    page with every option, as digests: the page, its body, each data member, its names) and page_whole.json (a small
+    page whole, the files it inlines by name).
   - A page record is the generator's `page_out` and `PagesReplay.out`: `sha256` and `size` of the whole page, `body`
     and `names` as their SHA-256's first 16 hex digits, `data` one string of `member=digest` in the data's order (8 hex
     digits each), so that it pins the members' order too; another lane's page records take that shape.
@@ -2564,7 +2569,9 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   render_all's for the song (`SongPass`: the kept versions' pages, each sheet's .cho and page, an auto sheet's beside
   the human one with no export and none of its shapes and swaps, the harmonica tabs' pages whatever came of the
   sheets, with HarpFit.tabHarps, a viewer's `guitar` from GuitarFiles, inbox.guitar_files' port, and its `kinds`,
-  `_kinds_data`'s, each source's name from `page/empty_library.json`'s `icons`, `PhoneRender.sourceName`), after
+  `_kinds_data`'s, each source's name from `page/empty_library.json`'s `icons`, `PhoneRender.sourceName`, and the
+  song's timed lyrics, `_timed_lyrics`' read once a song, `lyricsFromJson` then `Lyrics.syncedLines`, none for lyrics
+  it can't read, given every page of its sheets and versions), after
   `PlainLyrics` (sheet_lyrics.py) and `OwnVersions` (own_versions_upgraded); a song the mirror serves gets its
   progressions, script and info.json alone, the phone's own pages of it forgotten.
   - `WrittenPages`: kv `render:files:<id>` as render.py records it, each entry's `unit` the song unit's digest it was

@@ -11,6 +11,8 @@ import io.github.danielhp95.caracole.core.library.KeptFile
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.SongRow
+import io.github.danielhp95.caracole.core.lyrics.Lyrics
+import io.github.danielhp95.caracole.core.lyrics.lyricsFromJson
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.py.PyInt
 import io.github.danielhp95.caracole.core.py.PyRe
@@ -47,10 +49,11 @@ import io.github.danielhp95.caracole.core.library.Versions as Rows
 /**
  * One song's pass of render.py's page path with no PDF (`_render_song` and what it calls), as the phone makes a song's
  * pages: the pages of the versions kept beside the sheet, each sheet's .cho and page (the human one, then an auto one
- * beside it, or alone), then the pages of its harmonica tabs, whatever came of the sheets; every file written only when
- * its bytes change and recorded at the unit digest [unit] (WrittenPages), a page that leaves forgotten, deleted while it
- * is as written. [facts] alone records what the library finds the song by (its progressions and its sheet's script),
- * for a song whose pages the mirror serves.
+ * beside it, or alone), then the pages of its harmonica tabs, whatever came of the sheets; each page of its sheets and
+ * of its versions lights its lines by the song's timed lyrics (render._timed_lyrics, read once); every file written only
+ * when its bytes change and recorded at the unit digest [unit] (WrittenPages), a page that leaves forgotten, deleted
+ * while it is as written. [facts] alone records what the library finds the song by (its progressions and its sheet's
+ * script), for a song whose pages the mirror serves.
  *
  * What fails a page is said in render.py's words ([failures], the first the song's why), and costs the song's other
  * pages nothing; a sheet that can't be read is a [RenderError], which stops the song's sheets (its tabs' pages are
@@ -127,7 +130,9 @@ internal class SongPass(
         // What else it keeps to play from, which the pages of its sheet and of its versions name (not an auto sheet's
         // beside a human one, which lists no version either)
         val kinds = kindsData(files, tabs)
-        renderVersions(files, versions, listed, guitar, kinds)
+        // Its timed lyrics, which each of its pages matches to its own sheet's lines (Sung)
+        val timed = timedLyrics()
+        renderVersions(files, versions, listed, guitar, kinds, timed)
         val (humanKey, autoKey) = if (human != null || auto != null) MusicKeys.sheetKeys(db, libraryDir, song.id)
                                   else null to null
         val chosen = versions.firstOrNull { it.chosen }?.tabId
@@ -153,7 +158,8 @@ internal class SongPass(
                             val harp = harps[(h["name"] as JsonPrimitive).content]
                             if (harp == null) h else JsonObject(LinkedHashMap(h).apply { put("harp", JsonPrimitive(harp)) })
                         },
-                        video = video, viewerText = if (video != null) Sources.cho(song, sheet, credit = false) else null)
+                        video = video, viewerText = if (video != null) Sources.cho(song, sheet, credit = false) else null,
+                        timed = timed)
         }
 
         try {
@@ -186,6 +192,18 @@ internal class SongPass(
             }
             renderHarmonica(tabs, files, primary, back, listed, kinds)
         }
+    }
+
+    /** render._timed_lyrics: the song's timed lyrics, its stored lyrics' LRC as Lyrics.syncedLines reads it
+     * (`(seconds, text)`, in time order), which its pages match to their lines; none for a song with no lyrics, or none
+     * timed, or whose stored lyrics can't be read (no JSON object, a stamp past what a float holds: Python's TypeError,
+     * ValueError and OverflowError, an [IllegalArgumentException] or an [ArithmeticException] here). */
+    private fun timedLyrics(): List<Pair<Double, String>> = try {
+        lyricsFromJson(song.lyricsJson)?.synced?.takeIf { it.isNotEmpty() }?.let(Lyrics::syncedLines) ?: emptyList()
+    } catch (_: IllegalArgumentException) {
+        emptyList()
+    } catch (_: ArithmeticException) {
+        emptyList()
     }
 
     /** render._versions_data: what every page of the song says of its UG chords versions (sheet_versions.as_data with
@@ -313,19 +331,19 @@ internal class SongPass(
 
     // --- the versions kept beside the sheet ---------------------------------------------------------------------------
 
-    /** render._render_versions: a page for each version kept beside the sheet, `version-<tab>.html`; the page of one
-     * no longer kept goes while it is as written. */
+    /** render._render_versions: a page for each version kept beside the sheet, `version-<tab>.html`, lighting its own
+     * lines by the song's [timed] lyrics; the page of one no longer kept goes while it is as written. */
     private fun renderVersions(files: Map<String, KeptFile>, versions: List<SheetVersion>, listed: JsonObject?,
-                               guitar: List<String>, kinds: JsonObject) {
+                               guitar: List<String>, kinds: JsonObject, timed: List<Pair<Double, String>>) {
         val pages = LinkedHashMap<String, SheetVersion>()
         for (v in versions) if (v.page != null && v.page == SheetVersions.versionNames(v.tabId).third) pages[v.page!!] = v
-        for ((page, v) in pages) renderVersion(files, v, page, onPage(listed, v.tabId), guitar, kinds)
+        for ((page, v) in pages) renderVersion(files, v, page, onPage(listed, v.tabId), guitar, kinds, timed)
         val left = WrittenPages.record(db, song.id).keys.filter { SheetVersions.tabOf(it) != null && it !in pages }
         WrittenPages.forget(db, song.id, left, folder)
     }
 
     private fun renderVersion(files: Map<String, KeptFile>, v: SheetVersion, page: String, listed: JsonObject?,
-                              guitar: List<String>, kinds: JsonObject) {
+                              guitar: List<String>, kinds: JsonObject, timed: List<Pair<Double, String>>) {
         val doc = SheetVersions.versionNames(v.tabId).second
         val kept = files[doc] ?: return fail("$doc isn't kept")
         val raw = Sources.raw(db, kept.versionId)
@@ -337,7 +355,8 @@ internal class SongPass(
         val found = MusicKeys.sheetKey(raw, sheet.markup, sheet.capo)
         val text = ChordPro.chordProText(sheet.markup, Normalize.cleanTitle(song.title), song.artist, sheet.key, sheet.capo)
         val data = writeViewer(text, page, ViewerInputs(text, key = found?.key, keySource = found?.source, export = false,
-                                                        versions = listed, guitar = guitar, kinds = kinds)) ?: return
+                                                        versions = listed, guitar = guitar, kinds = kinds,
+                                                        timed = timed)) ?: return
         WrittenPages.note(db, song.id, page, data, unit)
     }
 
@@ -345,10 +364,11 @@ internal class SongPass(
 
     /** render._render_sheet, no PDF: the sheet's .cho ([text]), its progressions when it is the song's [primary]
      * sheet, then its page, in the song's own version [played] (from [start]), naming the song's other [kinds] (none
-     * beside a human sheet). */
+     * beside a human sheet), lighting its lines by the song's [timed] lyrics. */
     private fun renderSheet(kept: KeptFile, text: String, played: Version, start: String?, key: SongKey?,
                             export: Boolean, primary: Boolean, versions: JsonObject?, kinds: JsonObject?,
-                            guitar: List<String>, harmonica: List<JsonObject>, video: JsonObject?, viewerText: String?) {
+                            guitar: List<String>, harmonica: List<JsonObject>, video: JsonObject?, viewerText: String?,
+                            timed: List<Pair<Double, String>>) {
         val (cho, _, page) = RenderNames.SHEET_OUTPUTS.getValue(kept.name)
         val data = text.toByteArray(Charsets.UTF_8)
         if (LibraryReads.writeIfChanged(File(folder, cho), data)) wrote = true
@@ -358,7 +378,7 @@ internal class SongPass(
         val bytes = writeViewer(shown, page, ViewerInputs(shown, key = key?.key, keySource = key?.source,
                                                           transpose = played.t, start = start, export = export,
                                                           versions = versions, guitar = guitar, harmonica = harmonica,
-                                                          video = video, kinds = kinds)) ?: return
+                                                          video = video, kinds = kinds, timed = timed)) ?: return
         WrittenPages.note(db, song.id, page, bytes, unit)
     }
 

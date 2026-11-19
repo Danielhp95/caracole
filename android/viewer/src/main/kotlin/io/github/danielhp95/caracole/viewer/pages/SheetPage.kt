@@ -16,6 +16,7 @@ import io.github.danielhp95.caracole.viewer.sheet.Section
 import io.github.danielhp95.caracole.viewer.sheet.Sheet
 import io.github.danielhp95.caracole.viewer.sheet.SheetView
 import io.github.danielhp95.caracole.viewer.sheet.Sheets
+import io.github.danielhp95.caracole.viewer.sung.Sung
 import io.github.danielhp95.caracole.viewer.theory.Key
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -25,12 +26,14 @@ import kotlinx.serialization.json.JsonPrimitive
 import java.math.BigInteger
 
 /** page.build_viewer's arguments, in its order. [kinds] is render._kinds_data's: what else the song keeps to play
- * from, which the data holds right after its `versions`. */
+ * from, which the data holds right after its `versions`; [timed] render._timed_lyrics': the song's timed lyrics,
+ * Lyrics.syncedLines' `(seconds, text)`, which the page matches to its lines (Sung, the data's `sung`). */
 data class ViewerInputs(val cho: String, val key: String? = null, val keySource: String? = null, val transpose: Int = 0,
                         val start: String? = null, val pdf: String? = null, val export: Boolean = true,
                         val versions: JsonObject? = null, val guitar: List<String> = emptyList(),
                         val harmonica: List<JsonObject> = emptyList(), val pdfTraditional: String? = null,
-                        val video: JsonObject? = null, val kinds: JsonObject? = null)
+                        val video: JsonObject? = null, val kinds: JsonObject? = null,
+                        val timed: List<Pair<Double, String>> = emptyList())
 
 /** page._read_song: a sheet as its page shows it: the sheet read, the key of its shapes and where it came from in
  * words, and the data its block gives the script, which a caller may change before the page is written (book.py
@@ -75,6 +78,14 @@ object SheetPage {
             data["guitar"] = JsonArray(i.guitar.map(::JsonPrimitive))
             val clean = Normalize.cleanTitle(sheet.title)
             data["guitarDownload"] = JsonArray(i.guitar.map { JsonPrimitive(DownloadNames.downloadName(sheet.artist, clean, it)) })
+        }
+        if (i.timed.isNotEmpty()) {
+            // the last member: each timed line's time in ms and the drawn line it is sung on, or null
+            Sung.lines(SheetView.drawnLines(sheet), i.timed)?.let { sung ->
+                data["sung"] = JsonArray(sung.map { (ms, n) ->
+                    JsonArray(listOf(JsonPrimitive(ms), n?.let(::JsonPrimitive) ?: JsonNull))
+                })
+            }
         }
         val title = sheet.title.ifEmpty { "Untitled" }
         val pageTitle = if (sheet.artist.isNotEmpty()) "$title · ${sheet.artist}" else title
