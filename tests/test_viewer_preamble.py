@@ -193,7 +193,7 @@ def test_the_keyboard_reaches_more_after_the_title_and_opens_it(tmp_path):
                                       " : document.activeElement.closest('#necks') ? 'rail' : 'else'"))
         browser.press("Enter")
         opened_now = browser.js("document.querySelector('#sheet .pre').open")
-    # The title's own: ‹ Library and the artist's name. From 1200 px the toolbar comes right after them, under the
+    # The title's own: its ‹ (named Library) and the artist's name. From 1200 px the toolbar comes right after them, under the
     # title (− key +, Shapes, Text, Scroll, More: test_viewer_toolbar.py), then the rail of necks on the left: its tabs
     # (one stop, Guitar's), its Hide, then one stop for each of the song's six chords (the key's neck is the Harmony
     # tab's).

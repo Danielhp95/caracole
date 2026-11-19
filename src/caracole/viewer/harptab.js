@@ -25,7 +25,7 @@
   //
   // Under the artist, the song's version line and the list it opens, as on its sheet's viewer (kinds.js, inlined before
   // this script, attached below with this page's layers): "Harmonica · Tab 1 of 2", the song's kinds, and UG's
-  // versions, its other tabs and files a tap away, with the screen's choices (as ‹ Chord sheet takes them).
+  // versions, its other tabs and files a tap away, with the screen's choices (as the ‹ back to the sheet takes them).
   const $ = (id) => document.getElementById(id);
   const doc = document.documentElement;
   let data;
@@ -108,9 +108,10 @@
       if (kit) localStorage.setItem(kit.NECKS, state.necks ? "shown" : "hidden");
     } catch (err) { /* private mode, or a server's sandbox: the address keeps it */ }
   };
-  // ‹ Chord sheet takes the screen's choices back with it (the rail hidden, and as they came in the address, a sheet's
-  // viewer's link here having taken them on: the pinyin, the Chinese characters, the instrument), so that where the
-  // browser keeps nothing (caracole serve's sandbox) they go both ways. ‹ Library takes none.
+  // The ‹ back to the chord sheet (named Chord sheet) takes the screen's choices back with it (the rail hidden, and as
+  // they came in the address, a sheet's viewer's link here having taken them on: the pinyin, the Chinese characters,
+  // the instrument), so that where the browser keeps nothing (caracole serve's sandbox) they go both ways. The ‹ to the
+  // library (named Library), for a song with no sheet, takes none.
   const screenKit = window.caracoleScreen;  // screen.js, inlined in the head: the theme, the keys, the screen on
   const sheetLink = document.querySelector("a.back[data-sheet]");
   const sheetPage = sheetLink ? sheetLink.getAttribute("href") : "";
@@ -597,7 +598,7 @@
   // serve sent this page, as viewer.js tells), its versions are kept and chosen on the song's sheet (sheetPath, its
   // path in the library), none for a song with no sheet, and its Guitar Pro files open on caracole serve's Guitar Pro
   // page by the song's folder, this page's own (folder), sheet or none; each link to another of the song's pages
-  // takes the screen's choices along, as ‹ Chord sheet does.
+  // takes the screen's choices along, as the ‹ back to the sheet does.
   const served = location.protocol !== "file:" && location.hostname !== "appassets.androidplatform.net";
   const libraryPath = (() => {
     try {
@@ -722,10 +723,11 @@
     drawRail();
   };
   $("scroll").addEventListener("click", () => {
+    const keyed = document.activeElement === $("scroll");  // pressed by the keyboard: its focus to ▶, as the viewer's
     closeLayer("sizes", false);
     halfSheet();
     countdown();
-    go.focus({ preventScroll: true });
+    if (keyed) go.focus({ preventScroll: true });
   });
   go.addEventListener("click", () => {
     if (scroll.state !== "running") halfSheet();  // the pill's ▶, as the bar's Scroll

@@ -14,6 +14,8 @@ import time
 from html import unescape
 from pathlib import Path
 
+import pytest
+
 from helpers import browser
 from helpers import viewer_pages as pages
 from helpers.browser import Browser, in_chromium
@@ -226,9 +228,10 @@ def test_it_starts_three_seconds_after_start_or_at_once_when_pressed_again(tmp_p
         assert b.wait("window.seen.length === 3 && moves.length > 0", 10)
         again = b.js("window.seen[2]")
 
-    # The pill takes the bar's place, counting down on its first button, which has the focus:
-    # press it again to start at once.
-    assert counting["pill"] and not counting["bar"] and counting["focus"] == "go"
+    # The pill takes the bar's place, counting down on its first button: press it again to start at once. Pressed by
+    # the mouse, Scroll leaves the focus where it was (pressed from the keyboard, the pill's ▶ takes it:
+    # test_the_pill_answers_the_keyboard).
+    assert counting["pill"] and not counting["bar"] and counting["focus"] == ""
     assert counting["go"] == "Start" and counting["tick"] == "3" and counting["icons"] == ["ring", "tick"]
     assert counting["status"] == "Scrolling in 3 s" and counting["y"] == 0
     assert ring == "drain"  # the ring empties as the seconds pass
@@ -305,7 +308,7 @@ def test_a_touch_a_wheel_a_key_or_a_scroll_by_hand_pauses_and_keeps_the_pill(tmp
 
         b.click("#go")
         b.click("#go")
-        key(b, "PageDown", 34)  # with the focus on the pill's button, which scrolls the page all the same
+        key(b, "PageDown", 34)  # the key map's: a pause, then a turn
         keyed = look(b)
 
         b.click("#go")
@@ -360,6 +363,119 @@ def test_paused_or_at_the_end_the_bar_is_back_under_the_pill(tmp_path):
     assert counting["bar"] is None and counting["pill"] == running["pill"]
     assert end["go"] == "Resume" and end["bar"] and end_at["pill"] == running["pill"]
     assert end_at["foot"] <= end_at["pill"][1]  # the song's end clear of both
+
+
+# A song a laptop shows whole in two columns (1280 × 900, the rail of necks hidden): six verses of four lines, each
+# line its own words, timed a line every 0.4 s.
+COLUMN_LINES = [f"{a} {b} over the {c}" for a, b, c in zip(
+    ("Amber", "Birch", "Cedar", "Dune", "Ember", "Fjord", "Grove", "Harbor", "Island", "Juniper", "Kelp", "Lagoon",
+     "Meadow", "Nectar", "Orchard", "Pebble", "Quarry", "River", "Summit", "Tundra", "Upland", "Valley", "Willow",
+     "Yarrow"),
+    ("lanterns", "shadows", "whispers", "embers", "ribbons", "kettles", "pennies", "sparrows", "candles", "mittens",
+     "pillows", "baskets", "fiddles", "anchors", "buttons", "marbles", "ladders", "saddles", "thimbles", "wagons",
+     "barrels", "feathers", "goblets", "hammers"),
+    ("harbor", "island", "meadow", "valley", "river", "summit", "orchard", "lagoon", "quarry", "tundra", "upland",
+     "willow", "grove", "dune", "cedar", "birch", "amber", "ember", "fjord", "juniper", "kelp", "nectar", "pebble",
+     "yarrow"))]
+COLUMNS = "{title: Column Song}\n{artist: Synthetic}\n" + "".join(
+    f"{{comment: Verse {n + 1}}}\n" + "".join(f"[G]{COLUMN_LINES[4 * n + m]} [D]now\n" for m in range(4))
+    for n in range(6))
+COLUMN_TIMED = [(0.4 * k, line + " now") for k, line in enumerate(COLUMN_LINES)]
+LIT = "[...document.querySelectorAll('#sheet section.sec > p.l')].findIndex((l) => l.classList.contains('sung'))"
+# Where the page is, what autoscroll says, how many of the sheet's lines are not wholly in the window, and the
+# sheet's top beside the top of the room the controls leave it (layers.js toolbar.room(): from 1200 px the toolbar's
+# height and the pill under it).
+IN_VIEW = """(() => { const bar = document.getElementById('bar'), pill = document.getElementById('pill');
+  const under = parseFloat(document.documentElement.style.getPropertyValue('--toolbar-bottom')) || 0;
+  const room = bar.getBoundingClientRect().height + Math.max(0, pill.getBoundingClientRect().bottom - under);
+  const out = [...document.querySelectorAll('#sheet p, #sheet pre')].map((el) => el.getBoundingClientRect())
+    .filter((r) => r.top < -1 || r.bottom > innerHeight + 1).length;
+  return {y: scrollY, state: pill.dataset.state, status: document.getElementById('scroll-status').textContent, out,
+          top: document.getElementById('sheet').getBoundingClientRect().top, room}; })()"""
+
+
+# When the page heard the line lit last become the last timed one, and when autoscroll said it paused at the song's
+# end: ``window.marks`` (``last``, ``end``), on the page's clock.
+MARKS = """(() => {
+  window.marks = {};
+  const lines = [...document.querySelectorAll('#sheet section.sec > p.l')], status = document.getElementById('scroll-status');
+  new MutationObserver(() => {
+    if (marks.last === undefined && lines[lines.length - 1].classList.contains('sung')) marks.last = performance.now();
+  }).observe(document.getElementById('sheet'), {subtree: true, attributes: true, attributeFilter: ['class']});
+  new MutationObserver(() => {
+    if (marks.end === undefined && status.textContent === 'Paused · end of song') marks.end = performance.now();
+  }).observe(status, {childList: true, characterData: true, subtree: true});
+})()"""
+# Every requestAnimationFrame the page asks for from now on, counted (``window.frames``): the scroll's loop asks one a
+# frame while it runs.
+FRAMES = """(() => {
+  window.frames = 0;
+  const raf = window.requestAnimationFrame.bind(window);
+  window.requestAnimationFrame = (fn) => { frames += 1; return raf(fn); };
+})()"""
+QUIET = "new Promise((done) => { const n = frames; setTimeout(() => done(frames - n), 300); })"
+
+
+@in_chromium
+@pytest.mark.parametrize("ending", ["grace", "empty-stamp"])
+def test_in_columns_it_scrolls_no_further_than_brings_the_sheet_to_the_top_and_pauses_once_the_lyrics_end(
+        tmp_path, ending):
+    # A song in columns reads down one column and back up the next: a scroll to the page's end would carry the first
+    # column's lines and the next one's first lines out of view. It goes as far as the key map's turn does (the
+    # sheet's top at the top of the room the controls leave) and no further; the song is read in place there, the
+    # lyrics' clock going on until it passes the last timed line, then it pauses as at the end of a song in one column.
+    # The last timed line sung on a line of the sheet: a grace after it, the gaps' median, 3 s at least; LRCLIB's empty
+    # stamp at the end of a song's lyrics (sung nowhere): its time.
+    timed = COLUMN_TIMED + ([(10.0, "")] if ending == "empty-stamp" else [])
+    url = pages.written(tmp_path, COLUMNS, "Title", timed=timed) + "#speed=30&necks=0"
+    with viewer(tmp_path, url, width=1280, height=900, mobile=False) as b:
+        assert b.js("document.documentElement.dataset.columns") == "2"
+        first = b.js(IN_VIEW)
+        b.js(MARKS)
+        start_now(b)
+        assert b.wait(f"{LIT} >= 16", 12)  # 6.4 s on, at 60 px a second: far past where the sheet's top comes up
+        capped = b.js(IN_VIEW)
+        assert b.wait(f"{LIT} >= 22", 10)
+        later = b.js(IN_VIEW)
+        assert b.wait("window.marks.end !== undefined", 10)
+        ended, lit, marks = b.js(IN_VIEW), b.js(LIT), b.js("window.marks")
+        b.click("#pill-end")
+        off = b.js(IN_VIEW)
+    assert first["out"] > 0 and first["y"] == 0  # the title over it: its last lines below the window
+    assert capped["state"] == "running" and capped["status"] == "Scrolling" and capped["y"] > 0
+    assert capped["out"] == 0 and abs(capped["top"] - capped["room"]) <= 1, capped  # every line in view
+    assert later["state"] == "running" and later["y"] == capped["y"] and later["out"] == 0  # it stays put, running
+    assert ended["state"] == "paused" and ended["y"] == capped["y"]
+    after = marks["end"] - marks["last"]  # the last line lit at 9.2 s
+    if ending == "grace":
+        assert 2900 <= after <= 4500, marks  # 3 s on
+        assert lit == len(COLUMN_LINES) - 1  # the pause keeps it lit
+    else:
+        assert 600 <= after <= 2000, marks  # at 10 s, the empty stamp's
+        assert lit == -1  # sung nowhere, as anywhere in the song: none lit
+    assert off["state"] == "off"
+
+
+@in_chromium
+@pytest.mark.parametrize("width", [1280, 1150], ids=["toolbar", "bar-at-the-foot"])
+def test_in_columns_a_song_with_no_timed_lyrics_pauses_once_the_sheet_reaches_the_top(tmp_path, width):
+    # Nothing to read in place by: there it pauses at the song's end, as a song in one column does at the page's, so the
+    # screen goes back to its minutes, the bar comes back (below 1200 px, where it hid while it scrolled) and the loop
+    # stops.
+    url = pages.written(tmp_path, COLUMNS, "Title") + "#speed=30&necks=0"
+    with viewer(tmp_path, url, width=width, height=900, mobile=False) as b:
+        assert b.js("document.documentElement.dataset.columns") == "2"
+        b.js(FRAMES)
+        start_now(b)
+        assert b.wait("document.getElementById('scroll-status').textContent === 'Paused · end of song'", 10)
+        ended = b.js(IN_VIEW)
+        bar = b.js("(() => { const bar = document.getElementById('bar');"
+                   " return !bar.hidden && bar.getClientRects().length > 0 && !bar.hasAttribute('data-asleep'); })()")
+        quiet = b.js(QUIET)
+    assert ended["state"] == "paused" and ended["y"] > 0 and ended["out"] == 0, ended
+    if width >= 1200:
+        assert abs(ended["top"] - ended["room"]) <= 1, ended  # the sheet's top under the toolbar and the pill
+    assert bar and quiet == 0
 
 
 @in_chromium

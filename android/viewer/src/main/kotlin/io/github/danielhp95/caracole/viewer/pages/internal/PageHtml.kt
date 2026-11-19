@@ -63,15 +63,19 @@ internal object PageHtml {
     /** facts_html: the song's facts under its title, for the sheet as written on the guitar: a `dl.facts` (`#facts`,
      * a songbook's song's `#facts-N` by [suffix]) of its Tuning ([tuning], the one the sheet's notes name, else
      * [GUITAR_STRINGS]), its Capo ("none", or its fret) and, where it has one, its Key (the key alone with no capo;
-     * with one, the shapes' key and the one the song sounds in), each a `div.fact` of a `dt` and a `dd`; "" for a sheet
-     * with no [chords]. */
+     * with one, the shapes' key and the one the song sounds in), each a `div.fact` of a `dt` and a `dd`; for a sheet
+     * with no [chords] (a tab alone), its Capo line alone where it names a capo, else "". */
     fun factsHtml(key: Key?, origin: String?, capo: Int, tuning: String?, chords: Boolean, suffix: String = ""): String {
-        if (!chords) return ""
-        val rows = mutableListOf(
-            Triple("tuning", "Tuning", escape(tuning?.takeIf { it.isNotEmpty() } ?: GUITAR_STRINGS)),
-            Triple("capo", "Capo", if (capo != 0) capo.toString() else "none"),
-        )
-        if (key != null) {
+        val rows = if (!chords) {
+            if (capo != 0) mutableListOf(Triple("capo", "Capo", capo.toString())) else mutableListOf()
+        } else {
+            mutableListOf(
+                Triple("tuning", "Tuning", escape(tuning?.takeIf { it.isNotEmpty() } ?: GUITAR_STRINGS)),
+                Triple("capo", "Capo", if (capo != 0) capo.toString() else "none"),
+            )
+        }
+        if (rows.isEmpty()) return ""
+        if (chords && key != null) {
             val source = escape(origin ?: "")
             val said = if (capo == 0) {
                 "<b>${escape(Theory.keyName(key))}</b>" +

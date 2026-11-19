@@ -996,10 +996,11 @@
   // one that takes a capo ("none", or its fret), Key where the sheet has one (keyFacts, how far the chords you see
   // moved said after the key it sounds in, as the bar says it: " (+1)"), and the instrument's own line where its
   // script gives one (instruments.js register's header), the instrument's name its label: "Harmonica  G harp (1st
-  // position) · C harp (2nd)". A sheet with no chords has no facts, and nothing is drawn.
+  // position) · C harp (2nd)". A sheet with no chords (a tab alone), with nothing to transpose or to play on another
+  // instrument, keeps what page.py wrote: its Capo line as written, where it names a capo, else no facts.
   const drawFacts = () => {
     const box = $("facts");
-    if (!box) return;
+    if (!box || count === 0) return;
     box.textContent = "";
     const fact = (name, label) => {
       const row = box.appendChild(document.createElement("div"));
@@ -2810,7 +2811,8 @@
   // once), running, or paused. While it is on, the pill steers it, above the bar's place (from 1200 px under the
   // toolbar): − and + change the speed as it runs, ❚❚ pauses and ▶ resumes (after a countdown again), × ends it; the
   // bar is out of the way while it counts down and runs (dock()). A finger on the page, the wheel, a
-  // key that scrolls, a scroll by hand, a card opening or the end of the song pauses it: the page and
+  // key that scrolls, a scroll by hand, a card opening or the end of the song pauses it (a song in columns, read in
+  // place, stops moving once it is all in view, and pauses there once its timed lyrics are over: columnsEnd): the page and
   // the bar are yours until you press ▶, which stays within reach with the card open. The bar's Scroll (pressed
   // while it is on) closes the settings and the card, and leaves the overlay's sheet at half the screen, the bar
   // under it and the pill above it.
@@ -2881,10 +2883,23 @@
     else if (sungClock.since === null) goClock();
   });
   let lit = null;
+  const clockNow = () => sungClock.at + (sungClock.since === null ? 0 : performance.now() - sungClock.since);
+  // When the lyrics are over, on their clock: the last timed line's time where the sheet sings it nowhere (LRCLIB's
+  // empty stamp at the lyrics' end, which marks the song's end), else the last timed line's and a grace after it, the
+  // median gap between timed lines, 3 s at least, for that line to be sung; 0 for a song with no timed lyrics.
+  const SUNG_END = (() => {
+    if (!SUNG.length) return 0;
+    const [last, n] = SUNG[SUNG.length - 1];
+    if (n === null) return last;
+    const gaps = SUNG.slice(1).map((e, i) => e[0] - SUNG[i][0]).sort((a, b) => a - b);
+    const half = Math.floor(gaps.length / 2);
+    const median = !gaps.length ? 0 : gaps.length % 2 ? gaps[half] : (gaps[half - 1] + gaps[half]) / 2;
+    return last + Math.max(3000, median);
+  })();
   const lightSung = () => {
     let line = null;
     if (scroll.state !== "off" && sungClock.started) {
-      const now = sungClock.at + (sungClock.since === null ? 0 : performance.now() - sungClock.since);
+      const now = clockNow();
       for (const [ms, n] of SUNG) {
         if (ms > now) break;
         line = n === null ? null : songLines[n];
@@ -2922,6 +2937,20 @@
     showScroll("Scrolling in " + COUNTDOWN / 1000 + " s");
     awake();
   };
+  // A song in columns (html[data-columns] above 1: the window shows it whole, layout()), whose lines run down one
+  // column and back up the next, is read in place: the scroll goes no further than brings the sheet's top to the top
+  // of the room the controls leave it (layers.js toolbar's room, as the key map's turn in columns does, screen.js),
+  // never back up, nor past the page's end, and stays there running while the lyrics' clock lights its lines, until it
+  // passes their end (SUNG_END); then, or at once for a song with no timed lyrics, it pauses at the song's end, as a
+  // song in one column does at the page's (the screen back to its minutes, the bar back, the loop stopped; the line lit
+  // stays). The page's scroll position it stops at, a whole pixel; none (Infinity) in one column.
+  const columnsEnd = () => {
+    if (!(Number(doc.dataset.columns) > 1)) return Infinity;
+    const { top } = toolbar.room(pill, dockedNow());
+    const end = document.documentElement.scrollHeight - window.innerHeight;
+    const up = Math.max(0, sheetEl.getBoundingClientRect().top - top);
+    return Math.max(0, Math.min(end, Math.round(window.scrollY + up)));
+  };
   // Each frame scrolls to a whole pixel counted from where it began, Math.round(from + travelled),
   // never a pixel on from where the page is: a browser that rounds a scroll to its device pixels
   // (WebKit at a zoom other than 100 %, bug 281786) would lose every such step and stall.
@@ -2944,12 +2973,20 @@
       if (scroll.last) {
         // A frame long in coming (a tab in the background) moves no further than a quarter second.
         scroll.travelled += (Math.min(now - scroll.last, 250) / 1000) * pace();
-        const y = Math.round(scroll.from + scroll.travelled);
+        let y = Math.round(scroll.from + scroll.travelled);
+        const most = columnsEnd();
+        if (y > most) {  // held there: on from it at once should the columns go (a window made narrower)
+          y = most;
+          scroll.travelled = most - scroll.from;
+        }
         if (y !== Math.round(scroll.at)) {
           window.scrollTo(0, y);
           scroll.at = window.scrollY;
         }
-        if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) {
+        const end = most === Infinity
+          ? window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2
+          : y >= most && clockNow() >= SUNG_END;  // in columns, at the cap once the lyrics are over
+        if (end) {
           pauseScroll("Paused · end of song");
           return;
         }
@@ -2990,13 +3027,18 @@
     drawNecks();
   };
   $("scroll").addEventListener("click", () => {
+    // Pressed by the keyboard (its own focus, which a pointer's press never gives it: screen.js steer), its focus would
+    // go as the bar hides: the pill's ▶ takes it, to be pressed again, or Enter, to start at once. Pressed by the key
+    // map (toggle(), the focus on the page or full screen's handle), it leaves the focus where it is, so that a
+    // pedal's next Space or Enter is the map's again, once however long it is held, never ▶'s own press.
+    const keyed = document.activeElement === $("scroll");
     // The overlay's sheet stays, at half the screen, the song moving above it; and so does full screen, where the key
     // map's Space presses it (the bar hidden).
     closeAll(necksEl, handle);
     halfSheet();
     close(sizes, false);
     countdown();
-    go.focus({ preventScroll: true });  // press it again, or Enter, to start at once
+    if (keyed) go.focus({ preventScroll: true });
   });
   go.addEventListener("click", () => {
     if (scroll.state !== "running") halfSheet();  // the pill's ▶, as the bar's Scroll

@@ -100,8 +100,11 @@ Where a stage's section below says otherwise, this section wins.
    changes for a song too tall to fit whole.
 3. **screen.js** (5e.2) is the one shared script for the reader's screen choices: the theme (5e), the key map (5f.4)
    and the screen timer (5f.5) all live in it; 5e.2 creates it (listed in `BUILD_FILES` and the Kotlin asset lists).
-   It is inlined on every viewer page (sheet.html, a kept version's page, a songbook, a harmonica tab's page), so no
-   script guards `screenKit` or has a branch for a page without it.
+   It is inlined on every viewer page (sheet.html, a kept version's page, a songbook, a harmonica tab's page), in its
+   `<head>` (page.py `_page`'s `head_scripts`), so that the theme is the page's before its body is drawn, and is
+   DOM-free at start-up: what runs as it runs touches `<html>`, the address, localStorage and `performance` alone and
+   looks up no element; the page's own script (viewer.js, harptab.js) calls it once its body is there (the 5e.2
+   ruling). No script guards `screenKit` or has a branch for a page without it.
 4. **The bar's height.** 5d.2 raises `--foot` from 53 to 63 px for the words under the buttons; 5c.5's end room is
    written in `var(--foot)`, so whichever merges second needs no change.
 5. **The strip of chord shapes.** 5d.1 makes ⋯'s "All chord shapes" the strip's one switch (the bar's guitar button
@@ -112,10 +115,11 @@ Where a stage's section below says otherwise, this section wins.
    if a library lane changes a glyph in rows.js, the test tells lane 5 to follow.
 8. **The version steppers (‹ ›) go** with the D2 C list, as the owner's mockups show.
 9. **One script order on every viewer page**, which each task that inlines a script extends, in Python and Kotlin
-   alike:
-   - sheet.html and a kept version's page: `strum, overlay, instruments, winds, layers, kinds, screen, viewer`;
-   - a songbook: `book, strum, overlay, instruments, winds, layers, screen, viewer` (no kinds.js);
-   - a harmonica tab's page: `strum, overlay, layers, kinds, screen, harptab`.
+   alike, screen.js in the `<head>` (3, the 5e.2 ruling) and the others after the body:
+   - sheet.html and a kept version's page: `screen` in the head, then `strum, overlay, instruments, winds, layers,
+     kinds, viewer`;
+   - a songbook: `screen` in the head, then `book, strum, overlay, instruments, winds, layers, viewer` (no kinds.js);
+   - a harmonica tab's page: `screen` in the head, then `strum, overlay, layers, kinds, harptab`.
 
    A stage's literal tuple or list below is "the list as it stands, plus the new script" in this order. The task that
    adds a script updates, in the same commit, every test that pins the list: the order tests (test_viewer_layers.py's,
@@ -2515,7 +2519,7 @@ Named by role, since those stages are planned apart. Where a name below differs 
 
 | Name | Where | What |
 |---|---|---|
-| `screen.js`, `window.caracoleScreen` | src/caracole/viewer/ | the screen's choices for every viewer page: the theme (5e), the key map and keeping the screen on (5f); inlined on every viewer page (a sheet, a kept version's page, a songbook and a harmonica tab's page) just before viewer.js or harptab.js, after layers.js and kinds.js where the page has it ("Where the stages meet" 9) |
+| `screen.js`, `window.caracoleScreen` | src/caracole/viewer/ | the screen's choices for every viewer page: the theme (5e), the key map and keeping the screen on (5f); inlined in the `<head>` of every viewer page (a sheet, a kept version's page, a songbook and a harmonica tab's page), before the body and every other script, DOM-free at start-up, called by viewer.js or harptab.js once the body is there (the 5e.2 ruling; "Where the stages meet" 3 and 9) |
 | `html[data-theme]` | viewer.css | `light` or `dark` chosen; absent for Auto |
 | localStorage `caracole-viewer-theme`, address `theme=` | screen.js | `auto`, `light`, `dark`; the address names it only while it is `light` or `dark` |
 | `state.shapes` | viewer.js | the strip of chord shapes shown (`true`) or hidden (`false`) by hand for this song, `null` for the default |

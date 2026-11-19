@@ -115,6 +115,9 @@ class SheetPageTest {
         assertTrue("<dd>Drop &lt;D&gt;</dd>" in capo && "<dd>2</dd>" in capo, capo)
         assertTrue("<dd><b>Em</b> shapes · sounds <b>F#m</b></dd>" in capo, capo)
         assertTrue("data-fact=\"key\"" !in SheetPage.factsHtml(null, "from the tab", 3, null, chords = true))
-        assertEquals("", SheetPage.factsHtml(Key(4, "aeolian"), "from the tab", 3, null, chords = false))
+        // A sheet with no chords (a tab alone): its Capo line alone, where it names a capo.
+        assertEquals("<dl class=\"facts\" id=\"facts\">\n<div class=\"fact\" data-fact=\"capo\"><dt>Capo</dt><dd>3</dd></div>\n" +
+                     "</dl>\n", SheetPage.factsHtml(Key(4, "aeolian"), "from the tab", 3, null, chords = false))
+        assertEquals("", SheetPage.factsHtml(Key(4, "aeolian"), "from the tab", 0, "Drop D", chords = false))
     }
 }

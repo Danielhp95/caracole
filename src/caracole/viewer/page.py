@@ -4,7 +4,7 @@ The page is one self-contained file. It opens from the synced library folder wit
 no server: it loads nothing (a Content-Security-Policy with the hashes of its eight
 scripts, screen.js in its head, then strum.js, overlay.js, instruments.js, winds.js, layers.js, kinds.js and viewer.js
 after its body, and its stylesheet makes the browser enforce that)
-and links only to the PDF beside it and to the library's index.html two folders up: its ‹ Library, and the
+and links only to the PDF beside it and to the library's index.html two folders up: its ‹ (named Library), and the
 artist's name under the title, to the library page on their songs (``artist_line``); and out, in the same tab, to
 chords-db's credit and, on an auto sheet from YouTube, to the video its audio came from (``_CREDIT``).
 A server may serve it too, only while it is the page caracole wrote, with
@@ -718,12 +718,16 @@ def facts_html(key: Key | None, origin: str | None, capo: int, tuning: str | Non
     strings (``GUITAR_STRINGS``). Capo: "none", or its fret. Key, where the sheet has one: with no capo the key
     ("Am"), with one the key of the shapes played and the key the song sounds in, as Cifra Club's key line says it
     ("Em shapes · sounds F#m"): "Key Em" alone would read as the song's key; each says where the key came from
-    (``origin``). A sheet with no chords (``chords``) has no facts: "".
+    (``origin``). A sheet with no chords (``chords``: a tab alone, words alone) has its Capo line alone, where it
+    names a capo (the fret its tab is played at, "2"), else no facts: "".
     """
     if not chords:
+        rows = [("capo", "Capo", str(capo))] if capo else []
+    else:
+        rows = [("tuning", "Tuning", escape(tuning or GUITAR_STRINGS)), ("capo", "Capo", str(capo) if capo else "none")]
+    if not rows:
         return ""
-    rows = [("tuning", "Tuning", escape(tuning or GUITAR_STRINGS)), ("capo", "Capo", str(capo) if capo else "none")]
-    if key is not None:
+    if chords and key is not None:
         source = escape(origin or "")
         if not capo:
             said = f"<b>{escape(key_name(key))}</b>" + (f' · <span class="from">{source}</span>' if source else "")

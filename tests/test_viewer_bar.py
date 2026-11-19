@@ -302,9 +302,11 @@ def test_play_starts_the_scroll_and_the_pill_takes_the_bars_place(tmp_path):
         status = b.js("document.querySelector('#scroll-status').textContent")
         b.click("#pill-end")
         ended = bar(b)
-    assert counting["pill"] and counting["where"] == "hidden" and counting["focus"] == "go"
+    # Pressed by the mouse, Scroll and × take no focus and give none (screen.js steer): it stays on the page, where a
+    # pedal's keys are the key map's (pressed from the keyboard, ▶ takes it, then Scroll: test_viewer_scroll.py).
+    assert counting["pill"] and counting["where"] == "hidden" and counting["focus"] == ""
     assert status == "Scrolling in 3 s"
-    assert not ended["pill"] and ended["where"] == "shown" and ended["focus"] == "scroll"
+    assert not ended["pill"] and ended["where"] == "shown" and ended["focus"] == ""
 
 
 # Each tool's word as drawn: whole, under its icon and centred on it.

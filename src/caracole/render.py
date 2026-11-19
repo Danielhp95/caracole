@@ -1032,7 +1032,7 @@ def _render_harmonica(conn: sqlite3.Connection, cfg: Config, overrides: Override
     key, its harp, its difficulty, its views, its rating), read as overrides.toml's ``[harmonica]`` has it, else as
     caracole guesses, with the song's chord sheet ``sheet`` (its ChordPro and its key as
     keys.py found it: the human one, else the auto one), for the harp that plays with the record. ``back`` names the
-    song's sheet viewer, which its ‹ Chord sheet opens. Its version line names the song's UG chords versions
+    song's sheet viewer, which its ‹ opens (named Chord sheet). Its version line names the song's UG chords versions
     (``listed``, ``_versions_data``, none of them the page's: ``_on_page`` with no tab) and what else it keeps
     (``kinds``, ``_kinds_data``), as its sheet's viewer does. Each page is recorded (``_note_written``) and written
     only when its bytes change.

@@ -85,14 +85,23 @@ def test_a_tuning_the_sheet_names_is_its_tuning_line():
     assert '<dl class="facts" id="facts">' in html and '<p class="facts"' not in html
 
 
-def test_no_key_no_key_line_and_no_chords_no_facts():
+TAB_ALONE = "{title: T}\n{artist: A}\n{capo: 2}\n{start_of_tab}\ne|--0--2--3--|\nB|--1--3--3--|\n{end_of_tab}\n"
+
+
+def test_no_key_no_key_line_and_no_chords_no_facts_but_a_capo():
     from caracole.viewer.page import facts_html
 
     html = facts_html(None, None, 3, None, chords=True)
     assert re.findall(r'data-fact="(\w+)"', html) == ["tuning", "capo"] and "<dd>3</dd>" in html
-    assert facts_html(Key(0, "ionian"), "from the sheet", 2, "Drop D", chords=False) == ""
+    # A sheet with no chords (a tab alone) says its capo as the PDF does ("Capo 2"), and nothing else.
+    assert facts_html(Key(0, "ionian"), "from the sheet", 2, "Drop D", chords=False) == (
+        '<dl class="facts" id="facts">\n<div class="fact" data-fact="capo"><dt>Capo</dt><dd>2</dd></div>\n</dl>\n')
+    assert facts_html(None, None, 5, None, chords=False, suffix="-3").startswith('<dl class="facts" id="facts-3">\n')
     assert facts_html(None, None, 0, None, chords=False, suffix="-3") == ""
-    assert 'id="facts"' not in build_viewer("{title: T}\n{artist: A}\n{capo: 3}\nOnly words\n")
+    assert 'id="facts"' not in build_viewer("{title: T}\n{artist: A}\nOnly words\n")
+    tab = build_viewer(TAB_ALONE)
+    assert '<dl class="facts" id="facts">\n<div class="fact" data-fact="capo"><dt>Capo</dt><dd>2</dd></div>\n</dl>\n' in tab
+    assert '<dd>3</dd>' in build_viewer("{title: T}\n{artist: A}\n{capo: 3}\nOnly words\n")
 
 
 def test_a_songbook_song_has_the_three_lines():
@@ -140,6 +149,16 @@ def test_the_facts_follow_the_capo_and_the_transposition(tmp_path):
     assert moved == [[["tuning", "E A D G B E"], ["capo", "none"], ["key", f"{up} (+3) · from the tab"]],
                      "no capo · +3"]
     assert bold == up
+
+
+@in_chromium
+def test_a_tab_alone_keeps_its_capo_line_as_written(tmp_path):
+    # No chords: nothing to transpose or to play on another instrument (the piano chosen on another page), so the
+    # page's script leaves the facts page.py wrote, the capo the tab is played at.
+    piano = "localStorage.setItem('caracole-viewer-instrument', 'piano')"
+    with open_viewer(tmp_path, _page(tmp_path, build_viewer(TAB_ALONE)), before=[piano]) as b:
+        rows = b.js(ROWS)
+    assert rows == [["capo", "2"]]
 
 
 def _harps(b, key: Key) -> str:

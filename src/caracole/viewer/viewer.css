@@ -131,9 +131,10 @@ body {
 }
 a { color: inherit; }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-/* Room for the bar (--foot: its height and the screen's safe area) and a little more, and the pill's while it shows;
-   then half a screen past the song's end (::after), so its last lines can come up to the middle of the screen.
-   Never in the padding: layout() reads that as the bar's room. */
+/* Room for the bar (--foot: its height and the screen's safe area) and a little more, and the pill's while it shows
+   (below 1200 px: from 1200 px it sits under the toolbar, and the page keeps no room for it at its foot, so a song laid
+   out again while it shows keeps its columns); then half a screen past the song's end (::after), so its last lines can
+   come up to the middle of the screen. Never in the padding: layout() reads that as the bar's room. */
 .page { max-width: 760px; margin: 0 auto; padding: 0 16px calc(var(--foot) + 19px + var(--pill)); }
 .page::after { content: ""; display: block; height: 50vh; }
 
@@ -660,6 +661,7 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
    its word, kept for a screen reader (the container query on .bar-in). */
 @media screen and (min-width: 1200px) {
   :root { --foot: env(safe-area-inset-bottom); --toolbar: 56px; }
+  html[data-pill] { --pill: 0px; }  /* under the toolbar: its room the toolbar's at the top (room()), none at the foot */
   html:not([data-full]) { scroll-padding-top: calc(var(--toolbar) + 8px); }
   .bar { position: sticky; z-index: 6; top: 0; left: auto; right: auto; bottom: auto; margin-top: 10px; padding: 6px 0;
     border: 0; background: var(--bg); box-shadow: none; transition: none; }

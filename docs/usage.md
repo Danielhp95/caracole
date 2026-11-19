@@ -3243,7 +3243,7 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   Chinese characters, the instrument and the theme), and the address keeps `necks=0` too, for a page served by
   `caracole serve`, where the browser keeps nothing: a link to another
   version in the version list keeps it, so do a harmonica tab's link in the
-  Harmonica row and its page's ‹ Chord sheet, and in a songbook so does every step to another song (the
+  Harmonica row and its page's ‹ back to the chord sheet, and in a songbook so does every step to another song (the
   arrows, a swipe, ‹ ›, the contents). Served, a sheet opened afresh from the
   library page shows the rail again, as it starts at the usual text size: the
   library's links don't carry it. **Reset all** shows the rail again. Below 1200 px
@@ -3261,8 +3261,9 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   key with no capo ("F#m (+2)" two up; "A (+2)" for a sheet's capo 2 taken
   off, its G shapes played as A), after the shapes with one ("Ab shapes (+1)
   · sounds A" for that capo moved down a fret: the song still sounds in A).
-  Each says where the key came from. A sheet of
-  words alone has no facts, so none says its capo either (its PDF's line does).
+  Each says where the key came from. A sheet with
+  no chords (a tab alone, or words alone) has its Capo line alone, the fret
+  it is played at as written, where it names one, else no facts.
   The piano, the harmonica, the flute and the recorder take no capo and have
   no strings: no Tuning or Capo line, and the Key line names the key the song
   sounds in ("F#m"), the chords named as they sound (F#m, not Em): the
@@ -3700,7 +3701,11 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   scroll by hand or a chord's card pauses it, so the page is yours to read
   until you press ▶, which stays within reach (above the card, on a phone,
   with the bar kept under the card while the song scrolls on);
-  it pauses at the end of the song too. A bigger text
+  it pauses at the end of the song too. A song a laptop shows whole in
+  columns is read in place: it scrolls only until all of it is in view,
+  under the toolbar and the pill, and pauses there as at the end of the song:
+  at once, or, for a song with timed lyrics, once they are over (the line
+  being sung lit until then). A bigger text
   scrolls as much faster, so a speed keeps its pace through the song. Where
   the song has timed lyrics (LRCLIB's or Megalobiz's), the line being sung is
   lit while it scrolls: the lyrics' clock starts once the count-in is over,
@@ -3718,10 +3723,13 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   or ↓ turns a screen, the last two lines wholly in view coming to the top,
   clear of the bar and the pill (on a laptop, under the toolbar); PageUp or
   ↑ turns back, the first two going to the foot; any of them pauses a
-  scroll. A song a laptop shows whole in columns turns down only as far as
+  scroll. Held down, a key does its thing once: one turn, one start or stop.
+  A song a laptop shows whole in columns turns down only as far as
   brings all of it into view, and back up to the top. Tapping Scroll or one
-  of the pill's buttons leaves the keys to the pedal (from the keyboard, Tab
-  reaches them as ever). In a songbook ← and → change songs, as ever. They
+  of the pill's buttons, or starting the scroll with Space or Enter, leaves
+  the keys to the pedal (from the keyboard, Tab reaches them as ever, and
+  Scroll pressed with Enter puts the focus on the pill's first button). In a
+  songbook ← and → change songs, as ever. They
   do nothing while the settings, a chord's card, Aa, a menu, the rail of
   necks or a text field has the focus (each keeps its own keys), nor with
   Alt, Ctrl, Shift or ⌘ held, but all of them work in full screen; no key
@@ -3853,7 +3861,7 @@ the library page link it, the tab's text beside it.
   1200 px the neck, the overlay's sheet (below); ♪,
   **Notes**, shows each hole's note on that harp in its place ("F#6");
   **Aa** the text size and the theme (Auto, Light or Dark, kept for every
-  viewer page, and carried back to the chord sheet by ‹ Chord sheet), and
+  viewer page, and carried back to the chord sheet by its ‹), and
   Scroll scrolls by itself, as in the viewer,
   each with its word under it (Shapes, Notes, Text, Scroll). On a laptop it is
   a toolbar under the tab's title, as the viewer's. The viewer's keys and
@@ -3872,8 +3880,9 @@ the library page link it, the tab's text beside it.
 - **A hole tapped** is heard, a harmonica's reed; **▶ at a line's end** plays
   the line hole by hole, a beat each, lighting each hole as it sounds, and
   stops when pressed again (no rhythm: the tab has none).
-- **‹ Chord sheet** goes back to the song's sheet viewer (‹ Library for a song
-  with none), with the rail hidden, the pinyin, the Chinese characters and the
+- **‹**, at the title's left (named Chord sheet), goes back to the song's
+  sheet viewer (for a song with none it goes to the library, named Library),
+  with the rail hidden, the pinyin, the Chinese characters and the
   instrument as they came (served, where the browser keeps nothing, the
   address carries them both ways), and **Tab as text**, at the foot, opens
   `harmonica-1.txt`.
@@ -3901,7 +3910,7 @@ the library page link it, the tab's text beside it.
 The page keeps the harp, Notes, the text size and the scroll speed in its
 address too (`harmonica-1.html#harp=A&notes=1&fs=20`), the theme while it
 isn't Auto (`&theme=dark`) and the minutes the screen stays on while they aren't
-10 (`&awake=15`), which ‹ Chord sheet carries back.
+10 (`&awake=15`), which its ‹ carries back to the chord sheet.
 
 #### caracole harmonica
 

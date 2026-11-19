@@ -67,8 +67,9 @@
   //                    long they are held; but not on a focused control (button, a[href], summary, [role=button],
   //                    [tabindex]), whose own press they are, other than full screen's handle (#handle): full screen is
   //                    for reading, the keys work there, and a tap on the handle, Escape or Back brings the controls
-  //                    back. PageDown and ArrowDown turn a screen on, PageUp and ArrowUp one back: pause() (autoscroll
-  //                    paused if it moves, its bar back with it), then, measured after it, room() → { top, bottom },
+  //                    back. PageDown and ArrowDown turn a screen on, PageUp and ArrowUp one back, once however long
+  //                    they are held (each repeat taken, doing nothing): pause() (autoscroll paused if it moves,
+  //                    its bar back with it), then, measured after it, room() → { top, bottom },
   //                    the CSS px of the window the page's controls leave the song (layers.js toolbar's room), and
   //                    the lines of sheet (its p and pre, shown) wholly between them, a pixel either way: with more
   //                    than KEPT, PageDown brings the KEPT-th last to top and PageUp the KEPT-th to bottom, so that the
@@ -269,7 +270,8 @@
       if (!e.repeat) page.toggle();
       return;
     }
-    e.preventDefault();
+    e.preventDefault();  // a repeat too: never the browser's own screen down
+    if (e.repeat) return;  // held, as a pedal may: one turn
     page.pause();
     turn(way);
   };

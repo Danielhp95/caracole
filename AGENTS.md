@@ -465,7 +465,7 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   its data's last members after `overlay`. The line names its kind and which of its kind's pages it is ("Harmonica ·
   Tab 1 of 2", kinds.js's `hereIn`), its icons the sheet's; the list's Chords group the sheet's, none of it this
   page, and this tab ticked in its group. harptab.js attaches it with its `"list"` layer (`openLayer`, `closeLayer`,
-  `inSight`), `carry` the screen's choices as ‹ Chord sheet takes them (`screenChoices`), `sheetPath` the song's
+  `inSight`), `carry` the screen's choices as the ‹ back to the sheet takes them (`screenChoices`), `sheetPath` the song's
   sheet's path in the library, none for a song with no sheet, so served its versions are kept and chosen on the
   song's sheet; on a phone the list docks (`.top`, `data-dock="version-list"`), from 900 px a popover
   (test_viewer_versions.py's section "a harmonica tab's page", test_render_kinds.py).
@@ -1419,8 +1419,10 @@ It is rows.js's, shared by both pages:
     window's room for columns (`toolbarRoom()`, none in full screen); full screen hides it as the bar
     (`data-controls`), its handle staying at the window's foot.
 - **The song's end**: `.page`'s padding is the bar's room (`--foot`), which `layout()` measures columns against (from
-  1200 px less the toolbar's at the top); the half screen of over-scroll is `.page::after`, never in it, and print
-  drops it.
+  1200 px less the toolbar's at the top), and the pill's while it shows (`--pill`) below 1200 px alone: from 1200 px
+  the pill sits under the toolbar, its room the toolbar's at the top (`room()`), and `html[data-pill]`'s `--pill` is
+  0 there, so a song laid out again while it shows keeps its columns (test_viewer_layout.py); the half screen of
+  over-scroll is `.page::after`, never in it, and print drops it.
 - **The line being sung** (viewer.js `lightSung`, viewer.css `.l.sung`; test_viewer_sung_browser.py): while autoscroll
   is on, the line of `songLines` (the lines `pinyin` reads) that the data's `sung` names at the lyrics' clock:
   - `sungClock`, in ms (`at`, and `since`, null while it stands): `run()` starts it once the count-in is over
@@ -1446,13 +1448,17 @@ It is rows.js's, shared by both pages:
     1200 px below the toolbar's height, its bottom once stuck, and the pill under it; narrower above the bar's place,
     slid away or not, the pill and a docked layer; the bar nothing in full screen), keeping `KEPT` (2) of the
     sheet's lines (`p`, `pre`) wholly in view, the second-last to the top or the second to the foot (two alone where
-    that moves the page a line or more), else by the room less `KEPT` lines of `LINE` (2.6) em, half of it at least;
+    that moves the page a line or more), else by the room less `KEPT` lines of `LINE` (2.6) em, half of it at least,
+    once however long held (a key repeat's `keydown` prevented and nothing more);
     a song in columns (`html[data-columns]` above 1, the whole song shown: viewer.js `layout()`), its lines in order
     down one column and up the next, at most to bring `#sheet`'s top to the room's top, never back, and up to the
     page's top (test_viewer_keys.py's columns test): one `scrollTo` to a whole pixel, never smooth;
   - `steer`, the bar's `#scroll` and the pill's buttons: a pointer's press takes no focus (`pointerdown` and
     `mousedown` prevented, the click as ever), so the next Space or Enter stays the map's, never a tapped +'s press
     again; the keyboard reaches them by Tab as ever, and layer openers (⋯, Aa, the key) take the focus as before;
+    `#scroll` gives the pill's `#go` the focus only when it had it as it was pressed (the keyboard's own press, its
+    focus going as the bar hides: viewer.js, harptab.js), never when `toggle()` pressed it, so a pedal's held Enter
+    stays the map's, one toggle (test_viewer_keys.py's pedal test);
   - left alone: another handler's key (`defaultPrevented`: a chord's or a hole's Space, the rail tabs' arrows), an
     input method's, Alt, Ctrl, Meta or Shift, a text field with the focus, and `busy()` (viewer.js: the focus in a
     layer of the stack, `#sizes`, `#tip`, `#necks` or a dialog; harptab.js: `#sizes`, `#necks`, `#version-list`;
@@ -1468,6 +1474,13 @@ It is rows.js's, shared by both pages:
   narrower from three; `data-columns` says how many, which viewer.css keys on (`:not([data-columns="1"])` the wide
   page, a rule a count); else one column, `--fs` + 3 px, as a harmonica tab's page (no `data-columns`). A trial
   count's `fit()` runs in one column that wide (`fitIn`), never in balanced columns.
+  - Autoscroll reads a song in columns in place (viewer.js `columnsEnd`, test_viewer_scroll.py's columns tests): each
+    frame goes no further than brings `#sheet`'s top to the top of `toolbar.room()` (the key map's cap in columns),
+    never back up, nor past the page's end; there it pauses "Paused · end of song", as one column does at the page's
+    end (`moving()` false: the screen back to its minutes, the bar back, the loop stopped), at once for a song with no
+    `sung`, else once the lyrics' clock passes `SUNG_END` (the last entry's time where it is `[ms, null]`, LRCLIB's
+    empty stamp at the lyrics' end; else the last's and the timed lines' median gap, 3 s at least), running and
+    lighting lines until then.
 - **Full screen** (the sheet viewer's) is one of those layers, its element the handle (page.py `_HANDLE`,
   `button.handle#handle`, after the pill): `open(handle, opener)` sets `html[data-full="on"]`, which hides every
   element marked `data-controls` (the bar; a new control that full screen hides is marked so, nothing else changes),
@@ -1487,7 +1500,7 @@ It is rows.js's, shared by both pages:
     - localStorage `caracole-viewer-necks`;
     - and `necks=0` in the address, which book.js's `carryScreen` takes on to a songbook's next address, for its
       sandbox with no storage, as a link to another of the song's pages does (a version's in the list, a harmonica
-      tab's and its ‹ Chord sheet, viewer.js `screenChoices`, the view's `carry`, harptab.js `backToSheet`);
+      tab's and its ‹ back to the sheet, viewer.js `screenChoices`, the view's `carry`, harptab.js `backToSheet`);
     - with its Hide and the bar's button in step (test_viewer_necks.py).
   - **Pinyin**: so is the settings' Pinyin (`state.py`, off at first: localStorage `caracole-viewer-pinyin`, `py=1` in
     the address, which `carryScreen` takes on too), each Chinese character's reading over it, between its chord and
