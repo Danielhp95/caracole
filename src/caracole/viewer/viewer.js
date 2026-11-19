@@ -147,8 +147,8 @@
       if (typeof saved.shapes === "boolean") state.shapes = saved.shapes;  // an old record's `strip` says nothing
     }
   } catch (err) { /* no storage: the page still works */ }
-  // The screen's choices screen.js keeps for every viewer page (the theme, Aa's), applied before this script ran:
-  // inlined on every viewer page, so never missing.
+  // The screen's choices screen.js keeps for every viewer page (the theme, Aa's), applied before this script ran, and
+  // its key map, which this script binds (below): inlined on every viewer page, so never missing.
   const screenKit = window.caracoleScreen;
   // The rail of necks is the screen's choice, not a song's: kept once for every sheet, songbook and harmonica tab's
   // page (a name no page's own settings have, as theirs end in its path: overlay.js's), and in the address too, where
@@ -898,7 +898,8 @@
   // From 1200 px the bar is a toolbar under the song's title (layers.js's toolbar: right after the song's header, a
   // songbook's shown song's own; viewer.css), back at the foot below it.
   const toolbar = window.caracoleLayers ? window.caracoleLayers.toolbar(bar, () => sheetEl.parentElement
-    .querySelector(":scope > header.head")) : { wide: window.matchMedia("not all"), place() {}, edge() {} };
+    .querySelector(":scope > header.head")) : { wide: window.matchMedia("not all"), place() {}, edge() {},
+    room: () => ({ top: 0, bottom: window.innerHeight }) };
   const vList = $("version-list");  // a sheet's versions (below); the songbook has none
   let kinds = null;  // its line and its list, kinds.js's (below)
   const keyList = $("key-list"), keyNow = $("key-now");  // the twelve keys, and the bar's key that opens them (below)
@@ -1935,9 +1936,12 @@
   // sheet docks there up to 1199 px; over the whole screen, the pill rides over its foot (necks-full, viewer.css).
   // From 1200 px the toolbar under the title is asleep meanwhile (data-asleep: out of sight, its room kept, so the
   // song doesn't jump), never hidden.
-  function dock() {
-    const there = !wide.matches ? dockedTop()
+  function dockedNow() {
+    return !wide.matches ? dockedTop()
       : sheetAt !== null && !railWide.matches && !doc.dataset.full ? necksEl : null;  // full screen hides the sheet
+  }
+  function dock() {
+    const there = dockedNow();
     const away = moving() && !there;
     const hide = away && !toolbar.wide.matches;
     if (bar.hidden !== hide) {
@@ -2060,9 +2064,9 @@
     if (!on) fitKey();  // the bar back: its key measured again
     toolbar.edge();  // from 1200 px, the pill under the toolbar again, or at the top with none
   };
-  // Every one but ``keep``.
-  const closeAll = (keep) => {
-    for (const layer of layers.slice().reverse()) if (layer.el !== keep) close(layer.el);
+  // Every one but those in ``keep``.
+  const closeAll = (...keep) => {
+    for (const layer of layers.slice().reverse()) if (keep.indexOf(layer.el) < 0) close(layer.el);
   };
   // The sheet gone with the window widened past 1200 px, where the rail takes its place: the focus left where it is.
   const dropSheet = () => {
@@ -2991,7 +2995,9 @@
     drawNecks();
   };
   $("scroll").addEventListener("click", () => {
-    closeAll(necksEl);  // the overlay's sheet stays, at half the screen, the song moving above it
+    // The overlay's sheet stays, at half the screen, the song moving above it; and so does full screen, where the key
+    // map's Space presses it (the bar hidden).
+    closeAll(necksEl, handle);
     halfSheet();
     close(sizes, false);
     countdown();
@@ -3011,10 +3017,26 @@
     if (!(e.target instanceof Element && e.target.closest("#pill"))) pauseScroll();
   }, { passive: true });
   window.addEventListener("wheel", () => pauseScroll(), { passive: true });
-  const SCROLL_KEYS = ["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End"];
+  // Home and End scroll the page: they pause it. Space, Enter and the four page keys are the key map's (screen.js
+  // keys): Space or Enter starts and stops it (the bar's Scroll while it is off, else the pill's ▶), and a page key
+  // pauses it and turns a screen keeping two lines, measured in the room the bar, the pill and a docked layer leave
+  // (layers.js toolbar's room; in full screen, where the keys work, the bar counts for nothing). They are left to a
+  // layer with the focus (busy: one of the stack's, Aa's box, a numeral's tooltip, the rail of necks or a dialog),
+  // full screen's handle not counted.
   document.addEventListener("keydown", (e) => {
-    const control = e.target instanceof Element && e.target.closest("button, a, [role=button], summary, input");
-    if (SCROLL_KEYS.indexOf(e.key) >= 0 || (e.key === " " && !control)) pauseScroll();
+    if (e.key === "Home" || e.key === "End") pauseScroll();
+  });
+  const busy = () => {
+    const at = document.activeElement instanceof Element ? document.activeElement : null;
+    if (!at || at === handle) return false;
+    return layers.some((layer) => layer.el.contains(at)) || Boolean(at.closest("#sizes, #tip, #necks, dialog"));
+  };
+  screenKit.keys({
+    toggle: () => (scroll.state === "off" ? $("scroll") : go).click(),
+    pause: () => pauseScroll(),
+    room: () => toolbar.room(pill, dockedNow()),
+    busy,
+    sheet: sheetEl,
   });
 
   // --- the bar: away as you read down the song, back when you want it -----------------------------

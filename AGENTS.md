@@ -397,10 +397,11 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   - **harmony_tables.py**: its answers as the tables a viewer's data carries, per mode, each text naming notes
     written for every transposition, for viewer.js to look up.
   - **strum.js**: a chord's shape strummed in Web Audio, `window.caracoleSound`, each instrument's voice.
-  - **screen.js**: the screen's choices kept for every viewer page (the theme), `window.caracoleScreen`, inlined in
-    the head of every viewer page (`_page`'s `head_scripts`, the Kotlin frame's `headScripts`), so the theme is the
-    page's before its body is drawn; at start-up it touches the root, the address, storage and the navigation alone,
-    and what needs the body waits for DOMContentLoaded; no script guards it.
+  - **screen.js**: the screen's choices kept for every viewer page (the theme) and the key map (`keys`, below),
+    `window.caracoleScreen`, inlined in the head of every viewer page (`_page`'s `head_scripts`, the Kotlin frame's
+    `headScripts`), so the theme is the page's before its body is drawn; at start-up it touches the root, the address,
+    storage and the navigation alone, and what needs the body waits for DOMContentLoaded or reads what the page's
+    script gave it (it names no element lookup at all: test_viewer_theme.py); no script guards it.
   - **overlay.js**: the rail of a wide screen, Guitar (the necks), Harmonica (the circle of fifths, the key on the
     harp chosen, each chord's holes, the slim bar) and, on a sheet with a key, Harmony (the page's own pane, viewer.js
     `harmonyPane`: the key's neck, each section's progression), and narrower the phone's sheet,
@@ -1391,8 +1392,8 @@ It is rows.js's, shared by both pages:
   - a history that refuses entries (a `pushState` that throws) turns it off: the layers open and close as before,
     and Back leaves the page (test_viewer_layers.py).
 - **From 1200 px the bar is a toolbar** under the song's title (D13 C; test_viewer_toolbar.py), for viewer.js and
-  harptab.js alike through layers.js's `toolbar(bar, head)` (`{ wide, place(), edge() }`, neither script holding a
-  copy):
+  harptab.js alike through layers.js's `toolbar(bar, head)` (`{ wide, place(), edge(), room(pill, docked) }`, neither
+  script holding a copy):
   - `place()` puts `#bar` right after `head()` (`.page > header.head`; a songbook's shown song's own, `#sheet`'s
     parent's `:scope > header.head`) while `wide` (`TOOLBAR`, `(min-width: 1200px)`), back where the page wrote it
     (before `#pill`) while narrow, the focus kept on the control that had it: at load, and as `wide` changes; the tab
@@ -1432,6 +1433,25 @@ It is rows.js's, shared by both pages:
     edges, so nothing on the line moves and a Chinese line keeps its columns with pinyin; its words and chords 4.5:1
     on it; no transition; none on paper (`@media print`);
   - none without `sung` (no timed lyrics, too few lines met) nor in a songbook, whose data carries no lyrics.
+- **Keys and pedals** (D16 B; test_viewer_keys.py): a Bluetooth page turner is a keyboard. **screen.js** holds the key
+  map, one `keydown` listener on the document, which viewer.js and harptab.js bind once,
+  `screenKit.keys({ toggle, pause, room, busy, sheet })`:
+  - Space and Enter `toggle()` autoscroll (the bar's `#scroll` while it is off, else the pill's `#go`), once however
+    long held; on a focused control (`button, a[href], summary, [role=button], [tabindex]`) they are its own press,
+    but on full screen's `#handle`, where they are the map's (the keys work in full screen, D14; viewer.js's
+    `#scroll` closes every layer but the overlay's sheet and full screen, `closeAll(necksEl, handle)`);
+  - PageDown and ↓, PageUp and ↑: `pause()`, then a turn in `room()` (layers.js `toolbar.room(pill, docked)`: from
+    1200 px below the toolbar's height, its bottom once stuck, and the pill under it; narrower above the bar's place,
+    slid away or not, the pill and a docked layer; the bar nothing in full screen), keeping `KEPT` (2) of the
+    sheet's lines (`p`, `pre`) wholly in view, the second-last to the top or the second to the foot (two alone where
+    that moves the page a line or more), else by the room less `KEPT` lines of `LINE` (2.6) em, half of it at least:
+    one `scrollTo` to a whole pixel, never smooth;
+  - left alone: another handler's key (`defaultPrevented`: a chord's or a hole's Space, the rail tabs' arrows), an
+    input method's, Alt, Ctrl, Meta or Shift, a text field with the focus, and `busy()` (viewer.js: the focus in a
+    layer of the stack, `#sizes`, `#tip`, `#necks` or a dialog; harptab.js: `#sizes`, `#necks`, `#version-list`;
+    never `#handle`);
+  - ← → are book.js's alone (a songbook's songs, still blocked while any layer is open); a page key never navigates,
+    and no key changes the version; the pages' own `keydown` pauses autoscroll for Home and End alone.
 - **Columns** (from 1100 px, on the screen alone, viewer.css; test_viewer_layout.py) only where the whole song shows
   that way, its end in the last column (`layout()`): the fewest that do, two to five (`MOST_COLUMNS`), each at least
   the song's widest line (`widest()`: each `.sec > .l` and `.tab` as wide as its content, `.sheet.measure`, after

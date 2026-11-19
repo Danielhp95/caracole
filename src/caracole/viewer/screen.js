@@ -4,12 +4,13 @@
   // a kept version's page, a songbook and a harmonica tab's page), each of which inlines this script in its head
   // (page.py's _page, head_scripts), so that the theme is the page's before its body is drawn: a slow phone never
   // paints the other palette first. The page's own script (viewer.js, harptab.js), after the body, calls it. The one
-  // place a viewer page keeps them: the theme now (Auto, Light or Dark, Aa's); the keys and keeping the screen on come
-  // here too. It makes no element and loads nothing: the standard library alone.
+  // place a viewer page keeps them: the theme (Auto, Light or Dark, Aa's) and the keys a pedal sends; keeping the
+  // screen on comes here too. It makes no element and loads nothing: the standard library alone.
   //
   // At start-up there is no body yet: what runs as the script runs touches document.documentElement, location,
   // localStorage and performance alone, and looks up no element. Anything added here that needs the body waits for
-  // DOMContentLoaded, or is a function the page's own script calls.
+  // DOMContentLoaded, or is a function the page's own script calls: the key map reads the page only as a key comes,
+  // through what the page's script gave keys(), and looks up no element of its own.
   //
   // A choice is read as viewer.js reads the others kept for every page (its choiceOf): the one a link names (followed,
   // typed: theme=light or theme=dark in the address), else the browser's (localStorage); on a page come back to (a
@@ -31,6 +32,31 @@
   //                    theme=dark while the theme is Light or Dark, none for Auto (deleted); returns params. The page's
   //                    own script calls it where it writes its address and its links to another page of the song, so
   //                    that where the browser keeps nothing the choices go with them.
+  //   keys({ toggle, pause, room, busy, sheet })
+  //                    the key map, for a keyboard and a Bluetooth page turner alike (a pedal is a keyboard): one
+  //                    keydown listener on the document, bound by the first call (the page's script's, once its body
+  //                    is there; a later one changes what it calls, never binds again). It leaves a key alone that
+  //                    another handler took (defaultPrevented) or an input method composes, with Alt, Ctrl, Meta or
+  //                    Shift held (the browser's), with a text field focused (input, textarea, select,
+  //                    [contenteditable]), and while busy(): a layer of the page has the focus. Space and Enter call
+  //                    toggle(), the page's start and stop (the bar's ▶ while autoscroll is off, else the pill's: at
+  //                    once while it counts in, a pause while it runs, a count-in again while paused), once however
+  //                    long they are held; but not on a focused control (button, a[href], summary, [role=button],
+  //                    [tabindex]), whose own press they are, other than full screen's handle (#handle): full screen is
+  //                    for reading, the keys work there, and a tap on the handle, Escape or Back brings the controls
+  //                    back. PageDown and ArrowDown turn a screen on, PageUp and ArrowUp one back: pause() (autoscroll
+  //                    paused if it moves, its bar back with it), then, measured after it, room() → { top, bottom },
+  //                    the CSS px of the window the page's controls leave the song (layers.js toolbar's room), and
+  //                    the lines of sheet (its p and pre, shown) wholly between them, a pixel either way: with more
+  //                    than KEPT, PageDown brings the KEPT-th last to top and PageUp the KEPT-th to bottom, so that the
+  //                    lines last read stay in view; with KEPT alone, the same where it moves the page a line (LINE em)
+  //                    or more (the title over them, the strip of chord shapes); else the page goes on by the room less
+  //                    KEPT lines of LINE em of the sheet's text, by half the room at least. One window.scrollTo, to a
+  //                    whole pixel, never smooth. ArrowLeft and ArrowRight are no key of the map (a songbook's songs,
+  //                    book.js), nor is anything the version line does: no key changes the page.
+  //   KEPT             2, the lines a turn keeps in view
+  //   LINE             2.6, a line in the em of the sheet's text (a row of chords and its words), for a turn with
+  //                    KEPT lines or fewer wholly in view
   const doc = document.documentElement;
   const THEME = "caracole-viewer-theme";
   const THEMES = ["auto", "light", "dark"];
@@ -74,5 +100,52 @@
     else params.set("theme", theme);
     return params;
   };
-  window.caracoleScreen = Object.freeze({ THEME, theme: () => theme, setTheme, carry });
+
+  const KEPT = 2, LINE = 2.6;
+  const TEXT = "input, textarea, select, [contenteditable]";
+  const CONTROL = "button, a[href], summary, [role=button], [tabindex]";
+  const ON = ["PageDown", "ArrowDown"], BACK = ["PageUp", "ArrowUp"];
+  let page = null;  // what keys() was given: nothing until the page's script calls it
+  const turn = (way) => {
+    const { top, bottom } = page.room();
+    const span = bottom - top;
+    if (!(span > 0)) return;  // the song out of sight (a sheet over the whole screen): nothing to turn
+    const whole = [];
+    for (const el of page.sheet.getElementsByTagName("*")) {
+      if (el.tagName !== "P" && el.tagName !== "PRE") continue;
+      const r = el.getBoundingClientRect();
+      if (r.height && r.top >= top - 1 && r.bottom <= bottom + 1) whole.push(r);
+    }
+    const em = parseFloat(getComputedStyle(page.sheet).fontSize) || 16;
+    let by = null;
+    if (whole.length >= KEPT) {
+      by = way > 0 ? whole[whole.length - KEPT].top - top : whole[KEPT - 1].bottom - bottom;
+      if (whole.length === KEPT && Math.abs(by) < LINE * em) by = null;  // two that fill the room: they'd hardly move
+    }
+    if (by === null) by = way * Math.max(span / 2, span - KEPT * LINE * em);
+    window.scrollTo(0, Math.round(window.scrollY + by));
+  };
+  const onKey = (e) => {
+    if (!page || e.defaultPrevented || e.isComposing || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    const start = e.key === " " || e.key === "Enter";
+    const way = ON.includes(e.key) ? 1 : BACK.includes(e.key) ? -1 : 0;
+    if (!start && !way) return;
+    const at = document.activeElement instanceof Element ? document.activeElement : null;
+    if ((at && at.closest(TEXT)) || page.busy()) return;
+    if (start) {
+      const control = at && at.closest(CONTROL);
+      if (control && control.id !== "handle") return;
+      e.preventDefault();  // never Space's own screen down, nor the handle's press
+      if (!e.repeat) page.toggle();
+      return;
+    }
+    e.preventDefault();
+    page.pause();
+    turn(way);
+  };
+  const keys = (given) => {
+    if (page === null) document.addEventListener("keydown", onKey);
+    page = given;
+  };
+  window.caracoleScreen = Object.freeze({ THEME, theme: () => theme, setTheme, carry, keys, KEPT, LINE });
 })();

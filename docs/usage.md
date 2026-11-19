@@ -3711,6 +3711,18 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   guide at the song's own times, not a follower: the scroll keeps its own
   speed. With reduced motion asked for in your system's settings, the
   countdown shows the seconds alone, with no ring.
+- **Keys and pedals**: a Bluetooth page turner is a keyboard, and the viewer
+  answers it as it answers yours. Space or Enter starts and stops
+  auto-scroll (Scroll, then the pill's first button: at once while it counts
+  down, a pause while it scrolls, another countdown while paused). PageDown
+  or ↓ turns a screen, the last two lines wholly in view coming to the top,
+  clear of the bar and the pill (on a laptop, under the toolbar); PageUp or
+  ↑ turns back, the first two going to the foot; any of them pauses a
+  scroll. In a songbook ← and → change songs, as ever. They do nothing
+  while the settings, a chord's card, Aa, a menu, the rail of necks or a
+  text field has the focus (each keeps its own keys), nor with Alt, Ctrl,
+  Shift or ⌘ held, but all of them work in full screen; no key changes the
+  version.
 
 The viewer remembers its settings for each song in the browser, the scroll
 speed, the text size, the volume and the shape chosen for each chord among them: a chord
@@ -3830,7 +3842,10 @@ the library page link it, the tab's text beside it.
   viewer page, and carried back to the chord sheet by ‹ Chord sheet), and
   Scroll scrolls by itself, as in the viewer,
   each with its word under it (Shapes, Notes, Text, Scroll). On a laptop it is
-  a toolbar under the tab's title, as the viewer's.
+  a toolbar under the tab's title, as the viewer's. The viewer's keys and
+  pedals work here too: Space or Enter starts and stops scrolling, PageDown or
+  ↓ turns a screen keeping two lines, PageUp or ↑ turns back (not while Aa,
+  the rail or the versions list has the focus).
 - **Full screen**, as the viewer's: a double tap beside the tab (in its
   margins, never on a hole, a word, a line's ▶, the legend or a control) hides
   the bar, the facts, the "fit the sheet's chords" line and the rail, and a
