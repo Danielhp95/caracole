@@ -120,10 +120,12 @@ def test_the_synthesis_is_a_script_of_its_own_inlined_and_hashed_before_the_view
     overlay = (page.HERE / "overlay.js").read_text(encoding="utf-8")
     layers = (page.HERE / "layers.js").read_text(encoding="utf-8")
     kinds = (page.HERE / "kinds.js").read_text(encoding="utf-8")
+    screen = (page.HERE / "screen.js").read_text(encoding="utf-8")
     viewer = (page.HERE / "viewer.js").read_text(encoding="utf-8")
-    assert scripts == [strum, overlay, instruments, winds, layers, kinds, viewer]
-    assert (f"script-src {sha256_source(strum)} {sha256_source(overlay)} {sha256_source(instruments)} "
-            f"{sha256_source(winds)} {sha256_source(layers)} {sha256_source(kinds)} {sha256_source(viewer)};") in csp
+    assert scripts == [screen, strum, overlay, instruments, winds, layers, kinds, viewer]  # screen.js the head's
+    assert (f"script-src {sha256_source(screen)} {sha256_source(strum)} {sha256_source(overlay)} "
+            f"{sha256_source(instruments)} {sha256_source(winds)} {sha256_source(layers)} {sha256_source(kinds)} "
+            f"{sha256_source(viewer)};") in csp
     assert page.HERE / "strum.js" in page.BUILD_FILES
     # It loads nothing: no worklet module, no sample, no fetch.
     for word in ("addModule", "fetch(", "XMLHttpRequest", "import(", "new Audio(", "innerHTML", "eval("):
@@ -215,7 +217,7 @@ def test_the_shape_is_played_at_the_capo_so_it_sounds_the_song(tmp_path):
 def test_the_strip_and_the_keyboard_play_it_too(tmp_path):
     with opened(tmp_path, written(tmp_path, build_viewer(SONG)), width=1000, height=800, mobile=False) as b:
         b.click("#more")
-        b.click("#strip-toggle")
+        b.js("(() => { const s = document.getElementById('strip'); if (s.hidden) document.getElementById('strip-toggle').click(); })()")  # below 1200 px it shows already
         b.click("#strip button:nth-child(2)")  # G: 320003
         assert b.wait("document.documentElement.dataset.heard === '98.00 123.47 146.83 196.00 246.94 392.00'")
         b.js("document.querySelector('#diagram').focus()")

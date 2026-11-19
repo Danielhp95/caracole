@@ -1082,7 +1082,7 @@ def test_the_address_keeps_a_chords_chosen_position(tmp_path):
     hash_, name = run_in_page(build_viewer(UG_CHO), tmp_path, body, "#chord=3")
     assert hash_ == "#chord=3&at=3.2" and name == "C"
     strip = """
-      q("#strip-toggle").click();
+      if (q("#strip").hidden) q("#strip-toggle").click();
       out = [location.hash, q("#card-name").textContent, q("#strip").children[3].querySelector("svg").outerHTML,
              q("#diagram .count").textContent];
     """

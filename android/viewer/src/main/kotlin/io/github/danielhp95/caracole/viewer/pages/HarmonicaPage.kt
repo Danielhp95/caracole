@@ -48,8 +48,8 @@ import java.math.BigInteger
  * viewer/harptab_page.py: harmonica-N.html, a harmonica tab caracole kept from harptabs.com as a page in the sheet
  * viewer's look, byte for byte as `build_harmonica_viewer` writes it for the same inputs. It is sheet.html's kind of
  * page (SheetPage's frame: `_page`, `names_table`, `zh_attr`, `artist_line`, `_words`, and page.py's version line and
- * list, `_VERSIONS` and `_VERSION_LIST`), its stylesheets viewer.css then harptab.css and its scripts strum.js,
- * overlay.js, layers.js, kinds.js then harptab.js (ViewerAssets.Page.HARMONICA); the tab
+ * list, `_VERSIONS` and `_VERSION_LIST`), its stylesheets viewer.css then harptab.css, screen.js in its head and its
+ * scripts strum.js, overlay.js, layers.js, kinds.js then harptab.js (ViewerAssets.Page.HARMONICA); the tab
  * read by viewer.harptab (HarpTabs.parse) and the harp it starts on chosen by HarpFit.choose. Its HTML is
  * harptab_page.py's: the bar, the bar of a tab shown as written and the pill, and its constants, are data
  * (data/caracole/viewer/harmonica_page.json's `harptab_page`, written from the module), the rest its code here. Its
@@ -129,7 +129,8 @@ object HarmonicaPage {
             .append(if (!names.isNullOrEmpty()) Inline.jsonBlock("song-names", namesJson(names)) else "")
             .toString()
         return SheetPage.page(pageTitle, body, ViewerAssets.styles(ViewerAssets.Page.HARMONICA),
-                          ViewerAssets.scripts(ViewerAssets.Page.HARMONICA), names)
+                          ViewerAssets.scripts(ViewerAssets.Page.HARMONICA), names,
+                          ViewerAssets.headScripts(ViewerAssets.Page.HARMONICA))
     }
 
     // --- the data ------------------------------------------------------------------------------------------------

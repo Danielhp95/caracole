@@ -111,6 +111,7 @@
   // ‹ Chord sheet takes the screen's choices back with it (the rail hidden, and as they came in the address, a sheet's
   // viewer's link here having taken them on: the pinyin, the Chinese characters, the instrument), so that where the
   // browser keeps nothing (caracole serve's sandbox) they go both ways. ‹ Library takes none.
+  const screenKit = window.caracoleScreen;  // screen.js, inlined in the head: the theme
   const sheetLink = document.querySelector("a.back[data-sheet]");
   const sheetPage = sheetLink ? sheetLink.getAttribute("href") : "";
   // What a link to another page of the song takes along: "#necks=0&py=1", or "".
@@ -118,6 +119,7 @@
     const now = new URLSearchParams(location.hash.slice(1)), params = new URLSearchParams();
     if (!state.necks) params.set("necks", "0");
     for (const name of ["py", "trad", "inst"]) if (now.has(name)) params.set(name, now.get(name));
+    screenKit.carry(params);
     const fragment = params.toString();
     return fragment ? "#" + fragment : "";
   };
@@ -137,6 +139,7 @@
       keep("fs", state.fs, state.fs !== FS.start);
       keep("speed", state.speed, state.speed !== SPEED.start);
       keep("necks", "0", !state.necks);
+      screenKit.carry(params);
       const fragment = params.toString();
       if (fragment !== location.hash.slice(1)) {
         history.replaceState(history.state, "", fragment ? "#" + fragment : location.pathname + location.search);
@@ -224,6 +227,9 @@
     drawHarp();
     doc.style.setProperty("--fs", state.fs + "px");
     $("fs-now").textContent = state.fs + " px";
+    for (const choice of ["auto", "light", "dark"]) {
+      $("theme-" + choice).setAttribute("aria-pressed", screenKit.theme() === choice ? "true" : "false");
+    }
     $("smaller").setAttribute("aria-disabled", state.fs <= FS.min ? "true" : "false");
     $("bigger").setAttribute("aria-disabled", state.fs >= FS.max ? "true" : "false");
     $("pill-speed").textContent = String(state.speed);
@@ -574,6 +580,13 @@
     render();
     save();
   };
+  for (const choice of ["auto", "light", "dark"]) {
+    $("theme-" + choice).addEventListener("click", () => {
+      screenKit.setTheme(choice);
+      render();
+      save();
+    });
+  }
   $("smaller").addEventListener("click", () => setSize(state.fs - FS.step));
   $("bigger").addEventListener("click", () => setSize(state.fs + FS.step));
 

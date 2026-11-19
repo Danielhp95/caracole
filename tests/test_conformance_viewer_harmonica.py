@@ -657,9 +657,9 @@ def pieces(html: str) -> list[Any]:
     """``html`` as its texts and the viewer/ files it inlines whole (``{"asset": name}``), in order."""
     style, _ = page._assets()
     own_style, script = harptab_page._own_assets()
-    assets = [("viewer.css", style), ("harptab.css", own_style), ("strum.js", page._sound()),
-              ("overlay.js", page._overlay()), ("layers.js", page._layers()), ("kinds.js", page._kinds()),
-              ("harptab.js", script)]
+    assets = [("viewer.css", style), ("harptab.css", own_style), ("screen.js", page._screen()),
+              ("strum.js", page._sound()), ("overlay.js", page._overlay()), ("layers.js", page._layers()),
+              ("kinds.js", page._kinds()), ("harptab.js", script)]
     out: list[Any] = []
     at = 0
     for name, text in assets:

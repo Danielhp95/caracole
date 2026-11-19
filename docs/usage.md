@@ -3240,7 +3240,7 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   screen's, not a song's: the browser keeps it once for every sheet and
   songbook (a page you come back to, by a reload, Back or a tab restored, opens
   on the browser's choice whatever its old address says; so do the pinyin, the
-  Chinese characters and the instrument), and the address keeps `necks=0` too, for a page served by
+  Chinese characters, the instrument and the theme), and the address keeps `necks=0` too, for a page served by
   `caracole serve`, where the browser keeps nothing: a link to another
   version in the version list keeps it, so do a harmonica tab's link in the
   Harmonica row and its page's ‹ Chord sheet, and in a songbook so does every step to another song (the
@@ -3416,7 +3416,10 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   strip of every chord's shape (below) is **All chord shapes** in ⋯, on
   every screen; the bar has no button for it. **Aa** opens a small box
   over the bar (under the laptop's toolbar) with the text size and A− and
-  A+, nothing dimmed behind it; a tap anywhere else, or Escape, closes it.
+  A+, and under them the theme, **Auto**, **Light** or **Dark** (Auto is as
+  your system is; the choice is kept for every sheet, songbook and harmonica
+  tab's page, and a printed page is light whatever it is), nothing dimmed
+  behind it; a tap anywhere else, or Escape, closes it.
   **Scroll**, the arrow in a disc, scrolls the song by
   itself (below), ringed while it is on (counting down, scrolling or
   paused). **More** (⋯) opens the settings. Below 1200 px the bar slides
@@ -3611,8 +3614,10 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   it, those that play that one. With numerals on, a section's heading on the
   sheet names its progression too ("Verse · the pop progression"), or those
   it plays within it ("Chorus · contains the '50s progression").
-- Every chord's shape in a strip above the song (All chord shapes in the
-  settings, its one switch; kept for the page, as the text size is): the
+- Every chord's shape in a strip above the song, on the instrument shown: shown
+  by default below 1200 px, where no rail holds the shapes; from 1200 px the
+  rail holds them and the strip waits for its switch (All chord shapes in the
+  settings, its one switch, kept for the song, as its key is): the
   shapes alone, large enough to read at a glance; tap one for its card,
   with the fingers. Reset all, alone at the foot of the settings, puts the
   transposition, the mode, the capo and the chords played instead back as
@@ -3708,7 +3713,7 @@ capo, the chord names (`nm=both`, `nm=numerals`), the text size, the scroll spee
 volume in its address too (`sheet.html#t=2&mode=aeolian&fs=20&speed=8&vol=1`), the rail of necks hidden
 (`necks=0`; the browser keeps that once for every page), the pinyin shown (`py=1`, kept so too), the Chinese in
 Traditional characters (`trad=1`, kept so too), the instrument
-(`inst=piano`, kept so too), and so the shape chosen for a
+(`inst=piano`, kept so too), the theme while it isn't Auto (`theme=dark`, kept so too), and so the shape chosen for a
 chord, on its card or its neck (`at=3.2`: chord 3, its third shape), and the
 chords played instead of others (`alt=ionian.0.7.maj7.`: mode, chord, root,
 suffix, bass), so a reload or
@@ -3814,7 +3819,9 @@ the library page link it, the tab's text beside it.
   little smaller); after them, from 1200 px the rail's button, and below
   1200 px the neck, the overlay's sheet (below); ♪,
   **Notes**, shows each hole's note on that harp in its place ("F#6");
-  **Aa** the text size, and Scroll scrolls by itself, as in the viewer,
+  **Aa** the text size and the theme (Auto, Light or Dark, kept for every
+  viewer page, and carried back to the chord sheet by ‹ Chord sheet), and
+  Scroll scrolls by itself, as in the viewer,
   each with its word under it (Shapes, Notes, Text, Scroll). On a laptop it is
   a toolbar under the tab's title, as the viewer's.
 - **Full screen**, as the viewer's: a double tap beside the tab (in its
@@ -3854,7 +3861,8 @@ the library page link it, the tab's text beside it.
   page's both ways.
 
 The page keeps the harp, Notes, the text size and the scroll speed in its
-address too (`harmonica-1.html#harp=A&notes=1&fs=20`).
+address too (`harmonica-1.html#harp=A&notes=1&fs=20`), and the theme while it
+isn't Auto (`&theme=dark`).
 
 #### caracole harmonica
 

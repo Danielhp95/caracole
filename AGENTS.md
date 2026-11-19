@@ -393,6 +393,10 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   - **harmony_tables.py**: its answers as the tables a viewer's data carries, per mode, each text naming notes
     written for every transposition, for viewer.js to look up.
   - **strum.js**: a chord's shape strummed in Web Audio, `window.caracoleSound`, each instrument's voice.
+  - **screen.js**: the screen's choices kept for every viewer page (the theme), `window.caracoleScreen`, inlined in
+    the head of every viewer page (`_page`'s `head_scripts`, the Kotlin frame's `headScripts`), so the theme is the
+    page's before its body is drawn; at start-up it touches the root, the address, storage and the navigation alone,
+    and what needs the body waits for DOMContentLoaded; no script guards it.
   - **overlay.js**: the rail of a wide screen, Guitar (the necks), Harmonica (the circle of fifths, the key on the
     harp chosen, each chord's holes, the slim bar) and, on a sheet with a key, Harmony (the page's own pane, viewer.js
     `harmonyPane`: the key's neck, each section's progression), and narrower the phone's sheet,
@@ -437,8 +441,8 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 
 `harmonica-N.html` comes of `_render_harmonica`, whatever came of the sheet's PDF:
 
-- viewer/harptab_page.py `build_harmonica_viewer`, page.py's `_page` with viewer.css and harptab.css, strum.js,
-  overlay.js, layers.js, kinds.js and harptab.js.
+- viewer/harptab_page.py `build_harmonica_viewer`, page.py's `_page` with viewer.css and harptab.css, screen.js in
+  its head, and strum.js, overlay.js, layers.js, kinds.js and harptab.js after its body.
 - **Its version line and list**, the sheet's viewer's (page.py `_VERSIONS` after the artist line, `_VERSION_LIST`
   after the pill; kinds.js): render.py passes `versions=_on_page(listed, None)` (no `this`) and the song's `kinds`,
   its data's last members after `overlay`. The line names its kind and which of its kind's pages it is ("Harmonica ·
@@ -1345,7 +1349,10 @@ It is rows.js's, shared by both pages:
     (test_viewer_overlay_sheet.py);
   - one control each (D11): the rail's button, `necks-toggle`, takes the neck's place after the key from 1200 px, and
     the strip of shapes has no button in the bar, ⋯'s All chord shapes (`strip-toggle`) its one switch
-    (test_viewer_bar.py).
+    (test_viewer_bar.py);
+  - the strip of shapes shows by default here (`stripShown()`: `state.shapes`, null until a hand presses the switch,
+    then true or false, kept per song; from 1200 px the rail holds the shapes and the strip waits for its switch),
+    above the song's first section (test_viewer_strip.py).
 - **Layers and Back**: layers.js (`window.caracoleLayers`, inlined on every viewer page before its own script) keeps
   a page's layers in the browser's history, one entry each while it is open, marked `history.state.caracoleLayer`
   (its depth, from 1), so Back closes the one on top and leaves the page only once none is open:
@@ -1463,11 +1470,18 @@ It is rows.js's, shared by both pages:
     - and the menu offers only what the page draws, an instrument of another kind once its script registers it
       (instruments.js documents that API);
     - test_viewer_instruments.py, test_viewer_instruments_page.py, test_viewer_sound.py.
-  - **A numeral's tooltip**: so, last, is the view of a numeral's tooltip (the chord's notes on a twelve-note circle,
+  - **A numeral's tooltip**: so is the view of a numeral's tooltip (the chord's notes on a twelve-note circle,
     or tiles over a keyboard: localStorage `caracole-viewer-tipview`, the circle with none):
     - it draws only what `tones` (with each note's pitch class) and `keyScale` give;
     - a chord's card opens it too, by its chord, with the chords' names alone (its Circle & keyboard, viewer.js
       `tipDraws`): test_viewer_numerals.py.
+  - **The theme**: so, last, is Aa's theme, Auto, Light or Dark (screen.js, `html[data-theme]` `light` or `dark`, none
+    for Auto, the system's; viewer.css's palette on screen, paper light):
+    - localStorage `caracole-viewer-theme` (`auto`, `light`, `dark`), and `theme=` in the address while it isn't Auto,
+      which `carryScreen` and `screenChoices` take on (`caracoleScreen.carry`);
+    - applied by screen.js in the head, before the body is drawn (no other palette painted first on a slow phone), so
+      a songbook's contents follow it too; Reset all leaves it;
+    - the library page is not affected (test_viewer_theme.py).
 
 #### `commands/`
 
@@ -2511,7 +2525,7 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     and `names` as their SHA-256's first 16 hex digits, `data` one string of `member=digest` in the data's order (8 hex
     digits each), so that it pins the members' order too; another lane's page records take that shape.
   - Printed, every viewer page is in the light palette with a 15 mm margin: viewer.css's dark palette is the screen's
-    alone (`@media screen and (prefers-color-scheme: dark)`), `@media print` sets `color-scheme: light` and `@page`
+    alone, under `@media screen`, both for the system's dark (`:root:not([data-theme="light"])`) and for Dark chosen (`:root[data-theme="dark"]`, written twice: test_viewer_theme.py), `@media print` sets `color-scheme: light` and `@page`
     the margin, which Android's print framework gives a WebView's page none of (tests/test_viewer_print.py, in
     Chromium's print emulation).
 - A harmonica tab's page (harmonica-page): `viewer.pages.HarmonicaPage`, harptab_page.py's builder, byte for byte:

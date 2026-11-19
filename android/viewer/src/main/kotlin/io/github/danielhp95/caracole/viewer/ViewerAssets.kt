@@ -13,22 +13,26 @@ import java.util.concurrent.ConcurrentHashMap
  */
 object ViewerAssets {
     /**
-     * A kind of page and what it inlines in its head and at its end, in order: page.py's `build_viewer` (a sheet and a
-     * kept version's page), book.py's `build_songbook`, harptab_page.py's `build_harmonica_viewer`. Python passes the
-     * files' texts to `_page` by hand; vectors/viewer/theory_assets.jsonl holds what a page Python built inlines, and
-     * the theory replay compares.
+     * A kind of page and what it inlines, in order: its stylesheets and [head] scripts in its head, its [scripts] at
+     * its end: page.py's `build_viewer` (a sheet and a kept version's page), book.py's `build_songbook`,
+     * harptab_page.py's `build_harmonica_viewer`. Python passes the files' texts to `_page` by hand;
+     * vectors/viewer/theory_assets.jsonl holds what a page Python built inlines (its scripts in the page's order, the
+     * head's first), and the theory replay compares.
      */
-    enum class Page(val styles: List<String>, val scripts: List<String>) {
+    enum class Page(val styles: List<String>, val head: List<String>, val scripts: List<String>) {
         SHEET(
             listOf("viewer.css"),
+            listOf("screen.js"),
             listOf("strum.js", "overlay.js", "instruments.js", "winds.js", "layers.js", "kinds.js", "viewer.js"),
         ),
         SONGBOOK(
             listOf("viewer.css", "book.css"),
+            listOf("screen.js"),
             listOf("book.js", "strum.js", "overlay.js", "instruments.js", "winds.js", "layers.js", "viewer.js"),
         ),
         HARMONICA(
             listOf("viewer.css", "harptab.css"),
+            listOf("screen.js"),
             listOf("strum.js", "overlay.js", "layers.js", "kinds.js", "harptab.js"),
         ),
     }
@@ -51,7 +55,10 @@ object ViewerAssets {
     /** The texts of the stylesheets [page] inlines, in order. */
     fun styles(page: Page): List<String> = page.styles.map(::text)
 
-    /** The texts of the scripts [page] inlines, in order. */
+    /** The texts of the scripts [page] inlines in its head, in order. */
+    fun headScripts(page: Page): List<String> = page.head.map(::text)
+
+    /** The texts of the scripts [page] inlines at its end, in order. */
     fun scripts(page: Page): List<String> = page.scripts.map(::text)
 
     /** Whether [name] is one of the files copyViewerAssets puts on the classpath: a name with no folder. */

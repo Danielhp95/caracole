@@ -1,16 +1,16 @@
 """harmonica-N.html: a harmonica tab caracole kept from harptabs.com (``harmonica-N.txt``, harptabs_fetch.py) as a
 page in the sheet viewer's look, written beside it at render time (render.py) and recorded as the viewers are.
 
-It is sheet.html's kind of page (page.py ``_page``): one self-contained file that loads nothing, its policy allowing
-its five scripts (strum.js, overlay.js, layers.js, kinds.js, then harptab.js) and two stylesheets (viewer.css,
-harptab.css) by their hashes, and served in a sandbox (``page.viewer_csp``). The tab is read by harptab.py: each hole
-over the syllable it is blown on, as a chord sits over its syllable on sheet.html (page.py's ``.s`` and ``.w``
-columns: a line wraps between its words, never parting a hole from its syllable), a blow in the accent colour, a draw
-in blue with its "−", a bend's ″ in purple, holes together in their brackets; rows played alone, words sung to the
-same tune and the tabber's notes as they come. What a row's notation couldn't read is shown in its place as written,
-muted ("$", "(DV)"); an effect is a small label on its hole ("wah"), notes run together a ‿ between them, the tab's
-own legend a block of its own, and a row read with low confidence (``Row.trusted``) its text as written. The header
-says how the tab was read: the symbols it used, as it writes them, and whether its own legend said so or caracole
+It is sheet.html's kind of page (page.py ``_page``): one self-contained file that loads nothing, its policy allowing its
+six scripts (screen.js in its head; strum.js, overlay.js, layers.js, kinds.js, then harptab.js after its body) and two
+stylesheets (viewer.css, harptab.css) by their hashes, and served in a sandbox (``page.viewer_csp``). The tab is read by
+harptab.py: each hole over the syllable it is blown on, as a chord sits over its syllable on sheet.html (page.py's
+``.s`` and ``.w`` columns: a line wraps between its words, never parting a hole from its syllable), a blow in the accent
+colour, a draw in blue with its "−", a bend's ″ in purple, holes together in their brackets; rows played alone, words
+sung to the same tune and the tabber's notes as they come. What a row's notation couldn't read is shown in its place as
+written, muted ("$", "(DV)"); an effect is a small label on its hole ("wah"), notes run together a ‿ between them, the
+tab's own legend a block of its own, and a row read with low confidence (``Row.trusted``) its text as written. The
+header says how the tab was read: the symbols it used, as it writes them, and whether its own legend said so or caracole
 guessed, how surely (harptab.py's ``Reading``). A tab harptab.py can't read (``Tab.readable``) is its text as written,
 in the page's style, and its page says so; never an error.
 
@@ -89,6 +89,7 @@ from caracole.viewer.page import (
     _layers,
     _overlay,
     _page,
+    _screen,
     _sound,
     _words,
     artist_line,
@@ -180,7 +181,8 @@ def build_harmonica_viewer(
         + (json_block("song-names", names) if names else "")
     )
     return _page(page_title, body, styles=(style, own_style),
-                 scripts=(_sound(), _overlay(), _layers(), _kinds(), script), names=names)
+                 scripts=(_sound(), _overlay(), _layers(), _kinds(), script), names=names,
+                 head_scripts=(_screen(),))
 
 
 # --- the data ----------------------------------------------------------------------------------------------------
@@ -505,7 +507,7 @@ def _footer(tab_file: str, url: str | None, *, placed: bool, change: bool = Fals
 # The bar, hidden until the script runs, in the order a keyboard reaches it: the harp a semitone down or up, its name
 # and why it was chosen between them; right after it, the overlay shown or hidden (from 1200 px, as the viewer's:
 # page.py's _CONTROLS), or in its place the neck, the overlay's sheet opened or closed (below 1200 px, as the
-# viewer's); ♪, each hole's note on it in its place (pressed while it shows); Aa, the text size in a box beside it;
+# viewer's); ♪, each hole's note on it in its place (pressed while it shows); Aa, the text size and the theme in a box beside it;
 # the viewer's arrow down to a line (page.py's _SCROLL_ICON), scrolling by itself, pressed while it is on. Each after
 # the harp has its word under its icon, as the viewer's: Shapes, Notes, Text, Scroll. A tab shown as written has the
 # overlay's buttons, Aa and Scroll alone.
@@ -521,10 +523,17 @@ _BAR = """<div class="bar" id="bar" data-controls hidden role="region" aria-labe
 <button type="button" class="tool notes" id="notes" aria-pressed="false"><span class="ic" aria-hidden="true">♪</span><span class="bw">Notes</span></button>
 <span class="size-box" id="size-box">
 <button type="button" class="tool" id="size" aria-label="Text size" aria-expanded="false" aria-controls="sizes"><span class="ic" aria-hidden="true">Aa</span><span class="bw">Text</span></button>
-<span class="sizes" id="sizes" role="group" aria-label="Text size" hidden>
+<span class="sizes" id="sizes" hidden>
+<span class="size-row" role="group" aria-label="Text size">
 <button type="button" id="smaller" aria-label="Smaller text" aria-disabled="false">A−</button>
 <output id="fs-now">18 px</output>
 <button type="button" id="bigger" aria-label="Bigger text" aria-disabled="false">A+</button>
+</span>
+<span class="seg theme" id="theme" role="group" aria-label="Theme">
+<button type="button" id="theme-auto" aria-pressed="true">Auto</button>
+<button type="button" id="theme-light" aria-pressed="false">Light</button>
+<button type="button" id="theme-dark" aria-pressed="false">Dark</button>
+</span>
 </span>
 </span>
 <button type="button" class="tool play" id="scroll" aria-label="Auto-scroll" aria-pressed="false"><span class="disc">""" + _SCROLL_ICON + """</span><span class="bw">Scroll</span></button>

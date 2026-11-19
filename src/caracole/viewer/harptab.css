@@ -69,3 +69,7 @@ html:not([data-ready]) .rp { display: none; }
 @media (min-width: 900px) { .page { max-width: 820px; } }
 /* From 1200 px, in the toolbar under the title (viewer.css), the harp's pill as wide as the viewer's key's. */
 @media screen and (min-width: 1200px) { .bar .keys { max-width: 220px; } }
+
+/* Aa's box, the text size and the theme, a little wider than the size alone: its right edge under Aa's, so that on a
+   320 px phone, where Aa is far along the bar, it never leaves the screen (the viewer's centres under its button). */
+.sizes { left: auto; right: 0; transform: none; }

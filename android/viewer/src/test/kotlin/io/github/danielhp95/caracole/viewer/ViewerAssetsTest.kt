@@ -49,9 +49,11 @@ class ViewerAssetsTest {
     @Test fun eachPageInlinesFilesViewerHas() {
         for (page in ViewerAssets.Page.entries) {
             assertTrue(page.styles.isNotEmpty() && page.scripts.isNotEmpty(), page.name)
-            assertTrue((page.styles + page.scripts).all { it in names }, page.name)
+            assertTrue((page.styles + page.head + page.scripts).all { it in names }, page.name)
             assertEquals(page.styles.map(ViewerAssets::text), ViewerAssets.styles(page))
+            assertEquals(page.head.map(ViewerAssets::text), ViewerAssets.headScripts(page))
             assertEquals(page.scripts.map(ViewerAssets::text), ViewerAssets.scripts(page))
+            assertEquals(listOf("screen.js"), page.head, page.name)  // the screen's choices before the body is drawn
         }
         assertEquals("viewer.js", ViewerAssets.Page.SHEET.scripts.last())
         assertEquals("harptab.js", ViewerAssets.Page.HARMONICA.scripts.last())

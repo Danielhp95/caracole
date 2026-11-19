@@ -17,7 +17,7 @@
   --accent-soft: #efd9cf;
   --on-accent: #ffffff;
   --focus: #1f6feb;
-  --mark: #fbe3c4;
+  --mark: #fde8cd;
   --fs: 18px;
   --p1: #b4441e;
   --p2: #1f6feb;
@@ -36,7 +36,7 @@
 }
 /* The dark palette is the screen's alone: printed, a page keeps the light one, whatever the screen's scheme. */
 @media screen and (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #131312;
     --surface: #1d1c1b;
     --raised: #292826;
@@ -61,16 +61,56 @@
     --p4: #c79bf2;
     --kb-white: #d6d2cb;
     --kb-black: #262422;
-    --home: #6fd08f;
-    --away: #8ab8ff;
+    --home: #b8f2c7;
+    --away: #a0c6ff;
     --away-soft: #1b2a44;
     --on-away: #0b1a33;
-    --pull: #e5a3ef;
+    --pull: #cc8ad9;
     --off: #ff9d92;
     --off-bg: #3d1713;
     --kb-lit: #7d786f;
   }
 }
+/* Dark chosen (html[data-theme], screen.js): the same palette again, which a media query and an attribute can't share
+   one selector for; test_viewer_theme.py fails on any token one copy lacks. Under @media screen, so paper is light. */
+@media screen {
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #131312;
+    --surface: #1d1c1b;
+    --raised: #292826;
+    --text: #edebe7;
+    --muted: #aaa59c;
+    --border: #363431;
+    --border-strong: #4b4844;
+    --grip: #7d776f;
+    --sunk: #181716;
+    --seg-on: #292826;
+    --knob: #d8d4cc;
+    --orig-edge: #8f8a82;
+    --orig-bg: #2f2d2a;
+    --accent: #f0895c;
+    --accent-soft: #4a2a1c;
+    --on-accent: #1b0e07;
+    --focus: #6ea8fe;
+    --mark: #4d3416;
+    --p1: #f0895c;
+    --p2: #6ea8fe;
+    --p3: #5fcf85;
+    --p4: #c79bf2;
+    --kb-white: #d6d2cb;
+    --kb-black: #262422;
+    --home: #b8f2c7;
+    --away: #a0c6ff;
+    --away-soft: #1b2a44;
+    --on-away: #0b1a33;
+    --pull: #cc8ad9;
+    --off: #ff9d92;
+    --off-bg: #3d1713;
+    --kb-lit: #7d786f;
+  }
+}
+:root[data-theme="light"] { color-scheme: light; }
 /* On paper: the light palette's colour scheme for the browser's own parts too, and a margin on every side, which
    Android's print framework gives a WebView's page none of (a sheet, a songbook and a harmonica tab's page alike:
    each inlines this stylesheet first). */
@@ -400,6 +440,7 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
 .strip { display: flex; gap: 6px; margin: 14px -16px 0; padding: 4px 16px 6px; overflow-x: auto;
   scrollbar-width: thin; scroll-margin: 8px 0 calc(var(--foot) + 8px); }  /* brought into view clear of the bar */
 .strip button { flex: none; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 4px 2px;
+  min-width: 48px;  /* a chord with no shape (N.C.) is its name alone: still a finger's target */
   border: 0; border-radius: 10px; background: none; color: var(--text); font: inherit; font-size: .82rem;
   font-weight: 700; cursor: pointer; }
 .strip svg { width: 76px; height: auto; }
@@ -491,10 +532,11 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
   .keys { margin-right: 2px; }
   .now, .bar button.now { padding: 0; }
 }
-/* A finger's 48 px: the bar's and the pill's buttons (a minimum: the tools stay 54 px tall and --foot 63 px). Under
-   380 px a phone keeps its 44 px widths, 48 tall: six of 48 px would leave a 320 px phone's key 24 px. */
+/* A finger's 48 px: the bar's, Aa's box's (its theme's too) and the pill's buttons (a minimum: the tools stay 54 px
+   tall and --foot 63 px). Under 380 px a phone keeps its 44 px widths, 48 tall: six of 48 px would leave a 320 px
+   phone's key 24 px. */
 @media (pointer: coarse) {
-  .bar .tool, .keys .step, .sizes button, .pill button { min-width: 48px; min-height: 48px; }
+  .bar .tool, .keys .step, .sizes button, .sizes .seg > button, .pill button { min-width: 48px; min-height: 48px; }
   .pill .ring { width: 48px; height: 48px; }
 }
 @media (pointer: coarse) and (max-width: 379.98px) {
@@ -511,9 +553,15 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
     bottom: calc(-4px - env(safe-area-inset-bottom)); right: calc(-1 * var(--bar-r)); }
 }
 .bar #size[aria-expanded="true"] { background: var(--raised); }
+/* Its two rows: the text size, A− and A+ either side of it, and under it the theme (screen.js), Auto, Light or Dark,
+   in a segmented control as wide as the box. */
 .sizes { position: absolute; z-index: 1; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%);
-  display: flex; align-items: center; gap: 2px; padding: 3px; border-radius: 14px; border: 1px solid var(--border);
-  background: var(--surface); box-shadow: 0 4px 18px rgb(0 0 0 / .16); white-space: nowrap; }
+  display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 3px; border-radius: 14px;
+  border: 1px solid var(--border); background: var(--surface); box-shadow: 0 4px 18px rgb(0 0 0 / .16);
+  white-space: nowrap; }
+.size-row { display: flex; align-items: center; justify-content: space-between; gap: 2px; }
+.sizes .seg { border-radius: 11px; }
+.sizes .seg > button { width: auto; height: auto; min-width: 0; }
 .sizes output { min-width: 4.2em; text-align: center; font-size: .9rem; font-weight: 650;
   font-variant-numeric: tabular-nums; }
 .sizes button[aria-disabled="true"] { opacity: .35; cursor: default; }

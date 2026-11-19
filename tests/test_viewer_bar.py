@@ -122,10 +122,20 @@ def test_the_bar_is_on_the_page_hidden_until_the_script_runs():
     assert ('<p class="vh" id="scroll-status" role="status"></p>\n'
             '<p class="vh" id="key-status" role="status"></p>') in html
     assert 'id="key-status"' not in controls and html.index('id="key-status"') > html.index('<div class="pill"')
-    # Aa opens the size, there with the size it shows; ⋯ the settings.
+    # Aa opens the size, there with the size it shows, and the theme under it; ⋯ the settings.
     assert re.search(r'id="size"[^>]*aria-expanded="false" aria-controls="sizes"', controls)
-    assert re.search(r'<span class="sizes" id="sizes" role="group" aria-label="Text size" hidden>', controls)
-    assert '<output id="fs-now">18 px</output>' in controls
+    assert ('<span class="sizes" id="sizes" hidden>\n'
+            '<span class="size-row" role="group" aria-label="Text size">\n'
+            '<button type="button" id="smaller" aria-label="Smaller text" aria-disabled="false">A−</button>\n'
+            '<output id="fs-now">18 px</output>\n'
+            '<button type="button" id="bigger" aria-label="Bigger text" aria-disabled="false">A+</button>\n'
+            '</span>\n'
+            '<span class="seg theme" id="theme" role="group" aria-label="Theme">\n'
+            '<button type="button" id="theme-auto" aria-pressed="true">Auto</button>\n'
+            '<button type="button" id="theme-light" aria-pressed="false">Light</button>\n'
+            '<button type="button" id="theme-dark" aria-pressed="false">Dark</button>\n'
+            '</span>\n'
+            '</span>\n') in controls
     assert re.search(r'id="more"[^>]*aria-haspopup="dialog" aria-controls="panel" aria-expanded="false"', controls)
     # The neck opens the overlay's sheet, a dialog, below 1200 px (the script shows it there)
     assert re.search(r'id="necks-open" hidden title="Necks and harps" aria-haspopup="dialog" aria-controls="necks"'
@@ -375,18 +385,21 @@ def all_chord_shapes(b: Browser) -> None:
 
 @in_chromium
 def test_all_chord_shapes_is_kept_across_a_reload(tmp_path):
+    # On a phone the strip shows by default: the switch hides it, kept for the song, and shows it again.
     url = written(tmp_path, UG_CHO)
     with viewer(tmp_path, url) as b:
+        start = shapes(b)
+        all_chord_shapes(b)
+        b.open(url)
+        assert b.wait("document.documentElement.dataset.ready === '1'")
+        hidden = shapes(b)
         all_chord_shapes(b)
         b.open(url)
         assert b.wait("document.documentElement.dataset.ready === '1'")
         again = shapes(b)
-        all_chord_shapes(b)
-        b.open(url)
-        assert b.wait("document.documentElement.dataset.ready === '1'")
-        off = shapes(b)
+    assert start["strip"] and start["chip"] == "true"
+    assert not hidden["strip"] and hidden["chip"] == "false"
     assert again["strip"] and again["chip"] == "true"
-    assert not off["strip"] and off["chip"] == "false"
 
 
 @in_chromium
@@ -690,10 +703,9 @@ def test_a_songbook_song_has_the_bar_and_its_next_and_previous_too(tmp_path):
 
 
 @in_chromium
-def test_a_songbook_songs_all_chord_shapes_shows_them(tmp_path):
+def test_a_songbook_song_shows_its_chord_shapes_by_default(tmp_path):
     with viewer(tmp_path, songbook(tmp_path) + "#song-2") as b:
-        all_chord_shapes(b)
-        shown = shapes(b)
+        shown = shapes(b)  # on a phone, with no press
         names = b.js("[...document.querySelectorAll('#strip button')].map((e) => e.lastChild.textContent)")
     assert shown["strip"] and shown["chip"] == "true"
     assert names == ["Cm", "Ab", "Bb", "G7"]

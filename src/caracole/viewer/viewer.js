@@ -59,7 +59,7 @@
   // Chinese in Traditional characters, else in Simplified ones.
   // inst: the instrument the chords are drawn and heard for (data.instruments' id), the player's: kept once for every
   // page, as the rail of necks is.
-  const state = { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null, fs: FS.start, strip: false,
+  const state = { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null, fs: FS.start, shapes: null,
     speed: SPEED.start, nm: null, roles: true, kn: "scale", bpm: BPM.start, vol: VOL, necks: true, py: false,
     trad: false, inst: "guitar" };
   // Where its settings are kept: the page's name, or the one a songbook gives its song (book.js songStore).
@@ -144,9 +144,12 @@
       if (sizeOf(saved.fs) !== null) state.fs = sizeOf(saved.fs);
       if (speedOf(saved.speed) !== null) state.speed = speedOf(saved.speed);
       if (volOf(saved.vol) !== null) state.vol = volOf(saved.vol);
-      state.strip = saved.strip === true;
+      if (typeof saved.shapes === "boolean") state.shapes = saved.shapes;  // an old record's `strip` says nothing
     }
   } catch (err) { /* no storage: the page still works */ }
+  // The screen's choices screen.js keeps for every viewer page (the theme, Aa's), applied before this script ran:
+  // inlined on every viewer page, so never missing.
+  const screenKit = window.caracoleScreen;
   // The rail of necks is the screen's choice, not a song's: kept once for every sheet, songbook and harmonica tab's
   // page (a name no page's own settings have, as theirs end in its path: overlay.js's), and in the address too, where
   // there is no storage.
@@ -254,6 +257,7 @@
       keep("py", "1", state.py);
       keep("trad", "1", state.trad);
       keep("inst", state.inst, state.inst !== "guitar" || Boolean(startInst));
+      screenKit.carry(params);  // the theme, while it isn't Auto
       const fragment = params.toString();
       if (fragment !== location.hash.slice(1)) {
         history.replaceState(history.state, "", fragment ? "#" + fragment : location.pathname + location.search);
@@ -280,7 +284,7 @@
     for (const name of ["mine", "sheet"]) version.delete(name);
     if (!served) {
       const quoted = (text) => "'" + text.replace(/'/g, "'\\''") + "'";
-      for (const name of ["fs", "speed", "vol", "necks", "py"]) version.delete(name);
+      for (const name of ["fs", "speed", "vol", "necks", "py", "theme"]) version.delete(name);
       cmd.textContent = "caracole render --song " + songNamed()
         + " --version " + quoted(version.toString().replace(/%2C/g, ","));
       link.hidden = true;
@@ -765,15 +769,15 @@
     ? kit.keyboard(position, title, bare, span) : kit.box(position, title, bare));
 
   // The screen's choices, kept once for every page (the rail of necks hidden, the pinyin shown, the Chinese in
-  // Traditional characters, the instrument), set in ``params`` as the address keeps them: a link to another page of the
-  // song takes them on (a version's ‹ ›, a harmonica tab's page, and back), so that where the browser keeps nothing
-  // (caracole serve's sandbox) they go with it.
+  // Traditional characters, the instrument, and screen.js's: the theme), set in ``params`` as the address keeps them: a
+  // link to another page of the song takes them on (a version's in the list, a harmonica tab's page, and back), so that
+  // where the browser keeps nothing (caracole serve's sandbox) they go with it.
   function screenChoices(params) {
     if (!state.necks) params.set("necks", "0");
     if (state.py) params.set("py", "1");
     if (state.trad) params.set("trad", "1");
     if (state.inst !== "guitar") params.set("inst", state.inst);
-    return params;
+    return screenKit.carry(params);
   }
 
   // --- the instrument: what the chords are drawn and heard for ------------------------------------------
@@ -1038,6 +1042,12 @@
     keySaid = line;
     $("key-status").textContent = keyQuiet || !panel.hidden ? "" : line;
   };
+  // Aa's theme, the one screen.js has pressed.
+  const drawTheme = () => {
+    for (const b of $("theme").querySelectorAll("button")) {
+      b.setAttribute("aria-pressed", b.id === "theme-" + screenKit.theme() ? "true" : "false");
+    }
+  };
   const render = () => {
     if (state.capo === sheetCapo) state.capo = null;  // the sheet's own again
     keepPositions();
@@ -1054,6 +1064,7 @@
     $("fs-now").textContent = state.fs + " px";
     $("smaller").setAttribute("aria-disabled", state.fs <= FS.min ? "true" : "false");
     $("bigger").setAttribute("aria-disabled", state.fs >= FS.max ? "true" : "false");
+    drawTheme();
 
     const [main, words, changed] = keyShort();
     $("key-now").querySelector(".k").textContent = main;
@@ -1112,7 +1123,6 @@
       level.appendChild(speaker(v));
       return level;
     }) : []);
-    $("strip-toggle").setAttribute("aria-pressed", state.strip ? "true" : "false");
     drawSpeed();
     drawStrip();
     drawWords();  // the words in the characters chosen, with their readings: the Harmony tab names its sections so
@@ -1289,11 +1299,16 @@
     });
   }
 
+  // The strip of every chord's shape: shown by default where no rail holds the shapes (below 1200 px), else by its
+  // switch; the song's own choice, kept, wins either way.
+  const stripShown = () => (state.shapes === null ? !railWide.matches : state.shapes);
   const drawStrip = () => {
     const strip = $("strip");
-    strip.hidden = !state.strip;
+    const on = stripShown();
+    strip.hidden = !on;
     strip.textContent = "";
-    if (!state.strip) return;
+    $("strip-toggle").setAttribute("aria-pressed", on ? "true" : "false");
+    if (!on) return;
     for (let i = 0; i < count; i++) {
       const rep = current(String(i));
       const shapes = shapesOf(rep, shift());
@@ -1527,6 +1542,7 @@
     railWide.addEventListener("change", () => {
       const had = necksEl.contains(document.activeElement);
       if (railWide.matches && sheetAt !== null) dropSheet();
+      drawStrip();
       drawNecks();
       layout();
       place();
@@ -2684,7 +2700,7 @@
     const params = new URLSearchParams();
     if (state.fs !== FS.start) params.set("fs", String(state.fs));
     if (state.speed !== SPEED.start) params.set("speed", String(state.speed));
-    screenChoices(params);  // the rail, the pinyin, the characters and the instrument there too
+    screenChoices(params);  // the rail, the pinyin, the characters, the instrument and the theme there too
     const fragment = params.toString();
     return encodeURIComponent(page) + (fragment ? "#" + fragment : "");
   };
@@ -2745,7 +2761,11 @@
   $("t-up").addEventListener("click", () => step(state.t + 1));
   $("smaller").addEventListener("click", () => { state.fs = Math.max(FS.min, state.fs - FS.step); render(); });
   $("bigger").addEventListener("click", () => { state.fs = Math.min(FS.max, state.fs + FS.step); render(); });
-  $("strip-toggle").addEventListener("click", () => { state.strip = !state.strip; render(); });
+  // Aa's theme: Auto (the system's), Light or Dark, kept for every page by screen.js, and in the address (save()).
+  for (const b of $("theme").querySelectorAll("button")) {
+    b.addEventListener("click", () => { screenKit.setTheme(b.id.slice("theme-".length)); render(); });
+  }
+  $("strip-toggle").addEventListener("click", () => { state.shapes = !stripShown(); render(); });
   $("reset-all").addEventListener("click", () => {
     Object.assign(state, { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null, nm: null,
       necks: true, py: false, trad: false });

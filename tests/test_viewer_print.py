@@ -72,11 +72,13 @@ def _written(tmp_path: Path, kind: str) -> tuple[str, str]:
     return (folder / name).as_uri(), fragment
 
 
-def _seen(tmp_path: Path, kind: str, media: str, scheme: str) -> dict:
+def _seen(tmp_path: Path, kind: str, media: str, scheme: str, theme: str | None = None) -> dict:
     url, fragment = _written(tmp_path, kind)
     with Browser(tmp_path / f"profile-{kind}-{media}-{scheme}", width=1280, height=900) as b:
         b.open(url + fragment)
         assert b.wait("document.documentElement.dataset.ready === '1'")
+        if theme:
+            b.js(f"document.documentElement.dataset.theme = '{theme}'")
         b.send("Emulation.setEmulatedMedia", media=media,
                features=[{"name": "prefers-color-scheme", "value": scheme}])
         assert b.wait(f"matchMedia('{media} and (prefers-color-scheme: {scheme})').matches")
@@ -92,6 +94,13 @@ def test_a_page_prints_in_the_light_palette_from_a_dark_screen(tmp_path, kind):
     assert dark["vars"] == on_screen["vars"], {n: v for n, v in dark["vars"].items() if on_screen["vars"][n] != v}
     assert dark == light
     assert dark["shown"] and dark["shown"]["body"][:2] == ["rgb(0, 0, 0)", "rgb(255, 255, 255)"]
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_a_page_with_dark_chosen_prints_in_the_light_palette(tmp_path, kind):
+    printed = _seen(tmp_path, kind, "print", "light", theme="dark")
+    on_screen = _seen(tmp_path, kind, "screen", "light")
+    assert printed["scheme"] == "light" and printed["vars"] == on_screen["vars"]
 
 
 @pytest.mark.parametrize("kind", KINDS)

@@ -56,6 +56,9 @@ class SongbookPageTest {
         assertFalse("id=\"data-" in html)
         assertTrue("<script type=\"application/json\" id=\"voicings\">{}</script>" in html)
         for (asset in ViewerAssets.scripts(ViewerAssets.Page.SONGBOOK)) assertTrue(asset in html)
+        for (asset in ViewerAssets.headScripts(ViewerAssets.Page.SONGBOOK)) {
+            assertTrue(html.indexOf(asset) in 0 until html.indexOf("</head>"))  // screen.js before the body
+        }
     }
 
     @Test fun aMissingSongIsNamedInTheContentsAndHasNoPage() {

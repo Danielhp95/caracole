@@ -1,9 +1,9 @@
 """sheet.html: one sheet as a page for a phone, written beside its PDF.
 
 The page is one self-contained file. It opens from the synced library folder with
-no server: it loads nothing (a Content-Security-Policy with the hashes of its seven
-scripts, strum.js, overlay.js, instruments.js, winds.js, layers.js, kinds.js and viewer.js, and its stylesheet makes
-the browser enforce that)
+no server: it loads nothing (a Content-Security-Policy with the hashes of its eight
+scripts, screen.js in its head, then strum.js, overlay.js, instruments.js, winds.js, layers.js, kinds.js and viewer.js
+after its body, and its stylesheet makes the browser enforce that)
 and links only to the PDF beside it and to the library's index.html two folders up: its ‹ Library, and the
 artist's name under the title, to the library page on their songs (``artist_line``); and out, in the same tab, to
 chords-db's credit and, on an auto sheet from YouTube, to the video its audio came from (``_CREDIT``).
@@ -194,6 +194,7 @@ BUILD_FILES = (
     HERE / "overlay.js",  # the rail on a wide screen, Guitar and Harmonica, on a sheet and a harmonica tab's page
     HERE / "layers.js",  # a page's layers in the browser's history, Back closing the one on top, on every viewer page
     HERE / "kinds.js",  # the version line, its icons and its list, on a sheet's and a harmonica tab's page
+    HERE / "screen.js",  # the screen's choices, in the head of every viewer page
     # A harmonica tab's page, harmonica-N.html: the tab read, the harp it plays on, the page, its script and style
     *(HERE / name for name in ("harptab.py", "harpfit.py", "harptab_page.py", "harptab.js", "harptab.css")),
     HERE.parent / "inline.py",  # sha256_source, json_block
@@ -285,6 +286,15 @@ def _kinds() -> str:
 
 
 @lru_cache(maxsize=1)
+def _screen() -> str:
+    """screen.js: the screen's choices kept for every viewer page, the theme (``window.caracoleScreen``), inlined in
+    the head of each (``_page``'s ``head_scripts``: a sheet.html and a kept version's page, a songbook.html, book.py,
+    and a harmonica tab's page, harptab_page.py), so the theme is the page's before its body is drawn; the page's
+    own script, viewer.js or harptab.js, calls it."""
+    return (HERE / "screen.js").read_text(encoding="utf-8")
+
+
+@lru_cache(maxsize=1)
 def _instruments() -> str:
     """instruments.js: a chord's box on any fretted instrument and a piano's keyboard, and the instruments another
     script registers (``window.caracoleInstruments``), inlined after strum.js and before viewer.js, which calls it,
@@ -362,6 +372,7 @@ def build_viewer(
         styles=(style,),
         scripts=(_sound(), _overlay(), _instruments(), _winds(), _layers(), _kinds(), script),
         names=names,
+        head_scripts=(_screen(),),
     )
 
 
@@ -438,13 +449,14 @@ _NOTHING = "sandbox; default-src 'none'; base-uri 'none'; form-action 'none'"
 
 
 def _page(title: str, body: str, *, styles: tuple[str, ...], scripts: tuple[str, ...],
-          names: Mapping[str, Mapping[str, str]] | None = None) -> str:
-    """A whole page, sheet.html or songbook.html: its head (``title``, the icon, the stylesheets, and the
-    policy that allows exactly them and the scripts, an image from a data: URI, the icon, and nothing to
-    load, no form to send, no base to change), ``body``, then the scripts, which run once the page is
-    read, in their order. The title is marked as a name the page's ``names`` convert (``zh_attr``)."""
+          names: Mapping[str, Mapping[str, str]] | None = None, head_scripts: tuple[str, ...] = ()) -> str:
+    """A whole page, sheet.html or songbook.html: its head (``title``, the icon, the stylesheets, then
+    ``head_scripts``, which run before the body is read, and the policy that allows exactly them and the scripts, an
+    image from a data: URI, the icon, and nothing to load, no form to send, no base to change), ``body``, then the
+    scripts, which run once the page is read, in their order. The policy names the scripts in the page's order, the
+    head's first. The title is marked as a name the page's ``names`` convert (``zh_attr``)."""
     policy = (
-        f"default-src 'none'; script-src {' '.join(map(sha256_source, scripts))}; "
+        f"default-src 'none'; script-src {' '.join(map(sha256_source, head_scripts + scripts))}; "
         f"style-src {' '.join(map(sha256_source, styles))}; img-src data:; base-uri 'none'; form-action 'none'"
     )
     # One join, so the page is copied once: its script and stylesheet alone are some 66 kB.
@@ -456,6 +468,7 @@ def _page(title: str, body: str, *, styles: tuple[str, ...], scripts: tuple[str,
         PAGE_ICON,
         f"<title{zh_attr(title, names)}>{escape(title)}</title>\n",
         *(f"<style>{style}</style>\n" for style in styles),
+        *(f"<script>{script}</script>\n" for script in head_scripts),
         "</head>\n<body>\n",
         body,
         *(f"<script>{script}</script>\n" for script in scripts),
@@ -1033,10 +1046,17 @@ _CONTROLS = """<div class="bar" id="bar" data-controls hidden role="region" aria
 <button type="button" class="tool necks-open" id="necks-open" hidden title="Necks and harps" aria-haspopup="dialog" aria-controls="necks" aria-expanded="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M2.75 4.25h10.5a1.5 1.5 0 0 1 1.5 1.5v4.5a1.5 1.5 0 0 1-1.5 1.5H2.75a1.5 1.5 0 0 1-1.5-1.5v-4.5a1.5 1.5 0 0 1 1.5-1.5zM2.5 5.5v5h11v-5zm2.25 0h1v5h-1zM8 5.5h1v5H8zm3.25 0h1v5h-1zM6.875 7a1 1 0 1 0 0 2a1 1 0 1 0 0-2z"/></svg><span class="bw">Shapes</span></button>
 <span class="size-box" id="size-box">
 <button type="button" class="tool" id="size" aria-label="Text size" aria-expanded="false" aria-controls="sizes"><span class="ic" aria-hidden="true">Aa</span><span class="bw">Text</span></button>
-<span class="sizes" id="sizes" role="group" aria-label="Text size" hidden>
+<span class="sizes" id="sizes" hidden>
+<span class="size-row" role="group" aria-label="Text size">
 <button type="button" id="smaller" aria-label="Smaller text" aria-disabled="false">A−</button>
 <output id="fs-now">18 px</output>
 <button type="button" id="bigger" aria-label="Bigger text" aria-disabled="false">A+</button>
+</span>
+<span class="seg theme" id="theme" role="group" aria-label="Theme">
+<button type="button" id="theme-auto" aria-pressed="true">Auto</button>
+<button type="button" id="theme-light" aria-pressed="false">Light</button>
+<button type="button" id="theme-dark" aria-pressed="false">Dark</button>
+</span>
 </span>
 </span>
 <button type="button" class="tool play" id="scroll" aria-label="Auto-scroll" aria-pressed="false"><span class="disc">""" + _SCROLL_ICON + """</span><span class="bw">Scroll</span></button>

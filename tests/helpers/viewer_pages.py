@@ -11,7 +11,8 @@ the mouse and the keyboard would: the bar's, the settings', the card's and the s
 A finger is touch events (``Input.dispatchTouchEvent``): ``Input.synthesizeScrollGesture`` with a
 touch scrolls nothing in a headless Chromium. Back and Forward are the browser's own, through the tab's history
 (``back``, ``forward``; ``entries``, where it is in it), as its button and a phone's take them. The overlay's Harmony
-tab is a step away at any width: ``harmony_tab(b)``, or ``HARMONY_TAB`` and ``LEAVE_HARMONY`` as JavaScript.
+tab is a step away at any width: ``harmony_tab(b)``, or ``HARMONY_TAB`` and ``LEAVE_HARMONY`` as JavaScript. A page
+with no storage, as caracole serve's sandbox gives it: ``viewer(..., before=[NO_STORAGE])``.
 """
 
 from __future__ import annotations
@@ -27,6 +28,10 @@ from caracole.viewer import build_viewer
 
 from helpers.browser import Browser, BrowserError
 
+
+# localStorage refused, as in caracole serve's sandbox (an origin of its own, no storage): for ``viewer``'s ``before``.
+NO_STORAGE = """Object.defineProperty(window, 'localStorage', {configurable: true,
+  get() { throw new DOMException('The document is sandboxed', 'SecurityError'); }});"""
 
 # The overlay's Harmony tab shown, at any width: from 1200 px the rail's tab; narrower, the bar's neck first, unless the
 # necks' sheet is open already. An expression, for ``b.js`` as for a tap's (test_viewer_sound.py's ``tapped``).
@@ -57,13 +62,16 @@ def written(tmp_path: Path, cho: str, name: str = "Title") -> str:
 
 @contextmanager
 def viewer(tmp_path: Path, url: str, *, width: int = 390, height: int = 844, mobile: bool = True,
-           reduced: bool = False, args: Iterable[str] = ()) -> Iterator[Browser]:
+           reduced: bool = False, args: Iterable[str] = (), before: Iterable[str] = ()) -> Iterator[Browser]:
     """The page at ``url`` in a Chromium of its own, ``width`` × ``height`` (``mobile``: a phone's, with
-    touch), once its script ran; ``reduced``: with prefers-reduced-motion; ``args``: more of Chromium's switches."""
+    touch), once its script ran; ``reduced``: with prefers-reduced-motion; ``args``: more of Chromium's switches;
+    ``before``: scripts run in every document the page loads, before its own (``NO_STORAGE``)."""
     with Browser(Path(tempfile.mkdtemp(prefix="profile-", dir=tmp_path)), width=width, height=height,
                  mobile=mobile, args=args) as b:
         b.send("Emulation.setEmulatedMedia", features=[
             {"name": "prefers-reduced-motion", "value": "reduce" if reduced else "no-preference"}])
+        for source in before:
+            b.send("Page.addScriptToEvaluateOnNewDocument", source=source)
         b.open(url)
         assert b.wait("document.documentElement.dataset.ready === '1'")
         yield b

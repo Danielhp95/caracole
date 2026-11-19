@@ -117,7 +117,7 @@ CARD = """(() => ({
 def test_the_strip_draws_larger_diagrams_without_the_fingers(tmp_path):
     with Chromium(tmp_path / "profile") as browser:
         tab = opened(browser, build_viewer(UG_CHO), tmp_path)
-        tab.eval("document.getElementById('strip-toggle').click()")
+        tab.eval("if (document.getElementById('strip').hidden) document.getElementById('strip-toggle').click()")
         seen = tab.eval(STRIP)
         tab.click("#strip button")  # G: its card, with the fingers
         card = tab.eval(CARD)
@@ -133,7 +133,7 @@ def test_the_strip_draws_larger_diagrams_without_the_fingers(tmp_path):
 def test_the_strip_shows_the_tabs_own_shapes(tmp_path):
     with Chromium(tmp_path / "profile") as browser:
         tab = opened(browser, build_viewer(LEGEND), tmp_path)
-        tab.eval("document.getElementById('strip-toggle').click()")
+        tab.eval("if (document.getElementById('strip').hidden) document.getElementById('strip-toggle').click()")
         dots = tab.eval("""Object.fromEntries([...document.querySelectorAll("#strip button")].map((b) =>
           [b.lastChild.textContent, b.querySelectorAll(".dg-dot").length]))""")
     assert dots["Cadd9"] == 4 and dots["G"] == 4, dots  # x32033 and 320033, the tab's; chords-db's have three
