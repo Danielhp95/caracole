@@ -288,6 +288,7 @@ def test_the_pill_steers_the_scroll_without_stopping_it(tmp_path):
 
         b.click("#pill-end")
         ended = look(b)
+        ended_on_chord = b.js("document.activeElement.matches('#sheet .c')")
         time.sleep(0.3)
         ended_still = look(b)["y"] == ended["y"]
         b.js("window.before = true; location.reload()")  # the page loaded again, not the one before it
@@ -301,7 +302,9 @@ def test_the_pill_steers_the_scroll_without_stopping_it(tmp_path):
     assert resumed["go"] == "Start" and resumed["tick"] == "3"  # a countdown again, to get your hands back
     assert card["go"] == "Resume" and card["pill"] and not card["inert"]
     assert after_card["pill"] and not after_card["inert"] and after_card["go"] == "Resume"
-    assert not ended["pill"] and ended["bar"] and ended["focus"] == "scroll" and ended_still
+    # × pressed by the mouse takes no focus (screen.js keys' steer): it stays where it was, on the chord the card
+    # closed back to; pressed from the keyboard, the focus goes to Scroll (test_the_pill_answers_the_keyboard).
+    assert not ended["pill"] and ended["bar"] and ended_on_chord and ended_still
     assert ended["status"] == ""
     assert reloaded["speed"] == "8" and not reloaded["pill"]  # kept; it doesn't start by itself
 

@@ -3718,11 +3718,14 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   or ↓ turns a screen, the last two lines wholly in view coming to the top,
   clear of the bar and the pill (on a laptop, under the toolbar); PageUp or
   ↑ turns back, the first two going to the foot; any of them pauses a
-  scroll. In a songbook ← and → change songs, as ever. They do nothing
-  while the settings, a chord's card, Aa, a menu, the rail of necks or a
-  text field has the focus (each keeps its own keys), nor with Alt, Ctrl,
-  Shift or ⌘ held, but all of them work in full screen; no key changes the
-  version.
+  scroll. A song a laptop shows whole in columns turns down only as far as
+  brings all of it into view, and back up to the top. Tapping Scroll or one
+  of the pill's buttons leaves the keys to the pedal (from the keyboard, Tab
+  reaches them as ever). In a songbook ← and → change songs, as ever. They
+  do nothing while the settings, a chord's card, Aa, a menu, the rail of
+  necks or a text field has the focus (each keeps its own keys), nor with
+  Alt, Ctrl, Shift or ⌘ held, but all of them work in full screen; no key
+  changes the version.
 
 The viewer remembers its settings for each song in the browser, the scroll
 speed, the text size, the volume and the shape chosen for each chord among them: a chord

@@ -22,7 +22,7 @@ from caracole.viewer.book import BookSong, build_songbook
 
 from helpers.browser import CHROMIUM_MARKS, Browser
 from helpers.version_pages import WONDERWALL, folder
-from helpers.viewer_pages import key, written
+from helpers.viewer_pages import key, tap_at, written
 from test_viewer_harptab_browser import tab, written as harmonica_written
 from test_viewer_scroll import LONG as WRAPPING
 
@@ -175,6 +175,31 @@ def test_a_screen_of_too_few_whole_lines_turns_by_its_height_less_two_lines(tmp_
     assert down == step and up == 0
 
 
+def test_a_song_in_columns_turns_whole_into_view_and_back_to_the_top(tmp_path):
+    # From 1100 px a song the window shows whole is in columns (viewer.js layout), its lines running down one and up
+    # the next: a turn by its last lines would hide the next column's first ones under the toolbar. PageDown brings
+    # the sheet's top under the toolbar, every line in view, and no further; PageUp goes back to the page's top.
+    short = "{title: Short Song}\n{artist: Synthetic}\n" + "".join(
+        f"{{comment: Verse {n}}}\n" + "".join(f"[G]Line [D]{n}.{m}\n" for m in range(4)) for n in range(6))
+    with opened(tmp_path, written(tmp_path, short), **LAPTOP) as b:
+        assert b.js("document.documentElement.dataset.columns") == "2"
+        lines = b.js("document.querySelectorAll('#sheet p, #sheet pre').length")
+        blur(b)
+        top = len(b.js(WHOLE))
+        press(b, "PageDown")
+        settled(b)
+        down = [b.js(WHOLE), b.js("scrollY")]
+        press(b, "PageDown")
+        settled(b)
+        again = [b.js(WHOLE), b.js("scrollY")]
+        press(b, "PageUp")
+        up = b.js("scrollY")
+    assert top < lines  # the title over it: some of its lines below the window
+    assert down[0] == list(range(lines)) and down[1] > 0
+    assert again == down  # no further
+    assert up == 0
+
+
 # --- Space and Enter ------------------------------------------------------------------------------------------------
 
 
@@ -190,6 +215,28 @@ def test_space_and_enter_start_and_stop_autoscroll(tmp_path):
     assert [state for state, _ in seen] == ["counting", "running", "paused", "counting"]
     assert all(y < 60 for _, y in seen), seen  # never Space's own screen down: it ran a moment between two presses
     assert heard == [[" ", True], [" ", True], ["Enter", True], ["Enter", True]]
+
+
+@pytest.mark.parametrize("size", [PHONE, LAPTOP], ids=["finger", "mouse"])
+def test_a_pill_button_pressed_by_hand_leaves_the_next_space_to_the_map(tmp_path, size):
+    # A browser focuses a button tapped or clicked: the pedal's next Space would press + again rather than pause.
+    with opened(tmp_path, written(tmp_path, LONG), **size) as b:
+        blur(b)
+        press(b, " ")
+        press(b, " ")  # the focus on the pill's ▶: its own press, at once
+        assert b.js(STATE) == "running"
+        blur(b)
+        if size["mobile"]:
+            tap_at(b, *b.js("(() => { const r = document.getElementById('pill-faster').getBoundingClientRect();"
+                            " return [r.left + r.width / 2, r.top + r.height / 2]; })()"))
+        else:
+            b.click("#pill-faster")
+        faster = [b.js("document.getElementById('pill-speed').textContent"), b.js("document.activeElement.id"),
+                  b.js(STATE)]
+        press(b, " ")
+        paused = [b.js("document.getElementById('pill-speed').textContent"), b.js(STATE)]
+    assert faster == ["7", "", "running"]  # a step faster, and the focus where it was: on the page
+    assert paused == ["7", "paused"]
 
 
 def test_a_page_key_while_it_scrolls_pauses_it_and_turns(tmp_path):

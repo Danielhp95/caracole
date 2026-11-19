@@ -3037,6 +3037,7 @@
     room: () => toolbar.room(pill, dockedNow()),
     busy,
     sheet: sheetEl,
+    steer: [$("scroll"), ...pill.getElementsByTagName("button")],
   });
 
   // --- the bar: away as you read down the song, back when you want it -----------------------------

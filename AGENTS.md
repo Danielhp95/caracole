@@ -401,7 +401,8 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     `window.caracoleScreen`, inlined in the head of every viewer page (`_page`'s `head_scripts`, the Kotlin frame's
     `headScripts`), so the theme is the page's before its body is drawn; at start-up it touches the root, the address,
     storage and the navigation alone, and what needs the body waits for DOMContentLoaded or reads what the page's
-    script gave it (it names no element lookup at all: test_viewer_theme.py); no script guards it.
+    script gave it (it looks up no element of its own, test_viewer_theme.py; at key time it walks the sheet's lines it
+    was given); no script guards it.
   - **overlay.js**: the rail of a wide screen, Guitar (the necks), Harmonica (the circle of fifths, the key on the
     harp chosen, each chord's holes, the slim bar) and, on a sheet with a key, Harmony (the page's own pane, viewer.js
     `harmonyPane`: the key's neck, each section's progression), and narrower the phone's sheet,
@@ -1444,8 +1445,13 @@ It is rows.js's, shared by both pages:
     1200 px below the toolbar's height, its bottom once stuck, and the pill under it; narrower above the bar's place,
     slid away or not, the pill and a docked layer; the bar nothing in full screen), keeping `KEPT` (2) of the
     sheet's lines (`p`, `pre`) wholly in view, the second-last to the top or the second to the foot (two alone where
-    that moves the page a line or more), else by the room less `KEPT` lines of `LINE` (2.6) em, half of it at least:
-    one `scrollTo` to a whole pixel, never smooth;
+    that moves the page a line or more), else by the room less `KEPT` lines of `LINE` (2.6) em, half of it at least;
+    a song in columns (`html[data-columns]` above 1, the whole song shown: viewer.js `layout()`), its lines in order
+    down one column and up the next, at most to bring `#sheet`'s top to the room's top, never back, and up to the
+    page's top (test_viewer_keys.py's columns test): one `scrollTo` to a whole pixel, never smooth;
+  - `steer`, the bar's `#scroll` and the pill's buttons: a pointer's press takes no focus (`pointerdown` and
+    `mousedown` prevented, the click as ever), so the next Space or Enter stays the map's, never a tapped +'s press
+    again; the keyboard reaches them by Tab as ever, and layer openers (⋯, Aa, the key) take the focus as before;
   - left alone: another handler's key (`defaultPrevented`: a chord's or a hole's Space, the rail tabs' arrows), an
     input method's, Alt, Ctrl, Meta or Shift, a text field with the focus, and `busy()` (viewer.js: the focus in a
     layer of the stack, `#sizes`, `#tip`, `#necks` or a dialog; harptab.js: `#sizes`, `#necks`, `#version-list`;

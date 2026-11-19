@@ -32,7 +32,7 @@
   //                    theme=dark while the theme is Light or Dark, none for Auto (deleted); returns params. The page's
   //                    own script calls it where it writes its address and its links to another page of the song, so
   //                    that where the browser keeps nothing the choices go with them.
-  //   keys({ toggle, pause, room, busy, sheet })
+  //   keys({ toggle, pause, room, busy, sheet, steer })
   //                    the key map, for a keyboard and a Bluetooth page turner alike (a pedal is a keyboard): one
   //                    keydown listener on the document, bound by the first call (the page's script's, once its body
   //                    is there; a later one changes what it calls, never binds again). It leaves a key alone that
@@ -51,9 +51,15 @@
   //                    than KEPT, PageDown brings the KEPT-th last to top and PageUp the KEPT-th to bottom, so that the
   //                    lines last read stay in view; with KEPT alone, the same where it moves the page a line (LINE em)
   //                    or more (the title over them, the strip of chord shapes); else the page goes on by the room less
-  //                    KEPT lines of LINE em of the sheet's text, by half the room at least. One window.scrollTo, to a
-  //                    whole pixel, never smooth. ArrowLeft and ArrowRight are no key of the map (a songbook's songs,
-  //                    book.js), nor is anything the version line does: no key changes the page.
+  //                    KEPT lines of LINE em of the sheet's text, by half the room at least. A song in columns
+  //                    (html[data-columns] above 1: the window shows it whole, viewer.js layout), whose lines in
+  //                    order run down one column and up the next, turns down at most to bring the sheet's top to top
+  //                    (never back up), and up to the page's top. One window.scrollTo, to a whole pixel, never smooth.
+  //                    ArrowLeft and ArrowRight are no key of the map (a songbook's songs, book.js), nor is anything
+  //                    the version line does: no key changes the page. steer, the buttons that steer autoscroll (the
+  //                    bar's ▶ and the pill's): a pointer's press on one takes no focus (its pointerdown and mousedown
+  //                    prevented, its click as ever), so that the next Space or Enter is still the map's, never that
+  //                    button's own press again; the keyboard reaches them by Tab and presses them as ever.
   //   KEPT             2, the lines a turn keeps in view
   //   LINE             2.6, a line in the em of the sheet's text (a row of chords and its words), for a turn with
   //                    KEPT lines or fewer wholly in view
@@ -110,9 +116,14 @@
     const { top, bottom } = page.room();
     const span = bottom - top;
     if (!(span > 0)) return;  // the song out of sight (a sheet over the whole screen): nothing to turn
+    const lines = Array.from(page.sheet.getElementsByTagName("p"));
+    const tabs = page.sheet.getElementsByTagName("pre");
+    if (tabs.length) {  // in the sheet's order
+      lines.push(...tabs);
+      lines.sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
+    }
     const whole = [];
-    for (const el of page.sheet.getElementsByTagName("*")) {
-      if (el.tagName !== "P" && el.tagName !== "PRE") continue;
+    for (const el of lines) {
       const r = el.getBoundingClientRect();
       if (r.height && r.top >= top - 1 && r.bottom <= bottom + 1) whole.push(r);
     }
@@ -123,6 +134,9 @@
       if (whole.length === KEPT && Math.abs(by) < LINE * em) by = null;  // two that fill the room: they'd hardly move
     }
     if (by === null) by = way * Math.max(span / 2, span - KEPT * LINE * em);
+    if (Number(doc.dataset.columns) > 1) {  // the whole song shows: its top under the controls, or the page's
+      by = way > 0 ? Math.max(0, Math.min(by, page.sheet.getBoundingClientRect().top - top)) : -window.scrollY;
+    }
     window.scrollTo(0, Math.round(window.scrollY + by));
   };
   const onKey = (e) => {
@@ -143,9 +157,14 @@
     page.pause();
     turn(way);
   };
+  const steady = (e) => e.preventDefault();  // a pointer's press, with no focus taken
   const keys = (given) => {
     if (page === null) document.addEventListener("keydown", onKey);
     page = given;
+    for (const el of given.steer || []) {
+      el.addEventListener("pointerdown", steady);
+      el.addEventListener("mousedown", steady);
+    }
   };
   window.caracoleScreen = Object.freeze({ THEME, theme: () => theme, setTheme, carry, keys, KEPT, LINE });
 })();

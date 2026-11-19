@@ -777,6 +777,7 @@
     room: () => toolbar.room(pill, docked()),
     busy,
     sheet,
+    steer: [$("scroll"), ...pill.getElementsByTagName("button")],
   });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible" && moving()) holdScreen();
