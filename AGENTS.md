@@ -1420,15 +1420,17 @@ It is rows.js's, shared by both pages:
   drops it.
 - **The line being sung** (viewer.js `lightSung`, viewer.css `.l.sung`; test_viewer_sung_browser.py): while autoscroll
   is on, the line of `songLines` (the lines `pinyin` reads) that the data's `sung` names at the lyrics' clock:
-  - `sungClock`, in ms (`at`, and `since`, null while it stands): `run()` starts it once the count-in is over,
-    `pauseScroll` stands it (the line lit stays), `endScroll` puts it back at 0, none lit; the line lit is the last
-    timed line's at or before it, none before the first, nor for one sung nowhere (null);
+  - `sungClock`, in ms (`at`, and `since`, null while it stands): `run()` starts it once the count-in is over
+    (`goClock`), `standClock` stands it in `pauseScroll` and `countdown` (Scroll pressed again while it runs) and while
+    the page is hidden, which draws no frames (`visibilitychange`; it goes on once shown, never while hidden), the line
+    lit staying; `endScroll` puts it back at 0, none lit; the line lit is the last timed line's at or before it, none
+    before the first, nor for one sung nowhere (null);
   - a tap on a timed line's words, never its chords (whose card opens), while autoscroll is on sets it at the line's
     first time (`timeOf`); a finger pauses the scroll as ever, a mouse click pauses nothing; the scroll's speed is its
     own;
   - a band behind the line, `--sung` (light `#fdf1e4`, dark `#2f2418`, in both dark copies), a box shadow past its
     edges, so nothing on the line moves and a Chinese line keeps its columns with pinyin; its words and chords 4.5:1
-    on it; no transition;
+    on it; no transition; none on paper (`@media print`);
   - none without `sung` (no timed lyrics, too few lines met) nor in a songbook, whose data carries no lyrics.
 - **Columns** (from 1100 px, on the screen alone, viewer.css; test_viewer_layout.py) only where the whole song shows
   that way, its end in the last column (`layout()`): the fewest that do, two to five (`MOST_COLUMNS`), each at least

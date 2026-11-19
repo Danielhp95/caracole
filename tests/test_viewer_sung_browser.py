@@ -166,6 +166,54 @@ def test_ended_nothing_is_lit_and_the_clock_starts_over(tmp_path):
 
 
 @in_chromium
+def test_scroll_pressed_again_while_it_runs_keeps_the_clock_through_the_count_in(tmp_path):
+    # The bar's Scroll, where a layer docked on the bar shows it while the song scrolls (a mouse click, or Enter: a
+    # finger would pause it first), counts in again from where the song is.
+    with viewer(tmp_path, written(tmp_path, SONG, timed=TIMED)) as b:
+        start_now(b)
+        assert b.wait(f"{LIT} >= 2", 5)
+        b.js(WATCH)
+        k = b.js(f"(() => {{ const k = {LIT}; document.getElementById('scroll').click(); return k; }})()")
+        counting = look(b)["go"]
+        assert b.wait("document.getElementById('go').getAttribute('aria-label') === 'Pause'", 6)  # counted in
+        assert b.wait(f"{LIT} > {k}", 3)
+        log = lit_log(b)
+    assert counting == "Start"
+    assert log[:2] == [[k], [k + 1]]  # the next line, never back to the start
+
+
+# The page hidden, or shown again, as the browser tells it (``document.visibilityState`` and its event): a headless
+# Chromium's page is never hidden, and keeps drawing frames, so the scroll goes on where a hidden tab's would stop.
+VISIBILITY = """((state) => {
+  Object.defineProperty(document, 'visibilityState', {configurable: true, get: () => state});
+  document.dispatchEvent(new Event('visibilitychange')); })"""
+
+
+@in_chromium
+def test_the_clock_stands_while_the_page_is_hidden(tmp_path):
+    with viewer(tmp_path, written(tmp_path, SONG, timed=TIMED)) as b:
+        start_now(b)
+        assert b.wait(f"{LIT} >= 1", 5)
+        b.js(WATCH)
+        k = b.js(f"(() => {{ const k = {LIT}; ({VISIBILITY})('hidden'); return k; }})()")
+        hidden = later(b, LIT, 1700)  # two lines' time and more: the clock stood
+        b.js(f"({VISIBILITY})('visible')")
+        assert b.wait(f"{LIT} === {k + 1}", 3)  # on from where it stood
+        shown = lit_log(b)
+
+        # Started while hidden (its count-in over in the background): the clock waits for the page to show.
+        b.js(f"({VISIBILITY})('hidden')")
+        b.click("#go")
+        b.click("#go")
+        b.click("#go")  # running again, the page still hidden
+        started = later(b, f"[{LIT}, document.getElementById('go').getAttribute('aria-label')]", 1200)
+        b.js(f"({VISIBILITY})('visible')")
+        assert b.wait(f"{LIT} === {k + 2}", 3)
+    assert hidden == k and shown[:2] == [[k], [k + 1]]
+    assert started == [k + 1, "Pause"]
+
+
+@in_chromium
 @pytest.mark.parametrize("timed", [(), TOO_FEW], ids=["no timed lyrics", "too few lines met"])
 def test_no_timed_lyrics_or_too_few_matches_light_nothing(tmp_path, timed):
     url = written(tmp_path, SONG, timed=timed)

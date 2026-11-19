@@ -2850,13 +2850,14 @@
   // The line being sung, lit while it scrolls. data.sung (page.py, sung.py: the song's timed lyrics matched to its
   // lines at render time): for each timed line, in time order, [ms, n], its time and the index in songLines of the
   // line it is sung on, or null for one the sheet writes nowhere (a chorus sung again, a break); none for a song with
-  // no timed lyrics, or whose lyrics meet too few of its lines, which lights nothing. The lyrics' clock, sungClock (in
-  // ms: at, and since, when it last went on, null while it stands), starts once the count-in is over, stands while
-  // the scroll is paused (the line lit stays) and is back at the start, none lit, once autoscroll ends. The line lit
-  // is the one the last timed line at or before the clock names: none before the first, nor for one sung nowhere. A
-  // tap on a timed line's words while autoscroll is on (never on its chords, whose card opens) sets the clock at that
-  // line's first time; a finger pauses the scroll as ever, a mouse click pauses nothing, so the clock goes on from
-  // there. No recording plays: it is a guide at the song's own times, and the scroll keeps its own speed.
+  // no timed lyrics, or whose lyrics meet too few of its lines, which lights nothing. The lyrics' clock, sungClock
+  // (in ms: at, and since, when it last went on, null while it stands), starts once the count-in is over, stands
+  // while the scroll is paused or counts in again (the line lit stays) and while the page is hidden, and is back at
+  // the start, none lit, once autoscroll ends. The line lit is the one the last timed line at or before the clock
+  // names: none before the first, nor for one sung nowhere. A tap on a timed line's words while autoscroll is on
+  // (never on its chords, whose card opens) sets the clock at that line's first time; a finger pauses the scroll as
+  // ever, a mouse click pauses nothing, so the clock goes on from there. No recording plays: it is a guide at the
+  // song's own times, and the scroll keeps its own speed.
   const SUNG = (Array.isArray(data.sung) ? data.sung : [])
     .filter((e) => Array.isArray(e) && Number.isFinite(e[0])
       && (e[1] === null || (Number.isInteger(e[1]) && e[1] >= 0 && e[1] < songLines.length)))
@@ -2864,6 +2865,22 @@
   const timeOf = new Map();  // each line lit, its first time
   for (const [ms, n] of SUNG) if (n !== null && !timeOf.has(songLines[n])) timeOf.set(songLines[n], ms);
   const sungClock = { at: 0, since: null, started: false };
+  // The clock stands where the song is (a pause, a count-in again, the page hidden), or goes on from there: never
+  // while the page is hidden, which draws no frames, so the song scrolls no further and the light keeps with it.
+  const standClock = () => {
+    if (sungClock.since === null) return;
+    sungClock.at += performance.now() - sungClock.since;
+    sungClock.since = null;
+  };
+  const goClock = () => {
+    sungClock.started = true;
+    if (document.visibilityState !== "hidden") sungClock.since = performance.now();
+  };
+  document.addEventListener("visibilitychange", () => {
+    if (scroll.state !== "running") return;
+    if (document.visibilityState === "hidden") standClock();
+    else if (sungClock.since === null) goClock();
+  });
   let lit = null;
   const lightSung = () => {
     let line = null;
@@ -2890,6 +2907,7 @@
 
   const countdown = () => {
     clearTimeout(scroll.timer);
+    standClock();  // pressed again while it runs: the clock stands through the count-in, then goes on
     scroll.state = "counting";
     scroll.ends = performance.now() + COUNTDOWN;
     const tick = () => {
@@ -2914,8 +2932,7 @@
     scroll.from = scroll.at = window.scrollY;
     scroll.travelled = 0;
     scroll.last = 0;
-    sungClock.since = performance.now();  // the lyrics' clock goes on, from where it stood
-    sungClock.started = true;
+    goClock();  // the lyrics' clock goes on, from where it stood
     const loop = ++scroll.loop;
     const frame = (now) => {
       if (scroll.state !== "running" || loop !== scroll.loop) return;
@@ -2948,10 +2965,7 @@
   function pauseScroll(said) {
     if (!moving()) return;
     clearTimeout(scroll.timer);
-    if (sungClock.since !== null) {  // the clock stands where the song is
-      sungClock.at += performance.now() - sungClock.since;
-      sungClock.since = null;
-    }
+    standClock();
     scroll.state = "paused";
     showScroll(said || "Paused");
     letScreenSleep();

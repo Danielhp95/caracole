@@ -1083,6 +1083,7 @@ a.ver-main .ver-name { color: var(--accent); }
   .page::after { content: none; }
   .c { color: #b4441e; }
   .sheet ruby.py > rt { color: #645f57; }
+  .l.sung { background: none; box-shadow: none; }  /* the line being sung is the screen's */
   .tab { background: none; padding: 0; }
 }
 
