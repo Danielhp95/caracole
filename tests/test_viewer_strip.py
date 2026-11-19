@@ -10,7 +10,8 @@ from caracole.viewer.book import BookSong, build_songbook
 
 from helpers.browser import CHROMIUM_MARKS, Browser
 from helpers.viewer_pages import drag, viewer as open_viewer, written
-from test_viewer_necks import reload, reopen
+from test_viewer_necks import reload, reopen, served, to_song
+from caracole.viewer.book import songbook_csp
 
 pytestmark = CHROMIUM_MARKS
 
@@ -89,6 +90,9 @@ def test_the_strip_draws_the_instrument_shown(tmp_path, inst, drawn):
     with open_viewer(tmp_path, written(tmp_path, SONG) + f"#inst={inst}") as b:
         assert strip(b)["shown"]
         assert b.js(f"document.querySelectorAll('#strip button {drawn}').length") == 4
+        if inst == "ukulele":  # a box of four strings
+            assert b.js("""[...document.querySelectorAll('#strip button svg')].every((svg) =>
+              new Set([...svg.querySelectorAll('[data-string]')].map((m) => m.dataset.string)).size === 4)""")
 
 
 @pytest.mark.parametrize("size", [{"width": 320, "height": 640}, {"width": 844, "height": 390}])
@@ -110,3 +114,46 @@ def test_a_songbook_song_shows_its_strip_and_the_harmonica_page_has_none(tmp_pat
                     encoding="utf-8")
     with open_viewer(tmp_path, harp.as_uri()) as b:
         assert b.js("document.querySelector('.strip') === null")
+
+
+def resize(b: Browser, width: int) -> None:
+    b.send("Emulation.setDeviceMetricsOverride", width=width, height=900, deviceScaleFactor=1, mobile=False)
+    assert b.wait(f"window.innerWidth === {width}")
+
+
+def test_crossing_1200_px_follows_the_default_and_never_a_choice_made_by_hand(tmp_path):
+    with open_viewer(tmp_path, written(tmp_path, SONG), width=390, height=900, mobile=False) as b:
+        assert strip(b)["shown"]
+        resize(b, 1280)
+        assert b.wait("document.querySelector('#strip').hidden")
+        assert strip(b)["pressed"] == "false"
+        resize(b, 390)
+        assert b.wait("!document.querySelector('#strip').hidden")
+        switch(b)  # hidden by hand at 390 px
+        assert not strip(b)["shown"]
+        resize(b, 1280)
+        assert b.wait("window.innerWidth === 1280") and not strip(b)["shown"]
+        resize(b, 390)
+        assert b.wait("window.innerWidth === 390") and not strip(b)["shown"]
+
+
+def test_the_strip_shown_by_default_leaves_the_columns_a_short_song_had(tmp_path):
+    # The strip is above the sheet, outside the columns' room: layout() measures the sheet alone.
+    with open_viewer(tmp_path, written(tmp_path, SONG), width=1100, height=900, mobile=False) as b:
+        assert strip(b)["shown"]
+        shown = b.js("document.documentElement.dataset.columns")
+        switch(b)
+        assert not strip(b)["shown"]
+        assert b.js("document.documentElement.dataset.columns") == shown
+
+
+def test_a_songbook_without_storage_shows_the_next_songs_strip_by_default(tmp_path):
+    songs = [BookSong("Strip", "Synthetic", cho=SONG, id="aaaa"), BookSong("Other", "Synthetic", cho=OTHER, id="bbbb")]
+    page = "/_songbooks/Book/songbook.html"
+    with served({page: (build_songbook("Book", songs), songbook_csp)}) as site, \
+            open_viewer(tmp_path, site + page + "#song-1") as b:
+        assert strip(b)["shown"]
+        switch(b)
+        assert not strip(b)["shown"]
+        to_song(b, 2)
+        assert strip(b)["shown"]
