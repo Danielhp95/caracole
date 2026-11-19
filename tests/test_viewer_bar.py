@@ -385,18 +385,21 @@ def all_chord_shapes(b: Browser) -> None:
 
 @in_chromium
 def test_all_chord_shapes_is_kept_across_a_reload(tmp_path):
+    # On a phone the strip shows by default: the switch hides it, kept for the song, and shows it again.
     url = written(tmp_path, UG_CHO)
     with viewer(tmp_path, url) as b:
+        start = shapes(b)
+        all_chord_shapes(b)
+        b.open(url)
+        assert b.wait("document.documentElement.dataset.ready === '1'")
+        hidden = shapes(b)
         all_chord_shapes(b)
         b.open(url)
         assert b.wait("document.documentElement.dataset.ready === '1'")
         again = shapes(b)
-        all_chord_shapes(b)
-        b.open(url)
-        assert b.wait("document.documentElement.dataset.ready === '1'")
-        off = shapes(b)
+    assert start["strip"] and start["chip"] == "true"
+    assert not hidden["strip"] and hidden["chip"] == "false"
     assert again["strip"] and again["chip"] == "true"
-    assert not off["strip"] and off["chip"] == "false"
 
 
 @in_chromium
@@ -700,10 +703,9 @@ def test_a_songbook_song_has_the_bar_and_its_next_and_previous_too(tmp_path):
 
 
 @in_chromium
-def test_a_songbook_songs_all_chord_shapes_shows_them(tmp_path):
+def test_a_songbook_song_shows_its_chord_shapes_by_default(tmp_path):
     with viewer(tmp_path, songbook(tmp_path) + "#song-2") as b:
-        all_chord_shapes(b)
-        shown = shapes(b)
+        shown = shapes(b)  # on a phone, with no press
         names = b.js("[...document.querySelectorAll('#strip button')].map((e) => e.lastChild.textContent)")
     assert shown["strip"] and shown["chip"] == "true"
     assert names == ["Cm", "Ab", "Bb", "G7"]

@@ -59,7 +59,7 @@
   // Chinese in Traditional characters, else in Simplified ones.
   // inst: the instrument the chords are drawn and heard for (data.instruments' id), the player's: kept once for every
   // page, as the rail of necks is.
-  const state = { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null, fs: FS.start, strip: false,
+  const state = { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null, fs: FS.start, shapes: null,
     speed: SPEED.start, nm: null, roles: true, kn: "scale", bpm: BPM.start, vol: VOL, necks: true, py: false,
     trad: false, inst: "guitar" };
   // Where its settings are kept: the page's name, or the one a songbook gives its song (book.js songStore).
@@ -144,7 +144,7 @@
       if (sizeOf(saved.fs) !== null) state.fs = sizeOf(saved.fs);
       if (speedOf(saved.speed) !== null) state.speed = speedOf(saved.speed);
       if (volOf(saved.vol) !== null) state.vol = volOf(saved.vol);
-      state.strip = saved.strip === true;
+      if (typeof saved.shapes === "boolean") state.shapes = saved.shapes;  // an old record's `strip` says nothing
     }
   } catch (err) { /* no storage: the page still works */ }
   // The screen's choices screen.js keeps for every viewer page (the theme, Aa's), applied before this script ran:
@@ -1123,7 +1123,6 @@
       level.appendChild(speaker(v));
       return level;
     }) : []);
-    $("strip-toggle").setAttribute("aria-pressed", state.strip ? "true" : "false");
     drawSpeed();
     drawStrip();
     drawWords();  // the words in the characters chosen, with their readings: the Harmony tab names its sections so
@@ -1300,11 +1299,16 @@
     });
   }
 
+  // The strip of every chord's shape: shown by default where no rail holds the shapes (below 1200 px), else by its
+  // switch; the song's own choice, kept, wins either way.
+  const stripShown = () => (state.shapes === null ? !railWide.matches : state.shapes);
   const drawStrip = () => {
     const strip = $("strip");
-    strip.hidden = !state.strip;
+    const on = stripShown();
+    strip.hidden = !on;
     strip.textContent = "";
-    if (!state.strip) return;
+    $("strip-toggle").setAttribute("aria-pressed", on ? "true" : "false");
+    if (!on) return;
     for (let i = 0; i < count; i++) {
       const rep = current(String(i));
       const shapes = shapesOf(rep, shift());
@@ -1538,6 +1542,7 @@
     railWide.addEventListener("change", () => {
       const had = necksEl.contains(document.activeElement);
       if (railWide.matches && sheetAt !== null) dropSheet();
+      drawStrip();
       drawNecks();
       layout();
       place();
@@ -2760,7 +2765,7 @@
   for (const b of $("theme").querySelectorAll("button")) {
     b.addEventListener("click", () => { screenKit.setTheme(b.id.slice("theme-".length)); render(); });
   }
-  $("strip-toggle").addEventListener("click", () => { state.strip = !state.strip; render(); });
+  $("strip-toggle").addEventListener("click", () => { state.shapes = !stripShown(); render(); });
   $("reset-all").addEventListener("click", () => {
     Object.assign(state, { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null, nm: null,
       necks: true, py: false, trad: false });

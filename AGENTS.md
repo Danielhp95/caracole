@@ -1349,7 +1349,10 @@ It is rows.js's, shared by both pages:
     (test_viewer_overlay_sheet.py);
   - one control each (D11): the rail's button, `necks-toggle`, takes the neck's place after the key from 1200 px, and
     the strip of shapes has no button in the bar, ⋯'s All chord shapes (`strip-toggle`) its one switch
-    (test_viewer_bar.py).
+    (test_viewer_bar.py);
+  - the strip of shapes shows by default here (`stripShown()`: `state.shapes`, null until a hand presses the switch,
+    then true or false, kept per song; from 1200 px the rail holds the shapes and the strip waits for its switch),
+    above the song's first section (test_viewer_strip.py).
 - **Layers and Back**: layers.js (`window.caracoleLayers`, inlined on every viewer page before its own script) keeps
   a page's layers in the browser's history, one entry each while it is open, marked `history.state.caracoleLayer`
   (its depth, from 1), so Back closes the one on top and leaves the page only once none is open:

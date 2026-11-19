@@ -3614,8 +3614,10 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   it, those that play that one. With numerals on, a section's heading on the
   sheet names its progression too ("Verse · the pop progression"), or those
   it plays within it ("Chorus · contains the '50s progression").
-- Every chord's shape in a strip above the song (All chord shapes in the
-  settings, its one switch; kept for the page, as the text size is): the
+- Every chord's shape in a strip above the song, on the instrument shown: shown
+  by default below 1200 px, where no rail holds the shapes; from 1200 px the
+  rail holds them and the strip waits for its switch (All chord shapes in the
+  settings, its one switch, kept for the song, as its key is): the
   shapes alone, large enough to read at a glance; tap one for its card,
   with the fingers. Reset all, alone at the foot of the settings, puts the
   transposition, the mode, the capo and the chords played instead back as

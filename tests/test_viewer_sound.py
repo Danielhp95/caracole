@@ -217,7 +217,7 @@ def test_the_shape_is_played_at_the_capo_so_it_sounds_the_song(tmp_path):
 def test_the_strip_and_the_keyboard_play_it_too(tmp_path):
     with opened(tmp_path, written(tmp_path, build_viewer(SONG)), width=1000, height=800, mobile=False) as b:
         b.click("#more")
-        b.click("#strip-toggle")
+        b.js("(() => { const s = document.getElementById('strip'); if (s.hidden) document.getElementById('strip-toggle').click(); })()")  # below 1200 px it shows already
         b.click("#strip button:nth-child(2)")  # G: 320003
         assert b.wait("document.documentElement.dataset.heard === '98.00 123.47 146.83 196.00 246.94 392.00'")
         b.js("document.querySelector('#diagram').focus()")
