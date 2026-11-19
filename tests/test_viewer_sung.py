@@ -37,9 +37,10 @@ def test_its_numbers_are_the_ones_the_phone_follows():
     assert (LINE_MATCH, MIN_SHARE, MIN_LINES, MAX_SECONDS) == (80, 0.5, 4, 86400)
 
 
-def test_a_lines_key_is_its_words_in_simplified_characters():
+def test_a_lines_key_is_its_words_and_a_chinese_lines_its_pinyin():
     assert line_key("Paper Boats, are drifting!") == "paper boats are drifting"
-    assert line_key("斑馬，斑馬") == line_key("斑马 斑马") == "斑马 斑马"
+    assert line_key("斑馬，斑馬") == line_key("斑马 斑马") == line_key("斑 马 斑 马") == "ban ma ban ma"
+    assert line_key("我们 love you") == "wo men love you"
     assert line_key("") == line_key("  ") == line_key("(…)") == ""
 
 
@@ -90,6 +91,14 @@ def test_traditional_lyrics_meet_a_simplified_sheet():
     assert [n for _, n in sung_lines([t for _, t in timed], lrc(*drawn))] == [0, 1, 2, 3, 4]
 
 
+def test_chinese_meets_as_its_pinyin_spaced_or_written_with_other_characters():
+    # A tabber's spaces between the characters, 妳 for 你, 著 for 着: as characters, fuzz.ratio says 69, 67, 75 and 60
+    drawn = ["斑 马 斑 马 你 不 要 睡 着 啦", "你好吗", "你在哪里", "等着你回来", "我爱你"]
+    timed = lrc("斑马斑马你不要睡着啦", "妳好嗎", "妳在哪裡", "等著妳回來", "我恨你")
+    # ...and a word changed is another line: wo ai ni is no wo hen ni
+    assert [n for _, n in sung_lines(drawn, timed)] == [0, 1, 2, 3, None]
+
+
 def test_a_time_past_a_day_is_left_out():
     five = [t for t in DRAWN if t]
     timed = [(0.0, five[0]), (1.5, five[1]), (2.5, five[2]), (86399.999, five[3]), (86400.0, five[4]),
@@ -125,15 +134,16 @@ def test_build_viewer_puts_the_sung_lines_in_its_data_by_the_lines_pinyin_reads(
 
 
 @pytest.mark.slow
-def test_rapidfuzz_is_loaded_only_for_a_page_with_timed_lyrics():
+def test_rapidfuzz_is_loaded_only_for_a_page_with_timed_lyrics_and_pypinyin_only_for_chinese():
     code = (
         "import sys; import caracole.cli; from caracole.viewer import build_viewer\n"
         "cho = '{title: T}\\n' + ''.join(f'[C]Line number {n} of words\\n' for n in range(5))\n"
-        "print('\"sung\":[' in build_viewer(cho), 'rapidfuzz' in sys.modules)\n"
+        "print('\"sung\":[' in build_viewer(cho), 'rapidfuzz' in sys.modules, 'pypinyin' in sys.modules)\n"
         "timed = [(4.0 * n, f'Line number {n} of words') for n in range(5)]\n"
-        "print('\"sung\":[' in build_viewer(cho, timed=timed), 'rapidfuzz' in sys.modules)\n"
+        "print('\"sung\":[' in build_viewer(cho, timed=timed), 'rapidfuzz' in sys.modules,"
+        " 'pypinyin' in sys.modules)\n"
     )
     src = Path(__file__).resolve().parents[1] / "src"
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True,
                          env={"PYTHONPATH": subprocess_pythonpath(src)})
-    assert out.stdout.split() == ["False", "False", "True", "True"]
+    assert out.stdout.split() == ["False", "False", "False", "True", "True", "False"]

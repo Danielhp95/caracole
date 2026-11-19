@@ -120,7 +120,8 @@ EDGE_WORDS = ("", " ", "  ", "a", "a b", "a  b ", " a", "\ta\tb", "我们一起"
 # sung.py's: the constants the phone reads, its edges' keys, and how many corpus sheets' matches are recorded whole
 SUNG_CONSTANTS = ("LINE_MATCH", "MIN_SHARE", "MIN_LINES", "MAX_SECONDS")
 SUNG_KEYS = ("The river and the sea", "THE", "and", "Driftin' slowly", "drifting  slowly!", "ÀÉÎ Ñandú", "斑馬，斑馬",
-             "愛情說話 聽見", "再給我看看你受傷的尾巴", "我们一起 唱歌", "(…)", "♪ ♪", "1, 2, 3, 4")
+             "愛情說話 聽見", "再給我看看你受傷的尾巴", "我们一起 唱歌", "(…)", "♪ ♪", "1, 2, 3, 4",
+             "斑 马 斑 马 你 不 要 睡 着 啦", "妳好嗎", "等著妳回來", "我们 love you", "沈むように溶けてゆくように")
 SUNG_SHEETS = 20
 SUNG_TAGS = ("chinese", "kana", "auto", "preamble", "legend", "tab", "define", "capo", "edge", "fixture", "catalogue",
              "mode")
@@ -325,6 +326,9 @@ def _sung_edges() -> list[tuple[list[str], list[list[Any]]]]:
         (ten, lrc(*ten[:5])),
         (drawn, []), ([], lrc(*five)), (["", ""], lrc("", "", "", "", "")),
         (zh, lrc(*zh_trad)), (zh_trad, lrc(*zh)),
+        # Chinese as its pinyin: a tabber's spaces, 妳 for 你, 著 for 着; and a word changed, 我恨你 for 我爱你
+        (["斑 马 斑 马 你 不 要 睡 着 啦", "你好吗", "你在哪里", "等着你回来", "我爱你"],
+         lrc("斑马斑马你不要睡着啦", "妳好嗎", "妳在哪裡", "等著妳回來", "我恨你")),
         (drawn, [[0.0, five[0]], [1.5, five[1]], [2.5, five[2]], [86399.999, five[3]], [86400.0, five[4]],
                  [1e300, five[4]], [-0.5, five[4]]]),  # a time from 0 to under a day alone
         (drawn, [[0.0005, five[0]], [0.0015, five[1]], [0.0025, five[2]], [12.3456, five[3]], [20, five[4]]]),
@@ -511,9 +515,9 @@ def _options(rng: random.Random, sheet: viewer_corpus.CorpusSheet) -> dict[str, 
         kw["video"] = _video(rng)
     if rng.random() < 0.3:
         kw["kinds"] = _kinds(rng)
-    timed = _timed_rng(sheet.name)
-    if timed.random() < 1 / 3:
-        kw["timed"] = _timed(timed, sheet.cho)
+    draws = _timed_rng(sheet.name)
+    if draws.random() < 1 / 3:
+        kw["timed"] = _timed(draws, sheet.cho)
     return {k: v for k, v in kw.items() if v != DEFAULTS[k] and not (v in ((), []) and DEFAULTS[k] == ())}
 
 

@@ -434,8 +434,10 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     (`sung_lines`; n indexes page.py `_drawn_lines`, the lines `pinyin` reads):
     - top to bottom, the most lines paired, each as early as it can be: a chorus the sheet writes once lit the first
       time alone;
-    - two lines meet by `line_key` (normalize.py `name_words` of `simplified`: either Chinese script, accents, case
-      and punctuation folded) at rapidfuzz's `ratio` `LINE_MATCH` (80) or more, imported in `sung_lines` alone;
+    - two lines meet by `line_key` (normalize.py `name_words`, accents, case and punctuation folded; a line that
+      holds Chinese by its pinyin first, `romanize`, as coverage.py compares: either script, 妳 for 你, a tabber's
+      spaces) at rapidfuzz's `ratio` `LINE_MATCH` (80) or more, rapidfuzz imported in `sung_lines` alone, pypinyin
+      only for a line with Chinese;
     - fewer than `MIN_LINES` (4), or than `MIN_SHARE` (half) of the sheet's lines with words, lights nothing (None);
     - a time from 0 to under `MAX_SECONDS` (a day) alone, `round(seconds * 1000)` half to even.
 - **songbook.py**: songbooks.toml: a song is a string, or a table with its own `Setting`, `instrument` among its parts

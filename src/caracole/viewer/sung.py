@@ -13,8 +13,11 @@ index, or None: the page's data ``sung``, ``[[ms, n or null], …]`` (page.py ``
   ``name_words`` cuts them, accents and case folded, punctuation and apostrophes dropped) are rapidfuzz's ``ratio``
   ``LINE_MATCH`` or more alike, so "driftin'" is "drifting"; a line with no words (an instrumental break, a line of
   chords alone) meets none.
-- **Chinese in either script.** Each key is written in Simplified characters first (normalize.py ``simplified``):
-  lyrics in Traditional characters meet a sheet in Simplified ones, and the other way round.
+- **Chinese as pinyin.** A line that holds Chinese is keyed by its pinyin (normalize.py ``romanize``, as coverage.py
+  compares a sheet with its lyrics: "Chinese is compared as pinyin"), then cut into words as any other: so lyrics in
+  Traditional characters meet a sheet in Simplified ones and the other way round, a character written otherwise
+  (妳 for 你, 著 for 着) and a tabber's spaces between characters ("斑 马 斑 马") still meet, while a line that changes
+  a word (我爱你, 我恨你) doesn't; a line with no Chinese is keyed by its words alone.
 - **Enough or nothing.** A match of fewer than ``MIN_LINES`` lines, or of fewer than ``MIN_SHARE`` of the sheet's
   lines with words, is no match: the lyrics are of another version, or barely the sheet's, and the page lights
   nothing (None, and the data has no ``sung``).
@@ -23,14 +26,14 @@ index, or None: the page's data ``sung``, ``[[ms, n or null], …]`` (page.py ``
   out.
 
 rapidfuzz is imported by ``sung_lines`` alone, when there are enough timed lines to match: a page with no timed
-lyrics, and importing ``caracole.cli``, never load it.
+lyrics, and importing ``caracole.cli``, never load it; pypinyin by ``romanize`` alone, for a line that holds Chinese.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
 
-from caracole.normalize import name_words, simplified
+from caracole.normalize import name_words, romanize
 
 LINE_MATCH = 80  # rapidfuzz ratio of two lines' keys for the one to be sung on the other
 MIN_SHARE = 0.5  # of the sheet's lines with words, the share a match must light
@@ -39,9 +42,9 @@ MAX_SECONDS = 86400  # a timed line at a day or more is no song's
 
 
 def line_key(text: str) -> str:
-    """A line's words as the match compares them: in Simplified characters, as ``name_words`` cuts them, one space
-    between; "" for a line with none."""
-    return " ".join(name_words(simplified(text)))
+    """A line's words as the match compares them: a line that holds Chinese in its pinyin (``romanize``), then as
+    ``name_words`` cuts them, one space between; "" for a line with none."""
+    return " ".join(name_words(romanize(text)))
 
 
 def sung_lines(drawn: Sequence[str], timed: Sequence[Sequence]) -> list[list[int | None]] | None:

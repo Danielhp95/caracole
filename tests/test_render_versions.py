@@ -13,9 +13,9 @@ from caracole.library import drop_file, keep_file, song_dir
 from caracole.lyrics import Lyrics
 from caracole.overrides import Overrides
 from caracole.removal import plan_removal, remove_song
-from caracole.songs import update_song
 from caracole.render import render_all, written_file
 from caracole.sheet_versions import as_data, song_sheet_versions, version_names
+from caracole.songs import update_song
 from caracole.ug.page import strip_markup
 from caracole.versions import mark_gone, set_coverage, upsert_version
 
@@ -186,6 +186,7 @@ def test_a_kept_versions_page_lights_its_own_lines_too(conn, cfg):
     # the sheet's own two lines and C's are too few to light (viewer/sung.py MIN_LINES)
     assert "sung" not in page_data(folder / "sheet.html")
     assert "sung" not in page_data(folder / version_names(str(C))[2])
+
 
 def test_a_version_page_offers_no_export_the_sheets_does(conn, cfg):
     # an export is made from the sheet export_viewer names: from a version's page, Export PDF would give
