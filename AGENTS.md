@@ -1419,8 +1419,10 @@ It is rows.js's, shared by both pages:
     window's room for columns (`toolbarRoom()`, none in full screen); full screen hides it as the bar
     (`data-controls`), its handle staying at the window's foot.
 - **The song's end**: `.page`'s padding is the bar's room (`--foot`), which `layout()` measures columns against (from
-  1200 px less the toolbar's at the top); the half screen of over-scroll is `.page::after`, never in it, and print
-  drops it.
+  1200 px less the toolbar's at the top), and the pill's while it shows (`--pill`) below 1200 px alone: from 1200 px
+  the pill sits under the toolbar, its room the toolbar's at the top (`room()`), and `html[data-pill]`'s `--pill` is
+  0 there, so a song laid out again while it shows keeps its columns (test_viewer_layout.py); the half screen of
+  over-scroll is `.page::after`, never in it, and print drops it.
 - **The line being sung** (viewer.js `lightSung`, viewer.css `.l.sung`; test_viewer_sung_browser.py): while autoscroll
   is on, the line of `songLines` (the lines `pinyin` reads) that the data's `sung` names at the lyrics' clock:
   - `sungClock`, in ms (`at`, and `since`, null while it stands): `run()` starts it once the count-in is over

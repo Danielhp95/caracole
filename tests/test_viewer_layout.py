@@ -464,6 +464,34 @@ def test_from_1200_px_the_columns_show_the_song_whole_under_the_toolbar(tmp_path
     shows_whole(roomy)
 
 
+def test_from_1200_px_the_pill_keeps_no_room_at_the_foot_so_the_columns_stay_while_it_shows(tmp_path):
+    # From 1200 px the autoscroll pill sits under the toolbar at the top (its room the toolbar's, layers.js room()),
+    # never over the song's end: the page keeps no room for it at its foot, so a song laid out again while it shows (a
+    # text size changed while paused) keeps the columns it had, with less slack than the pill's 64 px.
+    MIDDLING = "{title: Middling Song}\n{artist: The Placeholders}\n" + "".join(
+        f"{{comment: Verse {n}}}\n[G]Tiny [D]words\n[C]Sing it [G]out\n\n" for n in range(1, 8))
+    foot = "parseFloat(getComputedStyle(document.querySelector('.page')).paddingBottom)"
+    with Chromium(tmp_path / "profile", size=DESKTOP) as browser:
+        tab = opened(browser, build_viewer(MIDDLING), tmp_path)
+        two = tab.eval(in_columns(2))["height"]
+        bare = tab.eval(foot)
+        chrome = tab.eval("outerHeight - innerHeight")
+        resize(browser, 1600, round(two + bare + 56 + 30 + chrome))  # 30 px to spare under the toolbar
+        tab.wait_for(f"innerHeight === {round(two + bare + 56 + 30)} && document.documentElement.dataset.columns === '2'")
+        for button in ("scroll", "go", "go"):  # counting, running, paused: the pill shows, under the toolbar
+            tab.eval(f"document.getElementById('{button}').click()")
+        paused = tab.eval("[document.getElementById('pill').dataset.state, document.documentElement.dataset.pill]")
+        for button in ("size", "bigger", "smaller"):  # laid out again at 19 px, then at 18 px again
+            tab.eval(f"document.getElementById('{button}').click()")
+        tab.wait_for("document.getElementById('fs-now').textContent === '18 px'")
+        seen = tab.eval(COLUMNS)
+        with_pill = tab.eval(foot)
+    assert paused == ["paused", "paused"]
+    assert seen["columns"] == "2", seen
+    shows_whole(seen)
+    assert with_pill == bare, (bare, with_pill)
+
+
 def test_a_song_of_short_lines_too_tall_for_two_columns_reads_in_three_and_shows_whole(tmp_path):
     with Chromium(tmp_path / "profile", size="1920,1080") as browser:
         tab = opened(browser, build_viewer(SHORT_LINES), tmp_path)
