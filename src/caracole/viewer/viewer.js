@@ -1573,8 +1573,10 @@
   // or a line of text whole), with its readings where it is a line of the song's; and a section's label, a tab and
   // a line of the notes' peek, each a text node (a label's progression, which the numerals name, follows it).
   const units = [];
+  // The lines of the song's sections, as the page draws them (page.py _drawn_lines): the lines data.pinyin reads and
+  // data.sung lights, by their index.
+  const songLines = Array.from(sheetEl.querySelectorAll(":scope > section.sec > p.l"));
   if (pyCan || hanzi) {
-    const songLines = Array.from(sheetEl.querySelectorAll(":scope > section.sec > p.l"));
     for (const line of sheetEl.querySelectorAll("p.l:not(.chords)")) {
       const nodes = line.querySelector(".y, .w") ? Array.from(line.querySelectorAll(".y, .w"))
         : line.firstElementChild ? [] : [line];
@@ -2845,6 +2847,47 @@
     if (document.visibilityState === "visible" && moving()) holdScreen();
   });
 
+  // The line being sung, lit while it scrolls. data.sung (page.py, sung.py: the song's timed lyrics matched to its
+  // lines at render time): for each timed line, in time order, [ms, n], its time and the index in songLines of the
+  // line it is sung on, or null for one the sheet writes nowhere (a chorus sung again, a break); none for a song with
+  // no timed lyrics, or whose lyrics meet too few of its lines, which lights nothing. The lyrics' clock, sungClock (in
+  // ms: at, and since, when it last went on, null while it stands), starts once the count-in is over, stands while
+  // the scroll is paused (the line lit stays) and is back at the start, none lit, once autoscroll ends. The line lit
+  // is the one the last timed line at or before the clock names: none before the first, nor for one sung nowhere. A
+  // tap on a timed line's words while autoscroll is on (never on its chords, whose card opens) sets the clock at that
+  // line's first time; a finger pauses the scroll as ever, a mouse click pauses nothing, so the clock goes on from
+  // there. No recording plays: it is a guide at the song's own times, and the scroll keeps its own speed.
+  const SUNG = (Array.isArray(data.sung) ? data.sung : [])
+    .filter((e) => Array.isArray(e) && Number.isFinite(e[0])
+      && (e[1] === null || (Number.isInteger(e[1]) && e[1] >= 0 && e[1] < songLines.length)))
+    .sort((a, b) => a[0] - b[0]);
+  const timeOf = new Map();  // each line lit, its first time
+  for (const [ms, n] of SUNG) if (n !== null && !timeOf.has(songLines[n])) timeOf.set(songLines[n], ms);
+  const sungClock = { at: 0, since: null, started: false };
+  let lit = null;
+  const lightSung = () => {
+    let line = null;
+    if (scroll.state !== "off" && sungClock.started) {
+      const now = sungClock.at + (sungClock.since === null ? 0 : performance.now() - sungClock.since);
+      for (const [ms, n] of SUNG) {
+        if (ms > now) break;
+        line = n === null ? null : songLines[n];
+      }
+    }
+    if (line === lit) return;
+    if (lit) lit.classList.remove("sung");
+    if (line) line.classList.add("sung");
+    lit = line;
+  };
+  sheet.addEventListener("click", (e) => {
+    const line = scroll.state === "off" || e.target.closest(".c") ? null : e.target.closest("p.l");
+    if (!line || !timeOf.has(line)) return;
+    sungClock.at = timeOf.get(line);
+    sungClock.started = true;
+    if (sungClock.since !== null) sungClock.since = performance.now();  // still scrolling: on from there
+    lightSung();
+  });
+
   const countdown = () => {
     clearTimeout(scroll.timer);
     scroll.state = "counting";
@@ -2871,9 +2914,12 @@
     scroll.from = scroll.at = window.scrollY;
     scroll.travelled = 0;
     scroll.last = 0;
+    sungClock.since = performance.now();  // the lyrics' clock goes on, from where it stood
+    sungClock.started = true;
     const loop = ++scroll.loop;
     const frame = (now) => {
       if (scroll.state !== "running" || loop !== scroll.loop) return;
+      lightSung();
       // Moved some other way (the scroll bar, a search in the page, a link): yours to read.
       if (Math.abs(window.scrollY - scroll.at) > 3) {
         pauseScroll();
@@ -2902,16 +2948,25 @@
   function pauseScroll(said) {
     if (!moving()) return;
     clearTimeout(scroll.timer);
+    if (sungClock.since !== null) {  // the clock stands where the song is
+      sungClock.at += performance.now() - sungClock.since;
+      sungClock.since = null;
+    }
     scroll.state = "paused";
     showScroll(said || "Paused");
     letScreenSleep();
+    lightSung();
   }
   const endScroll = () => {
     const mine = pill.contains(document.activeElement);
     clearTimeout(scroll.timer);
     scroll.state = "off";
+    sungClock.at = 0;  // back at the song's start
+    sungClock.since = null;
+    sungClock.started = false;
     showScroll("");
     letScreenSleep();
+    lightSung();
     if (mine) $("scroll").focus({ preventScroll: true });
   };
 

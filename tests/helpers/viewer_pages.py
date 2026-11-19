@@ -52,11 +52,12 @@ def harmony_tab(b: Browser) -> None:
                   " && document.getElementById('necks').getAnimations().length === 0")
 
 
-def written(tmp_path: Path, cho: str, name: str = "Title") -> str:
-    """The viewer of ``cho``, written as Artist/<name>/sheet.html under ``tmp_path``; its address."""
+def written(tmp_path: Path, cho: str, name: str = "Title", **options) -> str:
+    """The viewer of ``cho``, written as Artist/<name>/sheet.html under ``tmp_path``; its address. ``options`` are
+    ``build_viewer``'s (``timed=``: the song's timed lyrics)."""
     page = tmp_path / "Artist" / name / "sheet.html"
     page.parent.mkdir(parents=True, exist_ok=True)
-    page.write_text(build_viewer(cho), encoding="utf-8")
+    page.write_text(build_viewer(cho, **options), encoding="utf-8")
     return page.as_uri()
 
 

@@ -3701,9 +3701,16 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   until you press ▶, which stays within reach (above the card, on a phone,
   with the bar kept under the card while the song scrolls on);
   it pauses at the end of the song too. A bigger text
-  scrolls as much faster, so a speed keeps its pace through the song. With
-  reduced motion asked for in your system's settings, the countdown shows the
-  seconds alone, with no ring.
+  scrolls as much faster, so a speed keeps its pace through the song. Where
+  the song has timed lyrics (LRCLIB's or Megalobiz's), the line being sung is
+  lit while it scrolls: the lyrics' clock starts once the count-in is over,
+  stops with a pause (the line stays lit) and starts over once × ends it. A
+  tap on a line's words sets the clock there (a finger pauses the scroll as
+  ever, the mouse doesn't). A song whose lines caracole can't match to its
+  timed lyrics shows none, nor does a songbook. No recording plays, so it is a
+  guide at the song's own times, not a follower: the scroll keeps its own
+  speed. With reduced motion asked for in your system's settings, the
+  countdown shows the seconds alone, with no ring.
 
 The viewer remembers its settings for each song in the browser, the scroll
 speed, the text size, the volume and the shape chosen for each chord among them: a chord
