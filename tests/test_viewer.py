@@ -420,11 +420,12 @@ def test_a_chord_legends_lines_are_marked_so_the_script_leaves_their_chords_as_w
 def test_without_a_capo_the_key_line_names_the_key():
     assert facts_of(build_viewer(MINOR)) == {
         "tuning": "E A D G B E", "capo": "none", "key": '<b>Cm</b> · <span class="from">from the sheet</span>'}
-    # chords with no key: no Key line; no chords: no facts at all
+    # chords with no key: no Key line; no chords: the Capo line alone, where the sheet names one, else no facts
     assert facts_of(build_viewer("{title: T}\n{artist: A}\n{capo: 3}\n[Xq]Only words\n")) == {
         "tuning": "E A D G B E", "capo": "3"}
-    for cho in ("{title: T}\n{artist: A}\nOnly words\n", "{title: T}\n{artist: A}\n{capo: 3}\nOnly words\n"):
-        assert facts_of(build_viewer(cho)) == {} and 'id="facts"' not in build_viewer(cho)
+    assert facts_of(build_viewer("{title: T}\n{artist: A}\n{capo: 3}\nOnly words\n")) == {"capo": "3"}
+    words = build_viewer("{title: T}\n{artist: A}\nOnly words\n")
+    assert facts_of(words) == {} and 'id="facts"' not in words
 
 
 def test_a_sheet_without_chords_has_no_key():
