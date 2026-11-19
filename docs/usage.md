@@ -3243,7 +3243,7 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   Chinese characters, the instrument and the theme), and the address keeps `necks=0` too, for a page served by
   `caracole serve`, where the browser keeps nothing: a link to another
   version in the version list keeps it, so do a harmonica tab's link in the
-  Harmonica row and its page's ‹ Chord sheet, and in a songbook so does every step to another song (the
+  Harmonica row and its page's ‹ back to the chord sheet, and in a songbook so does every step to another song (the
   arrows, a swipe, ‹ ›, the contents). Served, a sheet opened afresh from the
   library page shows the rail again, as it starts at the usual text size: the
   library's links don't carry it. **Reset all** shows the rail again. Below 1200 px
@@ -3860,7 +3860,7 @@ the library page link it, the tab's text beside it.
   1200 px the neck, the overlay's sheet (below); ♪,
   **Notes**, shows each hole's note on that harp in its place ("F#6");
   **Aa** the text size and the theme (Auto, Light or Dark, kept for every
-  viewer page, and carried back to the chord sheet by ‹ Chord sheet), and
+  viewer page, and carried back to the chord sheet by its ‹), and
   Scroll scrolls by itself, as in the viewer,
   each with its word under it (Shapes, Notes, Text, Scroll). On a laptop it is
   a toolbar under the tab's title, as the viewer's. The viewer's keys and
@@ -3879,8 +3879,9 @@ the library page link it, the tab's text beside it.
 - **A hole tapped** is heard, a harmonica's reed; **▶ at a line's end** plays
   the line hole by hole, a beat each, lighting each hole as it sounds, and
   stops when pressed again (no rhythm: the tab has none).
-- **‹ Chord sheet** goes back to the song's sheet viewer (‹ Library for a song
-  with none), with the rail hidden, the pinyin, the Chinese characters and the
+- **‹**, at the title's left (named Chord sheet), goes back to the song's
+  sheet viewer (for a song with none it goes to the library, named Library),
+  with the rail hidden, the pinyin, the Chinese characters and the
   instrument as they came (served, where the browser keeps nothing, the
   address carries them both ways), and **Tab as text**, at the foot, opens
   `harmonica-1.txt`.
@@ -3908,7 +3909,7 @@ the library page link it, the tab's text beside it.
 The page keeps the harp, Notes, the text size and the scroll speed in its
 address too (`harmonica-1.html#harp=A&notes=1&fs=20`), the theme while it
 isn't Auto (`&theme=dark`) and the minutes the screen stays on while they aren't
-10 (`&awake=15`), which ‹ Chord sheet carries back.
+10 (`&awake=15`), which its ‹ carries back to the chord sheet.
 
 #### caracole harmonica
 

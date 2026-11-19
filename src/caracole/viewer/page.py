@@ -4,7 +4,7 @@ The page is one self-contained file. It opens from the synced library folder wit
 no server: it loads nothing (a Content-Security-Policy with the hashes of its eight
 scripts, screen.js in its head, then strum.js, overlay.js, instruments.js, winds.js, layers.js, kinds.js and viewer.js
 after its body, and its stylesheet makes the browser enforce that)
-and links only to the PDF beside it and to the library's index.html two folders up: its ‹ Library, and the
+and links only to the PDF beside it and to the library's index.html two folders up: its ‹ (named Library), and the
 artist's name under the title, to the library page on their songs (``artist_line``); and out, in the same tab, to
 chords-db's credit and, on an auto sheet from YouTube, to the video its audio came from (``_CREDIT``).
 A server may serve it too, only while it is the page caracole wrote, with

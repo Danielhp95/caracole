@@ -21,8 +21,9 @@ semitone down or up in place of the transposition (the holes stay: the sound and
 Notes, each hole's note on that harp in its place. The song's title and its artist's name follow the sheet viewer's
 Chinese characters where its chord sheet is Chinese (page.py ``names_table``: a ``song-names`` block), read from
 the browser's storage or ``trad=1`` in the address, with no row of the page's own. A tap on a hole sounds it (strum.js's reed voice); ▶ at a line's
-end plays it hole by hole, a hole a beat, lighting each (``caracoleSound.play``). ‹ Chord sheet goes back to the
-song's viewer (‹ Library for a song with none), and the tab's text is a tap away at the foot.
+end plays it hole by hole, a hole a beat, lighting each (``caracoleSound.play``). Its ‹, named Chord sheet, goes
+back to the song's viewer (named Library, to the library, for a song with none), and the tab's text is a tap away at
+the foot.
 
 Under the artist, the song's version line, as on its sheet's viewer (page.py ``_VERSIONS``, kinds.js): its kind,
 Harmonica, and which of the song's tabs this is ("Harmonica · Tab 1 of 2"), then an icon for each kind the song keeps
@@ -147,7 +148,7 @@ def build_harmonica_viewer(
     ``raw``, harptabs.HarpTab.raw). ``cho`` is the song's chord sheet (its human one, else its auto one, as render.py
     writes it), with ``key`` and ``key_source``, its key as keys.py found it: the harp that plays with the record, and
     the song's key for the positions. ``back`` names the song's sheet viewer beside the page ("sheet.html"), which
-    ‹ Chord sheet opens; with none, ‹ Library. ``versions``, the song's UG chords versions (render.py
+    its ‹ opens, named Chord sheet; with none, it goes to the library, named Library. ``versions``, the song's UG chords versions (render.py
     ``_versions_data``, each entry's ``this`` false), and ``kinds``, what else it keeps to play from (render.py
     ``_kinds_data``), go in its data after ``overlay``, for the version line and its list (kinds.js); without them,
     its data has neither."""

@@ -465,7 +465,7 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   its data's last members after `overlay`. The line names its kind and which of its kind's pages it is ("Harmonica ·
   Tab 1 of 2", kinds.js's `hereIn`), its icons the sheet's; the list's Chords group the sheet's, none of it this
   page, and this tab ticked in its group. harptab.js attaches it with its `"list"` layer (`openLayer`, `closeLayer`,
-  `inSight`), `carry` the screen's choices as ‹ Chord sheet takes them (`screenChoices`), `sheetPath` the song's
+  `inSight`), `carry` the screen's choices as the ‹ back to the sheet takes them (`screenChoices`), `sheetPath` the song's
   sheet's path in the library, none for a song with no sheet, so served its versions are kept and chosen on the
   song's sheet; on a phone the list docks (`.top`, `data-dock="version-list"`), from 900 px a popover
   (test_viewer_versions.py's section "a harmonica tab's page", test_render_kinds.py).
@@ -1497,7 +1497,7 @@ It is rows.js's, shared by both pages:
     - localStorage `caracole-viewer-necks`;
     - and `necks=0` in the address, which book.js's `carryScreen` takes on to a songbook's next address, for its
       sandbox with no storage, as a link to another of the song's pages does (a version's in the list, a harmonica
-      tab's and its ‹ Chord sheet, viewer.js `screenChoices`, the view's `carry`, harptab.js `backToSheet`);
+      tab's and its ‹ back to the sheet, viewer.js `screenChoices`, the view's `carry`, harptab.js `backToSheet`);
     - with its Hide and the bar's button in step (test_viewer_necks.py).
   - **Pinyin**: so is the settings' Pinyin (`state.py`, off at first: localStorage `caracole-viewer-pinyin`, `py=1` in
     the address, which `carryScreen` takes on too), each Chinese character's reading over it, between its chord and
