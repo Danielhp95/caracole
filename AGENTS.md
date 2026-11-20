@@ -3054,7 +3054,10 @@ CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py  
 - Both shells set `CARACOLE_CJK_FONT` to the packages' font, `CARACOLE_PDF_FONTS` to their PDF fonts
   (nix/pdf-fonts.nix), and `CARACOLE_ALPHATAB_DIR` to alphaTab (nix/alphatab.nix).
 - `.#autochords` adds torch, beat-this, librosa and openai-whisper, and sets `CARACOLE_BTC_WEIGHTS` and
-  `CARACOLE_BEAT_CHECKPOINT` to the files nix/autochords.nix fetches.
+  `CARACOLE_BEAT_CHECKPOINT` to the files nix/autochords.nix fetches, and `CARACOLE_WHISPER_MODEL` and
+  `CARACOLE_DEMUCS_MODEL` to Whisper large-v3 and HTDemucs (about 3.1 GB, fetched on a first build); both
+  auto-chords shells put `demucs` (demucs-rs with its `cpu` feature) on PATH. The suite points
+  `CARACOLE_DEMUCS_BIN` at no program (tests/conftest.py), as it does yt-dlp's.
 - `.#autochords-cuda` is that on `pkgsCuda` (flake.nix): a second nixpkgs whose python takes torch, torchaudio,
   torchvision and triton from the `-bin` packages, package-wide (one dependency on the CPU torch and buildEnv meets two
   torch builds). The unfree CUDA packages it admits are `cudaUnfree`, a list found by evaluating, not

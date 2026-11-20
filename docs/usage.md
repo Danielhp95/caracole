@@ -57,6 +57,7 @@ music_dir = "~/Music"             # tracks you bought; read only, used only for 
 user_agent = "caracole/0.1 (personal tab library)"
 chordpro_bin = "chordpro"         # the program that renders PDFs
 ytdlp_bin = "yt-dlp"              # or $CARACOLE_YTDLP_BIN; see "Audio from YouTube"
+demucs_bin = "demucs"             # or $CARACOLE_DEMUCS_BIN; demucs-rs, which separates the vocals
 # pdf_fonts = "/path/to/folder"   # or $CARACOLE_PDF_FONTS; see "Fonts in the PDFs"
 # cjk_font = "/path/to/font.ttf"  # or $CARACOLE_CJK_FONT; see "Fonts for Chinese sheets"
 
@@ -148,6 +149,9 @@ variant_bonus = 0.25              # onto an acoustic or live version, when your 
 # btc_weights = "/path/to/weights.pt"         # or $CARACOLE_BTC_WEIGHTS
 # beat_checkpoint = "/path/to/final0.ckpt"    # or $CARACOLE_BEAT_CHECKPOINT
 device = "cpu"                    # where the models run
+# whisper_model = "/path/to/large-v3.pt"      # or $CARACOLE_WHISPER_MODEL
+# separator_model = "/path/to/htdemucs.safetensors"  # or $CARACOLE_DEMUCS_MODEL
+transcribe_device = "auto"        # where Whisper runs: "auto" is the GPU when there is one
 ```
 
 Caracole keeps one sheet and one text tab per song, and beside the sheet the

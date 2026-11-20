@@ -288,6 +288,10 @@ numpy==2.5.2
 scipy==1.18.1
 soundfile==0.13.1
 pyyaml==6.0.3
+openai-whisper==20250625
+tiktoken==0.12.0
+more-itertools==11.1.0
+tqdm==4.68.4
 EOF
 ```
 
@@ -705,6 +709,15 @@ sudo uv venv --allow-existing --python $PY /opt/caracole/yt-dlp
 sudo uv pip install --compile-bytecode --python /opt/caracole/yt-dlp/bin/python 'yt-dlp[default]'
 sudo ln -sfn ../yt-dlp/bin/yt-dlp /opt/caracole/bin/yt-dlp
 ```
+
+The Ubuntu install does not transcribe lyrics from a song's audio: that needs
+Whisper large-v3 and HTDemucs (the Nix package fetches them, checked against
+`e5b1a55b89c1367dacf97e3e19bfd829a01529dbfdeefa8caeb59b3f1b81dadb` for
+`large-v3.pt` and
+`8193504cdfb3943adaf039b8acb524a46e87ebf232c383ac7a32c80a6578423e` for
+`htdemucs.safetensors`) and demucs-rs built with its CPU backend, none of which
+this section installs. Without them a song no lyrics site has stays without
+lyrics. `openai-whisper` is installed (it is in the extra), and unused.
 
 The unit runs after each run that succeeds, with no network, and may generate
 code, as PyTorch and numba do. So may caracole-web, which makes a song's sheet

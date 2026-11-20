@@ -88,6 +88,15 @@
       devCaracole = py: pkgs.writeShellScriptBin "caracole" ''
         exec ${py}/bin/python -m caracole "$@"
       '';
+      # The auto-chords shells differ in their python alone (torch or torch-bin).
+      autochordsShell = py: pkgs.mkShell ({
+        packages = [ py (devCaracole py) pkgs.yt-dlp caracoleAutochords.demucs ] ++ devTools;
+        shellHook = devShellHook;
+        CARACOLE_BTC_WEIGHTS = caracoleAutochords.btcWeights;
+        CARACOLE_BEAT_CHECKPOINT = caracoleAutochords.beatCheckpoint;
+        CARACOLE_WHISPER_MODEL = caracoleAutochords.whisperModel;
+        CARACOLE_DEMUCS_MODEL = caracoleAutochords.separatorModel;
+      } // fontEnv);
       devShellHook = ''
         root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
         export PYTHONPATH="$root/src''${PYTHONPATH:+:$PYTHONPATH}"
@@ -133,20 +142,11 @@
           shellHook = devShellHook;
         } // fontEnv);
         # `pytest -m autochords` here runs the model tests on the packaged model files,
-        # and `caracole youtube` finds yt-dlp, as the auto-chords package's wrapper does.
-        autochords = pkgs.mkShell ({
-          packages = [ devPythonAutochords (devCaracole devPythonAutochords) pkgs.yt-dlp ] ++ devTools;
-          shellHook = devShellHook;
-          CARACOLE_BTC_WEIGHTS = caracoleAutochords.btcWeights;
-          CARACOLE_BEAT_CHECKPOINT = caracoleAutochords.beatCheckpoint;
-        } // fontEnv);
+        # and `caracole youtube` finds yt-dlp (and the transcriber demucs), as the auto-chords
+        # package's wrapper does.
+        autochords = autochordsShell devPythonAutochords;
         # `.#autochords` on torch-bin: the model tests against the GPU build of torch.
-        autochords-cuda = pkgs.mkShell ({
-          packages = [ devPythonAutochordsCuda (devCaracole devPythonAutochordsCuda) pkgs.yt-dlp ] ++ devTools;
-          shellHook = devShellHook;
-          CARACOLE_BTC_WEIGHTS = caracoleAutochords.btcWeights;
-          CARACOLE_BEAT_CHECKPOINT = caracoleAutochords.beatCheckpoint;
-        } // fontEnv);
+        autochords-cuda = autochordsShell devPythonAutochordsCuda;
       };
     };
 }

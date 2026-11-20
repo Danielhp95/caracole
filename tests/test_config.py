@@ -253,6 +253,30 @@ def test_autochords_settings(tmp_path):
     assert cfg.autochords.device == "cpu"
 
 
+def test_transcription_settings(tmp_path):
+    p = write(tmp_path, '[autochords]\nwhisper_model = "w.pt"\nseparator_model = "h.safetensors"\n'
+                        'transcribe_device = "cpu"\n')
+    cfg = load_config(p, env={"HOME": str(tmp_path)})
+    assert cfg.autochords.whisper_model == tmp_path / "w.pt"
+    assert cfg.autochords.separator_model == tmp_path / "h.safetensors"
+    assert cfg.autochords.transcribe_device == "cpu"
+    env = {"HOME": str(tmp_path), "CARACOLE_WHISPER_MODEL": "/m/w.pt", "CARACOLE_DEMUCS_MODEL": "/m/h.st"}
+    cfg = load_config(None, env=env)
+    assert cfg.autochords.whisper_model == Path("/m/w.pt")
+    assert cfg.autochords.separator_model == Path("/m/h.st")
+    cfg = load_config(None, env={"HOME": str(tmp_path)})
+    assert (cfg.autochords.whisper_model, cfg.autochords.separator_model) == (None, None)
+    assert cfg.autochords.transcribe_device == "auto"
+
+
+def test_demucs_bin_from_the_file_then_the_environment(tmp_path):
+    assert load_config(None, env={"HOME": str(tmp_path)}).demucs_bin == "demucs"
+    env = {"HOME": str(tmp_path), "CARACOLE_DEMUCS_BIN": "/env/demucs"}
+    assert load_config(None, env=env).demucs_bin == "/env/demucs"
+    p = write(tmp_path, 'demucs_bin = "/opt/demucs"\n')
+    assert load_config(p, env=env).demucs_bin == "/opt/demucs"
+
+
 def test_cjk_font_setting_and_env(tmp_path):
     p = write(tmp_path, 'cjk_font = "/fonts/NotoSansCJK.ttc"\n')
     assert load_config(p, env={"HOME": str(tmp_path)}).cjk_font == Path("/fonts/NotoSansCJK.ttc")
@@ -314,6 +338,8 @@ def load(tmp_path, text):
         ("cjk_font = 5\n", "cjk_font"),
         ("[autochords]\nbtc_weights = 5\n", "btc_weights"),
         ("[autochords]\nbeat_checkpoint = 5\n", "beat_checkpoint"),
+        ("[autochords]\nwhisper_model = 5\n", "whisper_model"),
+        ("[autochords]\nseparator_model = 5\n", "separator_model"),
     ],
 )
 def test_a_path_that_is_not_a_string_is_a_config_error(tmp_path, toml, named):
@@ -329,6 +355,8 @@ def test_a_path_that_is_not_a_string_is_a_config_error(tmp_path, toml, named):
         ("ytdlp_bin = 5\n", "ytdlp_bin"),
         ("[ntfy]\nurl = 5\n", "url"),
         ("[autochords]\ndevice = 0\n", "device"),
+        ("[autochords]\ntranscribe_device = 0\n", "transcribe_device"),
+        ("demucs_bin = 5\n", "demucs_bin"),
     ],
 )
 def test_a_setting_that_is_not_a_string_is_a_config_error(tmp_path, toml, named):

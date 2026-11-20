@@ -3,7 +3,7 @@
 # fonts they are set in (./pdf-fonts.nix: Adwaita Sans and Mono, GNOME's), and
 # CARACOLE_CJK_FONT at a font with Chinese glyphs, so a song like 斑马斑马 renders. The `autochords`
 # variant's wrapper also points at the model files the offline unit needs, and
-# puts `yt-dlp` on PATH, for the audio of songs nobody has charted. Both point
+# puts `yt-dlp` and `demucs` on PATH, for the audio of songs nobody has charted. Both point
 # CARACOLE_ALPHATAB_DIR at alphaTab (./alphatab.nix), which caracole serve's Guitar
 # Pro page draws and plays a song's Guitar Pro file with.
 {
@@ -12,12 +12,27 @@
   python3Packages,
   perl5Packages,
   lxgw-fusionkai,
+  demucs-rs,
 
   # yt-dlp, which the nightly run's YouTube step runs (src/caracole/youtube.py),
   # in the auto-chords variant alone: without auto-chords caracole takes no audio
   # from YouTube. nixpkgs' wrapper brings what it needs: ffmpeg and ffprobe for
   # `-x`, and deno, the JavaScript runtime YouTube's player needs, patched in.
   yt-dlp,
+
+  # demucs-rs, which separates the vocals from a mix (src/caracole/autochords/) before Whisper is
+  # trusted with the words, in the auto-chords variant alone. nixpkgs builds it for the GPU (wgpu)
+  # only. Its cargo feature `cpu` swaps that backend for ndarray, at compile time, not at run
+  # time: `demucs --help` has no backend option, and the wgpu build panics ("No possible adapter")
+  # where no Vulkan adapter is found. So this build never touches a GPU and runs the same
+  # anywhere: slower, and in the nightly unit and caracole serve's job nothing competes with
+  # Whisper for the card. The feature goes in `cargoBuildFeatures`: buildRustPackage turns
+  # `buildFeatures` into it when it builds the derivation, so an override of `buildFeatures` alone
+  # is ignored (the drv keeps `cargoBuildFeatures = ""`).
+  demucs ? demucs-rs.overrideAttrs {
+    cargoBuildFeatures = [ "cpu" ];
+    cargoCheckFeatures = [ "cpu" ];
+  },
 
   # `chordpro`, without its wxWidgets GUI: the full package pulls GTK, WebKit
   # and GStreamer (about 1 GiB) into a closure that only ever runs headless.
@@ -55,12 +70,15 @@
   # `autochords-cuda` passes the matching python3Packages. Plain torch is CPU-only.
   cudaTorch ? false,
   # The model files the auto-chords variant's wrapper sets by default
-  # (CARACOLE_BTC_WEIGHTS, CARACOLE_BEAT_CHECKPOINT): the fixed-output downloads in
+  # (CARACOLE_BTC_WEIGHTS, CARACOLE_BEAT_CHECKPOINT, and below): the fixed-output downloads in
   # ./autochords.nix, because the unit has no network. The NixOS module's
   # options, then settings.autochords, win over them. Null leaves one unset.
   models ? callPackage ./autochords.nix { },
   btcWeights ? models.btcWeights,
   beatCheckpoint ? models.beatThisCheckpoint,
+  # Whisper large-v3 and HTDemucs (CARACOLE_WHISPER_MODEL, CARACOLE_DEMUCS_MODEL), likewise.
+  whisperModel ? models.whisperLargeV3,
+  separatorModel ? models.htdemucs,
 }:
 
 let
@@ -70,6 +88,8 @@ let
   modelFiles = lib.filterAttrs (_: file: file != null) {
     CARACOLE_BTC_WEIGHTS = btcWeights;
     CARACOLE_BEAT_CHECKPOINT = beatCheckpoint;
+    CARACOLE_WHISPER_MODEL = whisperModel;
+    CARACOLE_DEMUCS_MODEL = separatorModel;
   };
   modelDefaults = lib.concatLists (
     lib.mapAttrsToList (name: file: [
@@ -134,7 +154,7 @@ python3Packages.buildPythonApplication (finalAttrs: {
     "--prefix"
     "PATH"
     ":"
-    (lib.makeBinPath ([ chordpro ] ++ lib.optional withAutochords yt-dlp))
+    (lib.makeBinPath ([ chordpro ] ++ lib.optionals withAutochords [ yt-dlp demucs ]))
     "--set-default"
     "CARACOLE_CJK_FONT"
     cjkFont
@@ -223,6 +243,8 @@ python3Packages.buildPythonApplication (finalAttrs: {
         $out/bin/caracole autochords > autochords.out
         grep -qFx "auto-chords: 0 generated, 0 skipped, 0 failed" autochords.out
         grep -qF -- ${lib.escapeShellArg "${yt-dlp}/bin"} $out/bin/caracole
+        grep -qF -- ${lib.escapeShellArg "${demucs}/bin"} $out/bin/caracole
+        test -x ${lib.escapeShellArg "${demucs}/bin/demucs"}
         $out/bin/caracole youtube > youtube.out
         grep -qFx "No song is waiting for audio from YouTube." youtube.out
       ''
@@ -242,6 +264,10 @@ python3Packages.buildPythonApplication (finalAttrs: {
           echo "the default package puts yt-dlp on PATH" >&2
           exit 1
         fi
+        if grep -qF -- ${lib.escapeShellArg "${demucs}/bin"} $out/bin/caracole; then
+          echo "the default package puts demucs on PATH" >&2
+          exit 1
+        fi
       ''
   );
 
@@ -257,6 +283,7 @@ python3Packages.buildPythonApplication (finalAttrs: {
     inherit
       chordpro
       yt-dlp
+      demucs
       cjkFont
       pdfFonts
       withAutochords
@@ -264,6 +291,8 @@ python3Packages.buildPythonApplication (finalAttrs: {
       alphatab
       btcWeights
       beatCheckpoint
+      whisperModel
+      separatorModel
       ;
   };
 
