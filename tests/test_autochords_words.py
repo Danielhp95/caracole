@@ -1,6 +1,7 @@
 """Sung spans, the guard, the lines and the LRC of a transcript (pure Python)."""
 
 from caracole.autochords import merge
+from caracole.chordpro import display_columns
 from caracole.autochords.words import Span, Word, guard, lines_of, sung_spans, to_lrc
 
 
@@ -135,3 +136,12 @@ def test_the_lrc_reads_back_through_merge():
     ]
     assert read[0].words == ((1.0, 0), (1.5, 3))
     assert read[2].words == ((5.0, 0), (5.5, 3))
+
+
+def test_a_line_never_passes_fifty_two_columns():
+    texts = ["abcdefghij"] * 12 + ["x" * 60, "tail"]
+    words = [Word(i * 0.1, i * 0.1 + 0.05, t, i > 0) for i, t in enumerate(texts)]
+    lines = lines_of(words)
+    for line in lines:
+        assert len(line) == 1 or display_columns(" ".join(w.text for w in line))[-1] <= 52
+    assert [len(line) for line in lines] == [4, 4, 4, 1, 1]

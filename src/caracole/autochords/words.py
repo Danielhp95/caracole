@@ -95,7 +95,7 @@ def _joined(line: list[Word]) -> str:
 def lines_of(words: list[Word]) -> list[list[Word]]:
     """The words as lines: a new line before a word when the current one is not empty and a Whisper segment
     starts and the line is ``SEG_COLS`` wide, or it ends in punctuation and is ``PUNCT_COLS`` wide, or a
-    breath of ``BREATH_S`` came and it is ``BREATH_COLS`` wide, or it is ``MAX_COLS`` wide."""
+    breath of ``BREATH_S`` came and it is ``BREATH_COLS`` wide, or the word would take it past ``MAX_COLS`` (a word wider than that alone sits on its own line)."""
     lines: list[list[Word]] = []
     current: list[Word] = []
     for word in words:
@@ -105,7 +105,7 @@ def lines_of(words: list[Word]) -> list[list[Word]]:
                 (word.segment_start and width >= SEG_COLS)
                 or (_PUNCT.search(current[-1].text) and width >= PUNCT_COLS)
                 or (word.start - current[-1].end >= BREATH_S - 1e-9 and width >= BREATH_COLS)
-                or width >= MAX_COLS
+                or width + (1 if word.space else 0) + display_columns(word.text)[-1] > MAX_COLS
             ):
                 lines.append(current)
                 current = []
