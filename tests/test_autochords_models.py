@@ -333,3 +333,32 @@ def test_beat_this_finds_half_second_beats_at_120_bpm(tmp_path):
     assert float(np.median(np.diff(beats))) == pytest.approx(0.5, abs=0.02)
     assert beats[0] < 0.6 and beats[-1] > 11.0
     assert set(downbeats) <= set(beats)
+
+
+@pytest.mark.autochords
+@needs_libs
+def test_htdemucs_separates_a_tone_and_frame_db_reads_it(tmp_path):
+    # The real demucs-rs and model, from the environment (conftest points CARACOLE_DEMUCS_BIN at nothing).
+    import math
+
+    import numpy as np
+    import soundfile as sf
+
+    from caracole.autochords.separate import DemucsSeparator, frame_db
+
+    binary = shutil.which("demucs")
+    model = os.environ.get("CARACOLE_DEMUCS_MODEL")
+    if binary is None or not model or not Path(model).is_file():
+        pytest.skip("no demucs-rs or no HTDemucs model")
+    seconds = 4
+    t = np.arange(seconds * 44100) / 44100
+    audio = tmp_path / "tone.wav"
+    sf.write(audio, np.stack([0.3 * np.sin(2 * np.pi * 220 * t)] * 2, axis=1), 44100)
+    workdir = tmp_path / "work"
+    workdir.mkdir()
+
+    stem = DemucsSeparator(binary, Path(model), tmp_path / "cache").vocals(audio, workdir)
+
+    db = frame_db(stem)
+    assert abs(len(db) - math.ceil(seconds / 0.05)) <= 1
+    assert all(isinstance(v, float) for v in db)
