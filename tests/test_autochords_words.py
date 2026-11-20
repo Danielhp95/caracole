@@ -1,8 +1,8 @@
 """Sung spans, the guard, the lines and the LRC of a transcript (pure Python)."""
 
 from caracole.autochords import merge
-from caracole.chordpro import display_columns
 from caracole.autochords.words import Span, Word, guard, lines_of, sung_spans, to_lrc
+from caracole.chordpro import display_columns
 
 
 def test_frames_where_the_stem_is_near_the_mix_are_sung():
