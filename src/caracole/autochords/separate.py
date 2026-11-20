@@ -12,6 +12,22 @@ from typing import Protocol
 from caracole.autochords.words import FRAME_S
 
 
+# The cpu build runs about 4.8x the song's length, so a long song takes most of an hour; a run past this is hung
+# (a wgpu or driver stall), not slow.
+TIMEOUT_S = 4 * 3600.0
+
+
+def _why(stderr: str, code: int) -> str:
+    """The panic's own words: the line after the first ``panicked at`` (a Rust panic ends with a backtrace hint and
+    the main thread's generic unwrap, not its cause), else the last line that isn't a ``note:``."""
+    lines = [ln.strip() for ln in stderr.splitlines() if ln.strip()]
+    for i, ln in enumerate(lines[:-1]):
+        if "panicked at" in ln:
+            return lines[i + 1][:300]
+    lines = [ln for ln in lines if not ln.startswith("note:")]
+    return lines[-1][:300] if lines else f"demucs-rs exited {code}"
+
+
 class SeparatorFailed(Exception):
     """demucs-rs exited nonzero or wrote no vocal stem; the message carries its last stderr line."""
 
@@ -30,10 +46,11 @@ class DemucsSeparator:
     lands in HOME or the working directory. The driver's own shader caches (``mesa_shader_cache``, ``nvidia``)
     go to XDG_CACHE_HOME and are lost with the work directory."""
 
-    def __init__(self, binary: str, model: Path, cache_dir: Path):
+    def __init__(self, binary: str, model: Path, cache_dir: Path, timeout: float = TIMEOUT_S):
         self.binary = binary
         self.model = model
         self.cache_dir = cache_dir
+        self.timeout = timeout
 
     def vocals(self, audio: Path, workdir: Path) -> Path:
         cache = workdir / "cache"
@@ -47,12 +64,13 @@ class DemucsSeparator:
         stems = workdir / "stems"
         cmd = [self.binary, "-m", "htdemucs", "-s", "vocals", "-o", str(stems), str(audio)]
         try:
-            done = subprocess.run(cmd, env=env, capture_output=True, text=True)
+            done = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=self.timeout)
+        except subprocess.TimeoutExpired as e:
+            raise SeparatorFailed(f"demucs-rs took longer than {self.timeout:g} s and was stopped") from e
         except OSError as e:
             raise SeparatorFailed(f"demucs-rs won't run: {e}") from e
         if done.returncode != 0:
-            lines = [ln for ln in done.stderr.splitlines() if ln.strip()]
-            raise SeparatorFailed(lines[-1].strip() if lines else f"demucs-rs exited {done.returncode}")
+            raise SeparatorFailed(_why(done.stderr, done.returncode))
         out = stems / "vocals.wav"
         if not out.is_file():
             raise SeparatorFailed(f"demucs-rs wrote no vocals.wav under {stems}")

@@ -25,9 +25,17 @@ argv = sys.argv[1:]
 }}))
 mode = {mode!r}
 if mode == "fail":
-    print("loading model", file=sys.stderr)
-    print("thread 'main' panicked: No possible adapter", file=sys.stderr)
+    # A real wgpu build with no Vulkan adapter: the cause, a hint, then the main thread's generic unwrap panic.
+    sys.stderr.write("Loading model...\\n\\n"
+        "thread 'demucs-main' (1) panicked at cubecl-wgpu-0.9.0/src/runtime.rs:395:14:\\n"
+        "No possible adapter available for backend. Falling back to first available.: NotFound\\n"
+        "note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\\n\\n"
+        "thread 'main' (2) panicked at demucs-cli/src/main.rs:82:10:\\n"
+        "called `Result::unwrap()` on an `Err` value: Any {{ .. }}\\n")
     sys.exit(101)
+if mode == "hang":
+    import time
+    time.sleep(30)
 if mode == "write":
     out = Path(argv[argv.index("-o") + 1]) / "vocals.wav"
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -43,10 +51,10 @@ def _fake(tmp_path: Path, mode: str) -> Path:
     return script
 
 
-def _separator(tmp_path: Path, mode: str) -> tuple[DemucsSeparator, Path]:
+def _separator(tmp_path: Path, mode: str, **kw) -> tuple[DemucsSeparator, Path]:
     model = tmp_path / "htdemucs.safetensors"
     model.write_bytes(b"weights")
-    return DemucsSeparator(str(_fake(tmp_path, mode)), model, tmp_path / "cache"), model
+    return DemucsSeparator(str(_fake(tmp_path, mode)), model, tmp_path / "cache", **kw), model
 
 
 def test_demucs_runs_on_the_audio_with_its_model_linked_and_its_autotune_cache_kept(tmp_path):
@@ -76,4 +84,10 @@ def test_a_demucs_that_fails_raises_separator_failed_with_its_last_line(tmp_path
 def test_a_demucs_that_writes_no_stem_raises_separator_failed(tmp_path):
     separator, _ = _separator(tmp_path, "nothing")
     with pytest.raises(SeparatorFailed, match="vocals.wav"):
+        separator.vocals(tmp_path / "song.m4a", tmp_path)
+
+
+def test_a_demucs_that_hangs_is_stopped_and_raises_separator_failed(tmp_path):
+    separator, _ = _separator(tmp_path, "hang", timeout=0.5)
+    with pytest.raises(SeparatorFailed, match="longer than 0.5 s"):
         separator.vocals(tmp_path / "song.m4a", tmp_path)
