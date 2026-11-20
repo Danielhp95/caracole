@@ -71,6 +71,14 @@
 {"kv":"sheet_versions:yours:2","value":"{}"}
 {"kv":"sheet_versions:yours:2:more","value":"{}"}
 {"kv":"songs:key_version","value":"2"}
+{"kv":"transcribe:none:1","value":"{}"}
+{"kv":"transcribe:none:1:more","value":"{}"}
+{"kv":"transcribe:none:2","value":"{}"}
+{"kv":"transcribe:none:2:more","value":"{}"}
+{"kv":"transcript:1","value":"{}"}
+{"kv":"transcript:1:more","value":"{}"}
+{"kv":"transcript:2","value":"{}"}
+{"kv":"transcript:2:more","value":"{}"}
 {"kv":"ug:artist_page_checked:1","value":"{}"}
 {"kv":"ug:artist_page_checked:1:more","value":"{}"}
 {"kv":"ug:artist_page_checked:2","value":"{}"}

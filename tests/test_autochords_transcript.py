@@ -1,0 +1,126 @@
+"""autochords/transcript.py: the transcript kept for a song's YouTube audio, apart from its lyrics, and which
+songs are offered one. No model runs here."""
+
+from __future__ import annotations
+
+import dataclasses
+import os
+from pathlib import Path
+
+import pytest
+from conftest import add_song
+
+from caracole.autochords import transcript as tr
+from caracole.config import ProviderPolicy
+from caracole.db import kv_get, kv_set
+from caracole.library import keep_file
+from caracole.overrides import Overrides
+from caracole.songs import get_song, update_song
+from caracole.versions import upsert_version
+from caracole.youtube import Video
+from caracole.youtube_fetch import Record, _save
+
+
+def youtube_song(conn, tmp_path, artist="A", title="T", **fields):
+    """A song whose audio came from YouTube, its lyrics missing and every site asked about it."""
+    song = add_song(conn, artist, title)
+    audio = tmp_path / "youtube" / f"{song.id}-abc.m4a"
+    audio.parent.mkdir(parents=True, exist_ok=True)
+    audio.write_bytes(b"audio")
+    fields = {"lyrics_status": "missing", "lyrics_at": "2026-11-01T00:00:00Z", **fields}
+    update_song(conn, song.id, audio_path=str(audio), audio_mtime=os.stat(audio).st_mtime, **fields)
+    _save(conn, song.id, Record(video=Video("XFkzRNyygfk", "T", "A - Topic", 200.0),
+                                source="search", audio=str(audio)))
+    kv_set(conn, f"megalobiz:checked:{song.id}", "2026-11-01T00:00:00Z")
+    kv_set(conn, f"azlyrics:checked:{song.id}", "2026-11-01T00:00:00Z")
+    return get_song(conn, song.id)
+
+
+def made(song, **kw):
+    fields = dict(lrc="[00:01.00]hello\n", audio=song.audio_path, audio_mtime=song.audio_mtime, model=tr.MODEL,
+                  language="en", device="cuda", words_dropped=0, made_at="2026-11-20T00:00:00Z")
+    return tr.Transcript(**{**fields, **kw})
+
+
+def test_a_transcript_kept_is_read_back_while_the_audio_is_the_same(conn, tmp_path):
+    song = youtube_song(conn, tmp_path)
+    t = made(song)
+    tr.keep_transcript(conn, song, t)
+    assert tr.transcript_of(conn, song) == t
+    assert tr.Transcript.from_json(t.as_json()) == t
+    assert tr.Transcript.from_json({"lrc": 3}) is None
+    assert tr.Transcript.from_json("nope") is None
+
+
+def test_a_transcript_of_other_audio_is_none_and_the_offer_comes_back(conn, cfg, tmp_path):
+    song = youtube_song(conn, tmp_path)
+    tr.keep_transcript(conn, song, made(song))
+    assert tr.why_not_offered(conn, cfg, song, Overrides()) is not None
+    update_song(conn, song.id, audio_mtime=song.audio_mtime + 5)
+    song = get_song(conn, song.id)
+    assert tr.transcript_of(conn, song) is None
+    assert tr.why_not_offered(conn, cfg, song, Overrides()) is None
+
+
+def test_heard_nothing_holds_for_that_audio_alone(conn, cfg, tmp_path):
+    song = youtube_song(conn, tmp_path)
+    assert not tr.heard_nothing(conn, song)
+    tr.note_heard_nothing(conn, song, "2026-11-20T00:00:00Z")
+    assert tr.heard_nothing(conn, song)
+    assert tr.why_not_offered(conn, cfg, song, Overrides()) is not None
+    update_song(conn, song.id, audio_mtime=song.audio_mtime + 5)
+    other = get_song(conn, song.id)
+    assert not tr.heard_nothing(conn, other)
+    assert tr.why_not_offered(conn, cfg, other, Overrides()) is None
+    tr.note_heard_nothing(conn, song, "2026-11-20T00:00:00Z")
+    tr.keep_transcript(conn, song, made(song))
+    assert kv_get(conn, f"{tr.HEARD_NOTHING}{song.id}") is None
+
+
+def test_a_song_is_offered_once_every_site_switched_on_missed(conn, cfg, tmp_path):
+    song = youtube_song(conn, tmp_path)
+    assert tr.why_not_offered(conn, cfg, song, Overrides()) is None
+    conn.execute("DELETE FROM kv WHERE key = ?", (f"azlyrics:checked:{song.id}",))
+    assert tr.why_not_offered(conn, cfg, song, Overrides()) is not None
+    off = dataclasses.replace(cfg, providers={**cfg.providers, "azlyrics": ProviderPolicy(0, (0.0, 0.0), False)})
+    assert tr.why_not_offered(conn, off, song, Overrides()) is None
+    update_song(conn, song.id, lyrics_at=None)
+    assert tr.why_not_offered(conn, off, get_song(conn, song.id), Overrides()) is not None
+
+
+def _human_sheet(conn, cfg, song):
+    vid = upsert_version(conn, provider="ug", tab_id="1", song_id=song.id, slot="sheet", kind="chords", rating=4.5,
+                         votes=1, version=1, label=None, url="https://tabs.ultimate-guitar.com/tab/x-1", raw={},
+                         now="2026-10-18T00:00:00Z")
+    keep_file(conn, cfg.library_dir, song=song, version_id=vid, name="sheet.txt", data=b"[ch]G[/ch]\nHi", rank=1)
+
+
+@pytest.mark.parametrize("what", ["pending", "found", "instrumental", "human", "ignored", "overridden", "bought"])
+def test_no_offer_for_pending_or_found_or_instrumental_lyrics_a_human_sheet_an_ignored_song_or_bought_audio(
+        conn, cfg, tmp_path, what):
+    song = youtube_song(conn, tmp_path)
+    overrides = Overrides()
+    if what in ("pending", "found", "instrumental"):
+        update_song(conn, song.id, lyrics_status=what)
+    elif what == "human":
+        _human_sheet(conn, cfg, song)
+    elif what == "ignored":
+        update_song(conn, song.id, status="ignored")
+    elif what == "overridden":
+        overrides = Overrides(ignore=frozenset({song.key}))
+    else:
+        conn.execute("DELETE FROM kv WHERE key = ?", (f"youtube:{song.id}",))
+    assert tr.why_not_offered(conn, cfg, get_song(conn, song.id), overrides)
+
+
+def test_a_song_whose_audio_file_is_gone_is_not_offered(conn, cfg, tmp_path):
+    song = youtube_song(conn, tmp_path)
+    Path(song.audio_path).unlink()
+    assert tr.why_not_offered(conn, cfg, song, Overrides())
+
+
+def test_offered_song_ids_lists_the_songs_due(conn, cfg, tmp_path):
+    first = youtube_song(conn, tmp_path, "A", "One")
+    second = youtube_song(conn, tmp_path, "B", "Two")
+    youtube_song(conn, tmp_path, "C", "Three", lyrics_status="found")
+    assert tr.offered_song_ids(conn, cfg, Overrides()) == sorted([first.id, second.id])

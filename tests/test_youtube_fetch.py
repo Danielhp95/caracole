@@ -27,6 +27,9 @@ from caracole.versions import upsert_version
 from caracole.youtube import Video, YtDlp
 from caracole.youtube_urls import watch_url
 
+import sys as _sys
+
+_TORCH_BEFORE = {"torch"} & set(_sys.modules)
 NOW = datetime(2026, 10, 19, 3, 50, tzinfo=UTC)
 TOPIC = "XFkzRNyygfk"
 LYRICS = "pyGxJ0y0dbE"
@@ -108,6 +111,50 @@ def test_in_the_tests_a_config_read_from_the_environment_finds_no_real_yt_dlp(tm
     monkeypatch.setenv("CARACOLE_BTC_WEIGHTS", str(tmp_path / "btc.pt"))
     monkeypatch.setenv("CARACOLE_BEAT_CHECKPOINT", str(tmp_path / "beat.ckpt"))
     assert yf.route_problem(load_config(None)).startswith("yt-dlp isn't there")
+
+
+def test_transcribe_problem_starts_with_the_youtube_route(ycfg, tmp_path, monkeypatch):
+    import importlib.util
+    import sys
+
+    off = dataclasses.replace(ycfg, providers={**ycfg.providers, "youtube": ProviderPolicy(6, (3.75, 7.5), False)})
+    assert yf.transcribe_problem(off) == yf.route_problem(off)
+    assert yf.transcribe_reason(off) == "YouTube is off"
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name, *a: None if name == "whisper" else object())
+    assert yf.transcribe_problem(ycfg) == "built without Whisper"
+    assert yf.transcribe_reason(ycfg) == "Whisper isn't installed"
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name, *a: object())
+    whisper, demucs = tmp_path / "models" / "large-v3.pt", tmp_path / "models" / "htdemucs.safetensors"
+    assert "no Whisper model" in yf.transcribe_problem(ycfg)
+    assert yf.transcribe_reason(ycfg) == "the transcription models are missing"
+    with_paths = dataclasses.replace(ycfg, autochords=dataclasses.replace(
+        ycfg.autochords, whisper_model=whisper, separator_model=demucs))
+    assert "Whisper model isn't there" in yf.transcribe_problem(with_paths)
+    whisper.write_bytes(b"w")
+    assert "separator model isn't there" in yf.transcribe_problem(with_paths)
+    demucs.write_bytes(b"d")
+    assert yf.transcribe_problem(with_paths) == f"demucs-rs isn't there ({with_paths.demucs_bin})"
+    assert yf.transcribe_reason(with_paths) == "demucs-rs is missing"
+    bin_dir = tmp_path / "demucs-bin"
+    bin_dir.mkdir()
+    (bin_dir / "demucs").write_text("#!/bin/sh\n")
+    (bin_dir / "demucs").chmod(0o755)
+    ready = dataclasses.replace(with_paths, demucs_bin=str(bin_dir / "demucs"))
+    assert yf.transcribe_problem(ready) is None
+    assert yf.transcribe_reason(ready) is None
+    assert "torch" not in sys.modules or "torch" in _TORCH_BEFORE
+
+
+def test_transcribe_time_is_a_minute_on_a_gpu_and_up_to_half_an_hour_without(cfg, monkeypatch):
+    monkeypatch.delenv("CARACOLE_TORCH_CUDA", raising=False)
+    assert yf.transcribe_time(cfg) == "up to half an hour"
+    monkeypatch.setenv("CARACOLE_TORCH_CUDA", "1")
+    monkeypatch.setattr(yf.Path, "exists", lambda self: str(self) == "/dev/nvidiactl")
+    assert yf.transcribe_time(cfg) == "about a minute"
+    cpu = dataclasses.replace(cfg, autochords=dataclasses.replace(cfg.autochords, transcribe_device="cpu"))
+    assert yf.transcribe_time(cpu) == "up to half an hour"
+    monkeypatch.setattr(yf.Path, "exists", lambda self: False)
+    assert yf.transcribe_time(cfg) == "up to half an hour"
 
 
 def test_without_auto_chords_the_packages_are_looked_for_and_never_imported():

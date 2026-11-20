@@ -88,15 +88,15 @@
       devCaracole = py: pkgs.writeShellScriptBin "caracole" ''
         exec ${py}/bin/python -m caracole "$@"
       '';
-      # The auto-chords shells differ in their python (torch or torch-bin) and their demucs (cpu or wgpu).
-      autochordsShell = py: demucs: pkgs.mkShell ({
+      # The auto-chords shells differ in their python (torch or torch-bin) and their demucs (cpu or wgpu) and `extraEnv` (the cuda shell says its torch has CUDA).
+      autochordsShell = py: demucs: extraEnv: pkgs.mkShell ({
         packages = [ py (devCaracole py) pkgs.yt-dlp demucs ] ++ devTools;
         shellHook = devShellHook;
         CARACOLE_BTC_WEIGHTS = caracoleAutochords.btcWeights;
         CARACOLE_BEAT_CHECKPOINT = caracoleAutochords.beatCheckpoint;
         CARACOLE_WHISPER_MODEL = caracoleAutochords.whisperModel;
         CARACOLE_DEMUCS_MODEL = caracoleAutochords.separatorModel;
-      } // fontEnv);
+      } // extraEnv // fontEnv);
       devShellHook = ''
         root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
         export PYTHONPATH="$root/src''${PYTHONPATH:+:$PYTHONPATH}"
@@ -144,9 +144,9 @@
         # `pytest -m autochords` here runs the model tests on the packaged model files,
         # and `caracole youtube` finds yt-dlp (and the transcriber demucs), as the auto-chords
         # package's wrapper does.
-        autochords = autochordsShell devPythonAutochords caracoleAutochords.demucs;
+        autochords = autochordsShell devPythonAutochords caracoleAutochords.demucs { };
         # `.#autochords` on torch-bin: the model tests against the GPU build of torch.
-        autochords-cuda = autochordsShell devPythonAutochordsCuda caracoleAutochordsCuda.demucs;
+        autochords-cuda = autochordsShell devPythonAutochordsCuda caracoleAutochordsCuda.demucs { CARACOLE_TORCH_CUDA = "1"; };
       };
     };
 }

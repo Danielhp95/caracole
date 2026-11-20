@@ -454,3 +454,13 @@ def test_removed_songs_are_re_keyed_with_the_songs(conn):
                              isrc=None, source="wanted", source_id="soda-stereo/persiana-americana",
                              added_at="2026-10-11T00:00:00Z")
     assert created and removed_song(conn, "soda-stereo/persiana-americana") is None
+
+
+def test_transcript_kv_goes_with_a_removed_song(conn):
+    from caracole.songs import delete_song_kv
+
+    for key in ("transcript:7", "transcribe:none:7", "transcript:77", "transcribe:none:77"):
+        db.kv_set(conn, key, "{}")
+    delete_song_kv(conn, 7)
+    left = {row[0] for row in conn.execute("SELECT key FROM kv WHERE key LIKE 'transcri%'")}
+    assert left == {"transcript:77", "transcribe:none:77"}

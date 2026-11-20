@@ -174,7 +174,13 @@ python3Packages.buildPythonApplication (finalAttrs: {
     "CARACOLE_ALPHATAB_DIR"
     "${alphatab}"
   ]
-  ++ lib.optionals withAutochords modelDefaults;
+  ++ lib.optionals withAutochords modelDefaults
+  # transcribe_time (youtube_fetch.py) tells a GPU build from the CPU one by this.
+  ++ lib.optionals (withAutochords && cudaTorch) [
+    "--set-default"
+    "CARACOLE_TORCH_CUDA"
+    "1"
+  ];
 
   # `chordpro` on PATH lets the tests marked `chordpro` run. Those marked
   # `autochords` need the model weights; they run in `nix develop .#autochords`.
@@ -250,6 +256,21 @@ python3Packages.buildPythonApplication (finalAttrs: {
         grep -qF -- ${lib.escapeShellArg "${yt-dlp}/bin"} $out/bin/caracole
         grep -qF -- ${lib.escapeShellArg "${demucs}/bin"} $out/bin/caracole
         test -x ${lib.escapeShellArg "${demucs}/bin/demucs"}
+      ''
+      + (
+        if cudaTorch then
+          ''
+            grep -qF -- "CARACOLE_TORCH_CUDA" $out/bin/caracole
+          ''
+        else
+          ''
+            if grep -qF -- "CARACOLE_TORCH_CUDA" $out/bin/caracole; then
+              echo "the CPU package says its torch has CUDA" >&2
+              exit 1
+            fi
+          ''
+      )
+      + ''
         $out/bin/caracole youtube > youtube.out
         grep -qFx "No song is waiting for audio from YouTube." youtube.out
       ''
@@ -265,6 +286,10 @@ python3Packages.buildPythonApplication (finalAttrs: {
           exit 1
         fi
         grep -qF "packages.autochords" youtube.err
+        if grep -qF -- "CARACOLE_TORCH_CUDA" $out/bin/caracole; then
+          echo "the default package says its torch has CUDA" >&2
+          exit 1
+        fi
         if grep -qF -- ${lib.escapeShellArg "${yt-dlp}/bin"} $out/bin/caracole; then
           echo "the default package puts yt-dlp on PATH" >&2
           exit 1

@@ -33,6 +33,7 @@ must have torch, librosa and beat_this, both model files, and yt-dlp (``route_pr
 
 from __future__ import annotations
 
+import importlib.util
 import logging
 import os
 import re
@@ -128,6 +129,48 @@ def route_reason(cfg: Config) -> str | None:
     if problem.startswith("auto-chords"):
         return "auto-chords' model files are missing"
     return "yt-dlp is missing"
+
+
+def transcribe_problem(cfg: Config) -> str | None:
+    """Why no song's lyrics are transcribed from its audio here, or None when they can be: the YouTube route
+    (the audio), Whisper, both model files and demucs-rs. Nothing is imported to find out."""
+    problem = route_problem(cfg)
+    if problem is not None:
+        return problem
+    if importlib.util.find_spec("whisper") is None:
+        return "built without Whisper"
+    for what, path in (("Whisper model", cfg.autochords.whisper_model),
+                       ("separator model", cfg.autochords.separator_model)):
+        if path is None:
+            return f"no {what} configured"
+        if not path.is_file():
+            return f"the {what} isn't there ({path})"
+    if shutil.which(cfg.demucs_bin) is None:
+        return f"demucs-rs isn't there ({cfg.demucs_bin})"
+    return None
+
+
+def transcribe_reason(cfg: Config) -> str | None:
+    """``transcribe_problem`` in a few words, for a page; None when there is none."""
+    problem = transcribe_problem(cfg)
+    if problem is None:
+        return None
+    if problem == route_problem(cfg):
+        return route_reason(cfg)
+    if problem == "built without Whisper":
+        return "Whisper isn't installed"
+    if problem.startswith("demucs-rs"):
+        return "demucs-rs is missing"
+    return "the transcription models are missing"
+
+
+def transcribe_time(cfg: Config) -> str:
+    """How long a transcription takes here, for the offer: about a minute on a GPU, else up to half an hour
+    (measured: Whisper on the CPU is about 2x the song's length, demucs about 4.8x)."""
+    if (os.environ.get("CARACOLE_TORCH_CUDA") == "1" and cfg.autochords.transcribe_device != "cpu"
+            and Path("/dev/nvidiactl").exists()):
+        return "about a minute"
+    return "up to half an hour"
 
 
 def audio_dir(cfg: Config) -> Path:
