@@ -63,9 +63,9 @@ nix develop .#autochords-cuda -c pytest -m autochords  # the same, on torch-bin 
 
 Both shells set `CARACOLE_CJK_FONT`, `CARACOLE_PDF_FONTS` and `CARACOLE_ALPHATAB_DIR`, and
 `.#autochords` also sets `CARACOLE_BTC_WEIGHTS`, `CARACOLE_BEAT_CHECKPOINT`, `CARACOLE_WHISPER_MODEL` and
-`CARACOLE_DEMUCS_MODEL`, and puts `demucs` on PATH; `.#autochords-cuda` sets the same
+`CARACOLE_DEMUCS_MODEL`, and puts `demucs` on PATH (demucs-rs's `cpu` build: 712 s for a 149 s song, about 5x its length); `.#autochords-cuda` sets the same
 on a Python whose torch, torchaudio, torchvision and triton are nixpkgs' prebuilt CUDA builds (`torch-bin` and its
-kin), with `openai-whisper` for the lyrics of a song no site has. nixpkgs' own `torch` is CPU-only.
+kin), with nixpkgs' own wgpu `demucs` (the GPU: about 35 s for that song) and `openai-whisper` for the lyrics of a song no site has. nixpkgs' own `torch` is CPU-only.
 
 Without Nix, on Ubuntu, first sections 1 to 4 of [deploy.md's Ubuntu
 part](deploy.md#ubuntu-2404-without-nix) (Python, ChordPro, the fonts), then,

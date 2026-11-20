@@ -57,7 +57,7 @@ music_dir = "~/Music"             # tracks you bought; read only, used only for 
 user_agent = "caracole/0.1 (personal tab library)"
 chordpro_bin = "chordpro"         # the program that renders PDFs
 ytdlp_bin = "yt-dlp"              # or $CARACOLE_YTDLP_BIN; see "Audio from YouTube"
-demucs_bin = "demucs"             # or $CARACOLE_DEMUCS_BIN; demucs-rs, which separates the vocals
+demucs_bin = "demucs"             # or $CARACOLE_DEMUCS_BIN; demucs-rs (cpu build in `autochords`, GPU in `autochords-cuda`)
 # pdf_fonts = "/path/to/folder"   # or $CARACOLE_PDF_FONTS; see "Fonts in the PDFs"
 # cjk_font = "/path/to/font.ttf"  # or $CARACOLE_CJK_FONT; see "Fonts for Chinese sheets"
 

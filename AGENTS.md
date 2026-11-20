@@ -3056,7 +3056,8 @@ CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py  
 - `.#autochords` adds torch, beat-this, librosa and openai-whisper, and sets `CARACOLE_BTC_WEIGHTS` and
   `CARACOLE_BEAT_CHECKPOINT` to the files nix/autochords.nix fetches, and `CARACOLE_WHISPER_MODEL` and
   `CARACOLE_DEMUCS_MODEL` to Whisper large-v3 and HTDemucs (about 3.1 GB, fetched on a first build); both
-  auto-chords shells put `demucs` (demucs-rs with its `cpu` feature) on PATH. The suite points
+  auto-chords shells put `demucs` on PATH: `.#autochords` the `cpu` build of demucs-rs (backend fixed at compile
+  time; 712 s for a 149 s song), `.#autochords-cuda` nixpkgs' own wgpu build (the GPU, about 35 s). The suite points
   `CARACOLE_DEMUCS_BIN` at no program (tests/conftest.py), as it does yt-dlp's.
 - `.#autochords-cuda` is that on `pkgsCuda` (flake.nix): a second nixpkgs whose python takes torch, torchaudio,
   torchvision and triton from the `-bin` packages, package-wide (one dependency on the CPU torch and buildEnv meets two

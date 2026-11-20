@@ -21,18 +21,23 @@
   yt-dlp,
 
   # demucs-rs, which separates the vocals from a mix (src/caracole/autochords/) before Whisper is
-  # trusted with the words, in the auto-chords variant alone. nixpkgs builds it for the GPU (wgpu)
-  # only. Its cargo feature `cpu` swaps that backend for ndarray, at compile time, not at run
-  # time: `demucs --help` has no backend option, and the wgpu build panics ("No possible adapter")
-  # where no Vulkan adapter is found. So this build never touches a GPU and runs the same
-  # anywhere: slower, and in the nightly unit and caracole serve's job nothing competes with
-  # Whisper for the card. The feature goes in `cargoBuildFeatures`: buildRustPackage turns
-  # `buildFeatures` into it when it builds the derivation, so an override of `buildFeatures` alone
-  # is ignored (the drv keeps `cargoBuildFeatures = ""`).
-  demucs ? demucs-rs.overrideAttrs {
-    cargoBuildFeatures = [ "cpu" ];
-    cargoCheckFeatures = [ "cpu" ];
-  },
+  # trusted with the words, in the auto-chords variants alone. Its backend is fixed at compile
+  # time (`demucs --help` has no option for it): nixpkgs builds it for the GPU (wgpu), and its cargo
+  # feature `cpu` swaps that for ndarray. The free `autochords` package, for where there is no GPU,
+  # gets the `cpu` build: measured 712 s for a 149 s song (about 5x its length, 1.4 GB of memory).
+  # The `cudaTorch` package keeps nixpkgs' own wgpu build, so the separation runs on the GPU
+  # (about 35 s for that song); where no Vulkan adapter is found it fails ("No possible adapter")
+  # and caracole's separator reports that, never transcribing unguarded. The feature goes in
+  # `cargoBuildFeatures`: buildRustPackage turns `buildFeatures` into it when it builds the
+  # derivation, so an override of `buildFeatures` alone is ignored.
+  demucs ?
+    if cudaTorch then
+      demucs-rs
+    else
+      demucs-rs.overrideAttrs {
+        cargoBuildFeatures = [ "cpu" ];
+        cargoCheckFeatures = [ "cpu" ];
+      },
 
   # `chordpro`, without its wxWidgets GUI: the full package pulls GTK, WebKit
   # and GStreamer (about 1 GiB) into a closure that only ever runs headless.
