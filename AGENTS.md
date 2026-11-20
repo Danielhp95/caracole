@@ -338,7 +338,10 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     - and `sung`, its data's last member, the song's timed lyrics (`_timed_lyrics`: its stored LRC, lyrics.py
       `synced_lines`, read once a song; none for lyrics that can't be read) matched to that page's own lines
       (viewer/sung.py), on sheet.html, sheet (auto).html and each `version-<tab>.html` alike; none where they meet too
-      few lines.
+      few lines. Except that an auto sheet made over a transcript (its version's `raw["lyrics_source"]` is
+      `"transcript"`) lights by that transcript's LRC, `raw["transcript"]` (`_auto_sheet`, `_Sheet.timed`), and no other
+      page does: the song's own lyrics stay none while they're missing. Remade over a site's lyrics, the sheet loses
+      the keys and lights by those.
   - **Exports**: `render_version`, an export: the PDF in a viewer's version of the sheet `export_viewer` names, the
     human one else the auto one, on the instrument its `inst=` names (`export_version`; `sheet (A Major, piano).pdf`),
     while `sheet.pdf` is the guitar's (`on_the_guitar`).
@@ -433,7 +436,7 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     - and version.py's `for_instrument`, the capo folded in on one that takes none.
   - **instruments.js**: their box and keyboard and `window.caracoleInstruments`, where another instrument's script
     registers its drawing, a line of the header's facts and a settings row.
-  - **sung.py**: the song's timed lyrics matched to the sheet's lines, the data's `sung`, `[[ms, n or null], …]`
+  - **sung.py**: the song's timed lyrics (an auto sheet over a transcript: that transcript's) matched to the sheet's lines, the data's `sung`, `[[ms, n or null], …]`
     (`sung_lines`; n indexes page.py `_drawn_lines`, the lines `pinyin` reads):
     - top to bottom, the most lines paired, each as early as it can be: a chorus the sheet writes once lit the first
       time alone;
