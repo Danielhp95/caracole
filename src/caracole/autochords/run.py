@@ -86,6 +86,7 @@ from caracole.autochords.merge import (
     parse_lrc_words,
     youtube_credit,
 )
+from caracole.autochords.transcript import LYRICS_SOURCE, NOTE, Transcript, transcript_of
 from caracole.chordpro import display_columns
 from caracole.config import Config
 from caracole.db import kv_delete, kv_get_json, kv_set_json
@@ -304,17 +305,18 @@ def _generate(conn: sqlite3.Connection, cfg: Config, song: Song, models: tuple[R
         stats.failures.append(_unreadable(conn, song, e, stamp))
         return
     try:
-        text, used, key, shift = _make_sheet(song, heard, source=_from_youtube(video))
+        made = _make_sheet(song, heard, source=_from_youtube(video), transcript=transcript_of(conn, song))
     except Exception as e:  # noqa: BLE001 - a bug laying it out is caracole's, never the file's: the song stays due
         _error(stats, song, e)
         return
     try:
-        _keep(conn, cfg, song, text, used, key, stamp, video=video, shift=shift)
+        _keep(conn, cfg, song, made.text, made.used, made.key, stamp, video=video, shift=made.shift,
+              transcript=made.transcript)
     except Exception as e:  # noqa: BLE001 - the library's problem, not the purchase's
         _error(stats, song, e)
         return
     stats.generated += 1
-    log.info("%s: auto sheet written (%s lyrics)", song.display, used)
+    log.info("%s: auto sheet written (%s lyrics)", song.display, made.used)
 
 
 def _record_run(conn: sqlite3.Connection, stats: AutoStats, stamp: str, only: Collection[int] | None) -> None:
@@ -429,6 +431,14 @@ def _skip_reason(conn: sqlite3.Connection, song: Song, overrides: Overrides) -> 
     raw = get_version(conn, auto.version_id).raw
     if raw.get("lyrics") == "none" and _sung_lyrics(song):
         return None  # made before LRCLIB answered: once more, now with the words
+    kept_transcript = transcript_of(conn, song)
+    if raw.get("lyrics_source") == LYRICS_SOURCE:
+        if _sung_lyrics(song):
+            return None  # a site has lyrics now, and they always win: once more, over them
+        if kept_transcript is None or raw.get("transcript_made_at") != kept_transcript.made_at:
+            return None  # over a transcript that is not the one kept now (of other audio, or made again)
+    elif raw.get("lyrics") == "none" and kept_transcript is not None:
+        return None  # a transcript of this audio came since: once more, over its words
     if raw.get("lyrics") == "plain" and _synced_key(song) not in (None, raw.get("synced_lyrics")):
         return None  # timed lyrics came since: once more, with each chord over its word where they fit the audio
     if raw.get("lyrics") == "synced" and raw.get("columns") != COLUMNS and _wider_lines(song):
@@ -648,12 +658,28 @@ def _hear(song: Song, recognizer: Recognizer, beats_fn: BeatsFn) -> _Heard:
     return _Heard(audio, list(segments), beats, downbeats)
 
 
-def _make_sheet(song: Song, heard: _Heard, *, source: str | None = None) -> tuple[str, str, str | None, float | None]:
-    """One song's auto sheet, which lyrics it used, the key of the chords heard (None when
-    they fit no key), and the seconds its timed lyrics were shifted by to fit the audio (None
-    when LRCLIB timed them for audio of the same length, or they weren't used); all of it comes
-    from its audio file. ``source`` says where that came from, when it wasn't a purchase, on the
-    sheet's line after the song's name; the shift has the line after it.
+@dataclass(frozen=True)
+class _Made:
+    """One song's auto sheet: its text, which lyrics it used ("synced", "plain" or "none"), the key of the chords
+    heard (None when they fit no key), the seconds its timed lyrics were shifted by to fit the audio (None when
+    LRCLIB timed them for audio of the same length, or they weren't used), and the transcript it was made over
+    (None unless the words are Whisper's)."""
+
+    text: str
+    used: str
+    key: str | None
+    shift: float | None
+    transcript: Transcript | None = None
+
+
+def _make_sheet(song: Song, heard: _Heard, *, source: str | None = None,
+                transcript: Transcript | None = None) -> _Made:
+    """One song's auto sheet, from its audio file. ``source`` says where that came from, when it wasn't a
+    purchase, on the sheet's line after the song's name; the shift has the line after it.
+
+    The song's lyrics from a site, whenever it has any, else its ``transcript`` (Whisper's words from this
+    very audio: timed lyrics whose duration is the audio's, so they fit as they are and no shift is searched,
+    with NOTE on the line after the shift's), else none.
 
     The key is estimated from the chords as recognized, each weighed by how long it sounds,
     before they are snapped to beats and laid out.
@@ -661,12 +687,14 @@ def _make_sheet(song: Song, heard: _Heard, *, source: str | None = None) -> tupl
     audio, segments, beats, downbeats = heard.audio, heard.segments, heard.beats, heard.downbeats
     key = estimate_key((s.label, s.end - s.start) for s in segments if s.label != NO_CHORD)
     lyrics = _sung_lyrics(song)
-    timed = _synced_for(song, lyrics, audio, segments, beats, downbeats)
+    over = transcript if lyrics is None else None
+    timed = _Timed(over.lrc) if over is not None else _synced_for(song, lyrics, audio, segments, beats, downbeats)
     synced = timed.text if timed is not None else None
     plain = lyrics.plain if lyrics is not None else None
     # The shift on a line of its own after the credit: render.py takes that line for the credit, and the viewer of
     # a sheet from YouTube draws the video in its place, so the shift is the first of the sheet's own words
-    note = "\n".join(part for part in (source, timed.note() if timed is not None else None) if part)
+    notes = (source, timed.note() if timed is not None else None, NOTE if over is not None else None)
+    note = "\n".join(part for part in notes if part)
     text = build_sheet(
         segments,
         title=song.title,
@@ -679,7 +707,7 @@ def _make_sheet(song: Song, heard: _Heard, *, source: str | None = None) -> tupl
         source=note or None,
     )
     shift = timed.shift if timed is not None else None
-    return text, "synced" if synced else "plain" if plain else "none", key, shift
+    return _Made(text, "synced" if synced else "plain" if plain else "none", key, shift, over)
 
 
 def _keep(
@@ -693,13 +721,16 @@ def _keep(
     *,
     video: Video | None = None,
     shift: float | None = None,
+    transcript: Transcript | None = None,
 ) -> None:
     """Keep one song's auto sheet, under a version of provider ``auto``; the song becomes found.
 
     The key heard goes into the version's ``raw``, for ``keys.song_key``, and so does the shift
     of timed lyrics LRCLIB timed for audio of another length (``lyrics_shift``), what its
     chord lines' columns count (``columns``: ``COLUMNS``), and the timed lyrics the song had,
-    used or not (``synced_lyrics``, ``_synced_key``). Audio from
+    used or not (``synced_lyrics``, ``_synced_key``). A sheet made over a transcript keeps it as
+    ``lyrics_source``, ``transcript`` (its LRC, for the viewer's sung line) and ``transcript_made_at``
+    (``_skip_reason`` compares it with the transcript kept now). Audio from
     YouTube (``video``) gives the version the video's address, so info.json names it, and its
     fields.
     """
@@ -709,6 +740,10 @@ def _keep(
         raw["key"] = key
     if shift is not None:
         raw["lyrics_shift"] = shift
+    if transcript is not None:
+        raw["lyrics_source"] = LYRICS_SOURCE
+        raw["transcript"] = transcript.lrc
+        raw["transcript_made_at"] = transcript.made_at
     synced = _synced_key(song)
     if synced is not None:
         raw["synced_lyrics"] = synced

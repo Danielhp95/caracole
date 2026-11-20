@@ -66,7 +66,18 @@ STAGES = (
 )
 # What the chords stage says the sheet holds, by the lyrics auto-chords laid the chords over
 # (autochords/run.py's version ``raw["lyrics"]``), which caracole serve's Ready says.
-HOLDS = {"synced": "chords over the lyrics", "plain": "chords, then the lyrics", "none": "chords only, no lyrics"}
+HOLDS = {
+    "synced": "chords over the lyrics",
+    "plain": "chords, then the lyrics",
+    "none": "chords only, no lyrics",
+    "transcript": "chords over the transcribed lyrics",  # synced, over Whisper's words (``raw["lyrics_source"]``)
+}
+
+
+def holds(raw: dict[str, object]) -> str:
+    """What the auto sheet's version (its ``raw``) says the sheet holds."""
+    used = "transcript" if raw.get("lyrics_source") == "transcript" else str(raw.get("lyrics"))
+    return HOLDS.get(used, "chords")
 NO_AUDIO = "no audio"
 
 
@@ -439,9 +450,8 @@ class _Sheet:
         made = kept is not None and self.song.autochords_mtime == self.song.audio_mtime
         if not made:
             return self._fail("auto-chords made no sheet (see the log)")
-        used = get_version(self.conn, kept[0]).raw.get("lyrics")
-        holds = HOLDS.get(str(used), "chords")
-        return "done", holds if stats.generated else f"up to date: {holds}"
+        held = holds(get_version(self.conn, kept[0]).raw)
+        return "done", held if stats.generated else f"up to date: {held}"
 
     def pdf(self) -> tuple[str, str] | str:
         from caracole.render import render_all

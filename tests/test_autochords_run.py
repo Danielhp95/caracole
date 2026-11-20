@@ -691,6 +691,122 @@ def test_a_sheet_laid_out_by_characters_over_lyrics_wider_than_them_is_made_agai
     assert (run(conn, cfg, rec).skipped, rec.calls) == (2, [])
 
 
+TRANSCRIBED = (
+    "[00:00.50]<00:00.50>Walking <00:01.50>down <00:02.00>the <00:03.00>river <00:04.00>road\n"
+    "[00:05.20]<00:05.20>Singing <00:06.00>to <00:06.50>the <00:07.00>morning <00:08.00>light\n"
+)
+
+
+def transcribed(conn, song, lrc=TRANSCRIBED, *, made_at="2026-11-20T01:00:00Z"):
+    """Keep a transcript of the song's current audio, as caracole transcribe does."""
+    from caracole.autochords.transcript import Transcript, keep_transcript
+
+    keep_transcript(conn, song, Transcript(lrc=lrc, audio=song.audio_path or "", audio_mtime=song.audio_mtime,
+                                           model="whisper-large-v3", language="en", device="cpu",
+                                           words_dropped=0, made_at=made_at))
+
+
+def test_a_song_with_no_lyrics_and_a_transcript_gets_its_chords_over_the_transcribed_words(conn, cfg, tmp_path):
+    from caracole.autochords.transcript import NOTE
+
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"), seconds=10.0)
+    transcribed(conn, s)
+    run(conn, cfg, Heard((0.0, 3.0, "C"), (3.0, 10.0, "G")))
+    lines = auto_sheet(cfg, conn, s).splitlines()
+    assert lines[lines.index("Nobody - River Road") + 1] == NOTE
+    i = lines.index("Walking down the river road")
+    assert lines[i - 1] == "[ch]C[/ch]" + " " * 16 + "[ch]G[/ch]"  # each chord over its word
+    assert "Singing to the morning light" in lines and "[Lyrics]" not in lines
+    raw = auto_raw(conn, s)
+    assert (raw["lyrics"], raw["lyrics_source"], raw["transcript"], raw["transcript_made_at"]) == (
+        "synced", "transcript", TRANSCRIBED, "2026-11-20T01:00:00Z")
+    assert "lyrics_shift" not in raw
+
+
+def test_a_sites_lyrics_win_over_the_transcript(conn, cfg, tmp_path):
+    from caracole.autochords.transcript import NOTE
+
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"), lyrics_status="found",
+                   lyrics_json=lyrics_json(plain="Other words entirely"))
+    transcribed(conn, s)
+    run(conn, cfg)
+    text = auto_sheet(cfg, conn, s)
+    lines = text.splitlines()
+    assert "[Lyrics]" in lines and "Other words entirely" in text and "Walking down" not in text
+    assert NOTE not in text
+    raw = auto_raw(conn, s)
+    assert raw["lyrics"] == "plain" and not {"lyrics_source", "transcript", "transcript_made_at"} & raw.keys()
+
+
+def test_a_sheet_over_a_transcript_is_made_again_once_a_site_has_lyrics(conn, cfg, tmp_path):
+    from caracole.autochords.transcript import NOTE
+
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"))
+    transcribed(conn, s)
+    run(conn, cfg)
+    assert auto_raw(conn, s)["lyrics_source"] == "transcript"
+    rec = FakeRecognizer()
+    assert (run(conn, cfg, rec).skipped, rec.calls) == (1, [])
+
+    update_song(conn, s.id, lyrics_status="found", lyrics_json=lyrics_json(plain="A site's words"))
+    rec = FakeRecognizer()
+    assert (run(conn, cfg, rec).generated, rec.calls) == (1, [Path(s.audio_path)])
+    text = auto_sheet(cfg, conn, s)
+    assert "A site's words" in text and NOTE not in text and "Walking down" not in text
+    assert "lyrics_source" not in auto_raw(conn, s) and "transcript" not in auto_raw(conn, s)
+    rec = FakeRecognizer()
+    assert (run(conn, cfg, rec).skipped, rec.calls) == (1, [])
+
+
+def test_a_sheet_over_none_is_made_again_once_a_transcript_comes(conn, cfg, tmp_path):
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"))
+    run(conn, cfg)
+    assert auto_raw(conn, s)["lyrics"] == "none"
+    transcribed(conn, s)
+    rec = FakeRecognizer()
+    assert (run(conn, cfg, rec).generated, rec.calls) == (1, [Path(s.audio_path)])
+    assert auto_raw(conn, s)["lyrics_source"] == "transcript"
+    rec = FakeRecognizer()
+    assert (run(conn, cfg, rec).skipped, rec.calls) == (1, [])
+
+
+def test_a_sheet_over_one_transcript_is_made_again_over_a_newer_one(conn, cfg, tmp_path):
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"))
+    transcribed(conn, s)
+    run(conn, cfg)
+    newer = TRANSCRIBED.replace("Walking", "Running")
+    transcribed(conn, s, newer, made_at="2026-11-21T01:00:00Z")
+    rec = FakeRecognizer()
+    assert (run(conn, cfg, rec).generated, rec.calls) == (1, [Path(s.audio_path)])
+    assert "Running down the river road" in auto_sheet(cfg, conn, s)
+    assert auto_raw(conn, s)["transcript_made_at"] == "2026-11-21T01:00:00Z"
+    rec = FakeRecognizer()
+    assert (run(conn, cfg, rec).skipped, rec.calls) == (1, [])
+
+
+def test_a_transcript_of_other_audio_is_not_used(conn, cfg, tmp_path):
+    from caracole.autochords.transcript import NOTE
+
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"), name="first.wav")
+    transcribed(conn, s)
+    # The audio is replaced after it was transcribed: the old words are of another recording.
+    other = with_audio(conn, tmp_path, s, seconds=12.0, name="second.wav")
+    run(conn, cfg)
+    text = auto_sheet(cfg, conn, other)
+    assert NOTE not in text and "Walking down" not in text and "lyrics_source" not in auto_raw(conn, other)
+    assert auto_raw(conn, other)["lyrics"] == "none"
+
+
+def test_a_sheet_over_a_transcript_whose_audio_was_replaced_goes_back_to_its_chart(conn, cfg, tmp_path):
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"), name="first.wav")
+    transcribed(conn, s)
+    run(conn, cfg)
+    assert auto_raw(conn, s)["lyrics_source"] == "transcript"
+    other = with_audio(conn, tmp_path, s, seconds=12.0, name="second.wav")
+    assert run(conn, cfg).generated == 1
+    assert "lyrics_source" not in auto_raw(conn, other) and auto_raw(conn, other)["lyrics"] == "none"
+
+
 def test_missing_lyrics_are_not_waited_for(conn, cfg, tmp_path):
     s = with_audio(conn, tmp_path, add_song(conn, "A", "T"), lyrics_status="missing")
     assert run(conn, cfg).generated == 1

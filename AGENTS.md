@@ -1850,6 +1850,15 @@ It is rows.js's, shared by both pages:
   - `shifted_lrc` moves line and word stamps alike, so word-timed lines keep their words;
   - the shift said on a line of the sheet's after the song's name, after the video's credit for audio from YouTube,
     and kept as `raw["lyrics_shift"]`.
+- Which words go under the chords (run.py `_make_sheet`): a site's lyrics whenever the song has any, else the
+  transcript of its current audio (transcript.py `transcript_of`: its own audio and mtime only), else none.
+  - A transcript is used as timed lyrics whose duration is the audio's: no `_synced_for`, no shift searched. The sheet
+    says `transcript.NOTE` after the credit and the shift's line.
+  - The version's `raw` gets `lyrics_source` "transcript", `transcript` (the LRC) and `transcript_made_at`, and none of
+    the three otherwise; `raw["lyrics"]` stays "synced".
+  - `_skip_reason` makes the song due again when such a sheet finds a site's lyrics, or finds the kept transcript's
+    `made_at` is not its own (other audio, or transcribed again), and when a sheet of none finds a transcript.
+  - youtube_sheet.py's `holds` says "chords over the transcribed lyrics" for it.
 
 #### `tests/`
 
