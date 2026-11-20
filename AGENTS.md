@@ -3053,8 +3053,13 @@ CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py  
 
 - Both shells set `CARACOLE_CJK_FONT` to the packages' font, `CARACOLE_PDF_FONTS` to their PDF fonts
   (nix/pdf-fonts.nix), and `CARACOLE_ALPHATAB_DIR` to alphaTab (nix/alphatab.nix).
-- `.#autochords` adds torch, beat-this and librosa, and sets `CARACOLE_BTC_WEIGHTS` and `CARACOLE_BEAT_CHECKPOINT` to
-  the files nix/autochords.nix fetches.
+- `.#autochords` adds torch, beat-this, librosa and openai-whisper, and sets `CARACOLE_BTC_WEIGHTS` and
+  `CARACOLE_BEAT_CHECKPOINT` to the files nix/autochords.nix fetches.
+- `.#autochords-cuda` is that on `pkgsCuda` (flake.nix): a second nixpkgs whose python takes torch, torchaudio,
+  torchvision and triton from the `-bin` packages, package-wide (one dependency on the CPU torch and buildEnv meets two
+  torch builds). The unfree CUDA packages it admits are `cudaUnfree`, a list found by evaluating, not
+  `allowUnfree`; a new torch-bin dependency that refuses to evaluate for its license is one more name there.
+  torchaudio-bin does not bring torchcodec, so it is listed in the extra. `packages.autochords-cuda` is the package.
 - Tests that need a real program or model skip without it:
 
 | Needs | Tests | Set by |

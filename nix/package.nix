@@ -51,6 +51,9 @@
 
   # The `autochords` extra: torch, beat-this, librosa and friends.
   withAutochords ? false,
+  # Marks the build whose python takes its torch from torch-bin (CUDA); flake.nix's
+  # `autochords-cuda` passes the matching python3Packages. Plain torch is CPU-only.
+  cudaTorch ? false,
   # The model files the auto-chords variant's wrapper sets by default
   # (CARACOLE_BTC_WEIGHTS, CARACOLE_BEAT_CHECKPOINT): the fixed-output downloads in
   # ./autochords.nix, because the unit has no network. The NixOS module's
@@ -114,12 +117,17 @@ python3Packages.buildPythonApplication (finalAttrs: {
     torch
     # btc.py decodes .m4a (AAC) through it; beat-this pulls it in too.
     torchaudio
+    # torchaudio's decoder. nixpkgs' source torchaudio brings it along, torchaudio-bin (the GPU
+    # build's) does not.
+    torchcodec
     beat-this
     librosa
     numpy
     scipy
     soundfile
     pyyaml
+    # Whisper, for the lyrics of a song no lyrics site has (large-v3, on the GPU where there is one).
+    openai-whisper
   ];
 
   makeWrapperArgs = [
@@ -252,6 +260,7 @@ python3Packages.buildPythonApplication (finalAttrs: {
       cjkFont
       pdfFonts
       withAutochords
+      cudaTorch
       alphatab
       btcWeights
       beatCheckpoint

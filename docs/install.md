@@ -21,6 +21,7 @@ sign-in, so it listens only on a network you trust
 nix run github:Danielhp95/caracole -- --help                  # once, without installing
 nix profile add github:Danielhp95/caracole                    # caracole on your PATH
 nix profile add 'github:Danielhp95/caracole#autochords'       # or with auto-chords (about 3 GB)
+nix profile add 'github:Danielhp95/caracole#autochords-cuda'  # auto-chords on torch-bin, for an NVIDIA GPU (about 7 GB, unfree CUDA libraries)
 ```
 
 Before Nix 2.30, `nix profile add` was `nix profile install`. caracole then
@@ -57,10 +58,13 @@ nix develop                                         # Python, the dependencies, 
 pytest -q                                           # every test, on up to 12 cores
 pytest -q -m "not slow"                             # all but the browser, chordpro, model and second-process tests
 nix develop .#autochords -c pytest -m autochords    # the model tests, with the model files
+nix develop .#autochords-cuda -c pytest -m autochords  # the same, on torch-bin (CUDA)
 ```
 
 Both shells set `CARACOLE_CJK_FONT`, `CARACOLE_PDF_FONTS` and `CARACOLE_ALPHATAB_DIR`, and
-`.#autochords` also sets `CARACOLE_BTC_WEIGHTS` and `CARACOLE_BEAT_CHECKPOINT`.
+`.#autochords` also sets `CARACOLE_BTC_WEIGHTS` and `CARACOLE_BEAT_CHECKPOINT`; `.#autochords-cuda` sets the same
+on a Python whose torch, torchaudio, torchvision and triton are nixpkgs' prebuilt CUDA builds (`torch-bin` and its
+kin), with `openai-whisper` for the lyrics of a song no site has. nixpkgs' own `torch` is CPU-only.
 
 Without Nix, on Ubuntu, first sections 1 to 4 of [deploy.md's Ubuntu
 part](deploy.md#ubuntu-2404-without-nix) (Python, ChordPro, the fonts), then,
