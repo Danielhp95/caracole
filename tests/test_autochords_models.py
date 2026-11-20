@@ -362,3 +362,22 @@ def test_htdemucs_separates_a_tone_and_frame_db_reads_it(tmp_path):
     db = frame_db(stem)
     assert abs(len(db) - math.ceil(seconds / 0.05)) <= 1
     assert all(isinstance(v, float) for v in db)
+
+
+@needs_libs
+@pytest.mark.autochords
+def test_whisper_hears_a_tone_without_error(tmp_path, monkeypatch):
+    from caracole.autochords.run import _write_tone
+    from caracole.autochords.transcribe import Heard, WhisperTranscriber, resolve_device
+
+    model = os.environ.get("CARACOLE_WHISPER_MODEL")
+    if not model or not Path(model).is_file():
+        pytest.skip("no Whisper model (CARACOLE_WHISPER_MODEL)")
+    monkeypatch.delenv("TRITON_CACHE_DIR", raising=False)
+    device = resolve_device("auto")
+    t = WhisperTranscriber(Path(model), device=device, cache_dir=tmp_path)
+    tone = _write_tone(tmp_path / "tone.wav")
+    heard = t.hear(tone, tone, 0.0)
+    print("whisper device:", device)
+    assert isinstance(heard, Heard)
+    assert os.environ["TRITON_CACHE_DIR"] == str(tmp_path / "triton")
