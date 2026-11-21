@@ -57,6 +57,7 @@ music_dir = "~/Music"             # tracks you bought; read only, used only for 
 user_agent = "caracole/0.1 (personal tab library)"
 chordpro_bin = "chordpro"         # the program that renders PDFs
 ytdlp_bin = "yt-dlp"              # or $CARACOLE_YTDLP_BIN; see "Audio from YouTube"
+demucs_bin = "demucs"             # or $CARACOLE_DEMUCS_BIN; demucs-rs (cpu build in `autochords`, GPU in `autochords-cuda`)
 # pdf_fonts = "/path/to/folder"   # or $CARACOLE_PDF_FONTS; see "Fonts in the PDFs"
 # cjk_font = "/path/to/font.ttf"  # or $CARACOLE_CJK_FONT; see "Fonts for Chinese sheets"
 
@@ -144,10 +145,13 @@ scored_sheets = 3                 # sheets per song scored for coverage: the top
 label_penalty = 0.5               # off the rating of an intro, solo, outro, riff or lesson
 variant_bonus = 0.25              # onto an acoustic or live version, when your song is one
 
-[autochords]                      # read only by `caracole autochords`
+[autochords]                      # read only by `caracole autochords` and `caracole transcribe`
 # btc_weights = "/path/to/weights.pt"         # or $CARACOLE_BTC_WEIGHTS
 # beat_checkpoint = "/path/to/final0.ckpt"    # or $CARACOLE_BEAT_CHECKPOINT
 device = "cpu"                    # where the models run
+# whisper_model = "/path/to/large-v3.pt"      # or $CARACOLE_WHISPER_MODEL
+# separator_model = "/path/to/htdemucs.safetensors"  # or $CARACOLE_DEMUCS_MODEL
+transcribe_device = "auto"        # where Whisper runs: "auto" (the GPU when there is one), "cpu" or "cuda"
 ```
 
 Caracole keeps one sheet and one text tab per song, and beside the sheet the
@@ -1990,11 +1994,16 @@ and cache.
   length the same way (no download), and its thumbnail, as a link pasted into the
   library page's search box does: `Searched: YouTube's video ID is TITLE
   (CHANNEL).`
+- **`caracole transcribe --song "ARTIST - TITLE" [--progress]`** hears the lyrics of a song whose audio came from
+  YouTube and that no lyrics site has, with Whisper, keeps them as its transcript, and makes its auto sheet again
+  with the chords over them (see [Lyrics transcribed from the audio](#lyrics-transcribed-from-the-audio)). It
+  needs the flake's `packages.autochords`, with Whisper, its model files and demucs-rs: without them it does
+  nothing and exits 1.
 
 **The pages.** A command that changes what `_todo.md` and `index.html` show
 rewrites both when it is done: `match` (not `--dry-run`), `render`, `scan`,
 `todo`, `add`, `search --add`, `sync`, `autochords` and every `songbook`
-command but `list` and `show`; `review` when an
+command but `list` and `show`; `transcribe` once it took the song; `review` when an
 answer changed something; and `fetch`, `lyrics`, `lacuerda`, `gtptabs`,
 `harptabs`, `gametabs`, `musescore` and `youtube` when they did something or were blocked, so that
 Provider health shows the cooldown (`youtube` also when it let go of audio no
@@ -2008,7 +2017,7 @@ the library hold caracole's lock, `caracole.lock` in the state folder, while the
 work, so no two budgets are ever spent side by side: `run` from start to end,
 `get`, `ug`, `index build` and `refresh`, `fetch`, `lyrics`, `lacuerda`, `gtptabs`,
 `harptabs`, `gametabs`, `musescore`, `youtube`, `render`, `match`, `scan`, `todo`, `sync`, `add`,
-`search --add`, `autochords` and the `songbook` commands that change a songbook
+`search --add`, `autochords`, `transcribe` and the `songbook` commands that change a songbook
 or render one. A
 second one waits for the first, and says which it is:
 `Another caracole is running (pid 4242: run); waiting for it to finish.`
@@ -2060,15 +2069,19 @@ waits the pause after the other's last request there; `get` reads
 overrides.toml and its song again, and `ug --link` reads overrides.toml again
 between a tab's page and its artist's lists.
 LaCuerda's search checks what keeps it from asking and asks in one turn. A
-lookup still waits for a sync, an import, an index merge or a YouTube sheet's
-models, which hold the lock to their end: rare, and minutes at worst (the
-owner's choice of 2026-11-18).
+lookup still waits for a sync, an import, an index merge, a YouTube sheet's
+models or a stage of a transcription (its separator, Whisper or auto-chords),
+which hold the lock to their end: rare, and minutes at worst, but for a
+transcription's separator on a CPU, which runs about five times the song's
+length (12 minutes for a 149-second song; on a GPU each stage takes a minute
+and a half at most) (the owner's choice of 2026-11-18).
 What you ask for now waits as a lookup does and says the same, so that a lookup
 `caracole serve` queues after it never waits behind the whole run either: `add`,
 `remove`, `review`, `fetch --song`, `render --song`, `youtube --song` (its
-`--sheet` and `--none` too), `youtube --search` and `youtube --video`. Holding the
+`--sheet` and `--none` too), `youtube --search`, `youtube --video` and `transcribe`. Holding the
 lock, such a command lets a lookup go first there (a yt-dlp pause, a YouTube
-sheet before its models, `fetch --song`'s pauses), and gets the lock back once
+sheet before its models, a transcription before each of its separator, Whisper and auto-chords,
+`fetch --song`'s pauses), and gets the lock back once
 the lookups are done; another command asked for now usually waits for its end
 (one that waits while the lookups have the lock, such as a `caracole remove`
 from a terminal, may take it first once they are done).
@@ -2141,6 +2154,14 @@ A sheet auto-chords made before its song had lyrics takes them as soon as any si
 chart stays, the lyrics go under it, and its page and PDF are made again, with no model and no audio. The nightly
 run does it in its render step, and `caracole lyrics` and a lookup at once, whatever else they did. Timed lyrics go on the same
 way, then the next auto-chords run puts each chord over its word.
+
+Auto-chords takes the words for a sheet from a lyrics site whenever the song has any (or a site calls it
+instrumental, which makes a chart alone), else from the song's
+transcript (Whisper's words from its YouTube audio, see `caracole transcribe`) while the audio is the one that was
+transcribed, else it makes a chart alone. A sheet over a transcript says so on the line after the song's name
+(`Lyrics transcribed from the audio (Whisper), unverified`), and says "chords over the transcribed lyrics" when made
+from a video. It is made again once a site gives the song lyrics, and when the song gets a transcript, a newer one,
+or other audio.
 
 - A song is **missing** only once every site asked answered that it has none; a song LRCLIB missed
   stays missing when Megalobiz has none either, and Megalobiz is asked again after 30 days.
@@ -2319,6 +2340,70 @@ or `Lyrics' timing unshifted: LRCLIB's audio is 12.0 s shorter` for lyrics that 
 are timed though the lengths differ (credits after the song). A wrong shift shows there, and
 on chords that don't fit the words; another video under `[youtube]`, or a purchase, makes the
 sheet again.
+
+### Lyrics transcribed from the audio
+
+For a song whose audio came from YouTube and that no lyrics site has words for, caracole can hear them itself, with
+Whisper large-v3, and make the song's auto sheet again with the chords over them:
+
+    caracole transcribe --song "Nick Cani - Vikingos veganos"
+
+It takes a song of the library that is offered a transcription, and never adds one to wanted.txt: its audio from
+YouTube, the file there and not one auto-chords or a transcription couldn't read, no human sheet, not ignored, its lyrics missing once LRCLIB and every other lyrics site
+switched on (Megalobiz, AZLyrics) answered it has none, and its audio neither transcribed yet nor heard to have nothing
+sung. Then, one stage a line:
+
+    Song: in the book.
+    Vocals: sung from 24.8 s, 3 stretches.
+    Words: 212 words in 41 lines (es), 4 dropped.
+    Chords: chords over the transcribed lyrics.
+    Sheet: …/Nick Cani/Vikingos veganos/sheet (auto).txt, readable after 61.2 s.
+    PDF: made.
+    Pages: _todo.md and index.html rewritten.
+    Done in 63.0 s.
+
+- **Vocals**: demucs-rs separates the song's vocals, in a folder of the job's own under the cache that goes with it
+  (one a killed job left, `transcribe-…`, goes when the next job starts); where they are about as loud as the whole
+  song is where someone sings.
+- **Words**: Whisper hears the whole song, in the language it hears on the vocals' first 30 seconds of singing. A
+  word it heard more than 0.3 seconds from any singing is dropped (Whisper invents words over the instrumental parts:
+  credits, "subscribe"), and the rest are broken into lines for a sheet; with no singing found, Whisper isn't run at
+  all. They are kept as the song's transcript,
+  apart from its lyrics, which stay missing: the to-do page, the Sync and Sites tabs and the lyrics files go on as for
+  a song with none, and lyrics a site has later win (see
+  [Lyrics from LRCLIB, Megalobiz and AZLyrics](#lyrics-from-lrclib-megalobiz-and-azlyrics)).
+- **Chords**: auto-chords makes the sheet again, each chord over its word, with
+  `Lyrics transcribed from the audio (Whisper), unverified` on the line after the video's; then its PDF and viewer,
+  and the pages.
+
+It takes a couple of minutes on a GPU (`[autochords] transcribe_device`, `"auto"` by default), and up to half an hour
+on a CPU. Whisper and auto-chords' models are first tried on a 2-second tone, so one that can't run here fails the
+job before it hears the song; demucs-rs isn't (each of its runs takes about half a minute even for a tone), and one
+that can't run here fails on the song, recording nothing as well. Before each of the separator, Whisper and
+auto-chords, a lookup waiting for the lock goes first; a song taken out of the book meanwhile ends the job there, a
+refusal, and so does one that found lyrics before the separator or Whisper (after them, the sheet goes over the
+site's lyrics), or whose audio another caracole replaced after its vocals were separated (the new audio is offered a
+transcription of its own). `--progress` adds a JSON line per stage, for caracole serve, whose library page offers the
+same on the song's card (see **Lyrics transcribed from the audio** under [caracole serve](#caracole-serve)).
+
+It exits 0 once the sheet is made, and 1:
+
+- before anything else, where it can't run: `caracole transcribes nothing here: built without Whisper` (or without
+  auto-chords, with YouTube off, without yt-dlp, demucs-rs or a model file);
+- for a song it won't transcribe: `No transcript made: Nick Cani - Vikingos veganos isn't offered a transcription:
+  its lyrics are found.` (or `… isn't in the book`, `… left the book while its lyrics were transcribed …`,
+  `…: its audio changed while its lyrics were transcribed`);
+- for `Words: failed: no singing heard.`, nothing kept: the song isn't offered again until its audio changes;
+- for `can't read the audio`, Whisper saying it failed to load the song's audio: filed as auto-chords files a file it
+  can't read, the song isn't offered a transcription, nor are its chords tried, until its audio changes (the to-do
+  page lists the file after auto-chords' next run). Anything else Whisper fails on is a bug in caracole, said as one,
+  and files nothing: the song stays offered;
+- for the setup's failures, which record nothing against the song, offered still: `can't measure the audio here
+  (…)`, the song's loudness unread, in the reader's own words (it reads audio as auto-chords does, the AAC of
+  YouTube's `.m4a` included, so this is caracole's trouble, not the file's), `the separator can't run here (…)` in
+  demucs-rs's own words (or `its vocals can't be read: …`, or `its vocals are 1.5 s shorter than the song`: more
+  than 0.2 s short, the singing past their end would be lost), `the GPU failed: …` (a GPU missing, busy or out of
+  memory), or `Whisper's model won't load: …`.
 
 ## The to-do page
 
@@ -4855,6 +4940,38 @@ the library, sent as they are: they carry no badge.
   is the answer. Where caracole can't make the chords, the form has no such
   field and says why in one line ("No sheets from YouTube here: auto-chords
   isn't installed."), and the cards offer nothing.
+- **Lyrics transcribed from the audio.** Where caracole transcribes (as for
+  `caracole transcribe`: auto-chords, Whisper, its two model files and
+  demucs-rs, and YouTube not turned off), a song offered a transcription (its
+  audio from YouTube, every lyrics site switched on asked and none has its
+  lyrics: see [Lyrics transcribed from the audio](#lyrics-transcribed-from-the-audio))
+  has **Transcribe the lyrics** on its card, with how long it takes here
+  ("From the audio, a couple of minutes." with a GPU, "From the audio, up to
+  half an hour." without), and so has its newest request that ended Ready in the
+  Journal (a sheet from a video that said "Chords only, no lyrics.", say),
+  after its reason. A sheet from a video every lyrics site missed offers it the
+  moment it is Ready, with no reload: whenever a song's request ends, the page
+  asks caracole serve again which songs are offered one (`GET /transcribe`,
+  its script alone). One press queues `caracole transcribe --progress --song
+  "Nick Cani - Vikingos veganos"`, a request of its own, "Lyrics from the
+  audio: Nick Cani - Vikingos veganos"; the song's line says how it goes, a
+  bar of its steps, Song, Vocals, Words, Chords and PDF ("Words · 3 of 5"),
+  while it runs "Finding where the singing is…", then "Transcribing the
+  lyrics…". Ready, the Journal says "Chords over the transcribed lyrics.";
+  Failed, the stage that stopped it in its words ("no singing heard.", "the
+  GPU failed: …", with Try again). Once asked for, the offer is gone from the
+  card and the Journal while it waits and runs; once it is over the page asks
+  again, so a transcription that failed on the GPU (the song still offered) is
+  offered again, and a song transcribed meanwhile (from a terminal, or another
+  device) no more. One at a time a song:
+  pressed again while it waits or runs, that one is the answer; two songs'
+  run one after the other, never beside each other or a lookup. A song no
+  longer offered one by the time it is pressed (its lyrics found meanwhile,
+  transcribed already) is refused in the command's words ("Nick Cani -
+  Vikingos veganos isn't offered a transcription: its lyrics are found."), and
+  where caracole can't transcribe, no card offers it (`POST /transcribe` says
+  "No lyrics transcribed here: Whisper isn't installed."). The phone never
+  offers it.
 - **A YouTube video for a search.** Where caracole can make a sheet from a
   video (as above), a search the sites have no sheet for (no strong song of
   yours, of Ultimate Guitar's index or of LaCuerda's with chords, and no artist

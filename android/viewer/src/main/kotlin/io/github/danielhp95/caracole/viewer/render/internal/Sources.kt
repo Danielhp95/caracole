@@ -5,6 +5,7 @@ import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.KeptFile
 import io.github.danielhp95.caracole.core.library.OverrideUrls
 import io.github.danielhp95.caracole.core.library.SongRow
+import io.github.danielhp95.caracole.core.lyrics.Lyrics
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.py.PyRe
 import io.github.danielhp95.caracole.core.py.PyStr
@@ -25,9 +26,11 @@ internal data class Video(val id: String, val title: String, val channel: String
 }
 
 /** render._Sheet: what a song's ChordPro file is made from: an auto sheet's [credit] too, the line on where its audio
- * came from, and the [video] it came from, if any. */
+ * came from, and the [video] it came from, if any; an auto sheet's [timed] lines, the transcript its version was made
+ * over, when it was (null: the page uses the song's own timed lyrics). */
 internal data class SheetSource(val markup: String, val key: String? = null, val capo: Int? = null,
-                                val auto: Boolean = false, val credit: String? = null, val video: Video? = null)
+                                val auto: Boolean = false, val credit: String? = null, val video: Video? = null,
+                                val timed: List<Pair<Double, String>>? = null)
 
 /** Where a song's sheets come from: render.py's `_human_sheet`, `_ug_sheet`, `_auto_sheet`, `_video_of` and
  * `_sheet_cho`, over the phone's library. */
@@ -72,9 +75,27 @@ internal object Sources {
                 lines = lines.drop(1)
             }
         }
-        val video = videoOf(raw(db, kept.versionId))
+        val raw = raw(db, kept.versionId)
+        val video = videoOf(raw)
         if (video != null && credit != null) credit = youtubeCredit(video.title, video.channel, video.id)
-        return SheetSource(lines.joinToString("\n"), auto = true, credit = credit, video = video)
+        return SheetSource(lines.joinToString("\n"), auto = true, credit = credit, video = video,
+                           timed = transcriptTimed(raw))
+    }
+
+    /** _transcript_timed: the lines of the transcript an auto sheet's version was made over (`raw`'s `transcript`, an
+     * LRC, when its `lyrics_source` is "transcript"), as Lyrics.syncedLines reads them; null for any other version
+     * (its page uses the song's own timed lyrics), none when the LRC can't be read (the page lights none). */
+    fun transcriptTimed(raw: JsonObject): List<Pair<Double, String>>? {
+        val lrc = (raw["transcript"] as? JsonPrimitive)?.takeIf { it.isString }?.content
+        val source = (raw["lyrics_source"] as? JsonPrimitive)?.takeIf { it.isString }?.content
+        if (source != "transcript" || lrc == null) return null
+        return try {
+            Lyrics.syncedLines(lrc)
+        } catch (_: IllegalArgumentException) {
+            emptyList()
+        } catch (_: ArithmeticException) {
+            emptyList()
+        }
     }
 
     /** _video_of: the YouTube video an auto sheet's version names (`raw`'s `youtube`), by its id; null for none. */

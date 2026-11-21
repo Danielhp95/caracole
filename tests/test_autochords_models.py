@@ -333,3 +333,72 @@ def test_beat_this_finds_half_second_beats_at_120_bpm(tmp_path):
     assert float(np.median(np.diff(beats))) == pytest.approx(0.5, abs=0.02)
     assert beats[0] < 0.6 and beats[-1] > 11.0
     assert set(downbeats) <= set(beats)
+
+
+@pytest.mark.autochords
+@needs_libs
+def test_htdemucs_separates_a_tone_and_frame_db_reads_it(tmp_path):
+    # The real demucs-rs and model, from the environment (conftest points CARACOLE_DEMUCS_BIN at nothing).
+    import math
+
+    import numpy as np
+    import soundfile as sf
+
+    from caracole.autochords.separate import DemucsSeparator, frame_db
+
+    binary = shutil.which("demucs")
+    model = os.environ.get("CARACOLE_DEMUCS_MODEL")
+    if binary is None or not model or not Path(model).is_file():
+        pytest.skip("no demucs-rs or no HTDemucs model")
+    seconds = 4
+    t = np.arange(seconds * 44100) / 44100
+    audio = tmp_path / "tone.wav"
+    sf.write(audio, np.stack([0.3 * np.sin(2 * np.pi * 220 * t)] * 2, axis=1), 44100)
+    workdir = tmp_path / "work"
+    workdir.mkdir()
+
+    stem = DemucsSeparator(binary, Path(model), tmp_path / "cache").vocals(audio, workdir)
+
+    db = frame_db(stem)
+    assert abs(len(db) - math.ceil(seconds / 0.05)) <= 1
+    assert all(isinstance(v, float) for v in db)
+
+
+@needs_libs
+@pytest.mark.autochords
+def test_whisper_hears_a_tone_without_error(tmp_path, monkeypatch, caplog):
+    import logging
+    import warnings
+
+    from caracole.autochords.run import _write_tone
+    from caracole.autochords.transcribe import (
+        DRIVER_LIBS,
+        TRITON_FALLBACK,
+        Heard,
+        WhisperTranscriber,
+        resolve_device,
+    )
+
+    model = os.environ.get("CARACOLE_WHISPER_MODEL")
+    if not model or not Path(model).is_file():
+        pytest.skip("no Whisper model (CARACOLE_WHISPER_MODEL)")
+    monkeypatch.delenv("TRITON_CACHE_DIR", raising=False)
+    monkeypatch.setenv("LIBRARY_PATH", "")  # restored after the test; unset during it, as in the units
+    monkeypatch.delenv("LIBRARY_PATH")
+    device = resolve_device("auto")
+    t = WhisperTranscriber(Path(model), device=device, cache_dir=tmp_path)
+    tone = _write_tone(tmp_path / "tone.wav")
+    with caplog.at_level(logging.INFO, logger="caracole.autochords.transcribe"):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            heard = t.hear(tone, tone, 0.0)
+    fell_back = [r.getMessage() for r in caplog.records if "Triton" in r.getMessage()]
+    print("whisper device:", device, "| Triton's fallback:", fell_back or "none")
+    assert isinstance(heard, Heard)
+    assert os.environ["TRITON_CACHE_DIR"] == str(tmp_path / "triton")
+    # Whisper's own warning of Triton's fallback never shows: at most one INFO line says it.
+    assert not [w for w in caught if TRITON_FALLBACK in str(w.message)]
+    assert len(fell_back) <= 1
+    if device == "cuda" and (DRIVER_LIBS / "libcuda.so.1").exists():
+        # Triton's word-timing kernels launch (the shells have gcc): Whisper doesn't fall back to its slower ones.
+        assert fell_back == []

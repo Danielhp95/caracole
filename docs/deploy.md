@@ -94,7 +94,8 @@ Every option of `nix/module.nix`:
 | `web.allowedHosts` | `[ ]` | names it answers to beyond localhost, the host's name and its `.local` name |
 | `web.openFirewall` | `false` | opens `web.port` on every interface, for a LAN address |
 | `autochords.enable` | `false` | auto-chords (section 4) |
-| `autochords.btcWeights`, `autochords.beatCheckpoint` | `null` | model files other than the package's |
+| `autochords.cuda` | `false` | the GPU for transcriptions from the audio, in caracole-web and `caracole-admin` alone, with `autochords.enable` (section 4) |
+| `autochords.btcWeights`, `autochords.beatCheckpoint`, `autochords.whisperModel`, `autochords.separatorModel` | `null` | model files other than the package's |
 | `package`, `autochords.package` | the flake's builds | |
 
 ### 2. Syncthing for the library and the music
@@ -200,6 +201,24 @@ Then:
   `MemoryDenyWriteExecute`, as the auto-chords unit and `caracole-admin` do; the
   nightly run keeps it.
 
+With an NVIDIA GPU (the host's driver set up: `hardware.graphics` and
+`hardware.nvidia`), the lyrics transcribed from the audio can run on it:
+
+```nix
+  services.caracole.autochords.cuda = true;
+```
+
+That makes `autochords.package` the flake's `autochords-cuda` build (torch-bin,
+about 6.7 GiB, unfree CUDA libraries the flake allows itself): Whisper runs on
+CUDA and demucs-rs on Vulkan. Only caracole-web, whose job children run the
+transcription, and `caracole-admin` see the GPU: `PrivateDevices` is off for
+them, with `DevicePolicy=closed`, `DeviceAllow` for the NVIDIA device groups and
+`char-drm`, and the `video` and `render` groups. The nightly units keep
+`PrivateDevices`, and BTC and beat_this stay on the CPU. It needs
+`autochords.enable`: without it, it does nothing, and the system's build warns
+so. With nix/module.nix imported on its own, without the flake, `package` stays
+as it is: set `autochords.package` to a CUDA build of caracole yourself.
+
 For purchases alone, with no yt-dlp run and no YouTube on the library page:
 
 ```nix
@@ -288,6 +307,11 @@ numpy==2.5.2
 scipy==1.18.1
 soundfile==0.13.1
 pyyaml==6.0.3
+openai-whisper==20250625
+triton==3.7.1
+tiktoken==0.12.0
+more-itertools==11.1.0
+tqdm==4.68.4
 EOF
 ```
 
@@ -705,6 +729,15 @@ sudo uv venv --allow-existing --python $PY /opt/caracole/yt-dlp
 sudo uv pip install --compile-bytecode --python /opt/caracole/yt-dlp/bin/python 'yt-dlp[default]'
 sudo ln -sfn ../yt-dlp/bin/yt-dlp /opt/caracole/bin/yt-dlp
 ```
+
+The Ubuntu install does not transcribe lyrics from a song's audio: that needs
+Whisper large-v3 and HTDemucs (the Nix package fetches them, checked against
+`e5b1a55b89c1367dacf97e3e19bfd829a01529dbfdeefa8caeb59b3f1b81dadb` for
+`large-v3.pt` and
+`8193504cdfb3943adaf039b8acb524a46e87ebf232c383ac7a32c80a6578423e` for
+`htdemucs.safetensors`) and demucs-rs built with its CPU backend, none of which
+this section installs. Without them a song no lyrics site has stays without
+lyrics. `openai-whisper` is installed (it is in the extra), and unused.
 
 The unit runs after each run that succeeds, with no network, and may generate
 code, as PyTorch and numba do. So may caracole-web, which makes a song's sheet

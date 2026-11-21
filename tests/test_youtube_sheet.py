@@ -467,3 +467,12 @@ def test_without_lyrics_on_lrclib_or_megalobiz_azlyrics_plain_ones_go_on_the_she
     song = find_song(conn, result_key(conn))
     assert song.lyrics_status == "found"
     assert "Des mots inventés" in auto_sheet(setup, conn, song)
+
+
+def test_the_ready_line_says_the_lyrics_are_transcribed():
+    from caracole.youtube_sheet import HOLDS, holds
+
+    assert HOLDS["transcript"] == "chords over the transcribed lyrics"
+    assert holds({"lyrics": "synced", "lyrics_source": "transcript"}) == "chords over the transcribed lyrics"
+    assert holds({"lyrics": "synced"}) == "chords over the lyrics"
+    assert holds({}) == "chords"

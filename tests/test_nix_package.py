@@ -108,6 +108,7 @@ def test_every_module_the_source_imports_comes_from_a_listed_dependency():
     # still listed: the package that brings it may stop bringing it, or change it under caracole.
     listed = _listed()["pyproject.toml"]
     from_distribution = packages_distributions()  # "yaml" → ["PyYAML"], for what is installed here
+    from_distribution.setdefault("whisper", ["openai-whisper"])  # the auto-chords extra, absent from this shell
     missing = []
     for path in sorted(SRC.rglob("*.py")):
         allowed = set(listed["runtime"])

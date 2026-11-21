@@ -687,3 +687,71 @@ def test_a_sheet_from_youtube_says_what_it_holds_or_what_stopped_it():
                            Action("Try again", post="/jobs/again", fields=(("job", "6"),)))
     failed = youtube_job("failed", EVERY | {"chords": ("failed", "auto-chords can't read the audio")})
     assert outcome(failed, job_line(failed, None), None).word == "Failed"
+
+
+# --- a song's lyrics transcribed from its audio ---------------------------------------------------------------
+
+
+def transcribe_job(state="running", stages=None):
+    from caracole.transcribe_job import STAGES as TRANSCRIBE_STAGES
+    from caracole.web.jobs import TRANSCRIBE, transcribe_steps
+
+    said = stages or {}
+    made = [Step(label, tuple(args)) for label, args in transcribe_steps("Nick Cani - Vikingos veganos")]
+    if state != "running":
+        made[0].state = "done" if state == "done" else "failed"
+    return Job(9, "Lyrics from the audio: Nick Cani - Vikingos veganos", TRANSCRIBE + "nick cani/vikingos veganos",
+               made, state=state, display="Nick Cani - Vikingos veganos", **times(state),
+               stages=[Stage(name, label, *said.get(name, ("waiting", ""))) for name, label in TRANSCRIBE_STAGES])
+
+
+TRANSCRIBED = {"song": ("done", "in the book"), "vocals": ("done", "sung from 9.3 s, 4 stretches"),
+               "words": ("done", "212 words in 31 lines (es), 3 dropped"),
+               "chords": ("done", "chords over the transcribed lyrics"), "pdf": ("done", "made"),
+               "pages": ("done", "_todo.md and index.html rewritten")}
+
+
+def test_a_transcription_shows_its_steps_and_says_what_it_holds_or_what_stopped_it():
+    from caracole.web.outcome import TRANSCRIBE_STEPS, lists_steps
+
+    assert TRANSCRIBE_STEPS == (("Song", ("song",)), ("Vocals", ("vocals",)), ("Words", ("words",)),
+                                ("Chords", ("chords",)), ("PDF", ("pdf",)))
+    job = transcribe_job(stages={"song": ("done", "in the book"), "vocals": ("done", "sung from 9.3 s, 4 stretches"),
+                                 "words": ("running", "")})
+    # Its steps, each by what it does, none naming a site; the pages are the line's, as a lookup's are.
+    assert steps(job) == [Chip("Song", "done", "", "in the book"),
+                          Chip("Vocals", "done", "", "sung from 9.3 s, 4 stretches"),
+                          Chip("Words", "running"), Chip("Chords", "waiting"), Chip("PDF", "waiting")]
+    line = job_line(job, SongFacts())
+    assert line.text == "Transcribing the lyrics…"
+    assert progress(job, line, SongFacts()) == {"steps": [c.as_json() for c in steps(job)], "at": 2,
+                                                "count": "3 of 5"}
+    waiting = transcribe_job(stages={"song": ("done", ""), "vocals": ("running", "waiting for the book (pid 9: x)")})
+    assert progress(waiting, job_line(waiting, SongFacts()), SongFacts())["waits"] is True
+    # Ready: what the sheet holds now, its steps folded away; listed in the Requests tab as it left them.
+    ready = transcribe_job("done", TRANSCRIBED)
+    assert outcome(ready, job_line(ready, SHEET), SHEET) == Outcome(
+        "ready", "Ready", "Chords over the transcribed lyrics.", Action("Open", href="/" + SHEET.sheet))
+    assert progress(ready, job_line(ready, SHEET), SHEET) == {} and lists_steps(ready)
+    assert [c.state for c in steps(ready)] == ["done"] * 5
+    # Failed: the stage that stopped it, in its words (as a sheet from YouTube's), drawn failed; Try again.
+    deaf = transcribe_job("failed", TRANSCRIBED | {"words": ("failed", "no singing heard"),
+                                                   "chords": ("skipped", "no transcript"),
+                                                   "pdf": ("skipped", "no sheet")})
+    assert outcome(deaf, job_line(deaf, SHEET), SHEET) == Outcome(
+        "failed", "Failed", "no singing heard.", Action("Try again", post="/jobs/again", fields=(("job", "9"),)))
+    assert [(c.name, c.state, c.found) for c in steps(deaf)][2:] == [
+        ("Words", "failed", "no singing heard"), ("Chords", "skipped", ""), ("PDF", "skipped", "")]
+    gpu = transcribe_job("failed", TRANSCRIBED | {"vocals": ("failed", "the GPU failed: CUDA out of memory"),
+                                                  "words": ("skipped", "no vocals"),
+                                                  "chords": ("skipped", "no transcript"),
+                                                  "pdf": ("skipped", "no sheet")})
+    assert outcome(gpu, job_line(gpu, SHEET), SHEET).reason == "the GPU failed: CUDA out of memory."
+    # Over with no new sheet (its chords skipped): Not made yet, and the stage that stopped it.
+    unmade = transcribe_job("done", TRANSCRIBED | {"words": ("skipped", "no vocals"),
+                                                   "chords": ("skipped", "no transcript")})
+    assert outcome(unmade, job_line(unmade, SHEET), SHEET) == Outcome(
+        "waiting", "Not made yet", "No vocals.", Action("Try again", post="/jobs/again", fields=(("job", "9"),)))
+    # A sheet from YouTube says the same of its own stages, as before.
+    assert outcome(youtube_job("done", EVERY), job_line(youtube_job("done", EVERY), SHEET), SHEET).reason == (
+        "Chords over the lyrics.")

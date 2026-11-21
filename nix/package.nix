@@ -3,7 +3,7 @@
 # fonts they are set in (./pdf-fonts.nix: Adwaita Sans and Mono, GNOME's), and
 # CARACOLE_CJK_FONT at a font with Chinese glyphs, so a song like 斑马斑马 renders. The `autochords`
 # variant's wrapper also points at the model files the offline unit needs, and
-# puts `yt-dlp` on PATH, for the audio of songs nobody has charted. Both point
+# puts `yt-dlp` and `demucs` on PATH, for the audio of songs nobody has charted. Both point
 # CARACOLE_ALPHATAB_DIR at alphaTab (./alphatab.nix), which caracole serve's Guitar
 # Pro page draws and plays a song's Guitar Pro file with.
 {
@@ -12,12 +12,32 @@
   python3Packages,
   perl5Packages,
   lxgw-fusionkai,
+  demucs-rs,
 
   # yt-dlp, which the nightly run's YouTube step runs (src/caracole/youtube.py),
   # in the auto-chords variant alone: without auto-chords caracole takes no audio
   # from YouTube. nixpkgs' wrapper brings what it needs: ffmpeg and ffprobe for
   # `-x`, and deno, the JavaScript runtime YouTube's player needs, patched in.
   yt-dlp,
+
+  # demucs-rs, which separates the vocals from a mix (src/caracole/autochords/) before Whisper is
+  # trusted with the words, in the auto-chords variants alone. Its backend is fixed at compile
+  # time (`demucs --help` has no option for it): nixpkgs builds it for the GPU (wgpu), and its cargo
+  # feature `cpu` swaps that for ndarray. The free `autochords` package, for where there is no GPU,
+  # gets the `cpu` build: measured 712 s for a 149 s song (about 5x its length, 1.4 GB of memory).
+  # The `cudaTorch` package keeps nixpkgs' own wgpu build, so the separation runs on the GPU
+  # (about 35 s for that song); where no Vulkan adapter is found it fails ("No possible adapter")
+  # and caracole's separator reports that, never transcribing unguarded. The feature goes in
+  # `cargoBuildFeatures`: buildRustPackage turns `buildFeatures` into it when it builds the
+  # derivation, so an override of `buildFeatures` alone is ignored.
+  demucs ?
+    if cudaTorch then
+      demucs-rs
+    else
+      demucs-rs.overrideAttrs {
+        cargoBuildFeatures = [ "cpu" ];
+        cargoCheckFeatures = [ "cpu" ];
+      },
 
   # `chordpro`, without its wxWidgets GUI: the full package pulls GTK, WebKit
   # and GStreamer (about 1 GiB) into a closure that only ever runs headless.
@@ -51,13 +71,19 @@
 
   # The `autochords` extra: torch, beat-this, librosa and friends.
   withAutochords ? false,
+  # Marks the build whose python takes its torch from torch-bin (CUDA); flake.nix's
+  # `autochords-cuda` passes the matching python3Packages. Plain torch is CPU-only.
+  cudaTorch ? false,
   # The model files the auto-chords variant's wrapper sets by default
-  # (CARACOLE_BTC_WEIGHTS, CARACOLE_BEAT_CHECKPOINT): the fixed-output downloads in
+  # (CARACOLE_BTC_WEIGHTS, CARACOLE_BEAT_CHECKPOINT, and below): the fixed-output downloads in
   # ./autochords.nix, because the unit has no network. The NixOS module's
   # options, then settings.autochords, win over them. Null leaves one unset.
   models ? callPackage ./autochords.nix { },
   btcWeights ? models.btcWeights,
   beatCheckpoint ? models.beatThisCheckpoint,
+  # Whisper large-v3 and HTDemucs (CARACOLE_WHISPER_MODEL, CARACOLE_DEMUCS_MODEL), likewise.
+  whisperModel ? models.whisperLargeV3,
+  separatorModel ? models.htdemucs,
 }:
 
 let
@@ -67,6 +93,8 @@ let
   modelFiles = lib.filterAttrs (_: file: file != null) {
     CARACOLE_BTC_WEIGHTS = btcWeights;
     CARACOLE_BEAT_CHECKPOINT = beatCheckpoint;
+    CARACOLE_WHISPER_MODEL = whisperModel;
+    CARACOLE_DEMUCS_MODEL = separatorModel;
   };
   modelDefaults = lib.concatLists (
     lib.mapAttrsToList (name: file: [
@@ -114,19 +142,24 @@ python3Packages.buildPythonApplication (finalAttrs: {
     torch
     # btc.py decodes .m4a (AAC) through it; beat-this pulls it in too.
     torchaudio
+    # torchaudio's decoder. nixpkgs' source torchaudio brings it along, torchaudio-bin (the GPU
+    # build's) does not.
+    torchcodec
     beat-this
     librosa
     numpy
     scipy
     soundfile
     pyyaml
+    # Whisper, for the lyrics of a song no lyrics site has (large-v3, on the GPU where there is one).
+    openai-whisper
   ];
 
   makeWrapperArgs = [
     "--prefix"
     "PATH"
     ":"
-    (lib.makeBinPath ([ chordpro ] ++ lib.optional withAutochords yt-dlp))
+    (lib.makeBinPath ([ chordpro ] ++ lib.optionals withAutochords [ yt-dlp demucs ]))
     "--set-default"
     "CARACOLE_CJK_FONT"
     cjkFont
@@ -141,7 +174,13 @@ python3Packages.buildPythonApplication (finalAttrs: {
     "CARACOLE_ALPHATAB_DIR"
     "${alphatab}"
   ]
-  ++ lib.optionals withAutochords modelDefaults;
+  ++ lib.optionals withAutochords modelDefaults
+  # transcribe_time (youtube_fetch.py) tells a GPU build from the CPU one by this.
+  ++ lib.optionals (withAutochords && cudaTorch) [
+    "--set-default"
+    "CARACOLE_TORCH_CUDA"
+    "1"
+  ];
 
   # `chordpro` on PATH lets the tests marked `chordpro` run. Those marked
   # `autochords` need the model weights; they run in `nix develop .#autochords`.
@@ -215,6 +254,23 @@ python3Packages.buildPythonApplication (finalAttrs: {
         $out/bin/caracole autochords > autochords.out
         grep -qFx "auto-chords: 0 generated, 0 skipped, 0 failed" autochords.out
         grep -qF -- ${lib.escapeShellArg "${yt-dlp}/bin"} $out/bin/caracole
+        grep -qF -- ${lib.escapeShellArg "${demucs}/bin"} $out/bin/caracole
+        test -x ${lib.escapeShellArg "${demucs}/bin/demucs"}
+      ''
+      + (
+        if cudaTorch then
+          ''
+            grep -qF -- "CARACOLE_TORCH_CUDA" $out/bin/caracole
+          ''
+        else
+          ''
+            if grep -qF -- "CARACOLE_TORCH_CUDA" $out/bin/caracole; then
+              echo "the CPU package says its torch has CUDA" >&2
+              exit 1
+            fi
+          ''
+      )
+      + ''
         $out/bin/caracole youtube > youtube.out
         grep -qFx "No song is waiting for audio from YouTube." youtube.out
       ''
@@ -230,8 +286,16 @@ python3Packages.buildPythonApplication (finalAttrs: {
           exit 1
         fi
         grep -qF "packages.autochords" youtube.err
+        if grep -qF -- "CARACOLE_TORCH_CUDA" $out/bin/caracole; then
+          echo "the default package says its torch has CUDA" >&2
+          exit 1
+        fi
         if grep -qF -- ${lib.escapeShellArg "${yt-dlp}/bin"} $out/bin/caracole; then
           echo "the default package puts yt-dlp on PATH" >&2
+          exit 1
+        fi
+        if grep -qF -- ${lib.escapeShellArg "${demucs}/bin"} $out/bin/caracole; then
+          echo "the default package puts demucs on PATH" >&2
           exit 1
         fi
       ''
@@ -249,12 +313,16 @@ python3Packages.buildPythonApplication (finalAttrs: {
     inherit
       chordpro
       yt-dlp
+      demucs
       cjkFont
       pdfFonts
       withAutochords
+      cudaTorch
       alphatab
       btcWeights
       beatCheckpoint
+      whisperModel
+      separatorModel
       ;
   };
 

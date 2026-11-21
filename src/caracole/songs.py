@@ -65,7 +65,7 @@ _WANTED = "wanted"  # wanted.SOURCE: a line's source id is its identity key
 _PER_SONG_KV = ("render:", "render:files:", "render:export:", "render:progressions:", "ug:artist_page_checked:",
                 "lyrics:failed:", "megalobiz:checked:", "azlyrics:checked:",
                 "autochords:failed:", "gtptabs:checked:", "harptabs:checked:", "gametabs:checked:", "ireal:checked:",
-                "ug:blocked:", "youtube:",
+                "ug:blocked:", "youtube:", "transcript:", "transcribe:none:",
                 "sheet_versions:same:",
                 "sheet_versions:yours:", "sheet_versions:unkeepable:")
 

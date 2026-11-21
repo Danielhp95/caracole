@@ -93,7 +93,8 @@ version's) lists the song's UG chords versions in its data's ``versions`` (``_ve
 keeps to play from in its ``kinds``, as its library card names them (``_kinds_data``: its sheet's kind and page, its
 Guitar Pro files, its text tab, its harmonica tabs, its game music tabs, its scores); an auto sheet's beside a human
 one has neither. Every viewer of the song, an auto sheet's too, lights the line being sung by the song's timed lyrics
-(``_timed_lyrics``, read once a song), which it matches to its own lines (its data's ``sung``, viewer/sung.py).
+(``_timed_lyrics``, read once a song), which it matches to its own lines (its data's ``sung``, viewer/sung.py);
+an auto sheet made over a transcript lights by that transcript's instead (``_Sheet.timed``).
 
 Each harmonica tab the song keeps (harptabs_fetch.py: ``harmonica-N.txt``) gets a page of its own,
 ``harmonica-N.html`` (viewer/harptab_page.py), made from its text with the song's chord sheet (its human
@@ -798,7 +799,7 @@ def _render_song(
                                   harmonica=tuple({**h, "harp": harps[h["name"]]} if h["name"] in harps else h
                                                   for h in harmonica),
                                   video=video, viewer_text=_sheet_cho(song, sheet, credit=False) if video else None,
-                                  timed=timed)
+                                  timed=timed if sheet.timed is None else sheet.timed)
         done.extend([twin, own] if twin is not None else [own])  # the sheet's own last: done[-1] below
         if done[-1].outcome == "rendered":
             _say_if_keyless(overrides, song, text, mine[0], Path(kept.name).stem + ".pdf")
@@ -1974,7 +1975,8 @@ class _Video:
 @dataclass(frozen=True)
 class _Sheet:
     """What a song's ChordPro file is made from: an auto sheet's ``credit`` too, the line on where its audio came
-    from, and the ``video`` it came from, if any (``_auto_sheet``)."""
+    from, and the ``video`` it came from, if any (``_auto_sheet``); ``timed``, the lines of the transcript it was
+    made over, if any, which it lights by in place of the song's timed lyrics."""
 
     markup: str
     key: str | None = None
@@ -1982,6 +1984,7 @@ class _Sheet:
     auto: bool = False
     credit: str | None = None
     video: _Video | None = None
+    timed: tuple[tuple[float, str], ...] | None = None  # over a transcript: its timed lines, in place of the song's
 
 
 def _read_text(path: Path) -> str:
@@ -2039,10 +2042,26 @@ def _auto_sheet(conn: sqlite3.Connection, library_dir: Path, kept: KeptFile) -> 
         lines = lines[2:]  # the marker, then "Artist - Title"
         if lines and lines[0].strip():  # then where the audio came from, when it said
             credit, lines = lines[0].strip(), lines[1:]
-    video = _video_of(get_version(conn, kept.version_id).raw)
+    raw = get_version(conn, kept.version_id).raw
+    video = _video_of(raw)
     if video is not None and credit is not None:
         credit = youtube_credit(video.title, video.channel, video.id)
-    return _Sheet("\n".join(lines), auto=True, credit=credit, video=video)
+    return _Sheet("\n".join(lines), auto=True, credit=credit, video=video, timed=_transcript_timed(raw))
+
+
+def _transcript_timed(raw: Mapping[str, Any]) -> tuple[tuple[float, str], ...] | None:
+    """The timed lines of the transcript an auto sheet was made over (``raw``'s ``transcript``, its LRC, kept with
+    ``lyrics_source`` "transcript"), which only that sheet lights its lines from; None for a sheet over a site's
+    lyrics or none, and for a transcript that can't be read (as ``_timed_lyrics`` reads none)."""
+    from caracole.lyrics import synced_lines
+
+    lrc = raw.get("transcript")
+    if raw.get("lyrics_source") != "transcript" or not isinstance(lrc, str):
+        return None
+    try:
+        return tuple(synced_lines(lrc))
+    except (TypeError, ValueError, OverflowError, RecursionError):
+        return ()
 
 
 def _video_of(raw: Mapping[str, Any]) -> _Video | None:

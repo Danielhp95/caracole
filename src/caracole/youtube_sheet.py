@@ -4,7 +4,7 @@ serve's sheet from a YouTube video runs (the library page's request form and a s
 The nightly run's youtube step and ``caracole autochords`` do this in bulk, a night apart; here it is one song
 you chose the video of, in one process, under caracole's lock, its stages reported as a lookup reports its own
 (get.py's ``Progress``: ``caracole youtube --sheet --progress`` writes a JSON line per event, which caracole
-serve reads into the job's stages):
+serve reads into the job's stages; staged.py's ``StagedRun`` is that reporting half):
 
 - ``song``: the song, found in the library or added to wanted.txt as ``caracole add`` adds it, then synced;
   refused when it is ignored, has a human sheet or has a purchase linked, and, without a video given, when
@@ -44,14 +44,14 @@ import logging
 import subprocess
 import time
 from collections.abc import Callable
-from contextlib import closing
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from caracole.config import Config
-from caracole.get import Progress, readable_files
+from caracole.get import Progress
+from caracole.staged import StagedResult, StagedRun, _Stop
 
 log = logging.getLogger(__name__)
 
@@ -66,7 +66,18 @@ STAGES = (
 )
 # What the chords stage says the sheet holds, by the lyrics auto-chords laid the chords over
 # (autochords/run.py's version ``raw["lyrics"]``), which caracole serve's Ready says.
-HOLDS = {"synced": "chords over the lyrics", "plain": "chords, then the lyrics", "none": "chords only, no lyrics"}
+HOLDS = {
+    "synced": "chords over the lyrics",
+    "plain": "chords, then the lyrics",
+    "none": "chords only, no lyrics",
+    "transcript": "chords over the transcribed lyrics",  # synced, over Whisper's words (``raw["lyrics_source"]``)
+}
+
+
+def holds(raw: dict[str, object]) -> str:
+    """What the auto sheet's version (its ``raw``) says the sheet holds."""
+    used = "transcript" if raw.get("lyrics_source") == "transcript" else str(raw.get("lyrics"))
+    return HOLDS.get(used, "chords")
 NO_AUDIO = "no audio"
 
 
@@ -85,92 +96,18 @@ class SheetRequest:
 
 
 @dataclass
-class SheetResult:
-    song_id: int | None = None
-    display: str = ""
-    states: dict[str, str] = field(default_factory=dict)
-    details: dict[str, str] = field(default_factory=dict)
-    files: dict[str, str] = field(default_factory=dict)  # name -> library-relative path, once readable
-    seconds: float = 0.0
-    requests: dict[str, int] = field(default_factory=dict)
-    refused: str | None = None  # the song stage's refusal
-    failed: str | None = None  # what waiting won't mend: the command exits 1
-    bug: str | None = None
-
-    @property
-    def ok(self) -> bool:
-        return self.refused is None and self.failed is None and self.bug is None
+class SheetResult(StagedResult):
+    """What came of a sheet from a YouTube video: its stages' ends, its files once readable, the requests it sent."""
 
 
-class _Stop(Exception):
-    """The song can't have a sheet from YouTube: said in the song stage, the others skipped."""
+class _Sheet(StagedRun):
+    STAGES = STAGES
 
-
-class _Sheet:
     def __init__(self, cfg: Config, request: SheetRequest, progress: Progress, *, runner: Callable,
                  recognizer: Any, beats_fn: Any, now: datetime | None, clock: Callable[[], float]):
-        from caracole.commands._common import run_id_for, utcnow
-
-        self.cfg, self.request, self.progress = cfg, request, progress
-        self.runner, self.recognizer, self.beats_fn, self.clock = runner, recognizer, beats_fn, clock
-        self.started = clock()
-        self.now = (now or utcnow()).replace(microsecond=0)
-        self.run_id = run_id_for(self.now)
-        self.result = SheetResult(display=request.display)
-        self.conn: Any = None
-        self.overrides: Any = None
-        self.song: Any = None
-
-    # --- reporting --------------------------------------------------------------------------------
-
-    def _report(self, name: str, state: str, detail: str = "") -> None:
-        self.result.states[name] = state
-        if state != "running":
-            self.result.details[name] = detail
-        self.progress.stage(name, state, detail)
-
-    def stage(self, name: str, run: Callable[[], tuple[str, str] | str]) -> None:
-        """Run one stage; what it returns is its end, ``(state, detail)`` or a detail of ``done``."""
-        self._report(name, "running")
-        try:
-            out = run()
-        except _Stop:  # the song left the book: the sheet ends there (``run``)
-            raise
-        except Exception as e:  # a bug: say so, and leave the stages after it
-            log.error("The %s stage failed: %s: %s. That's a bug in caracole; its traceback follows.", name,
-                      type(e).__name__, e, exc_info=True)
-            self.result.bug = self.result.bug or f"{name}: {type(e).__name__}: {e}"
-            self._report(name, "failed", f"a bug in caracole: {type(e).__name__}: {e}")
-            return
-        state, detail = out if isinstance(out, tuple) else ("done", out or "")
-        self._report(name, state, detail)
-        self._check_readable()
-
-    def _check_readable(self) -> None:
-        """Say the sheet is readable once its auto sheet is kept, and again when its PDF or viewer comes."""
-        if self.song is None or self.result.states.get("chords") != "done":
-            return
-        files = readable_files(self.conn, self.cfg.library_dir, self.song)
-        if files and files != self.result.files:
-            self.result.files = files
-            self.progress.readable(files, self.clock() - self.started)
-
-    def _fail(self, detail: str) -> tuple[str, str]:
-        """A stage's end that waiting won't mend: the command exits 1."""
-        self.result.failed = self.result.failed or detail
-        return "failed", detail
-
-    def _song_again(self) -> None:
-        """The song read again; gone (another caracole removed it, or merged it into a song of the same name, while
-        this one let a lookup have the lock), the sheet ends there, a refusal (``_Stop``), before anything more is
-        written for it."""
-        from caracole.songs import get_song
-
-        try:
-            self.song = get_song(self.conn, self.song.id)
-        except KeyError:
-            raise _Stop(f"{self.song.display} left the book while its sheet was made (removed, or merged into a song "
-                        "of the same name)") from None
+        super().__init__(cfg, progress, SheetResult(display=request.display), runner=runner, recognizer=recognizer,
+                         beats_fn=beats_fn, now=now, clock=clock)
+        self.request = request
 
     # --- the stages -------------------------------------------------------------------------------
 
@@ -416,94 +353,13 @@ class _Sheet:
         return "done", "not asked: LRCLIB answered for it lately"
 
     def chords(self) -> tuple[str, str] | str:
-        from caracole.autochords.run import autochords_pending
-        from caracole.commands._common import hand_over, handoffs, overrides_since
-        from caracole.songs import AUTO_SHEET
-        from caracole.versions import get_version
-
         if self.result.states.get("audio") != "done":
             return "skipped", NO_AUDIO
-        handed = handoffs()
-        hand_over(self.cfg, self.conn)  # the models take minutes: a waiting lookup goes first
-        self.overrides = overrides_since(self.cfg, self.overrides, handed)
-        self._song_again()
-        stats = autochords_pending(self.conn, self.cfg, recognizer=self.recognizer, beats_fn=self.beats_fn,
-                                   now=self.now, overrides=self.overrides, only={self.song.id})
-        self._song_again()
-        if stats.errors:
-            return self._fail(f"auto-chords can't run here ({stats.errors[0]})")
-        if stats.failures:
-            return self._fail("auto-chords can't read the audio")
-        kept = self.conn.execute(
-            "SELECT version_id FROM files WHERE song_id = ? AND name = ?", (self.song.id, AUTO_SHEET)).fetchone()
-        made = kept is not None and self.song.autochords_mtime == self.song.audio_mtime
-        if not made:
-            return self._fail("auto-chords made no sheet (see the log)")
-        used = get_version(self.conn, kept[0]).raw.get("lyrics")
-        holds = HOLDS.get(str(used), "chords")
-        return "done", holds if stats.generated else f"up to date: {holds}"
-
-    def pdf(self) -> tuple[str, str] | str:
-        from caracole.render import render_all
-
-        if self.result.states.get("chords") != "done":
-            return "skipped", "no sheet"
-        stats = render_all(self.conn, self.cfg, self.overrides, runner=self.runner, now=self.now,
-                           song_ids={self.song.id})
-        if stats.font_error:
-            return "failed", stats.font_error
-        if stats.failed:
-            return "failed", "chordpro couldn't make the PDF (see the log)"
-        return "made" if stats.rendered else "up to date"
-
-    def pages(self) -> str:
-        from caracole.todo import write_pages
-
-        write_pages(self.conn, self.cfg, self.overrides, self.now)
-        return "_todo.md and index.html rewritten"
-
-    # --- the whole run --------------------------------------------------------------------------------
+        self._after_a_lookup()  # the models take minutes: a waiting lookup goes first
+        return self._autochords_sheet()
 
     def run(self) -> SheetResult:
-        from caracole import db
-        from caracole.commands._common import exclusive
-        from caracole.overrides import OverridesError, load_overrides
-        from caracole.songs import ensure_current_keys
-
-        self._report("song", "running")
-
-        def waiting(holder: str) -> None:
-            self.progress.stage("song", "running", f"waiting for the book ({holder})")
-
-        with exclusive(self.cfg, f"youtube --sheet {self.request.display}", interactive=True, on_wait=waiting):
-            try:  # once the lock is held: what another caracole wrote while this one waited is read
-                self.overrides = load_overrides(self.cfg.overrides_file)
-            except OverridesError as e:
-                return self._refuse(f"Can't read overrides.toml: {e}")
-            with closing(db.connect(self.cfg.db_path)) as conn:
-                self.conn = conn
-                ensure_current_keys(conn)
-                try:
-                    self._report("song", "done", self.find_song())
-                except _Stop as e:
-                    return self._refuse(str(e))
-                try:
-                    for name, work in (("audio", self.audio), ("lyrics", self.lyrics), ("chords", self.chords),
-                                       ("pdf", self.pdf), ("pages", self.pages)):
-                        self.stage(name, work)
-                except _Stop as e:  # the song left the book as this one let a lookup have the lock
-                    return self._refuse(str(e))
-        self.result.seconds = self.clock() - self.started
-        return self.result
-
-    def _refuse(self, why: str) -> SheetResult:
-        """The sheet refused, its song stage failed with ``why``; the stages that hadn't ended, skipped."""
-        self.result.refused = why
-        self._report("song", "failed", why)
-        for name, _ in STAGES[1:]:
-            if self.result.states.get(name, "running") == "running":
-                self._report(name, "skipped", "")
-        self.result.seconds = self.clock() - self.started
+        self._run(f"youtube --sheet {self.request.display}")
         return self.result
 
 

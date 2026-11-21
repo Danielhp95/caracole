@@ -167,6 +167,11 @@ class AutochordsConfig:
     btc_weights: Path | None = None
     beat_checkpoint: Path | None = None
     device: str = "cpu"
+    # Lyrics transcribed from a song's audio: Whisper large-v3's file, HTDemucs's (demucs-rs's safetensors), and
+    # where Whisper runs ("auto": the GPU when there is one).
+    whisper_model: Path | None = None
+    separator_model: Path | None = None
+    transcribe_device: str = "auto"
 
 
 @dataclass(frozen=True)
@@ -182,6 +187,7 @@ class Config:
     user_agent: str = DEFAULT_USER_AGENT
     chordpro_bin: str = "chordpro"
     ytdlp_bin: str = "yt-dlp"
+    demucs_bin: str = "demucs"
     cjk_font: Path | None = None
     # The folder of fonts the PDFs are set in (pdf_fonts.py: nix/pdf-fonts.nix's Adwaita Sans and Mono); None
     # without one, when they keep ChordPro's built-in Helvetica and Courier.
@@ -213,14 +219,14 @@ class Config:
 _TOP_KEYS = {
     "name", "data_dir", "library_dir", "music_dir", "state_dir", "cache_dir", "overrides_file",
     "wanted_file",
-    "user_agent", "chordpro_bin", "ytdlp_bin", "cjk_font", "pdf_fonts",
+    "user_agent", "chordpro_bin", "ytdlp_bin", "demucs_bin", "cjk_font", "pdf_fonts",
     "providers", "match", "rank", "ug_directory", "ntfy", "autochords",
 }
 _PROVIDER_KEYS = {"budget", "delay", "lookup_delay", "lookup_requests", "lookup_per_hour"}
 _NTFY_KEYS = {"url"}
 _DIRECTORY_KEYS = {"concurrency", "delay", "budget"}
 DIRECTORY_CONCURRENCY_MAX = 32  # requests in flight at once that [ug_directory].concurrency may ask, at most
-_AUTOCHORDS_KEYS = {"btc_weights", "beat_checkpoint", "device"}
+_AUTOCHORDS_KEYS = {"btc_weights", "beat_checkpoint", "device", "whisper_model", "separator_model", "transcribe_device"}
 
 
 def _check_keys(table: Mapping[str, Any], allowed: set[str], where: str) -> None:
@@ -250,6 +256,18 @@ def _string(value: Any, where: str) -> str:
     if not isinstance(value, str):
         raise ConfigError(f"{where} must be a string, not {_shown(value)}")
     return value
+
+
+TRANSCRIBE_DEVICES = ("auto", "cpu", "cuda")
+
+
+def _transcribe_device(value: Any) -> str:
+    """Where Whisper runs: "auto" (the GPU when torch can allocate on it), "cpu" or "cuda"."""
+    where = "[autochords].transcribe_device"
+    device = _string(value, where)
+    if device not in TRANSCRIBE_DEVICES:
+        raise ConfigError(f'{where} must be "auto", "cpu" or "cuda", not {_shown(device)}')
+    return device
 
 
 def _optional_string(table: Mapping[str, Any], key: str, where: str) -> str | None:
@@ -454,11 +472,15 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
         btc_weights=ac_path("btc_weights", "CARACOLE_BTC_WEIGHTS"),
         beat_checkpoint=ac_path("beat_checkpoint", "CARACOLE_BEAT_CHECKPOINT"),
         device=_string(ac_t.get("device", "cpu"), "[autochords].device"),
+        whisper_model=ac_path("whisper_model", "CARACOLE_WHISPER_MODEL"),
+        separator_model=ac_path("separator_model", "CARACOLE_DEMUCS_MODEL"),
+        transcribe_device=_transcribe_device(ac_t.get("transcribe_device", "auto")),
     )
 
     cjk_font_value = _optional_string(data, "cjk_font", "cjk_font") or env.get("CARACOLE_CJK_FONT")
     pdf_fonts_value = _optional_string(data, "pdf_fonts", "pdf_fonts") or env.get("CARACOLE_PDF_FONTS")
     ytdlp_bin = _optional_string(data, "ytdlp_bin", "ytdlp_bin") or env.get("CARACOLE_YTDLP_BIN") or "yt-dlp"
+    demucs_bin = _optional_string(data, "demucs_bin", "demucs_bin") or env.get("CARACOLE_DEMUCS_BIN") or "demucs"
     alphatab_value = env.get("CARACOLE_ALPHATAB_DIR")
 
     return Config(
@@ -472,6 +494,7 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
         user_agent=_string(data.get("user_agent", DEFAULT_USER_AGENT), "user_agent"),
         chordpro_bin=_string(data.get("chordpro_bin", "chordpro"), "chordpro_bin"),
         ytdlp_bin=ytdlp_bin,
+        demucs_bin=demucs_bin,
         cjk_font=paths.resolve(cjk_font_value) if cjk_font_value else None,
         pdf_fonts=paths.resolve(pdf_fonts_value) if pdf_fonts_value else None,
         alphatab_dir=paths.resolve(alphatab_value) if alphatab_value else None,

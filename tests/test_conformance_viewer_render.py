@@ -319,6 +319,13 @@ def case_auto_sheets(w: World) -> list[dict]:
     ug_sheet(w, both, SODA, tab=93002, tonality="G")
     auto_sheet(w, both, synced=None, raw={"lyrics": "none"}, source="Audio from a purchase (synthetic)")
     store_lyrics(w, both, "words that came later\nbeside a human sheet")
+    # an auto sheet made over a transcript: it lights its lines by the transcript, which is no lyrics of the song's
+    heard = add_song(w.conn, "Placeholder Band", "Heard Not Read", added_at="2026-10-04T00:00:00Z")
+    transcript = "".join(f"[00:{4 * n + 2:02d}.00]{line}\n" for n, line in enumerate(
+        ["made up words to sing", "only for the test", "and a second verse", "heard on the audio", "and no more"]))
+    auto_sheet(w, heard, synced=transcript, source="Audio from a purchase (synthetic)",
+               raw={"lyrics": "synced", "lyrics_source": "transcript", "transcript": transcript,
+                    "transcript_made_at": "2026-11-20T01:00:00Z"})
     return [{"render": None}]
 
 

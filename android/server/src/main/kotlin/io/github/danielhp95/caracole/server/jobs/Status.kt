@@ -68,6 +68,7 @@ internal class Shape(val job: Job) {
     /** Whether a command looks its song up, or makes its sheet from a YouTube video. */
     val looksUp: Boolean get() = steps.any { JobCommands.looksUp(it.args) }
     val fromYoutube: Boolean get() = steps.any { JobCommands.sheetsFromYoutube(it.args) }
+    val transcribes: Boolean get() = steps.any { JobCommands.transcribes(it.args) }
 
     private companion object {
         fun stepState(state: String): String = when (state) {
@@ -117,6 +118,8 @@ object Status {
         "search" to "Searching LaCuerda",
         "audio" to "Getting the audio",
         "chords" to "Working out the chords",
+        "vocals" to "Finding where the singing is",
+        "words" to "Transcribing the lyrics",
         "video" to "Searching YouTube",
         "thumbnail" to "Getting the thumbnail",
         "tab" to "Reading the tab page on UG",
@@ -233,7 +236,7 @@ object Status {
             return Line("ready", DONE.getValue(book.action), opens?.let { "Open songbook" to it })
         }
         if (JobCommands.INDEX_READS.any(key::startsWith)) return artistRead(job.steps, details)
-        if (key.startsWith(JobCommands.YOUTUBE_SHEET)) {
+        if (key.startsWith(JobCommands.YOUTUBE_SHEET) || key.startsWith(JobCommands.TRANSCRIBE)) {
             val made = job.stages.any { it.name == "chords" && it.state == Job.DONE }
             if (made && song?.sheet != null) return Line("ready", READY, "Open" to song.sheet)
             return Line("waiting", "Not made yet", details = details)

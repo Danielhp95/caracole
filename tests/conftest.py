@@ -123,6 +123,8 @@ def _no_real_yt_dlp(monkeypatch, tmp_path_factory):
     program, it finds yt-dlp missing instead. A test that wants the route sets ``ytdlp_bin``
     to a ``FakeYtDlp`` (helpers/fake_ytdlp.py), which wins over the variable."""
     monkeypatch.setenv("CARACOLE_YTDLP_BIN", str(tmp_path_factory.getbasetemp() / "no-real-yt-dlp-in-tests"))
+    # Nor a real demucs: the separator (demucs-rs) is on PATH in the same shell.
+    monkeypatch.setenv("CARACOLE_DEMUCS_BIN", str(tmp_path_factory.getbasetemp() / "no-real-demucs-in-tests"))
 
 
 @pytest.fixture(autouse=True)

@@ -23,4 +23,21 @@
     url = "https://cloud.cp.jku.at/public.php/dav/files/7ik4RrBKTS273gp/final0.ckpt";
     hash = "sha256-jDKLRfWdjdPf8hklP/ao1kgr5X0BM6KRQOL+u/jrgzE=";
   };
+
+  # Whisper large-v3, for the lyrics of a song no lyrics site has. MIT License, OpenAI. The URL is
+  # openai-whisper's own for it (the checkpoint's SHA-256 is its folder name), 3,087,371,615 bytes.
+  whisperLargeV3 = fetchurl {
+    name = "whisper-large-v3.pt";
+    url = "https://openaipublic.azureedge.net/main/whisper/models/e5b1a55b89c1367dacf97e3e19bfd829a01529dbfdeefa8caeb59b3f1b81dadb/large-v3.pt";
+    hash = "sha256-5bGlW4nBNn2s+X4+Gb/YKaAVKdv97vqMrrWbPxuB2ts=";
+  };
+
+  # HTDemucs as demucs-rs reads it (safetensors), which separates the vocals from the mix so the
+  # transcript can be checked against where the singing is. Meta's Demucs: MIT License. Converted
+  # by set-soft, pinned at a commit; 84,030,696 bytes.
+  htdemucs = fetchurl {
+    name = "htdemucs.safetensors";
+    url = "https://huggingface.co/set-soft/audio_separation/resolve/939723568b2dca203e61cc7294317ba38549964f/Demucs/htdemucs.safetensors";
+    hash = "sha256-gZNQTN+zlDra8Dm4rLUkpG6H6/Iyw4OsejLICmV4Qj4=";
+  };
 }

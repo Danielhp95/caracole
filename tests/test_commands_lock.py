@@ -469,6 +469,7 @@ ASKED_NOW = [
     ("youtube", "--song", "Radiohead - Creep", "--url", VIDEO),
     ("youtube", "--song", "Radiohead - Creep", "--none"),
     ("youtube", "--song", "Radiohead - Creep", "--sheet", "--url", VIDEO, "--progress"),
+    ("transcribe", "--song", "A - T", "--progress"),
 ]
 # Bulk work: the nightly run's steps, or a pass over the whole library by hand, waits for the whole run.
 BULK = [("run",), ("fetch",), ("render",), ("youtube",), ("lyrics",), ("match",), ("sync",)]
@@ -488,6 +489,7 @@ def test_lookups_take_the_lock_in_the_lane_what_the_owner_asked_for_now_as_a_loo
         tmp_path, config, sites, conn, monkeypatch, args):
     a_song_to_match(tmp_path, sites, conn)
     monkeypatch.setattr("caracole.youtube_fetch.route_problem", lambda cfg: None)  # as with auto-chords
+    monkeypatch.setattr("caracole.youtube_fetch.transcribe_problem", lambda cfg: None)  # and Whisper
     took: list[tuple[str, bool, bool]] = []
 
     def acquire(cfg, what, *, fatal=True, interactive=False, lane=False, on_wait=None):

@@ -382,6 +382,8 @@ body.with-tray .page { padding-bottom: 88px; }
 .fields .youtube-field { grid-column: 1 / -1; }
 form.youtube-sheet { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; margin: 0; }
 form.youtube-sheet .f { flex: 1 1 260px; }
+/* Lyrics transcribed from a song's audio: its button and how long it takes, on its card and its request. */
+form.transcribe { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; }
 /* A YouTube video suggested for a search with no sheet (library.js ytRow): its thumbnail, its words, Make the sheet. */
 .youtube-box:empty { display: none; }
 .youtube-box { margin: 14px 0 0; }

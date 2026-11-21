@@ -159,7 +159,7 @@ internal class SongPass(
                             if (harp == null) h else JsonObject(LinkedHashMap(h).apply { put("harp", JsonPrimitive(harp)) })
                         },
                         video = video, viewerText = if (video != null) Sources.cho(song, sheet, credit = false) else null,
-                        timed = timed)
+                        timed = sheet.timed ?: timed)
         }
 
         try {

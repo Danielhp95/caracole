@@ -216,18 +216,10 @@ def _sheet(cfg: Config, display: str, url: str | None, *, progress: bool) -> Non
     artist, _, title = display.partition(" - ")
     reporter = _Lines(cfg.library_dir, show=False, json_lines=progress)
     result = make_sheet(cfg, SheetRequest(artist.strip(), title.strip(), url), reporter)
-    reporter.flush()
     sent = ", ".join(f"{plural(n, 'yt-dlp run') if p == PROVIDER else plural(n, 'LRCLIB request')}"
                      for p, n in result.requests.items() if n)
-    if result.refused:
-        typer.echo(f"No sheet made: {result.refused}.")
-    else:
-        typer.echo(f"Done in {result.seconds:.1f} s" + (f": {sent}." if sent else ", asking nothing."))
-    if progress:
-        typer.echo(reporter.event({"done": {"seconds": round(result.seconds, 3), "requests": result.requests,
-                                            "ok": result.ok, "refused": result.refused}}))
-    if not result.ok:
-        raise typer.Exit(1)
+    _common.staged_end(reporter, result, progress=progress, refused="No sheet made",
+                       done=f"Done in {result.seconds:.1f} s" + (f": {sent}." if sent else ", asking nothing."))
 
 
 NOT_SEARCHED = "Not searched: "

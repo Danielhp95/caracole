@@ -268,9 +268,11 @@ def test_the_served_page_has_the_request_form_and_its_token(conn, cfg):
     assert "connect-src 'self'" in csp_of(html) and "default-src 'none'" in csp_of(html)
     served = data_of(html)["server"]
     youtube = served.pop("youtube")  # whether a sheet can be made from a YouTube video here: test_web_youtube.py
+    transcribe = served.pop("transcribe")  # whether lyrics are transcribed here, and for which songs (below)
     assert served == {"csrf": 't0k"<en', "busy": [wanted.id], "active": 2, "removing": [found.id], "jobs": [job],
                       "guitar": False}
     assert set(youtube) == {"ok", "why", "off"}
+    assert set(transcribe) == {"ok", "why", "songs", "time"}
     # Where the songs just requested go, and the list of requests.
     assert re.search(r'<section class="requested" id="requested"[^>]*hidden>', shell)
     assert re.search(r'<aside class="tray" id="tray"[^>]*hidden>', shell)
@@ -279,6 +281,79 @@ def test_the_served_page_has_the_request_form_and_its_token(conn, cfg):
     styles = re.findall(r"<style>(.*?)</style>", html, re.S)
     assert len(scripts) == 1 and len(styles) == 1
     assert sha(scripts[0]) in csp_of(html) and sha(styles[0]) in csp_of(html)
+
+
+def test_the_served_page_lists_the_songs_offered_a_transcription(conn, cfg, tmp_path, monkeypatch):
+    # Served alone, beside the cards (whose data is the phone's too, and stays as it is): whether this caracole
+    # transcribes, why not, the songs offered one (transcript.offered_song_ids), and how long one takes here.
+    import caracole.youtube_fetch as yf
+    from caracole.library_page import WebControls
+    from test_autochords_transcript import youtube_song
+
+    offered = youtube_song(conn, tmp_path, "Nick Cani", "Vikingos veganos")
+    later = youtube_song(conn, tmp_path, "Estopa", "Como Camarón")
+    found = youtube_song(conn, tmp_path, "Radiohead", "Creep", lyrics_status="found")
+    add_song(conn, "Soda Stereo", "De Música Ligera")  # no audio from YouTube
+    monkeypatch.delenv("CARACOLE_TORCH_CUDA", raising=False)
+    monkeypatch.setattr(yf, "transcribe_problem", lambda cfg: None)
+    html = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok"))
+    assert data_of(html)["server"]["transcribe"] == {"ok": True, "why": None, "songs": [offered.id, later.id],
+                                                     "time": "up to half an hour"}
+    cards_now = {s["id"]: s for s in data_of(html)["songs"]}
+    assert "transcribe" not in cards_now[offered.id] and found.id in cards_now
+    # Where it can't run, it says why, and no song is offered one.
+    monkeypatch.setattr(yf, "transcribe_problem", lambda cfg: "built without Whisper")
+    html = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok"))
+    assert data_of(html)["server"]["transcribe"] == {"ok": False, "why": "Whisper isn't installed", "songs": [],
+                                                     "time": ""}
+    assert "server" not in data_of(page(conn, cfg))  # the file on disk offers none of it
+
+
+PAGE_BUILD = r"""
+import sys
+from datetime import UTC, datetime
+from pathlib import Path
+
+import caracole.youtube_fetch as yf
+from caracole import db
+from caracole.config import load_config
+from caracole.library_page import WebControls, build_library_page
+from caracole.overrides import Overrides
+
+cfg = load_config(Path(sys.argv[1]))
+conn = db.connect(cfg.db_path)
+print("problem:", yf.transcribe_problem(cfg))  # the real check: nothing imported to find out
+yf.transcribe_problem = lambda cfg: None  # as where it can run: every song asked whether it is offered one
+html = build_library_page(conn, cfg, Overrides(), datetime(2026, 11, 21, tzinfo=UTC), controls=WebControls(csrf="t"))
+assert '"transcribe":{"ok":true' in html.replace(" ", ""), html[:500]
+heavy = ("torch", "torchaudio", "torchcodec", "numpy", "librosa", "soundfile", "whisper", "triton", "numba")
+print("loaded:", sorted({m.split(".")[0] for m in sys.modules} & set(heavy)))
+"""
+
+
+@pytest.mark.slow
+def test_building_the_served_page_loads_no_model_library(conn, cfg, tmp_path):
+    # Every page build asks which songs are offered a transcription and how long one takes (transcript.py,
+    # youtube_fetch.py): it reads the database and the files' names, and never imports a model's library, which
+    # would cost every build seconds and a gigabyte in the auto-chords packages.
+    import os
+    import subprocess
+    import sys
+
+    from conftest import subprocess_pythonpath
+    from test_autochords_transcript import youtube_song
+
+    youtube_song(conn, tmp_path, "Nick Cani", "Vikingos veganos")
+    conn.commit()
+    config = tmp_path / "caracole.toml"
+    config.write_text(f'state_dir = "{cfg.state_dir}"\ncache_dir = "{cfg.cache_dir}"\n'
+                      f'library_dir = "{cfg.library_dir}"\nmusic_dir = "{cfg.music_dir}"\n', encoding="utf-8")
+    src = Path(__file__).resolve().parents[1] / "src"
+    env = {"HOME": str(tmp_path), "PATH": os.environ.get("PATH", ""), "PYTHONPATH": subprocess_pythonpath(src)}
+    out = subprocess.run([sys.executable, "-c", PAGE_BUILD, str(config)], capture_output=True, text=True,
+                         env=env, check=False)
+    assert out.returncode == 0, out.stderr[-3000:]
+    assert out.stdout.splitlines()[-1] == "loaded: []", out.stdout
 
 
 def bar_of(html):

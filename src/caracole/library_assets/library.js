@@ -462,6 +462,105 @@
     postInPlace(form, go, s);
     return form;
   };
+  // Lyrics transcribed from a song's audio (web/transcribe_routes.py), on a song's card, served: for a song offered
+  // one (``server.transcribe.songs``: its audio from YouTube, every lyrics site missed) where this caracole transcribes
+  // (``server.transcribe.ok``), Transcribe the lyrics and how long it takes here (POST /transcribe with the song:
+  // caracole transcribe, its words heard, its chords made again over them), which posts in place, the song's line then
+  // saying how it goes; none while a request of the song waits or runs, and none once asked for from this page, here
+  // or in the Requests tab (``transcribing``, requests.js's form). The songs offered are read again once a song's job
+  // is over (``offerAfter``, ``readTranscriptions``: GET /transcribe), so a sheet from a video that found no lyrics
+  // offers it at once, a transcription that failed offers it again, and one made meanwhile offers it no more.
+  const TRANSCRIBE = server && server.transcribe && typeof server.transcribe === "object" ? server.transcribe : null;
+  const TRANSCRIBES = Boolean(TRANSCRIBE && TRANSCRIBE.ok === true);  // only then is the offer read again
+  let transcribable = new Set(TRANSCRIBES ? listOf(TRANSCRIBE.songs).map(Number) : []);
+  const transcribeHint = () => "From the audio, " + String(TRANSCRIBE.time || "") + ".";
+  const offersTranscription = (id) => {
+    const asked = jobOfSong(id);
+    return transcribable.has(Number(id)) && !removing.has(Number(id)) && !busy.has(Number(id)) &&
+      !(asked && isActive(asked));
+  };
+  const transcribing = (id) => transcribable.delete(Number(id));
+  // A song that may be offered one once its job is over: its lyrics missing, and a sheet from YouTube for it (no human
+  // sheet, not ignored, no purchase: its card's ``youtubeSheet``), as a sheet from a video or a transcription leaves
+  // it.
+  const mayBeOffered = (s) => Boolean(s) && typeof s === "object" && s.lyrics === "missing" && s.youtubeSheet === true;
+  const songById = (id) => (byIndex.has(Number(id)) ? songs[byIndex.get(Number(id))] : arrived.get(Number(id)) || null);
+  // A song's card made again where it was made already (open, or opened once), its offer as it is now; one never opened
+  // is made with it when it opens.
+  const cardAgain = (id) => {
+    const i = byIndex.get(Number(id));
+    if (i === undefined || !lines.has(i)) return;
+    const made = cardOf(lines.get(i));
+    if (made && made.childElementCount) lines.set(i, refill(lines.get(i), lineFor(songs[i])));
+  };
+  // GET /transcribe: the songs offered one as the served page would have them now (library_page.transcribe_member),
+  // where this caracole transcribes; one read at a time, one more after it when asked meanwhile. Each song whose offer
+  // changed has its card made again, and the Requests tab hears it ("caracole:transcribe"), for its requests.
+  let transcribeAsking = false;
+  let transcribeAgain = false;
+  const readTranscriptions = () => {
+    if (!TRANSCRIBES) return;
+    if (transcribeAsking) {
+      transcribeAgain = true;
+      return;
+    }
+    transcribeAsking = true;
+    fetch("transcribe", {
+      cache: "no-store",
+      headers: { Accept: "application/json", "X-Caracole-Form-Token": String(server.csrf || "") },
+    }).then((r) => (r.ok ? r.json() : null)).catch(() => null).then((body) => {
+      transcribeAsking = false;
+      if (body && typeof body === "object") {
+        const now = new Set(body.ok === true ? listOf(body.songs).map(Number) : []);
+        const changed = Array.from(now).filter((id) => !transcribable.has(id))
+          .concat(Array.from(transcribable).filter((id) => !now.has(id)));
+        transcribable = now;
+        for (const id of changed) cardAgain(id);
+        if (changed.length) document.dispatchEvent(new CustomEvent("caracole:transcribe"));
+      }
+      if (transcribeAgain) {
+        transcribeAgain = false;
+        readTranscriptions();
+      }
+    });
+  };
+  // A song's job over (``view``, its card as it is now): the offer read again when it may have changed for the song.
+  const offerAfter = (view) => {
+    const id = view.songId === null || view.songId === undefined ? null : Number(view.songId);
+    if (!TRANSCRIBES || view.kind !== "song" || id === null) return;
+    const s = view.card && typeof view.card === "object" ? view.card : songById(id);
+    if (transcribable.has(id) || mayBeOffered(s)) readTranscriptions();
+  };
+  // The Requests tab's request of a song over, one this page may not follow (asked on another device): by its name.
+  const requestOver = (display) => {
+    if (!TRANSCRIBES) return;
+    const s = songs.find((x) => x && String(x.display) === String(display)) ||
+      Array.from(arrived.values()).find((x) => x && String(x.display) === String(display));
+    if (s && (transcribable.has(Number(s.id)) || mayBeOffered(s))) readTranscriptions();
+  };
+  // The song a request of the Requests tab names (``display``) when it is offered one now, its card; else null.
+  const offeredSong = (display) => {
+    for (const id of transcribable) {
+      const s = songById(id);
+      if (s && String(s.display) === String(display) && offersTranscription(id)) return s;
+    }
+    return null;
+  };
+  const transcribeOffer = (s) => {
+    if (!offersTranscription(s.id)) return null;
+    const form = songForm("transcribe", "/transcribe", s);
+    const go = el("button", "btn small", "Transcribe the lyrics");
+    go.type = "submit";
+    go.setAttribute("aria-label", "Transcribe the lyrics of " + String(s.title) + " by " + String(s.artist) +
+      " from its audio");
+    go.title = "Whisper hears the words, and the auto sheet is made again with its chords over them.";
+    form.append(go, el("p", "hint", transcribeHint()));
+    postInPlace(form, go, s, (body) => {
+      transcribing(s.id);
+      return body.job;
+    });
+    return form;
+  };
   // The LaCuerda sheet of each song of yours that the bar's search found (a LaCuerda row of it with chords, which
   // mergeSites folds into its line), by song id: its line offers it until the page is loaded again.
   const lacuerdaFound = new Map();
@@ -1351,6 +1450,8 @@
     if (fromYouTube) more.push(fromYouTube);
     const fromVideo = server ? youtubeSheet(s) : null;
     if (fromVideo) more.push(fromVideo);
+    const transcribe = server ? transcribeOffer(s) : null;
+    if (transcribe) more.push(transcribe);
     const picked = lacuerdaNote(s);
     if (picked) more.push(picked);
     if (server && s.notFound && s.status === "wanted" && !removing.has(id)) {
@@ -4322,6 +4423,7 @@
     if (!isActive(view) && !settled.has(id) && drawable(view)) {
       settled.add(id);
       redraw(view);
+      offerAfter(view);
     }
     paint(view);
     // A removal done, its line saying so: the id names that song no more.
@@ -4354,6 +4456,11 @@
       if (fromVideo && isActive(view)) {  // so too a sheet from a YouTube video
         if (fromVideo.contains(document.activeElement)) focusOn(p);
         fromVideo.remove();
+      }
+      const transcribe = inItem(item, "form.transcribe");
+      if (transcribe && isActive(view)) {  // and its lyrics transcribed
+        if (transcribe.contains(document.activeElement)) focusOn(p);
+        transcribe.remove();
       }
       const picker = inItem(item, "form.pick-form");
       if (picker && isActive(view)) {  // POST /review would refuse a pick now: the line is drawn again after
@@ -4534,6 +4641,13 @@
     stepList,
     focusOn,
     fold,
+    // The Requests tab's Transcribe the lyrics (requests.js): the song a request names when it is offered one now, as
+    // its card offers it, and its words; the song asked for there, so neither offers it again; and a request of a song
+    // over, for the offer to be read again.
+    offeredSong,
+    transcribeHint,
+    transcribing,
+    requestOver,
   });
 
   if (server) {

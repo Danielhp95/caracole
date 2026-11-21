@@ -116,6 +116,36 @@ let
   modelEnv = lib.filterAttrs (_: value: value != null) {
     CARACOLE_BTC_WEIGHTS = cfg.autochords.btcWeights;
     CARACOLE_BEAT_CHECKPOINT = cfg.autochords.beatCheckpoint;
+    CARACOLE_WHISPER_MODEL = cfg.autochords.whisperModel;
+    CARACOLE_DEMUCS_MODEL = cfg.autochords.separatorModel;
+  };
+
+  # The GPU, for the units that run a transcription: caracole-web (its job
+  # children) and caracole-admin, never the nightly units. Whisper uses CUDA and
+  # demucs-rs uses Vulkan (wgpu), so both need the NVIDIA device nodes; Vulkan's
+  # ICD and libraries come from /run/opengl-driver, which ProtectSystem=strict
+  # leaves readable. DeviceAllow takes device groups (from /proc/devices), not
+  # path globs. The entries are nixpkgs' ollama module's
+  # (nixos/modules/services/misc/ollama.nix) for CUDA: char-nvidiactl,
+  # char-nvidia-caps, char-nvidia-frontend, char-nvidia-uvm. Its char-drm
+  # (listed there for ROCm) is /dev/dri, which Vulkan opens. Its char-fb,
+  # char-kfd and /dev/dxg (ROCm, WSL) are left out. DevicePolicy=closed and
+  # PrivateDevices=false are its too (PrivateDevices hides the nodes), and
+  # `render` is its SupplementaryGroups; `video` is for the /dev/dri/card* nodes.
+  gpu = lib.optionalAttrs cfg.autochords.cuda {
+    PrivateDevices = false;
+    DevicePolicy = "closed";
+    DeviceAllow = [
+      "char-nvidiactl"
+      "char-nvidia-caps"
+      "char-nvidia-frontend"
+      "char-nvidia-uvm"
+      "char-drm"
+    ];
+    SupplementaryGroups = [
+      "video"
+      "render"
+    ];
   };
 
   # The nightly run takes the audio of songs nobody has charted from YouTube
@@ -191,7 +221,8 @@ let
       # As the units: started once the folders' file systems are mounted.
       RequiresMountsFor = writable;
     }
-    // lib.optionalAttrs cfg.autochords.enable { MemoryDenyWriteExecute = false; };
+    // lib.optionalAttrs cfg.autochords.enable { MemoryDenyWriteExecute = false; }
+    // lib.optionalAttrs cfg.autochords.enable gpu;
   # One --property per list item, as a unit file gets one line per item (for
   # SystemCallFilter, the order is the units' too); booleans as yes or no.
   property =
@@ -380,6 +411,36 @@ in
         '';
       };
 
+      cuda = lib.mkEnableOption ''
+        the GPU for the transcription of lyrics from the audio (Whisper on CUDA,
+        demucs-rs on Vulkan), which caracole-web's job children and caracole-admin
+        run: the flake's module then defaults `package` to its autochords-cuda
+        build (torch-bin, about 6.7 GiB against 1.1 GiB) and these two units see
+        the NVIDIA devices (PrivateDevices off, DeviceAllow for the GPU's groups).
+        The nightly units keep their sandbox, and BTC and beat_this stay on the CPU.
+        It needs the NVIDIA driver (hardware.graphics, hardware.nvidia) on the host,
+        and autochords.enable: without it, it does nothing (a warning says so).
+        nix/module.nix imported on its own, without the flake, leaves `package` as
+        it is: set it to a CUDA build of caracole yourself'';
+
+      whisperModel = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
+        default = null;
+        description = ''
+          Another Whisper checkpoint, as CARACOLE_WHISPER_MODEL. Null leaves the
+          package's own (large-v3); settings.autochords.whisper_model wins over both.
+        '';
+      };
+
+      separatorModel = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
+        default = null;
+        description = ''
+          Another demucs-rs model (safetensors), as CARACOLE_DEMUCS_MODEL. Null leaves
+          the package's own (htdemucs); settings.autochords.separator_model wins over both.
+        '';
+      };
+
       btcWeights = lib.mkOption {
         type = lib.types.nullOr lib.types.path;
         default = null;
@@ -401,6 +462,11 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    # Not an assertion: a GPU asked for and not used breaks nothing.
+    warnings = lib.optional (cfg.autochords.cuda && !cfg.autochords.enable) ''
+      services.caracole.autochords.cuda does nothing without services.caracole.autochords.enable: the GPU is
+      for the transcription of lyrics from the audio, which only the auto-chords package runs.'';
+
     assertions =
       let
         # The options whose caracole.toml key settings sets to a path of its own.
@@ -638,7 +704,7 @@ in
           # OnFailure= and send an alert on every try.
           RestartMode = "direct";
         }
-        // lib.optionalAttrs cfg.autochords.enable { MemoryDenyWriteExecute = false; };
+        // lib.optionalAttrs cfg.autochords.enable ({ MemoryDenyWriteExecute = false; } // gpu);
     };
 
     networking.firewall.allowedTCPPorts = lib.mkIf (cfg.web.enable && cfg.web.openFirewall) [

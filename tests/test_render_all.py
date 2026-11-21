@@ -143,12 +143,13 @@ AUTO_CHORDS = (ChordSegment(0.0, 4.0, "C"), ChordSegment(4.0, 8.0, "G"))
 AUTO_LYRICS = "[00:00.00]made up words to sing\n[00:04.00]only for the test\n"
 
 
-def auto_sheet(conn, cfg, song, *, key=None, video=None, source=None, chords=AUTO_CHORDS, synced=AUTO_LYRICS):
+def auto_sheet(conn, cfg, song, *, key=None, video=None, source=None, chords=AUTO_CHORDS, synced=AUTO_LYRICS,
+               raw=None):
     """Keep an auto-chords sheet the way the autochords step does: 'sheet (auto).txt',
     from a versions row with provider "auto", whose raw data holds the ``key`` heard, if any, and the ``video`` its
     audio came from (``VIDEO``), if any, which the sheet names after the song's name as autochords/run.py writes it
     (``source``: that line as it is written otherwise, an older caracole's). The sheet lays the ``chords`` heard out
-    over the ``synced`` lyrics."""
+    over the ``synced`` lyrics; ``raw`` adds to the version's raw data (a transcript's three keys, Task 5's)."""
     if video is not None and source is None:
         source = youtube_credit(video["title"], video["channel"], video["id"])
     text = build_sheet(
@@ -158,7 +159,7 @@ def auto_sheet(conn, cfg, song, *, key=None, video=None, source=None, chords=AUT
         synced=synced,
         source=source,
     )
-    raw = {"key": key} if key else {}
+    raw = {**({"key": key} if key else {}), **(raw or {})}
     if video is not None:
         raw["youtube"] = video
     vid = upsert_version(
@@ -716,6 +717,49 @@ def test_a_songs_timed_lyrics_light_its_viewers_lines(conn, cfg):
         [8000, 1], [12000, 2], [16000, 3], [20000, 4], [24000, 5]]  # line 0: the intro's chords
     auto_sung = viewer_data(viewer_of(cfg, auto, "sheet (auto).html"))["sung"]
     assert [ms for ms, _ in auto_sung] == [8000, 12000, 16000, 20000, 24000] and None not in [n for _, n in auto_sung]
+
+
+def over_a_transcript(conn, cfg, song, lrc: str) -> None:
+    """An auto sheet made over ``lrc`` as the song's transcript (autochords/run.py's three raw keys)."""
+    auto_sheet(conn, cfg, song, synced=lrc, raw={"lyrics": "synced", "lyrics_source": "transcript", "transcript": lrc,
+                                                 "transcript_made_at": "2026-11-20T01:00:00Z"})
+
+
+def test_an_auto_sheet_over_a_transcript_lights_its_lines_from_the_transcript(conn, cfg):
+    song = add_song(conn, "Placeholder Band", "Synthetic Song")
+    transcript = lrc_of(["Palabras de prueba", "solo para el visor", "una tercera línea", "y una cuarta más",
+                         "para cantar al final"], start=3.0)
+    over_a_transcript(conn, cfg, song, transcript)
+    render(conn, cfg)
+    sung = viewer_data(viewer_of(cfg, song, "sheet (auto).html"))["sung"]
+    assert sung is not None and sung[0][0] == 3000
+    assert [ms for ms, _ in sung] == [3000, 7000, 11000, 15000, 19000]
+
+
+def test_a_human_sheet_beside_it_lights_none_from_the_transcript(conn, cfg):
+    song = rendered_song(conn, cfg, content=SUNG_SHEET)
+    cho = (song_dir(cfg.library_dir, song) / "sheet.cho").read_text(encoding="utf-8")
+    drawn = [line for line in page._drawn_lines(parse_sheet(cho)) if line]
+    transcript = lrc_of(drawn)
+    over_a_transcript(conn, cfg, song, transcript)
+    render(conn, cfg, force=True)
+    assert "sung" not in viewer_data(viewer_of(cfg, song))
+    assert viewer_data(viewer_of(cfg, song, "sheet (auto).html"))["sung"] is not None
+
+
+def test_an_auto_sheet_remade_over_a_sites_lyrics_lights_its_lines_from_them_not_the_transcript(conn, cfg):
+    song = add_song(conn, "Placeholder Band", "Synthetic Song")
+    lines = ["Palabras de prueba", "solo para el visor", "una tercera línea", "y una cuarta más",
+             "para cantar al final"]
+    over_a_transcript(conn, cfg, song, lrc_of(lines, start=3.0))
+    render(conn, cfg)
+    assert viewer_data(viewer_of(cfg, song, "sheet (auto).html"))["sung"][0][0] == 3000
+    site = lrc_of(lines, start=20.0)  # the site's lyrics arrive; auto-chords remakes the sheet without the keys
+    with_timed_lyrics(conn, song, site)
+    auto_sheet(conn, cfg, song, synced=site)
+    render(conn, cfg)
+    assert [ms for ms, _ in viewer_data(viewer_of(cfg, song, "sheet (auto).html"))["sung"]] == [
+        20000, 24000, 28000, 32000, 36000]
 
 
 @pytest.mark.parametrize("stored", ["[1, 2]", "lrc of a long minute"], ids=["not-an-object", "a-minute-too-long"])

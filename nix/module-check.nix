@@ -21,6 +21,8 @@
   # What services.caracole.package and autochords.package must default to.
   defaultPackage,
   autochordsPackage,
+  # What autochords.package must default to with autochords.cuda.
+  autochordsCudaPackage,
 }:
 let
   # caracole's source: its config loader, run against the generated files, and
@@ -139,6 +141,21 @@ let
     autochordsOn
     { services.caracole.web.enable = true; }
   ];
+  # caracole-web with the GPU on: transcription runs in its job children. The model
+  # paths are given, as for the other auto-chords units.
+  webCuda = evalSystem [
+    stubbed
+    configured
+    autochordsOn
+    {
+      services.caracole.autochords = {
+        cuda = true;
+        whisperModel = "/models/large-v3.pt";
+        separatorModel = "/models/htdemucs.safetensors";
+      };
+      services.caracole.web.enable = true;
+    }
+  ];
   # caracole-web on every address.
   webOpen = evalSystem [
     stubbed
@@ -151,6 +168,19 @@ let
     }
   ];
   defaults = evalSystem [ ];
+  # The flake's own default package, with the GPU on.
+  cudaDefault =
+    (pkgs.nixos [
+      module
+      {
+        boot.isContainer = true;
+        system.stateVersion = lib.trivial.release;
+        services.caracole = {
+          enable = true;
+          autochords.cuda = true;
+        };
+      }
+    ]).config;
   # nix/module.nix imported on its own, without the flake's wrapper.
   standalone =
     (pkgs.nixos [
@@ -330,6 +360,18 @@ let
   admin = findAdmin nuc;
   adminAutochords = findAdmin nucAutochords;
   adminMoved = findAdmin moved;
+  adminCuda = findAdmin webCuda;
+  webCudaSc = webCuda.systemd.services.caracole-web.serviceConfig;
+  autochordsCudaSc = webCuda.systemd.services.caracole-autochords.serviceConfig;
+  # The GPU's device groups, as nixpkgs' ollama module lists them for CUDA (nixos/modules/services/misc/ollama.nix),
+  # and char-drm, which that module lists for ROCm and Vulkan's /dev/dri needs too. Not its char-fb, char-kfd and /dev/dxg.
+  gpuDevices = [
+    "char-nvidiactl"
+    "char-nvidia-caps"
+    "char-nvidia-frontend"
+    "char-nvidia-uvm"
+    "char-drm"
+  ];
   # The rendered tmpfiles.d file of the moved system.
   movedTmpfiles = lib.findFirst (p: p.name == "caracole.conf") null moved.systemd.tmpfiles.packages;
 
@@ -466,6 +508,32 @@ let
       && webAutochordsUnit.environment.CARACOLE_BEAT_CHECKPOINT == "/models/beat_this.ckpt"
       && webAutochordsUnit.serviceConfig.MemoryDenyWriteExecute == false
       && hardened webAutochordsUnit.serviceConfig;
+    "caracole-web.service with autochords.cuda sees the GPU and nothing else" =
+      webCudaSc.PrivateDevices == false
+      && webCudaSc.DevicePolicy == "closed"
+      && lib.sort lib.lessThan webCudaSc.DeviceAllow == lib.sort lib.lessThan gpuDevices
+      && lib.sort lib.lessThan webCudaSc.SupplementaryGroups == [ "render" "video" ]
+      && webCudaSc.ProtectSystem == "strict"
+      && webCudaSc.CapabilityBoundingSet == ""
+      && webCuda.systemd.services.caracole-web.environment.CARACOLE_WHISPER_MODEL == "/models/large-v3.pt"
+      && webCuda.systemd.services.caracole-web.environment.CARACOLE_DEMUCS_MODEL == "/models/htdemucs.safetensors"
+      && !(webCuda.systemd.services.caracole-web.environment ? LD_LIBRARY_PATH);
+    "caracole-autochords.service keeps PrivateDevices with autochords.cuda" =
+      hardened autochordsCudaSc
+      && !(autochordsCudaSc ? DeviceAllow)
+      && !(autochordsCudaSc ? SupplementaryGroups)
+      && !(autochordsCudaSc ? DevicePolicy);
+    "without autochords.cuda, caracole-web keeps PrivateDevices" =
+      hardened webAutochordsUnit.serviceConfig
+      && !(webAutochordsUnit.serviceConfig ? DeviceAllow)
+      && !(webAutochordsUnit.serviceConfig ? SupplementaryGroups);
+    "the auto-chords package defaults to this flake's cuda package with autochords.cuda" =
+      cudaDefault.services.caracole.autochords.package.drvPath == autochordsCudaPackage.drvPath;
+    # cudaDefault has autochords.cuda alone, auto-chords off: the GPU would serve nothing.
+    "autochords.cuda without autochords.enable warns that it does nothing" =
+      says [ "services.caracole.autochords.cuda does nothing" "autochords.enable" ] cudaDefault.warnings;
+    "autochords.cuda with autochords.enable is no warning" =
+      !(says [ "autochords.cuda" ] webCuda.warnings);
     "caracole-web.service is hardened as caracole.service is, MemoryDenyWriteExecute included" =
       hardened webSc && webSc.MemoryDenyWriteExecute && webSc.RestrictNamespaces;
     "caracole-web.service runs as caracole, with a group-writable umask" = sameUser webSc;
@@ -650,6 +718,7 @@ else
       notifyConfigured = notify.serviceConfig.ExecStart;
       adminScript = lib.getExe admin;
       adminAutochordsScript = lib.getExe adminAutochords;
+      adminCudaScript = lib.getExe adminCuda;
       adminMovedScript = lib.getExe adminMoved;
       movedTmpfiles = "${movedTmpfiles}/lib/tmpfiles.d/caracole.conf";
       passAsFile = [
@@ -796,6 +865,15 @@ else
       lacks PrivateNetwork "$adminScript"
       # With the auto-chords package, as in its unit, torch may generate code.
       grep -q -- "'--property=MemoryDenyWriteExecute=no'" "$adminAutochordsScript"
+      # With autochords.cuda it sees the GPU as caracole-web does; without it, no.
+      lacks DeviceAllow "$adminAutochordsScript"
+      grep -q -- "'--property=PrivateDevices=yes'" "$adminAutochordsScript"
+      grep -q -- "'--property=PrivateDevices=no'" "$adminCudaScript"
+      grep -q -- "'--property=DevicePolicy=closed'" "$adminCudaScript"
+      for device in char-nvidiactl char-nvidia-caps char-nvidia-frontend char-nvidia-uvm char-drm; do
+        grep -q -- "'--property=DeviceAllow=$device'" "$adminCudaScript" \
+          || { echo "caracole-admin lacks DeviceAllow=$device" >&2; exit 1; }
+      done
       lacks MemoryDenyWriteExecute=yes "$adminAutochordsScript"
 
       # Moved to /data/caracole, caracole-admin opens what the units open there.

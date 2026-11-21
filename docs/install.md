@@ -21,7 +21,11 @@ sign-in, so it listens only on a network you trust
 nix run github:Danielhp95/caracole -- --help                  # once, without installing
 nix profile add github:Danielhp95/caracole                    # caracole on your PATH
 nix profile add 'github:Danielhp95/caracole#autochords'       # or with auto-chords (about 3 GB)
+nix profile add 'github:Danielhp95/caracole#autochords-cuda'  # auto-chords on torch-bin, for an NVIDIA GPU (about 7 GB, unfree CUDA libraries)
 ```
+
+On NixOS, the module's `services.caracole.autochords.cuda = true` picks that
+package and lets caracole-web see the GPU ([deploy.md](deploy.md#4-auto-chords)).
 
 Before Nix 2.30, `nix profile add` was `nix profile install`. caracole then
 reads `~/.config/caracole/caracole.toml` ([usage.md](usage.md#configure)).
@@ -57,10 +61,16 @@ nix develop                                         # Python, the dependencies, 
 pytest -q                                           # every test, on up to 12 cores
 pytest -q -m "not slow"                             # all but the browser, chordpro, model and second-process tests
 nix develop .#autochords -c pytest -m autochords    # the model tests, with the model files
+nix develop .#autochords-cuda -c pytest -m autochords  # the same, on torch-bin (CUDA)
 ```
 
 Both shells set `CARACOLE_CJK_FONT`, `CARACOLE_PDF_FONTS` and `CARACOLE_ALPHATAB_DIR`, and
-`.#autochords` also sets `CARACOLE_BTC_WEIGHTS` and `CARACOLE_BEAT_CHECKPOINT`.
+`.#autochords` also sets `CARACOLE_BTC_WEIGHTS`, `CARACOLE_BEAT_CHECKPOINT`, `CARACOLE_WHISPER_MODEL` and
+`CARACOLE_DEMUCS_MODEL`, and puts `demucs` on PATH (demucs-rs's `cpu` build: 712 s for a 149 s song, about 5x its length); `.#autochords-cuda` sets the same
+on a Python whose torch, torchaudio, torchvision and triton are nixpkgs' prebuilt CUDA builds (`torch-bin` and its
+kin), with nixpkgs' own wgpu `demucs` (the GPU: about 35 s for that song) and `openai-whisper` for the lyrics of a song no site has. nixpkgs' own `torch` is CPU-only.
+It also sets `CARACOLE_TORCH_CUDA=1`, as the `autochords-cuda` package's wrapper does: caracole reads it to tell a GPU
+build from the CPU one, and offers a transcription as taking a couple of minutes, not up to half an hour.
 
 Without Nix, on Ubuntu, first sections 1 to 4 of [deploy.md's Ubuntu
 part](deploy.md#ubuntu-2404-without-nix) (Python, ChordPro, the fonts), then,

@@ -145,11 +145,12 @@ SERVER_CONTROLS = WebControls(CSRF, busy=frozenset({3, 1}), active=2, held=froze
 
 def server_member(controls: WebControls) -> dict[str, Any]:
     """``build_library_page``'s ``server`` for ``controls`` on the phone: no Guitar Pro page, no sheet from YouTube
-    (``YOUTUBE_PROBLEM``), YouTube off (checked against build_library_page itself:
-    ``test_the_server_member_is_build_library_pages``)."""
+    (``YOUTUBE_PROBLEM``), YouTube off, and no lyrics transcribed (for the same reason: no song offered one, no time
+    said) (checked against build_library_page itself: ``test_the_server_member_is_build_library_pages``)."""
     return {"csrf": controls.csrf, "busy": sorted(controls.busy), "active": controls.active,
             "removing": sorted(controls.removing), "jobs": list(controls.jobs), "guitar": False,
-            "youtube": {"ok": False, "why": YOUTUBE_PROBLEM, "off": True}}
+            "youtube": {"ok": False, "why": YOUTUBE_PROBLEM, "off": True},
+            "transcribe": {"ok": False, "why": YOUTUBE_PROBLEM, "songs": [], "time": ""}}
 
 
 def data_objects() -> dict[str, dict[str, Any]]:
@@ -469,11 +470,12 @@ def test_the_cases_cover_what_the_page_writes_otherwise():
 
 def test_the_server_member_is_build_library_pages(conn, cfg):
     # The phone's server member is the one build_library_page writes for the same controls, with no Guitar Pro page,
-    # no sheet from YouTube (the phone's reason) and YouTube off.
+    # no sheet from YouTube (the phone's reason), YouTube off and no lyrics transcribed (the same reason).
     youtube = cfg.provider("youtube")
     off = mock.patch.object(type(cfg), "provider", lambda self, name: (
         type(youtube)(**{**youtube.__dict__, "enabled": False}) if name == "youtube" else youtube))
-    with off, mock.patch.object(library_page, "route_reason", lambda cfg: YOUTUBE_PROBLEM):
+    with (off, mock.patch.object(library_page, "route_reason", lambda cfg: YOUTUBE_PROBLEM),
+          mock.patch.object(library_page, "transcribe_reason", lambda cfg: YOUTUBE_PROBLEM)):
         html = build_library_page(conn, cfg, Overrides(), NOW, controls=SERVER_CONTROLS)
     data = json.loads(re.search(r'<script type="application/json" id="songs">(.*?)</script>', html, re.S).group(1))
     assert data["server"] == server_member(SERVER_CONTROLS)

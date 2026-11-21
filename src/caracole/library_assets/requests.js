@@ -9,7 +9,11 @@
 // another tab shows; each answer draws again only the requests that changed, each where it was, its Output open or
 // shut as you left it. Cancel, Try again and Get it from there post with fetch(), the page staying where it is: the
 // song's line follows the request they queue (library.js's ``track``); a failed removal's Try again asks what goes
-// on the server's own page. Every text is put in with textContent.
+// on the server's own page. A song offered a transcription of its lyrics (library.js's word: the data's
+// ``server.transcribe``, read again once a song's job is over) has Transcribe the lyrics on its newest request that
+// ended Ready, as its card has it, posted the same way and then gone from both; a request seen over tells library.js,
+// which reads the offer again when it may have changed, and the tab is drawn again when it did. Every text is put in
+// with textContent.
 (() => {
   "use strict";
   const byId = (id) => document.getElementById(id);
@@ -50,6 +54,20 @@
   // The forms the server answers with data, so the page stays where it is; any other (a failed removal's Try again,
   // POST /remove) posts as a form, and the server asks what goes on a page of its own.
   const SENT = ["/jobs/cancel", "/jobs/again", "/lookup"];
+  // Lyrics transcribed from a song's audio (web/transcribe_routes.py): where this caracole transcribes, the song a
+  // request names (``display``, as the song's card names it) when it is offered one now: library.js's word, which it
+  // reads again; without library.js, the songs offered when the page was made.
+  const TRANSCRIBE = server.transcribe && typeof server.transcribe === "object" && server.transcribe.ok === true
+    ? server.transcribe : null;
+  const offered = new Map();  // without library.js: a song's "Artist - Title" -> its card, for each song offered one
+  if (TRANSCRIBE && !(lib && typeof lib.offeredSong === "function")) {
+    const ids = new Set(listOf(TRANSCRIBE.songs).map(Number));
+    for (const s of listOf(data.songs)) {
+      if (s && typeof s === "object" && ids.has(Number(s.id))) offered.set(String(s.display || ""), s);
+    }
+  }
+  const transcribed = new Set();  // the songs asked for from this tab
+  let going = new Set();  // the requests that waited or ran in the last answer, which tell library.js once over
 
   const status = el("p", "reqs-status");
   status.setAttribute("role", "status");
@@ -105,8 +123,8 @@
     line.textContent = text;
   };
   // A next step posted as the page's script: the request it queues is followed on its song's line, and the tab asks
-  // again at once; a refusal says why, under the request.
-  const post = (form, go) => {
+  // again at once; a refusal says why, under the request. ``done``: told once the server queued it.
+  const post = (form, go, done) => {
     const item = form.closest("li.req");
     go.disabled = true;
     fetch(form.getAttribute("action"), {
@@ -122,6 +140,7 @@
         const view = body.view && typeof body.view === "object" ? body.view
           : body.job && typeof body.job === "object" ? body.job : null;
         if (view && lib) lib.track(view);
+        if (done) done();
         ask();
       }, () => {
         go.disabled = false;
@@ -157,6 +176,71 @@
         post(form, go);
       });
     }
+    return form;
+  };
+  // The song a request names when it is offered a transcription now: as its card offers it (library.js's word: not
+  // while a request of it waits or runs, nor once asked for), and not asked for from here; else null.
+  const offeredFor = (name) => {
+    const s = lib && typeof lib.offeredSong === "function" ? lib.offeredSong(name) : offered.get(name) || null;
+    return s && !transcribed.has(Number(s.id)) ? s : null;
+  };
+  // The requests that offer one, by id, each its song's card: a song's newest that ended Ready, while none of the song
+  // waits or runs.
+  const offersIn = (groups) => {
+    const found = new Map();
+    if (!TRANSCRIBE) return found;
+    const all = [];
+    for (const g of groups) for (const r of listOf(g.requests)) if (r && typeof r === "object") all.push(r);
+    const running = new Set(all.filter((r) => r.state === "queued" || r.state === "running")
+      .map((r) => String(r.display || "")));
+    const seen = new Set();
+    for (const r of all) {
+      const name = String(r.display || "");
+      const says = r.says && typeof r.says === "object" ? r.says : {};
+      if (seen.has(name) || running.has(name) || says.tone !== "ready" || says.text !== "Ready") continue;
+      seen.add(name);
+      const s = offeredFor(name);
+      if (s) found.set(Number(r.id), s);
+    }
+    return found;
+  };
+  // The requests over since the last answer, each told to library.js by its song's name, which reads the offer again
+  // when the song may be offered one now, or no more.
+  const overNow = (groups) => {
+    const now = new Set();
+    for (const g of groups) {
+      for (const r of listOf(g.requests)) {
+        if (!r || typeof r !== "object") continue;
+        if (r.state === "queued" || r.state === "running") now.add(Number(r.id));
+        else if (going.has(Number(r.id)) && lib && typeof lib.requestOver === "function") lib.requestOver(r.display);
+      }
+    }
+    going = now;
+  };
+  // Transcribe the lyrics, the card's form (library.js's ``transcribeOffer``): the song by its id and its identity key,
+  // and how long it takes here.
+  const transcribeForm = (s) => {
+    const form = el("form", "transcribe");
+    form.setAttribute("method", "post");
+    form.setAttribute("action", "/transcribe");
+    form.appendChild(hidden("csrf", String(server.csrf || "")));
+    form.appendChild(hidden("song", Number(s.id)));
+    if (s.identity) form.appendChild(hidden("identity", String(s.identity)));
+    const go = el("button", "btn small", "Transcribe the lyrics");
+    go.type = "submit";
+    go.setAttribute("aria-label", "Transcribe the lyrics of " + String(s.title) + " by " + String(s.artist) +
+      " from its audio");
+    go.title = "Whisper hears the words, and the auto sheet is made again with its chords over them.";
+    go.dataset.focus = "act:Transcribe the lyrics";
+    form.append(go, el("p", "hint", lib && typeof lib.transcribeHint === "function" ? lib.transcribeHint()
+      : "From the audio, " + String(TRANSCRIBE.time || "") + "."));
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      post(form, go, () => {
+        transcribed.add(Number(s.id));
+        if (lib && typeof lib.transcribing === "function") lib.transcribing(Number(s.id));
+      });
+    });
     return form;
   };
   // What a request ran: a lookup's stages, or its commands, each with how it went (a badge), why, and what it printed.
@@ -199,7 +283,7 @@
     });
     return box;
   };
-  const makeItem = (r) => {
+  const makeItem = (r, offer) => {
     const id = Number(r.id);
     const state = String(r.state || "");
     const item = el("li", "req " + (state === "running" ? "running" : state === "queued" ? "queued" : "over"));
@@ -221,6 +305,7 @@
     if (typeof r.reason === "string" && r.reason) item.appendChild(el("p", "req-reason", r.reason));
     const chips = listOf(r.steps).filter((c) => c && typeof c === "object" && c.name);
     if (chips.length) item.appendChild(stepsOf(chips, state !== "running" && state !== "queued"));
+    if (offer) item.appendChild(transcribeForm(offer));
     const actions = listOf(r.actions).map(actionOf).filter(Boolean);
     const when = r.when && typeof r.when === "object" ? r.when : null;
     if (actions.length || when) {
@@ -236,17 +321,17 @@
     item.appendChild(outputOf(id, r.output));
     return { node: item, ago };
   };
-  // A request's element: the one drawn before while it says the same (how long ago it started is written in place),
-  // else drawn again.
-  const itemFor = (r) => {
+  // A request's element: the one drawn before while it says the same (how long ago it started is written in place)
+  // and offers the same (``offer``: its song's card, when it offers a transcription), else drawn again.
+  const itemFor = (r, offer) => {
     const id = Number(r.id);
-    const key = JSON.stringify(Object.assign({}, r, { ago: null }));
+    const key = JSON.stringify(Object.assign({}, r, { ago: null, offer: offer ? Number(offer.id) : null }));
     const had = items.get(id);
     if (had && had.key === key) {
       if (had.ago && typeof r.ago === "string" && had.ago.textContent !== r.ago) had.ago.textContent = r.ago;
       return had.node;
     }
-    const made = makeItem(r);
+    const made = makeItem(r, offer);
     items.set(id, { key, node: made.node, ago: made.ago });
     return made.node;
   };
@@ -289,13 +374,15 @@
     const focusId = at ? Number(at.id.replace(/^req-/, "")) : null;
     const focusWhat = at && document.activeElement.dataset ? document.activeElement.dataset.focus || "" : "";
     const groups = listOf(given.groups).filter((g) => g && typeof g === "object" && g.name);
+    overNow(groups);
+    const offering = offersIn(groups);
     const seen = new Set();
     const shown = groups.map((g) => {
       const section = sectionOf(String(g.name));
       place(section.list, listOf(g.requests).filter((r) => r && typeof r === "object" && Number(r.id) > 0)
         .map((r) => {
           seen.add(Number(r.id));
-          return itemFor(r);
+          return itemFor(r, offering.get(Number(r.id)) || null);
         }));
       return section.node;
     });
@@ -370,6 +457,9 @@
     const said = e.detail || {};
     if (said.name === "requests") start(said.words);
     else later();  // another tab: no more asking
+  });
+  document.addEventListener("caracole:transcribe", () => {  // library.js read the offer again, and it changed
+    if (fed) draw(fed);
   });
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden && tabs.current() === "requests") ask();
