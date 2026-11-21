@@ -38,6 +38,18 @@ if mode == "fail":
 if mode == "hang":
     import time
     time.sleep(30)
+if mode == "fail_in_latin1":
+    # A message in another encoding than UTF-8, as a driver may print one.
+    sys.stderr.buffer.write("Vulkan: p\\u00e9riph\\u00e9rique introuvable\\n".encode("latin-1"))
+    sys.exit(1)
+if mode == "wgpu":
+    # As the GPU (wgpu) build says it, measured: a cold autotune cache, then NVIDIA's compiler after Done!.
+    out = Path(argv[argv.index("-o") + 1]) / "vocals.wav"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(b"RIFF")
+    sys.stderr.write("Loading cached model: htdemucs\\nReading song.m4a\\n  176400 samples, 4.0s, 44100 Hz, stereo\\n"
+                     "Loading model...\\nPre-compiling GPU shaders (first run only)...\\nSeparating...\\n"
+                     "  Wrote " + str(out) + "\\nDone!\\nNVVM compilation failed: 3\\n")
 if mode in ("write", "crash_after_done", "abort_after_done", "crash_before_done", "done_exit_1"):
     out = Path(argv[argv.index("-o") + 1]) / "vocals.wav"
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -150,3 +162,28 @@ def test_frame_db_reads_the_aac_m4a_caracole_keeps_youtube_audio_as(tmp_path):
     assert abs(len(db) - 60) <= 1  # 50 ms frames
     assert max(db[2:16]) < -60  # the silent second
     assert all(abs(v - -13.5) < 1.5 for v in db[25:55])  # the tone: RMS 0.3 / sqrt(2), -13.5 dB
+
+
+def test_a_demucs_that_says_something_in_another_encoding_still_fails_in_its_words(tmp_path):
+    separator, _ = _separator(tmp_path, "fail_in_latin1")
+    with pytest.raises(SeparatorFailed, match="Vulkan: p.riph.rique introuvable"):
+        separator.vocals(tmp_path / "song.m4a", tmp_path)
+
+
+def test_what_demucs_says_of_its_device_is_logged_at_info(tmp_path, caplog):
+    # So that the journal shows whether wgpu ran on the GPU; demucs-rs 0.3.4 names no adapter, so its own lines are
+    # what there is: its GPU shaders, NVIDIA's compiler.
+    separator, _ = _separator(tmp_path, "wgpu")
+    with caplog.at_level("INFO", logger="caracole.autochords.separate"):
+        separator.vocals(tmp_path / "song.m4a", tmp_path)
+    [said] = [r for r in caplog.records if r.levelname == "INFO"]
+    assert said.getMessage() == ("demucs-rs separated the vocals; of its device it said: Pre-compiling GPU shaders "
+                                 "(first run only)... | NVVM compilation failed: 3")
+
+
+def test_a_demucs_that_names_no_device_says_so_at_info(tmp_path, caplog):
+    separator, _ = _separator(tmp_path, "write")
+    with caplog.at_level("INFO", logger="caracole.autochords.separate"):
+        separator.vocals(tmp_path / "song.m4a", tmp_path)
+    assert [r.getMessage() for r in caplog.records if r.levelname == "INFO"] == [
+        "demucs-rs separated the vocals; it named no device"]

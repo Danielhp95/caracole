@@ -7,6 +7,7 @@ mix and of the stem is ``frame_db``'s, read through audio.py.
 
 import logging
 import os
+import re
 import signal
 import subprocess
 from pathlib import Path
@@ -19,6 +20,10 @@ log = logging.getLogger(__name__)
 # The cpu build runs about 4.8x the song's length, so a long song takes most of an hour; a run past this is hung
 # (a wgpu or driver stall), not slow.
 TIMEOUT_S = 4 * 3600.0
+# demucs-rs 0.3.4 names no adapter or backend (nor does cubecl's CUBECL_DEBUG_LOG make it): what it says that bears
+# on its device is its GPU shaders ("Pre-compiling GPU shaders", the wgpu build) and a driver's own words after it
+# ("NVVM compilation failed: 3", NVIDIA's compiler), logged at INFO so the journal shows where it ran.
+_DEVICE_WORDS = re.compile(r"\b(GPU|NVVM|NVIDIA|adapter|backend|Vulkan|lavapipe|llvmpipe|wgpu|device)\b", re.I)
 
 
 def _why(stderr: str, code: int) -> str:
@@ -30,6 +35,12 @@ def _why(stderr: str, code: int) -> str:
             return lines[i + 1][:300]
     lines = [ln for ln in lines if not ln.startswith("note:")]
     return lines[-1][:300] if lines else f"demucs-rs exited {code}"
+
+
+def _of_its_device(stderr: str) -> str:
+    """demucs-rs's own lines that bear on the device it ran on, for the log."""
+    said = [ln.strip() for ln in stderr.splitlines() if _DEVICE_WORDS.search(ln)]
+    return f"of its device it said: {' | '.join(said)}" if said else "it named no device"
 
 
 def _signal_name(number: int) -> str:
@@ -81,7 +92,8 @@ class DemucsSeparator:
         stems = workdir / "stems"
         cmd = [self.binary, "-m", "htdemucs", "-s", "vocals", "-o", str(stems), str(audio)]
         try:
-            done = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=self.timeout)
+            done = subprocess.run(cmd, env=env, capture_output=True, text=True, errors="replace",
+                                  timeout=self.timeout)
         except subprocess.TimeoutExpired as e:
             raise SeparatorFailed(f"demucs-rs took longer than {self.timeout:g} s and was stopped") from e
         except OSError as e:
@@ -95,6 +107,7 @@ class DemucsSeparator:
                         _signal_name(-done.returncode))
         if not out.is_file():
             raise SeparatorFailed(f"demucs-rs wrote no vocals.wav under {stems}")
+        log.info("demucs-rs separated the vocals; %s", _of_its_device(done.stderr))
         return out
 
 
