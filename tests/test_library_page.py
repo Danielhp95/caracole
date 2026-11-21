@@ -309,6 +309,53 @@ def test_the_served_page_lists_the_songs_offered_a_transcription(conn, cfg, tmp_
     assert "server" not in data_of(page(conn, cfg))  # the file on disk offers none of it
 
 
+PAGE_BUILD = r"""
+import sys
+from datetime import UTC, datetime
+from pathlib import Path
+
+import caracole.youtube_fetch as yf
+from caracole import db
+from caracole.config import load_config
+from caracole.library_page import WebControls, build_library_page
+from caracole.overrides import Overrides
+
+cfg = load_config(Path(sys.argv[1]))
+conn = db.connect(cfg.db_path)
+print("problem:", yf.transcribe_problem(cfg))  # the real check: nothing imported to find out
+yf.transcribe_problem = lambda cfg: None  # as where it can run: every song asked whether it is offered one
+html = build_library_page(conn, cfg, Overrides(), datetime(2026, 11, 21, tzinfo=UTC), controls=WebControls(csrf="t"))
+assert '"transcribe":{"ok":true' in html.replace(" ", ""), html[:500]
+heavy = ("torch", "torchaudio", "torchcodec", "numpy", "librosa", "soundfile", "whisper", "triton", "numba")
+print("loaded:", sorted({m.split(".")[0] for m in sys.modules} & set(heavy)))
+"""
+
+
+@pytest.mark.slow
+def test_building_the_served_page_loads_no_model_library(conn, cfg, tmp_path):
+    # Every page build asks which songs are offered a transcription and how long one takes (transcript.py,
+    # youtube_fetch.py): it reads the database and the files' names, and never imports a model's library, which
+    # would cost every build seconds and a gigabyte in the auto-chords packages.
+    import os
+    import subprocess
+    import sys
+
+    from conftest import subprocess_pythonpath
+    from test_autochords_transcript import youtube_song
+
+    youtube_song(conn, tmp_path, "Nick Cani", "Vikingos veganos")
+    conn.commit()
+    config = tmp_path / "caracole.toml"
+    config.write_text(f'state_dir = "{cfg.state_dir}"\ncache_dir = "{cfg.cache_dir}"\n'
+                      f'library_dir = "{cfg.library_dir}"\nmusic_dir = "{cfg.music_dir}"\n', encoding="utf-8")
+    src = Path(__file__).resolve().parents[1] / "src"
+    env = {"HOME": str(tmp_path), "PATH": os.environ.get("PATH", ""), "PYTHONPATH": subprocess_pythonpath(src)}
+    out = subprocess.run([sys.executable, "-c", PAGE_BUILD, str(config)], capture_output=True, text=True,
+                         env=env, check=False)
+    assert out.returncode == 0, out.stderr[-3000:]
+    assert out.stdout.splitlines()[-1] == "loaded: []", out.stdout
+
+
 def bar_of(html):
     found = re.search(r'<div class="searchbar"[^>]*>.*?<p class="bar-status"[^>]*></p>\s*</div>\s*'
                       r'(?:<section class="recent".*?</section>\s*)?</div>', html, re.S)

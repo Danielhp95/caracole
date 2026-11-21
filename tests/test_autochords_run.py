@@ -758,6 +758,46 @@ def test_a_sheet_over_a_transcript_is_made_again_once_a_site_has_lyrics(conn, cf
     assert (run(conn, cfg, rec).skipped, rec.calls) == (1, [])
 
 
+def test_a_sheet_over_a_transcript_is_made_again_once_a_site_has_timed_lyrics(conn, cfg, tmp_path):
+    # Both sheets are "synced": the site's timed words win all the same, each chord over its word.
+    from caracole.autochords.transcript import NOTE
+
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"), seconds=10.0)
+    transcribed(conn, s)
+    run(conn, cfg)
+    assert auto_raw(conn, s)["lyrics_source"] == "transcript"
+
+    timed = "[00:00.50]Strolling along the river road\n[00:05.20]Calling to the evening light\n"
+    update_song(conn, s.id, lyrics_status="found", lyrics_json=lyrics_json(synced=timed, duration=10.0))
+    rec = FakeRecognizer()
+    assert (run(conn, cfg, rec).generated, rec.calls) == (1, [Path(s.audio_path)])
+    text = auto_sheet(cfg, conn, s)
+    assert "Strolling along the river road" in text.splitlines() and "Walking down" not in text and NOTE not in text
+    raw = auto_raw(conn, s)
+    assert raw["lyrics"] == "synced" and not {"lyrics_source", "transcript", "transcript_made_at"} & raw.keys()
+    rec = FakeRecognizer()
+    assert (run(conn, cfg, rec).skipped, rec.calls) == (1, [])
+
+
+def test_a_sheet_over_a_transcript_goes_back_to_its_chart_once_the_transcript_is_gone(conn, cfg, tmp_path):
+    from caracole.autochords.transcript import NOTE, TRANSCRIPT
+    from caracole.db import kv_delete
+
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"))
+    transcribed(conn, s)
+    run(conn, cfg)
+    assert auto_raw(conn, s)["lyrics_source"] == "transcript"
+    kv_delete(conn, f"{TRANSCRIPT}{s.id}")
+    rec = FakeRecognizer()
+    assert (run(conn, cfg, rec).generated, rec.calls) == (1, [Path(s.audio_path)])
+    text = auto_sheet(cfg, conn, s)
+    assert NOTE not in text and "Walking down" not in text
+    raw = auto_raw(conn, s)
+    assert raw["lyrics"] == "none" and not {"lyrics_source", "transcript", "transcript_made_at"} & raw.keys()
+    rec = FakeRecognizer()
+    assert (run(conn, cfg, rec).skipped, rec.calls) == (1, [])
+
+
 def test_a_sheet_over_none_is_made_again_once_a_transcript_comes(conn, cfg, tmp_path):
     s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"))
     run(conn, cfg)
