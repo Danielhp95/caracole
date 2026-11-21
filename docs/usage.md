@@ -2362,7 +2362,8 @@ sung. Then, one stage a line:
   where they are about as loud as the whole song is where someone sings.
 - **Words**: Whisper hears the whole song, in the language it hears on the vocals' first 30 seconds of singing. A
   word it heard more than 0.3 seconds from any singing is dropped (Whisper invents words over the instrumental parts:
-  credits, "subscribe"), and the rest are broken into lines for a sheet. They are kept as the song's transcript,
+  credits, "subscribe"), and the rest are broken into lines for a sheet; with no singing found, Whisper isn't run at
+  all. They are kept as the song's transcript,
   apart from its lyrics, which stay missing: the to-do page, the Sync and Sites tabs and the lyrics files go on as for
   a song with none, and lyrics a site has later win (see
   [Lyrics from LRCLIB, Megalobiz and AZLyrics](#lyrics-from-lrclib-megalobiz-and-azlyrics)).
@@ -2374,15 +2375,17 @@ It takes about a minute on a GPU (`[autochords] transcribe_device`, `"auto"` by 
 CPU. Each model is first tried on a 2-second tone, so one that can't run here fails the job before it hears the
 song. Before each of the separator, Whisper and auto-chords, a lookup waiting for the lock goes first; a song taken
 out of the book meanwhile ends the job there, a refusal, and so does one that found lyrics before the separator or
-Whisper (after them, the sheet goes over the site's lyrics). `--progress` adds a JSON line per stage, for caracole
-serve.
+Whisper (after them, the sheet goes over the site's lyrics), or whose audio another caracole replaced after its
+vocals were separated (the new audio is offered a transcription of its own). `--progress` adds a JSON line per
+stage, for caracole serve.
 
 It exits 0 once the sheet is made, and 1:
 
 - before anything else, where it can't run: `caracole transcribes nothing here: built without Whisper` (or without
   auto-chords, with YouTube off, without yt-dlp, demucs-rs or a model file);
 - for a song it won't transcribe: `No transcript made: Nick Cani - Vikingos veganos isn't offered a transcription:
-  its lyrics are found.` (or `… isn't in the book`, `… left the book while its lyrics were transcribed …`);
+  its lyrics are found.` (or `… isn't in the book`, `… left the book while its lyrics were transcribed …`,
+  `…: its audio changed while its lyrics were transcribed`);
 - for `Words: failed: no singing heard.`, nothing kept: the song isn't offered again until its audio changes;
 - for `can't read the audio`, which records nothing;
 - for the setup's failures, which record nothing against the song, offered still: `the separator can't run here

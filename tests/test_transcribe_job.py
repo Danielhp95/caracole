@@ -22,7 +22,15 @@ from test_youtube_sheet import Heard, Recognizer, beats, wav
 from caracole.autochords import separate
 from caracole.autochords import transcribe as tx
 from caracole.autochords.separate import SeparatorFailed
-from caracole.autochords.transcript import HEARD_NOTHING, NOTE, TRANSCRIPT, Transcript, heard_nothing, why_not_offered
+from caracole.autochords.transcript import (
+    HEARD_NOTHING,
+    NOTE,
+    TRANSCRIPT,
+    Transcript,
+    heard_nothing,
+    transcript_of,
+    why_not_offered,
+)
 from caracole.autochords.words import Word
 from caracole.commands import _common
 from caracole.db import kv_get, kv_get_json, kv_set
@@ -222,6 +230,21 @@ def test_a_stem_a_frame_shorter_than_the_mix_is_read_as_far_as_both_go(conn, cfg
     result, heard = make(cfg)
     assert result.ok, result
     assert heard.ends()["vocals"] == ("done", "sung from 24.8 s, 1 stretch")
+
+
+def test_with_no_singing_found_whisper_never_runs_and_nothing_sung_is_noted(conn, cfg, monkeypatch):
+    # The guard would drop every word Whisper heard: it isn't run (up to half an hour on a CPU).
+    song = offered(conn, cfg)
+    monkeypatch.setattr(separate, "frame_db",
+                        lambda path, **kw: [-80.0] * 1200 if Path(path).name == "vocals.wav" else list(MIX))
+    transcriber, recognizer = Transcriber(), Recognizer()
+    result, heard = make(cfg, transcriber=transcriber, recognizer=recognizer)
+    assert not result.ok and result.failed == "no singing heard" and result.bug is None
+    ends = heard.ends()
+    assert ends["vocals"] == ("done", "no singing found")
+    assert ends["words"] == ("failed", "no singing heard")
+    assert transcriber.calls == [] and recognizer.calls == []
+    assert heard_nothing(conn, song) and kept(conn, song) is None
 
 # --- refused: nothing runs ----------------------------------------------------------------------------------------
 
@@ -466,6 +489,46 @@ def test_a_song_a_lookup_changed_while_it_had_the_lock_ends_the_job_as_a_refusal
     assert recognizer.calls == []
     assert (transcriber.calls == []) == (before == "words")
     assert not auto_sheet(cfg, conn, song).exists()
+
+
+
+def other_audio(conn, cfg, song):
+    """Another video's audio for the song, as a `caracole youtube --sheet --url` that took the lock after the lookups
+    would leave it."""
+    other = "oNOFfl3Hx3s"
+    audio = wav(cfg.cache_dir / "youtube" / f"{song.id}-{other}.wav", 60.0)
+    update_song(conn, song.id, audio_path=str(audio), audio_mtime=audio.stat().st_mtime)
+    _save(conn, song.id, Record(video=Video(other, song.title, "Nick Cani", 60.0), source="pasted", audio=str(audio)))
+
+
+@pytest.mark.parametrize("before", ["words", "chords"])
+def test_audio_replaced_while_the_job_let_others_have_the_lock_ends_it_as_a_refusal(conn, cfg, monkeypatch, before):
+    # The stem and the sung spans are the old audio's: no transcript, nor a sheet over one, is made of them for the
+    # new audio, which is offered a transcription of its own.
+    song = offered(conn, cfg)
+    heard = Heard()
+    monkeypatch.setattr(_common, "_handoffs", _common.handoffs())  # put back as it was after the test
+
+    def hand_over(cfg_, conn_=None) -> bool:
+        _common._handoffs += 1
+        if heard.events[-1] == ("stage", before, "running", ""):
+            other_audio(conn_, cfg_, song)
+        return True
+
+    monkeypatch.setattr(_common, "hand_over", hand_over)
+    transcriber, recognizer = Transcriber(), Recognizer()
+    result, _ = make(cfg, transcriber=transcriber, recognizer=recognizer, progress=heard)
+    said = "Nick Cani - Vikingos veganos: its audio changed while its lyrics were transcribed"
+    assert result.bug is None and result.failed is None and result.refused == said
+    ends = heard.ends()
+    assert ends["song"] == ("failed", said)
+    assert all(ends[name][0] == "skipped" for name in ("chords", "pdf", "pages"))
+    assert recognizer.calls == [] and not auto_sheet(cfg, conn, song).exists()
+    assert (transcriber.calls == []) == (before == "words")
+    now = get_song(conn, song.id)
+    assert transcript_of(conn, now) is None and not heard_nothing(conn, now)
+    assert kv_get(conn, f"autochords:failed:{song.id}") is None
+    assert why_not_offered(conn, cfg, now, Overrides()) is None
 
 
 LOOKUP = r"""

@@ -11,16 +11,17 @@ its own (staged.py; ``--progress`` writes a JSON line per event, which caracole 
   ``sung_spans``).
 - ``words``: Whisper large-v3 over the full mix, the language heard on the stem's first 30 s of singing; the words
   outside every sung span dropped (``guard``), the rest broken into lines and written as enhanced LRC, kept as the
-  song's transcript (``keep_transcript``), never as its lyrics. Nothing kept: ``note_heard_nothing``, so the song is
-  offered again only once its audio changes.
+  song's transcript (``keep_transcript``), never as its lyrics. Nothing kept, or no sung span to keep a word in
+  (then Whisper isn't run): ``note_heard_nothing``, so the song is offered again only once its audio changes.
 - ``chords``: auto-chords for this song alone (``autochords_pending``'s ``only``), which lays the chords over the
   transcript now.
 - ``pdf``: the PDF and the viewer, for this song alone (``render_all``'s ``song_ids``).
 - ``pages``: _todo.md and index.html.
 
 Before each of vocals, words and chords, the long stages, a waiting lookup goes first (``_common.hand_over``); then
-the song is read again, and checked still offered before vocals and words. A song that left the book or is offered
-no more ends the job there, a refusal its song stage says, before the next model runs.
+the song is read again, checked still offered before vocals and words, and its audio still the one vocals separated
+before words and chords. A song that left the book, is offered no more or has other audio ends the job there, a
+refusal its song stage says, before the next model runs.
 
 The models default to demucs-rs and Whisper from ``cfg``, each built at its first stage and run first on run.py's
 test tone, as auto-chords checks its own: a model that fails there would fail on every song.
@@ -96,6 +97,7 @@ class _Transcription(StagedRun):
         self.request = request
         self.separator, self.transcriber = separator, transcriber
         self.work: tempfile.TemporaryDirectory[str] | None = None  # the stem and the test tones, for the job
+        self.audio: tuple[str | None, float | None] = (None, None)  # the audio separated: its path and mtime
         self.stem: Path | None = None
         self.spans: list[Any] = []
 
@@ -122,6 +124,13 @@ class _Transcription(StagedRun):
         why = why_not_offered(self.conn, self.cfg, self.song, self.overrides)
         if why is not None:
             raise self._not_offered(why)
+
+    def _same_audio(self) -> None:
+        """The song's audio still the one its vocals were separated from (another caracole may replace it while this
+        one lets the lookups have the lock), else the job ends there, a refusal: the stem and the sung spans are no
+        use to other audio, which is offered a transcription of its own."""
+        if (self.song.audio_path, self.song.audio_mtime) != self.audio:
+            raise _Stop(f"{self.song.display}: its audio changed while its lyrics were transcribed")
 
     def _folder(self, name: str) -> Path:
         """A folder of the job's own under the cache, gone with the job."""
@@ -203,6 +212,7 @@ class _Transcription(StagedRun):
             separator = self._the_separator()
         except separate.SeparatorFailed as e:
             return self._fail(f"the separator can't run here ({e})")
+        self.audio = (self.song.audio_path, self.song.audio_mtime)
         mix = Path(self.song.audio_path or "")
         try:
             mix_db = separate.frame_db(mix)
@@ -226,12 +236,16 @@ class _Transcription(StagedRun):
 
         if self.result.states.get("vocals") != "done" or self.stem is None:
             return "skipped", "no vocals"
+        if not self.spans:  # the guard would drop every word Whisper heard: it isn't run
+            note_heard_nothing(self.conn, self.song, self.run_id)
+            return self._fail("no singing heard")
         self._after_a_lookup()
+        self._same_audio()
         self._still_offered()
         transcriber = self._the_transcriber()
         mix = Path(self.song.audio_path or "")
         try:
-            heard = transcriber.hear(mix, self.stem, self.spans[0].start if self.spans else 0.0)
+            heard = transcriber.hear(mix, self.stem, self.spans[0].start)
         except SetupFailed:  # the GPU's, said by ``stage``
             raise
         except Exception as e:  # noqa: BLE001 - anything else Whisper raises is the audio's, as auto-chords tells it
@@ -252,6 +266,7 @@ class _Transcription(StagedRun):
         if self.result.states.get("words") != "done":
             return "skipped", "no transcript"
         self._after_a_lookup()
+        self._same_audio()
         return self._autochords_sheet()
 
     # --- the whole run --------------------------------------------------------------------------------

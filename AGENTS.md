@@ -304,8 +304,9 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   then its auto sheet made again over them (`make_transcript`).
   - Its stages song, vocals, words, chords, pdf, pages (`STAGES`), reported as a lookup's (staged.py's `StagedRun`).
   - Only a song `transcript.why_not_offered` offers one, by its identity key, never added to wanted.txt; read again
-    after each hand-over (`hand_over` before vocals, words and chords), and checked still offered before vocals and
-    words.
+    after each hand-over (`hand_over` before vocals, words and chords), checked still offered before vocals and
+    words, and its audio still the one vocals separated before words and chords (`_same_audio`), else a refusal.
+  - No sung span: Whisper isn't run, and the song is noted heard to have nothing sung.
   - The pieces are autochords/'s (below); the stem in a temporary folder under `cache_dir`, gone with the job.
 - youtube_search.py is `caracole youtube --search`: a search's first video and its thumbnail, suggested on the
   library page (`gate`, `sheet_on_screen`, `checked_jpeg`).
