@@ -29,6 +29,10 @@ below; during a job the GPU peaked at 100 % and averaged 21-23 %, all of it the 
   stems, whose sum leaves a residual 33 dB under the mix), scaled by 0.74 so that nothing clips. The extra
   instrumental is 10:00-13:00 of a file in `~/Music` (caracole's default `music_dir`), copied. Nothing was
   downloaded.
+- **The files**: every song here was a 48 kHz 16-bit stereo PCM WAV (`media*/song.wav`, the spike's decodes; at
+  48 kHz, YouTube's Opus stream rather than the 44.1 kHz AAC `.m4a` caracole downloads, youtube.py's `m4a`). Not
+  one run of this section read an `.m4a`; the AAC path, which failed at the time, is measured in "The final
+  review's fixes: the end-to-end on the .m4a" below.
 - Each song went through the branch's own pieces, in the cuda shell: `separate.frame_db` on the mix,
   `DemucsSeparator.vocals`, `frame_db` on the stem, `words.sung_spans` (for the language's first 30 s of singing),
   `WhisperTranscriber.hear` on CUDA. Every word Whisper heard was kept, before the guard, with both loudness tracks;
@@ -114,8 +118,11 @@ voice is), kept.
 
 A scratch library (`out/e2e/lib`, its own caracole.toml with `data_dir` and `music_dir` there): the example as a
 YouTube song every site missed, seeded as tests/test_transcribe_job.py's `offered` does (the song, its audio in the
-cache's `youtube/`, lyrics missing with LRCLIB asked, the youtube record, Megalobiz's and AZLyrics' stamps). Then,
-from the worktree, `$S` the spike folder:
+cache's `youtube/`, lyrics missing with LRCLIB asked, the youtube record, Megalobiz's and AZLyrics' stamps). **Its
+audio was `media/song.wav`, the 48 kHz PCM WAV, copied as `1-nlSSyPXQ2i4.wav`**, in these runs and in the
+follow-up's: not the AAC `.m4a` caracole keeps every YouTube song as, on which the job of that time failed
+("can't read the audio", filed unreadable: libsndfile can't decode AAC). Then, from the worktree, `$S` the spike
+folder:
 
     CARACOLE_TORCH_CUDA=1 nix develop .#autochords-cuda -c python -I $S/spike/timed.py $S/out/e2e/cold -- \
       caracole --config $S/out/e2e/lib/caracole.toml transcribe \
@@ -196,7 +203,8 @@ exit and a missing stem still fail. Test: tests/test_autochords_separate.py
 
 ## Follow-up: the job's time
 
-Three changes after the measurements above, then the example's job timed again in the same scratch libraries:
+Three changes after the measurements above, then the example's job timed again in the same scratch libraries, on
+the same WAV (`1-nlSSyPXQ2i4.wav`, `media/song.wav`'s copy):
 
 - the job runs demucs-rs on the song alone, with no test tone first (its failure on the song is the setup's, as on a
   tone, and records nothing); Whisper's and auto-chords' tone checks stay;
@@ -229,3 +237,62 @@ Three changes after the measurements above, then the example's job timed again i
   C compiler on its PATH (nix/module.nix sets no `path`; the package's wrapper adds chordpro, yt-dlp and demucs-rs;
   read, not run in the unit), so there Whisper should fall back as before, quickly, saying so in the journal; the
   setting saves the time wherever gcc is found, as in the shells.
+
+## The final review's fixes: the end-to-end on the .m4a
+
+Measured 2026-11-21 at 8d70fd50 (the loudness read through audio.py `load_mono`, a reader's failure filing nothing,
+a short stem the separator's, Whisper's Triton warnings kept back, demucs-rs's device lines logged), same machine,
+same cuda shell, the game resident on the GPU (1.3 GB) and idle: nvidia-smi read 0 % before the cold run and the
+second warm one, 10 % before the first warm one.
+
+- **The file**: the spike folder holds no `.m4a` of the example (only `media/song.wav`), so the WAV was encoded as
+  yt-dlp's `bestaudio[ext=m4a]` (YouTube's format 140) is: AAC-LC, 128 kb/s, 44.1 kHz, stereo, in an M4A, by the
+  ffmpeg in caracole's closure (`ffmpeg-headless` 9.0.1, the one openai-whisper's patched `load_audio` names; FFmpeg's
+  own `aac` encoder): `ffmpeg -i media/song.wav -c:a aac -b:a 128k -ar 44100 -ac 2 media-m4a/song.m4a` (2.45 MB,
+  149.42 s, 129 kb/s). A second lossy generation (YouTube's Opus, then AAC), so somewhat further from the WAV than a
+  real format-140 download would be.
+- **The library**: `out/e2e/lib-m4a`, seeded by `spike/seed_e2e.py` (which now keeps the audio's suffix), its
+  audio `1-nlSSyPXQ2i4.m4a`. The command, as above with `-v` (as caracole serve runs its jobs), through
+  `spike/timed.py`: `caracole -v --config $S/out/e2e/lib-m4a/caracole.toml transcribe --song "…" --progress`. Cold is
+  the fresh library; warm 1 and 2 the same after `spike/refresh_e2e.py` took the audio again.
+
+| Stage | cold | warm 1 | warm 2 |
+|---|---|---|---|
+| song | 0.0 s | 0.0 s | 0.0 s |
+| vocals | 90.2 s (burn's autotune cold) | 40.5 s | 46.7 s |
+| words | 31.1 s | 30.4 s | 31.7 s |
+| chords | 3.5 s | 3.5 s | 3.8 s |
+| pdf | 1.0 s (made) | 0.2 s (up to date) | 0.3 s (up to date) |
+| pages | 0.1 s | 0.1 s | 0.1 s |
+| **Done in** | **125.9 s** | **74.8 s** | **82.6 s** |
+| GPU during (max, mean) | 100 %, 28.9 % | 100 %, 39.3 % | 100 %, 36.8 % |
+
+- **The result**: each run exit 0, `Vocals: sung from 9.8 s, 40 stretches.`, `Words: 242 words in 41 lines (en), 0
+  dropped.`, `Chords: chords over the transcribed lyrics.`; `out/e2e/m4a-*-check.json` (`spike/check_e2e.py`): the
+  transcript kept (kv, device `cuda`, language `en`), 242 words, 0 dropped, one empty LRC line (the break), no word
+  in 89.6-100.8 s but the sung one at 100.54 s; the song's lyrics still missing, no `lyrics_json`; the version's raw
+  `lyrics_source` "transcript", `lyrics` "synced", `transcript` the kept LRC.
+- **The NOTE**: `sheet (auto).txt` line 4, after the video's credit; the PDF and `sheet (auto).html` made.
+- **`sung`**: 42 entries, the first at 9.16 s, the last at 139.52 s.
+- **WER against `gpu-mix.json`: 5.37 %** (the WAV's runs: 0.0 %), the same in all three runs: 13 word edits in 11
+  places, 10 of them between 10.3 and 46.4 s and one at 103.8 s, Whisper hearing the AAC a little differently. None
+  is the guard's (0 dropped): within the spec's 10 %.
+- **The guard's numbers on each decode** (`spike/guard_m4a.py`, `out/e2e/guard-m4a.json`: the branch's `frame_db`
+  on each file, demucs-rs on each, `sung_spans`, the guard over `gpu-mix.json`'s 242 words):
+
+| | the WAV | the .m4a |
+|---|---|---|
+| mix frames / stem frames | 2989 / 2989 | 2989 / 2990 (the stem a frame longer) |
+| sung spans, sung time | 39, 116.2 s | 40, 115.9 s |
+| first sung | 9.85 s | 9.85 s |
+| spans over the break (89.6-100.8 s) | none | none |
+| `gpu-mix.json`'s words kept | 242 of 242 | 242 of 242 |
+| the mix's loudness read in | 0.4 s (libsndfile) | 1.6 s (torchaudio, FFmpeg) |
+
+- **The log**: demucs-rs's INFO line said `of its device it said: Pre-compiling GPU shaders (first run only)...`
+  on the cold run and `it named no device` on the warm ones (it prints no adapter, and its shaders' line only with
+  a cold cache); warm 2's demucs-rs died by SIGSEGV after `Done!` (taken, logged). No Triton warning and no
+  fallback line in any run (the shell has gcc; the cold run's stderr has gcc's 7-line `_POSIX_C_SOURCE` note from
+  building Triton's launcher once).
+- **Against the WAV's runs**: cold 125.9 s against 149.7 s, warm 74.8-82.6 s against 82.6-86.7 s; the offer's "a
+  couple of minutes" holds.
