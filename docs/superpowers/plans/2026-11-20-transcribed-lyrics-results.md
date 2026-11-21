@@ -172,7 +172,8 @@ Inside the stages (instrumented, cold / warm):
   it isn't on the linker's path; `TRITON_LIBCUDA_PATH` doesn't help), and each window compiles and fails again.
   With `LIBRARY_PATH=/run/opengl-driver/lib` the kernels launch and Whisper took 25.1 s, then 22.0 s,
   against 28.9 s and 27.8 s with the fallback (`out/measure/triton-cost.txt`): **the fallback costs about 4-6 s a
-  song**. The words are the same either way (242).
+  song**. The words are the same either way (242). (The follow-up below finds the cost is the failed builds, not the
+  slower kernels.)
 
 ## The separator's exit, measured
 
@@ -192,3 +193,39 @@ exit and a missing stem still fail. Test: tests/test_autochords_separate.py
   can't be read from this account (above); 野人 is the one song with a reference.
 - The job inside caracole-web's unit, on the GPU and with the GPU hidden, and the served page lighting the sheet's
   lines on the computer and, after a sync, on the phone: the owner's, after the switch (Task 14, Step 4).
+
+## Follow-up: the job's time
+
+Three changes after the measurements above, then the example's job timed again in the same scratch libraries:
+
+- the job runs demucs-rs on the song alone, with no test tone first (its failure on the song is the setup's, as on a
+  tone, and records nothing); Whisper's and auto-chords' tone checks stay;
+- before importing Whisper, caracole sets `LIBRARY_PATH` to `/run/opengl-driver/lib` when the driver's
+  `libcuda.so.1` is there and the variable is unset. triton-bin 3.7.1 reads no `TRITON_LIBCUDA_PATH` (its knob is
+  defined, nothing reads it; nixpkgs' `libcuda_dirs` returns `/run/opengl-driver/lib/libcuda.so` as a string, which
+  `library_dirs` spreads into one-character folders), so the launcher's gcc found no libcuda;
+- the offer on a GPU says "a couple of minutes" (below), the CPU's "up to half an hour" unchanged.
+
+| Stage | warm, run 1 | warm, run 2 | cold (a fresh library) |
+|---|---|---|---|
+| song | 0.0 s | 0.0 s | 0.0 s |
+| vocals | 45.2 s | 50.2 s | 110.2 s (burn's autotune cold, on the song now) |
+| words | 32.7 s | 31.6 s | 33.1 s |
+| chords | 4.4 s | 4.6 s | 5.0 s |
+| pdf | 0.2 s (up to date) | 0.2 s (up to date) | 1.2 s |
+| pages | 0.1 s | 0.1 s | 0.1 s |
+| **Done in** | **82.6 s** | **86.7 s** | **149.7 s** |
+| GPU before / during | 0 % / max 100 %, mean 35.0 % | 0 % / 100 %, 31.8 % | 0 % / 100 %, 24.1 % |
+
+(The game stayed resident, 1.3 GB, idle.) Against the runs above: warm 125.4 s -> 82.6-86.7 s, cold 176.7 s ->
+149.7 s. Every run ended `chords over the transcribed lyrics`, 242 words in 40 lines, 0 dropped, WER 0.0 % against
+`gpu-mix.json`, the NOTE on line 4, `sung` with 41 entries, and no Triton warning.
+
+- **The offer**: warm T = 82.6-86.7 s, over 75 s, so "about a minute" became **"a couple of minutes"**.
+- **Triton**, Whisper alone on the example (`triton_cost.py`, two hears a process): with `LIBRARY_PATH` set by
+  caracole, 21.8 s then 19.4 s and no fallback; as before, 28.9 s then 27.8 s, 12 fallback warnings each; and with
+  no C compiler on PATH at all, 21.7 s then 19.8 s, 12 fallback warnings each (`out/measure/triton-no-compiler.txt`).
+  So the 4-6 s were Triton's failed gcc runs (two a 30 s window), not the slower kernels. caracole-web's unit has no
+  C compiler on its PATH (nix/module.nix sets no `path`; the package's wrapper adds chordpro, yt-dlp and demucs-rs;
+  read, not run in the unit), so there Whisper should fall back as before, quickly, saying so in the journal; the
+  setting saves the time wherever gcc is found, as in the shells.
