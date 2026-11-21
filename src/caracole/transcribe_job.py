@@ -44,7 +44,6 @@ import subprocess
 import tempfile
 import time
 from collections.abc import Callable
-from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -92,15 +91,10 @@ class _Transcription(StagedRun):
     def __init__(self, cfg: Config, request: TranscribeRequest, progress: Progress, *, separator: Any,
                  transcriber: Any, recognizer: Any, beats_fn: Any, runner: Callable, now: datetime | None,
                  clock: Callable[[], float]):
-        from caracole.commands._common import run_id_for, utcnow
-
-        super().__init__(cfg, progress, TranscribeResult(display=request.display), clock=clock)
+        super().__init__(cfg, progress, TranscribeResult(display=request.display), runner=runner,
+                         recognizer=recognizer, beats_fn=beats_fn, now=now, clock=clock)
         self.request = request
         self.separator, self.transcriber = separator, transcriber
-        self.recognizer, self.beats_fn, self.runner = recognizer, beats_fn, runner
-        self.now = (now or utcnow()).replace(microsecond=0)
-        self.stamp = run_id_for(self.now)
-        self.overrides: Any = None
         self.work: tempfile.TemporaryDirectory[str] | None = None  # the stem and the test tones, for the job
         self.stem: Path | None = None
         self.spans: list[Any] = []
@@ -121,16 +115,6 @@ class _Transcription(StagedRun):
 
     def _not_offered(self, why: str) -> _Stop:
         return _Stop(f"{self.song.display} isn't offered a transcription: {why}")
-
-    def _after_a_lookup(self) -> None:
-        """A waiting lookup goes first, as the stage takes minutes; then overrides.toml and the song read again: a
-        song that left the book ends the job there (``_song_again``)."""
-        from caracole.commands._common import hand_over, handoffs, overrides_since
-
-        handed = handoffs()
-        hand_over(self.cfg, self.conn)
-        self.overrides = overrides_since(self.cfg, self.overrides, handed)
-        self._song_again()
 
     def _still_offered(self) -> None:
         from caracole.autochords.transcript import why_not_offered
@@ -254,91 +238,30 @@ class _Transcription(StagedRun):
             return self._unreadable(e)
         kept, dropped = guard(heard.words, self.spans)
         if not kept:
-            note_heard_nothing(self.conn, self.song, self.stamp)
+            note_heard_nothing(self.conn, self.song, self.run_id)
             return self._fail("no singing heard")
         lines = lines_of(kept)
         keep_transcript(self.conn, self.song, Transcript(
             lrc=to_lrc(lines), audio=self.song.audio_path or "", audio_mtime=self.song.audio_mtime, model=MODEL,
             language=heard.language, device=str(getattr(transcriber, "device", "unknown")),
-            words_dropped=len(dropped), made_at=self.stamp))
+            words_dropped=len(dropped), made_at=self.run_id))
         return "done", (f"{plural(len(kept), 'word')} in {plural(len(lines), 'line')} ({heard.language}), "
                         f"{len(dropped)} dropped")
 
     def chords(self) -> tuple[str, str] | str:
-        from caracole.autochords.run import autochords_pending
-        from caracole.songs import AUTO_SHEET
-        from caracole.versions import get_version
-        from caracole.youtube_sheet import holds
-
         if self.result.states.get("words") != "done":
             return "skipped", "no transcript"
         self._after_a_lookup()
-        stats = autochords_pending(self.conn, self.cfg, recognizer=self.recognizer, beats_fn=self.beats_fn,
-                                   now=self.now, overrides=self.overrides, only={self.song.id})
-        self._song_again()
-        if stats.errors:
-            return self._fail(f"auto-chords can't run here ({stats.errors[0]})")
-        if stats.failures:
-            return self._fail("auto-chords can't read the audio")
-        kept = self.conn.execute(
-            "SELECT version_id FROM files WHERE song_id = ? AND name = ?", (self.song.id, AUTO_SHEET)).fetchone()
-        if kept is None or self.song.autochords_mtime != self.song.audio_mtime:
-            return self._fail("auto-chords made no sheet (see the log)")
-        held = holds(get_version(self.conn, kept[0]).raw)
-        return "done", held if stats.generated else f"up to date: {held}"
-
-    def pdf(self) -> tuple[str, str] | str:
-        from caracole.render import render_all
-
-        if self.result.states.get("chords") != "done":
-            return "skipped", "no sheet"
-        stats = render_all(self.conn, self.cfg, self.overrides, runner=self.runner, now=self.now,
-                           song_ids={self.song.id})
-        if stats.font_error:
-            return "failed", stats.font_error
-        if stats.failed:
-            return "failed", "chordpro couldn't make the PDF (see the log)"
-        return "made" if stats.rendered else "up to date"
-
-    def pages(self) -> str:
-        from caracole.todo import write_pages
-
-        write_pages(self.conn, self.cfg, self.overrides, self.now)
-        return "_todo.md and index.html rewritten"
+        return self._autochords_sheet()
 
     # --- the whole run --------------------------------------------------------------------------------
 
+    def _cleanup(self) -> None:
+        if self.work is not None:
+            self.work.cleanup()
+
     def run(self) -> TranscribeResult:
-        from caracole import db
-        from caracole.commands._common import exclusive
-        from caracole.overrides import OverridesError, load_overrides
-        from caracole.songs import ensure_current_keys
-
-        self._report("song", "running")
-
-        def waiting(holder: str) -> None:
-            self.progress.stage("song", "running", f"waiting for the book ({holder})")
-
-        try:
-            with exclusive(self.cfg, f"transcribe {self.request.display}", interactive=True, on_wait=waiting):
-                try:  # once the lock is held: what another caracole wrote while this one waited is read
-                    self.overrides = load_overrides(self.cfg.overrides_file)
-                except OverridesError as e:
-                    return self._refuse(f"Can't read overrides.toml: {e}")
-                with closing(db.connect(self.cfg.db_path)) as conn:
-                    self.conn = conn
-                    ensure_current_keys(conn)
-                    try:
-                        self._report("song", "done", self.find_song())
-                        for name, work in (("vocals", self.vocals), ("words", self.words), ("chords", self.chords),
-                                           ("pdf", self.pdf), ("pages", self.pages)):
-                            self.stage(name, work)
-                    except _Stop as e:  # not offered, or the song left the book as a lookup had the lock
-                        return self._refuse(str(e))
-        finally:
-            if self.work is not None:
-                self.work.cleanup()
-        self.result.seconds = self.clock() - self.started
+        self._run(f"transcribe {self.request.display}")
         return self.result
 
 

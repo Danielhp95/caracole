@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 
 import typer
 
-from caracole.commands._common import fail, load_cfg
+from caracole.commands._common import fail, load_cfg, staged_end
 
 if TYPE_CHECKING:
     from caracole.config import Config
@@ -58,13 +58,5 @@ def _transcribe(cfg: Config, display: str, *, progress: bool) -> None:
     artist, _, title = display.partition(" - ")
     reporter = _Lines(cfg.library_dir, show=False, json_lines=progress)
     result = make_transcript(cfg, TranscribeRequest(artist.strip(), title.strip()), reporter)
-    reporter.flush()
-    if result.refused:
-        typer.echo(f"No transcript made: {result.refused}.")
-    else:
-        typer.echo(f"Done in {result.seconds:.1f} s.")
-    if progress:
-        typer.echo(reporter.event({"done": {"seconds": round(result.seconds, 3), "requests": result.requests,
-                                            "ok": result.ok, "refused": result.refused}}))
-    if not result.ok:
-        raise typer.Exit(1)
+    staged_end(reporter, result, progress=progress, refused="No transcript made",
+               done=f"Done in {result.seconds:.1f} s.")

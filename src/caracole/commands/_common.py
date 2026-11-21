@@ -67,8 +67,10 @@ from caracole.overrides import Overrides, OverridesError, load_overrides, overri
 if TYPE_CHECKING:  # the HTTP client waits for a command that makes one (``make_client``)
     import httpx
 
+    from caracole.commands.get import _Lines
     from caracole.http import Event, PoliteClient
     from caracole.songs import Song
+    from caracole.staged import StagedResult
     from caracole.youtube import YtDlp
 
 LOCK_NAME = "caracole.lock"  # in the state directory
@@ -97,6 +99,19 @@ def fail(message: str, code: int = 1) -> NoReturn:
 def warn(message: str) -> None:
     """A warning on stderr, the way the log writes one, for a command that carries on."""
     logs.say(logging.WARNING, message)
+
+
+def staged_end(reporter: _Lines, result: StagedResult, *, progress: bool, refused: str, done: str) -> None:
+    """A staged job's last lines (staged.py: ``caracole youtube --sheet``, ``caracole transcribe``), once its stages
+    were said through ``reporter``: ``refused`` and the job's refusal, else ``done``; with ``progress``, the ``done``
+    event caracole serve reads; then exit 1 unless the job was ``ok``."""
+    reporter.flush()
+    typer.echo(f"{refused}: {result.refused}." if result.refused else done)
+    if progress:
+        typer.echo(reporter.event({"done": {"seconds": round(result.seconds, 3), "requests": result.requests,
+                                            "ok": result.ok, "refused": result.refused}}))
+    if not result.ok:
+        raise typer.Exit(1)
 
 
 _unwarned: str | None = None  # what a command on the home defaults beside the service says first (load_cfg)

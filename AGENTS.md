@@ -573,7 +573,7 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 | removal.py | `caracole remove` and the web page's Remove; the tombstones it leaves are songs.py's |
 | sites.py | the library page's Sites tab's data (below) |
 | progress.py | a command's output: a live line on a terminal, plain lines elsewhere |
-| staged.py | a job of stages over one song, each reported as a lookup's stages are (`StagedRun`: `stage`, `_fail`, `_song_again`, `_refuse`; `StagedResult`): youtube_sheet.py's and transcribe_job.py's |
+| staged.py | a job of stages over one song, each reported as a lookup's stages are, run in order under the lock as asked for now (`StagedRun`: `_run`, `stage`, `_fail`, `_after_a_lookup`, `_song_again`, `_refuse`; the stages both jobs end with, `_autochords_sheet`, `pdf`, `pages`; `StagedResult`; the command's last lines, `_common.staged_end`): youtube_sheet.py's and transcribe_job.py's |
 | progressions.py | each song's progressions (below) |
 
 #### index_transfer.py
