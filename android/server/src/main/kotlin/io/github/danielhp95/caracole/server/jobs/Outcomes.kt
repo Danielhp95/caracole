@@ -67,6 +67,20 @@ object Outcomes {
     )
     private const val YOUTUBE_SOURCE = "YouTube"
 
+    /** A transcription's steps (transcribe_job.STAGES). */
+    val TRANSCRIBE_STEPS: List<Pair<String, List<String>>> = listOf(
+        "Song" to listOf("song"), "Vocals" to listOf("vocals"), "Words" to listOf("words"),
+        "Chords" to listOf("chords"), "PDF" to listOf("pdf"),
+    )
+
+    /** A staged job's steps and the stage of its words a Ready one says may wait (outcome._staged); null for any
+     * other job. */
+    private fun staged(job: Shape): Pair<List<Pair<String, List<String>>>, String>? = when {
+        job.fromYoutube -> YOUTUBE_STEPS to "lyrics"
+        job.transcribes -> TRANSCRIBE_STEPS to "words"
+        else -> null
+    }
+
     /** A step's site in full, by its tag (outcome.SITE_NAMES: get.py's NAMES by icons.tag, YouTube's, and where an
      * auto sheet or a file you filed came from); a tag it lacks is named as it is. */
     val SITE_NAMES: Map<String, String> = linkedMapOf(
@@ -140,7 +154,7 @@ object Outcomes {
     fun listsSteps(job: Job): Boolean {
         if (job.active || job.startedAt == null) return false
         val shape = Shape(job)
-        return shape.looksUp || shape.fromYoutube
+        return shape.looksUp || staged(shape) != null
     }
 
     internal fun steps(job: Shape, facts: SongFacts?): List<Chip> {
@@ -150,7 +164,7 @@ object Outcomes {
                      if (stage.state == Job.INTERRUPTED) Job.FAILED else stage.state)
             }
         }
-        if (job.stages.isNotEmpty() && job.fromYoutube) return youtubeSteps(job)
+        if (job.stages.isNotEmpty()) staged(job)?.let { return stagedSteps(job, it.first) }
         if (job.stages.isNotEmpty()) return lookupSteps(job, facts)
         return job.steps.filter { it.state != Job.SKIPPED }.map { step ->
             val name = COMMAND_STEPS[step.args.firstOrNull() ?: ""] ?: step.label
@@ -178,10 +192,10 @@ object Outcomes {
         return chips
     }
 
-    private fun youtubeSteps(job: Shape): List<Chip> {
+    private fun stagedSteps(job: Shape, table: List<Pair<String, List<String>>>): List<Chip> {
         val byName = job.stages.associateBy { it.name }
         val chips = ArrayList<Chip>()
-        for ((name, names) in YOUTUBE_STEPS) {
+        for ((name, names) in table) {
             val read = names.mapNotNull { byName[it] }.map { stage ->
                 stage to if ((stage.name == "audio" && stage.state == Job.SKIPPED && stage.detail.isNotEmpty()) ||
                     stage.state == Job.INTERRUPTED) Job.FAILED else stage.state
@@ -229,7 +243,7 @@ object Outcomes {
 
     internal fun progress(job: Shape, line: Line, facts: SongFacts?, now: Instant = Instant.now()):
         Map<String, JsonElement> {
-        if (!(job.looksUp || job.fromYoutube) || job.state == Job.QUEUED || job.state == Job.CANCELLED ||
+        if (!(job.looksUp || staged(job) != null) || job.state == Job.QUEUED || job.state == Job.CANCELLED ||
             (line.tone == "ready" && line.text == Status.READY) || !hasRun(job.job, now)) return emptyMap()
         val chips = steps(job, facts)
         if (chips.isEmpty()) return emptyMap()
@@ -308,7 +322,7 @@ object Outcomes {
         if (tone == "ready") {
             val href = line.link?.let { href(it.second) }
             if (text == Status.READY) {
-                val said = if (job.fromYoutube) youtubeHolds(job.stages) else waits(job.stages, afterSheet = true)
+                val said = staged(job)?.let { stagedHolds(job.stages, it.second) } ?: waits(job.stages, afterSheet = true)
                 return Outcome("ready", "Ready", said, href?.let { Action("Open", href = it) })
             }
             return Outcome("ready", text, "", if (line.link != null && href != null) Action(line.link.first, href = href) else null)
@@ -323,7 +337,7 @@ object Outcomes {
             return Outcome(tone, word, if (rest.isNotEmpty()) sentence(rest) else "", if (tone == "waiting") again else null)
         }
         if (tone == "missing") return notFound(job, facts, songId)
-        if (tone == "waiting" && job.fromYoutube) return Outcome("waiting", text, youtubeStopped(job.stages), again)
+        staged(job)?.let { if (tone == "waiting") return Outcome("waiting", text, stagedStopped(job.stages, it.first), again) }
         if (tone == "waiting") {
             return Outcome("waiting", text, waits(job.stages).ifEmpty { if (job.stages.isNotEmpty()) "" else NOT_ASKED }, again)
         }
@@ -393,9 +407,9 @@ object Outcomes {
         return names.firstNotNullOfOrNull { name -> byName[name]?.let(::stageReason)?.takeIf { it.isNotEmpty() } } ?: ""
     }
 
-    private fun youtubeHolds(stages: List<Stage>): String {
+    private fun stagedHolds(stages: List<Stage>, words: String): String {
         val byName = stages.associateBy { it.name }
-        val lyrics = byName["lyrics"]
+        val lyrics = byName[words]
         val chords = byName["chords"]
         if (lyrics != null && (lyrics.state == Job.SKIPPED || lyrics.state == Job.FAILED) && lyrics.detail.isNotEmpty()) {
             return capital(lyrics.detail)
@@ -403,10 +417,13 @@ object Outcomes {
         return if (chords != null && chords.detail.isNotEmpty()) capital(chords.detail.removePrefix("up to date: ")) else ""
     }
 
-    private fun youtubeStopped(stages: List<Stage>): String = stages.firstOrNull { stage ->
-        stage.name in listOf("audio", "lyrics", "chords", "pdf") &&
-            (stage.state == Job.SKIPPED || stage.state == Job.FAILED) && stage.detail.isNotEmpty()
-    }?.let { capital(it.detail) } ?: ""
+    private fun stagedStopped(stages: List<Stage>, table: List<Pair<String, List<String>>>): String {
+        val names = table.flatMap { it.second }.filter { it != "song" }.toSet()
+        return stages.firstOrNull { stage ->
+            stage.name in names &&
+                (stage.state == Job.SKIPPED || stage.state == Job.FAILED) && stage.detail.isNotEmpty()
+        }?.let { capital(it.detail) } ?: ""
+    }
 
     private fun capital(text: String): String = sentence(capitalFirst(text))
 

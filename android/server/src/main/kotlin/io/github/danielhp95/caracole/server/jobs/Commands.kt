@@ -90,6 +90,16 @@ object JobCommands {
         "pages" to "The logbook page",
     )
 
+    /** transcribe_job.py's STAGES, `caracole transcribe --progress`'s (caracole serve's alone). */
+    val TRANSCRIBE_STAGES: List<Pair<String, String>> = listOf(
+        "song" to "Find the song",
+        "vocals" to "Where the singing is",
+        "words" to "Transcribing the lyrics",
+        "chords" to "Chords from the audio",
+        "pdf" to "PDF",
+        "pages" to "The logbook page",
+    )
+
     /** `caracole peer take --progress`'s stages, a push another caracole sent taken here. */
     val PEER_TAKE_STAGES: List<Pair<String, String>> = listOf(
         "check" to "What changed since compared",
@@ -132,6 +142,7 @@ object JobCommands {
     const val YOUTUBE_SEARCH = "youtube-search:"  // a video suggested for a search
     const val UG_LINK = "ug-link:"  // a UG link pasted into the search box read: the page's address after it
     const val YOUTUBE_SHEET = "youtube:"  // a sheet from a YouTube video: the song's identity key after it
+    const val TRANSCRIBE = "transcribe:"  // lyrics transcribed from a song's audio: the song's identity key after it
     const val INDEX_MERGE = "index-merge:"  // an index export's merge
     const val SYNCING = "sync:"  // a sync's (sync_routes.SYNCING): the address it syncs with after it
     const val IMPORTING = "import:"  // a file's import (sync_routes.IMPORTING): the staged file's id after it
@@ -263,7 +274,7 @@ object JobCommands {
     /** Whether a command writes `caracole get --progress` lines: a lookup, `caracole versions --progress`, `lacuerda
      * --search --progress`, `youtube … --progress`, `peer … --progress` or `index merge --progress`. */
     fun reports(args: List<String>): Boolean = first(args) == LOOKUP ||
-        (first(args) in listOf(VERSIONS, "lacuerda", "youtube", PEER, "ug") && "--progress" in options(args)) ||
+        (first(args) in listOf(VERSIONS, "lacuerda", "youtube", PEER, "ug", "transcribe") && "--progress" in options(args)) ||
         (args.take(2) == INDEX_MERGE_COMMAND && "--progress" in options(args))
 
     /** Whether a command is a query of LaCuerda's search. */
@@ -274,6 +285,9 @@ object JobCommands {
 
     /** Whether a command makes a song's sheet from a YouTube video (`caracole youtube --sheet`). */
     fun sheetsFromYoutube(args: List<String>): Boolean = first(args) == "youtube" && "--sheet" in args
+
+    /** Whether a command transcribes a song's lyrics from its audio (`caracole transcribe`). */
+    fun transcribes(args: List<String>): Boolean = first(args) == "transcribe"
 
     private fun peerStages(args: List<String>): List<Pair<String, String>> {
         if (args.take(2) == INDEX_MERGE_COMMAND && "--progress" in options(args)) return INDEX_MERGE_STAGES
@@ -296,7 +310,7 @@ object JobCommands {
     }
 
     /** The song's identity key in a job's key: a removal's and a sheet from YouTube's have theirs after a prefix. */
-    fun songKeyOf(jobKey: String): String = jobKey.removePrefix(REMOVING).removePrefix(YOUTUBE_SHEET)
+    fun songKeyOf(jobKey: String): String = jobKey.removePrefix(REMOVING).removePrefix(YOUTUBE_SHEET).removePrefix(TRANSCRIBE)
 
     private val PICKED_BY_LOOKUP = listOf("--ug=", "--tab=", "--lacuerda=", "--harptabs=", "--gametabs=", "--ireal=")
 
@@ -331,6 +345,7 @@ object JobCommands {
             KEEP_STAGES.forEach { (name, label) -> names.putIfAbsent(name, label) }
         }
         if (commands.any(::sheetsFromYoutube)) YOUTUBE_SHEET_STAGES.forEach { (name, label) -> names.putIfAbsent(name, label) }
+        if (commands.any(::transcribes)) TRANSCRIBE_STAGES.forEach { (name, label) -> names.putIfAbsent(name, label) }
         for (args in commands) {
             peerStages(args).forEach { (name, label) -> names.putIfAbsent(name, label) }
             ugLinkStages(args).forEach { (name, label) -> names.putIfAbsent(name, label) }
