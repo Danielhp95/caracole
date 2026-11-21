@@ -70,7 +70,7 @@ class WhisperTranscriber:
             self.model = whisper.load_model(str(model_path), device=device)
         except Exception as e:  # noqa: BLE001 - classified below
             if device == "cuda" or is_setup_error(e):
-                raise SetupFailed(f"{type(e).__name__}: {e}") from e
+                raise SetupFailed(f"the GPU failed: {type(e).__name__}: {e}") from e
             raise SetupFailed(f"Whisper's model won't load: {type(e).__name__}: {e}") from e
         self.model.set_alignment_heads(ALIGNMENT_HEADS)
 
