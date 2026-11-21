@@ -26,13 +26,17 @@ refusal its song stage says, before the next model runs.
 The models default to demucs-rs and Whisper from ``cfg``, each built at its first stage and run first on run.py's
 test tone, as auto-chords checks its own: a model that fails there would fail on every song.
 
-What fails is told apart as auto-chords tells it, and only "no singing heard" is recorded against the song:
+What fails is told apart as auto-chords tells it:
 
 - the setup's, which blames no song and records nothing, the song staying offered: the separator ("the separator
   can't run here (...)", demucs-rs's own words), a GPU missing, busy or out of memory, or a Whisper model that won't
   load (``SetupFailed``, in its own words: "the GPU failed: ...");
-- the audio's: the mix that librosa or Whisper can't read ("can't read the audio"), which records nothing either;
+- the audio's: the mix that librosa or Whisper can't read ("can't read the audio"), filed as auto-chords files a
+  file it can't read (run.py ``_unreadable``: kv ``autochords:failed:<song id>``), so the song is offered no
+  transcription, nor auto-chords tried on it, until its audio changes;
 - a bug: caracole's, said as such.
+
+Beside the audio's, only "no singing heard" is recorded against the song (``note_heard_nothing``).
 
 Each is ``TranscribeResult.failed`` (or ``bug``), and the command exits 1. The caller checks first that lyrics can
 be transcribed here (``youtube_fetch.transcribe_problem``).
@@ -40,7 +44,6 @@ be transcribed here (``youtube_fetch.transcribe_problem``).
 
 from __future__ import annotations
 
-import logging
 import subprocess
 import tempfile
 import time
@@ -54,8 +57,6 @@ from caracole.config import Config
 from caracole.get import Progress
 from caracole.logs import plural
 from caracole.staged import StagedResult, StagedRun, _Stop
-
-log = logging.getLogger(__name__)
 
 STAGES = (
     ("song", "Find the song"),
@@ -140,8 +141,11 @@ class _Transcription(StagedRun):
         return Path(self.work.name) / name
 
     def _unreadable(self, e: Exception) -> tuple[str, str]:
-        """The audio's: the job fails, recording nothing against the song."""
-        log.warning("%s: %s %s: %s: %s", self.song.display, UNREADABLE, self.song.audio_path, type(e).__name__, e)
+        """The audio's: filed as auto-chords files a file it can't read (run.py ``_unreadable``), so the song is
+        offered no transcription, nor auto-chords tried on it, until its audio changes; the job fails."""
+        from caracole.autochords.run import _unreadable as file_unreadable
+
+        file_unreadable(self.conn, self.song, e, self.run_id)
         return self._fail(UNREADABLE)
 
     # --- the default models ----------------------------------------------------------------------------------

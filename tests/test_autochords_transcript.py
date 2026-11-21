@@ -119,6 +119,18 @@ def test_a_song_whose_audio_file_is_gone_is_not_offered(conn, cfg, tmp_path):
     assert tr.why_not_offered(conn, cfg, song, Overrides())
 
 
+def test_audio_that_cant_be_read_is_offered_no_more_until_it_changes(conn, cfg, tmp_path):
+    # Filed as auto-chords files a file it can't read (run.py), by auto-chords or by a transcription.
+    from caracole.autochords.run import _unreadable
+
+    song = youtube_song(conn, tmp_path)
+    _unreadable(conn, song, RuntimeError("Failed to load audio: moov atom not found"), "2026-11-20T00:00:00Z")
+    assert tr.why_not_offered(conn, cfg, song, Overrides()) == "its audio can't be read"
+    assert tr.offered_song_ids(conn, cfg, Overrides()) == []
+    update_song(conn, song.id, audio_mtime=song.audio_mtime + 5)  # new audio: offered again
+    assert tr.why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) is None
+
+
 def test_offered_song_ids_lists_the_songs_due(conn, cfg, tmp_path):
     first = youtube_song(conn, tmp_path, "A", "One")
     second = youtube_song(conn, tmp_path, "B", "Two")

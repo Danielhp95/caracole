@@ -1868,14 +1868,17 @@ It is rows.js's, shared by both pages:
   - words.py, pure Python: where someone sings, from the stem's loudness against the mix's (`sung_spans`); the words
     outside it dropped (`guard`); the lines (`lines_of`) and the enhanced LRC (`to_lrc`);
   - transcript.py, no third-party import (every page build asks it): kv `transcript:<id>` and `transcribe:none:<id>`
-    (`keep_transcript`, `note_heard_nothing`), and which songs are offered one (`why_not_offered`);
+    (`keep_transcript`, `note_heard_nothing`), and which songs are offered one (`why_not_offered`, which also reads
+    run.py's `autochords:failed:<id>`, its key `UNREADABLE`);
   - separate.py: demucs-rs, a program run as a subprocess (`DemucsSeparator`; `SeparatorFailed` in its own words), and
     each frame's loudness (`frame_db`, librosa imported inside);
   - transcribe.py: Whisper large-v3 (`WhisperTranscriber`), torch and whisper imported inside; `SetupFailed`, the
     GPU's or the model's failure, never the audio's.
   - The job builds the default separator and Whisper at their first stage, each run first on run.py's test tone
     (`_test_tone`). Its failures are told apart as run.py's: the setup's (`SeparatorFailed`, `SetupFailed`) and the
-    audio's record nothing against the song, which stays offered; only no singing heard is recorded.
+    audio's: the setup's record nothing against the song, which stays offered; the audio's is filed as run.py files
+    audio it can't read (`_unreadable`, kv `autochords:failed:`, transcript.py's `UNREADABLE`), which
+    `why_not_offered` reads ("its audio can't be read") until the audio changes; and no singing heard is noted.
 - Which words go under the chords (run.py `_make_sheet`): a site's lyrics whenever the song has any, else the
   transcript of its current audio (transcript.py `transcript_of`: its own audio and mtime only), else none.
   - A transcript is used as timed lyrics whose duration is the audio's: no `_synced_for`, no shift searched. The sheet

@@ -45,7 +45,9 @@ Two kinds of failure are told apart, because only one is the purchase's:
   song alone. kv ``autochords:failed:<song id>`` keeps the file's path and
   mtime, so it isn't decoded again every night: the song is tried again once
   its file changes (a new download, a converted copy), and the record is
-  dropped once the song's file changes or goes.
+  dropped once the song's file changes or goes. A transcription that can't
+  read the file files it the same way (transcribe_job.py), and transcript.py
+  offers such a song no transcription.
 - **A setup that can't work** blames no purchase: model files missing or
   unusable, models that fail on a generated test tone (a sandbox that stops
   them, a checkpoint that won't load), or a sheet that can't be kept in the
@@ -86,7 +88,7 @@ from caracole.autochords.merge import (
     parse_lrc_words,
     youtube_credit,
 )
-from caracole.autochords.transcript import LYRICS_SOURCE, NOTE, Transcript, transcript_of
+from caracole.autochords.transcript import LYRICS_SOURCE, NOTE, UNREADABLE, Transcript, transcript_of
 from caracole.chordpro import display_columns
 from caracole.config import Config
 from caracole.db import kv_delete, kv_get_json, kv_set_json
@@ -342,8 +344,9 @@ def _failed_display(conn: sqlite3.Connection, song_id: int) -> str | None:
 
 
 def _failed_key(song_id: int) -> str:
-    """kv: the audio file of the song that couldn't be read (written and read only here)."""
-    return f"autochords:failed:{song_id}"
+    """kv: the audio file of the song that couldn't be read, written here (and by the transcription job, through
+    ``_unreadable``); transcript.py reads it too, offering such a song no transcription."""
+    return f"{UNREADABLE}{song_id}"
 
 
 def _known_failure(conn: sqlite3.Connection, song: Song) -> Failure | None:

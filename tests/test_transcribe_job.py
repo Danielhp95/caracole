@@ -311,16 +311,27 @@ def test_a_gpu_failure_fails_the_job_records_nothing_and_the_song_stays_offered(
     assert why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) is None
 
 
-def test_audio_whisper_cant_read_is_the_audios_and_records_nothing(conn, cfg):
+def filed_unreadable(conn, cfg, song) -> bool:
+    """Whether the song's audio is filed as auto-chords files a file it can't read, and so offered no transcription
+    until it changes."""
+    record = kv_get_json(conn, f"autochords:failed:{song.id}")
+    return (record["audio"], record["audio_mtime"]) == (song.audio_path, song.audio_mtime) and (
+        why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) == "its audio can't be read")
+
+
+def test_audio_whisper_cant_read_is_filed_as_auto_chords_files_it(conn, cfg):
     song = offered(conn, cfg)
     fail = RuntimeError("Failed to load audio: [mov,mp4] moov atom not found")
     result, heard = make(cfg, transcriber=Transcriber(fail=fail))
     assert not result.ok and result.bug is None and result.failed == "can't read the audio"
     assert heard.ends()["words"] == ("failed", "can't read the audio")
-    assert nothing_recorded(conn, song)
+    assert filed_unreadable(conn, cfg, song)
+    assert kv_get_json(conn, f"autochords:failed:{song.id}")["error"] == (
+        "RuntimeError: Failed to load audio: [mov,mp4] moov atom not found")
+    assert kept(conn, song) is None and not heard_nothing(conn, song)
 
 
-def test_audio_librosa_cant_read_is_the_audios_before_the_separator_runs(conn, cfg, monkeypatch):
+def test_audio_librosa_cant_read_is_filed_before_the_separator_runs(conn, cfg, monkeypatch):
     song = offered(conn, cfg)
 
     def frame_db(path, **kwargs):
@@ -332,7 +343,8 @@ def test_audio_librosa_cant_read_is_the_audios_before_the_separator_runs(conn, c
     assert not result.ok and result.bug is None and result.failed == "can't read the audio"
     assert heard.ends()["vocals"] == ("failed", "can't read the audio")
     assert separator.calls == []
-    assert nothing_recorded(conn, song)
+    assert filed_unreadable(conn, cfg, song)
+    assert kept(conn, song) is None and not heard_nothing(conn, song)
 
 
 # --- the default models -----------------------------------------------------------------------------------------

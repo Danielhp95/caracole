@@ -2345,7 +2345,7 @@ Whisper large-v3, and make the song's auto sheet again with the chords over them
     caracole transcribe --song "Nick Cani - Vikingos veganos"
 
 It takes a song of the library that is offered a transcription, and never adds one to wanted.txt: its audio from
-YouTube and the file there, no human sheet, not ignored, its lyrics missing once LRCLIB and every other lyrics site
+YouTube, the file there and not one auto-chords or a transcription couldn't read, no human sheet, not ignored, its lyrics missing once LRCLIB and every other lyrics site
 switched on (Megalobiz, AZLyrics) answered it has none, and its audio neither transcribed yet nor heard to have nothing
 sung. Then, one stage a line:
 
@@ -2387,7 +2387,9 @@ It exits 0 once the sheet is made, and 1:
   its lyrics are found.` (or `… isn't in the book`, `… left the book while its lyrics were transcribed …`,
   `…: its audio changed while its lyrics were transcribed`);
 - for `Words: failed: no singing heard.`, nothing kept: the song isn't offered again until its audio changes;
-- for `can't read the audio`, which records nothing;
+- for `can't read the audio`, filed as auto-chords files a file it can't read: the song isn't offered a
+  transcription, nor are its chords tried, until its audio changes (the to-do page lists the file after auto-chords'
+  next run);
 - for the setup's failures, which record nothing against the song, offered still: `the separator can't run here
   (…)` in demucs-rs's own words, `the GPU failed: …` (a GPU missing, busy or out of memory), or
   `Whisper's model won't load: …`.

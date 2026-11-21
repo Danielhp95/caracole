@@ -5,7 +5,8 @@ Whisper's words from a YouTube song's audio (when no lyrics site has the song's)
 kept, unused while the song has lyrics, and goes with the song (songs._PER_SONG_KV). It is the song's only while
 its ``audio`` and ``audio_mtime`` are the song's own: other audio (another video pasted, a purchase dropped into
 Music/) is no use to it, and the song is offered a transcript again. A song heard to have nothing sung keeps
-``transcribe:none:<song id>`` instead, for that audio alone.
+``transcribe:none:<song id>`` instead, for that audio alone; one whose audio can't be read, auto-chords' record of it,
+``autochords:failed:<song id>`` (run.py's, which the transcription files too), and is offered none until it changes.
 
 This module imports nothing third-party: the transcribing itself is elsewhere, and ``why_not_offered`` runs on
 every page build.
@@ -27,6 +28,7 @@ from caracole.youtube_fetch import youtube_audio
 
 TRANSCRIPT = "transcript:"  # + song id: the Transcript kept for the song's audio
 HEARD_NOTHING = "transcribe:none:"  # + song id: when the song's audio was transcribed to nothing
+UNREADABLE = "autochords:failed:"  # + song id: audio auto-chords or a transcription couldn't read (run.py writes it)
 LYRICS_SOURCE = "transcript"  # a version's raw["lyrics_source"] when the sheet's words are the transcript's
 NOTE = "Lyrics transcribed from the audio (Whisper), unverified"
 MODEL = "whisper-large-v3"
@@ -96,12 +98,20 @@ def heard_nothing(conn: sqlite3.Connection, song: Song) -> bool:
     return isinstance(kept, dict) and _own_audio(song, kept.get("audio"), kept.get("audio_mtime"))
 
 
+def unreadable(conn: sqlite3.Connection, song: Song) -> bool:
+    """Whether the song's current audio is filed as audio that can't be read (run.py ``_unreadable``)."""
+    kept = kv_get_json(conn, f"{UNREADABLE}{song.id}")
+    return isinstance(kept, dict) and _own_audio(song, kept.get("audio"), kept.get("audio_mtime"))
+
+
 def why_not_offered(conn: sqlite3.Connection, cfg: Config, song: Song, overrides: Overrides) -> str | None:
     """None when the song is due for an offer of a transcript, else one short reason."""
     if youtube_audio(conn, song) is None:
         return "its audio isn't from YouTube"
     if not Path(song.audio_path or "").is_file():
         return "its audio file is missing"
+    if unreadable(conn, song):
+        return "its audio can't be read"
     if song.status == "ignored" or song.key in overrides.ignore:
         return "ignored"
     if any(f.name == HUMAN_SHEET for f in kept_files(conn, song.id)):
