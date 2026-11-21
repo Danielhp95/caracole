@@ -529,6 +529,11 @@ let
       && !(webAutochordsUnit.serviceConfig ? SupplementaryGroups);
     "the auto-chords package defaults to this flake's cuda package with autochords.cuda" =
       cudaDefault.services.caracole.autochords.package.drvPath == autochordsCudaPackage.drvPath;
+    # cudaDefault has autochords.cuda alone, auto-chords off: the GPU would serve nothing.
+    "autochords.cuda without autochords.enable warns that it does nothing" =
+      says [ "services.caracole.autochords.cuda does nothing" "autochords.enable" ] cudaDefault.warnings;
+    "autochords.cuda with autochords.enable is no warning" =
+      !(says [ "autochords.cuda" ] webCuda.warnings);
     "caracole-web.service is hardened as caracole.service is, MemoryDenyWriteExecute included" =
       hardened webSc && webSc.MemoryDenyWriteExecute && webSc.RestrictNamespaces;
     "caracole-web.service runs as caracole, with a group-writable umask" = sameUser webSc;

@@ -1976,6 +1976,8 @@ It is rows.js's, shared by both pages:
     `caracole-admin` (the units whose children transcribe) get `PrivateDevices = false`, `DevicePolicy = "closed"`,
     `DeviceAllow` (`char-nvidiactl`, `-nvidia-caps`, `-nvidia-frontend`, `-nvidia-uvm` from nixpkgs' ollama module,
     `char-drm` for Vulkan) and the `video` and `render` groups. The nightly units never get them.
+    Without `autochords.enable` it does nothing, and the module warns (a `warnings` entry, not an assertion);
+    nix/module.nix alone, without the flake, doesn't switch `autochords.package`.
     `whisperModel` and `separatorModel` are `CARACOLE_WHISPER_MODEL` and `CARACOLE_DEMUCS_MODEL`.
   - And `/etc/caracole/service`, the service's marker, service.py's.
 - **module-check.nix**: `checks.module`, which loads the marker with service.py.

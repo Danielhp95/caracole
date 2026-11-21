@@ -418,7 +418,10 @@ in
         build (torch-bin, about 6.7 GiB against 1.1 GiB) and these two units see
         the NVIDIA devices (PrivateDevices off, DeviceAllow for the GPU's groups).
         The nightly units keep their sandbox, and BTC and beat_this stay on the CPU.
-        It needs the NVIDIA driver (hardware.graphics, hardware.nvidia) on the host'';
+        It needs the NVIDIA driver (hardware.graphics, hardware.nvidia) on the host,
+        and autochords.enable: without it, it does nothing (a warning says so).
+        nix/module.nix imported on its own, without the flake, leaves `package` as
+        it is: set it to a CUDA build of caracole yourself'';
 
       whisperModel = lib.mkOption {
         type = lib.types.nullOr lib.types.path;
@@ -459,6 +462,11 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    # Not an assertion: a GPU asked for and not used breaks nothing.
+    warnings = lib.optional (cfg.autochords.cuda && !cfg.autochords.enable) ''
+      services.caracole.autochords.cuda does nothing without services.caracole.autochords.enable: the GPU is
+      for the transcription of lyrics from the audio, which only the auto-chords package runs.'';
+
     assertions =
       let
         # The options whose caracole.toml key settings sets to a path of its own.

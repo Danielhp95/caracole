@@ -94,7 +94,7 @@ Every option of `nix/module.nix`:
 | `web.allowedHosts` | `[ ]` | names it answers to beyond localhost, the host's name and its `.local` name |
 | `web.openFirewall` | `false` | opens `web.port` on every interface, for a LAN address |
 | `autochords.enable` | `false` | auto-chords (section 4) |
-| `autochords.cuda` | `false` | the GPU for transcriptions from the audio, in caracole-web and `caracole-admin` alone (section 4) |
+| `autochords.cuda` | `false` | the GPU for transcriptions from the audio, in caracole-web and `caracole-admin` alone, with `autochords.enable` (section 4) |
 | `autochords.btcWeights`, `autochords.beatCheckpoint`, `autochords.whisperModel`, `autochords.separatorModel` | `null` | model files other than the package's |
 | `package`, `autochords.package` | the flake's builds | |
 
@@ -214,7 +214,10 @@ CUDA and demucs-rs on Vulkan. Only caracole-web, whose job children run the
 transcription, and `caracole-admin` see the GPU: `PrivateDevices` is off for
 them, with `DevicePolicy=closed`, `DeviceAllow` for the NVIDIA device groups and
 `char-drm`, and the `video` and `render` groups. The nightly units keep
-`PrivateDevices`, and BTC and beat_this stay on the CPU.
+`PrivateDevices`, and BTC and beat_this stay on the CPU. It needs
+`autochords.enable`: without it, it does nothing, and the system's build warns
+so. With nix/module.nix imported on its own, without the flake, `package` stays
+as it is: set `autochords.package` to a CUDA build of caracole yourself.
 
 For purchases alone, with no yt-dlp run and no YouTube on the library page:
 
