@@ -6,9 +6,11 @@ For a song whose audio came from YouTube and that every lyrics site switched on 
 its own (staged.py; ``--progress`` writes a JSON line per event, which caracole serve reads into the job's stages):
 
 - ``song``: the song, by its identity key, never added to wanted.txt; refused when it isn't offered a transcription.
+  First, the work folders a killed job left under the cache are swept (``_sweep``).
 - ``vocals``: where the singing is. The mix's loudness frame by frame (``separate.frame_db``), the vocals separated
   by demucs-rs into a temporary folder under the cache, their loudness, then the sung spans (words.py
-  ``sung_spans``).
+  ``sung_spans``), over as much of the song as both cover: a stem more than ``SHORT_STEM_FRAMES`` shorter than the
+  mix is the separator's failure.
 - ``words``: Whisper large-v3 over the full mix, the language heard on the stem's first 30 s of singing; the words
   outside every sung span dropped (``guard``), the rest broken into lines and written as enhanced LRC, kept as the
   song's transcript (``keep_transcript``), never as its lyrics. Nothing kept, or no sung span to keep a word in
@@ -51,6 +53,7 @@ be transcribed here (``youtube_fetch.transcribe_problem``).
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 import tempfile
 import time
@@ -74,6 +77,10 @@ STAGES = (
     ("pages", "The logbook page"),
 )
 UNREADABLE = "can't read the audio"
+WORK_PREFIX = "transcribe-"  # a job's work folder under the cache, its stem in it
+# demucs-rs writes the stem at its own rate: resampled, it may come out a frame or so shorter than the mix, read as
+# far as both go. Shorter than this, the singing past its end would be lost: the separator's failure.
+SHORT_STEM_FRAMES = 4  # 0.2 s
 
 
 @dataclass(frozen=True)
@@ -144,8 +151,17 @@ class _Transcription(StagedRun):
         """A folder of the job's own under the cache, gone with the job."""
         if self.work is None:
             self.cfg.cache_dir.mkdir(parents=True, exist_ok=True)
-            self.work = tempfile.TemporaryDirectory(prefix="transcribe-", dir=self.cfg.cache_dir)
+            self.work = tempfile.TemporaryDirectory(prefix=WORK_PREFIX, dir=self.cfg.cache_dir)
         return Path(self.work.name) / name
+
+    def _sweep(self) -> None:
+        """The work folders a killed job left under the cache, its stem in each, removed. Under caracole's lock, which
+        lets one transcription run at a time (it hands the lock to lookups alone, which make none), any there is
+        stale, as youtube_fetch.py sweeps a download a stopped caracole left half-done."""
+        if self.cfg.cache_dir.is_dir():
+            for leftover in self.cfg.cache_dir.glob(f"{WORK_PREFIX}*"):
+                if leftover.is_dir():
+                    shutil.rmtree(leftover, ignore_errors=True)
 
     def _unreadable(self, e: Exception) -> tuple[str, str]:
         """The audio's, Whisper's own "Failed to load audio" on the mix: filed as auto-chords files a file it can't
@@ -199,6 +215,7 @@ class _Transcription(StagedRun):
         from caracole.normalize import identity_key
         from caracole.songs import find_song
 
+        self._sweep()
         req = self.request
         song = find_song(self.conn, identity_key(req.artist, req.title))
         if song is None:
@@ -211,7 +228,7 @@ class _Transcription(StagedRun):
 
     def vocals(self) -> tuple[str, str] | str:
         from caracole.autochords import separate
-        from caracole.autochords.words import sung_spans
+        from caracole.autochords.words import FRAME_S, sung_spans
 
         self._after_a_lookup()
         self._still_offered()
@@ -230,7 +247,11 @@ class _Transcription(StagedRun):
             stem_db = separate.frame_db(self.stem)
         except Exception as e:  # noqa: BLE001 - a stem the separator wrote and can't be read is the separator's
             return self._fail(f"the separator can't run here (its vocals can't be read: {type(e).__name__}: {e})")
-        both = min(len(stem_db), len(mix_db))  # the stem, at demucs-rs's own rate, may come out a frame shorter
+        short = len(mix_db) - len(stem_db)
+        if short > SHORT_STEM_FRAMES:
+            return self._fail(f"the separator can't run here (its vocals are {round(short * FRAME_S, 2):g} s "
+                              "shorter than the song)")
+        both = min(len(stem_db), len(mix_db))
         self.spans = sung_spans(stem_db[:both], mix_db[:both])
         if not self.spans:
             return "done", "no singing found"

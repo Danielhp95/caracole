@@ -1914,12 +1914,15 @@ It is rows.js's, shared by both pages:
     of Triton's kernels (nixpkgs' Triton names no libcuda folder: Whisper's word timing would try to build them on
     every 30 s, fail, and fall back); `SetupFailed`, the
     GPU's or the model's failure, never the audio's; `is_audio_error`, Whisper failing to load the audio.
+  - The job works in a `transcribe-*` folder under the cache, gone with it; one a killed job left is swept at the
+    next job's start (`_sweep`, under the lock: one transcription at a time).
   - The job builds the default separator and Whisper at their first stage, Whisper run first on run.py's test tone
     (`_test_tone`); demucs-rs not (it fails on the song as on a tone, the setup's alike, and each run costs about
     30 s). Its failures are told apart as run.py's: the setup's and the audio's. The setup's record nothing against
     the song, which stays offered: `frame_db` failing on the mix, whatever it raises ("can't measure the audio here
-    (…)": a reader's failure is no proof the audio is bad), `SeparatorFailed` or a stem `frame_db` can't read ("the
-    separator can't run here (…)"), and `SetupFailed`. The audio's is Whisper's own "Failed to load audio" on the mix
+    (…)": a reader's failure is no proof the audio is bad), `SeparatorFailed`, a stem `frame_db` can't read or one
+    more than `SHORT_STEM_FRAMES` (4, 0.2 s) shorter than the mix ("the separator can't run here (…)"), and
+    `SetupFailed`. The audio's is Whisper's own "Failed to load audio" on the mix
     alone (transcribe.py `is_audio_error`), filed as run.py files audio it can't read (`_unreadable`, kv
     `autochords:failed:`, transcript.py's `UNREADABLE`), which `why_not_offered` reads ("its audio can't be read")
     until the audio changes; anything else Whisper raises is a bug, filing nothing; and no singing heard is noted.

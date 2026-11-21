@@ -229,14 +229,65 @@ def test_no_singing_heard_records_it_and_fails_without_a_sheet(conn, cfg, words)
 
 
 
-def test_a_stem_a_frame_shorter_than_the_mix_is_read_as_far_as_both_go(conn, cfg, monkeypatch):
-    # demucs-rs writes the stem at its own rate: resampled, it may have a frame fewer than the mix.
+@pytest.mark.parametrize("short", [1, 4])
+def test_a_stem_a_few_frames_shorter_than_the_mix_is_read_as_far_as_both_go(conn, cfg, monkeypatch, short):
+    # demucs-rs writes the stem at its own rate: resampled, it may have a frame or so fewer than the mix.
     offered(conn, cfg)
     monkeypatch.setattr(separate, "frame_db",
-                        lambda path, **kw: list(STEM[:-1] if Path(path).name == "vocals.wav" else MIX))
+                        lambda path, **kw: list(STEM[:-short] if Path(path).name == "vocals.wav" else MIX))
     result, heard = make(cfg)
     assert result.ok, result
     assert heard.ends()["vocals"] == ("done", "sung from 24.8 s, 1 stretch")
+
+
+@pytest.mark.parametrize("short,said", [(5, "0.25"), (200, "10")])
+def test_a_stem_shorter_than_the_song_is_the_separators_failure(conn, cfg, monkeypatch, short, said):
+    # Read only as far as both go, its singing past its end would be lost without a word.
+    song = offered(conn, cfg)
+    monkeypatch.setattr(separate, "frame_db",
+                        lambda path, **kw: list(STEM[:-short] if Path(path).name == "vocals.wav" else MIX))
+    transcriber = Transcriber()
+    result, heard = make(cfg, transcriber=transcriber)
+    failed = f"the separator can't run here (its vocals are {said} s shorter than the song)"
+    assert not result.ok and result.bug is None and result.failed == failed
+    assert heard.ends()["vocals"] == ("failed", failed)
+    assert transcriber.calls == []
+    assert nothing_recorded(conn, song)
+    assert why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) is None
+
+
+def test_a_killed_jobs_work_folders_are_swept_when_the_next_job_starts(conn, cfg):
+    # A job killed in its stages leaves its stem (tens of MB) under the cache. The lock lets one transcription run
+    # at a time (it hands the lock to lookups alone), so any work folder there when a job holds it is stale.
+    offered(conn, cfg)
+    stale = [cfg.cache_dir / name for name in ("transcribe-k1ll3d0", "transcribe-0ld")]
+    for folder in stale:
+        (folder / "song" / "stems").mkdir(parents=True)
+        (folder / "song" / "stems" / "vocals.wav").write_bytes(b"RIFF")
+    other = cfg.cache_dir / "youtube"
+    result, _ = make(cfg)
+    assert result.ok, result
+    assert not any(folder.exists() for folder in stale)
+    assert other.is_dir() and list(other.iterdir())  # the rest of the cache stays
+    assert not list(cfg.cache_dir.glob("transcribe-*"))  # and the job's own went with it
+
+
+def test_a_song_with_an_auto_sheet_over_no_lyrics_gets_it_made_again_over_its_transcript(conn, cfg):
+    # The example's own way: `caracole youtube --sheet` made a chart with no words, and then its lyrics are
+    # transcribed.
+    from caracole.autochords.run import autochords_pending
+
+    song = offered(conn, cfg)
+    autochords_pending(conn, cfg, recognizer=Recognizer(), beats_fn=beats, only={song.id})
+    before = auto_sheet(cfg, conn, song).read_text(encoding="utf-8")
+    assert NOTE not in before.splitlines() and "Somos vikingos de prueba" not in before
+    recognizer = Recognizer()
+    result, heard = make(cfg, recognizer=recognizer)
+    assert result.ok, result
+    assert heard.ends()["chords"] == ("done", "chords over the transcribed lyrics")
+    assert recognizer.calls == [Path(song.audio_path)]
+    lines = auto_sheet(cfg, conn, song).read_text(encoding="utf-8").splitlines()
+    assert NOTE in lines and "Somos vikingos de prueba" in lines
 
 
 def test_with_no_singing_found_whisper_never_runs_and_nothing_sung_is_noted(conn, cfg, monkeypatch):

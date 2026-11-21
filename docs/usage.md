@@ -2359,8 +2359,9 @@ sung. Then, one stage a line:
     Pages: _todo.md and index.html rewritten.
     Done in 63.0 s.
 
-- **Vocals**: demucs-rs separates the song's vocals, in a folder of the job's own under the cache that goes with it;
-  where they are about as loud as the whole song is where someone sings.
+- **Vocals**: demucs-rs separates the song's vocals, in a folder of the job's own under the cache that goes with it
+  (one a killed job left, `transcribe-…`, goes when the next job starts); where they are about as loud as the whole
+  song is where someone sings.
 - **Words**: Whisper hears the whole song, in the language it hears on the vocals' first 30 seconds of singing. A
   word it heard more than 0.3 seconds from any singing is dropped (Whisper invents words over the instrumental parts:
   credits, "subscribe"), and the rest are broken into lines for a sheet; with no singing found, Whisper isn't run at
@@ -2397,7 +2398,8 @@ It exits 0 once the sheet is made, and 1:
 - for the setup's failures, which record nothing against the song, offered still: `can't measure the audio here
   (…)`, the song's loudness unread, in the reader's own words (it reads audio as auto-chords does, the AAC of
   YouTube's `.m4a` included, so this is caracole's trouble, not the file's), `the separator can't run here (…)` in
-  demucs-rs's own words (or `its vocals can't be read: …`), `the GPU failed: …` (a GPU missing, busy or out of
+  demucs-rs's own words (or `its vocals can't be read: …`, or `its vocals are 1.5 s shorter than the song`: more
+  than 0.2 s short, the singing past their end would be lost), `the GPU failed: …` (a GPU missing, busy or out of
   memory), or `Whisper's model won't load: …`.
 
 ## The to-do page
