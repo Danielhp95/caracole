@@ -165,11 +165,12 @@ def transcribe_reason(cfg: Config) -> str | None:
 
 
 def transcribe_time(cfg: Config) -> str:
-    """How long a transcription takes here, for the offer: about a minute on a GPU, else up to half an hour
-    (measured: Whisper on the CPU is about 2x the song's length, demucs about 4.8x)."""
+    """How long a transcription takes here, for the offer: a couple of minutes on a GPU, else up to half an hour
+    (measured: on the GPU 83-87 s warm and 150 s cold for a 149 s song, demucs-rs about half of it; on the CPU
+    Whisper is about 2x the song's length, demucs about 4.8x)."""
     if (os.environ.get("CARACOLE_TORCH_CUDA") == "1" and cfg.autochords.transcribe_device != "cpu"
             and Path("/dev/nvidiactl").exists()):
-        return "about a minute"
+        return "a couple of minutes"
     return "up to half an hour"
 
 

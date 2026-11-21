@@ -2372,15 +2372,15 @@ sung. Then, one stage a line:
   `Lyrics transcribed from the audio (Whisper), unverified` on the line after the video's; then its PDF and viewer,
   and the pages.
 
-It takes about a minute on a GPU (`[autochords] transcribe_device`, `"auto"` by default), and up to half an hour on a
-CPU. Whisper and auto-chords' models are first tried on a 2-second tone, so one that can't run here fails the job
-before it hears the song; demucs-rs isn't (each of its runs takes about half a minute even for a tone), and one that
-can't run here fails on the song, recording nothing as well. Before each of the separator, Whisper and auto-chords, a lookup waiting for the lock goes first; a song taken
-out of the book meanwhile ends the job there, a refusal, and so does one that found lyrics before the separator or
-Whisper (after them, the sheet goes over the site's lyrics), or whose audio another caracole replaced after its
-vocals were separated (the new audio is offered a transcription of its own). `--progress` adds a JSON line per
-stage, for caracole serve, whose library page offers the same on the song's card (see **Lyrics transcribed from the
-audio** under [caracole serve](#caracole-serve)).
+It takes a couple of minutes on a GPU (`[autochords] transcribe_device`, `"auto"` by default), and up to half an hour
+on a CPU. Whisper and auto-chords' models are first tried on a 2-second tone, so one that can't run here fails the
+job before it hears the song; demucs-rs isn't (each of its runs takes about half a minute even for a tone), and one
+that can't run here fails on the song, recording nothing as well. Before each of the separator, Whisper and
+auto-chords, a lookup waiting for the lock goes first; a song taken out of the book meanwhile ends the job there, a
+refusal, and so does one that found lyrics before the separator or Whisper (after them, the sheet goes over the
+site's lyrics), or whose audio another caracole replaced after its vocals were separated (the new audio is offered a
+transcription of its own). `--progress` adds a JSON line per stage, for caracole serve, whose library page offers the
+same on the song's card (see **Lyrics transcribed from the audio** under [caracole serve](#caracole-serve)).
 
 It exits 0 once the sheet is made, and 1:
 
@@ -4939,8 +4939,8 @@ the library, sent as they are: they carry no badge.
   audio from YouTube, every lyrics site switched on asked and none has its
   lyrics: see [Lyrics transcribed from the audio](#lyrics-transcribed-from-the-audio))
   has **Transcribe the lyrics** on its card, with how long it takes here
-  ("From the audio, about a minute." with a GPU, "From the audio, up to half
-  an hour." without), and so has its newest request that ended Ready in the
+  ("From the audio, a couple of minutes." with a GPU, "From the audio, up to
+  half an hour." without), and so has its newest request that ended Ready in the
   Journal (a sheet from a video that said "Chords only, no lyrics.", say),
   after its reason. A sheet from a video every lyrics site missed offers it the
   moment it is Ready, with no reload: whenever a song's request ends, the page

@@ -145,12 +145,13 @@ def test_transcribe_problem_starts_with_the_youtube_route(ycfg, tmp_path, monkey
     assert "torch" not in sys.modules or "torch" in _TORCH_BEFORE
 
 
-def test_transcribe_time_is_a_minute_on_a_gpu_and_up_to_half_an_hour_without(cfg, monkeypatch):
+def test_transcribe_time_is_a_couple_of_minutes_on_a_gpu_and_up_to_half_an_hour_without(cfg, monkeypatch):
+    # Measured on the GPU (Task 14): 83-87 s warm for a 149 s song, 150 s cold.
     monkeypatch.delenv("CARACOLE_TORCH_CUDA", raising=False)
     assert yf.transcribe_time(cfg) == "up to half an hour"
     monkeypatch.setenv("CARACOLE_TORCH_CUDA", "1")
     monkeypatch.setattr(yf.Path, "exists", lambda self: str(self) == "/dev/nvidiactl")
-    assert yf.transcribe_time(cfg) == "about a minute"
+    assert yf.transcribe_time(cfg) == "a couple of minutes"
     cpu = dataclasses.replace(cfg, autochords=dataclasses.replace(cfg.autochords, transcribe_device="cpu"))
     assert yf.transcribe_time(cpu) == "up to half an hour"
     monkeypatch.setattr(yf.Path, "exists", lambda self: False)
