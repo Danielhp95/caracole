@@ -2152,7 +2152,8 @@ chart stays, the lyrics go under it, and its page and PDF are made again, with n
 run does it in its render step, and `caracole lyrics` and a lookup at once, whatever else they did. Timed lyrics go on the same
 way, then the next auto-chords run puts each chord over its word.
 
-Auto-chords takes the words for a sheet from a lyrics site whenever the song has any, else from the song's
+Auto-chords takes the words for a sheet from a lyrics site whenever the song has any (or a site calls it
+instrumental, which makes a chart alone), else from the song's
 transcript (Whisper's words from its YouTube audio, see `caracole transcribe`) while the audio is the one that was
 transcribed, else it makes a chart alone. A sheet over a transcript says so on the line after the song's name
 (`Lyrics transcribed from the audio (Whisper), unverified`), and says "chords over the transcribed lyrics" when made

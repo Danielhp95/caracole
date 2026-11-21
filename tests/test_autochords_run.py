@@ -784,6 +784,48 @@ def test_a_sheet_over_one_transcript_is_made_again_over_a_newer_one(conn, cfg, t
     assert (run(conn, cfg, rec).skipped, rec.calls) == (1, [])
 
 
+def instrumental(conn, song):
+    update_song(conn, song.id, lyrics_status="instrumental", lyrics_json=lyrics_json(instrumental=True))
+
+
+def test_a_sites_instrumental_verdict_wins_over_a_transcript(conn, cfg, tmp_path):
+    from caracole.autochords.transcript import NOTE
+
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"))
+    instrumental(conn, s)
+    transcribed(conn, s)
+    run(conn, cfg)
+    text = auto_sheet(cfg, conn, s)
+    assert NOTE not in text and "Walking down" not in text
+    raw = auto_raw(conn, s)
+    assert raw["lyrics"] == "none" and not {"lyrics_source", "transcript", "transcript_made_at"} & raw.keys()
+
+
+def test_a_sheet_over_a_transcript_is_made_again_once_the_song_is_instrumental(conn, cfg, tmp_path):
+    from caracole.autochords.transcript import transcript_of
+
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"))
+    transcribed(conn, s)
+    run(conn, cfg)
+    assert auto_raw(conn, s)["lyrics_source"] == "transcript"
+    instrumental(conn, s)
+    rec = FakeRecognizer()
+    assert (run(conn, cfg, rec).generated, rec.calls) == (1, [Path(s.audio_path)])
+    assert "lyrics_source" not in auto_raw(conn, s) and "Walking down" not in auto_sheet(cfg, conn, s)
+    assert transcript_of(conn, get_song(conn, s.id)) is not None  # kept, unused
+    rec = FakeRecognizer()
+    assert (run(conn, cfg, rec).skipped, rec.calls) == (1, [])
+
+
+def test_a_chart_of_an_instrumental_song_is_not_made_again_for_its_kept_transcript(conn, cfg, tmp_path):
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"))
+    instrumental(conn, s)
+    run(conn, cfg)
+    transcribed(conn, s)
+    rec = FakeRecognizer()
+    assert (run(conn, cfg, rec).skipped, rec.calls) == (1, [])
+
+
 def test_a_transcript_of_other_audio_is_not_used(conn, cfg, tmp_path):
     from caracole.autochords.transcript import NOTE
 

@@ -436,11 +436,11 @@ def _skip_reason(conn: sqlite3.Connection, song: Song, overrides: Overrides) -> 
         return None  # made before LRCLIB answered: once more, now with the words
     kept_transcript = transcript_of(conn, song)
     if raw.get("lyrics_source") == LYRICS_SOURCE:
-        if _sung_lyrics(song):
-            return None  # a site has lyrics now, and they always win: once more, over them
+        if _sung_lyrics(song) or _instrumental(song):
+            return None  # a site has lyrics now, or says it is instrumental: they always win, once more over them
         if kept_transcript is None or raw.get("transcript_made_at") != kept_transcript.made_at:
             return None  # over a transcript that is not the one kept now (of other audio, or made again)
-    elif raw.get("lyrics") == "none" and kept_transcript is not None:
+    elif raw.get("lyrics") == "none" and kept_transcript is not None and not _instrumental(song):
         return None  # a transcript of this audio came since: once more, over its words
     if raw.get("lyrics") == "plain" and _synced_key(song) not in (None, raw.get("synced_lyrics")):
         return None  # timed lyrics came since: once more, with each chord over its word where they fit the audio
@@ -564,6 +564,14 @@ def _default_beats(cfg: Config) -> BeatsFn:
     return lambda path: detect_beats(path, checkpoint, device=device)
 
 
+def _instrumental(song: Song) -> bool:
+    """Whether a site says the song is instrumental: its verdict wins over a transcript, which it never gets."""
+    if song.lyrics_status == "instrumental":
+        return True
+    lyrics = song_lyrics(song)
+    return lyrics is not None and lyrics.instrumental and not lyrics.has_lyrics
+
+
 def _sung_lyrics(song: Song) -> Lyrics | None:
     """The song's stored lyrics, when they have words (an instrumental has none)."""
     lyrics = song_lyrics(song)
@@ -680,7 +688,8 @@ def _make_sheet(song: Song, heard: _Heard, *, source: str | None = None,
     """One song's auto sheet, from its audio file. ``source`` says where that came from, when it wasn't a
     purchase, on the sheet's line after the song's name; the shift has the line after it.
 
-    The song's lyrics from a site, whenever it has any, else its ``transcript`` (Whisper's words from this
+    The song's lyrics from a site, whenever it has any (and a site's word that it is
+    instrumental wins too), else its ``transcript`` (Whisper's words from this
     very audio: timed lyrics whose duration is the audio's, so they fit as they are and no shift is searched,
     with NOTE on the line after the shift's), else none.
 
@@ -690,7 +699,7 @@ def _make_sheet(song: Song, heard: _Heard, *, source: str | None = None,
     audio, segments, beats, downbeats = heard.audio, heard.segments, heard.beats, heard.downbeats
     key = estimate_key((s.label, s.end - s.start) for s in segments if s.label != NO_CHORD)
     lyrics = _sung_lyrics(song)
-    over = transcript if lyrics is None else None
+    over = transcript if lyrics is None and not _instrumental(song) else None
     timed = _Timed(over.lrc) if over is not None else _synced_for(song, lyrics, audio, segments, beats, downbeats)
     synced = timed.text if timed is not None else None
     plain = lyrics.plain if lyrics is not None else None
