@@ -1,5 +1,5 @@
 {
- "vectors_total": 72000000,
+ "vectors_total": 82000000,
  "data_total": 12000000,
  "areas": {
   "canonical": 1000000,
@@ -24,6 +24,6 @@
   "sync": 2000000,
   "unicode": 4000000,
   "viewer": 12000000,
-  "web": 10000000
+  "web": 20000000
  }
 }
