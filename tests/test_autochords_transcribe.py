@@ -180,3 +180,23 @@ def test_hearing_builds_words_and_calls_whisper_as_pinned(monkeypatch, tmp_path,
         language="es", word_timestamps=True, condition_on_previous_text=False, beam_size=5, best_of=5,
         fp16=device == "cuda",
     )
+
+
+@pytest.mark.parametrize(("error", "audio"), [
+    (RuntimeError("Failed to load audio: song.m4a: Invalid data found when processing input"), True),
+    (RuntimeError("expected scalar type Half but found Float"), False),
+    (IndexError("list index out of range"), False),
+    (ValueError("Failed to load audio: not whisper's own"), False),
+])
+def test_only_whisper_failing_to_load_the_audio_is_the_audios(error, audio):
+    assert transcribe.is_audio_error(error) is audio
+
+
+@pytest.mark.slow
+def test_whispers_own_error_for_a_file_it_cant_load_is_the_audios(tmp_path):
+    whisper_audio = pytest.importorskip("whisper.audio")  # runs its ffmpeg on a file that is no audio
+    bad = tmp_path / "song.m4a"
+    bad.write_bytes(b"not audio at all")
+    with pytest.raises(Exception) as caught:
+        whisper_audio.load_audio(str(bad))
+    assert transcribe.is_audio_error(caught.value)

@@ -331,6 +331,23 @@ def test_audio_whisper_cant_read_is_filed_as_auto_chords_files_it(conn, cfg):
     assert kept(conn, song) is None and not heard_nothing(conn, song)
 
 
+@pytest.mark.parametrize("fail", [IndexError("list index out of range"),
+                                  RuntimeError("expected scalar type Half but found Float")], ids=["index", "runtime"])
+def test_anything_else_whisper_raises_is_a_bug_that_files_nothing(conn, cfg, fail):
+    # Only Whisper failing to load the audio is the audio's; a failure deep in Whisper, or in caracole, parks nothing.
+    song = offered(conn, cfg)
+    recognizer = Recognizer()
+    result, heard = make(cfg, transcriber=Transcriber(fail=fail), recognizer=recognizer)
+    assert not result.ok and result.failed is None
+    assert result.bug == f"words: {type(fail).__name__}: {fail}"
+    ends = heard.ends()
+    assert ends["words"] == ("failed", f"a bug in caracole: {type(fail).__name__}: {fail}")
+    assert [ends[name][0] for name in ("chords", "pdf", "pages")] == ["skipped", "skipped", "done"]
+    assert recognizer.calls == []
+    assert nothing_recorded(conn, song)
+    assert why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) is None
+
+
 def test_audio_librosa_cant_read_is_filed_before_the_separator_runs(conn, cfg, monkeypatch):
     song = offered(conn, cfg)
 

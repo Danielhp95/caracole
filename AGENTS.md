@@ -1873,12 +1873,14 @@ It is rows.js's, shared by both pages:
   - separate.py: demucs-rs, a program run as a subprocess (`DemucsSeparator`; `SeparatorFailed` in its own words), and
     each frame's loudness (`frame_db`, librosa imported inside);
   - transcribe.py: Whisper large-v3 (`WhisperTranscriber`), torch and whisper imported inside; `SetupFailed`, the
-    GPU's or the model's failure, never the audio's.
+    GPU's or the model's failure, never the audio's; `is_audio_error`, Whisper failing to load the audio.
   - The job builds the default separator and Whisper at their first stage, each run first on run.py's test tone
     (`_test_tone`). Its failures are told apart as run.py's: the setup's (`SeparatorFailed`, `SetupFailed`) and the
-    audio's: the setup's record nothing against the song, which stays offered; the audio's is filed as run.py files
-    audio it can't read (`_unreadable`, kv `autochords:failed:`, transcript.py's `UNREADABLE`), which
-    `why_not_offered` reads ("its audio can't be read") until the audio changes; and no singing heard is noted.
+    audio's: the setup's record nothing against the song, which stays offered; the audio's (`frame_db` failing on
+    the mix, or Whisper's own "Failed to load audio", transcribe.py `is_audio_error`) is filed as run.py files audio
+    it can't read (`_unreadable`, kv `autochords:failed:`, transcript.py's `UNREADABLE`), which `why_not_offered`
+    reads ("its audio can't be read") until the audio changes; anything else Whisper raises is a bug, filing nothing;
+    and no singing heard is noted.
 - Which words go under the chords (run.py `_make_sheet`): a site's lyrics whenever the song has any, else the
   transcript of its current audio (transcript.py `transcript_of`: its own audio and mtime only), else none.
   - A transcript is used as timed lyrics whose duration is the audio's: no `_synced_for`, no shift searched. The sheet

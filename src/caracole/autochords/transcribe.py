@@ -59,6 +59,15 @@ def is_setup_error(e: BaseException) -> bool:
     return isinstance(e, RuntimeError) and any(s in str(e) for s in ("CUDA", "cuDNN", "device-side"))
 
 
+AUDIO_ERROR = "Failed to load audio: "  # how openai-whisper's load_audio says ffmpeg couldn't read a file
+
+
+def is_audio_error(e: BaseException) -> bool:
+    """Whisper couldn't read the audio: openai-whisper's ``load_audio`` raises ``RuntimeError("Failed to load audio:
+    <ffmpeg's stderr>")``. Anything else it raises is no fault of the audio's."""
+    return isinstance(e, RuntimeError) and str(e).startswith(AUDIO_ERROR)
+
+
 class WhisperTranscriber:
     def __init__(self, model_path: Path, *, device: str, cache_dir: Path):
         # Triton compiles into a cache, and fails without a writable one (the service's HOME is read-only).

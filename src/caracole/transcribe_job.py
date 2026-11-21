@@ -31,10 +31,11 @@ What fails is told apart as auto-chords tells it:
 - the setup's, which blames no song and records nothing, the song staying offered: the separator ("the separator
   can't run here (...)", demucs-rs's own words), a GPU missing, busy or out of memory, or a Whisper model that won't
   load (``SetupFailed``, in its own words: "the GPU failed: ...");
-- the audio's: the mix that librosa or Whisper can't read ("can't read the audio"), filed as auto-chords files a
+- the audio's: the mix that librosa or Whisper can't read ("can't read the audio": librosa's ``frame_db`` failing
+  on it, or Whisper's own "Failed to load audio", ``transcribe.is_audio_error``), filed as auto-chords files a
   file it can't read (run.py ``_unreadable``: kv ``autochords:failed:<song id>``), so the song is offered no
   transcription, nor auto-chords tried on it, until its audio changes;
-- a bug: caracole's, said as such.
+- a bug: caracole's, said as such, and anything else Whisper raises, filing nothing against the song.
 
 Beside the audio's, only "no singing heard" is recorded against the song (``note_heard_nothing``).
 
@@ -234,7 +235,7 @@ class _Transcription(StagedRun):
         return "done", f"sung from {self.spans[0].start:.1f} s, {plural(len(self.spans), 'stretch', 'stretches')}"
 
     def words(self) -> tuple[str, str] | str:
-        from caracole.autochords.transcribe import SetupFailed
+        from caracole.autochords.transcribe import is_audio_error
         from caracole.autochords.transcript import MODEL, Transcript, keep_transcript, note_heard_nothing
         from caracole.autochords.words import guard, lines_of, to_lrc
 
@@ -250,9 +251,9 @@ class _Transcription(StagedRun):
         mix = Path(self.song.audio_path or "")
         try:
             heard = transcriber.hear(mix, self.stem, self.spans[0].start)
-        except SetupFailed:  # the GPU's, said by ``stage``
-            raise
-        except Exception as e:  # noqa: BLE001 - anything else Whisper raises is the audio's, as auto-chords tells it
+        except RuntimeError as e:  # a SetupFailed (the GPU's) is said by ``stage``
+            if not is_audio_error(e):
+                raise  # a bug, deep in Whisper or in caracole: said as one, and nothing filed against the song
             return self._unreadable(e)
         kept, dropped = guard(heard.words, self.spans)
         if not kept:
