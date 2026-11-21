@@ -300,6 +300,13 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   - LRCLIB asked with the audio's length.
   - `autochords_pending(only=)`.
   - caracole serve's sheet from a YouTube video runs it (web/youtube_routes.py).
+- transcribe_job.py is no step either but `caracole transcribe`: a YouTube song's lyrics transcribed from its audio,
+  then its auto sheet made again over them (`make_transcript`).
+  - Its stages song, vocals, words, chords, pdf, pages (`STAGES`), reported as a lookup's (staged.py's `StagedRun`).
+  - Only a song `transcript.why_not_offered` offers one, by its identity key, never added to wanted.txt; read again
+    after each hand-over (`hand_over` before vocals, words and chords), and checked still offered before vocals and
+    words.
+  - The pieces are autochords/'s (below); the stem in a temporary folder under `cache_dir`, gone with the job.
 - youtube_search.py is `caracole youtube --search`: a search's first video and its thumbnail, suggested on the
   library page (`gate`, `sheet_on_screen`, `checked_jpeg`).
   - And `caracole youtube --video`: a pasted video's metadata (`video_gate`, `read_video`, `song_of_video`).
@@ -566,7 +573,7 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 | removal.py | `caracole remove` and the web page's Remove; the tombstones it leaves are songs.py's |
 | sites.py | the library page's Sites tab's data (below) |
 | progress.py | a command's output: a live line on a terminal, plain lines elsewhere |
-| staged.py | a job of stages over one song, each reported as a lookup's stages are (`StagedRun`: `stage`, `_fail`, `_song_again`, `_refuse`; `StagedResult`): youtube_sheet.py's |
+| staged.py | a job of stages over one song, each reported as a lookup's stages are (`StagedRun`: `stage`, `_fail`, `_song_again`, `_refuse`; `StagedResult`): youtube_sheet.py's and transcribe_job.py's |
 | progressions.py | each song's progressions (below) |
 
 #### index_transfer.py
@@ -1600,6 +1607,8 @@ It is rows.js's, shared by both pages:
     is `caracole ug --directory`: UG's artist directory, bulk work at the pace the owner chose for it.
   - youtube_sheet.py is `caracole youtube --sheet`: a song's auto sheet from a YouTube video now, at the bulk pace: a
     command, never a lookup.
+  - transcribe_job.py is `caracole transcribe` (commands/transcribe.py): a song's lyrics transcribed from its YouTube
+    audio, its sheet made again; asked for now, never a lookup, and asking no site.
   - review.py, search.py, removal.py and songbook.py are `caracole review`, `search`, `remove` and `songbook`.
 
 ##### search.py
@@ -1854,6 +1863,18 @@ It is rows.js's, shared by both pages:
   - `shifted_lrc` moves line and word stamps alike, so word-timed lines keep their words;
   - the shift said on a line of the sheet's after the song's name, after the video's credit for audio from YouTube,
     and kept as `raw["lyrics_shift"]`.
+- A song's lyrics transcribed from its YouTube audio, which transcribe_job.py composes from:
+  - words.py, pure Python: where someone sings, from the stem's loudness against the mix's (`sung_spans`); the words
+    outside it dropped (`guard`); the lines (`lines_of`) and the enhanced LRC (`to_lrc`);
+  - transcript.py, no third-party import (every page build asks it): kv `transcript:<id>` and `transcribe:none:<id>`
+    (`keep_transcript`, `note_heard_nothing`), and which songs are offered one (`why_not_offered`);
+  - separate.py: demucs-rs, a program run as a subprocess (`DemucsSeparator`; `SeparatorFailed` in its own words), and
+    each frame's loudness (`frame_db`, librosa imported inside);
+  - transcribe.py: Whisper large-v3 (`WhisperTranscriber`), torch and whisper imported inside; `SetupFailed`, the
+    GPU's or the model's failure, never the audio's.
+  - The job builds the default separator and Whisper at their first stage, each run first on run.py's test tone
+    (`_test_tone`). Its failures are told apart as run.py's: the setup's (`SeparatorFailed`, `SetupFailed`) and the
+    audio's record nothing against the song, which stays offered; only no singing heard is recorded.
 - Which words go under the chords (run.py `_make_sheet`): a site's lyrics whenever the song has any, else the
   transcript of its current audio (transcript.py `transcript_of`: its own audio and mtime only), else none.
   - A transcript is used as timed lyrics whose duration is the audio's: no `_synced_for`, no shift searched. The sheet
@@ -3174,7 +3195,8 @@ nix flake check
   start, and the default package has no torch.
   - `test_commands_index_match.py::test_registering_the_commands_imports_neither_the_matcher_nor_the_index` fails
     when importing `caracole.cli` loads rapidfuzz, `caracole.match` or `caracole.ug`; the
-    `test_registering_the_command*` tests of fetch, lyrics, sources, autochords and youtube do the same.
+    `test_registering_the_command*` tests of fetch, lyrics, sources, autochords, youtube and transcribe do the same
+    (transcribe's: no whisper, torch or librosa).
   - httpx, with the rich and pygments it brings, is a third of a start: http.py imports it inside the functions that
     use it, and `_common` makes its client class on first use (`_locked_client`).
   - `test_commands_index_match.py::test_a_command_that_sends_no_request_imports_no_http_client` fails when importing
@@ -3861,12 +3883,14 @@ picks one).
   `--choose` through get.
 - So does everything else caracole serve queues that the owner asked for just now, so a lookup queued behind it in
   serve's one-at-a-time queue never waits behind the whole run either: `add`, `remove`, `review`, `fetch --song`,
-  `render --song`, `youtube --song` (`--sheet`, `--none`), `youtube --search` and `--video`
+  `render --song`, `youtube --song` (`--sheet`, `--none`), `youtube --search` and `--video`, and `transcribe`
   (`test_commands_lock.py::test_lookups_take_the_lock_in_the_lane_what_the_owner_asked_for_now_as_a_lookup_and_bulk_work_neither`,
   `test_web_jobs.py::test_a_lookup_queued_behind_an_add_never_waits_behind_the_whole_nightly_run`).
   - A process holding the lock as asked for now hands it to the lane's lookups alone (`hand_over`), at its hand-over
-    points (a yt-dlp pause, a YouTube sheet before its models, `fetch --song`'s pauses), taking the gate only if it is
-    free (held, it is the bulk work that let it in), and waits with a ticket of its own, written before it lets go, to
+    points (a yt-dlp pause, a YouTube sheet before its models, a transcription before each of vocals, words and chords
+    (`test_transcribe_job.py::test_the_lock_goes_to_a_waiting_lookup_before_each_long_stage`), `fetch --song`'s
+    pauses), taking the gate only if it is free (held, it is the bulk work that let it in), and waits with a ticket
+    of its own, written before it lets go, to
     take it back once the lane is empty; so bulk work that let it in gives it back at its next pause
     (`test_commands_lane.py::test_a_queue_job_lets_a_lookup_go_first_in_its_pause_and_gets_the_lock_back`,
     `::test_a_nightly_run_that_let_a_queue_job_in_gives_it_back_at_its_next_pause`). Another caracole asked for now

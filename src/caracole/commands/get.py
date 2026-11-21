@@ -37,6 +37,7 @@ if TYPE_CHECKING:
 
 _SHORT = {"song": "Song", "match": "Match", "sheet": "Sheet", "pdf": "PDF", "lyrics": "Lyrics", "audio": "Audio",
           "chords": "Chords",  # caracole youtube --sheet's (youtube_sheet.py), said the same way
+          "vocals": "Vocals", "words": "Words",  # and caracole transcribe's (transcribe_job.py)
           "ug": "Ultimate Guitar", "lacuerda": "LaCuerda", "gtptabs": "gtptabs.com", "harptabs": "harptabs.com", "gametabs": "gametabs.net",
           "pages": "Pages",
           "songbooks": "Songbooks"}
