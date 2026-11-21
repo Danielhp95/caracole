@@ -296,7 +296,7 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   - `song_states`: where each song stands for the pages: `todo.write_pages` asks once and hands it to both, a
     one-song card asks of its song alone.
 - youtube_sheet.py is no step but `caracole youtube --sheet`: one song's auto sheet from a video now.
-  - Its stages song, audio, lyrics, chords, pdf, pages, reported as a lookup's.
+  - Its stages song, audio, lyrics, chords, pdf, pages, reported as a lookup's (staged.py's `StagedRun`).
   - LRCLIB asked with the audio's length.
   - `autochords_pending(only=)`.
   - caracole serve's sheet from a YouTube video runs it (web/youtube_routes.py).
@@ -566,6 +566,7 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 | removal.py | `caracole remove` and the web page's Remove; the tombstones it leaves are songs.py's |
 | sites.py | the library page's Sites tab's data (below) |
 | progress.py | a command's output: a live line on a terminal, plain lines elsewhere |
+| staged.py | a job of stages over one song, each reported as a lookup's stages are (`StagedRun`: `stage`, `_fail`, `_song_again`, `_refuse`; `StagedResult`): youtube_sheet.py's |
 | progressions.py | each song's progressions (below) |
 
 #### index_transfer.py
