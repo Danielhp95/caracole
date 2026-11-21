@@ -11,6 +11,14 @@ def test_frames_where_the_stem_is_near_the_mix_are_sung():
     assert sung_spans(stem, mix) == [Span(0.8, 3.2)]
 
 
+def test_a_soft_line_11_db_under_the_mix_is_still_sung():
+    # Measured (Task 14): the example's softest sung word needs the stem counted from 9 dB under the mix; the
+    # threshold keeps 3 dB more, and the instrumentals kept a made-up word only from 26 dB.
+    mix = [-10.0] * 100
+    stem = [-21.0 if 20 <= i < 60 else -60.0 for i in range(100)]
+    assert sung_spans(stem, mix) == [Span(0.8, 3.2)]
+
+
 def test_bleed_without_a_voice_is_not_sung():
     mix = [-10.0] * 100
     assert sung_spans([-25.0] * 100, mix) == []

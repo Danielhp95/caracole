@@ -15,8 +15,10 @@ JOIN_S = 0.4  # sung runs closer than this are one
 MIN_RUN_S = 0.3  # a sung run shorter than this is noise
 PAD_S = 0.2  # a span reaches this far past its run on each side
 SLACK_S = 0.3  # a word within this of a span is kept
-# Starting values for the stem-to-mix rule, measured again on real songs.
-STEM_WITHIN_DB = 10.0  # the stem is sung when it is at most this far under the mix
+# The stem-to-mix rule, measured on five songs (docs/superpowers/plans/2026-11-20-transcribed-lyrics-results.md):
+# the example keeps every word from 9 dB and from a 15 dB floor; a made-up word was kept only from 26 dB (an
+# instrumental) and from a 100 dB floor (野人's credits).
+STEM_WITHIN_DB = 12.0  # the stem is sung when it is at most this far under the mix
 FLOOR_DB = 40.0  # frames this far under the mix's loudest are silence
 
 SEG_COLS = 12  # a Whisper segment's first word breaks a line this wide
