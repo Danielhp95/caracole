@@ -3112,6 +3112,7 @@ def test_the_router_answers_the_routes_of_each_route_module_and_each_lists_its_o
     assert route_for("GET", "/api/jobsx") is None and route_for("POST", "/songbook/nothing") is None
     assert route_for("POST", "/songbook/make").page == "the library"
     assert route_for("POST", "/lookup").page == "the page" and route_for("GET", "/jobs.json").script_only
+    assert route_for("GET", "/transcribe").script_only and not route_for("POST", "/transcribe").script_only
     assert route_for("GET", "/export.pdf").path == "/export.pdf" and route_for("POST", "/export") is None
 
 

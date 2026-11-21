@@ -1691,7 +1691,9 @@ It is rows.js's, shared by both pages:
   - `GET /api/youtube/video` and `POST /youtube/video`: a video pasted into the library page's search box
     (`caracole youtube --video --progress`).
 - **transcribe_routes.py** is `POST /transcribe` (`song`, `identity`): a YouTube song's lyrics transcribed from its
-  audio, its auto sheet made again over them.
+  audio, its auto sheet made again over them; and `GET /transcribe`, read-only, for the page's script alone
+  (`script_only`, as /jobs.json): the served `server.transcribe` member as of now, `library_page.transcribe_member`,
+  the one function the page is built with too.
   - `caracole transcribe --progress --song=…` queued under `jobs.TRANSCRIBE` and the song's key (`transcribe_steps`,
     titled "Lyrics from the audio: Artist - Title"), never joining its lookup nor a lookup it, one at a time a song
     (pressed again, the job waiting or running is the answer), and the queue's, never the lane's, so two songs' run
@@ -1700,12 +1702,21 @@ It is rows.js's, shared by both pages:
     sheet's.
   - Refused 409 where it can't run (`youtube_fetch.transcribe_reason`, "No lyrics transcribed here: …") and for a
     song not offered one (`transcript.why_not_offered`, in the command's words "… isn't offered a transcription: …").
-  - Offered only on the served page, from served-only data: library_page.py `server.transcribe` (`ok`, `why`, `songs`
-    `offered_song_ids` when `ok`, `time` `transcribe_time` when `ok`, else `[]` and `""`), the cards' own data
-    unchanged (the phone writes the same cards, and its member says it can't); library.js `transcribeOffer` on a
-    card, and requests.js on the newest request that ended Ready of a song offered one (matched by `display`, the
-    name a song's requests go by, none while a request of it waits or runs), through `caracoleLibrary`'s
-    `offersTranscription` and `transcribing`: once asked for from the page, neither offers it again until a reload.
+  - Offered only on the served page, from served-only data: library_page.py `server.transcribe`
+    (`transcribe_member`: `ok`, `why`, `songs` `offered_song_ids` when `ok`, `time` `transcribe_time` when `ok`,
+    else `[]` and `""`), the cards' own data unchanged (the phone writes the same cards, and its member says it
+    can't); library.js `transcribeOffer` on a card, and requests.js on the newest request that ended Ready of a song
+    offered one (matched by `display`, the name a song's requests go by, none while a request of it waits or runs),
+    through `caracoleLibrary`'s `offeredSong`, `transcribeHint` and `transcribing`; asked for, neither offers it while
+    its request waits or runs.
+  - Read again live, never left to a reload (library.js `readTranscriptions`, one GET at a time): once a song's job
+    the page follows is over (`offerAfter`) or a request the Journal saw waiting or running is over
+    (`caracoleLibrary.requestOver`), when the song is offered one or may be (`mayBeOffered`: its card's lyrics
+    `missing` and `youtubeSheet`), and only where `server.transcribe.ok`; each song whose offer changed has its
+    card made again where it was made (`cardAgain`, `refill`), and requests.js draws its answer again
+    ("caracole:transcribe"). So a sheet from a video that found no lyrics offers it at once (the sheet's lyrics
+    stage asks LRCLIB, Megalobiz and AZLyrics, each noting its miss), a transcription that failed on the GPU offers
+    it again, and one made from a terminal meanwhile no more.
 - **ug_link_routes.py** is a UG link pasted into the library page's box: `GET /api/ug/link` (ug/link.py `known`, no
   request and no lock: its state, the tab's names, its artist's page, `guess`, the library's `song`, `hits` as
   /api/search's `index` items) and `POST /ug/link` (`caracole ug --link --progress` queued under `jobs.UG_LINK`, among

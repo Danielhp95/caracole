@@ -4940,7 +4940,10 @@ the library, sent as they are: they carry no badge.
   ("From the audio, about a minute." with a GPU, "From the audio, up to half
   an hour." without), and so has its newest request that ended Ready in the
   Journal (a sheet from a video that said "Chords only, no lyrics.", say),
-  after its reason. One press queues `caracole transcribe --progress --song
+  after its reason. A sheet from a video every lyrics site missed offers it the
+  moment it is Ready, with no reload: whenever a song's request ends, the page
+  asks caracole serve again which songs are offered one (`GET /transcribe`,
+  its script alone). One press queues `caracole transcribe --progress --song
   "Nick Cani - Vikingos veganos"`, a request of its own, "Lyrics from the
   audio: Nick Cani - Vikingos veganos"; the song's line says how it goes, a
   bar of its steps, Song, Vocals, Words, Chords and PDF ("Words · 3 of 5"),
@@ -4948,7 +4951,10 @@ the library, sent as they are: they carry no badge.
   lyrics…". Ready, the Journal says "Chords over the transcribed lyrics.";
   Failed, the stage that stopped it in its words ("no singing heard.", "the
   GPU failed: …", with Try again). Once asked for, the offer is gone from the
-  card and the Journal until the page is loaded again. One at a time a song:
+  card and the Journal while it waits and runs; once it is over the page asks
+  again, so a transcription that failed on the GPU (the song still offered) is
+  offered again, and a song transcribed meanwhile (from a terminal, or another
+  device) no more. One at a time a song:
   pressed again while it waits or runs, that one is the answer; two songs'
   run one after the other, never beside each other or a lookup. A song no
   longer offered one by the time it is pressed (its lyrics found meanwhile,

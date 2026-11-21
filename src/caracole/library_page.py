@@ -200,9 +200,11 @@ Lyrics transcribed from a song's audio (web/transcribe_routes.py): where this ca
 (``youtube_fetch.transcribe_reason``), the data's ``server.transcribe`` lists the songs offered one
 (``transcript.offered_song_ids``: audio from YouTube, every lyrics site missed) and how long one takes here
 (``transcribe_time``), and such a song's card has Transcribe the lyrics (library.js ``transcribeOffer``), as its
-request that ended Ready has in the Requests tab (requests.js), posting ``POST /transcribe`` in place, offered once:
-asked for, it is gone from both until the page is loaded again. The card's own data says nothing of it (the phone,
-which transcribes nothing, writes the same cards); elsewhere no card offers it.
+request that ended Ready has in the Requests tab (requests.js), posting ``POST /transcribe`` in place; asked for,
+it is gone from both. Once a song's job ends, the page reads the member again (``GET /transcribe``,
+``transcribe_member``): a sheet from a video that found no lyrics offers it at once, a failed transcription offers it
+again, one made meanwhile from a terminal offers it no more. The card's own data says nothing of it (the phone, which
+transcribes nothing, writes the same cards); elsewhere no card offers it.
 
 Remove stays on the page: one tap and the song's own line says "Removing in 5 s
 · Undo", the focus on Undo, with what goes in one sentence under it (the
@@ -446,9 +448,6 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
     }
     problem = route_reason(cfg) if controls is not None else None
     if controls is not None:
-        from caracole.autochords.transcript import offered_song_ids
-
-        unheard = transcribe_reason(cfg)
         data["server"] = {"csrf": controls.csrf, "busy": sorted(controls.busy), "active": controls.active,
                           "removing": sorted(controls.removing), "jobs": list(controls.jobs),
                           "guitar": controls.guitar,
@@ -456,12 +455,9 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
                           # why not, and whether you turned YouTube off, when the cards say nothing of it.
                           "youtube": {"ok": problem is None, "why": problem,
                                       "off": not cfg.provider("youtube").enabled},
-                          # Lyrics transcribed from a song's audio (web/transcribe_routes.py): whether this caracole
-                          # transcribes, why not, the songs offered one, and how long one takes here; none offered and
-                          # no time where it can't. Served alone: the cards' own data stays the phone's too.
-                          "transcribe": {"ok": unheard is None, "why": unheard,
-                                         "songs": offered_song_ids(conn, cfg, overrides) if unheard is None else [],
-                                         "time": transcribe_time(cfg) if unheard is None else ""}}
+                          # Lyrics transcribed from a song's audio (web/transcribe_routes.py), served alone: the
+                          # cards' own data stays the phone's too.
+                          "transcribe": transcribe_member(conn, cfg, overrides)}
         if controls.timers is not None:
             data["server"]["timers"] = dict(controls.timers)
         for song in songs:
@@ -471,6 +467,19 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
     if note is not None:
         note(data)
     return assemble_page(data, controls, problem=problem, library_name=cfg.library_name)
+
+
+def transcribe_member(conn: sqlite3.Connection, cfg: Config, overrides: Overrides) -> dict[str, Any]:
+    """The served page's ``server.transcribe``, as ``GET /transcribe`` answers it too (web/transcribe_routes.py), the
+    page asking it again once a song's job ends: whether this caracole transcribes (``ok``), why not (``why``,
+    ``youtube_fetch.transcribe_reason``), the songs offered one (``songs``, ``transcript.offered_song_ids``) and how
+    long one takes here (``time``, ``transcribe_time``); none offered and no time where it can't."""
+    from caracole.autochords.transcript import offered_song_ids
+
+    why = transcribe_reason(cfg)
+    if why is not None:
+        return {"ok": False, "why": why, "songs": [], "time": ""}
+    return {"ok": True, "why": None, "songs": offered_song_ids(conn, cfg, overrides), "time": transcribe_time(cfg)}
 
 
 def assemble_page(data: Mapping[str, Any], controls: WebControls | None, *, problem: str | None,

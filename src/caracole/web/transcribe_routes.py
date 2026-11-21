@@ -4,6 +4,11 @@ from the audio now, and its auto sheet made again over them.
     POST /transcribe      a song's lyrics transcribed from its audio (``song``, its id, and its ``identity``: its
                           card's, or its request's in the Requests tab, Transcribe the lyrics), with ``caracole
                           transcribe`` queued
+    GET  /transcribe      what the library page offers, for its script alone (as /jobs.json is asked): the served
+                          page's ``server.transcribe`` as it would be built now (library_page.py
+                          ``transcribe_member``: ``ok``, ``why``, ``songs``, ``time``), which the page reads again
+                          once a song's job ends, so a song a sheet from a video left without lyrics is offered at
+                          once, with no reload
 
 The job is one ``caracole transcribe --progress`` (jobs.py ``transcribe_steps``, transcribe_job.py): where the
 singing is (demucs-rs), the words (Whisper), the chords over them, the PDF and the viewer. Its key is the song's after
@@ -22,7 +27,7 @@ waits).
 
 from __future__ import annotations
 
-from caracole.web.app import Response, Route, WebApp, no_such_song, same_song, song_id
+from caracole.web.app import Response, Route, WebApp, json_response, no_such_song, same_song, song_id
 from caracole.web.jobs import TRANSCRIBE, transcribe_steps
 from caracole.web.pages import Refused
 
@@ -30,7 +35,17 @@ NOT_HERE = "No lyrics transcribed here"  # how a refusal begins, where none can 
 
 ROUTES = (
     Route("POST", "/transcribe", lambda app, asked, form: transcribe_song(app, form)),
+    Route("GET", "/transcribe", lambda app, asked: offered(app), script_only=True),
 )
+
+
+def offered(app: WebApp) -> Response:
+    """The library page's ``server.transcribe`` as of now (``library_page.transcribe_member``), read-only."""
+    from caracole.library_page import transcribe_member
+
+    overrides = app.overrides(" Fix it, then reload this page.")
+    with app.db() as conn:
+        return json_response(200, transcribe_member(conn, app.cfg, overrides))
 
 
 def transcribe_song(app: WebApp, form: dict[str, str]) -> Response:

@@ -8,6 +8,8 @@ A song offered a transcription is one whose audio came from YouTube and every ly
 """
 
 import json
+import re
+from datetime import UTC, datetime
 from urllib.parse import urlencode
 
 import pytest
@@ -21,6 +23,7 @@ from caracole.web.app import Request, WebApp
 from caracole.web.jobs import LANE, TRANSCRIBE, JobQueue, ahead, lookup_steps, transcribe_steps
 
 HOST = "localhost:8737"
+JSON_BLOCK = re.compile(r'<script type="application/json" id="songs">(.*?)</script>', re.S)
 ALLOWED = frozenset({"localhost", "127.0.0.1", "::1"})
 
 
@@ -57,6 +60,13 @@ def post(app, fields, **headers):
 
 def answer(response):
     return json.loads(response.body)
+
+
+def offers(app, **headers):
+    """GET /transcribe as the page's script asks it: its own origin, the form token in a header."""
+    sent = {"host": HOST, "accept": "application/json", "sec-fetch-site": "same-origin",
+            "x-caracole-form-token": "tok"} | headers
+    return app.handle(Request("GET", "/transcribe", {k: v for k, v in sent.items() if v is not None}))
 
 
 # --- queued ---------------------------------------------------------------------------------------------
@@ -172,3 +182,49 @@ def test_a_song_the_library_hasnt_or_another_by_its_id_is_refused(able, queue, c
     update_song(conn, song.id, status="ignored")
     ignored = post(app, {"song": str(song.id), "identity": song.key})
     assert ignored.status == 409 and queue.snapshot() == []
+
+
+# --- the offer, read again by the page ------------------------------------------------------------------------------
+
+
+def test_the_page_reads_the_offer_again_as_the_served_page_has_it(able, queue, conn, tmp_path, monkeypatch):
+    # GET /transcribe answers the served page's server.transcribe member, built by the one function the page is
+    # built with: a song that became due since the page loaded (a sheet from YouTube that found no lyrics) is in
+    # it at once, and one transcribed since is gone.
+    from caracole.autochords.transcript import Transcript, keep_transcript
+    from caracole.library_page import WebControls, build_library_page
+    from caracole.overrides import Overrides
+    from caracole.songs import get_song
+
+    monkeypatch.delenv("CARACOLE_TORCH_CUDA", raising=False)
+    app = app_for(able, queue)
+    song = youtube_song(conn, tmp_path, "Nick Cani", "Vikingos veganos", lyrics_status="pending", lyrics_at=None)
+    response = offers(app)
+    assert response.status == 200
+    assert dict(response.headers)["Content-Type"] == "application/json; charset=utf-8"
+    assert dict(response.headers)["Cache-Control"] == "no-store"
+    assert answer(response) == {"ok": True, "why": None, "songs": [], "time": "up to half an hour"}
+    update_song(conn, song.id, lyrics_status="missing", lyrics_at="2026-11-21T00:00:00Z")  # every site missed it
+    assert answer(offers(app))["songs"] == [song.id]
+    html = build_library_page(conn, able, Overrides(), datetime.now(UTC), controls=WebControls(csrf="tok"))
+    assert json.loads(JSON_BLOCK.search(html).group(1))["server"]["transcribe"] == answer(offers(app))
+    song = get_song(conn, song.id)
+    keep_transcript(conn, song, Transcript(lrc="[00:01.00]hola\n", audio=song.audio_path,
+                                           audio_mtime=song.audio_mtime, model="whisper-large-v3", language="es",
+                                           device="cpu", words_dropped=0, made_at="2026-11-21T00:00:00Z"))
+    assert answer(offers(app))["songs"] == []  # transcribed meanwhile (the command, from a terminal)
+
+
+def test_where_it_cant_run_the_offer_says_why_and_offers_no_song(cfg, queue, conn, tmp_path, monkeypatch):
+    youtube_song(conn, tmp_path, "Nick Cani", "Vikingos veganos")
+    monkeypatch.setattr(yf, "transcribe_problem", lambda cfg: "built without Whisper")
+    assert answer(offers(app_for(cfg, queue))) == {"ok": False, "why": "Whisper isn't installed", "songs": [],
+                                                   "time": ""}
+
+
+def test_the_offer_is_read_by_the_pages_script_alone(able, queue, conn):
+    app = app_for(able, queue)
+    assert offers(app, **{"sec-fetch-site": "cross-site"}).status == 403  # another site's fetch
+    assert offers(app, **{"x-caracole-form-token": None}).status == 403  # no form token: not the page's script
+    assert offers(app, **{"x-caracole-form-token": "old"}).status == 403  # a page of a server before this one
+    assert queue.snapshot() == []
