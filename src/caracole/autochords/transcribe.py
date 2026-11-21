@@ -18,6 +18,11 @@ ALIGNMENT_HEADS = b"ABzY8gWO1E0{>%R7(9S+Kn!D~%ngiGaR?*L!iJG9p-nab0JQ=-{D1-g00"
 
 SAMPLE_RATE = 16000  # whisper.audio.SAMPLE_RATE
 DETECT_S = 30.0  # the stretch of singing the language is heard on
+# NixOS's GPU driver libraries. nixpkgs' Triton (triton-bin 3.7.1) gives the linker of its kernels' launcher no
+# libcuda folder (its patched ``libcuda_dirs`` returns one path as a string, spread into characters, and nothing reads
+# TRITON_LIBCUDA_PATH), so each word-timing kernel fails to link and Whisper falls back to slower ones, 4-6 s a song
+# (measured). gcc finds ``-l:libcuda.so.1`` on LIBRARY_PATH.
+DRIVER_LIBS = Path("/run/opengl-driver/lib")
 
 
 @dataclass(frozen=True)
@@ -72,6 +77,8 @@ class WhisperTranscriber:
     def __init__(self, model_path: Path, *, device: str, cache_dir: Path):
         # Triton compiles into a cache, and fails without a writable one (the service's HOME is read-only).
         os.environ.setdefault("TRITON_CACHE_DIR", str(cache_dir / "triton"))
+        if (DRIVER_LIBS / "libcuda.so.1").exists():
+            os.environ.setdefault("LIBRARY_PATH", str(DRIVER_LIBS))
         import whisper
 
         self.device = device

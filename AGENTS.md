@@ -1905,7 +1905,10 @@ It is rows.js's, shared by both pages:
     run.py's `autochords:failed:<id>`, its key `UNREADABLE`);
   - separate.py: demucs-rs, a program run as a subprocess (`DemucsSeparator`; `SeparatorFailed` in its own words; a wgpu demucs-rs that dies by a signal after "Done!" with the stem written, as it does from Python, has separated it, logged), and
     each frame's loudness (`frame_db`, librosa imported inside);
-  - transcribe.py: Whisper large-v3 (`WhisperTranscriber`), torch and whisper imported inside; `SetupFailed`, the
+  - transcribe.py: Whisper large-v3 (`WhisperTranscriber`), torch and whisper imported inside, after `os.environ`
+    gets Triton's cache (`TRITON_CACHE_DIR`) and, where NixOS has the driver's libcuda, `LIBRARY_PATH` for the linker
+    of Triton's kernels (nixpkgs' Triton names no libcuda folder: Whisper's word timing would try to build them on
+    every 30 s, fail, and fall back); `SetupFailed`, the
     GPU's or the model's failure, never the audio's; `is_audio_error`, Whisper failing to load the audio.
   - The job builds the default separator and Whisper at their first stage, Whisper run first on run.py's test tone
     (`_test_tone`); demucs-rs not (it fails on the song as on a tone, the setup's alike, and each run costs about

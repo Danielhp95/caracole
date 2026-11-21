@@ -367,17 +367,26 @@ def test_htdemucs_separates_a_tone_and_frame_db_reads_it(tmp_path):
 @needs_libs
 @pytest.mark.autochords
 def test_whisper_hears_a_tone_without_error(tmp_path, monkeypatch):
+    import warnings
+
     from caracole.autochords.run import _write_tone
-    from caracole.autochords.transcribe import Heard, WhisperTranscriber, resolve_device
+    from caracole.autochords.transcribe import DRIVER_LIBS, Heard, WhisperTranscriber, resolve_device
 
     model = os.environ.get("CARACOLE_WHISPER_MODEL")
     if not model or not Path(model).is_file():
         pytest.skip("no Whisper model (CARACOLE_WHISPER_MODEL)")
     monkeypatch.delenv("TRITON_CACHE_DIR", raising=False)
+    monkeypatch.setenv("LIBRARY_PATH", "")  # restored after the test; unset during it, as in the units
+    monkeypatch.delenv("LIBRARY_PATH")
     device = resolve_device("auto")
     t = WhisperTranscriber(Path(model), device=device, cache_dir=tmp_path)
     tone = _write_tone(tmp_path / "tone.wav")
-    heard = t.hear(tone, tone, 0.0)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        heard = t.hear(tone, tone, 0.0)
     print("whisper device:", device)
     assert isinstance(heard, Heard)
     assert os.environ["TRITON_CACHE_DIR"] == str(tmp_path / "triton")
+    if device == "cuda" and (DRIVER_LIBS / "libcuda.so.1").exists():
+        # Triton's word-timing kernels launch: Whisper doesn't fall back to its slower ones.
+        assert not [w for w in caught if "Failed to launch Triton kernels" in str(w.message)]

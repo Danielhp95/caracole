@@ -1,5 +1,6 @@
 """The Whisper transcriber's rules that need no model: which device, and whose fault an error is."""
 
+import os
 import sys
 import types
 
@@ -200,3 +201,38 @@ def test_whispers_own_error_for_a_file_it_cant_load_is_the_audios(tmp_path):
     with pytest.raises(Exception) as caught:
         whisper_audio.load_audio(str(bad))
     assert transcribe.is_audio_error(caught.value)
+
+
+def _no_library_path(monkeypatch):
+    """LIBRARY_PATH unset for the test, and as it was after it (setenv records it, delenv clears it)."""
+    monkeypatch.setenv("LIBRARY_PATH", "")
+    monkeypatch.delenv("LIBRARY_PATH")
+
+
+def test_triton_links_the_drivers_libcuda_where_nixos_has_one(monkeypatch, tmp_path):
+    # nixpkgs' Triton gives its launcher's linker no libcuda folder: gcc finds it by LIBRARY_PATH.
+    driver = tmp_path / "opengl-driver" / "lib"
+    driver.mkdir(parents=True)
+    (driver / "libcuda.so.1").write_bytes(b"")
+    monkeypatch.setattr(transcribe, "DRIVER_LIBS", driver)
+    _no_library_path(monkeypatch)
+    _fake_torch(monkeypatch, available=False, allocates=True)
+    _fake_whisper(monkeypatch, _Model())
+    _make(monkeypatch, tmp_path)
+    assert os.environ["LIBRARY_PATH"] == str(driver)
+
+
+def test_triton_is_left_alone_without_the_drivers_libcuda_or_with_a_library_path(monkeypatch, tmp_path):
+    monkeypatch.setattr(transcribe, "DRIVER_LIBS", tmp_path / "none")
+    _no_library_path(monkeypatch)
+    _fake_torch(monkeypatch, available=False, allocates=True)
+    _fake_whisper(monkeypatch, _Model())
+    _make(monkeypatch, tmp_path)
+    assert "LIBRARY_PATH" not in os.environ
+    driver = tmp_path / "lib"
+    driver.mkdir()
+    (driver / "libcuda.so.1").write_bytes(b"")
+    monkeypatch.setattr(transcribe, "DRIVER_LIBS", driver)
+    monkeypatch.setenv("LIBRARY_PATH", "/elsewhere")
+    _make(monkeypatch, tmp_path)
+    assert os.environ["LIBRARY_PATH"] == "/elsewhere"
