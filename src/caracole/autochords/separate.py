@@ -57,9 +57,10 @@ class DemucsSeparator:
     go to XDG_CACHE_HOME and are lost with the work directory.
 
     The wgpu build, run from Python with its output captured (6 of 6 runs; from a plain shell it exits 0), finishes
-    the separation and then dies by SIGSEGV in the driver's exit path. A death by a signal after ``Done!`` as the
-    last stderr line, with vocals.wav written, is therefore taken as a success and logged; a positive exit, a
-    signal before ``Done!`` and a missing stem still fail."""
+    the separation and then dies by SIGSEGV in the driver's exit path; at times it says more after ``Done!``
+    (``NVVM compilation failed: 3``) or glibc aborts it (``double free or corruption (out)``, SIGABRT), as measured
+    on real songs. A death by a signal once ``Done!`` was said, with vocals.wav written, is therefore taken as a
+    success and logged; a positive exit, a signal before ``Done!`` and a missing stem still fail."""
 
     def __init__(self, binary: str, model: Path, cache_dir: Path, timeout: float = TIMEOUT_S):
         self.binary = binary
@@ -86,8 +87,8 @@ class DemucsSeparator:
             raise SeparatorFailed(f"demucs-rs won't run: {e}") from e
         out = stems / "vocals.wav"
         if done.returncode != 0:
-            last = [ln.strip() for ln in done.stderr.splitlines() if ln.strip()][-1:]
-            if not (done.returncode < 0 and last == ["Done!"] and out.is_file()):
+            said = [ln.strip() for ln in done.stderr.splitlines() if ln.strip()]
+            if not (done.returncode < 0 and "Done!" in said and out.is_file()):
                 raise SeparatorFailed(_why(done.stderr, done.returncode))
             log.warning("demucs-rs died by %s on its way out, after writing the vocals; taking them",
                         _signal_name(-done.returncode))

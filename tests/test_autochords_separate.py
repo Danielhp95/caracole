@@ -36,13 +36,19 @@ if mode == "fail":
 if mode == "hang":
     import time
     time.sleep(30)
-if mode in ("write", "crash_after_done", "crash_before_done", "done_exit_1"):
+if mode in ("write", "crash_after_done", "abort_after_done", "crash_before_done", "done_exit_1"):
     out = Path(argv[argv.index("-o") + 1]) / "vocals.wav"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_bytes(b"RIFF")
-if mode in ("crash_after_done", "done_exit_1"):
+if mode in ("crash_after_done", "abort_after_done", "done_exit_1"):
     sys.stderr.write("Separating...\\n  Wrote " + str(out) + "\\nDone!\\n")
     sys.stderr.flush()
+if mode == "abort_after_done":
+    # As measured (Task 14): the driver's exit path says more after Done!, then glibc aborts.
+    sys.stderr.write("NVVM compilation failed: 3\\ndouble free or corruption (out)\\n")
+    sys.stderr.flush()
+    import signal
+    os.kill(os.getpid(), signal.SIGABRT)
 if mode == "crash_before_done":
     sys.stderr.write("Separating...\\n")
     sys.stderr.flush()
@@ -110,6 +116,14 @@ def test_a_demucs_that_crashes_on_its_way_out_after_writing_the_vocals_has_separ
         stem = separator.vocals(tmp_path / "song.m4a", tmp_path)
     assert stem == tmp_path / "stems" / "vocals.wav" and stem.is_file()
     assert "SIGSEGV" in caplog.text
+
+
+def test_a_demucs_that_aborts_with_more_said_after_done_has_separated_them_too(tmp_path, caplog):
+    separator, _ = _separator(tmp_path, "abort_after_done")
+    with caplog.at_level("WARNING"):
+        stem = separator.vocals(tmp_path / "song.m4a", tmp_path)
+    assert stem == tmp_path / "stems" / "vocals.wav" and stem.is_file()
+    assert "SIGABRT" in caplog.text
 
 
 def test_a_demucs_that_dies_by_a_signal_before_done_fails(tmp_path):
