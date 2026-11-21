@@ -52,6 +52,10 @@ ran. So a job of other commands reads the same way:
   chords stage made the sheet (an auto sheet of an earlier video is none of
   its doing), else "Not made yet" (a block, a cooldown, a spent budget or a
   site's error, which exit 0), the Requests tab saying which stage stopped it.
+  A song's lyrics transcribed from its audio (``jobs.TRANSCRIBE``) says
+  the same: Ready once its chords stage made the sheet over them, else
+  "Not made yet"; it says why it failed in its failed stage's words ("no
+  singing heard", "the GPU failed: …").
   A sync with another caracole (``caracole peer sync``, the Sync tab's: sync_routes.py) says "Shared", and a push
   another caracole sent taken (``caracole peer take``, peer_routes.py) or a pull of its units "Taken"; with a unit
   left as it was (the owner skipped it, or it changed on a side since the comparison), "Shared · 2 changes left as
@@ -85,6 +89,7 @@ from caracole.web.jobs import (
     PEER,
     READING,
     REMOVING,
+    TRANSCRIBE,
     YOUTUBE_SHEET,
     Job,
     Stage,
@@ -116,6 +121,8 @@ STAGE_LINES = {
     "search": "Searching LaCuerda",  # caracole lacuerda --search's (jobs.SEARCH_STAGES)
     "audio": "Getting the audio",  # caracole youtube --sheet's (youtube_sheet.STAGES)
     "chords": "Working out the chords",
+    "vocals": "Finding where the singing is",  # caracole transcribe's (transcribe_job.STAGES)
+    "words": "Transcribing the lyrics",
     "video": "Searching YouTube",  # caracole youtube --search's (jobs.YOUTUBE_SEARCH_STAGES)
     "thumbnail": "Getting the thumbnail",
     "tab": "Reading the tab page on UG",  # caracole ug --link's (jobs.UG_LINK_STAGES)
@@ -276,7 +283,7 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page:
         return Line("ready", DONE[action], ("Open songbook", opens) if opens else None)
     if job.song_key.startswith(INDEX_READS):  # no song's: its command's last word says what the site answered
         return _artist_read(job.steps, details)
-    if job.song_key.startswith(YOUTUBE_SHEET):  # Ready once its chords are made, never on an earlier sheet
+    if job.song_key.startswith((YOUTUBE_SHEET, TRANSCRIBE)):  # Ready once its chords are made, never an earlier sheet
         made = any(stage.name == "chords" and stage.state == "done" for stage in job.stages)
         if made and song is not None and song.sheet:
             return Line("ready", READY, ("Open", song.sheet))

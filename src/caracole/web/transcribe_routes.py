@@ -1,0 +1,58 @@
+"""caracole serve's lyrics transcribed from a song's audio: a YouTube song every lyrics site missed, its words heard
+from the audio now, and its auto sheet made again over them.
+
+    POST /transcribe      a song's lyrics transcribed from its audio (``song``, its id, and its ``identity``: its
+                          card's, or its request's in the Requests tab, Transcribe the lyrics), with ``caracole
+                          transcribe`` queued
+
+The job is one ``caracole transcribe --progress`` (jobs.py ``transcribe_steps``, transcribe_job.py): where the
+singing is (demucs-rs), the words (Whisper), the chords over them, the PDF and the viewer. Its key is the song's after
+``jobs.TRANSCRIBE``, so it never joins the song's lookup, nor a lookup it, and one at a time a song: asked again while
+one waits or runs, that one is the answer. It is the queue's, never the lookups' lane's, so two songs' run one after
+the other, each under caracole's lock. Its view is the song's (/jobs.json's ``kind`` "song"), so the song's line says
+how it goes, its stages as steps (outcome.py ``TRANSCRIBE_STEPS``).
+
+Refused, with nothing queued (``pages.Refused``): a caracole that transcribes nothing
+(``youtube_fetch.transcribe_reason``, 409, in its words: no auto-chords, no Whisper, a model file or demucs-rs
+missing, as the library page then offers it on no card), and a song not offered a transcription (409, in
+``transcript.why_not_offered``'s words: its audio isn't from YouTube, a lyrics site has its lyrics or hasn't been
+asked, it was transcribed already…), as the command refuses it again when it runs (the library may change while it
+waits).
+"""
+
+from __future__ import annotations
+
+from caracole.web.app import Response, Route, WebApp, no_such_song, same_song, song_id
+from caracole.web.jobs import TRANSCRIBE, transcribe_steps
+from caracole.web.pages import Refused
+
+NOT_HERE = "No lyrics transcribed here"  # how a refusal begins, where none can be
+
+ROUTES = (
+    Route("POST", "/transcribe", lambda app, asked, form: transcribe_song(app, form)),
+)
+
+
+def transcribe_song(app: WebApp, form: dict[str, str]) -> Response:
+    """A song's lyrics transcribed from its audio, queued (see the module docstring): the song by its id (``song``),
+    the one its ``identity`` names."""
+    from caracole.autochords.transcript import why_not_offered
+    from caracole.songs import get_song
+    from caracole.youtube_fetch import transcribe_reason
+
+    problem = transcribe_reason(app.cfg)
+    if problem is not None:
+        raise Refused(409, "Not here", f"{NOT_HERE}: {problem}.")
+    overrides = app.overrides()
+    asked = song_id(form.get("song", ""))
+    with no_such_song(), app.db() as conn:
+        song = get_song(conn, asked)
+        same_song(song, form)
+        why = why_not_offered(conn, app.cfg, song, overrides)
+    if why is not None:
+        raise Refused(409, "Not offered", f"{song.display} isn't offered a transcription: {why}.")
+    display = song.display
+    job, _ = app.submit(f"Lyrics from the audio: {display}", TRANSCRIBE + song.key, transcribe_steps(display),
+                        display=display,
+                        full="The queue is full: nothing queued. Ask again once it empties.")
+    return app.queued(job)

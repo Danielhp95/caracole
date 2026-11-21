@@ -4,14 +4,13 @@ The library page's song lines keep status.py's ``Line``, and draw a lookup's ste
 the Requests tab (feed.py) reads that same line and says it its own way, never from anything else than
 the job and what the library knows of its song:
 
-- **Steps** (``steps``), for the request that runs, and for a lookup or a sheet from a YouTube video once it is
-  over, as it left them (``lists_steps``: one that started): a lookup's stages (get.py's ``STAGES``) as a few steps
-  in plain words, Song, Match, Sheet, PDF, Lyrics, Extras (Ultimate Guitar's second pass, its sheets scored
-  and its tab, LaCuerda's sheet, gtptabs.com's Guitar Pro file, harptabs.com's harmonica tab and gametabs.net's tab
-  of game music, from the
-  first to the last) and
-  Songbooks; a request of other commands, its commands, each by what it does ("Sheet" for ``caracole
-  fetch``), else by its step's label, each skipped one not drawn. A step is running while one of its stages
+- **Steps** (``steps``), for the request that runs, and for a lookup, a sheet from a YouTube video or a
+  transcription once it is over, as it left them (``lists_steps``: one that started): a lookup's stages (get.py's
+  ``STAGES``) as a few steps in plain words, Song, Match, Sheet, PDF, Lyrics, Extras (Ultimate Guitar's second pass,
+  its sheets scored and its tab, LaCuerda's sheet, gtptabs.com's Guitar Pro file, harptabs.com's harmonica tab and
+  gametabs.net's tab of game music, from the first to the last) and Songbooks; a request of other commands, its
+  commands, each by what it does ("Sheet" for ``caracole fetch``), else by its step's label, each skipped one not
+  drawn. A step is running while one of its stages
   runs, or once some ran and others wait; done once all are over, failed when one failed. A lookup's steps are
   fixed when it starts: those of its command (no Songbooks for one that leaves them to a later job,
   ``--no-songbooks``), and a step whose every stage ended skipped, with nothing to do for the song, keeps its
@@ -31,6 +30,10 @@ the job and what the library knows of its song:
   a cooldown or a spent budget drawn failed, as a lookup's sheet is; Ready
   says what the sheet holds (its chords stage's words: chords over the timed lyrics, a chart then the lyrics, or
   chords alone), or why its lyrics wait, and Not made yet the stage that stopped it, in its words.
+- **A song's lyrics transcribed from its audio** (``TRANSCRIBE_STEPS``): Song, Vocals, Words, Chords and PDF, as a sheet
+  from a YouTube video's are, none naming a site; Ready says what the sheet holds ("chords over the transcribed
+  lyrics"), and Not made yet the stage that stopped it, in its words (``_staged_holds``, ``_staged_stopped``: the
+  two jobs' rules, each given its stages).
 - **Progress** (``progress``), for the library page: a lookup's steps, a bar on the song's line (or a search
   result's row) while it runs, with the step in hand (``_in_hand``: the one that runs, else the first that
   waits, between two steps, else the last), its place ``at`` and ``count``, "3 of 7", its place among every
@@ -112,6 +115,17 @@ YOUTUBE_STEPS = (
     ("PDF", ("pdf",)),
 )
 YOUTUBE_SOURCE = tag("youtube")  # the site its Audio step names
+# A song's lyrics transcribed from its audio's steps (transcribe_job.STAGES): where the singing is, the words, the
+# chords, the PDF.
+TRANSCRIBE_STEPS = (
+    ("Song", ("song",)),
+    ("Vocals", ("vocals",)),
+    ("Words", ("words",)),
+    ("Chords", ("chords",)),
+    ("PDF", ("pdf",)),
+)
+# A staged job's steps, as the two tables above: each a name and the stages it stands for.
+StepTable = tuple[tuple[str, tuple[str, ...]], ...]
 # A step's site in full, by its tag (icons.tag): get.py's names, YouTube's, and where an auto sheet or a file you filed
 # came from; a tag it lacks is named as it is.
 SITE_NAMES = {tag(key): name for key, name in NAMES.items()} | {
@@ -205,8 +219,9 @@ def steps(job: Job, facts: SongFacts | None = None) -> list[Chip]:
     if peer_kind(job) is not None:  # a sync's or a take's: its stages, each skipped one not drawn
         return [Chip(PEER_STEPS.get(stage.name, stage.label), "failed" if stage.state == INTERRUPTED else stage.state)
                 for stage in job.stages if stage.state != "skipped"]
-    if job.stages and job.from_youtube:
-        return _youtube_steps(job)
+    staged = _staged(job)
+    if job.stages and staged is not None:
+        return _staged_steps(job, staged[0])
     if job.stages:
         return _lookup_steps(job, facts)
     chips = []
@@ -220,9 +235,21 @@ def steps(job: Job, facts: SongFacts | None = None) -> list[Chip]:
 
 
 def lists_steps(job: Job) -> bool:
-    """Whether the Requests tab lists the steps of ``job`` once it is over: a lookup's, or a sheet from a YouTube
-    video's, that started, as it left them; never one cancelled before it ran, nor a request of other commands."""
-    return not job.active and job.started_at is not None and (job.looks_up or job.from_youtube)
+    """Whether the Requests tab lists the steps of ``job`` once it is over: a lookup's, a sheet from a YouTube
+    video's or a transcription's, that started, as it left them; never one cancelled before it ran, nor a request of
+    other commands."""
+    return not job.active and job.started_at is not None and (job.looks_up or _staged(job) is not None)
+
+
+def _staged(job: Job) -> tuple[StepTable, str] | None:
+    """A job of stages over one song (staged.py) as this module reads it: its steps (``YOUTUBE_STEPS``,
+    ``TRANSCRIBE_STEPS``) and the stage of the words a Ready one says may wait (a sheet from YouTube's lyrics, a
+    transcription's words); None for any other job."""
+    if job.from_youtube:
+        return YOUTUBE_STEPS, "lyrics"
+    if job.transcribes:
+        return TRANSCRIBE_STEPS, "words"
+    return None
 
 
 def _lookup_steps(job: Job, facts: SongFacts | None) -> list[Chip]:
@@ -246,13 +273,13 @@ def _lookup_steps(job: Job, facts: SongFacts | None) -> list[Chip]:
     return chips
 
 
-def _youtube_steps(job: Job) -> list[Chip]:
-    """A sheet from a YouTube video's steps: its audio skipped for a block, a cooldown or a spent budget is the step
-    that stopped it, drawn failed; a step every stage of which ended skipped, with nothing to do, keeps its place,
-    skipped."""
+def _staged_steps(job: Job, table: StepTable) -> list[Chip]:
+    """A staged job's steps, ``table``'s (a sheet from a YouTube video's, a transcription's): a YouTube sheet's
+    audio skipped for a block, a cooldown or a spent budget is the step that stopped it, drawn failed, and names
+    YouTube; a step every stage of which ended skipped, with nothing to do, keeps its place, skipped."""
     by_name = {stage.name: stage for stage in job.stages}
     chips = []
-    for name, names in YOUTUBE_STEPS:
+    for name, names in table:
         read = [(by_name[n], "failed" if (n == "audio" and by_name[n].state == "skipped" and by_name[n].detail)
                  or by_name[n].state == INTERRUPTED else by_name[n].state) for n in names if n in by_name]
         state = _state([s for _, s in read])
@@ -312,7 +339,7 @@ def progress(job: Job, line: Line, facts: SongFacts | None, *, now: datetime | N
     (status.py's) says Ready: its steps fold away, as its song's line opens the sheet. Ended otherwise, its steps
     stay, to show which step stopped: ``at`` and ``count`` name the one that failed, and are left out when none did.
     Nothing either until it has run ``BAR_AFTER`` (``_has_run``) at ``now`` (None: the clock's)."""
-    if (not (job.looks_up or job.from_youtube) or job.state in ("queued", "cancelled")
+    if (not (job.looks_up or _staged(job) is not None) or job.state in ("queued", "cancelled")
             or (line.tone == "ready" and line.text == READY) or not _has_run(job, now)):
         return {}
     chips = steps(job, facts)
@@ -331,7 +358,7 @@ def progress(job: Job, line: Line, facts: SongFacts | None, *, now: datetime | N
 def _waits_for_the_book(stages: list[Stage]) -> bool:
     """Whether the stage that runs waits for the book, a nightly run holding caracole's lock: its detail begins as
     status.py's ``_WAITING``, as ``_stage_line`` reads it for "Waiting for the book…"; the step in hand is that stage's
-    (the song's, a lookup's and a sheet from a YouTube video's)."""
+    (the song's, a lookup's, a sheet from a YouTube video's and a transcription's)."""
     stage = next((s for s in stages if s.state == "running"), None)
     return stage is not None and stage.detail.startswith(_WAITING)
 
@@ -402,10 +429,11 @@ def outcome(job: Job, line: Line, facts: SongFacts | None = None, *, song_id: in
         return Outcome("removed", text)
     if tone == "cancelled":  # you took it out of the queue: asked for again from the library, never from here
         return Outcome("cancelled", text, CANCELLED)
+    staged = _staged(job)
     if tone == "ready":
         href = _href(line.link[1]) if line.link else None
         if text == "Ready":
-            said = _youtube_holds(job.stages) if job.from_youtube else _waits(job.stages, after_sheet=True)
+            said = _staged_holds(job.stages, staged[1]) if staged else _waits(job.stages, after_sheet=True)
             return Outcome("ready", "Ready", said, Action("Open", href=href) if href else None)
         return Outcome("ready", text, "", Action(line.link[0], href=href) if line.link and href else None)
     if tone == "review":
@@ -417,8 +445,8 @@ def outcome(job: Job, line: Line, facts: SongFacts | None = None, *, song_id: in
         return Outcome(tone, word, _sentence(rest) if rest else "", again if tone == "waiting" else None)
     if tone == "missing":
         return _not_found(job, facts, song_id)
-    if tone == "waiting" and job.from_youtube:
-        return Outcome("waiting", text, _youtube_stopped(job.stages), again)
+    if tone == "waiting" and staged is not None:
+        return Outcome("waiting", text, _staged_stopped(job.stages, staged[0]), again)
     if tone == "waiting":
         return Outcome("waiting", text, _waits(job.stages) or ("" if job.stages else NOT_ASKED), again)
     # "Added · fetched tonight": the word, then the reason; any other line ("Ignored · overrides.toml") whole
@@ -491,21 +519,23 @@ def _waits(stages: list[Stage], *, after_sheet: bool = False) -> str:
     return next((said for name in names if name in by_name and (said := _stage_reason(by_name[name]))), "")
 
 
-def _youtube_holds(stages: list[Stage]) -> str:
-    """A sheet from a YouTube video that is ready: what it holds (its chords stage's words), or, when its lyrics
-    wait, why."""
+def _staged_holds(stages: list[Stage], words: str) -> str:
+    """A staged job that is ready (a sheet from a YouTube video, a transcription): what its sheet holds (its chords
+    stage's words), or, when the stage of its words (``words``: the sheet's lyrics, the transcription's words) waits,
+    why."""
     by_name = {stage.name: stage for stage in stages}
-    lyrics, chords = by_name.get("lyrics"), by_name.get("chords")
-    if lyrics is not None and lyrics.state in ("skipped", "failed") and lyrics.detail:
-        return _capital(lyrics.detail)
+    waited, chords = by_name.get(words), by_name.get("chords")
+    if waited is not None and waited.state in ("skipped", "failed") and waited.detail:
+        return _capital(waited.detail)
     return _capital(chords.detail.removeprefix("up to date: ")) if chords is not None and chords.detail else ""
 
 
-def _youtube_stopped(stages: list[Stage]) -> str:
-    """A sheet from a YouTube video not made: the first stage that stopped it, in its words."""
+def _staged_stopped(stages: list[Stage], table: StepTable) -> str:
+    """A staged job not made: the first of its stages after the song's (``table``'s, its steps') that stopped it, in
+    its words."""
+    names = {name for _, group in table for name in group if name != "song"}
     return next((_capital(stage.detail) for stage in stages
-                 if stage.name in ("audio", "lyrics", "chords", "pdf") and stage.state in ("skipped", "failed")
-                 and stage.detail), "")
+                 if stage.name in names and stage.state in ("skipped", "failed") and stage.detail), "")
 
 
 def _capital(text: str) -> str:

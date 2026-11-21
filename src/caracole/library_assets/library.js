@@ -462,6 +462,35 @@
     postInPlace(form, go, s);
     return form;
   };
+  // Lyrics transcribed from a song's audio (web/transcribe_routes.py), on a song's card, served: for a song offered
+  // one (``server.transcribe.songs``: its audio from YouTube, every lyrics site missed) where this caracole transcribes
+  // (``server.transcribe.ok``), Transcribe the lyrics and how long it takes here (POST /transcribe with the song:
+  // caracole transcribe, its words heard, its chords made again over them), which posts in place, the song's line then
+  // saying how it goes; none while a request of the song waits or runs, and none once asked for from this page, here
+  // or in the Requests tab (``transcribing``, requests.js's form): its request then says how it went.
+  const TRANSCRIBE = server && server.transcribe && typeof server.transcribe === "object" ? server.transcribe : null;
+  const transcribable = new Set(TRANSCRIBE && TRANSCRIBE.ok === true ? listOf(TRANSCRIBE.songs).map(Number) : []);
+  const offersTranscription = (id) => {
+    const asked = jobOfSong(id);
+    return transcribable.has(Number(id)) && !removing.has(Number(id)) && !busy.has(Number(id)) &&
+      !(asked && isActive(asked));
+  };
+  const transcribing = (id) => transcribable.delete(Number(id));
+  const transcribeOffer = (s) => {
+    if (!offersTranscription(s.id)) return null;
+    const form = songForm("transcribe", "/transcribe", s);
+    const go = el("button", "btn small", "Transcribe the lyrics");
+    go.type = "submit";
+    go.setAttribute("aria-label", "Transcribe the lyrics of " + String(s.title) + " by " + String(s.artist) +
+      " from its audio");
+    go.title = "Whisper hears the words, and the auto sheet is made again with its chords over them.";
+    form.append(go, el("p", "hint", "From the audio, " + String(TRANSCRIBE.time || "") + "."));
+    postInPlace(form, go, s, (body) => {
+      transcribing(s.id);
+      return body.job;
+    });
+    return form;
+  };
   // The LaCuerda sheet of each song of yours that the bar's search found (a LaCuerda row of it with chords, which
   // mergeSites folds into its line), by song id: its line offers it until the page is loaded again.
   const lacuerdaFound = new Map();
@@ -1351,6 +1380,8 @@
     if (fromYouTube) more.push(fromYouTube);
     const fromVideo = server ? youtubeSheet(s) : null;
     if (fromVideo) more.push(fromVideo);
+    const transcribe = server ? transcribeOffer(s) : null;
+    if (transcribe) more.push(transcribe);
     const picked = lacuerdaNote(s);
     if (picked) more.push(picked);
     if (server && s.notFound && s.status === "wanted" && !removing.has(id)) {
@@ -4355,6 +4386,11 @@
         if (fromVideo.contains(document.activeElement)) focusOn(p);
         fromVideo.remove();
       }
+      const transcribe = inItem(item, "form.transcribe");
+      if (transcribe && isActive(view)) {  // and its lyrics transcribed
+        if (transcribe.contains(document.activeElement)) focusOn(p);
+        transcribe.remove();
+      }
       const picker = inItem(item, "form.pick-form");
       if (picker && isActive(view)) {  // POST /review would refuse a pick now: the line is drawn again after
         const box = picker.closest("details.picker");
@@ -4534,6 +4570,10 @@
     stepList,
     focusOn,
     fold,
+    // The Requests tab's Transcribe the lyrics (requests.js): whether a song is offered one now, as its card offers
+    // it, and the song asked for there, so neither offers it again.
+    offersTranscription,
+    transcribing,
   });
 
   if (server) {

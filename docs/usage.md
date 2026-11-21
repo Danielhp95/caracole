@@ -2377,7 +2377,8 @@ song. Before each of the separator, Whisper and auto-chords, a lookup waiting fo
 out of the book meanwhile ends the job there, a refusal, and so does one that found lyrics before the separator or
 Whisper (after them, the sheet goes over the site's lyrics), or whose audio another caracole replaced after its
 vocals were separated (the new audio is offered a transcription of its own). `--progress` adds a JSON line per
-stage, for caracole serve.
+stage, for caracole serve, whose library page offers the same on the song's card (see **Lyrics transcribed from the
+audio** under [caracole serve](#caracole-serve)).
 
 It exits 0 once the sheet is made, and 1:
 
@@ -4930,6 +4931,32 @@ the library, sent as they are: they carry no badge.
   is the answer. Where caracole can't make the chords, the form has no such
   field and says why in one line ("No sheets from YouTube here: auto-chords
   isn't installed."), and the cards offer nothing.
+- **Lyrics transcribed from the audio.** Where caracole transcribes (as for
+  `caracole transcribe`: auto-chords, Whisper, its two model files and
+  demucs-rs, and YouTube not turned off), a song offered a transcription (its
+  audio from YouTube, every lyrics site switched on asked and none has its
+  lyrics: see [Lyrics transcribed from the audio](#lyrics-transcribed-from-the-audio))
+  has **Transcribe the lyrics** on its card, with how long it takes here
+  ("From the audio, about a minute." with a GPU, "From the audio, up to half
+  an hour." without), and so has its newest request that ended Ready in the
+  Journal (a sheet from a video that said "Chords only, no lyrics.", say),
+  after its reason. One press queues `caracole transcribe --progress --song
+  "Nick Cani - Vikingos veganos"`, a request of its own, "Lyrics from the
+  audio: Nick Cani - Vikingos veganos"; the song's line says how it goes, a
+  bar of its steps, Song, Vocals, Words, Chords and PDF ("Words · 3 of 5"),
+  while it runs "Finding where the singing is…", then "Transcribing the
+  lyrics…". Ready, the Journal says "Chords over the transcribed lyrics.";
+  Failed, the stage that stopped it in its words ("no singing heard.", "the
+  GPU failed: …", with Try again). Once asked for, the offer is gone from the
+  card and the Journal until the page is loaded again. One at a time a song:
+  pressed again while it waits or runs, that one is the answer; two songs'
+  run one after the other, never beside each other or a lookup. A song no
+  longer offered one by the time it is pressed (its lyrics found meanwhile,
+  transcribed already) is refused in the command's words ("Nick Cani -
+  Vikingos veganos isn't offered a transcription: its lyrics are found."), and
+  where caracole can't transcribe, no card offers it (`POST /transcribe` says
+  "No lyrics transcribed here: Whisper isn't installed."). The phone never
+  offers it.
 - **A YouTube video for a search.** Where caracole can make a sheet from a
   video (as above), a search the sites have no sheet for (no strong song of
   yours, of Ultimate Guitar's index or of LaCuerda's with chords, and no artist

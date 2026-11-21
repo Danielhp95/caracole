@@ -196,6 +196,14 @@ from it in place of a lookup, and a song's card (its ``youtubeSheet``: no human 
 has Sheet from a YouTube video under its "⋯" (library.js ``youtubeSheet``), posting ``POST /youtube`` in place;
 elsewhere the form says why in one line, and the cards offer nothing.
 
+Lyrics transcribed from a song's audio (web/transcribe_routes.py): where this caracole transcribes
+(``youtube_fetch.transcribe_reason``), the data's ``server.transcribe`` lists the songs offered one
+(``transcript.offered_song_ids``: audio from YouTube, every lyrics site missed) and how long one takes here
+(``transcribe_time``), and such a song's card has Transcribe the lyrics (library.js ``transcribeOffer``), as its
+request that ended Ready has in the Requests tab (requests.js), posting ``POST /transcribe`` in place, offered once:
+asked for, it is gone from both until the page is loaded again. The card's own data says nothing of it (the phone,
+which transcribes nothing, writes the same cards); elsewhere no card offers it.
+
 Remove stays on the page: one tap and the song's own line says "Removing in 5 s
 · Undo", the focus on Undo, with what goes in one sentence under it (the
 server's answer to the question, ``removal.brief``: caracole's files of the
@@ -323,6 +331,8 @@ from caracole.youtube_fetch import (
     route_problem,
     route_reason,
     song_states,
+    transcribe_reason,
+    transcribe_time,
     videos_by_audio,
 )
 
@@ -436,13 +446,22 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
     }
     problem = route_reason(cfg) if controls is not None else None
     if controls is not None:
+        from caracole.autochords.transcript import offered_song_ids
+
+        unheard = transcribe_reason(cfg)
         data["server"] = {"csrf": controls.csrf, "busy": sorted(controls.busy), "active": controls.active,
                           "removing": sorted(controls.removing), "jobs": list(controls.jobs),
                           "guitar": controls.guitar,
                           # A sheet from a YouTube video (web/youtube_routes.py): whether this caracole makes one,
                           # why not, and whether you turned YouTube off, when the cards say nothing of it.
                           "youtube": {"ok": problem is None, "why": problem,
-                                      "off": not cfg.provider("youtube").enabled}}
+                                      "off": not cfg.provider("youtube").enabled},
+                          # Lyrics transcribed from a song's audio (web/transcribe_routes.py): whether this caracole
+                          # transcribes, why not, the songs offered one, and how long one takes here; none offered and
+                          # no time where it can't. Served alone: the cards' own data stays the phone's too.
+                          "transcribe": {"ok": unheard is None, "why": unheard,
+                                         "songs": offered_song_ids(conn, cfg, overrides) if unheard is None else [],
+                                         "time": transcribe_time(cfg) if unheard is None else ""}}
         if controls.timers is not None:
             data["server"]["timers"] = dict(controls.timers)
         for song in songs:

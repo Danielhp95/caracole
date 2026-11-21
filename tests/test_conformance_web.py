@@ -529,7 +529,7 @@ def phone_kind(job: _Job) -> str:
                          (_songbooks.KEY, "songbook"), (_jobs.LACUERDA_SEARCH, "lacuerda-search"),
                          (_jobs.LACUERDA_ARTIST, "lacuerda-artist"), (_jobs.HARPTABS_ARTIST, "harptabs-artist"),
                          (_jobs.YOUTUBE_SEARCH, "youtube-search"), (_jobs.YOUTUBE_SHEET, "youtube"),
-                         (_jobs.UG_LINK, "ug-link"),
+                         (_jobs.TRANSCRIBE, "transcribe"), (_jobs.UG_LINK, "ug-link"),
                          (_jobs.INDEX_MERGE, "index-merge"), ("sync:", "sync"), ("import:", "sync")):
         if key.startswith(prefix):
             return kind
@@ -895,6 +895,40 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
     add("a sheet from YouTube, not made", in_state(youtube, "done", {
         "song": ("done", ""), "audio": ("skipped", "waiting out YouTube until 2026-11-04 11:30 UTC")}),
         facts=_status.SongFacts())
+    # A song's lyrics transcribed from its audio (caracole transcribe: transcribe_job.STAGES).
+    transcription = queued_job(f"Lyrics from the audio: {V_DISPLAY}", _jobs.TRANSCRIBE + V_KEY,
+                               _jobs.transcribe_steps(V_DISPLAY), display=V_DISPLAY)
+    heard = {"song": ("done", "in the book"), "vocals": ("done", "sung from 9.3 s, 4 stretches"),
+             "words": ("done", "212 words in 31 lines (en), 3 dropped")}
+    add("a transcription, waiting for the book", in_state(transcription, "running", {
+        "song": ("done", "in the book"), "vocals": ("running", "waiting for the book (pid 9: run)")}),
+        facts=_status.SongFacts())
+    add("a transcription, its words", in_state(transcription, "running", {
+        "song": ("done", "in the book"), "vocals": ("done", "sung from 9.3 s, 4 stretches"),
+        "words": ("running", "")}), facts=_status.SongFacts())
+    add("a transcription, ready", in_state(transcription, "done", heard | {
+        "chords": ("done", "chords over the transcribed lyrics"), "pdf": ("done", "made"),
+        "pages": ("done", "_todo.md and index.html rewritten")}), facts=ready)
+    add("a transcription, up to date", in_state(transcription, "done", heard | {
+        "chords": ("done", "up to date: chords over the transcribed lyrics"), "pdf": ("done", "up to date"),
+        "pages": ("done", "")}), facts=ready)
+    add("a transcription, no singing heard", in_state(transcription, "failed", {
+        "song": ("done", "in the book"), "vocals": ("done", "no singing found"),
+        "words": ("failed", "no singing heard"), "chords": ("skipped", "no transcript"),
+        "pdf": ("skipped", "no sheet")}, code=1), facts=_status.SongFacts())
+    add("a transcription, the GPU failed", in_state(transcription, "failed", {
+        "song": ("done", "in the book"), "vocals": ("done", "sung from 9.3 s, 4 stretches"),
+        "words": ("failed", "the GPU failed: CUDA out of memory"), "chords": ("skipped", "no transcript"),
+        "pdf": ("skipped", "no sheet")}, code=1), facts=_status.SongFacts())
+    add("a transcription, the separator can't run", in_state(transcription, "failed", {
+        "song": ("done", "in the book"), "vocals": ("failed", "the separator can't run here (no GPU adapter)"),
+        "words": ("skipped", "no vocals"), "chords": ("skipped", "no transcript"),
+        "pdf": ("skipped", "no sheet")}, code=1), facts=_status.SongFacts())
+    add("a transcription, refused: no longer offered", in_state(transcription, "failed", {
+        "song": ("failed", f"{V_DISPLAY} isn't offered a transcription: its lyrics are found")}, code=1),
+        facts=ready)
+    add("a transcription, not made", in_state(transcription, "done", heard | {
+        "chords": ("skipped", "no transcript")}), facts=ready)
     video = queued_job("Search YouTube for “creep”", _jobs.YOUTUBE_SEARCH + "creep",
                        _jobs.youtube_search_steps("creep"))
     add("a video searched for, done", in_state(video, "done", {"video": ("done", ""), "thumbnail": ("done", "")},
@@ -917,7 +951,8 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
             ("a harmonica reading", harp, None, ready), ("make it mine", mine, None, ready),
             ("an add", plain, V_ID, _status.SongFacts()), ("a fetch of commands", fetch, V_ID, _status.SongFacts()),
             ("a removal of commands", removal, V_ID, None), ("a pull", pull, None, None),
-            ("a sheet from YouTube", youtube, V_ID, ready), ("a video searched for", video, None, None)):
+            ("a sheet from YouTube", youtube, V_ID, ready), ("a transcription", transcription, V_ID, ready),
+            ("a video searched for", video, None, None)):
         first = {job.stages[0].name: ("running", "")} if job.stages else None
         add(f"{note}, every state: queued", job, song_id, facts=facts)
         add(f"{note}, every state: queued behind one", job, song_id, 1, facts=facts)
@@ -933,7 +968,8 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
 
     # Each stage status.STAGE_LINES words, running, in the first kind of job that has it (the phone's own sync's
     # mirror and index stages are job_views.jsonl's), every stage before it done.
-    staged = [lookup_job(), keep, reads[1][0], youtube, video] + [peer_job(kind, "queued") for kind in PEER_KINDS]
+    staged = [lookup_job(), keep, reads[1][0], youtube, transcription, video] + [
+        peer_job(kind, "queued") for kind in PEER_KINDS]
     for name in _status.STAGE_LINES:
         job = next((j for j in staged if name in [s.name for s in j.stages]), None)
         if job is None:
@@ -1070,6 +1106,7 @@ def tables_record() -> dict:
         "SONGBOOK_DONE": songbooks.DONE, "SONGBOOK_OPENS": sorted(songbooks.OPENS),
         "LOOKUP_STEPS": [[name, list(names)] for name, names in _outcome.LOOKUP_STEPS],
         "YOUTUBE_STEPS": [[name, list(names)] for name, names in _outcome.YOUTUBE_STEPS],
+        "TRANSCRIBE_STEPS": [[name, list(names)] for name, names in _outcome.TRANSCRIBE_STEPS],
         "COMMAND_STEPS": _outcome.COMMAND_STEPS, "PEER_STEPS": _outcome.PEER_STEPS, "ASKS": _outcome._ASKS,
         "WHAT": {name: list(said) for name, said in _outcome._WHAT.items()}, "ELSEWHERE": _outcome._ELSEWHERE,
         "SITE_NAMES": _outcome.SITE_NAMES}}
@@ -1098,7 +1135,7 @@ def test_job_views_kinds_jsonl_is_what_the_views_say_of_every_kind_caracole_serv
     records = view_kind_records(monkeypatch)
     kinds = {r["job"]["kind"] for r in records}
     assert {"song", "versions", "lacuerda-artist", "lacuerda-search", "harptabs-artist", "songbook", "review",
-            "harmonica", "export", "remove", "youtube", "youtube-search", "ug-link"} <= kinds
+            "harmonica", "export", "remove", "youtube", "youtube-search", "transcribe", "ug-link"} <= kinds
     assert {r["out"]["kind"] for r in records} >= {"song", "remove", "export", "songbook", "peer-pull"}
     every = {"queued", "running", "done", "failed", "cancelled", "interrupted"}
     for kind in kinds | {"sync", "peer-push", "index-merge"}:  # every kind in every state

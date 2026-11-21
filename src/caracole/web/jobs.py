@@ -32,7 +32,11 @@ harmonica`` (harmonica_routes.py), under a key of its own (``READING``), the son
 version's (``EXPORTING``). A sheet made from a YouTube video is one ``caracole youtube --sheet --progress``
 (``youtube_sheet_steps``), its JSON lines its stages (youtube_sheet.py's), under a key of its own too
 (``YOUTUBE_SHEET`` and the song's identity key), so it never joins the song's lookup, nor a lookup it; one at a
-time a song. A video suggested for a search is ``caracole youtube --search --progress`` (``youtube_search_steps``),
+time a song. A song's lyrics transcribed from its YouTube audio, then its auto sheet made again over them, is one
+``caracole transcribe --progress`` (``transcribe_steps``), its JSON lines its stages (transcribe_job.py's), under a key
+of its own too (``TRANSCRIBE`` and the song's identity key), as a sheet from YouTube's: it never joins the song's
+lookup, nor a lookup it, and one at a time a song; it is the queue's, so two songs' run one after the other. A video
+suggested for a search is ``caracole youtube --search --progress`` (``youtube_search_steps``),
 a job of no song's (``YOUTUBE_SEARCH`` and the query's key, among ``INDEX_READS``), whose stages are
 ``YOUTUBE_SEARCH_STAGES``, as are a pasted video's (``youtube_video_steps``: ``caracole youtube --video``, under
 ``YOUTUBE_SEARCH`` and ``video:<id>``). A UG link pasted into that box is read by ``caracole ug --link --progress``
@@ -193,6 +197,12 @@ class Job:
         """Whether it makes its song's sheet from a YouTube video (``caracole youtube --sheet``): its stages are
         youtube_sheet.py's."""
         return any(_sheets_from_youtube(step.args) for step in self.steps)
+
+    @property
+    def transcribes(self) -> bool:
+        """Whether it transcribes its song's lyrics from its audio (``caracole transcribe``): its stages are
+        transcribe_job.py's."""
+        return any(_transcribes(step.args) for step in self.steps)
 
     def as_json(self) -> dict[str, Any]:
         """The job as plain data: its steps, each with a state (a lookup's stages; else its commands)."""
@@ -355,9 +365,10 @@ def _fetches(steps: Sequence[Step]) -> bool:
 def _reports(args: Sequence[str]) -> bool:
     """Whether a step's command writes ``caracole get --progress`` lines: a lookup, ``caracole versions
     --progress``, ``caracole lacuerda --search --progress``, ``caracole youtube --sheet --progress`` (``--search``,
-    ``--video``), ``caracole ug --link --progress``, or ``caracole peer take --progress``, ``peer sync --progress`` or
-    ``index merge --progress``."""
-    return args[:1] == (LOOKUP,) or (args[:1] in ((VERSIONS,), ("lacuerda",), ("youtube",), ("ug",), (PEER,))
+    ``--video``), ``caracole ug --link --progress``, ``caracole transcribe --progress``, or ``caracole peer take
+    --progress``, ``peer sync --progress`` or ``index merge --progress``."""
+    return args[:1] == (LOOKUP,) or (args[:1] in ((VERSIONS,), ("lacuerda",), ("youtube",), ("ug",), ("transcribe",),
+                                                  (PEER,))
                                      and "--progress" in _options(args)) or (
         args[:2] == INDEX_MERGE_COMMAND and "--progress" in _options(args))
 
@@ -487,9 +498,25 @@ def _sheets_from_youtube(args: Sequence[str]) -> bool:
     return args[:1] == ("youtube",) and "--sheet" in args
 
 
+TRANSCRIBE = "transcribe:"  # lyrics transcribed from a song's audio: its job's key, the song's identity key after it
+
+
+def transcribe_steps(display: str) -> list[tuple[str, tuple[str, ...]]]:
+    """Transcribe a song's lyrics from its audio now, and make its auto sheet again over them: ``caracole transcribe
+    --progress``, one process for every stage (transcribe_job.py's ``STAGES``): where the singing is, the words, the
+    chords, the PDF."""
+    return [("Transcribing the lyrics", ("transcribe", "--progress", f"--song={display}"))]
+
+
+def _transcribes(args: Sequence[str]) -> bool:
+    """Whether a step's command transcribes a song's lyrics from its audio (``caracole transcribe``)."""
+    return args[:1] == ("transcribe",)
+
+
 def song_key_of(job_key: str) -> str:
-    """The song's identity key in a job's key: a removal's and a sheet from YouTube's have theirs after a prefix."""
-    return job_key.removeprefix(REMOVING).removeprefix(YOUTUBE_SHEET)
+    """The song's identity key in a job's key: a removal's, a sheet from YouTube's and a transcription's have theirs
+    after a prefix."""
+    return job_key.removeprefix(REMOVING).removeprefix(YOUTUBE_SHEET).removeprefix(TRANSCRIBE)
 
 
 def song_of_job(job_key: str) -> str:
@@ -568,7 +595,8 @@ def _afresh(stages: Sequence[Stage]) -> None:
 def _stages(steps: Sequence[Step]) -> list[Stage]:
     """A job's stages, all waiting: a lookup's (``caracole versions --choose`` and ``--clear`` run one), then Keep
     it's it hasn't, a search of LaCuerda's (``SEARCH_STAGES``), a sheet from a YouTube video's
-    (youtube_sheet.py's ``STAGES``), a sync's with another caracole (``PEER_TAKE_STAGES``,
+    (youtube_sheet.py's ``STAGES``), a transcription's (transcribe_job.py's ``STAGES``), a sync's with another
+    caracole (``PEER_TAKE_STAGES``,
     ``PEER_SYNC_STAGES``, ``INDEX_MERGE_STAGES``), and a UG link's read (``UG_LINK_STAGES``); none for other
     commands."""
     from caracole.get import STAGES
@@ -587,6 +615,10 @@ def _stages(steps: Sequence[Step]) -> list[Stage]:
         from caracole.youtube_sheet import STAGES as SHEET_STAGES
 
         names.update((name, label) for name, label in SHEET_STAGES if name not in names)
+    if any(_transcribes(step.args) for step in steps):
+        from caracole.transcribe_job import STAGES as TRANSCRIBE_STAGES
+
+        names.update((name, label) for name, label in TRANSCRIBE_STAGES if name not in names)
     for step in steps:
         names.update((name, label) for name, label in _peer_stages(step.args) if name not in names)
         names.update((name, label) for name, label in _ug_link_stages(step.args) if name not in names)

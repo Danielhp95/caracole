@@ -11,7 +11,8 @@ A small server from the standard library (``http.server``), in these parts:
   while each is still as written.
 - jobs.py: the queue and the lookups' lane. A request runs the ``caracole``
   command line in child processes: the queue's one request at a time (``caracole
-  add``, a review's pick, ``caracole remove``, a sheet from a YouTube video...),
+  add``, a review's pick, ``caracole remove``, a sheet from a YouTube video, a
+  song's lyrics transcribed from its audio...),
   and beside it up to three of the lane's (``caracole get``, a pasted UG link,
   LaCuerda's search, an artist's page), which start at once unless their song
   has a job in the queue and take turns with caracole's lock. Each takes the
@@ -49,9 +50,10 @@ A small server from the standard library (``http.server``), in these parts:
   take, and ``POST /peer/pull``, its units taken: peer_sync.py), sync_routes.py (the Sync tab: another
   caracole's library compared with this one, and ``caracole peer sync`` queued with your choices),
   sync_file_routes.py (Export, this library's ``.caracole`` file made and sent once, and Import a file, one sent
-  here in parts and staged for ``caracole peer import``: peer_file.py, peer_import.py) and youtube_routes.py (a
+  here in parts and staged for ``caracole peer import``: peer_file.py, peer_import.py), youtube_routes.py (a
   song's auto sheet from a YouTube video pasted on the library page: ``caracole
-  youtube --sheet`` queued).
+  youtube --sheet`` queued) and transcribe_routes.py (a YouTube song's lyrics transcribed from its audio, its sheet
+  made again over them: ``caracole transcribe`` queued).
   pages.py: the pages it writes itself (a song's picker, Remove's question, errors).
 - songbooks.py: the songbook forms, each queued as its ``caracole songbook``
   command (songbook_routes.py). Each songbook's page is one of the pages

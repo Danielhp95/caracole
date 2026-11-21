@@ -740,6 +740,38 @@ def test_a_sheet_from_youtube_never_joins_the_songs_lookup_nor_a_lookup_it():
     assert not new and after.id == lookup.id
 
 
+# --- a song's lyrics transcribed from its audio -----------------------------------------------------------------
+
+
+def test_a_transcription_is_one_caracole_transcribe_whose_progress_is_its_stages():
+    from caracole.transcribe_job import STAGES
+    from caracole.web.jobs import TRANSCRIBE, _reports, song_key_of, song_of_job, transcribe_steps
+
+    steps = transcribe_steps("Nick Cani - Vikingos veganos")
+    assert steps == [("Transcribing the lyrics",
+                      ("transcribe", "--progress", "--song=Nick Cani - Vikingos veganos"))]
+    assert _reports(steps[0][1]) and not _reports(("transcribe", "--song=Nick Cani - Vikingos veganos"))
+    assert not lane_of(steps)  # the queue's, one at a time: never beside another job in the lane
+    progress = ['caracole-progress: {"song":{"id":7,"display":"Nick Cani - Vikingos veganos"}}',
+                'caracole-progress: {"stage":"vocals","state":"running","detail":""}',
+                "demucs: separating"]
+    queue = JobQueue(FakeRunner(lines={"transcribe": progress}), lane=LANE)
+    job, new = queue.submit("Lyrics from the audio: Nick Cani - Vikingos veganos",
+                            TRANSCRIBE + "nick cani/vikingos veganos", steps, display="Nick Cani - Vikingos veganos")
+    assert new and not job.lane and [s.name for s in job.stages] == [name for name, _ in STAGES]
+    assert song_key_of(job.song_key) == song_of_job(job.song_key) == "nick cani/vikingos veganos"
+    # A lookup of the song asked while it waits goes into the queue behind it, never beside it in the lane.
+    lookup, new = queue.submit("Fetch Nick Cani - Vikingos veganos", "nick cani/vikingos veganos",
+                               lookup_steps("Nick Cani", "Vikingos veganos"), fetching=True)
+    assert new and not lookup.lane and lookup.id > job.id
+    queue.run_pending()
+    done = queue.job(job.id)
+    assert done.state == "done" and done.song_id == 7 and done.transcribes
+    assert not done.looks_up and not done.from_youtube
+    assert {s.name: s.state for s in done.stages}["vocals"] == "done"  # over: nothing left running
+    assert done.steps[0].output == ["demucs: separating"]  # its progress is data, not output
+
+
 # --- a sync's report, and an import's stages ------------------------------------------------------------------------
 
 REPORT = {"with": {"name": "Studio", "kind": "server", "address": "http://192.168.1.20:8737"},

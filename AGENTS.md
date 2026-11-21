@@ -308,6 +308,7 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     words, and its audio still the one vocals separated before words and chords (`_same_audio`), else a refusal.
   - No sung span: Whisper isn't run, and the song is noted heard to have nothing sung.
   - The pieces are autochords/'s (below); the stem in a temporary folder under `cache_dir`, gone with the job.
+  - caracole serve's Transcribe the lyrics runs it (web/transcribe_routes.py).
 - youtube_search.py is `caracole youtube --search`: a search's first video and its thumbnail, suggested on the
   library page (`gate`, `sheet_on_screen`, `checked_jpeg`).
   - And `caracole youtube --video`: a pasted video's metadata (`video_gate`, `read_video`, `song_of_video`).
@@ -1689,6 +1690,22 @@ It is rows.js's, shared by both pages:
     among `INDEX_READS`), and `GET /youtube/thumb/`, its thumbnail.
   - `GET /api/youtube/video` and `POST /youtube/video`: a video pasted into the library page's search box
     (`caracole youtube --video --progress`).
+- **transcribe_routes.py** is `POST /transcribe` (`song`, `identity`): a YouTube song's lyrics transcribed from its
+  audio, its auto sheet made again over them.
+  - `caracole transcribe --progress --song=…` queued under `jobs.TRANSCRIBE` and the song's key (`transcribe_steps`,
+    titled "Lyrics from the audio: Artist - Title"), never joining its lookup nor a lookup it, one at a time a song
+    (pressed again, the job waiting or running is the answer), and the queue's, never the lane's, so two songs' run
+    one after the other; its view the song's (`kind` "song"), its stages its line's steps (status.py `STAGE_LINES`
+    vocals and words, outcome.py `TRANSCRIBE_STEPS`), Ready once its chords stage made the sheet, as a YouTube
+    sheet's.
+  - Refused 409 where it can't run (`youtube_fetch.transcribe_reason`, "No lyrics transcribed here: …") and for a
+    song not offered one (`transcript.why_not_offered`, in the command's words "… isn't offered a transcription: …").
+  - Offered only on the served page, from served-only data: library_page.py `server.transcribe` (`ok`, `why`, `songs`
+    `offered_song_ids` when `ok`, `time` `transcribe_time` when `ok`, else `[]` and `""`), the cards' own data
+    unchanged (the phone writes the same cards, and its member says it can't); library.js `transcribeOffer` on a
+    card, and requests.js on the newest request that ended Ready of a song offered one (matched by `display`, the
+    name a song's requests go by, none while a request of it waits or runs), through `caracoleLibrary`'s
+    `offersTranscription` and `transcribing`: once asked for from the page, neither offers it again until a reload.
 - **ug_link_routes.py** is a UG link pasted into the library page's box: `GET /api/ug/link` (ug/link.py `known`, no
   request and no lock: its state, the tab's names, its artist's page, `guess`, the library's `song`, `hits` as
   /api/search's `index` items) and `POST /ug/link` (`caracole ug --link --progress` queued under `jobs.UG_LINK`, among
@@ -1796,9 +1813,14 @@ It is rows.js's, shared by both pages:
 - The library page's Requests tab (its label Journal), its last, says that line its own way (outcome.py): `#tab=requests`,
   library_assets/requests.js, drawn from `/requests.json`: web/feed.py; no page of its own, every link and redirect to
   a request is `/#tab=requests&job=N`, status.py `details_href`.
-  - Its finished requests keep their steps (feed.py `_finished`, `"steps"` right after `"reason"`): a lookup's or a
-    sheet from a YouTube video's that started (`outcome.lists_steps`; the phone's `Outcomes.listsSteps`, whose
-    `RequestsRoutes` hands `Feed.feed` their chips), never one cancelled before it ran nor a request of other commands.
+  - Its finished requests keep their steps (feed.py `_finished`, `"steps"` right after `"reason"`): a lookup's, a
+    sheet from a YouTube video's or a transcription's that started (`outcome.lists_steps`; the phone's
+    `Outcomes.listsSteps`, whose `RequestsRoutes` hands `Feed.feed` their chips), never one cancelled before it ran
+    nor a request of other commands.
+  - The two staged jobs over one song (staged.py: a sheet from a YouTube video, `YOUTUBE_STEPS`; a transcription,
+    `TRANSCRIBE_STEPS`) share outcome.py's rules, each given its own stages (`_staged`: its steps and the stage of its
+    words): `_staged_steps`, `_staged_holds` (Ready: what the chords stage says the sheet holds, or why its words
+    wait) and `_staged_stopped` (Not made yet: the first stage after the song's that stopped it).
 - The library page's lines read only its steps (`outcome.progress`: while a lookup runs, once it has run a second
   (`BAR_AFTER`), its line, a song's or a result's row, is a bar of them, library.js `showLine`'s `barred`: a segment
   a step, `segsOf`, then the step in hand, its site and `count`, `stepWords`, "Sheet · Ultimate Guitar · 3 of 7",

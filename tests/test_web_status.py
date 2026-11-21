@@ -317,6 +317,52 @@ def test_a_sheet_from_youtube_is_ready_once_its_chords_are_made():
     assert job_line(failed, None) == Line("failed", "can't download this video; try another.", details=details_href(5))
 
 
+# --- a song's lyrics transcribed from its audio ---------------------------------------------------------------
+
+
+def transcribe_job(state="running", stages=None):
+    from caracole.transcribe_job import STAGES
+    from caracole.web.jobs import TRANSCRIBE, Stage, transcribe_steps
+
+    said = stages or {}
+    made = [Step(label, tuple(args)) for label, args in transcribe_steps("Nick Cani - Vikingos veganos")]
+    if state != "running":
+        made[0].state = "done" if state == "done" else "failed"
+    return Job(8, "Lyrics from the audio: Nick Cani - Vikingos veganos", TRANSCRIBE + "nick cani/vikingos veganos",
+               made, state=state, display="Nick Cani - Vikingos veganos",
+               stages=[Stage(name, label, *said.get(name, ("waiting", ""))) for name, label in STAGES])
+
+
+def test_a_transcription_says_its_running_stage():
+    song = SongFacts()  # a song of the library: a transcription never adds one
+    lines = {"song": "Finding the song…", "vocals": "Finding where the singing is…",
+             "words": "Transcribing the lyrics…", "chords": "Working out the chords…", "pdf": "Making the PDF…",
+             "pages": "Writing the logbook page…"}
+    for name, text in lines.items():
+        assert job_line(transcribe_job(stages={name: ("running", "")}), song) == Line("running", text)
+    waiting = transcribe_job(stages={"song": ("done", "in the book"),
+                                     "vocals": ("running", "waiting for the book (pid 9: run)")})
+    assert job_line(waiting, song).text == "Waiting for the book…"
+
+
+def test_it_is_ready_once_its_chords_are_made():
+    every = {"song": ("done", "in the book"), "vocals": ("done", "sung from 9.3 s, 4 stretches"),
+             "words": ("done", "212 words in 31 lines (es), 3 dropped"),
+             "chords": ("done", "chords over the transcribed lyrics"), "pdf": ("done", "made"),
+             "pages": ("done", "")}
+    sheet = SongFacts(sheet="Nick%20Cani/Vikingos%20veganos/sheet%20%28auto%29.pdf")
+    assert job_line(transcribe_job("done", every), sheet) == Line("ready", "Ready", ("Open", sheet.sheet))
+    # The song's auto sheet of before (chords only): no chords made over the words, so not Ready.
+    unmade = every | {"chords": ("skipped", "no transcript")}
+    assert job_line(transcribe_job("done", unmade), sheet) == Line("waiting", "Not made yet", details=details_href(8))
+    failed = transcribe_job("failed", every | {"words": ("failed", "no singing heard"),
+                                               "chords": ("skipped", "no transcript")})
+    assert job_line(failed, sheet) == Line("failed", "no singing heard.", details=details_href(8))
+    gpu = transcribe_job("failed", every | {"words": ("failed", "the GPU failed: CUDA out of memory"),
+                                            "chords": ("skipped", "no transcript")})
+    assert job_line(gpu, sheet).text == "the GPU failed: CUDA out of memory."
+
+
 def test_a_caracole_with_no_to_do_page_says_the_same_line_with_no_link_to_it():
     # The phone has no to-do page (todo=None): a Not found or a Needs review with no candidates says the same words,
     # with nothing to open; its picker's link stays, and the to-do page is the computer's default.

@@ -96,7 +96,8 @@ file, and none of it loads anything from the network.
   file on disk has neither tab nor panel): every request the server remembers, drawn from ``/requests.json``
   (web/feed.py) with createElement and textContent, asked again while it shows (each request drawn again only
   when it changed, its Output as you left it); its Cancel, Try again and Get it from there post with fetch(), the
-  request they queue followed on its song's line (``caracoleLibrary.track``).
+  request they queue followed on its song's line (``caracoleLibrary.track``), and so does Transcribe the lyrics, on
+  the newest request that ended Ready of a song its card offers it on (``caracoleLibrary.offersTranscription``).
 
 - sync.css, sync-words.js, sync.js, sync-tab.html, sync-panel.html and sync-sheet.html: the sync with another
   caracole, one flow written once for both devices (``WebControls.sync``). On caracole serve's page, the Sync tab
