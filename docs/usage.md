@@ -2069,9 +2069,12 @@ waits the pause after the other's last request there; `get` reads
 overrides.toml and its song again, and `ug --link` reads overrides.toml again
 between a tab's page and its artist's lists.
 LaCuerda's search checks what keeps it from asking and asks in one turn. A
-lookup still waits for a sync, an import, an index merge or a YouTube sheet's
-models, which hold the lock to their end: rare, and minutes at worst (the
-owner's choice of 2026-11-18).
+lookup still waits for a sync, an import, an index merge, a YouTube sheet's
+models or a stage of a transcription (its separator, Whisper or auto-chords),
+which hold the lock to their end: rare, and minutes at worst, but for a
+transcription's separator on a CPU, which runs about five times the song's
+length (12 minutes for a 149-second song; on a GPU each stage takes a minute
+and a half at most) (the owner's choice of 2026-11-18).
 What you ask for now waits as a lookup does and says the same, so that a lookup
 `caracole serve` queues after it never waits behind the whole run either: `add`,
 `remove`, `review`, `fetch --song`, `render --song`, `youtube --song` (its

@@ -308,6 +308,7 @@ scipy==1.18.1
 soundfile==0.13.1
 pyyaml==6.0.3
 openai-whisper==20250625
+triton==3.7.1
 tiktoken==0.12.0
 more-itertools==11.1.0
 tqdm==4.68.4

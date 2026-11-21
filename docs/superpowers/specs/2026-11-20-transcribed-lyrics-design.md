@@ -120,7 +120,7 @@ the owner chose, for languages other than English:
 
 ## The design
 
-A review of the first draft (a second model, reading the design against the code) found where it was wrong about
+A review of the first draft (a review reading the design against the code) found where it was wrong about
 the code or would have broken; what it changed is folded in below, each marked *(review)*.
 
 ### Which songs

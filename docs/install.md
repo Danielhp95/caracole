@@ -69,6 +69,8 @@ Both shells set `CARACOLE_CJK_FONT`, `CARACOLE_PDF_FONTS` and `CARACOLE_ALPHATAB
 `CARACOLE_DEMUCS_MODEL`, and puts `demucs` on PATH (demucs-rs's `cpu` build: 712 s for a 149 s song, about 5x its length); `.#autochords-cuda` sets the same
 on a Python whose torch, torchaudio, torchvision and triton are nixpkgs' prebuilt CUDA builds (`torch-bin` and its
 kin), with nixpkgs' own wgpu `demucs` (the GPU: about 35 s for that song) and `openai-whisper` for the lyrics of a song no site has. nixpkgs' own `torch` is CPU-only.
+It also sets `CARACOLE_TORCH_CUDA=1`, as the `autochords-cuda` package's wrapper does: caracole reads it to tell a GPU
+build from the CPU one, and offers a transcription as taking a couple of minutes, not up to half an hour.
 
 Without Nix, on Ubuntu, first sections 1 to 4 of [deploy.md's Ubuntu
 part](deploy.md#ubuntu-2404-without-nix) (Python, ChordPro, the fonts), then,

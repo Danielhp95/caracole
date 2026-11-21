@@ -1964,7 +1964,14 @@ It is rows.js's, shared by both pages:
   - pdf-fonts.nix: nixpkgs' adwaita-fonts as four files, static Regular, Bold and Italic instances of Adwaita Sans
     made by pdf-fonts.py with fontTools, each glyph record padded to an even length, Adwaita Mono, and the OFL.
   - alphatab.nix: alphaTab's npm package, fixed-output, three files and their licences.
-  - `withAutochords` adds the extra, the model files and `yt-dlp` on PATH.
+  - `withAutochords` adds the extra, the model files (the wrapper's `CARACOLE_BTC_WEIGHTS`,
+    `CARACOLE_BEAT_CHECKPOINT`, `CARACOLE_WHISPER_MODEL` and `CARACOLE_DEMUCS_MODEL` defaults), and `yt-dlp` and
+    `demucs` (demucs-rs) on PATH.
+  - `cudaTorch` (flake.nix's `autochords-cuda`, on `pkgsCuda`'s torch-bin; its demucs-rs the wgpu build) sets
+    `CARACOLE_TORCH_CUDA=1` in the wrapper, as the `.#autochords-cuda` shell does: youtube_fetch.py
+    `transcribe_time` reads it, with `[autochords] transcribe_device` not "cpu" and `/dev/nvidiactl` there, to offer
+    a transcription as "a couple of minutes" rather than "up to half an hour"; the package check fails a CPU wrapper
+    that sets it.
 - **autochords.nix**: the model files, fixed-output.
 - **module.nix**: `services.caracole`: units, timer, `caracole-admin`.
   - No `credentials` option, as caracole reads no secret, so no unit and not `caracole-admin` loads one.
@@ -3163,6 +3170,7 @@ CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py  
   torch builds). The unfree CUDA packages it admits are `cudaUnfree`, a list found by evaluating, not
   `allowUnfree`; a new torch-bin dependency that refuses to evaluate for its license is one more name there.
   torchaudio-bin does not bring torchcodec, so it is listed in the extra. `packages.autochords-cuda` is the package.
+  The shell sets `CARACOLE_TORCH_CUDA=1`, as that package's wrapper does (`nix/`, package.nix's `cudaTorch`).
 - Tests that need a real program or model skip without it:
 
 | Needs | Tests | Set by |
