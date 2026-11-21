@@ -1903,7 +1903,7 @@ It is rows.js's, shared by both pages:
   - transcript.py, no third-party import (every page build asks it): kv `transcript:<id>` and `transcribe:none:<id>`
     (`keep_transcript`, `note_heard_nothing`), and which songs are offered one (`why_not_offered`, which also reads
     run.py's `autochords:failed:<id>`, its key `UNREADABLE`);
-  - separate.py: demucs-rs, a program run as a subprocess (`DemucsSeparator`; `SeparatorFailed` in its own words), and
+  - separate.py: demucs-rs, a program run as a subprocess (`DemucsSeparator`; `SeparatorFailed` in its own words; a wgpu demucs-rs that dies by a signal after "Done!" with the stem written, as it does from Python, has separated it, logged), and
     each frame's loudness (`frame_db`, librosa imported inside);
   - transcribe.py: Whisper large-v3 (`WhisperTranscriber`), torch and whisper imported inside; `SetupFailed`, the
     GPU's or the model's failure, never the audio's; `is_audio_error`, Whisper failing to load the audio.

@@ -4,13 +4,16 @@ demucs-rs is a Rust program, run as a subprocess; it separates the full mix only
 ``words.sung_spans`` can tell where someone sings (the transcript is Whisper's, from the mix).
 """
 
+import logging
 import os
+import signal
 import subprocess
 from pathlib import Path
 from typing import Protocol
 
 from caracole.autochords.words import FRAME_S
 
+log = logging.getLogger(__name__)
 
 # The cpu build runs about 4.8x the song's length, so a long song takes most of an hour; a run past this is hung
 # (a wgpu or driver stall), not slow.
@@ -28,8 +31,15 @@ def _why(stderr: str, code: int) -> str:
     return lines[-1][:300] if lines else f"demucs-rs exited {code}"
 
 
+def _signal_name(number: int) -> str:
+    try:
+        return signal.Signals(number).name
+    except ValueError:
+        return f"signal {number}"
+
+
 class SeparatorFailed(Exception):
-    """demucs-rs exited nonzero or wrote no vocal stem; the message carries its last stderr line."""
+    """demucs-rs failed (exited nonzero, died by a signal before Done!) or wrote no vocal stem; the message carries its last stderr line."""
 
 
 class Separator(Protocol):
@@ -44,7 +54,12 @@ class DemucsSeparator:
     GPU (wgpu) build writes it there, and a warm cache cut a 4 s clip from 70 s to 25 s; the cpu (ndarray) build
     writes none, so for it the setting is harmless. It is kept at ``cache_dir/demucs-rs`` between runs. Nothing
     lands in HOME or the working directory. The driver's own shader caches (``mesa_shader_cache``, ``nvidia``)
-    go to XDG_CACHE_HOME and are lost with the work directory."""
+    go to XDG_CACHE_HOME and are lost with the work directory.
+
+    The wgpu build, run from Python with its output captured (6 of 6 runs; from a plain shell it exits 0), finishes
+    the separation and then dies by SIGSEGV in the driver's exit path. A death by a signal after ``Done!`` as the
+    last stderr line, with vocals.wav written, is therefore taken as a success and logged; a positive exit, a
+    signal before ``Done!`` and a missing stem still fail."""
 
     def __init__(self, binary: str, model: Path, cache_dir: Path, timeout: float = TIMEOUT_S):
         self.binary = binary
@@ -69,9 +84,13 @@ class DemucsSeparator:
             raise SeparatorFailed(f"demucs-rs took longer than {self.timeout:g} s and was stopped") from e
         except OSError as e:
             raise SeparatorFailed(f"demucs-rs won't run: {e}") from e
-        if done.returncode != 0:
-            raise SeparatorFailed(_why(done.stderr, done.returncode))
         out = stems / "vocals.wav"
+        if done.returncode != 0:
+            last = [ln.strip() for ln in done.stderr.splitlines() if ln.strip()][-1:]
+            if not (done.returncode < 0 and last == ["Done!"] and out.is_file()):
+                raise SeparatorFailed(_why(done.stderr, done.returncode))
+            log.warning("demucs-rs died by %s on its way out, after writing the vocals; taking them",
+                        _signal_name(-done.returncode))
         if not out.is_file():
             raise SeparatorFailed(f"demucs-rs wrote no vocals.wav under {stems}")
         return out

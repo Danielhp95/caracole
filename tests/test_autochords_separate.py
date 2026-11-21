@@ -36,10 +36,21 @@ if mode == "fail":
 if mode == "hang":
     import time
     time.sleep(30)
-if mode == "write":
+if mode in ("write", "crash_after_done", "crash_before_done", "done_exit_1"):
     out = Path(argv[argv.index("-o") + 1]) / "vocals.wav"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_bytes(b"RIFF")
+if mode in ("crash_after_done", "done_exit_1"):
+    sys.stderr.write("Separating...\\n  Wrote " + str(out) + "\\nDone!\\n")
+    sys.stderr.flush()
+if mode == "crash_before_done":
+    sys.stderr.write("Separating...\\n")
+    sys.stderr.flush()
+if mode in ("crash_after_done", "crash_before_done"):
+    import signal
+    os.kill(os.getpid(), signal.SIGSEGV)
+if mode == "done_exit_1":
+    sys.exit(1)
 '''
 
 
@@ -90,4 +101,24 @@ def test_a_demucs_that_writes_no_stem_raises_separator_failed(tmp_path):
 def test_a_demucs_that_hangs_is_stopped_and_raises_separator_failed(tmp_path):
     separator, _ = _separator(tmp_path, "hang", timeout=0.5)
     with pytest.raises(SeparatorFailed, match="longer than 0.5 s"):
+        separator.vocals(tmp_path / "song.m4a", tmp_path)
+
+
+def test_a_demucs_that_crashes_on_its_way_out_after_writing_the_vocals_has_separated_them(tmp_path, caplog):
+    separator, _ = _separator(tmp_path, "crash_after_done")
+    with caplog.at_level("WARNING"):
+        stem = separator.vocals(tmp_path / "song.m4a", tmp_path)
+    assert stem == tmp_path / "stems" / "vocals.wav" and stem.is_file()
+    assert "SIGSEGV" in caplog.text
+
+
+def test_a_demucs_that_dies_by_a_signal_before_done_fails(tmp_path):
+    separator, _ = _separator(tmp_path, "crash_before_done")
+    with pytest.raises(SeparatorFailed, match="Separating"):
+        separator.vocals(tmp_path / "song.m4a", tmp_path)
+
+
+def test_a_demucs_that_says_done_but_exits_1_fails(tmp_path):
+    separator, _ = _separator(tmp_path, "done_exit_1")
+    with pytest.raises(SeparatorFailed):
         separator.vocals(tmp_path / "song.m4a", tmp_path)
