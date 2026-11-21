@@ -94,7 +94,8 @@ Every option of `nix/module.nix`:
 | `web.allowedHosts` | `[ ]` | names it answers to beyond localhost, the host's name and its `.local` name |
 | `web.openFirewall` | `false` | opens `web.port` on every interface, for a LAN address |
 | `autochords.enable` | `false` | auto-chords (section 4) |
-| `autochords.btcWeights`, `autochords.beatCheckpoint` | `null` | model files other than the package's |
+| `autochords.cuda` | `false` | the GPU for transcriptions from the audio, in caracole-web and `caracole-admin` alone (section 4) |
+| `autochords.btcWeights`, `autochords.beatCheckpoint`, `autochords.whisperModel`, `autochords.separatorModel` | `null` | model files other than the package's |
 | `package`, `autochords.package` | the flake's builds | |
 
 ### 2. Syncthing for the library and the music
@@ -199,6 +200,21 @@ Then:
   form or suggested for a search, the models running in it, so it runs without
   `MemoryDenyWriteExecute`, as the auto-chords unit and `caracole-admin` do; the
   nightly run keeps it.
+
+With an NVIDIA GPU (the host's driver set up: `hardware.graphics` and
+`hardware.nvidia`), the lyrics transcribed from the audio can run on it:
+
+```nix
+  services.caracole.autochords.cuda = true;
+```
+
+That makes `autochords.package` the flake's `autochords-cuda` build (torch-bin,
+about 6.7 GiB, unfree CUDA libraries the flake allows itself): Whisper runs on
+CUDA and demucs-rs on Vulkan. Only caracole-web, whose job children run the
+transcription, and `caracole-admin` see the GPU: `PrivateDevices` is off for
+them, with `DevicePolicy=closed`, `DeviceAllow` for the NVIDIA device groups and
+`char-drm`, and the `video` and `render` groups. The nightly units keep
+`PrivateDevices`, and BTC and beat_this stay on the CPU.
 
 For purchases alone, with no yt-dlp run and no YouTube on the library page:
 

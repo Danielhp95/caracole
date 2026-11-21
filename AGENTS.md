@@ -1954,6 +1954,11 @@ It is rows.js's, shared by both pages:
     `caracole-admin` run it too, so their pages agree.
   - caracole-web then without MemoryDenyWriteExecute, as the auto-chords unit and `caracole-admin`, since a sheet from
     a YouTube video runs the models in it.
+  - `autochords.cuda` picks `autochords-cuda` as the flake's default `autochords.package`; then caracole-web and
+    `caracole-admin` (the units whose children transcribe) get `PrivateDevices = false`, `DevicePolicy = "closed"`,
+    `DeviceAllow` (`char-nvidiactl`, `-nvidia-caps`, `-nvidia-frontend`, `-nvidia-uvm` from nixpkgs' ollama module,
+    `char-drm` for Vulkan) and the `video` and `render` groups. The nightly units never get them.
+    `whisperModel` and `separatorModel` are `CARACOLE_WHISPER_MODEL` and `CARACOLE_DEMUCS_MODEL`.
   - And `/etc/caracole/service`, the service's marker, service.py's.
 - **module-check.nix**: `checks.module`, which loads the marker with service.py.
 

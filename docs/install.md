@@ -24,6 +24,9 @@ nix profile add 'github:Danielhp95/caracole#autochords'       # or with auto-cho
 nix profile add 'github:Danielhp95/caracole#autochords-cuda'  # auto-chords on torch-bin, for an NVIDIA GPU (about 7 GB, unfree CUDA libraries)
 ```
 
+On NixOS, the module's `services.caracole.autochords.cuda = true` picks that
+package and lets caracole-web see the GPU ([deploy.md](deploy.md#4-auto-chords)).
+
 Before Nix 2.30, `nix profile add` was `nix profile install`. caracole then
 reads `~/.config/caracole/caracole.toml` ([usage.md](usage.md#configure)).
 

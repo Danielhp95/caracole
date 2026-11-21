@@ -113,14 +113,16 @@
 
       # nix/module.nix, with the packages defaulting to this flake's builds
       # (the ones `nix build` tests) rather than rebuilds from the host's nixpkgs.
-      nixosModules.default = { lib, pkgs, ... }:
+      nixosModules.default = { lib, pkgs, config, ... }:
         let
           packages = self.packages.${pkgs.stdenv.hostPlatform.system};
         in {
           _file = ./flake.nix;
           imports = [ ./nix/module.nix ];
           services.caracole.package = lib.mkDefault packages.default;
-          services.caracole.autochords.package = lib.mkDefault packages.autochords;
+          services.caracole.autochords.package = lib.mkDefault (
+            if config.services.caracole.autochords.cuda then packages.autochords-cuda else packages.autochords
+          );
         };
 
       checks.${system} = {
@@ -132,6 +134,7 @@
           module = self.nixosModules.default;
           defaultPackage = self.packages.${system}.default;
           autochordsPackage = self.packages.${system}.autochords;
+          autochordsCudaPackage = self.packages.${system}.autochords-cuda;
           cliPython = python.withPackages runtimeDeps;
         };
       };
