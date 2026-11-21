@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 import pytest
@@ -267,6 +268,20 @@ def test_transcription_settings(tmp_path):
     cfg = load_config(None, env={"HOME": str(tmp_path)})
     assert (cfg.autochords.whisper_model, cfg.autochords.separator_model) == (None, None)
     assert cfg.autochords.transcribe_device == "auto"
+
+
+@pytest.mark.parametrize("device", ["auto", "cpu", "cuda"])
+def test_transcribe_device_is_auto_cpu_or_cuda(tmp_path, device):
+    p = write(tmp_path, f'[autochords]\ntranscribe_device = "{device}"\n')
+    assert load_config(p, env={"HOME": str(tmp_path)}).autochords.transcribe_device == device
+
+
+@pytest.mark.parametrize("device", ["gpu", "cuda:0", "CPU", ""])
+def test_any_other_transcribe_device_is_a_config_error(tmp_path, device):
+    p = write(tmp_path, f'[autochords]\ntranscribe_device = "{device}"\n')
+    with pytest.raises(ConfigError, match=r'^\[autochords\]\.transcribe_device must be "auto", "cpu" or "cuda", '
+                                          rf'not "{re.escape(device)}"$'):
+        load_config(p, env={"HOME": str(tmp_path)})
 
 
 def test_demucs_bin_from_the_file_then_the_environment(tmp_path):

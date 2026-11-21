@@ -258,6 +258,18 @@ def _string(value: Any, where: str) -> str:
     return value
 
 
+TRANSCRIBE_DEVICES = ("auto", "cpu", "cuda")
+
+
+def _transcribe_device(value: Any) -> str:
+    """Where Whisper runs: "auto" (the GPU when torch can allocate on it), "cpu" or "cuda"."""
+    where = "[autochords].transcribe_device"
+    device = _string(value, where)
+    if device not in TRANSCRIBE_DEVICES:
+        raise ConfigError(f'{where} must be "auto", "cpu" or "cuda", not {_shown(device)}')
+    return device
+
+
 def _optional_string(table: Mapping[str, Any], key: str, where: str) -> str | None:
     """The string at ``key``, or None when it's absent or empty."""
     value = table.get(key)
@@ -462,7 +474,7 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
         device=_string(ac_t.get("device", "cpu"), "[autochords].device"),
         whisper_model=ac_path("whisper_model", "CARACOLE_WHISPER_MODEL"),
         separator_model=ac_path("separator_model", "CARACOLE_DEMUCS_MODEL"),
-        transcribe_device=_string(ac_t.get("transcribe_device", "auto"), "[autochords].transcribe_device"),
+        transcribe_device=_transcribe_device(ac_t.get("transcribe_device", "auto")),
     )
 
     cjk_font_value = _optional_string(data, "cjk_font", "cjk_font") or env.get("CARACOLE_CJK_FONT")

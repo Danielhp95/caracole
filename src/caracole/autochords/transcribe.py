@@ -2,15 +2,19 @@
 
 Whisper hears the full mix (it does worse on a separated stem); the vocal stem only serves to detect the
 language, on the first 30 s of singing. torch and whisper load inside functions: ``caracole --help`` never
-pays for them.
+pays for them. Whisper's warnings pass as they are, but for its fallback from Triton's kernels, said once at INFO.
 """
 
+import logging
 import os
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
 from caracole.autochords.words import Word
+
+log = logging.getLogger(__name__)
 
 # openai-whisper's _ALIGNMENT_HEADS["large-v3"], copied: ``load_model(<path>)`` leaves the alignment heads
 # unset (only ``load_model("large-v3")`` sets them), and word timestamps need them.
@@ -23,6 +27,10 @@ DETECT_S = 30.0  # the stretch of singing the language is heard on
 # TRITON_LIBCUDA_PATH), so each word-timing kernel fails to link and Whisper falls back to slower ones, 4-6 s a song
 # (measured). gcc finds ``-l:libcuda.so.1`` on LIBRARY_PATH.
 DRIVER_LIBS = Path("/run/opengl-driver/lib")
+# How openai-whisper's timing.py warns, twice a 30 s window (its median filter's and its DTW's), that Triton's kernels
+# won't launch and it falls back to slower ones: where Triton can't build them (caracole-web's unit has no C
+# compiler), each song's request would show a dozen such warnings. Kept back, and said once at INFO.
+TRITON_FALLBACK = "Failed to launch Triton kernels"
 
 
 @dataclass(frozen=True)
@@ -36,8 +44,9 @@ class Transcriber(Protocol):
 
 
 class SetupFailed(Exception):
-    """The setup's failure (a GPU that is missing, busy or out of memory; a model that won't load), never
-    the audio's: the song stays offered."""
+    """The setup's failure (a GPU that is missing, busy or out of memory: "the GPU failed: ...", whenever
+    ``is_setup_error``; a model that won't load: "Whisper's model won't load: ...", on either device), never the
+    audio's: the song stays offered."""
 
 
 def resolve_device(setting: str) -> str:
@@ -82,30 +91,35 @@ class WhisperTranscriber:
         import whisper
 
         self.device = device
+        self.fell_back = False  # Triton's fallback said, once
         try:
             self.model = whisper.load_model(str(model_path), device=device)
         except Exception as e:  # noqa: BLE001 - classified below
-            if device == "cuda" or is_setup_error(e):
+            if is_setup_error(e):  # the GPU's own errors alone: a corrupt file fails on the GPU as on the CPU
                 raise SetupFailed(f"the GPU failed: {type(e).__name__}: {e}") from e
             raise SetupFailed(f"Whisper's model won't load: {type(e).__name__}: {e}") from e
         self.model.set_alignment_heads(ALIGNMENT_HEADS)
 
     def hear(self, mix: Path, stem: Path, first_sung_s: float) -> Heard:
+        caught: list[warnings.WarningMessage] = []
         try:
-            language = self._language(stem, first_sung_s)
-            result = self.model.transcribe(
-                str(mix),
-                language=language,
-                word_timestamps=True,
-                condition_on_previous_text=False,
-                beam_size=5,
-                best_of=5,
-                fp16=self.device == "cuda",
-            )
+            with warnings.catch_warnings(record=True) as caught:
+                language = self._language(stem, first_sung_s)
+                result = self.model.transcribe(
+                    str(mix),
+                    language=language,
+                    word_timestamps=True,
+                    condition_on_previous_text=False,
+                    beam_size=5,
+                    best_of=5,
+                    fp16=self.device == "cuda",
+                )
         except Exception as e:  # noqa: BLE001 - only the setup's errors are told apart
             if is_setup_error(e):
                 raise SetupFailed(f"the GPU failed: {type(e).__name__}: {e}") from e
             raise
+        finally:
+            self._pass_on(caught)
         words = []
         for segment in result["segments"]:
             first = True
@@ -116,6 +130,18 @@ class WhisperTranscriber:
                 words.append(Word(w["start"], w["end"], text, w["word"][:1].isspace(), first))
                 first = False
         return Heard(language, words)
+
+    def _pass_on(self, caught: list[warnings.WarningMessage]) -> None:
+        """The warnings Whisper gave, shown as they would have been, but for Triton's fallback (``TRITON_FALLBACK``),
+        said once at INFO instead."""
+        for w in caught:
+            if str(w.message).startswith(TRITON_FALLBACK):
+                if not self.fell_back:
+                    self.fell_back = True
+                    log.info("Whisper times the words with its slower kernels: Triton can't build its own here (no C "
+                             "compiler, or no libcuda for its linker)")
+                continue
+            warnings.showwarning(w.message, w.category, w.filename, w.lineno, w.file, w.line)
 
     def _language(self, stem: Path, first_sung_s: float) -> str:
         import torch

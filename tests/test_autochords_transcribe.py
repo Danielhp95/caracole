@@ -1,8 +1,10 @@
 """The Whisper transcriber's rules that need no model: which device, and whose fault an error is."""
 
+import logging
 import os
 import sys
 import types
+import warnings
 
 import pytest
 
@@ -63,18 +65,20 @@ class _Mel:
 
 
 class _Model:
-    def __init__(self, result=None, error=None):
+    def __init__(self, result=None, error=None, warns=()):
         self.dims = types.SimpleNamespace(n_mels=128)
         self.device = "cpu"
         self.heads = None
         self.calls = []
-        self._result, self._error = result, error
+        self._result, self._error, self._warns = result, error, warns
 
     def set_alignment_heads(self, heads):
         self.heads = heads
 
     def transcribe(self, audio, **kw):
         self.calls.append((audio, kw))
+        for message in self._warns:
+            warnings.warn(message, stacklevel=1)
         if self._error:
             raise self._error
         return self._result
@@ -101,25 +105,24 @@ def _make(monkeypatch, tmp_path, device="cpu"):
     return transcribe.WhisperTranscriber(tmp_path / "m.pt", device=device, cache_dir=tmp_path)
 
 
-def test_a_cuda_load_failure_is_the_gpus(monkeypatch, tmp_path):
-    _fake_torch(monkeypatch, available=True, allocates=True)
-    _fake_whisper(monkeypatch, load_error=ValueError("bad file"))
-    with pytest.raises(transcribe.SetupFailed, match=r"^the GPU failed: ValueError: bad file$"):
-        _make(monkeypatch, tmp_path, "cuda")
+@pytest.mark.parametrize("device", ["cpu", "cuda"])
+def test_a_load_failure_is_the_models_on_either_device(monkeypatch, tmp_path, device):
+    # A corrupt model file fails to load on the GPU as on the CPU: it is no fault of the GPU's.
+    _fake_torch(monkeypatch, available=device == "cuda", allocates=True)
+    _fake_whisper(monkeypatch, load_error=RuntimeError("PytorchStreamReader failed reading zip archive"))
+    with pytest.raises(transcribe.SetupFailed, match=r"^Whisper's model won't load: RuntimeError: PytorchStreamReader "
+                                                     r"failed reading zip archive$"):
+        _make(monkeypatch, tmp_path, device)
 
 
-def test_a_cpu_load_failure_is_the_models(monkeypatch, tmp_path):
-    _fake_torch(monkeypatch, available=False, allocates=True)
-    _fake_whisper(monkeypatch, load_error=ValueError("bad file"))
-    with pytest.raises(transcribe.SetupFailed, match=r"^Whisper's model won't load: ValueError: bad file$"):
-        _make(monkeypatch, tmp_path)
-
-
-def test_a_cpu_load_failure_by_cuda_error_is_the_gpus(monkeypatch, tmp_path):
-    _fake_torch(monkeypatch, available=False, allocates=True)
-    _fake_whisper(monkeypatch, load_error=RuntimeError("CUDA error: x"))
-    with pytest.raises(transcribe.SetupFailed, match=r"^the GPU failed: RuntimeError: CUDA error: x$"):
-        _make(monkeypatch, tmp_path)
+@pytest.mark.parametrize("device", ["cpu", "cuda"])
+@pytest.mark.parametrize("error", [RuntimeError("CUDA error: x"), "OutOfMemoryError"])
+def test_a_cuda_error_at_load_is_the_gpus_on_either_device(monkeypatch, tmp_path, device, error):
+    torch = _fake_torch(monkeypatch, available=device == "cuda", allocates=True)
+    error = torch.cuda.OutOfMemoryError("CUDA out of memory") if error == "OutOfMemoryError" else error
+    _fake_whisper(monkeypatch, load_error=error)
+    with pytest.raises(transcribe.SetupFailed, match=rf"^the GPU failed: {type(error).__name__}: CUDA "):
+        _make(monkeypatch, tmp_path, device)
 
 
 def test_the_alignment_heads_are_set_after_loading(monkeypatch, tmp_path):
@@ -236,3 +239,38 @@ def test_triton_is_left_alone_without_the_drivers_libcuda_or_with_a_library_path
     monkeypatch.setenv("LIBRARY_PATH", "/elsewhere")
     _make(monkeypatch, tmp_path)
     assert os.environ["LIBRARY_PATH"] == "/elsewhere"
+
+
+# openai-whisper's own, from whisper/timing.py: each 30 s window, where Triton can't build its kernels.
+TRITON = ("Failed to launch Triton kernels, likely due to missing CUDA toolkit; falling back to a slower median "
+          "kernel implementation...",
+          "Failed to launch Triton kernels, likely due to missing CUDA toolkit; falling back to a slower DTW "
+          "implementation...")
+
+
+def test_whispers_triton_fallback_is_said_once_at_info_and_its_warnings_are_kept_back(monkeypatch, tmp_path, caplog):
+    # caracole-web's unit has no C compiler: Triton can't build its word-timing kernels, and Whisper would warn twice
+    # a window into the request's Output. Its other warnings pass as they are.
+    _fake_torch(monkeypatch, available=True, allocates=True)
+    _fake_whisper(monkeypatch, _Model({"segments": []}, warns=[*TRITON * 6, "something else"]))
+    t = _make(monkeypatch, tmp_path, "cuda")
+    with caplog.at_level(logging.INFO, logger="caracole.autochords.transcribe"):
+        with warnings.catch_warnings(record=True) as shown:
+            warnings.simplefilter("always")
+            t.hear(tmp_path / "mix", tmp_path / "stem", 0.0)
+            t.hear(tmp_path / "mix", tmp_path / "stem", 0.0)
+    assert [str(w.message) for w in shown] == ["something else", "something else"]
+    said = [r for r in caplog.records if "Triton" in r.getMessage()]
+    assert len(said) == 1 and said[0].levelno == logging.INFO
+    assert "slower" in said[0].getMessage()
+
+
+def test_whispers_warnings_are_said_when_it_fails_too(monkeypatch, tmp_path):
+    _fake_torch(monkeypatch, available=True, allocates=True)
+    _fake_whisper(monkeypatch, _Model(error=ValueError("odd"), warns=[TRITON[0], "something else"]))
+    t = _make(monkeypatch, tmp_path, "cuda")
+    with warnings.catch_warnings(record=True) as shown:
+        warnings.simplefilter("always")
+        with pytest.raises(ValueError, match="odd"):
+            t.hear(tmp_path / "mix", tmp_path / "stem", 0.0)
+    assert [str(w.message) for w in shown] == ["something else"]

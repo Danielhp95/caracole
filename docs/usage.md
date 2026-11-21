@@ -151,7 +151,7 @@ variant_bonus = 0.25              # onto an acoustic or live version, when your 
 device = "cpu"                    # where the models run
 # whisper_model = "/path/to/large-v3.pt"      # or $CARACOLE_WHISPER_MODEL
 # separator_model = "/path/to/htdemucs.safetensors"  # or $CARACOLE_DEMUCS_MODEL
-transcribe_device = "auto"        # where Whisper runs: "auto" is the GPU when there is one
+transcribe_device = "auto"        # where Whisper runs: "auto" (the GPU when there is one), "cpu" or "cuda"
 ```
 
 Caracole keeps one sheet and one text tab per song, and beside the sheet the
