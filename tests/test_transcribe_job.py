@@ -382,7 +382,7 @@ class Built:
 
             def vocals(self, audio, workdir):
                 built.log.append(("demucs", Path(audio).name))
-                if separator_fails and Path(audio).name == "test-tone.wav":
+                if separator_fails:
                     raise SeparatorFailed(separator_fails)
                 return super().vocals(audio, workdir)
 
@@ -433,8 +433,10 @@ def make_with_defaults(cfg, built):
     return result, heard
 
 
-def test_the_default_models_are_built_at_their_first_stage_and_must_hear_a_tone_first(conn, cfg, tmp_path,
-                                                                                     monkeypatch):
+def test_the_default_models_are_built_at_their_first_stage_and_whisper_must_hear_a_tone_first(conn, cfg, tmp_path,
+                                                                                             monkeypatch):
+    # demucs-rs hears no tone: failing on the song is the setup's as failing on a tone would be, and each of its runs
+    # costs about 30 s (measured: the results file of docs/superpowers/plans/).
     built = Built(monkeypatch)
     setup = default_models(cfg, tmp_path)
     song = offered(conn, setup)
@@ -445,7 +447,6 @@ def test_the_default_models_are_built_at_their_first_stage_and_must_hear_a_tone_
         ("stage", "song"),
         ("stage", "vocals"),
         ("demucs built", "demucs-cpu", tmp_path / "htdemucs.safetensors", setup.cache_dir),
-        ("demucs", "test-tone.wav"),
         ("demucs", audio),
         ("stage", "words"),
         ("device", "auto"),
@@ -459,8 +460,7 @@ def test_the_default_models_are_built_at_their_first_stage_and_must_hear_a_tone_
 
 
 @pytest.mark.parametrize("fails,stage,said", [
-    ({"separator_fails": "No possible adapter"}, "vocals",
-     "the separator can't run here (demucs-rs fails on a test tone: SeparatorFailed: No possible adapter)"),
+    ({"separator_fails": "No possible adapter"}, "vocals", "the separator can't run here (No possible adapter)"),
     ({"load_fails": tx.SetupFailed("the GPU failed: OutOfMemoryError: CUDA out of memory")}, "words",
      "the GPU failed: OutOfMemoryError: CUDA out of memory"),
     ({"load_fails": tx.SetupFailed("Whisper's model won't load: RuntimeError: PytorchStreamReader failed")}, "words",
@@ -469,7 +469,7 @@ def test_the_default_models_are_built_at_their_first_stage_and_must_hear_a_tone_
      "the GPU failed: RuntimeError: CUDA error: no kernel image"),
     ({"whisper_fails": RuntimeError("ffmpeg was not found")}, "words",
      "Whisper fails on a test tone: RuntimeError: ffmpeg was not found"),
-], ids=["separator on the tone", "GPU at load", "model at load", "GPU on the tone", "Whisper on the tone"])
+], ids=["separator on the song", "GPU at load", "model at load", "GPU on the tone", "Whisper on the tone"])
 def test_a_default_model_that_fails_on_the_tone_or_at_load_is_the_setups(conn, cfg, tmp_path, monkeypatch, fails,
                                                                          stage, said):
     built = Built(monkeypatch, **fails)
@@ -479,8 +479,8 @@ def test_a_default_model_that_fails_on_the_tone_or_at_load_is_the_setups(conn, c
     assert not result.ok and result.bug is None and result.failed == said
     assert heard.ends()[stage] == ("failed", said)
     audio = Path(song.audio_path).name
-    assert (("demucs", audio) in built.log) == (stage == "words")  # a broken separator never heard the song
-    assert ("whisper", audio) not in built.log  # nor a broken Whisper
+    assert ("demucs", "test-tone.wav") not in built.log  # the separator is tried on the song alone
+    assert ("whisper", audio) not in built.log  # a broken Whisper never heard the song
     assert nothing_recorded(conn, song)
     assert why_not_offered(conn, setup, get_song(conn, song.id), Overrides()) is None
 

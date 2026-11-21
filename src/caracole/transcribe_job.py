@@ -23,8 +23,11 @@ the song is read again, checked still offered before vocals and words, and its a
 before words and chords. A song that left the book, is offered no more or has other audio ends the job there, a
 refusal its song stage says, before the next model runs.
 
-The models default to demucs-rs and Whisper from ``cfg``, each built at its first stage and run first on run.py's
-test tone, as auto-chords checks its own: a model that fails there would fail on every song.
+The models default to demucs-rs and Whisper from ``cfg``, each built at its first stage. Whisper is run first on
+run.py's test tone, as auto-chords checks its own: a model that fails there would fail on every song. demucs-rs is
+not: a separator that can't run fails on the song as it would on a tone, the setup's either way and filing nothing
+(librosa has read the mix by then), and each of its runs costs about half a minute on the GPU, the tone's as much
+as the song's.
 
 What fails is told apart as auto-chords tells it:
 
@@ -98,7 +101,7 @@ class _Transcription(StagedRun):
                          recognizer=recognizer, beats_fn=beats_fn, now=now, clock=clock)
         self.request = request
         self.separator, self.transcriber = separator, transcriber
-        self.work: tempfile.TemporaryDirectory[str] | None = None  # the stem and the test tones, for the job
+        self.work: tempfile.TemporaryDirectory[str] | None = None  # the stem, for the job
         self.audio: tuple[str | None, float | None] = (None, None)  # the audio separated: its path and mtime
         self.stem: Path | None = None
         self.spans: list[Any] = []
@@ -152,17 +155,12 @@ class _Transcription(StagedRun):
     # --- the default models ----------------------------------------------------------------------------------
 
     def _the_separator(self) -> Any:
-        """The separator given, else demucs-rs from ``cfg``, which must separate a test tone first."""
+        """The separator given, else demucs-rs from ``cfg``, with no test tone first (the module docstring)."""
         if self.separator is None:
-            from caracole.autochords.run import _test_tone
-            from caracole.autochords.separate import DemucsSeparator, SeparatorFailed, frame_db
+            from caracole.autochords.separate import DemucsSeparator
 
-            separator = DemucsSeparator(self.cfg.demucs_bin, self.cfg.autochords.separator_model, self.cfg.cache_dir)
-            work = self._folder("tone")
-            problems = _test_tone([("demucs-rs", lambda tone: frame_db(separator.vocals(tone, work)))])
-            if problems:
-                raise SeparatorFailed(problems[0])
-            self.separator = separator
+            self.separator = DemucsSeparator(self.cfg.demucs_bin, self.cfg.autochords.separator_model,
+                                             self.cfg.cache_dir)
         return self.separator
 
     def _the_transcriber(self) -> Any:
@@ -213,10 +211,7 @@ class _Transcription(StagedRun):
 
         self._after_a_lookup()
         self._still_offered()
-        try:
-            separator = self._the_separator()
-        except separate.SeparatorFailed as e:
-            return self._fail(f"the separator can't run here ({e})")
+        separator = self._the_separator()
         self.audio = (self.song.audio_path, self.song.audio_mtime)
         mix = Path(self.song.audio_path or "")
         try:

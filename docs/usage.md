@@ -2373,8 +2373,9 @@ sung. Then, one stage a line:
   and the pages.
 
 It takes about a minute on a GPU (`[autochords] transcribe_device`, `"auto"` by default), and up to half an hour on a
-CPU. Each model is first tried on a 2-second tone, so one that can't run here fails the job before it hears the
-song. Before each of the separator, Whisper and auto-chords, a lookup waiting for the lock goes first; a song taken
+CPU. Whisper and auto-chords' models are first tried on a 2-second tone, so one that can't run here fails the job
+before it hears the song; demucs-rs isn't (each of its runs takes about half a minute even for a tone), and one that
+can't run here fails on the song, recording nothing as well. Before each of the separator, Whisper and auto-chords, a lookup waiting for the lock goes first; a song taken
 out of the book meanwhile ends the job there, a refusal, and so does one that found lyrics before the separator or
 Whisper (after them, the sheet goes over the site's lyrics), or whose audio another caracole replaced after its
 vocals were separated (the new audio is offered a transcription of its own). `--progress` adds a JSON line per

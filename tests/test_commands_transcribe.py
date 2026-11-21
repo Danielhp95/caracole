@@ -132,10 +132,10 @@ def test_transcribe_says_each_stage_and_exits_0(tmp_path, config, conn, models, 
     assert {"song": {"id": song.id, "display": "Nick Cani - Vikingos veganos"}} in events
     assert events[-1]["done"]["ok"] is True and events[-1]["done"]["refused"] is None
     assert any(line.startswith("Done in ") for line in lines)
-    # Each model the command built heard a test tone before the song's audio.
+    # Whisper and BTC heard a test tone before the song's audio; demucs-rs, the song alone.
     audio = Path(song.audio_path).name
-    assert models == ["demucs test-tone.wav", f"demucs {audio}", "whisper test-tone.wav", f"whisper {audio}",
-                      "btc test-tone.wav", f"btc {audio}"]
+    assert models == [f"demucs {audio}", "whisper test-tone.wav", f"whisper {audio}", "btc test-tone.wav",
+                      f"btc {audio}"]
     assert kv_get(conn, f"transcript:{song.id}") is not None
 
 

@@ -1907,8 +1907,9 @@ It is rows.js's, shared by both pages:
     each frame's loudness (`frame_db`, librosa imported inside);
   - transcribe.py: Whisper large-v3 (`WhisperTranscriber`), torch and whisper imported inside; `SetupFailed`, the
     GPU's or the model's failure, never the audio's; `is_audio_error`, Whisper failing to load the audio.
-  - The job builds the default separator and Whisper at their first stage, each run first on run.py's test tone
-    (`_test_tone`). Its failures are told apart as run.py's: the setup's (`SeparatorFailed`, `SetupFailed`) and the
+  - The job builds the default separator and Whisper at their first stage, Whisper run first on run.py's test tone
+    (`_test_tone`); demucs-rs not (it fails on the song as on a tone, the setup's alike, and each run costs about
+    30 s). Its failures are told apart as run.py's: the setup's (`SeparatorFailed`, `SetupFailed`) and the
     audio's: the setup's record nothing against the song, which stays offered; the audio's (`frame_db` failing on
     the mix, or Whisper's own "Failed to load audio", transcribe.py `is_audio_error`) is filed as run.py files audio
     it can't read (`_unreadable`, kv `autochords:failed:`, transcript.py's `UNREADABLE`), which `why_not_offered`
