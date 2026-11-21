@@ -7,9 +7,10 @@ then its auto sheet made again with the chords over them, its PDF and viewer, an
 ``--progress`` adds a JSON line per stage, which caracole serve reads, as ``caracole get --progress`` does.
 
 It takes caracole's lock as asked for now, and hands it to a waiting lookup before each long stage. It exits 0 once
-the sheet is made; 1 for a song not offered a transcription, for no singing heard, for audio that can't be read, for
-a separator or a GPU that can't run here, and, saying so before it asks anything, for a caracole that transcribes
-nothing (``youtube_fetch.transcribe_problem``: no auto-chords, no Whisper, a model file or demucs-rs missing).
+the sheet is made; 1 for a song not offered a transcription, for no singing heard, for audio Whisper can't read, for
+a loudness reader, a separator or a GPU that can't run here, and, saying so before it asks anything, for a caracole
+that transcribes nothing (``youtube_fetch.transcribe_problem``: no auto-chords, no Whisper, a model file or demucs-rs
+missing).
 
 Every command module is imported on every start, so the job is imported inside the command.
 """

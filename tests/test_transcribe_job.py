@@ -1,8 +1,9 @@
 """transcribe_job.py: a YouTube song's lyrics transcribed from its audio, then its auto sheet made again over them.
 
 demucs-rs is a fake ``Separator`` that writes a WAV, Whisper a fake ``Transcriber`` that hears fixed words, the
-loudness of the stem and the mix fixed frames (``separate.frame_db``, librosa's, faked), auto-chords' models
-test_youtube_sheet.py's fakes and chordpro ``fake_chordpro``: no model runs and nothing reaches the network.
+loudness of the stem and the mix fixed frames (``separate.frame_db`` faked, but in the one test marked
+``autochords``, which reads an AAC .m4a for real), auto-chords' models test_youtube_sheet.py's fakes and chordpro
+``fake_chordpro``: no model runs and nothing reaches the network.
 """
 
 from __future__ import annotations
@@ -15,6 +16,9 @@ from pathlib import Path
 
 import pytest
 from conftest import add_song, subprocess_pythonpath
+from helpers.aac import RATE as AAC_RATE
+from helpers.aac import aac_m4a, needs_aac
+from helpers.aac import samples as aac_samples
 from helpers.locks import waiting_for
 from helpers.rendered import fake_chordpro
 from test_youtube_sheet import Heard, Recognizer, beats, wav
@@ -47,6 +51,7 @@ VIDEO = "XFkzRNyygfk"
 # 50 ms frames: the stem silent through the intro's 25 s, then sung to the minute's end; the mix loud throughout.
 STEM = [-80.0] * 500 + [-12.0] * 700
 MIX = [-10.0] * 1200
+REAL_FRAME_DB = separate.frame_db  # the autouse ``loudness`` fakes it; a test of the real reader puts it back
 INTRO = Word(0.0, 0.4, "Suscríbete", False, True)  # Whisper's own, over the intro nobody sings
 WORDS = [
     INTRO,
@@ -117,11 +122,13 @@ def no_sites(monkeypatch):
     monkeypatch.setattr(_common, "transport_for", transport)
 
 
-def offered(conn, cfg, artist="Nick Cani", title="Vikingos veganos", seconds=60.0):
+def offered(conn, cfg, artist="Nick Cani", title="Vikingos veganos", seconds=60.0, audio=None):
     """A song whose audio came from YouTube, its lyrics missing and every lyrics site asked: one offered a
-    transcription."""
+    transcription. Its audio is ``seconds`` of silence in a WAV, or what ``audio`` writes given the file's path in the
+    cache's youtube folder (its suffix ``.wav``) and returns."""
     song = add_song(conn, artist, title, duration_ms=None)
-    audio = wav(cfg.cache_dir / "youtube" / f"{song.id}-{VIDEO}.wav", seconds)
+    path = cfg.cache_dir / "youtube" / f"{song.id}-{VIDEO}.wav"
+    audio = wav(path, seconds) if audio is None else audio(path)
     update_song(conn, song.id, audio_path=str(audio), audio_mtime=audio.stat().st_mtime, lyrics_status="missing",
                 lyrics_at="2026-11-01T00:00:00Z")
     _save(conn, song.id, Record(video=Video(VIDEO, title, "HyperFanes", seconds), source="pasted", audio=str(audio)))
@@ -348,20 +355,84 @@ def test_anything_else_whisper_raises_is_a_bug_that_files_nothing(conn, cfg, fai
     assert why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) is None
 
 
-def test_audio_librosa_cant_read_is_filed_before_the_separator_runs(conn, cfg, monkeypatch):
+@pytest.mark.parametrize("error", [
+    RuntimeError("Error opening '1-XFkzRNyygfk.m4a': Format not recognised."),
+    FileNotFoundError("audio file not found: 1-XFkzRNyygfk.m4a"),
+    ValueError("buffer is too small"),
+], ids=["undecodable", "missing", "other"])
+def test_a_mix_the_loudness_reader_cant_read_files_nothing_and_the_song_stays_offered(conn, cfg, monkeypatch, error):
+    # The reader's failure, of any kind, is no proof the audio is bad: only Whisper's own "Failed to load audio" is
+    # filed. The job ends there, in the reader's words, before the separator runs.
     song = offered(conn, cfg)
 
     def frame_db(path, **kwargs):
-        raise RuntimeError(f"Error opening {path}: Format not recognised.")
+        raise error
 
     monkeypatch.setattr(separate, "frame_db", frame_db)
-    separator = Separator()
-    result, heard = make(cfg, separator=separator)
-    assert not result.ok and result.bug is None and result.failed == "can't read the audio"
-    assert heard.ends()["vocals"] == ("failed", "can't read the audio")
-    assert separator.calls == []
-    assert filed_unreadable(conn, cfg, song)
-    assert kept(conn, song) is None and not heard_nothing(conn, song)
+    separator, transcriber = Separator(), Transcriber()
+    result, heard = make(cfg, separator=separator, transcriber=transcriber)
+    said = f"can't measure the audio here ({type(error).__name__}: {error})"
+    assert not result.ok and result.bug is None and result.failed == said
+    assert heard.ends()["vocals"] == ("failed", said)
+    assert [heard.ends()[name][0] for name in ("words", "chords", "pdf", "pages")] == ["skipped"] * 3 + ["done"]
+    assert separator.calls == transcriber.calls == []
+    assert nothing_recorded(conn, song)
+    assert why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) is None
+
+
+def test_a_stem_that_cant_be_read_is_the_separators_failure_and_files_nothing(conn, cfg, monkeypatch):
+    song = offered(conn, cfg)
+
+    def frame_db(path, **kwargs):
+        if Path(path).name == "vocals.wav":
+            raise RuntimeError("Error opening 'vocals.wav': File contains data in an unknown format.")
+        return list(MIX)
+
+    monkeypatch.setattr(separate, "frame_db", frame_db)
+    transcriber = Transcriber()
+    result, heard = make(cfg, transcriber=transcriber)
+    said = ("the separator can't run here (its vocals can't be read: RuntimeError: Error opening 'vocals.wav': File "
+            "contains data in an unknown format.)")
+    assert not result.ok and result.bug is None and result.failed == said
+    assert heard.ends()["vocals"] == ("failed", said)
+    assert transcriber.calls == []
+    assert nothing_recorded(conn, song)
+    assert why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) is None
+
+
+@pytest.mark.autochords
+@needs_aac
+def test_a_song_whose_audio_is_the_aac_m4a_youtube_gives_is_transcribed(conn, cfg, monkeypatch):
+    # The loudness read for real (separate.frame_db) on the AAC .m4a caracole keeps YouTube's audio as, and on the
+    # stem demucs-rs writes (a WAV); demucs-rs, Whisper and auto-chords' models are the fakes.
+    import soundfile
+
+    monkeypatch.setattr(separate, "frame_db", REAL_FRAME_DB)
+    song_of = [(1.0, 0.0), (3.0, 0.3)]  # a second's silence, then three of singing
+    song = offered(conn, cfg, seconds=4.0, audio=lambda path: aac_m4a(path.with_suffix(".m4a"), song_of))
+    assert Path(song.audio_path).suffix == ".m4a"
+
+    class Stem(Separator):
+        def vocals(self, audio, workdir):
+            self.calls.append((Path(audio), Path(workdir)))
+            out = Path(workdir) / "stems" / "vocals.wav"
+            out.parent.mkdir(parents=True)
+            soundfile.write(out, aac_samples(song_of), AAC_RATE)
+            return out
+
+    words = [Word(0.0, 0.2, "Suscríbete", False, True), Word(1.5, 2.0, "Somos", True, True),
+             Word(2.1, 2.8, "vikingos", True)]
+    transcriber = Transcriber(words)
+    result, heard = make(cfg, separator=Stem(), transcriber=transcriber)
+    assert result.ok, result
+    ends = heard.ends()
+    state, detail = ends["vocals"]
+    assert state == "done" and detail.endswith(" s, 1 stretch"), detail
+    assert 0.6 <= float(detail.removeprefix("sung from ").partition(" s")[0]) <= 1.0  # the singing from 1 s
+    assert ends["words"] == ("done", "2 words in 1 line (es), 1 dropped")
+    assert ends["chords"] == ("done", "chords over the transcribed lyrics")
+    assert kv_get(conn, f"autochords:failed:{song.id}") is None
+    assert "Somos vikingos" in auto_sheet(cfg, conn, song).read_text(encoding="utf-8")
 
 
 # --- the default models -----------------------------------------------------------------------------------------

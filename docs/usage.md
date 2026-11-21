@@ -2390,13 +2390,15 @@ It exits 0 once the sheet is made, and 1:
   its lyrics are found.` (or `… isn't in the book`, `… left the book while its lyrics were transcribed …`,
   `…: its audio changed while its lyrics were transcribed`);
 - for `Words: failed: no singing heard.`, nothing kept: the song isn't offered again until its audio changes;
-- for `can't read the audio` (the audio can't be decoded for its loudness, or Whisper says it failed to load it),
-  filed as auto-chords files a file it can't read: the song isn't offered a transcription, nor are its chords tried,
-  until its audio changes (the to-do page lists the file after auto-chords' next run). Anything else Whisper fails
-  on is a bug in caracole, said as one, and files nothing: the song stays offered;
-- for the setup's failures, which record nothing against the song, offered still: `the separator can't run here
-  (…)` in demucs-rs's own words, `the GPU failed: …` (a GPU missing, busy or out of memory), or
-  `Whisper's model won't load: …`.
+- for `can't read the audio`, Whisper saying it failed to load the song's audio: filed as auto-chords files a file it
+  can't read, the song isn't offered a transcription, nor are its chords tried, until its audio changes (the to-do
+  page lists the file after auto-chords' next run). Anything else Whisper fails on is a bug in caracole, said as one,
+  and files nothing: the song stays offered;
+- for the setup's failures, which record nothing against the song, offered still: `can't measure the audio here
+  (…)`, the song's loudness unread, in the reader's own words (it reads audio as auto-chords does, the AAC of
+  YouTube's `.m4a` included, so this is caracole's trouble, not the file's), `the separator can't run here (…)` in
+  demucs-rs's own words (or `its vocals can't be read: …`), `the GPU failed: …` (a GPU missing, busy or out of
+  memory), or `Whisper's model won't load: …`.
 
 ## The to-do page
 

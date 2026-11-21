@@ -1,4 +1,5 @@
-"""The separator: demucs-rs run as a program (a fake one here, written to ``tmp_path``), and the frame energies."""
+"""The separator: demucs-rs run as a program (a fake one here, written to ``tmp_path``), and the frame energies (the
+real ones, of an AAC .m4a made at test time, in the auto-chords shells)."""
 
 from __future__ import annotations
 
@@ -8,6 +9,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from helpers.aac import aac_m4a, needs_aac
 
 from caracole.autochords.separate import DemucsSeparator, SeparatorFailed
 
@@ -136,3 +138,15 @@ def test_a_demucs_that_says_done_but_exits_1_fails(tmp_path):
     separator, _ = _separator(tmp_path, "done_exit_1")
     with pytest.raises(SeparatorFailed):
         separator.vocals(tmp_path / "song.m4a", tmp_path)
+
+
+@pytest.mark.autochords
+@needs_aac
+def test_frame_db_reads_the_aac_m4a_caracole_keeps_youtube_audio_as(tmp_path):
+    # libsndfile can't decode AAC: the loudness is read through the loader BTC reads with (autochords/audio.py).
+    from caracole.autochords.separate import frame_db
+
+    db = frame_db(aac_m4a(tmp_path / "song.m4a", [(1.0, 0.0), (2.0, 0.3)]))
+    assert abs(len(db) - 60) <= 1  # 50 ms frames
+    assert max(db[2:16]) < -60  # the silent second
+    assert all(abs(v - -13.5) < 1.5 for v in db[25:55])  # the tone: RMS 0.3 / sqrt(2), -13.5 dB

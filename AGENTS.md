@@ -1891,6 +1891,10 @@ It is rows.js's, shared by both pages:
   `raw["lyrics"]` then "plain").
 - btc.py (with the vendored btc_model.py and LICENSE-BTC) and beats.py need torch, librosa and beat_this; run.py runs
   them over the library.
+- audio.py, `load_mono`: every model's audio, mono at a rate, through librosa (libsndfile: WAV, FLAC, Ogg, MP3), else
+  torchaudio (FFmpeg, through torchcodec) for the AAC of an .m4a, as YouTube's audio always is (youtube.py) and an
+  iTunes purchase; btc.py `load_audio` and separate.py `frame_db` both read through it, and `load_librosa` gives numba
+  a cache folder first (a hardened unit has no writable home).
 - align.py, pure Python too, is run.py's: how far to shift timed lyrics LRCLIB timed for audio of another length, from
   the chords and beats alone:
   - `lyrics_offset`: candidate shifts scored, the best taken only by a clear margin, else the plain lyrics as before;
@@ -1904,7 +1908,7 @@ It is rows.js's, shared by both pages:
     (`keep_transcript`, `note_heard_nothing`), and which songs are offered one (`why_not_offered`, which also reads
     run.py's `autochords:failed:<id>`, its key `UNREADABLE`);
   - separate.py: demucs-rs, a program run as a subprocess (`DemucsSeparator`; `SeparatorFailed` in its own words; a wgpu demucs-rs that dies by a signal after "Done!" with the stem written, as it does from Python, has separated it, logged), and
-    each frame's loudness (`frame_db`, librosa imported inside);
+    each frame's loudness (`frame_db`, audio.py's `load_mono` and librosa imported inside);
   - transcribe.py: Whisper large-v3 (`WhisperTranscriber`), torch and whisper imported inside, after `os.environ`
     gets Triton's cache (`TRITON_CACHE_DIR`) and, where NixOS has the driver's libcuda, `LIBRARY_PATH` for the linker
     of Triton's kernels (nixpkgs' Triton names no libcuda folder: Whisper's word timing would try to build them on
@@ -1912,12 +1916,13 @@ It is rows.js's, shared by both pages:
     GPU's or the model's failure, never the audio's; `is_audio_error`, Whisper failing to load the audio.
   - The job builds the default separator and Whisper at their first stage, Whisper run first on run.py's test tone
     (`_test_tone`); demucs-rs not (it fails on the song as on a tone, the setup's alike, and each run costs about
-    30 s). Its failures are told apart as run.py's: the setup's (`SeparatorFailed`, `SetupFailed`) and the
-    audio's: the setup's record nothing against the song, which stays offered; the audio's (`frame_db` failing on
-    the mix, or Whisper's own "Failed to load audio", transcribe.py `is_audio_error`) is filed as run.py files audio
-    it can't read (`_unreadable`, kv `autochords:failed:`, transcript.py's `UNREADABLE`), which `why_not_offered`
-    reads ("its audio can't be read") until the audio changes; anything else Whisper raises is a bug, filing nothing;
-    and no singing heard is noted.
+    30 s). Its failures are told apart as run.py's: the setup's and the audio's. The setup's record nothing against
+    the song, which stays offered: `frame_db` failing on the mix, whatever it raises ("can't measure the audio here
+    (…)": a reader's failure is no proof the audio is bad), `SeparatorFailed` or a stem `frame_db` can't read ("the
+    separator can't run here (…)"), and `SetupFailed`. The audio's is Whisper's own "Failed to load audio" on the mix
+    alone (transcribe.py `is_audio_error`), filed as run.py files audio it can't read (`_unreadable`, kv
+    `autochords:failed:`, transcript.py's `UNREADABLE`), which `why_not_offered` reads ("its audio can't be read")
+    until the audio changes; anything else Whisper raises is a bug, filing nothing; and no singing heard is noted.
 - Which words go under the chords (run.py `_make_sheet`): a site's lyrics whenever the song has any (a site's
   verdict that it is instrumental wins too: a chart alone, the transcript kept unused), else the
   transcript of its current audio (transcript.py `transcript_of`: its own audio and mtime only), else none.

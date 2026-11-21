@@ -1,7 +1,8 @@
 """The vocal stem, separated by demucs-rs, and its loudness frame by frame.
 
 demucs-rs is a Rust program, run as a subprocess; it separates the full mix only so that
-``words.sung_spans`` can tell where someone sings (the transcript is Whisper's, from the mix).
+``words.sung_spans`` can tell where someone sings (the transcript is Whisper's, from the mix). The loudness of the
+mix and of the stem is ``frame_db``'s, read through audio.py.
 """
 
 import logging
@@ -98,10 +99,12 @@ class DemucsSeparator:
 
 
 def frame_db(path: Path, *, frame_s: float = FRAME_S, rate: int = 16000) -> list[float]:
-    """The RMS loudness of each ``frame_s`` frame of the audio at ``path``, in dB, one value per frame."""
-    import librosa
+    """The RMS loudness of each ``frame_s`` frame of the audio at ``path``, in dB, one value per frame. The file is
+    read as BTC reads its own (audio.py ``load_mono``: libsndfile, else FFmpeg for the AAC of YouTube's .m4a)."""
+    from caracole.autochords.audio import load_librosa, load_mono
 
-    samples, _ = librosa.load(path, sr=rate, mono=True)
+    samples = load_mono(path, rate)
+    librosa = load_librosa()
     hop = max(1, round(frame_s * rate))
     rms = librosa.feature.rms(y=samples, frame_length=2 * hop, hop_length=hop)[0]
     return [float(v) for v in librosa.amplitude_to_db(rms, ref=1.0, amin=1e-5, top_db=None)]

@@ -26,18 +26,21 @@ refusal its song stage says, before the next model runs.
 The models default to demucs-rs and Whisper from ``cfg``, each built at its first stage. Whisper is run first on
 run.py's test tone, as auto-chords checks its own: a model that fails there would fail on every song. demucs-rs is
 not: a separator that can't run fails on the song as it would on a tone, the setup's either way and filing nothing
-(librosa has read the mix by then), and each of its runs costs about half a minute on the GPU, the tone's as much
-as the song's.
+(the mix's loudness has been read by then), and each of its runs costs about half a minute on the GPU, the tone's as
+much as the song's.
 
 What fails is told apart as auto-chords tells it:
 
-- the setup's, which blames no song and records nothing, the song staying offered: the separator ("the separator
-  can't run here (...)", demucs-rs's own words), a GPU missing, busy or out of memory, or a Whisper model that won't
-  load (``SetupFailed``, in its own words: "the GPU failed: ...");
-- the audio's: the mix that librosa or Whisper can't read ("can't read the audio": librosa's ``frame_db`` failing
-  on it, or Whisper's own "Failed to load audio", ``transcribe.is_audio_error``), filed as auto-chords files a
-  file it can't read (run.py ``_unreadable``: kv ``autochords:failed:<song id>``), so the song is offered no
-  transcription, nor auto-chords tried on it, until its audio changes;
+- the setup's, which blames no song and records nothing, the song staying offered: the loudness reader failing on
+  the mix, whatever it raises ("can't measure the audio here (...)", in its words: ``frame_db`` reads as BTC does,
+  libsndfile, else FFmpeg for the AAC of YouTube's .m4a, so a failure there is no proof the audio is bad), the
+  separator ("the separator can't run here (...)", demucs-rs's own words, or a stem it wrote that can't be read), a
+  GPU missing, busy or out of memory, or a Whisper model that won't load (``SetupFailed``, in its own words: "the GPU
+  failed: ...", "Whisper's model won't load: ...");
+- the audio's: Whisper's own "Failed to load audio" on the mix (``transcribe.is_audio_error``, "can't read the
+  audio"), alone filed as auto-chords files a file it can't read (run.py ``_unreadable``: kv
+  ``autochords:failed:<song id>``), so the song is offered no transcription, nor auto-chords tried on it, until its
+  audio changes;
 - a bug: caracole's, said as such, and anything else Whisper raises, filing nothing against the song.
 
 Beside the audio's, only "no singing heard" is recorded against the song (``note_heard_nothing``).
@@ -145,8 +148,9 @@ class _Transcription(StagedRun):
         return Path(self.work.name) / name
 
     def _unreadable(self, e: Exception) -> tuple[str, str]:
-        """The audio's: filed as auto-chords files a file it can't read (run.py ``_unreadable``), so the song is
-        offered no transcription, nor auto-chords tried on it, until its audio changes; the job fails."""
+        """The audio's, Whisper's own "Failed to load audio" on the mix: filed as auto-chords files a file it can't
+        read (run.py ``_unreadable``), so the song is offered no transcription, nor auto-chords tried on it, until its
+        audio changes; the job fails."""
         from caracole.autochords.run import _unreadable as file_unreadable
 
         file_unreadable(self.conn, self.song, e, self.run_id)
@@ -216,13 +220,16 @@ class _Transcription(StagedRun):
         mix = Path(self.song.audio_path or "")
         try:
             mix_db = separate.frame_db(mix)
-        except Exception as e:  # noqa: BLE001 - the audio's, as auto-chords tells it
-            return self._unreadable(e)
+        except Exception as e:  # noqa: BLE001 - the reader's, whatever it is: no proof the audio is bad
+            return self._fail(f"can't measure the audio here ({type(e).__name__}: {e})")
         try:
             self.stem = separator.vocals(mix, self._folder("song"))
         except separate.SeparatorFailed as e:
             return self._fail(f"the separator can't run here ({e})")
-        stem_db = separate.frame_db(self.stem)
+        try:
+            stem_db = separate.frame_db(self.stem)
+        except Exception as e:  # noqa: BLE001 - a stem the separator wrote and can't be read is the separator's
+            return self._fail(f"the separator can't run here (its vocals can't be read: {type(e).__name__}: {e})")
         both = min(len(stem_db), len(mix_db))  # the stem, at demucs-rs's own rate, may come out a frame shorter
         self.spans = sung_spans(stem_db[:both], mix_db[:both])
         if not self.spans:

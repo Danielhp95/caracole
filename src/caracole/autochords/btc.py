@@ -17,15 +17,13 @@ load audio or build a recognizer, so this module imports in any environment.
 
 from __future__ import annotations
 
-import os
-import sys
-import tempfile
 import warnings
 from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from caracole.autochords.audio import load_librosa, load_mono
 from caracole.autochords.merge import NO_CHORD, ChordSegment
 
 if TYPE_CHECKING:
@@ -125,27 +123,9 @@ def frames_to_segments(
 
 
 def load_audio(path: Path | str) -> np.ndarray:
-    """Mono float32 samples at 22,050 Hz, like upstream's ``librosa.load(sr=22050, mono=True)``.
-
-    libsndfile reads WAV, FLAC, Ogg and MP3. Anything else, such as the AAC in an
-    iTunes Store .m4a, is decoded by torchaudio (FFmpeg, through torchcodec), then
-    mixed down and resampled the way librosa does it.
-    """
-    import numpy as np
-
-    path = Path(path)
-    if not path.is_file():
-        raise FileNotFoundError(f"audio file not found: {path}")
-    librosa = _librosa()
-    try:
-        y, _ = librosa.load(path, sr=SAMPLE_RATE, mono=True)
-        return y
-    except RuntimeError:  # soundfile's LibsndfileError: a format libsndfile cannot read
-        import torchaudio
-
-        waveform, sr = torchaudio.load(str(path))
-        mono = waveform.mean(dim=0).numpy().astype(np.float32)
-        return librosa.resample(mono, orig_sr=sr, target_sr=SAMPLE_RATE, res_type="soxr_hq")
+    """Mono float32 samples at 22,050 Hz, like upstream's ``librosa.load(sr=22050, mono=True)``, from any file
+    libsndfile or FFmpeg decodes, such as the AAC in an iTunes Store or YouTube .m4a (audio.py ``load_mono``)."""
+    return load_mono(path, SAMPLE_RATE)
 
 
 def cqt_features(y: np.ndarray) -> np.ndarray:
@@ -169,26 +149,8 @@ def cqt_features(y: np.ndarray) -> np.ndarray:
     return np.log(np.abs(np.concatenate(parts, axis=1)) + 1e-6).T
 
 
-def _librosa():
-    """librosa, imported after making sure numba has somewhere to write its cache.
-
-    librosa compiles some functions with numba's on-disk cache, which numba keeps
-    next to the package or under the home directory. A hardened service has
-    neither writable, and numba then fails at import. Unless NUMBA_CACHE_DIR is
-    set, the cache goes to the service's cache directory, or to the temp dir.
-    """
-    if "NUMBA_CACHE_DIR" not in os.environ:
-        base = os.environ.get("CACHE_DIRECTORY", "").split(":")[0] or tempfile.gettempdir()
-        os.environ["NUMBA_CACHE_DIR"] = os.path.join(base, "numba")
-        if "numba" in sys.modules:
-            sys.modules["numba"].core.config.reload_config()
-    import librosa
-
-    return librosa
-
-
 def _cqt(y: np.ndarray) -> np.ndarray:
-    librosa = _librosa()
+    librosa = load_librosa()
     with warnings.catch_warnings():
         # librosa warns when the last, short chunk is shorter than its lowest filters.
         warnings.simplefilter("ignore", UserWarning)
