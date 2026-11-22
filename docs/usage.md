@@ -2943,14 +2943,15 @@ Escape or Filter again closes it) and as a sheet from the bottom of a phone's
 screen (over the page dimmed, it ends in **Show 4 songs**, which closes it,
 as Escape does). Its **Status** shows all songs, or only those found, wanted
 or needing review (Review only while a song needs it), each with how many
-songs it would show, the arrow keys moving between them; **Has something
-for** shows the songs that have something for any of the instruments you
-tap: a Chord sheet (a human or an auto sheet), a Guitar tab (a Guitar Pro
+songs it would show, the arrow keys moving between them; **Matches**
+shows the songs that have something for any of the instruments you
+tap: Chords (a human or an auto sheet), Guitar (a Guitar Pro
 file or a text tab), Ukulele (Ultimate Guitar's Ukulele Chords), Harmonica
 (a harmonica tab) or a Score you filed, each with how many songs have it
 (one no song has, greyed, can't be tapped), and while one is on, each line's
 button of it is filled with the accent (the group shows once a song has something but a
-chord sheet; the search's rows of the sites stay, whatever they are for); its
+chord sheet; while the sites' results show, they count and keep the sites' songs
+too, below); its
 **Key**, there once a song has a key, is Any, Major or Minor, then the twelve
 tonics in circle-of-fifths order (C G D A E B F♯ D♭ A♭ E♭ B♭ F, each named
 as your songs spell the key: C♯ for a song in C# minor), a tonic no song is on
@@ -4558,10 +4559,20 @@ the library, sent as they are: they carry no badge.
   you type, here as on the file, and from the third letter (the second with a
   Chinese character in it) it searches the sites too, a moment after you stop:
   no Enter, and no button. The list and its toolbar make way for the results,
-  your songs among them still keeping to the filters, which the results' head
-  says ("Your songs here: wanted · in A minor"), with Show all of yours, which
-  lets every song of yours show, there and in the list; the sites' songs are
-  what the sites have, whatever the filters show. A progression typed as
+  your songs among them still keeping to the filters. **Filter** opens over
+  them and stays open as you tap: its Matches keep the sites' songs too, by
+  what each site has of a song (Ultimate Guitar's chords, tabs or Ukulele
+  Chords, LaCuerda's chords, iReal Pro's chart, gtptabs.com's Guitar Pro file,
+  gametabs.net's tab, harptabs.com's harmonica tab, MuseScore's score), so
+  "yoko kanno" with Harmonica on shows her harmonica tabs on harptabs.com and
+  yours, and none of the sites' chords; its chips count the results' songs.
+  Status, Key and a progression are your songs' alone, as a site's song has
+  neither a status nor a key its index knows. The results' head says what is
+  kept ("With harmonica tab · yours here: wanted · in A minor", or "Yours here:
+  wanted"), with Show all (Show all of yours, while the filters keep your songs
+  alone), which lets every filter go, there and in the list; and where the
+  Matches leave nothing, the results say so ("Nothing with harmonica tab for
+  “creep”."), with Show all. A progression typed as
   numerals ("vi IV I V", "i bVII bVI V") or named ("andalusian", "the pop
   progression", "blues"; words of fewer than five letters, "pop" or "the road",
   are words, as "minor" alone is, and "creep" the song) finds your songs

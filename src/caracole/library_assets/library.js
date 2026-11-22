@@ -30,8 +30,8 @@
   const sort = byId("sort");
   const count = byId("count");
   const jump = byId("jump");
-  // The toolbar's Filter, and the panel it opens (body.html): the songs' Status, what they have something for, their Key.
-  const toolbar = document.querySelector(".toolbar");
+  // Filter, beside the search, and the panel it opens in the search bar (body.html): the songs' Status, what they have
+  // something for, their Key.
   const filterButton = byId("filter");
   const panel = byId("filter-panel");
   const statusButtons = Array.from(panel.querySelectorAll("[data-show]"));
@@ -2124,6 +2124,10 @@
   // changes it. matchingNow: the songs the search and the progression leave, the panel's filters aside.
   let matchingNow = [];
   let shownNow = [];
+  // While the sites' results show (drawGroups): how many lines they show, yours and the sites' songs, and what the
+  // sites' songs among them have something for, the Matches aside (each chip's count of them).
+  let resultsShown = 0;
+  let resultsHas = null;
   const keyFits = (i) => (!state.mode || modeOf(i) === state.mode) && (!state.tonic || pitchOf(i) === Number(state.tonic));
   const instFits = (i) => !state.inst || instsChosen().some((x) => instOf(songs[i]).has(x));
   // An option's count: the songs it would show chosen, the panel's other groups as they are.
@@ -2143,6 +2147,10 @@
       if (keyed && shows) for (const x of instOf(songs[i])) having[x] += 1;
       if (held && shows && pitchOf(i) >= 0 && (!state.mode || modeOf(i) === state.mode)) onTonic[pitchOf(i)] += 1;
     }
+    // Searching the sites, a Matches chip counts the results' songs of the sites it would show too: they have no
+    // status and no key the indexes know, which keep to your songs.
+    const sitesToo = Boolean(server) && state.all && resultsHas;
+    if (sitesToo) for (const x of INSTRUMENTS) having[x] += resultsHas[x];
     // The Key, there once a song has one: the mode chosen, then each tonic, dashed and not to be pressed where no song
     // is on it in that mode (one chosen can always be let go).
     byId("keys").hidden = keyGroups.size === 0 && !keyChosen();
@@ -2171,7 +2179,8 @@
       c.disabled = !on && having[c.dataset.inst] === 0;
     }
     byId("f-insts").hidden = !chosen.length && !songs.some((s) => counted(s) &&
-      Array.from(instOf(s)).some((x) => x !== "sheet"));
+      Array.from(instOf(s)).some((x) => x !== "sheet")) && !(sitesToo && INSTRUMENTS.some((x) => x !== "sheet" &&
+      resultsHas[x] > 0));
     libraryView.dataset.lit = chosen.join(" ");
     // Review, only while a song needs it (or while it is the one chosen).
     const reviewing = songs.some((s) => SHOWS.review(s)) || Array.from(arrived.values()).some((s) => SHOWS.review(s));
@@ -2189,14 +2198,16 @@
     filterCount.textContent = on ? String(on) : "";
     filterButton.setAttribute("aria-label", on ? "Filter " + on : "Filter");
   };
-  // How many songs the list shows, of how many; and in the panel, "4 songs", or on a phone "Show 4 songs".
+  // How many songs the list shows, of how many; and in the panel, "4 songs", or on a phone "Show 4 songs": while the
+  // sites' results show, how many songs they show, yours and the sites'.
   const tell = () => {
     const total = songs.filter(counted).length;
     const n = shownNow.filter((i) => counted(songs[i])).length;
     count.hidden = n === total;
     count.textContent = n === total ? "" : n + "/" + plural(total, "song");
-    filterLive.textContent = plural(n, "song");
-    showN.textContent = "Show " + plural(n, "song");
+    const shows = server && state.all ? resultsShown : n;
+    filterLive.textContent = plural(shows, "song");
+    showN.textContent = "Show " + plural(shows, "song");
   };
 
   // Search mode (body.search-mode): on as the box takes the focus, or while it holds a query (typed, the address's,
@@ -2327,7 +2338,6 @@
     const matching = matchingNow.filter((i) => keyFits(i) && instFits(i));
     const shown = matching.filter((i) => SHOWS[state.show](songs[i]));
     sort.value = state.sort;
-    if (Boolean(server) && state.all) closePanel(false);  // the sites' results take the list's place, its tools too
     clear.hidden = !state.q;
     if (state.q) searchMode(true);  // a query in the box is search, however it came
     drawTags();
@@ -2750,16 +2760,23 @@
   // which neither takes a tap nor scrolls behind it; Tab keeps to it, and Show N songs closes it. Either way the
   // focus goes to the status chosen, and back to Filter once it closes.
   const wide = window.matchMedia("(min-width: 720px)");
-  // The popover under Filter, its right edge with Filter's, kept within the window; its arrow at Filter's middle.
+  // The popover under Filter, its right edge with Filter's, kept within the window; its arrow at Filter's middle. It is
+  // the search bar's (body.html), so it sticks with the bar, and what the list or the sites' results under it do moves
+  // it nowhere: a Matches chip pressed while they show leaves it under Filter. On a window too short for it, it ends
+  // 8 px above the window's foot and scrolls, the page under it scrolling it nowhere.
   const placePanel = () => {
     if (!panel.open || panel.matches(":modal")) return;
-    const bar = toolbar.getBoundingClientRect();
+    const box = bar.getBoundingClientRect();
     const at = filterButton.getBoundingClientRect();
     const width = panel.offsetWidth;
     const room = document.documentElement.clientWidth;
     const left = Math.max(16, Math.min(at.right - width, room - 16 - width));
-    panel.style.left = Math.round(left - bar.left) + "px";
-    panel.style.top = Math.round(at.bottom - bar.top + 8) + "px";
+    panel.style.left = Math.round(left - box.left) + "px";
+    panel.style.top = Math.round(at.bottom - box.top + 8) + "px";
+    const under = window.innerHeight - 8 - Math.round(at.bottom + 8);
+    const fits = panel.scrollHeight <= under;
+    panel.style.maxHeight = fits ? "" : Math.max(160, under) + "px";
+    panel.style.overflowY = fits ? "" : "auto";
     panel.style.setProperty("--arrow", Math.round(at.left + at.width / 2 - left) + "px");
   };
   const openPanel = () => {
@@ -2898,7 +2915,7 @@
     }
     if (mine === undefined) return;
     const found = foundNow(answer.model);
-    const key = mine + " " + JSON.stringify(found);
+    const key = mine + " " + JSON.stringify(found) + " " + state.inst;
     if (countsFor === answer.data && countsKey === key) return;
     const fresh = countsFor !== answer.data;
     countsFor = answer.data;
@@ -2906,8 +2923,12 @@
     drawCountMarks(barCounts, answer.data, mine, found);
     if (!fresh && !barSaid.classList.contains("counted")) return;  // what followed the answer stays said
     const meant = objects(answer.data.suggest).filter((x) => x.artist);
-    say(countsSaid(answer.data, mine, found) + (meant.length ? " · did you mean " + meantName(meant[0]) + "?" : ""),
-      true);
+    // With Matches chosen, the counts are of what they keep: "With harmonica tab: 1 of your songs · 3 on
+    // harptabs.com", or "Nothing with harmonica tab".
+    const any = Number(mine) > 0 || Object.values(found).some((n) => n > 0);
+    const words = !state.inst ? countsSaid(answer.data, mine, found)
+      : any ? "With " + instsSaid() + ": " + countsSaid(answer.data, mine, found) : "Nothing with " + instsSaid();
+    say(words + (meant.length ? " · did you mean " + meantName(meant[0]) + "?" : ""), true);
   };
   const searching = (on) => {
     if (on) found.setAttribute("aria-busy", "true");
@@ -2999,6 +3020,36 @@
   const artistKeyOf = (s) => String((s && s.identity) || "").split("/")[0] || "~" + String((s && s.sortArtist) || "");
   const titleKeyOf = (s) => String((s && s.identity) || "").split("/").slice(1).join("/");
 
+  // What a site's row of a song has something for, as the Filter panel's Matches asks it (``inst=``) and a song of
+  // yours is read (instOf): a chord sheet (Ultimate Guitar's chords or Ukulele Chords, LaCuerda's chords, iReal Pro's
+  // chart), a guitar's (UG's tabs, gtptabs.com's Guitar Pro file, gametabs.net's text tab, whatever it is for but the
+  // ukulele), the ukulele's (UG's Ukulele Chords, gametabs.net's ukulele tab), a harmonica tab (harptabs.com's) and a
+  // score (MuseScore's); a removed song's, nothing. A site's whole (SITE_HAS) where nothing more is known: an artist's
+  // songs there, a page of a title alone.
+  const SITE_HAS = { ug: ["sheet", "guitar", "ukulele"], lacuerda: ["sheet"], gtptabs: ["guitar"],
+    harptabs: ["harmonica"], gametabs: ["guitar", "ukulele"], ireal: ["sheet"], musescore: ["score"] };
+  const ROW_SITES = ["ug", "lacuerda", "gtptabs", "harptabs", "gametabs", "ireal"];
+  const https = (url) => /^https:[/][/]/i.test(String(url || ""));
+  const rowHas = (source, row) => {
+    if (source === "ug") {
+      const c = row.counts && typeof row.counts === "object" ? row.counts : {};
+      return [Number(c.chords) > 0 || Number(c.ukulele) > 0 ? "sheet" : "", Number(c.tabs) > 0 ? "guitar" : "",
+        Number(c.ukulele) > 0 ? "ukulele" : ""].filter(Boolean);
+    }
+    if (source === "lacuerda") return https(row.sheet) && https(row.url) ? ["sheet"] : [];
+    if (source === "gametabs") {
+      const named = listOf(row.instruments).map((x) => String(x).toLowerCase());
+      return [named.length === 0 || named.some((x) => x !== "ukulele") ? "guitar" : "",
+        named.indexOf("ukulele") >= 0 ? "ukulele" : ""].filter(Boolean);
+    }
+    return own.call(SITE_HAS, source) ? SITE_HAS[source] : [];
+  };
+  // A site's song (an item of mergeSites's model): what its rows have, together.
+  const itemHas = (item) => new Set(ROW_SITES.flatMap((source) => (item[source] ? rowHas(source, item[source]) : [])));
+  // Whether the Matches chosen keep what has something for ``has`` (a set), any of them; none chosen, everything.
+  const instKeeps = (has) => !state.inst || instsChosen().some((x) => has.has(x));
+  const siteKeeps = (source) => instKeeps(new Set(own.call(SITE_HAS, source) ? SITE_HAS[source] : []));
+
   // The sites a suggested song's rows are of, in the order its line takes them.
   const SUGGESTED_SITES = ["ug", "lacuerda", "gtptabs", "harptabs"];
   // The answer's artists and songs, put together by artist and by song, in the order the answer ranks them: the
@@ -3079,20 +3130,24 @@
     return model;
   };
   // How many songs of each site the results show (the marks under the box count them: drawCounts): a line each that
-  // has the site's row, but a song it may have meant; an artist the query names there none of whose songs is listed,
-  // one; a title alone (MuseScore's pages, harptabs.com's tabs by their title, iReal Pro's threads), one.
+  // has the site's row, but a song it may have meant, and one the filters show (kept, a song of yours; a site's, what
+  // the Matches chosen keep); an artist the query names there none of whose songs is listed, one; a title alone
+  // (MuseScore's pages, harptabs.com's tabs by their title, iReal Pro's threads), one; each while the Matches chosen
+  // keep what its site has.
   const FOUND_SITES = ["ug", "gtptabs", "lacuerda", "harptabs", "gametabs", "ireal"];
   const foundNow = (model) => {
-    const n = { ug: 0, gtptabs: 0, lacuerda: 0, musescore: model.titles.length, harptabs: model.harps.length,
-      gametabs: 0, ireal: model.threads.length };
+    const n = { ug: 0, gtptabs: 0, lacuerda: 0, musescore: siteKeeps("musescore") ? model.titles.length : 0,
+      harptabs: siteKeeps("harptabs") ? model.harps.length : 0, gametabs: 0,
+      ireal: siteKeeps("ireal") ? model.threads.length : 0 };
     for (const item of model.items.values()) {
-      if (!item.meant) for (const source of FOUND_SITES) if (item[source]) n[source] += 1;
+      const shows = item.mine !== undefined ? kept(item.mine) : instKeeps(itemHas(item));
+      if (!item.meant && shows) for (const source of FOUND_SITES) if (item[source]) n[source] += 1;
     }
     for (const g of model.groups.values()) {
       for (const source of ["ug", "lacuerda", "harptabs"]) {
-        if (g[source] && !g.items.some((item) => item[source] && !item.meant)) n[source] += 1;
+        if (g[source] && siteKeeps(source) && !g.items.some((item) => item[source] && !item.meant)) n[source] += 1;
       }
-      if (g.directory && !g.ug) n.ug += 1;  // an artist UG's listings name, their page not read yet
+      if (g.directory && !g.ug && siteKeeps("ug")) n.ug += 1;  // an artist UG's listings name, their page not read yet
     }
     return n;
   };
@@ -3171,7 +3226,8 @@
   // harptabs.com, or, for an artist whose page caracole has never read there, the offer to read it; for an artist the
   // query may have meant, until their songs are listed, "Their 7 songs on UG ›" (openSuggested); for an artist UG's
   // artist directory names whose page caracole hasn't read, Read their page on UG (ugOffer), the group's tail as
-  // "+ N more" is (a group with a tail never folds). None when there is nothing more: null.
+  // "+ N more" is (a group with a tail never folds); each while the Matches chosen keep what its site has (SITE_HAS:
+  // no "+ N more by Estopa" on UG with Harmonica on). None when there is nothing more: null.
   const tailOf = (m) => {
     if (!m.tail) {
       m.tail = { box: el("div", "group-tail"), ug: null, lc: null, offer: null, ht: null, htOffer: null, ugOffer: null };
@@ -3188,6 +3244,7 @@
         arrow.setAttribute("aria-hidden", "true");
         go.appendChild(arrow);
         m.tail.box.appendChild(go);
+        m.tail.their = go;
       }
       if (m.ug) {
         m.tail.ug = button("", "small more-by", () => moreOf(m, "ug"));
@@ -3224,7 +3281,12 @@
       (n) => "List " + n + " more songs by " + m.name + " on LaCuerda");
     more(m.tail.ht, m.htListed ? 0 : Number(m.harptabs && m.harptabs.held) - listed("harptabs"),
       m.name + " on harptabs.com", (n) => "List " + n + " more songs by " + m.name + " on harptabs");
-    return m.tail.box.childNodes.length ? m.tail.box : null;
+    const their = m.meant && (m.meant.source === "lacuerda" || m.meant.source === "harptabs") ? m.meant.source : "ug";
+    for (const [go, source] of [[m.tail.ugOffer, "ug"], [m.tail.their, their], [m.tail.ug, "ug"], [m.tail.lc, "lacuerda"],
+      [m.tail.offer, "lacuerda"], [m.tail.ht, "harptabs"], [m.tail.htOffer, "harptabs"]]) {
+      if (go) go.hidden = !siteKeeps(source);
+    }
+    return Array.from(m.tail.box.children).some((x) => !x.hidden) ? m.tail.box : null;
   };
   // "+ N more": the artist's next songs, in their group, each a line as the others are; the focus stays on the button,
   // or, once it is gone, goes to the first song it listed.
@@ -3408,21 +3470,31 @@
     });
   };
 
-  // Of your songs, those the Filter panel's filters show, in the list as in the results (the sites' songs are what
-  // the sites have, whatever they show); and that in words, for the results' head, which hides the toolbar: "Your
-  // songs here: wanted · with a harmonica tab · in A minor", or nothing when they show every song.
+  // Of your songs, those the Filter panel's filters show, in the list as in the results; of the sites' songs among the
+  // results, those its Matches keep (what their rows have something for: itemHas), as a site's song has no status and
+  // no key the indexes know, nor a progression read. And that in words, for the results' head, which hides the
+  // toolbar: "With harmonica tab · yours here: wanted · in A minor", "Yours here: wanted", or nothing when they show
+  // every song.
   const kept = (i) => keyFits(i) && (!state.prog || playsProg(songs[i], state.prog)) && instFits(i) &&
     SHOWS[state.show](songs[i]);
   const SHOW_WORD = { found: "found", wanted: "wanted", review: "needing review" };
+  const instsSaid = () => instsChosen().map((x) => INST_SAID[x]).join(" or ");
   const keptSaid = () => {
-    const parts = [label(SHOW_WORD, state.show),
-      state.inst ? "with " + instsChosen().map((x) => INST_SAID[x]).join(" or ") : "",
-      keyChosen() ? "in " + keySaid() : "",
+    const yours = [label(SHOW_WORD, state.show), keyChosen() ? "in " + keySaid() : "",
       state.prog ? "with " + progNumerals(state.prog) : ""].filter(Boolean);
-    return parts.length ? "Yours here: " + parts.join(" · ") : "";
+    const every = state.inst ? "With " + instsSaid() : "";
+    return [every, yours.length ? (every ? "yours here: " : "Yours here: ") + yours.join(" · ") : ""]
+      .filter(Boolean).join(" · ");
   };
-  // Show all of yours: every status, instrument, key and progression, here and in the list; the focus to the box, as
-  // the button goes with its note.
+  // Show all of yours, or Show all while the Matches keep the sites' songs too: every status, instrument, key and
+  // progression, here and in the list; the focus to the box, as the button goes with its note.
+  const showAll = (go) => {
+    const words = state.inst ? "Show all" : "Show all of yours";
+    if (go.textContent === words) return;
+    go.textContent = words;
+    go.setAttribute("aria-label", state.inst ? "Show all: the sites' songs and yours, every status, instrument, key " +
+      "and progression" : "Show all of yours: every status, instrument, key and progression");
+  };
   const keptNote = el("p", "filtered");
   keptNote.append(el("span"), button("Show all of yours", "small", () => {
     clearFilters();
@@ -3432,6 +3504,18 @@
     focusList();
   }, "Show all of yours: every status, instrument, key and progression"));
   keptNote.hidden = true;
+  // What the sites' answer and your songs had, all hidden by the Matches chosen: said, with Show all, as the list's
+  // empty state says it.
+  const filteredOut = () => {
+    const box = el("section", "filtered-out");
+    box.appendChild(el("p", "empty", "Nothing with " + instsSaid() + " for “" + state.q.trim() + "”."));
+    box.appendChild(button("Show all", "small", () => {
+      clearFilters();
+      render();
+      save();
+    }, "Show all: the sites' songs and yours, every status, instrument and key"));
+    return box;
+  };
   // A progression typed or named (/api/search's ``progression``: "vi IV I V", "andalusian"): how many of your songs
   // play it, and Show them, the list of those songs alone (#prog=). The first few are among the results already.
   const progNote = el("p", "filtered prog-found");
@@ -3492,6 +3576,8 @@
     const drawn = new Set(shown);
     const keys = new Set(shown.map((i) => String(songs[i].identity || "")));
     const box = document.createDocumentFragment();
+    const has = { sheet: 0, guitar: 0, ukulele: 0, harmonica: 0, score: 0 };  // the sites' songs', the Matches aside
+    let lines = 0;  // the sites' songs drawn
     for (const [key, g] of groups) {
       const items = [];
       const theirs = g.mine.slice();
@@ -3502,9 +3588,12 @@
             theirs.push(item.mine);
           }
         } else if (!keys.has(item.key)) {
-          items.push(lineOfItem(model, item));
+          const its = itemHas(item);
+          for (const x of its) has[x] += 1;
+          if (instKeeps(its)) items.push(lineOfItem(model, item));
         }
       }
+      lines += items.length;
       const tail = g.model ? tailOf(g.model) : null;
       if (!theirs.length && !items.length && !tail) continue;
       const you = theirs.length ? songs[theirs[0]] : named.get(key) || null;
@@ -3519,17 +3608,23 @@
             ? songsOn(meant) : "" });
       box.appendChild(section);
     }
-    if (model && model.titles.length) {  // MuseScore's pages: a title alone, no artist to put them under
+    // Titles alone, each group while the Matches chosen keep what its site has: a score, a harmonica tab, a chart.
+    const titled = (n, source) => {
+      for (const x of SITE_HAS[source]) has[x] += n;
+      if (siteKeeps(source)) lines += n;
+      return n > 0 && siteKeeps(source);
+    };
+    if (model && titled(model.titles.length, "musescore")) {  // MuseScore's pages: a title alone, no artist for them
       if (!model.titleLines) model.titleLines = model.titles.map(titleLine);
       box.appendChild(artistGroup({ name: "MuseScore", search: false }, model.titleLines,
         { note: many(model.titles.length, "page") + " by that title" }));
     }
-    if (model && model.harps.length) {  // harptabs.com's harmonica tabs: a title alone too
+    if (model && titled(model.harps.length, "harptabs")) {  // harptabs.com's harmonica tabs: a title alone too
       if (!model.harpLines) model.harpLines = model.harps.map(titleLine);
       box.appendChild(artistGroup({ name: "harptabs", search: false }, model.harpLines,
         { note: many(model.harps.length, "harmonica tab") + " by that title" }));
     }
-    if (model && model.threads.length) {  // iReal Pro's threads of no by-line: a title alone too
+    if (model && titled(model.threads.length, "ireal")) {  // iReal Pro's threads of no by-line: a title alone too
       if (!model.threadLines) model.threadLines = model.threads.map(titleLine);
       box.appendChild(artistGroup({ name: "iReal Pro", search: false }, model.threadLines,
         { note: many(model.threads.length, "thread") + " by that name" }));
@@ -3537,6 +3632,7 @@
     const missed = foundNothing(model);
     const missWas = groupsBox.querySelector(":scope > section.nothing");
     if (missed) box.appendChild(missOf(model, missWas, mine.length));  // nothing on the sites: a line of the list, last
+    else if (model && state.inst && !box.childNodes.length) box.appendChild(filteredOut());  // the Matches hid it all
     groupsBox.replaceChildren(box);
     groupsBox.hidden = !groupsBox.childNodes.length;  // no empty box: nothing matches yet
     // One Request: what found nothing has its own, in its line, so the form under the results waits for it.
@@ -3559,8 +3655,14 @@
     const said = keptSaid();
     if (keptNote.firstChild.textContent !== said) keptNote.firstChild.textContent = said;
     keptNote.hidden = !said;
+    showAll(keptNote.lastChild);
     drawProgFound();
     notesBox.replaceChildren(...(model && !missed ? notesOf(model) : []));
+    // The panel's counts, of what the results show now, as they change with each answer.
+    resultsHas = model ? has : null;
+    resultsShown = mine.length + lines;
+    tallyChips();
+    tell();
     keepSelected();
     placePlays();
   };

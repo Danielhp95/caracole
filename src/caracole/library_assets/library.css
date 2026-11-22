@@ -171,6 +171,9 @@
 .filtered { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0; color: var(--muted);
   font-size: .85rem; }
 .all-mine { margin: 10px 0 0; }
+/* The Matches chosen hid every result (library.js filteredOut): said where they would be, with Show all. */
+.filtered-out { margin: 14px 0 0; }
+.filtered-out .empty { margin: 0 0 8px; }
 /* The list showing one progression's songs alone (#prog=): "Songs with I–V–vi–IV, the pop progression · Show all";
    in the sites' results, how many of your songs play the progression typed, with Show them. */
 .prog-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 10px 0 0; color: var(--muted);

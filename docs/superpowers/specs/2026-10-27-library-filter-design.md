@@ -67,6 +67,9 @@ message ("No songs in A minor. Show all") covers instruments and modes too, nami
 - Served and from a file alike (the panel needs no server). The Android app's copy of index.html is the file's.
 - select.js's Select keeps its behaviour; only its place and look change.
 - Search results (the sites' rows under the bar) are not filtered by instrument: the filters are your songs'.
+  Changed by the owner on 2026-11-22 ("search yoko kanno while looking only for harmonica songs"): while the sites'
+  results show, the instruments keep the sites' songs too, by what each one's rows have, and the panel opens over
+  them (AGENTS.md, "A row for one instrument says which").
 
 ## Left to the builder
 
