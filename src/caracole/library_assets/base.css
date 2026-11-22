@@ -6,6 +6,17 @@
   --radius-m: 8px;
   --radius-l: 12px;
   --radius-pill: 999px;
+  /* A pixel at the text's size, as Android's sp is: 1px at the pages' own size, twice that with the text shown twice as
+     large. A zoom of the text alone (the Android app's pinch, the WebView's text zoom; a browser's Zoom text only)
+     sizes the text and its line heights, never a length in px or rem: the root's line height, 16px (html, below),
+     grows with it, so 1rlh / 16 does (@supports, below). What is sized in it (a song's buttons and chevron, its card's
+     tiles, an artist's band) grows with the words beside it, until a song's line fills the window's width: its
+     title's least room, a button to play from, its key and its chevron are 192 of them (rows.css, library.css), with
+     88px of the page's, an opened card's (card.css) and the line's paddings, borders and gaps, so from there on (past
+     about 170 % on a phone 412 px wide) it grows no more, the line one row with its chevron on the screen, and the text
+     grows on, its title cut shorter. Never in a font size or a line height, which the zoom sizes already (they would
+     grow twice). */
+  --sp: 1px;
   --bg: #f6f5f1;
   --surface: #ffffff;
   --raised: #f1efea;
@@ -69,7 +80,8 @@
 }
 *, *::before, *::after { box-sizing: border-box; }
 [hidden] { display: none !important; }
-html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; line-height: 16px; }  /* --sp's 16: body sets the text's own */
+@supports (height: 1rlh) { :root { --sp: min(calc(1rlh / 16), max(1px, calc((100vw - 88px) / 192))); } }
 body {
   margin: 0;
   background: var(--bg);

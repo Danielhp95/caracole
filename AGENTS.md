@@ -1189,6 +1189,19 @@ It is rows.js's, shared by both pages:
   first (a pick, a removal, a message, the lookup page, the Guitar Pro page: pages.py, lookup_page.py, guitar.css),
   take theirs from the same tokens (`test_caracole_serves_own_pages_have_the_same_four_radii`, alphaTab's drawing
   inside `#score` left out, its box measured).
+- **The text's pixel** (base.css `--sp`, the owner's ask of 2026-11-22: on the phone a pinch that grew the text alone
+  left the tiles and the chevrons as they were): the Android app's pinch sets the WebView's text zoom, which sizes the
+  text and its line heights, never a length in px or rem (WebView 133, measured: `1rem` stays 16px at 200 %), so what
+  sits beside the words on the library page (a song's play buttons, its Fetch, its key's column and its chevron, its
+  card's tiles, chevrons and closes, an artist's band, the bar's field and Filter and Sort, the sites' marks, the list's
+  estimates `--band-h`, `--line-h`, `--fold-h`) is `calc(N * var(--sp))`. `--sp` is `1rlh / 16` (`html`'s line height
+  is 16px for it), at most `(100vw - 88px) / 192`, so a phone's line stays one row, its chevron on the screen (its
+  title's least room, a button, its key and its chevron are 192 of them; 88px the page's, an opened card's and the
+  line's paddings, borders and gaps), and 1px at least from that room; never in a `font-size` or a `line-height`,
+  which the zoom sizes already (a line height in it grows twice), nor where a box's height is a line height (a count's
+  digits centred by the grid). The tiles' container queries are in `rlh` (24.9375rlh is 399px at the pages' own
+  size). test_library_text_size.py (the root's line height grown, Chromium having no text zoom), PinchTest on a
+  device.
 - **No outline around the list** (stage 1f; library.css, rows.css): a list of lines or rows (`.groups`, `.lines`,
   `.rows`: index.html's list and a search's results, the lookup page's rows) has no border, shadow or fill of its own,
   the page's background under it: the bands (`--raised`) and the 1 px dividers between lines, rows and groups are its
