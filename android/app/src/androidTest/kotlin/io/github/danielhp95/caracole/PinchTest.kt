@@ -33,7 +33,10 @@ import kotlin.math.roundToInt
  *         io.github.danielhp95.caracole.test/io.github.danielhp95.caracole.CaracoleTestRunner
  *
  * Fingers apart make the text larger, together smaller, in steps of [TextZoom.STEP], of the size Android's font size
- * gives the pages, and the size is kept; Settings' Reset applies when the library screen comes back. While the fingers
+ * gives the pages, and the size is kept; Settings' Reset applies when the library screen comes back. On the library
+ * page a song's buttons, its chevron and its artist's band grow and shrink with its words, as many times as the size
+ * changed, until a song's line fills the screen's width (base.css's --sp, a pixel at the text's size: 192 of them
+ * and 88px a line), its chevron always on the screen. While the fingers
  * are down the size shows over the page ("135%", the limit at a limit), and it goes about a second after they lift;
  * Reset shows none. A page reflows: never zoomed as a picture, never wider than the
  * screen. On a sheet each chord stays over its syllable, above its line and clear of the next, a row's chords at one
@@ -81,6 +84,8 @@ class PinchTest {
             waitFor(main, library)
             record("Android's font size", own)
             assertEquals(TextZoom.DEFAULT, zoom(main))
+            val ownLine = line(main)
+            record("library: a song's line at ${TextZoom.DEFAULT}", ownLine)
 
             // The library page: fingers apart, larger text, kept in the settings; the page reflowed. The size shows
             // while the fingers are down, and for a second after they lift.
@@ -96,6 +101,7 @@ class PinchTest {
             main.onActivity { shown = it.findViewById<WebView>(R.id.web).settings.textZoom }
             assertEquals(TextZoom.applied(own, larger), shown)
             reflowed(main, "the library page at $larger")
+            grewWith(main, ownLine, larger)
             waitUntil("the size to go", 5_000) { label(main) == null }
             val gone = System.currentTimeMillis() - lifted
             record("library: the size gone after (ms)", gone)
@@ -107,6 +113,7 @@ class PinchTest {
                 Pages.shot("library-limit", hold)
             }
             assertEquals(TextZoom.MAX, zoomAfter(main, larger))
+            grewWith(main, ownLine, TextZoom.MAX)  // the buttons as big as the room lets them, every chevron on the screen
 
             // Fingers together: smaller again.
             pinch(main, 0.8f, 0.3f)
@@ -115,6 +122,7 @@ class PinchTest {
             assertTrue("smaller: $smaller", smaller < TextZoom.MAX)
             assertEquals(smaller, settings.textZoom)
             reflowed(main, "the library page at $smaller")
+            grewWith(main, ownLine, smaller)
 
             // Settings' Reset, then back to the library screen: the pages' own size, and no label for it.
             waitUntil("the size to go", 5_000) { label(main) == null }
@@ -255,6 +263,47 @@ class PinchTest {
     private fun showsTheSize(main: ActivityScenario<MainActivity>, what: String) {
         waitUntil("$what: the size shown") { label(main) == "${zoom(main)}%" }
         record("$what: shown", label(main) ?: "nothing")
+    }
+
+    /**
+     * A song's line on the library page, the first with a button to play from: its title's text size, its first
+     * button's height, its chevron's, and its artist's band's (the first band's: -1 with none), in CSS pixels; whether
+     * every line's chevron is on the screen; and how far the room lets a box grow (`room`, base.css's --sp).
+     */
+    private fun line(main: ActivityScenario<MainActivity>): JSONObject {
+        waitUntil("a song's line with a button to play from, drawn") {
+            evaluate(main, "!!document.querySelector('#list article.line .line-plays > .play')") == true
+        }
+        return JSONObject(evaluate(main, LINE) as String)
+    }
+
+    private val LINE = """(() => {
+        const line = Array.from(document.querySelectorAll('#list article.line')).find((l) => l.querySelector('.line-plays > .play'));
+        const band = document.querySelector('#list section.artist:not(.folded) > .artist-title');
+        const height = (n) => n ? n.getBoundingClientRect().height : -1;
+        const shown = Array.from(document.querySelectorAll('#list article.line > .line-more'))
+          .every((m) => m.getBoundingClientRect().right <= innerWidth);
+        return JSON.stringify({ text: parseFloat(getComputedStyle(line.querySelector('h3')).fontSize),
+          play: height(line.querySelector('.line-plays > .play')), chevron: height(line.querySelector(':scope > .line-more')),
+          band: height(band), shown: shown, room: Math.max(1, (innerWidth - 88) / 192) }); })()"""
+
+    /** At [zoom], the line [own] measured at the pages' own size, once laid out at it (the same twice): its text as
+     * many times bigger as the size is, its button, chevron and band as many times bigger too, up to what the room lets
+     * them grow; every chevron on the screen. */
+    private fun grewWith(main: ActivityScenario<MainActivity>, own: JSONObject, zoom: Int) {
+        var now = line(main)
+        waitUntil("the line laid out at $zoom") {
+            val next = line(main)
+            (next.toString() == now.toString()).also { now = next }
+        }
+        record("library: a song's line at $zoom", now)
+        assertTrue("a chevron off the screen at $zoom: $now", now.getBoolean("shown"))
+        val boxes = minOf(zoom / 100.0, now.getDouble("room"))
+        for (part in listOf("text", "play", "chevron", "band")) {
+            if (own.getDouble(part) < 0) continue
+            val grew = if (part == "text") zoom / 100.0 else boxes
+            assertEquals("$part at $zoom: $own then $now", grew, now.getDouble(part) / own.getDouble(part), 0.08)
+        }
     }
 
     /** The page at its own scale, and no wider than the screen. */
