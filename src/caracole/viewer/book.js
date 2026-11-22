@@ -219,7 +219,8 @@
     if (to) location.hash = "song-" + to.dataset.n;
   };
   // The settings, the key list, a card or the overlay's sheet (its Harmony tab among them) open, or a progression
-  // playing from the rail's Harmony tab (viewer.js marks it data-playing): the arrows and a swipe stay with them.
+  // playing from the rail's Harmony tab (viewer.js marks it data-playing): a swipe stays with them. No key goes from
+  // song to song: the page takes none (screen.js), its contents' and the pagers' links do.
   const busy = () => ["panel", "key-list", "card"].some((id) => {
     const el = document.getElementById(id);
     return el && !el.hidden;
@@ -240,10 +241,4 @@
     start = null;
     if (quick && Math.abs(dx) > 70 && Math.abs(dx) > 2 * Math.abs(dy)) go(sections[dx < 0 ? at + 1 : at - 1]);
   }, { passive: true });
-  document.addEventListener("keydown", (e) => {
-    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || busy()) return;
-    if (e.target instanceof Element && e.target.closest("input, select, textarea")) return;
-    if (e.key === "ArrowRight") go(sections[at + 1]);
-    else if (e.key === "ArrowLeft") go(sections[at - 1]);
-  });
 })();

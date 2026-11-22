@@ -2406,7 +2406,7 @@
   tip.addEventListener("keydown", (e) => {
     if ((e.key !== "ArrowLeft" && e.key !== "ArrowRight") || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
     e.preventDefault();
-    e.stopPropagation();  // in a songbook the arrows go from song to song (book.js), but not from here
+    e.stopPropagation();
     if (!$("tip-view").hidden) showTipView(e.key === "ArrowLeft" ? "circle" : "keys");
   });
   // What Hear it strums: the shape the chord's card shows for it now, on the instrument played, or null where
@@ -3028,12 +3028,9 @@
   };
   $("scroll").addEventListener("click", () => {
     // Pressed by the keyboard (its own focus, which a pointer's press never gives it: screen.js steer), its focus would
-    // go as the bar hides: the pill's ▶ takes it, to be pressed again, or Enter, to start at once. Pressed by the key
-    // map (toggle(), the focus on the page or full screen's handle), it leaves the focus where it is, so that a
-    // pedal's next Space or Enter is the map's again, once however long it is held, never ▶'s own press.
+    // go as the bar hides: the pill's ▶ takes it, to be pressed again, or Enter, to start at once.
     const keyed = document.activeElement === $("scroll");
-    // The overlay's sheet stays, at half the screen, the song moving above it; and so does full screen, where the key
-    // map's Space presses it (the bar hidden).
+    // The overlay's sheet stays, at half the screen, the song moving above it; and so does full screen.
     closeAll(necksEl, handle);
     halfSheet();
     close(sizes, false);
@@ -3054,28 +3051,12 @@
     if (!(e.target instanceof Element && e.target.closest("#pill"))) pauseScroll();
   }, { passive: true });
   window.addEventListener("wheel", () => pauseScroll(), { passive: true });
-  // Home and End scroll the page: they pause it. Space, Enter and the four page keys are the key map's (screen.js
-  // keys): Space or Enter starts and stops it (the bar's Scroll while it is off, else the pill's ▶), and a page key
-  // pauses it and turns a screen keeping two lines, measured in the room the bar, the pill and a docked layer leave
-  // (layers.js toolbar's room; in full screen, where the keys work, the bar counts for nothing). They are left to a
-  // layer with the focus (busy: one of the stack's, Aa's box, a numeral's tooltip, the rail of necks or a dialog),
-  // full screen's handle not counted.
+  // The page takes no key (screen.js): the browser's own (and Vimium's) scroll it, a scroll by hand that pauses it
+  // (frame). Home and End, which scroll it to an end, pause it at once, as a wheel does, the key still the browser's.
   document.addEventListener("keydown", (e) => {
     if (e.key === "Home" || e.key === "End") pauseScroll();
   });
-  const busy = () => {
-    const at = document.activeElement instanceof Element ? document.activeElement : null;
-    if (!at || at === handle) return false;
-    return layers.some((layer) => layer.el.contains(at)) || Boolean(at.closest("#sizes, #tip, #necks, dialog"));
-  };
-  screenKit.keys({
-    toggle: () => (scroll.state === "off" ? $("scroll") : go).click(),
-    pause: () => pauseScroll(),
-    room: () => toolbar.room(pill, dockedNow()),
-    busy,
-    sheet: sheetEl,
-    steer: [$("scroll"), ...pill.getElementsByTagName("button")],
-  });
+  screenKit.steer([$("scroll"), ...pill.getElementsByTagName("button")]);
 
   // --- the bar: away as you read down the song, back when you want it -----------------------------
   // It slides away as you scroll down, and comes back as you scroll up, at the top and the end of

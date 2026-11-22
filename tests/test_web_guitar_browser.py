@@ -11,6 +11,7 @@ them all); no real song's tab is a fixture in this public repository."""
 import base64
 import hashlib
 import threading
+import time
 from dataclasses import replace
 from urllib.parse import quote, urlencode
 
@@ -386,32 +387,31 @@ SPY_PLAY = """(() => { const api = window.caracoleGuitar; const real = api.playP
 PLAYER = "document.documentElement.dataset.player === '{state}'"
 
 
-def test_space_plays_and_pauses_wherever_the_focus_is(served, tmp_path):
+def test_space_is_the_browsers_and_a_focused_buttons_own(served, tmp_path):
+    # The page takes no key (the owner's choice of 2026-11-22, for Vimium): Space on the page plays nothing, and on a
+    # button it is that button's own press, Play's playing and pausing as a click does.
     _, url = served
     page = opened(tmp_path, url)
     try:
         assert page.wait(PLAYER.format(state="ready") + " && !document.getElementById('play').disabled", 30)
         page.js(SPY_PLAY)
+        page.js("document.activeElement.blur()")
+        page.press(" ")
+        time.sleep(0.5)
+        assert page.js("window.toggles") == 0 and page.js(PLAYER.format(state="ready")) is True
+        page.js("document.getElementById('play').focus()")
         page.press(" ")
         assert page.wait(PLAYER.format(state="playing"), 15)
         page.press(" ")
         assert page.wait(PLAYER.format(state="paused"), 15)
         assert page.js("window.toggles") == 2
-        # On a track's button Space plays, and shows no other track; on Play itself, it plays once, not twice.
+        # On a track's button, Space shows that track, as its click does.
+        shown = page.js("document.documentElement.dataset.track")
         page.js(f"document.querySelector({SHOW.format(n=3)!r}).focus()")
         page.press(" ")
-        assert page.wait(PLAYER.format(state="playing"), 15)
-        assert page.js("document.documentElement.dataset.track") == "1"
-        page.js("document.getElementById('play').focus()")
-        page.press(" ")
-        assert page.wait(PLAYER.format(state="paused"), 15)
-        assert page.js("window.toggles") == 4
-        # With Alt, Ctrl, Meta or Shift held, Space is left to the browser and the desktop (which, on a button,
-        # presses it: so with no button focused here).
-        page.js("document.activeElement.blur()")
-        for modifiers in (1, 2, 4, 8):
-            page.press(" ", modifiers=modifiers)
-        assert page.js("window.toggles") == 4
+        assert page.wait(f"document.documentElement.dataset.track !== {shown!r}", 5)
+        assert page.js(f"document.querySelector({SHOW.format(n=3)!r}).getAttribute('aria-pressed')") == "true"
+        assert page.js("window.toggles") == 2
         assert page.js("window.caracoleViolations") == []
     finally:
         page.close()
@@ -666,11 +666,11 @@ def test_space_ticks_mutes_and_closes_in_the_open_sheet_and_plays_nothing(served
         assert page.wait(f"!{SHEET}.open", 5)
         assert page.wait("document.documentElement.dataset.track === '1,2'", 5)
         assert page.js("window.toggles") == 0
-        # Shut, Space plays as before.
+        # Shut, Space is the browser's: it plays nothing.
         page.js("document.activeElement.blur()")
         page.press(" ")
-        assert page.wait(PLAYER.format(state="playing"), 15)
-        assert page.js("window.toggles") == 1
+        time.sleep(0.5)
+        assert page.js("window.toggles") == 0 and page.js(PLAYER.format(state="ready")) is True
     finally:
         page.close()
 

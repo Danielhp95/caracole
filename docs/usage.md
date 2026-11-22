@@ -2983,7 +2983,8 @@ sites have too, under the same artist headers, with Fetch, and a form to
 request a song by name (see below).
 
 **Searching is a step of its own**, on the file and served alike. As the box takes
-the focus (a tap, a click, `/`), or while it holds a search, a ← shows at its
+the focus (a tap, a click, Tab; the page takes no key, so `/` is the browser's,
+or Vimium's), or while it holds a search, a ← shows at its
 left ("Back to your songs" to a screen reader), at every width. The ←, or the
 browser's Back (Android's too), leaves the search: the box empty, the list as
 it was before you searched, the box no longer focused, so a phone puts its
@@ -3802,24 +3803,17 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   guide at the song's own times, not a follower: the scroll keeps its own
   speed. With reduced motion asked for in your system's settings, the
   countdown shows the seconds alone, with no ring.
-- **Keys and pedals**: a Bluetooth page turner is a keyboard, and the viewer
-  answers it as it answers yours. Space or Enter starts and stops
-  auto-scroll (Scroll, then the pill's first button: at once while it counts
-  down, a pause while it scrolls, another countdown while paused). PageDown
-  or ↓ turns a screen, the last two lines wholly in view coming to the top,
-  clear of the bar and the pill (on a laptop, under the toolbar); PageUp or
-  ↑ turns back, the first two going to the foot; any of them pauses a
-  scroll. Held down, a key does its thing once: one turn, one start or stop.
-  A song a laptop shows whole in columns turns down only as far as
-  brings all of it into view, and back up to the top. Tapping Scroll or one
-  of the pill's buttons, or starting the scroll with Space or Enter, leaves
-  the keys to the pedal (from the keyboard, Tab reaches them as ever, and
-  Scroll pressed with Enter puts the focus on the pill's first button). In a
-  songbook ← and → change songs, as ever. They
-  do nothing while the settings, a chord's card, Aa, a menu, the rail of
-  necks or a text field has the focus (each keeps its own keys), nor with
-  Alt, Ctrl, Shift or ⌘ held, but all of them work in full screen; no key
-  changes the version.
+- **Keys**: the pages take none of your keyboard's, so Vimium's (and the
+  browser's own: Space, PageDown, the arrows) work on them as anywhere. A
+  Bluetooth page turner is a keyboard: it scrolls the page as the browser does,
+  which pauses auto-scroll as any scroll of yours does (Home and End too).
+  Caracole's own controls keep their keys: Space or Enter on a focused chord
+  opens its card, on a focused button presses it, Escape closes what is open,
+  a menu or the rail's tabs take their arrows. Tapping Scroll or one of the
+  pill's buttons leaves the focus where it was (from the keyboard, Tab reaches
+  them as ever, and Scroll pressed with Enter puts the focus on the pill's
+  first button). A songbook goes from song to song by its ‹ › links, its
+  contents and a swipe; nothing changes the version but its list.
 - **Keep the screen on**: while a sheet shows, the screen stays on (where the
   browser allows it) until 10 minutes after your last touch, key or scroll,
   and always while it scrolls by itself, so it doesn't go dark between two
@@ -3950,10 +3944,9 @@ the library page link it, the tab's text beside it.
   viewer page, and carried back to the chord sheet by its ‹), and
   Scroll scrolls by itself, as in the viewer,
   each with its word under it (Shapes, Notes, Text, Scroll). On a laptop it is
-  a toolbar under the tab's title, as the viewer's. The viewer's keys and
-  pedals work here too: Space or Enter starts and stops scrolling, PageDown or
-  ↓ turns a screen keeping two lines, PageUp or ↑ turns back (not while Aa,
-  the rail or the versions list has the focus). The screen stays on as on a
+  a toolbar under the tab's title, as the viewer's. It takes no key either,
+  as the viewer: a page turner scrolls it as the browser does, which pauses a
+  scroll. The screen stays on as on a
   sheet, for the minutes the sheets' Keep the screen on keeps (the page has no
   setting of its own), and always while it scrolls.
 - **Full screen**, as the viewer's: a double tap beside the tab (in its
@@ -4802,10 +4795,10 @@ the library, sent as they are: they carry no badge.
   search, above, is the one request it may send): it moves to
   the first result's line (once the query's answer is in), from which Tab goes
   on to its name and its button; Fetch, or a click or a key on the name,
-  does. Escape goes back to
+  does. Escape in the box goes back to
   the list with your search and buttons as they were (Escape again clears the
   search, and once more, in the empty box, leaves it; Enter, or typing on,
-  brings the results back); the box's × goes back to all your songs, the focus
+  brings the results back); away from the box Escape is the browser's; the box's × goes back to all your songs, the focus
   kept in the box, still searching; the ← at the box's left, or Back, leaves
   the search (Searching is a step of its own, above); each way a song asked
   for there has its line (see below); ↓ goes from the box to the first

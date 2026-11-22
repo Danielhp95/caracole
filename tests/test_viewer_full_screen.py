@@ -19,7 +19,7 @@ from caracole.viewer.book import BookSong, build_songbook
 
 from helpers.browser import Browser, in_chromium
 from helpers.targets import small_targets
-from helpers.viewer_pages import back, click_at, double_tap, entries, key, spot, tap, tap_at, viewer as open_viewer, written
+from helpers.viewer_pages import back, click_at, double_tap, entries, spot, tap, tap_at, viewer as open_viewer, written
 from test_viewer_instruments_page import IN_E, THREE
 from test_viewer_layers import until
 from test_viewer_panels import DESKTOP, LONG, PHONE, UG_CHO, chord
@@ -277,13 +277,13 @@ def test_full_screen_does_not_move_under_reduced_motion(tmp_path):
 
 
 @in_chromium
-def test_a_songbook_song_goes_full_screen_and_its_arrows_still_change_songs(tmp_path):
+def test_a_songbook_song_goes_full_screen_and_its_next_link_still_changes_songs(tmp_path):
     book = _songbook(tmp_path, [BookSong("One", "Synthetic", cho=IN_E, id="aaaa"),
                                 BookSong("Two", "Synthetic", cho=THREE, id="bbbb")])
     with open_viewer(tmp_path, book + "#song-1", **DESKTOP) as b:
         hide_controls(b)
         b.js("window.before = true")
-        key(b, "ArrowRight", 39)
+        b.js("document.querySelector('#song-1 a[rel=next]').click()")
         assert b.wait("!window.before && location.hash.startsWith('#song-2') && " + READY)
         assert b.js("document.querySelector('section.song:not([hidden]) h2.title').textContent") == "Two"
 

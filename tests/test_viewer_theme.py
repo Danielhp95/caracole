@@ -21,7 +21,7 @@ from caracole.viewer.harptab_page import build_harmonica_viewer
 
 from helpers.browser import in_chromium
 from helpers.version_pages import WONDERWALL, folder
-from helpers.viewer_pages import NO_STORAGE, key, viewer, written
+from helpers.viewer_pages import NO_STORAGE, viewer, written
 from test_viewer_necks import reload
 from test_viewer_numerals import IN_C, contrast, middle
 
@@ -228,7 +228,7 @@ def test_a_songbook_carries_the_theme_to_its_next_song_and_its_contents_follow(t
         system(b, "light")
         choose(b, "dark")
         b.js("window.before = true")
-        key(b, "ArrowRight", 39)
+        b.js("document.querySelector('section.song:not([hidden]) a[rel=next]').click()")  # its pager's Next
         assert b.wait(f"!window.before && location.hash.startsWith('#song-2') && {READY}")
         second = b.js(STATE)
         b.js("window.before = true; location.hash = ''")  # the contents

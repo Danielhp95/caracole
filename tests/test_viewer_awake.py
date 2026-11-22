@@ -221,7 +221,7 @@ def test_a_songbook_without_storage_carries_the_minutes_to_its_next_song(tmp_pat
         b.click("#panel [data-close]")
         assert b.wait("document.getElementById('panel').hidden")
         b.js("window.before = true")
-        key(b, "ArrowRight", 39)
+        b.js("document.querySelector('section.song:not([hidden]) a[rel=next]').click()")  # its pager's Next
         assert b.wait(f"!window.before && location.hash.startsWith('#song-2') && {READY}")
         assert b.wait(HELD)
         more(b)

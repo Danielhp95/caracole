@@ -60,7 +60,7 @@ STATUS = "document.getElementById('bar-status').textContent"
 BILLY = [("billy-joel", "piano-man", 5), ("billy-joel", "uptown-girl", 3)]  # UG's: chords alone
 
 
-def test_the_instruments_filter_the_sites_songs_in_the_results_too(cfg, live, browser):
+def test_the_instruments_filter_the_sites_songs_in_the_results_too(cfg, live, browser):  # noqa: F811
     # With Harmonica on, the results are what has a harmonica tab: your songs with one, as in the list, and a site's
     # song by what its rows have: a UG song of chords alone has none.
     base, _, _ = live
@@ -82,7 +82,7 @@ def test_the_instruments_filter_the_sites_songs_in_the_results_too(cfg, live, br
     assert "inst=" not in browser.js("location.hash") and browser.js(f"{NOTE}.hidden") is True
 
 
-def test_searching_billy_joel_for_harmonica_tabs_the_panel_filters_the_results_as_you_tap(cfg, live, browser):
+def test_searching_billy_joel_for_harmonica_tabs_the_panel_filters_the_results_as_you_tap(cfg, live, browser):  # noqa: F811
     base, _, _ = live
     sites(cfg, ug=BILLY)
     harptabs(cfg)
@@ -122,7 +122,7 @@ def test_searching_billy_joel_for_harmonica_tabs_the_panel_filters_the_results_a
     assert browser.js("document.body.classList.contains('searching-all')") is True
 
 
-def test_matches_keep_the_sites_songs_and_the_status_your_songs_alone(cfg, live, browser):
+def test_matches_keep_the_sites_songs_and_the_status_your_songs_alone(cfg, live, browser):  # noqa: F811
     base, _, _ = live
     sites(cfg, ug=BILLY)
     harptabs(cfg)
@@ -134,7 +134,7 @@ def test_matches_keep_the_sites_songs_and_the_status_your_songs_alone(cfg, live,
     assert browser.js(f"{NOTE}.firstChild.textContent") == "With harmonica tab · yours here: found"
 
 
-def test_what_the_matches_hide_whole_is_said_with_show_all(cfg, live, browser):
+def test_what_the_matches_hide_whole_is_said_with_show_all(cfg, live, browser):  # noqa: F811
     base, _, _ = live
     sites(cfg, ug=BILLY)
     harptabs(cfg)
@@ -149,7 +149,7 @@ def test_what_the_matches_hide_whole_is_said_with_show_all(cfg, live, browser):
     assert browser.js(f"{said}") is None and "inst=" not in browser.js("location.hash")
 
 
-def test_on_a_phone_the_sheet_opens_over_the_results_and_its_show_n_songs_counts_them(cfg, live, phone):
+def test_on_a_phone_the_sheet_opens_over_the_results_and_its_show_n_songs_counts_them(cfg, live, phone):  # noqa: F811
     base, _, _ = live
     sites(cfg, ug=BILLY)
     harptabs(cfg)

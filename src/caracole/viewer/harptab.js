@@ -112,7 +112,7 @@
   // they came in the address, a sheet's viewer's link here having taken them on: the pinyin, the Chinese characters,
   // the instrument), so that where the browser keeps nothing (caracole serve's sandbox) they go both ways. The ‹ to the
   // library (named Library), for a song with no sheet, takes none.
-  const screenKit = window.caracoleScreen;  // screen.js, inlined in the head: the theme, the keys, the screen on
+  const screenKit = window.caracoleScreen;  // screen.js, inlined in the head: the theme, the screen on
   const sheetLink = document.querySelector("a.back[data-sheet]");
   const sheetPage = sheetLink ? sheetLink.getAttribute("href") : "";
   // What a link to another page of the song takes along: "#necks=0&py=1", or "".
@@ -747,24 +747,11 @@
     if (!(e.target instanceof Element && e.target.closest("#pill"))) pauseScroll();
   }, { passive: true });
   window.addEventListener("wheel", () => pauseScroll(), { passive: true });
-  // Home and End pause it; Space, Enter and the four page keys are the key map's, as the viewer's (screen.js keys),
-  // left to Aa's box, the rail of necks (or the phone's sheet) and the versions list while one has the focus,
-  // full screen's handle not counted.
+  // The page takes no key, as the viewer's: Home and End, the browser's, pause it, as a wheel does.
   document.addEventListener("keydown", (e) => {
     if (e.key === "Home" || e.key === "End") pauseScroll();
   });
-  const busy = () => {
-    const at = document.activeElement instanceof Element ? document.activeElement : null;
-    return Boolean(at) && at !== handle && Boolean(at.closest("#sizes, #necks, #version-list"));
-  };
-  screenKit.keys({
-    toggle: () => (scroll.state === "off" ? $("scroll") : go).click(),
-    pause: () => pauseScroll(),
-    room: () => toolbar.room(pill, docked()),
-    busy,
-    sheet,
-    steer: [$("scroll"), ...pill.getElementsByTagName("button")],
-  });
+  screenKit.steer([$("scroll"), ...pill.getElementsByTagName("button")]);
 
   // --- the bar: away as you read down the tab, back when you want it ---------------------------------------------
   const reveal = { y: window.scrollY, touched: false };

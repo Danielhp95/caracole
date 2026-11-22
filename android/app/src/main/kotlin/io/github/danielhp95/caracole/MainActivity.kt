@@ -467,10 +467,10 @@ class MainActivity : Activity() {
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
             if (request.isForMainFrame) follow(request.url.toString(), gesture = request.hasGesture()) else false
 
-        // A pedal is a keyboard: its keys go to the focused view, and a WebView that has loaded a page is not the
-        // focused one until it asks, so the first press would go nowhere. Asked upward, the page's own focus stays
-        // where it was: asked as FOCUS_DOWN, the WebView focuses the first link (the sheet's ‹), and Space on a
-        // focused link is its own press, never the key map's.
+        // A keyboard's keys (a page turner pedal's too) go to the focused view, and a WebView that has loaded a page is
+        // not the focused one until it asks, so the first press would go nowhere: the page scrolls by them as a
+        // browser's does (the pages take no key). Asked upward, the page's own focus stays where it was: asked as
+        // FOCUS_DOWN, the WebView focuses the first link (the sheet's ‹), and Space on a focused link is its own press.
         override fun onPageFinished(view: WebView, url: String?) {
             if (!view.hasFocus()) view.requestFocus(View.FOCUS_UP)
         }

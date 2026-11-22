@@ -505,16 +505,7 @@
     api.playPause();
   });
   stop.addEventListener("click", () => api.stop());
-  // Space plays and pauses, as Play does, wherever the focus is: a button it is on (Play itself, a track's) is not
-  // pressed too, nor a switch moved, and the page doesn't scroll. The page has no field to type in. Before the sound
-  // has loaded, or with a modifier held, Space is the browser's, and so it is in the open sheet, where it ticks a box,
-  // mutes a speaker and presses Done as in any dialog.
-  document.addEventListener("keydown", (e) => {
-    if (e.key !== " " || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || play.disabled) return;
-    if (sheet && sheet.open) return;
-    e.preventDefault();
-    if (!e.repeat) play.click();
-  });
+  // The page takes no key: Space is the browser's (and Vimium's), and a focused button's own press, Play's among them.
 
   const tempo = $("tempo");
   const tempoNow = $("tempo-now");

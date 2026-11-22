@@ -160,6 +160,8 @@ bar split 700 px apart, a screen that sleeps when autoscroll is off. The owner c
   (sheets repeat and abbreviate sections) is done when the page is built, in Python and its Kotlin port alike; a line
   with no match is never lit, and a song with too few matches (the builder's threshold) shows no highlight.
 - **Keys and pedals (D16 B)**: Space or Enter starts and stops autoscroll; PageDown or ↓ turns a screen less two lines;
+  Removed by the owner on 2026-11-22, for Vimium ("Remove the keybindings that caracole takes entirely"): the pages
+  take no key, and a pedal scrolls the page as the browser does (AGENTS.md, "No page takes a key").
   PageUp or ↑ goes back a screen; any of these while autoscroll runs pauses it; ← → keep changing songs in a songbook.
   Keys are ignored while a text field or a layer has the focus; the version switcher is never in the key map.
 - **The end of a song in a songbook (D17 A)**: as today.

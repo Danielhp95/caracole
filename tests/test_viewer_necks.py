@@ -921,7 +921,7 @@ def follow(b: Browser, script: str, ready: str = "document.documentElement?.data
 
 def test_a_served_songbook_keeps_the_rail_hidden_from_song_to_song_and_through_its_contents(tmp_path):
     # In caracole serve's sandbox there is no storage: the address keeps the choice, and every step to another
-    # song (the arrows, a swipe, the ‹ › links, the contents) carries it into the next song's address.
+    # song (a swipe, the ‹ › links, the contents) carries it into the next song's address.
     songs = [BookSong("Legend Song", "The Placeholders", cho=LEGEND, id="aaaa"),
              BookSong("Twins", "Synthetic", cho=TWINS, id="bbbb"),
              BookSong("In C", "Synthetic", cho=IN_C, id="cccc")]
@@ -932,9 +932,7 @@ def test_a_served_songbook_keeps_the_rail_hidden_from_song_to_song_and_through_i
         sandboxed = [b.js("origin"), b.js(STORAGE)]
         b.click("#necks-toggle")
         one = toggles(b)
-        b.js("document.activeElement.blur(); window.before = true")
-        key(b, "ArrowRight", 39)  # the next song, from the keyboard
-        assert b.wait("!window.before && document.documentElement?.dataset.ready === '1'")
+        follow(b, "document.querySelector('#song-1 a[rel=next]').click()")  # the next song, from its pager
         two = [b.js(RAIL), toggles(b), b.js("location.hash")]
         follow(b, "document.querySelector('#song-2 a[rel=next]').click()")
         three = [b.js(RAIL), toggles(b), b.js("location.hash")]
