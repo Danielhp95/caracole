@@ -1243,7 +1243,10 @@ It is rows.js's, shared by both pages:
 - The play buttons', the foot's and the opened card's box's rules are card.css's; where the buttons sit on a line (a
   selector ending `.line-title > .line-plays`, rows.css and library.css) and the laptop's pane (`#card-pane …`,
   library.css) are lane 1's: test_library_assets.py.
-- A song of yours closes to a line: its title, then a button for each thing to play from, none first (card.js
+- A song of yours closes to a line: its title, then, at the line's end, left of its action and its key (the owner's
+  ask of 2026-11-22: "always right aligned. That is, left of the key"; rows.css's margin, library.css's columns, a
+  band's line's under its title beside the pane where its title would be cut, library.js `placePlays`), a button for
+  each thing to play from, none first (card.js
   `plays`, from `things`, what the card's tiles are made of too: each a link that opens it at once, its instrument's
   `glyph`, inline SVG made with `createElementNS`, the one address the page names, an icon tile at every pointer (30 px with a mouse, 48 px on a touch screen, no
   words), the marks of the sites its versions came from at its foot, how many at its corner; the lyrics none), Fetch's download glyph where it has one (rows.js `fetchIcon`, a site's

@@ -377,3 +377,39 @@ def test_a_line_is_one_row_its_buttons_whole_and_needs_review_under_it_on_a_phon
         assert same_row(desperado["action"], desperado["status"]), desperado
     # The keys line up.
     assert len({round(line["key"][1]) for line in laid.values() if line["key"]}) == 1, laid
+
+
+def soda_song(conn, cfg):
+    """Soda Stereo - De Música Ligera, alone of its artist (its line their band folded into it): a chord sheet of
+    Ultimate Guitar in Am, so it has a key."""
+    soda = add_song(conn, "Soda Stereo", "De Música Ligera")
+    ug = upsert_version(conn, provider="ug", tab_id="6", song_id=soda.id, slot="sheet", kind="chords", rating=4.5,
+                        votes=10, version=1, label=None, url="https://tabs.ultimate-guitar.com/tab/x-chords-6",
+                        raw={"tonality_name": "Am"}, now="2026-10-19T00:00:00Z")
+    keep_file(conn, cfg.library_dir, song=soda, version_id=ug, name="sheet.json",
+              data=b'{"content": "[ch]Am[/ch]\\nx"}', rank=1)
+    keep_file(conn, cfg.library_dir, song=soda, version_id=ug, name="sheet.txt", data=b"[ch]Am[/ch]\nx", rank=1)
+    put(cfg, soda, "sheet.html")
+    update_song(conn, soda.id, status="found")
+    return soda
+
+
+@pytest.mark.parametrize(("size", "touch"), [("390,844", True), ("320,640", True), ("820,1180", True),
+                                             ("1280,900", False), ("1600,900", False)])
+def test_the_buttons_end_beside_the_key_whatever_the_title(conn, cfg, tmp_path, size, touch):
+    """The owner's ask of 2026-11-22: a line's buttons right-aligned, at its end, left of its key (its action, none
+    here, between them), on a band's line and on a line its one-song artist folded into, at every width; never right
+    after the title, so that the buttons of a list read as one column."""
+    hotel_california(conn, cfg)
+    harmonica_song(conn, cfg)  # Eagles: a band of two
+    soda_song(conn, cfg)  # Soda Stereo: folded into its line
+    drawn = attribute_of(run(conn, cfg, tmp_path, LAYOUT, size=size, touch=touch), "data-laid")
+    laid = drawn["laid"]
+    for title in ("Hotel California", "Take It Easy", "De Música Ligera"):
+        line = laid[title]
+        assert line["key"] and line["plays"], (title, line)
+        last = max(p["box"][1] for p in line["plays"])
+        # The two gaps around the empty action's column (6 px each), and from 720 px the key centred in its column.
+        assert 0 <= line["key"][0] - last <= 16.5, (title, last, line["key"])
+        # The title keeps the room on its left: its end is before the first button.
+        assert line["h3"][1] <= min(p["box"][0] for p in line["plays"]) + 0.5, (title, line)

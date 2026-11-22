@@ -264,8 +264,14 @@ section.nothing .line.miss > .line-panel { gap: 6px; padding: 4px 0 8px; }
 /* In an artist's band its header names the artist: its lines leave the name out, and the column with it. */
 section.artist:not(.folded) .line-by { display: none; }
 @media (min-width: 720px) {
-  section.artist:not(.folded) .line { grid-template-columns: minmax(0, 1fr) calc(104 * var(--sp)) auto calc(44 * var(--sp));
-    grid-template-areas: "title status act key"; }
+  /* A song of yours: its title's box dissolves into the line's grid, so that its buttons are a column of it after the
+     status, right before the action and the key (rows.css: at the line's end). */
+  section.artist:not(.folded) .line { grid-template-columns: minmax(0, 1fr) calc(104 * var(--sp)) auto auto
+    calc(44 * var(--sp)); grid-template-areas: "title status plays act key"; }
+  section.artist:not(.folded) .line:not(.hit):not(.miss) > .line-title { display: contents; }
+  section.artist:not(.folded) .line:not(.hit):not(.miss) > .line-title > h3 { grid-area: title; }
+  section.artist:not(.folded) .line:not(.hit):not(.miss) > .line-title > .line-plays { grid-area: plays;
+    max-width: none; }
   /* A site's line has no key: its status and counts ("chords ×9 · tabs ×2") take most of that room, its marks the
      rest, the rest where yours are (rows.css). */
   section.artist:not(.folded) .line.hit { grid-template-columns: minmax(0, 1fr)
@@ -286,16 +292,16 @@ section.artist.folded .line-by, section.flat .line-by { flex: 0 1 auto; color: v
   letter-spacing: .06em; text-transform: uppercase; line-height: 1.2; white-space: nowrap; overflow: hidden;
   text-overflow: ellipsis; max-width: 100%; }
 @media (pointer: coarse) { section.artist.folded .line-by, section.flat .line-by { min-height: calc(24 * var(--sp)); } }
-/* From 720 px, a line that names its artist on it reads on one row: the title, their name, the play tiles, then (past a
-   gap that takes what is left) the status, the action, the key and the chevron. The title's box and the line's meta
-   dissolve into the line's grid so that the name and the tiles are columns of it; the title gives way first (an
-   ellipsis): the artist keeps its whole name up to 16rem, then is cut with an ellipsis itself, and the tiles wrap
-   before they overlap anything. A site's line (.hit, .miss) is as before. */
+/* From 720 px, a line that names its artist on it reads on one row: the title, their name, then (past a gap that takes
+   what is left) the status, the play tiles, the action and the key, the tiles at the line's end (rows.css). The
+   title's box and the line's meta dissolve into the line's grid so that the name and the tiles are columns of it; the
+   title gives way first (an ellipsis): the artist keeps its whole name up to 16rem, then is cut with an ellipsis
+   itself, and the tiles wrap before they overlap anything. A site's line (.hit, .miss) is as before. */
 @media (min-width: 720px) {
   section.artist.folded .line:not(.hit):not(.miss),
   section.flat .line:not(.hit):not(.miss) { grid-template-columns: minmax(calc(64 * var(--sp)), max-content)
-    fit-content(calc(256 * var(--sp))) auto minmax(0, 1fr) calc(104 * var(--sp)) auto calc(44 * var(--sp));
-    grid-template-areas: "name by plays . status act key"; }
+    fit-content(calc(256 * var(--sp))) minmax(0, 1fr) calc(104 * var(--sp)) auto auto calc(44 * var(--sp));
+    grid-template-areas: "name by . status plays act key"; }
   section.artist.folded .line:not(.hit):not(.miss) > .line-title,
   section.flat .line:not(.hit):not(.miss) > .line-title { display: contents; }
   /* The name's own width is the button's least (capped, so a longer one is cut inside it): the track never shares it. */
@@ -311,9 +317,10 @@ section.artist.folded .line-by, section.flat .line-by { flex: 0 1 auto; color: v
 /* From 1200 px, beside the pane (where the lanes meet, 12), the list is 760 px: a line's buttons (chips of 100 to
    150 px) may not fit beside its title, its artist, its key and its chevron. A folded or flat line keeps the one row
    above while they fit; where they don't (library.js placePlays: .plays-under), its first row is the title, its artist
-   right after it, the status, the action, the key and the chevron, and its buttons go on a row of their own under the
-   title, wrapping there. A band's line has them beside its title where they fit, else under it. None ever pushes the
-   key off the line, and the title keeps the room they took from it. */
+   right after it, the status, the action, the key and the chevron, and its buttons go on a row of their own under it,
+   at its end, left of the key's column, wrapping there. A band's line has them in their column, which wraps them
+   where the title leaves too little room. None ever pushes the key off the line, and the title keeps the room they
+   took from it. */
 @media (min-width: 1200px) {
   .line > .line-title { flex-wrap: wrap; row-gap: 4px; }
   .line > .line-title > .line-plays { max-width: 100%; }
@@ -322,8 +329,11 @@ section.artist.folded .line-by, section.flat .line-by { flex: 0 1 auto; color: v
     fit-content(calc(256 * var(--sp))) minmax(0, 1fr) calc(104 * var(--sp)) auto calc(44 * var(--sp));
     grid-template-rows: minmax(calc(28 * var(--sp)), auto);
     grid-template-areas: "name by . status act key" "plays plays plays plays plays ."; }
-  section.artist.folded .line.plays-under:not(.hit):not(.miss) > .line-title > .line-plays,
-  section.flat .line.plays-under:not(.hit):not(.miss) > .line-title > .line-plays { margin: 0 0 6px; }
+  section.artist:not(.folded) .line.plays-under:not(.hit):not(.miss) { grid-template-columns: minmax(0, 1fr)
+    calc(104 * var(--sp)) auto calc(44 * var(--sp)); grid-template-rows: minmax(calc(28 * var(--sp)), auto);
+    grid-template-areas: "title status act key" "plays plays plays ."; }
+  section.artist .line.plays-under:not(.hit):not(.miss) > .line-title > .line-plays,
+  section.flat .line.plays-under:not(.hit):not(.miss) > .line-title > .line-plays { margin: 0 0 6px auto; }
 }
 @media (max-width: 719px) {
   section.artist.folded .line,

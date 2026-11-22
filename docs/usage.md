@@ -2695,8 +2695,8 @@ all of them, whatever the search or a filter leaves out), and their songs A to
 Z under it. A line is a song, one row each, on a laptop and on a phone: read
 down under the search box, a laptop's screen holds about twenty lines with their
 artists' names, and a song that needs something says so under its title on a
-phone. A line has the song's title, then, right after it, a button for each
-thing the song has to play from, none of them first: its **chord sheet** (its
+phone. A line has the song's title, then, at the line's end, left of its key,
+a button for each thing the song has to play from, none of them first: its **chord sheet** (its
 own colour for an auto sheet, a ukulele for Ultimate Guitar's Ukulele Chords),
 its **Guitar Pro** file, its **guitar tab** (Ultimate Guitar's text tab), its
 **harmonica tab**, its **game music tab** (gametabs.net's) and a **score** you
@@ -2876,7 +2876,7 @@ your count of their songs, small and muted. An artist of one song has no band:
 it folds into the song's line, their name a small overline in capitals, in the
 artist's colour, over the title (cut short on one line), the line about 64 px
 tall on a touch screen; from 720 px wide their name sits right after the title
-(then the buttons to play from and the key), as a line sorted by
+(the buttons to play from and the key at the line's end), as a line sorted by
 title shows it. So does an artist's group among a search's
 results that holds one line and nothing else, never one with "+ N more" under it
 nor a "Did you mean". Every control is 44 px on a touch screen but an artist's
@@ -2890,8 +2890,7 @@ the name finds ("Queen" finds ABBA's "Dancing Queen" too), and Back is the list
 as it was before. There is no view of one artist's songs alone, and no tag for
 it. Sorted by title, or by when the songs were added, the lines stand alone,
 each folded as a one-song artist's is: its artist's name a small overline over
-the title on a phone, right after the title from 720 px wide, before the
-buttons to play from (and a click on it
+the title on a phone, right after the title from 720 px wide (and a click on it
 does the same as one on the name over a band).
 `#by=` in the address, an artist's name as a sheet viewer's artist line links
 to it (`index.html#by=Soda%20Stereo`), does what pressing their name does, and
