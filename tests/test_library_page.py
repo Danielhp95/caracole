@@ -2606,11 +2606,12 @@ def test_on_a_phone_files_open_with_a_tap_the_title_opens_the_card_and_tab_goes_
         phone.open(path.as_uri())
         assert phone.wait(f"document.querySelector({json.dumps(line)}) !== null")
         q = f"document.querySelector({json.dumps(line)})"
-        # A thumb's target: the chevron, each button on the line, and each file once the card is open.
-        assert phone.js(f"{q}.querySelector('.line-more').getBoundingClientRect().height") >= 44
+        # A thumb's target: the line's row, which opens its card, each button on the line, and each file once the card
+        # is open.
+        assert phone.js(f"{q}.getBoundingClientRect().height") >= 44
         assert phone.js(f"Math.min(...Array.from({q}.querySelectorAll('.line-plays a')).map((a) => "
                         "Math.min(a.getBoundingClientRect().width, a.getBoundingClientRect().height)))") >= 44
-        phone.click(line + " .line-more")
+        cards.press_at(phone, cards.blank_point(phone, line))  # its blank space opens the card
         cards.install(phone)
         card = f"document.querySelector('#' + cardOf({q}).id)"
         assert phone.wait(f"!{card}.hidden")
@@ -2627,7 +2628,7 @@ def test_on_a_phone_files_open_with_a_tap_the_title_opens_the_card_and_tab_goes_
         files, heights = reach
         assert files == 9 and min(heights) >= 44, (files, heights)
         # From the line, Tab goes to its first button, its sheet's: the title is no stop of its own, and a tap on it
-        # folds the card as the chevron does; the sheet's button opens the viewer.
+        # folds the card as its blank space does; the sheet's button opens the viewer.
         phone.js(f"{q}.focus()")
         phone.press("Tab")
         assert phone.js("document.activeElement.getAttribute('aria-label')") == (
@@ -3109,7 +3110,9 @@ LINE_PARTS = "(() => {" + cards.KIT + """
       key: shown ? shown.textContent : null,
       more: more ? { glyph: chevron ? chevron.getAttribute("class") : null,
         hidden: chevron ? chevron.getAttribute("aria-hidden") : null, title: more.title,
-        name: more.querySelector(".visually-hidden").textContent, dots: more.textContent.includes("⋯") } : null,
+        name: more.querySelector(".visually-hidden").textContent, dots: more.textContent.includes("⋯"),
+        seen: [Math.round(more.getBoundingClientRect().width), Math.round(more.getBoundingClientRect().height),
+          getComputedStyle(more).clip] } : null,
     };
   }
   document.body.setAttribute("data-parts", JSON.stringify(parts));
@@ -3267,33 +3270,31 @@ def test_a_search_hits_line_keeps_its_sites_marks_and_a_lines_buttons_follow_its
     assert yours["marks"] == [] and [(g["kind"], g["after"]) for g in yours["plays"]] == [("sheet", "h3")], yours
 
 
-# Notes how the fold button's glyph is turned (its computed transform) before and after a click.
+# Notes the fold button's state before and after a click, and the line's focus ring while the keyboard is on it.
 TURNS = """
 (() => {
   const more = document.querySelector("#list .line .line-more");
-  const turn = () => getComputedStyle(more.querySelector("svg")).transform;
-  const closed = turn();
+  const closed = more.getAttribute("aria-expanded");
   more.click();
-  document.body.setAttribute("data-turns",
-    JSON.stringify({ closed, open: turn(), expanded: more.getAttribute("aria-expanded") }));
+  document.body.setAttribute("data-turns", JSON.stringify({ closed, expanded: more.getAttribute("aria-expanded") }));
 })();
 """
 
 
 @in_chromium
-def test_the_fold_button_is_a_chevron_named_more_for_the_song(conn, cfg, tmp_path):
-    # It unfolds the song in place: a chevron, which turns when the song is open, never "⋯", which reads as a menu.
+def test_the_fold_button_draws_nothing_and_is_named_more_for_the_song(conn, cfg, tmp_path):
+    # It unfolds the song in place, the keyboard's and a screen reader's (a hand's is the line's name or blank space):
+    # no chevron drawn, the owner's choice of 2026-11-22 ("Remove the chevron icons all together, I want to regain
+    # that space"), out of sight, still named for the song, never "⋯", which reads as a menu.
     creep = add_song(conn, "Radiohead", "Creep")
     put(cfg, creep, "sheet.pdf", "lyrics.txt")
     update_song(conn, creep.id, status="found")
     more = line_parts(conn, cfg, tmp_path)["Creep"]["more"]
-    assert more == {"glyph": "glyph glyph-chevron", "hidden": "true", "title": "More: Creep",
-                    "name": "More: Creep", "dots": False}, more
+    assert more == {"glyph": None, "hidden": None, "title": "More: Creep", "name": "More: Creep", "dots": False,
+                    "seen": [1, 1, "rect(0px, 0px, 0px, 0px)"]}, more
     path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), TURNS))
-    # Without motion, as the turn's transition runs on a clock virtual time doesn't move.
-    turns = attribute_of(dump_dom(path, tmp_path, media={"prefers-reduced-motion": "reduce"}), "data-turns")
-    assert turns["closed"] == "none" and turns["expanded"] == "true", turns
-    assert re.fullmatch(r"matrix\(-1, [-0-9.e]+, [-0-9.e]+, -1, 0, 0\)", turns["open"]), turns  # half a turn
+    turns = attribute_of(dump_dom(path, tmp_path), "data-turns")
+    assert turns == {"closed": "false", "expanded": "true"}, turns
 
 
 # A site's song put among Eagles' songs, as the served search puts one (rows.js indexLine: a line of class "hit"),
@@ -3917,7 +3918,7 @@ def test_the_library_is_lines_grouped_by_artist_a_to_z(conn, cfg, tmp_path):
 LINES = """(() => {
   const box = (n) => n.getBoundingClientRect();
   const lines = Array.from(document.querySelectorAll("#list article.line"));
-  const parts = ".line-title h3, .line-by, .line-status > *, .line-key, .line-sources > *, .line-action > *, .line-more";
+  const parts = ".line-title h3, .line-by, .line-status > *, .line-key, .line-sources > *, .line-action > *";
   const rows = (line) => {
     const middles = Array.from(line.querySelectorAll(parts)).filter((p) => p.checkVisibility() && box(p).height > 0)
       .map((p) => box(p).top + box(p).height / 2).sort((a, b) => a - b);

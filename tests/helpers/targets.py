@@ -61,9 +61,12 @@ _SMALL = r"""
   // A link among words of its own, in a line of text: WCAG 2.5.8 exempts it.
   const inText = (node) => node.tagName === "A" && getComputedStyle(node).display === "inline" &&
     node.parentElement.textContent.trim() !== node.textContent.trim();
+  // A control drawn nowhere (the visually-hidden pattern: a pixel, clipped to nothing), the keyboard's and a screen
+  // reader's alone: no pointer's target (a line's chevron, whose line is the pointer's).
+  const unseen = (node) => getComputedStyle(node).clip === "rect(0px, 0px, 0px, 0px)";
   const short = [];
   for (const node of document.querySelectorAll('a[href], button, input:not([type="hidden"]), select, textarea, summary')) {
-    if (!node.checkVisibility() || (exempt && node.matches(exempt)) || inText(node)) continue;
+    if (!node.checkVisibility() || (exempt && node.matches(exempt)) || inText(node) || unseen(node)) continue;
     const target = node.matches(".pick input") ? node.parentElement
       : node.matches('input[type="checkbox"], input[type="radio"]') ? node.closest("label") || node : node;
     const box = target.getBoundingClientRect();

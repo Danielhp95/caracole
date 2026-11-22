@@ -668,8 +668,14 @@ def test_a_removed_song_shows_among_the_results_and_add_again_brings_it_back(cfg
         conn.close()
 
 
-# A result's song name, which does what its Get it does: a button in its heading.
-NAME = "{} h3 button.title-get"
+# A result's song name, its line's own as its blank space, which opens what the line holds (rows.js foldMore), never a
+# Get it: the owner's choice of 2026-11-22, its chevron gone, so that a tap a little off the line's button never spends a
+# site's request.
+NAME = "{} > .line-title h3"
+# Whether the line's panel is open, by its chevron (out of sight, the keyboard's) and the panel it names.
+OPEN = ("(() => {{ const m = document.querySelector(\"{} > .line-more\"); const p = m && "
+        "document.getElementById(m.getAttribute('aria-controls')); return Boolean(p && !p.hidden && "
+        "m.getAttribute('aria-expanded') === 'true'); }})()")
 # The page's fetch, each POST noted (its path and form) and never sent: its line stays "Sending…".
 NOTE_POSTS = ("(() => { window.posts = []; const real = window.fetch; window.fetch = (url, init) => { "
               "if (init && init.method === 'POST') { window.posts.push([String(url), String(init.body)]); "
@@ -679,56 +685,55 @@ OASIS = "#results .hit[data-ug='oasis/wonderwall']"
 NOEL = "#results .hit[data-source='gtptabs']"
 
 
-def test_a_results_name_posts_what_its_get_it_posts(cfg, live, browser):
+def test_a_results_name_opens_what_it_holds_and_its_get_it_posts_its_lookup(cfg, live, browser):
     base, queue, _ = live
     sites(cfg, ug=WONDERWALL["ug"], gtptabs=[*WONDERWALL["gtptabs"],
                                             "https://gtptabs.com/tabs/20/noel-gallagher/wonderwall.html"])
-    pressed = {}
     browser.open(base + "#q=wonderwall&all=1")
-    for what in ("name", "get it"):
-        if pressed:
-            browser.js("window.before = true; location.reload()")  # the page anew, its lines as they came
-        assert browser.wait(f"!window.before && {HITS} >= 3 && !!document.querySelector(\"{NOEL}\")")
-        browser.js(NOTE_POSTS)
-        for hit in (RYAN, OASIS, NOEL):
-            browser.click(NAME.format(hit) if what == "name" else f"{hit} .line-action button")
-            assert browser.wait(f"window.posts.length && !!document.querySelector(\"{hit} .progress\")")
-        pressed[what] = browser.js("window.posts")
-    assert pressed["name"] == pressed["get it"]
-    assert [path for path, _ in pressed["name"]] == ["lookup"] * 3
-    forms = [parse_qs(body) for _, body in pressed["name"]]
+    assert browser.wait(f"{HITS} >= 3 && !!document.querySelector(\"{NOEL}\")")
+    browser.js(NOTE_POSTS)
+    for hit in (RYAN, OASIS, NOEL):
+        assert browser.js(OPEN.format(hit)) is False
+        browser.click(NAME.format(hit))  # its name: what the line holds, opened, and nothing asked
+        assert browser.wait(OPEN.format(hit)), hit
+        browser.click(NAME.format(hit))  # and closed again
+        assert browser.wait(f"!{OPEN.format(hit)}"), hit
+    assert browser.js("window.posts") == []
+    # The name is the heading's text, no button of its own: its Get it is the line's one way to look it up.
+    assert browser.js(f"document.querySelector(\"{RYAN} h3\").textContent") == "Wonderwall"
+    assert browser.js("document.querySelectorAll('#results article.line h3 button').length") == 0
+    for hit in (RYAN, OASIS, NOEL):
+        browser.click(f"{hit} .line-action button")
+        assert browser.wait(f"window.posts.length && !!document.querySelector(\"{hit} .progress\")")
+    posts = browser.js("window.posts")
+    assert [path for path, _ in posts] == ["lookup"] * 3
+    forms = [parse_qs(body) for _, body in posts]
     assert forms[0]["ug"] == ["ryan-adams/wonderwall"] and forms[1]["ug"] == ["oasis/wonderwall"]
     assert forms[2]["artist"] == ["Noel Gallagher"] and "ug" not in forms[2]
     assert queue.snapshot() == []  # noted, never sent
-    # Named for what it does, and looking like the name it is.
-    assert browser.js(f"document.querySelector(\"{NAME.format(RYAN)}\").getAttribute('aria-label')"
-                      ) == "Fetch Ryan Adams - Wonderwall"
-    assert browser.js(f"document.querySelector(\"{NAME.format(RYAN)}\").title").startswith("Fetch Ryan Adams - Wonderwall")
-    assert browser.js(f"document.querySelector(\"{RYAN} h3\").textContent") == "Wonderwall"
 
 
-def test_a_results_name_looks_the_song_up_and_cant_be_pressed_twice(cfg, live, browser):
+def test_a_results_get_it_looks_the_song_up_once_and_its_name_meanwhile_asks_nothing(cfg, live, browser):
     base, queue, asked = live
     sites(cfg, **WONDERWALL)
     browser.open(base + "#q=wonderwall&all=1")
     assert browser.wait(f"{HITS} >= 2")
-    name = f"document.querySelector(\"{NAME.format(RYAN)}\")"
-    assert browser.js(f"{name}.disabled") is False
+    get_it = f"document.querySelector(\"{RYAN} .line-action button\")"
     asked.lookups_held = threading.Event()  # the page hears back once the test says so
-    browser.js(f"{name}.focus()")
-    browser.press("Enter")  # a key on the name, as a click on it
+    browser.js(f"{get_it}.focus()")
+    browser.press("Enter")
     args = posted(queue)
     assert args[:3] == ("get", "--progress", "--ug=ryan-adams/wonderwall") and args[-2:] == ("Ryan Adams", "Wonderwall")
-    assert browser.wait(f"{name}.disabled && document.querySelector(\"{RYAN} .line-action button\").disabled")
-    browser.click(NAME.format(RYAN))  # pressed again while its request is on its way: nothing more
+    assert browser.wait(f"{get_it}.disabled")
+    browser.click(NAME.format(RYAN))  # its name while its request is on its way: its versions, and nothing more asked
+    assert browser.wait(OPEN.format(RYAN))
     asked.lookups_held.set()
     assert answered(browser, RYAN)  # its request line in its Get it's place
-    assert browser.wait(f"!{name} || {name}.disabled")
     assert browser.wait("document.querySelector('#results .progress').dataset.tone === 'ready'", timeout=20)
     assert len(queue.snapshot()) == 1
 
 
-def test_a_song_of_yours_keeps_its_buttons_and_a_removed_songs_name_adds_it_again(cfg, live, browser):
+def test_a_song_of_yours_keeps_its_buttons_and_a_removed_songs_name_asks_for_nothing(cfg, live, browser):
     base, queue, _ = live
     sites(cfg, ug=[("radiohead", "creep", 2), ("radiohead", "karma-police", 2)])
     removed(cfg, "Radiohead", "Creep")
@@ -739,20 +744,22 @@ def test_a_song_of_yours_keeps_its_buttons_and_a_removed_songs_name_adds_it_agai
     (folder / "sheet.pdf").write_bytes(b"%PDF-1.4")
     update_song(conn, mine.id, status="found")
     conn.close()
+    wanted = cfg.wanted_file.read_text(encoding="utf-8") if cfg.wanted_file.exists() else None
     browser.open(base)
     search(browser, "radiohead")
     assert browser.wait(f"{answer_to('radiohead')} && !!document.querySelector('#results .removed-hit') && "
                         "!!document.querySelector('#results .line[data-id]')")
     yours = "#results .line[data-id]"
     assert browser.js(f"!!document.querySelector(\"{yours} .line-plays a.play-sheet\")") is True  # opens its sheet
-    assert browser.js(f"document.querySelector(\"{yours} .title-get\")") is None
+    assert browser.js(f"document.querySelector(\"{yours} h3 button\")") is None
     gone = "#results .removed-hit"
-    assert browser.js(f"document.querySelector(\"{NAME.format(gone)}\").getAttribute('aria-label')"
+    assert browser.js(f"document.querySelector(\"{gone} .line-action button\").getAttribute('aria-label')"
                       ) == "Add Radiohead - Creep again"
-    browser.click(NAME.format(gone))  # as its Add again: asked for as the request form asks
-    args = posted(queue)
-    assert args[0] == "get" and args[-2:] == ("Radiohead", "Creep")
-    assert "Radiohead - Creep" in cfg.wanted_file.read_text(encoding="utf-8")
+    browser.click(NAME.format(gone))  # its versions on UG, opened: Add again is its button's alone
+    assert browser.wait(OPEN.format(gone))
+    time.sleep(0.3)
+    assert queue.snapshot() == []
+    assert (cfg.wanted_file.read_text(encoding="utf-8") if cfg.wanted_file.exists() else None) == wanted
 
 
 # What each line of the results looks like, read from the page: whether it is a song you have, its name's colour and
@@ -1804,8 +1811,7 @@ def test_a_title_spelled_close_is_a_line_in_its_artists_band_whose_get_it_looks_
     assert browser.js(f"document.querySelector('{MEANT_LINE} .line-facts').textContent") == "chords ×6"
     assert browser.js(f"document.querySelector('{MEANT_LINE} .line-action button.line-fetch').getAttribute("
                       "'aria-label')") == "Fetch Eagles - Hotel California from UG"
-    assert browser.js(f"document.querySelector('{MEANT_LINE} h3 .title-get').getAttribute('aria-label')") == (
-        "Fetch Eagles - Hotel California")  # its name gets it, as its Get it does
+    assert browser.js(f"document.querySelector('{MEANT_LINE} h3 button')") is None  # its name opens what it holds
     assert browser.js("document.querySelector('#results section.meant .their-songs').textContent") == (
         "Their 2 songs on UG›")
     browser.press("Enter")  # to the first line: a suggestion is never what Enter asks for

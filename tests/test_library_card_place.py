@@ -1,4 +1,6 @@
-"""Where a song's card is on the library page (stage 1d), in a real browser: the tests find it by its line's chevron."""
+"""Where a song's card is on the library page (stage 1d), in a real browser: the tests find it by its line's chevron, out
+of sight (the keyboard's button, whose ``aria-controls`` names it), and open it as a hand does, by the line's name or
+its blank space."""
 
 from __future__ import annotations
 
@@ -206,13 +208,15 @@ def test_a_cards_parts_come_in_the_phones_order(conn, cfg, tmp_path, size):
 # --- a long card's head sticks under the search bar, and closing it brings its line back ---------------------------
 
 PHONE = {"width": 390, "height": 844, "mobile": True}
-# The page's script's names for a test's: Hotel California's line (``song``), its chevron, its card's head and the
-# bar kept at the top. ``chevronAt(y)`` scrolls until the chevron's middle is at ``y(…)`` on the screen, ``topAt(y)``
-# until the card's top is (the bar sticks on the way, so y is asked again each step); ``geometry()`` notes where each
-# is; ``settled()``, two frames and a task on, once the page's observers have said what they saw.
+# The page's script's names for a test's: Hotel California's line (``song``), its chevron (out of sight, the
+# keyboard's), its name, its card's head and the bar kept at the top. ``headingAt(y)`` scrolls until the name's middle
+# is at ``y(…)`` on the screen, ``rowAt(y)`` the middle of the line's own row (over its card), ``topAt(y)`` until the
+# card's top is (the bar sticks on the way, so y is asked again each step); ``geometry()`` notes where each is;
+# ``settled()``, two frames and a task on, once the page's observers have said what they saw.
 PLACE = r"""
 window.line = document.querySelector('#list article.line[data-id="SONG"]');
 window.chevron = () => line.querySelector(":scope > .line-more");
+window.heading = () => line.querySelector(":scope > .line-title h3");
 window.bar = () => document.querySelector(".searchbar").getBoundingClientRect();
 window.headIn = () => cardOf(line).querySelector(".card-head-in");
 window.scrollTill = (at, y) => {
@@ -222,15 +226,16 @@ window.scrollTill = (at, y) => {
     scrollBy(0, by);
   }
 };
-window.chevronAt = (y) => scrollTill(() => { const r = chevron().getBoundingClientRect(); return (r.top + r.bottom) / 2; }, y);
+window.headingAt = (y) => scrollTill(() => { const r = heading().getBoundingClientRect(); return (r.top + r.bottom) / 2; }, y);
+window.rowAt = (y) => scrollTill(() => (line.getBoundingClientRect().top + cardOf(line).getBoundingClientRect().top) / 2, y);
 window.topAt = (y) => scrollTill(() => cardOf(line).getBoundingClientRect().top, y);
 window.settled = () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() =>
   setTimeout(() => done(true), 50))));
 window.geometry = () => {
   const name = headIn().querySelector(".card-name");
-  const c = chevron().getBoundingClientRect();
+  const h = heading().getBoundingClientRect();
   return { shown: headIn().checkVisibility({ visibilityProperty: true }), head: headIn().getBoundingClientRect().top,
-           bar: bar().bottom, barTop: bar().top, chevron: [c.top, c.bottom], line: line.getBoundingClientRect().top,
+           bar: bar().bottom, barTop: bar().top, heading: [h.top, h.bottom], line: line.getBoundingClientRect().top,
            card: [cardOf(line).getBoundingClientRect().top, cardOf(line).getBoundingClientRect().bottom],
            middle: innerHeight / 2, lines: name.clientHeight / parseFloat(getComputedStyle(name).lineHeight),
            expanded: chevron().getAttribute("aria-expanded") };
@@ -326,14 +331,14 @@ def test_a_long_cards_head_sticks_under_the_bar_and_closes_it(conn, cfg, tmp_pat
 
 
 def test_at_320_px_no_head_lies_over_the_lines_buttons_still_showing(conn, cfg, tmp_path):
-    # At 320 px Hotel California's buttons stand in a column beside its title: its chevron under the bar, those
-    # buttons still show under it, and no head lies over them; a tap there is the button's. Once the card's top is
-    # under the bar too, the head shows.
+    # At 320 px Hotel California's buttons stand in a column beside its title: its row's upper half under the bar,
+    # those buttons still show under it, and no head lies over them; a tap there is the button's. Once the card's top
+    # is under the bar too, the head shows.
     url, song = _long_card(conn, cfg)
     b = _phone(tmp_path, url, song, size={"width": 320, "height": 640, "mobile": True})
     try:
         _open_long(b)
-        b.js("chevronAt(() => bar().bottom - 30)")
+        b.js("rowAt(() => bar().bottom - 30)")
         play = ("[...line.querySelectorAll('.line-plays > .play')].find((p) => "
                 "p.getBoundingClientRect().top > bar().bottom + 2)")
         assert b.js(f"Boolean({play})"), b.js("geometry()")  # a button of the line's still on the screen
@@ -347,16 +352,16 @@ def test_at_320_px_no_head_lies_over_the_lines_buttons_still_showing(conn, cfg, 
         b.close()
 
 
-def test_closing_by_the_chevron_brings_the_line_back_too(conn, cfg, tmp_path):
-    # The chevron half under the bar, its lower half tapped: the card closes and its line comes back into view.
+def test_closing_by_the_title_brings_the_line_back_too(conn, cfg, tmp_path):
+    # The title half under the bar, its lower half tapped: the card closes and its line comes back into view.
     url, song = _long_card(conn, cfg)
     b = _phone(tmp_path, url, song)
     try:
         _open_long(b)
-        b.js("chevronAt(() => bar().bottom)")
+        b.js("headingAt(() => bar().bottom)")
         at = b.js("geometry()")
-        assert at["barTop"] == 0 and at["chevron"][0] < at["bar"] < at["chevron"][1], at
-        x, y = b.js("(() => { const r = chevron().getBoundingClientRect(); "
+        assert at["barTop"] == 0 and at["heading"][0] < at["bar"] < at["heading"][1], at
+        x, y = b.js("(() => { const r = heading().getBoundingClientRect(); "
                     "return [r.x + r.width / 2, (bar().bottom + r.bottom) / 2]; })()")
         _tap(b, x, y)
         assert b.wait("chevron().getAttribute('aria-expanded') === 'false'"), b.js("geometry()")
@@ -373,7 +378,7 @@ def test_with_reduced_motion_closing_lands_at_once(conn, cfg, tmp_path):
     try:
         b.send("Emulation.setEmulatedMedia", features=[{"name": "prefers-reduced-motion", "value": "reduce"}])
         _open_long(b)
-        b.js("chevronAt(() => bar().bottom)")
+        b.js("headingAt(() => bar().bottom)")
         was, at, later = b.js("(() => { const was = scrollY; chevron().click(); const at = scrollY; "
                               "return new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => "
                               "done([was, at, scrollY])))); })()")
@@ -413,8 +418,8 @@ def test_a_running_requests_line_and_steps_are_never_under_the_head(cfg, live, l
         steps = "line.querySelector(':scope > .steps')"
         assert browser.wait(f"Boolean({steps}) && {steps}.checkVisibility()", timeout=15), \
             browser.js("line.outerHTML.slice(0, 400)")
-        # The chevron under the bar, the request's line and its steps still showing: no head over them.
-        browser.js("chevronAt(() => bar().bottom - 30)")
+        # The title under the bar, the request's line and its steps still showing: no head over them.
+        browser.js("headingAt(() => bar().bottom - 30)")
         assert browser.js(f"{steps}.getBoundingClientRect().bottom > bar().bottom + 10"), browser.js("geometry()")
         assert browser.js("settled()") and browser.js(SHOWN) is False, browser.js("geometry()")
         assert browser.js(f"(() => {{ const r = {steps}.getBoundingClientRect(); "
@@ -538,8 +543,8 @@ def test_a_title_puts_its_card_in_the_pane_and_marks_its_line(conn, cfg, tmp_pat
         assert shown == {"name": "Creep · Radiohead", "hidden": False, "seen": True, "card": False, "selected": True,
                          "current": "true", "expanded": "true", "empty": False, "labelled": True, "close": 0,
                          "length": length, "look": ["0px", True]}, shown  # no card's box, the accent on its edge
-        # Another song's chevron: its card in the pane, Creep's back under its line, closed.
-        b.click(f'#list article.line[data-id="{b.js("lineOf(\'Karma Police\').dataset.id")}"] .line-more')
+        # Another song's line, tapped in its blank space: its card in the pane, Creep's back under its line, closed.
+        cards.press_at(b, cards.blank_point(b, f'#list article.line[data-id="{b.js("lineOf(\'Karma Police\').dataset.id")}"]'))
         assert b.wait("inPane('Karma Police')")
         back = b.js("(() => { const card = cardOf(lineOf('Creep')); return { selected: lineOf('Creep').classList"
                     ".contains('selected'), current: lineOf('Creep').hasAttribute('aria-current'), "
@@ -550,8 +555,8 @@ def test_a_title_puts_its_card_in_the_pane_and_marks_its_line(conn, cfg, tmp_pat
                     "lines: document.querySelectorAll('.line.selected').length }; })()")
         assert back == {"selected": False, "current": False, "inLine": True, "hidden": True, "expanded": "false",
                         "head": "true", "karma": True, "lines": 1}, back
-        # Its chevron again: the pane empty, the card back under its line.
-        b.click(f'#list article.line[data-id="{b.js("lineOf(\'Karma Police\').dataset.id")}"] .line-more')
+        # Its name again: the pane empty, the card back under its line.
+        b.click(cards.name_of(f'#list article.line[data-id="{b.js("lineOf(\'Karma Police\').dataset.id")}"]'))
         assert b.wait("empty().checkVisibility() && !pane().querySelector('.song-card')"), b.js("pane().outerHTML")
         assert b.js("document.querySelectorAll('.line.selected, [aria-current]').length") == 0
         assert b.js("cardOf(lineOf('Karma Police')).parentNode === lineOf('Karma Police')")
@@ -727,18 +732,18 @@ def test_opening_a_card_adds_no_history_entry(conn, cfg, tmp_path, size):
 
 
 # Each song line's parts where they are: its h3's box, its artist's (and its middle), its buttons' (left, top, right),
-# its key's and chevron's lefts and rights, every play's box inside the line, and the list's right.
+# its key's left, right and top, every play's box inside the line, its right padding, and the list's right.
 PARTS = """(() => {
   const r = (n) => n && n.checkVisibility() ? n.getBoundingClientRect() : null;
   const list = document.getElementById('list').getBoundingClientRect();
   return Object.fromEntries([...document.querySelectorAll('#list article.line')].map((line) => {
     const h3 = r(line.querySelector('h3')), by = r(line.querySelector('.line-by')), key = r(line.querySelector('.line-key')),
-      more = r(line.querySelector('.line-more')), plays = r(line.querySelector('.line-plays')), box = r(line);
+      plays = r(line.querySelector('.line-plays')), box = r(line);
     const each = [...line.querySelectorAll('.line-plays > .play')].map((p) => p.getBoundingClientRect());
     return [line.querySelector('h3').textContent, {
       h3: [h3.left, h3.right, h3.top, h3.bottom], by: by && [by.left, by.right, (by.top + by.bottom) / 2],
       plays: plays && [plays.left, plays.top, plays.right], key: key && [key.left, key.right, key.top],
-      more: more && [more.left, more.right],
+      pad: parseFloat(getComputedStyle(line).paddingRight),
       inside: each.every((p) => p.left >= box.left - 0.5 && p.right <= box.right + 0.5 && p.top >= box.top - 0.5
         && p.bottom <= box.bottom + 0.5), n: each.length, line: [box.left, box.right, box.width],
       cut: line.querySelector('h3').scrollWidth > line.querySelector('h3').clientWidth }];
@@ -764,10 +769,10 @@ def _six(conn, cfg, artist, title):
 @pytest.mark.parametrize("selecting", [False, True])
 def test_on_a_laptop_chips_wrap_under_the_title_and_never_push_the_key_off(conn, cfg, tmp_path, size, selecting):
     # Beside the pane a folded line reads on one row as under 1200 px (its title, its artist right after it, its play
-    # buttons, its key and its chevron) while its buttons fit there, as Hotel California's five icon tiles do; where
+    # buttons and its key, at its end) while its buttons fit there, as Hotel California's five icon tiles do; where
     # they don't (Suite: Judy Blue Eyes's six, beside Crosby, Stills, Nash & Young's long name), they go on a row of
-    # their own under its title, and the first row keeps the title, its artist right after it, the key and the
-    # chevron. None pushes the key off the line, and the title keeps its room; selecting too, after the line's box.
+    # their own under its title, and the first row keeps the title, its artist right after it and the key. None pushes
+    # the key off the line, and the title keeps its room; selecting too, after the line's box.
     from test_library_bands import keyed
 
     hotel(conn, cfg)
@@ -791,8 +796,9 @@ def test_on_a_laptop_chips_wrap_under_the_title_and_never_push_the_key_off(conn,
         for line in lines:
             assert line["inside"] and not line["cut"], line  # every button on the line, the title whole
             assert line["key"][1] <= whole["list"][1] + 0.5, (line, whole)
-            if not selecting:
-                assert line["key"][1] <= line["more"][0] and line["more"][1] <= whole["list"][1] + 0.5, (line, whole)
+            # The key at the line's end, where the chevron was: its padding after it, and the room its 36 px leave in
+            # its 44 px column (centred).
+            assert line["line"][1] - line["key"][1] <= line["pad"] + 4.5, (line, whole)
         # Yesterday and Hotel California, folded (The Beatles and the Eagles have one song each): one row, its title,
         # its artist, its buttons, then its key.
         for line in (yesterday, hotel_line):
@@ -815,7 +821,7 @@ def test_on_a_laptop_chips_wrap_under_the_title_and_never_push_the_key_off(conn,
 def test_on_a_laptop_a_bands_line_puts_its_buttons_under_its_title_where_they_dont_fit(conn, cfg, tmp_path):
     # In a band, a line's buttons sit beside its title where they fit (Hotel California's five icon tiles, Desperado's
     # one) and go under it where they don't (six beside one of Panic! at the Disco's longest titles), the title whole
-    # and the chevron in the same column either way.
+    # and every button inside its line either way.
     hotel(conn, cfg)
     for title in ("Desperado", "Take It Easy"):
         song = add_song(conn, "Eagles", title)
@@ -836,8 +842,8 @@ def test_on_a_laptop_a_bands_line_puts_its_buttons_under_its_title_where_they_do
             assert long_line["n"] == 6 and long_line["plays"][1] >= long_line["h3"][3] - 1, long_line  # under the title
             for line in (hotel_line, desperado):  # beside it
                 assert line["plays"][0] >= line["h3"][1] and line["plays"][1] < line["h3"][3], line
-            assert abs(long_line["more"][0] - desperado["more"][0]) <= 1 and long_line["inside"], at
-            assert abs(hotel_line["more"][0] - desperado["more"][0]) <= 1 and hotel_line["inside"], at
+            assert long_line["inside"] and hotel_line["inside"] and desperado["inside"], at
+            assert all(line["line"][1] <= at[""]["list"][1] + 0.5 for line in (long_line, hotel_line, desperado)), at
             assert not long_line["cut"] and not hotel_line["cut"] and at[""]["page"][0] <= at[""]["page"][1], at
         finally:
             b.close()

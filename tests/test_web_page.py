@@ -895,7 +895,7 @@ def test_remove_counts_down_on_the_line_then_removes_the_song_there(serve, cfg, 
     width, height = (int(n) for n in size.split(","))
     with browser.Browser(tmp_path / "chrome", width=width, height=height, mobile=width < 500) as page:
         page.open(url + left)
-        page.click(f"{item} .line-more")  # Remove… waits under "⋯"
+        page.click(cards.name_of(item))  # its card: Remove… waits under its "⋯"
         page.js(f"window.song = document.querySelector('{item}'); window.song.scrollIntoView({{ block: 'center' }})")
         cards.install(page)
         assert page.js(SHIFTS) and page.js(COUNTDOWN)
@@ -961,7 +961,7 @@ def test_a_song_that_gets_a_removed_songs_id_is_a_new_song_on_the_page(serve, cf
              ".filter((l) => l.textContent.includes('Yours')).map((l) => l.querySelector('h3').textContent)")
     with browser.Browser(tmp_path / "chrome", width=1280, height=800) as page:
         page.open(url)
-        page.click(f"{item} .line-more")  # Remove… waits under "⋯"
+        page.click(cards.name_of(item))  # its card: Remove… waits under its "⋯"
         page.js(f"window.song = document.querySelector('{item}')")
         press_remove(page, item)
         assert page.wait("window.song.querySelector('.progress')?.textContent === 'Removed'", timeout=20)
@@ -1087,7 +1087,7 @@ def test_a_removed_song_counts_no_more_under_needs_review(serve, cfg, conn, tmp_
     with browser.Browser(tmp_path / "chrome", width=1280, height=800) as page:
         page.open(url + left)
         assert page.js(COUNTS)["chips"]["review"] == "1" and page.js(f"{chip}.hidden") is False
-        page.click(f"{item} .line-more")  # Remove… waits under "⋯"
+        page.click(cards.name_of(item))  # its card: Remove… waits under its "⋯"
         page.js(f"window.song = document.querySelector('{item}')")
         press_remove(page, item)
         assert page.wait("window.song.querySelector('.progress')?.textContent === 'Removed'", timeout=20)
@@ -1113,7 +1113,7 @@ def test_undo_keeps_the_song_and_nothing_is_sent(serve, cfg, conn, tmp_path, siz
     width, height = (int(n) for n in size.split(","))
     with browser.Browser(tmp_path / "chrome", width=width, height=height, mobile=width < 500) as page:
         page.open(url)
-        page.click(f"{item} .line-more")  # Remove… waits under "⋯"
+        page.click(cards.name_of(item))  # its card: Remove… waits under its "⋯"
         tapped = time.monotonic()
         press_remove(page, item)
         assert page.wait(f"{line} !== null && !!{line}.querySelector('button.undo')")
@@ -1187,7 +1187,7 @@ def test_a_song_asked_for_on_the_page_then_removed_there_is_drawn_as_gone(serve,
           form.elements.namedItem("artist").value = "Muse"; form.elements.namedItem("title").value = "Uprising";
           form.requestSubmit(); })()""")
         assert page.wait(f"({line}.querySelector('.progress') || {{}}).textContent === 'Ready'", timeout=20)
-        page.click("#requested article .line-more")
+        page.click(cards.name_of("#requested article"))
         card = cards.open_card(page, "#requested article")
         page.js(f"document.querySelector('{card} .foot-more').open = true")
         page.click(f"{card} form.remove button")

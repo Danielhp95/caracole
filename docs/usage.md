@@ -873,7 +873,7 @@ say), nothing is removed and it exits 1.
 `caracole remove` on a song removed already says when it was, and how to
 bring it back. Like `caracole review`, it asks before it takes caracole's lock,
 so the nightly run never waits for your answer; `--list` only reads. On the
-web page, each song's **Remove**, under its line's chevron, does the same, right
+web page, each song's **Remove**, in its card, does the same, right
 there on its line: it says in one line what goes, counts down five seconds with Undo, then
 removes the song ([caracole serve](#caracole-serve)).
 
@@ -1867,8 +1867,8 @@ and cache.
   `caracole remove` deletes them. One a new sheet names otherwise (a sheet in
   another key or capo took the old one's place, an auto sheet's key was heard
   again) is made under its new name, and the PDF under the old one goes, while
-  it is still as caracole wrote it. The library page lists them under the
-  song's line's chevron, as its PDF exports, each by its version (`G Dorian, capo
+  it is still as caracole wrote it. The library page lists them in the
+  song's card, as its PDF exports, each by its version (`G Dorian, capo
   0`), before its other files. An
   export is made from the song's human sheet, else its auto sheet; it needs one
   of them to be kept, and exits 1 with the reason when it can't be made.
@@ -2712,27 +2712,30 @@ count in its top one, both inside it. The tile is 30 px square with a mouse and
 the harmonica tab of Take It Easy, from harptabs.com", "Download the Guitar Pro
 file of Hotel California, from gtptabs.com and your inbox, 2 files"). Where the
 title leaves too little room for them, they wrap to a second row beside it, and
-a long title is cut short first. The lyrics have no button: their tile, under
-the chevron, says where they came from. Then its status when it needs
+a long title is cut short first. The lyrics have no button: their tile, in
+the song's card, says where they came from. Then its status when it needs
 something, one word: Wanted, Needs review when caracole isn't sure of the match,
 or Ignored (a found song, nearly every one, says nothing); its key, in muted
 bold letters ("Am"; a screen reader hears "Key A minor (from the tab)", see
 [The song's key](#the-songs-key)); on the page `caracole serve` serves, for a wanted song,
 **Fetch**, a download icon in the accent, which looks the song up then and
 not before (Pick for one that needs review first, and Removing…
-while caracole removes it); and a chevron, which unfolds the song in place,
-turned while it is open. The title opens it too. A song you have has no
+while caracole removes it). There is no chevron: a tap or a click on the
+line's name or on its blank space (anywhere on its row but a button or a link)
+unfolds the song in place, and closes it again; from the keyboard, Tab reaches
+the line's own button for it after its other buttons ("More: Creep", the line
+ringed while it has the focus), which Enter or Space presses. A song you have has no
 button to fetch it again on its line: **Fetch again** is in its card. From
 720 px the line is one row of columns: the title, then its artist where the
 line shows one (an artist of one song, or sorted by title or by when added),
-its buttons, the status, Fetch, the key and the chevron, so that the keys and
-the chevrons line up. Where each file
-came from, each site's own icon says beside the file under the chevron too
+its buttons, the status, Fetch and the key, at the line's end, so that the keys
+line up. Where each file
+came from, each site's own icon says beside the file in the card too
 (the lyrics LRCLIB's or Megalobiz's, a Guitar Pro file gtptabs.com's: see
 [Where each file came from](#where-each-file-came-from)).
 
-Its chevron opens the song as a card, under its line (from 1200 px in the pane
-beside the list, below), which the chevron closes again. At its top, its key in words and where it came from ("Key
+Its name or its blank space opens the song as a card, under its line (from 1200 px in the pane
+beside the list, below), which they close again. At its top, its key in words and where it came from ("Key
 A minor (from the tab)", "Key C major (guessed from the chords)", "(from the
 audio)"), its transposition, its lyrics' state and when it was added. Then what
 needs you: a review's candidates (below); where it stands on the YouTube route,
@@ -2846,21 +2849,22 @@ a request's line and steps under it), up under the search bar, the card's head s
 name and artist on one line (cut short when long) and a close button, and goes with the card's end as that
 comes up under the bar. While any of the line shows, the head isn't there, so it never lies over the line: the
 line says the same. However you close a card, its line comes back into view, just under the search bar, at
-once when your system asks for less motion, and the focus is on its chevron.
+once when your system asks for less motion, and the focus is on its line's own button for it (out of sight; the line
+ringed while the keyboard is on it).
 
 On a window 1200 px wide or more the library is two columns: the list, 760 px wide, and on its right a pane that
 holds the card of the song you open, which says "Open a song to see its card here." until you do. A song's title or
-its chevron puts its card there, its head across the pane's top (its name, its artist and a close button), and marks
+its line's blank space puts its card there, its head across the pane's top (its name, its artist and a close button), and marks
 its line, tinted with the accent, the accent along its edge (among a search's results more strongly than the songs you
 have there, so it stands out from them); the card reads there as it does on a phone, the pane being about as
 narrow (its tiles a row each, a version's buttons under its number and its rating), with nothing to scroll sideways;
-another song's takes its place, and its chevron again, the head's close,
+another song's takes its place, and its title again, the head's close,
 or a search or a filter that leaves its line out of the list empties the pane. The pane stays in view under the search
 bar as the list scrolls, and scrolls on its own when the card is longer than the screen; a lookup's steps are listed
 there under the head, while the line keeps the bar of them as the lookup left it. Opened from the keyboard (Enter on
-the chevron), the focus goes to the song's name in the pane, and Escape there brings it back to the chevron, the card
-staying open. Beside the pane, a line whose artist is on it keeps its one row while its buttons fit there; where they
-don't, its title, its artist, its key and its chevron stay on its first row and its buttons go on a row under the
+the line's own button for it), the focus goes to the song's name in the pane, and Escape there brings it back to that
+button, the card staying open. Beside the pane, a line whose artist is on it keeps its one row while its buttons fit
+there; where they don't, its title, its artist and its key stay on its first row and its buttons go on a row under the
 title; under an artist's band a line's buttons stay beside its title where they fit, else go under it. Under 1200 px
 the library is one column, 800 px wide from 720 px, centred under the logo and the tabs, and a card opens under its
 line; widening or narrowing the window moves an open card between the two. Opening or closing a card is no step of
@@ -2872,7 +2876,7 @@ your count of their songs, small and muted. An artist of one song has no band:
 it folds into the song's line, their name a small overline in capitals, in the
 artist's colour, over the title (cut short on one line), the line about 64 px
 tall on a touch screen; from 720 px wide their name sits right after the title
-(then the buttons to play from, the key and the chevron), as a line sorted by
+(then the buttons to play from and the key), as a line sorted by
 title shows it. So does an artist's group among a search's
 results that holds one line and nothing else, never one with "+ N more" under it
 nor a "Did you mean". Every control is 44 px on a touch screen but an artist's
@@ -2904,8 +2908,8 @@ renders it: each section's chords as Roman numerals in the key the viewer
 reads the sheet in, one cycle, with its name when it has one ("the pop
 progression", "the Andalusian cadence"), and the named progressions it
 plays within it (a verse ii–I–V–vi–IV–♭VII–I–V–vi–IV plays the pop
-progression twice). A progression's button under a song's
-chevron, or `#prog=` in the address (`index.html#prog=I%20V%20vi%20IV`, as a
+progression twice). A progression's button in a song's
+card, or `#prog=` in the address (`index.html#prog=I%20V%20vi%20IV`, as a
 sheet viewer's Harmony tab links to it; written by hand, `#prog=vi–IV–I–V` is
 the same progression), shows only your songs that play it,
 in any key and starting on any of its chords, under a line that says which,
@@ -2917,7 +2921,7 @@ that plays it within a longer section. A section held on
 one chord is no progression. A library rendered by an older caracole has its
 progressions after its next render (the nightly run's).
 
-A song that needs review lists its candidates under its chevron, under "3
+A song that needs review lists its candidates in its card, under "3
 candidates", numbered as `caracole review` numbers them. Each is the UG song as UG names it
 ("Radiohead – Creep"), why the matcher thought of it ("artist spelled
 differently", "title only: another artist's song, probably a cover", "under
@@ -3007,7 +3011,7 @@ there); a laptop's wheel leaves the focus in the box.
 On a touch screen every button, fold, chip, menu and letter is at least 44
 pixels each way, for a thumb (but an artist's name, on its band or as a line's
 overline, 24 pixels: see above), and so are each line's buttons, its
-Fetch and its chevron (its title, beside them, is as tall): a phone shows
+Fetch and its row, which opens its card (its title, beside them, is as tall): a phone shows
 about eleven songs to a screen. With a mouse they keep their compact sizes. Fields, menus and the
 Select boxes have an edge you can see against the page, in light and dark mode
 (3:1 at least, as WCAG 1.4.11 asks), while the boxes the songs are in keep
@@ -3017,13 +3021,13 @@ same.
 
 **Select** picks the songs of a songbook in the library. The Songbooks tab's
 **+ New songbook** turns it on (see [The Songbooks tab](#the-songbooks-tab)),
-the bar's name field ready, and so does a line's **Add to a songbook…**, under
-its chevron, with that song ticked, the bar's menu or name field ready: the
+the bar's name field ready, and so does a line's **Add to a songbook…**, in
+its card, with that song ticked, the bar's menu or name field ready: the
 toolbar beside the search has no button for it. It puts a box at the start of
 each song's line: tick songs in the order they go in the songbook (each box
 shows its place, and a screen reader says it: "Pick Creep by Radiohead, 2nd").
-A tap anywhere on a line ticks it, or unticks it: while you select, each line's
-Fetch and chevron are put away, a request's line still says how it goes but
+A tap anywhere on a line ticks it, or unticks it (and opens no card): while you select, each line's
+Fetch is put away, a request's line still says how it goes but
 without its links (Details), and a tap on its title or its buttons opens nothing,
 so a tick never opens a file by mistake. Search, filter and sort between ticks; the bar
 at the bottom counts them, `3 selected`. Give the songbook a name and tap Make
@@ -4658,8 +4662,8 @@ the library, sent as they are: they carry no badge.
   search` lists them, above): each under the by-line its name gives, an artist
   caracole knows that ends it, or your words where they end it ("groove
   merchant" is Groove Merchant under Thad Jones and under Jerome Richardson,
-  `thread not read yet`, and "Named from the thread's name" under its chevron,
-  or its ⋯ on the lookup page). Fetch looks the song up by those names and
+  `thread not read yet`, and "Named from the thread's name" folded under it (its
+  name opens it), or under its ⋯ on the lookup page). Fetch looks the song up by those names and
   keeps the chart it reads in that thread (a lookup with `--ireal`, recorded
   under `[ireal]`); nothing is asked of the forum before you press it. A thread
   whose name gives no by-line comes apart, by its name alone, in an iReal Pro
@@ -4731,7 +4735,7 @@ the library, sent as they are: they carry no badge.
   box, no row of marks at all unless some of your songs match (then yours, and
   the sites in one mark at 0), and a screen reader hears "Nothing in your songs
   or the sites' indexes" ("1 of your songs · nothing in the sites' indexes"). Its
-  chevron holds the rest: Ask LaCuerda · 1 request, only while LaCuerda's
+  name, or its blank space, unfolds the rest: Ask LaCuerda · 1 request, only while LaCuerda's
   listings don't reach the name's letter (LaCuerda's search first, as under
   results), and "Why isn't it found?", folded: Ultimate Guitar's
   sitemaps name some artists only by a number (Joaquín Sabina, Maná, 宋冬野),
@@ -4788,14 +4792,13 @@ the library, sent as they are: they carry no badge.
   the button under what it said. A query is sent once a page, and once in 30
   days. The Look up page does the same. **One LaCuerda button at a time**:
   where the results offer Ask LaCuerda for a name its listings don't reach yet
-  (above, under the results or under the chevron of what found nothing), the line has no button of its own, and that one sends the search
+  (above, under the results or folded under what found nothing), the line has no button of its own, and that one sends the search
   while the search may go by hand (before the query settles too, in its place),
   then, once it is asked, or after it failed lately, reads the name's page.
   **Enter never asks for a song**, however clear the best result (LaCuerda's
   search, above, is the one request it may send): it moves to
   the first result's line (once the query's answer is in), from which Tab goes
-  on to its name and its button; Fetch, or a click or a key on the name,
-  does. Escape in the box goes back to
+  on to its buttons; Fetch does. Escape in the box goes back to
   the list with your search and buttons as they were (Escape again clears the
   search, and once more, in the empty box, leaves it; Enter, or typing on,
   brings the results back); away from the box Escape is the browser's; the box's × goes back to all your songs, the focus
@@ -4814,7 +4817,7 @@ the library, sent as they are: they carry no badge.
   else as LaCuerda's, as `caracole get --lacuerda …` does, keeping that
   LaCuerda sheet (`[lacuerda]`), whatever Ultimate Guitar has (one with no
   chords there, "LaCuerda ×1, no chords", is looked up by its names); else by
-  its names, as `caracole get` does. Its chevron has what each site has: Ultimate
+  its names, as `caracole get` does. Its name or its blank space unfolds what each site has: Ultimate
   Guitar's versions ("Chords 2 of 13", each with an "on UG" link to look at it
   there first), each looked up as `--tab …` (`[pin]`); LaCuerda's page and,
   beside Ultimate Guitar's song, Fetch with this sheet, which keeps
@@ -4823,12 +4826,10 @@ the library, sent as they are: they carry no badge.
   line of its own ("Sending…", then, once the request has run a second, a bar
   of the lookup's steps and "Sheet · Ultimate Guitar · 3 of 7"), as on a
   song's line (below), and once the sheet is kept the line is the song's own line, yours,
-  its buttons opening what it holds: the request line and its steps fold away. **A result's name does what its Fetch does**: a click on
-  "Wonderwall", or Enter or Space on it, looks the song up just as Fetch would,
-  and while that request is on its way the name, like the button, can't be
-  pressed again. A removed song's name does what its Add again does (below). A
-  song of yours' title opens its card; and on the file, with no caracole serve,
-  no name gets anything. **An artist's name searches
+  its buttons opening what it holds: the request line and its steps fold away. **A result's name opens what it
+  holds**, as its blank space does: a click on "Wonderwall" unfolds its versions and pages, and asks no site; only
+  its Fetch (or a removed song's Add again) looks it up, so a tap a little off the button never spends a request. A
+  song of yours' title opens its card. **An artist's name searches
   for them**: a click on "C Tangana", over the results, over your songs in the
   list, or beside a line's title, puts their name in the search box and
   searches it as typing it would (their group first, with their songs, as a
@@ -4848,11 +4849,11 @@ the library, sent as they are: they carry no badge.
   of the accent colour with an edge to it, where every other line, a site's or
   one of yours still wanted, has a muted name on a plain one (its pill, In your
   library, is left to a screen reader). A song your library hasn't, from Ultimate Guitar,
-  LaCuerda or gtptabs.com, also has **Add for tonight** under its chevron: it
+  LaCuerda or gtptabs.com, also has **Add for tonight** folded under its line: it
   goes into wanted.txt under the site's names, as Request does with Fetch
   unticked (a song only LaCuerda has as `caracole add --lacuerda …`, the
   pick recorded: its request says Added · your LaCuerda pick comes tonight,
-  as its line's chevron does, with a link to that sheet's
+  as its line's card does, with a link to that sheet's
   page, and it waits for no Ultimate Guitar review of other artists' songs of
   its title), and the nightly run looks it up (not a song under one of UG's
   `misc-…` names, which are no one's: request it by name as you know it).
@@ -4890,7 +4891,7 @@ the library, sent as they are: they carry no badge.
   Ultimate Guitar's Fetch again, with a version of theirs to pick under "⋯",
   and LaCuerda's, which keeps that LaCuerda sheet.
 - **Fetch again, and Use LaCuerda's sheet.** On the library page the index's
-  rows of a song of yours are folded into your song's own line, so its chevron looks
+  rows of a song of yours are folded into your song's own line, so its card looks
   it up again, sending what the lookup page sends: **Fetch again**, on a song
   with its sheet (a wanted song has Fetch), looks it up anew, one `caracole
   get` (`POST /lookup` with the song); **Use LaCuerda's sheet**, when LaCuerda has
@@ -4923,7 +4924,7 @@ the library, sent as they are: they carry no badge.
   `caracole youtube --sheet --progress` (see A sheet from a video, now, under
   [Audio from YouTube](#audio-from-youtube)), queued as any request is. A song you have
   with no human sheet, not ignored and with no purchase linked has the same
-  under its line's chevron, **From a YouTube video**: the address, and
+  in its card, **From a YouTube video**: the address, and
   Make the sheet, which replaces any audio it had from YouTube. The line then
   says how it goes: once the job has run a second, a bar of its steps, Song,
   Audio (YouTube), Lyrics, Chords and PDF, and the step in hand ("Chords ·
@@ -5074,18 +5075,18 @@ the library, sent as they are: they carry no badge.
   offers it a pin or an ignore. With the keyboard, Enter opens the picker and
   takes the focus to the first candidate, the arrow keys choose, and Tab
   goes on through the candidates' UG links to Fetch and Pick. The picker
-  is under the line's chevron, and the line's Pick opens it there, the
+  is in the line's card, and the line's Pick opens it there, the
   focus on the first candidate.
 - **Look in index.** A wanted song the offline index didn't match (and
-  whose sheet you didn't pick on LaCuerda: its line's chevron says Tonight's run
+  whose sheet you didn't pick on LaCuerda: its line's card says Tonight's run
   gets the sheet you picked on LaCuerda instead) has a
-  Look in index link under its line's chevron: its
+  Look in index link in its line's card: its
   page, `/review?song=ID`, runs
   `caracole search` for the song's artist and title, and offers the first five
   hits the same way, without None of these. A pick writes `[match]` alone (see
   [Review](#review)). The page runs the search when you open it, so the
   library page carries no hits of its own.
-- **Remove a song.** Each song's Remove, under its line's chevron, removes the
+- **Remove a song.** Each song's Remove, in its card, removes the
   song where it is, and you stay on the library: one tap, and
   the song's line says "Removing in 5 s · Undo", the keyboard focus on Undo,
   and under it what goes, in one sentence, as
@@ -5151,7 +5152,7 @@ the library, sent as they are: they carry no badge.
   change) keeps its one line. How it ended:
   - **Ready**: the bar folds away and nothing takes its place; the line is
     the song's, found, and its title or its Open opens the sheet, its files
-    under its chevron (a screen reader still hears Ready, and the focus Fetch
+    in its card (a screen reader still hears Ready, and the focus Fetch
     gave the request line goes to that Open);
   - **Not on the sites · To-do page**, when Ultimate Guitar had no sheet:
     the fetch looked the song up during the request and found none, or the
@@ -5534,8 +5535,8 @@ afresh.
 
 **Guitar Pro files in the browser.** Served, a song's Guitar Pro file
 (`guitar-N.gp3`, `.gp4`, `.gp5`, `.gpx` or `.gp`, one caracole keeps: filed
-from `_inbox/` or downloaded from gtptabs.com) has a group of its own under its
-line's chevron, named as the file is (`Guitar Pro 1 · gtptabs.com`): **Open in the
+from `_inbox/` or downloaded from gtptabs.com) has a group of its own in its
+line's card, named as the file is (`Guitar Pro 1 · gtptabs.com`): **Open in the
 browser**, and **Download** beside it. A sheet viewer the server sends offers
 the same as **Guitar Pro tab**, in its ⋯ settings, for a song with such a file
 (the viewer from the folder links the file itself), and so does the guitar after
@@ -5581,7 +5582,7 @@ against its hash and keeps for good. That script is the same for anyone, so the
 server sends it to any origin, the page's sandbox among them. Only caracole serve does this: `index.html`
 opened from the folder lists the file as before, and the server needs alphaTab
 for it, which the Nix packages carry (`CARACOLE_ALPHATAB_DIR`; without Nix, see
-[deploy.md](deploy.md#4-the-fonts-and-alphatab)). Without it the server runs all the same, the line's chevron
+[deploy.md](deploy.md#4-the-fonts-and-alphatab)). Without it the server runs all the same, the song's card
 says Guitar Pro files are downloads until it has alphaTab, and `/guitar` says
 why it can't show one.
 

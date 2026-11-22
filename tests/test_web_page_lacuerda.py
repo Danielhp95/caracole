@@ -221,7 +221,7 @@ def test_a_name_under_a_letter_lacuerda_hasnt_listed_yet_is_read_on_asking_then_
     search(browser, base, "caifanes")
     ask = "#results .nothing .ask-lacuerda"
     assert browser.wait(f"{answer_to('caifanes')} && !!document.querySelector('{ask}')")
-    browser.click("#results .nothing .line-more")
+    browser.click(cards.name_of("#results .nothing .line"))
     browser.click(ask)
     assert browser.wait("!!document.querySelector('#results .nothing .read-outcome')", timeout=20)
     said = browser.js("document.querySelector('#results .read-outcome').textContent")
@@ -253,7 +253,7 @@ def test_a_lacuerda_song_can_be_added_for_tonights_run_with_its_pick(cfg, live, 
     # Your Tu Calorro, which LaCuerda's Estopa lists too, is your own line in their group.
     assert browser.js("[...document.querySelectorAll('#results section.artist .line[data-id] h3')]"
                       ".map((h) => h.textContent)") == ["Tu Calorro"]
-    browser.click(f"{row} .line-more")
+    browser.click(cards.name_of(row))
     browser.click(f"{row} .line-panel .later button")
     assert posted(queue) == ("add", f"--lacuerda={LC}estopa/como_camaron", "--", "Estopa", "Como Camarón")
     assert "Estopa - Como Camarón" in cfg.wanted_file.read_text(encoding="utf-8")

@@ -4,7 +4,7 @@ why (web/app.py ``same_song``)."""
 
 from __future__ import annotations
 
-from helpers import browser
+from helpers import browser, cards
 from helpers.browser import CHROMIUM_MARKS
 from test_web_page import QUICK, FakeCaracole, press_remove, serve  # noqa: F401  (serve: a fixture)
 
@@ -31,7 +31,7 @@ def test_remove_on_a_line_whose_id_another_song_has_now_removes_nothing_and_says
         conn.commit()
         assert uprising.id == creep.id
         assert page.js(f"document.querySelector('{item} h3').textContent") == "Creep"
-        page.click(f"{item} .line-more")
+        page.click(cards.name_of(item))
         page.js(f"window.song = document.querySelector('{item}')")
         press_remove(page, item)
         assert page.wait("/another has its place/.test(window.song.querySelector('.progress')?.textContent || '')",

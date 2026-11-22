@@ -22,6 +22,7 @@ import threading
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from helpers import cards
 from helpers.browser import CHROMIUM_MARKS, Browser, BrowserError
 from test_web_page_search import RYAN, WONDERWALL, search, sites
 
@@ -358,7 +359,7 @@ def test_a_lookup_that_ends_otherwise_keeps_its_bar_frozen_under_its_line(cfg, l
                        f"document.querySelector('{line} .progress').getBoundingClientRect().bottom - 0.5")
         one_row(page, line, ".step-bar")
         assert page.js(shown(line, ".step-list")) is False
-        page.click(f"{line} .line-more")  # the card open: the list in the bar's place
+        page.click(cards.name_of(line))  # the card open: the list in the bar's place
         assert page.js(shown(line, ".step-bar")) is False
         assert page.js(shown(line, ".step-list")) is True
         assert page.js(f"document.querySelector('{line} .step-list').getAttribute('aria-label')") == "Steps"
@@ -378,7 +379,7 @@ def test_a_lookup_that_ends_otherwise_keeps_its_bar_frozen_under_its_line(cfg, l
         glyph = f"getComputedStyle(document.querySelector('{line} .step.failed .step-glyph')).color"
         assert page.js(glyph) == page.js(FAILED)
         assert page.js("document.documentElement.scrollWidth <= window.innerWidth")
-        page.click(f"{line} .line-more")  # closed again: the frozen bar back
+        page.click(cards.name_of(line))  # closed again: the frozen bar back
         assert page.js(shown(line, ".step-bar")) is True
         assert page.js(shown(line, ".step-list")) is False
 
@@ -411,7 +412,7 @@ def test_on_a_laptop_the_selected_lines_steps_are_listed_in_the_pane(cfg, live, 
         assert page.js(shown(line, ".step-bar")) is True
         assert page.js(shown(line, ".step-list")) is False
         assert page.js("document.documentElement.scrollWidth <= window.innerWidth")
-        page.click(f"{line} .line-more")  # closed: the pane holds no steps, the line its frozen bar
+        page.click(cards.name_of(line))  # closed: the pane holds no steps, the line its frozen bar
         assert page.wait("!document.querySelector('#card-pane .step-list')")
         assert page.js(shown(line, ".step-bar")) is True
 
@@ -422,7 +423,7 @@ def test_the_open_cards_list_follows_a_running_lookup_and_folds_away_once_ready(
     line = line_of(creep(cfg))
     with driven(tmp_path, 1024) as page:  # its card under its line
         page.open(base)
-        page.click(f"{line} .line-more")  # Creep's card open
+        page.click(cards.name_of(line))  # Creep's card open
         page.click(f"{line} .line-action form.fetch button")
         # Asking Ultimate Guitar for the sheet: the list says the step that runs, those before it ticked with what
         # they found, those to come waiting; the bar stays on the line's row, over the list.
@@ -458,7 +459,7 @@ def test_a_lookup_waiting_for_the_book_says_so_on_its_bar(cfg, live, tmp_path):
     line = line_of(creep(cfg))
     with driven(tmp_path, 1280) as page:
         page.open(base)
-        page.click(f"{line} .line-more")  # its card open, which lists the steps as the bar draws them
+        page.click(cards.name_of(line))  # its card open, which lists the steps as the bar draws them
         page.click(f"{line} .line-action form.fetch button")
         # A nightly run holds the book: the bar says so in place of the step's name, its place kept, and the step in
         # hand drawn waiting, unlit and steady, as nothing moves.
@@ -492,10 +493,10 @@ def test_a_queued_request_says_its_place_with_cancel_beside_it(cfg, live, tmp_pa
     wonderwall = line_of(wonder)
     with driven(tmp_path, width) as page:
         page.open(base)
-        page.click(f"{creep_line} .line-more")
+        page.click(cards.name_of(creep_line))
         page.click(f"{creep_line} .line-action form.fetch button")
         wait_for(page, bar_of(creep_line), ["done", "done", "running", "waiting", "waiting", "waiting", "waiting"])
-        page.click(f"{wonderwall} .line-more")
+        page.click(cards.name_of(wonderwall))
         page.click(f"{wonderwall} .line-action form.fetch button")
         # Behind Creep's lookup, held at its sheet: its place, and Cancel beside it.
         wait_for(page, f"document.querySelector('{wonderwall} .progress').textContent",
@@ -526,10 +527,10 @@ def _queued_behind_creep(cfg, runner, page, base):
         conn.close()
     wonderwall = line_of(wonder)
     page.open(base)
-    page.click(f"{creep_line} .line-more")
+    page.click(cards.name_of(creep_line))
     page.click(f"{creep_line} .line-action form.fetch button")
     wait_for(page, bar_of(creep_line), ["done", "done", "running", "waiting", "waiting", "waiting", "waiting"])
-    page.click(f"{wonderwall} .line-more")
+    page.click(cards.name_of(wonderwall))
     page.click(f"{wonderwall} .line-action form.fetch button")
     wait_for(page, f"document.querySelector('{wonderwall} .progress').textContent",
              "Queued · 1 request ahead…·Cancel")
@@ -540,11 +541,11 @@ def test_cancel_touches_no_neighbouring_target_and_stays_in_its_line(cfg, live, 
     base, runner = live
     with driven(tmp_path, 390) as page:
         wonderwall = _queued_behind_creep(cfg, runner, page, base)
-        # Cancel's box meets no line's play tiles or chevron (every line's, its own too), and lies in its own line.
+        # Cancel's box meets no line's play tiles (every line's, its own too), and lies in its own line.
         clashes = page.js("(() => { const b = document.querySelector("
                           f"'{wonderwall} .progress button.cancel').getBoundingClientRect(); "
                           "const hit = (r) => r.left < b.right && b.left < r.right && r.top < b.bottom && b.top < r.bottom; "
-                          "return [...document.querySelectorAll('#list .line-plays > *, #list .line-more')]"
+                          "return [...document.querySelectorAll('#list .line-plays > *')]"
                           ".filter((e) => e.getClientRects().length && hit(e.getBoundingClientRect()))"
                           ".map((e) => e.className); })()")
         assert clashes == [], clashes
