@@ -19,6 +19,11 @@ elements counted), or "" when there is none; a test opens the card first (a scri
 
 ``IN_PLACE``: a laptop's window ("1024,900") whose cards open under their lines (any under 1200 px; from 1200 px a card
 is in the pane beside the list, one at a time), for a test that reads several cards of one page in one dump.
+
+``name_of(line_selector)``: a selector for the line's name, where a hand presses to open or close its card (the chevron
+is out of sight, the keyboard's: rows.js foldMore), for ``page.click``. ``blank_point(page, line_selector)``: a point
+of its blank space (its left padding, at its name's height), brought into view, which ``press_at(page, point)`` taps
+where it is.
 """
 
 from __future__ import annotations
@@ -164,3 +169,24 @@ def card_of(dom: str, title: str) -> str:
     found = _Element(dom, controls)
     found.feed(dom)
     return dom[found.begin:found.end] if found.begin is not None and found.end is not None else ""
+
+
+def name_of(line_selector: str) -> str:
+    """The line's name, which a hand presses to open or close its card, as its blank space (rows.js foldMore)."""
+    return f"{line_selector} > .line-title h3"
+
+
+def blank_point(page, line_selector: str) -> list[float]:
+    """A point of the line's blank space, in its left padding at its name's height, the name brought into view first."""
+    import json
+
+    return page.js("(() => { const line = document.querySelector(" + json.dumps(line_selector) + "); "
+                   "const name = line.querySelector(':scope > .line-title h3'); name.scrollIntoView({ block: 'center' }); "
+                   "const r = line.getBoundingClientRect(), n = name.getBoundingClientRect(); "
+                   "return [r.left + parseFloat(getComputedStyle(line).paddingLeft) / 2, (n.top + n.bottom) / 2]; })()")
+
+
+def press_at(page, point: list[float]) -> None:
+    """A real click (the mouse pressed and let go) at ``point``, the page left as it is scrolled."""
+    for kind in ("mousePressed", "mouseReleased"):
+        page.send("Input.dispatchMouseEvent", type=kind, x=point[0], y=point[1], button="left", clickCount=1)

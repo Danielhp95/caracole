@@ -1,7 +1,8 @@
 """A song of yours' line on the library page (card.js ``plays``, rows.js, library.js, rows.css), in a real browser: a
 button for each thing it holds to play from, right after its title, none of them first, each opening it at once and
-carrying the marks of the sites its versions came from; the title opens the card, as the chevron does; a wanted
-song's Fetch now is the download glyph on the same row; one row on a phone and on a desktop, Needs review under it.
+carrying the marks of the sites its versions came from; the title opens the card, as the line's blank space does (no
+chevron drawn); a wanted song's Fetch now is the download glyph on the same row; one row on a phone and on a desktop,
+the key at its end, Needs review under it.
 
 The tests add a script after the page's own (test_library_card's ``KIT`` and ``run``), which notes what the lines
 show into an attribute of the body, read back from the DOM once the page ran.
@@ -165,7 +166,7 @@ def test_game_music_tabs_are_a_button_and_a_song_with_nothing_has_none(conn, cfg
 # --- the title opens the card; a button opens its file --------------------------------------------------------
 
 
-def test_the_title_opens_the_card_as_the_chevron_does_and_a_button_never_does(conn, cfg, tmp_path):
+def test_the_title_and_the_blank_space_open_the_card_and_a_button_never_does(conn, cfg, tmp_path):
     hotel_california(conn, cfg)
     script = """
     const line = lineOf("Hotel California");
@@ -179,14 +180,25 @@ def test_the_title_opens_the_card_as_the_chevron_does_and_a_button_never_does(co
     line.querySelector(".line-title h3").click();
     const opened = state();
     line.querySelector(".line-title h3").click();
-    note("title", { afterPlay, opened, closed: state(),
-      cursor: getComputedStyle(line.querySelector(".line-title")).cursor });
+    const closed = state();
+    line.querySelector(":scope > .line-key").click();  // the line's blank space: any of its own that does nothing
+    const byKey = state();
+    cardOf(line).querySelector("h2, h3, p").click();  // inside the card, nothing of the line's
+    const inCard = state();
+    line.click();
+    note("title", { afterPlay, opened, closed, byKey, inCard, again: state(),
+      cursor: [getComputedStyle(line.querySelector(".line-title")).cursor, getComputedStyle(line).cursor],
+      drawn: [more.querySelector("svg") !== null, Math.round(more.getBoundingClientRect().width)] });
     """
     shown = attribute_of(run(conn, cfg, tmp_path, script), "data-title")
     assert shown["afterPlay"] == {"expanded": "false", "shown": False}
     assert shown["opened"] == {"expanded": "true", "shown": True}
     assert shown["closed"] == {"expanded": "false", "shown": False}
-    assert shown["cursor"] == "pointer"
+    assert shown["byKey"] == {"expanded": "true", "shown": True}
+    assert shown["inCard"] == {"expanded": "true", "shown": True}
+    assert shown["again"] == {"expanded": "false", "shown": False}
+    assert shown["cursor"] == ["pointer", "pointer"]
+    assert shown["drawn"] == [False, 1]  # no chevron drawn: the keyboard's button, out of sight
 
 
 # --- Fetch now: the download glyph ------------------------------------------------------------------------------
@@ -291,15 +303,15 @@ def test_a_tile_stays_whole_beside_a_long_title(conn, cfg, tmp_path):
 
 # --- one row, on a phone and on a desktop ------------------------------------------------------------------------
 
-# Each line's parts, where they are: its title's, its buttons' (with their marks and counts), its action's, its key's
-# and its chevron's boxes, its status's, the line's own; and every button's target.
+# Each line's parts, where they are: its title's, its buttons' (with their marks and counts), its action's and its key's
+# boxes, its status's, the line's own; and every button's target. Its chevron is drawn nowhere.
 LAYOUT = PLAYS + r"""
 const box = (n) => { const b = n.getBoundingClientRect(); return [b.left, b.right, b.top, b.bottom]; };
 const laid = {};
 for (const line of document.querySelectorAll("#list .line")) {
   const one = (sel) => { const n = line.querySelector(sel); return n && n.checkVisibility() ? box(n) : null; };
   laid[line.querySelector("h3").textContent] = { line: box(line), h3: one(":scope > .line-title h3"),
-    key: one(":scope > .line-key"), more: one(":scope > .line-more"), action: one(":scope > .line-action > *"),
+    key: one(":scope > .line-key"), action: one(":scope > .line-action > *"),
     status: one(":scope > .line-meta .line-status"),
     plays: Array.from(line.querySelectorAll(".line-plays > .play")).map((p) => ({ box: box(p),
       parts: Array.from(p.querySelectorAll(".n, .marks > *")).filter((n) => n.checkVisibility()).map(box) })) };
@@ -329,13 +341,15 @@ def test_a_line_is_one_row_its_buttons_whole_and_needs_review_under_it_on_a_phon
 
     easy = laid["Take It Easy"]
     assert len(easy["plays"]) == 2 and len(laid["Hotel California"]["plays"]) == 5, laid
-    # One row: the title, its two buttons, the key and the chevron, side by side, in that order.
-    row = [easy["h3"], *[p["box"] for p in easy["plays"]], easy["key"], easy["more"]]
-    assert all(same_row(easy["more"], b) for b in row), easy
+    # One row: the title, its two buttons and the key, side by side, in that order, the key at the line's end, where the
+    # chevron was: the line's padding after it (4 px), and from 720 px the room its 36 px leave in its 44 px column.
+    row = [easy["h3"], *[p["box"] for p in easy["plays"]], easy["key"]]
+    assert all(same_row(easy["key"], b) for b in row), easy
     assert all(a[1] <= b[0] + 0.5 for a, b in zip(row, row[1:], strict=False)), row
+    assert easy["line"][1] - easy["key"][1] <= (4.5 if phone else 8.5), (easy["line"], easy["key"])
     # Every button's marks and count whole, inside the line, overlapping no other part of it.
     for title, line in laid.items():
-        others = [b for b in (line["h3"], line["key"], line["more"], line["action"], line["status"]) if b]
+        others = [b for b in (line["h3"], line["key"], line["action"], line["status"]) if b]
         for p in line["plays"]:
             for part in [p["box"], *p["parts"]]:
                 assert line["line"][0] - 0.5 <= part[0] and part[1] <= line["line"][1] + 0.5, (title, part)
@@ -356,11 +370,10 @@ def test_a_line_is_one_row_its_buttons_whole_and_needs_review_under_it_on_a_phon
             assert all(b[0] - a[1] >= 7.5 for a, b in zip(boxes, boxes[1:], strict=False) if same_row(a, b)), (title, boxes)
     # Needs review: on a phone a row of its own under the title, Fetch now's glyph on the title's row.
     desperado = laid["Desperado"]
-    assert same_row(desperado["more"], desperado["action"]) and same_row(desperado["more"], desperado["h3"])
+    assert same_row(desperado["action"], desperado["h3"]), desperado
     if phone:
         assert desperado["status"][2] >= desperado["h3"][3] - 0.5, desperado
     else:
-        assert same_row(desperado["more"], desperado["status"]), desperado
-    # The keys line up, and so do the chevrons.
+        assert same_row(desperado["action"], desperado["status"]), desperado
+    # The keys line up.
     assert len({round(line["key"][1]) for line in laid.values() if line["key"]}) == 1, laid
-    assert len({round(line["more"][1]) for line in laid.values()}) == 1, laid

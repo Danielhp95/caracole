@@ -34,9 +34,9 @@ import kotlin.math.roundToInt
  *
  * Fingers apart make the text larger, together smaller, in steps of [TextZoom.STEP], of the size Android's font size
  * gives the pages, and the size is kept; Settings' Reset applies when the library screen comes back. On the library
- * page a song's buttons, its chevron and its artist's band grow and shrink with its words, as many times as the size
- * changed, until a song's line fills the screen's width (base.css's --sp, a pixel at the text's size: 192 of them
- * and 88px a line), its chevron always on the screen. While the fingers
+ * page a song's buttons and its artist's band grow and shrink with its words, as many times as the size changed,
+ * until a song's line fills the screen's width (base.css's --sp, a pixel at the text's size: 148 of them and 82px a
+ * line, the line drawing no chevron), its key always on the screen. While the fingers
  * are down the size shows over the page ("135%", the limit at a limit), and it goes about a second after they lift;
  * Reset shows none. A page reflows: never zoomed as a picture, never wider than the
  * screen. On a sheet each chord stays over its syllable, above its line and clear of the next, a row's chords at one
@@ -113,7 +113,7 @@ class PinchTest {
                 Pages.shot("library-limit", hold)
             }
             assertEquals(TextZoom.MAX, zoomAfter(main, larger))
-            grewWith(main, ownLine, TextZoom.MAX)  // the buttons as big as the room lets them, every chevron on the screen
+            grewWith(main, ownLine, TextZoom.MAX)  // the buttons as big as the room lets them, every key on the screen
 
             // Fingers together: smaller again.
             pinch(main, 0.8f, 0.3f)
@@ -267,8 +267,8 @@ class PinchTest {
 
     /**
      * A song's line on the library page, the first with a button to play from: its title's text size, its first
-     * button's height, its chevron's, and its artist's band's (the first band's: -1 with none), in CSS pixels; whether
-     * every line's chevron is on the screen; and how far the room lets a box grow (`room`, base.css's --sp).
+     * button's height and its artist's band's (the first band's: -1 with none), in CSS pixels; whether every line's
+     * key is on the screen; and how far the room lets a box grow (`room`, base.css's --sp).
      */
     private fun line(main: ActivityScenario<MainActivity>): JSONObject {
         waitUntil("a song's line with a button to play from, drawn") {
@@ -281,15 +281,15 @@ class PinchTest {
         const line = Array.from(document.querySelectorAll('#list article.line')).find((l) => l.querySelector('.line-plays > .play'));
         const band = document.querySelector('#list section.artist:not(.folded) > .artist-title');
         const height = (n) => n ? n.getBoundingClientRect().height : -1;
-        const shown = Array.from(document.querySelectorAll('#list article.line > .line-more'))
+        const shown = Array.from(document.querySelectorAll('#list article.line > .line-key'))
           .every((m) => m.getBoundingClientRect().right <= innerWidth);
         return JSON.stringify({ text: parseFloat(getComputedStyle(line.querySelector('h3')).fontSize),
-          play: height(line.querySelector('.line-plays > .play')), chevron: height(line.querySelector(':scope > .line-more')),
-          band: height(band), shown: shown, room: Math.max(1, (innerWidth - 88) / 192) }); })()"""
+          play: height(line.querySelector('.line-plays > .play')),
+          band: height(band), shown: shown, room: Math.max(1, (innerWidth - 82) / 148) }); })()"""
 
     /** At [zoom], the line [own] measured at the pages' own size, once laid out at it (the same twice): its text as
-     * many times bigger as the size is, its button, chevron and band as many times bigger too, up to what the room lets
-     * them grow; every chevron on the screen. */
+     * many times bigger as the size is, its button and band as many times bigger too, up to what the room lets them
+     * grow; every key on the screen. */
     private fun grewWith(main: ActivityScenario<MainActivity>, own: JSONObject, zoom: Int) {
         var now = line(main)
         waitUntil("the line laid out at $zoom") {
@@ -297,9 +297,9 @@ class PinchTest {
             (next.toString() == now.toString()).also { now = next }
         }
         record("library: a song's line at $zoom", now)
-        assertTrue("a chevron off the screen at $zoom: $now", now.getBoolean("shown"))
+        assertTrue("a key off the screen at $zoom: $now", now.getBoolean("shown"))
         val boxes = minOf(zoom / 100.0, now.getDouble("room"))
-        for (part in listOf("text", "play", "chevron", "band")) {
+        for (part in listOf("text", "play", "band")) {
             if (own.getDouble(part) < 0) continue
             val grew = if (part == "text") zoom / 100.0 else boxes
             assertEquals("$part at $zoom: $own then $now", grew, now.getDouble(part) / own.getDouble(part), 0.08)

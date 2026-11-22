@@ -1,6 +1,6 @@
 """The library page at a larger text size, in a real browser: what is sized in the text's pixels (base.css ``--sp``) grows
-with the text, a song's buttons and chevron, its card's tiles, an artist's band, the search bar's tools; on a phone,
-until a song's line fills its width, so that the line stays one row, its chevron on the screen.
+with the text, a song's buttons and its line's row, its card's tiles, an artist's band, the search bar's tools; on a
+phone, until a song's line fills its width, so that the line stays one row, its key on the screen.
 
 The Android app's pinch sets the WebView's text zoom, which sizes the text and its line heights, never a length in px
 or rem (measured on an emulator, WebView 133: at 200 % ``1rem`` and ``1em`` stay 16px, a root line height of 16px is
@@ -28,16 +28,19 @@ from conftest import add_song
 
 pytestmark = CHROMIUM_MARKS
 
-# What a song's line shows, its artist's band, the bar's Filter and, its card opened, the card's first tile, each box's
-# width and height (and a tile's gaps), at the root's line height ``lh``. The card opens after the line height is set:
-# its tiles are a container whose queries are read as it is drawn.
+# What a song's line shows, a line's row with nothing on it to press (Muse's Hysteria, wanted, on a page opened as a
+# file: no Fetch), its artist's band, the bar's Filter and, its card opened, the card's first tile, each box's width
+# and height (and a tile's gaps), at the root's line height ``lh``. The card opens after the line height is set: its
+# tiles are a container whose queries are read as it is drawn.
 SIZES = r"""
 const box = (n) => { const r = n.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; };
+const rowOf = (line) => { const s = getComputedStyle(line);
+  return Math.round(line.getBoundingClientRect().height - parseFloat(s.borderTopWidth) - parseFloat(s.borderBottomWidth)); };
 const sizes = (lh) => {
   document.documentElement.style.setProperty("line-height", lh);
   const line = lineOf("Hotel California");
   const out = { lh: getComputedStyle(document.documentElement).getPropertyValue("line-height"),
-    play: box(line.querySelector(".line-plays > .play")), more: box(line.querySelector(":scope > .line-more")),
+    play: box(line.querySelector(".line-plays > .play")), row: rowOf(lineOf("Hysteria")),
     band: box(line.closest("section.artist").querySelector(".artist-title"))[1],
     filter: box(document.getElementById("filter"))[1] };
   const card = cardOf(openCard("Hotel California"));
@@ -65,38 +68,40 @@ def songs(conn, cfg):
     add_song(conn, "Muse", "Hysteria")
 
 
-def test_at_twice_the_text_a_songs_buttons_chevron_band_and_tiles_are_twice_as_big(conn, cfg, tmp_path):
+def test_at_twice_the_text_a_songs_buttons_row_band_and_tiles_are_twice_as_big(conn, cfg, tmp_path):
     songs(conn, cfg)
     own, twice = attribute_of(run(conn, cfg, tmp_path, SIZES, touch=True), "data-sizes")
-    # At the pages' own size, a thumb's: the play tile 48 px, the chevron 44, the band 34, Filter 44 tall; the card's
-    # tile's icon 38 and chevron 44, its gaps 8 and 10 (the laptop's pane, 400 px and more).
-    assert own == {"lh": "16px", "play": [48, 48], "more": [44, 44], "band": 34, "filter": 44,
+    # At the pages' own size, a thumb's: the play tile 48 px, a line's row 44 (as tall as its chevron made it), the
+    # band 34, Filter 44 tall; the card's tile's icon 38 and chevron 44, its gaps 8 and 10 (the laptop's pane, 400 px
+    # and more).
+    assert own == {"lh": "16px", "play": [48, 48], "row": 44, "band": 34, "filter": 44,
                    "ico": [38, 38], "chevron": [44, 44], "gaps": ["8px", "10px"]}, own
     # Twice the text: each twice as big, on a window that has the room; the card, under 300 of the text's pixels now,
     # takes a narrow card's gaps.
-    assert twice == {"lh": "32px", "play": [96, 96], "more": [88, 88], "band": 68, "filter": 88,
+    assert twice == {"lh": "32px", "play": [96, 96], "row": 88, "band": 68, "filter": 88,
                      "ico": [76, 76], "chevron": [88, 88], "gaps": ["12px", "16px"]}, twice
 
 
-# Each line of the list: its title, whether its chevron, its buttons and its action are on it and on the screen, and its
-# first button's size.
+# Each line of the list: its title, whether its key (where it has one), its buttons and its action are on it and on the
+# screen, and its first button's size.
 LINES = r"""
 const lines = () => Array.from(document.querySelectorAll("#list article.line")).map((line) => {
-  const r = (n) => n.getBoundingClientRect(), at = r(line), more = r(line.querySelector(":scope > .line-more"));
+  const r = (n) => n.getBoundingClientRect(), at = r(line), keyed = line.querySelector(":scope > .line-key");
+  const key = keyed ? r(keyed) : null;
   const title = r(line.querySelector("h3")), plays = Array.from(line.querySelectorAll(".line-plays > .play")).map(r);
   return { title: line.querySelector("h3").textContent,
-    fits: more.right <= at.right + 0.5 && at.right <= innerWidth && plays.every((p) => p.right <= at.right + 0.5) &&
+    fits: (!key || key.right <= at.right + 0.5) && at.right <= innerWidth && plays.every((p) => p.right <= at.right + 0.5) &&
       line.querySelector(".line-action") .getBoundingClientRect().right <= at.right + 0.5,
-    within: more.top >= at.top - 0.5 && more.bottom <= at.bottom + 0.5 && title.right <= at.right + 0.5,
+    within: (!key || (key.top >= at.top - 0.5 && key.bottom <= at.bottom + 0.5)) && title.right <= at.right + 0.5,
     play: plays.length ? Math.round(plays[0].width) : 0 };
 });
 """
 
 
 @pytest.mark.parametrize("width", [390, 320])
-def test_past_the_rooms_size_a_line_stays_one_row_on_a_phone_its_chevron_on_the_screen(conn, cfg, tmp_path, width):
-    # Two and a half times the text, the most the app's pinch gives: the buttons and the chevron grow until a line
-    # fills the phone's width, and no more, by artist (bands and a folded artist) and by title (a flat list).
+def test_past_the_rooms_size_a_line_stays_one_row_on_a_phone_its_key_on_the_screen(conn, cfg, tmp_path, width):
+    # Two and a half times the text, the most the app's pinch gives: the buttons grow until a line fills the phone's
+    # width, and no more, by artist (bands and a folded artist) and by title (a flat list).
     songs(conn, cfg)
     script = LINES + r"""
     document.documentElement.style.setProperty("line-height", "40px");
@@ -105,15 +110,15 @@ def test_past_the_rooms_size_a_line_stays_one_row_on_a_phone_its_chevron_on_the_
     sort.value = "title";
     sort.dispatchEvent(new Event("change"));
     const byTitle = lines();
-    // A card opened: its box takes the line's margins and borders, the chevron inside them still.
+    // A card opened: its box takes the line's margins and borders, the key inside them still.
     const creep = lineOf("Creep");
     openCardOf(creep);
     const edge = creep.getBoundingClientRect().right - parseFloat(getComputedStyle(creep).borderRightWidth);
-    const opened = creep.querySelector(":scope > .line-more").getBoundingClientRect().right <= edge + 0.5;
+    const opened = creep.querySelector(":scope > .line-key").getBoundingClientRect().right <= edge + 0.5;
     note("lines", { byArtist, byTitle, opened, wide: document.documentElement.scrollWidth <= innerWidth });"""
     drawn = attribute_of(run(conn, cfg, tmp_path, script, controls=SERVED, size=f"{width},800", touch=True),
                          "data-lines")
-    room = round(48 * (width - 88) / 192)  # a tile at the most the room gives
+    room = round(48 * (width - 82) / 148)  # a tile at the most the room gives
     for by in ("byArtist", "byTitle"):
         assert sorted(line["title"] for line in drawn[by]) == ["Creep", "Hotel California", "Hysteria", "Take It Easy"]
         assert [line for line in drawn[by] if not (line["fits"] and line["within"])] == [], by

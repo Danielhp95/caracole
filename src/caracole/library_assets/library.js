@@ -1832,7 +1832,7 @@
     }
   }
   let wasSelecting = document.body.classList.contains("selecting");
-  new MutationObserver(() => {  // Select on or off: a line's row has its box, and no chevron
+  new MutationObserver(() => {  // Select on or off: a line's row has its box, and no Fetch
     const now = document.body.classList.contains("selecting");
     if (now !== wasSelecting) {
       wasSelecting = now;
@@ -1895,15 +1895,9 @@
     line.dataset.id = String(s.id);  // the Select mode finds the song's line by it
     shownSongs.set(line, s);
     line.querySelector(":scope > .line-panel").classList.add("song-card");
-    // Its title opens its card as its chevron does, a tap's convenience (the chevron is the keyboard's); never one of
-    // its buttons, which open what they hold. The line it is in by then (refill moves it into the line drawn before).
-    const named = line.querySelector(":scope > .line-title");
-    named.classList.add("opens-card");
-    named.addEventListener("click", (e) => {
-      if (e.target.closest("a, button")) return;
-      const more = e.currentTarget.parentNode && e.currentTarget.parentNode.querySelector(":scope > .line-more");
-      if (more) more.click();
-    });
+    // Its title, as its line's blank space, opens its card (rows.js foldMore: a click on the line's own row presses
+    // its chevron, out of sight, the keyboard's); never one of its buttons, which open what they hold.
+    line.querySelector(":scope > .line-title").classList.add("opens-card");
     if (s.status === "found") line.classList.add("have");  // set apart among a search's results (rows.css)
     // How the song's request goes, on a line of its own, and its lookup's steps under it.
     const job = server ? jobOfSong(id) : null;

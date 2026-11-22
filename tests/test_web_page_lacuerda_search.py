@@ -438,7 +438,7 @@ def test_a_search_that_failed_offers_the_button_and_no_page_sends_it_again_by_it
 
 
 # The chevron of a search that found nothing, on the library page and on the lookup page ("⋯"): Ask LaCuerda is under it.
-FOLD = {"": "#results .nothing .line-more", "lookup": "#results .nothing .row-more"}
+FOLD = {"": "#results .nothing .line > .line-title h3", "lookup": "#results .nothing .row-more"}
 
 
 @pytest.mark.parametrize("page, query, label, folded", [

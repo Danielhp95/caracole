@@ -197,16 +197,18 @@ def test_long_and_chinese_names_are_cut_short_never_wrapped_into_the_buttons(con
 
 
 
-# The laptop's line, one row: the title, its artist, the play tiles, the key, the chevron (the owner's ask, 2026-11-18).
+# The laptop's line, one row: the title, its artist, the play tiles, the key (the owner's ask, 2026-11-18), at its end,
+# where the chevron was until the owner took it out (2026-11-22).
 ORDER = """(() => {
   const box = (n) => n && n.getBoundingClientRect();
   return [...document.querySelectorAll('#list article.line')].map((line) => {
     const h3 = line.querySelector('h3'), by = line.querySelector('.line-by'), plays = line.querySelector('.line-plays > .play'),
-      key = line.querySelector('.line-key'), more = line.querySelector('.line-more'), box0 = box(line), p = line.querySelector('.pick');
+      key = line.querySelector('.line-key'), box0 = box(line), p = line.querySelector('.pick');
     const l = (n) => (n && n.checkVisibility() ? box(n).left : null);
     const name = by && (by.querySelector('.artist-name') || by);
     return { title: h3.textContent, h3: [box(h3).right, box(h3).top, box(h3).bottom], by: by && [box(by).left, box(by).right],
-      plays: l(plays), key: l(key), more: l(more), pick: l(p), line: [box0.top, box0.bottom, box0.right],
+      plays: l(plays), key: l(key), keyEnd: key && key.checkVisibility() ? box(key).right : null, pick: l(p),
+      line: [box0.top, box0.bottom, box0.right], pad: parseFloat(getComputedStyle(line).paddingRight),
       band: !by || !by.checkVisibility(), cut: h3.scrollWidth > h3.clientWidth,
       byCut: name && name.scrollWidth > name.clientWidth + 1, rem: parseFloat(getComputedStyle(document.documentElement).fontSize),
       page: [document.documentElement.scrollWidth, innerWidth] };
@@ -237,9 +239,10 @@ def _on_one_row(lines, selecting=False):
         assert line["h3"][0] <= left + 0.5 and left < line["plays"], line  # title, artist, tiles
         assert right <= line["plays"] + 0.5, line  # the name never under a tile
         assert line["plays"] < line["key"], line
-        assert selecting or line["key"] < line["more"], line  # the chevron is gone while selecting
         assert line["line"][0] <= line["h3"][1] and line["h3"][2] <= line["line"][1], line  # one row
-        assert (line["key"] if selecting else line["more"]) <= line["line"][2] + 0.5, line  # nothing pushed off it
+        # The key at the line's end, nothing pushed off it: no chevron after it, its padding alone and the room its 36 px
+        # leave in its 44 px column (centred).
+        assert line["line"][2] - line["pad"] - 4.5 <= line["keyEnd"] <= line["line"][2] + 0.5, line
         assert right - left <= 16 * line["rem"] + 1, line  # the artist's cap
         assert line["page"][0] <= line["page"][1], line  # nothing sideways
         if selecting:
@@ -260,7 +263,7 @@ def _laid(conn, cfg, tmp_path, size, selecting):
 # 1280 and 1200 beside the pane, the rest one column.
 @pytest.mark.parametrize("size", ["1280,800", "1200,900", "1199,900", "1024,900", "800,900", "720,900"])
 @pytest.mark.parametrize("selecting", [False, True])
-def test_on_a_laptop_a_line_reads_title_artist_tiles_key_chevron(conn, cfg, tmp_path, size, selecting):
+def test_on_a_laptop_a_line_reads_title_artist_tiles_and_its_key_at_its_end(conn, cfg, tmp_path, size, selecting):
     for artist, title in (("Oasis", "Wonderwall"), ("Eagles", "Desperado"), ("Queen", LONG_TITLE),
                           (RED_HOT, LONG_TITLE + " (live)")):
         keyed(conn, cfg, artist, title)

@@ -308,8 +308,8 @@ def test_new_songbook_starts_picking_in_the_library_as_it_was_left(shelf, tmp_pa
         assert page.js("document.querySelector('#list article.picked h3').textContent") == "Hysteria"
         assert leave() == "tab-library"
         page.js("[...document.querySelectorAll('#list article.line')].find((l) => l.querySelector('h3').textContent === "
-                "'Wonderwall').querySelector('.line-more').id = 'wonderwall-more'")
-        page.click("#wonderwall-more")
+                "'Wonderwall').id = 'wonderwall'")
+        page.click(cards.name_of("#wonderwall"))  # its name: its card
         page.js("[...cardOf([...document.querySelectorAll('#list .line')].find((l) => l.querySelector('h3')"
                 ".textContent === 'Wonderwall')).querySelectorAll('button')].find((b) => b.checkVisibility() && "
                 "b.textContent === 'Add to a songbook…').id = 'add-to-book'")

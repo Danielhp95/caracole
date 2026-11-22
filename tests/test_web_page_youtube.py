@@ -216,7 +216,7 @@ def line(song) -> str:
 
 def opened(browser, song) -> None:
     assert browser.wait(f"document.querySelector({json.dumps(line(song) + ' .line-more')}) !== null")
-    browser.click(line(song) + " .line-more")
+    browser.click(cards.name_of(line(song)))
 
 
 def test_a_songs_card_makes_its_sheet_from_the_video_pasted_and_its_line_follows_it(able, live, sheet, browser):

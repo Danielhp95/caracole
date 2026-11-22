@@ -12,6 +12,7 @@ import json
 from datetime import UTC, datetime
 
 import pytest
+from helpers import cards
 from helpers.browser import CHROMIUM_MARKS
 from helpers.targets import odd_radii
 from test_web_lookup_page import index_songs
@@ -96,7 +97,7 @@ def test_the_library_page_has_four_corner_radii(library, live, tmp_path, size, s
         # A song's card (under its line on a phone, in the pane on a laptop): its tiles, a tile's drawer, the ⋯ menu.
         wonderwall = page.js("Array.from(document.querySelectorAll('#list article.line')).find((l) => "
                              "l.querySelector('h3').textContent.includes('Wonderwall')).dataset.id")
-        page.click(f"#list article.line[data-id='{wonderwall}'] .line-more")
+        page.click(cards.name_of(f"#list article.line[data-id='{wonderwall}']"))
         odd_in(page, "a card", ".song-card .tile", 1)
         page.click(".song-card .tile-more")
         odd_in(page, "a tile's drawer", ".song-card .drawer", 1)
@@ -105,7 +106,7 @@ def test_the_library_page_has_four_corner_radii(library, live, tmp_path, size, s
         page.click(".song-card .foot-more-btn")  # closed, on a touch screen it takes its history entry back
         assert page.wait("!document.querySelector('.song-card .foot-more[open]') && "
                          "!(history.state && history.state.caracoleMenu)")
-        page.click(f"#list article.line[data-id='{wonderwall}'] .line-more")
+        page.click(cards.name_of(f"#list article.line[data-id='{wonderwall}']"))
         assert page.wait(SHOWN % json.dumps(".song-card .tile") + " === 0")
         # A search's results.
         page.click("#q")

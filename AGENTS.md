@@ -932,7 +932,7 @@ The pages caracole writes and serves are index.html, sheet.html, songbook.html a
     words name: test_web_page_lacuerda_search.py.
   - One LaCuerda button on the screen at a time, worded Ask LaCuerda:
     - the search's own, "Ask LaCuerda: “…” · 1 request", only where the results offer no name's page;
-    - where they do (`lacuerda_unlisted`), Ask LaCuerda's under the chevron of `nothingFound`'s line or in
+    - where they do (`lacuerda_unlisted`), Ask LaCuerda's folded under `nothingFound`'s line or in
       `notesLine` stands for both, sending the search while its gate says `auto` or `button` (the searcher's `ask`,
       which the pages' `does.ask` tries first) and reading the name's page else, the search's line then its words
       alone.
@@ -975,7 +975,7 @@ The pages caracole writes and serves are index.html, sheet.html, songbook.html a
 - **iReal Pro's forum's charts and threads** (`search.search_ireal`, `search_ireal_threads`, `/api/search`'s `ireal`)
   are songs whose artist is their composer, or the by-line a thread's name gives:
   - a chart a line under its composer, "iReal Pro chart"; a thread caracole never read (`read: false`) a line under
-    its by-line, "thread not read yet", and on both pages "Named from the thread's name" under its chevron or ⋯
+    its by-line, "thread not read yet", and on both pages "Named from the thread's name" folded under its line or ⋯
     (rows.js `THREAD_SAID`, `THREAD_NAMED`), a song of yours on the same line as ever;
   - each Fetch the lookup that keeps that chart, a thread's reading it for its chart (`ireal`, the thread's address,
     `caracole get --ireal`, `[ireal]`): nothing is sent before it; a pick whose thread holds no chart of the title,
@@ -1015,7 +1015,7 @@ It is rows.js's, shared by both pages:
     "… in the sites' indexes" alone when `does.yours`, the songs of yours the search shows, is above 0; the card is
     made again when that number changes), the query as the line's title, Request (`.miss-request`, the one filled
     button) after it, under it on a phone, the one Request then, no marks of its own (and no row under the box unless some of yours match);
-  - under its chevron Ask LaCuerda and `unseen` folded.
+  - folded under it (its name or its blank space unfolds them) Ask LaCuerda and `unseen`.
 - `notesLine`: those two under results.
 - On the lookup page, `didYouMean` (`/api/search`'s `suggest`, a row each, a song's as the search's rows are, before
   any result).
@@ -1039,7 +1039,8 @@ It is rows.js's, shared by both pages:
   - on a phone library.css's folded grid puts the overline over the title, `.line-title` `display: contents` (its
     `.line-plays` a direct child, card.css's seam: test_library_assets.py), the title's column keeping rows.css's
     4rem; from 720 px the flat line's columns, the title, then the overline in `by` right after it, then its buttons,
-    the status, the action, the key and the chevron (the owner's order); Select mode's are songbooks.css's
+    the status, the action and the key, at its end (the owner's order; no chevron after it since 2026-11-22: below);
+    Select mode's are songbooks.css's
     (test_library_bands.py); the same rules are `section.flat .line`'s, a list sorted by title or by when they came
     folding every line;
   - from 1200 px, in the 760 px list beside the pane (where the lanes meet, 12): a folded or flat line keeps that one
@@ -1048,7 +1049,7 @@ It is rows.js's, shared by both pages:
     when the line changes or stops being folded or flat; batched once a frame, `placePlaysSoon`; a line of a run off
     the screen once its run comes near it, `contentvisibilityautostatechange`, `placeRuns`, never by laying the run
     out: below)
-    makes its first row the title, its artist right after it, the status, the action, the key and the chevron, and its
+    makes its first row the title, its artist right after it, the status, the action and the key, and its
     buttons a row of their own under the title (library.css, songbooks.css selecting); a band's line its buttons
     beside its title where they fit, else under it (`.line-title` wrapping), so none ever pushes the key off the line
     (test_library_card_place.py, test_library_bands.py).
@@ -1058,8 +1059,10 @@ It is rows.js's, shared by both pages:
 - A "Did you mean" band's "Their 7 songs on UG ›" opens that artist's group from `/api/artist`, as "+ N more" does.
 - A song of yours under its ⋯ (Fetch again; Use LaCuerda's sheet, `lacuerdaSheet` or the search's LaCuerda row of it)
   posts `/lookup` exactly as the lookup page's rows of it do (test_web_page_again.py).
-- A hit's name there and on the lookup page presses its Fetch (or Add again), disabled while that button is (rows.js
-  `nameDoes`): never in place of a title that opens a sheet, and only a click or a key on it.
+- A hit's name on the lookup page presses its Fetch (or Add again), disabled while that button is (rows.js
+  `nameDoes`): never in place of a title that opens a sheet, and only a click or a key on it. On the library page a
+  line's name, a site's song's too, is its row's, which opens what the line holds and never asks a site (below), so
+  that a tap a little off its Fetch never spends a request (the owner's choice of 2026-11-22).
 - **An artist's name**:
   - An artist's name (a header's, a line's, a site's row's, a lookup row's) searches for them as typing it would,
     served or from a file (library.js `searchFor`, a step of the browser's history, search's `{ search: n + 1 }`,
@@ -1192,13 +1195,13 @@ It is rows.js's, shared by both pages:
 - **The text's pixel** (base.css `--sp`, the owner's ask of 2026-11-22: on the phone a pinch that grew the text alone
   left the tiles and the chevrons as they were): the Android app's pinch sets the WebView's text zoom, which sizes the
   text and its line heights, never a length in px or rem (WebView 133, measured: `1rem` stays 16px at 200 %), so what
-  sits beside the words on the library page (a song's play buttons, its Fetch, its key's column and its chevron, its
-  card's tiles, chevrons and closes, an artist's band, the bar's field and Filter and Sort, the sites' marks, the list's
-  estimates `--band-h`, `--line-h`, `--fold-h`) is `calc(N * var(--sp))`. `--sp` is `1rlh / 16` (`html`'s line height
-  is 16px for it), at most `(100vw - 88px) / 192`, so a phone's line stays one row, its chevron on the screen (its
-  title's least room, a button, its key and its chevron are 192 of them; 88px the page's, an opened card's and the
-  line's paddings, borders and gaps), and 1px at least from that room; never in a `font-size` or a `line-height`,
-  which the zoom sizes already (a line height in it grows twice), nor where a box's height is a line height (a count's
+  sits beside the words on the library page (a song's play buttons, its Fetch, its key's column and its row's height,
+  its card's tiles, chevrons and closes, an artist's band, the bar's field and Filter and Sort, the sites' marks, the
+  list's estimates `--band-h`, `--line-h`, `--fold-h`) is `calc(N * var(--sp))`. `--sp` is `1rlh / 16` (`html`'s line
+  height is 16px for it), at most `(100vw - 82px) / 148`, so a phone's line stays one row, its key on the screen (its
+  title's least room, a button and its key are 148 of them; 82px the page's, an opened card's and the line's
+  paddings, borders and gaps; 192 and 88px while it had its chevron), and 1px at least from that room; never in a
+  `font-size` or a `line-height`, which the zoom sizes already (a line height in it grows twice), nor where a box's height is a line height (a count's
   digits centred by the grid). The tiles' container queries are in `rlh` (24.9375rlh is 399px at the pages' own
   size). test_library_text_size.py (the root's line height grown, Chromium having no text zoom), PinchTest on a
   device.
@@ -1244,8 +1247,17 @@ It is rows.js's, shared by both pages:
   `plays`, from `things`, what the card's tiles are made of too: each a link that opens it at once, its instrument's
   `glyph`, inline SVG made with `createElementNS`, the one address the page names, an icon tile at every pointer (30 px with a mouse, 48 px on a touch screen, no
   words), the marks of the sites its versions came from at its foot, how many at its corner; the lyrics none), Fetch's download glyph where it has one (rows.js `fetchIcon`, a site's
-  song's Fetch too), its key and its chevron, one row on a phone and a laptop (test_library_plays.py). Its title and
-  its chevron open it as a card (card.js `caracoleCard`, card.css):
+  song's Fetch too) and its key, at its end, one row on a phone and a laptop (test_library_plays.py). Its title, as
+  its blank space, opens it as a card (card.js `caracoleCard`, card.css):
+  - no chevron drawn, the owner's choice of 2026-11-22 ("Remove the chevron icons all together, I want to regain that
+    space. I'll have it so that clicking in the name of a song or it's blank space yields the same result"): a click
+    on any line's own row (rows.js, one listener for the page after `foldMore`, a line as it is now: refill's too; a
+    site's song's too) presses its chevron, a button out of sight (rows.css: no column, the keyboard's and a screen
+    reader's disclosure, `aria-expanded` and `aria-controls`, the line drawing its focus ring), never a click on a
+    link, a button, a field or a summary in it, on what left the line as its own click was handled (Undo), in its open
+    card, while Select ticks lines, or at the end of a text being selected; the line keeps the height its chevron gave its row (`--line-row`, 28 px of the text's, 24 from 720 px,
+    44 for a thumb: a mark of no width in its key's cell, `.line::after`), so the long list's estimates hold and a line
+    stays a thumb's target (test_library_plays.py, test_web_page_search.py's names);
   - made the first time it opens, from the song and its request as they are then (library.js `cardFor`, rows.js
     `resultRow`'s `more` a function): until then its panel, `.line-panel.song-card`, is empty and hidden, the
     chevron's `aria-controls` naming it (test_library_card_place.py);

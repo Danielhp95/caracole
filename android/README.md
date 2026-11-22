@@ -98,9 +98,9 @@ sends, so the viewers run sandboxed as they do there.
 
 Pinch any page to change its text size: fingers apart make the text larger, fingers together make it smaller. The
 size goes from 50% to 250%, in steps of 5%, where 100% is the size Android's own font size setting gives the pages.
-The text grows or shrinks, and on the library page so do a song's buttons, its chevron, its card's tiles, an
-artist's band and the search bar's buttons, until a song's line fills the screen's width (about 170% on a phone 412
-dp wide): from there the text grows on, each title cut shorter, and the line stays one row with its chevron on the
+The text grows or shrinks, and on the library page so do a song's buttons, its line's height, its card's tiles,
+an artist's band and the search bar's buttons, until a song's line fills the screen's width (about 225% on a phone
+412 dp wide): from there the text grows on, each title cut shorter, and the line stays one row with its key on the
 screen. The page reflows to the screen's width, so it never zooms as a picture and never scrolls sideways. The size holds for every page and across restarts. Settings shows it ("Text size: 120%"), and
 **Reset** sets it back to 100%. A sheet's own **Aa** still works, and the two multiply.
 
@@ -296,8 +296,8 @@ emulators 37.1 and 37.2 crashed in their own render thread when the WebView went
 the host's `127.0.0.1` is `10.0.2.2`. The instrumented tests sync from a running caracole serve. EndToEndTest opens
 the library page and a viewer, transposes, and hands off a PDF and a Guitar Pro file. PinchTest pinches the library
 page and a sheet, larger and smaller, and checks the size label, that a song's line on the library page grows with
-the text (its buttons, chevron and band as far as the screen's width lets them, every chevron on the screen), and
-that the chords stay over their syllables.
+the text (its buttons, its row and band as far as the screen's width lets them, every key on the screen), and that
+the chords stay over their syllables.
 LocalServerTest needs no computer: the app's server answers its page only with the launch's cookie, the WebView
 never loads another loopback port, and a first start's database is made whole. SyncSheetTest opens the sheet with
 the bar's sync button and syncs a song changed on both sides, the computer's version kept, then finds nothing that

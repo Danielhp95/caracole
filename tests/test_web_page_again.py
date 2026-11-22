@@ -142,7 +142,7 @@ def menu_button(song, label: str) -> str:
 def press_in_menu(browser, song, label: str) -> None:
     """The song's "⋯" opened, and its button ``label`` clicked, as a hand would."""
     assert browser.wait(f"document.querySelector({json.dumps(line(song) + ' .line-more')}) !== null")
-    browser.click(line(song) + " .line-more")
+    browser.click(cards.name_of(line(song)))
     assert browser.wait(f"({menu_button(song, label)}) !== null")
     browser.js(f"({menu_button(song, label)}).dataset.pressMe = '1'")
     browser.click(cards.open_card(browser, line(song)) + " button[data-press-me]")
@@ -230,7 +230,7 @@ def test_the_bars_search_finding_lacuerdas_sheet_of_a_song_offers_it_under_its_m
     browser.open(base)
     assert browser.wait(f"document.querySelector({json.dumps(line(song))}) !== null")
     # Its "⋯" open: nothing tells the page LaCuerda has it, yet.
-    browser.click(line(song) + " .line-more")
+    browser.click(cards.name_of(line(song)))
     assert browser.wait(f"({menu_button(song, 'Fetch again')}) !== null")
     assert browser.js(menu_button(song, USE)) is None
     # The search begins.

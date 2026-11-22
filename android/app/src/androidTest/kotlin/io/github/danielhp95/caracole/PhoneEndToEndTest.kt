@@ -296,7 +296,8 @@ class PhoneEndToEndTest {
             val gone = cards(main).let { all -> (0 until all.length()).map { all.getJSONObject(it) } }
                 .first { it.optString("title") == REMOVED.second && it.optString("artist") == REMOVED.first }
             val remove = "button[aria-label=${JSONObject.quote("Remove ${REMOVED.second} by ${REMOVED.first} from your logbook")}]"
-            // The card is built when it is first opened (stage 1d): open the song's card by its chevron first.
+            // The card is built when it is first opened (stage 1d): open the song's card first, by its line's own
+            // button for it (the chevron, drawn no more: out of sight, the keyboard's).
             js("""(() => { const line = [...document.querySelectorAll("article.line")]
                 .find((l) => (l.querySelector("h3") || {}).textContent === ${JSONObject.quote(REMOVED.second)});
                 const more = line && line.querySelector(".line-more");

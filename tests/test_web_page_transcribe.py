@@ -176,7 +176,7 @@ def line(song) -> str:
 
 def opened(browser, song) -> str:
     assert browser.wait(f"document.querySelector({json.dumps(line(song) + ' .line-more')}) !== null")
-    browser.click(line(song) + " .line-more")
+    browser.click(cards.name_of(line(song)))
     return cards.open_card(browser, line(song))
 
 

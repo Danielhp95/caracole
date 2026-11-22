@@ -404,14 +404,15 @@ def test_a_focused_lines_ring_shows_on_all_four_sides(big, tmp_path):
 
 # --- the laptop's buttons placed before the frame is painted ------------------------------------------------------
 
-# Before the page's scripts: the list beside the pane narrowed to 520 px (a stylesheet the document adopts, which the
+# Before the page's scripts: the list beside the pane narrowed to 470 px (a stylesheet the document adopts, which the
 # page's policy doesn't govern), so that a line's two or three icon tiles don't fit beside its title and its artist and
 # go under its title, as six beside a long name do in the list's own 760 px (test_library_card_place.py): the long
-# list then holds lines placePlays puts under their title, on the screen and far down.
+# list then holds lines placePlays puts under their title, on the screen and far down. (520 px did, while a line kept
+# its chevron's 36 px.)
 NARROW = r"""(() => {
   const sheet = new CSSStyleSheet();
   sheet.replaceSync("@media (min-width: 1200px) { "
-    + ".lib-cols { grid-template-columns: minmax(0, 520px) minmax(400px, 1fr); } }");
+    + ".lib-cols { grid-template-columns: minmax(0, 470px) minmax(400px, 1fr); } }");
   document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
 })();"""
 

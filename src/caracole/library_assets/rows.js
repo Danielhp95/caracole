@@ -205,7 +205,9 @@ const caracoleRows = (icons, does) => {
   };
   // What a row's "⋯" button or a line's chevron shows (``more``), folded under it: the button and its panel, named
   // for the ``kind`` of item ("row-more", "row-panel"), go at the item's end; nothing more to show, no button. A line
-  // unfolds in place, so its button is a chevron, which turns while it is open (rows.css), never "⋯", a menu's mark.
+  // unfolds in place, and its button is no icon at all (the owner's choice of 2026-11-22, for the room it took): out of
+  // sight (rows.css), the keyboard's and a screen reader's disclosure, pressed by a click on the line's own row, its
+  // name or its blank space (below), never on a link, a button or a field in it, nor in its open panel.
   // ``more`` a function: what it returns is made the first time the button opens it (``built``), so the button is
   // always drawn and its panel, empty and hidden until then, has its id from the start, which the button names.
   // ``onToggle(open, panel, event)``: after every open or close (``event``, the click), the panel shown or hidden.
@@ -224,9 +226,7 @@ const caracoleRows = (icons, does) => {
     button.setAttribute("aria-expanded", "false");
     button.setAttribute("aria-controls", panel.id);
     button.title = "More: " + title;
-    if (kind === "line") {
-      button.appendChild(glyph("chevron"));
-    } else {
+    if (kind !== "line") {
       const dots = el("span", null, "⋯");
       dots.setAttribute("aria-hidden", "true");
       button.appendChild(dots);
@@ -245,15 +245,33 @@ const caracoleRows = (icons, does) => {
     item.appendChild(button);
     item.appendChild(panel);
   };
+  // A click on a line's own row presses its chevron, heard once for the page (so that a line library.js's refill drew
+  // into another's place, with its chevron and panel, is heard as it is now). Not on what does something of its own (a
+  // link, a button, a field, a summary), nor on what left the line as its own click was handled (Undo, whose request's
+  // line is drawn again), nor in its panel (a song's card, under its line), nor while Select ticks lines (select.js: a
+  // tap on a line is its tick), nor at the end of a text being selected.
+  const OWN = "a, button, input, select, textarea, label, summary, [role=button], [contenteditable]";
+  document.addEventListener("click", (e) => {
+    const at = e.target instanceof Element ? e.target : null;
+    const item = at ? at.closest(".line") : null;
+    const more = item ? item.querySelector(":scope > .line-more") : null;
+    if (!more || at === more || item.closest(".selecting")) return;
+    const panel = document.getElementById(more.getAttribute("aria-controls") || "");
+    if (panel && panel.contains(at)) return;
+    const does = at.closest(OWN);
+    if (does && item.contains(does)) return;
+    if (window.getSelection && String(window.getSelection())) return;
+    more.click();
+  });
   const mainAction = (r) => (r.action instanceof Node ? r.action
     : r.action && typeof r.action === "object" ? link(r.action, "btn small primary", isWeb(r.action.href)) : null);
   // A dense list's line (``dense``): index.html's songs, under their artist's name. Its title, which opens what
   // ``href`` says, and right after it ``plays``, a song of yours' button for each thing to play from (card.js plays:
   // none of them first); then the artist (where no group above names it: ``onSearch`` makes it what a group's name
   // is, artistOf), the status's badges, and a site's song's marks of where it came from (``sources``,
-  // else ``source``); its key, in muted bold letters; its main action and its chevron. One line from 720px; on a phone
-  // the title and its buttons, the action, the key and the chevron, and under them the artist and the badges, when
-  // there are any.
+  // else ``source``); its key, in muted bold letters; its main action; and its chevron, drawn nowhere (foldMore). One
+  // line from 720px; on a phone the title and its buttons, the action and the key, and under them the artist and the
+  // badges, when there are any.
   const denseLine = (r) => {
     const title = String(r.title || "");
     const artist = String(r.artist || "");
@@ -368,7 +386,9 @@ const caracoleRows = (icons, does) => {
   // request line in its place), so one song is never two lookups. None where ``main`` is no button or is disabled,
   // or the title opens something already (titleLink): a link is never traded for a fetch.
   const nameDoes = (item, main, said) => {
-    if (!(main instanceof HTMLButtonElement) || main.disabled) return;
+    // Not a line's (index.html's): its name is its row's, which opens what it holds (foldMore) and asks no site, so a
+    // tap a little off its button never spends a request (the owner's choice of 2026-11-22, its chevron gone).
+    if (!(main instanceof HTMLButtonElement) || main.disabled || item.classList.contains("line")) return;
     const heading = item.querySelector("h2, h3");
     if (!heading || heading.closest("a")) return;
     const name = el("button", "title-get", heading.textContent);
@@ -675,7 +695,7 @@ const caracoleRows = (icons, does) => {
   // with each site's mark and its counts, and its identity (``key``) as the line's ``data-hit``. Get it looks the
   // song up as Ultimate Guitar's song (whose lookup gets gtptabs.com's Guitar Pro file too), else keeping
   // LaCuerda's sheet, else by its names; a removed song's is Add again, which asks for it again as the request form
-  // does. Its name does what that button does (nameDoes). Under "⋯": UG's versions, LaCuerda's sheet and page,
+  // does. Its name, as its blank space, opens what it holds (foldMore): UG's versions, LaCuerda's sheet and page,
   // gtptabs.com's page, Add for tonight's run.
   // ``acts``: { get, later, again }, each called (pick, display, line, button), as ugHit's ``get`` is.
   const indexLine = (item, acts) => {
@@ -1388,10 +1408,10 @@ const caracoleRows = (icons, does) => {
   // sites' indexes" alone), over one line, the library page's (``does.dense``) or a row, the lookup page's: the query,
   // and where a song's Open sits, the request by name (``does.request``: "Request", else ``does.requestText``,
   // named ``does.requestLabel``); where caracole looked is the row of marks under the box (countMarks), each site at
-  // 0, and no more here. Its chevron ("⋯" on a row) holds the rest: Ask LaCuerda while
+  // 0, and no more here. Folded under it (its name or blank space, foldMore; "⋯" on a row) the rest: Ask LaCuerda while
   // LaCuerda's listings don't reach the name (``does.ask(button, box)``, LaCuerda's search first while its gate,
-  // ``data.lacuerda_search``, lets one go), and why caracole may not see an artist, folded. ``does.unfolded``: its
-  // chevron open from the start (the same query drawn again, where it was open).
+  // ``data.lacuerda_search``, lets one go), and why caracole may not see an artist. ``does.unfolded``: those open
+  // from the start (the same query drawn again, where they were open).
   const nothingFound = (data, query, does) => {
     const d = data && typeof data === "object" ? data : {};
     const box = el("section", "nothing");

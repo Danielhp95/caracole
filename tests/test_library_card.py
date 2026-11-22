@@ -849,7 +849,7 @@ def test_a_line_drawn_again_keeps_its_card_open_and_its_drawer_closed(conn, cfg,
     song = hotel(conn, cfg)
     item = f'article.line[data-id="{song.id}"]'
     browser.open(base)
-    browser.click(item + " .line-more")
+    browser.click(cards.name_of(item))
     browser.click(card(browser, item) + " .tile-sheet > button.tile-more")
     assert browser.wait(f"!document.querySelector('{card(browser, item)} .drawer').hidden")
     browser.js(f"[...document.querySelectorAll('{card(browser, item)} .foot button')].find((b) => b.textContent === 'Fetch again')"
@@ -955,7 +955,7 @@ UG, LC = '.drawer-part[data-source="ug"]', '.drawer-part[data-source="lacuerda"]
 def drawer_of(browser, song):
     """The song's card opened, and its sheet tile's drawer, then shown; its line's selector."""
     item = f'article.line[data-id="{song.id}"]'
-    browser.click(item + " .line-more")
+    browser.click(cards.name_of(item))
     browser.click(card(browser, item) + " .tile-sheet > button.tile-more")
     assert browser.wait(f"!document.querySelector('{card(browser, item)} .drawer').hidden")
     return item
@@ -1381,7 +1381,7 @@ def test_where_history_refuses_a_push_the_more_menu_still_opens_and_closes(conn,
         b.open(path.as_uri())
         b.js("history.pushState = () => { throw new DOMException('refused', 'SecurityError'); };"
              "window.errors = 0; addEventListener('error', () => { window.errors += 1; })")
-        b.click("#list .line .line-more")
+        b.click(cards.name_of("#list .line"))
         b.click("#list .line details.foot-more > summary")
         assert b.wait("document.querySelector('#list details.foot-more').open")
         b.press("Escape")
