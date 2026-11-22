@@ -432,7 +432,7 @@ def test_next_and_swipes_go_from_song_to_song_skipping_the_missing(tmp_path):
       if (step === 0) q('#song-1 a[rel="next"]').click();
       else if (step === 1) swipe(-160);
       else if (step === 2) swipe(160);
-      else if (step === 3) document.dispatchEvent(new KeyboardEvent("keydown", {key: "ArrowLeft", bubbles: true}));
+      else if (step === 3) q('#song-3 a[rel="prev"]').click();
       else out = seen;
     """
     dom = open_page(page(), tmp_path, "#song-1", harness=harness, budget=12000)

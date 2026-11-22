@@ -526,7 +526,8 @@ def test_get_it_looks_the_song_up_and_its_line_says_how_it_goes(cfg, live, brows
     assert browser.js(f"{line}.querySelector('h3').textContent") == "Wonderwall"
     assert browser.wait(f"{line}.querySelector('.line-plays .play-sheet') && "
                         f"/sheet[.]pdf$/.test({line}.querySelector('.line-plays .play-sheet').getAttribute('href'))")
-    # Escape, back to your songs: the new song has a line of its own above the list.
+    # Escape in the box, back to your songs: the new song has a line of its own above the list.
+    browser.js("document.getElementById('q').focus()")
     browser.press("Escape")
     assert browser.wait("document.getElementById('results').hidden")
     assert browser.wait("!document.getElementById('requested').hidden && "
@@ -557,7 +558,8 @@ def test_a_song_get_it_brought_offers_no_songbook_until_the_page_is_loaded_again
     oasis = ("[...document.querySelectorAll('#results section.artist')].find((g) => "
              "g.querySelector('.artist-name').textContent === 'Oasis').querySelector('article.line')")
     assert "Add to a songbook…" in browser.js(f"{OFFERS}({oasis})")
-    browser.press("Escape")  # its line under the bar, as the new song's
+    browser.js("document.getElementById('q').focus()")
+    browser.press("Escape")  # in the box: its line under the bar, as the new song's
     assert browser.wait("!document.getElementById('requested').hidden && "
                         "document.querySelector('#requested article h3').textContent === 'Wonderwall'")
     assert "Add to a songbook…" not in browser.js(f"{OFFERS}(document.querySelector('#requested article'))")
@@ -584,7 +586,8 @@ def test_a_newer_answer_keeps_the_line_whose_request_runs_and_its_request_line(c
                       "!!window.row.querySelector('.progress')]")
     assert kept == [True, True, True]  # the same line, in the newer list, with its request line
     assert browser.wait("window.row.querySelector('.progress').dataset.tone === 'ready'", timeout=20)
-    browser.press("Escape")
+    browser.js("document.getElementById('q').focus()")
+    browser.press("Escape")  # in the box: back to your songs
     assert browser.wait("!document.getElementById('requested').hidden && "
                         "document.querySelector('#requested article h3').textContent === 'Wonderwall'")
 
@@ -1136,7 +1139,8 @@ def keyed(page, text):
 
 
 def test_a_slash_typed_in_the_request_form_is_the_fields(cfg, live, browser):
-    # "/" elsewhere on the page goes to the search box; in a field of the form, "AC/DC" or "Either/Or" is typed.
+    # In a field of the form, "AC/DC" or "Either/Or" is typed; elsewhere "/" is the browser's (Vimium's find), the page
+    # taking no key.
     base, _, _ = live
     sites(cfg, ug=[("radiohead", "creep", 4), ("muse", "hysteria-live", 2)])  # a result: the form is under it
     browser.open(base)
@@ -1153,10 +1157,11 @@ def test_a_slash_typed_in_the_request_form_is_the_fields(cfg, live, browser):
         assert browser.js(f"document.activeElement === {field}")
     assert browser.js("document.getElementById('q').value") == "Muse - Hysteria"
     assert browser.js("document.getElementById('request-box').getClientRects().length > 0")
-    # Anywhere else, "/" still goes to the search box, its text selected, and types nothing.
+    # Anywhere else, "/" is the browser's: the search box keeps its text and the focus stays where it was.
     browser.js("document.activeElement.blur()")
     keyed(browser, "/")
-    assert browser.wait("document.activeElement === document.getElementById('q')")
+    time.sleep(0.3)
+    assert browser.js("document.activeElement === document.body")
     assert browser.js("document.getElementById('q').value") == "Muse - Hysteria"
 
 

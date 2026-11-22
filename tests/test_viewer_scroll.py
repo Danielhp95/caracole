@@ -284,7 +284,7 @@ def test_the_pill_steers_the_scroll_without_stopping_it(tmp_path):
     assert resumed["go"] == "Start" and resumed["tick"] == "3"  # a countdown again, to get your hands back
     assert card["go"] == "Resume" and card["pill"] and not card["inert"]
     assert after_card["pill"] and not after_card["inert"] and after_card["go"] == "Resume"
-    # × pressed by the mouse takes no focus (screen.js keys' steer): it stays where it was, on the chord the card
+    # × pressed by the mouse takes no focus (screen.js steer): it stays where it was, on the chord the card
     # closed back to; pressed from the keyboard, the focus goes to Scroll (test_the_pill_answers_the_keyboard).
     assert not ended["pill"] and ended["bar"] and ended_on_chord and ended_still
     assert ended["status"] == ""
@@ -308,7 +308,8 @@ def test_a_touch_a_wheel_a_key_or_a_scroll_by_hand_pauses_and_keeps_the_pill(tmp
 
         b.click("#go")
         b.click("#go")
-        key(b, "PageDown", 34)  # the key map's: a pause, then a turn
+        key(b, "PageDown", 34)  # the browser's: its scroll by hand pauses it
+        b.wait("document.querySelector('#go').getAttribute('aria-label') === 'Resume'", 2)
         keyed = look(b)
 
         b.click("#go")

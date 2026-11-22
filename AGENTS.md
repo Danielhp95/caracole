@@ -1472,34 +1472,18 @@ It is rows.js's, shared by both pages:
     edges, so nothing on the line moves and a Chinese line keeps its columns with pinyin; its words and chords 4.5:1
     on it; no transition; none on paper (`@media print`);
   - none without `sung` (no timed lyrics, too few lines met) nor in a songbook, whose data carries no lyrics.
-- **Keys and pedals** (D16 B; test_viewer_keys.py): a Bluetooth page turner is a keyboard. **screen.js** holds the key
-  map, one `keydown` listener on the document, which viewer.js and harptab.js bind once,
-  `screenKit.keys({ toggle, pause, room, busy, sheet })`:
-  - Space and Enter `toggle()` autoscroll (the bar's `#scroll` while it is off, else the pill's `#go`), once however
-    long held; on a focused control (`button, a[href], summary, [role=button], [tabindex]`) they are its own press,
-    but on full screen's `#handle`, where they are the map's (the keys work in full screen, D14; viewer.js's
-    `#scroll` closes every layer but the overlay's sheet and full screen, `closeAll(necksEl, handle)`);
-  - PageDown and ↓, PageUp and ↑: `pause()`, then a turn in `room()` (layers.js `toolbar.room(pill, docked)`: from
-    1200 px below the toolbar's height, its bottom once stuck, and the pill under it; narrower above the bar's place,
-    slid away or not, the pill and a docked layer; the bar nothing in full screen), keeping `KEPT` (2) of the
-    sheet's lines (`p`, `pre`) wholly in view, the second-last to the top or the second to the foot (two alone where
-    that moves the page a line or more), else by the room less `KEPT` lines of `LINE` (2.6) em, half of it at least,
-    once however long held (a key repeat's `keydown` prevented and nothing more);
-    a song in columns (`html[data-columns]` above 1, the whole song shown: viewer.js `layout()`), its lines in order
-    down one column and up the next, at most to bring `#sheet`'s top to the room's top, never back, and up to the
-    page's top (test_viewer_keys.py's columns test): one `scrollTo` to a whole pixel, never smooth;
-  - `steer`, the bar's `#scroll` and the pill's buttons: a pointer's press takes no focus (`pointerdown` and
-    `mousedown` prevented, the click as ever), so the next Space or Enter stays the map's, never a tapped +'s press
-    again; the keyboard reaches them by Tab as ever, and layer openers (⋯, Aa, the key) take the focus as before;
-    `#scroll` gives the pill's `#go` the focus only when it had it as it was pressed (the keyboard's own press, its
-    focus going as the bar hides: viewer.js, harptab.js), never when `toggle()` pressed it, so a pedal's held Enter
-    stays the map's, one toggle (test_viewer_keys.py's pedal test);
-  - left alone: another handler's key (`defaultPrevented`: a chord's or a hole's Space, the rail tabs' arrows), an
-    input method's, Alt, Ctrl, Meta or Shift, a text field with the focus, and `busy()` (viewer.js: the focus in a
-    layer of the stack, `#sizes`, `#tip`, `#necks` or a dialog; harptab.js: `#sizes`, `#necks`, `#version-list`;
-    never `#handle`);
-  - ← → are book.js's alone (a songbook's songs, still blocked while any layer is open); a page key never navigates,
-    and no key changes the version; the pages' own `keydown` pauses autoscroll for Home and End alone.
+- **No page takes a key** (the owner's choice of 2026-11-22, for Vimium: "Remove the keybindings that caracole takes
+  entirely", D16 B's pedal map among them; test_viewer_keys.py, test_web_page_search.py's slash test,
+  test_web_guitar_browser.py): no viewer page (a sheet, a version's, a songbook, a harmonica tab's), the library page or
+  the Guitar Pro page binds a key on the document. Space, Enter, the page keys, the arrows and letters are the
+  browser's (and Vimium's): a page turner's pedal scrolls the page as the browser does, a scroll by hand that pauses
+  autoscroll (viewer.js's frame); Home and End pause it at once, their key still the browser's. Only caracole's own
+  controls keep theirs: a focused chord's or hole's Space, a dialog's Escape and Tab, an open layer's or panel's
+  Escape, a widget's arrows (the rail's tabs, a segmented control, the tablist), the search box's Enter, ↓ and Escape.
+  screen.js `steer`: a pointer's press on the bar's `#scroll` or a pill button takes no focus (`pointerdown` and
+  `mousedown` prevented, the click as ever), so that no button the bar hides holds the next key; `#scroll` gives the
+  pill's `#go` the focus only when it had it as it was pressed (the keyboard's own press). A songbook goes from song to
+  song by its pagers' and its contents' links and a swipe; no key changes the version.
 - **Columns** (from 1100 px, on the screen alone, viewer.css; test_viewer_layout.py) only where the whole song shows
   that way, its end in the last column (`layout()`): the fewest that do, two to five (`MOST_COLUMNS`), each at least
   the song's widest line (`widest()`: each `.sec > .l` and `.tab` as wide as its content, `.sheet.measure`, after
@@ -2083,7 +2067,7 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 - `app/src/androidTest/` runs on a device or an emulator alone (the device step, below), under `CaracoleTestRunner`:
   `BundledSqliteTest`, `CorpusOnDeviceTest` (one test per corpus area, `core.testing.Replays`,
   `server.testing.ServerReplays` and `viewer.testing.ViewerReplays`; `-e area NAME[,NAME…]` picks some), `NoSitesTest`,
-  `LocalServerTest`, `EndToEndTest`, `PinchTest`, `PedalTest`, `SyncSheetTest`, `ExportImportTest` and `PhoneEndToEndTest`, and
+  `LocalServerTest`, `EndToEndTest`, `PinchTest`, `SyncSheetTest`, `ExportImportTest` and `PhoneEndToEndTest`, and
   milestones 4–6's: `ColdSearchTest`, `LookupOfflineTest`, `NoNetworkTest`, `RealTransportOnDeviceTest`,
   `LookupOnDeviceTest` and `PagesOnDeviceTest` (with `--sites`), `PagesServedTest`, `SongbooksOnDeviceTest`,
   `VersionsPageTest`, `GuitarPageTest`, `PrintTest`, `ShareTest`, `ShareLinkTest`, `BackupsTest` and `AlertsTest`.

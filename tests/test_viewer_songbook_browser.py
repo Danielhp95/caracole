@@ -15,8 +15,8 @@ import pytest
 from caracole.viewer.book import BookSong, build_songbook, songbook_csp
 
 from helpers.browser import CHROMIUM_MARKS, Browser
-from helpers.viewer_pages import back, harmony_tab, key, viewer as open_viewer
-from test_viewer_harmony_tab import FAKE_SOUND, PLAY, SAID as PLAYING, SONG as PROG_SONG
+from helpers.viewer_pages import back, viewer as open_viewer
+from test_viewer_harmony_tab import SONG as PROG_SONG
 from test_viewer_instruments_page import IN_E, SETTINGS, SONG, THREE, choose
 from test_viewer_necks import reload, served, to_song
 
@@ -32,56 +32,6 @@ def _songbook(tmp_path, songs) -> str:
     path.parent.mkdir(parents=True)
     path.write_text(build_songbook("Campfire", songs), encoding="utf-8")
     return path.as_uri()
-
-
-@pytest.mark.parametrize("panel", ["settings", "harmony"])
-def test_the_arrows_stay_in_the_song_while_a_panel_is_open(tmp_path, panel):
-    """With the settings open, or the overlay's sheet on its Harmony tab, ← and → stay with it (a progression playing
-    there goes on), as with a card open."""
-    book = _songbook(tmp_path, [BookSong("One", "Synthetic", cho=PROG_SONG, id="aaaa"),
-                                BookSong("Two", "Synthetic", cho=IN_E, id="bbbb")])
-    size = DESKTOP if panel == "settings" else {"width": 1100, "height": 800, "mobile": False}  # the sheet, not the rail
-    with open_viewer(tmp_path, book + "#song-1", **size) as b:
-        if panel == "harmony":
-            b.js(FAKE_SOUND)
-            harmony_tab(b)
-            b.js(PLAY)
-            b.js("document.querySelector('#harmony .prog-play').focus()")  # on ■, as a tap on ▶ leaves it
-        else:
-            b.click("#more")
-        b.js("window.before = true")
-        key(b, "ArrowRight", 39)
-        time.sleep(0.5)
-        seen = b.js("[location.hash.split('=')[0], window.before === true]")
-        playing = b.js(PLAYING) if panel == "harmony" else None
-    assert seen == ["#song-1", True], seen
-    assert playing == ("Stop" if panel == "harmony" else None)  # the progression goes on
-
-
-
-
-def test_from_1200_px_a_progression_playing_from_the_rail_keeps_the_arrows_and_stopped_lets_them_go(tmp_path):
-    """The rail is no layer: with its Harmony tab shown, ← and → go from song to song, but not while a progression
-    plays from it (book.js busy(): #harmony[data-playing])."""
-    book = _songbook(tmp_path, [BookSong("One", "Synthetic", cho=PROG_SONG, id="aaaa"),
-                                BookSong("Two", "Synthetic", cho=IN_E, id="bbbb")])
-    with open_viewer(tmp_path, book + "#song-1", **DESKTOP) as b:
-        b.js(FAKE_SOUND)
-        harmony_tab(b)
-        b.js(PLAY)
-        b.js("document.querySelector('#harmony .prog-play').focus()")  # on ■, as a tap on ▶ leaves it
-        b.js("window.before = true")
-        key(b, "ArrowRight", 39)
-        time.sleep(0.5)
-        held = b.js(f"[location.hash.split('=')[0], window.before === true, {PLAYING},"
-                    " document.getElementById('harmony').hasAttribute('data-playing')]")
-        b.js(PLAY)  # ■
-        stopped = b.js("document.getElementById('harmony').hasAttribute('data-playing')")
-        key(b, "ArrowRight", 39)
-        assert b.wait("!window.before && document.documentElement?.dataset.ready === '1'")
-        moved = b.js("location.hash.split('=')[0]")
-    assert held == ["#song-1", True, "Stop", True]
-    assert stopped is False and moved == "#song-2"
 
 
 class _Tab:
