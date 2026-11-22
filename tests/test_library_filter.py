@@ -196,6 +196,18 @@ def test_a_click_outside_closes_the_popover(shelf, laptop):
     assert laptop.js(f"document.activeElement === {FILTER}")  # the click took the focus nowhere: back to Filter
 
 
+def test_on_a_short_window_the_popover_ends_above_its_foot_and_scrolls(shelf, tmp_path):
+    # It is the search bar's, which sticks: where it would pass the window's foot, it stops 8 px above it and scrolls.
+    with browser.Browser(tmp_path / "chrome-short", width=1280, height=420) as page:
+        page.open(shelf.as_uri())
+        page.click("#filter")
+        assert page.wait(f"{PANEL}.open")
+        box = page.js("(() => { const p = " + PANEL + ", r = p.getBoundingClientRect(); return { bottom: r.bottom, "
+                      "room: innerHeight, scrolls: p.scrollHeight > p.clientHeight, "
+                      "overflow: getComputedStyle(p).overflowY }; })()")
+        assert box["bottom"] <= box["room"] - 7.5 and box["scrolls"] and box["overflow"] == "auto", box
+
+
 def test_below_720px_filter_opens_a_bottom_sheet_with_show_n_songs(shelf, phone):
     phone.open(shelf.as_uri())
     phone.click("#filter")

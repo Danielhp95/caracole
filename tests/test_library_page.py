@@ -358,7 +358,8 @@ def test_building_the_served_page_loads_no_model_library(conn, cfg, tmp_path):
 
 def bar_of(html):
     found = re.search(r'<div class="searchbar"[^>]*>.*?<p class="bar-status"[^>]*></p>\s*</div>\s*'
-                      r'(?:<section class="recent".*?</section>\s*)?</div>', html, re.S)
+                      r'(?:<dialog class="filter-panel".*?</dialog>\s*)?(?:<section class="recent".*?</section>\s*)?'
+                      r'</div>', html, re.S)
     assert found, html[:3000]
     return found.group(0)
 
@@ -3805,7 +3806,9 @@ def test_on_a_desktop_filter_and_sort_are_one_line_and_review_shows_once_a_song_
     toolbar = re.search(r'<div class="toolbar">(.*?)<nav class="jump"', dom, re.S).group(1)
     bar = re.search(r'<div class="searchbar"[^>]*>(.*?)<section class="results"', dom, re.S).group(1)
     assert 'id="sort"' in bar and 'id="filter"' in bar and 'id="tools"' in bar  # beside the search
-    assert 'id="filter-panel"' in toolbar and 'id="sort"' not in toolbar and 'id="view' not in toolbar  # the panel, and the tags
+    # Filter's panel in the bar too, under Filter whatever the list or the sites' results do; the toolbar the tags alone.
+    assert 'id="filter-panel"' in bar and 'id="filter-panel"' not in toolbar
+    assert 'id="tags"' in toolbar and 'id="sort"' not in toolbar and 'id="view' not in toolbar
     assert len(noted(dom, "data-tops")) == 2
     assert max(noted(dom, "data-tops")) - min(noted(dom, "data-tops")) < 8  # one line: it all fits
 

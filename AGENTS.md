@@ -942,8 +942,17 @@ The pages caracole writes and serves are index.html, sheet.html, songbook.html a
   `instrumentBadges`: Ukulele for UG's Ukulele Chords, Harmonica for harptabs.com's tabs, Score for MuseScore's,
   Guitar, Bass… for gametabs.net's, as its game pages name them; a song's card's `instruments`, library_page.py
   `instruments_of`).
-  - No site's row is ever filtered by instrument: the Filter panel's Has something for (library.js `instOf`, a line's
-    holds read the same way) keeps to your songs, in the list and among the results.
+  - The Filter panel's Matches keep a site's songs too while the sites' results show, the owner's ask of 2026-11-22
+    ("search yoko kanno while looking only for harmonica songs"): a site's song by what its rows have something for
+    (library.js `rowHas`, `itemHas`: UG's chords, tabs or Ukulele Chords by its counts, LaCuerda's chords, iReal
+    Pro's chart, gtptabs.com's Guitar Pro file, gametabs.net's tab by its instruments, harptabs.com's harmonica tab,
+    MuseScore's score), a group's "+ N more" and read offers and a title alone by what its site has (`SITE_HAS`,
+    `siteKeeps`), your songs as in the list (`instOf`, a line's holds read the same way). Status, Key and a
+    progression keep to your songs alone: a site's song has no status and no key its index knows. The panel is the
+    search bar's (body.html), so it opens over the results, under Filter, and stays open as you tap; its chips and
+    its Show N songs count what the results show (`resultsHas`, `resultsShown`, drawGroups); the marks under the
+    box count the lines shown (`foundNow`); the results' head says what is kept, with Show all (`keptSaid`), and
+    what the Matches hide whole is said, with Show all (`filteredOut`; test_web_page_search_filters.py).
 - **harptabs.com is searched as UG's index is** (`search.search_harptabs`, `/api/search`'s `harptabs_artists` and
   `harptabs`):
   - its artists, named from their page once read (harptabs_index.py);
