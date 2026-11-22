@@ -7,12 +7,12 @@
 .actions form { margin: 0; }
 .subhead { margin: 2px 0 -2px; color: var(--muted); font-size: .75rem; font-weight: 650; letter-spacing: .06em;
   text-transform: uppercase; }
-.source { flex: none; display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: var(--radius-s);
-  vertical-align: -3px; }
+.source { flex: none; display: inline-grid; place-items: center; width: calc(16 * var(--sp)); height: calc(16 * var(--sp));
+  border-radius: var(--radius-s); vertical-align: calc(-3 * var(--sp)); }
 /* A site with no icon (yet), or no site: a badge a little bigger than an icon, so its letters read. */
-.source.letters, .source.glyph { width: 20px; height: 20px; border: 1px solid var(--border-strong);
+.source.letters, .source.glyph { width: calc(20 * var(--sp)); height: calc(20 * var(--sp)); border: 1px solid var(--border-strong);
   border-radius: var(--radius-s); background: var(--raised); color: var(--text); font-size: 10px; font-weight: 750;
-  letter-spacing: -.02em; line-height: 1; vertical-align: -5px; }
+  letter-spacing: -.02em; line-height: 1; vertical-align: calc(-5 * var(--sp)); }
 .source.glyph { font-size: 12px; font-weight: 600; }
 .btn.sourced { gap: 7px; }
 .btn.sourced .source { order: -1; }
@@ -89,8 +89,9 @@ button.artist:hover .artist-name { text-decoration: underline; text-underline-of
    and a site's song's marks (and its artist, where no group names it), a row a found song of yours has none of. From
    720px all of it on one row, every column but the title's as wide on every line (the action's as wide as it is,
    before the key), so that the keys and the chevrons line up. Its action is a word or a glyph in the accent's colour,
-   as a link of the list's own, so that a column of them reads quietly. */
-.line { --line-more: 30px; display: grid; grid-template-columns: minmax(0, 1fr) auto auto var(--line-more);
+   as a link of the list's own, so that a column of them reads quietly. Its buttons, its chevron, its marks and its
+   columns are in the text's pixels (base.css --sp), so they grow with its words. */
+.line { --line-more: calc(30 * var(--sp)); display: grid; grid-template-columns: minmax(0, 1fr) auto auto var(--line-more);
   grid-template-areas: "title act key more" "meta meta meta meta"; align-items: center; gap: 0 6px; min-width: 0;
   padding: 3px 4px 4px 12px; border-top: 1px solid var(--border); }
 .line:first-child { border-top: 0; }
@@ -103,7 +104,7 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
 /* A song of yours: its title opens its card, as its chevron does. */
 .line-title.opens-card { cursor: pointer; }
 /* Where a song's buttons sit on its line: the buttons' own rules are card.css's. */
-.line-title > .line-plays { flex: none; max-width: calc(100% - 4rem); }
+.line-title > .line-plays { flex: none; max-width: calc(100% - calc(64 * var(--sp))); }
 .line-meta { grid-area: meta; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0;
   color: var(--muted); font-size: .8rem; line-height: 1.3; }
 .line-meta:empty { display: none; }
@@ -120,41 +121,41 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
 .badge.instrument { color: var(--text); background: transparent; box-shadow: inset 0 0 0 1px var(--control-edge); }
 .line-facts { flex: 1 1 0; min-width: 3em; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 /* The key, plain muted bold text, centred in its column; where a site's song came from, its sites' marks. */
-.line-key { grid-area: key; justify-self: center; min-width: 2.25rem; color: var(--muted); font-size: .8rem;
+.line-key { grid-area: key; justify-self: center; min-width: calc(36 * var(--sp)); color: var(--muted); font-size: .8rem;
   font-weight: 700; line-height: 1.3; text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* Marks of sites, each a square of --mark, --mark-gap apart, drawn within it (an icon a pixel inside its edge, a dashed
    edge on it), so that a cell as wide as its marks shows each whole; one narrower wraps them, never cuts one: where a
    site's song is (``sources``), and in a song's card which sites have it (rows.js siteMarks), in its colours where it
    has the song, grey where it had nothing, fainter on a dashed edge where it wasn't asked yet. */
-.line, .card-sites { --mark: 16px; --mark-gap: 4px; }
+.line, .card-sites { --mark: calc(16 * var(--sp)); --mark-gap: calc(4 * var(--sp)); }
 .line-sites, .line-sources { display: flex; flex-wrap: wrap; align-items: center; gap: 2px var(--mark-gap);
   min-width: 0; }
 .line-sites .source, .line-sources .source { width: var(--mark); height: var(--mark); border-radius: var(--radius-s);
   font-size: 8px; vertical-align: 0; }
-.line-sites img.source, .line-sources img.source { padding: 1px; }
+.line-sites img.source, .line-sources img.source { padding: calc(1 * var(--sp)); }
 .line-sites .source[data-state="none"] { filter: grayscale(1); opacity: .45; }
 .line-sites .source[data-state="unasked"] { filter: grayscale(1); opacity: .3; }
 .line-sites span.source[data-state="unasked"] { border-style: dashed; border-color: var(--muted); }
 .line-sites img.source[data-state="unasked"] { outline: 1px dashed var(--muted); outline-offset: -1px; }
 .line-action { grid-area: act; justify-self: end; display: flex; min-width: 0; }
 .line-action form { margin: 0; }
-.line-action .btn { min-height: 28px; padding: 0 8px; border-color: transparent; border-radius: var(--radius-m);
+.line-action .btn { min-height: calc(28 * var(--sp)); padding: 0 8px; border-color: transparent; border-radius: var(--radius-m);
   background: transparent; color: var(--text); font-size: .85rem; font-weight: 650; white-space: nowrap; }
 .line-action .btn.primary { color: var(--accent); }
 .line-action .btn.line-pick { color: var(--review); }
 .line-action .btn:hover { border-color: var(--border); background: var(--raised); }
 .line-action .btn:disabled { border-color: var(--border); background: transparent; color: var(--muted); }
 /* Fetch now, Get it: the download glyph alone (rows.js fetchIcon), as wide as a play button. */
-.line-action .btn.line-fetch { width: 32px; min-height: 24px; padding: 0; }
-.line-fetch svg.glyph { width: 20px; height: 20px; }
-.line-busy { display: inline-flex; align-items: center; min-height: 28px; padding: 0 8px; color: var(--wanted);
+.line-action .btn.line-fetch { width: calc(32 * var(--sp)); min-height: calc(24 * var(--sp)); padding: 0; }
+.line-fetch svg.glyph { width: calc(20 * var(--sp)); height: calc(20 * var(--sp)); }
+.line-busy { display: inline-flex; align-items: center; min-height: calc(28 * var(--sp)); padding: 0 8px; color: var(--wanted);
   font-size: .85rem; font-weight: 650; text-underline-offset: 2px; }
 .line-more { grid-area: more; justify-self: end; display: grid; place-items: center; width: var(--line-more);
-  height: 28px; padding: 0; border: 1px solid transparent; border-radius: var(--radius-m); background: transparent;
+  height: calc(28 * var(--sp)); padding: 0; border: 1px solid transparent; border-radius: var(--radius-m); background: transparent;
   color: var(--muted); font: inherit; font-size: 1.1rem; line-height: 1; cursor: pointer; }
 .line-more:hover, .line-more[aria-expanded="true"] { border-color: var(--border); background: var(--raised);
   color: var(--text); }
-.line-more svg.glyph { width: 18px; height: 18px; }
+.line-more svg.glyph { width: calc(18 * var(--sp)); height: calc(18 * var(--sp)); }
 .line-more[aria-expanded="true"] svg.glyph { transform: rotate(180deg); }
 /* A request's line, a lookup's steps under it (steps.css's), and what its chevron holds: each across the whole line,
    under the rest. */
@@ -173,16 +174,16 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
    yours' does, before the key's column, empty. */
 @media (min-width: 720px) {
   .line { --sources-w: calc(5 * (var(--mark) + var(--mark-gap)) - var(--mark-gap));
-    grid-template-columns: minmax(0, 1fr) minmax(0, .6fr) 6.5rem auto 2.75rem var(--line-more);
+    grid-template-columns: minmax(0, 1fr) minmax(0, .6fr) calc(104 * var(--sp)) auto calc(44 * var(--sp)) var(--line-more);
     grid-template-areas: "title by status act key more"; padding: 0 4px 0 12px; }
-  .line.hit { grid-template-columns: minmax(0, 1fr) minmax(0, .6fr) calc(16.5rem - var(--sources-w)) var(--sources-w)
-    4.5rem 2.75rem var(--line-more); grid-template-areas: "title by status src act key more"; }
+  .line.hit { grid-template-columns: minmax(0, 1fr) minmax(0, .6fr) calc(264 * var(--sp) - var(--sources-w))
+    var(--sources-w) calc(72 * var(--sp)) calc(44 * var(--sp)) var(--line-more); grid-template-areas: "title by status src act key more"; }
   .line-meta { display: contents; }
   .line-by { grid-area: by; justify-self: start; max-width: 100%; }
   .line-status { grid-area: status; }
   .line-sources { grid-area: src; }
-  .line-action .btn, .line-busy { min-height: 24px; }
-  .line-more { height: 24px; }
+  .line-action .btn, .line-busy { min-height: calc(24 * var(--sp)); }
+  .line-more { height: calc(24 * var(--sp)); }
 }
 @media (prefers-reduced-motion: no-preference) {
   .line-more svg.glyph { transition: transform .15s; }
@@ -193,12 +194,13 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
   .row { --row-more: 44px; padding-top: 4px; padding-bottom: 4px; }
   .row .btn { min-height: 44px; }
   .row-more { height: 44px; }
-  .line { --line-more: 44px; padding-top: 0; padding-bottom: 0; }
-  .line-action .btn, .line-busy { min-height: 44px; }
-  .line-action .btn.line-fetch { width: 44px; min-height: 44px; }
-  .line-more { height: 44px; }
-  button.artist { min-width: 44px; min-height: 44px; }
-  .on-ug { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; }
+  .line { --line-more: calc(44 * var(--sp)); padding-top: 0; padding-bottom: 0; }
+  .line-action .btn, .line-busy { min-height: calc(44 * var(--sp)); }
+  .line-action .btn.line-fetch { width: calc(44 * var(--sp)); min-height: calc(44 * var(--sp)); }
+  .line-more { height: calc(44 * var(--sp)); }
+  button.artist { min-width: calc(44 * var(--sp)); min-height: calc(44 * var(--sp)); }
+  .on-ug { display: inline-flex; align-items: center; justify-content: center; min-width: calc(44 * var(--sp));
+    min-height: calc(44 * var(--sp)); }
 }
 /* Under a search box, what each site found (rows.js countMarks): your songs first, by the page's logo, then a pill a
    site that found something, its own mark (an icon in its colours, else its letters), its name in full from 720 px
@@ -216,19 +218,20 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
 .counts-row.counted > .counts ~ * { position: absolute; width: 1px; height: 1px; min-height: 0;
   margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .counts-row.counted:has(> .counts[hidden]) { min-height: 0; margin: 0; }
-.count-mark { display: inline-flex; flex: none; align-items: center; gap: 4px; height: 22px; padding: 0 6px 0 3px;
+.count-mark { display: inline-flex; flex: none; align-items: center; gap: calc(4 * var(--sp)); height: calc(22 * var(--sp));
+  padding: 0 calc(6 * var(--sp)) 0 calc(3 * var(--sp));
   border-radius: var(--radius-s); background: var(--raised); color: var(--text); font-size: .8rem; font-weight: 700;
   line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; cursor: default; }
-.count-mark .source { width: 16px; height: 16px; vertical-align: 0; }
-.count-mark .source.letters { width: auto; min-width: 18px; height: 16px; padding: 0 2px; border-radius: var(--radius-s);
-  font-size: 9px; }
-.count-mark .yours-mark { flex: none; width: auto; height: 15px; color: var(--text); }
-.count-mark svg.glyph { flex: none; width: 12px; height: 12px; stroke-width: 2.6; }
+.count-mark .source { width: calc(16 * var(--sp)); height: calc(16 * var(--sp)); vertical-align: 0; }
+.count-mark .source.letters { width: auto; min-width: calc(18 * var(--sp)); height: calc(16 * var(--sp)); padding: 0 calc(2 * var(--sp));
+  border-radius: var(--radius-s); font-size: 9px; }
+.count-mark .yours-mark { flex: none; width: auto; height: calc(15 * var(--sp)); color: var(--text); }
+.count-mark svg.glyph { flex: none; width: calc(12 * var(--sp)); height: calc(12 * var(--sp)); stroke-width: 2.6; }
 .count-name { display: none; font-weight: 600; }
 @media (min-width: 720px) {
   .counts:not(.short) .count-name { display: inline; }
 }
-.count-mark.rest { padding: 0 7px; }
+.count-mark.rest { padding: 0 calc(7 * var(--sp)); }
 .count-mark[data-n="0"] { background: transparent; color: var(--muted); font-weight: 600;
   box-shadow: inset 0 0 0 1px var(--border); }
 .count-mark[data-n="0"] .yours-mark { filter: grayscale(1); opacity: .6; }
