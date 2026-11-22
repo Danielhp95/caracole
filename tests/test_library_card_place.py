@@ -768,11 +768,12 @@ def _six(conn, cfg, artist, title):
 @pytest.mark.parametrize("size", ["1280,900", "1200,900"])
 @pytest.mark.parametrize("selecting", [False, True])
 def test_on_a_laptop_chips_wrap_under_the_title_and_never_push_the_key_off(conn, cfg, tmp_path, size, selecting):
-    # Beside the pane a folded line reads on one row as under 1200 px (its title, its artist right after it, its play
-    # buttons and its key, at its end) while its buttons fit there, as Hotel California's five icon tiles do; where
+    # Beside the pane a folded line reads on one row as under 1200 px (its title, its artist right after it, then its
+    # play buttons and its key, at its end) while its buttons fit there, as Hotel California's five icon tiles do; where
     # they don't (Suite: Judy Blue Eyes's six, beside Crosby, Stills, Nash & Young's long name), they go on a row of
-    # their own under its title, and the first row keeps the title, its artist right after it and the key. None pushes
-    # the key off the line, and the title keeps its room; selecting too, after the line's box.
+    # their own under its title, at its end, left of the key's column, and the first row keeps the title, its artist
+    # right after it and the key. None pushes the key off the line, and the title keeps its room; selecting too, after
+    # the line's box.
     from test_library_bands import keyed
 
     hotel(conn, cfg)
@@ -799,6 +800,9 @@ def test_on_a_laptop_chips_wrap_under_the_title_and_never_push_the_key_off(conn,
             # The key at the line's end, where the chevron was: its padding after it, and the room its 36 px leave in
             # its 44 px column (centred).
             assert line["line"][1] - line["key"][1] <= line["pad"] + 4.5, (line, whole)
+        # Every line's buttons end beside its key's column (the owner's ask of 2026-11-22: right-aligned).
+        for line in lines:
+            assert 0 <= line["key"][0] - line["plays"][2] <= 16.5, line
         # Yesterday and Hotel California, folded (The Beatles and the Eagles have one song each): one row, its title,
         # its artist, its buttons, then its key.
         for line in (yesterday, hotel_line):
@@ -806,12 +810,12 @@ def test_on_a_laptop_chips_wrap_under_the_title_and_never_push_the_key_off(conn,
             assert by and h3[1] <= by[0] + 0.5 and h3[2] <= by[2] <= h3[3], line
             assert by[1] <= plays[0] + 0.5 and plays[1] < h3[3] and plays[2] <= line["key"][0], line
         # Suite: Judy Blue Eyes, folded, six buttons that don't fit beside it: its title, its artist right after it and
-        # its key on the first row, the buttons under the title.
+        # its key on the first row, the buttons under them, at the line's end.
         h3, by, plays = suite["h3"], suite["by"], suite["plays"]
         assert by and h3[1] <= by[0] + 0.5 and h3[2] <= by[2] <= h3[3], suite
         assert suite["key"][2] < h3[3], suite
-        assert plays[1] >= h3[3] - 1 and abs(plays[0] - h3[0]) <= 1, suite
-        # In Radiohead's band: the title, then its button beside it.
+        assert plays[1] >= h3[3] - 1 and plays[0] > h3[0] + 1, suite
+        # In Radiohead's band: the title, then its button on its row.
         assert creep["plays"][0] >= creep["h3"][1] and creep["plays"][1] < creep["h3"][3], creep
         assert whole["page"][0] <= whole["page"][1], whole
     finally:
@@ -819,9 +823,9 @@ def test_on_a_laptop_chips_wrap_under_the_title_and_never_push_the_key_off(conn,
 
 
 def test_on_a_laptop_a_bands_line_puts_its_buttons_under_its_title_where_they_dont_fit(conn, cfg, tmp_path):
-    # In a band, a line's buttons sit beside its title where they fit (Hotel California's five icon tiles, Desperado's
-    # one) and go under it where they don't (six beside one of Panic! at the Disco's longest titles), the title whole
-    # and every button inside its line either way.
+    # In a band, a line's buttons sit on its title's row where they fit (Hotel California's five icon tiles,
+    # Desperado's one) and go under it where they don't (six beside one of Panic! at the Disco's longest titles), the
+    # title whole, every button inside its line and at its end, left of the key, either way (library.js placePlays).
     hotel(conn, cfg)
     for title in ("Desperado", "Take It Easy"):
         song = add_song(conn, "Eagles", title)
@@ -843,6 +847,9 @@ def test_on_a_laptop_a_bands_line_puts_its_buttons_under_its_title_where_they_do
             for line in (hotel_line, desperado):  # beside it
                 assert line["plays"][0] >= line["h3"][1] and line["plays"][1] < line["h3"][3], line
             assert long_line["inside"] and hotel_line["inside"] and desperado["inside"], at
+            assert all(0 <= line["key"][0] - line["plays"][2] <= 16.5 for line in (long_line, hotel_line, desperado)
+                       if line["key"]), at
+            assert long_line["plays"][2] >= hotel_line["plays"][2] - 0.5, at  # the same end, under the title too
             assert all(line["line"][1] <= at[""]["list"][1] + 0.5 for line in (long_line, hotel_line, desperado)), at
             assert not long_line["cut"] and not hotel_line["cut"] and at[""]["page"][0] <= at[""]["page"][1], at
         finally:

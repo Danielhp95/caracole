@@ -1728,36 +1728,43 @@
   const keepSelected = () => {
     if (selected && !selected.checkVisibility()) unselect();
   };
-  // From 1200 px a folded or flat line's buttons stay on its row while they fit beside its title and its artist, and
-  // go on a row of their own under the title where they don't (``plays-under``, library.css): measured in the one row,
-  // where they wrap (the last below the first), once a line, and again once the list's width, Select, or the line
-  // itself (refill, an action gone) changes; a line hidden is measured once it shows, and a line of a run off the
-  // screen (render's runs, which content-visibility leaves unlaid) once its run comes near it, never by laying the
-  // run out to read it. Under 1200 px, none.
-  const placedAt = new WeakMap();  // a line -> the list's width, the text's size and Select its buttons were placed at
-  const unplace = (line) => {  // placed again when it is a folded or flat line beside the pane next
+  // From 1200 px a line's buttons stay on its row while they fit beside its title (and its artist), and go on a row of
+  // their own under it where they don't (``plays-under``, library.css), at its end either way: measured in the one
+  // row, where a folded or flat line's wrap (the last below the first) and a band's line's cut its title short (their
+  // column takes what they need first), once a line, and again once the list's width, Select, the line itself (refill,
+  // an action gone) or its kind (its artist's band folded or unfolded) changes; a line hidden is measured once it
+  // shows, and a line of a run off the screen (render's runs, which content-visibility leaves unlaid) once its run
+  // comes near it, never by laying the run out to read it. Under 1200 px, none.
+  const placedAt = new WeakMap();  // a line -> the list's width, the text's size, Select and its kind it was placed at
+  const unplace = (line) => {  // placed again when it is a line of the list beside the pane next
     line.classList.remove("plays-under");
     placedAt.delete(line);
   };
   let playsFrame = 0;
-  const PLACED = "section.artist.folded .line, section.flat .line";
+  const PLACED = "section.artist .line, section.flat .line";
+  const inBand = (line) => Boolean(line.closest("section.artist:not(.folded)"));
   const placeable = (line) => !line.matches(".hit, .miss") && line.querySelector(":scope > .line-title > .line-plays");
-  // ``lines`` (folded or flat lines, placeable) placed where they are laid out, or in ``shown`` (runs on the screen),
-  // and weren't at this width, text and Select.
+  // ``lines`` (placeable) placed where they are laid out, or in ``shown`` (runs on the screen), and weren't at this
+  // width, text, Select and kind.
   const placeLines = (lines, shown) => {
     const main = libraryView.querySelector(".lib-main");
     const at = [main ? main.clientWidth : 0, getComputedStyle(document.documentElement).fontSize,
       document.body.classList.contains("selecting")].join(" ");
-    const todo = lines.filter((line) => placedAt.get(line) !== at
+    const kind = (line) => at + (inBand(line) ? " band" : "");
+    const todo = lines.filter((line) => placedAt.get(line) !== kind(line)
       && (line.checkVisibility({ contentVisibilityAuto: true })
         || Boolean(shown && line.checkVisibility() && shown.has(line.closest(".cv")))));
     for (const line of todo) line.classList.remove("plays-under");
     const wraps = todo.filter((line) => {
+      if (inBand(line)) {
+        const title = line.querySelector(":scope > .line-title > h3");
+        return Boolean(title) && title.scrollWidth > title.clientWidth;
+      }
       const chips = line.querySelectorAll(":scope > .line-title > .line-plays > .play");
       return chips.length > 1 && chips[chips.length - 1].getBoundingClientRect().top
         > chips[0].getBoundingClientRect().top + 1;
     });
-    for (const line of todo) placedAt.set(line, at);
+    for (const line of todo) placedAt.set(line, kind(line));
     for (const line of wraps) line.classList.add("plays-under");
   };
   const placePlays = () => {
@@ -1769,7 +1776,7 @@
       return;
     }
     const lines = new Set(Array.from(libraryView.querySelectorAll(PLACED)).filter(placeable));
-    for (const line of under) if (!lines.has(line)) unplace(line);  // a band's line now
+    for (const line of under) if (!lines.has(line)) unplace(line);  // a site's line now, or none of the list's
     // A list just drawn has its runs laid out only as the next frame is made, so the lines that frame shows would be
     // placed a frame after it: the runs whose own box is on the screen (read without laying out what they hold) are
     // laid out now for their lines, as they would be in this frame anyway; never one off the screen.

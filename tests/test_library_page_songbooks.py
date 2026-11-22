@@ -494,7 +494,8 @@ def test_the_select_bars_style_leaves_a_reviews_picker_as_it_is(library, tmp_pat
 
 
 # Each line's controls that show, but for its box; and what a tap at the middle of its title, its status and its
-# title's box lands on (a folded line's overline, on a phone, where its title's box is the line's grid: library.css).
+# title's box lands on (a folded line's overline, where its title's box is the line's grid, and the line itself where
+# a band's line's is, from 720 px: library.css).
 LINE_TARGETS = """
   const landsOn = (line, n) => {
     if (!n) return null;
@@ -503,8 +504,9 @@ LINE_TARGETS = """
     const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
     return hit === line ? "line" : hit ? hit.className || hit.tagName : null;
   };
-  const boxOf = (line) => (line.querySelector(".line-title").getClientRects().length ? line.querySelector(".line-title")
-    : line.querySelector(".line-by"));
+  const shows = (n) => Boolean(n && n.getClientRects().length);
+  const boxOf = (line) => (shows(line.querySelector(".line-title")) ? line.querySelector(".line-title")
+    : shows(line.querySelector(".line-by")) ? line.querySelector(".line-by") : line);
   const targets = (line) => ({
     controls: qa("a, button, summary, select, input").filter((n) => line.contains(n) && !n.closest(".pick")
       && n.checkVisibility()).map((n) => n.className),
