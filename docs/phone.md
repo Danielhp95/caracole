@@ -1,91 +1,73 @@
-# caracole on Android
+# The Android app
 
-The app keeps a copy of your library on your phone, so it works with the computer off.
-The computer does the nightly work. The phone reads, searches, fetches a song when you ask, and syncs with it.
+The app keeps a copy of your library on the phone, so you can read and play with the computer
+off. It syncs with the computer when you ask, or by itself on Wi-Fi.
 
 <p>
-  <img src="screenshots/phone-library.png" width="260" alt="The library page on a phone">
-  <img src="screenshots/phone-chord.png" width="260" alt="A sheet on a phone, with a chord's card at the foot: its shape, its notes and a scale to solo in">
+  <img src="screenshots/phone-library.png" width="260" alt="The library on a phone">
+  <img src="screenshots/phone-chord.png" width="260" alt="A sheet on a phone, with a chord's card open">
 </p>
 
-## Install
+## Install and connect
 
-- In F-Droid, go to Settings › Repositories › **+**, and scan or paste `https://danielhp95.github.io/caracole/fdroid/repo?fingerprint=B34AD39AD80D6CE828F0885C68FD81816230BB3CB482C9E7BCC6DAD844500397`.
-- Then install caracole from F-Droid's list. Or build it yourself: [android/README.md](../android/README.md#build).
-- To switch between F-Droid's app and your own build, you must uninstall first, which deletes the phone's library. Sync first.
-
-## Connect it to your computer
-
-- On the computer, run `caracole serve --address 0.0.0.0` ([caracole serve](usage.md#caracole-serve)). It has no sign-in: use it only on a network you trust.
-- On the phone, Settings opens at the first start. Type the computer's address, such as `http://192.168.1.20:8737`.
-- Tap **Test**. It says how many songs and songbooks the computer has, or what went wrong.
-- Then tap the sync button in the bar.
+1. In F-Droid, go to Settings › Repositories › **+** and add
+   `https://danielhp95.github.io/caracole/fdroid/repo?fingerprint=B34AD39AD80D6CE828F0885C68FD81816230BB3CB482C9E7BCC6DAD844500397`.
+   Install caracole from there. (Or [build it yourself](../android/README.md#build).)
+2. On the computer, run `caracole serve --address 0.0.0.0`. It has no sign-in, so do this only
+   on a network you trust.
+3. In the app's Settings, type the computer's address, for example `http://192.168.1.20:8737`,
+   and tap **Test**.
+4. Tap the sync button in the top bar.
 
 ## Sync
 
-- The sync button (two circular arrows) compares the phone and the computer. Each takes what the other changed.
-- You choose what to sync: **Library**, **Songbooks** and **Site indexes**.
-- A song changed on both sides gets a card. You choose **Phone** or **Computer**. **Cancel** takes and gives nothing.
-- Before it takes anything, the phone backs up its library.
-- **Sync on Wi-Fi** (Settings) syncs by itself every 6 hours on an unmetered network. It leaves conflicts for you, with a notification.
-- If the two can't reach each other, Settings › **Export** makes a `.caracole` file, and **Import a file** syncs with one. An import sends nothing back.
-- Details: [Sync from the phone](../android/README.md#sync-from-the-phone) and [the Share tab](usage.md#the-share-tab).
+The sync button compares the two libraries, and each side takes what the other changed. You
+choose what to include: your songs, your songbooks, and the site catalogues that search needs.
+If a song changed on both sides, you pick which one to keep. The phone backs up its library
+before it takes anything.
 
-## Offline
+**Sync on Wi-Fi**, in Settings, does this every 6 hours. It leaves conflicts for you and sends a
+notification.
 
-- The library page, with its filters and search over your songs.
-- Every sheet: transpose, capo, mode, chord diagrams, harmony, pinyin and strumming.
-- Kept versions, harmonica tabs and songbooks. The computer's PDFs open in another app.
-- Making a songbook, printing and backups need no network. Fetching songs and syncing do.
+If the phone can't reach the computer, **Export** in Settings writes the library to a
+`.caracole` file and **Import a file** reads one. Two computers sync the same way, with
+[`caracole peer`](usage.md#two-caracoles-the-phones-and-the-computers).
 
-## Search and Fetch
+## What works on the phone
 
-- The computer builds the site indexes. The phone never does: a sync brings them (**Site indexes**).
-- Once they are synced, search finds songs on Ultimate Guitar, LaCuerda, gtptabs.com, MuseScore, harptabs.com and gametabs.net, offline.
-- **Fetch** looks a song up now, from the phone itself, at the pace of a lookup on the computer. Mobile data works too.
-- The phone then makes the song's pages itself, without a PDF.
-- A song you add without Fetch is fetched by the computer's nightly run, after a sync.
-- If caracole isn't sure which song it found, you pick the match on the phone.
+- Reading, offline: sheets with all their tools, kept versions, harmonica tabs, Guitar Pro files
+  and songbooks.
+- Search across your songs and the sites, offline, once a sync has brought the catalogues.
+- **Fetch**: the phone looks a song up itself, over Wi-Fi or mobile data.
+- Making and editing songbooks, and choosing a sheet's version.
+- **Export PDF** opens Android's print dialog, to print or save as PDF.
+- Sharing to caracole from another app: a song from Spotify, Apple Music, TIDAL, YouTube, Deezer
+  or Shazam to look it up, or a Guitar Pro file or score to file under its song.
+- Backups, daily and before each sync (Settings › Backups).
+- Pinch to change the text size.
 
-## Songbooks, versions and Guitar Pro
+## What stays on the computer
 
-- Make and change songbooks. The phone makes each songbook's page; the songbook's PDF is the computer's.
-- Choose a sheet's version, or how a harmonica tab is read.
-- Guitar Pro files are drawn as score and tab and played, with each track shown or muted.
-- **Export PDF** opens Android's print dialog, so you can print the sheet in your key or **Save as PDF**.
-- Details: [Songbooks, versions and printing](../android/README.md#songbooks-versions-and-printing).
-
-## Share to caracole
-
-- In a music app (Spotify, Apple Music, TIDAL, YouTube, Deezer, Shazam and more), tap **Share**, then **caracole**.
-- caracole shows the song it found, with **Fetch**, **Open** and **Edit**. Nothing goes to a tab site before you tap Fetch.
-- Share a Guitar Pro file or a score to caracole, and it is filed under the song its name is of. A file with no song yet waits up to 30 days.
-- Details: [a song](../android/README.md#sharing-a-song-from-a-music-app), [a file](../android/README.md#sharing-files-to-caracole).
-
-## Backups, alerts and more
-
-- Settings › Backups: **Back up now**, **Export…** (a `.zip`) and **Restore…**. A backup is also made each day, and before a sync takes anything.
-- You get a notification when a site blocks a lookup, or when a request fails while the app is in the background.
-- Pinch any page to change its text size, from 50% to 250%. **Reset** in Settings sets it back.
-- While the app opens, its steps show under the logo. After an update, "Updating your library…" can take a minute.
-
-## Computer and phone
+The nightly run, building the site catalogues, chords from audio, YouTube, PDF files and iReal
+Pro charts. A song you add on the phone without fetching it is picked up by the computer's next
+nightly run, after a sync.
 
 | | Computer | Phone |
 |---|---|---|
 | Nightly run over your song list | Yes | No |
-| Build the site indexes | Yes | No, gets them by sync |
-| Search your songs and the sites, offline | Yes | Yes, once synced |
-| iReal Pro charts | Yes | No |
+| Build the site catalogues | Yes | No, gets them by sync |
+| Search, offline | Yes | Yes, once synced |
 | Fetch one song now | Yes | Yes |
 | Sheets, songbooks, versions, Guitar Pro | Yes | Yes |
-| PDFs | Yes | No, print or Save as PDF |
+| PDF files | Yes | No, prints instead |
 | Chords from audio, YouTube | Optional | No |
-| Music/ and `_inbox/` folders | Yes | No, share files instead |
+| iReal Pro charts | Yes | No |
+| Watch your `Music/` and `_inbox/` folders | Yes | No, share files to the app |
 | Share from another app | No | Yes |
-| Library page for other devices | Yes, `caracole serve` | No, this app only |
-| Settings (caracole.toml) | Yes | Takes the computer's at each sync |
-| Sync | Answers the phone | Starts it, or every 6 hours on Wi-Fi |
+| Web page for other devices | Yes, `caracole serve` | No |
 | Backups | Yes | Yes |
 | Alerts | ntfy | Android notifications |
-| Request limits and cooldowns | Its own | Its own |
+| Request limits per site | Its own | Its own |
+
+More: [syncing from the phone](../android/README.md#sync-from-the-phone),
+[sharing a song](../android/README.md#sharing-a-song-from-a-music-app).
