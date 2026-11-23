@@ -331,14 +331,14 @@ def test_a_long_cards_head_sticks_under_the_bar_and_closes_it(conn, cfg, tmp_pat
 
 
 def test_at_320_px_no_head_lies_over_the_lines_buttons_still_showing(conn, cfg, tmp_path):
-    # At 320 px Hotel California's buttons stand in a column beside its title: its row's upper half under the bar,
+    # At 320 px Hotel California's buttons stand in rows beside its title: its row's upper half under the bar,
     # those buttons still show under it, and no head lies over them; a tap there is the button's. Once the card's top
     # is under the bar too, the head shows.
     url, song = _long_card(conn, cfg)
     b = _phone(tmp_path, url, song, size={"width": 320, "height": 640, "mobile": True})
     try:
         _open_long(b)
-        b.js("rowAt(() => bar().bottom - 30)")
+        b.js("rowAt(() => bar().bottom)")  # its first row of buttons under the bar, its second showing
         play = ("[...line.querySelectorAll('.line-plays > .play')].find((p) => "
                 "p.getBoundingClientRect().top > bar().bottom + 2)")
         assert b.js(f"Boolean({play})"), b.js("geometry()")  # a button of the line's still on the screen
@@ -770,14 +770,14 @@ def _six(conn, cfg, artist, title):
 def test_on_a_laptop_chips_wrap_under_the_title_and_never_push_the_key_off(conn, cfg, tmp_path, size, selecting):
     # Beside the pane a folded line reads on one row as under 1200 px (its title, its artist right after it, then its
     # play buttons and its key, at its end) while its buttons fit there, as Hotel California's five icon tiles do; where
-    # they don't (Suite: Judy Blue Eyes's six, beside Crosby, Stills, Nash & Young's long name), they go on a row of
+    # they don't (Suite: Judy Blue Eyes, Live's six, beside Crosby, Stills, Nash & Young's long name), they go on a row of
     # their own under its title, at its end, left of the key's column, and the first row keeps the title, its artist
     # right after it and the key. None pushes the key off the line, and the title keeps its room; selecting too, after
     # the line's box.
     from test_library_bands import keyed
 
     hotel(conn, cfg)
-    _six(conn, cfg, "Crosby, Stills, Nash & Young", "Suite: Judy Blue Eyes")
+    _six(conn, cfg, "Crosby, Stills, Nash & Young", "Suite: Judy Blue Eyes, Live")
     keyed(conn, cfg, "The Beatles", "Yesterday")
     for title in ("Creep", "Karma Police"):
         keyed(conn, cfg, "Radiohead", title)
@@ -788,7 +788,7 @@ def test_on_a_laptop_chips_wrap_under_the_title_and_never_push_the_key_off(conn,
             b.js("document.dispatchEvent(new CustomEvent('caracole:new-songbook'))")
             assert b.wait("document.querySelectorAll('#list .line > .pick').length === 5")
         at = b.js(PARTS)
-        hotel_line, suite, yesterday, creep = (at["Hotel California"], at["Suite: Judy Blue Eyes"], at["Yesterday"],
+        hotel_line, suite, yesterday, creep = (at["Hotel California"], at["Suite: Judy Blue Eyes, Live"], at["Yesterday"],
                                                at["Creep"])
         whole = at[""]
         assert hotel_line["n"] == 5 and suite["n"] == 6 and yesterday["n"] == 1 and creep["n"] == 1, at
@@ -809,7 +809,7 @@ def test_on_a_laptop_chips_wrap_under_the_title_and_never_push_the_key_off(conn,
             h3, by, plays = line["h3"], line["by"], line["plays"]
             assert by and h3[1] <= by[0] + 0.5 and h3[2] <= by[2] <= h3[3], line
             assert by[1] <= plays[0] + 0.5 and plays[1] < h3[3] and plays[2] <= line["key"][0], line
-        # Suite: Judy Blue Eyes, folded, six buttons that don't fit beside it: its title, its artist right after it and
+        # Suite: Judy Blue Eyes, Live, folded, six buttons that don't fit beside it: its title, its artist right after it and
         # its key on the first row, the buttons under them, at the line's end.
         h3, by, plays = suite["h3"], suite["by"], suite["plays"]
         assert by and h3[1] <= by[0] + 0.5 and h3[2] <= by[2] <= h3[3], suite
@@ -955,18 +955,18 @@ def test_a_selected_line_keeps_its_buttons_shape_and_its_words_contrast(conn, cf
 
 
 def test_a_folded_lines_buttons_are_placed_again_whatever_it_was_meanwhile(conn, cfg, tmp_path):
-    # Suite: Judy Blue Eyes's six buttons don't fit beside it and its artist's long name: under its title whenever it
+    # Suite: Judy Blue Eyes, Live's six buttons don't fit beside it and its artist's long name: under its title whenever it
     # is a folded or flat line beside the pane, after it was a band's line meanwhile (a search that folds Crosby,
     # Stills, Nash & Young into it, then none; the list sorted by title, by artist, by title) or the window narrower.
     artist = "Crosby, Stills, Nash & Young"
-    _six(conn, cfg, artist, "Suite: Judy Blue Eyes")
+    _six(conn, cfg, artist, "Suite: Judy Blue Eyes, Live")
     for title in ("Helplessly Hoping", "Teach Your Children"):
         song = add_song(conn, artist, title)
         put(cfg, song, "sheet.html")
         update_song(conn, song.id, status="found")
     b = _opened(tmp_path, write_library_page(cfg.library_dir, page(conn, cfg)).as_uri())
-    under = "lineOf('Suite: Judy Blue Eyes').classList.contains('plays-under')"
-    kind = "[...lineOf('Suite: Judy Blue Eyes').closest('section').classList].filter((c) => c !== 'cv').join(' ')"
+    under = "lineOf('Suite: Judy Blue Eyes, Live').classList.contains('plays-under')"
+    kind = "[...lineOf('Suite: Judy Blue Eyes, Live').closest('section').classList].filter((c) => c !== 'cv').join(' ')"
     lines = "document.querySelectorAll('#list article.line').length"
     try:
         assert b.js(f"[{kind}, {under}]") == ["artist", False]  # a band's line: beside its title, else under it

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- caracole's logo while the app opens (activity_main's loading, MainActivity.loaded): the launcher icon's foreground on
+     its white, a circle within the 72 dp an adaptive icon keeps, so it reads on the light and the dark background alike. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:left="18dp" android:top="18dp" android:right="18dp" android:bottom="18dp">
+        <shape android:shape="oval">
+            <solid android:color="@color/ic_launcher_background" />
+        </shape>
+    </item>
+    <item android:drawable="@drawable/ic_launcher_foreground" />
+</layer-list>

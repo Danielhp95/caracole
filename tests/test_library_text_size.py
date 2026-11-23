@@ -71,14 +71,14 @@ def songs(conn, cfg):
 def test_at_twice_the_text_a_songs_buttons_row_band_and_tiles_are_twice_as_big(conn, cfg, tmp_path):
     songs(conn, cfg)
     own, twice = attribute_of(run(conn, cfg, tmp_path, SIZES, touch=True), "data-sizes")
-    # At the pages' own size, a thumb's: the play tile 48 px, a line's row 44 (as tall as its chevron made it), the
+    # At the pages' own size, a thumb's: the play tile 43 px (a tenth under 48, its target 45.6), a line's row 44 (as tall as its chevron made it), the
     # band 34, Filter 44 tall; the card's tile's icon 38 and chevron 44, its gaps 8 and 10 (the laptop's pane, 400 px
     # and more).
-    assert own == {"lh": "16px", "play": [48, 48], "row": 44, "band": 34, "filter": 44,
+    assert own == {"lh": "16px", "play": [43, 43], "row": 44, "band": 34, "filter": 44,
                    "ico": [38, 38], "chevron": [44, 44], "gaps": ["8px", "10px"]}, own
     # Twice the text: each twice as big, on a window that has the room; the card, under 300 of the text's pixels now,
     # takes a narrow card's gaps.
-    assert twice == {"lh": "32px", "play": [96, 96], "row": 88, "band": 68, "filter": 88,
+    assert twice == {"lh": "32px", "play": [86, 86], "row": 88, "band": 68, "filter": 88,
                      "ico": [76, 76], "chevron": [88, 88], "gaps": ["12px", "16px"]}, twice
 
 
@@ -118,7 +118,7 @@ def test_past_the_rooms_size_a_line_stays_one_row_on_a_phone_its_key_on_the_scre
     note("lines", { byArtist, byTitle, opened, wide: document.documentElement.scrollWidth <= innerWidth });"""
     drawn = attribute_of(run(conn, cfg, tmp_path, script, controls=SERVED, size=f"{width},800", touch=True),
                          "data-lines")
-    room = round(48 * (width - 82) / 148)  # a tile at the most the room gives
+    room = round(43.2 * (width - 82) / 152)  # a tile at the most the room gives
     for by in ("byArtist", "byTitle"):
         assert sorted(line["title"] for line in drawn[by]) == ["Creep", "Hotel California", "Hysteria", "Take It Easy"]
         assert [line for line in drawn[by] if not (line["fits"] and line["within"])] == [], by

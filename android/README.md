@@ -139,7 +139,7 @@ sends, so the viewers run sandboxed as they do there.
 Pinch any page to change its text size: fingers apart make the text larger, fingers together make it smaller. The
 size goes from 50% to 250%, in steps of 5%, where 100% is the size Android's own font size setting gives the pages.
 The text grows or shrinks, and on the library page so do a song's buttons, its line's height, its card's tiles,
-an artist's band and the search bar's buttons, until a song's line fills the screen's width (about 225% on a phone
+an artist's band and the search bar's buttons, until a song's line fills the screen's width (about 215% on a phone
 412 dp wide): from there the text grows on, each title cut shorter, and the line stays one row with its key on the
 screen. The page reflows to the screen's width, so it never zooms as a picture and never scrolls sideways. The size holds for every page and across restarts. Settings shows it ("Text size: 120%"), and
 **Reset** sets it back to 100%. A sheet's own **Aa** still works, and the two multiply.

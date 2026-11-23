@@ -2609,8 +2609,9 @@ def test_on_a_phone_files_open_with_a_tap_the_title_opens_the_card_and_tab_goes_
         # A thumb's target: the line's row, which opens its card, each button on the line, and each file once the card
         # is open.
         assert phone.js(f"{q}.getBoundingClientRect().height") >= 44
-        assert phone.js(f"Math.min(...Array.from({q}.querySelectorAll('.line-plays a')).map((a) => "
-                        "Math.min(a.getBoundingClientRect().width, a.getBoundingClientRect().height)))") >= 44
+        assert phone.js(f"Math.min(...Array.from({q}.querySelectorAll('.line-plays a')).map((a) => "  # its ::after's reach too
+                        "Math.min(a.getBoundingClientRect().width, a.getBoundingClientRect().height) "
+                        "- 2 * parseFloat(getComputedStyle(a, '::after').top)))") >= 44
         cards.press_at(phone, cards.blank_point(phone, line))  # its blank space opens the card
         cards.install(phone)
         card = f"document.querySelector('#' + cardOf({q}).id)"

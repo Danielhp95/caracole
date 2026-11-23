@@ -62,6 +62,7 @@ class MainActivity : Activity() {
     private lateinit var web: WebView
     private lateinit var status: TextView
     private lateinit var title: TextView
+    private lateinit var loading: View
     /** Where links go, once the server has started (the WebView's client reads it on its own threads). */
     @Volatile private var links: Links? = null
     /** The server's files read in this process, once it has started (the WebView's client reads it on its own
@@ -100,6 +101,8 @@ class MainActivity : Activity() {
         web = findViewById(R.id.web)
         status = findViewById(R.id.status)
         title = findViewById(R.id.title)
+        loading = findViewById(R.id.loading)
+        screen.launch { delay(LOADING_MOST_MS); loaded() }  // never left over a page that came some other way
         settings = Settings(this)
         alphaTab = AlphaTabAssets(this)
         chooser = FileChooser(this)
@@ -369,7 +372,14 @@ class MainActivity : Activity() {
     }
 
     /** A line in the status bar, kept until the next sync's. */
+    /** caracole's logo, shown from the app's start until its first page is drawn (or a message said), faded out once. */
+    private fun loaded() {
+        if (loading.visibility != View.VISIBLE || loading.alpha < 1f) return
+        loading.animate().alpha(0f).setDuration(LOADING_FADE_MS).withEndAction { loading.visibility = View.GONE }
+    }
+
     private fun say(text: String) {
+        loaded()
         hiding?.cancel()
         status.text = text
         status.visibility = View.VISIBLE
@@ -471,7 +481,11 @@ class MainActivity : Activity() {
         // not the focused one until it asks, so the first press would go nowhere: the page scrolls by them as a
         // browser's does (the pages take no key). Asked upward, the page's own focus stays where it was: asked as
         // FOCUS_DOWN, the WebView focuses the first link (the sheet's ‹), and Space on a focused link is its own press.
+        // The first page drawn: the logo the app opened with goes.
+        override fun onPageCommitVisible(view: WebView, url: String?) = loaded()
+
         override fun onPageFinished(view: WebView, url: String?) {
+            loaded()
             if (!view.hasFocus()) view.requestFocus(View.FOCUS_UP)
         }
 
@@ -627,5 +641,8 @@ class MainActivity : Activity() {
         private const val NOTIFY = 1
         private const val RELAYOUT = "window.dispatchEvent(new Event('resize'))"
         private const val FADE_MS = 250L
+        /** The opening logo's fade, and the most it stays over the screen whatever came of the first page. */
+        private const val LOADING_FADE_MS = 200L
+        private const val LOADING_MOST_MS = 15_000L
     }
 }
