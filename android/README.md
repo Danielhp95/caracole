@@ -34,11 +34,19 @@ settings, a file read from the phone's server for another app, an index fetched 
 
 ## Install
 
-1. **Install the debug APK**, which [Build](#build) made:
-   - with USB or wireless debugging on: `adb install -r android/app/build/outputs/apk/debug/app-debug.apk` (`-r`
-     keeps the app's data when it is already there);
-   - or copy the APK to the phone and open it there. Android asks you to allow installs from that app (Files, say)
-     once.
+1. **Install the app**, from F-Droid or from a build of your own:
+   - **From F-Droid** (signed releases, updated by F-Droid): in the F-Droid app, Settings › Repositories › **+**,
+     then scan or paste
+     `https://danielhp95.github.io/caracole/fdroid/repo?fingerprint=B34AD39AD80D6CE828F0885C68FD81816230BB3CB482C9E7BCC6DAD844500397`.
+     Or open [the repository's page](https://danielhp95.github.io/caracole/fdroid/repo/) on the phone and tap its
+     link. caracole then appears in F-Droid's list: install it from there. The fingerprint makes F-Droid check that
+     the repository's index is the one signed with its key. The APKs are signed with caracole's release key, whose
+     certificate's SHA-256 is `332c457ddadd0c7a2f2b7d880c827fec23cd2ab143f21a2f38c759d47b48a8f1`.
+   - **Your own debug APK**, which [Build](#build) made:
+     - with USB or wireless debugging on: `adb install -r android/app/build/outputs/apk/debug/app-debug.apk` (`-r`
+       keeps the app's data when it is already there);
+     - or copy the APK to the phone and open it there. Android asks you to allow installs from that app (Files,
+       say) once.
 2. **Open it**: caracole, in the launcher. The first start opens Settings: type the computer's address there, tap
    **Test**, then the bar's sync button ([below](#point-it-at-caracole-serve)). Until then the library page is empty, and its
    pages say caracole, with a Phone badge beside it; the sync brings the computer's settings, among them the
@@ -48,8 +56,40 @@ settings, a file read from the phone's server for another app, an index fetched 
    indexes.sqlite` and copied to the phone (`adb push indexes.sqlite /sdcard/Download/`, say) ([Search with the
    computer off](#search-with-the-computer-off)).
 
-The debug APK is signed with your machine's debug key (`~/.android/debug.keystore`). An update must be signed
-with the same key.
+The debug APK is signed with your machine's debug key (`~/.android/debug.keystore`), F-Droid's with the release
+key. An update must be signed with the same key as the app it replaces: to move from a debug APK to F-Droid's (or
+back), uninstall the app first. That deletes the phone's copy of the library: sync it first, and a sync after
+the install brings it back.
+
+## Release
+
+A release is a signed APK in the F-Droid repository at `docs/fdroid/`, which GitHub Pages serves from `main`'s
+`docs/` at https://danielhp95.github.io/caracole/fdroid/repo.
+
+1. Raise `versionCode` (and `versionName`) in `app/build.gradle.kts`: F-Droid offers an APK as an update only when
+   its `versionCode` is higher.
+2. Build it signed. `~/.gradle/gradle.properties`, outside the repository, names the release key:
+
+       caracole.release.storeFile=/path/to/caracole-release.jks
+       caracole.release.storePassword=…
+
+   (`caracole.release.keyAlias` is `caracole` and `caracole.release.keyPassword` the store's password unless
+   given.) Then:
+
+       nix develop ./android -c gradle -p android :app:assembleRelease
+
+   Without those properties the release APK is built unsigned.
+3. Add it to the repository and sign the index (the repository's own key and its passwords are
+   `docs/fdroid/keystore.p12` and `docs/fdroid/config.yml`, kept out of git):
+
+       cp android/app/build/outputs/apk/release/app-release.apk docs/fdroid/repo/io.github.danielhp95.caracole_<versionCode>.apk
+       cd docs/fdroid && nix develop ../../android -c nix shell nixpkgs#fdroidserver -c fdroid update
+
+4. Commit `docs/fdroid/` and push `main`. The app's page in F-Droid (its description, screenshots) is
+   `docs/fdroid/metadata/`.
+
+Losing either key ends the updates: the release key's APKs install over no other, and F-Droid refuses an index
+signed with another key. Keep a copy of both outside the repository.
 
 ## Point it at caracole serve
 

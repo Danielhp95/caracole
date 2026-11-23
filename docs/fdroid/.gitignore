@@ -1,0 +1,9 @@
+# The repo's signing key and its passwords: never published, backed up by hand.
+config.yml
+keystore.p12
+# fdroid's scratch
+tmp/
+archive/
+stats/
+repo/status/
+unsigned/
