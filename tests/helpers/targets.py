@@ -69,7 +69,13 @@ _SMALL = r"""
     if (!node.checkVisibility() || (exempt && node.matches(exempt)) || inText(node) || unseen(node)) continue;
     const target = node.matches(".pick input") ? node.parentElement
       : node.matches('input[type="checkbox"], input[type="radio"]') ? node.closest("label") || node : node;
-    const box = target.getBoundingClientRect();
+    // A target past its box where an ::after reaches as far out on every side (card.css's play tiles, --hit).
+    const after = getComputedStyle(target, "::after");
+    const out = ["top", "right", "bottom", "left"].map((side) => -parseFloat(after[side]));
+    const hit = after.content !== "none" && after.position === "absolute" && out.every((d) => d > 0 && d === out[0])
+      ? out[0] : 0;
+    const r = target.getBoundingClientRect();
+    const box = { width: r.width + 2 * hit, height: r.height + 2 * hit };
     if (box.width < least - 0.5 || box.height < least - 0.5) {
       short.push({ what: name(node), said: said(node), width: Math.round(box.width), height: Math.round(box.height) });
     }

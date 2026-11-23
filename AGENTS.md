@@ -1198,8 +1198,8 @@ It is rows.js's, shared by both pages:
   sits beside the words on the library page (a song's play buttons, its Fetch, its key's column and its row's height,
   its card's tiles, chevrons and closes, an artist's band, the bar's field and Filter and Sort, the sites' marks, the
   list's estimates `--band-h`, `--line-h`, `--fold-h`) is `calc(N * var(--sp))`. `--sp` is `1rlh / 16` (`html`'s line
-  height is 16px for it), at most `(100vw - 82px) / 148`, so a phone's line stays one row, its key on the screen (its
-  title's least room, a button and its key are 148 of them; 82px the page's, an opened card's and the line's
+  height is 16px for it), at most `(100vw - 82px) / 152`, so a phone's line stays one row, its key on the screen (its
+  title's least room, a button (43.2) and its key's cell (44 on a touch screen) are 152 of them; 82px the page's, an opened card's and the line's
   paddings, borders and gaps; 192 and 88px while it had its chevron), and 1px at least from that room; never in a
   `font-size` or a `line-height`, which the zoom sizes already (a line height in it grows twice), nor where a box's height is a line height (a count's
   digits centred by the grid). The tiles' container queries are in `rlh` (24.9375rlh is 399px at the pages' own
@@ -1248,7 +1248,8 @@ It is rows.js's, shared by both pages:
   band's line's under its title beside the pane where its title would be cut, library.js `placePlays`), a button for
   each thing to play from, none first (card.js
   `plays`, from `things`, what the card's tiles are made of too: each a link that opens it at once, its instrument's
-  `glyph`, inline SVG made with `createElementNS`, the one address the page names, an icon tile at every pointer (30 px with a mouse, 48 px on a touch screen, no
+  `glyph`, inline SVG made with `createElementNS`, the one address the page names, an icon tile at every pointer (27 px with a mouse, 43.2 px on a touch screen, a tenth under 30 and 48 by the owner's ask of
+  2026-11-23, its target 1.2 px past its edges there by an `::after`, `--hit`; no
   words), the marks of the sites its versions came from at its foot, how many at its corner; the lyrics none), Fetch's download glyph where it has one (rows.js `fetchIcon`, a site's
   song's Fetch too) and its key, at its end, one row on a phone and a laptop (test_library_plays.py). Its title, as
   its blank space, opens it as a card (card.js `caracoleCard`, card.css):

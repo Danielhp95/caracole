@@ -35,7 +35,7 @@ import kotlin.math.roundToInt
  * Fingers apart make the text larger, together smaller, in steps of [TextZoom.STEP], of the size Android's font size
  * gives the pages, and the size is kept; Settings' Reset applies when the library screen comes back. On the library
  * page a song's buttons and its artist's band grow and shrink with its words, as many times as the size changed,
- * until a song's line fills the screen's width (base.css's --sp, a pixel at the text's size: 148 of them and 82px a
+ * until a song's line fills the screen's width (base.css's --sp, a pixel at the text's size: 152 of them and 82px a
  * line, the line drawing no chevron), its key always on the screen. While the fingers
  * are down the size shows over the page ("135%", the limit at a limit), and it goes about a second after they lift;
  * Reset shows none. A page reflows: never zoomed as a picture, never wider than the
@@ -285,7 +285,7 @@ class PinchTest {
           .every((m) => m.getBoundingClientRect().right <= innerWidth);
         return JSON.stringify({ text: parseFloat(getComputedStyle(line.querySelector('h3')).fontSize),
           play: height(line.querySelector('.line-plays > .play')),
-          band: height(band), shown: shown, room: Math.max(1, (innerWidth - 82) / 148) }); })()"""
+          band: height(band), shown: shown, room: Math.max(1, (innerWidth - 82) / 152) }); })()"""
 
     /** At [zoom], the line [own] measured at the pages' own size, once laid out at it (the same twice): its text as
      * many times bigger as the size is, its button and band as many times bigger too, up to what the room lets them

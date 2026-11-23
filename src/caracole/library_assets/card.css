@@ -216,11 +216,14 @@ a.tile-source:hover .tile-source-name { color: var(--text); text-decoration: und
    grid, never by a line height, which the text's zoom sizes past where --sp stops. The buttons take what the title needs of the row but 4rem, and wrap to
    a second row of their own where more won't fit: a long title is cut short first. */
 .line-plays { display: flex; flex-wrap: wrap; align-items: center; gap: calc(6 * var(--sp)); padding: 0; }
-.play { --mark-size: calc(11 * var(--sp)); position: relative; flex: none; display: inline-grid; place-items: center;
-  width: calc(30 * var(--sp)); height: calc(30 * var(--sp)); padding: 0; border: 0; border-radius: var(--radius-m, 8px); background: var(--raised);
+.play { --mark-size: calc(9.9 * var(--sp)); position: relative; flex: none; display: inline-grid; place-items: center;
+  width: calc(27 * var(--sp)); height: calc(27 * var(--sp)); padding: 0; border: 0; border-radius: var(--radius-m, 8px); background: var(--raised);
   color: var(--text); font-size: .8rem; font-weight: 600; line-height: 1; text-decoration: none; }
 .play:hover { background: color-mix(in srgb, var(--text) 8%, var(--raised)); }
-.play svg.glyph { flex: none; width: calc(18 * var(--sp)); height: calc(18 * var(--sp)); color: var(--accent); }
+.play svg.glyph { flex: none; width: calc(16.2 * var(--sp)); height: calc(16.2 * var(--sp)); color: var(--accent); }
+/* A thumb's target past the tile's edge, where --hit says (a touch screen's, below): the owner's tiles a tenth smaller
+   (2026-11-23) than the 48 px a thumb's target is, the target 44 px or more still. */
+.play::after { content: ""; position: absolute; inset: calc(-1 * var(--hit, 0px)); }
 .play.auto svg.glyph { color: var(--auto); }
 .play .n { position: absolute; top: calc(1 * var(--sp)); right: calc(1 * var(--sp)); display: grid; place-items: center;
   min-width: var(--mark-size); height: var(--mark-size); padding: 0 calc(2 * var(--sp));
@@ -230,7 +233,7 @@ a.tile-source:hover .tile-source-name { color: var(--text); text-decoration: und
 .play .marks { display: flex; position: absolute; right: calc(1 * var(--sp)); bottom: calc(1 * var(--sp)); gap: calc(1 * var(--sp)); }
 .play .marks > .source { width: auto; min-width: var(--mark-size); height: var(--mark-size); padding: 0 calc(1 * var(--sp));
   border: 0; border-radius: var(--radius-s, 4px); background: var(--raised); box-shadow: 0 0 0 1px var(--surface);
-  font-size: 6px; line-height: 11px; vertical-align: 0; }
+  font-size: 6px; line-height: 10px; vertical-align: 0; }
 .play .marks > img.source { width: var(--mark-size); padding: calc(1 * var(--sp)); }
 /* While a filter of instruments is on, each line's button of one that is on (card.js plays, its ``data-inst``) is
    filled with the accent, its glyph in the accent's text colour. */
@@ -246,14 +249,15 @@ a.tile-source:hover .tile-source-name { color: var(--text); text-decoration: und
 [data-lit~="harmonica"] .line-plays .play[data-inst~="harmonica"] :is(svg.glyph),
 [data-lit~="score"] .line-plays .play[data-inst~="score"] :is(svg.glyph) { color: inherit; }
 @media (pointer: coarse) {
-  /* A play button a thumb's 48 px tile, 8 px from the next; its count and its sites' marks (letters at 8 px) inside
-     its corners. */
+  /* A play button a thumb's tile, 43.2 px (a tenth under 48, the owner's of 2026-11-23), its target 1.2 px past each
+     edge (--hit: 45.6 px), 8 px from the next; its count and its sites' marks (letters at 8 px) inside its corners. */
   .line-plays { gap: calc(8 * var(--sp)); }
-  .play { --mark-size: calc(16 * var(--sp)); width: calc(48 * var(--sp)); height: calc(48 * var(--sp)); border-radius: var(--radius-l, 12px); }
-  .play svg.glyph { width: calc(24 * var(--sp)); height: calc(24 * var(--sp)); }
+  .play { --mark-size: calc(14.4 * var(--sp)); --hit: calc(1.2 * var(--sp)); width: calc(43.2 * var(--sp));
+    height: calc(43.2 * var(--sp)); border-radius: var(--radius-l, 12px); }
+  .play svg.glyph { width: calc(21.6 * var(--sp)); height: calc(21.6 * var(--sp)); }
   .play .n { top: calc(3 * var(--sp)); right: calc(3 * var(--sp)); padding: 0 calc(3 * var(--sp)); font-size: 10px; }
   .play .marks { right: calc(3 * var(--sp)); bottom: calc(3 * var(--sp)); gap: calc(2 * var(--sp)); }
   .play .marks > .source { min-width: var(--mark-size); height: var(--mark-size); padding: 0 calc(2 * var(--sp)); font-size: 8px;
-    line-height: 16px; }
+    line-height: 14px; }
   .play .marks > img.source { width: var(--mark-size); padding: calc(1 * var(--sp)); }
 }

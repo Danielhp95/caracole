@@ -11,9 +11,9 @@
      sizes the text and its line heights, never a length in px or rem: the root's line height, 16px (html, below),
      grows with it, so 1rlh / 16 does (@supports, below). What is sized in it (a song's buttons and the height of its
      line's row, its card's tiles, an artist's band) grows with the words beside it, until a song's line fills the
-     window's width: its title's least room, a button to play from and its key are 148 of them (rows.css, library.css;
-     its chevron, 44 more, is drawn no more since 2026-11-22), with 82px of the page's, an opened card's (card.css) and
-     the line's paddings, borders and gaps, so from there on (past about 225 % on a phone 412 px wide) it grows no more,
+     window's width: its title's least room, a button to play from (43.2) and its key's cell (44 on a touch screen)
+     are 152 of them (rows.css, library.css, card.css; its chevron, 44 more, is drawn no more since 2026-11-22), with 82px of the page's, an opened card's (card.css) and
+     the line's paddings, borders and gaps, so from there on (past about 215 % on a phone 412 px wide) it grows no more,
      the line one row with its key on the screen, and the text grows on, its title cut shorter. Never in a font size or
      a line height, which the zoom sizes already (they would grow twice). */
   --sp: 1px;
@@ -80,8 +80,9 @@
 }
 *, *::before, *::after { box-sizing: border-box; }
 [hidden] { display: none !important; }
-html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; line-height: 16px; }  /* --sp's 16: body sets the text's own */
-@supports (height: 1rlh) { :root { --sp: min(calc(1rlh / 16), max(1px, calc((100vw - 82px) / 148))); } }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; line-height: 16px;
+  -webkit-tap-highlight-color: transparent; }  /* no blue flash on a tap, as on the computer (the owner's ask, 2026-11-23) */  /* --sp's 16: body sets the text's own */
+@supports (height: 1rlh) { :root { --sp: min(calc(1rlh / 16), max(1px, calc((100vw - 82px) / 152))); } }
 body {
   margin: 0;
   background: var(--bg);

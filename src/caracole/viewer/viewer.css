@@ -121,7 +121,8 @@
 @page { margin: 15mm; }
 *, *::before, *::after { box-sizing: border-box; }
 [hidden] { display: none !important; }
-html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent; }  /* no blue flash on a tap, as on the computer (the owner's ask, 2026-11-23) */
 body {
   margin: 0;
   background: var(--bg);

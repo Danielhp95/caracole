@@ -219,6 +219,25 @@ def test_fetch_now_is_the_download_glyph_on_the_same_row(conn, cfg, tmp_path):
                      "glyph": "glyph glyph-download", "action": "/fetch", "have": 0}
 
 
+@pytest.mark.parametrize(("size", "touch"), [("390,844", True), ("390,844", False), ("320,640", True)])
+def test_on_a_phone_the_download_glyph_lines_up_with_the_keys(conn, cfg, tmp_path, size, touch):
+    # The owner's ask of 2026-11-23: a wanted song's download glyph centred where the keys of the lines around it are,
+    # in a band (Eagles: Hotel California keyed, Desperado wanted) and on a folded line (Radiohead's one, wanted).
+    hotel_california(conn, cfg)
+    add_song(conn, "Eagles", "Desperado")
+    add_song(conn, "Radiohead", "Creep")
+    script = """
+    const mid = (n) => { const r = n.getBoundingClientRect(); return (r.left + r.right) / 2; };
+    note("mids", { key: mid(lineOf("Hotel California").querySelector(":scope > .line-key")),
+      band: mid(lineOf("Desperado").querySelector(".line-fetch")), folded: mid(lineOf("Creep").querySelector(".line-fetch")),
+      size: Math.round(lineOf("Creep").querySelector(".line-fetch").getBoundingClientRect().width) });
+    """
+    mids = attribute_of(run(conn, cfg, tmp_path, script, controls=WebControls(csrf="tok"), size=size, touch=touch),
+                        "data-mids")
+    assert abs(mids["band"] - mids["key"]) <= 0.5 and abs(mids["folded"] - mids["key"]) <= 0.5, mids
+    assert mids["size"] == (44 if touch else 36), mids  # a thumb's target still
+
+
 def test_on_a_touch_screen_a_play_is_a_filled_tile_its_sites_letters_8px(conn, cfg, tmp_path):
     hotel_california(conn, cfg)
     script = PLAYS + """
@@ -229,9 +248,9 @@ def test_on_a_touch_screen_a_play_is_a_filled_tile_its_sites_letters_8px(conn, c
     drawn = attribute_of(run(conn, cfg, tmp_path, script, size="390,844", touch=True), "data-tiles")
     assert drawn["tiles"] == [["none", True]] * 5  # no outline; the fill keeps its shape
     # The sheet's UG, the Guitar Pro files' gtptabs and inbox, the harmonica tab's harptabs, the score's inbox (the
-    # text tab has no site): letters, or the inbox's glyph, at 8 px on a mark 16 px tall.
-    assert drawn["letters"] == [["ug", "8px", 16], ["gtptabs", "8px", 16], ["inbox", "8px", 16],
-                                ["harptabs", "8px", 16], ["inbox", "8px", 16]], drawn
+    # text tab has no site): letters, or the inbox's glyph, at 8 px on a mark 14 px tall (a tenth under 16).
+    assert drawn["letters"] == [["ug", "8px", 14], ["gtptabs", "8px", 14], ["inbox", "8px", 14],
+                                ["harptabs", "8px", 14], ["inbox", "8px", 14]], drawn
 
 
 CHIPS = PLAYS + r"""
@@ -266,7 +285,7 @@ def chip_library(conn, cfg):
 def test_the_pointer_decides_the_tiles_size_whatever_the_width(conn, cfg, tmp_path, size, touch):
     chip_library(conn, cfg)
     drawn = dict(attribute_of(run(conn, cfg, tmp_path, CHIPS, size=size, touch=touch), "data-chips"))
-    side = 48 if touch else 30  # a thumb's 48 px tile, a mouse's 30 px one: an icon, never words
+    side = 43 if touch else 27  # a thumb's 43 px tile, a mouse's 27 px one (a tenth under 48 and 30): an icon
     for title in TITLES:
         shown = drawn[title]
         assert all(p["words"] is None and p["marks"] is not False and p["width"] == side == p["height"]
@@ -297,8 +316,8 @@ def test_a_tile_stays_whole_beside_a_long_title(conn, cfg, tmp_path):
     note("long", { cut: h3.scrollWidth > h3.clientWidth, chips: Array.from(l.querySelectorAll(".play"))
       .map((a) => Math.round(a.getBoundingClientRect().height)) });"""
     phone = attribute_of(run(conn, cfg, tmp_path, script, size="390,844"), "data-long")
-    assert phone == {"cut": True, "chips": [30]}, phone  # the title cut short, the tile whole on one line
-    assert attribute_of(run(conn, cfg, tmp_path, script, size="1280,900"), "data-long")["chips"] == [30]
+    assert phone == {"cut": True, "chips": [27]}, phone  # the title cut short, the tile whole on one line
+    assert attribute_of(run(conn, cfg, tmp_path, script, size="1280,900"), "data-long")["chips"] == [27]
 
 
 # --- one row, on a phone and on a desktop ------------------------------------------------------------------------
@@ -357,10 +376,10 @@ def test_a_line_is_one_row_its_buttons_whole_and_needs_review_under_it_on_a_phon
                 assert not any(a[0] < part[1] - 0.5 and part[0] < a[1] - 0.5 and a[2] < part[3] - 0.5
                                and part[2] < a[3] - 0.5 for a in others), (title, part, others)
             w, h = p["box"][1] - p["box"][0], p["box"][3] - p["box"][2]
-            if not touch:  # a mouse's tile, 30 px square
-                assert (round(w), round(h)) == (30, 30), p
-            if touch:  # a thumb's target, 48 px square, its marks and count inside it
-                assert (round(w), round(h)) == (48, 48), p
+            if not touch:  # a mouse's tile, 27 px square (a tenth under 30, the owner's of 2026-11-23)
+                assert (round(w, 1), round(h, 1)) == (27, 27), p
+            if touch:  # a thumb's tile, 43.2 px square (a tenth under 48), its marks and count inside it
+                assert (round(w, 1), round(h, 1)) == (43.2, 43.2), p
                 assert all(p["box"][0] - .5 <= q[0] and q[1] <= p["box"][1] + .5 and p["box"][2] - .5 <= q[2]
                            and q[3] <= p["box"][3] + .5 for q in p["parts"]), p
         if touch:  # the title keeps some room even at 320 px
