@@ -1,16 +1,32 @@
-# Sites, and being a good guest
+# The sites caracole reads
 
-caracole reads other people's websites gently: one request at a time, a pause between two, a small
-budget a night, never a page a site's robots.txt closes ([how](usage.md#caracole-run)).
-The exceptions are your choice, each one a switch (`[providers.NAME] enabled = false`):
+| What | From |
+|---|---|
+| Chord sheets, text tabs, ukulele chords | Ultimate Guitar |
+| Spanish chord sheets | LaCuerda |
+| Lyrics | LRCLIB, then Megalobiz, then AZLyrics |
+| Guitar Pro files | gtptabs.com |
+| Harmonica tabs | harptabs.com |
+| Video game music tabs | gametabs.net |
+| Jazz chord charts | iReal Pro's forum |
+| Scores | MuseScore, as links you open |
+| Audio, for [chords from audio](autochords.md) | YouTube, optional |
 
-- **YouTube:** the optional auto-chords add-on takes the audio of a few uncharted songs a night
-  from it, against its robots.txt and terms ([why](usage.md#audio-from-youtube)).
-- **harptabs.com, gametabs.net and AZLyrics:** their terms forbid bots, yet caracole keeps a tab
-  or a song's lyrics from them, for your songs alone, robots.txt honoured.
-- **A link shared to the phone:** Spotify's, TIDAL's and YouTube's terms forbid automated
-  access, yet the phone asks the service once to name the song, one request a share.
+caracole is slow on purpose. It sends one request at a time, waits between requests, has a small
+budget per site each night, and never asks for a page that a site's robots.txt closes. When a
+site blocks it, it stops and stays away for a day or more. The numbers are under
+[caracole run](usage.md#caracole-run).
 
-The sheets and lyrics are other people's work, so keep your library private.
+## Exceptions
 
-Each site's rules in full: [AGENTS.md's Politeness](../AGENTS.md#politeness).
+A few things go against a site's rules. You can turn each off with `[providers.NAME] enabled = false`
+in caracole.toml.
+
+- **YouTube.** The optional chords-from-audio add-on takes the audio of a few songs a night,
+  against YouTube's robots.txt and terms. See [Audio from YouTube](usage.md#audio-from-youtube).
+- **harptabs.com, gametabs.net and AZLyrics.** Their terms forbid bots. caracole still keeps a
+  tab or a song's lyrics from them, only for songs on your list, and follows their robots.txt.
+- **Links shared to the phone.** Spotify, TIDAL and YouTube forbid automated access. When you
+  share a link to the app, it asks that service once for the song's name.
+
+The sheets and lyrics are other people's work. Keep your library private.

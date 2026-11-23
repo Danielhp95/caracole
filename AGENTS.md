@@ -2017,12 +2017,14 @@ It is rows.js's, shared by both pages:
 - deploy.md: a server: the NixOS module, or Ubuntu 24.04 without Nix, whose units and caracole-admin do what
   nix/module.nix's do, so a change to a unit there changes them too.
 - install.md, and the design files above.
-- features.md: every feature in full, the computer's and the phone's, and the pictures; sources.md: the sites and
-  the exceptions to their rules. README.md is the short front page: what it is, computer and phone, Try it, links.
+- A short page for each thing caracole does, which the README's bullets link to: sheets.md, search.md, songbooks.md,
+  autochords.md, phone.md; sources.md: the sites and the exceptions to their rules. README.md is the front page: what
+  it is, computer and phone, Install, the Gallery, links. usage.md is the reference under them. All in plain, short
+  prose (the owner's ask of 2026-11-23: concise, for people, nothing that reads as machine-written).
 - web-search.md designs a search-API fallback for matching, not built.
 - android_port.md: caracole in Kotlin on the phone, its plan and what is built of it, milestones 1 to 6 (its research:
   superpowers/specs/2026-11-02-android-native-port-feasibility.md).
-- screenshots/: the README's and features.md's pictures, of a demo library of public-domain songs, and make.py, which builds that
+- screenshots/: the README's and the pages' pictures, of a demo library of public-domain songs, and make.py, which builds that
   library with no request and takes them again (its docstring says how): retake them when the pages they show change.
 - logo/: caracole's logo, its masters (caracole_icon.png, the project's and every page's, with a small copy for the
   README; app_logo.png, the Android app's launcher icon) and trace.py, which traces a master's black and copper into

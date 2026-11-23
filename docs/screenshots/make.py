@@ -200,6 +200,19 @@ INDEX = (
 FIRST_TAB = 4000001  # the made-up tab id of the first song's sheet, and so on
 
 SONGBOOK = "Campfire"
+# Amazing Grace's melody as a harmonica tab, written for this script (holes over words, harptabs.com's way): on a
+# G harp, the key of its sheet, these holes play it in G.
+AMAZING_GRACE_HARP = """\
+6  7   8    7      8   -8    7   6
+A- ma- zing grace, how sweet the sound
+6    7     8 7      8    9
+That saved a wretch like me
+8 9    8   7     6   -6  7  6
+I once was lost, but now am found
+6   7      8   7   -8 7
+Was blind, but now I see
+"""
+
 SET_LIST = ("Traditional - Greensleeves", "John Newton - Amazing Grace", "Traditional - Scarborough Fair",
             "Traditional - Shenandoah", "Frederic Weatherly - Danny Boy", "Robert Burns - Auld Lang Syne")
 
@@ -343,6 +356,12 @@ def build(root: Path, browser_profile: Path):
 
     greensleeves = find_song(conn, identity_key("Traditional", "Greensleeves"))
     keep_guitar(conn, cfg, greensleeves, guitar_file(browser_profile), name="guitar-1.gp")
+    grace = find_song(conn, identity_key("John Newton", "Amazing Grace"))  # a harmonica tab, as harptabs.com's are kept
+    harp = upsert_version(conn, provider="harptabs", tab_id="1", song_id=grace.id, slot="guitar", kind="harmonica",
+                          rating=0, votes=0, version=1, label=None, url="https://www.harptabs.com/song.php?ID=1",
+                          raw={}, now=FETCHED)
+    keep_file(conn, cfg.library_dir, song=grace, version_id=harp, name="harmonica-1.txt",
+              data=AMAZING_GRACE_HARP.encode("utf-8"), rank=1)
 
     render = render_all(conn, cfg, Overrides())
     if render.failed:
@@ -459,6 +478,24 @@ SHOTS = (
     ("guitar-pro", "guitar?file=Traditional%2FGreensleeves%2Fguitar-1.gp", DESKTOP, (
         ("wait", "document.documentElement.dataset.player === 'ready'"),
     ), "[0, 0, innerWidth, 662]"),  # the first line of the score
+    ("card", "", DESKTOP, (  # Greensleeves' card, beside the list
+        ("wait", named("#list article.line h3", "Greensleeves", "named")),
+        ("click", "#named"),
+        ("wait", "document.querySelector('#card-pane .song-card .tiles') !== null"),
+        ("js", "document.activeElement.blur()"),
+    ), below("#card-pane")),
+    ("harmonica", "John%20Newton/Amazing%20Grace/harmonica-1.html", DESKTOP, (
+        ("wait", "document.querySelector('#sheet b.h[data-i]') !== null"),
+    ), None),
+    ("phone-library", "", PHONE, (
+        ("wait", "document.querySelectorAll('#list article.line').length > 4"),
+    ), None),
+    ("sites", "#tab=sites", DESKTOP, (
+        ("wait", "!document.getElementById('sites').hidden && document.querySelector('#sites h2, #sites h3') !== null"),
+    ), below("#sites", 12)),
+    ("share", "#tab=sync", DESKTOP, (
+        ("wait", "!document.getElementById('sync').hidden"),
+    ), below("#sync")),
 )
 PDF_PAGE = 3  # the songbook's first song, after its cover and its contents
 PDF_DPI = 144

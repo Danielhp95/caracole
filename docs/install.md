@@ -10,6 +10,7 @@ model files and yt-dlp. The flake's packages bring all of it, for x86_64-linux.
   Nix](deploy.md#ubuntu-2404-without-nix).
 - **[With Nix](#with-nix)**, on any Linux, to run it by hand.
 - **[From source](#from-source)**, to change caracole and run its tests.
+- **[On Android](#on-android)**, the app that keeps a copy of your library on the phone.
 
 caracole keeps no secret: no credential and no token. `caracole serve` has no
 sign-in, so it listens only on a network you trust
@@ -98,3 +99,11 @@ A test that needs a program or a file it can't find skips:
 | `ffmpeg`, `chromium` | one `.m4a` test; the pages in a browser |
 
 [AGENTS.md](../AGENTS.md#development) lists every such test and variable.
+
+## On Android
+
+- **From F-Droid**: in the F-Droid app, Settings › Repositories › **+**, scan or paste
+  `https://danielhp95.github.io/caracole/fdroid/repo?fingerprint=B34AD39AD80D6CE828F0885C68FD81816230BB3CB482C9E7BCC6DAD844500397`,
+  then install caracole from its list. F-Droid keeps it updated.
+- **Built yourself**: [android/README.md](../android/README.md#build).
+- Then connect it to your computer: [phone.md](phone.md#install-and-connect).
