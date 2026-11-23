@@ -83,8 +83,10 @@ computer off.
 - **Alerts and backups:** a notification when a site turns a lookup away or a request fails in
   the background, and backups of the phone's library to restore from.
 
-It is a debug APK you build and install yourself, with no Play Store:
-[build, install and use it](android/README.md).
+Install it with F-Droid: add the repository
+`https://danielhp95.github.io/caracole/fdroid/repo?fingerprint=B34AD39AD80D6CE828F0885C68FD81816230BB3CB482C9E7BCC6DAD844500397`
+in F-Droid's Settings › Repositories, then install caracole from its list. Or build the APK yourself:
+[install, build and use it](android/README.md).
 
 ## Try it
 
