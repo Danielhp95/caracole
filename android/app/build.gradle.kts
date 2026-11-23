@@ -16,8 +16,8 @@ android {
         minSdk = 26
         // 36, not 37: an app targeting Android 17 must ask for ACCESS_LOCAL_NETWORK to reach a LAN address.
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
         // Sends no site a request: caracole.network=loopback and a refusing Caracole.sitesForTests, before the app starts.
         testInstrumentationRunner = "io.github.danielhp95.caracole.CaracoleTestRunner"
         // The bundled SQLite's native library, for phones and for the emulator.
