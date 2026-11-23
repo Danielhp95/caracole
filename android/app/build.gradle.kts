@@ -24,8 +24,22 @@ android {
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
     }
 
+    // The release key, from outside the repo: ~/.gradle/gradle.properties (or -P / ORG_GRADLE_PROJECT_*) names the
+    // keystore and its passwords. Without them assembleRelease still builds, unsigned.
+    val releaseStore = providers.gradleProperty("caracole.release.storeFile").orNull
+    val releaseSigning = releaseStore?.let {
+        signingConfigs.create("release") {
+            storeFile = file(it)
+            storePassword = providers.gradleProperty("caracole.release.storePassword").get()
+            keyAlias = providers.gradleProperty("caracole.release.keyAlias").getOrElse("caracole")
+            keyPassword = providers.gradleProperty("caracole.release.keyPassword")
+                .orElse(providers.gradleProperty("caracole.release.storePassword")).get()
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = releaseSigning
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
