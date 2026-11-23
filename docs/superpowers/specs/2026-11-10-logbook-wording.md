@@ -203,7 +203,7 @@ these screens uses these words.
 
 | Element | When | Text |
 |---|---|---|
-| label | always: the switch's label | Share logs on Wi-Fi |
+| label | always: the switch's label | Sync on Wi-Fi (the owner's change of 2026-11-23: "logs" read as log files there) |
 
 ### Planned · Notification · an unattended share
 

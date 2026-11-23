@@ -102,7 +102,7 @@ signed with another key. Keep a copy of both outside the repository.
 3. Tap **Test**. It answers "studio answered: 96 songs, 3 songbooks, its indexes read 02/11/26", or says what went
    wrong. Then tap the bar's sync button ([below](#sync-from-the-phone)).
 
-**Share logs on Wi-Fi** syncs every 6 hours on an unmetered network, leaving what changed on both sides for you
+**Sync on Wi-Fi** syncs every 6 hours on an unmetered network, leaving what changed on both sides for you
 to choose ([below](#sync-from-the-phone)). First it checks that caracole answers at the address. When nothing
 answers there, or something else does (another network's device, a Wi-Fi login page), it does nothing and says
 nothing. The library screen's bar has the sync
@@ -237,7 +237,7 @@ started again.
   export, and a file no newer than the last sync with its caracole ("Nothing in this file is newer than your sync
   with studio on 03/11/26").
 
-**Share logs on Wi-Fi** (Settings) is this sync, unattended: every 6 hours on an unmetered network, the three
+**Sync on Wi-Fi** (Settings) is this sync, unattended: every 6 hours on an unmetered network, the three
 parts, every change made on one side taken or given, and each conflict left as it is on both sides, for the next
 sync you start. First it reads the computer's state at the address in Settings; when nothing answers there, or
 something else does (another network's device, a Wi-Fi login page), it does nothing and says nothing. While it runs,
@@ -341,7 +341,7 @@ the chords stay over their syllables.
 LocalServerTest needs no computer: the app's server answers its page only with the launch's cookie, the WebView
 never loads another loopback port, and a first start's database is made whole. SyncSheetTest opens the sheet with
 the bar's sync button and syncs a song changed on both sides, the computer's version kept, then finds nothing that
-differs; and opens it from the notification of a Share logs on Wi-Fi that left such a conflict. ExportImportTest exports
+differs; and opens it from the notification of a Sync on Wi-Fi that left such a conflict. ExportImportTest exports
 from Settings to the share sheet, and imports a file through the picker. They change the computer's library (one
 song's own version), so give them a computer of their own, such as `nix develop -c python -m tests.helpers.e2e_library
 serve DIR PORT --address 127.0.0.1`:

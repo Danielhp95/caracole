@@ -7,4 +7,19 @@
         <item name="android:windowBackground">@color/background</item>
         <item name="android:textColorPrimary">@color/text</item>
     </style>
+
+    <!-- The opening screen's step segments (activity_main's opening_steps). -->
+    <style name="OpeningSegment">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">match_parent</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:background">@drawable/opening_segment</item>
+    </style>
+
+    <style name="OpeningShine">
+        <item name="android:layout_width">22dp</item>
+        <item name="android:layout_height">match_parent</item>
+        <item name="android:background">@drawable/opening_fill</item>
+        <item name="android:visibility">invisible</item>
+    </style>
 </resources>
