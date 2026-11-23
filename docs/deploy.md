@@ -1,17 +1,16 @@
 # Deploying caracole
 
-caracole runs on a server as a nightly service, with its library page on your
-network. Two ways to set it up:
+caracole runs on a server as a nightly service, with its library page on your network. There are
+two ways to set it up:
 
 - **[NixOS](#nixos)**: the flake's module, `nixosModules.default`.
-- **[Ubuntu 24.04 without Nix](#ubuntu-2404-without-nix)**: apt, a few
-  downloads checked against their SHA-256, and systemd units that do what the
-  module does.
+- **[Ubuntu 24.04 without Nix](#ubuntu-2404-without-nix)**: apt, a few downloads checked against
+  their SHA-256, and systemd units that do what the module does.
 
-[The first run](#the-first-run), [Checking auto-chords](#checking-auto-chords),
-[Logs](#logs), [Moving an index into the service](#moving-an-index-into-the-service),
-[Restoring the database](#restoring-the-database) and [When something is
-wrong](#when-something-is-wrong) are the same for both. Either way the machine gets:
+[The first run](#the-first-run), [Checking auto-chords](#checking-auto-chords), [Logs](#logs),
+[Moving an index into the service](#moving-an-index-into-the-service), [Restoring the
+database](#restoring-the-database) and [When something is wrong](#when-something-is-wrong) apply
+to both. Either way the machine gets:
 
 | What | Does |
 |---|---|
@@ -22,9 +21,8 @@ wrong](#when-something-is-wrong) are the same for both. Either way the machine g
 | `caracole-notify-failure` | Posts to your ntfy topic when one of the units fails |
 | `caracole-admin` | Runs any `caracole` command as the units do: `sudo caracole-admin index build` |
 
-And a data folder, `/var/lib/caracole` unless you choose another, never under
-`/home`, `/root`, `/run/user`, `/tmp` or `/var/tmp`, which the units' sandbox
-hides:
+It also gets a data folder, `/var/lib/caracole` unless you choose another. Don't put it under
+`/home`, `/root`, `/run/user`, `/tmp` or `/var/tmp`: the units' sandbox hides those.
 
 | Folder | Holds |
 |---|---|
@@ -33,12 +31,10 @@ hides:
 | `state` | the database, its last three copies (`backups/`, made at the end of each nightly run) and caracole's lock, `caracole`'s alone: back it up, never sync it |
 | `cache` | every raw HTTP response, kept forever: losing it costs only requests |
 
-caracole keeps no secret: no credential, no token, no sign-in. ntfy is a
-topic's URL alone, which anyone who knows it can read: make it long and random,
-and know that every user of the host can read it (on NixOS, in the Nix store).
-The library page has no sign-in either: whoever reaches it can read the library
-and request songs, so it listens only on a network you trust, your LAN or your
-tailnet, never the internet.
+caracole keeps no credentials. ntfy is only a topic URL, readable by anyone who knows it and by
+every user of the host (on NixOS, it's in the Nix store), so make it long and random. The library
+page has no sign-in: anyone who reaches it can read the library and request songs. Keep it on your
+LAN or tailnet, never the internet.
 
 ## NixOS
 
@@ -52,12 +48,11 @@ In your system flake's `flake.nix`:
     caracole.inputs.nixpkgs.follows = "nixpkgs";
 ```
 
-A new commit on caracole's default branch, `main`, reaches the host
-after `nix flake update caracole` and a switch. `follows` builds caracole, and
-runs its tests, with your nixpkgs: one whose tomlkit or ChordPro is newer than
-caracole takes yet (tomlkit 0.15.1, ChordPro 6.060) fails the build, and
-without the line caracole builds with its own. Then, in the host's
-configuration (with `inputs` in `specialArgs`):
+A new commit on caracole's `main` reaches the host after `nix flake update caracole` and a switch.
+With `follows`, caracole builds and runs its tests with your nixpkgs. If your tomlkit or ChordPro is
+newer than caracole supports yet (tomlkit 0.15.1, ChordPro 6.060), the build fails. Without the
+line, caracole builds with its own nixpkgs. Then, in the host's configuration (with `inputs` in
+`specialArgs`):
 
 ```nix
 # hosts/nuc/caracole.nix: caracole, and (sections 2 and 3) Syncthing and restic.
@@ -100,9 +95,9 @@ Every option of `nix/module.nix`:
 
 ### 2. Syncthing for the library and the music
 
-The library is `caracole:caracole`, mode 2775, setgid, and caracole writes with
-umask 0007; Syncthing, in group `caracole` with the same umask, writes there
-too. Add to `hosts/nuc/caracole.nix`:
+The library is `caracole:caracole`, mode 2775 with setgid, and caracole writes with umask 0007.
+Syncthing joins group `caracole` with the same umask, so it can write there too. Add to
+`hosts/nuc/caracole.nix`:
 
 ```nix
   services.syncthing = {
@@ -129,12 +124,11 @@ too. Add to `hosts/nuc/caracole.nix`:
   };
 ```
 
-After the first switch, `sudo systemctl restart syncthing`, so that it runs in
-its new group.
+After the first switch, run `sudo systemctl restart syncthing` so it picks up its new group.
 
 ### 3. Backups with restic
 
-The state, the library and the music; the live database through a consistent
+This backs up the state, the library and the music. The live database goes in as a consistent
 copy, made with SQLite's online backup:
 
 ```nix
@@ -176,81 +170,70 @@ sudo systemctl start caracole.timer caracole-web.service
 
 ### 4. Auto-chords
 
-For a song nobody has charted, a local model writes `sheet (auto).txt` from its
-audio: a track you bought, dropped into the music folder, audio the nightly
-run takes from YouTube, or that of a video you paste on the library page.
+For a song nobody has charted, a local model writes `sheet (auto).txt` from its audio. The audio
+can be a track you bought and dropped into the music folder, audio the nightly run takes from
+YouTube, or a video you paste on the library page. See [autochords.md](autochords.md).
 
 ```nix
   services.caracole.autochords.enable = true;
 ```
 
-The switch builds the `autochords` package, about 3 GB more: torch, librosa,
-beat_this, and yt-dlp with the ffmpeg and deno it runs. Its wrapper points at
-the two model files `nix/autochords.nix` fetches, checked by their hashes (JKU's
-server is sometimes down: [When something is wrong](#when-something-is-wrong)).
-Then:
+This builds the `autochords` package, about 3 GB more: torch, librosa, beat_this, and yt-dlp with
+ffmpeg and deno. It uses the two model files `nix/autochords.nix` fetches, checked by their hashes.
+JKU's server is sometimes down: see [When something is wrong](#when-something-is-wrong). Then:
 
-- `caracole-autochords.service` runs after each run that succeeds, with no
-  network, the models on the CPU, a few minutes a song.
-- The nightly run, caracole-web and `caracole-admin` run that package. The run
-  takes the audio of up to three songs a night that have no human sheet from
-  YouTube: against YouTube's robots.txt and terms, the owner's choice, on the
-  terms [usage.md](usage.md#audio-from-youtube) gives.
-- caracole-web makes a song's sheet from a YouTube video, pasted in the request
-  form or suggested for a search, the models running in it, so it runs without
-  `MemoryDenyWriteExecute`, as the auto-chords unit and `caracole-admin` do; the
-  nightly run keeps it.
+- `caracole-autochords.service` runs after each successful run, with no network, on the CPU, a few
+  minutes a song.
+- The nightly run takes the audio of up to three songs a night with no human sheet from YouTube.
+  This goes against YouTube's robots.txt and terms, on the terms
+  [usage.md](usage.md#audio-from-youtube) gives.
+- caracole-web can make a sheet from a YouTube video, pasted in the request form or suggested for a
+  search. The models run inside it, so caracole-web and `caracole-admin` run without
+  `MemoryDenyWriteExecute`. The nightly run keeps it.
 
-With an NVIDIA GPU (the host's driver set up: `hardware.graphics` and
-`hardware.nvidia`), the lyrics transcribed from the audio can run on it:
+With an NVIDIA GPU (the host's driver set up with `hardware.graphics` and `hardware.nvidia`), lyrics
+transcription can run on it:
 
 ```nix
   services.caracole.autochords.cuda = true;
 ```
 
-That makes `autochords.package` the flake's `autochords-cuda` build (torch-bin,
-about 6.7 GiB, unfree CUDA libraries the flake allows itself): Whisper runs on
-CUDA and demucs-rs on Vulkan. Only caracole-web, whose job children run the
-transcription, and `caracole-admin` see the GPU: `PrivateDevices` is off for
-them, with `DevicePolicy=closed`, `DeviceAllow` for the NVIDIA device groups and
-`char-drm`, and the `video` and `render` groups. The nightly units keep
-`PrivateDevices`, and BTC and beat_this stay on the CPU. It needs
-`autochords.enable`: without it, it does nothing, and the system's build warns
-so. With nix/module.nix imported on its own, without the flake, `package` stays
-as it is: set `autochords.package` to a CUDA build of caracole yourself.
+This uses the flake's `autochords-cuda` build (about 6.7 GiB, unfree CUDA libraries). Whisper runs
+on CUDA and demucs-rs on Vulkan. Only caracole-web and `caracole-admin` get the GPU devices; the
+nightly units don't, and the chord models stay on the CPU. It needs `autochords.enable`, or it does
+nothing and the build warns. If you import nix/module.nix without the flake, set
+`autochords.package` to a CUDA build yourself.
 
-For purchases alone, with no yt-dlp run and no YouTube on the library page:
+For purchases only, with no yt-dlp and no YouTube on the library page:
 
 ```nix
   services.caracole.settings.providers.youtube.enabled = false;
 ```
 
-The videos the page suggests come with a thumbnail from YouTube's image host,
-`i.ytimg.com`, a provider of its own: `settings.providers.ytimg.enabled = false`
-drops the thumbnails alone. Then [check that it works](#checking-auto-chords).
+Suggested videos show a thumbnail from `i.ytimg.com`, a provider of its own:
+`settings.providers.ytimg.enabled = false` drops only the thumbnails. Then [check that it
+works](#checking-auto-chords).
 
 ### 5. The library page on your network
 
-`web.address` decides who reaches it:
+`web.address` decides who can reach it:
 
-- `127.0.0.1`, the default: this machine alone. From the laptop,
+- `127.0.0.1`, the default: this machine only. From the laptop,
   `ssh -L 8737:127.0.0.1:8737 nuc`, then `http://127.0.0.1:8737/`.
-- The tailnet address: the tailnet. A tailnet whose interface is in
-  `networking.firewall.trustedInterfaces` needs no opening.
-- The LAN address, with `web.openFirewall = true`: the LAN, everyone on it.
+- The tailnet address: your tailnet. A tailnet whose interface is in
+  `networking.firewall.trustedInterfaces` needs no firewall opening.
+- The LAN address, with `web.openFirewall = true`: everyone on the LAN.
 
-It answers to its IP addresses and the names it knows: a full tailnet name goes
-in `allowedHosts`, or the browser gets 421. A tailnet address that doesn't
-exist yet at boot is tried again every 10 seconds.
-[usage.md](usage.md#caracole-serve) says what the page does.
+It answers to its IP addresses and the names it knows. Put a full tailnet name in `allowedHosts`, or
+the browser gets a 421. If the tailnet address doesn't exist yet at boot, it retries every 10
+seconds. [usage.md](usage.md#caracole-serve) says what the page does.
 
 ## Ubuntu 24.04 without Nix
 
-The same service, with no Nix, on an x86-64 machine (the downloads are
-x86-64's): what the Nix package brings goes under `/opt/caracole`, and the
-units are the module's. Run the blocks in order, in one shell, as a user with
-sudo: later blocks use `$PY` and `$REV`. Each download is checked against its
-SHA-256: stop at a `FAILED`.
+The same service, without Nix, on an x86-64 machine. What the Nix package brings goes under
+`/opt/caracole`, and the units match the module's. Run the blocks in order, in one shell, as a user
+with sudo: later blocks use `$PY` and `$REV`. Each download is checked against its SHA-256: stop if
+you see `FAILED`.
 
 ### 1. Packages from apt
 
@@ -266,8 +249,7 @@ sudo apt install git curl xz-utils sqlite3 build-essential cpanminus \
 
 ### 2. Python and caracole
 
-uv installs CPython 3.14.7, which caracole is tested on, where the units can
-read it:
+uv installs CPython 3.14.7, which caracole is tested on, where the units can read it:
 
 ```sh
 cd "$(mktemp -d)"
@@ -280,9 +262,8 @@ sudo uv python install --install-dir /opt/caracole/python --no-bin 3.14.7
 PY=/opt/caracole/python/cpython-3.14.7-linux-x86_64-gnu/bin/python3.14
 ```
 
-caracole's dependencies come from PyPI, held to the Nix package's versions,
-which the tests pass with (PyPI's latest tomlkit breaks renaming a songbook);
-the packages they bring in are PyPI's latest:
+caracole's dependencies come from PyPI, pinned to the Nix package's versions, which the tests pass
+with (PyPI's latest tomlkit breaks renaming a songbook). Their own dependencies are PyPI's latest:
 
 ```sh
 sudo tee /opt/caracole/constraints.txt > /dev/null <<'EOF'
@@ -315,9 +296,9 @@ tqdm==4.68.4
 EOF
 ```
 
-Then caracole, at the head of `main`, in a virtual environment of that
-commit, compiled ahead (the units can't write `.pyc` files there), and linked
-as `current` once it is whole:
+Then install caracole at the head of `main`, in a virtual environment for that commit. It is
+compiled ahead, since the units can't write `.pyc` files there, and linked as `current` once
+complete:
 
 ```sh
 REV=$(git ls-remote https://github.com/Danielhp95/caracole refs/heads/main | cut -f1)
@@ -330,9 +311,9 @@ sudo ln -sfn releases/$REV /opt/caracole/current
 
 ### 3. ChordPro 6.050.7
 
-caracole makes no PDF with a later ChordPro, and Ubuntu has none. cpanm builds
-it into `/opt/caracole/perl`, with JavaScript::QuickJS, which apt hasn't got,
-and Text::Layout 0.037, newer than apt's; the rest is apt's:
+caracole makes no PDF with a later ChordPro, and Ubuntu has none. cpanm builds it into
+`/opt/caracole/perl`, with JavaScript::QuickJS (not in apt) and Text::Layout 0.037 (newer than
+apt's). The rest comes from apt:
 
 ```sh
 cd "$(mktemp -d)"
@@ -350,9 +331,8 @@ sudo cpanm -l /opt/caracole/perl \
 
 ### 4. The fonts and alphaTab
 
-The PDFs' fonts, Adwaita Sans and Mono, made by caracole's `nix/pdf-fonts.py`
-as the Nix package makes them; LXGW FusionKai for Chinese words; alphaTab, for
-Guitar Pro files in the browser:
+The PDF fonts, Adwaita Sans and Mono, made by caracole's `nix/pdf-fonts.py` as the Nix package
+makes them. LXGW FusionKai for Chinese words. alphaTab for Guitar Pro files in the browser:
 
 ```sh
 cd "$(mktemp -d)"
@@ -383,8 +363,8 @@ sudo install -m 0644 package/dist/alphaTab.min.js package/dist/font/Bravura.woff
 
 ### 5. The wrapper
 
-As the Nix package's wrapper: ChordPro on PATH, and the fonts', alphaTab's and
-the model files' paths as defaults, which a variable already set overrides:
+Like the Nix package's wrapper: it puts ChordPro on PATH and sets default paths for the fonts,
+alphaTab and the model files. A variable you already set wins.
 
 ```sh
 sudo tee /opt/caracole/bin/caracole > /dev/null <<'EOF'
@@ -407,8 +387,8 @@ sudo chmod 0755 /opt/caracole/bin/caracole
 
 ### 6. The user, the folders and the config
 
-The folders as the NixOS module makes them, and caracole.toml (put your own
-ntfy topic in it, or leave `[ntfy]` out):
+The folders as the NixOS module makes them, and caracole.toml. Put your own ntfy topic in it, or
+leave `[ntfy]` out:
 
 ```sh
 sudo useradd --system --user-group --home-dir /nonexistent --shell /usr/sbin/nologin caracole
@@ -435,19 +415,17 @@ library_dir = "/var/lib/caracole/library"
 EOF
 ```
 
-The last file, the NixOS module's too, tells a caracole you start yourself
-with no `--config` that this machine runs caracole as a service: it builds no
-index into your home folders, and warns before it writes there
+The last file, which the NixOS module writes too, tells a caracole you start yourself without
+`--config` that this machine runs caracole as a service. That caracole builds no index into your
+home folders, and warns before it writes there
 ([usage.md](usage.md#the-services-library-and-your-homes)).
 
-To keep the data elsewhere, put its path in place of `/var/lib/caracole` in
-every file of this part.
+To keep the data elsewhere, replace `/var/lib/caracole` with its path in every file of this part.
 
 ### 7. The units
 
-The module's user and folders are one file, and its sandbox another, which
-each caracole unit takes as drop-ins, and `caracole-admin` reads too; the
-failure alert takes the sandbox alone:
+One file holds the user and folders, another the sandbox. Each caracole unit takes both as
+drop-ins, and `caracole-admin` reads them too. The failure alert takes only the sandbox:
 
 ```sh
 sudo tee /etc/caracole/units.conf > /dev/null <<'EOF'
@@ -493,10 +471,9 @@ CapabilityBoundingSet=
 EOF
 ```
 
-The failure alert, to your ntfy topic, whose URL goes on its last line: the
-URL of caracole.toml's `[ntfy]` again, so a new topic means editing both.
-Without ntfy, skip this block, leave the `OnFailure=` lines out of the units
-below, and the alert out of the check after them.
+The failure alert posts to your ntfy topic, whose URL is on its last line. It repeats the URL in
+caracole.toml's `[ntfy]`, so a new topic means editing both. Without ntfy, skip this block, leave
+the `OnFailure=` lines out of the units below, and leave the alert out of the check after them.
 
 ```sh
 sudo tee /etc/systemd/system/caracole-notify-failure@.service > /dev/null <<'EOF'
@@ -518,8 +495,7 @@ sudo mkdir -p /etc/systemd/system/caracole-notify-failure@.service.d
 sudo ln -sfn /etc/caracole/sandbox.conf /etc/systemd/system/caracole-notify-failure@.service.d/sandbox.conf
 ```
 
-The nightly run, its timer, and the library page (on this machine alone until
-section 11):
+The nightly run, its timer, and the library page (on this machine only until section 11):
 
 ```sh
 sudo tee /etc/systemd/system/caracole.service > /dev/null <<'EOF'
@@ -569,7 +545,7 @@ WantedBy=multi-user.target
 EOF
 ```
 
-Then the shared files for both caracole units, a check, and the start:
+Then link the shared files for both caracole units, check, and start:
 
 ```sh
 for unit in caracole caracole-web; do
@@ -585,8 +561,7 @@ sudo systemctl enable --now caracole.timer caracole-web.service
 
 ### 8. caracole-admin
 
-A command run as the units run it: a transient unit with their settings, and
-the network.
+Runs a command as the units do: a transient unit with their settings, plus the network.
 
 ```sh
 sudo tee /usr/local/sbin/caracole-admin > /dev/null <<'EOF'
@@ -611,8 +586,8 @@ sudo caracole-admin --version   # caracole 0.1.0
 
 ### 9. Syncthing
 
-As on NixOS (section 2): Syncthing as its own user, in group `caracole`, with
-umask 0007, and the music folder its own.
+As on NixOS (section 2): Syncthing as its own user, in group `caracole`, with umask 0007, and
+owning the music folder.
 
 ```sh
 sudo apt install syncthing
@@ -627,15 +602,15 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now syncthing@syncthing.service
 ```
 
-Its GUI listens on the machine alone: `ssh -L 8384:localhost:8384 server`, then
-`http://localhost:8384`. Add your devices, and two folders, `tabs` at
-`/var/lib/caracole/library` and `music` at `/var/lib/caracole/music`, each with
-Ignore Permissions ticked under Advanced. With ufw on, `sudo ufw allow syncthing`.
+Its GUI listens on the machine only: `ssh -L 8384:localhost:8384 server`, then
+`http://localhost:8384`. Add your devices and two folders, `tabs` at `/var/lib/caracole/library`
+and `music` at `/var/lib/caracole/music`. Tick **Ignore Permissions** under Advanced for each. With
+ufw on, run `sudo ufw allow syncthing`.
 
 ### 10. Backups with restic
 
-The NixOS backup (section 3), as a unit and a timer. Put your repository in
-place of `/mnt/backup/restic/caracole`:
+The NixOS backup (section 3), as a unit and a timer. Replace `/mnt/backup/restic/caracole` with
+your repository:
 
 ```sh
 sudo apt install restic
@@ -670,15 +645,14 @@ EOF
 sudo systemctl daemon-reload && sudo systemctl enable --now caracole-backup.timer
 ```
 
-To restore, as on NixOS, with `sudo restic -r /mnt/backup/restic/caracole -p
-/etc/restic/caracole-password` for `sudo restic-caracole`.
+To restore, do as on NixOS, with `sudo restic -r /mnt/backup/restic/caracole -p
+/etc/restic/caracole-password` in place of `sudo restic-caracole`.
 
 ### 11. The library page on your network
 
-caracole-web listens on 127.0.0.1: from the laptop,
-`ssh -L 8737:127.0.0.1:8737 server`, then `http://127.0.0.1:8737/`. For your
-LAN, give it the machine's LAN address (`ip -4 addr`, fixed by a DHCP
-reservation in the router), or its tailnet address:
+caracole-web listens on 127.0.0.1: from the laptop, `ssh -L 8737:127.0.0.1:8737 server`, then
+`http://127.0.0.1:8737/`. For your LAN, give it the machine's LAN address (`ip -4 addr`, fixed by a
+DHCP reservation in the router), or its tailnet address:
 
 ```sh
 sudo sed -i 's/--address 127.0.0.1/--address 192.168.1.20/' /etc/systemd/system/caracole-web.service
@@ -686,14 +660,13 @@ sudo systemctl daemon-reload && sudo systemctl restart caracole-web.service
 sudo ufw allow from 192.168.1.0/24 to any port 8737 proto tcp   # with ufw on: the LAN alone
 ```
 
-`--allow-host NAME`, added to its `ExecStart=`, is another name it answers to,
-such as a full tailnet name.
+Add `--allow-host NAME` to its `ExecStart=` for each other name it should answer to, such as a full
+tailnet name.
 
 ### 12. Auto-chords
 
-Optional, as on NixOS (section 4). torch comes from PyTorch's CPU-only index
-(PyPI's brings GB of CUDA), then caracole's `autochords` extra, both at section
-2's versions:
+Optional, as on NixOS (section 4). torch comes from PyTorch's CPU-only index (PyPI's brings GBs of
+CUDA), then caracole's `autochords` extra, both at section 2's versions:
 
 ```sh
 sudo apt install ffmpeg unzip
@@ -705,11 +678,10 @@ sudo uv pip install --compile-bytecode --python $VENV/bin/python -c /opt/caracol
   "caracole[autochords] @ git+https://github.com/Danielhp95/caracole@$(basename $VENV)"
 ```
 
-The model files `nix/autochords.nix` pins (JKU's server is sometimes down: try
-again later), then, for audio from YouTube, yt-dlp and deno, the JavaScript
-runtime it solves YouTube's player with: deno at nixpkgs' version, yt-dlp at its
-latest (Ubuntu's is too old for YouTube). For purchases alone, leave those two
-out, and turn YouTube off:
+Next, the model files `nix/autochords.nix` pins (JKU's server is sometimes down: try again later).
+For audio from YouTube you also need yt-dlp and deno, the JavaScript runtime it uses for YouTube's
+player: deno at nixpkgs' version, yt-dlp at its latest (Ubuntu's is too old). For purchases only,
+leave those two out and turn YouTube off:
 `printf '\n[providers.youtube]\nenabled = false\n' | sudo tee -a /etc/caracole/caracole.toml`.
 
 ```sh
@@ -730,20 +702,16 @@ sudo uv pip install --compile-bytecode --python /opt/caracole/yt-dlp/bin/python 
 sudo ln -sfn ../yt-dlp/bin/yt-dlp /opt/caracole/bin/yt-dlp
 ```
 
-The Ubuntu install does not transcribe lyrics from a song's audio: that needs
-Whisper large-v3 and HTDemucs (the Nix package fetches them, checked against
-`e5b1a55b89c1367dacf97e3e19bfd829a01529dbfdeefa8caeb59b3f1b81dadb` for
-`large-v3.pt` and
-`8193504cdfb3943adaf039b8acb524a46e87ebf232c383ac7a32c80a6578423e` for
-`htdemucs.safetensors`) and demucs-rs built with its CPU backend, none of which
-this section installs. Without them a song no lyrics site has stays without
-lyrics. `openai-whisper` is installed (it is in the extra), and unused.
+The Ubuntu install doesn't transcribe lyrics from audio. That needs Whisper large-v3 and HTDemucs
+(the Nix package's are checked against
+`e5b1a55b89c1367dacf97e3e19bfd829a01529dbfdeefa8caeb59b3f1b81dadb` for `large-v3.pt` and
+`8193504cdfb3943adaf039b8acb524a46e87ebf232c383ac7a32c80a6578423e` for `htdemucs.safetensors`)
+and a CPU build of demucs-rs, none of which this section installs. `openai-whisper` comes with the
+extra but goes unused.
 
-The unit runs after each run that succeeds, with no network, and may generate
-code, as PyTorch and numba do. So may caracole-web, which makes a song's sheet
-from a YouTube video, and `caracole-admin`, once this unit exists (section 8).
-Two drop-ins give caracole.service its `OnSuccess=` and caracole-web its
-`MemoryDenyWriteExecute=no`:
+The unit runs after each successful run, with no network, and without `MemoryDenyWriteExecute`
+because PyTorch and numba generate code. Two drop-ins start it after caracole.service and lift
+`MemoryDenyWriteExecute` for caracole-web; `caracole-admin` lifts it once this unit exists:
 
 ```sh
 sudo tee /etc/systemd/system/caracole-autochords.service > /dev/null <<'EOF'
@@ -778,8 +746,7 @@ Then [check that it works](#checking-auto-chords).
 
 ### 13. Upgrades
 
-A new commit gets a virtual environment of its own, and the link moves once it
-is ready:
+Each new commit gets its own virtual environment, and the link moves once it is ready:
 
 ```sh
 PY=/opt/caracole/python/cpython-3.14.7-linux-x86_64-gnu/bin/python3.14
@@ -802,9 +769,9 @@ sudo systemctl restart caracole-web.service
 yt-dlp falls behind when YouTube changes:
 `sudo uv pip install --compile-bytecode --python /opt/caracole/yt-dlp/bin/python -U 'yt-dlp[default]'`.
 
-To roll back, point `current` at the commit before, and restart caracole-web.
-A commit that moves `flake.lock`, `nix/pdf-fonts.py`, `nix/alphatab.nix` or
-`nix/autochords.nix` moves the versions or files of sections 2, 4 or 12 too.
+To roll back, point `current` at the previous commit and restart caracole-web. A commit that
+changes `flake.lock`, `nix/pdf-fonts.py`, `nix/alphatab.nix` or `nix/autochords.nix` also changes
+the versions or files of sections 2, 4 or 12.
 
 ## The first run
 
@@ -820,20 +787,18 @@ sudo systemctl start caracole.service        # a whole run now; it returns when 
 journalctl -u caracole.service -e
 ```
 
-`wanted.txt`, in the library, lists your songs, one a line: `Artist - Title`,
-then optionally ` | Album` and ` | m:ss`, which make the lyrics exact
-([usage.md](usage.md#wantedtxt)). Edit it on any device, or ask for a song on
-the library page. Then read `_todo.md` in the library, or the library page: what
-needs you comes first.
+`wanted.txt`, in the library, lists your songs, one per line: `Artist - Title`, then optionally
+` | Album` and ` | m:ss`, which make the lyrics exact ([usage.md](usage.md#wantedtxt)). Edit it on
+any device, or ask for a song on the library page. Then read `_todo.md` in the library, or the
+library page: what needs you comes first.
 
-A file you pass `caracole-admin` must be one user `caracole` can read, outside
-`/home`, `/root` and `/tmp`, which the sandbox hides. A `caracole` you run
-yourself, with no `--config`, uses your home folders, not the service's: both
-systems leave `/etc/caracole/service`, so it says so, and builds no index there
-unless you add `--home` ([usage.md](usage.md#the-services-library-and-your-homes)). One caracole works at a
-time: a command started during the nightly run waits for it, but a lookup
-(`get`, or a song asked for on the library page) only for the run's next pause
-([usage.md](usage.md#one-step-at-a-time)).
+Files you pass to `caracole-admin` must be readable by user `caracole` and outside `/home`,
+`/root` and `/tmp`. A `caracole` you run yourself without `--config` uses your home folders, warns
+you about it, and builds no index unless you add `--home`
+([usage.md](usage.md#the-services-library-and-your-homes)).
+
+One caracole works at a time. A command started during the nightly run waits for it to end, but a
+lookup waits only for the run's next pause ([usage.md](usage.md#one-step-at-a-time)).
 
 ## Checking auto-chords
 
@@ -846,10 +811,9 @@ sudo systemctl start --no-block caracole-autochords.service     # now, rather th
 journalctl -u caracole-autochords -f                            # its last line: auto-chords: 0 generated, 0 skipped, 0 failed
 ```
 
-The library page's request form then has a **YouTube video** field, and after
-the next nightly run the Sites tab's YouTube line counts its yt-dlp runs. Where
-the form has no such field, it says why, "No sheets from YouTube here: …", and
-the Sites tab's YouTube line, Off, says it in full once opened:
+The library page's request form then has a **YouTube video** field, and after the next nightly run
+the Sites tab's YouTube line counts its yt-dlp runs. If the field is missing, the form says why
+("No sheets from YouTube here: …"), and so does the Sites tab's YouTube line once opened:
 
 | It says | Then |
 |---|---|
@@ -858,22 +822,21 @@ the Sites tab's YouTube line, Off, says it in full once opened:
 | yt-dlp is missing | Ubuntu: section 12's yt-dlp, linked into `/opt/caracole/bin` |
 | YouTube is turned off | `[providers.youtube] enabled = false`: auto-chords for purchases alone |
 
-Then one song from end to end, one nobody has charted, from a video of it. It
-goes into wanted.txt if the library hasn't got it; its audio, lyrics, chords,
-PDF and viewer come in a few minutes, a line a stage, then `Done in …`:
+Then try one song end to end: one nobody has charted, from a video of it. It goes into wanted.txt
+if the library doesn't have it. Its audio, lyrics, chords, PDF and viewer arrive in a few minutes,
+one line per stage, then `Done in …`:
 
 ```sh
 sudo caracole-admin youtube --song "Artist - Title" --url "https://www.youtube.com/watch?v=…" --sheet
 ```
 
-On the library page, the same is a video pasted in the request form, or **Make
-the sheet** on the video it suggests for a search the sites have no sheet for,
-with its thumbnail from `i.ytimg.com`. Either way the sheet opens in the
-viewer, as any other.
+On the library page, you can do the same by pasting a video in the request form, or with **Make the
+sheet** on the video suggested for a search that found no sheet. Either way the sheet opens in the
+viewer like any other.
 
 ## Logs
 
-The units write to the journal, each line under its priority
+The units write to the journal, each line at its priority
 ([usage.md](usage.md#what-caracole-prints)):
 
 ```sh
@@ -883,16 +846,14 @@ journalctl -u caracole-web | grep 'library page'   # each library page served: i
 sudo caracole-admin -v run            # a run now, a line per request, on the terminal
 ```
 
-A block, a cooldown or a spent budget is no failure: the run exits 0 and the
-songs wait for the next one. A bug exits 1, and ntfy says the unit failed
-([usage.md](usage.md#caracole-run)).
+A block, a cooldown or a spent budget is not a failure: the run exits 0 and the songs wait for the
+next one. A bug exits 1, and ntfy says the unit failed ([usage.md](usage.md#caracole-run)).
 
 ## Moving an index into the service
 
-An index built by a `caracole` of your own, on your home folders
-(`~/.local/state/caracole`), moves into the service's database as a file:
-exported as you, put where user `caracole` can read it (the sandbox hides
-`/home` and `/tmp`), merged there, and deleted:
+You can move an index built by your own `caracole` (in `~/.local/state/caracole`) into the
+service's database. Export it as yourself, put it where user `caracole` can read it (the sandbox
+hides `/home` and `/tmp`), merge it, and delete it:
 
 ```sh
 caracole index export /tmp/caracole-indexes.sqlite        # add --site harptabs, say, for one site's
@@ -901,20 +862,19 @@ sudo caracole-admin index merge /var/lib/caracole/state/indexes.sqlite
 sudo rm /var/lib/caracole/state/indexes.sqlite && rm /tmp/caracole-indexes.sqlite
 ```
 
-The merge takes what the file read more recently, page by page and sitemap by
-sitemap, and leaves the rest as the service has it, after a copy of its
-database in `backups/` ([usage.md](usage.md#caracole-index-export-and-merge)).
-Both caracoles must be at the same schema version: the merge says so when they
-aren't, and changes nothing.
+The merge takes whatever the file read more recently, page by page and sitemap by sitemap, and
+leaves the rest alone. It saves a copy of the database in `backups/` first
+([usage.md](usage.md#caracole-index-export-and-merge)). Both caracoles must be at the same schema
+version; otherwise the merge says so and changes nothing.
 
 ## Restoring the database
 
-Each nightly run that went well ends with a whole copy of the database in
-`/var/lib/caracole/state/backups/`, the last three kept
-([usage.md](usage.md#caracole-backup)); `sudo caracole-admin backup` makes one
-now. To put one back, stop caracole, set the database aside with its `-wal`
-and `-shm` files (a `-wal` left beside another database would be read into
-it), and copy the backup into its place:
+Each successful nightly run ends with a full copy of the database in
+`/var/lib/caracole/state/backups/`, keeping the last three ([usage.md](usage.md#caracole-backup)).
+`sudo caracole-admin backup` makes one now.
+
+To put one back, stop caracole, move the database aside with its `-wal` and `-shm` files (a
+leftover `-wal` would be read into the restored database), and copy the backup into its place:
 
 ```sh
 sudo systemctl stop caracole.timer caracole-web.service caracole.service   # and caracole-autochords.service
@@ -927,51 +887,28 @@ sudo sh -c 'cd /var/lib/caracole/state && mkdir -p -m 0700 before-restore &&
 sudo systemctl start caracole.timer caracole-web.service
 ```
 
-The nightly runs after it do again what the nights since the copy did, from
-the HTTP cache where they can. A copy a newer caracole made stops every
-command with status 2, as the database itself would; an older one is
-migrated as an upgrade migrates the database. `before-restore/` is yours to
-delete once all is well. restic's copy (NixOS section 3, Ubuntu section 10)
-is restored the same way.
+The following nightly runs redo what the nights since the copy did, from the HTTP cache where they
+can. A copy made by a newer caracole stops every command with status 2. An older one is migrated
+as an upgrade would. Delete `before-restore/` once all is well. Restore restic's copy (NixOS
+section 3, Ubuntu section 10) the same way.
 
 ## When something is wrong
 
-- **ntfy says a unit failed:** `journalctl -u UNIT -e`, for the unit it names.
-- **ntfy says a site blocked caracole:** nothing to do or work around. The
-  message says until when caracole leaves the site alone; nothing was marked
-  not found, and the songs wait.
-- **`_todo.md` leads with "overrides.toml can't be read":** the run stopped
-  before its first step; the error names the line. `Permission denied`: give
-  the file group `caracole` and `chmod g+rw`. Then
-  `sudo systemctl start caracole.service`.
-- **"Another caracole is running":** the message names the process. A nightly
-  run takes up to an hour, and with auto-chords up to another for YouTube.
-- **"is at schema version N, but this caracole knows up to M":** a newer
-  caracole migrated the database. Go back to it, or restore the copy saved
-  before the migration, which the message names.
-- **The library page shows no songs:** `journalctl -u caracole-web | grep
-  'library page'`. Each page served has its line, and one with no songs is a
-  warning that names the database it opened, whether it was there before, its
-  size, owner and schema version, the rows its `songs` table holds, and the
-  uid caracole-web runs as (`-u caracole` for the `index.html` the nightly run
-  wrote; [usage.md](usage.md#what-caracole-prints)).
-- **The library page doesn't load:** `journalctl -u caracole-web -e`; "can't
-  listen on" says why. A 421: add the name the browser used to
-  `web.allowedHosts` (`--allow-host`). "caracole serve has restarted since this
-  page was opened": reload it.
-- **Which server is this page from?** Every page names the library after
-  caracole's, in its header and its tab's title (`name` in caracole.toml, else
-  the library folder's: "caracole · library" here). A page badged **Scratch
-  library** (or what `--label` says) is another caracole serve's, of a library
-  in a temporary folder: caracole-web's pages carry no badge
-  ([usage.md](usage.md#caracole-serve)). What each request did is in the
-  Journal, kept across restarts in `/var/lib/caracole/state/requests.jsonl`.
-- **Syncthing says "permission denied":** `ls -ld /var/lib/caracole/library`
-  shows `drwxrwsr-x caracole caracole`, and `id syncthing` lists `caracole`?
-  Restart Syncthing after a group change, and tick Ignore Permissions.
-- **Auto-chords can't read a purchase:** the to-do page says why; replace the
-  file (as FLAC, say). For audio from YouTube, put another video under
-  `[youtube]` in overrides.toml.
-- **The NixOS build can't fetch beat_this's checkpoint:** add a copy of
-  `final0.ckpt` to the store, which Nix finds by its hash:
-  `cp final0.ckpt beat_this-final0.ckpt && nix-store --add-fixed sha256 beat_this-final0.ckpt`.
+| Symptom | What to do |
+|---|---|
+| ntfy says a unit failed | `journalctl -u UNIT -e`, for the unit it names. |
+| ntfy says a site blocked caracole | Nothing. The message says until when caracole leaves the site alone. No song was marked not found; they wait. |
+| `_todo.md` leads with "overrides.toml can't be read" | The run stopped before its first step, and the error names the line. For `Permission denied`, give the file group `caracole` and `chmod g+rw`. Then `sudo systemctl start caracole.service`. |
+| "Another caracole is running" | The message names the process. A nightly run takes up to an hour, plus up to another with auto-chords for YouTube. |
+| "is at schema version N, but this caracole knows up to M" | A newer caracole migrated the database. Go back to it, or restore the pre-migration copy the message names. |
+| The library page shows no songs | `journalctl -u caracole-web \| grep 'library page'`. A page with no songs logs a warning naming the database it opened, its size, owner, schema version and `songs` rows, and the uid caracole-web runs as. Use `-u caracole` for the `index.html` the nightly run wrote ([usage.md](usage.md#what-caracole-prints)). |
+| The library page doesn't load | `journalctl -u caracole-web -e`: "can't listen on" says why. For a 421, add the name the browser used to `web.allowedHosts` (`--allow-host`). For "caracole serve has restarted since this page was opened", reload. |
+| Syncthing says "permission denied" | Check that `ls -ld /var/lib/caracole/library` shows `drwxrwsr-x caracole caracole` and `id syncthing` lists `caracole`. Restart Syncthing after a group change, and tick Ignore Permissions. |
+| Auto-chords can't read a purchase | The to-do page says why. Replace the file (as FLAC, say). For audio from YouTube, put another video under `[youtube]` in overrides.toml. |
+| The NixOS build can't fetch beat_this's checkpoint | Add a copy of `final0.ckpt` to the store, where Nix finds it by its hash: `cp final0.ckpt beat_this-final0.ckpt && nix-store --add-fixed sha256 beat_this-final0.ckpt`. |
+
+To tell which server a page comes from, look at the library name after "caracole" in its header
+(`name` in caracole.toml, else the library folder's name). A **Scratch library** badge means another
+caracole serve on a temporary library; caracole-web's pages have none
+([usage.md](usage.md#caracole-serve)). The Journal keeps each request across restarts, in
+`/var/lib/caracole/state/requests.jsonl`.
