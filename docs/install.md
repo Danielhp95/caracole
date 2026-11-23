@@ -106,4 +106,4 @@ A test that needs a program or a file it can't find skips:
   `https://danielhp95.github.io/caracole/fdroid/repo?fingerprint=B34AD39AD80D6CE828F0885C68FD81816230BB3CB482C9E7BCC6DAD844500397`,
   then install caracole from its list. F-Droid keeps it updated.
 - **Built yourself**: [android/README.md](../android/README.md#build).
-- Then connect it to your computer: [phone.md](phone.md#connect-it-to-your-computer).
+- Then connect it to your computer: [phone.md](phone.md#install-and-connect).
