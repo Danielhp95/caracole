@@ -56,18 +56,4 @@ Install it from F-Droid, or build it: [android/README.md](../android/README.md).
 
 ## Pictures
 
-<p>
-  <img src="screenshots/phone-chord.png" width="260" alt="Scarborough Fair on a phone, the card of its G chord at the foot: its shape, its notes and a scale to solo in">
-  <img src="screenshots/phone-pinyin.png" width="260" alt="A Chinese folk song on a phone, with the pinyin of each character between it and its chord">
-</p>
-
-![The Harmony tab beside the song: the key's neck and each section's progression in numerals](screenshots/harmony.png)
-
-![The Songbooks tab: a set list, each song with the key it is played in](screenshots/songbooks.png)
-
-<img src="screenshots/songbook-pdf.png" width="440" alt="A page of a songbook's PDF: chord diagrams, then the verses with the chords over the words">
-
-![The Guitar Pro page: a melody drawn as a score and a tab, with Play and a button for each track](screenshots/guitar-pro.png)
-
-A demo library of public-domain songs, which [docs/screenshots/make.py](screenshots/make.py)
-builds and photographs.
+Every part of the app, pictured: the [README's Gallery](../README.md#gallery).
