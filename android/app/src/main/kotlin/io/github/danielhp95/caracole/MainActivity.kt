@@ -33,6 +33,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import io.github.danielhp95.caracole.mirror.Links
 import io.github.danielhp95.caracole.mirror.Route
+import io.github.danielhp95.caracole.core.db.Database
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -62,7 +63,7 @@ class MainActivity : Activity() {
     private lateinit var web: WebView
     private lateinit var status: TextView
     private lateinit var title: TextView
-    private lateinit var loading: View
+    private lateinit var opening: OpeningScreen
     /** Where links go, once the server has started (the WebView's client reads it on its own threads). */
     @Volatile private var links: Links? = null
     /** The server's files read in this process, once it has started (the WebView's client reads it on its own
@@ -101,8 +102,7 @@ class MainActivity : Activity() {
         web = findViewById(R.id.web)
         status = findViewById(R.id.status)
         title = findViewById(R.id.title)
-        loading = findViewById(R.id.loading)
-        screen.launch { delay(LOADING_MOST_MS); loaded() }  // never left over a page that came some other way
+        opening = OpeningScreen(findViewById(R.id.loading))
         settings = Settings(this)
         alphaTab = AlphaTabAssets(this)
         chooser = FileChooser(this)
@@ -162,7 +162,14 @@ class MainActivity : Activity() {
      */
     private suspend fun start(saved: Bundle?) {
         val phone = try {
-            withContext(Dispatchers.IO) { Caracole.phone(this@MainActivity) }
+            withContext(Dispatchers.IO) {
+                // What the opening screen says (OpeningSteps): the library opened, upgraded first after an update.
+                if (Caracole.started() == null) {
+                    val updating = OpeningSteps.updating(Caracole.databaseFile(this@MainActivity), Database.SCHEMA_VERSION)
+                    runOnUiThread { opening.show(OpeningSteps.Step.OPEN, updating) }
+                }
+                Caracole.phone(this@MainActivity) { runOnUiThread { opening.show(OpeningSteps.Step.START) } }
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
@@ -171,6 +178,8 @@ class MainActivity : Activity() {
             say(getString(R.string.no_server, e.message ?: e.javaClass.simpleName))
             return
         }
+        opening.show(OpeningSteps.Step.DRAW)
+        screen.launch { delay(LOADING_MOST_MS); loaded() }  // never left over a page that came some other way
         val origin = phone.server.origin
         files = LocalFiles(phone.app::handle, URI(origin), Caracole.secret)
         links = Links(URI(origin)) { Caracole.isFile(this, it) }
@@ -372,10 +381,9 @@ class MainActivity : Activity() {
     }
 
     /** A line in the status bar, kept until the next sync's. */
-    /** caracole's logo, shown from the app's start until its first page is drawn (or a message said), faded out once. */
+    /** The opening screen (OpeningScreen), shown from the app's start until its first page is drawn or a message is said. */
     private fun loaded() {
-        if (loading.visibility != View.VISIBLE || loading.alpha < 1f) return
-        loading.animate().alpha(0f).setDuration(LOADING_FADE_MS).withEndAction { loading.visibility = View.GONE }
+        opening.done()
     }
 
     private fun say(text: String) {
@@ -642,7 +650,6 @@ class MainActivity : Activity() {
         private const val RELAYOUT = "window.dispatchEvent(new Event('resize'))"
         private const val FADE_MS = 250L
         /** The opening logo's fade, and the most it stays over the screen whatever came of the first page. */
-        private const val LOADING_FADE_MS = 200L
         private const val LOADING_MOST_MS = 15_000L
     }
 }

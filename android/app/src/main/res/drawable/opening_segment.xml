@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A step not yet done on the opening screen; OpeningScreen tints a done one in the accent. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/opening_track" />
+    <corners android:radius="2dp" />
+</shape>

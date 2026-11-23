@@ -85,9 +85,12 @@ object Caracole {
      * The phone's caracole, its server listening: made once a process, by the first caller, on its own thread (never
      * the main one: it opens the database, migrating and seeding it on the first start, and binds the port).
      */
-    fun phone(context: Context): Phone = phone ?: synchronized(this) {
-        phone ?: start(context.applicationContext).also { phone = it }
+    fun phone(context: Context, starting: () -> Unit = {}): Phone = phone ?: synchronized(this) {
+        phone ?: start(context.applicationContext, starting).also { phone = it }
     }
+
+    /** The library's database file, which the opening screen reads the header of (OpeningSteps.updating). */
+    fun databaseFile(context: Context): File = File(context.filesDir, DATABASE)
 
     /** The phone's caracole once it has started, else null. */
     fun started(): Phone? = phone
@@ -95,10 +98,11 @@ object Caracole {
     /** What keeps the phone's caracole working while its queue works ([SyncService]), once it has started. */
     internal fun working(): Working? = working
 
-    private fun start(context: Context): Phone {
+    private fun start(context: Context, starting: () -> Unit): Phone {
         val files = context.filesDir
         val database = openDatabase(File(files, DATABASE))
         try {
+            starting()  // the database open: caracole's own server next (MainActivity's opening screen)
             val library = File(files, "library").apply { mkdirs() }
             val state = File(files, "state").apply { mkdirs() }
             cacheDir(context).mkdirs()

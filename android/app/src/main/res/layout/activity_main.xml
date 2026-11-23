@@ -72,19 +72,70 @@
         <!-- caracole's logo while the app opens, over the page until the WebView draws its first one
              (MainActivity.loaded): no blank screen between Android's own splash and the library. Not clickable, so
              nothing waits on it. -->
-        <FrameLayout
+        <LinearLayout
             android:id="@+id/loading"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:background="@color/background">
+            android:background="@color/background"
+            android:gravity="center"
+            android:orientation="vertical">
 
             <ImageView
                 android:layout_width="200dp"
                 android:layout_height="200dp"
-                android:layout_gravity="center"
                 android:contentDescription="@string/loading"
                 android:src="@drawable/logo_loading" />
-        </FrameLayout>
+
+            <!-- A segment a step (OpeningSteps): done ones filled, the current one with a moving shine (OpeningScreen). -->
+            <LinearLayout
+                android:id="@+id/opening_steps"
+                android:layout_width="132dp"
+                android:layout_height="4dp"
+                android:layout_marginTop="4dp"
+                android:importantForAccessibility="no"
+                android:orientation="horizontal">
+
+                <FrameLayout style="@style/OpeningSegment" android:layout_marginEnd="4dp">
+                    <View style="@style/OpeningShine" />
+                </FrameLayout>
+
+                <FrameLayout style="@style/OpeningSegment" android:layout_marginEnd="4dp">
+                    <View style="@style/OpeningShine" />
+                </FrameLayout>
+
+                <FrameLayout style="@style/OpeningSegment">
+                    <View style="@style/OpeningShine" />
+                </FrameLayout>
+            </LinearLayout>
+
+            <!-- What is happening, said once a step. -->
+            <TextView
+                android:id="@+id/opening_said"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:accessibilityLiveRegion="polite"
+                android:gravity="center"
+                android:text="@string/opening_open"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:textColor="@color/muted"
+                android:textSize="14sp" />
+
+            <!-- A step slower than OpeningScreen.SLOW_MS: it is still working. -->
+            <TextView
+                android:id="@+id/opening_more"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:gravity="center"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:text="@string/opening_slow"
+                android:textColor="@color/muted"
+                android:textSize="12sp"
+                android:visibility="invisible" />
+        </LinearLayout>
 
         <!-- The size a pinch is at ("135%"), near the top of the page while it lasts (SizeLabel); said once at its
              end rather than read here at each step. -->
