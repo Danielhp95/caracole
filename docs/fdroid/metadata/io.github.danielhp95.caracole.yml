@@ -1,0 +1,30 @@
+Categories:
+  - Multimedia
+  - Reading
+License: MIT
+AuthorName: Daniel Hernandez
+WebSite: https://github.com/Danielhp95/caracole
+SourceCode: https://github.com/Danielhp95/caracole
+IssueTracker: https://github.com/Danielhp95/caracole/issues
+
+Name: caracole
+Summary: Your caracole library of chord sheets, offline on the phone
+Description: |-
+  caracole keeps a copy of your caracole library on the phone and runs caracole
+  there, so it works with the computer off.
+
+  * Your library, offline: the library page, every sheet with all its tools
+    (key, capo, chord diagrams, harmony, pinyin, strum), kept versions,
+    harmonica tabs and songbooks.
+  * Search and fetch from the phone: the computer's site indexes come with a
+    sync, so the phone's search finds songs on the sites offline.
+  * Sync with your computer: the two libraries each take what the other
+    changed; where both changed a song, you pick which to keep.
+  * Guitar Pro on the phone: a file drawn as score and tab and played.
+  * Share to caracole: share a song from a music app to find it or fetch it.
+
+  It needs a computer running caracole serve to sync from:
+  https://github.com/Danielhp95/caracole
+
+AutoUpdateMode: None
+UpdateCheckMode: None
