@@ -14,6 +14,7 @@ import io.github.danielhp95.caracole.core.sync.SyncEngine
 import io.github.danielhp95.caracole.core.sync.SyncFailed
 import io.github.danielhp95.caracole.core.sync.SyncOutcome
 import io.github.danielhp95.caracole.core.sync.Units
+import io.github.danielhp95.caracole.core.index.IndexTransfer
 import io.github.danielhp95.caracole.core.testing.Fixtures
 import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.TestDb
@@ -57,7 +58,10 @@ class ImportTest {
         val store = LibraryStore(library)
         val pagesHanded = CopyOnWriteArrayList<Pair<SyncFile, List<String>>>()
         val engine = SyncEngine(database, store, File(dir, "state"), client = { PeerClient(ServerAddress.parse(it)) },
-                                mirrorRefresh = null, pagesFromFile = { f, taken -> pagesHanded.add(f to taken) })
+                                mirrorRefresh = null, pagesFromFile = { f, taken, say ->
+                                    pagesHanded.add(f to taken)
+                                    say("1 of 2 pages kept")
+                                })
             .also { it.zone = ZoneOffset.UTC }
 
         init {
@@ -106,6 +110,7 @@ class ImportTest {
         assertEquals(mapOf("check" to "done", "take" to "done", "mirror" to "done", "agree" to "done", "index" to "skipped"),
                      ended())
         assertEquals(listOf(outcome.taken), here.pagesHanded.map { it.second })
+        assertTrue(Triple("mirror", "running", "1 of 2 pages kept") in stages, "the hook's words are the stage's")
         val report = outcome.report!!
         assertEquals(JsonObject(mapOf("name" to JsonPrimitive("Desk"), "kind" to JsonPrimitive("file"),
                                       "address" to JsonPrimitive(null as String?))), report["with"])
@@ -218,6 +223,22 @@ class ImportTest {
         val entries = (outcome.report!!["indexes"] as JsonArray).map { it as JsonObject }
         assertTrue(entries.isNotEmpty() && entries.all { it["direction"] == JsonPrimitive("taken") }, "$entries")
         assertEquals(File(here.dir, "state/cache").listFiles().orEmpty().toList(), emptyList())
+    }
+
+    @Test fun anImportsIndexStageSaysEachStepOfItsMerge() {
+        val there = Caracole()
+        val full = File(tmp.newFolder(), "export.sqlite").also { Fixtures.loadRaw(it, "index/fixtures/full-export.jsonl") }
+        there.database.writeBlocking { db -> IndexTransfer.merge(db, full, "2026-11-01T10:00:00Z") }
+        val here = Caracole()
+        here.engine.ticks = { 0L }  // the clock stands still: each step's first words alone
+        here.apply(here.engine.compareFile(there.export(listOf(Scope.LIBRARY, Scope.INDEXES))))
+        val said = stages.filter { it.first == "index" && it.second == "running" }.map { it.third }
+        val steps = listOf("", "Copying the file's indexes out…", "Comparing with the phone's index…",
+                           "Importing · Ultimate Guitar", "Importing · LaCuerda", "Tidying the database…")
+        var at = 0
+        for (line in said) if (at < steps.size && line == steps[at]) at++
+        assertEquals(steps.size, at, said.joinToString("\n"))
+        assertEquals("done", ended()["index"])
     }
 
     @Test fun theUnitsTakenFromAFileAreHandedToThePagesHookAndNoneWhenNothingWasTaken() {
