@@ -19,6 +19,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import io.github.danielhp95.caracole.server.Phone
+import io.github.danielhp95.caracole.server.jobs.Job
 import io.github.danielhp95.caracole.server.jobs.JobViews
 import io.github.danielhp95.caracole.server.lookups.CataloguesRunner
 import kotlinx.coroutines.CoroutineScope
@@ -41,9 +42,10 @@ import java.time.Instant
  * 2026 · 3 weeks old"), or of the computer's indexes a sync merged ("The computer's indexes, of 3 Nov 2026 · …"),
  * "None yet" for neither (SiteCatalogues.fresh), and Download the site catalogues, which asks GitHub nothing until it
  * is tapped, then queues CataloguesRunner's job and says its line as it goes ([followCatalogues]); a job a metered
- * network stopped is asked about ("52 MB over mobile data?"), Download then the owner's go-ahead, the question kept
- * for the next screen until it is answered (a rotation's). A phone's caracole that can't start is said under the
- * catalogues' button ("Couldn't start · …"), never a crash. Syncing itself is the library screen's bar's sync button.
+ * network stopped is asked about ("52 MB on a metered network?"), whoever queued it (the Journal's Try again too),
+ * Download then the owner's go-ahead, the question kept for the next screen until it is answered (a rotation's). A
+ * phone's caracole that can't start is said under the catalogues' button ("Couldn't start · …"), never a crash, and
+ * its start tried again as the screen comes back. Syncing itself is the library screen's bar's sync button.
  * No item's text ends in "…".
  */
 class SettingsActivity : Activity() {
@@ -64,8 +66,8 @@ class SettingsActivity : Activity() {
     internal var asked: AlertDialog? = null
         private set
 
-    /** The job [asked] is about. */
-    private var askedFor: Int? = null
+    /** The job [asked] is about (SiteCatalogues.keyOf). */
+    private var askedFor: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -122,6 +124,7 @@ class SettingsActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        if (startFailed) starting = null  // a start that failed is tried again as the screen comes back, once
         showTextSize()
         showStorage()
         showCatalogues()
@@ -139,23 +142,28 @@ class SettingsActivity : Activity() {
     }
 
     override fun onDestroy() {
-        // A rotation, say: the question goes with its window, unanswered, so the next screen asks it again
-        // (SiteCatalogues.toSay), and no window is leaked.
+        // A rotation, say: the question goes with its window, unanswered (Settings.cataloguesAnswered not written), so
+        // the next screen asks it again, and no window is leaked.
         asked?.let { it.setOnDismissListener(null); it.dismiss() }
         asked = null
         askedFor = null
         super.onDestroy()
     }
 
-    /** The phone's caracole asked for once a screen (its start, should the library screen's have failed, tried again
-     * once rather than at each row: an update's migration that ran out of room is long), in the process's scope. */
-    private val starting: Deferred<Result<Phone>> by lazy {
-        val app = applicationContext
-        Caracole.background.async(Dispatchers.IO) { guarded { Caracole.phone(app) } }
-    }
+    /** The phone's caracole asked for, should the library screen's start have failed, once each time the screen comes
+     * back (onResume), never once a row: an update's migration that ran out of room is long. In the process's scope. */
+    private var starting: Deferred<Result<Phone>>? = null
+    private var startFailed = false
 
     /** The phone's caracole, or null once why it can't start is said ([cantStart]). */
-    private suspend fun phone(): Phone? = starting.await().onFailure(::cantStart).getOrNull()
+    private suspend fun phone(): Phone? {
+        val app = applicationContext
+        val asked = starting ?: Caracole.background.async(Dispatchers.IO) { guarded { Caracole.phone(app) } }
+            .also { starting = it }
+        val started = asked.await()
+        startFailed = started.isFailure
+        return started.onFailure(::cantStart).getOrNull()
+    }
 
     /** "Couldn't start · database or disk is full", under the catalogues' button: the library screen's words. */
     private fun cantStart(e: Throwable) = say(getString(R.string.no_server, why(e)))
@@ -239,40 +247,28 @@ class SettingsActivity : Activity() {
         }
     }
 
-    /** The newest catalogues job's line (the first start's Download, a tap before this screen was left), followed
-     * while it waits or runs, or while its end is still to be said: its question, if the app queued it and no screen
-     * had it answered (one this screen's rotation took away). */
+    /** The newest catalogues job's line (the first start's Download, the Journal's Try again, a tap before this screen
+     * was left), followed while it waits or runs, then its end ([ended]). */
     private fun followCatalogues() {
         scope.launch {
             val phone = phone() ?: return@launch
             val job = SiteCatalogues.newestOf(phone.queue.snapshot()) ?: return@launch
             say(JobViews.line(job).text)
-            if (!SiteCatalogues.over(job.state) || SiteCatalogues.toSay(job.id)) follow(job.id)
+            if (!SiteCatalogues.over(job.state)) follow(job.id) else ended(phone, job)
         }
     }
 
-    /**
-     * Job [id] followed: its line ("Downloading · 31 of 52 MB") as it goes, then the date again and, when its end is
-     * still to be said ([SiteCatalogues.toSay]), the question a metered network's stop asks, else its end said.
-     */
+    /** Job [id] followed: its line ("Downloading · 31 of 52 MB") as it goes, then the date again and its end. */
     private fun follow(id: Int) {
         following?.cancel()
         following = scope.launch {
             val phone = phone() ?: return@launch
             while (true) {
                 val job = phone.queue.job(id) ?: return@launch
-                val line = JobViews.line(job)
-                say(line.text)
+                say(JobViews.line(job).text)
                 if (SiteCatalogues.over(job.state)) {
                     showCatalogues()
-                    if (!SiteCatalogues.toSay(id)) return@launch
-                    val asking = withContext(Dispatchers.IO) {
-                        guarded {
-                            phone.parts.database.read { db -> SiteCatalogues.asking(db.kvGet(CataloguesRunner.ASKING)) }
-                        }.getOrNull()
-                    }
-                    val question = SiteCatalogues.asks(job.state, line.tone, asking)
-                    if (question == null) SiteCatalogues.said(id) else askMetered(id, question)
+                    ended(phone, job)
                     return@launch
                 }
                 delay(FOLLOW_MS)
@@ -280,21 +276,37 @@ class SettingsActivity : Activity() {
         }
     }
 
-    /** "52 MB over mobile data?": Download, the go-ahead; Not now (or Back) leaves the job's line, waiting for it.
-     * Either answer says job [id]'s end; the window going without one (a rotation) leaves it to say. */
-    private fun askMetered(id: Int, asking: SiteCatalogues.Asking) {
-        if (askedFor == id && asked?.isShowing == true) return
+    /**
+     * [job] over: when it is the newest catalogues job and stopped at the metered step, its file named in kv
+     * `catalogues:asking`, the question, whoever queued it (SiteCatalogues.question), until it is answered.
+     */
+    private suspend fun ended(phone: Phone, job: Job) {
+        if (SiteCatalogues.newestOf(phone.queue.snapshot())?.id != job.id) return
+        val asking = withContext(Dispatchers.IO) {
+            guarded { phone.parts.database.read { db -> SiteCatalogues.asking(db.kvGet(CataloguesRunner.ASKING)) } }
+                .getOrNull()
+        }
+        val key = SiteCatalogues.keyOf(job.id, job.queuedAt)
+        SiteCatalogues.question(job.state, JobViews.line(job).tone, asking, key, settings.cataloguesAnswered)
+            ?.let { askMetered(key, it) }
+    }
+
+    /** "52 MB on a metered network?": Download, the go-ahead; Not now (or Back) leaves the job's line, waiting for it.
+     * Either answer is kept ([Settings.cataloguesAnswered]) for job [key]; the window going without one (a rotation)
+     * leaves it to ask again. */
+    private fun askMetered(key: String, asking: SiteCatalogues.Asking) {
+        if (askedFor == key && asked?.isShowing == true) return
         asked?.let { it.setOnDismissListener(null); it.dismiss() }
-        askedFor = id
+        askedFor = key
         asked = AlertDialog.Builder(this)
             .setTitle(getString(R.string.catalogues_asking_title, SiteCatalogues.size(asking.bytes)))
             .setMessage(R.string.catalogues_asking_message)
             .setPositiveButton(R.string.catalogues_asking_yes) { _, _ ->
-                SiteCatalogues.said(id)
+                settings.cataloguesAnswered = key
                 downloadCatalogues(meteredOk = true)
             }
-            .setNegativeButton(R.string.catalogues_asking_no) { _, _ -> SiteCatalogues.said(id) }
-            .setOnCancelListener { SiteCatalogues.said(id) }
+            .setNegativeButton(R.string.catalogues_asking_no) { _, _ -> settings.cataloguesAnswered = key }
+            .setOnCancelListener { settings.cataloguesAnswered = key }
             .setOnDismissListener {
                 asked = null
                 askedFor = null

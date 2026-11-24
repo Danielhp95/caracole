@@ -98,7 +98,7 @@ class SiteCataloguesTest {
     }
 
     @Test
-    fun theQuestionIsAskedOfAJobAMeteredNetworkStopped() {
+    fun theFileAMeteredNetworkLeftIsReadFromItsRecord() {
         val asking = Asking("indexes-s17-20261124T0312Z.sqlite.gz", 52_000_000)
         assertEquals(asking, SiteCatalogues.asking("""{"name": "indexes-s17-20261124T0312Z.sqlite.gz", "bytes": 52000000}"""))
         assertNull(SiteCatalogues.asking(null))
@@ -106,13 +106,6 @@ class SiteCataloguesTest {
         assertNull(SiteCatalogues.asking("""{"name": "x"}"""))
         assertNull(SiteCatalogues.asking("""{"name": 3, "bytes": 52}"""))
         assertNull(SiteCatalogues.asking("""[1, 2]"""))
-
-        // Done, its line a wait (the kind's otherwise), and the file it waits for: asked.
-        assertEquals(asking, SiteCatalogues.asks("done", "waiting", asking))
-        // Imported, up to date, or failed: never asked, whatever an earlier stop left.
-        assertNull(SiteCatalogues.asks("done", "ok", asking))
-        assertNull(SiteCatalogues.asks("failed", "error", asking))
-        assertNull(SiteCatalogues.asks("done", "waiting", null))
     }
 
     @Test
@@ -122,16 +115,21 @@ class SiteCataloguesTest {
     }
 
     @Test
-    fun aJobsEndIsToSayUntilItsQuestionIsAnswered() {
-        // The app queued it: its end is to say, by any screen that follows it (a rotation's new one too), until the
-        // question it asks is answered or it asks none.
-        SiteCatalogues.owe(41)
-        assertTrue(SiteCatalogues.toSay(41))
-        assertTrue("still to say: a screen gone before its answer leaves it", SiteCatalogues.toSay(41))
-        assertTrue(SiteCatalogues.said(41))
-        assertFalse(SiteCatalogues.toSay(41))
-        assertFalse("said once", SiteCatalogues.said(41))
-        assertFalse("a job the app never queued", SiteCatalogues.toSay(42))
+    fun theNewestJobAMeteredNetworkStoppedIsAskedAboutWhoeverQueuedIt() {
+        // Settings' Download, the first start's, or the Journal's Try again: the newest catalogues job that stopped at
+        // the metered step, with kv catalogues:asking naming its file, is asked about once, until it is answered.
+        val asking = Asking("indexes-s17-20261124T0312Z.sqlite.gz", 52_000_000)
+        val job = SiteCatalogues.keyOf(41, Instant.parse("2026-11-24T12:00:00.250Z"))
+        assertEquals(asking, SiteCatalogues.question("done", "waiting", asking, job, answered = null))
+        assertEquals("an older job's answer is no answer of this one's",
+                     asking, SiteCatalogues.question("done", "waiting", asking, job,
+                                                     SiteCatalogues.keyOf(40, Instant.parse("2026-11-24T11:00:00Z"))))
+        assertNull("answered: never asked again", SiteCatalogues.question("done", "waiting", asking, job, answered = job))
+        assertNull(SiteCatalogues.question("done", "waiting", null, job, answered = null))
+        assertNull(SiteCatalogues.question("done", "ok", asking, job, answered = null))
+        assertNull(SiteCatalogues.question("failed", "error", asking, job, answered = null))
+        // A job's key is its id and the second it was queued, as the Journal's history keeps them across a restart.
+        assertEquals(job, SiteCatalogues.keyOf(41, Instant.parse("2026-11-24T12:00:00Z")))
     }
 
     @Test
@@ -139,6 +137,9 @@ class SiteCataloguesTest {
         // Nothing downloads by itself once on Wi-Fi, and a metered Wi-Fi is no mobile data's absence of Wi-Fi.
         val strings = java.io.File("src/main/res/values/strings.xml").readText()
         val message = Regex("<string name=\"catalogues_asking_message\">([^<]*)</string>").find(strings)!!.groupValues[1]
+        val title = Regex("<string name=\"catalogues_asking_title\">([^<]*)</string>").find(strings)!!.groupValues[1]
+        assertEquals("%1\$s on a metered network?", title)
+        assertTrue(message, message.contains("a Wi-Fi marked metered"))
         assertFalse(message, message.contains("isn\\'t on Wi-Fi"))
         assertFalse(message, Regex("once (it is|on Wi-Fi)|when .*Wi-Fi|by itself on Wi-Fi").containsMatchIn(message))
         assertFalse("no line of the app's waits for Wi-Fi", strings.contains("waiting for Wi-Fi"))

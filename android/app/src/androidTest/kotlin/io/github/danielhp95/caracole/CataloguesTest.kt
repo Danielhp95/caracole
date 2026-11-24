@@ -51,7 +51,8 @@ import kotlin.random.Random
  * (the app's data cleared, as device-test.sh clears it before each class) with no computer set and no index, the
  * library screen offers the catalogues; Download imports them, and Settings, opened after it, says their date (the
  * file's); a second Download is Up to date. On a metered network the job stops before downloading and Settings asks
- * "… over mobile data?", asked again by the screen a rotation makes; Download there is the go-ahead, which imports.
+ * "… on a metered network?", asked again by the screen a rotation makes; Download there is the go-ahead, which
+ * imports. A job queued by no screen of the app's (the Journal's Try again) that stops so is asked about too, once.
  */
 @RunWith(AndroidJUnit4::class)
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
@@ -76,6 +77,7 @@ class CataloguesTest {
 
     private val first = "indexes-s${Database.SCHEMA_VERSION}-20261124T0312Z.sqlite.gz"
     private val second = "indexes-s${Database.SCHEMA_VERSION}-20261201T0312Z.sqlite.gz"
+    private val third = "indexes-s${Database.SCHEMA_VERSION}-20261208T0312Z.sqlite.gz"
 
     @Test fun a_theFirstStartOffersThemAndSettingsSaysTheirDate() {
         github.publish(first)
@@ -126,6 +128,30 @@ class CataloguesTest {
             onMain { asked!!.getButton(AlertDialog.BUTTON_POSITIVE).performClick() }
             waitUntil("the go-ahead imports", 60_000) { kv(Catalogues.IMPORTED) == second }
             waitUntil("its line") { text(again, R.id.catalogues_status) == "Catalogues of 1 Dec 2026" }
+        }
+    }
+
+    @Test fun c_aStopTheAppDidntQueueIsAskedAboutOnce() {
+        github.publish(third)
+        Caracole.meteredForTests = true
+        // The Journal's Try again: the plain job queued again, by no screen of the app's.
+        val phone = Caracole.phone(context)
+        val tried = phone.queue.submit(phone.catalogues.spec(meteredOk = false)).first
+        waitUntil("the job stopped for the go-ahead", 60_000) { phone.queue.job(tried.id)?.state == "done" }
+        ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
+            val settings = find(scenario)
+            var asked: AlertDialog? = null
+            waitUntil("the question") { onMain { settings.asked }.also { asked = it } != null }
+            onMain { asked!!.getButton(AlertDialog.BUTTON_NEGATIVE).performClick() }
+        }
+        // Answered: the next screen says the job's line and asks nothing.
+        ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
+            val settings = find(scenario)
+            waitUntil("its line") {
+                PhoneKinds.fits(text(settings, R.id.catalogues_status), PhoneKinds.CATALOGUES.otherwise!!)
+            }
+            Thread.sleep(1_000)  // the question, were it asked, comes with the line
+            assertEquals(null, onMain { settings.asked })
         }
     }
 

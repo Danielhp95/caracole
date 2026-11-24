@@ -23,6 +23,12 @@ class Settings(private val prefs: SharedPreferences) {
         get() = TextZoom.fitted(prefs.getInt(TEXT_ZOOM, TextZoom.DEFAULT))
         set(value) = prefs.edit { putInt(TEXT_ZOOM, TextZoom.fitted(value)) }
 
+    /** The last catalogues job whose metered question was answered (SiteCatalogues.keyOf), so no screen asks it
+     * again. */
+    var cataloguesAnswered: String?
+        get() = prefs.getString(CATALOGUES_ANSWERED, null)
+        set(value) = prefs.edit { if (value == null) remove(CATALOGUES_ANSWERED) else putString(CATALOGUES_ANSWERED, value) }
+
     /** How the last unattended sync ended (Sync on Wi-Fi by itself: [Syncs.run]). */
     var lastOutcome: Outcome?
         get() = outcome(LAST_AT, LAST_OK, LAST_TEXT)
@@ -44,5 +50,6 @@ class Settings(private val prefs: SharedPreferences) {
         const val LAST_AT = "last_sync_at"
         const val LAST_OK = "last_sync_ok"
         const val LAST_TEXT = "last_sync_text"
+        const val CATALOGUES_ANSWERED = "catalogues_answered"
     }
 }

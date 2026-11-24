@@ -17,12 +17,11 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import java.time.Duration
 import java.time.Instant
-import java.util.Collections
 
 /**
  * What the app says and decides of the site catalogues (CataloguesRunner's job, Settings' row and the first start's
  * card), apart from Android, so that a JVM test holds it: the date Settings shows ([fresh], [day], [age]), whether the
- * first start offers them ([firstStart]), and the question a metered network leaves ([asking], [asks], [toSay]). Its
+ * first start offers them ([firstStart]), and the question a metered network leaves ([asking], [question]). Its
  * words are the app's strings.xml; the ones it makes here are the job's ([size]) and core.catalogues' ([day]).
  */
 object SiteCatalogues {
@@ -124,34 +123,28 @@ object SiteCatalogues {
         return Asking(name, bytes)
     }
 
-    /** The question to ask after a catalogues job ended [state] with its line's [tone]: the file waiting, when the job
-     * stopped for a metered network (done, its line a wait: the kind's otherwise) and [asking] names it; none else. */
-    fun asks(state: String, tone: String, asking: Asking?): Asking? =
-        if (state == Job.DONE && tone == WAITING) asking else null
+    /**
+     * The question to ask after the newest catalogues job, [job] by its key ([keyOf]), ended [state] with its line's
+     * [tone]: the file waiting, when the job stopped for a metered network (done, its line a wait: the kind's
+     * otherwise) and [asking] names it, whoever queued it (Settings' Download, the first start's, the Journal's Try
+     * again), until it is [answered] (Settings.cataloguesAnswered, the last job's key answered); none else.
+     */
+    fun question(state: String, tone: String, asking: Asking?, job: String, answered: String?): Asking? =
+        if (state == Job.DONE && tone == WAITING && job != answered) asking else null
+
+    /** A job's key for its question: its id and the second it was queued, as the Journal's history keeps them. */
+    fun keyOf(id: Int, queuedAt: Instant): String = "$id@${queuedAt.epochSecond}"
 
     /** Whether a job in [state] is over: done, failed, cancelled, or cut short by the app's end. */
     fun over(state: String): Boolean = state in OVER
 
     /** The catalogues' job queued ([meteredOk]: the owner's go-ahead on a metered network), as BackupsActivity queues
-     * a backup; the job waiting or running answers a second tap (CataloguesRunner.spec); null when the queue is full.
-     * Its end is then still to be said ([toSay]). */
+     * a backup; the job waiting or running answers a second tap (CataloguesRunner.spec); null when the queue is full. */
     fun queue(phone: Phone, meteredOk: Boolean): Job? = try {
-        phone.queue.submit(phone.catalogues.spec(meteredOk)).first.also { owe(it.id) }
+        phone.queue.submit(phone.catalogues.spec(meteredOk)).first
     } catch (_: QueueFull) {
         null
     }
-
-    /** Job [id]'s end to be said ([toSay]), the app having queued it. */
-    internal fun owe(id: Int) {
-        unsaid += id
-    }
-
-    /** Whether the end of job [id], one the app queued ([queue]), is still to be said: until [said], so that a screen
-     * gone before its question is answered (a rotation, Home) leaves it to the next one. */
-    fun toSay(id: Int): Boolean = id in unsaid
-
-    /** Job [id]'s end said: its question answered, or none to ask; true the first time alone. */
-    fun said(id: Int): Boolean = unsaid.remove(id)
 
     /** The newest of [jobs] that is a catalogues job, none for none. */
     fun newestOf(jobs: List<Job>): Job? = jobs.filter { it.spec.kind == PhoneKinds.CATALOGUES.kind }.maxByOrNull { it.id }
@@ -161,5 +154,4 @@ object SiteCatalogues {
 
     private const val WAITING = "waiting"
     private val OVER = setOf(Job.DONE, Job.FAILED, Job.CANCELLED, Job.INTERRUPTED)
-    private val unsaid: MutableSet<Int> = Collections.synchronizedSet(HashSet())
 }
