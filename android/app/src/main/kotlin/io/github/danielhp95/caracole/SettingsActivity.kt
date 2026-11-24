@@ -158,7 +158,7 @@ class SettingsActivity : Activity() {
     /** The phone's caracole, or null once why it can't start is said ([cantStart]). */
     private suspend fun phone(): Phone? {
         val app = applicationContext
-        val asked = starting ?: Caracole.background.async(Dispatchers.IO) { guarded { Caracole.phone(app) } }
+        val asked = starting ?: Caracole.background.async(Dispatchers.IO) { guarded("the phone's caracole didn't start") { Caracole.phone(app) } }
             .also { starting = it }
         val started = asked.await()
         startFailed = started.isFailure
@@ -211,8 +211,11 @@ class SettingsActivity : Activity() {
         scope.launch {
             val phone = phone() ?: return@launch
             val fresh = withContext(Dispatchers.IO) {
-                guarded { phone.parts.database.read { db -> SiteCatalogues.read(db) } }
-            }.onFailure(::cantStart).getOrElse { return@launch }
+                guarded("the site indexes' date couldn't be read") { phone.parts.database.read { db -> SiteCatalogues.read(db) } }
+            }.getOrElse {
+                say(getString(R.string.catalogues_date_failed, why(it)))
+                return@launch
+            }
             cataloguesDate.text = when (fresh?.source) {
                 null -> getString(R.string.catalogues_none)
                 SiteCatalogues.Source.CATALOGUES, SiteCatalogues.Source.INDEXES ->
@@ -285,7 +288,9 @@ class SettingsActivity : Activity() {
     private suspend fun ended(phone: Phone, job: Job) {
         if (SiteCatalogues.newestOf(phone.queue.snapshot())?.id != job.id) return
         val asking = withContext(Dispatchers.IO) {
-            guarded { phone.parts.database.read { db -> SiteCatalogues.asking(db.kvGet(CataloguesRunner.ASKING)) } }
+            guarded("the catalogues' question couldn't be read") {
+                phone.parts.database.read { db -> SiteCatalogues.asking(db.kvGet(CataloguesRunner.ASKING)) }
+            }
                 .getOrNull()
         }
         val key = SiteCatalogues.keyOf(job.id, job.queuedAt)

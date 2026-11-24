@@ -280,7 +280,7 @@ class MainActivity : Activity() {
         val app = applicationContext
         screen.launch {
             withContext(Dispatchers.IO) {
-                guarded<Unit> {
+                guarded<Unit>("the catalogues' offer couldn't be answered") {
                     val phone = Caracole.phone(app)
                     phone.parts.database.writeBlocking { it.kvSet(SiteCatalogues.OFFERED, Stamps.now()) }
                     if (download) SiteCatalogues.queue(phone, meteredOk = false)

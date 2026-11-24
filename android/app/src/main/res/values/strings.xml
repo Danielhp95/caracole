@@ -84,6 +84,9 @@
     <string name="backup_exporting">Exporting the backup…</string>
     <string name="backup_exported">Exported.</string>
     <string name="backup_export_failed">Not exported: %1$s</string>
+    <string name="backups_list_failed">Couldn\'t list the backups · %1$s</string>
+    <string name="backup_failed">Couldn\'t back up · %1$s</string>
+    <string name="restore_failed">Couldn\'t restore · %1$s</string>
     <string name="backup_no_picker">No app on this phone picks where a file goes.</string>
     <string name="backup_queue_full">The phone\'s queue is full: try again in a moment.</string>
     <string name="backup_restore_title">Restore the library of %1$s?</string>
@@ -99,6 +102,7 @@
          leaves, and the first start's offer (MainActivity). -->
     <string name="catalogues_label">Site catalogues</string>
     <string name="catalogues_none">None yet</string>
+    <string name="catalogues_date_failed">Couldn\'t read the site indexes\' date · %1$s</string>
     <string name="catalogues_of">Of %1$s · %2$s</string>
     <!-- A phone that took its site indexes from a computer by a sync, and no catalogue since: how old the computer's
          were when it merged them. -->

@@ -219,6 +219,8 @@ object Syncs {
     } catch (e: Exception) {
         // Anything, the unexpected too: said on the screen, never a crash.
         words(e)
+    } catch (e: VirtualMachineError) {
+        throw e
     } catch (e: Throwable) {
         // An Error too: the phone's caracole that can't start (its SQLite's native library that won't load).
         why(e)

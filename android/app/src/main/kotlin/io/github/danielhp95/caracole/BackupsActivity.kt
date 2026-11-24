@@ -22,7 +22,6 @@ import io.github.danielhp95.caracole.server.jobs.JobSpec
 import io.github.danielhp95.caracole.server.jobs.JobViews
 import io.github.danielhp95.caracole.server.jobs.QueueFull
 import io.github.danielhp95.caracole.server.lookups.BackupRunner
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
@@ -84,15 +83,15 @@ class BackupsActivity : Activity() {
     /** The backups listed again. */
     private fun refresh() {
         scope.launch {
-            withContext(Dispatchers.IO) { guarded { Backups.list(phone().parts.stateDir) } }
+            withContext(Dispatchers.IO) { guarded("the backups couldn't be listed") { Backups.list(phone().parts.stateDir) } }
                 .onSuccess(::show)
-                .onFailure(::cantStart)
+                .onFailure { failed(R.string.backups_list_failed, it) }
         }
     }
 
-    /** "Couldn't start · database or disk is full": the phone's caracole can't start, said, never a crash. */
-    private fun cantStart(e: Throwable) {
-        status.text = getString(R.string.no_server, why(e))
+    /** What failed in its own words ("Couldn't list the backups · database or disk is full"), never a crash. */
+    private fun failed(words: Int, e: Throwable) {
+        status.text = getString(words, why(e))
     }
 
     private fun show(backups: List<Backup>) {
@@ -137,9 +136,11 @@ class BackupsActivity : Activity() {
         status.text = getString(R.string.backup_working)
         backupNow.isEnabled = false
         scope.launch {
-            val over = guarded { queued { phone -> BackupRunner(phone.parts).backup(Backups.BY_HAND) } }
+            val over = guarded("a backup by hand couldn't be queued") {
+                queued { phone -> BackupRunner(phone.parts).backup(Backups.BY_HAND) }
+            }
             backupNow.isEnabled = true
-            over.onFailure { cantStart(it); return@launch }
+            over.onFailure { failed(R.string.backup_failed, it); return@launch }
             status.text = over.getOrNull()?.let { JobViews.line(it).text } ?: getString(R.string.backup_queue_full)
             refresh()
         }
@@ -169,14 +170,9 @@ class BackupsActivity : Activity() {
         if (resultCode != RESULT_OK || uri == null || name == null) return
         status.text = getString(R.string.backup_exporting)
         scope.launch {
-            status.text = try {
-                withContext(Dispatchers.IO) { exportTo(this@BackupsActivity, phone(), name, uri) }
-                getString(R.string.backup_exported)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                getString(R.string.backup_export_failed, why(e))
-            }
+            status.text = withContext(Dispatchers.IO) {
+                guarded("a backup couldn't be exported") { exportTo(this@BackupsActivity, phone(), name, uri) }
+            }.fold({ getString(R.string.backup_exported) }, { getString(R.string.backup_export_failed, why(it)) })
         }
     }
 
@@ -195,8 +191,8 @@ class BackupsActivity : Activity() {
     private fun restore(backup: Backup) {
         status.text = getString(R.string.backup_restoring)
         scope.launch {
-            val over = guarded { queued { phone -> BackupRunner(phone.parts).restore(backup) } }
-            over.onFailure { cantStart(it); return@launch }
+            val over = guarded("a restore couldn't be queued") { queued { phone -> BackupRunner(phone.parts).restore(backup) } }
+            over.onFailure { failed(R.string.restore_failed, it); return@launch }
             status.text = over.getOrNull()?.let { JobViews.line(it).text } ?: getString(R.string.backup_queue_full)
             refresh()
         }
