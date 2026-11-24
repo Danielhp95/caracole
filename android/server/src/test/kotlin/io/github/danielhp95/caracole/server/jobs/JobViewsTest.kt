@@ -278,6 +278,49 @@ class JobViewsTest {
         assertEquals(Line("running", "Backing up the book…"), JobViews.line(queue.job(backing.id)!!))
     }
 
+    @Test fun theSiteCataloguesSayWhatTheyDoTheirDateAndWhyNot() = runTest {
+        val queue = queue()
+        val kind = PhoneKinds.CATALOGUES
+        assertEquals(kind, PhoneKinds.ALL["catalogues"])
+        val step = CompletableDeferred<Unit>()
+        val gate = CompletableDeferred<Unit>()
+        val job = phoneJob(queue, kind, "") { context ->
+            context.stage("catalogues", "running")
+            step.await()
+            context.stage("catalogues", "running", PhoneKinds.fill(kind.running, "doing" to "Downloading · 31 of 52 MB"))
+            gate.await()
+            context.stage("catalogues", "done", PhoneKinds.fill(kind.done, "date" to "24 Nov 2026"))
+        }
+        runCurrent()
+        assertEquals(Line("running", "Catalogues…"), JobViews.line(queue.job(job.id)!!))  // nothing filled yet
+        step.complete(Unit)
+        runCurrent()
+        assertEquals(Line("running", "Downloading · 31 of 52 MB"), JobViews.line(queue.job(job.id)!!))
+        gate.complete(Unit)
+        runCurrent()
+        val over = queue.job(job.id)!!
+        assertEquals(Line("ready", "Catalogues of 24 Nov 2026"), JobViews.line(over))
+        assertEquals(JsonPrimitive("catalogues"), JobViews.view(over, queue)["kind"])
+        assertEquals(listOf(Chip("Catalogues", "done")), Outcomes.steps(over))
+        // Up to date: the kind's second way to end, which the Requests tab says as a wait.
+        val upToDate = phoneJob(queue, kind, "again") { context ->
+            context.stage("catalogues", "done", PhoneKinds.fill(kind.otherwise!!, "date" to "24 Nov 2026"))
+        }
+        runCurrent()
+        assertEquals(Line("waiting", "Up to date: the catalogues of 24 Nov 2026",
+                          details = "#tab=requests&job=${upToDate.id}"), JobViews.line(queue.job(upToDate.id)!!))
+        val failed = phoneJob(queue, kind, "failed") { context ->
+            val line = PhoneKinds.fill(kind.failed, "why" to "No catalogues are published yet.")
+            context.stage("catalogues", "failed", line)
+            throw CommandExit(1, line)
+        }
+        runCurrent()
+        assertEquals(Line("failed", "Not imported: No catalogues are published yet.",
+                          details = "#tab=requests&job=${failed.id}"), JobViews.line(queue.job(failed.id)!!))
+        // A job read back from the history is of its kind by its key.
+        assertEquals("catalogues", JobCommands.kindOf("catalogues:", emptyList(), listOf("catalogues")))
+    }
+
     @Test fun thePhonesIndexImportSaysTheComputersIndexNotAnotherCaracolesPages() = runTest {
         val queue = queue()
         val gate = CompletableDeferred<Unit>()
