@@ -209,3 +209,61 @@ def test_a_published_file_and_its_sidecar_hold_no_path(conn_with_index, out):
     data = (out / p.name).read_bytes()
     assert data[3] & 0x08 == 0
     assert str(out) not in (out / "published.json").read_text()
+
+
+class Told:
+    """A ``catalogues.Progress`` that keeps what it is told."""
+
+    def __init__(self) -> None:
+        self.events: list = []
+
+    def exporting(self) -> None:
+        self.events.append("exporting")
+
+    def copied(self, table: str, rows: int) -> None:
+        self.events.append(("copied", table, rows))
+
+    def omitting(self) -> None:
+        self.events.append("omitting")
+
+    def checking(self) -> None:
+        self.events.append("checking")
+
+    def compressing(self, done: int, total: int) -> None:
+        self.events.append(("compressing", done, total))
+
+
+def test_publish_tells_each_step_as_it_goes_and_the_gzip_by_the_bytes_it_read(conn_with_index, out, monkeypatch):
+    monkeypatch.setattr(catalogues, "CHUNK", 4096)
+    told = Told()
+
+    p = catalogues.publish(conn_with_index, out, now=NOW, last=None, progress=told)
+
+    from caracole import index_transfer as transfer
+    tables = [t for site in transfer.SITES.values() for t in site.tables]
+    kinds = [e if isinstance(e, str) else e[0] for e in told.events]
+    assert kinds == ["exporting", *["copied"] * len(tables), "omitting", "checking",
+                     *["compressing"] * (kinds.count("compressing"))]
+    assert [e[1] for e in told.events if e[0] == "copied"] == tables
+    assert ("copied", "ug_index", 3) in told.events
+    gzipped = [e[1:] for e in told.events if e[0] == "compressing"]
+    assert gzipped[0] == (0, p.raw_bytes) and gzipped[-1] == (p.raw_bytes, p.raw_bytes)
+    assert len(gzipped) == 1 + -(-p.raw_bytes // 4096)  # the start, then a chunk at a time
+    assert [done for done, _ in gzipped] == sorted(done for done, _ in gzipped)
+
+
+def test_a_publish_told_nothing_writes_the_same_file(conn_with_index, out, tmp_path):
+    (tmp_path / "other").mkdir()
+    told = catalogues.publish(conn_with_index, out, now=NOW, last=None, progress=Told())
+    quiet = catalogues.publish(conn_with_index, tmp_path / "other", now=NOW, last=None)
+    assert told == quiet and (out / told.name).read_bytes() == (tmp_path / "other" / quiet.name).read_bytes()
+
+
+def test_a_progress_that_cant_be_told_is_no_error_of_the_folder_and_leaves_nothing(conn_with_index, out):
+    class Cut(Told):
+        def checking(self) -> None:
+            raise BrokenPipeError(32, "Broken pipe")
+
+    with pytest.raises(BrokenPipeError):
+        catalogues.publish(conn_with_index, out, now=NOW, last=None, progress=Cut())
+    assert list(out.iterdir()) == []

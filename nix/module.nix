@@ -176,6 +176,29 @@ let
 
   ntfyUrl = cfg.settings.ntfy.url or "";
 
+  # As root, after a publish that succeeded: the upload user's own caracole-upload.service started in their
+  # manager, never waited for. Their manager is asked of the system manager first and reached over their own bus:
+  # `systemctl --user --machine=<user>@` would go through a PAM login bridge, which starts a manager that isn't
+  # running, for logind to stop seconds later. A manager that isn't running is no failure: the user's catch-up
+  # timer uploads it. Anything else that goes wrong (no such user, no such unit, a bus error) fails this unit.
+  uploadUser = toString cfg.publish.uploadUser;
+  uploadNotify = pkgs.writeShellApplication {
+    name = "caracole-publish-upload-notify";
+    text = ''
+      user=${lib.escapeShellArg uploadUser}
+      systemctl=${config.systemd.package}/bin/systemctl
+      uid=$(${pkgs.coreutils}/bin/id -u "$user")
+      if ! "$systemctl" is-active --quiet "user@$uid.service"; then
+        echo "$user's user manager isn't running, so the upload waits for $user's catch-up timer (caracole-upload.timer)"
+        exit 0
+      fi
+      ${pkgs.util-linux}/bin/runuser -u "$user" -- ${pkgs.coreutils}/bin/env XDG_RUNTIME_DIR="/run/user/$uid" \
+        DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
+        "$systemctl" --user start --no-block caracole-upload.service
+      echo "started $user's caracole-upload.service"
+    '';
+  };
+
   notifyFailure = pkgs.writeShellApplication {
     name = "caracole-notify-failure";
     runtimeInputs = [ pkgs.curl ];
@@ -413,6 +436,23 @@ in
         default = "Sun 05:00";
         description = "When the publish unit runs, as a systemd OnCalendar value.";
       };
+
+      uploadUser = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        example = "alice";
+        description = ''
+          The user whose own systemd user service, `caracole-upload.service`,
+          uploads the file (docs/deploy.md). Once a publish succeeds,
+          caracole-publish-upload-notify.service starts it in that user's
+          manager, if it is running (it never starts one: an upload in a
+          manager with no session would find gh's keyring locked). When it
+          isn't, the notifier says so in one line and succeeds, and the upload
+          waits for that user's catch-up timer; any other failure fails the
+          notifier, never the publish. A user path unit can't do this: systemd
+          watches every folder from / down to the file, and dataDir is 0710.
+        '';
+      };
     };
 
     autochords = {
@@ -488,9 +528,13 @@ in
 
   config = lib.mkIf cfg.enable {
     # Not an assertion: a GPU asked for and not used breaks nothing.
-    warnings = lib.optional (cfg.autochords.cuda && !cfg.autochords.enable) ''
-      services.caracole.autochords.cuda does nothing without services.caracole.autochords.enable: the GPU is
-      for the transcription of lyrics from the audio, which only the auto-chords package runs.'';
+    warnings =
+      lib.optional (cfg.autochords.cuda && !cfg.autochords.enable) ''
+        services.caracole.autochords.cuda does nothing without services.caracole.autochords.enable: the GPU is
+        for the transcription of lyrics from the audio, which only the auto-chords package runs.''
+      ++ lib.optional (cfg.publish.uploadUser != null && !cfg.publish.enable) ''
+        services.caracole.publish.uploadUser does nothing without services.caracole.publish.enable: it starts
+        the user's upload once a publish succeeds, and no publish runs.'';
 
     assertions =
       let
@@ -678,6 +722,8 @@ in
     systemd.services.caracole-publish = lib.mkIf cfg.publish.enable {
       description = "caracole publish: gzip the site indexes for upload";
       onFailure = [ "caracole-notify-failure.service" ];
+      # The owner's upload, started by the system: a user path unit can't watch a file under the 0710 dataDir.
+      onSuccess = lib.optional (cfg.publish.uploadUser != null) "caracole-publish-upload-notify.service";
       restartIfChanged = false;
       unitConfig.RequiresMountsFor = writable;
       environment = cacheEnv;
@@ -693,6 +739,18 @@ in
           TimeoutStartSec = "1h";
         };
     };
+
+    systemd.services.caracole-publish-upload-notify =
+      lib.mkIf (cfg.publish.enable && cfg.publish.uploadUser != null)
+        {
+          description = "Start ${uploadUser}'s caracole-upload.service after a publish";
+          restartIfChanged = false;
+          serviceConfig = {
+            Type = "oneshot";
+            # As root, which may reach any user's manager.
+            ExecStart = lib.getExe uploadNotify;
+          };
+        };
 
     systemd.timers.caracole-publish = lib.mkIf cfg.publish.enable {
       description = "Weekly caracole index publish";

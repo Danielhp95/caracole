@@ -3770,6 +3770,13 @@ On a NixOS or Ubuntu service, `sudo caracole-admin` writes the publish folder,
 `/var/lib/caracole/publish`, beside the library, state and cache folders, once publishing is set up
 there (deploy.md); it can write no other.
 
+It says what it does as it goes (the export, each site's rows, the check, then `Compressing · 31 of 75
+MB`): one live line in a terminal, plain lines in a journal. To watch the service's run, `sudo
+systemctl start --no-block caracole-publish && journalctl -fu caracole-publish`; for the live line,
+run it in a terminal with `sudo caracole-admin index publish /var/lib/caracole/publish`. A publish
+by hand starts no upload, as the service's run does with `publish.uploadUser` (deploy.md): then run
+`systemctl --user start caracole-upload`.
+
 It exits 1, leaving nothing behind, when the name exists, when UG's index isn't built whole, or
 when a site holds a tenth fewer rows than `published.json` says of the last file. `--force` publishes
 that one anyway. It also refuses a file that holds a path of this machine, naming the table and

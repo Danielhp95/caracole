@@ -226,6 +226,105 @@ def test_index_publish_prints_the_file_and_its_rows(tmp_path, state):
     assert f"Published {gz}" in result.stdout and "ug: 2 rows." in result.stdout
 
 
+def test_index_publish_says_what_it_does_as_it_goes_a_line_a_step_where_no_terminal_is(tmp_path, state):
+    import re
+
+    built(state)
+    out = tmp_path / "pub"
+    out.mkdir()
+
+    result = invoke(tmp_path, "publish", str(out))
+
+    assert result.exit_code == 0, result.output
+    (gz,) = out.glob("indexes-s*.sqlite.gz")
+    lines = result.stdout.splitlines()
+    assert lines[:9] == [
+        f"Exporting every site's index into {out}...",
+        "  Ultimate Guitar: ug_index 2 rows copied, ug_artist_tabs 0, ug_directory 0.",
+        "  LaCuerda: lacuerda_index 0 rows copied.",
+        "  gtptabs.com: gtptabs_index 0 rows copied.",
+        "  MuseScore: musescore_index 0 rows copied.",
+        "  harptabs.com: harptabs_index 0 rows copied, harptabs_artists 0, harptabs_artist_tabs 0.",
+        "  gametabs.net: gametabs_index 0 rows copied, gametabs_games 0, gametabs_game_tabs 0.",
+        "Leaving out what stays private, and compacting the export...",
+        "Checking the export: no path of this machine in it, then SQLite's quick check...",
+    ]
+    assert re.fullmatch(r"Compressing \u00b7 (\d+) of \1 KB", lines[9]), lines[9]  # one chunk: one line, not four
+    assert lines[10].startswith(f"Published {gz} (") and lines[11:] == [
+        "  ug: 2 rows.", "  lacuerda: 0 rows.", "  gtptabs: 0 rows.", "  musescore: 0 rows.", "  harptabs: 0 rows.",
+        "  gametabs: 0 rows."]
+    assert "\r" not in result.stdout
+
+
+def test_index_publish_whose_output_is_cut_off_still_publishes_and_says_no_disk_error(tmp_path, state, monkeypatch):
+    """``caracole index publish DIR | head -1``: once the pipe is closed, nothing more is said, the file is
+    published, and a broken stdout is never worded as the folder's error."""
+    from caracole.commands import index
+    from caracole.progress import Console
+
+    class Closed:
+        def write(self, text):
+            raise BrokenPipeError(32, "Broken pipe")
+
+        def flush(self):
+            raise BrokenPipeError(32, "Broken pipe")
+
+        def isatty(self):
+            return False
+
+    monkeypatch.setattr(index, "console", lambda: Console(Closed()))
+    built(state)
+    out = tmp_path / "pub"
+    out.mkdir()
+
+    result = invoke(tmp_path, "publish", str(out))
+
+    assert result.exit_code == 0, (result.output, result.exception)
+    assert "can't write" not in result.stderr
+    (gz,) = out.glob("indexes-s*.sqlite.gz")
+    assert json.loads((out / "published.json").read_text())["file"] == gz.name
+
+
+def compressed(monkeypatch, console, *, chunks: int = 100, step: float = 0.05) -> None:
+    """What ``index publish``'s report makes of a gzip of ``chunks`` MiB read a chunk every ``step`` seconds."""
+    from caracole.commands import index
+
+    now = [0.0]
+    monkeypatch.setattr(index, "clock", lambda: now[0])
+    report = index._Publishing(console, Path("/pub"))
+    mib = 1 << 20
+    report.compressing(0, chunks * mib)
+    for n in range(1, chunks + 1):
+        now[0] += step
+        report.compressing(n * mib, chunks * mib)
+
+
+def test_index_publish_writes_the_gzips_progress_a_line_a_quarter_where_no_terminal_is(monkeypatch):
+    import io
+
+    from caracole.progress import Console
+
+    stream = io.StringIO()
+    compressed(monkeypatch, Console(stream, live=False, color=False))
+    assert stream.getvalue().splitlines() == [
+        "Compressing \u00b7 25 of 100 MB", "Compressing \u00b7 50 of 100 MB", "Compressing \u00b7 75 of 100 MB",
+        "Compressing \u00b7 100 of 100 MB"]
+
+
+def test_index_publish_updates_the_gzips_live_line_a_few_times_a_second(monkeypatch):
+    import io
+
+    from caracole.progress import Console
+
+    stream = io.StringIO()
+    compressed(monkeypatch, Console(stream, live=True, color=False, width=lambda: 200))
+    shown = [part.strip() for part in stream.getvalue().split("\r") if part.strip()]
+    assert shown[0] == "Compressing \u00b7 0 of 100 MB" and shown[-1] == "Compressing \u00b7 100 of 100 MB"
+    assert len(shown) <= 1 + 5 / 0.25 + 1  # 5 s of chunks: at most four a second, and the last
+    assert len(shown) >= 5 / 0.25 - 1  # and it does move as it goes
+    assert "\n" not in stream.getvalue()
+
+
 def high_sidecar(out: Path) -> None:
     (out / "published.json").write_text(json.dumps({
         "file": "indexes-s17-20261117T0312Z.sqlite.gz", "schema": 17, "made": "2026-11-17T03:12:00Z", "bytes": 1,

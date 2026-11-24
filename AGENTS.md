@@ -546,7 +546,7 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 |---|---|
 | config.py | caracole.toml and directories, and no secret (ntfy is a topic's URL alone); `name`, what the pages call the library (`Config.library_name`: else its folder's name); `[ug_directory]` (`DirectoryPolicy`: UG's artist directory's concurrency, delay and budget, politeness that never crosses to the phone) |
 | index_transfer.py | `caracole index export` and `merge` (below) |
-| catalogues.py | `caracole index publish DIR`: every site's index as one public gzip, `indexes-s<schema>-<UTC minute>.sqlite.gz`, its sidecar `published.json` and the Keep rule (`name_for`, `read_name`, `publish`, `kept`); `index_transfer.PUBLIC_OMIT` leaves out the database's path and LaCuerda's search rows, and a file holding a path of this machine is refused (`_no_paths`: a value with this config's folders, the home folder, the database or `/nix/store/` in it, or beginning with a machine root, `ROOTS`; a name that merely begins with "/" is a site's) |
+| catalogues.py | `caracole index publish DIR`: every site's index as one public gzip, `indexes-s<schema>-<UTC minute>.sqlite.gz`, its sidecar `published.json` and the Keep rule (`name_for`, `read_name`, `publish`, `kept`), each step told as it goes (`Progress`: the export, each table's rows by `index_transfer.export`'s `copied` and `omitting`, the check, the gzip's bytes read), which commands/index.py's `_Publishing` says through progress.py's `Console` (a terminal's live line at most four times a second, a journal's line a quarter); `index_transfer.PUBLIC_OMIT` leaves out the database's path and LaCuerda's search rows, and a file holding a path of this machine is refused (`_no_paths`: a value with this config's folders, the home folder, the database or `/nix/store/` in it, or beginning with a machine root, `ROOTS`; a name that merely begins with "/" is a site's) |
 | peer_sync.py | two caracoles compared and synced, unit by unit (below) |
 | canonical.py | canonical JSON: one text, so one digest, for a value in Python and in Kotlin (`dumps`, `digest`, `read`, `stored_hash`; docs/superpowers/specs/2026-11-03-canonical-json.md); the standard library alone |
 | peer_push.py | a push: the units another caracole (the phone) gives this one, staged by caracole serve, taken by `caracole peer take` (below) |
@@ -2012,9 +2012,19 @@ It is rows.js's, shared by both pages:
   - And `/etc/caracole/service`, the service's marker, service.py's.
   - `publish` (off): `caracole-publish.service` and its weekly timer run `caracole index publish` offline into
     `publish.folder` (2750), with no network and no token, which `caracole-admin` may then write too. The upload is
-    the owner's own systemd user service in their own configuration, started by a user path unit as `published.json`
-    changes and by a weekly timer that catches up, running `publish-indexes DIR` with their `gh` login
-    (docs/deploy.md); the module has no token file and no upload unit.
+    the owner's own systemd user service in their own configuration (`caracole-upload.service`), running
+    `publish-indexes DIR` with their `gh` login (docs/deploy.md); the module has no token file and no upload unit.
+    `publish.uploadUser` (null by default; set without `publish.enable`, a `warnings` entry) starts it:
+    `caracole-publish.service`'s `OnSuccess=` is `caracole-publish-upload-notify.service`, a oneshot as root, every
+    program by its store path: `systemctl is-active user@<uid>.service` first, and when the user's manager isn't
+    running one line (the upload waits for their catch-up timer) and exit 0; else `runuser -u <user> -- env
+    XDG_RUNTIME_DIR=/run/user/<uid> DBUS_SESSION_BUS_ADDRESS=… systemctl --user start --no-block
+    caracole-upload.service`, whose failure (no such unit, a bus error), as no such user, fails the notifier, never the
+    publish. Never `systemctl --user --machine=<user>@`: its PAM bridge starts a manager that isn't running, for logind
+    to stop seconds later, with gh's keyring locked. module-check.nix runs the notifier with stand-ins for id,
+    systemctl and runuser in each case. No user path unit: systemd watches every folder from / down to
+    `published.json`, and the 0710 dataDir refuses the user's inotify watch. A publish by hand (`caracole-admin index
+    publish`) starts no upload.
 - **module-check.nix**: `checks.module`, which loads the marker with service.py.
 
 #### `docs/`

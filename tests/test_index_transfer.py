@@ -215,6 +215,31 @@ def test_an_export_holds_each_sites_tables_and_progress_records_and_nothing_else
     assert exported.rows["ug_index"] == 3 and exported.rows["harptabs_artist_tabs"] == 2
 
 
+def test_an_export_tells_each_table_it_copied_and_its_rows_and_when_it_leaves_rows_out(home, tmp_path):
+    full(home)
+    told = []
+
+    exported = transfer.export(home, tmp_path / "indexes.sqlite", now=NOW, omit=transfer.PUBLIC_OMIT,
+                               copied=lambda table, n: told.append((table, n)),
+                               omitting=lambda: told.append("omitting"))
+
+    tables = [t for s in SITES for t in transfer.SITES[s].tables]
+    assert [t for t, _ in told[:-1]] == tables and told[-1] == "omitting"
+    copied = dict(told[:-1])
+    assert copied["ug_index"] == 3 and copied["harptabs_artist_tabs"] == 2
+    (search,) = home.execute("SELECT count(*) FROM lacuerda_index WHERE page = 'busca.php'").fetchone()
+    assert search and copied["lacuerda_index"] == exported.rows["lacuerda_index"] + search  # copied, then left out
+    assert all(copied[t] == exported.rows[t] for t in tables if t != "lacuerda_index")
+
+
+def test_an_export_with_nothing_to_leave_out_says_no_omitting(home, tmp_path):
+    full(home)
+    told = []
+    transfer.export(home, tmp_path / "indexes.sqlite", ["harptabs"], now=NOW,
+                    copied=lambda table, n: told.append((table, n)), omitting=lambda: told.append("omitting"))
+    assert told == [("harptabs_index", 2), ("harptabs_artists", 1), ("harptabs_artist_tabs", 2)]
+
+
 def test_an_export_of_some_sites(home, tmp_path):
     full(home)
     exported = transfer.export(home, tmp_path / "indexes.sqlite", ["gametabs", "harptabs"], now=NOW)
