@@ -159,6 +159,11 @@ class WorkingTest {
         assertNull(Working.counted("Importing the catalogues…"))
         assertNull(Working.counted("12 of 10"), "more done than there is: no bar")
         assertNull(Working.counted("0 of 0"))
+        // A count is words of its own: never digits inside a name the stage says ("Filing Top 10 of 2020.gp5…").
+        assertNull(Working.counted("Filing Top 10 of 2020.gp5…"))
+        assertNull(Working.counted("Filing x10 of 20y.gp5…"))
+        assertEquals(3.0 to 12.0, Working.counted("Taken 3 of 12."))
+        assertEquals(3.0 to 12.0, Working.counted("3 of 12 changes · 2 waiting"))
         // A lookup's line names its song: no count is read there ("Top 10 of 2020" is a title).
         val gate = CompletableDeferred<Unit>()
         val song = lookup("Fetch Estopa - Top 10 of 2020", "estopa/top-10-of-2020", "Estopa - Top 10 of 2020",

@@ -152,8 +152,11 @@ internal class Working(
             return if (all > 0 && done <= all) done to all else null
         }
 
-        /** "N of M", each a number as the phone's lines write one: digits grouped by commas, tenths after a point. */
-        private val COUNT = Regex("([0-9][0-9,]*(?:[.][0-9]+)?) of ([0-9][0-9,]*(?:[.][0-9]+)?)")
+        /** "N of M", each a number as the phone's lines write one (digits grouped by commas, tenths after a point), and
+         * words of their own: never the digits of a name ("Top 10 of 2020.gp5"), so a space, a stop, "…", "·", or the
+         * line's end on either side. */
+        private val COUNT = Regex("(?<![0-9A-Za-z.,_-])([0-9][0-9,]*(?:[.][0-9]+)?) of ([0-9][0-9,]*(?:[.][0-9]+)?)" +
+                                  "(?=$|[\\s…·),;:]|[.](?:$|\\s))")
 
         /** A job named as a request: "Share with Daniel's library", "Add Estopa - Tu calorro", a lookup by its title
          * ("Fetch Estopa - Tu calorro", "Search LaCuerda for “corazón”"). */
