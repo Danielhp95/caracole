@@ -128,6 +128,51 @@ def test_past_the_rooms_size_a_line_stays_one_row_on_a_phone_its_key_on_the_scre
     assert drawn["opened"] is True and drawn["wide"] is True
 
 
+# Each folded or flat line's title's width, and the least library.css gives it on a phone, 64 of the list's text's
+# pixels less the gap (a probe sized so in the list, whose --sp Select mode caps).
+TITLES = r"""
+const titles = () => {
+  const list = document.getElementById("list"), probe = document.createElement("div");
+  probe.style.width = "calc(64 * var(--sp) - 6px)";
+  list.append(probe);
+  const least = probe.getBoundingClientRect().width;
+  probe.remove();
+  return Array.from(document.querySelectorAll("#list section.artist.folded article.line, #list section.flat article.line"))
+    .map((line) => ({ title: line.querySelector("h3").textContent, least,
+                      width: line.querySelector("h3").getBoundingClientRect().width }));
+};
+"""
+
+
+@pytest.mark.parametrize("width", [390, 360])
+@pytest.mark.parametrize("lh", ["24px", "32px"], ids=["150 %", "200 %"])
+def test_in_select_mode_a_phones_line_keeps_its_titles_least_and_its_key_on_the_screen(conn, cfg, tmp_path, width,
+                                                                                       lh):
+    # Select mode's box beside each line takes room from the title: its columns in the text's pixels, as library.css's,
+    # never in rem (a title cut to 58 px at 150 %), and the box's room taken from what the text's pixel may grow to,
+    # so the line keeps its title's least, its buttons and its key on the screen, by artist and by title.
+    songs(conn, cfg)
+    script = LINES + TITLES + r"""
+    document.documentElement.style.setProperty("line-height", "%s");
+    document.body.classList.add("selecting");
+    const byArtist = { lines: lines(), titles: titles() };
+    const sort = document.getElementById("sort");
+    sort.value = "title";
+    sort.dispatchEvent(new Event("change"));
+    document.body.classList.add("selecting");
+    const byTitle = { lines: lines(), titles: titles() };
+    note("lines", { byArtist, byTitle, wide: document.documentElement.scrollWidth <= innerWidth });""" % lh
+    drawn = attribute_of(run(conn, cfg, tmp_path, script, controls=SERVED, size=f"{width},800", touch=True),
+                         "data-lines")
+    for by in ("byArtist", "byTitle"):
+        assert [line for line in drawn[by]["lines"] if not (line["fits"] and line["within"])] == [], (by, drawn)
+        assert drawn[by]["titles"] and [t for t in drawn[by]["titles"] if t["width"] < t["least"] - 0.5] == [], (
+            by, drawn)
+    assert {t["title"] for t in drawn["byTitle"]["titles"]} == {"Creep", "Hotel California", "Hysteria",
+                                                               "Take It Easy"}
+    assert drawn["wide"] is True
+
+
 DECLARATIONS = re.compile(r"(?:^|[;{])\s*((?:font|font-size|line-height)\s*:[^;}]*)")
 
 

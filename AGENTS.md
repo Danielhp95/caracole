@@ -1236,7 +1236,9 @@ It is rows.js's, shared by both pages:
   list's estimates `--band-h`, `--line-h`, `--fold-h`) is `calc(N * var(--sp))`. `--sp` is `1rlh / 16` (`html`'s line
   height is 16px for it), at most `(100vw - 82px) / 152`, so a phone's line stays one row, its key on the screen (its
   title's least room, a button (43.2) and its key's cell (44 on a touch screen) are 152 of them; 82px the page's, an opened card's and the line's
-  paddings, borders and gaps; 192 and 88px while it had its chevron), and 1px at least from that room; never in a
+  paddings, borders and gaps; 192 and 88px while it had its chevron; in Select mode the lists' own, `.selecting .list`
+  and `#found`, at most `(100vw - 132px) / 152`, its box's 44 px and gap off the room, and Select's columns in it too,
+  songbooks.css), and 1px at least from that room; never in a
   `font-size` or a `line-height`, which the zoom sizes already (a line height in it grows twice), nor where a box's height is a line height (a count's
   digits centred by the grid). The tiles' container queries are in `rlh` (24.9375rlh is 399px at the pages' own
   size). test_library_text_size.py (the root's line height grown, Chromium having no text zoom), PinchTest on a
