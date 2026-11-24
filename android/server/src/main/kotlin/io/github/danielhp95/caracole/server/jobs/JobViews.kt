@@ -196,7 +196,8 @@ object JobViews {
      * name and what its line says, "the site catalogues (Importing · …)", "the phone's pages (Remaking pages · 3 of
      * 10)", its name alone before it has said anything; any other of PhoneKinds' its line alone, its first letter
      * small, "backing up the book", "filing song.gp5"; a sync "the sync" and its running stage's line and words, "(Updating
-     * the indexes · Downloading …)"; an index import its name, and its words when it says any.
+     * the indexes · Downloading …)", a long stage's words once (its line says them: Status.LONG_STAGES); an index
+     * import its name, and its words when it says any.
      */
     private fun doing(job: Job): String {
         val stage = job.stages.firstOrNull { it.state == Job.RUNNING }
@@ -205,7 +206,9 @@ object JobViews {
         return when (job.spec.kind) {
             in COUNTING -> named(job) + if (words.isEmpty()) "" else " ($line)"
             in PhoneKinds.ALL -> small(line)
-            "sync" -> "the sync ($line" + (if (words.isEmpty()) "" else " · $words") + ")"
+            // a long stage's line says its words already (Status.LONG_STAGES): once
+            "sync" -> "the sync ($line" +
+                (if (stage == null || words.isEmpty() || Status.doing(stage)) "" else " · $words") + ")"
             else -> named(job) + if (words.isEmpty()) "" else " ($words)"
         }
     }

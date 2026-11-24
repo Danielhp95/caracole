@@ -91,18 +91,27 @@ class JobViewsTest {
         assertEquals(null, JobViews.behind(queue.job(catalogues.id)!!, jobs), "a running job waits for none")
         gate.complete(Unit)
         runCurrent()
+        val taking = CompletableDeferred<Unit>()
         val syncing = CompletableDeferred<Unit>()
         val sync = queue.submit(JobSpec("Sharing logs with studio", "sync:http://pc:8737", "sync", sync,
                                         display = "Sharing logs with studio") { context ->
+            context.stage("take", "running", "2 of 5 changes")
+            taking.await()
+            context.stage("take", "done", "took 5")
             context.stage("index", "running", "Downloading the computer's indexes · 120 of 274 MB")
             syncing.await()
         }).first
         runCurrent()
         val after = queue.submit(JobSpec("Get Muse - Uprising", "muse/uprising", "song", emptyList(),
                                          commands = JobCommands.lookupSteps("Muse", "Uprising"), fetching = true)).first
+        val waits = { JobViews.line(queue.job(after.id)!!, 1, behind = JobViews.behind(queue.job(after.id)!!,
+                                                                                    queue.snapshot())).text }
+        assertEquals("Queued · after the sync (Taking their entries · 2 of 5 changes)", waits())
+        taking.complete(Unit)
+        runCurrent()
+        // A long stage's line says its words already (Status.LONG_STAGES): said once.
         assertEquals("Queued · after the sync (Updating the indexes · Downloading the computer's indexes · 120 of 274 MB)",
-                     JobViews.line(queue.job(after.id)!!, 1, behind = JobViews.behind(queue.job(after.id)!!,
-                                                                                      queue.snapshot())).text)
+                     waits())
         syncing.complete(Unit)
         runCurrent()
         assertEquals(Job.DONE, queue.job(sync.id)!!.state)
