@@ -56,8 +56,8 @@ class Transcriber(Protocol):
 class SetupFailed(Exception):
     """The setup's failure (a GPU that is missing, busy or out of memory: "the GPU failed: ...", whenever
     ``is_setup_error``; a model that won't load: "Whisper's model won't load: ...", on either device; the separator's
-    stem Whisper can't load, which it reads first, for the language: "the separator can't run here (...)"), never the
-    audio's: the song stays offered."""
+    stem Whisper can't load, which it reads first, for the language: "the separator can't run here (...)", never for
+    audio that is its own stem, as the test tone is), never the audio's: the song stays offered."""
 
 
 def resolve_device(setting: str) -> str:
@@ -120,7 +120,7 @@ class WhisperTranscriber:
                 try:
                     language = self._language(stem, first_sung_s)
                 except RuntimeError as e:  # a stem Whisper can't load is no proof the song's audio is bad
-                    if not is_audio_error(e):
+                    if not is_audio_error(e) or Path(stem) == Path(mix):  # the test tone is its own stem: Whisper's
                         raise
                     raise SetupFailed(f"the separator can't run here (its vocals can't be read: "
                                       f"{type(e).__name__}: {e})") from e

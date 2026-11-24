@@ -170,6 +170,25 @@ def test_a_stem_whisper_cant_load_is_the_separators_never_the_songs(monkeypatch,
     assert model.calls == []  # the mix never heard
 
 
+def test_a_test_tone_whisper_cant_load_is_whispers_own_failure_never_the_separators(monkeypatch, tmp_path):
+    # The test tone is its own mix and stem: Whisper failing to load it (an ffmpeg that won't run) is Whisper's, said
+    # as the tone's, never blamed on a separator that never ran.
+    from caracole.autochords.run import _test_tone
+
+    _fake_torch(monkeypatch, available=False, allocates=True)
+    _fake_whisper(monkeypatch, _Model({"segments": []}))
+
+    def load_audio(path):
+        raise RuntimeError("Failed to load audio: /bin/sh: ffmpeg: not found")
+
+    sys.modules["whisper"].load_audio = load_audio
+    t = _make(monkeypatch, tmp_path)
+    with pytest.raises(RuntimeError, match=r"^Failed to load audio: "):
+        t.hear(tmp_path / "tone.wav", tmp_path / "tone.wav", 0.0)
+    assert _test_tone([("Whisper", lambda tone: t.hear(tone, tone, 0.0))]) == [
+        "Whisper fails on a test tone: RuntimeError: Failed to load audio: /bin/sh: ffmpeg: not found"]
+
+
 @pytest.mark.parametrize("device", ["cpu", "cuda"])
 def test_hearing_builds_words_and_calls_whisper_as_pinned(monkeypatch, tmp_path, device):
     from caracole.autochords.words import Word
@@ -255,6 +274,7 @@ def test_whispers_progress_through_the_mix_is_told_as_it_hears(monkeypatch, tmp_
     assert drawn == [{"total": 22500, "unit": "frames", "disable": True}]
 
 
+@pytest.mark.autochords
 def test_whispers_progress_hook_is_its_versions_own():
     # The hook reads whisper.transcribe's module-level tqdm, which its transcribe() draws its bar with, over the mel
     # frames of 10 ms: a Whisper that draws it otherwise fails here, never in a job.
