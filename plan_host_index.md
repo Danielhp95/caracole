@@ -52,7 +52,7 @@ A name is used once. The schema is in the name and in `caracole_export.schema`, 
 ## The release
 
 ```
-indexes  (a tag and its release, marked not latest, kept for good)
+indexes  (a tag and its release, a prerelease so never Latest, kept for good)
 ├─ indexes-s17-20261124T0312Z.sqlite.gz   this week's
 ├─ indexes-s17-20261117T0310Z.sqlite.gz   the one before, a week more
 └─ indexes-s16-20261103T0309Z.sqlite.gz   the last of an older schema, for apps not updated yet
@@ -81,8 +81,9 @@ Two steps, weekly, since the database is the service's and the login is the owne
    changes and by a weekly timer that catches up; the script in this repo, `nix/publish-indexes.sh`, a flake
    package, tested against a fake `gh`):
    1. delete from the release any file not `uploaded` (what a failed run left);
-   2. `gh release upload indexes FILE`, which refuses a name that exists; the release made first if missing
-      (`--latest=false`);
+   2. `gh release upload indexes FILE`, which refuses a name that exists; the release made first if missing,
+      a prerelease (`--prerelease`: GitHub ignores `--latest=false` while no other full release exists, so
+      only a prerelease is never `/releases/latest`), and one that isn't made one;
    3. read the file's entry back: its size and `digest` are the local file's, else delete it and exit 1;
    4. delete what "Kept" no longer keeps.
 

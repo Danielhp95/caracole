@@ -12,7 +12,8 @@
 #
 # Each step says what it does as it begins, on stdout. Steps, each failing the script (exit 1)
 # with a line saying which:
-#   1 the release exists, else it is created (not "latest");
+#   1 the release exists, else it is created; either way a prerelease, so that it is never the
+#     repository's Latest (/releases/latest never answers a prerelease; the phone reads the tag);
 #   2 every asset whose state isn't "uploaded" is deleted (a half upload);
 #   3 the file DIR/published.json names: listed as uploaded with the same size and digest,
 #     "already published" (steps 4 and 5 skipped, 6 still runs); listed otherwise, exit 1 (never
@@ -155,10 +156,17 @@ digest="sha256:$(jq -r .sha256 "$published")"
 # 1
 say "reading the release $TAG of $REPO..."
 if ! gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
-  say "creating the release $TAG..."
-  gh release create "$TAG" --repo "$REPO" --latest=false --title "Site catalogues" \
+  say "creating the release $TAG, a prerelease, so that it is never the repository's Latest..."
+  gh release create "$TAG" --repo "$REPO" --prerelease --title "Site catalogues" \
     --notes "The site catalogues' files: made weekly by caracole index publish." >/dev/null \
     || die 1 "the release $TAG can't be created"
+else
+  pre=$(gh api "repos/$REPO/releases/tags/$TAG" | jq -r .prerelease) || die 1 "the release $TAG can't be read"
+  if [ "$pre" != true ]; then
+    say "marking the release $TAG a prerelease, so that it is never the repository's Latest..."
+    gh release edit "$TAG" --repo "$REPO" --prerelease >/dev/null \
+      || die 1 "the release $TAG can't be made a prerelease"
+  fi
 fi
 list=$(assets) || die 1 "the release $TAG can't be read"
 

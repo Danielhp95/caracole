@@ -1,16 +1,17 @@
 """``FakeGh``: a stand-in for the GitHub CLI, a script in the test's folder over a JSON state file
 (``state.json``), so no test reaches GitHub. It answers what nix/publish-indexes.sh asks:
 
-- ``release view TAG`` (exit 1 when there is no release), ``release create TAG ...``,
-  ``release upload TAG FILE`` (no ``--clobber``: an existing name fails);
-- ``api repos/R/releases/tags/TAG`` (the release, with its ``id``), ``api repos/R/releases/ID/assets``
+- ``release view TAG`` (exit 1 when there is no release), ``release create TAG ...`` (a prerelease with
+  ``--prerelease``), ``release edit TAG --prerelease``, ``release upload TAG FILE`` (no ``--clobber``: an
+  existing name fails);
+- ``api repos/R/releases/tags/TAG`` (the release, with its ``id`` and ``prerelease``), ``api repos/R/releases/ID/assets``
   (``--paginate``: one JSON array a page of two; the REST asset shape: numeric ``id``, ``name``,
   ``size``, ``state``, ``digest``)
   and ``api -X DELETE repos/R/releases/assets/ID``.
 
 Every call is logged to ``calls.jsonl`` with ``GH_TOKEN``. ``FAKE_GH_FAIL=<kind>:<n>`` makes the
-n-th call of that kind fail (exit 1, nothing changed); kinds: ``create``, ``upload``, and ``api`` for the changing
-api calls (DELETE) alone. A state's ``corrupt_upload`` makes an upload list a digest that is not the file's,
+n-th call of that kind fail (exit 1, nothing changed); kinds: ``create``, ``edit``, ``upload``, and ``api`` for the
+changing api calls (DELETE) alone. A state's ``corrupt_upload`` makes an upload list a digest that is not the file's,
 ``no_digest`` none at all.
 
 An upload reads its file as gh does, through one open file: ``FAKE_GH_SLOW=<seconds>`` reads it a quarter at a time,
@@ -65,7 +66,13 @@ if argv[:2] == ["release", "view"]:
     sys.exit(0 if state["release"] else 1)
 if argv[:2] == ["release", "create"]:
     fails("create")
-    state["release"] = {"tag": argv[2], "args": argv[3:]}
+    state["release"] = {"tag": argv[2], "args": argv[3:], "prerelease": "--prerelease" in argv}
+elif argv[:2] == ["release", "edit"]:
+    if not state["release"]:
+        sys.exit(1)
+    fails("edit")
+    if "--prerelease" in argv:
+        state["release"]["prerelease"] = True
 elif argv[:2] == ["release", "upload"]:
     if not state["release"]:
         sys.exit(1)
@@ -102,7 +109,8 @@ elif argv[0] == "api":
             for n in range(0, max(len(shown), 1), 2):
                 print(json.dumps(shown[n:n + 2]))
         else:
-            print(json.dumps({"tag_name": "indexes", "id": 7, "assets": shown}))
+            print(json.dumps({"tag_name": "indexes", "id": 7,
+                              "prerelease": bool(state["release"].get("prerelease")), "assets": shown}))
         sys.exit(0)
     fails("api")
     a = asset_by(id=endpoint.rsplit("/", 1)[1])
@@ -132,8 +140,9 @@ class FakeGh:
     def load(self) -> None:
         self.state = json.loads((self.root / "state.json").read_text(encoding="utf-8"))
 
-    def release(self) -> FakeGh:
-        self.state["release"] = {"tag": "indexes", "args": []}
+    def release(self, *, prerelease: bool = True) -> FakeGh:
+        """The release, made as the script makes it (a prerelease), or ``prerelease=False`` as it was made once."""
+        self.state["release"] = {"tag": "indexes", "args": [], "prerelease": prerelease}
         self.save()
         return self
 
@@ -141,7 +150,7 @@ class FakeGh:
               digest: str | None = None) -> FakeGh:
         import base64
 
-        self.state["release"] = self.state["release"] or {"tag": "indexes", "args": []}
+        self.state["release"] = self.state["release"] or {"tag": "indexes", "args": [], "prerelease": True}
         self.state["next_id"] += 1
         self.state["assets"].append({
             "id": self.state["next_id"], "name": name, "size": len(data) if size is None else size,

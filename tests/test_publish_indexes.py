@@ -70,20 +70,45 @@ def rig(tmp_path):
     return Rig(tmp_path)
 
 
-def test_a_first_publish_makes_the_release_not_latest_says_each_step_and_uploads(rig):
+def test_a_first_publish_makes_the_release_a_prerelease_says_each_step_and_uploads(rig):
     done = rig.run()
     assert done.returncode == 0, done.stderr
     rig.gh.load()
-    assert "--latest=false" in rig.gh.state["release"]["args"]
+    # A prerelease is never the repository's Latest (/releases/latest), as a release with no other full one
+    # would be whatever --latest=false asked; the phone reads the tag.
+    assert "--prerelease" in rig.gh.state["release"]["args"] and rig.gh.state["release"]["prerelease"]
     assert rig.gh.names() == [NEW]
     assert done.stdout.splitlines() == [
         "publish-indexes: reading the release indexes of o/r...",
-        "publish-indexes: creating the release indexes...",
+        "publish-indexes: creating the release indexes, a prerelease, so that it is never the repository's Latest...",
         f"publish-indexes: uploading {NEW} ({len(rig.data)} bytes) to o/r, release indexes...",
         "publish-indexes: checking the upload against published.json...",
         "publish-indexes: applying the Keep rule to 1 asset...",
         f"publish-indexes: published {NEW}",
     ]
+
+
+def test_a_release_that_isnt_a_prerelease_is_made_one(rig):
+    rig.gh.release(prerelease=False)
+    done = rig.run()
+    assert done.returncode == 0, done.stderr
+    rig.gh.load()
+    assert rig.gh.state["release"]["prerelease"]
+    assert "publish-indexes: marking the release indexes a prerelease, so that it is never the repository's " \
+           "Latest..." in done.stdout.splitlines()
+    assert [c["argv"][:3] for c in rig.gh.calls() if c["argv"][:2] == ["release", "edit"]] == [
+        ["release", "edit", "indexes"]]
+    again = rig.run()
+    assert again.returncode == 0 and "marking" not in again.stdout
+    assert len([c for c in rig.gh.calls() if c["argv"][:2] == ["release", "edit"]]) == 1
+
+
+def test_a_release_that_cant_be_made_a_prerelease_fails_before_anything_is_uploaded(rig):
+    rig.gh.release(prerelease=False)
+    done = rig.run(FAKE_GH_FAIL="edit:1")
+    assert done.returncode == 1
+    assert "step 1: the release indexes can't be made a prerelease" in done.stderr
+    assert rig.gh.names() == []
 
 
 def test_a_half_upload_left_behind_is_deleted_first(rig):
