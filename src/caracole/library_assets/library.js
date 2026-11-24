@@ -1730,14 +1730,18 @@
   const keepSelected = () => {
     if (selected && !selected.checkVisibility()) unselect();
   };
-  // From 1200 px a line's buttons stay on its row while they fit beside its title (and its artist), and go on a row of
-  // their own under it where they don't (``plays-under``, library.css), at its end either way: measured in the one
-  // row, where a folded or flat line's wrap (the last below the first) and a band's line's cut its title short (their
-  // column takes what they need first), once a line, and again once the list's width, Select, the line itself (refill,
-  // an action gone) or its kind (its artist's band folded or unfolded) changes; a line hidden is measured once it
-  // shows, and a line of a run off the screen (render's runs, which content-visibility leaves unlaid) once its run
-  // comes near it, never by laying the run out to read it. Under 1200 px, none.
+  // A line's buttons stay on its row while they fit beside its title (and its artist), and go on a row of their own
+  // under it where they don't (``plays-under``, library.css), at its end either way: from 720 px a band's line's,
+  // where they wrap in their column (the last below the first: the title's column keeps its least, library.css, so
+  // they wrap rather than cut it) and, from 1200 px, also where its title is cut short; from 1200 px, beside the pane,
+  // a folded or flat line's, where they wrap. Measured in the one row, once a line, and again once the list's width,
+  // the text's size, Select, the line itself (refill, an action gone) or its kind (its artist's band folded or
+  // unfolded) changes; a line hidden is measured once it shows, and a line of a run off the screen (render's runs,
+  // which content-visibility leaves unlaid) once its run comes near it, never by laying the run out to read it. Under
+  // 720 px, none.
   const placedAt = new WeakMap();  // a line -> the list's width, the text's size, Select and its kind it was placed at
+  const bandsWide = window.matchMedia ? window.matchMedia("(min-width: 720px)") : null;
+  const wideAt = (query) => Boolean(query && query.matches);
   // The text's size: the root's font size and line height, the second what the Android app's pinch grows (the
   // WebView's text zoom leaves the font size at 16px), and what base.css's --sp, the tiles' size, reads.
   const textSize = () => {
@@ -1752,6 +1756,7 @@
   const PLACED = "section.artist .line, section.flat .line";
   const inBand = (line) => Boolean(line.closest("section.artist:not(.folded)"));
   const placeable = (line) => !line.matches(".hit, .miss") && line.querySelector(":scope > .line-title > .line-plays");
+  const placesNow = (line) => wideAt(inBand(line) ? bandsWide : paneWide);  // at this width, of its kind
   // ``lines`` (placeable) placed where they are laid out, or in ``shown`` (runs on the screen), and weren't at this
   // width, text, Select and kind.
   const placeLines = (lines, shown) => {
@@ -1763,13 +1768,12 @@
         || Boolean(shown && line.checkVisibility() && shown.has(line.closest(".cv")))));
     for (const line of todo) line.classList.remove("plays-under");
     const wraps = todo.filter((line) => {
-      if (inBand(line)) {
-        const title = line.querySelector(":scope > .line-title > h3");
-        return Boolean(title) && title.scrollWidth > title.clientWidth;
-      }
       const chips = line.querySelectorAll(":scope > .line-title > .line-plays > .play");
-      return chips.length > 1 && chips[chips.length - 1].getBoundingClientRect().top
-        > chips[0].getBoundingClientRect().top + 1;
+      if (chips.length > 1 && chips[chips.length - 1].getBoundingClientRect().top
+        > chips[0].getBoundingClientRect().top + 1) return true;
+      if (!inBand(line) || !wideAt(paneWide)) return false;
+      const title = line.querySelector(":scope > .line-title > h3");
+      return Boolean(title) && title.scrollWidth > title.clientWidth;
     });
     for (const line of todo) placedAt.set(line, kind(line));
     for (const line of wraps) line.classList.add("plays-under");
@@ -1778,12 +1782,12 @@
     if (playsFrame) cancelAnimationFrame(playsFrame);
     playsFrame = 0;
     const under = Array.from(libraryView.querySelectorAll(".line.plays-under"));
-    if (!paneWide || !paneWide.matches) {
+    if (!wideAt(bandsWide)) {
       for (const line of under) unplace(line);
       return;
     }
-    const lines = new Set(Array.from(libraryView.querySelectorAll(PLACED)).filter(placeable));
-    for (const line of under) if (!lines.has(line)) unplace(line);  // a site's line now, or none of the list's
+    const lines = new Set(Array.from(libraryView.querySelectorAll(PLACED)).filter((l) => placeable(l) && placesNow(l)));
+    for (const line of under) if (!lines.has(line)) unplace(line);  // a site's line now, none of the list's, or folded
     // A list just drawn has its runs laid out only as the next frame is made, so the lines that frame shows would be
     // placed a frame after it: the runs whose own box is on the screen (read without laying out what they hold) are
     // laid out now for their lines, as they would be in this frame anyway; never one off the screen.
@@ -1805,11 +1809,12 @@
     runsFrame = 0;
     const runs = Array.from(shownRuns).filter((run) => run.isConnected);
     shownRuns.clear();
-    if (!paneWide || !paneWide.matches || playsFrame) return;  // every line is to be placed this frame anyway
-    placeLines(runs.flatMap((run) => Array.from(run.querySelectorAll(PLACED))).filter(placeable));
+    if (!wideAt(bandsWide) || playsFrame) return;  // every line is to be placed this frame anyway
+    placeLines(runs.flatMap((run) => Array.from(run.querySelectorAll(PLACED))).filter((l) => placeable(l) &&
+      placesNow(l)));
   };
   list.addEventListener("contentvisibilityautostatechange", (e) => {
-    if (e.skipped || !paneWide || !paneWide.matches) return;
+    if (e.skipped || !wideAt(bandsWide)) return;
     shownRuns.add(e.target);
     if (!runsFrame) runsFrame = requestAnimationFrame(placeRuns);
   }, true);
@@ -1822,6 +1827,7 @@
       more.focus();
     });
   }
+  if (bandsWide && bandsWide.addEventListener) bandsWide.addEventListener("change", () => placePlays());
   if (paneWide) {
     paneWide.addEventListener("change", () => {
       placePlays();
@@ -1832,7 +1838,7 @@
       toWide();
     });
   }
-  if (pane && "ResizeObserver" in window) {  // the list's width, or the text's size (its lines' height): placed again
+  if ("ResizeObserver" in window) {  // the list's width, or the text's size (its lines' height): placed again
     const main = libraryView.querySelector(".lib-main");
     let seen = "";
     if (main) {
@@ -2770,7 +2776,10 @@
   const wide = window.matchMedia("(min-width: 720px)");
   const POPOVER_LEAST = 240;
   const panelBody = panel.querySelector(".fbody");  // what scrolls in the popover, its arrow outside it (filter.css)
-  const underFilter = () => window.innerHeight - 8 - Math.round(filterButton.getBoundingClientRect().bottom + 8);
+  // The room under Filter once the bar sticks at the window's top, where it is wherever the page has scrolled to: the
+  // same window gets the same kind of panel at the page's top (the masthead over the bar) as further down.
+  const underFilter = () => window.innerHeight - 8 -
+    Math.round(filterButton.getBoundingClientRect().bottom - bar.getBoundingClientRect().top + 8);
   // The text's pixel (base.css --sp) from 720 px: the root's line height, which the Android app's pinch grows.
   const textPixel = () => parseFloat(getComputedStyle(document.documentElement).lineHeight) / 16 || 1;
   const asPopover = () => wide.matches && underFilter() >= POPOVER_LEAST * textPixel();
@@ -2789,7 +2798,8 @@
     panel.style.left = Math.round(left - box.left) + "px";
     panel.style.top = Math.round(at.bottom - box.top + 8) + "px";
     const under = window.innerHeight - 8 - Math.round(at.bottom + 8);
-    const fits = panel.offsetHeight - panelBody.clientHeight + panelBody.scrollHeight <= under;
+    // What it holds, its body's padding the popover's own (--filter-pad, filter.css), and the popover's borders.
+    const fits = panelBody.scrollHeight + panel.offsetHeight - panel.clientHeight <= under;
     panel.style.maxHeight = fits ? "" : Math.max(160, under) + "px";
     panelBody.style.overflowY = fits ? "" : "auto";
     panel.style.setProperty("--arrow", Math.round(at.left + at.width / 2 - left) + "px");

@@ -227,13 +227,19 @@ def test_on_a_short_window_the_popover_ends_above_its_foot_and_scrolls(shelf, tm
         assert page.js(f"{PANEL}.open") and page.js(SHORT)["arrow"]
 
 
-@pytest.mark.parametrize(("width", "height", "mobile"), [(844, 340, True), (1280, 300, False)],
+@pytest.mark.parametrize(("width", "height", "mobile"), [(844, 300, True), (1280, 300, False)],
                          ids=["landscape-phone", "short-window"])
-def test_where_too_little_of_the_popover_would_fit_filter_opens_the_sheet(shelf, tmp_path, width, height, mobile):
+@pytest.mark.parametrize("scrolled", [False, True], ids=["top", "scrolled"])
+def test_where_too_little_of_the_popover_would_fit_filter_opens_the_sheet(shelf, tmp_path, width, height, mobile,
+                                                                          scrolled):
     # A phone held sideways under its bars, or a window too short for a popover worth scrolling (less than 240 of the
-    # text's pixels under Filter): the sheet from the bottom, as on a phone, across the window, with Show N songs.
+    # text's pixels under Filter, the bar stuck at the window's top): the sheet from the bottom, as on a phone, across
+    # the window, with Show N songs, at the page's top as scrolled.
     with browser.Browser(tmp_path / "chrome-shorter", width=width, height=height, mobile=mobile) as page:
         page.open(shelf.as_uri())
+        if scrolled:
+            page.js("window.scrollTo(0, document.documentElement.scrollHeight)")
+            assert page.wait("document.querySelector('.searchbar').getBoundingClientRect().top === 0")
         page.click("#filter")
         assert page.wait(f"{PANEL}.open")
         assert page.js(f"{PANEL}.matches(':modal')")
@@ -243,6 +249,22 @@ def test_where_too_little_of_the_popover_would_fit_filter_opens_the_sheet(shelf,
         assert page.js("document.getElementById('show-n').checkVisibility()")
         page.click("#show-n")
         assert page.wait(f"!{PANEL}.open && document.activeElement === {FILTER}")
+
+
+@pytest.mark.parametrize("scrolled", [False, True], ids=["top", "scrolled"])
+def test_the_same_window_opens_the_same_kind_of_panel_wherever_the_page_is(shelf, tmp_path, scrolled):
+    # The room is reckoned with the bar stuck at the window's top, where the popover opens once the page scrolls: a
+    # window with 240 of the text's pixels under a stuck Filter gets the popover at the page's top too, where the
+    # masthead leaves less (its body scrolling), never the sheet there and the popover further down.
+    with browser.Browser(tmp_path / "chrome-short", width=1280, height=330) as page:
+        page.open(shelf.as_uri())
+        if scrolled:
+            page.js("window.scrollTo(0, document.documentElement.scrollHeight)")
+            assert page.wait("document.querySelector('.searchbar').getBoundingClientRect().top === 0")
+        page.click("#filter")
+        assert page.wait(f"{PANEL}.open")
+        box = page.js(SHORT)
+        assert not box["modal"] and box["bottom"] <= box["room"] - 7.5 and box["arrow"], box
 
 
 def test_below_720px_filter_opens_a_bottom_sheet_with_show_n_songs(shelf, phone):

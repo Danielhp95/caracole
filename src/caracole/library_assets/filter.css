@@ -44,16 +44,19 @@
 
 /* The panel Filter opens. From 720 px a popover under it, the list behind it filtering as you tap; on a phone a sheet
    from the bottom over the page dimmed, ending in Show N songs. */
-.filter-panel { position: absolute; inset: auto; z-index: 4; width: min(calc(400 * var(--sp)), calc(100vw - 32px)); max-width: none;
-  max-height: none; margin: 0; padding: 14px; overflow: visible; border: 1px solid var(--border-strong);
-  border-radius: var(--radius-l); background: var(--surface); color: var(--text); box-shadow: var(--pop-shadow); }
+/* --filter-pad: its padding, which its body (.fbody, below) takes as its own where it scrolls. */
+.filter-panel { --filter-pad: 14px; position: absolute; inset: auto; z-index: 4;
+  width: min(calc(400 * var(--sp)), calc(100vw - 32px)); max-width: none; max-height: none; margin: 0;
+  padding: var(--filter-pad); overflow: visible; border: 1px solid var(--border-strong); border-radius: var(--radius-l);
+  background: var(--surface); color: var(--text); box-shadow: var(--pop-shadow); }
 .filter-panel::before { content: ""; position: absolute; top: -7px; left: calc(var(--arrow, 50%) - 6px); width: 12px;
   height: 12px; transform: rotate(45deg); border-top: 1px solid var(--border-strong);
   border-left: 1px solid var(--border-strong); background: var(--surface); }
 /* Where it ends above the window's foot (library.js placePanel), its body scrolls, never the popover itself, whose
    clip would cut its arrow off: the body as large as the popover's padding box, the popover a column it shrinks in. */
 .filter-panel[open]:not(:modal) { display: flex; flex-direction: column; }
-.filter-panel:not(:modal) > .fbody { min-height: 0; margin: -14px; padding: 14px; border-radius: inherit; }
+.filter-panel:not(:modal) > .fbody { min-height: 0; margin: calc(-1 * var(--filter-pad)); padding: var(--filter-pad);
+  border-radius: inherit; }
 .filter-panel:modal { position: fixed; inset: auto 0 0; width: 100%; max-height: calc(100% - 24px); padding: 8px 16px
   calc(14px + env(safe-area-inset-bottom)); overflow-y: auto; overscroll-behavior: contain; border-width: 1px 0 0;
   border-radius: var(--radius-l) var(--radius-l) 0 0; box-shadow: 0 -16px 40px rgb(0 0 0 / 30%); }

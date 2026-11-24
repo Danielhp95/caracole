@@ -277,6 +277,14 @@ section.artist:not(.folded) .line-by { display: none; }
   section.artist:not(.folded) .line:not(.hit):not(.miss) > .line-title > h3 { grid-area: title; }
   section.artist:not(.folded) .line:not(.hit):not(.miss) > .line-title > .line-plays { grid-area: plays;
     max-width: none; }
+  /* Where they would wrap beside the title (library.js placePlays: .plays-under; from 1200 px also where it is cut),
+     they go on a row of their own under it, at its end, left of the key's column, wrapping there, never one a row
+     beside it; the title's row keeps its status, its action and its key. */
+  section.artist:not(.folded) .line.plays-under:not(.hit):not(.miss) { grid-template-columns: minmax(0, 1fr)
+    calc(104 * var(--sp)) auto calc(44 * var(--sp)); grid-template-rows: minmax(calc(28 * var(--sp)), auto);
+    grid-template-areas: "title status act key" "plays plays plays ."; }
+  section.artist:not(.folded) .line.plays-under:not(.hit):not(.miss) > .line-title > .line-plays {
+    margin: 0 0 6px auto; }
   /* A site's line has no key: its status and counts ("chords ×9 · tabs ×2") take most of that room, its marks the
      rest, the rest where yours are (rows.css). */
   section.artist:not(.folded) .line.hit { grid-template-columns: minmax(0, 1fr)
@@ -323,8 +331,8 @@ section.artist.folded .line-by, section.flat .line-by { flex: 0 1 auto; color: v
    150 px) may not fit beside its title, its artist, its key and its chevron. A folded or flat line keeps the one row
    above while they fit; where they don't (library.js placePlays: .plays-under), its first row is the title, its artist
    right after it, the status, the action, the key and the chevron, and its buttons go on a row of their own under it,
-   at its end, left of the key's column, wrapping there. A band's line has them in their column, which wraps them
-   where the title leaves too little room. None ever pushes the key off the line, and the title keeps the room they
+   at its end, left of the key's column, wrapping there. A band's line's are placed so from 720 px (above), and from
+   here where its title is cut short too. None ever pushes the key off the line, and the title keeps the room they
    took from it. */
 @media (min-width: 1200px) {
   .line > .line-title { flex-wrap: wrap; row-gap: 4px; }
@@ -334,10 +342,7 @@ section.artist.folded .line-by, section.flat .line-by { flex: 0 1 auto; color: v
     fit-content(calc(256 * var(--sp))) minmax(0, 1fr) calc(104 * var(--sp)) auto calc(44 * var(--sp));
     grid-template-rows: minmax(calc(28 * var(--sp)), auto);
     grid-template-areas: "name by . status act key" "plays plays plays plays plays ."; }
-  section.artist:not(.folded) .line.plays-under:not(.hit):not(.miss) { grid-template-columns: minmax(0, 1fr)
-    calc(104 * var(--sp)) auto calc(44 * var(--sp)); grid-template-rows: minmax(calc(28 * var(--sp)), auto);
-    grid-template-areas: "title status act key" "plays plays plays ."; }
-  section.artist .line.plays-under:not(.hit):not(.miss) > .line-title > .line-plays,
+  section.artist.folded .line.plays-under:not(.hit):not(.miss) > .line-title > .line-plays,
   section.flat .line.plays-under:not(.hit):not(.miss) > .line-title > .line-plays { margin: 0 0 6px auto; }
 }
 @media (max-width: 719px) {

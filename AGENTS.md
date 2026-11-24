@@ -953,7 +953,8 @@ The pages caracole writes and serves are index.html, sheet.html, songbook.html a
     (body.html), so it opens over the results, under Filter, and stays open as you tap (the bar over the list of
     requests meanwhile, `.searchbar:has(> .filter-panel[open])`; its body, `.fbody`, the one that scrolls on a short
     window, its arrow outside it; the sheet from the bottom where less than `POPOVER_LEAST`, 240 of the text's pixels,
-    would show under Filter: test_library_filter.py); its chips and its Show N songs count what the results show
+    would show under Filter with the bar stuck at the window's top, the same kind wherever the page is scrolled to:
+    test_library_filter.py); its chips and its Show N songs count what the results show
     (`resultsHas`, `resultsShown`, drawGroups); the marks under the box count the lines shown (`foundNow`); the results'
     head says what is kept, with Show all (`keptSaid`), and what the Matches hide whole is said, with Show all
     (`filteredOut`; test_web_page_search_filters.py), each giving the focus to the first result (`focusList`).
@@ -1055,9 +1056,11 @@ It is rows.js's, shared by both pages:
     the screen once its run comes near it, `contentvisibilityautostatechange`, `placeRuns`, never by laying the run
     out: below)
     makes its first row the title, its artist right after it, the status, the action and the key, and its
-    buttons a row of their own under the title (library.css, songbooks.css selecting); a band's line its buttons
-    beside its title where they fit, else under it (`.line-title` wrapping), so none ever pushes the key off the line
-    (test_library_card_place.py, test_library_bands.py).
+    buttons a row of their own under the title (library.css, songbooks.css selecting); a band's line, from 720 px
+    (its title's column keeping 64 of the text's pixels), its buttons beside its title where they fit on one row,
+    else under it (`plays-under` where they wrap in their column, and from 1200 px also where its title is cut), so
+    none ever pushes the key off the line nor stacks its buttons one a row beside the title
+    (test_library_card_place.py, test_library_bands.py, test_library_text_size.py).
 - **The card's place**: from 1200 px a song's card is in the laptop's pane, `#card-pane` (body.html's `.lib-cols`, the
   list's `.lib-main` beside it), one at a time, never under its line; under 1200 px under its line, in one column of
   800 px from 720 px (`#library-view`, the masthead keeping the page's width) (library.js, below; library.css).
