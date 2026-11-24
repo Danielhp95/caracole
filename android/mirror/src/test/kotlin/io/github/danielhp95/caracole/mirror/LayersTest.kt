@@ -143,6 +143,24 @@ class LayersTest {
     }
 
     @Test
+    fun `a layer taken says how many of the pages it lacked it has kept, those it holds already never counted`() {
+        val pages = filePages(
+            mapOf("index.html" to filesLibrary, sheetPath to filesSheet, "Oasis/Wonderwall/sheet.html" to othersSheet,
+                  "style.css" to "body {}".toByteArray()),
+            mapOf(sheetPath to (song to inFile), "Oasis/Wonderwall/sheet.html" to (other to inFile)),
+        )
+        val told = mutableListOf<Pair<Int, Int>>()
+        mirror.takeLayer(layerId, pages.manifest, setOf(song), progress = { done, total -> told += done to total },
+                         blob = pages::blob)
+        assertEquals(listOf(0 to 2, 1 to 2, 2 to 2), told, "the start page and the song's sheet, one rule: the layer's")
+        // Taken again: the layer lacks none of them, and says nothing.
+        told.clear()
+        mirror.takeLayer(layerId, pages.manifest, setOf(song), progress = { done, total -> told += done to total },
+                         blob = pages::blob)
+        assertEquals(emptyList(), told)
+    }
+
+    @Test
     fun `a later file of the same caracole takes the pages of its units and its start page, and keeps the others'`() {
         take(filePages(mapOf("index.html" to filesLibrary, sheetPath to filesSheet), mapOf(sheetPath to (song to inFile))), setOf(song))
         val newer = "<html>the newer file's library</html>".toByteArray()

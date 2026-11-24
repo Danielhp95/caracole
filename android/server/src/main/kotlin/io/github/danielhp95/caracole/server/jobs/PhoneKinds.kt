@@ -9,10 +9,14 @@ package io.github.danielhp95.caracole.server.jobs
  */
 object PhoneKinds {
     /** A kind: its job's key prefix, its [title] and [display] (JobSpec's), its one stage (name, label), and its lines
-     * while it runs, once done (and [otherwise], a second way it may end well) and failed. */
+     * while it runs, once done (and [otherwise], a second way it may end well, with [formerly] its older words, which a
+     * request kept in the history may still say) and failed. */
     data class Kind(val kind: String, val key: String, val title: String, val display: String,
                     val stage: Pair<String, String>, val running: String, val done: String, val failed: String,
-                    val otherwise: String? = null)
+                    val otherwise: String? = null, val formerly: List<String> = emptyList()) {
+        /** Whether [line] is the kind's second way to end ([otherwise], or one of its [formerly] words, filled). */
+        fun waits(line: String): Boolean = (listOfNotNull(otherwise) + formerly).any { fits(line, it) }
+    }
 
     val RENDER = Kind("render", "render:", "Remake the pages", "The phone's pages", "render" to "Making the pages",
                       "Remaking pages · {done} of {total}", "Pages remade · {n} songs",
@@ -27,10 +31,12 @@ object PhoneKinds {
 
     /** The site catalogues GitHub's release holds, downloaded and merged: its stage's words while it runs are what it
      * is doing (`{doing}`), its date the file's; its [Kind.otherwise], a wait, the download a metered network leaves
-     * for the owner's go-ahead ({size}). */
+     * for the owner's go-ahead ({size}): nothing starts it again on Wi-Fi by itself, so its words name the go-ahead
+     * alone. */
     val CATALOGUES = Kind("catalogues", "catalogues:", "Download the site catalogues", "The site catalogues",
                           "catalogues" to "Catalogues", "{doing}", "Catalogues of {date}", "Not imported: {why}",
-                          otherwise = "{size} to download: waiting for Wi-Fi or your go-ahead")
+                          otherwise = "{size} to download: waiting for your go-ahead to use mobile data",
+                          formerly = listOf("{size} to download: waiting for Wi-Fi or your go-ahead"))
 
     val ALL: Map<String, Kind> = listOf(RENDER, INBOX, BACKUP, RESTORE, CATALOGUES).associateBy { it.kind }
 

@@ -24,7 +24,9 @@ import kotlinx.serialization.json.jsonPrimitive
  * - the computer's settings (`phone:settings`), the phone's own schema record, and its indexes' progress and the
  *   pages it read for them (`phone:read:`, `phone:pushed:`, each site's sitemaps, `:index:`, `:keys` records, UG's
  *   artist directory's listings and keys, `ug:directory:`): the index tables are no backup's, so their records stay
- *   theirs;
+ *   theirs; and the site catalogues' (`catalogues:`: the file those tables took last, which a tap compares with
+ *   GitHub's newest to say Up to date, the time GitHub said to ask again after, a download waiting for a go-ahead,
+ *   the offer made), so that a restore never has a tap download again a catalogue the index still holds;
  * - and each song's records that gate a request ([SONGS]: a site's 30-day check, UG's artist page checked), kept by
  *   the song's identity key, since a song's id may differ in the backup: a song the backup has takes the records the
  *   phone has now for that song (none, if it has none now), and one only the backup has keeps its own.
@@ -46,6 +48,7 @@ object OwnRecords {
         "youtube-search:",
         "ug:index:", "ug:artist_tabs:", "ug:directory:", "lacuerda:index:", "harptabs:index:", "harptabs:artists:", "gametabs:index:",
         "gametabs:games:", "gtptabs:index:", "musescore:index:",
+        "catalogues:",
     )
 
     /** A song's records that gate a request (of songs._PER_SONG_KV), `<prefix><song id>` or `<prefix><id>:<more>`. */

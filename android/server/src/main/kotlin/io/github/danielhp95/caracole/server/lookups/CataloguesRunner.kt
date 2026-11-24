@@ -15,6 +15,9 @@ import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.db.isSqliteError
 import io.github.danielhp95.caracole.core.index.IndexTransfer
+import io.github.danielhp95.caracole.core.index.MergeProgress
+import io.github.danielhp95.caracole.core.index.Paced
+import io.github.danielhp95.caracole.core.index.Sizes
 import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.index.TransferError
 import io.github.danielhp95.caracole.core.json.PyJson
@@ -46,23 +49,29 @@ import java.time.Instant
  * 2. the release listed ([CatalogueSource.list]) and its file chosen ([choose]): none of this schema, the reason in
  *    [words] (a newer schema, an older one, none at all); the one imported last (kv [Catalogues.IMPORTED]), "Up to
  *    date: the catalogues of DATE" ([UP_TO_DATE]), done, nothing downloaded;
- * 3. on a metered network ([metered]) with no `--metered-ok`: "52 MB to download: waiting for Wi-Fi or your
- *    go-ahead" (the kind's second way to end, a wait), nothing downloaded, the file's name and size kept in kv
- *    [ASKING] (`{"name", "bytes"}`) for the app's question; asked again with `--metered-ok` (the go-ahead, a job of
- *    its own key, [GO]), downloaded whatever the network;
+ * 3. on a metered network ([metered]) with no `--metered-ok`: "52 MB to download: waiting for your go-ahead to use
+ *    mobile data" (the kind's second way to end, a wait: nothing starts it again on Wi-Fi by itself), nothing
+ *    downloaded, the file's name and size kept in kv [ASKING] (`{"name", "bytes"}`) for the app's question; asked
+ *    again with `--metered-ok` (the go-ahead, a job of its own key, [GO]), downloaded whatever the network;
  * 4. less room in `stateDir` than [Catalogues.ROOM_FACTOR] times the file ([free]): "The import needs about 1.2 GB
  *    free; the phone has 700 MB.", nothing downloaded;
- * 5. the file downloaded ([download]: unpacked and checked) into `stateDir/cache/catalogues/`, saying "Downloading ·
- *    31 of 52 MB" as it goes;
- * 6. in one write, merged (IndexTransfer.merge, `notAfter` the clock and a day, as a sync's merge: no record dated
- *    later is newer than the phone's), kv [Catalogues.IMPORTED] its name once the merge took it, and "Catalogues of
- *    DATE", with a sentence for the sites the file holds that this version doesn't know (caracole_export's `sites`
- *    against [IndexTransfer.SITES], [unknown]); once the merge has begun, whatever came of it, the WAL checkpointed
- *    and the search's answers forgotten ([forget]).
+ * 5. the lookups queued meanwhile let go first (JobContext.yieldToQueued, holding no write), then the file
+ *    downloaded ([download]: unpacked and checked) into `stateDir/cache/catalogues/`, saying "Downloading · 31 of
+ *    52 MB" as it goes;
+ * 6. the lookups queued meanwhile let go first again, then, in one write, merged (IndexTransfer.merge, `notAfter` the
+ *    clock and a day, as a sync's merge: no record dated later is newer than the phone's), saying each step of it
+ *    (MergeProgress.words: "Comparing with the phone's index…", "Importing · Ultimate Guitar · 600,000 of 1,521,145
+ *    tabs", "Importing · harptabs.com", "Making the search index ready…"), kv [Catalogues.IMPORTED] its name once the
+ *    merge took it, and "Catalogues of DATE", with a sentence for the sites the file holds that this version doesn't
+ *    know (caracole_export's `sites` against [IndexTransfer.SITES], [unknown]); once the merge has begun, whatever
+ *    came of it, the WAL checkpointed ("Tidying the database…") and the search's answers forgotten ([forget]). No
+ *    lookup runs inside the merge's write.
  *
- * Whatever came of it, the folder `stateDir/cache/catalogues/` is emptied, a file a killed job left among it. A
- * [Limited] anywhere keeps its time in kv [Catalogues.NOT_BEFORE]. Failed, its words are "Not imported: WHY" (its
- * kind's), the command's exit 1.
+ * Its words while it runs come at most once a second of [ticks] within a step, each step's first and last at once
+ * (Paced: the last before each yield and the end). [chunk] is IndexTransfer.merge's (a test's fewer rows a chunk).
+ * Whatever came of it, the folder `stateDir/cache/catalogues/` is emptied, a file a killed job left among it, and
+ * [sweep] empties it as the phone starts. A [Limited] anywhere keeps its time in kv [Catalogues.NOT_BEFORE]. Failed,
+ * its words are "Not imported: WHY" (its kind's), the command's exit 1.
  *
  * Each run asks GitHub with caracole's user agent as the phone's settings say it then (PhoneConfig.read: the
  * computer's once a sync brought it), through [source] made of that client (GitHub's API, the owner's choice);
@@ -75,7 +84,13 @@ class CataloguesRunner(
     private val metered: () -> Boolean = { false },
     private val forget: () -> Unit = {},
     private val free: (File) -> Long = File::getUsableSpace,
+    private val ticks: () -> Long = System::nanoTime,
+    private val chunk: Int = IndexTransfer.UG_CHUNK,
 ) : CommandRunner {
+    /** The file a job killed in its middle left in `stateDir/cache/catalogues/` (up to the whole unpacked index)
+     * deleted: called as the phone starts, while no job runs. */
+    fun sweep() = empty(File(parts.stateDir, CACHE))
+
     /** The job the app queues (Settings, the first start): one at a time, a request while one waits or runs answered
      * by that one; with [meteredOk], the owner's go-ahead to download on a metered network, a job of its own key
      * ([GO]), so that a plain job waiting never answers it. */
@@ -108,7 +123,9 @@ class CataloguesRunner(
 
     private suspend fun import(meteredOk: Boolean, cache: File, context: JobContext) {
         val kind = PhoneKinds.CATALOGUES
-        fun doing(words: String) = context.stage(STAGE, "running", PhoneKinds.fill(kind.running, "doing" to words))
+        val paced = Paced({ words -> context.stage(STAGE, "running", PhoneKinds.fill(kind.running, "doing" to words)) },
+                          ticks = ticks)
+        fun doing(words: String, step: Any = words) = paced.say(words, step)
         context.stage(STAGE, "running")
         val (until, imported, agent) = parts.database.read { db ->
             Triple(notBefore(db), db.kvGet(Catalogues.IMPORTED), PhoneConfig.read(db).userAgent)
@@ -146,19 +163,15 @@ class CataloguesRunner(
         }
         if (!cache.isDirectory && !cache.mkdirs()) throw CatalogueError("The phone's storage failed: no ${cache.name} folder.")
         val to = File(cache, take.file.name.removeSuffix(".gz"))
-        var said = ""
-        doing(downloading(0, bytes))
-        val fetched = download(http, take.file, to, source.redirects) { got ->
-            val now = downloading(got, bytes)
-            if (now != said) {
-                said = now
-                doing(now)
-            }
-        }
-        doing(IMPORTING)
+        context.yieldToQueued()  // the lookups queued as GitHub was asked go first: the download takes minutes
+        doing(downloading(0, bytes), DOWNLOADING)
+        val fetched = download(http, take.file, to, source.redirects) { got -> doing(downloading(got, bytes), DOWNLOADING) }
+        paced.flush()  // "Downloading · 52 of 52 MB", its last count, before the lookups go
+        context.yieldToQueued()  // and those queued as it came, before the merge's write holds the worker for a minute
         val unknown = try {
             parts.database.write { db ->
-                IndexTransfer.merge(db, fetched.file, Stamps.of(clock()), notAfter = notAfter())
+                IndexTransfer.merge(db, fetched.file, Stamps.of(clock()), notAfter = notAfter(), chunk = chunk,
+                                    progress = { doing(it.words(), it.step) })
                 db.kvSet(Catalogues.IMPORTED, take.file.name)
                 db.kvDelete(ASKING)
                 sitesOf(db, fetched.file).filter { it !in IndexTransfer.SITES }
@@ -172,6 +185,7 @@ class CataloguesRunner(
             throw CatalogueError("The phone's database failed: ${e.message ?: e::class.simpleName}.", e)
         } finally {
             // The merge began: whatever it took, the WAL it grew given back and the search's answers forgotten.
+            doing(MergeProgress.TIDYING)
             quietly { parts.database.checkpoint() }
             forget()
         }
@@ -249,7 +263,9 @@ class CataloguesRunner(
         private const val READ_AS = "catalogue"
         private const val THE_FILE = "the file"
         private const val LISTING = "Asking GitHub for the catalogues…"
-        private const val IMPORTING = "Importing the catalogues…"
+
+        /** The download's step, whatever its count says (Paced). */
+        private const val DOWNLOADING = "downloading"
 
         /** The go-ahead's key after the kind's (`catalogues:go`). */
         const val GO = "go"
@@ -272,34 +288,9 @@ class CataloguesRunner(
         }
 
         /** "Downloading · 31 of 52 MB": [got] of [total] bytes, in the unit and the precision [size] says [total] in. */
-        fun downloading(got: Long, total: Long): String {
-            val so = when {
-                total >= GB -> tenths(got, 100_000_000)
-                total >= WHOLE_MB -> ((got + 500_000) / 1_000_000).toString()
-                else -> tenths(got, 100_000)
-            }
-            return "Downloading · $so of ${size(total)}"
-        }
+        fun downloading(got: Long, total: Long): String = "Downloading · " + Sizes.of(got, total)
 
-        /** A size as the pages say one (sync-words.js's `size`): 0.4 MB, 3.4 MB, 207 MB, 1.2 GB, a megabyte a million
-         * bytes, 0.1 MB at least; ASCII digits, no locale's. */
-        fun size(bytes: Long): String {
-            val b = maxOf(bytes, 0)
-            return when {
-                b >= GB -> tenths(b, 100_000_000) + " GB"
-                b >= WHOLE_MB -> ((b + 500_000) / 1_000_000).toString() + " MB"
-                else -> tenths(maxOf(b, 100_000), 100_000) + " MB"
-            }
-        }
-
-        /** [bytes] in tenths of [tenth] bytes, rounded half up, as "1.2". */
-        private fun tenths(bytes: Long, tenth: Long): String {
-            val n = (bytes + tenth / 2) / tenth
-            return "${n / 10}.${n % 10}"
-        }
-
-        /** The sizes from which [size] says gigabytes, and whole megabytes (sync-words.js's 999.5 and 9.95 MB). */
-        private const val GB = 999_500_000L
-        private const val WHOLE_MB = 9_950_000L
+        /** A size as the pages say one (sync-words.js's `size`): 0.4 MB, 3.4 MB, 207 MB, 1.2 GB (core.index.Sizes). */
+        fun size(bytes: Long): String = Sizes.size(bytes)
     }
 }

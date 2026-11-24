@@ -173,6 +173,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         commands["backup"] = BackupRunner(parts)
         catalogues = CataloguesRunner(parts, source = deps.catalogues, metered = deps.metered,
                                       forget = { search.invalidate() })
+        catalogues.sweep()  // the file an import killed in its middle left (up to the whole unpacked index)
         commands[CataloguesRunner.COMMAND] = catalogues
     }
 
@@ -186,8 +187,13 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         deps.database, store, deps.stateDir,
         client = { address -> PeerClient(ServerAddress.parse(address)) },
         mirrorRefresh = deps.mirror?.let { mirror ->
-            { address: String ->
-                withContext(Dispatchers.IO) { MirrorSync(mirror).sync(ServerAddress.parse(address)) }
+            { address: String, say: (String) -> Unit ->
+                withContext(Dispatchers.IO) {
+                    // How many of the pages the phone lacks are copied, as they come ("120 of 640 pages").
+                    MirrorSync(mirror).sync(ServerAddress.parse(address), progress = { at ->
+                        if (at.total > 0) say("${at.done} of ${at.total} pages")
+                    })
+                }
                 Unit
             }
         },

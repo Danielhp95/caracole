@@ -163,11 +163,14 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
     }
 
     /** GET /api/peer/index ([sites]: those alone, every one when null), streamed into [to], [INDEX_TIMEOUT_MS] at
-     * most between two reads. */
-    fun index(to: File, sites: List<String>? = null) {
+     * most between two reads; [onBytes] told the bytes come so far and the answer's Content-Length (-1: it gives none)
+     * once the answer begins (the computer exports the whole index before its first byte), then after each read. */
+    fun index(to: File, sites: List<String>? = null, onBytes: ((got: Long, total: Long) -> Unit)? = null) {
         val path = INDEX_PATH + (sites?.let { "?sites=" + Documents.quote(it.joinToString(",")) } ?: "")
         http.get(address, address.resolve(path), emptyMap(), readTimeoutMs = INDEX_TIMEOUT_MS) { answer ->
             if (answer.status != 200) throw refused(Answered(answer.status, readAtMost(answer.body, MAX_JSON)))
+            var got = 0L
+            onBytes?.invoke(got, answer.contentLength)
             // The answer's bytes as they come; a write that fails is the phone's storage, never the connection.
             val out = try {
                 to.outputStream()
@@ -185,6 +188,8 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
                         to.delete()
                         throw PeerError("The phone's storage failed: ${e.message ?: e.javaClass.simpleName}.", cause = e)
                     }
+                    got += n
+                    onBytes?.invoke(got, answer.contentLength)
                 }
                 out.fd.sync()
             }

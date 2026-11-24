@@ -6,6 +6,7 @@ import io.github.danielhp95.caracole.core.sync.SyncEngine
 import io.github.danielhp95.caracole.core.sync.file.SyncFiles
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.Fixtures
+import io.github.danielhp95.caracole.core.testing.TestDb
 import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.mirror.LayerPolicy
 import io.github.danielhp95.caracole.mirror.Looked
@@ -44,6 +45,7 @@ import java.time.Instant
 import java.time.ZoneOffset
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
@@ -158,6 +160,29 @@ class SyncFileRoutesTest {
     }
 
     @Test
+    fun `the pages hook says how many of the pages its layer lacked it has kept`() {
+        val dir = tmp.newFolder()
+        val file = File(dir, "full.caracole").also { it.writeBytes(full()) }
+        val sync = SyncFiles.read(file)
+        val mirror = Mirror(File(dir, "mirror"))
+        TestDb.fresh(dir).use { database ->
+            // The song taken, as an import's take leaves it before its mirror stage.
+            database.writeBlocking { db ->
+                io.github.danielhp95.caracole.core.library.LibraryStore(File(dir, "library"))
+                    .add(db, "Radiohead", "Creep", now = "2026-11-03T10:00:00Z")
+            }
+            val hook = SyncFileRoutes.pagesFromFile(mirror, File(dir, "library"), PhoneGate(database))
+            val taken = listOf("song/radiohead/creep")
+            val said = ArrayList<String>()
+            hook(sync, taken) { said += it }
+            assertTrue(said.isNotEmpty())
+            val total = said.first().substringAfter(" of ").substringBefore(" ")
+            assertEquals((0..4).map { SyncFileRoutes.kept(it, 4) }, said, "the start page and Creep's three")
+            assertEquals("4", total)
+        }
+    }
+
+    @Test
     fun `a file's import takes what it gives, keeps its pages as a layer, and leaves no staging behind`() = Phone().use { phone ->
         val id = phone.send(full())
         val compared = phone.app.postScript("/sync/import/compare", listOf("import" to id))
@@ -173,6 +198,11 @@ class SyncFileRoutesTest {
         assertEquals("import:$id", job.spec.key)
         assertEquals(SyncEngine.FILE_STAGES.map { it.first }, job.stages.map { it.name })
         assertEquals("done", job.stages.single { it.name == SyncEngine.MIRROR }.state, job.stages.toString())
+        // As it kept them it said how many of the file's pages it had kept (paced: a count at most once a second).
+        val said = job.stages.single { it.name == SyncEngine.MIRROR }.runningDetail
+        val kept = Regex("(\\d+) of (\\d+) pages kept").matchEntire(said)
+        assertNotNull(kept, said)
+        assertTrue(kept.groupValues[1].toInt() <= kept.groupValues[2].toInt() && kept.groupValues[2].toInt() > 0, said)
         assertEquals(emptyList(), phone.staged(), "its staging deleted once the job is over")
 
         val layer = phone.mirror.layers().single()

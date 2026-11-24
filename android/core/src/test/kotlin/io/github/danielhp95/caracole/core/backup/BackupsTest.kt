@@ -444,7 +444,10 @@ class BackupsTest {
                            "lacuerda:search:x", "lacuerda:search-failed", "gtptabs:unusable:12", "ug:artist_url:x",
                            "ug:pasted_tab:1", "ug:unreadable:1", "ug:index:built_at", "ug:sitemaps",
                            "lacuerda:index:pages", "harptabs:artists:keys", "phone:read:ug", "phone:pushed:ug",
-                           "ug:directory:letters", "ug:directory:keys")) {
+                           "ug:directory:letters", "ug:directory:keys",
+                           // The site catalogues': the file the index tables hold, when GitHub may be asked again, the
+                           // download waiting for a go-ahead, the offer made: of the index tables and this phone alone.
+                           "catalogues:imported", "catalogues:not-before", "catalogues:asking", "catalogues:offered")) {
             assertTrue(OwnRecords.isOwn(key), key)
         }
         for (key in listOf("songs:key_version", "wanted:first_seen:x", "render:1:phone", "render:files:1",

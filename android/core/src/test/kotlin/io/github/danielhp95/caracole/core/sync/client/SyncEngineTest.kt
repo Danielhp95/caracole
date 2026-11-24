@@ -8,6 +8,7 @@ import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.index.IndexTransfer
+import io.github.danielhp95.caracole.core.index.Sizes as CataloguesSizes
 import io.github.danielhp95.caracole.core.sync.Compare
 import io.github.danielhp95.caracole.core.sync.Comparison
 import io.github.danielhp95.caracole.core.sync.Conflicts
@@ -75,7 +76,7 @@ class SyncEngineTest {
         if (::phone.isInitialized) phone.close()
     }
 
-    private fun engine(mirror: (suspend (String) -> Unit)? = null) =
+    private fun engine(mirror: (suspend (String, (String) -> Unit) -> Unit)? = null) =
         SyncEngine(phone, phoneStore, stateDir, client = { PeerClient(ServerAddress.parse(it)) }, mirrorRefresh = mirror)
             .also { it.pollEveryMs = 10 }
 
@@ -530,7 +531,7 @@ class SyncEngineTest {
     @Test fun `the mirror is brought up to date after the give, and its failure stops nothing`() {
         onComputer("Radiohead", "Creep")
         val asked = CopyOnWriteArrayList<String>()
-        val mirrored = engine { address -> asked.add(address); throw IOException("no space left") }
+        val mirrored = engine { address, _ -> asked.add(address); throw IOException("no space left") }
         val outcome = apply(mirrored.compare(computer.address.toString()), on = mirrored)
         assertEquals(listOf(computer.address.toString()), asked)
         assertEquals("failed", ended()["mirror"])
@@ -724,6 +725,45 @@ class SyncEngineTest {
         assertTrue(unitOf(hysteria) in computer.state())
     }
 
+    @Test fun `the mirror stage says how many of the computer's pages are copied`() {
+        onComputer("Radiohead", "Creep")
+        val mirrored = engine { _, say -> say("0 of 7 pages"); say("3 of 7 pages"); say("7 of 7 pages") }
+        var tick = 0L
+        mirrored.ticks = { tick.also { tick += 2_000_000_000L } }  // two seconds a reading: every count is said
+        apply(mirrored.compare(computer.address.toString()), on = mirrored)
+        val said = stages.filter { it.first == "mirror" && it.second == "running" }.map { it.third }
+        assertEquals(listOf("", "0 of 7 pages", "3 of 7 pages", "7 of 7 pages"), said)
+        assertEquals("done", ended()["mirror"])
+    }
+
+    @Test fun `the index stage says each step of the computer's indexes coming, and how far`() {
+        onComputer("Radiohead", "Creep")
+        val export = tmp.newFile("export.sqlite").also { it.delete() }
+        io.github.danielhp95.caracole.core.testing.Fixtures.loadRaw(export, "index/fixtures/full-export.jsonl")
+        computer.index = { export.readBytes() }
+        computer.indexes = mapOf("gtptabs" to "2026-11-03T10:00:00Z", "musescore" to "2026-11-03T11:00:00Z")
+        var tick = 0L
+        engine.ticks = { tick.also { tick += 2_000_000_000L } }  // two seconds a reading: every count is said
+        apply(engine.compare(computer.address.toString()))
+        val said = stages.filter { it.first == "index" && it.second == "running" }.map { it.third }
+        val bytes = export.length()
+        val steps = listOf("gtptabs, musescore", "The computer is copying its indexes…",
+                           "Downloading the computer's indexes · ${CataloguesSizes.of(0, bytes)}",
+                           "Comparing with the phone's index…",
+                           "Importing · gtptabs.com", "Importing · MuseScore", "Tidying the database…")
+        var at = 0
+        for (line in said) if (at < steps.size && line == steps[at]) at++
+        assertEquals(steps.size, at, said.joinToString("\n"))
+        assertTrue(said.any { it == "Downloading the computer's indexes · ${CataloguesSizes.of(bytes, bytes)}" },
+                   said.joinToString("\n"))
+        assertEquals("0.0 of 0.1 MB", CataloguesSizes.of(0, 100_000))
+        // An answer of no Content-Length: the bytes come so far, no total, no 0.1 MB floor.
+        assertEquals("Downloading the computer's indexes · 0.0 MB so far", SyncEngine.downloading(40_000, -1))
+        assertEquals("Downloading the computer's indexes · 3.4 MB so far", SyncEngine.downloading(3_400_000, -1))
+        assertEquals("Downloading the computer's indexes · 120 MB so far", SyncEngine.downloading(120_000_000, -1))
+        assertEquals("merged gtptabs, musescore", stages.last { it.first == "index" }.third)
+    }
+
     @Test fun `a newer index merged takes its sites into the phone's tables, and the stamps are kept`() {
         onComputer("Radiohead", "Creep")
         val export = tmp.newFile("export.sqlite").also { it.delete() }
@@ -829,7 +869,7 @@ class SyncEngineTest {
         onComputer("Radiohead", "Creep")
         computer.indexes = mapOf("gtptabs" to "2026-11-03T10:00:00Z")
         var refreshed = 0
-        val mirrored = engine { refreshed++ }
+        val mirrored = engine { _, _ -> refreshed++ }
         val outcome = apply(engine.compare(computer.address.toString()), on = mirrored, parts = listOf(Scope.SONGBOOKS))
         assertEquals(emptyList(), outcome.taken, "a song comes with the songbooks only when one lists it")
         assertEquals(0, refreshed)

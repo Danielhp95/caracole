@@ -86,7 +86,8 @@ class RequestsRoutes(val parts: PhoneParts, val clock: () -> Instant = { Instant
         }
         val facts = songs.mapValues { it.value.second }
         val lines = jobs.associate { job ->
-            job.id to JobViews.line(job, ahead(jobs, job), facts[job.id], songbookPage = books[job.id])
+            job.id to JobViews.line(job, ahead(jobs, job), facts[job.id], songbookPage = books[job.id],
+                                    behind = JobViews.behind(job, jobs))
         }
         val outcomes = jobs.filter { !it.active }.associate { job ->
             job.id to Outcomes.outcome(job, lines.getValue(job.id), facts[job.id], songs[job.id]?.first)
@@ -154,7 +155,8 @@ class RequestsRoutes(val parts: PhoneParts, val clock: () -> Instant = { Instant
         parts.database.read { db ->
             val (songId, facts) = ended.songOf(db, job, parts.cards, clock())
             JobViews.view(job, if (job.state == Job.QUEUED) queue.ahead(job) else 0, songId, facts = facts,
-                          songbookPage = JobsRoutes.songbookPage(db, job))
+                          songbookPage = JobsRoutes.songbookPage(db, job),
+                          behind = JobViews.behind(job, queue.snapshot()))
         }
     } catch (e: Exception) {
         if (!unreadable(e)) throw e

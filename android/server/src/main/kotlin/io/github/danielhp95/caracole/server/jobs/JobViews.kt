@@ -31,6 +31,13 @@ import java.time.Instant
  *   songs", "Not filed: why").
  * - `details` is the request's output in the Requests tab (`#tab=requests&job=N`), but a sync's, which the Sync tab
  *   shows (`#tab=sync`).
+ *
+ * A request queued behind a long job of the phone's own that runs now ([behind]: the catalogues, a sync, an index
+ * import, the render job…, the queue's one worker running it first) says which and how far it has got, the phone's
+ * alone (Python never queues one): "Queued · after the site catalogues (Importing · Ultimate Guitar · 600,000 of
+ * 1,521,145 tabs)", "Queued · after backing up the book", "Queued · 2 requests ahead, now the sync (Updating the
+ * indexes · Downloading the computer's indexes · 120 of 274 MB)" ([queuedBehind]). While that job lets the lookups
+ * queued go first, it waits for none.
  */
 object JobViews {
     const val REQUESTS = Status.REQUESTS
@@ -71,12 +78,13 @@ object JobViews {
         }
     }
 
-    /** [view] with the jobs before a queued one counted in [queue], and its song the one the job knows. */
+    /** [view] with the jobs before a queued one counted in [queue], the job of the phone's own it waits [behind]
+     * there, and its song the one the job knows. */
     fun view(job: Job, queue: JobQueue, card: JsonObject? = null, songbooks: JsonObject? = null,
              facts: SongFacts? = null, songbookPage: String? = null, now: Instant = Instant.now()): JsonObject =
         view(job, if (job.state == Job.QUEUED) queue.ahead(job) else 0,
              (card?.get("id") as? JsonPrimitive)?.content?.toLongOrNull() ?: job.songId, card, songbooks, facts,
-             songbookPage, now)
+             songbookPage, now, behind = if (job.state == Job.QUEUED) behind(job, queue.snapshot()) else null)
 
     /**
      * A job as `/jobs.json` gives it; [ahead], the jobs waiting or running before a queued one; [songId], the song it
@@ -86,10 +94,11 @@ object JobViews {
      * [now], the time it is asked at, for a lookup's steps (Outcomes.progress: none for its first second).
      */
     fun view(job: Job, ahead: Int, songId: Long?, card: JsonObject? = null, songbooks: JsonObject? = null,
-             facts: SongFacts? = null, songbookPage: String? = null, now: Instant = Instant.now()): JsonObject {
+             facts: SongFacts? = null, songbookPage: String? = null, now: Instant = Instant.now(),
+             behind: Job? = null): JsonObject {
         val shape = Shape(job)
         val kind = kindOf(shape)
-        val line = line(shape, ahead, facts, songbookPage)
+        val line = line(shape, ahead, facts, songbookPage, behind)
         val shown = if (kind == "song") Status.songLine(line) else line
         val seen = linkedMapOf<String, JsonElement>(
             "id" to JsonPrimitive(job.id),
@@ -150,14 +159,70 @@ object JobViews {
     }
 
     /** The job's line (status.py's job_line, the phone's own kinds as the class says); [ahead], the jobs before a
-     * queued one; [facts], what the library knows of its song; [songbookPage], a songbook's change's page. */
-    fun line(job: Job, ahead: Int = 0, facts: SongFacts? = null, songbookPage: String? = null): Line =
-        line(Shape(job), ahead, facts, songbookPage)
+     * queued one, and [behind], the job of the phone's own it waits behind ([behind]'s); [facts], what the library
+     * knows of its song; [songbookPage], a songbook's change's page. */
+    fun line(job: Job, ahead: Int = 0, facts: SongFacts? = null, songbookPage: String? = null, behind: Job? = null): Line =
+        line(Shape(job), ahead, facts, songbookPage, behind)
 
-    private fun line(shape: Shape, ahead: Int, facts: SongFacts?, songbookPage: String?): Line {
+    private fun line(shape: Shape, ahead: Int, facts: SongFacts?, songbookPage: String?, behind: Job? = null): Line {
+        if (shape.job.state == Job.QUEUED && behind != null) return Line("queued", queuedBehind(ahead, behind))
         if (shape.own) ownLine(shape)?.let { return it }
         return Status.line(shape, facts, ahead, songbookPage, todo = null)
     }
+
+    /**
+     * The job of the phone's own a queued [job] waits behind among [jobs] (the queue's snapshot): one queued before
+     * it that runs now, staged (a PhoneKinds' kind's, a sync's, an index import's: one that says how far it has got),
+     * and not letting the lookups queued go first meanwhile (JobQueue's yield: `waitingFor`); null for none, and for a
+     * job that isn't queued.
+     */
+    fun behind(job: Job, jobs: List<Job>): Job? {
+        if (job.state != Job.QUEUED) return null
+        return jobs.firstOrNull { it.id < job.id && it.state == Job.RUNNING && it.waitingFor == 0 && Shape(it).staged }
+    }
+
+    /** "Queued · after …", or with others ahead "Queued · 3 requests ahead, now …": what [behind] is doing as
+     * [doing] words it. */
+    internal fun queuedBehind(ahead: Int, behind: Job): String {
+        val doing = doing(behind)
+        return if (ahead <= 1) "Queued · after $doing" else "Queued · $ahead requests ahead, now $doing"
+    }
+
+    /** The phone's kinds that count as they go ("{doing}", "{done} of {total}"): named, their count after. */
+    private val COUNTING = setOf(PhoneKinds.CATALOGUES.kind, PhoneKinds.RENDER.kind)
+
+    /**
+     * What a running job of the phone's own is doing, as a queued line says it, each thing once: a kind that counts its
+     * name and what its line says, "the site catalogues (Importing · …)", "the phone's pages (Remaking pages · 3 of
+     * 10)", its name alone before it has said anything; any other of PhoneKinds' its line alone, its first letter
+     * small, "backing up the book", "filing song.gp5"; a sync "the sync" and its running stage's line and words, "(Updating
+     * the indexes · Downloading …)"; an index import its name, and its words when it says any.
+     */
+    private fun doing(job: Job): String {
+        val stage = job.stages.firstOrNull { it.state == Job.RUNNING }
+        val words = stage?.detail.orEmpty()
+        val line = line(Shape(job), 0, null, null).text.removeSuffix("…")
+        return when (job.spec.kind) {
+            in COUNTING -> named(job) + if (words.isEmpty()) "" else " ($line)"
+            in PhoneKinds.ALL -> small(line)
+            "sync" -> "the sync ($line" + (if (words.isEmpty()) "" else " · $words") + ")"
+            else -> named(job) + if (words.isEmpty()) "" else " ($words)"
+        }
+    }
+
+    /** A job of the phone's own by its display, its first word a small letter where it is "The" or "A" ("the site
+     * catalogues", "the computer's index"). */
+    private fun named(job: Job): String {
+        val display = job.display
+        return when {
+            display.startsWith("The ") || display.startsWith("A ") -> small(display)
+            else -> display
+        }
+    }
+
+    /** [text] with its first letter, an ASCII capital, a small one (no case mapping of the JDK's: ForbiddenApis). */
+    private fun small(text: String): String =
+        if (text.isNotEmpty() && text[0] in 'A'..'Z') (text[0] + 32) + text.substring(1) else text
 
     /** The words of the phone's own kinds where they are not caracole serve's; null where they are. */
     private fun ownLine(shape: Shape): Line? {
@@ -189,7 +254,7 @@ object JobViews {
             }
             Job.DONE -> {
                 val said = stage?.detail?.takeIf { it.isNotEmpty() } ?: kind.done.takeIf { '{' !in it } ?: "Done"
-                val waits = kind.otherwise?.let { PhoneKinds.fits(said, it) } == true
+                val waits = kind.waits(said)
                 if (waits) Line("waiting", said, details = details) else Line("ready", said)
             }
             Job.FAILED -> Line("failed", Status.stageFailure(job.stages) ?: Status.failure(Shape(job).steps),

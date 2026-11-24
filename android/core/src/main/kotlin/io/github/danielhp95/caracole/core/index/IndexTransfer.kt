@@ -20,9 +20,12 @@ import java.io.File
  * more recently, site by site, exactly as `caracole index merge` takes it (tests/conformance/vectors/index/merge.jsonl:
  * the database after equals Python's, its kv text byte for byte).
  *
- * **A merge** attaches the file as `theirs`, and refuses it, writing nothing ([TransferError]), unless its META
- * table (`caracole_export`) says format [FORMAT] and schema [Database.SCHEMA_VERSION], it holds each site asked for,
- * and every table it merges has the database's columns (PRAGMA table_info, in order). Then it plans each site, the two
+ * **A merge** attaches the file as `theirs`, read as anyone's (index_transfer._attached: `trusted_schema` off while
+ * it is attached, so that no function its schema names runs), and refuses it, writing nothing ([TransferError]),
+ * unless it holds tables alone (no view, trigger, index of its own or virtual table: index_transfer._meta's check,
+ * made before any of its tables is read), its META table (`caracole_export`) says format [FORMAT] and schema
+ * [Database.SCHEMA_VERSION], it holds each site asked for, and kv and every table it merges have the database's
+ * columns (PRAGMA table_info, in order). Then it plans each site, the two
  * databases' records compared (stamps.parse's times: [Stamps]):
  *
  * - a sitemap (UG's `ug:sitemaps` by `indexed_at`, a site_index.py site's `<provider>:sitemaps` by `checked_at`) or a
@@ -67,16 +70,37 @@ object IndexTransfer {
      * (Warmup.optimizes: an import, never a sync's nightly few); Long.MAX_VALUE never. With [notAfter] (a time as
      * Stamps.parse gives one), a record or page the file says it read after it is never newer than the database's,
      * so that a file dated in the future can't take a site's rows for good (the phone's sync passes its clock; Python's
-     * merge has no such bound, and the replays none).
+     * merge has no such bound, and the replays none). UG's sitemaps' rows are taken [chunk] a statement ([UG_CHUNK]),
+     * in the same savepoint and order as one statement took them, so that [progress] is told how far it has got as it
+     * goes ([MergeProgress]), on the caller's thread, inside its write: every row, trigger-made row and record comes
+     * out as one statement leaves them (FTS5 lays its segments out by its own flushes, which no reading of it sees).
+     * [backup] is index_transfer.merge's `backing_up()` and the backup alike: called before the first change.
      */
     fun merge(db: Db, export: File, now: String, sites: List<String>? = null,
-              optimizeAfter: Long = Warmup.OPTIMIZE_AFTER, notAfter: Long? = null,
-              backup: (() -> Unit)? = null): Merged {
+              optimizeAfter: Long = Warmup.OPTIMIZE_AFTER, notAfter: Long? = null, chunk: Int = UG_CHUNK,
+              progress: ((MergeProgress) -> Unit)? = null, backup: (() -> Unit)? = null): Merged {
+        require(chunk > 0) { "a chunk of UG's rows holds one row at least, not $chunk" }
         // A caller's mistake, never the file's: SQLite attaches no database within a transaction.
         check(!db.raw.inTransaction()) { "an index merge runs in no transaction (ATTACH runs in none)" }
         check(Merge.THEIRS !in attached(db)) { "a database is attached as ${Merge.THEIRS} already" }
         if (!export.exists()) throw TransferError("$export: no such file")
         if (sameFile(export, mainFile(db))) throw TransferError("$export is the database itself")
+        // The file may be anyone's (another phone's .caracole, a catalogue someone else published): no function its
+        // schema names runs while it is attached (index_transfer._attached), and the connection as it was after.
+        val trusted = db.one("PRAGMA trusted_schema") { it.long(0)!! }!!
+        db.execute("PRAGMA trusted_schema = OFF")
+        try {
+            return mergeAttached(db, export, now, sites, optimizeAfter, notAfter, chunk, progress, backup)
+        } finally {
+            db.execute("PRAGMA trusted_schema = ${if (trusted != 0L) "ON" else "OFF"}")
+        }
+    }
+
+    /** [merge] with the file read as anyone's: attached as [Merge.THEIRS], refused unless it is an export of this
+     * layout and schema, then planned and applied. */
+    private fun mergeAttached(db: Db, export: File, now: String, sites: List<String>?, optimizeAfter: Long,
+                              notAfter: Long?, chunk: Int, progress: ((MergeProgress) -> Unit)?,
+                              backup: (() -> Unit)?): Merged {
         try {
             db.attach(export, Merge.THEIRS)
         } catch (e: Exception) {
@@ -84,27 +108,37 @@ object IndexTransfer {
             throw noExport(export, e)
         }
         try {
+            tablesAlone(db, export)
             val meta = meta(db, export)
             val names = mergedSites(export, meta, sites)
+            progress?.invoke(MergeProgress("", MergeProgress.PLANNING, 0, names.size.toLong()))
             Merge.checkColumns(db, export, names)
-            val plans = names.map { Merge.plan(db, it, now, notAfter) }
+            val plans = names.map { Merge.plan(db, it, now, notAfter, chunk) }
             if (plans.none { it.changes }) {
                 return Merged(names.associateWithTo(LinkedHashMap()) { emptyMap<String, Int>() }, false)
             }
             backup?.invoke()
             val taken = LinkedHashMap<String, Map<String, Int>>()
             var ugChanges = 0L
-            for (plan in plans) {
+            for ((i, plan) in plans.withIndex()) {
+                progress?.invoke(MergeProgress(plan.site, "", i.toLong(), plans.size.toLong()))
                 val before = Warmup.changes(db)
-                taken[plan.site] = Merge.apply(db, plan)
+                taken[plan.site] = Merge.apply(db, plan, progress)
                 if (plan.site == "ug") ugChanges = Warmup.changes(db) - before
             }
-            if (Warmup.optimizes(taken["ug"], ugChanges, optimizeAfter)) Warmup.optimize(db)  // one segment each (prep-db)
+            if (Warmup.optimizes(taken["ug"], ugChanges, optimizeAfter)) {
+                progress?.invoke(MergeProgress("ug", MergeProgress.OPTIMIZE, 0, 0))
+                Warmup.optimize(db)  // one segment each (prep-db)
+            }
             return Merged(taken, true)
         } finally {
             db.detach(Merge.THEIRS)
         }
     }
+
+    /** How many of UG's sitemaps' rows each statement of a merge takes (index_transfer.py's chunk alike): each chunk
+     * a range of `tab_id`s, in `tab_id` order, as the one statement it replaces read them. */
+    const val UG_CHUNK = 50_000
 
     /**
      * The kv records a fresh caracole database holds once each site's index made its keys current on its empty tables
@@ -177,6 +211,27 @@ object IndexTransfer {
         false
     }
 
+    /**
+     * _meta's first check: a file of tables alone, as an export makes it (no view, trigger, index of its own or virtual
+     * table, whose reading could run what its maker wrote, or never end: a view of a recursive query), read in its
+     * `sqlite_master` before any of its tables is; the one it holds first refused in Python's words.
+     */
+    private fun tablesAlone(db: Db, export: File) {
+        val odd = try {
+            db.one(
+                "SELECT type, name FROM ${Merge.THEIRS}.sqlite_master WHERE NOT (type = 'table' AND sql LIKE " +
+                    "'CREATE TABLE %') AND NOT (type = 'index' AND sql IS NULL) ORDER BY rowid",
+            ) { it.text(0) to it.text(1) }
+        } catch (e: Exception) {
+            if (!e.isSqliteError()) throw e
+            throw noExport(export, e)
+        }
+        if (odd != null) {
+            throw TransferError("$export holds the ${odd.first} ${odd.second}, and an index export of caracole's holds " +
+                                    "tables alone: `caracole index export` makes one")
+        }
+    }
+
     /** _meta: the export's META, refused unless it is an export of this layout and schema. */
     private fun meta(db: Db, export: File): Map<String, String?> {
         val meta = try {
@@ -242,6 +297,66 @@ object IndexTransfer {
  * `SiteMerge.taken`: "sitemap", "tab of its artist pages", "listing page"…), and whether anything changed (a page
  * taken or a progress record moved on). */
 data class Merged(val sites: Map<String, Map<String, Int>>, val changed: Boolean)
+
+/**
+ * How far a merge has got (IndexTransfer.merge's `progress`), index_transfer.merge's `progress(site, action, done,
+ * total)` event for event, told on the writer's thread as the merge goes:
+ *
+ * - `("", [PLANNING], 0, n)`: once the file is found an export of the n sites asked, before they are planned;
+ * - then, once any site changes anything (a merge of nothing newer tells the plan alone), `(site, "", i, n)` before
+ *   each site asked, the i-th from 0 in caracole's order (one that changes nothing too, as Python's);
+ * - `(site, noun, 0, count)` before each of its actions, as Merged names it and counts it: `("ug", "sitemap", 0, 41)`,
+ *   41 sitemaps;
+ * - `("ug", [TAB], done, rows)` after each chunk of [IndexTransfer.UG_CHUNK] of UG's sitemaps' rows, the last with
+ *   done == rows (no rows: one, 0 of 0);
+ * - `("ug", [OPTIMIZE], 0, 0)`: once UG's rows are in, before its full-text indexes are made one segment each (the
+ *   phone's alone: Warmup.optimize).
+ *
+ * index_transfer.merge's `backing_up()` is IndexTransfer.merge's `backup`, before the first change.
+ */
+data class MergeProgress(val site: String, val action: String, val done: Long, val total: Long) {
+    /** The phone's words for it, as the catalogues job and a sync's index stage say them: [COMPARING] as it plans,
+     * "Importing · harptabs.com" for a site and each of its actions (its title), "Importing · Ultimate Guitar · 600,000
+     * of 1,521,145 tabs" for UG's sitemaps' rows (counts grouped by commas, as the app's other counts are), and
+     * [READYING] for the full-text indexes. */
+    fun words(): String {
+        val title = Sites.named(site)?.title ?: site
+        return when (action) {
+            PLANNING -> COMPARING
+            OPTIMIZE -> READYING
+            TAB -> "$IMPORTING · $title · ${grouped(done)} of ${grouped(total)} tabs"
+            else -> "$IMPORTING · $title"
+        }
+    }
+
+    /** The step its words are of, for a Paced: each site's each action, a step of its own (UG's chunks one). */
+    val step: Pair<String, String> get() = site to action
+
+    companion object {
+        /** index_transfer.PLANNING and UG_TABS. */
+        const val PLANNING = "planning"
+        const val TAB = "tab"
+        const val OPTIMIZE = "optimize"
+
+        const val COMPARING = "Comparing with the phone's index…"
+        const val IMPORTING = "Importing"
+        const val READYING = "Making the search index ready…"
+
+        /** What a merge's caller says as it gives the WAL the merge grew back (Database.checkpoint). */
+        const val TIDYING = "Tidying the database…"
+
+        /** Python's `f"{n:,}"`: the digits in threes, by commas, ASCII alone (never a locale's). */
+        fun grouped(n: Long): String {
+            val digits = kotlin.math.abs(n).toString()
+            val out = StringBuilder(if (n < 0) "-" else "")
+            digits.forEachIndexed { i, c ->
+                if (i > 0 && (digits.length - i) % 3 == 0) out.append(',')
+                out.append(c)
+            }
+            return out.toString()
+        }
+    }
+}
 
 /** An export or a merge refused, nothing written: its words say why. */
 class TransferError(message: String) : Exception(message)

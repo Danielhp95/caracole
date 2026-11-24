@@ -6,6 +6,9 @@ import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.index.IndexExport
 import io.github.danielhp95.caracole.core.index.IndexTransfer
 import io.github.danielhp95.caracole.core.index.Merged
+import io.github.danielhp95.caracole.core.index.MergeProgress
+import io.github.danielhp95.caracole.core.index.Paced
+import io.github.danielhp95.caracole.core.index.Sizes
 import io.github.danielhp95.caracole.core.index.TabCounts
 import io.github.danielhp95.caracole.core.index.Reads
 import io.github.danielhp95.caracole.core.index.Sites
@@ -104,8 +107,8 @@ class SameCaracole(message: String) : Exception(message)
  *    ([FILE_CHANGED]). Then the computer's request is followed every second, 10 minutes at most, with no lock held,
  *    and each unit is given or left as its request says it (its `units`). A request that can't be sent or followed
  *    stops the sync there: no agreement is recorded on either side.
- * 4. **mirror**: the mirror of the computer's pages brought up to date ([mirrorRefresh]; skipped without one); its
- *    failure stops nothing.
+ * 4. **mirror**: the mirror of the computer's pages brought up to date ([mirrorRefresh], told what to say as it goes:
+ *    "120 of 640 pages"; skipped without one); its failure stops nothing.
  * 5. **agree**: the computer's state read again; what the two hold alike now recorded as agreed at its clock, inside
  *    Database.write (Compare.recordAgreement), with kv `sync:peer:<computer id>` = {address, name, synced_at}, which
  *    GET /api/sync lists, and the computer's settings that state gives taken ([takeSettings], PhoneConfig.take: kv
@@ -116,7 +119,9 @@ class SameCaracole(message: String) : Exception(message)
  * 6. **index**, both ways:
  *    - the computer's site indexes the phone knows (IndexTransfer's sites) whose stamp is newer than kv
  *      `sync:index:<computer id>` records, fetched into `stateDir/cache/` and merged (IndexTransfer.merge) inside
- *      Database.write, the kv brought up to date, then the WAL checkpointed;
+ *      Database.write, the kv brought up to date, then the WAL checkpointed; the stage says each step as it goes
+ *      ("The computer is copying its indexes…" until the answer begins, "Downloading the computer's indexes · 120 of
+ *      274 MB", the merge's MergeProgress.words, "Tidying the database…"), a count at most once a second ([ticks]);
  *    - then, merged or not (whatever came of that, a failure too), the pages the phone's lookups stored since the
  *      last push to that computer (Reads.since: what they read, never a time window, since UG's stamp moves with the
  *      computer's nightly refresh and LaCuerda's rows hold no time) exported (IndexExport.export) into
@@ -134,12 +139,19 @@ class SameCaracole(message: String) : Exception(message)
  * overrides.put_song_entries reads its entries back (Assembly gives Versions.keyVersion and HarpTabs.checkSpec).
  */
 class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: File,
-                 val client: (String) -> PeerClient, val mirrorRefresh: (suspend (String) -> Unit)?,
+                 val client: (String) -> PeerClient, val mirrorRefresh: (suspend (String, (String) -> Unit) -> Unit)?,
                  val name: String = PHONE_NAME, val version: String = CARACOLE,
-                 val pagesFromFile: ((SyncFile, List<String>) -> Unit)? = null,
+                 val pagesFromFile: ((SyncFile, List<String>, (String) -> Unit) -> Unit)? = null,
                  val checks: OverrideChecks = OverrideChecks.NONE) {
     /** The clock comparisons are kept by and the phone's own stamps are made of; a test's own. */
     internal var clock: () -> Instant = { Instant.now() }
+
+    /** The clock a stage's counts are paced by (Paced: at most one a second within a step); a test's own. */
+    internal var ticks: () -> Long = System::nanoTime
+
+    /** A stage's running words, paced (Paced): each step's first at once, a count at most once a second. */
+    private fun paced(stage: (String, String, String) -> Unit, name: String): Paced =
+        Paced({ words -> stage(name, RUNNING, words) }, ticks = ticks)
 
     /** The latest time an index merged here may say it was read at (IndexTransfer.merge's `notAfter`): the clock and
      * a day more, for another device's clock ahead of the phone's. */
@@ -259,8 +271,10 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             stage(MIRROR, SKIPPED_STATE, "no copy of the computer's pages here")
         } else {
             stage(MIRROR, RUNNING, "")
+            val pacer = paced(stage, MIRROR)
             try {
-                refresh(c.address)
+                refresh(c.address) { words -> pacer.say(words, MIRROR) }
+                pacer.flush()  // its last count, before the stage's end
                 stage(MIRROR, DONE, "")
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
@@ -343,12 +357,14 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
      *    change ([STALE]), as does a refusal of the file's (its words); then each difference within [parts] decided.
      * 2. **take**: a backup first (none: nothing taken), then each unit the file gives, from it (FileSource), as a
      *    pull takes one.
-     * 3. **mirror**: the units taken handed to the pages hook ([pagesFromFile]), which keeps the file's pages of them;
-     *    skipped with no hook or nothing taken; its failure stops nothing.
+     * 3. **mirror**: the units taken handed to the pages hook ([pagesFromFile]), which keeps the file's pages of them,
+     *    told what to say as it goes ("12 of 40 pages kept"); skipped with no hook or nothing taken; its failure stops
+     *    nothing.
      * 4. **agree**: what the two now agree on recorded as agreed with the file's caracole at its `made`, of the units
      *    the file speaks for, and each conflict answered "keep mine" remembered (SyncFiles.recordImport); skipped for
      *    an index export, or a file of neither the library nor the songbooks.
-     * 5. **index**: its indexes merged (IndexTransfer.merge), each site counted before and after.
+     * 5. **index**: its indexes merged (IndexTransfer.merge), each site counted before and after, a `.caracole` file's
+     *    copied out first ("Copying the file's indexes out…"), the merge's steps said as the computer's are.
      * A file takes nothing back: nothing is given. The report's `with` is the file's library, of kind `"file"`.
      */
     private suspend fun applyFile(c: Comparison, choices: Map<String, Side>, prefer: Side?, parts: List<String>,
@@ -407,8 +423,10 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             taken.isEmpty() -> stage(MIRROR, SKIPPED_STATE, "nothing taken")
             else -> {
                 stage(MIRROR, RUNNING, "")
+                val pacer = paced(stage, MIRROR)
                 try {
-                    io { hook(sf, taken) }
+                    io { hook(sf, taken) { words -> pacer.say(words, MIRROR) } }
+                    pacer.flush()
                     stage(MIRROR, DONE, plural(taken.size, "unit"))
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
@@ -434,8 +452,9 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             stage(INDEX, SKIPPED_STATE, "")
         } else {
             stage(INDEX, RUNNING, "")
+            val pacer = paced(stage, INDEX)
             try {
-                val entries = io { mergeFile(sf) }
+                val entries = io { mergeFile(sf, pacer) }
                 done.reported.addAll(entries)
                 done.indexed.addAll(entries.map { Documents.text(it["site"])!! })
                 stage(INDEX, DONE, if (entries.isEmpty()) "nothing read more recently"
@@ -450,18 +469,23 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
 
     /** A file's indexes merged into the database: an index export where it is, a `.caracole` file's copied out to
      * `stateDir/cache/` first and deleted after. The report's entries of the sites it changed. */
-    private fun mergeFile(sf: SyncFile): List<JsonObject> {
+    private fun mergeFile(sf: SyncFile, pacer: Paced): List<JsonObject> {
         val copy = if (sf.indexOnly) null else File(cache(), "import-indexes-${KeptById.newId()}.sqlite")
         try {
-            if (copy != null) FileSource(sf, database, store.libraryDir).use { it.indexes(copy) }
+            if (copy != null) {
+                pacer.say(COPYING_OUT)
+                FileSource(sf, database, store.libraryDir).use { it.indexes(copy) }
+            }
             val from = copy ?: sf.file
             val sites = (sf.manifest["indexes"] as? JsonArray)?.mapNotNull { Documents.text(it) } ?: emptyList()
             val counted = database.writeBlocking { db ->
                 val before = TabCounts.of(db)
-                val merged = IndexTransfer.merge(db, from, Stamps.of(clock()), notAfter = notAfter())
+                val merged = IndexTransfer.merge(db, from, Stamps.of(clock()), notAfter = notAfter(),
+                                                 progress = { pacer.say(it.words(), it.step) })
                 val newest = IndexTransfer.newest(db)
                 taken(merged, before, TabCounts.of(db), merged.sites.keys.toList().ifEmpty { sites }) { newest[it] }
             }
+            pacer.say(MergeProgress.TIDYING)
             database.checkpoint()
             return counted
         } finally {
@@ -665,11 +689,12 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             return
         }
         stage(INDEX, RUNNING, if (newer.isEmpty()) sending(noted) else newer.joinToString(", "))
+        val pacer = paced(stage, INDEX)
         val parts = ArrayList<String>()
         var failed = false
         if (newer.isNotEmpty()) {
             try {
-                done.reported.addAll(merge(client, computer, had, newer, indexes))
+                done.reported.addAll(merge(client, computer, had, newer, indexes, pacer))
                 done.indexed.addAll(newer)
                 parts.add("merged ${newer.joinToString(", ")}")
             } catch (e: Exception) {
@@ -695,17 +720,20 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
      * date, the WAL checkpointed; the file gone after, whatever came of it. The report's entries of the sites the
      * merge changed, each site's tabs counted before and after (TabCounts). */
     private suspend fun merge(client: PeerClient, computer: String, had: Map<String, String>, newer: List<String>,
-                              indexes: Map<String, String>): List<JsonObject> {
+                              indexes: Map<String, String>, pacer: Paced): List<JsonObject> {
         val file = File(cache(), "index-${KeptById.newId()}.sqlite")
         try {
-            io { client.index(file, newer) }
+            pacer.say(COPYING_THERE)  // the computer exports the whole of them before it sends a byte
+            io { client.index(file, newer) { got, total -> pacer.say(downloading(got, total), DOWNLOADING) } }
             return io {
                 val counted = database.write { db ->
                     val before = TabCounts.of(db)
-                    val merged = IndexTransfer.merge(db, file, Stamps.of(clock()), newer, notAfter = notAfter())
+                    val merged = IndexTransfer.merge(db, file, Stamps.of(clock()), newer, notAfter = notAfter(),
+                                                     progress = { pacer.say(it.words(), it.step) })
                     db.kvSetJson(INDEX_KEY + computer, IndexStamps.json(had + newer.associateWith { indexes.getValue(it) }))
                     taken(merged, before, TabCounts.of(db), newer) { indexes[it] }
                 }
+                pacer.say(MergeProgress.TIDYING)
                 database.checkpoint()  // the WAL a big merge grew, given back (lane prep-db)
                 counted
             }
@@ -903,6 +931,17 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
 
         /** The names of a sync's index files in `stateDir/cache/` ([sweep]), and their SQLite journals. */
         private val LEFT = Regex("(index|import-indexes|reads)-[0-9a-f]{16}\\.sqlite(-wal|-shm|-journal)?")
+
+        /** The index stage's words as the computer exports its indexes (no byte sent yet), as they come ([downloading]),
+         * and as a file's are copied out of it. */
+        const val COPYING_THERE = "The computer is copying its indexes…"
+        const val COPYING_OUT = "Copying the file's indexes out…"
+        private const val DOWNLOADING = "downloading"
+
+        /** "Downloading the computer's indexes · 120 of 274 MB"; with no total ([total] -1, an answer of no
+         * Content-Length), the bytes so far alone: "· 3.4 MB so far". */
+        fun downloading(got: Long, total: Long): String =
+            "Downloading the computer's indexes · " + if (total >= 0) Sizes.of(got, total) else Sizes.soFar(got)
 
         /** The index stage's words with no index newer there and no page read here. */
         const val NOTHING_TO_INDEX = "no newer index there, no page read here to send"
