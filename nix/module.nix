@@ -177,19 +177,25 @@ let
   ntfyUrl = cfg.settings.ntfy.url or "";
 
   # As root, after a publish that succeeded: the upload user's own caracole-upload.service started in their
-  # manager, never waited for. A manager that isn't running is no failure: the user's catch-up timer uploads it.
+  # manager, never waited for. Their manager is asked of the system manager first and reached over their own bus:
+  # `systemctl --user --machine=<user>@` would go through a PAM login bridge, which starts a manager that isn't
+  # running, for logind to stop seconds later. A manager that isn't running is no failure: the user's catch-up
+  # timer uploads it. Anything else that goes wrong (no such user, no such unit, a bus error) fails this unit.
   uploadUser = toString cfg.publish.uploadUser;
   uploadNotify = pkgs.writeShellApplication {
     name = "caracole-publish-upload-notify";
     text = ''
       user=${lib.escapeShellArg uploadUser}
       systemctl=${config.systemd.package}/bin/systemctl
-      if said=$("$systemctl" --user --machine="$user@" start --no-block caracole-upload.service 2>&1); then
-        echo "started $user's caracole-upload.service"
-      else
-        echo "$user's user manager can't be reached, so the upload waits for $user's catch-up timer" \
-          "(caracole-upload.timer): ''${said//$'\n'/ }"
+      uid=$(${pkgs.coreutils}/bin/id -u "$user")
+      if ! "$systemctl" is-active --quiet "user@$uid.service"; then
+        echo "$user's user manager isn't running, so the upload waits for $user's catch-up timer (caracole-upload.timer)"
+        exit 0
       fi
+      ${pkgs.util-linux}/bin/runuser -u "$user" -- ${pkgs.coreutils}/bin/env XDG_RUNTIME_DIR="/run/user/$uid" \
+        DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
+        "$systemctl" --user start --no-block caracole-upload.service
+      echo "started $user's caracole-upload.service"
     '';
   };
 
@@ -439,10 +445,12 @@ in
           The user whose own systemd user service, `caracole-upload.service`,
           uploads the file (docs/deploy.md). Once a publish succeeds,
           caracole-publish-upload-notify.service starts it in that user's
-          manager. When the manager isn't running, it says so in one line and
-          the upload waits for that user's catch-up timer; the publish stays a
-          success. A user path unit can't do this: systemd watches every
-          folder from / down to the file, and dataDir is 0710.
+          manager, if it is running (it never starts one: an upload in a
+          manager with no session would find gh's keyring locked). When it
+          isn't, the notifier says so in one line and succeeds, and the upload
+          waits for that user's catch-up timer; any other failure fails the
+          notifier, never the publish. A user path unit can't do this: systemd
+          watches every folder from / down to the file, and dataDir is 0710.
         '';
       };
     };
@@ -520,9 +528,13 @@ in
 
   config = lib.mkIf cfg.enable {
     # Not an assertion: a GPU asked for and not used breaks nothing.
-    warnings = lib.optional (cfg.autochords.cuda && !cfg.autochords.enable) ''
-      services.caracole.autochords.cuda does nothing without services.caracole.autochords.enable: the GPU is
-      for the transcription of lyrics from the audio, which only the auto-chords package runs.'';
+    warnings =
+      lib.optional (cfg.autochords.cuda && !cfg.autochords.enable) ''
+        services.caracole.autochords.cuda does nothing without services.caracole.autochords.enable: the GPU is
+        for the transcription of lyrics from the audio, which only the auto-chords package runs.''
+      ++ lib.optional (cfg.publish.uploadUser != null && !cfg.publish.enable) ''
+        services.caracole.publish.uploadUser does nothing without services.caracole.publish.enable: it starts
+        the user's upload once a publish succeeds, and no publish runs.'';
 
     assertions =
       let

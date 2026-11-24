@@ -2014,11 +2014,17 @@ It is rows.js's, shared by both pages:
     `publish.folder` (2750), with no network and no token, which `caracole-admin` may then write too. The upload is
     the owner's own systemd user service in their own configuration (`caracole-upload.service`), running
     `publish-indexes DIR` with their `gh` login (docs/deploy.md); the module has no token file and no upload unit.
-    `publish.uploadUser` (null by default) starts it: `caracole-publish.service`'s `OnSuccess=` is
-    `caracole-publish-upload-notify.service`, a oneshot as root, `systemctl --user --machine=<user>@ start --no-block
-    caracole-upload.service` by systemd's store path, which says in one line that the upload waits for the user's
-    catch-up timer when their manager isn't running, and never fails (nor fails the publish). No user path unit: systemd
-    watches every folder from / down to `published.json`, and the 0710 dataDir refuses the user's inotify watch.
+    `publish.uploadUser` (null by default; set without `publish.enable`, a `warnings` entry) starts it:
+    `caracole-publish.service`'s `OnSuccess=` is `caracole-publish-upload-notify.service`, a oneshot as root, every
+    program by its store path: `systemctl is-active user@<uid>.service` first, and when the user's manager isn't
+    running one line (the upload waits for their catch-up timer) and exit 0; else `runuser -u <user> -- env
+    XDG_RUNTIME_DIR=/run/user/<uid> DBUS_SESSION_BUS_ADDRESS=… systemctl --user start --no-block
+    caracole-upload.service`, whose failure (no such unit, a bus error), as no such user, fails the notifier, never the
+    publish. Never `systemctl --user --machine=<user>@`: its PAM bridge starts a manager that isn't running, for logind
+    to stop seconds later, with gh's keyring locked. module-check.nix runs the notifier with stand-ins for id,
+    systemctl and runuser in each case. No user path unit: systemd watches every folder from / down to
+    `published.json`, and the 0710 dataDir refuses the user's inotify watch. A publish by hand (`caracole-admin index
+    publish`) starts no upload.
 - **module-check.nix**: `checks.module`, which loads the marker with service.py.
 
 #### `docs/`

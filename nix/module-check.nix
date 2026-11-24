@@ -660,9 +660,11 @@ let
       && !(uploadNotify.serviceConfig ? DynamicUser)
       && uploadNotify.onSuccess or [ ] == [ ]
       && uploadNotify.onFailure or [ ] == [ ];
-    "publish.uploadUser without publish adds no unit" =
+    "publish.uploadUser without publish adds no unit, and warns that it does nothing" =
       !(uploadAlone.systemd.services ? caracole-publish)
-      && !(uploadAlone.systemd.services ? caracole-publish-upload-notify);
+      && !(uploadAlone.systemd.services ? caracole-publish-upload-notify)
+      && says [ "services.caracole.publish.uploadUser does nothing" "publish.enable" ] uploadAlone.warnings;
+    "publish.uploadUser with publish is no warning" = !(says [ "uploadUser" ] publishUpload.warnings);
     "caracole-publish.timer fires weekly on Sunday at 05:00" =
       publishOn.systemd.timers.caracole-publish.timerConfig.OnCalendar == "Sun 05:00"
       && publishOn.systemd.timers.caracole-publish.timerConfig.Persistent == true
@@ -796,6 +798,8 @@ else
       adminPublishScript = lib.getExe (findAdmin publishOn);
       uploadNotifyScript = uploadNotify.serviceConfig.ExecStart;
       systemctl = "${publishUpload.systemd.package}/bin/systemctl";
+      runuser = "${pkgs.util-linux}/bin/runuser";
+      idProgram = "${pkgs.coreutils}/bin/id";
       movedTmpfiles = "${movedTmpfiles}/lib/tmpfiles.d/caracole.conf";
       passAsFile = [
         "serviceMarker"
@@ -999,15 +1003,68 @@ else
       # With an upload user, systemd starts the notifier once it succeeds, and the notifier starts the user's
       # upload in their own manager, with systemd's systemctl by its store path, enqueued and not waited for.
       grep -qx -- "OnSuccess=caracole-publish-upload-notify.service" "$uploadPublishUnitPath"
-      grep -qxF -- "systemctl=$systemctl" "$uploadNotifyScript"
+      # The notifier asks the system manager whether alice's user manager runs (never `--machine=alice@`, whose
+      # PAM bridge would start one), and only then starts her upload in it as her, over her own bus.
+      grep -qF -- "$systemctl" "$uploadNotifyScript"
+      grep -qF -- "$runuser" "$uploadNotifyScript"
+      grep -qF -- "$idProgram" "$uploadNotifyScript"
       grep -qxF -- "user=alice" "$uploadNotifyScript"
-      grep -qF -- '"$systemctl" --user --machine="$user@" start --no-block caracole-upload.service' "$uploadNotifyScript"
+      lacks "--machine" "$uploadNotifyScript"
       lacks GH_TOKEN "$uploadNotifyScript"
-      # No user manager to reach here (the build has no systemd): it says, in one line, that the upload waits
-      # for the user's catch-up timer, and succeeds, so the publish stays a success.
-      "$uploadNotifyScript" > upload-notify.log 2>&1
-      test "$(wc -l < upload-notify.log)" = 1 || { cat upload-notify.log >&2; exit 1; }
+      # Run with stand-ins for id, systemctl and runuser, each scene's answers in the environment.
+      mkdir stubs
+      cat > stubs/id <<'EOF'
+      #!/bin/sh
+      [ "$1 $2" = "-u alice" ] && [ -z "$NO_USER" ] && { echo 1000; exit 0; }
+      echo "id: '$2': no such user" >&2; exit 1
+      EOF
+      cat > stubs/systemctl <<'EOF'
+      #!/bin/sh
+      echo "systemctl $*" >> "$CALLS"
+      if [ "$1" = is-active ]; then
+        [ "$*" = "is-active --quiet user@1000.service" ] && [ -n "$MANAGER" ] && exit 0
+        exit 3
+      fi
+      echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS" >> "$CALLS"
+      [ -z "$START_FAILS" ] && exit 0
+      echo "Failed to start caracole-upload.service: Unit caracole-upload.service not found." >&2; exit 5
+      EOF
+      cat > stubs/runuser <<'EOF'
+      #!/bin/sh
+      echo "runuser $1 $2 $3" >> "$CALLS"
+      shift 3
+      exec "$@"
+      EOF
+      chmod +x stubs/*
+      sed -e "s|$systemctl|$PWD/stubs/systemctl|g" -e "s|$runuser|$PWD/stubs/runuser|g" \
+        -e "s|$idProgram|$PWD/stubs/id|g" "$uploadNotifyScript" > notify-stubbed
+      notify() {
+        rm -f calls.log
+        status=0
+        env CALLS=$PWD/calls.log "$@" bash notify-stubbed > upload-notify.log 2>&1 || status=$?
+      }
+      # No user manager running: one line, success, and no upload started (no bridge, no session opened).
+      notify
+      test "$status" = 0 && test "$(wc -l < upload-notify.log)" = 1 || { cat upload-notify.log >&2; exit 1; }
       grep -q "alice's catch-up timer" upload-notify.log
+      grep -qxF "systemctl is-active --quiet user@1000.service" calls.log
+      lacks "start" calls.log
+      lacks runuser calls.log
+      # Her manager running: the upload started in it, as her, over her bus, not waited for.
+      notify MANAGER=1
+      test "$status" = 0 || { cat upload-notify.log >&2; exit 1; }
+      grep -qxF "runuser -u alice --" calls.log
+      grep -qxF "systemctl --user start --no-block caracole-upload.service" calls.log
+      grep -qxF "XDG_RUNTIME_DIR=/run/user/1000 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus" calls.log
+      grep -q "started alice's caracole-upload.service" upload-notify.log
+      # A start that fails while her manager runs (no such unit, a bus error) fails the notifier, in its own words.
+      notify MANAGER=1 START_FAILS=1
+      test "$status" = 5 || { echo "status $status" >&2; cat upload-notify.log >&2; exit 1; }
+      grep -q "Unit caracole-upload.service not found" upload-notify.log
+      # No such user: a misconfiguration, a failure.
+      notify NO_USER=1
+      test "$status" != 0 || { cat upload-notify.log >&2; exit 1; }
+      grep -q "no such user" upload-notify.log
 
       # No unit holds a secret: caracole reads none.
       for file in "$runUnitPath" "$autochordsUnitPath" "$notifyUnitPath" "$webUnitPath" "$webDefaultUnitPath"; do

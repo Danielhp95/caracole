@@ -259,11 +259,16 @@ timer to catch up (the example assumes your user is in group `caracole` and `gh 
 ```
 
 `<login>` is your user on this machine, `<account>` the GitHub account that owns the repository
-(`gh`'s active account may be another). A publish starts the upload only while your user
-manager runs; when it doesn't, `caracole-publish-upload-notify.service` says so in one line and the
-timer catches up at your next login (`Persistent`). An upload of a file already there says "already
-published" and changes nothing. `gh` may keep its token in a login keyring, locked without a session,
-which is why the example doesn't enable linger.
+(`gh`'s active account may be another). Once a publish succeeds, `caracole-publish-upload-notify.service`
+asks whether your user manager runs, and starts the upload in it only if it does: it never starts one,
+since an upload in a manager with no session would find `gh`'s keyring locked. When it doesn't run,
+the notifier says so in one line, succeeds, and the timer catches up at your next login (`Persistent`);
+any other failure (no such user, no `caracole-upload.service`) fails the notifier, never the publish.
+An upload of a file already there says "already published" and changes nothing. `gh` may keep its
+token in a login keyring, locked without a session, which is why the example doesn't enable linger.
+
+Only the service's run starts the upload. After a publish by hand (`sudo caracole-admin index publish
+/var/lib/caracole/publish`), upload it yourself with `systemctl --user start caracole-upload`.
 
 There is no user path unit watching `published.json`: systemd watches every folder from `/` down to
 the file, and your user can't read `/var/lib/caracole` (mode 0710), so such a unit never fires.
