@@ -13,7 +13,7 @@ and hands it to the merge a sync already uses, as a phone job of its own kind.
 **Tech Stack:** Python 3.14 (typer, sqlite3, gzip), bash + `gh`, Nix (module, flake package), Kotlin (`:core`,
 `:server`, `:app`), `java.util.zip`.
 
-**Spec:** `plan_host_index.md` (read it first: its "To decide" section is this plan's three switches).
+**Spec:** `plan_host_index.md` (read it first: its "Decided" section settled this plan's three switches).
 
 ## The three switches
 
@@ -243,7 +243,7 @@ Conformance (`tests/test_conformance_catalogues.py`): writes `vectors/catalogues
 - Usage: `publish-indexes [--manifest] DIR`
   - `REPO` defaults to `Danielhp95/caracole`, `TAG` to `indexes`.
   - **S3**: if `GH_TOKEN_FILE` is set, `GH_TOKEN=$(cat "$GH_TOKEN_FILE")`; else `gh`'s own login
-    (the owner's user timer sets `GH_TOKEN=$(gh auth token --user Danielhp95)` in its unit; see Task 4).
+    (the owner's user unit sets `GH_TOKEN` from `gh auth token` for their account; see Task 4).
   - Steps, each failing the script (exit 1) with a line saying which:
     1. release exists, else `gh release create indexes --latest=false --title "Site catalogues" --notes …`;
     2. delete every asset whose `state` isn't `uploaded`;
@@ -282,7 +282,7 @@ there, no `.prev`/`.next`), `test_a_token_file_is_used_when_named` (fake gh reco
 - Modify: `nix/module.nix` (`services.caracole.publish`), `nix/module-check.nix`
 - Modify: `docs/deploy.md` (NixOS: the option; Ubuntu: "no timer; run `caracole index publish` and
   `publish-indexes` by hand")
-- Outside this repo: `~/nix_config/nixos/caracole.nix` (the user timer)
+- Outside this repo: the owner's own configuration (the user unit that uploads)
 
 **Interfaces:**
 - `services.caracole.publish.enable` (bool, default false), `.folder` (default `"${dataDir}/publish"`),
@@ -293,8 +293,8 @@ there, no `.prev`/`.next`), `test_a_token_file_is_used_when_named` (fake gh reco
   - `tokenFile` set: `caracole-publish-upload.service` after it (network, `LoadCredential=gh:<tokenFile>`,
     `GH_TOKEN_FILE=%d/gh`) running `publish-indexes <folder>`. Null: no upload unit, and the folder is the owner's
     user timer's to upload (S3 default).
-- nix_config (S3 default): a `systemd.user.services.caracole-publish-upload` + timer an hour after the service's,
-  `ExecStart = bash -c 'GH_TOKEN=$(gh auth token --user Danielhp95) exec publish-indexes /var/lib/caracole/publish'`.
+- The owner's configuration (S3 default): a systemd user service that sets `GH_TOKEN` from `gh auth token` and
+  runs `publish-indexes /var/lib/caracole/publish`, started as the publish writes `published.json` (docs/deploy.md).
 
 - [ ] **Step 1: Write the failing checks** in `nix/module-check.nix`: a system with `publish.enable = true` has the
       unit, its command line parses with caracole's CLI (the check's existing parser), `PrivateNetwork` true, no
@@ -305,7 +305,7 @@ there, no `.prev`/`.next`), `test_a_token_file_is_used_when_named` (fake gh reco
       `2750`, so the owner (group `caracole`) reads it.
 - [ ] **Step 4:** Module check → PASS; `nix flake check` → PASS.
 - [ ] **Step 5:** docs/deploy.md in the same commit. Commit: `feat(nix): a weekly publish of the site catalogues`.
-- [ ] **Step 6 (nix_config, after caracole's push):** the user timer; `nix flake update caracole`; switch; run both
+- [ ] **Step 6 (the owner's configuration, after caracole's push):** the user unit; `nix flake update caracole`; switch; run both
       by hand once; open `https://github.com/Danielhp95/caracole/releases/tag/indexes`.
 
 ---
@@ -502,7 +502,7 @@ For each decided switch, in one commit each:
   `Download`; the script's `--manifest` becomes the default; AGENTS.md's exception written.
 - **S2:** edit `PUBLIC_OMIT`; its test names what is kept and left out; sources.md says the same.
 - **S3 = user timer:** delete `publish.tokenFile` and the upload unit and their checks. **S3 = token file:**
-  delete the nix_config user timer; deploy.md says how to make the token.
+  delete the owner's user unit; deploy.md says how to make the token.
 - Then `nix develop -c pytest -q`, `gradle -p android test`, `nix flake check` → PASS; commit
   `refactor: the site catalogues' <switch> settled`.
 

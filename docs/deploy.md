@@ -236,28 +236,34 @@ writes a gzip of every site index into `publish.folder` (`/var/lib/caracole/publ
 `caracole`, so a user in that group can read it).
 
 Uploading to GitHub is your own user's job, with your own `gh` login: the module holds no token. A
-user timer in your own configuration, an hour after the publish (the example assumes your user is in
-group `caracole` and `gh auth login` is done):
+user service in your own configuration, started as the publish writes `published.json`, with a weekly
+timer to catch up (the example assumes your user is in group `caracole` and `gh auth login` is done):
 
 ```nix
   systemd.user.services.caracole-upload = {
     description = "Upload the site indexes to GitHub";
+    unitConfig.ConditionPathExists = "/var/lib/caracole/publish/published.json";
     path = [ pkgs.gh ];
     script = ''
       export GH_TOKEN=$(gh auth token --user <you>)
       exec ${caracole.packages.${pkgs.stdenv.hostPlatform.system}.publish-indexes}/bin/publish-indexes /var/lib/caracole/publish
     '';
   };
+  systemd.user.paths.caracole-upload = {
+    wantedBy = [ "default.target" ];
+    pathConfig.PathChanged = "/var/lib/caracole/publish/published.json";
+  };
   systemd.user.timers.caracole-upload = {
     wantedBy = [ "timers.target" ];
-    timerConfig = { OnCalendar = "Sun 06:00"; Persistent = true; };
+    timerConfig = { OnCalendar = "Mon 06:00"; Persistent = true; };
   };
 ```
 
-`<you>` is the GitHub account that owns the repository: `gh`'s active account may be another. A user
-timer fires only while your user manager runs, so a run missed while you are logged out happens
-(`Persistent`) at your next login; `gh` may keep its token in a login keyring, locked without a session,
-which is why the example doesn't enable linger.
+`<you>` is the GitHub account that owns the repository: `gh`'s active account may be another. Both
+start the upload only while your user manager runs. The path unit misses a publish made while it
+doesn't, so the timer catches up at your next login (`Persistent`); an upload of a file already there
+says "already published" and changes nothing. `gh` may keep its token in a login keyring, locked
+without a session, which is why the example doesn't enable linger.
 
 `caracole` is the flake input. `publish-indexes DIR` checks what GitHub holds and prunes old files.
 
@@ -779,10 +785,30 @@ Then [check that it works](#checking-auto-chords).
 
 ### 13. Publishing the site indexes
 
-There is no timer here. To publish, run `sudo caracole-admin index publish /var/lib/caracole/publish`,
-then upload the folder with `publish-indexes /var/lib/caracole/publish`, logged in with `gh auth login`
-(`GH_TOKEN` as `gh auth token` prints it, if you like). Both can go in a user crontab, the upload an hour
-after the publish.
+The publish folder beside the others, which the units and `caracole-admin` may write, and the upload
+script, which needs `gh` and `jq`. Your user reads the folder as a member of group `caracole`:
+
+```sh
+echo 'd /var/lib/caracole/publish 2750 caracole caracole -' | sudo tee -a /etc/tmpfiles.d/caracole.conf > /dev/null
+sudo systemd-tmpfiles --create /etc/tmpfiles.d/caracole.conf
+sudo sed -i '/^ReadWritePaths=/s|$| /var/lib/caracole/publish|' /etc/caracole/units.conf
+sudo systemctl daemon-reload
+sudo apt install gh jq
+sudo curl -fsSLo /usr/local/bin/publish-indexes \
+  https://raw.githubusercontent.com/Danielhp95/caracole/$REV/nix/publish-indexes.sh
+sudo chmod 0755 /usr/local/bin/publish-indexes
+sudo usermod -aG caracole "$USER"   # then log in again
+```
+
+There is no timer here. To publish, then upload, logged in with `gh auth login` (or with `GH_TOKEN`
+as `gh auth token` prints it):
+
+```sh
+sudo caracole-admin index publish /var/lib/caracole/publish
+PATH=/opt/caracole/bin:$PATH publish-indexes /var/lib/caracole/publish
+```
+
+The publish needs `caracole-admin`, so sudo; the upload is your user's, with your `gh` login.
 
 ### 14. Upgrades
 

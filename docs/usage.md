@@ -3766,15 +3766,19 @@ schema and the minute), an export as above, gzipped, with nothing of your own in
 search answers, no path of yours). It also writes `published.json` (the file, its sizes, its sha256
 and each site's rows) and deletes the older `indexes-*.sqlite.gz` in `DIR`. It takes no lock, and like
 `index build` it is refused beside a service unless you name its config or pass `--home`.
-On a NixOS or Ubuntu service, `sudo caracole-admin` can write only the library, state and cache
-folders, so name a `DIR` inside one of them, as deploy.md's `/var/lib/caracole/publish` is.
+On a NixOS or Ubuntu service, `sudo caracole-admin` writes the publish folder,
+`/var/lib/caracole/publish`, beside the library, state and cache folders, once publishing is set up
+there (deploy.md); it can write no other.
 
 It exits 1, leaving nothing behind, when the name exists, when UG's index isn't built whole, or
 when a site holds a tenth fewer rows than `published.json` says of the last file. `--force` publishes
-that one anyway. It also refuses a file that holds a path of this machine (your folders, your home
-folder, `/nix/store/`, or any text value that is an absolute path), naming the table and column.
+that one anyway. It also refuses a file that holds a path of this machine, naming the table and
+column: a text value with your folders, your home folder, the database or `/nix/store/` in it, or one
+that begins with a machine's root (`/home/`, `/var/`, `/nix/`, `/tmp/`, `/data/`, `/sdcard/`,
+`file:` and the like). A site's name that just begins with `/` is no path.
 
-`--kept NAME` (repeated, once for each name) exports nothing. It prints, one a line and each once,
+`--kept NAME` (repeated, once for each name) exports nothing and reads no config, so it answers
+beside a service too. It prints, one a line and each once,
 the names the Keep rule would delete. The rule: this caracole's schema keeps its two newest files
 whatever their age; every other schema keeps its newest for 180 days. A name that isn't a catalogue
 file (`indexes.json`, say) is kept, so never printed.

@@ -22,12 +22,12 @@ off. It syncs with the computer when you ask, or by itself on Wi-Fi.
 ## Without a computer
 
 If you have no computer to sync with, search still works. Settings › **Download the site
-catalogues** fetches every site's index, about 50 MB to download and several times that on the
+catalogues** fetches every site's index, about 80 MB to download and several times that on the
 phone once it is unpacked. The first time you open the app with no computer set, it offers the
 same download. On mobile data it asks first.
 
 The catalogues are made on the author's computer and published once a week, so a download is
-never more than a week or two old. Settings shows the date of the ones you have. Tap again to
+usually a week old at most. Settings shows the date of the ones you have. Tap again to
 get newer ones; it says "Up to date" when there are none. Nothing is asked of GitHub until you
 tap. If the newest file is for a different version of the app, it says so: update the app, or
 wait for new catalogues. Your own songs, sheets and lookups don't depend on them.
