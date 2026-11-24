@@ -88,10 +88,12 @@ internal fun readLayers(root: File): List<Layer> =
  * kind it doesn't serve is left out). What the layer had of other units stays; what it had of these goes. Each blob
  * the layer lacks is written to a temporary file, checked by its size and its SHA-256, then renamed; then the list is
  * written whole over the old one, and the blobs it no longer names are deleted. A page the file lacks, or whose bytes
- * aren't the ones listed, fails it ([LayerError]) with the layer as it was.
+ * aren't the ones listed, fails it ([LayerError]) with the layer as it was. [progress] is told how many of the blobs
+ * the layer lacked are written, of how many (0 of N first; nothing when it lacks none).
  */
 internal fun writeLayer(root: File, id: String, manifest: ByteArray, units: Set<String>, taken: Long,
-                        folderOf: ((String) -> List<String>?)?, blob: (String) -> InputStream?) {
+                        folderOf: ((String) -> List<String>?)?, blob: (String) -> InputStream?,
+                        progress: ((Int, Int) -> Unit)? = null) {
     require(Layer.ID.matches(id)) { "a layer's id is 16 lowercase hex, not “${id.take(40)}”" }
     val given = try {
         Manifest.parse(manifest)
@@ -114,11 +116,13 @@ internal fun writeLayer(root: File, id: String, manifest: ByteArray, units: Set<
         layer.blobs.mkdirs()
         if (!layer.blobs.isDirectory) throw LayerError("The phone's storage failed: the folder ${layer.blobs} can't be made.")
         removeTemporaries(layer)
-        for (entry in entries.distinctBy { it.sha256 }) {
+        val lacking = entries.distinctBy { it.sha256 }.filter { !layer.blob(it.sha256).isFile }
+        if (lacking.isNotEmpty()) progress?.invoke(0, lacking.size)
+        for ((i, entry) in lacking.withIndex()) {
             val file = layer.blob(entry.sha256)
-            if (file.isFile) continue
             copyChecked(layer, entry, blob, file)
             written.add(file)
+            progress?.invoke(i + 1, lacking.size)
         }
         swap(layer, listJson(given.start, taken, entries).toByteArray(Charsets.UTF_8))
     } catch (e: IOException) {

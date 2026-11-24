@@ -21,10 +21,7 @@ import io.github.danielhp95.caracole.core.sync.file.PageSource
 import io.github.danielhp95.caracole.core.sync.file.SyncFile
 import io.github.danielhp95.caracole.core.sync.file.SyncFiles
 import io.github.danielhp95.caracole.core.web.DownloadNames
-import io.github.danielhp95.caracole.mirror.Layer
-import io.github.danielhp95.caracole.mirror.Manifest
 import io.github.danielhp95.caracole.mirror.Mirror
-import io.github.danielhp95.caracole.mirror.SyncError
 import io.github.danielhp95.caracole.mirror.UnitGate
 import io.github.danielhp95.caracole.server.files.PhoneGate
 import io.github.danielhp95.caracole.server.http.AppConfig
@@ -449,19 +446,14 @@ class SyncFileRoutes(
                     FileSource(file, null, libraryDir).use { source ->
                         val listed = source.pages()
                         if (listed != null) {
-                            val bytes = listed.toString().toByteArray(Charsets.UTF_8)
-                            val total = lacking(mirror, id, bytes, taken.toSet()) { unit -> PhoneGate.folderOf(gate.database, unit) }
-                            var read = 0
-                            if (total > 0) say(kept(0, total))
-                            mirror.takeLayer(id, bytes, taken.toSet(), gate,
-                                             folderOf = { unit -> PhoneGate.folderOf(gate.database, unit) }) { sha ->
-                                val page = try {
+                            mirror.takeLayer(id, listed.toString().toByteArray(Charsets.UTF_8), taken.toSet(), gate,
+                                             folderOf = { unit -> PhoneGate.folderOf(gate.database, unit) },
+                                             progress = { done, total -> say(kept(done, total)) }) { sha ->
+                                try {
                                     source.page(sha)
                                 } catch (e: PeerError) {
                                     null
                                 }
-                                if (page != null && total > 0) say(kept(minOf(++read, total), total))
-                                page
                             }
                         }
                     }
@@ -470,28 +462,5 @@ class SyncFileRoutes(
 
         /** "12 of 40 pages kept": an import's mirror stage as it keeps a file's pages. */
         fun kept(done: Int, total: Int): String = "$done of $total pages kept"
-
-        /** The pages a layer of [id] lacks of those the file's list ([manifest]) names for [units], each right in its
-         * unit's folder ([folderOf]: a song's `Artist/Title`), and its start page, by their bytes (each kept once): how
-         * many Mirror.takeLayer reads of the file, at most (a kind it never serves is never read); 0 for a list that
-         * can't be read, which takeLayer refuses itself. */
-        private fun lacking(mirror: Mirror, id: String, manifest: ByteArray, units: Set<String>,
-                            folderOf: (String) -> List<String>?): Int {
-            val list = try {
-                Manifest.parse(manifest)
-            } catch (e: SyncError) {
-                return 0
-            }
-            val folders = HashMap<String, List<String>?>()
-            fun inFolder(path: String, unit: String): Boolean {
-                val folder = folders.getOrPut(unit) { folderOf(unit) }
-                val parts = path.split('/')
-                return folder != null && folder.size == 2 && parts.size == 3 && parts.subList(0, 2) == folder
-            }
-            val layer = Layer(id, File(mirror.layersDir, id))
-            return list.entries.filter { e ->
-                e.path == list.start || (e.unit != null && e.unit in units && inFolder(e.path, e.unit!!))
-            }.map { it.sha256 }.distinct().count { !layer.blob(it).isFile }
-        }
     }
 }
