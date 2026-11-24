@@ -26,7 +26,7 @@ class Fetched(val file: File, val raw: Long)
  * one of [hosts] over https (the source's `redirects`, always given, so that no other set is passed by omission:
  * GitHub's API sends an asset's bytes from `release-assets.githubusercontent.com`), streamed: the `.gz` bytes hashed
  * as they come ([onProgress] told how many so far), unpacked through [GZIPInputStream] (gzip's own check of its CRC and size) into [to], stopped past
- * [Catalogues.CAP_FACTOR] times the `.gz` size listed or past that size itself, then the hash checked against
+ * [capFor] the `.gz` size listed or past that size itself, then the hash checked against
  * [Listed.sha256]. On any failure [to] is deleted and a [CatalogueError] (a [Limited] for GitHub's hourly share
  * spent) says why; under tests a host but loopback is refused (`RealTransport.refuseUnderTests`) before a socket.
  */
@@ -55,7 +55,7 @@ private const val MISMATCH = "The download isn't the file GitHub listed. Try aga
 
 private fun unpack(body: InputStream, file: Listed, to: File, onProgress: (Long) -> Unit): Fetched {
     val counted = Counted(body, file.bytes)
-    val cap = Catalogues.CAP_FACTOR.toLong() * file.bytes
+    val cap = capFor(file.bytes)
     val out = try {
         FileOutputStream(to)
     } catch (e: IOException) {
@@ -64,22 +64,23 @@ private fun unpack(body: InputStream, file: Listed, to: File, onProgress: (Long)
     var raw = 0L
     out.use {
         try {
-            val gz = GZIPInputStream(counted, CHUNK)
-            val buffer = ByteArray(CHUNK)
-            while (true) {
-                val n = gz.read(buffer)
-                if (n < 0) break
-                raw += n
-                if (raw > cap) throw CatalogueError("The file unpacks to more than it should; nothing was imported.")
-                try {
-                    out.write(buffer, 0, n)
-                } catch (e: IOException) {
-                    throw storage(e)
+            GZIPInputStream(counted, CHUNK).use { gz ->
+                val buffer = ByteArray(CHUNK)
+                while (true) {
+                    val n = gz.read(buffer)
+                    if (n < 0) break
+                    raw += n
+                    if (raw > cap) throw CatalogueError("The file unpacks to more than it should; nothing was imported.")
+                    try {
+                        out.write(buffer, 0, n)
+                    } catch (e: IOException) {
+                        throw storage(e)
+                    }
+                    onProgress(counted.count)
                 }
-                onProgress(counted.count)
+                // What comes after gzip's end is hashed too: the digest is of every byte sent.
+                while (counted.read(buffer) >= 0) Unit
             }
-            // What comes after gzip's end is hashed too: the digest is of every byte sent.
-            while (counted.read(buffer) >= 0) Unit
         } catch (e: ZipException) {
             throw CatalogueError(MISMATCH, e)
         } catch (e: EOFException) {
@@ -97,6 +98,10 @@ private fun unpack(body: InputStream, file: Listed, to: File, onProgress: (Long)
     if (counted.hex() != Py.asciiLower(file.sha256)) throw CatalogueError(MISMATCH)
     return Fetched(to, raw)
 }
+
+/** The most a file of [bytes] `.gz` bytes may unpack to: [Catalogues.CAP_FACTOR] times them, and never less than
+ * [Catalogues.CAP_FLOOR], so that a small file that compresses well is no bomb. */
+internal fun capFor(bytes: Long): Long = maxOf(Catalogues.CAP_FACTOR.toLong() * bytes, Catalogues.CAP_FLOOR)
 
 private fun storage(e: IOException) = CatalogueError("The phone's storage failed: ${e.message ?: e.javaClass.simpleName}.", e)
 

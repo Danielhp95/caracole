@@ -65,7 +65,7 @@ import java.time.Instant
  * kind's), the command's exit 1.
  *
  * Each run asks GitHub with caracole's user agent as the phone's settings say it then (PhoneConfig.read: the
- * computer's once a sync brought it), through [source] made of that client (GitHub's API, the owner's choice S1);
+ * computer's once a sync brought it), through [source] made of that client (GitHub's API, the owner's choice);
  * [clock], [metered], [free] and [forget] are the app's (a test's).
  */
 class CataloguesRunner(
@@ -113,7 +113,9 @@ class CataloguesRunner(
         val (until, imported, agent) = parts.database.read { db ->
             Triple(notBefore(db), db.kvGet(Catalogues.IMPORTED), PhoneConfig.read(db).userAgent)
         }
-        if (until != null && until.isAfter(clock())) throw Limited(until)
+        val at = clock()
+        // GitHub's reset is within the hour: one further on than MOST_AHEAD is a clock that was wrong, passed over.
+        if (until != null && until.isAfter(at) && !until.isAfter(at.plus(MOST_AHEAD))) throw Limited(until)
         empty(cache)  // what a killed job left
         val http = Http(userAgent = agent)
         val source = source(http)
@@ -233,6 +235,9 @@ class CataloguesRunner(
     companion object {
         const val COMMAND = "catalogues"
         const val METERED_OK = "--metered-ok"
+
+        /** The furthest ahead of the clock a kept [Catalogues.NOT_BEFORE] is kept to; past it, it is passed over. */
+        val MOST_AHEAD: Duration = Duration.ofHours(2)
 
         /** kv: the file a metered network left waiting for the owner's go-ahead, `{"name": …, "bytes": …}`. */
         const val ASKING = "catalogues:asking"

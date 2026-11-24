@@ -132,16 +132,44 @@ class DownloadTest {
     }
 
     @Test fun aFileThatUnpacksPastItsCapIsStopped() {
-        // About 1 KB of gzip that unpacks to 30 KB, listed as the 1 KB it is: 30 times its size, past 20.
-        val bomb = FakeGitHub.gzip(ByteArray(30_000))
+        // About 65 KB of gzip that unpacks to 65 MiB of zeros: past 20 times its size and past the 64 MiB floor.
+        val bomb = zeros(65L shl 20)
         redirectedTo(bomb)
         val to = tmp.root.resolve("indexes.sqlite")
         val e = assertFailsWith<CatalogueError> {
-            download(http, listed(bytes = 1_000, sha256 = FakeGitHub.sha256(bomb)), to, loopback) {}
+            download(http, listed(bytes = bomb.size.toLong(), sha256 = FakeGitHub.sha256(bomb)), to, loopback) {}
         }
-        assertTrue(bomb.size <= 1_000)
         assertEquals("The file unpacks to more than it should; nothing was imported.", e.message)
         assertFalse(to.exists())
+    }
+
+    @Test fun aSmallFileThatCompressesWellIsWithinTheFloor() {
+        // 30 KB of zeros in about a hundred bytes: past 20 times its size, under 64 MiB.
+        val small = FakeGitHub.gzip(ByteArray(30_000))
+        redirectedTo(small)
+        val to = tmp.root.resolve("indexes.sqlite")
+        val got = download(http, listed(bytes = small.size.toLong(), sha256 = FakeGitHub.sha256(small)), to, loopback) {}
+        assertEquals(30_000L, got.raw)
+    }
+
+    @Test fun theCapIsTwentyTimesTheGzipOr64MiB() {
+        assertEquals(64L shl 20, capFor(1_000))
+        assertEquals(20L * (10L shl 20), capFor(10L shl 20))
+    }
+
+    /** [n] zero bytes gzipped, written a MiB at a time. */
+    private fun zeros(n: Long): ByteArray {
+        val out = java.io.ByteArrayOutputStream()
+        java.util.zip.GZIPOutputStream(out).use { gz ->
+            val chunk = ByteArray(1 shl 20)
+            var left = n
+            while (left > 0) {
+                val k = minOf(left, chunk.size.toLong()).toInt()
+                gz.write(chunk, 0, k)
+                left -= k
+            }
+        }
+        return out.toByteArray()
     }
 
     @Test fun aGoneFileIsAnError() {

@@ -8,15 +8,19 @@ import java.time.temporal.ChronoUnit
  * The site catalogues: every site's index, which the laptop publishes each week as a gzip of an index export in the
  * GitHub release [TAG] of [REPO] (`caracole index publish`, nix/publish-indexes.sh), read by a phone with no computer
  * (plan_host_index.md). This package is the one place on the phone that knows GitHub: [Names] reads a file's name,
- * [CatalogueSource] lists the release (GitHub's API, the owner's choice S1), [choose] picks this app's schema's newest
+ * [CatalogueSource] lists the release through GitHub's API, [choose] picks this app's schema's newest
  * file and [download] streams, unpacks and checks it. The job that merges it is the server's.
  */
 object Catalogues {
     const val REPO = "Danielhp95/caracole"
     const val TAG = "indexes"
 
-    /** A file unpacks to at most this many times its `.gz` size; past it, it is no export. */
+    /** A file unpacks to at most this many times its `.gz` size, or [CAP_FLOOR] where that is more; past it, it is
+     * no export. */
     const val CAP_FACTOR = 20
+
+    /** The least a file may unpack to, whatever its `.gz` size: 64 MiB. */
+    const val CAP_FLOOR = 64L shl 20
 
     /** The room a download needs, as times its `.gz` size: the unpacked file and the merge's (the spec's estimate,
      * not measured yet: plan's Task 0). */
@@ -35,7 +39,7 @@ object Catalogues {
 /** Why the catalogues can't be listed or downloaded, in words the app says as they are. */
 open class CatalogueError(message: String, cause: Throwable? = null) : Exception(message, cause)
 
-/** The release has no files yet (it answers 404, or its manifest does). */
+/** The release has no files yet (GitHub's API answers 404 for its tag). */
 class NoRelease : CatalogueError("No catalogues are published yet.")
 
 /**

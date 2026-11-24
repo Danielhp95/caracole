@@ -63,8 +63,10 @@ class CataloguesRunnerTest {
         github.close()
     }
 
-    private val newest = "indexes-s17-20261124T0312Z.sqlite.gz"
-    private val older = "indexes-s17-20261117T0312Z.sqlite.gz"
+    private val schema = Database.SCHEMA_VERSION
+    private val newest = "indexes-s$schema-20261124T0312Z.sqlite.gz"
+    private val older = "indexes-s$schema-20261117T0312Z.sqlite.gz"
+    private val newer = "indexes-s${schema + 1}-20261124T0400Z.sqlite.gz"
 
     /** The paths GitHub was asked, in order. */
     private fun asked(): List<String> = github.asked.map { it.removePrefix("GET ").substringBefore(" ·") }
@@ -93,8 +95,7 @@ class CataloguesRunnerTest {
         try {
             c.prepare("UPDATE caracole_export SET value = ? WHERE key = 'schema'").use { it.bindText(1, "$schema"); it.step() }
             c.prepare("UPDATE caracole_export SET value = ? WHERE key = 'sites'").use { it.bindText(1, sites); it.step() }
-            // Bytes that don't compress, in a table no merge reads: a few pages of rows unpack to more than
-            // Catalogues.CAP_FACTOR times their gzip, which a real index never does.
+            // Bytes that don't compress, in a table no merge reads, as a real index's mostly don't.
             c.execSQL("CREATE TABLE padding (bytes BLOB NOT NULL)")
             c.prepare("INSERT INTO padding (bytes) VALUES (?)").use { it.bindBlob(1, Random(17).nextBytes(40_000)); it.step() }
         } finally {
@@ -160,7 +161,7 @@ class CataloguesRunnerTest {
 
     @Test fun importsTheNewestOfItsSchemaAndSaysItsDate() {
         val phone = phone()
-        publish(older to export(), newest to export(), "indexes-s18-20261124T0400Z.sqlite.gz" to export(18))
+        publish(older to export(), newest to export(), newer to export(schema + 1))
         val job = run(phone)
         assertEquals(Job.DONE, job.state, job.asJson().toString())
         assertEquals("Catalogues of 24 Nov 2026", JobViews.line(job).text)
@@ -185,12 +186,12 @@ class CataloguesRunnerTest {
 
     @Test fun aNewerSchemaFailsInTheSpecsWords() {
         val phone = phone()
-        publish("indexes-s18-20261124T0400Z.sqlite.gz" to export(18))
+        publish(newer to export(schema + 1))
         val job = run(phone)
         assertEquals(Job.FAILED, job.state)
-        assertEquals("Not imported: The published catalogues are for a newer caracole (schema 18): update the app.",
+        assertEquals("Not imported: The published catalogues are for a newer caracole (schema ${schema + 1}): update the app.",
                      detail(job))
-        assertEquals("Not imported: The published catalogues are for a newer caracole (schema 18): update the app.",
+        assertEquals("Not imported: The published catalogues are for a newer caracole (schema ${schema + 1}): update the app.",
                      JobViews.line(job).text, "what to do is kept in the line's one sentence")
         assertEquals(listOf(release), asked())
         // No file at all: none published yet.
@@ -201,11 +202,11 @@ class CataloguesRunnerTest {
 
     @Test fun aRefusedMergeLeavesNothingImported() {
         val phone = phone()
-        publish(newest to export(schema = 16))
+        publish(newest to export(schema = schema - 1))
         val job = run(phone)
         assertEquals(Job.FAILED, job.state)
-        assertTrue(detail(job).startsWith("Not imported: The file was exported at schema version 16, and this " +
-                                              "caracole's database is at 17"), detail(job))
+        assertTrue(detail(job).startsWith("Not imported: The file was exported at schema version ${schema - 1}, and " +
+                                              "this caracole's database is at $schema"), detail(job))
         assertTrue(phone.parts.stateDir.path !in detail(job), "no path of the phone's in its words")
         assertNull(phone.kv(Catalogues.IMPORTED))
         assertEquals(0L, phone.tabs())
@@ -269,7 +270,7 @@ class CataloguesRunnerTest {
         val phone = phone()
         // One a killed job left goes too.
         phone.cache.mkdirs()
-        File(phone.cache, "indexes-s17-20261110T0312Z.sqlite").writeText("left")
+        File(phone.cache, "indexes-s$schema-20261110T0312Z.sqlite").writeText("left")
         val gz = export()
         publish(newest to gz)
         github.route(asset(newest), FakeGitHub.Reply(200, gz + byteArrayOf(0)))  // not its bytes
@@ -301,6 +302,25 @@ class CataloguesRunnerTest {
         assertEquals(Job.DONE, ahead.state, ahead.asJson().toString())
         assertEquals(newest, phone.kv(Catalogues.IMPORTED))
         assertNull(phone.kv(CataloguesRunner.ASKING))
+    }
+
+    @Test fun aNotBeforeFarAheadOfTheClockIsPassedOver() {
+        // GitHub's reset is within the hour: one more than two hours on is a clock that was wrong, never a wait.
+        val phone = phone()
+        publish(newest to export())
+        phone.parts.database.writeBlocking { it.kvSet(Catalogues.NOT_BEFORE, Stamps.of(now.plusSeconds(3 * 3600))) }
+        val job = run(phone)
+        assertEquals(Job.DONE, job.state, job.asJson().toString())
+        assertEquals(newest, phone.kv(Catalogues.IMPORTED))
+    }
+
+    @Test fun aNotBeforeWithinTwoHoursStillHolds() {
+        val phone = phone()
+        publish(newest to export())
+        phone.parts.database.writeBlocking { it.kvSet(Catalogues.NOT_BEFORE, Stamps.of(now.plusSeconds(2 * 3600 - 60))) }
+        val job = run(phone)
+        assertEquals(Job.FAILED, job.state)
+        assertEquals(emptyList(), asked())
     }
 
     @Test fun anUnreadableNotBeforeIsNone() {
@@ -339,7 +359,7 @@ class CataloguesRunnerTest {
 
     @Test fun aMergeThatFailsStillForgetsTheSearchsAnswers() {
         val phone = phone()
-        publish(newest to export(schema = 16))
+        publish(newest to export(schema = schema - 1))
         assertEquals(Job.FAILED, run(phone).state)
         assertEquals(1, forgotten)
     }

@@ -194,8 +194,7 @@ class CataloguesTest {
                     it.bindText(1, "${Database.SCHEMA_VERSION}")
                     it.step()
                 }
-                // Bytes that don't compress, in a table no merge reads: the corpus's few rows alone unpack to more
-                // than Catalogues.CAP_FACTOR times their gzip, which a real index never does.
+                // Bytes that don't compress, in a table no merge reads, as a real index's mostly don't.
                 c.prepare("CREATE TABLE padding (bytes BLOB NOT NULL)").use { it.step() }
                 c.prepare("INSERT INTO padding (bytes) VALUES (?)").use {
                     it.bindBlob(1, Random(17).nextBytes(40_000))

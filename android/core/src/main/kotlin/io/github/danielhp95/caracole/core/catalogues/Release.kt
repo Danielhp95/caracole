@@ -20,7 +20,7 @@ import java.time.ZoneOffset
 data class Listed(val name: String, val bytes: Long, val sha256: String, val uploaded: Boolean, val url: String)
 
 /**
- * Where the phone lists the release: [Api], GitHub's REST API's release by its tag (the owner's choice S1, for
+ * Where the phone lists the release: [Api], GitHub's REST API's release by its tag (the owner's choice, for
  * good). It asks GitHub alone, every URI it builds from its [base] and checked by `RealTransport.refuseUnderTests`
  * before it is asked, and its files' bytes are followed only to one of its [redirects], once.
  */

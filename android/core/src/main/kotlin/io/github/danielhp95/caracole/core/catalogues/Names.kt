@@ -9,8 +9,8 @@ import java.time.Instant
 data class Named(val schema: Int, val at: Instant)
 
 /**
- * catalogues.py's `read_name`: `indexes-s<schema>-<yyyymmdd>T<hhmm>Z.sqlite.gz`, the schema one ASCII digit or more
- * with first digit 1 to 9, the stamp a real date (year 1 or later) and time in UTC; any other name (`indexes.json`, a
+ * catalogues.py's `read_name`: `indexes-s<schema>-<yyyymmdd>T<hhmm>Z.sqlite.gz`, the schema one to nine ASCII digits,
+ * the first 1 to 9, the stamp a real date (year 1 or later) and time in UTC; any other name (`indexes.json`, a
  * `.next`, `indexes2-…`, a 13th month, a 24:00) is none. Read by hand, ASCII alone: no regex's `\d`.
  */
 object Names {
