@@ -434,6 +434,7 @@ let
     "caracole.service runs `caracole --config <generated caracole.toml> run`" =
       runSc.ExecStart == "${lib.getExe stub} --config ${configFile} run";
     "caracole.service is a oneshot" = runSc.Type == "oneshot";
+    "caracole.service lets the run tell systemd its status line, and nothing else may" = runSc.NotifyAccess == "main";
     "caracole.service runs as caracole, with a group-writable umask" = sameUser runSc;
     "by default, the library, music, state and cache are in /var/lib/caracole, and the generated settings name them" =
       nuc.services.caracole.dataDir == "/var/lib/caracole" && hasLayout nuc defaultLayout;
