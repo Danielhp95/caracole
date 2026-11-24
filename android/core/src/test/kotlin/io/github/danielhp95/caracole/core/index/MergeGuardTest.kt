@@ -83,6 +83,24 @@ class MergeGuardTest {
                      words)
     }
 
+    /** The names its META's `sites` lists come back with what it took (Merged.listed), a site this version doesn't
+     * know among them, read while the file was attached under the guard: a caller needn't attach it again. */
+    @Test fun theSitesItListsComeBackAsItReadThem() {
+        val file = export("UPDATE caracole_export SET value = '[\"gtptabs\", \"musescore\", \"ireal\"]' WHERE key = 'sites'")
+        TestDb.fresh(tmp.newFolder()).use { database ->
+            val merged = database.writeBlocking { IndexTransfer.merge(it, file, now) }
+            assertEquals(listOf("gtptabs", "musescore", "ireal"), merged.listed)
+            assertEquals(listOf("gtptabs", "musescore"), merged.sites.keys.toList(), "the sites it knows merged")
+            // A merge of nothing newer lists them too.
+            assertEquals(listOf("gtptabs", "musescore", "ireal"),
+                         database.writeBlocking { IndexTransfer.merge(it, file, now) }.listed)
+        }
+        val unreadable = export("UPDATE caracole_export SET value = 'not json' WHERE key = 'sites'")
+        TestDb.fresh(tmp.newFolder()).use { database ->
+            assertEquals(emptyList(), database.writeBlocking { IndexTransfer.merge(it, unreadable, now) }.listed)
+        }
+    }
+
     @Test fun noFunctionOfItsSchemaRunsWhileItIsAttached() {
         val file = export()
         TestDb.fresh(tmp.newFolder()).use { database ->

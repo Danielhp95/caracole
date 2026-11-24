@@ -91,6 +91,37 @@ class MergeProgressTest {
         }
     }
 
+    /** A file made by hand whose ug_index repeats every tab_id (no primary key): past the chunks the count left
+     * promises, no chunk-th row is there, and the rest is the last chunk, never an error; what it takes is what the
+     * export's own rows took, its last count done == total. */
+    @Test fun aFileThatRepeatsATabIdTakesTheRestInOneLastChunk() {
+        fun merged(export: File, chunk: Int, said: MutableList<MergeProgress>): List<String> =
+            TestDb.fresh(tmp.newFolder()).use { database ->
+                database.writeBlocking { IndexTransfer.seedFresh(it) }
+                database.writeBlocking { IndexTransfer.merge(it, export, now, chunk = chunk, progress = { p -> said += p }) }
+                database.read { Dumps.lines(it) }
+            }
+        val whole = merged(export("full-export"), IndexTransfer.UG_CHUNK, ArrayList())
+        val twice = export("full-export")
+        BundledSQLiteDriver().open(twice.path).let { c ->
+            try {
+                c.execSQL("ALTER TABLE ug_index RENAME TO ug_once")
+                c.execSQL("CREATE TABLE ug_index AS SELECT * FROM ug_once")
+                c.execSQL("INSERT INTO ug_index SELECT * FROM ug_once")
+                c.execSQL("DROP TABLE ug_once")
+            } finally {
+                c.close()
+            }
+        }
+        for (chunk in listOf(1, 2, 3, 4)) {
+            val said = ArrayList<MergeProgress>()
+            assertEquals(whole, merged(twice, chunk, said), "chunks of $chunk")
+            val tabs = said.filter { it.action == MergeProgress.TAB }
+            assertEquals(10L to 10L, tabs.last().done to tabs.last().total, "chunks of $chunk: $tabs")
+            assertTrue(tabs.zipWithNext().all { (a, b) -> a.done < b.done }, "chunks of $chunk: $tabs")
+        }
+    }
+
     @Test fun aMergeOfNothingNewerSaysItPlannedAndNothingMore() {
         val export = export("partial-export")
         TestDb.fresh(tmp.newFolder()).use { database ->

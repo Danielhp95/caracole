@@ -110,12 +110,13 @@ object IndexTransfer {
         try {
             tablesAlone(db, export)
             val meta = meta(db, export)
-            val names = mergedSites(export, meta, sites)
+            val listed = listed(meta)
+            val names = mergedSites(export, listed, sites)
             progress?.invoke(MergeProgress("", MergeProgress.PLANNING, 0, names.size.toLong()))
             Merge.checkColumns(db, export, names)
             val plans = names.map { Merge.plan(db, it, now, notAfter, chunk) }
             if (plans.none { it.changes }) {
-                return Merged(names.associateWithTo(LinkedHashMap()) { emptyMap<String, Int>() }, false)
+                return Merged(names.associateWithTo(LinkedHashMap()) { emptyMap<String, Int>() }, false, listed)
             }
             backup?.invoke()
             val taken = LinkedHashMap<String, Map<String, Int>>()
@@ -130,7 +131,7 @@ object IndexTransfer {
                 progress?.invoke(MergeProgress("ug", MergeProgress.OPTIMIZE, 0, 0))
                 Warmup.optimize(db)  // one segment each (prep-db)
             }
-            return Merged(taken, true)
+            return Merged(taken, true, listed)
         } finally {
             db.detach(Merge.THEIRS)
         }
@@ -260,16 +261,17 @@ object IndexTransfer {
     private fun noExport(export: File, e: Exception) =
         TransferError("$export is no index export of caracole's (${e.message}): `caracole index export` makes one")
 
-    /** _merged_sites: the sites the file holds (META's `sites`), and of them those asked for. */
-    private fun mergedSites(export: File, meta: Map<String, String?>, sites: List<String>?): List<String> {
-        val listed = meta["sites"] ?: "[]"
-        val held = try {
-            (Canonical.parse(listed) as? JsonArray).orEmpty()
-                .mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content }
-                .filter { Sites.named(it) != null }
-        } catch (_: CanonicalError) {
-            emptyList()
-        }
+    /** The names META's `sites` lists (a JSON array of texts), every one, in its order; none where it can't be read. */
+    private fun listed(meta: Map<String, String?>): List<String> = try {
+        (Canonical.parse(meta["sites"] ?: "[]") as? JsonArray).orEmpty()
+            .mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content }
+    } catch (_: CanonicalError) {
+        emptyList()
+    }
+
+    /** _merged_sites: the sites the file holds (META's `sites`, as [listed] reads them), and of them those asked for. */
+    private fun mergedSites(export: File, listed: List<String>, sites: List<String>?): List<String> {
+        val held = listed.filter { Sites.named(it) != null }
         val names = chosen(sites, if (held.isNotEmpty()) chosen(held, null) else emptyList())
         for (name in names) {
             if (name !in held) {
@@ -295,8 +297,11 @@ object IndexTransfer {
 
 /** What a merge took: per site merged (in caracole's order), each kind of page it took and how many (index_transfer's
  * `SiteMerge.taken`: "sitemap", "tab of its artist pages", "listing page"…), and whether anything changed (a page
- * taken or a progress record moved on). */
-data class Merged(val sites: Map<String, Map<String, Int>>, val changed: Boolean)
+ * taken or a progress record moved on); [listed], the names the file's META `sites` lists, as written and in its
+ * order, a site this version doesn't know among them (none where it lists none it can read), read as the merge read
+ * the file, never by attaching it again (the catalogues job's sentence on what it doesn't read). */
+data class Merged(val sites: Map<String, Map<String, Int>>, val changed: Boolean,
+                  val listed: List<String> = emptyList())
 
 /**
  * How far a merge has got (IndexTransfer.merge's `progress`), index_transfer.merge's `progress(site, action, done,

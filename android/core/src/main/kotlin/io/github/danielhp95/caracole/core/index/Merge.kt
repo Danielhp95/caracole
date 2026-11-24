@@ -249,7 +249,10 @@ internal object Merge {
             // plan.chunk rows, in tab_id order (the order one statement's scan of the file's rows, by its rowid, took
             // them in, so that the rows the triggers add, the keys and the artists, are numbered as one statement
             // numbered them), a chunk ending at the chunk-th row's tab_id after the last chunk's, the rest one chunk
-            // with no bound; each told, the last with done == total (no rows: one chunk of none, 0 of 0).
+            // with no bound; each told, the last with done == total (no rows: one chunk of none, 0 of 0). A file
+            // whose table repeats a tab_id (made by hand: an export's has a primary key) has fewer rows past a chunk
+            // than the count left says: where no chunk-th row is there (or its tab_id is none), the rest is the last
+            // chunk.
             val rows = "FROM $THEIRS.ug_index WHERE $IN_TAKEN"
             val total = c.one("SELECT COUNT(*) $rows") { it.long(0)!! }!!
             var done = 0L
@@ -257,7 +260,8 @@ internal object Merge {
             while (true) {
                 val lower = if (after == null) "" else " AND tab_id > ?"
                 val low: List<Any?> = listOfNotNull(after)
-                val upto = if (total - done > plan.chunk) {
+                val upto: Long? = if (total - done > plan.chunk) {
+                    // null: no such row (one statement's `fetchone()` of none), the rest taken in one chunk
                     c.one("SELECT tab_id $rows$lower ORDER BY tab_id LIMIT 1 OFFSET ?",
                           *(low + (plan.chunk - 1)).toTypedArray()) { it.long(0) }
                 } else null
