@@ -47,9 +47,12 @@ internal object Merge {
     fun sitemapsKey(provider: String) = "$provider:sitemaps"
     fun completeKey(provider: String) = "$provider:index:complete_at"
 
-    /** _Plan: what a merge takes of a site. */
-    class Plan(val site: String, val notAfter: Long? = null) {
-        class Action(val noun: String, val count: Int, val run: (Db) -> Unit)
+    /** _Plan: what a merge takes of a site; [chunk], how many of UG's sitemaps' rows a statement takes. */
+    class Plan(val site: String, val notAfter: Long? = null, val chunk: Int = IndexTransfer.UG_CHUNK) {
+        /** An action: what it takes and how many ([count], Merged's), and what does it, told how far it has got
+         * ([run]'s second argument: done of total) when it counts by its own ([counted]: UG's sitemaps by their rows);
+         * else [apply] tells its count before it runs. */
+        class Action(val noun: String, val count: Int, val counted: Boolean, val run: (Db, (Long, Long) -> Unit) -> Unit)
 
         val actions = ArrayList<Action>()
         val kv = LinkedHashMap<String, String?>()
@@ -57,7 +60,12 @@ internal object Merge {
         val changes: Boolean get() = actions.isNotEmpty() || kv.isNotEmpty()
 
         fun take(noun: String, count: Int, run: (Db) -> Unit) {
-            if (count != 0) actions.add(Action(noun, count, run))
+            if (count != 0) actions.add(Action(noun, count, false) { db, _ -> run(db) })
+        }
+
+        /** An action that tells how far it has got itself, by its own count. */
+        fun takeCounted(noun: String, count: Int, run: (Db, (Long, Long) -> Unit) -> Unit) {
+            if (count != 0) actions.add(Action(noun, count, true, run))
         }
     }
 
@@ -129,8 +137,8 @@ internal object Merge {
 
     // --- deciding --------------------------------------------------------------------------------------------------
 
-    fun plan(db: Db, name: String, now: String, notAfter: Long? = null): Plan {
-        val plan = Plan(name, notAfter)
+    fun plan(db: Db, name: String, now: String, notAfter: Long? = null, chunk: Int = IndexTransfer.UG_CHUNK): Plan {
+        val plan = Plan(name, notAfter, chunk)
         when (name) {
             "ug" -> planUg(db, plan, now)
             "lacuerda" -> planLacuerda(db, plan)
@@ -224,7 +232,7 @@ internal object Merge {
 
     private fun planUg(db: Db, plan: Plan, now: String) {
         val names = plan.newerRecords(db, UG_SITEMAPS, "indexed_at")
-        plan.take("sitemap", names.size) { c ->
+        plan.takeCounted("sitemap", names.size) { c, said ->
             taken(c, names)
             // The tabs the database never had, kept for the songs they may be for (none on a new phone).
             val songs = NewTabs.songs(c)
@@ -236,17 +244,36 @@ internal object Merge {
                 )
             }
             // As a refresh stores a sitemap (ug/index.py upsert_rows): a row the database has keeps where and when it
-            // was first seen, and takes the file's keys and path.
-            c.execute(
-                "INSERT INTO main.ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) " +
-                    "SELECT tab_id, artist_key, song_key, type, sitemap, first_seen, path FROM $THEIRS.ug_index " +
-                    "WHERE sitemap IN (SELECT name FROM $TAKEN) " +
-                    "ON CONFLICT (tab_id) DO UPDATE SET artist_key = excluded.artist_key, " +
-                    "song_key = excluded.song_key, " +
-                    "type = excluded.type, path = excluded.path " +
-                    "WHERE ug_index.artist_key != excluded.artist_key OR ug_index.song_key != excluded.song_key " +
-                    "OR ug_index.type != excluded.type OR ug_index.path != excluded.path",
-            )
+            // was first seen, and takes the file's keys and path. A chunk of plan.chunk rows a statement, each a range
+            // of tab_ids in tab_id order, the order one statement's scan of the file's rows (by its rowid) took them
+            // in, so that the rows the triggers add (the keys, the artists) are numbered as one statement numbered them.
+            val total = c.one("SELECT COUNT(*) FROM $THEIRS.ug_index WHERE $IN_TAKEN") { it.long(0)!! }!!
+            said(0, total)
+            var after: Long? = null
+            var done = 0L
+            while (done < total) {
+                val from = if (after == null) "" else "tab_id > ? AND "
+                val since: List<Any?> = listOfNotNull(after)
+                val last = c.one(
+                    "SELECT tab_id FROM $THEIRS.ug_index WHERE $from$IN_TAKEN ORDER BY tab_id " +
+                        "LIMIT 1 OFFSET ${plan.chunk - 1}", *since.toTypedArray(),
+                ) { it.long(0) }
+                val upTo = if (last == null) "" else "tab_id <= ? AND "
+                c.execute(
+                    "INSERT INTO main.ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) " +
+                        "SELECT tab_id, artist_key, song_key, type, sitemap, first_seen, path FROM $THEIRS.ug_index " +
+                        "WHERE $from$upTo$IN_TAKEN " +
+                        "ON CONFLICT (tab_id) DO UPDATE SET artist_key = excluded.artist_key, " +
+                        "song_key = excluded.song_key, " +
+                        "type = excluded.type, path = excluded.path " +
+                        "WHERE ug_index.artist_key != excluded.artist_key OR ug_index.song_key != excluded.song_key " +
+                        "OR ug_index.type != excluded.type OR ug_index.path != excluded.path",
+                    *(since + listOfNotNull(last)).toTypedArray(),
+                )
+                done = if (last == null) total else done + plan.chunk
+                said(done, total)
+                after = last ?: break
+            }
             takeRecords(c, UG_SITEMAPS, names)
             if (songs.isNotEmpty()) NewTabs.markDirty(c, songs, now)
         }
@@ -375,10 +402,18 @@ internal object Merge {
     // --- applying --------------------------------------------------------------------------------------------------
 
     /** _apply: the plan's actions and kv records, then the site's keys made current, in one savepoint; what it
-     * took. */
-    fun apply(db: Db, plan: Plan): Map<String, Int> {
+     * took. [progress] told the site, then each action before it runs (MergeProgress). */
+    fun apply(db: Db, plan: Plan, progress: ((MergeProgress) -> Unit)? = null): Map<String, Int> {
+        progress?.invoke(MergeProgress(plan.site, "", 0, plan.actions.size.toLong()))
         db.savepoint("index_merge") {
-            for (action in plan.actions) action.run(db)
+            for (action in plan.actions) {
+                val said = { done: Long, total: Long ->
+                    progress?.invoke(MergeProgress(plan.site, action.noun, done, total))
+                    Unit
+                }
+                if (!action.counted) said(0, action.count.toLong())
+                action.run(db, said)
+            }
             for ((key, value) in plan.kv) if (value == null) db.kvDelete(key) else db.kvSet(key, value)
             currentKeys(db, plan.site)
             db.execute("DROP TABLE IF EXISTS $TAKEN")
@@ -410,6 +445,9 @@ internal object Merge {
     }
 
     private const val TAKEN_CHUNK = 10_000
+
+    /** A row of the sitemaps an action takes. */
+    private const val IN_TAKEN = "sitemap IN (SELECT name FROM $TAKEN)"
 
     /** _replace: the database's rows of the pages taken (by [column]) in place of the file's. */
     private fun replace(db: Db, table: String, column: String) {

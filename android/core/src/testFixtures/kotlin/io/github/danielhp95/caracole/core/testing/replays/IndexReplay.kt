@@ -48,7 +48,7 @@ object IndexReplay : AreaReplay {
     const val NOW = "2026-11-03T12:00:00Z"
 
     override fun replay(misses: Misses) {
-        for (record in Corpus.records(MERGE)) merge(record, misses)
+        mergeAll(misses)
         seedFresh(misses)
         freshMerge(misses)
         newest(misses)
@@ -64,8 +64,14 @@ object IndexReplay : AreaReplay {
         return "$name ${record.kw["sites"]}"
     }
 
+    /** Every merge of merge.jsonl, as Python merged them, UG's sitemaps taken [chunk] rows a statement
+     * (IndexTransfer.UG_CHUNK, the phone's; fewer, to hold a chunked merge to Python's one statement). */
+    fun mergeAll(misses: Misses, chunk: Int = IndexTransfer.UG_CHUNK) {
+        for (record in Corpus.records(MERGE)) merge(record, misses, chunk)
+    }
+
     /** One merge of merge.jsonl, as Python merged it. */
-    fun merge(record: Record, misses: Misses) {
+    fun merge(record: Record, misses: Misses, chunk: Int = IndexTransfer.UG_CHUNK) {
         val label = label(record)
         val fixture = record.extra.getValue("fixture").jsonObject
         fun fixture(role: String) = fixture.getValue(role).jsonPrimitive.content
@@ -82,7 +88,7 @@ object IndexReplay : AreaReplay {
                     misses.check(fixture("before") == fixture("after")) { "$label: a refusal changes the phone" }
                     val before = database.read { Dumps.lines(it) }
                     val refused = try {
-                        database.writeBlocking { IndexTransfer.merge(it, export, now, sites) { backups++ } }
+                        database.writeBlocking { IndexTransfer.merge(it, export, now, sites, chunk = chunk) { backups++ } }
                         false
                     } catch (e: TransferError) {
                         true
@@ -91,7 +97,9 @@ object IndexReplay : AreaReplay {
                     misses.check(backups == 0) { "$label: backed up $backups times before a refusal" }
                     misses.check(before == database.read { Dumps.lines(it) }) { "$label: the refusal changed the phone" }
                 } else {
-                    val merged = database.writeBlocking { IndexTransfer.merge(it, export, now, sites) { backups++ } }
+                    val merged = database.writeBlocking {
+                        IndexTransfer.merge(it, export, now, sites, chunk = chunk) { backups++ }
+                    }
                     val out = record.out!!.jsonObject
                     misses.check(out.getValue("changed").jsonPrimitive.boolean == merged.changed) {
                         "$label: changed ${merged.changed}, Python's ${out["changed"]}"

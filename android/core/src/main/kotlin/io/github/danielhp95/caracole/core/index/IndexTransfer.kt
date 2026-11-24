@@ -67,11 +67,14 @@ object IndexTransfer {
      * (Warmup.optimizes: an import, never a sync's nightly few); Long.MAX_VALUE never. With [notAfter] (a time as
      * Stamps.parse gives one), a record or page the file says it read after it is never newer than the database's,
      * so that a file dated in the future can't take a site's rows for good (the phone's sync passes its clock; Python's
-     * merge has no such bound, and the replays none).
+     * merge has no such bound, and the replays none). UG's sitemaps' rows are taken [chunk] a statement ([UG_CHUNK]),
+     * in the same savepoint and order as one statement took them (the database after is the same), so that
+     * [progress] is told how far it has got as it goes ([MergeProgress]), on the caller's thread, inside its write.
      */
     fun merge(db: Db, export: File, now: String, sites: List<String>? = null,
-              optimizeAfter: Long = Warmup.OPTIMIZE_AFTER, notAfter: Long? = null,
-              backup: (() -> Unit)? = null): Merged {
+              optimizeAfter: Long = Warmup.OPTIMIZE_AFTER, notAfter: Long? = null, chunk: Int = UG_CHUNK,
+              progress: ((MergeProgress) -> Unit)? = null, backup: (() -> Unit)? = null): Merged {
+        require(chunk > 0) { "a chunk of UG's rows holds one row at least, not $chunk" }
         // A caller's mistake, never the file's: SQLite attaches no database within a transaction.
         check(!db.raw.inTransaction()) { "an index merge runs in no transaction (ATTACH runs in none)" }
         check(Merge.THEIRS !in attached(db)) { "a database is attached as ${Merge.THEIRS} already" }
@@ -87,7 +90,8 @@ object IndexTransfer {
             val meta = meta(db, export)
             val names = mergedSites(export, meta, sites)
             Merge.checkColumns(db, export, names)
-            val plans = names.map { Merge.plan(db, it, now, notAfter) }
+            progress?.invoke(MergeProgress("", MergeProgress.PLAN, 0, names.size.toLong()))
+            val plans = names.map { Merge.plan(db, it, now, notAfter, chunk) }
             if (plans.none { it.changes }) {
                 return Merged(names.associateWithTo(LinkedHashMap()) { emptyMap<String, Int>() }, false)
             }
@@ -96,15 +100,22 @@ object IndexTransfer {
             var ugChanges = 0L
             for (plan in plans) {
                 val before = Warmup.changes(db)
-                taken[plan.site] = Merge.apply(db, plan)
+                taken[plan.site] = Merge.apply(db, plan, progress)
                 if (plan.site == "ug") ugChanges = Warmup.changes(db) - before
             }
-            if (Warmup.optimizes(taken["ug"], ugChanges, optimizeAfter)) Warmup.optimize(db)  // one segment each (prep-db)
+            if (Warmup.optimizes(taken["ug"], ugChanges, optimizeAfter)) {
+                progress?.invoke(MergeProgress("ug", MergeProgress.OPTIMIZE, 0, 0))
+                Warmup.optimize(db)  // one segment each (prep-db)
+            }
             return Merged(taken, true)
         } finally {
             db.detach(Merge.THEIRS)
         }
     }
+
+    /** How many of UG's sitemaps' rows each statement of a merge takes (index_transfer.py's chunk alike): each chunk
+     * a range of `tab_id`s, in `tab_id` order, as the one statement it replaces read them. */
+    const val UG_CHUNK = 50_000
 
     /**
      * The kv records a fresh caracole database holds once each site's index made its keys current on its empty tables
@@ -242,6 +253,28 @@ object IndexTransfer {
  * `SiteMerge.taken`: "sitemap", "tab of its artist pages", "listing page"…), and whether anything changed (a page
  * taken or a progress record moved on). */
 data class Merged(val sites: Map<String, Map<String, Int>>, val changed: Boolean)
+
+/**
+ * How far a merge has got (IndexTransfer.merge's `progress`, index_transfer.merge's `progress(site, action, done,
+ * total)` alike), told on the writer's thread as the merge goes:
+ *
+ * - `("", [PLAN], 0, n)`: before the [n] sites asked are planned (both databases read: what the file read later);
+ * - `(site, "", 0, n)`: before a site that changes anything is applied, [n] its actions (0: its records alone);
+ * - `(site, action, 0, count)`: before each action, named as Merged names it ("sitemap", "artist page"…), [total]
+ *   its count;
+ * - but UG's sitemaps, counted by their rows: `("ug", "sitemap", 0, rows)` before, then `("ug", "sitemap", done,
+ *   rows)` after each chunk of [IndexTransfer.UG_CHUNK] rows;
+ * - `("ug", [OPTIMIZE], 0, 0)`: once UG's rows are in, before its full-text indexes are made one segment each (the
+ *   phone's alone: Warmup.optimize).
+ *
+ * A merge of nothing newer tells the plan alone.
+ */
+data class MergeProgress(val site: String, val action: String, val done: Long, val total: Long) {
+    companion object {
+        const val PLAN = "plan"
+        const val OPTIMIZE = "optimize"
+    }
+}
 
 /** An export or a merge refused, nothing written: its words say why. */
 class TransferError(message: String) : Exception(message)
