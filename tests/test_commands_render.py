@@ -60,6 +60,19 @@ def test_render_rewrites_the_pages(conn, cfg, chordpro):
     assert (cfg.library_dir / "index.html").read_text(encoding="utf-8") != STALE
 
 
+def test_render_says_which_song_it_is_on_while_it_goes(conn, cfg, chordpro, monkeypatch):
+    from helpers.screens import on_screen
+
+    add_song(conn, "Soda Stereo", "De Música Ligera", added_at="2026-10-02T00:00:00Z")
+    add_song(conn, "Soda Stereo", "Signos", added_at="2026-10-01T00:00:00Z")
+    screen = on_screen(monkeypatch)
+    result = render(cfg, chordpro)
+    assert result.exit_code == 0, result.output
+    assert [line.split("  ")[0] for line in screen.shown()] == [  # each with the time left, once it is measured
+        "PDFs · 1 of 2 songs · Soda Stereo - De Música Ligera", "PDFs · 2 of 2 songs · Soda Stereo - Signos"]
+    assert screen.getvalue().endswith("\r") and result.stdout.startswith("0 rendered, ")
+
+
 def song_in_em(conn, cfg):
     """A - T, with a UG sheet in Em kept."""
     from helpers.ug_pages import version_dict

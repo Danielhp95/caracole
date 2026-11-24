@@ -5,6 +5,18 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+/** The short hash of the commit the checkout is at (`git rev-parse --short HEAD`, read as Gradle configures the
+ * build), for the debug build's version; none outside a git checkout or with no git (a source tarball, a sandbox). */
+val commit: String? = try {
+    providers.exec {
+        commandLine("git", "rev-parse", "--short", "HEAD")
+        workingDir = rootDir
+        isIgnoreExitValue = true
+    }.standardOutput.asText.get().trim().takeIf { Regex("[0-9a-f]{4,40}").matches(it) }
+} catch (e: Exception) {
+    null
+}
+
 android {
     namespace = "io.github.danielhp95.caracole"
     // flake.nix's platformVersion and buildToolsVersion: the SDK the shell provides.
@@ -22,6 +34,8 @@ android {
         testInstrumentationRunner = "io.github.danielhp95.caracole.CaracoleTestRunner"
         // The bundled SQLite's native library, for phones and for the emulator.
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
+        // The port the phone's own server asks for first (Caracole.PORT).
+        buildConfigField("int", "SERVER_PORT", "8738")
     }
 
     // The release key, from outside the repo: ~/.gradle/gradle.properties (or -P / ORG_GRADLE_PROJECT_*) names the
@@ -38,6 +52,15 @@ android {
     }
 
     buildTypes {
+        // A debug build installs beside F-Droid's release, never over it: a package of its own (so its own data and
+        // library), named "Debug caracole" with an icon of its own (src/debug/res), and a port of its own, so both
+        // keep their origin when they run at once. The test APK is io.github.danielhp95.caracole.debug.test. Its
+        // version names the commit it was built from, "0.3.0-debug+abc1234" ([commit]), so the phone tells which.
+        debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug" + (commit?.let { "+$it" } ?: "")
+            buildConfigField("int", "SERVER_PORT", "8739")
+        }
         release {
             signingConfig = releaseSigning
             isMinifyEnabled = true

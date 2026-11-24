@@ -10,7 +10,6 @@ import io.github.danielhp95.caracole.core.http.Transport
 import io.github.danielhp95.caracole.core.index.IndexTransfer
 import io.github.danielhp95.caracole.mirror.Http
 import io.github.danielhp95.caracole.mirror.Mirror
-import io.github.danielhp95.caracole.mirror.Progress
 import io.github.danielhp95.caracole.server.Phone
 import io.github.danielhp95.caracole.server.PhoneDeps
 import io.github.danielhp95.caracole.server.files.FileTypes
@@ -40,8 +39,12 @@ import java.util.Locale
  * app, read on every request.
  */
 object Caracole {
-    /** The port the server asks for first: a fixed origin keeps the viewers' localStorage across launches. */
-    const val PORT = 8738
+    /**
+     * The port the server asks for first: a fixed origin keeps the viewers' localStorage across launches. 8738, the
+     * debug build's 8739 (app/build.gradle.kts), so that a debug build beside the release keeps an origin of its own;
+     * one taken all the same (by another app) makes the server listen on a free port (LocalServer.start).
+     */
+    const val PORT = BuildConfig.SERVER_PORT
     private const val DATABASE = "caracole.sqlite"
 
     private val random = SecureRandom()
@@ -81,7 +84,7 @@ object Caracole {
 
     /** Whether the network the phone uses now is metered (mobile data, a hotspot): [meteredForTests], else Android's
      * ConnectivityManager, a phone with no way to tell taken as metered. */
-    private fun metered(context: Context): Boolean = meteredForTests
+    fun metered(context: Context): Boolean = meteredForTests
         ?: (context.getSystemService(ConnectivityManager::class.java)?.isActiveNetworkMetered ?: true)
 
     /** The phone's alerts: [AndroidAlerts] from the start, unless something set others before (lane alerts-backups'
@@ -203,8 +206,9 @@ object Caracole {
 sealed interface SyncState {
     data object Idle : SyncState
 
-    /** Running: [progress] is null while it asks caracole for the list. */
-    data class Running(val progress: Progress?) : SyncState
+    /** Running: [doing] is the stage it is at and what that says ("Copying the computer's pages · 120 of 640
+     * pages", Working.doing), null before its job runs a stage. */
+    data class Running(val doing: String?) : SyncState
 
     /** Over, with its [outcome]. */
     data class Ended(val outcome: Outcome) : SyncState

@@ -246,23 +246,27 @@ const caracoleRows = (icons, does) => {
     item.appendChild(panel);
   };
   // A click on a line's own row presses its chevron, heard once for the page (so that a line library.js's refill drew
-  // into another's place, with its chevron and panel, is heard as it is now). Not on what does something of its own (a
-  // link, a button, a field, a summary), nor on what left the line as its own click was handled (Undo, whose request's
-  // line is drawn again), nor in its panel (a song's card, under its line), nor while Select ticks lines (select.js: a
-  // tap on a line is its tick), nor at the end of a text being selected.
+  // into another's place, with its chevron and panel, is heard as it is now), however many kits the page makes
+  // (library.js and sites.js make three: each its own listener would press it three times, open, closed, open).
+  // Not on what does something of its own (a link, a button, a field, a summary), nor on what left the line as its own
+  // click was handled (Undo, whose request's line is drawn again), nor in its panel (a song's card, under its line),
+  // nor while Select ticks lines (select.js: a tap on a line is its tick), nor at the end of a text being selected.
   const OWN = "a, button, input, select, textarea, label, summary, [role=button], [contenteditable]";
-  document.addEventListener("click", (e) => {
-    const at = e.target instanceof Element ? e.target : null;
-    const item = at ? at.closest(".line") : null;
-    const more = item ? item.querySelector(":scope > .line-more") : null;
-    if (!more || at === more || item.closest(".selecting")) return;
-    const panel = document.getElementById(more.getAttribute("aria-controls") || "");
-    if (panel && panel.contains(at)) return;
-    const does = at.closest(OWN);
-    if (does && item.contains(does)) return;
-    if (window.getSelection && String(window.getSelection())) return;
-    more.click();
-  });
+  if (!caracoleRows.linesHeard) {
+    caracoleRows.linesHeard = true;
+    document.addEventListener("click", (e) => {
+      const at = e.target instanceof Element ? e.target : null;
+      const item = at ? at.closest(".line") : null;
+      const more = item ? item.querySelector(":scope > .line-more") : null;
+      if (!more || at === more || item.closest(".selecting")) return;
+      const panel = document.getElementById(more.getAttribute("aria-controls") || "");
+      if (panel && panel.contains(at)) return;
+      const does = at.closest(OWN);
+      if (does && item.contains(does)) return;
+      if (window.getSelection && String(window.getSelection())) return;
+      more.click();
+    });
+  }
   const mainAction = (r) => (r.action instanceof Node ? r.action
     : r.action && typeof r.action === "object" ? link(r.action, "btn small primary", isWeb(r.action.href)) : null);
   // A dense list's line (``dense``): index.html's songs, under their artist's name. Its title, which opens what

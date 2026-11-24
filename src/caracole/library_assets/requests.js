@@ -66,7 +66,7 @@
       if (s && typeof s === "object" && ids.has(Number(s.id))) offered.set(String(s.display || ""), s);
     }
   }
-  const transcribed = new Set();  // the songs asked for from this tab
+  const transcribed = new Set();  // without library.js: the songs asked for from this tab
   let going = new Set();  // the requests that waited or ran in the last answer, which tell library.js once over
 
   const status = el("p", "reqs-status");
@@ -179,9 +179,12 @@
     return form;
   };
   // The song a request names when it is offered a transcription now: as its card offers it (library.js's word: not
-  // while a request of it waits or runs, nor once asked for), and not asked for from here; else null.
+  // while a request of it waits or runs, nor once asked for, here or on its card, until it reads the offer again once
+  // that request is over: a transcription that failed is offered again in both); without library.js, as the page was
+  // made, and not once asked for from here. Else null.
   const offeredFor = (name) => {
-    const s = lib && typeof lib.offeredSong === "function" ? lib.offeredSong(name) : offered.get(name) || null;
+    if (lib && typeof lib.offeredSong === "function") return lib.offeredSong(name);
+    const s = offered.get(name) || null;
     return s && !transcribed.has(Number(s.id)) ? s : null;
   };
   // The requests that offer one, by id, each its song's card: a song's newest that ended Ready, while none of the song

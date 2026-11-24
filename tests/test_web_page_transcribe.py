@@ -21,7 +21,7 @@ from helpers import cards
 from helpers.browser import CHROMIUM_MARKS, Browser, BrowserError
 from helpers.fake_ytdlp import FakeYtDlp
 from test_autochords_transcript import youtube_song
-from test_web_page_steps import bar_of, wait_for, words_of
+from test_web_page_steps import bar_of, driven, wait_for, words_of
 from test_web_page_youtube import serve
 
 import caracole.youtube_fetch as yf
@@ -51,6 +51,9 @@ class FakeTranscribe:
         self.ran: list[tuple[str, ...]] = []
         self.hold = threading.Event()
         self.fail = False
+        self.words_said: list[str] = []  # what the words say they do as they run, before the hold
+        self.vocals_said: list[str] = []  # what the vocals say they do, each said once ``vocals_go`` lets it on
+        self.vocals_go = threading.Semaphore(0)
         self.cfg = None
         self.song = None
 
@@ -86,8 +89,14 @@ class FakeTranscribe:
             return 0
         for name in ("song", "vocals"):
             stage(name, "running")
+            if name == "vocals":
+                for said in self.vocals_said:
+                    stage(name, "running", said)
+                    self.vocals_go.acquire(timeout=30)
             stage(name, "done", "in the book" if name == "song" else "sung from 9.3 s, 4 stretches")
         stage("words", "running")
+        for said in self.words_said:
+            stage("words", "running", said)
         self.hold.wait(30)
         if self.fail:
             stage("words", "failed", "the GPU failed: CUDA out of memory")
@@ -131,6 +140,7 @@ def transcriber(able, tmp_path):
     made = FakeTranscribe()
     made.cfg, made.song = able, offered(able, tmp_path)
     yield made
+    made.vocals_go.release(10)
     made.hold.set()
 
 
@@ -140,7 +150,8 @@ def live(able, transcriber):
     yield base, posted, queue
     server.shutdown()
     server.server_close()
-    transcriber.hold.set()  # a transcription still held lets go first: the queue stops at once
+    transcriber.vocals_go.release(10)  # a transcription still held lets go first: the queue stops at once
+    transcriber.hold.set()
     queue.stop()
 
 
@@ -210,6 +221,58 @@ def test_a_songs_card_offers_a_transcription_and_its_line_follows_it(able, live,
     assert browser.wait(f"{again} !== null && {again}.querySelector('.card-head') !== null")
     assert not browser.wait("document.querySelector('form.transcribe') !== null", timeout=1.5)
     assert len(posted) == 1
+
+
+def doing_of(song) -> str:
+    """The expression for the words beside the song's running bar: the step (its text, whether it is cut short), its
+    place (its text, whether it shows: under 400 px it is a screen reader's alone, the room what the step does'),
+    what it does (its text, whether it is cut short), and whether the bar is one row: the segments and what it does
+    centred on one line, within the song's line, no page wider than the screen."""
+    bar = json.dumps(f"{line(song)} .progress.barred")
+    item = json.dumps(line(song))
+    return (f"(() => {{ const b = document.querySelector({bar}); if (!b) return null; "
+            "const e = (s) => b.querySelector(s); "
+            "const cut = (s) => !!e(s) && e(s).scrollWidth > e(s).clientWidth; "
+            "const text = (s) => e(s) ? e(s).textContent : ''; "
+            "const r = (s) => e(s).getBoundingClientRect(); "
+            "const mid = (x) => x.top + x.height / 2; "
+            "const row = !!e('.step-doing') && Math.abs(mid(r('.step-segs')) - mid(r('.step-doing'))) <= 2 "
+            f"&& r('.step-doing').right <= document.querySelector({item}).getBoundingClientRect().right + 0.5 "
+            "&& document.documentElement.scrollWidth <= window.innerWidth; "
+            "return [[text('.step-at'), cut('.step-at')], [text('.step-count'), !!e('.step-count') "
+            "&& r('.step-count').width > 1], [text('.step-doing'), cut('.step-doing')], row]; })()")
+
+
+@pytest.mark.parametrize("width", [1280, 390, 360, 320])
+def test_the_bar_says_how_far_a_long_stage_is_beside_its_place(able, live, transcriber, tmp_path, width):
+    # The separator and Whisper take up to half an hour on a CPU: the bar says what the running stage says it does,
+    # the number first, after the step's place, in the bar's one row; on a phone, under 400 px, the step's place is a
+    # screen reader's alone, and what it does has its room: neither the step nor its number cut short. What it does
+    # is the eye's alone: a screen reader hears the step and its place change, not each window.
+    base, posted, _ = live
+    song = transcriber.song
+    transcriber.vocals_said = ["~12 min", "2 of ~12 min"]  # its first minute, then the next
+    transcriber.words_said = ["1:20 of 3:45"]
+    placed = width >= 400
+    page = driven(tmp_path, width)
+    try:
+        page.open(base)
+        card = opened(page, song)
+        page.click(card + ' form.transcribe button[type="submit"]')
+        posted.next(0)
+        wait_for(page, doing_of(song), [["Vocals", False], [" · 2 of 5", placed], [" · ~12 min", False], True])
+        wait_for(page, bar_of(line(song)), ["done", "running", "waiting", "waiting", "waiting"])
+        doing = json.dumps(line(song) + " .step-doing")
+        assert page.js(f"document.querySelector({doing}).getAttribute('aria-hidden')") == "true"
+        transcriber.vocals_go.release()
+        wait_for(page, doing_of(song), [["Vocals", False], [" · 2 of 5", placed], [" · 2 of ~12 min", False], True])
+        transcriber.vocals_go.release()
+        wait_for(page, doing_of(song), [["Words", False], [" · 3 of 5", placed], [" · 1:20 of 3:45", False], True])
+        transcriber.hold.set()
+        assert page.wait(f"{tone(song)} === 'ready'")
+        assert page.js(f"document.querySelector({doing})") is None
+    finally:
+        page.close()
 
 
 def test_a_sheet_from_a_video_that_found_no_lyrics_offers_it_at_once_with_no_reload(able, live, transcriber,
@@ -304,6 +367,36 @@ def test_a_ready_request_of_a_song_offered_when_the_page_loaded_offers_it_in_the
     assert browser.wait("[...document.querySelectorAll('.req-group.now .req-song')]"
                         f".some((n) => n.textContent === {json.dumps(DISPLAY)})")
     assert transcriber.ran[-1] == ("transcribe", "--progress", f"--song={DISPLAY}")
+
+
+def test_a_transcription_asked_in_the_requests_tab_that_failed_is_offered_there_again(able, live, transcriber,
+                                                                                      browser):
+    # Asked for from the Journal, then failed on the GPU: the song stays offered, and once the job is over the page
+    # reads the offer again and offers it again, in the Journal as on its card, with no reload, wherever it was asked.
+    base, posted, queue = live
+    song = transcriber.song
+    transcriber.fail = True
+    sheet, _ = queue.submit(f"Sheet from YouTube: {DISPLAY}", YOUTUBE_SHEET + song.key,
+                            youtube_sheet_steps(DISPLAY, "https://www.youtube.com/watch?v=XFkzRNyygfk"),
+                            display=DISPLAY)
+    over(queue, sheet.id)
+    item = f"#req-{sheet.id}"
+    offer = json.dumps(item + " form.transcribe")
+    browser.open(base + "#tab=requests")
+    browser.js("window.notReloaded = true")
+    assert browser.wait(f"document.querySelector({offer}) !== null")
+    browser.click(item + ' form.transcribe button[type="submit"]')
+    posted.next(0)
+    assert browser.wait(f"document.querySelector({offer}) === null")
+    transcriber.hold.set()
+    over(queue, sheet.id + 1)  # the transcription, failed
+    read_again(posted)
+    assert browser.wait(f"document.querySelector({offer}) !== null"), posted.read[-5:]
+    assert browser.js(NO_RELOAD)
+    browser.click("#tab-library")
+    card = opened(browser, song)
+    assert browser.wait(f"document.querySelector({json.dumps(card + ' form.transcribe')}) !== null")
+    assert browser.js(NO_RELOAD)
 
 
 def test_where_it_cant_run_no_card_offers_one(cfg, tmp_path, browser, monkeypatch):

@@ -582,6 +582,28 @@ def test_a_push_is_taken_by_caracole_peer_take_and_both_sides_then_agree(pair):
     assert comparison(phone, pusher)[1] == []
 
 
+def test_a_takes_render_stage_says_how_many_of_the_songs_taken_it_has_reached(pair, monkeypatch):
+    # A take of many songs renders for minutes: its render stage says which of them it is at ("12 of 20 songs"),
+    # which the Sync sheet and the request's line show while it runs (status.LONG_STAGES).
+    computer, phone, pusher, _ = pair
+    phone.song("Radiohead", "Creep", sheet=b"[Am]Creep")
+    phone.song("Oasis", "Wonderwall", sheet=b"[Em]Wonderwall")
+
+    def render_all(conn, cfg, overrides, *, song_ids=(), on_song=None, **kw):
+        assert on_song is not None
+        songs = sorted(song_ids)
+        for n, song_id in enumerate(songs, 1):
+            on_song(n, len(songs), None)
+
+    monkeypatch.setattr("caracole.render.render_all", render_all)
+    state, found = comparison(phone, pusher)
+    push_all(phone, pusher, state, found)
+    _, result = take_queued(computer, progress_lines=(events := []))
+    assert result.exit_code == 0, result.output
+    assert [(e["state"], e["detail"]) for e in events if e.get("stage") == "render"] == [
+        ("running", ""), ("running", "1 of 2 songs"), ("running", "2 of 2 songs"), ("done", "")]
+
+
 def test_a_unit_changed_on_the_computer_since_the_comparison_is_left_as_it_is(pair):
     from caracole.overrides import add_version, load_overrides, override_key
 

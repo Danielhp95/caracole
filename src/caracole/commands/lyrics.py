@@ -14,6 +14,7 @@ caracole serve's search bar sends once a query has settled (``--auto``, within i
 share of the hour's lookups), and its Ask LaCuerda button (``--progress``, a
 JSON line per event for the request's stages).
 As in the run,
+each says how far its client is into its budget while it goes (progress.py), and
 a provider cooling down after a block is left alone, and a block starts (or
 extends) its cooldown and sends one ntfy alert. Neither is a failure, and
 neither is a spent budget: each prints what happened and exits 0, as
@@ -947,7 +948,11 @@ def _provider_pass[T](
     budget). After a block, or a pass that did something
     (``ran``), it rewrites _todo.md and index.html, by overrides.toml as a lookup
     its client let go first in a pause left it (``_common.overrides_since``).
+    While it goes, its client's requests are counted against its budget (progress.py's
+    ``Ticker``: a live line on stderr on a terminal, a line a minute in the journal), the
+    line taken off before anything is printed.
     """
+    from caracole import progress
     from caracole.http import ProviderBlocked
 
     name = provider_name(provider)
@@ -960,9 +965,11 @@ def _provider_pass[T](
             return None
         run_id = run_id_for(now)
         handed = _common.handoffs()  # the client's first pause may let a lookup go first too
-        client = make_client(cfg, conn, provider, run_id, policy=policy)
+        ticker = progress.ticker()
+        client = make_client(cfg, conn, provider, run_id, policy=policy, ticker=ticker)
         try:
-            result = run(conn, client, now)
+            with ticker:
+                result = run(conn, client, now)
         except ProviderBlocked as e:
             state = record_block(conn, provider, now, str(e))
             message = (

@@ -8,7 +8,8 @@ found nothing lately, unless it has a human sheet, is ignored or has a purchase 
 ``--none`` writes "none" there, lets go of any audio the song has from YouTube, and asks
 YouTube nothing: it does so with YouTube off too, and for a song not in the library yet.
 Audio let go of with nothing to download (a human sheet came, a file is gone) rewrites
-the pages all the same.
+the pages all the same. Each yt-dlp run is counted against the budget on progress.py's ticker,
+as the step's are: a live line on a terminal, a line a minute in the journal.
 
 As the other steps' commands do, it leaves YouTube alone while it cools down after a
 block; a block starts (or extends) the cooldown and sends one ntfy alert, and like a
@@ -21,7 +22,8 @@ from ``caracole autochords``, which the caracole-autochords unit runs after each
 YouTube video does (youtube_sheet.py): the song added to wanted.txt if it isn't in the library, the video
 (``--url``, else the one under ``[youtube]``, else its search's pick) written there and its audio taken,
 its lyrics from LRCLIB, the chords from the audio, its PDF and viewer, then the pages; ``--progress`` adds a
-JSON line per stage, which caracole serve reads, as ``caracole get --progress`` does. It exits 0 once the
+JSON line per stage, which caracole serve reads, as ``caracole get --progress`` does; without it, what a long
+stage is doing goes on progress.py's ticker, as the pass's yt-dlp runs do. It exits 0 once the
 sheet is made, and for a block, a cooldown, a spent budget or a site's error, which wait; 1 for a song it
 won't make a sheet of, a video YouTube won't give, audio auto-chords can't read, or a caracole that can't
 make chords of the audio, which it says before it asks anything.
@@ -131,6 +133,7 @@ def _youtube(cfg: Config, display: str | None, url: str | None, none: bool) -> N
     from caracole.health import answered_any, get_state, is_cooling, record_block, record_ok
     from caracole.http import ProviderBlocked
     from caracole.overrides import OverridesError, add_youtube
+    from caracole.progress import ticker as make_ticker
     from caracole.youtube_fetch import route_problem, songs_for_youtube, tidy, youtube_pass
 
     if none and display is not None:  # asks YouTube nothing: written even with YouTube off
@@ -171,10 +174,16 @@ def _youtube(cfg: Config, display: str | None, url: str | None, none: bool) -> N
             return
         run_id = run_id_for(now)
         handed = _common.handoffs()  # the runner's first pause may let a lookup go first too
-        runner = make_youtube(cfg, conn, run_id)
+        ticker = make_ticker()  # each yt-dlp run counted: a live line on a terminal, a line a minute in the journal
+        runner = make_youtube(cfg, conn, run_id, ticker=ticker)
+
+        def said(song: Song, outcome: str, record: Record) -> None:
+            ticker.clear()  # the live line off, for the song's own
+            typer.echo(_line(song, outcome, record))
+
         try:
-            stats = youtube_pass(conn, runner, cfg, now, overrides=overrides, songs=songs,
-                                 on_song=lambda s, outcome, record: typer.echo(_line(s, outcome, record)))
+            with ticker:
+                stats = youtube_pass(conn, runner, cfg, now, overrides=overrides, songs=songs, on_song=said)
         except ProviderBlocked as e:
             state = record_block(conn, PROVIDER, now, str(e))
             message = (f"{e}\nNo more yt-dlp runs until {shown(state.cooldown_until)} (block #{state.strikes}). "
@@ -188,7 +197,9 @@ def _youtube(cfg: Config, display: str | None, url: str | None, none: bool) -> N
         if answered_any(conn, run_id, PROVIDER, runner.requests_made):  # runs that all failed are no good run
             record_ok(conn, PROVIDER, now)
         write_pages(conn, cfg, _common.overrides_since(cfg, overrides, handed), utcnow())
-    typer.echo(_totals(stats, runner.requests_made, cfg.provider(PROVIDER).budget))
+    totals = _totals(stats, runner.requests_made, cfg.provider(PROVIDER).budget)
+    ticker.finish(totals)  # the unit's status line, where one is told
+    typer.echo(totals)
     if stats.budget_exhausted:
         budget = cfg.provider(PROVIDER).budget
         typer.echo(f"YouTube's budget of {plural(budget, 'yt-dlp run')} is spent; the songs left wait for the next run.")
@@ -202,6 +213,7 @@ def _sheet(cfg: Config, display: str, url: str | None, *, progress: bool) -> Non
     its own; nothing is asked when this caracole can't make chords of the audio."""
     from caracole.commands.get import _Lines
     from caracole.overrides import OverridesError, override_key
+    from caracole.progress import ticker
     from caracole.youtube_fetch import route_problem
     from caracole.youtube_sheet import SheetRequest, make_sheet
 
@@ -214,12 +226,12 @@ def _sheet(cfg: Config, display: str, url: str | None, *, progress: bool) -> Non
         hint = f"; {NOT_BUILT}" if "auto-chords" in problem and "built without" in problem else ""
         fail(f"caracole makes no sheet from YouTube here: {problem}{hint}")
     artist, _, title = display.partition(" - ")
-    reporter = _Lines(cfg.library_dir, show=False, json_lines=progress)
-    result = make_sheet(cfg, SheetRequest(artist.strip(), title.strip(), url), reporter)
-    sent = ", ".join(f"{plural(n, 'yt-dlp run') if p == PROVIDER else plural(n, 'LRCLIB request')}"
-                     for p, n in result.requests.items() if n)
-    _common.staged_end(reporter, result, progress=progress, refused="No sheet made",
-                       done=f"Done in {result.seconds:.1f} s" + (f": {sent}." if sent else ", asking nothing."))
+    with _Lines(cfg.library_dir, show=False, json_lines=progress, ticker=None if progress else ticker()) as reporter:
+        result = make_sheet(cfg, SheetRequest(artist.strip(), title.strip(), url), reporter)
+        sent = ", ".join(f"{plural(n, 'yt-dlp run') if p == PROVIDER else plural(n, 'LRCLIB request')}"
+                         for p, n in result.requests.items() if n)
+        _common.staged_end(reporter, result, progress=progress, refused="No sheet made",
+                           done=f"Done in {result.seconds:.1f} s" + (f": {sent}." if sent else ", asking nothing."))
 
 
 NOT_SEARCHED = "Not searched: "

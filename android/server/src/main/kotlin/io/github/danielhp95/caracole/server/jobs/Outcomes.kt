@@ -235,8 +235,9 @@ object Outcomes {
     }
 
     /** What the library page draws under a song's request line (outcome.progress): a lookup's steps, every one it
-     * has from its start, and the step in hand ([inHand]), its place `at` and `count` ("3 of 7"), and `waits`, true,
-     * while that step waits for the book ([waitsForTheBook]); nothing for a request that runs no lookup, one queued or
+     * has from its start, and the step in hand ([inHand]), its place `at` and `count` ("3 of 7"), `doing`, what its
+     * running stage says it does, a long one ([Status.doing]: "heard 1:20 of 3:45"), and `waits`, true, while that
+     * step waits for the book ([waitsForTheBook]); nothing for a request that runs no lookup, one queued or
      * cancelled, one Ready, and one that hasn't run [BAR_AFTER] at [now] ([hasRun]). */
     fun progress(job: Job, line: Line, facts: SongFacts?, now: Instant = Instant.now()): Map<String, JsonElement> =
         progress(Shape(job), line, facts, now)
@@ -252,6 +253,8 @@ object Outcomes {
         if (at != null) {
             shown["at"] = JsonPrimitive(at)
             shown["count"] = JsonPrimitive("${at + 1} of ${chips.size}")
+            val told = if (job.state == Job.RUNNING) job.stages.firstOrNull { it.state == Job.RUNNING } else null
+            if (told != null && Status.doing(told)) shown["doing"] = JsonPrimitive(told.detail)
             if (job.state == Job.RUNNING && waitsForTheBook(job.stages)) shown["waits"] = JsonPrimitive(true)
         }
         return shown

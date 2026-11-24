@@ -110,6 +110,8 @@ SYNC_TOLERANCE_S = 2.0  # LRCLIB's own tolerance when it matches a duration
 STATUS_KEY = "autochords:status"  # kv: the last run, for the to-do page
 COLUMNS = "display"  # what a sheet's chord lines count, in its version's raw: display columns (merge._on_words)
 ERROR_CHARS = 300  # an error as the to-do page lists it: one line, if a long one
+# What ``autochords_pending`` tells its ``on_step`` as each step starts.
+STEPS = ("setting up the models", "hearing the chords", "finding the beats", "writing the sheet")
 TONE_SECONDS = 2.0
 TONE_HZ = (261.63, 329.63, 392.0)  # C major: C4, E4 and G4
 
@@ -179,6 +181,7 @@ def autochords_pending(
     overrides: Overrides | None = None,
     between: Callable[[], bool] | None = None,
     only: Collection[int] | None = None,
+    on_step: Callable[[str], None] | None = None,
 ) -> AutoStats:
     """Generate the auto sheets that are due, keep them in the library, and record the run.
 
@@ -197,22 +200,34 @@ def autochords_pending(
     ``only``: the ids of the songs to work on (``caracole autochords --song``, a sheet
     from a YouTube video); the others count nowhere, and the run's record keeps their
     failures as the last whole run left them.
+
+    Before each song it works on, it logs which, and how many of those due it is
+    ("Working out the chords of A - T (3 of 12)…"), a song taking minutes: the due
+    counted as it starts, which a lookup let in between two songs may change.
+
+    ``on_step`` is told each step as it starts, in a few words (``STEPS``): the models set
+    up, then each song's chords, beats and sheet, for a job that says how it goes.
     """
     stamp = (now or datetime.now(UTC)).astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     if overrides is None:
         overrides = load_overrides(cfg.overrides_file)
     stats = AutoStats()
+    told = on_step or (lambda said: None)
     models = _Models(cfg, recognizer, beats_fn)
-    songs = (s for s in list_songs(conn) if only is None or s.id in only)
+    songs = [s for s in list_songs(conn) if only is None or s.id in only]
+    due, worked = _count_due(conn, cfg, songs, overrides), 0
     for song, overrides in _songs_in_turn(conn, cfg, songs, overrides, between):
         failure = _known_failure(conn, song)  # first, so a failure goes when its file does
         if not song.audio_path or not _due(conn, cfg, song, overrides, failure, stats):
             continue
-        loaded = models.load(stats)
+        loaded = models.load(stats, told)
         if loaded is None:  # the models can't run: the song stays due
             stats.failed += 1
             continue
-        _generate(conn, cfg, song, loaded, stamp, stats)
+        worked += 1
+        due = max(due, worked)
+        log.info("Working out the chords of %s%s…", song.display, f" ({worked} of {due})" if due > 1 else "")
+        _generate(conn, cfg, song, loaded, stamp, stats, told)
     _record_run(conn, stats, stamp, only)
     return stats
 
@@ -235,6 +250,23 @@ def _songs_in_turn(conn: sqlite3.Connection, cfg: Config, songs: Iterable[Song],
             except KeyError:  # merged into another song meanwhile
                 continue
         yield song, overrides
+
+
+def _count_due(conn: sqlite3.Connection, cfg: Config, songs: Iterable[Song], overrides: Overrides) -> int:
+    """How many of ``songs`` are due now, for the "3 of 12" before each, as ``_due`` would find them, counting
+    nothing in a run's stats."""
+    n = 0
+    for song in songs:
+        if not song.audio_path or _known_failure(conn, song) is not None:
+            continue
+        try:
+            if _skip_reason(conn, song, overrides) is not None:
+                continue
+        except Exception:  # noqa: BLE001 - a song's bad data: ``_due`` says so as its turn comes
+            continue
+        if keeper_of(conn, cfg.library_dir, song, AUTO_SHEET) is None:
+            n += 1
+    return n
 
 
 def _due(conn: sqlite3.Connection, cfg: Config, song: Song, overrides: Overrides, failure: Failure | None,
@@ -280,10 +312,11 @@ class _Models:
     loaded: tuple[Recognizer, BeatsFn] | None = None
     unavailable: bool = False
 
-    def load(self, stats: AutoStats) -> tuple[Recognizer, BeatsFn] | None:
-        """The models, set up now for the first song due; None when they can't run, each reason one of the run's
-        errors in ``stats``, logged once."""
+    def load(self, stats: AutoStats, told: Callable[[str], None]) -> tuple[Recognizer, BeatsFn] | None:
+        """The models, set up now for the first song due (``told`` so); None when they can't run, each reason one of
+        the run's errors in ``stats``, logged once."""
         if self.loaded is None and not self.unavailable:
+            told(STEPS[0])
             try:
                 self.loaded = _models(self.cfg, self.recognizer, self.beats_fn)
             except ModelsUnavailable as e:
@@ -295,17 +328,18 @@ class _Models:
 
 
 def _generate(conn: sqlite3.Connection, cfg: Config, song: Song, models: tuple[Recognizer, BeatsFn], stamp: str,
-              stats: AutoStats) -> None:
+              stats: AutoStats, told: Callable[[str], None]) -> None:
     """The song's auto sheet, made from its audio and kept in the library, counted in ``stats``: generated, or
     failed, by its file (``_unreadable``: tried again once the file changes) or by caracole (``_error``: the song
-    stays due, and the run fails)."""
+    stays due, and the run fails); ``told`` each step as it starts."""
     video = youtube_audio(conn, song)  # audio youtube_fetch.py took, rather than a purchase
     try:
-        heard = _hear(song, *models)
+        heard = _hear(song, *models, told)
     except Exception as e:  # noqa: BLE001 - one file's problem must not stop the others
         stats.failed += 1
         stats.failures.append(_unreadable(conn, song, e, stamp))
         return
+    told(STEPS[3])
     try:
         made = _make_sheet(song, heard, source=_from_youtube(video), transcript=transcript_of(conn, song))
     except Exception as e:  # noqa: BLE001 - a bug laying it out is caracole's, never the file's: the song stays due
@@ -660,11 +694,13 @@ class _Heard:
     downbeats: Sequence[float]
 
 
-def _hear(song: Song, recognizer: Recognizer, beats_fn: BeatsFn) -> _Heard:
+def _hear(song: Song, recognizer: Recognizer, beats_fn: BeatsFn, told: Callable[[str], None]) -> _Heard:
     """The models over the song's audio file: what fails here is the file's (one that won't decode, say), which
     ``_unreadable`` records; what fails after it, laying out the sheet, is a bug of caracole's."""
     audio = Path(song.audio_path or "")
+    told(STEPS[1])
     segments = recognizer.recognize(audio)
+    told(STEPS[2])
     beats, downbeats = beats_fn(audio)
     return _Heard(audio, list(segments), beats, downbeats)
 

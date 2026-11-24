@@ -194,3 +194,17 @@ def test_the_command_imports_no_pass_when_it_registers():
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True,
                          env={"PYTHONPATH": subprocess_pythonpath(Path(__file__).resolve().parent.parent / "src")})
     assert out.stdout.strip() == "[]"
+
+
+def test_index_says_its_requests_against_its_budget_while_it_goes(tmp_path, sites, monkeypatch):
+    # On a terminal, a live line on stderr; stdout keeps its report alone, as before.
+    from helpers.screens import on_screen
+
+    screen = on_screen(monkeypatch)
+    result = run(tmp_path, "--index", "--budget", "8", delay=1)
+    assert result.exit_code == 0, result.output
+    shown = screen.shown()
+    assert shown[0].startswith("gametabs.net · 1 of up to 8 requests  up to about ")
+    assert shown[-1] == "gametabs.net · 8 of up to 8 requests"
+    assert screen.getvalue().endswith("\r")  # taken off before the report
+    assert result.stdout.splitlines()[0] == "Index: gametabs.net's 6 sitemaps read."

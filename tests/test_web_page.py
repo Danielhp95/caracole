@@ -462,6 +462,52 @@ def test_the_list_of_requests_is_a_pill_that_opens_upwards(serve, cfg, conn, tmp
     assert tray["expanded"] == "true" and tray["list"][1] <= tray["head"][0] + 1, tray  # open: above its head
 
 
+# The list of requests opened, then Filter's popover over it: whether they overlap, and each of the popover's buttons
+# whose middle it shows that isn't the topmost there (the tray's, a tap on it landing on the tray).
+FILTER_OVER_THE_TRAY = """
+const opened = () => {
+  const tray = document.getElementById("tray");
+  if (tray.hidden || !/· done/.test(tray.textContent)) return setTimeout(opened, 50);
+  document.getElementById("tray-toggle").click();
+  document.getElementById("filter").click();
+  const panel = document.getElementById("filter-panel");
+  const p = panel.getBoundingClientRect(), t = tray.getBoundingClientRect();
+  const overlap = Math.min(p.right, t.right) > Math.max(p.left, t.left) &&
+    Math.min(p.bottom, t.bottom) > Math.max(p.top, t.top);
+  const covered = [...panel.querySelectorAll("button")].filter((b) => b.checkVisibility()).filter((b) => {
+    const r = b.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+    if (y <= p.top || y >= p.bottom) return false;  // scrolled out of the popover's sight
+    const hit = document.elementFromPoint(x, y);
+    return !(hit && panel.contains(hit));
+  }).map((b) => b.textContent.trim());
+  document.body.setAttribute("data-over", JSON.stringify({ open: panel.open, modal: panel.matches(":modal"), overlap,
+    covered, boxes: [p, t].map((b) => [b.left, b.top, b.right, b.bottom].map(Math.round)) }));
+};
+opened();
+"""
+
+
+@pytest.mark.parametrize("size", ["1280,640", "900,700"])
+def test_filters_popover_is_over_the_list_of_requests(serve, cfg, conn, tmp_path, size):
+    # The popover is the search bar's, which sticks over the page: opened over the list of requests in the corner, it
+    # is drawn over it and takes its own taps, the requests' song names (links to their sheets) under it. Songs with
+    # something for each instrument and a key (test_library_text_size's), so that the popover shows all it has.
+    from test_library_text_size import songs
+
+    songs(conn, cfg)
+    for artist, title in (("Muse", "Hysteria"), ("Oasis", "Wonderwall"), ("Muse", "Uprising")):
+        song = add_song(conn, artist, title)
+        update_song(conn, song.id, match_decision="accept", match_artist_key=artist.lower(),
+                    match_song_key=title.lower())
+    script = clicks_in_turn("Hysteria", "Wonderwall", "Uprising").replace(
+        "next();\n})();", "next();\n" + FILTER_OVER_THE_TRAY + "})();")
+    url = serve(FakeCaracole(cfg), script)
+
+    over = attribute(dump_dom(url, tmp_path, size=size), "data-over")
+    assert over["open"] and not over["modal"] and over["overlap"], json.dumps(over)
+    assert over["covered"] == [], json.dumps(over)
+
+
 def test_a_failed_request_says_why_in_one_sentence_with_its_details(serve, cfg, conn, tmp_path):
     creep = add_song(conn, "Radiohead", "Creep")
     update_song(conn, creep.id, match_decision="accept", match_artist_key="radiohead", match_song_key="creep")

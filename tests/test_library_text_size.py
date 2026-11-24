@@ -10,6 +10,7 @@ which is what ``--sp`` reads (``1rlh / 16``); PinchTest, on a device, pinches th
 
 from __future__ import annotations
 
+import json
 import re
 
 import pytest
@@ -18,7 +19,7 @@ from helpers.library_songs import hotel_california, with_versions
 from test_library_assets import text_of
 from test_library_card import SERVED, run
 from test_library_filter import sheet as ug_sheet
-from test_library_page import attribute_of, put
+from test_library_page import attribute_of, page, put
 from test_library_plays import harmonica_song
 
 from caracole.library_page import STYLESHEETS
@@ -127,6 +128,51 @@ def test_past_the_rooms_size_a_line_stays_one_row_on_a_phone_its_key_on_the_scre
     assert drawn["opened"] is True and drawn["wide"] is True
 
 
+# Each folded or flat line's title's width, and the least library.css gives it on a phone, 64 of the list's text's
+# pixels less the gap (a probe sized so in the list, whose --sp Select mode caps).
+TITLES = r"""
+const titles = () => {
+  const list = document.getElementById("list"), probe = document.createElement("div");
+  probe.style.width = "calc(64 * var(--sp) - 6px)";
+  list.append(probe);
+  const least = probe.getBoundingClientRect().width;
+  probe.remove();
+  return Array.from(document.querySelectorAll("#list section.artist.folded article.line, #list section.flat article.line"))
+    .map((line) => ({ title: line.querySelector("h3").textContent, least,
+                      width: line.querySelector("h3").getBoundingClientRect().width }));
+};
+"""
+
+
+@pytest.mark.parametrize("width", [390, 360])
+@pytest.mark.parametrize("lh", ["24px", "32px"], ids=["150 %", "200 %"])
+def test_in_select_mode_a_phones_line_keeps_its_titles_least_and_its_key_on_the_screen(conn, cfg, tmp_path, width,
+                                                                                       lh):
+    # Select mode's box beside each line takes room from the title: its columns in the text's pixels, as library.css's,
+    # never in rem (a title cut to 58 px at 150 %), and the box's room taken from what the text's pixel may grow to,
+    # so the line keeps its title's least, its buttons and its key on the screen, by artist and by title.
+    songs(conn, cfg)
+    script = LINES + TITLES + r"""
+    document.documentElement.style.setProperty("line-height", "%s");
+    document.body.classList.add("selecting");
+    const byArtist = { lines: lines(), titles: titles() };
+    const sort = document.getElementById("sort");
+    sort.value = "title";
+    sort.dispatchEvent(new Event("change"));
+    document.body.classList.add("selecting");
+    const byTitle = { lines: lines(), titles: titles() };
+    note("lines", { byArtist, byTitle, wide: document.documentElement.scrollWidth <= innerWidth });""" % lh
+    drawn = attribute_of(run(conn, cfg, tmp_path, script, controls=SERVED, size=f"{width},800", touch=True),
+                         "data-lines")
+    for by in ("byArtist", "byTitle"):
+        assert [line for line in drawn[by]["lines"] if not (line["fits"] and line["within"])] == [], (by, drawn)
+        assert drawn[by]["titles"] and [t for t in drawn[by]["titles"] if t["width"] < t["least"] - 0.5] == [], (
+            by, drawn)
+    assert {t["title"] for t in drawn["byTitle"]["titles"]} == {"Creep", "Hotel California", "Hysteria",
+                                                               "Take It Easy"}
+    assert drawn["wide"] is True
+
+
 DECLARATIONS = re.compile(r"(?:^|[;{])\s*((?:font|font-size|line-height)\s*:[^;}]*)")
 
 
@@ -138,3 +184,66 @@ def test_the_texts_pixel_sizes_boxes_never_a_text_or_its_line_height():
              for name in STYLESHEETS}
     assert {name: ds for name, ds in found.items() if ds} == {}
 
+
+
+# A band's line's title, its buttons, its key and the line: their widths and right edges, and how many rows its buttons
+# take, at the root's line height ``lh``, as the list draws it and in Select mode.
+BAND_TITLE = r"""
+window.bandLine = (lh, selecting) => {
+  const line = [...document.querySelectorAll("#list .line")].find((l) => l.querySelector("h3").textContent ===
+    "Hotel California");
+  const r = (n) => n.getBoundingClientRect();
+  const sp = parseFloat(getComputedStyle(document.documentElement).lineHeight) / 16;
+  const key = line.querySelector(":scope > .line-key");
+  const plays = Array.from(line.querySelectorAll(".line-plays > .play"));
+  return { lh, selecting, band: !line.closest("section.artist").classList.contains("folded"),
+    title: Math.round(r(line.querySelector("h3")).width), least: 64 * sp,
+    under: line.classList.contains("plays-under"), plays: plays.length,
+    rows: new Set(plays.map((p) => Math.round(r(p).top))).size,
+    fits: r(key).right <= r(line).right + 0.5 && r(line).right <= innerWidth + 0.5 &&
+      plays.every((p) => r(p).right <= r(line).right + 0.5) };
+};
+"""
+FRAMES = "new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(done))))"
+
+
+@pytest.mark.parametrize(("size", "touch"), [("720,400", True), ("844,390", True), ("1024,768", True),
+                                             ("1180,820", True), ("800,600", False)])
+def test_from_720_px_a_bands_line_keeps_its_title_whatever_its_buttons_take(conn, cfg, tmp_path, size, touch):
+    # From 720 px a band's line has its buttons in a column of their own: grown with the text (a landscape phone, a
+    # tablet, the app's pinch, to 250 %), they never take the title's 64 of the text's pixels, so the song's name
+    # never goes, in Select mode too; the key stays on the line; and where they would wrap beside the title, they go
+    # under it (library.js placePlays: plays-under, placed again as the text's size or Select changes), never one a
+    # row in their column. Each read once the page has placed its lines (a frame after the change).
+    from helpers.browser import Browser, BrowserError
+
+    from caracole.library_page import write_library_page
+
+    songs(conn, cfg)
+    url = write_library_page(cfg.library_dir, page(conn, cfg)).as_uri()
+    width, height = (int(n) for n in size.split(","))
+    try:
+        b = Browser(tmp_path / "chrome", width=width, height=height)
+    except BrowserError as e:
+        pytest.skip(f"chromium couldn't run: {e}")
+    drawn = []
+    try:
+        if touch:
+            b.send("Emulation.setTouchEmulationEnabled", enabled=True, maxTouchPoints=5)
+            b.send("Emulation.setEmulatedMedia", features=[{"name": "pointer", "value": "coarse"}])
+        b.open(url)
+        assert b.wait("document.querySelectorAll('#list article.line').length === 4")
+        b.js(BAND_TITLE)
+        for selecting in (False, True):
+            for lh in ("16px", "32px", "40px"):
+                b.js(f"document.documentElement.style.setProperty('line-height', '{lh}'); "
+                     f"document.body.classList.toggle('selecting', {json.dumps(selecting)})")
+                b.js(FRAMES)
+                drawn.append(b.js(f"bandLine('{lh}', {json.dumps(selecting)})"))
+    finally:
+        b.close()
+    said = json.dumps(drawn)
+    assert all(m["band"] for m in drawn), said
+    assert [m for m in drawn if m["title"] < m["least"] - 0.5 or not m["fits"]] == [], said
+    assert [m for m in drawn if m["plays"] > 1 and m["rows"] >= m["plays"]] == [], said  # never one a row
+    assert [m for m in drawn if not m["under"] and m["rows"] > 1] == [], said  # wrapped: under the title instead

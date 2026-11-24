@@ -12,7 +12,11 @@ ran. So a job of other commands reads the same way:
   UG…" ("Fetching from LaCuerda…" while its sheet stage says it
   asks LaCuerda, ``get.SHEET_FROM``), or "Waiting for the book…"
   while its lock is held by a nightly run that lets it go first at its next
-  pause.
+  pause. A stage that takes minutes (``LONG_STAGES``: a sheet from a YouTube
+  video's audio and chords, a transcription's vocals, words and chords, a
+  sync's indexes and pages, an index merge) puts what it says it does after
+  its line, as it goes: "Transcribing the lyrics · 1:20 of 3:45…", so that a
+  line of half an hour moves.
 - **Cancelled**: taken out of the queue before it ran (``JobQueue.cancel``),
   whatever it was for.
 - **Failed**: the error its failing command gave, in one short sentence (the
@@ -143,6 +147,12 @@ INDEX_MERGE_KIND = "index-merge"  # ``caracole index merge --progress``: another
 # How each says it is done.
 _PEER_DONE = {"sync": "Shared", "peer-push": "Taken", "peer-pull": "Taken", INDEX_MERGE_KIND: "Merged"}
 _WAITING = "waiting for the book"  # how get.py's song stage begins while the lock is held
+# The stages that take minutes and say how far they are while they run: their line says it after its words, and
+# for a song's job the library page's bar beside the step (outcome.py ``progress``'s ``doing``). A sheet from a
+# YouTube video's audio and chords and a transcription's vocals, words and chords (staged.py ``_doing``); and a sync's
+# or an import's indexes (commands/peer.py ``_merging``), the phone's copy of the computer's pages, a take's or an
+# import's pages (commands/peer.py ``_rendering``), and an index merge (commands/index.py ``Merging``).
+LONG_STAGES = ("audio", "vocals", "words", "chords", "index", "mirror", "merge", "render")
 _SHEET_LINES = {said: f"Fetching {said}" for said in SHEET_FROM.values()}  # a running sheet stage's, by its site
 # How ``caracole lacuerda --artist`` and ``--search`` end, by what LaCuerda answered, and the tone of the line.
 _READ_TONES = {"Read: ": "added", "Not found: ": "missing", "Not read: ": "waiting",
@@ -365,7 +375,16 @@ def _stage_line(stages: list[Stage], *, new: bool = False) -> str:
         return f"{_SHEET_LINES[stage.detail]}…"
     if stage.state == "running" and stage.name == "songbooks" and stage.detail:
         return f"Remaking songbook {stage.detail}…"
+    if doing(stage):
+        return f"{STAGE_LINES.get(stage.name, stage.label)} · {stage.detail}…"
     return f"{STAGE_LINES.get(stage.name, stage.label)}…"
+
+
+def doing(stage: Stage) -> bool:
+    """Whether ``stage`` is a long one (``LONG_STAGES``) that says what it does while it runs, and not that it waits
+    for the book."""
+    return (stage.state == "running" and stage.name in LONG_STAGES and bool(stage.detail)
+            and not stage.detail.startswith(_WAITING))
 
 
 def _stage_failure(stages: list[Stage]) -> str | None:

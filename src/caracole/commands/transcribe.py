@@ -4,7 +4,8 @@
 switched on missed (transcript.py ``why_not_offered``): its vocals separated by demucs-rs, its words heard by Whisper
 large-v3 on the full mix, those outside the singing dropped, the rest kept as its transcript (never as its lyrics),
 then its auto sheet made again with the chords over them, its PDF and viewer, and the pages (transcribe_job.py).
-``--progress`` adds a JSON line per stage, which caracole serve reads, as ``caracole get --progress`` does.
+``--progress`` adds a JSON line per stage, which caracole serve reads, as ``caracole get --progress`` does; without it,
+what a long stage is doing is a live line on a terminal and a line a minute in the journal (progress.py ``ticker``).
 
 It takes caracole's lock as asked for now, and hands it to a waiting lookup before each long stage. It exits 0 once
 the sheet is made; 1 for a song not offered a transcription, for no singing heard, for audio Whisper can't read, for
@@ -46,6 +47,7 @@ def _transcribe(cfg: Config, display: str, *, progress: bool) -> None:
     nothing is done when this caracole transcribes nothing."""
     from caracole.commands.get import _Lines
     from caracole.overrides import OverridesError, override_key
+    from caracole.progress import ticker
     from caracole.transcribe_job import TranscribeRequest, make_transcript
     from caracole.youtube_fetch import transcribe_problem
 
@@ -57,7 +59,12 @@ def _transcribe(cfg: Config, display: str, *, progress: bool) -> None:
     if problem is not None:
         fail(f"caracole transcribes nothing here: {problem}")
     artist, _, title = display.partition(" - ")
-    reporter = _Lines(cfg.library_dir, show=False, json_lines=progress)
-    result = make_transcript(cfg, TranscribeRequest(artist.strip(), title.strip()), reporter)
-    staged_end(reporter, result, progress=progress, refused="No transcript made",
-               done=f"Done in {result.seconds:.1f} s.")
+    with _Lines(cfg.library_dir, show=False, json_lines=progress, ticker=None if progress else ticker()) as reporter:
+        result = make_transcript(cfg, TranscribeRequest(artist.strip(), title.strip()), reporter)
+        if not result.transcript_kept:
+            stopped = "No transcript made"
+        elif result.states.get("chords") == "done":  # a bug after the sheet over it was kept
+            stopped = "Transcript and sheet kept"
+        else:
+            stopped = "Transcript kept; no sheet made"
+        staged_end(reporter, result, progress=progress, refused=stopped, done=f"Done in {result.seconds:.1f} s.")

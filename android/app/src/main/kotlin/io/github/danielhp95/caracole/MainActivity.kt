@@ -54,24 +54,25 @@ import java.net.URI
 import kotlin.coroutines.resume
 
 /**
- * The library screen: a WebView showing the phone's own caracole, its server on `http://127.0.0.1:8738` (the library
- * page, and the mirror's pages, caracole's own, unchanged, at their paths on caracole serve: [Links]), with a small
- * bar (the page's title; the sync button, which opens the library page's sync sheet; ⋮ with Library and Settings)
- * and the unattended sync's line under it. An intent's [SHEET] (Settings' Export and Import a file, the notification
- * of a sync that left conflicts) opens the sheet at that flow ([SheetAddress]). The WebView carries the launch's
- * cookie and loads that exact origin alone. A pinch sizes the pages' text ([pinchToSize]), and shows the size it is
- * at over the page while it lasts ([sizeLabel]). A first start with no computer set and no site's index offers the
- * site catalogues once ([offerCatalogues]), before Settings opens.
+ * The library screen: a WebView showing the phone's own caracole, its server on `http://127.0.0.1:8738` (a debug
+ * build's 8739, [Caracole.PORT]; the library page, and the mirror's pages, caracole's own, unchanged, at their paths on
+ * caracole serve: [Links]), with a small bar (the page's title; the sync button, which opens the library page's sync
+ * sheet; ⋮ with Library and Settings) and the unattended sync's line under it. An intent's [SHEET] (Settings' Export
+ * and Import a file, the notification of a sync that left conflicts) opens the sheet at that flow ([SheetAddress]). The
+ * WebView carries the launch's cookie and loads that exact origin alone. A pinch sizes the pages' text ([pinchToSize]),
+ * and shows the size it is at over the page while it lasts ([sizeLabel]). A first start with no computer set and no
+ * site's index offers the site catalogues once ([offerCatalogues]), once the opening screen is gone, before Settings
+ * opens; until answered (Back is Not now), and gone once a computer is set.
  */
 class MainActivity : Activity() {
     private lateinit var web: WebView
     private lateinit var status: TextView
     private lateinit var title: TextView
     private lateinit var opening: OpeningScreen
-    /** The first start's offer of the site catalogues (SiteCatalogues.offers). */
+    /** The first start's offer of the site catalogues (SiteCatalogues.firstStart): its card, and where it stands
+     * ([CatalogueOffer]: shown once the opening screen is gone, Back its Not now, gone once a computer is set). */
     private lateinit var offer: View
-    /** Whether Settings opens once the offer is answered (a first start with nothing set up). */
-    private var offerThenSettings = false
+    private val offerState = CatalogueOffer()
     /** Where links go, once the server has started (the WebView's client reads it on its own threads). */
     @Volatile private var links: Links? = null
     /** The server's files read in this process, once it has started (the WebView's client reads it on its own
@@ -112,8 +113,8 @@ class MainActivity : Activity() {
         title = findViewById(R.id.title)
         opening = OpeningScreen(findViewById(R.id.loading))
         offer = findViewById(R.id.catalogue_offer)
-        findViewById<View>(R.id.offer_download).setOnClickListener { answerOffer(download = true) }
-        findViewById<View>(R.id.offer_not_now).setOnClickListener { answerOffer(download = false) }
+        findViewById<View>(R.id.offer_download).setOnClickListener { offerState.answer(download = true)?.let(::answered) }
+        findViewById<View>(R.id.offer_not_now).setOnClickListener { offerState.answer(download = false)?.let(::answered) }
         settings = Settings(this)
         alphaTab = AlphaTabAssets(this)
         chooser = FileChooser(this)
@@ -222,46 +223,84 @@ class MainActivity : Activity() {
         val first = saved == null && page == null && sheet == null
         val setUp = settings.server.isNotBlank() || Caracole.mirror(this).manifest() != null
         if (saved?.getBoolean(OFFERING) == true) {
-            showOffer(thenSettings = saved.getBoolean(OFFER_SETTINGS))
+            offerState.restore(saved.getBoolean(OFFER_SETTINGS))
+            showOffer()
         } else if (first && withContext(Dispatchers.IO) { offerCatalogues(phone) }) {
-            showOffer(thenSettings = !setUp)
+            offerState.offer(thenSettings = !setUp)
+            showOffer()
         } else if (first && !setUp) {
             openSettings()
         }
     }
 
     /**
-     * Whether the first start offers the site catalogues ([SiteCatalogues.offers]: no computer set, no site's index,
-     * never offered), kv [SiteCatalogues.OFFERED] written as it is offered, so it is offered once; false when the
-     * database can't say.
+     * Whether the first start offers the site catalogues ([SiteCatalogues.firstStart]: no computer set, never offered,
+     * no site's index, looked at last). kv [SiteCatalogues.OFFERED] is written once it is answered ([answered]), so
+     * a start that ends before (the app swiped away) offers it again; or here, once a site's index is found there
+     * (decided: no later start looks again), so a start counts no table once it is decided. False when the database
+     * can't say.
      */
     private fun offerCatalogues(phone: Phone): Boolean = try {
         val db = phone.parts.database
-        val offers = db.read { SiteCatalogues.offers(settings.server, TabCounts.of(it), it.kvGet(SiteCatalogues.OFFERED)) }
-        if (offers) db.writeBlocking { it.kvSet(SiteCatalogues.OFFERED, Stamps.now()) }
-        offers
+        val start = db.read { d ->
+            SiteCatalogues.firstStart(settings.server, d.kvGet(SiteCatalogues.OFFERED)) {
+                TabCounts.of(d).values.any { it > 0 }
+            }
+        }
+        if (start == SiteCatalogues.FirstStart.DECIDED) db.writeBlocking { it.kvSet(SiteCatalogues.OFFERED, Stamps.now()) }
+        start == SiteCatalogues.FirstStart.OFFER
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
         false
     }
 
-    private fun showOffer(thenSettings: Boolean) {
-        offerThenSettings = thenSettings
-        offer.visibility = View.VISIBLE
+    /** The offer shown once the opening screen is gone (never live under the logo, nor drawn over it), Back answering
+     * it Not now. */
+    private fun showOffer() {
+        opening.whenGone {
+            if (!offerState.openingGone()) return@whenGone
+            offer.visibility = View.VISIBLE
+            offerBack(true)
+        }
     }
 
     /**
-     * The offer answered: Download queues the catalogues' job and opens Settings, whose row follows it (and asks
-     * before a download on mobile data); Not now opens Settings only where a first start would have.
+     * The offer answered ([CatalogueOffer.Answer]): the card gone, kv [SiteCatalogues.OFFERED] written, so no start
+     * offers it again; Download queues the catalogues' job; Settings opened where the answer says (Download's, whose
+     * row follows the job and asks before a download on a metered network; Not now's only where a first start would
+     * have). Download asks to show notifications (from Android 13), so that the download's, with its bar, shows: in
+     * Settings, which it opens, so that the question is never left under it; here when it opens none.
      */
-    private fun answerOffer(download: Boolean) {
+    private fun answered(answer: CatalogueOffer.Answer) {
+        val download = answer.download
         offer.visibility = View.GONE
+        offerBack(false)
+        if (download && !answer.openSettings) askToNotify()
         val app = applicationContext
         screen.launch {
-            if (download) withContext(Dispatchers.IO) { SiteCatalogues.queue(Caracole.phone(app), meteredOk = false) }
-            if (download || offerThenSettings) openSettings()
+            withContext(Dispatchers.IO) {
+                guarded<Unit>("the catalogues' offer couldn't be answered") {
+                    val phone = Caracole.phone(app)
+                    phone.parts.database.writeBlocking { it.kvSet(SiteCatalogues.OFFERED, Stamps.now()) }
+                    if (download) SiteCatalogues.queue(phone, meteredOk = false)
+                }
+            }
+            if (answer.openSettings) openSettings(askToNotify = download)
         }
+    }
+
+    /** Back while the offer shows is its Not now (from Android 13 a callback over the WebView's; before, onBackPressed). */
+    private val offerBackCallback: Any? =
+        if (Build.VERSION.SDK_INT >= 33) OnBackInvokedCallback { offerState.back()?.let(::answered) } else null
+    private var offerBackRegistered = false
+
+    private fun offerBack(want: Boolean) {
+        if (Build.VERSION.SDK_INT < 33 || want == offerBackRegistered) return
+        val callback = offerBackCallback as OnBackInvokedCallback
+        if (want) onBackInvokedDispatcher.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_OVERLAY, callback)
+        else onBackInvokedDispatcher.unregisterOnBackInvokedCallback(callback)
+        offerBackRegistered = want
     }
 
     /** A song shared to the app while the screen was open (MainActivity is single-task): its page; or the sync sheet
@@ -291,6 +330,9 @@ class MainActivity : Activity() {
         super.onResume()
         pinch.set(settings.textZoom) // as Settings' Reset may have left it
         if (!shown && origin != null) showLibrary()
+        // A computer set meanwhile (⋮ › Settings while the offer waited): the offer, made to a phone with none, is
+        // moot, and goes, opening nothing.
+        offerState.resumed(settings.server)?.let(::answered)
     }
 
     override fun onStart() {
@@ -306,9 +348,9 @@ class MainActivity : Activity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        if (offer.visibility == View.VISIBLE) {
+        offerState.saved()?.let { thenSettings ->
             outState.putBoolean(OFFERING, true)
-            outState.putBoolean(OFFER_SETTINGS, offerThenSettings)
+            outState.putBoolean(OFFER_SETTINGS, thenSettings)
         }
         val gone = goneAt
         if (gone != null) {  // the renderer died, its WebView with it: the page it showed, to open again
@@ -323,10 +365,17 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        // In the opening too (Back, a recreation): its shine stops with the screen, and the start, which goes on in
+        // the process, shows nothing on it.
+        opening.stop()
+        offerBack(false)
         screen.cancel()
         web.destroy()
         super.onDestroy()
     }
+
+    /** Whether the opening screen's shine runs (a device test's). */
+    internal val openingShines: Boolean get() = opening.shining
 
     /** A page of the phone's server by its path and query ("/share?text=…", already encoded), once it has started. */
     private fun showPage(page: String) {
@@ -367,15 +416,19 @@ class MainActivity : Activity() {
         shown = true
     }
 
-    /** Android 13 and later show the notification of a sync that runs (SyncService), and of one that left conflicts,
-     * only once asked; it runs either way. */
+    /** Android 13 and later show the notification of a job that runs (SyncService: a sync, the site catalogues'
+     * download), and of a sync that left conflicts, only once asked; it runs either way. */
     private fun askToNotify() {
         if (Build.VERSION.SDK_INT < 33) return
         if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return
         requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), NOTIFY)
     }
 
-    private fun openSettings() = startActivity(Intent(this, SettingsActivity::class.java))
+    /** Settings; with [askToNotify], asking to show notifications as it opens (SettingsActivity.ASK_TO_NOTIFY). */
+    private fun openSettings(askToNotify: Boolean = false) {
+        offerState.settingsSeen()  // the offer's Not now needn't open it again
+        startActivity(Intent(this, SettingsActivity::class.java).putExtra(SettingsActivity.ASK_TO_NOTIFY, askToNotify))
+    }
 
     private fun menu(anchor: View) {
         val popup = PopupMenu(this, anchor)
@@ -391,16 +444,18 @@ class MainActivity : Activity() {
     }
 
     /**
-     * The unattended sync's line ([Syncs.run]): "Syncing with the computer…" while it runs; at its end, for a few
-     * seconds, what it came to in its own words ("Up to date: 1 taken", "2 changed on both sides: tap Sync to choose",
-     * or why it failed). A sync from the sheet says how it goes in the sheet.
+     * The unattended sync's line ([Syncs.run]): "Syncing with the computer…" while it runs, then the stage it is at and
+     * what that says ("Syncing with the computer · Updating the indexes · …"); at its end, for a few seconds, what it
+     * came to in its own words ("Up to date: 1 taken", "2 changed on both sides: tap Sync to choose", or why it
+     * failed). A sync from the sheet says how it goes in the sheet.
      */
     private fun show(state: SyncState) {
         hiding?.cancel()
+        status.maxLines = 1  // a sync's line, its words changing as it goes: one line, never the bar's height changing
         when (state) {
             SyncState.Idle -> status.visibility = View.GONE
             is SyncState.Running -> {
-                status.text = getString(R.string.syncing)
+                status.text = state.doing?.let { getString(R.string.syncing_doing, it) } ?: getString(R.string.syncing)
                 status.visibility = View.VISIBLE
             }
             is SyncState.Ended -> {
@@ -434,15 +489,17 @@ class MainActivity : Activity() {
         screen.launch { Exports.share(this@MainActivity, files, url, disposition) }
     }
 
-    /** A line in the status bar, kept until the next sync's. */
     /** The opening screen (OpeningScreen), shown from the app's start until its first page is drawn or a message is said. */
     private fun loaded() {
         opening.done()
     }
 
+    /** What stops the app from opening ("Couldn't start · …"), in the status bar whole, on as many lines as it takes:
+     * the bar is one line, ellipsized, for a sync's words alone, which change as it goes. */
     private fun say(text: String) {
         loaded()
         hiding?.cancel()
+        status.maxLines = Int.MAX_VALUE
         status.text = text
         status.visibility = View.VISIBLE
     }
@@ -519,7 +576,8 @@ class MainActivity : Activity() {
             val files = files ?: return notFound()
             Log.i(TAG, "an export asked by the WebView itself: read here, once")
             return try {
-                when (val got = Exports.copy(files, url, File(cacheDir, Exports.FOLDER))) {
+                when (val got = Exports.copy(files, url, File(cacheDir, Exports.FOLDER),
+                                             starting = Exports.readying(this@MainActivity))) {
                     is Exports.Copied.File -> WebResourceResponse(Exports.TYPE, null, 200, "OK",
                         mapOf("Content-Disposition" to got.disposition), ByteArrayInputStream(ByteArray(0)))
                     // The listener hears no download, and says nothing: the refusal is said here.
@@ -583,7 +641,12 @@ class MainActivity : Activity() {
     @SuppressLint("GestureBackNavigation")
     @Deprecated("Android 13 and later use backCallback")
     override fun onBackPressed() {
-        if (web.canGoBack()) web.goBack() else @Suppress("DEPRECATION") super.onBackPressed()
+        val answer = offerState.back()
+        when {
+            answer != null -> answered(answer)
+            web.canGoBack() -> web.goBack()
+            else -> @Suppress("DEPRECATION") super.onBackPressed()
+        }
     }
 
     /**

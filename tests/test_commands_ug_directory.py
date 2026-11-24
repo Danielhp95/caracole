@@ -107,3 +107,17 @@ def test_link_and_directory_are_one_or_the_other(tmp_path, site):
     assert run(tmp_path, "--directory", "--link", "https://tabs.ultimate-guitar.com/tab/1").exit_code == 2
     assert run(tmp_path, "--link", "https://tabs.ultimate-guitar.com/tab/1", "--budget", "3").exit_code == 2
     assert not site.requests
+
+
+def test_the_pass_says_how_far_it_is_while_it_goes_and_its_report_after(tmp_path, site, monkeypatch):
+    from helpers.screens import on_screen
+
+    screen = on_screen(monkeypatch)
+    result = run(tmp_path, "--directory")
+    assert result.exit_code == 0, result.output
+    shown = screen.shown()
+    assert shown[0] == "UG's listings · 0 of about 27 pages · 0 requests"
+    assert [line for line in shown if line.startswith("UG's listings · 28 of about 28 pages · letter ")]
+    assert shown[-1].startswith("UG's bare artists' pages · 1 of 1 · ")
+    assert screen.getvalue().endswith("\r")  # taken off before the report, which is stdout's
+    assert "UG's listings: 28 pages read" in result.stdout and "UG's listings ·" not in result.stdout

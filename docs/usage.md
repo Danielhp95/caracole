@@ -290,6 +290,32 @@ A warning starts with `warning:` and an error with `error:`, coloured on a termi
 `$NO_COLOR` is set. Under systemd, each line starts with its journal priority instead
 (see [deploy.md](deploy.md#logs)).
 
+While a long command works, it says how far it is, on stderr. On a terminal that is one line,
+rewritten in place: the run's step, the requests sent against the site's budget, the pages or songs
+done, and the time left. The budget is the most a step may spend, so its time is the most it may
+take:
+
+    [6/20] lyrics · LRCLIB · 37 of up to 200 requests  up to about 1 min left
+
+In the journal the same line comes at most once a minute, and `caracole run` adds a line as each
+step starts and ends. A step that doesn't run has its one line:
+
+    [6/20] lyrics…
+    [6/20] lyrics · LRCLIB · 120 of up to 200 requests  up to about 1 min left
+    [6/20] lyrics: 12 found, 3 missing, 0 instrumental, 0 errors (1 min 32 s)
+    [7/20] megalobiz: skipped: megalobiz is off ([providers.megalobiz] enabled = false)
+
+An upgrade of the database by a newer caracole logs one line as it begins, and so does a caracole
+that waits for another's to end: `Upgrading the database from schema 16 to 17 (a copy first:
+caracole.sqlite.v16.bak)…`. The journal keeps it, and `-v` shows it on a terminal; at the default
+verbosity a terminal shows no such line.
+
+`-q` shows none of it. `-v` shows the minute lines and the step lines among its request lines,
+and no live line. `caracole run`, `fetch`, `render`, `ug --directory`, `youtube` and the passes of
+`lyrics`, `lacuerda`, `gtptabs`, `harptabs`, `gametabs`, `ireal` and `musescore` say how far they
+are this way; so do `transcribe` and `youtube --sheet`, a long stage's line (`Vocals · 2 of ~12
+min`). Their report on stdout is as it was. The progress only counts: it changes no pause.
+
 Each build of the library page logs one line. `-v` shows it, and the journal keeps it by default
 (`journalctl -u caracole-web | grep 'library page'`):
 
@@ -804,7 +830,8 @@ to-do page need you, each site's problems with its cooldown, the requests agains
 how long the run took.
 
 The summary is all `caracole run` prints on stdout. Its log, on stderr, shows only the problems the
-summary doesn't already say. For `-v` and `-q`, see [What caracole prints](#what-caracole-prints).
+summary doesn't already say, and while the run goes, where it is: a live line on a terminal, the
+step lines in the journal. For `-v` and `-q`, see [What caracole prints](#what-caracole-prints).
 
 #### Budgets
 
@@ -1082,6 +1109,12 @@ The library page runs this command when you paste a UG link into its search box 
 `--directory` reads [UG's artist directory](#ugs-artist-directory): its letter listings, then the
 page of every artist they name by a bare address. It goes on where the last pass stopped, with
 `[ug_directory]`'s concurrency, pause and budget. `--budget N` sets its requests for this pass.
+While it goes, it says how far it is, after each batch of requests:
+
+    UG's listings · 312 of about 3,480 pages · letter m · 2,104 requests  about 48 min left
+    UG's bare artists' pages · 1,200 of 9,431 · 14,210 requests  about 28 min left
+
+Then what it read:
 
     The directory: 175,420 of about 175,600 artists, 27 of 27 listings read whole; 6,310 of 6,310 bare artists' pages read.
 
@@ -1194,7 +1227,8 @@ the key and the capo ("Soda Stereo · Bm shapes · capo 2 · sounds C#m"). For i
 
 A PDF is made again only when its sheet, its version, the fonts, caracole's PDF style or the text it
 prints changes, or when the file is no longer the one caracole wrote. So annotate a copy, not
-`sheet.pdf`. `--force` makes them all again, or the one song's with `--song`.
+`sheet.pdf`. `--force` makes them all again, or the one song's with `--song`. Meanwhile it says
+which song it is on: `PDFs · 37 of 214 songs · Artist - Title  about 2 min left`.
 
 Each UG version kept beside the sheet gets a viewer of its own, `version-<tab>.html`, in the
 version's own key. It gets no `.cho`, no PDF and no Export PDF. To export one, make it the sheet
@@ -1313,6 +1347,9 @@ says so and exits 1.
 A song's sheet is made again when its audio changes, and when timed lyrics arrive after a sheet made
 over plain lyrics or none, so that each chord can go over its word.
 
+A song takes minutes, so it logs a line before each, `Working out the chords of Artist - Title
+(3 of 12)…`, and one after: `Artist - Title: auto sheet written (synced lyrics)`.
+
 ### caracole youtube
 
     caracole youtube [--song "ARTIST - TITLE" [--url URL | --none] [--sheet [--progress]]] [--search QUERY | --video URL]
@@ -1344,7 +1381,9 @@ Transcribes, with Whisper, the lyrics of a song whose audio came from YouTube an
 site has. It keeps them as the song's transcript and makes its auto sheet again with the chords over
 them (see [Lyrics transcribed from the audio](#lyrics-transcribed-from-the-audio)). It needs the
 flake's `packages.autochords`, with Whisper, its model files and demucs-rs. Without them it does
-nothing and exits 1.
+nothing and exits 1. It says each stage as it ends; while the vocals, the words and the chords run,
+a live line on a terminal says what they are doing (`Words · 1:12 of 3:58`), and the journal gets
+that line once a minute. `--progress` writes a JSON line per stage instead, for caracole serve.
 
 ### When the pages are rewritten
 
@@ -1558,11 +1597,14 @@ It exits 0 when the sheet is made, and when a block, a cooldown, a spent budget 
 error makes the song wait. It exits 1 when:
 
 - The song has a human sheet, is ignored, has a purchase linked, or has `"none"` under
-  `[youtube]` and you gave no video.
+  `[youtube]` and you gave no video. A human sheet kept, or the song ignored, while a lookup went
+  first before the chords counts too.
 - YouTube won't give the video, or auto-chords can't read the audio.
 - This caracole can't make chords from audio. It says so before it asks anything.
 - Another caracole removed the song meanwhile (`No sheet made: … left the book while its sheet
   was made`).
+
+Its last line then says why (`No sheet made: can't download this video; try another.`).
 
 ### Timed lyrics of another length
 
@@ -1606,18 +1648,24 @@ lyrics missing at every lyrics site you have switched on, and not transcribed ye
 - It prints a line per stage, and `--progress` adds a JSON line per stage, for caracole serve.
   Its library page offers the same on the song's card (see **Lyrics transcribed from the audio**
   under [caracole serve](#caracole-serve)).
+- The transcript is kept before the chords. If they fail, or the server stops then, running it
+  again (the Journal's Try again) goes straight to the chords over the kept transcript.
 
 It exits 0 once the sheet is made, and 1 otherwise:
 
 | It says | What happened | The song afterwards |
 |---|---|---|
 | `caracole transcribes nothing here: …` | This caracole can't transcribe: no Whisper, auto-chords, yt-dlp, demucs-rs or model file, or YouTube is off. | Unchanged. |
-| `No transcript made: …` | The song isn't offered one or isn't in the book. Or, during the job, its lyrics were found, its audio changed or it was removed. | Unchanged. |
+| `No transcript made: …` | The song isn't offered one or isn't in the book. Or, during the job, its lyrics were found, it got a human sheet or was ignored, its audio changed or it was removed. | Unchanged. |
+| `Transcript kept; no sheet made: …` | The words were heard and kept, but before the chords the song got a human sheet, was ignored or found its lyrics, or the chords then failed. | Its transcript is kept, unused while it has a human sheet or lyrics; after a failure, Try again makes the sheet over it. |
+| `Transcript and sheet kept: a bug in caracole …` | The sheet over the transcript was made, then caracole hit a bug. | Both are kept. |
 | `Words: failed: no singing heard.` | Nothing is kept. | Not offered until its audio changes. |
 | `can't read the audio` | Whisper couldn't load the audio. | Not offered, and no chords tried, until its audio changes. The to-do page lists the file. |
 | `can't measure the audio here`, `the separator can't run here`, `its vocals can't be read`, `its vocals are … shorter than the song`, `the GPU failed`, `Whisper's model won't load` | The setup failed, not the song. | Still offered. |
 
 Anything else Whisper fails on is a bug in caracole. It says so, and the song stays offered.
+Whatever stopped it, its last line says why (`No transcript made: the GPU failed: …`), never
+`Done in …`.
 
 ## The to-do page
 
@@ -2716,7 +2764,8 @@ Request. caracole then makes the sheet from the video instead of a lookup:
 with no purchase linked has the same in its card, **From a YouTube video**, whose Make the sheet
 replaces any YouTube audio it had.
 
-The line shows a bar of steps: Song, Audio (YouTube), Lyrics, Chords and PDF. When it is Ready,
+The line shows a bar of steps: Song, Audio (YouTube), Lyrics, Chords and PDF. The audio and the
+chords say what they are doing ("Chords · 4 of 5 · finding the beats"). When it is Ready,
 the title opens `sheet (auto).html` and the Journal says what the sheet holds ("Chords over the
 lyrics.", "Chords only, no lyrics."), or why the lyrics wait. The nightly run asks LRCLIB again
 and remakes the sheet with them.
@@ -2740,7 +2789,9 @@ long it takes: "a couple of minutes" with a GPU, "up to half an hour" without. I
 request in the Journal offers it too, and a sheet from a video offers it as soon as it is Ready.
 
 Pressing it queues `caracole transcribe --progress --song "Nick Cani - Vikingos veganos"`. The bar
-shows Song, Vocals, Words, Chords and PDF. When it is Ready, the Journal says "Chords over the
+shows Song, Vocals, Words, Chords and PDF, and how far the long steps are: the minutes the separator
+has run against about how long it takes here, how far Whisper has heard the song ("Words · 3 of 5 ·
+1:20 of 3:45"), and auto-chords' step. When it is Ready, the Journal says "Chords over the
 transcribed lyrics.". If it fails, the Journal gives the reason ("no singing heard.", "the GPU
 failed: …") with Try again. One runs at a time per song, and never beside another transcription
 or a lookup. A song no longer offered one is refused ("… isn't offered a transcription: its lyrics
@@ -3746,7 +3797,11 @@ and the file lacks stays, and how far an index has got never moves back.
   in.
 
 Before it changes anything it backs the database up into `backups/` (`…-before-merge.sqlite`), and
-without room for that copy it merges nothing. It says what each site took:
+without room for that copy it merges nothing. While it works it says how far it has got on stderr:
+the comparison, the backup, each site's sitemaps or pages, and Ultimate Guitar's tabs as they go in
+(`Ultimate Guitar · 41 sitemaps · 600,000 of 1,367,059 tabs`, 50,000 at a time). In a terminal
+that is one live line, taken off for a warning; in a journal or a pipe, or with `-v`, a line a step
+and one each quarter of UG's tabs; with `-q`, none. Then it says what each site took, on stdout:
 
     Merged /var/lib/caracole/state/indexes.sqlite into /var/lib/caracole/state/caracole.sqlite:
       Ultimate Guitar: nothing read more recently.
@@ -3784,11 +3839,21 @@ column: a text value with your folders, your home folder, the database or `/nix/
 that begins with a machine's root (`/home/`, `/var/`, `/nix/`, `/tmp/`, `/data/`, `/sdcard/`,
 `file:` and the like). A site's name that just begins with `/` is no path.
 
+It also refuses to publish while the clock reads earlier than the minute in the last file's name
+(`published.json`). A file named in the past would never reach the phones, which take the newest
+name. `--force` doesn't pass this one. Either clock may be the wrong one:
+
+- If the clock now is wrong (it went back), set it right, then publish.
+- If the clock now is right, the last file was stamped ahead. Delete that file and `published.json`
+  from `DIR`, delete its asset from the release on GitHub, then publish again.
+
 `--kept NAME` (repeated, once for each name) exports nothing and reads no config, so it answers
 beside a service too. It prints, one a line and each once,
-the names the Keep rule would delete. The rule: this caracole's schema keeps its two newest files
-whatever their age; every other schema keeps its newest for 180 days. A name that isn't a catalogue
-file (`indexes.json`, say) is kept, so never printed.
+the names the Keep rule would delete. The rule: the publishing schema keeps its two newest files
+whatever their age; every other schema keeps its newest for 180 days. Each file's schema is in its
+name, and the publishing schema is this caracole's or the newest among the names, whichever is
+higher. So an upload script built before a schema change never prunes what a newer caracole
+published. A name that isn't a catalogue file (`indexes.json`, say) is kept, so never printed.
 
 If `published.json` is there but can't be read, `publish` refuses (exit 1) and tells you to remove it
 or pass `--force`.
@@ -3879,7 +3944,8 @@ from <its library>".
 `caracole peer take [--progress] DIR` takes the push the way a pull takes units. It waits for the
 nightly run, backs the database up, leaves any unit that changed here since the phone compared
 ("changed here since the comparison"), then deletes the folder. It exits 0 unless caracole hits a
-bug. `--progress` prints JSON lines for the Journal.
+bug. `--progress` prints JSON lines for the Journal; while it renders the songs taken, its render
+step says which it is at ("12 of 20 songs").
 
 Two pushes can be staged at once, one per caracole (a second gets a 409). A file can be 64 MiB and
 a whole push 2 GiB. A push left for an hour is deleted.
@@ -3910,7 +3976,8 @@ and choose again.
 A unit that changed on either side since the comparison is left, with the reason. That doesn't
 fail the sync (exit 0). The sync then records what the two agree on and the other side's address,
 which the Share tab lists. `--progress` prints the stages (compare, take, give, agree, index),
-each unit and a final report as JSON lines for caracole serve.
+each unit and a final report as JSON lines for caracole serve; while the take renders the songs
+taken, it says which it is at ("12 of 20 songs").
 
 ### Export and import: peer export, peer import
 
@@ -3947,7 +4014,8 @@ Otherwise it backs the database up (`…-before-sync.sqlite`) and takes each uni
 does. A conflict goes by `--choose`, else `--prefer`, else you are asked, else it is left. A song
 removed there is removed here, but a part the file doesn't hold never removes anything. Then it
 renders the songs taken, records the agreement and merges the file's indexes if `--parts` names
-them. `--progress` names these steps check, take, render, agree and index.
+them. `--progress` names these steps check, take, render, agree and index, and the render step says
+which of the songs taken it is at ("12 of 20 songs").
 
 If you choose to keep your own version of a unit, caracole remembers. The next file from that
 caracole doesn't ask again unless the unit changed, and the next `peer sync` with it gives it your
@@ -3974,7 +4042,9 @@ With `indexes`, the sync ends by bringing each site's index up to date on both s
 stage). Whichever side read a site more recently gives that index to the other:
 
 - An index taken here is downloaded and merged as `caracole index merge` does, after a backup
-  (`…-before-merge.sqlite`).
+  (`…-before-merge.sqlite`), saying how far the merge has got as `index merge` does. With
+  `--progress` that is the `index` stage's detail, which the Sync sheet shows. A `peer import` of a
+  file's indexes says it the same way.
 - An index given there is exported and uploaded to the other server, which merges it as a queued
   `caracole peer import`. The sync waits up to ten minutes for it. The other side must run this
   version of caracole or a later one.
@@ -4079,8 +4149,8 @@ the Journal:
 This is the usual merge ([caracole index export and merge](#caracole-index-export-and-merge)),
 with a backup of the database first. `--delete` deletes FILE once it is merged. It also deletes a
 refused file that caracole serve staged, never one you named by hand. A file whose merge couldn't
-start stays, so **Try again** works. `--progress` reports the merge as a JSON line for the
-Journal.
+start stays, so **Try again** works. `--progress` reports the merge as JSON lines for the
+Journal, with how far it has got as the stage's detail.
 
 If the computer refuses the file or doesn't answer, the phone keeps the pages for the next sync
 and the sync says why. A 409 means the two run different versions of caracole, or two files

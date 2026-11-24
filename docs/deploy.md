@@ -264,11 +264,17 @@ asks whether your user manager runs, and starts the upload in it only if it does
 since an upload in a manager with no session would find `gh`'s keyring locked. When it doesn't run,
 the notifier says so in one line, succeeds, and the timer catches up at your next login (`Persistent`);
 any other failure (no such user, no `caracole-upload.service`) fails the notifier, never the publish.
-An upload of a file already there says "already published" and changes nothing. `gh` may keep its
+An upload of a file already there says "already published" and changes nothing; one GitHub lists
+with no digest can't be checked, so it is deleted and uploaded again. `gh` may keep its
 token in a login keyring, locked without a session, which is why the example doesn't enable linger.
 
 Only the service's run starts the upload. After a publish by hand (`sudo caracole-admin index publish
 /var/lib/caracole/publish`), upload it yourself with `systemctl --user start caracole-upload`.
+
+The upload says each step as it begins, and every 30 seconds while `gh` sends the file, how far it has
+read it (`publish-indexes: uploading · 31 of 80 MB · 3 min so far, about 5 min left`; where it can't
+tell, the time so far and the file's size). An 80 MB file can take several minutes. Watch it with
+`journalctl --user -fu caracole-upload`.
 
 There is no user path unit watching `published.json`: systemd watches every folder from `/` down to
 the file, and your user can't read `/var/lib/caracole` (mode 0710), so such a unit never fires.
@@ -555,6 +561,7 @@ OnFailure=caracole-notify-failure@%n.service
 [Service]
 Type=oneshot
 ExecStart=/opt/caracole/bin/caracole run
+NotifyAccess=main
 TimeoutStartSec=3h
 MemoryDenyWriteExecute=yes
 EOF
@@ -816,7 +823,8 @@ sudo caracole-admin index publish /var/lib/caracole/publish
 PATH=/opt/caracole/bin:$PATH publish-indexes /var/lib/caracole/publish
 ```
 
-The publish needs `caracole-admin`, so sudo; the upload is your user's, with your `gh` login.
+The publish needs `caracole-admin`, so sudo; the upload is your user's, with your `gh` login. Both
+say what they do as they go; the upload, every 30 seconds, how much of the file `gh` has sent.
 
 ### 14. Upgrades
 
@@ -914,11 +922,23 @@ The units write to the journal, each line at its priority
 ([usage.md](usage.md#what-caracole-prints)):
 
 ```sh
+journalctl -u caracole -f             # a run as it goes
+systemctl status caracole             # Status: the step under way, and how far it is
 journalctl -u caracole -p warning     # only what needs you or went wrong
 journalctl -u caracole -b -o cat      # the lines as caracole wrote them, the summary among them
 journalctl -u caracole-web | grep 'library page'   # each library page served: its songs, the database it read
 sudo caracole-admin -v run            # a run now, a line per request, on the terminal
 ```
+
+While a run goes, the journal gets a line as each step starts and ends, and in between, at most a
+line a minute saying how far the step is (requests against its budget, UG's directory's pages, the
+PDFs made). `systemctl status caracole` shows that as its `Status:` line, updated every few
+seconds, and once the run is over, what it came to: `Finished in 12 min 3 s · ` and the summary's
+first line ([usage.md](usage.md#what-caracole-prints)):
+
+    [6/20] lyrics…
+    [6/20] lyrics · LRCLIB · 120 of up to 200 requests  up to about 1 min left
+    [6/20] lyrics: 12 found, 3 missing, 0 instrumental, 0 errors (1 min 32 s)
 
 A block, a cooldown or a spent budget is not a failure: the run exits 0 and the songs wait for the
 next one. A bug exits 1, and ntfy says the unit failed ([usage.md](usage.md#caracole-run)).

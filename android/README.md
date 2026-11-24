@@ -34,6 +34,11 @@ settings, a file read from the phone's server for another app, an index fetched 
 
 ## Install
 
+A phone with an old debug build under the release's package (`io.github.danielhp95.caracole`, signed with your debug
+key) must lose it before F-Droid's caracole can install: sync its library to the computer first, since uninstalling
+deletes its data, then `adb uninstall --user 0 io.github.danielhp95.caracole`. Debug builds made since are an app of
+their own ([below](#your-phone-f-droid-and-a-debug-build-side-by-side)).
+
 1. **Install the app**, from F-Droid or from a build of your own:
    - **From F-Droid** (signed releases, updated by F-Droid): in the F-Droid app, Settings › Repositories › **+**,
      then scan or paste
@@ -42,9 +47,11 @@ settings, a file read from the phone's server for another app, an index fetched 
      link. caracole then appears in F-Droid's list: install it from there. The fingerprint makes F-Droid check that
      the repository's index is the one signed with its key. The APKs are signed with caracole's release key, whose
      certificate's SHA-256 is `332c457ddadd0c7a2f2b7d880c827fec23cd2ab143f21a2f38c759d47b48a8f1`.
-   - **Your own debug APK**, which [Build](#build) made:
-     - with USB or wireless debugging on: `adb install -r android/app/build/outputs/apk/debug/app-debug.apk` (`-r`
-       keeps the app's data when it is already there);
+   - **Your own debug APK**, which [Build](#build) made, "Debug caracole", installed beside F-Droid's
+     ([below](#your-phone-f-droid-and-a-debug-build-side-by-side)):
+     - with USB or wireless debugging on: `android/scripts/phone-install.sh`, or
+       `adb install -r android/app/build/outputs/apk/debug/app-debug.apk` (`-r` keeps the app's data when it is
+       already there);
      - or copy the APK to the phone and open it there. Android asks you to allow installs from that app (Files,
        say) once.
 2. **Open it**: caracole, in the launcher. The first start opens Settings: type the computer's address there, tap
@@ -57,9 +64,43 @@ settings, a file read from the phone's server for another app, an index fetched 
    computer off](#search-with-the-computer-off)).
 
 The debug APK is signed with your machine's debug key (`~/.android/debug.keystore`), F-Droid's with the release
-key. An update must be signed with the same key as the app it replaces: to move from a debug APK to F-Droid's (or
-back), uninstall the app first. That deletes the phone's copy of the library: sync it first, and a sync after
-the install brings it back.
+key, and they are two apps: `io.github.danielhp95.caracole.debug` and `io.github.danielhp95.caracole`.
+
+## Your phone: F-Droid and a debug build side by side
+
+F-Droid's caracole and a debug build of any checkout install at once, and neither replaces the other.
+
+1. **Connect the phone** by wireless debugging: on the phone, Developer options › Wireless debugging, on. The first
+   time, tap Pair device with pairing code and run `adb pair IP:PORT CODE` with what it shows. Then
+   `adb connect IP:PORT`, with the address and port the Wireless debugging screen shows (the port changes each time
+   you switch it on). USB debugging works too. `adb devices` lists the phone.
+2. **Install a build** of the checkout you are in:
+
+       android/scripts/phone-install.sh             # builds the debug APK and installs it
+       android/scripts/phone-install.sh --launch    # and starts it
+       android/scripts/phone-install.sh -s SERIAL   # when adb lists more than one phone
+
+   It installs for the phone's own user alone (`adb install -r --user 0`), so the phone's other users keep what they
+   have, and it never touches F-Droid's caracole. It ends by saying the version installed, `0.3.0-debug+abc1234`:
+   a debug build's version names the commit it was built from (`git rev-parse --short HEAD`, `-debug` alone outside
+   a git checkout), and Android's App info shows it too.
+
+**Telling them apart**: the debug build is "Debug caracole" in the launcher, the share sheet and its notifications,
+and its icon is amber, the logo smaller over a red DEBUG mark. Its server is on 127.0.0.1:8739, the release's on
+8738, so both can run at once.
+
+**Two libraries**: each app keeps its own. A new debug build starts empty: sync it with the computer (Settings, then
+the bar's sync button), or import a file the computer or the other app exported (Settings › Import a file). Both can
+sync with the same computer, as two phones would.
+
+**An older checkout over a newer one**: a build's database moves forward with its schema, never back. Installing an
+older checkout's debug build over the data a newer one left opens to "Couldn't start · …" (the database is too new
+for it) until the debug app's data is cleared, its library with it:
+`adb shell pm clear --user 0 io.github.danielhp95.caracole.debug`. If that library holds anything the computer
+doesn't, sync it from the newer build before installing the older one.
+
+**Removing it**: `adb uninstall --user 0 io.github.danielhp95.caracole.debug`, or uninstall "Debug caracole" on the
+phone. Its library goes with it; F-Droid's caracole keeps its own.
 
 ## Release
 
@@ -165,7 +206,7 @@ again, and the next sync brings them to the phone.
 ## Search with the computer off
 
 The app runs caracole's own rules (android/core and android/server) on the phone. Its server listens on
-`http://127.0.0.1:8738`, or another free port when that one is taken. The WebView loads the library page from it:
+`http://127.0.0.1:8738` (a debug build on 8739), or another free port when that one is taken. The WebView loads the library page from it:
 caracole's own page, built from the same files caracole serve builds it from, each of your songs' cards made from
 the phone's own library as caracole serve makes it. Sheets, PDFs and songbooks are the copy's files where the phone
 holds the song as the computer did, else the pages the phone makes itself.
@@ -213,8 +254,9 @@ phone's library page has no Share tab.
    own key, its sheet, its versions, its kept files…). Under "Which version to keep", **Phone** or **Computer**, and
    **Same for the other N**. Above the card, what is to take (↓), to give (↑) and changed on both (⚠). There is no
    Skip: Cancel ends the sync with nothing taken or given.
-3. **The sync** runs in the background, with a notification ("Syncing with <the computer's name>…") that keeps the
-   app working while you leave it, gone once it ends:
+3. **The sync** runs in the background, with a notification that keeps the app working while you leave it, gone
+   once it ends. It names the computer, the stage the sync is at and what that stage says ("Sharing logs with studio
+   · Copying the computer's pages · 120 of 640 pages"), its bar filled where the stage counts:
    1. compared again, refused if either side changed since you compared (compare again then);
    2. a backup of the phone's library (`state/backups/`, the last three kept), then what the computer changed taken,
       each file checked by its SHA-256;
@@ -247,7 +289,8 @@ started again.
 parts, every change made on one side taken or given, and each conflict left as it is on both sides, for the next
 sync you start. First it reads the computer's state at the address in Settings; when nothing answers there, or
 something else does (another network's device, a Wi-Fi login page), it does nothing and says nothing. While it runs,
-the bar's line says so ("Syncing with the computer…"), and at its end what it did for a few seconds ("Up to date · 1
+the bar's line says so and names the stage it is at ("Syncing with the computer · Updating the indexes · …"), and at
+its end what it did for a few seconds ("Up to date · 1
 taken, 2 given"; "2 changed on both sides: tap Sync to choose"; or why it failed, a stage that failed among it, such
 as the copy of the computer's pages). When it left conflicts, a notification on its own channel, Syncs, says so ("2
 songs changed on both sides: tap to choose"), and its tap opens the sheet, whose cards ask; the next one that leaves
@@ -329,13 +372,14 @@ serve has no sign-in, so any app on the phone can use it on 127.0.0.1.
 
 To try the app by hand there, install it as on a phone
 (`adb install -r android/app/build/outputs/apk/debug/app-debug.apk`), start it
-(`adb shell am start -n io.github.danielhp95.caracole/.MainActivity`, or from the emulator's launcher), and point it
+(`adb shell am start -n io.github.danielhp95.caracole.debug/io.github.danielhp95.caracole.MainActivity`, or from the
+emulator's launcher), and point it
 at a computer of its own: `nix develop -c python -m tests.helpers.e2e_library serve DIR PORT --address 127.0.0.1`
 builds a library of 20 songs in DIR with no request and serves it on the host's loopback alone (caracole serve has
 no sign-in: never on the LAN for a test), which the emulator reaches at `http://10.0.2.2:PORT`. Its
 bar's sync button then brings that computer's indexes with the rest, and Settings' Import a file a file pushed to the
 emulator's Download folder (`adb push indexes.sqlite /sdcard/Download/`). `adb shell pm clear
-io.github.danielhp95.caracole` starts it over, as new. Never PORT 8737 on a machine whose caracole-web listens there.
+io.github.danielhp95.caracole.debug` starts it over, as new. Never PORT 8737 on a machine whose caracole-web listens there.
 
 Use `-gpu host`. With the software renderers (`swiftshader_indirect`, and the lavapipe fallback of `-gpu guest`),
 emulators 37.1 and 37.2 crashed in their own render thread when the WebView went back a page. On the emulator,
@@ -356,9 +400,10 @@ serve DIR PORT --address 127.0.0.1`:
     adb install -r -t android/app/build/outputs/apk/debug/app-debug.apk
     adb install -r -t android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
     adb shell am instrument -w -e server http://10.0.2.2:PORT \
-        io.github.danielhp95.caracole.test/io.github.danielhp95.caracole.CaracoleTestRunner
+        io.github.danielhp95.caracole.debug.test/io.github.danielhp95.caracole.CaracoleTestRunner
 
-Add `-e class io.github.danielhp95.caracole.PinchTest` to run one of them. The runner, `CaracoleTestRunner`, lets the
+Add `-e class io.github.danielhp95.caracole.PinchTest` to run one of them (the debug build's package ends in `.debug`,
+its classes' don't). The runner, `CaracoleTestRunner`, lets the
 app send no request to a site: every test's sites refuse, unless the test names the fake sites server.
 
 `android/scripts/device-test.sh` does all of it, one caller an emulator at a time (it builds first, then takes the

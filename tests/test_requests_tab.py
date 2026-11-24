@@ -765,11 +765,13 @@ def test_cancel_try_again_and_output_work_in_the_tab_and_a_link_to_it_stays_on_t
             assert page.wait("document.activeElement.id === 'tab-library'")
             page.press("ArrowRight")
             assert page.js("[document.activeElement.id, location.hash]") == ["tab-songbooks", "#q=Creep&tab=songbooks"]
-            # Opened at a request (job=N, where the server sends a form back), its output is open and in view.
+            # Opened at a request (job=N, where the server sends a form back), its output is open and in view. The
+            # address differs from this one by its fragment alone, so the document stays, its request 3 drawn with
+            # its Output already: what job=3 brings is the fresh answer's draw, which focuses it and drops job.
             page.open(url + "#tab=requests&job=3")
-            assert page.wait("document.querySelector('#req-3 .req-output pre') !== null")
-            assert page.js("[document.querySelector('#req-3 .req-output').open, document.activeElement.id, "
-                           "location.hash]") == [True, "req-3", "#tab=requests"]
+            shown = ("[document.querySelector('#req-3 .req-output pre') !== null, "
+                     "document.querySelector('#req-3 .req-output').open, document.activeElement.id, location.hash]")
+            assert page.wait(shown + ".join() === [true, true, 'req-3', '#tab=requests'].join()"), page.js(shown)
     finally:
         runner.go.set()
 

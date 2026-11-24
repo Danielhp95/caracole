@@ -191,29 +191,41 @@ button.plays:hover, button.plays[aria-expanded="true"] { border-color: var(--acc
 .selecting .card-pane { display: none; }
 .selecting #library-view .line.selected:not(.picked) { background: none; box-shadow: none; }
 /* A line its one-song artist folded into (library.css): on a phone the box beside its artist's overline and its title,
-   its buttons and its key beside both; from 720 px its artist in the column a title-sorted line names its own in. */
+   its buttons and its key beside both; from 720 px its artist in the column a title-sorted line names its own in.
+   Its columns in the text's pixels, as library.css's: the title keeps 64 of them (less the 6 px between columns). In
+   the lists, the box takes 44 px and a gap from the room the text's pixel is capped by (base.css --sp: a title, a
+   button and a key in 152 of them, less 82 px), so a phone's line still keeps all three on one row, its key on the
+   screen; the bar and the rest of the page keep theirs. */
+@supports (height: 1rlh) {
+  .selecting .list, .selecting #found { --sp: min(calc(1rlh / 16), max(1px, calc((100vw - 132px) / 152))); }
+}
 @media (max-width: 719px) {
-  .selecting section.artist.folded .line, .selecting section.flat .line { grid-template-columns: 44px minmax(calc(4rem - 6px), 1fr) auto auto;
+  .selecting section.artist.folded .line, .selecting section.flat .line {
+    grid-template-columns: 44px minmax(calc(64 * var(--sp) - 6px), 1fr) auto auto;
     grid-template-areas: "pick meta plays key" "pick name plays key"; }
 }
 @media (min-width: 720px) {
-  .selecting .line { grid-template-columns: 44px minmax(0, 1fr) minmax(0, .6fr) 6.5rem 2.75rem;
+  .selecting .line { grid-template-columns: 44px minmax(0, 1fr) minmax(0, .6fr) calc(104 * var(--sp)) calc(44 * var(--sp));
     grid-template-areas: "pick title by status key"; }
   .selecting section.artist.folded .line:not(.hit):not(.miss), .selecting section.flat .line:not(.hit):not(.miss) {
-    grid-template-columns: 44px minmax(4rem, max-content) fit-content(16rem) minmax(0, 1fr) 6.5rem auto 2.75rem;
-    grid-template-areas: "pick name by . status plays key"; }
-  .selecting section.artist:not(.folded) .line { grid-template-columns: 44px minmax(0, 1fr) 6.5rem auto 2.75rem;
-    grid-template-areas: "pick title status plays key"; }
+    grid-template-columns: 44px minmax(calc(64 * var(--sp)), max-content) fit-content(calc(256 * var(--sp)))
+      minmax(0, 1fr) calc(104 * var(--sp)) auto calc(44 * var(--sp)); grid-template-areas: "pick name by . status plays key"; }
+  /* Its title's least, as library.css's; the key's column the text's pixels, as every other line's (base.css --sp). */
+  .selecting section.artist:not(.folded) .line { grid-template-columns: 44px minmax(calc(64 * var(--sp)), 1fr)
+    calc(104 * var(--sp)) auto calc(44 * var(--sp)); grid-template-areas: "pick title status plays key"; }
+  /* A band's line's buttons under its title where they would wrap beside it (library.css). */
+  .selecting section.artist:not(.folded) .line.plays-under:not(.hit):not(.miss) {
+    grid-template-columns: 44px minmax(0, 1fr) calc(104 * var(--sp)) calc(44 * var(--sp));
+    grid-template-areas: "pick title status key" "pick plays plays ."; }
 }
-/* Beside the laptop's pane, a line's buttons under its title where they don't fit beside it (library.css). */
+/* Beside the laptop's pane, a folded or flat line's buttons under its title where they don't fit beside it
+   (library.css). */
 @media (min-width: 1200px) {
   .selecting section.artist.folded .line.plays-under:not(.hit):not(.miss),
   .selecting section.flat .line.plays-under:not(.hit):not(.miss) {
-    grid-template-columns: 44px minmax(4rem, max-content) fit-content(16rem) minmax(0, 1fr) 6.5rem 2.75rem;
+    grid-template-columns: 44px minmax(calc(64 * var(--sp)), max-content) fit-content(calc(256 * var(--sp)))
+      minmax(0, 1fr) calc(104 * var(--sp)) calc(44 * var(--sp));
     grid-template-areas: "pick name by . status key" "pick plays plays plays plays ."; }
-  .selecting section.artist:not(.folded) .line.plays-under:not(.hit):not(.miss) {
-    grid-template-columns: 44px minmax(0, 1fr) 6.5rem 2.75rem;
-    grid-template-areas: "pick title status key" "pick plays plays ."; }
 }
 .selecting .page { padding-bottom: 104px; }
 .selecting:has(.pickbar.open, .pick-command:not([hidden])) .page { padding-bottom: 300px; }

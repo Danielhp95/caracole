@@ -159,6 +159,18 @@ class AssemblyTest {
         }
     }
 
+    @Test fun theFileACataloguesImportKilledInItsMiddleLeftIsSweptAsThePhoneStarts() {
+        val folder = File(tmp.root, "state/cache/catalogues").apply { mkdirs() }
+        val left = listOf("indexes-s17-20261124T1815Z.sqlite", "indexes-s17-20261124T1815Z.sqlite-journal")
+            .map { File(folder, it).apply { writeBytes(ByteArray(16)) } }
+        val beside = File(tmp.root, "state/cache/notes.txt").apply { writeBytes(ByteArray(1)) }
+        phone {
+            assertTrue(left.none { it.exists() }, "the unpacked index a killed import left is gone")
+            assertTrue(folder.isDirectory, "its folder stays")
+            assertTrue(beside.exists(), "nothing beside it is touched")
+        }
+    }
+
     /** A take checks a song's `[version]` and `[harmonica]` entries with the viewer's own checks, as
      * overrides.put_song_entries reads them back: the engine is given Versions.keyVersion and HarpTabs.checkSpec. */
     @Test fun theSyncEngineTakesWithTheViewersChecksOfAnOverridesEntry() = phone<Unit> { phone ->

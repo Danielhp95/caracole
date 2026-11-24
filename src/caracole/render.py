@@ -197,6 +197,7 @@ from caracole.normalize import clean_title
 from caracole.overrides import Overrides, OverridesError, add_version, load_overrides
 from caracole.pdf_fonts import ROLES, PdfFonts, in_folder, metrics
 from caracole.pdf_text import PDF_TEXT_VERSION, STYLE_FILE, pdf_text
+from caracole.progress import Counted, Ticker
 from caracole.sheet_versions import SheetVersion, as_data, in_library, sheet_kind, sheet_pins, tab_of, version_names
 from caracole.songs import (
     AUTO_SHEET,
@@ -556,6 +557,7 @@ def render_all(
     now: datetime | None = None,
     between: Callable[[], bool] | None = None,
     song_ids: Collection[int] | None = None,
+    on_song: Callable[[int, int, Song], None] | None = None,
 ) -> RenderStats:
     """Write every kept sheet as ChordPro and render it to a PDF in the song's key.
 
@@ -580,6 +582,10 @@ def render_all(
     caracole's lock to a waiting lookup there (``_common.hand_over``), as a pass
     that renders many PDFs takes minutes. When it says it did, overrides.toml
     and each song after are read again, since the lookup may have changed them.
+
+    ``on_song(n, total, song)`` hears each song's turn as it starts, the ``n``-th
+    of the ``total`` listed, an ignored one's too: how far the pass is, which
+    ``caracole render`` and the run's render step show as it goes (progress.py).
     """
     from caracole.autochords.sheet_lyrics import lyrics_onto_sheets
 
@@ -589,7 +595,9 @@ def render_all(
     fonts = _usable_pdf_fonts(cfg)
     overrides = own_versions_upgraded(conn, cfg, overrides)
     songs = list_songs(conn) if song_ids is None else _songs_of(conn, song_ids)
-    for song, overrides in _songs_in_turn(conn, cfg, songs, overrides, between):
+    for n, (song, overrides) in enumerate(_songs_in_turn(conn, cfg, songs, overrides, between), 1):
+        if on_song is not None:
+            on_song(n, len(songs), song)
         if song.status == "ignored" or song.key in overrides.ignore:
             continue
         try:
@@ -603,6 +611,20 @@ def render_all(
         tally.count(song, done)
     tally.record(conn, font_problem, now=now, names=None if song_ids is None else {s.display for s in songs})
     return stats
+
+
+RENDER_PACE = 0.5  # seconds a song's PDFs take, about, before it is measured; one up to date takes none
+
+
+def rendering(ticker: Ticker) -> Callable[[int, int, Song], None]:
+    """``render_all``'s ``on_song`` on a ``progress.Ticker``: "PDFs · 37 of 214 songs · Artist - Title", with the
+    time the rest should take."""
+    counted = Counted(ticker, per_step=RENDER_PACE)
+
+    def on_song(n: int, total: int, song: Song) -> None:
+        counted(f"PDFs · {n:,} of {total:,} songs · {song.display}", n - 1, total)
+
+    return on_song
 
 
 def _songs_in_turn(conn: sqlite3.Connection, cfg: Config, songs: Iterable[Song], overrides: Overrides,

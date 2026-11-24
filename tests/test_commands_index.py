@@ -64,8 +64,13 @@ def test_the_queued_merge_reports_its_stage_and_deletes_the_file_once_merged(tmp
     assert result.exit_code == 0, result.output
     assert events(result.stdout) == [
         {"stage": "merge", "state": "running", "detail": ""},
+        {"stage": "merge", "state": "running", "detail": "Comparing with this database's indexes"},
+        {"stage": "merge", "state": "running", "detail": "Backing up the database first"},
+        {"stage": "merge", "state": "running", "detail": "harptabs.com"},
+        {"stage": "merge", "state": "running", "detail": "harptabs.com · 1 artist page"},
         {"stage": "merge", "state": "done", "detail": "harptabs.com: 1 artist page"},
     ]
+    assert result.stderr == ""  # the stage alone says how far it has got
     assert f"Merged {path} into {state / 'caracole.sqlite'}:" in result.stdout
     assert not path.exists()
     conn = db.connect(state / "caracole.sqlite")
@@ -190,7 +195,185 @@ def test_without_progress_it_says_what_it_always_said(tmp_path, state):
     assert result.exit_code == 0, result.output
     assert events(result.stdout) == []
     assert result.stdout.splitlines()[1] == f"Merged {path} into {state / 'caracole.sqlite'}:"
+    # How far it has got goes to stderr, so stdout stays the report: off a terminal, a plain line a step.
+    assert result.stderr.splitlines() == ["Comparing with this database's indexes...",
+                                          "Backing up the database first...", "harptabs.com · 1 artist page..."]
     assert not path.exists()
+
+
+def merging(live: bool):
+    import io
+
+    from caracole.commands.index import Merging
+    from caracole.progress import Console
+
+    out = io.StringIO()
+    return Merging(console=Console(out, live=live, color=False, width=lambda: 200)), out
+
+
+def ug_rows(told) -> None:
+    """A merge's progress through UG's sitemaps, 1,367,059 rows in chunks of 50,000, then its artist pages."""
+    told("", transfer.PLANNING, 0, 1)
+    told.backing_up()
+    told("ug", "", 0, 1)
+    told("ug", "sitemap", 0, 41)
+    for done in [*range(transfer.UG_CHUNK, 1_367_059, transfer.UG_CHUNK), 1_367_059]:
+        told("ug", transfer.UG_TABS, done, 1_367_059)
+    told("ug", "tab of its artist pages", 0, 12)
+    told.close()
+
+
+def test_a_merge_off_a_terminal_says_a_line_a_step_and_each_quarter_of_ugs_sitemap_rows():
+    told, out = merging(live=False)
+    ug_rows(told)
+    assert out.getvalue().splitlines() == [
+        "Comparing with this database's indexes...",
+        "Backing up the database first...",
+        "Ultimate Guitar · 41 sitemaps...",
+        "Ultimate Guitar · 41 sitemaps · 350,000 of 1,367,059 tabs",
+        "Ultimate Guitar · 41 sitemaps · 700,000 of 1,367,059 tabs",
+        "Ultimate Guitar · 41 sitemaps · 1,050,000 of 1,367,059 tabs",
+        "Ultimate Guitar · 41 sitemaps · 1,367,059 of 1,367,059 tabs",
+        "Ultimate Guitar · 12 tabs of its artist pages...",
+    ]
+
+
+def test_a_merge_on_a_terminal_rewrites_one_live_line_a_chunk_and_clears_it_at_the_end():
+    told, out = merging(live=True)
+    ug_rows(told)
+    shown = [part.strip() for part in out.getvalue().split("\r") if part.strip()]
+    chunks = [s for s in shown if s.endswith(" tabs")]
+    assert len(chunks) == 28 and chunks[0] == "Ultimate Guitar · 41 sitemaps · 50,000 of 1,367,059 tabs"
+    assert shown[:2] == ["Comparing with this database's indexes...", "Backing up the database first..."]
+    assert "Ultimate Guitar..." in shown and shown[-1] == "Ultimate Guitar · 12 tabs of its artist pages..."
+    assert "\n" not in out.getvalue() and out.getvalue().endswith("\r")  # one line, cleared once done
+
+
+class Gone:
+    """A stream whose reader is gone (``| head``, a closed terminal): every write a BrokenPipeError, counted."""
+
+    def __init__(self) -> None:
+        self.writes = 0
+
+    def write(self, text):
+        self.writes += 1
+        raise BrokenPipeError(32, "Broken pipe")
+
+    def flush(self):
+        raise BrokenPipeError(32, "Broken pipe")
+
+    def isatty(self):
+        return False
+
+
+def test_a_merge_whose_progress_reader_is_gone_still_merges_and_says_nothing_more(tmp_path, state, monkeypatch):
+    from caracole.commands import index
+    from caracole.progress import Console
+
+    gone = Gone()
+    monkeypatch.setattr(index, "merge_console", lambda: Console(gone))
+    path = phone_reads(tmp_path)
+
+    result = invoke(tmp_path, "merge", str(path))
+
+    assert result.exit_code == 0, (result.output, result.exception)
+    assert f"Merged {path} into {state / 'caracole.sqlite'}:" in result.stdout
+    assert gone.writes == 1  # the first step's write found the reader gone; nothing tried after it
+    conn = db.connect(state / "caracole.sqlite")
+    try:
+        assert conn.execute("SELECT count(*) FROM harptabs_artist_tabs").fetchone()[0] == 2
+    finally:
+        conn.close()
+
+
+class Failing(Gone):
+    """A stream that fails another way: a terminal gone (EIO), or one closed (ValueError)."""
+
+    def __init__(self, error: Exception) -> None:
+        super().__init__()
+        self.error = error
+
+    def write(self, text):
+        self.writes += 1
+        raise self.error
+
+    def flush(self):
+        raise self.error
+
+
+@pytest.mark.parametrize("error", [OSError(5, "Input/output error"), ValueError("I/O operation on closed file.")],
+                         ids=["a terminal gone", "a stream closed"])
+def test_merging_whose_terminal_fails_any_way_says_nothing_more_and_never_raises(error):
+    from caracole.commands.index import Merging
+    from caracole.progress import Console
+
+    failing = Failing(error)
+    told = Merging(console=Console(failing, live=False, color=False))
+    ug_rows(told)
+    told.say("Copying the file's indexes out")
+    assert failing.writes == 1
+
+
+@pytest.mark.parametrize(("level", "live", "quiet"), [
+    ("NORMAL", True, False), ("VERBOSE", False, False), ("DEBUG", False, False), ("QUIET", False, True),
+    (None, False, False)])
+def test_a_merges_console_follows_the_tickers_rules(monkeypatch, level, live, quiet):
+    # As progress.ticker(): the live line on a terminal at the default verbosity alone (at -v the log's lines say
+    # more, a caller that set up no log gets none), and -q keeps the report alone.
+    import sys
+
+    from helpers.screens import Terminal
+
+    from caracole import logs
+    from caracole.commands import index
+
+    monkeypatch.setenv("TERM", "xterm")
+    monkeypatch.setattr(sys, "stderr", Terminal())
+    monkeypatch.setattr(logs, "level", lambda: None if level is None else getattr(logs, level))
+    console = index.merge_console()
+    assert (console.stream, console.live, console.quiet) == (sys.stderr, live, quiet)
+
+
+def test_a_warning_mid_merge_takes_the_live_line_off_first_and_none_after_it_closed():
+    import io
+    import logging
+
+    from helpers.screens import Terminal
+
+    from caracole import logs
+    from caracole.commands.index import Merging
+    from caracole.progress import Console
+
+    screen, log = Terminal(), io.StringIO()
+    logs.setup(logs.NORMAL, stream=log)
+    try:
+        told = Merging(console=Console(screen, live=True, color=False, width=lambda: 200))
+        told("ug", "sitemap", 0, 41)
+        told("ug", transfer.UG_TABS, transfer.UG_CHUNK, 1_367_059)
+        assert screen.getvalue().endswith("50,000 of 1,367,059 tabs")
+        logging.getLogger("caracole.index_transfer").warning("a site's rows look odd")
+        assert screen.getvalue().endswith("\r") and log.getvalue() == "warning: a site's rows look odd\n"
+        told.close()
+        written = screen.getvalue()
+        logging.getLogger("caracole.index_transfer").warning("after it")
+        assert screen.getvalue() == written  # its hook gone with it
+    finally:
+        logs.teardown()
+
+
+def test_merging_whose_stage_reader_is_gone_says_nothing_more_and_never_raises():
+    from caracole.commands.index import Merging
+
+    tried = []
+
+    def stage(text):
+        tried.append(text)
+        raise BrokenPipeError(32, "Broken pipe")
+
+    told = Merging(stage=stage)
+    ug_rows(told)
+    told.say("Copying the file's indexes out")
+    assert tried == ["Comparing with this database's indexes"]
 
 
 def test_a_file_missing_is_a_failed_stage(tmp_path, state):
@@ -347,6 +530,37 @@ def test_index_publish_refuses_a_site_with_far_fewer_rows_than_the_last_file_unl
     assert forced.exit_code == 0, forced.output
     (gz,) = out.glob("indexes-s*.sqlite.gz")
     assert json.loads((out / "published.json").read_text())["file"] == gz.name
+
+
+def test_index_publish_refuses_a_clock_behind_the_last_file_published_forced_or_not(tmp_path, state):
+    built(state)
+    out = tmp_path / "pub"
+    out.mkdir()
+    ahead = "indexes-s17-20991117T0312Z.sqlite.gz"  # published once by a clock this one is now behind
+    (out / "published.json").write_text(json.dumps({
+        "file": ahead, "schema": 17, "made": "2099-11-17T03:12:00Z", "bytes": 1, "raw_bytes": 1, "sha256": "0",
+        "sites": {"ug": 1}}))
+
+    for forced in ((), ("--force",)):
+        result = invoke(tmp_path, "publish", str(out), *forced)
+
+        assert result.exit_code == 1, result.output
+        assert (f"earlier than the last file published, {ahead}. If the clock is right, that file was stamped "
+                f"ahead: delete it and published.json from {out} (and its asset from the release), then publish "
+                "again; if not, set the clock right.") in result.stderr
+        assert [p.name for p in out.iterdir()] == ["published.json"]
+
+
+def test_index_publish_forced_passes_a_corrupt_sidecar(tmp_path, state):
+    built(state)
+    out = tmp_path / "pub"
+    out.mkdir()
+    (out / "published.json").write_text("{nope")
+
+    result = invoke(tmp_path, "publish", str(out), "--force")
+
+    assert result.exit_code == 0, result.output
+    assert len(list(out.glob("indexes-*"))) == 1
 
 
 def test_index_publish_refuses_a_corrupt_sidecar(tmp_path, state):

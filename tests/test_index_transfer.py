@@ -492,6 +492,59 @@ def test_a_merge_refuses_a_file_that_holds_more_than_tables_and_changes_nothing(
     assert backup.backups(tmp_path / "state") == []
 
 
+ENDLESS = "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n) SELECT 'format' AS key, i AS value FROM n"
+
+
+def refused_within(seconds: float, call) -> BaseException | None:
+    """What ``call()`` raised, once it ended within ``seconds``; a call still running then fails the test (its
+    thread a daemon, so a hung read never holds the process up)."""
+    import threading
+
+    raised: list[BaseException | None] = []
+
+    def run() -> None:
+        try:
+            call()
+        except BaseException as e:  # noqa: BLE001 (handed back to the test)
+            raised.append(e)
+        else:
+            raised.append(None)
+
+    worker = threading.Thread(target=run, daemon=True)
+    worker.start()
+    worker.join(seconds)
+    assert not worker.is_alive(), f"still reading the file after {seconds} s"
+    return raised[0]
+
+
+@pytest.mark.parametrize("sql", [
+    # META itself a view over an endless query: refused before it is read.
+    [f"DROP TABLE {transfer.META}", f"CREATE VIEW {transfer.META} AS {ENDLESS}"],
+    # a table a merge reads made such a view: refused before any table is read.
+    ["DROP TABLE gtptabs_index", f"CREATE VIEW gtptabs_index AS {ENDLESS}"],
+])
+def test_a_file_whose_views_never_end_is_refused_promptly_never_read(home, conn, tmp_path, sql):
+    full(home)
+    path = _altered(export(home, tmp_path), *sql)
+    before = snapshot(conn)
+
+    def in_its_thread(act):  # a connection of the calling thread's own, as sqlite3 asks
+        def call() -> None:
+            mine = db.connect(tmp_path / "state" / "caracole.sqlite")
+            try:
+                act(mine)
+            finally:
+                mine.close()
+        return call
+
+    for act in (lambda c: merge(c, path, state=tmp_path / "state"), lambda c: transfer.check_pages(c, path)):
+        e = refused_within(10, in_its_thread(act))
+        assert isinstance(e, transfer.TransferError) and "holds tables alone" in str(e), e
+
+    assert snapshot(conn) == before
+    assert backup.backups(tmp_path / "state") == []
+
+
 def test_a_merge_trusts_no_function_of_the_files_schema_and_leaves_the_connection_as_it_was(home, conn, tmp_path):
     full(home)
     path = export(home, tmp_path)
@@ -780,6 +833,154 @@ def test_merging_some_sites_of_a_file(home, conn, tmp_path):
     assert [s.site for s in merged.sites] == ["harptabs"]
     assert rows(conn, "harptabs_artists") == rows(home, "harptabs_artists")
     assert rows(conn, "gametabs_games") == []
+
+
+# --- merge: its progress, and UG's sitemap rows a chunk at a time ---------------------------------------------------
+
+
+def told_merge(conn, path, sites=None, state=None, told=None):
+    """A merge, with what it told as it went (into ``told``): each progress call as a tuple, the backup as
+    "backup"."""
+    told = [] if told is None else told
+    merged = transfer.merge(conn, path, sites, state_dir=state, now=NOW,
+                            progress=lambda site, action, done, total: told.append((site, action, done, total)),
+                            backing_up=lambda: told.append("backup"))
+    return merged, told
+
+
+def test_a_merge_tells_before_planning_the_backup_each_site_each_action_and_each_chunk_of_ugs_sitemap_rows(
+        home, conn, tmp_path, monkeypatch):
+    monkeypatch.setattr(transfer, "UG_CHUNK", 2)
+    ug_sitemap(home, "1", ["radiohead/creep-chords-4169", "radiohead/creep-chords-5000", "oasis/live-forever-chords-3"],
+               LATE)
+    ug_sitemap(home, "last", ["blur/song-2-chords-1001", "blur/beetlebum-chords-1002"], LATE)
+    ug_listed(home, ["1", "last"], LATE)
+    artist_tab(home, SONG_DONGYE, 2001, "斑马 斑马", LATE)
+    harp_page(home, "artist/1178/billy-joel", ["Piano Man", "Honesty"], LATE)
+    path = export(home, tmp_path, ["ug", "harptabs"])
+
+    merged, told = told_merge(conn, path, state=tmp_path / "state")
+
+    assert told == [
+        ("", transfer.PLANNING, 0, 2),
+        "backup",
+        ("ug", "", 0, 2),
+        ("ug", "sitemap", 0, 2),
+        ("ug", transfer.UG_TABS, 2, 5), ("ug", transfer.UG_TABS, 4, 5), ("ug", transfer.UG_TABS, 5, 5),
+        ("ug", "tab of its artist pages", 0, 1),
+        ("harptabs", "", 1, 2),
+        ("harptabs", "artist page", 0, 1),
+    ]
+    assert merged.changed and rows(conn, "ug_index") == rows(home, "ug_index")
+
+
+def test_a_merge_that_takes_nothing_tells_its_planning_alone(home, conn, tmp_path):
+    full(home)
+    path = export(home, tmp_path)
+    merge(conn, path, state=tmp_path / "state")
+
+    again, told = told_merge(conn, path, state=tmp_path / "state")
+
+    assert not again.changed and told == [("", transfer.PLANNING, 0, len(SITES))]
+
+
+def test_a_refused_merge_tells_nothing(home, conn, tmp_path):
+    told: list = []
+    with pytest.raises(transfer.TransferError):
+        told_merge(conn, tmp_path / "gone.sqlite", state=tmp_path / "state", told=told)
+    path = tmp_path / "no-export.sqlite"
+    sqlite3.connect(path).close()
+    with pytest.raises(transfer.TransferError):
+        told_merge(conn, path, state=tmp_path / "state", told=told)
+    assert told == []
+
+
+@pytest.mark.parametrize("chunk", [1, 2, 3, 4, 7, 8])
+def test_ugs_sitemap_rows_taken_a_chunk_at_a_time_leave_the_database_as_one_statement_does(
+        home, tmp_path, monkeypatch, chunk):
+    """The chunks go in tab_id order, as the one statement did, in the same savepoint: every table, its search
+    tables, the songs marked and kv come out the same, row for row (8 rows: one chunk of 8, chunks that divide it
+    and chunks that don't)."""
+    from caracole import songs
+    from caracole.songs import get_song, update_song
+
+    monkeypatch.setattr(songs, "utc_now_iso", lambda: "2026-10-29T18:00:00Z")  # a song marked: one clock for both
+    ug_sitemap(home, "1", ["radiohead/creep-chords-4169", "oasis/wonderwall-chords-27596", "blur/tender-chords-8"],
+               LATE)
+    ug_sitemap(home, "2", ["radiohead/creep-chords-5000", "oasis/live-forever-chords-3", "blur/song-2-chords-1001"],
+               LATE)
+    ug_sitemap(home, "last", ["radiohead/karma-police-chords-7", "oasis/wonderwall-intro-tabs-27597"], LATE)
+    ug_listed(home, ["1", "2", "last"], LATE)
+    path = export(home, tmp_path, ["ug"])
+
+    def merged_with(size: int, name: str):
+        live = database(tmp_path, name)
+        ug_sitemap(live, "1", ["radiohead/creep-chords-4169", "blur/tender-acoustic-chords-8"], EARLY)  # renamed since
+        ug_listed(live, ["1"], EARLY)
+        song = add_song(live, "Oasis", "Wonderwall")
+        update_song(live, song.id, match_decision="accept", match_artist_key="oasis", match_song_key="wonderwall",
+                    ug_dirty=False)
+        monkeypatch.setattr(transfer, "UG_CHUNK", size)
+        merge(live, path, state=tmp_path / name / "state")
+        tables = [r[0] for r in live.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")]
+        shadows = ("_data", "_idx", "_config", "_docsize", "_content")
+        dumped = {t: [tuple(r) for r in live.execute(f"SELECT rowid, * FROM {t} ORDER BY rowid")]
+                  for t in tables if not ("_fts" in t and t.endswith(shadows))}
+        dumped["kv"] = [r for r in dumped["kv"] if r[1] != "sync:id"]
+        found = {q: [r[0] for r in live.execute("SELECT rowid FROM ug_index_fts WHERE ug_index_fts MATCH ? "
+                                                "ORDER BY rowid", (q,))]
+                 for q in ("oasis", "wonderwall", "creep", "tender", "acoustic", "song")}
+        live.execute("INSERT INTO ug_index_fts(ug_index_fts) VALUES ('integrity-check')")
+        dirty = get_song(live, song.id).ug_dirty
+        live.close()
+        return dumped, found, dirty
+
+    whole = merged_with(50_000, "whole")
+    chunked = merged_with(chunk, f"chunked-{chunk}")
+
+    assert chunked == whole
+    assert whole[2] and whole[1]["acoustic"] == []  # a new tab of its song marked it; a row renamed took the file's
+
+
+@pytest.mark.parametrize("chunk", [1, 2, 3])
+def test_a_hand_made_file_repeating_a_tab_id_merges_a_chunk_at_a_time_as_one_statement_does(
+        home, tmp_path, monkeypatch, chunk):
+    """A file whose ug_index has no key of its own and holds a tab_id five times (made by hand, never by an export):
+    its chunks count rows, not tab ids, so a chunk's end may fall past its last tab id; the rest is then one chunk,
+    and the database comes out as one statement leaves it, never a TypeError half-way."""
+    ug_sitemap(home, "1", ["radiohead/creep-chords-4169", "oasis/wonderwall-chords-27596", "blur/tender-chords-8"],
+               LATE)
+    ug_listed(home, ["1"], LATE)
+    path = export(home, tmp_path, ["ug"])
+    cols = "tab_id, artist_key, song_key, type, sitemap, first_seen, path"
+    first = f"SELECT {cols} FROM ug_index WHERE tab_id = (SELECT MIN(tab_id) FROM ug_index)"
+    f = sqlite3.connect(path)
+    f.executescript(f"""
+        CREATE TABLE loose (tab_id INTEGER, artist_key TEXT NOT NULL, song_key TEXT NOT NULL, type TEXT NOT NULL,
+                            sitemap TEXT NOT NULL, first_seen TEXT NOT NULL, path TEXT NOT NULL DEFAULT '');
+        INSERT INTO loose ({cols}) SELECT {cols} FROM ug_index ORDER BY tab_id;
+        INSERT INTO loose ({cols}) {first};
+        INSERT INTO loose ({cols}) {first};
+        INSERT INTO loose ({cols}) {first};
+        INSERT INTO loose ({cols}) {first};
+        DROP TABLE ug_index;
+        ALTER TABLE loose RENAME TO ug_index;
+    """)
+    assert f.execute("SELECT COUNT(*), COUNT(DISTINCT tab_id) FROM ug_index").fetchone() == (7, 3)
+    f.close()
+
+    def merged_with(size: int, name: str):
+        live = database(tmp_path, name)
+        monkeypatch.setattr(transfer, "UG_CHUNK", size)
+        merge(live, path, state=tmp_path / name / "state")
+        taken = rows(live, "ug_index"), kv(live, ug_index.LISTED_KEY)
+        live.close()
+        return taken
+
+    whole = merged_with(50_000, "whole")
+    assert len(whole[0]) == 3
+    assert merged_with(chunk, f"chunked-{chunk}") == whole
 
 
 def test_no_room_for_the_backup_no_merge(home, conn, tmp_path, monkeypatch):

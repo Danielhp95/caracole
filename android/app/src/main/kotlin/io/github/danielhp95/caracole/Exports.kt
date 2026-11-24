@@ -25,7 +25,9 @@ import java.security.SecureRandom
  * ([share]: ACTION_SEND of [TYPE] through a chooser, the copy exposed by the FileProvider), to send it or save it to
  * Files.
  *
- * An export is read once ([copy]: a second ask of the same address is the copy made), and a copy a day old goes.
+ * An export is read once ([copy]: a second ask of the same address is the copy made), and a copy a day old goes. A
+ * large one ([readies]: one with the site indexes is hundreds of MB) says it is being got ready before its copy
+ * begins ([readying]), so the screen isn't silent until the share sheet comes.
  */
 object Exports {
     /** The cache's folder of the copies shared (res/xml/file_paths.xml's `exports`). */
@@ -39,6 +41,24 @@ object Exports {
 
     /** A file's name when the server's attachment names none (sync.js's own). */
     const val DEFAULT_NAME = "caracole.caracole"
+
+    /** The size from which the copy before the share sheet is said ([readies]): 100 MB, about what an export with the
+     * site indexes starts at (hundreds of MB, a copy of seconds); a library and its songbooks alone copy in a moment,
+     * with nothing said. */
+    const val READIES_FROM = 100_000_000L
+
+    /** Whether an export of [length] bytes says it is being got ready before its copy. */
+    fun readies(length: Long): Boolean = length >= READIES_FROM
+
+    /** What [copy] tells as it begins, on [activity]'s screen: "Getting the file ready to share · 274 MB" in a toast,
+     * for an export that [readies]; nothing for a smaller one. Called on any thread. */
+    fun readying(activity: Activity): (Long) -> Unit = { length ->
+        if (readies(length)) {
+            activity.runOnUiThread {
+                Handoff.toast(activity, activity.getString(R.string.export_readying, Syncs.size(activity, length)))
+            }
+        }
+    }
 
     private const val KEEP_MS = 24 * 60 * 60 * 1000L
     private const val PART = ".part"
@@ -85,10 +105,11 @@ object Exports {
      * of its own, under its name ([nameOf] of the server's attachment, else of [disposition], the download listener's):
      * written under a temporary name and renamed whole, so one cut short leaves nothing. The same export again (by its
      * id, however its address is spelled: the request interceptor's and the download listener's may differ) is the
-     * copy made (the server sends an export once). Copies a day old ([now]) go first.
+     * copy made (the server sends an export once). Copies a day old ([now]) go first. [starting] is told the file's
+     * length once the server has answered it, before its copy begins.
      */
     fun copy(files: LocalFiles, url: String, root: File, disposition: String? = null,
-             now: Long = System.currentTimeMillis()): Copied = synchronized(lock) {
+             now: Long = System.currentTimeMillis(), starting: (Long) -> Unit = {}): Copied = synchronized(lock) {
         val key = parse(url)?.let { exportOf(it.rawQuery) }?.let { PyUrl.unquote(it) }?.ifEmpty { null } ?: url
         copies[key]?.takeIf { it.file.isFile }?.let { return it }
         root.mkdirs()
@@ -99,6 +120,7 @@ object Exports {
             is Fetched.Refused -> Copied.Refused(got.status, got.message)
             is Fetched.File -> {
                 val name = nameOf(got.disposition ?: disposition)
+                starting(got.length)
                 val dir = File(root, token())
                 val part = File(dir, PART)
                 try {
@@ -117,13 +139,15 @@ object Exports {
     }
 
     /**
-     * The export at [url] to Android's share sheet: [copy] in the cache's [FOLDER], off the main thread, then
-     * ACTION_SEND of [TYPE] with the copy's FileProvider URI (read permission granted, through the chooser too); a
-     * refusal or a copy that failed said in a toast.
+     * The export at [url] to Android's share sheet: [copy] in the cache's [FOLDER], off the main thread, a large one
+     * said first ("Getting the file ready to share · 274 MB"), then ACTION_SEND of [TYPE] with the copy's FileProvider
+     * URI (read permission granted, through the chooser too); a refusal or a copy that failed said in a toast.
      */
     suspend fun share(activity: Activity, files: LocalFiles, url: String, disposition: String?) {
         val got = try {
-            withContext(Dispatchers.IO) { copy(files, url, File(activity.cacheDir, FOLDER), disposition) }
+            withContext(Dispatchers.IO) {
+                copy(files, url, File(activity.cacheDir, FOLDER), disposition, starting = readying(activity))
+            }
         } catch (e: IOException) {
             Handoff.toast(activity, activity.getString(R.string.export_failed, e.message ?: e.javaClass.simpleName))
             return

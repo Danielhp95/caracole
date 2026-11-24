@@ -21,7 +21,7 @@ import org.junit.runners.Parameterized
  *
  *     android/scripts/device-test.sh --area unicode,keys      # some areas; none named: every one
  *     adb shell am instrument -w -e class io.github.danielhp95.caracole.CorpusOnDeviceTest -e area unicode \
- *         io.github.danielhp95.caracole.test/io.github.danielhp95.caracole.CaracoleTestRunner
+ *         io.github.danielhp95.caracole.debug.test/io.github.danielhp95.caracole.CaracoleTestRunner
  */
 @RunWith(Parameterized::class)
 class CorpusOnDeviceTest(private val area: String) {

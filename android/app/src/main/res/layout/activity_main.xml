@@ -51,6 +51,8 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@color/status"
+        android:ellipsize="end"
+        android:maxLines="1"
         android:paddingStart="12dp"
         android:paddingTop="2dp"
         android:paddingEnd="12dp"
@@ -69,8 +71,9 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
 
-        <!-- The first start's offer of the site catalogues (SiteCatalogues.offers): once, to a phone with no
-             computer set and no site's index, under the opening screen until it fades. -->
+        <!-- The first start's offer of the site catalogues (SiteCatalogues.firstStart): once, to a phone with no
+             computer set and no site's index, shown once the opening screen is gone (OpeningScreen.whenGone): gone
+             till then, so neither drawn over the logo (its elevation would put it above) nor live under it. -->
         <LinearLayout
             android:id="@+id/catalogue_offer"
             android:layout_width="match_parent"

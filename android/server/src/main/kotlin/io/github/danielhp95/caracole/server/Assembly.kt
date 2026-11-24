@@ -6,6 +6,8 @@ import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.health.Alerts
 import io.github.danielhp95.caracole.core.http.Transport
 import io.github.danielhp95.caracole.core.index.IndexTransfer
+import io.github.danielhp95.caracole.core.index.MergeProgress
+import io.github.danielhp95.caracole.core.index.Paced
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.OverrideChecks
@@ -173,6 +175,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         commands["backup"] = BackupRunner(parts)
         catalogues = CataloguesRunner(parts, source = deps.catalogues, metered = deps.metered,
                                       forget = { search.invalidate() })
+        catalogues.sweep()  // the file an import killed in its middle left (up to the whole unpacked index)
         commands[CataloguesRunner.COMMAND] = catalogues
     }
 
@@ -186,8 +189,13 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         deps.database, store, deps.stateDir,
         client = { address -> PeerClient(ServerAddress.parse(address)) },
         mirrorRefresh = deps.mirror?.let { mirror ->
-            { address: String ->
-                withContext(Dispatchers.IO) { MirrorSync(mirror).sync(ServerAddress.parse(address)) }
+            { address: String, say: (String) -> Unit ->
+                withContext(Dispatchers.IO) {
+                    // How many of the pages the phone lacks are copied, as they come ("120 of 640 pages").
+                    MirrorSync(mirror).sync(ServerAddress.parse(address), progress = { at ->
+                        if (at.total > 0) say("${at.done} of ${at.total} pages")
+                    })
+                }
                 Unit
             }
         },
@@ -361,15 +369,25 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
     }
 
     /** The computer's index in [file] merged, as a job of kind "index" (key "index"), so it never writes beside a
-     * sync; the file is deleted after, and the WAL the merge grew given back (Database.checkpoint). */
-    fun importIndex(file: File): Job = queue.submit(
+     * sync; the file is deleted after, and the WAL the merge grew given back (Database.checkpoint). The device tests'
+     * and the e2e's way to give the phone an index (the app queues none). */
+    fun importIndex(file: File): Job = queue.submit(importSpec(file)).first
+
+    /** [importIndex]'s job: its stage says each step of the merge as a sync's index stage says them (Paced, each
+     * step's words its detail with one "…" left off, SyncEngine.detail: "Importing · gtptabs.com", "Tidying the
+     * database"), its line "Merging the computer's index · …" (JobViews). */
+    internal fun importSpec(file: File): JobSpec =
         JobSpec(
             title = "Import the computer's index", key = "index", kind = "index", display = "The computer's index",
             stages = listOf("merge" to "Merging the index"),
             run = { job ->
                 job.stage("merge", "running")
+                val paced = Paced({ words -> job.stage("merge", "running", SyncEngine.detail(words)) })
                 try {
-                    val merged = deps.database.write { db -> IndexTransfer.merge(db, file, now()) }
+                    val merged = deps.database.write { db ->
+                        IndexTransfer.merge(db, file, now(), progress = { paced.say(it.words(), it.step) })
+                    }
+                    paced.say(MergeProgress.TIDYING)
                     deps.database.checkpoint()
                     search.invalidate()
                     job.stage("merge", "done", if (merged.changed) "merged" else "nothing newer")
@@ -381,8 +399,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
                     file.delete()
                 }
             },
-        ),
-    ).first
+        )
 
     private fun now(): String = Instant.now().truncatedTo(ChronoUnit.SECONDS).toString()
 }

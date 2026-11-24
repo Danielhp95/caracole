@@ -7,12 +7,15 @@ for which published files stay.
 - ``publish``: ``index_transfer.export`` (``PUBLIC_OMIT``: nothing private) into a temporary file in the folder,
   ``PRAGMA quick_check``, gzip -9 streamed while hashed, renamed into place, ``published.json`` written, the
   folder's older files deleted, each step told to ``progress`` as it goes (``Progress``). Refused (``PublishError``,
-  nothing left behind) for a name that exists, a UG index not built whole, or a site holding a tenth fewer rows than
-  the last file's, unless ``last`` is None (--force). A progress whose output is cut off (``BrokenPipeError``) is no
-  error of the folder's: it goes on as itself, nothing left behind.
+  nothing left behind) for a name that exists, a UG index not built whole, a clock that reads earlier than the last
+  file's minute (``after``, forced or not), or a site holding a tenth fewer rows than the last file's, unless
+  ``last`` is None (--force). A progress whose output is cut off (``BrokenPipeError``) is no error of the folder's:
+  it goes on as itself, nothing left behind.
 - ``kept``: the Keep rule, one function, the upload script's (``caracole index publish --kept``).
   A name that isn't a catalogue file is always kept; of the others, the publishing schema's two newest whatever
-  their age, and every other schema's newest while it is no older than ``keep_days``.
+  their age, and every other schema's newest while it is no older than ``keep_days``. Each file's schema is its
+  name's; the publishing schema the newest the names hold or the uploader's, whichever is higher, so an uploader
+  built before a schema bump, beside a service after it, never prunes what one built after it keeps.
 """
 
 from __future__ import annotations
@@ -127,7 +130,8 @@ def published(folder: Path) -> Published | None:
 
 
 def kept(names: Iterable[str], *, schema: int, now: datetime, keep_days: int = KEEP_DAYS) -> set[str]:
-    """Of ``names``, those the Keep rule keeps."""
+    """Of ``names``, those the Keep rule keeps: ``schema`` is the uploader's, and the publishing schema the higher of
+    it and the newest schema the names hold."""
     now = _utc(now)
     out: set[str] = set()
     by_schema: dict[int, list[tuple[datetime, str]]] = {}
@@ -137,9 +141,10 @@ def kept(names: Iterable[str], *, schema: int, now: datetime, keep_days: int = K
             out.add(name)
         else:
             by_schema.setdefault(named.schema, []).append((named.at, name))
+    publishing = max([schema, *by_schema])
     for s, found in by_schema.items():
         found.sort(reverse=True)
-        if s == schema:
+        if s == publishing:
             out.update(n for _, n in found[:2])
         elif now - found[0][0] <= timedelta(days=keep_days):
             out.add(found[0][1])
@@ -147,7 +152,13 @@ def kept(names: Iterable[str], *, schema: int, now: datetime, keep_days: int = K
 
 
 def publish(conn: sqlite3.Connection, folder: Path, *, now: datetime, last: Published | None,
-            private: Sequence[str] = (), progress: Progress | None = None) -> Published:
+            private: Sequence[str] = (), progress: Progress | None = None,
+            after: Published | None = None) -> Published:
+    """The catalogue file and its sidecar written in ``folder`` (see the module docstring); ``last``, the last
+    publication whose rows the new one's are held to (None: --force); ``after``, the last publication, whose file's
+    minute (its name's) the new one's may not be before: a clock gone back would name a file the phones never take
+    (they take the newest name) and the Keep rule might prune at once. The refusal says what to do either way: the
+    clock now set right, or, the clock right, the last file stamped ahead deleted (here and from the release)."""
     from caracole import db, stamps
     from caracole import index_transfer as transfer
     from caracole.ug.index import BUILT_KEY
@@ -158,6 +169,12 @@ def publish(conn: sqlite3.Connection, folder: Path, *, now: datetime, last: Publ
     target = folder / name
     if os.path.lexists(target):
         raise PublishError(f"{target} exists: wait a minute, or remove it first")
+    before = read_name(after.name) if after is not None else None
+    if before is not None and read_name(name).at < before.at:
+        raise PublishError(f"the clock reads {now:%Y-%m-%d %H:%M} UTC, earlier than the last file published, "
+                           f"{after.name}. If the clock is right, that file was stamped ahead: delete it and "
+                           f"{SIDECAR} from {folder} (and its asset from the release), then publish again; if not, "
+                           "set the clock right.")
     if db.kv_get(conn, BUILT_KEY) is None:
         raise PublishError("UG's index isn't built whole yet")
     token = secrets.token_hex(6)

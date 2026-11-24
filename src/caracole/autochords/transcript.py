@@ -31,6 +31,7 @@ HEARD_NOTHING = "transcribe:none:"  # + song id: when the song's audio was trans
 UNREADABLE = "autochords:failed:"  # + song id: audio auto-chords or a transcription couldn't read (run.py writes it)
 LYRICS_SOURCE = "transcript"  # a version's raw["lyrics_source"] when the sheet's words are the transcript's
 NOTE = "Lyrics transcribed from the audio (Whisper), unverified"
+ALREADY_TRANSCRIBED = "already transcribed"  # why_not_offered's word for a song whose own audio has a transcript
 MODEL = "whisper-large-v3"
 
 # The lyrics sites that are switched on: (provider, the kv prefix of the song's miss).
@@ -124,7 +125,7 @@ def why_not_offered(conn: sqlite3.Connection, cfg: Config, song: Song, overrides
         if cfg.provider(provider).enabled and kv_get(conn, f"{prefix}{song.id}") is None:
             return f"{provider} hasn't been asked"
     if transcript_of(conn, song) is not None:
-        return "already transcribed"
+        return ALREADY_TRANSCRIBED
     if heard_nothing(conn, song):
         return "nothing sung was heard"
     return None

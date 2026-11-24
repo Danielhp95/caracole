@@ -149,6 +149,46 @@ def test_an_audio_error_while_hearing_is_not_the_setups(monkeypatch, tmp_path, e
     assert raised.value is error
 
 
+def test_a_stem_whisper_cant_load_is_the_separators_never_the_songs(monkeypatch, tmp_path):
+    # Whisper reads the stem first, for the language: a stem it can't load (or one gone from the cache) is no proof
+    # the song's audio is bad, so it is the setup's, said as the separator's, and the song stays offered.
+    _fake_torch(monkeypatch, available=False, allocates=True)
+    model = _Model({"segments": []})
+    _fake_whisper(monkeypatch, model)
+    stem = tmp_path / "vocals.wav"
+
+    def load_audio(path):
+        if path == str(stem):
+            raise RuntimeError("Failed to load audio: Error opening input files: No such file or directory")
+        return [0.0] * 16000 * 40
+
+    sys.modules["whisper"].load_audio = load_audio
+    with pytest.raises(transcribe.SetupFailed, match=r"^the separator can't run here \(its vocals can't be read: "
+                                                     r"RuntimeError: Failed to load audio: Error opening input files: "
+                                                     r"No such file or directory\)$"):
+        _make(monkeypatch, tmp_path).hear(tmp_path / "mix", stem, 0.0)
+    assert model.calls == []  # the mix never heard
+
+
+def test_a_test_tone_whisper_cant_load_is_whispers_own_failure_never_the_separators(monkeypatch, tmp_path):
+    # The test tone is its own mix and stem: Whisper failing to load it (an ffmpeg that won't run) is Whisper's, said
+    # as the tone's, never blamed on a separator that never ran.
+    from caracole.autochords.run import _test_tone
+
+    _fake_torch(monkeypatch, available=False, allocates=True)
+    _fake_whisper(monkeypatch, _Model({"segments": []}))
+
+    def load_audio(path):
+        raise RuntimeError("Failed to load audio: /bin/sh: ffmpeg: not found")
+
+    sys.modules["whisper"].load_audio = load_audio
+    t = _make(monkeypatch, tmp_path)
+    with pytest.raises(RuntimeError, match=r"^Failed to load audio: "):
+        t.hear(tmp_path / "tone.wav", tmp_path / "tone.wav", 0.0)
+    assert _test_tone([("Whisper", lambda tone: t.hear(tone, tone, 0.0))]) == [
+        "Whisper fails on a test tone: RuntimeError: Failed to load audio: /bin/sh: ffmpeg: not found"]
+
+
 @pytest.mark.parametrize("device", ["cpu", "cuda"])
 def test_hearing_builds_words_and_calls_whisper_as_pinned(monkeypatch, tmp_path, device):
     from caracole.autochords.words import Word
@@ -184,6 +224,71 @@ def test_hearing_builds_words_and_calls_whisper_as_pinned(monkeypatch, tmp_path,
         language="es", word_timestamps=True, condition_on_previous_text=False, beam_size=5, best_of=5,
         fp16=device == "cuda",
     )
+
+
+class _Bar:
+    """openai-whisper's transcribe(): its progress bar over the mix's mel frames (10 ms each), moved a window at a
+    time, as whisper/transcribe.py moves its ``tqdm.tqdm``, read through the module's own ``tqdm`` name."""
+
+    def __init__(self, frames, windows):
+        self.frames, self.windows = frames, windows
+
+    def transcribe(self, audio, **kw):
+        bars = sys.modules["whisper.transcribe"].tqdm
+        with bars.tqdm(total=self.frames, unit="frames", disable=kw.get("verbose") is not False) as pbar:
+            for n in self.windows:
+                pbar.update(n)
+        return {"segments": []}
+
+
+def test_whispers_progress_through_the_mix_is_told_as_it_hears(monkeypatch, tmp_path):
+    # Whisper hears a song window by window, minutes on a CPU: its own progress bar (whisper.transcribe's tqdm, which
+    # it shows only with verbose=False) is read as it moves, in seconds of the mix heard, and given back as it was.
+    _fake_torch(monkeypatch, available=False, allocates=True)
+    model = _Model()
+    model.transcribe = _Bar(22500, [3000, 3000, 16500]).transcribe  # 3 min 45 s, two windows, then the rest
+    _fake_whisper(monkeypatch, model)
+    drawn = []
+
+    class Own:
+        def __init__(self, **kw):
+            drawn.append(kw)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return None
+
+        def update(self, n):
+            pass
+
+    real = types.SimpleNamespace(tqdm=Own)
+    monkeypatch.setitem(sys.modules, "whisper.transcribe", types.SimpleNamespace(tqdm=real))
+    heard = []
+    t = _make(monkeypatch, tmp_path)
+    t.hear(tmp_path / "mix", tmp_path / "stem", 0.0, on_progress=lambda done, total: heard.append((done, total)))
+    assert heard == [(30.0, 225.0), (60.0, 225.0), (225.0, 225.0)]
+    assert drawn == [] and sys.modules["whisper.transcribe"].tqdm is real  # never drawn, and put back
+    t.hear(tmp_path / "mix", tmp_path / "stem", 0.0)  # with none asked, Whisper's own bar, hidden as ever
+    assert drawn == [{"total": 22500, "unit": "frames", "disable": True}]
+
+
+@pytest.mark.autochords
+def test_whispers_progress_hook_is_its_versions_own():
+    # The hook reads whisper.transcribe's module-level tqdm, which its transcribe() draws its bar with, over the mel
+    # frames of 10 ms: a Whisper that draws it otherwise fails here, never in a job.
+    import inspect
+
+    pytest.importorskip("whisper")
+    module = sys.modules["whisper.transcribe"]
+    from whisper.audio import HOP_LENGTH, SAMPLE_RATE
+    from whisper.model import Whisper
+
+    assert Whisper.transcribe.__globals__ is vars(module)
+    assert "with tqdm.tqdm(\n        total=content_frames" in inspect.getsource(module)
+    assert "pbar.update(" in inspect.getsource(module)
+    assert HOP_LENGTH / SAMPLE_RATE == transcribe.WHISPER_FRAME_S
 
 
 @pytest.mark.parametrize(("error", "audio"), [

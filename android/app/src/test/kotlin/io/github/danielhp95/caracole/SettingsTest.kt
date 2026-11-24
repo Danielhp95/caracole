@@ -50,4 +50,12 @@ class SettingsTest {
         settings.lastOutcome = null
         assertEquals(null, Settings(prefs).lastOutcome)
     }
+
+    @Test
+    fun `the catalogues' question answered is kept, so no screen asks it again`() {
+        val prefs = MemoryPreferences()
+        assertEquals(null, Settings(prefs).cataloguesAnswered)
+        Settings(prefs).cataloguesAnswered = "41@1795608000"
+        assertEquals("41@1795608000", Settings(prefs).cataloguesAnswered)
+    }
 }

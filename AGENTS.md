@@ -304,8 +304,22 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   then its auto sheet made again over them (`make_transcript`).
   - Its stages song, vocals, words, chords, pdf, pages (`STAGES`), reported as a lookup's (staged.py's `StagedRun`).
   - Only a song `transcript.why_not_offered` offers one, by its identity key, never added to wanted.txt; read again
-    after each hand-over (`hand_over` before vocals, words and chords), checked still offered before vocals and
-    words, and its audio still the one vocals separated before words and chords (`_same_audio`), else a refusal.
+    after each hand-over (`hand_over` before vocals, words and chords), checked still offered before vocals, words
+    and chords (its transcript kept no refusal before the chords), and its audio still the one vocals separated
+    before words and chords (`_same_audio`), else a refusal.
+  - Its own audio's transcript kept with no auto sheet over it (the chords failed or were cut off: Try again), the
+    job goes straight to the chords (`_sheet_to_make`, run.py `_skip_reason`, guarded as `_due` guards it: a record
+    that won't read a refusal in its words), neither model run again.
+  - Refused or failed at the chords, its words kept (`TranscribeResult.transcript_kept`, set as the chords begin,
+    taken back for a song that left the book): the command's "Transcript kept; no sheet made: …" (a refusal "… needs
+    no sheet over its transcript now: …", `_still_due_its_sheet`; a failure auto-chords'), and "Transcript and sheet
+    kept: …" for a bug after the sheet was made.
+  - Each long stage says what it does as it runs (staged.py `_doing`, a running event each change): the vocals the
+    minutes demucs-rs has run against about how long it takes here (`_separating`, separate.py's `on_tick`,
+    `CPU_PACE`, `GPU_PACE`), the words Whisper loading then how far it has heard the mix (`_heard`, transcribe.py's
+    `on_progress` off Whisper's own progress bar), the chords auto-chords' steps (run.py `on_step`, `STEPS`), as a
+    YouTube sheet's audio (a video searched for, then its download: youtube_fetch's `on_download`) and chords do
+    too; status.py's `LONG_STAGES` put them on the line and the bar.
   - No sung span: Whisper isn't run, and the song is noted heard to have nothing sung.
   - The pieces are autochords/'s (below); the stem in a temporary folder under `cache_dir`, gone with the job.
   - caracole serve's Transcribe the lyrics runs it (web/transcribe_routes.py).
@@ -538,7 +552,11 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   what needs the user), which report.py turns into the run's summary on stdout and ntfy: a new step plugs in by
   returning one.
 - The log goes to stderr, set up once by the root callback (logs.py: `-v`, `-vv`, `-q`, journal priorities; under
-  systemd, the information of `JOURNAL_INFO`'s loggers too at the default verbosity: page_log.py's).
+  systemd, the information of `JOURNAL_INFO`'s loggers too at the default verbosity: page_log.py's, pipeline.py's
+  step lines and `caracole.progress`'s; `logs.level`; `clears_first`, a live line taken off stderr before a record).
+- While it goes, the run says where it is (pipeline.py `_run`): "[6/20] lyrics…" as a step starts, "[6/20] lyrics:
+  <status> (1 min 2 s)" as it ends, one line for a step that doesn't run; between them its `Ticker` (progress.py,
+  `StepContext.ticker`) says how far the step is, its last word the unit's status line (`_last_word`).
 
 ### Shared by the steps and the commands
 
@@ -546,7 +564,7 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 |---|---|
 | config.py | caracole.toml and directories, and no secret (ntfy is a topic's URL alone); `name`, what the pages call the library (`Config.library_name`: else its folder's name); `[ug_directory]` (`DirectoryPolicy`: UG's artist directory's concurrency, delay and budget, politeness that never crosses to the phone) |
 | index_transfer.py | `caracole index export` and `merge` (below) |
-| catalogues.py | `caracole index publish DIR`: every site's index as one public gzip, `indexes-s<schema>-<UTC minute>.sqlite.gz`, its sidecar `published.json` and the Keep rule (`name_for`, `read_name`, `publish`, `kept`), each step told as it goes (`Progress`: the export, each table's rows by `index_transfer.export`'s `copied` and `omitting`, the check, the gzip's bytes read), which commands/index.py's `_Publishing` says through progress.py's `Console` (a terminal's live line at most four times a second, a journal's line a quarter); `index_transfer.PUBLIC_OMIT` leaves out the database's path and LaCuerda's search rows, and a file holding a path of this machine is refused (`_no_paths`: a value with this config's folders, the home folder, the database or `/nix/store/` in it, or beginning with a machine root, `ROOTS`; a name that merely begins with "/" is a site's) |
+| catalogues.py | `caracole index publish DIR`: every site's index as one public gzip, `indexes-s<schema>-<UTC minute>.sqlite.gz`, its sidecar `published.json` and the Keep rule (`name_for`, `read_name`, `publish`, `kept`), each step told as it goes (`Progress`: the export, each table's rows by `index_transfer.export`'s `copied` and `omitting`, the check, the gzip's bytes read), which commands/index.py's `_Publishing` says through progress.py's `Console` (a terminal's live line at most four times a second, a journal's line a quarter); `index_transfer.PUBLIC_OMIT` leaves out the database's path and LaCuerda's search rows, and a file holding a path of this machine is refused (`_no_paths`: a value with this config's folders, the home folder, the database or `/nix/store/` in it, or beginning with a machine root, `ROOTS`; a name that merely begins with "/" is a site's); a clock that reads earlier than the last file's minute is refused too (`publish(after=)`, the sidecar's last publication), which `--force`, passing the rows' guard alone, never passes; the Keep rule's publishing schema is the higher of the uploader's and the newest the names hold, so an uploader built before a schema bump never prunes what a service after it keeps |
 | peer_sync.py | two caracoles compared and synced, unit by unit (below) |
 | canonical.py | canonical JSON: one text, so one digest, for a value in Python and in Kotlin (`dumps`, `digest`, `read`, `stored_hash`; docs/superpowers/specs/2026-11-03-canonical-json.md); the standard library alone |
 | peer_push.py | a push: the units another caracole (the phone) gives this one, staged by caracole serve, taken by `caracole peer take` (below) |
@@ -554,7 +572,7 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 | peer_import.py | a file to import, staged part by part in `state_dir/peer/import-<id>/` (peer_file.py, below) |
 | politeness.py | the settings the computer gives the phone at a sync (`settings_document`: caracole.toml's name, the user agent, each provider's switch and lookup settings, `[match]`, `[rank]`), never its politeness (Two caracoles, each its own politeness, below); the standard library alone |
 | service.py | whether this machine runs caracole as a service (below) |
-| db.py | the schema, migrations, `kv`, `savepoint` (atomic writes on the autocommit connection) |
+| db.py | the schema, migrations, `kv`, `savepoint` (atomic writes on the autocommit connection); an upgrade, and a wait for another caracole's, said on the progress log (`caracole.progress`, never under -q) |
 | http.py | `PoliteClient`, robots rules, cached answers (`stale`, `read_once_more`; `cached` and `CachedAnswers` read the cache alone, sending nothing); `ParallelClient`, PoliteClient's rules with several requests in flight (`get_many`; each request cleared one at a time under a lock, `_claim`; the events held and drained into the caller's thread, `drain`): UG's artist directory's alone |
 | health.py | cooldowns, `events` |
 | normalize.py | keys, pinyin, `name_forms`; `name_words`, `holds_run` and `PINYIN_PARTIAL_SCALE`, Chinese in pinyin only as whole words, for search.py and lacuerda_index.py |
@@ -575,7 +593,7 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 | keys.py | a song's musical key and where it came from (below) |
 | removal.py | `caracole remove` and the web page's Remove; the tombstones it leaves are songs.py's |
 | sites.py | the library page's Sites tab's data (below) |
-| progress.py | a command's output: a live line on a terminal, plain lines elsewhere |
+| progress.py | a command's output: a live line on a terminal, plain lines elsewhere, fitted in display columns of the stream's own width; `Ticker` (`ticker()`), what long work is doing as it goes: a live line on stderr on a terminal at the default verbosity alone, off for good once a write fails, a `caracole.progress` line a minute, the unit's status line (`systemd_status`, sd_notify `STATUS=`, where `$NOTIFY_SOCKET` is set); `Requests`, a client's requests against its budget (`make_client(ticker=)`, `make_youtube(ticker=)`, its runs with no time left); `Counted`, work of a known size (`directory_pass(progress=)`, `render.rendering`); a staged job by hand (`caracole transcribe`, `youtube --sheet`) its long stages' running details on one (commands/get.py `_Lines(ticker=)`, none with `--progress`, nor for `caracole get`); they only count, never pace |
 | staged.py | a job of stages over one song, each reported as a lookup's stages are, run in order under the lock as asked for now (`StagedRun`: `_run`, `stage`, `_fail`, `_after_a_lookup`, `_song_again`, `_refuse`; the stages both jobs end with, `_autochords_sheet`, `pdf`, `pages`; `StagedResult`; the command's last lines, `_common.staged_end`): youtube_sheet.py's and transcribe_job.py's |
 | progressions.py | each song's progressions (below) |
 
@@ -597,7 +615,16 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     - LaCuerda's artist pages and search rows only where the database has none;
   - progress records move on, never back;
   - backed up first (backup.py, `before-merge`) only when something changes, so a second merge writes nothing;
-  - each index's `ensure_current_keys` after, whole where the file's keys record differs.
+  - each index's `ensure_current_keys` after, whole where the file's keys record differs;
+  - its progress, `merge(progress=, backing_up=)`, which the phone's merge mirrors: `progress(site, action, done,
+    total)` once before it plans (`("", PLANNING, 0, sites)`), and once anything changes, `backing_up()`, then
+    `(site, "", i, sites)` before each site, one that changes nothing too, `(site, noun, 0, n)` before each action,
+    and `("ug", UG_TABS, rows taken, rows)` after each chunk of UG's sitemap rows, a statement for each `UG_CHUNK`
+    (50,000) by `tab_id` range, in one statement's order and savepoint, so its rows come out the same (the index
+    corpus with `UG_CHUNK` 1 unchanged); `MergeWords` the words, commands/index.py `Merging` where they go (`index
+    merge`'s stderr or `--progress` detail; `peer sync`'s and `peer import`'s `index` stage), stderr's by the
+    ticker's rules (`merge_console`: `progress.live_here`, quiet at -q; a live line taken off before a log record,
+    `logs.clears_first`; any write that fails, a broken pipe, a terminal gone, a stream closed, the last it tries).
 
 #### peer_sync.py
 
@@ -945,15 +972,19 @@ The pages caracole writes and serves are index.html, sheet.html, songbook.html a
   `instruments_of`).
   - The Filter panel's Matches keep a site's songs too while the sites' results show, the owner's ask of 2026-11-22
     ("search yoko kanno while looking only for harmonica songs"): a site's song by what its rows have something for
-    (library.js `rowHas`, `itemHas`: UG's chords, tabs or Ukulele Chords by its counts, LaCuerda's chords, iReal
-    Pro's chart, gtptabs.com's Guitar Pro file, gametabs.net's tab by its instruments, harptabs.com's harmonica tab,
+    (library.js `rowHas`, `itemHas`: UG's chords, tabs or Ukulele Chords by its counts, LaCuerda's chords, iReal Pro's
+    chart, gtptabs.com's Guitar Pro file, gametabs.net's tab by its instruments, harptabs.com's harmonica tab,
     MuseScore's score), a group's "+ N more" and read offers and a title alone by what its site has (`SITE_HAS`,
-    `siteKeeps`), your songs as in the list (`instOf`, a line's holds read the same way). Status, Key and a
-    progression keep to your songs alone: a site's song has no status and no key its index knows. The panel is the
-    search bar's (body.html), so it opens over the results, under Filter, and stays open as you tap; its chips and
-    its Show N songs count what the results show (`resultsHas`, `resultsShown`, drawGroups); the marks under the
-    box count the lines shown (`foundNow`); the results' head says what is kept, with Show all (`keptSaid`), and
-    what the Matches hide whole is said, with Show all (`filteredOut`; test_web_page_search_filters.py).
+    `siteKeeps`), your songs as in the list (`instOf`, a line's holds read the same way). Status, Key and a progression
+    keep to your songs alone: a site's song has no status and no key its index knows. The panel is the search bar's
+    (body.html), so it opens over the results, under Filter, and stays open as you tap (the bar over the list of
+    requests meanwhile, `.searchbar:has(> .filter-panel[open])`; its body, `.fbody`, the one that scrolls on a short
+    window, its arrow outside it; the sheet from the bottom where less than `POPOVER_LEAST`, 240 of the text's pixels,
+    would show under Filter with the bar stuck at the window's top, the same kind wherever the page is scrolled to:
+    test_library_filter.py); its chips and its Show N songs count what the results show
+    (`resultsHas`, `resultsShown`, drawGroups); the marks under the box count the lines shown (`foundNow`); the results'
+    head says what is kept, with Show all (`keptSaid`), and what the Matches hide whole is said, with Show all
+    (`filteredOut`; test_web_page_search_filters.py), each giving the focus to the first result (`focusList`).
 - **harptabs.com is searched as UG's index is** (`search.search_harptabs`, `/api/search`'s `harptabs_artists` and
   `harptabs`):
   - its artists, named from their page once read (harptabs_index.py);
@@ -1039,21 +1070,25 @@ It is rows.js's, shared by both pages:
     (rows.js `indexLine`'s too, `onSearch`);
   - on a phone library.css's folded grid puts the overline over the title, `.line-title` `display: contents` (its
     `.line-plays` a direct child, card.css's seam: test_library_assets.py), the title's column keeping rows.css's
-    4rem; from 720 px the flat line's columns, the title, then the overline in `by` right after it, then its buttons,
-    the status, the action and the key, at its end (the owner's order; no chevron after it since 2026-11-22: below);
+    4rem; from 720 px the flat line's columns, the title, then the overline in `by` right after it, then the status,
+    its buttons, the action and the key, at its end (the owner's order; no chevron after it since 2026-11-22: below);
     Select mode's are songbooks.css's
     (test_library_bands.py); the same rules are `section.flat .line`'s, a list sorted by title or by when they came
     folding every line;
-  - from 1200 px, in the 760 px list beside the pane (where the lanes meet, 12): a folded or flat line keeps that one
-    row while its buttons fit; where they don't, `plays-under` (library.js `placePlays`: measured in the one row, where
-    its last button wraps below its first, once a line, by the list's width, the root's font size and Select, again
-    when the line changes or stops being folded or flat; batched once a frame, `placePlaysSoon`; a line of a run off
-    the screen once its run comes near it, `contentvisibilityautostatechange`, `placeRuns`, never by laying the run
-    out: below)
-    makes its first row the title, its artist right after it, the status, the action and the key, and its
-    buttons a row of their own under the title (library.css, songbooks.css selecting); a band's line its buttons
-    beside its title where they fit, else under it (`.line-title` wrapping), so none ever pushes the key off the line
-    (test_library_card_place.py, test_library_bands.py).
+  - where a line's buttons go, `plays-under` (library.js `placePlays`: measured in the one row, where its last button
+    wraps below its first, once a line, by the list's width, the root's font size and line height (`textSize`: the
+    app's pinch grows the second alone) and Select, again when the line changes or stops being folded or flat;
+    batched once a frame, `placePlaysSoon`; a line of a run off the screen once its run comes near it,
+    `contentvisibilityautostatechange`, `placeRuns`, never by laying the run out: below), its first row then the
+    title (a folded or flat line's artist right after it), the status, the action and the key, its buttons a row of
+    their own under the title, at its end, left of the key's column (library.css, songbooks.css selecting), so none
+    ever pushes the key off the line:
+    - a folded or flat line from 1200 px, in the 760 px list beside the pane (where the lanes meet, 12): one row while
+      its buttons fit, else `plays-under`;
+    - a band's line from 720 px, its title's column keeping 64 of the text's pixels: its buttons beside its title where
+      they fit on one row, else `plays-under` (where they wrap in their column, and from 1200 px also where its title
+      is cut), never one a row beside the title (test_library_card_place.py, test_library_bands.py,
+      test_library_text_size.py).
 - **The card's place**: from 1200 px a song's card is in the laptop's pane, `#card-pane` (body.html's `.lib-cols`, the
   list's `.lib-main` beside it), one at a time, never under its line; under 1200 px under its line, in one column of
   800 px from 720 px (`#library-view`, the masthead keeping the page's width) (library.js, below; library.css).
@@ -1201,7 +1236,9 @@ It is rows.js's, shared by both pages:
   list's estimates `--band-h`, `--line-h`, `--fold-h`) is `calc(N * var(--sp))`. `--sp` is `1rlh / 16` (`html`'s line
   height is 16px for it), at most `(100vw - 82px) / 152`, so a phone's line stays one row, its key on the screen (its
   title's least room, a button (43.2) and its key's cell (44 on a touch screen) are 152 of them; 82px the page's, an opened card's and the line's
-  paddings, borders and gaps; 192 and 88px while it had its chevron), and 1px at least from that room; never in a
+  paddings, borders and gaps; 192 and 88px while it had its chevron; in Select mode the lists' own, `.selecting .list`
+  and `#found`, at most `(100vw - 132px) / 152`, its box's 44 px and gap off the room, and Select's columns in it too,
+  songbooks.css), and 1px at least from that room; never in a
   `font-size` or a `line-height`, which the zoom sizes already (a line height in it grows twice), nor where a box's height is a line height (a count's
   digits centred by the grid). The tiles' container queries are in `rlh` (24.9375rlh is 399px at the pages' own
   size). test_library_text_size.py (the root's line height grown, Chromium having no text zoom), PinchTest on a
@@ -1245,8 +1282,8 @@ It is rows.js's, shared by both pages:
   selector ending `.line-title > .line-plays`, rows.css and library.css) and the laptop's pane (`#card-pane …`,
   library.css) are lane 1's: test_library_assets.py.
 - A song of yours closes to a line: its title, then, at the line's end, left of its action and its key (the owner's
-  ask of 2026-11-22: "always right aligned. That is, left of the key"; rows.css's margin, library.css's columns, a
-  band's line's under its title beside the pane where its title would be cut, library.js `placePlays`), a button for
+  ask of 2026-11-22: "always right aligned. That is, left of the key"; rows.css's margin, library.css's columns,
+  under its title where they would wrap beside it, library.js `placePlays`: Bands and folding, above), a button for
   each thing to play from, none first (card.js
   `plays`, from `things`, what the card's tiles are made of too: each a link that opens it at once, its instrument's
   `glyph`, inline SVG made with `createElementNS`, the one address the page names, an icon tile at every pointer (27 px with a mouse, 43.2 px on a touch screen, a tenth under 30 and 48 by the owner's ask of
@@ -1870,9 +1907,19 @@ It is rows.js's, shared by both pages:
     (`skipped`), so the total only rises; a sync's, a take's and a request of commands still leave a skipped one out.
   - `at` and `count` ("3 of 7") are the step in hand (`outcome._in_hand`): while it runs the running step, else the
     first waiting, else the last; once over the first that failed, else none; the bar shows them while the request
-    runs, and the frozen bar once it is over. `waits`, true, right after them, while that step's running stage waits for the book
-    (`outcome._waits_for_the_book`: its detail begins as status.py's `_WAITING`, the test `_stage_line` makes for
-    "Waiting for the book…"; the phone's `Outcomes.waitsForTheBook`, by the same rule though it takes no lock).
+    runs, and the frozen bar once it is over. `doing`, right after them, while that step's running stage is a long
+    one that says what it does (status.py `LONG_STAGES`, `doing`: a YouTube sheet's audio and chords, a
+    transcription's vocals, words and chords; the number first, nothing the step's name says, "1:20 of 3:45", "~12
+    min", "2 of ~12 min"), which `stepWords` says after the count (`.step-doing`, in the room the step and its place
+    leave, `flex: 1 1 0`; under 400 px its bar's place a screen reader's alone, `.step-count` clipped, and its own
+    " · " left out, `.step-sep`, so 320 px shows it whole; for the eye alone, `aria-hidden`, changed in place on the
+    same bar, `sayDoing`, so the line's live region never reads each of Whisper's windows). status.py's line says
+    every long stage's words after its own ("Transcribing the lyrics · 1:20 of 3:45…"), a sync's or an import's
+    `index`, the phone's `mirror`, an index `merge` and a take's or an import's `render` too, which have no bar,
+    their line the Journal's and the tray's ("Making pages of what was taken · 12 of 20 songs…"); the phone's
+    `Status.LONG_STAGES` and `Outcomes.progress` alike. `waits`, true, while that step's running stage waits for the
+    book (`outcome._waits_for_the_book`: its detail begins as status.py's `_WAITING`, the test `_stage_line` makes
+    for "Waiting for the book…"; the phone's `Outcomes.waitsForTheBook`, by the same rule though it takes no lock).
   - Each step (`outcome.Chip`, `{name, site, state, found}`) names its site in full (`site`, `outcome.SITE_NAMES`
     of its tag: "Ultimate Guitar", "LaCuerda", "YouTube"; a tag it lacks as it is) and what it found (`found`,
     `outcome._found`: its stages done in their words, one failed in the outcome's words where they parse, else in
@@ -1913,7 +1960,9 @@ It is rows.js's, shared by both pages:
   on it, `render_all` first thing, so every path to a page gives it them (`merge.with_plain_lyrics`, a version's
   `raw["lyrics"]` then "plain").
 - btc.py (with the vendored btc_model.py and LICENSE-BTC) and beats.py need torch, librosa and beat_this; run.py runs
-  them over the library.
+  them over the library (`autochords_pending`), logging each song it works on and its place among those due
+  ("Working out the chords of A - T (3 of 12)…", `_count_due`), and telling `on_step` each step (`STEPS`: the models
+  set up, a song's chords, beats and sheet), which a staged job's chords stage says.
 - audio.py, `load_mono`: every model's audio, mono at a rate, through librosa (libsndfile: WAV, FLAC, Ogg, MP3), else
   torchaudio (FFmpeg, through torchcodec) for the AAC of an .m4a, as YouTube's audio always is (youtube.py) and an
   iTunes purchase; btc.py `load_audio` and separate.py `frame_db` both read through it, and `load_librosa` gives numba
@@ -1944,7 +1993,8 @@ It is rows.js's, shared by both pages:
     or the model's ("Whisper's model won't load": any other load failure, on the GPU too), never the audio's;
     `is_audio_error`, Whisper failing to load the audio.
   - The job works in a `transcribe-*` folder under the cache, gone with it; one a killed job left is swept at the
-    next job's start (`_sweep`, under the lock: one transcription at a time).
+    next job's start (`_sweep`: a folder no live job holds, its `.owner` flocked while its job runs, as another
+    transcription asked for now may take the lock while this one lets the lookups have it).
   - The job builds the default separator and Whisper at their first stage, Whisper run first on run.py's test tone
     (`_test_tone`); demucs-rs not (it fails on the song as on a tone, the setup's alike, and each run costs about
     30 s). Its failures are told apart as run.py's: the setup's and the audio's. The setup's record nothing against
@@ -2010,6 +2060,8 @@ It is rows.js's, shared by both pages:
     nix/module.nix alone, without the flake, doesn't switch `autochords.package`.
     `whisperModel` and `separatorModel` are `CARACOLE_WHISPER_MODEL` and `CARACOLE_DEMUCS_MODEL`.
   - And `/etc/caracole/service`, the service's marker, service.py's.
+  - caracole.service has `NotifyAccess = "main"` (deploy.md's Ubuntu unit too): the run tells systemd its status line
+    (progress.py `systemd_status`), the wrappers exec'ing, so caracole is the main process.
   - `publish` (off): `caracole-publish.service` and its weekly timer run `caracole index publish` offline into
     `publish.folder` (2750), with no network and no token, which `caracole-admin` may then write too. The upload is
     the owner's own systemd user service in their own configuration (`caracole-upload.service`), running
@@ -2067,22 +2119,33 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     normalize.py and library.safe_name; `pinyin/`: pypinyin; `fuzz/`: rapidfuzz-cpp;
   - `json/`: canonical.py (canonical JSON, digests) and `json.dumps`'s kv text;
   - `search/`, `ug/`, `sites/`, `lacuerda/`: search.py, ug/key_search.py, ug/artist_tabs.py, lacuerda_index.py and
-    the other sites' search; `names/`: song_names.py; `index/`: index_transfer.py's merge;
+    the other sites' search; `names/`: song_names.py; `index/`: index_transfer.py's merge (its guards: a file of
+    tables alone, read in its `sqlite_master` before any table, `trusted_schema` off while attached, kv's columns
+    checked; its `progress`, `MergeProgress`, index_transfer.merge's events one for one: `planning`, each site, each
+    action, `tab` after each `UG_CHUNK` of UG's sitemap rows, by `tab_id` range in one statement's order, and the
+    phone's own `optimize`; `Paced`, a stage's words at most once a second, a step's first and last at once);
   - `library/`: songs.py, removal.py's rules, overrides.toml and songbooks.toml as tables; `sync/`: peer_sync.py,
     and the phone's sync engine and peer client;
   - and milestones 4–6's, each in its section below: `http/`, `health/`, `config/`, `html/`, `lookup/`, `ug/`,
-    `match/`, `lyrics/`, `lacuerda/`, `sites/`, `inbox/`, `share/`, `songbooks/`, `backup/`.
+    `match/`, `lyrics/`, `lacuerda/`, `sites/`, `inbox/`, `share/`, `songbooks/`, `backup/`, and `catalogues/`
+    (GitHub's release of the site catalogues, below).
   - testFixtures: `Corpus`, `Fixtures`, `TestDb`: how every Kotlin test reads the corpus and makes a database.
 - `:server` (plain JVM): web/ on the phone, on Ktor CIO at 127.0.0.1 behind a launch secret: `http/` (app.py,
   security.py, inline.py, the message page), `files/`, `page/` (library_page.py's page, from library_assets/ copied
   byte for byte at build time), `jobs/` (jobs.py, jobs_routes.py), `routes/`, and `Assembly.kt`, the phone whole.
 - `:app`: the Android app on its own server (`Caracole.kt`: one `Phone` a process, its server on
-  `http://127.0.0.1:8738`, else a free port; the launch's secret a cookie, `caracole-launch`, set in the WebView, which
-  loads that exact origin alone, `mirror.Links`); the bar's sync button, the library page's sync sheet
+  `http://127.0.0.1:8738`, the debug build's 8739 (`Caracole.PORT`, BuildConfig's `SERVER_PORT`), else a free port;
+  the launch's secret a cookie, `caracole-launch`, set in the WebView, which loads that exact origin alone,
+  `mirror.Links`); the bar's sync button, the library page's sync sheet
   (`SheetAddress`, `#sheet=sync`; Settings' Export and Import a file open it at theirs, the page's file input reaching
   Android's picker, `FileChooser`, its export the share sheet, `Exports`); Sync on Wi-Fi, that sync unattended
   (`Syncs.run`: `Phone.sync.alone`, a notification on channel `syncs` for the conflicts it left); the queue's work, a
   sync among it, in a foreground service (`SyncService`).
+  - Its debug build is an app of its own beside F-Droid's release (`io.github.danielhp95.caracole`, the release key):
+    `io.github.danielhp95.caracole.debug` (`applicationIdSuffix`, versionName `…-debug`), "Debug caracole" with an
+    amber icon and a DEBUG mark (src/debug/res), its own data and port, its tests
+    `io.github.danielhp95.caracole.debug.test`; the classes stay in `io.github.danielhp95.caracole` (the namespace).
+    `android/scripts/phone-install.sh` builds a checkout's and installs it on a real phone (tests/test_phone_install.py).
 - `:viewer` (plain JVM, milestone 5): the page builder, viewer/ in Kotlin, with viewer/'s `.js`, `.css` and voicings
   copied byte for byte at build time (`copyViewerAssets`).
 - `:e2e`: the end-to-end phases against a real caracole serve (`PhoneScenarioTest`, driven by
@@ -2103,8 +2166,11 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   file of this app's schema, `download` streams it through `GZIPInputStream` into `stateDir/cache/catalogues/`, checks
   GitHub's SHA-256 and a cap of 20 times its size or 64 MiB, the larger, and says why it can't (a newer or older schema only, no release,
   the hour's share spent, no room). server/lookups' `CataloguesRunner` merges it (`IndexTransfer.merge`), kv
-  `catalogues:imported`. The app's Settings row and first-start offer are native (`SiteCatalogues`), the shared library
-  page untouched.
+  `catalogues:imported`, saying each step (`MergeProgress.words` through `Paced`), the lookups queued meanwhile let
+  go first once GitHub's list is read and once the file is in (`yieldToQueued`), never inside the merge's write; a metered network's stop waits for the go-ahead alone
+  (`PhoneKinds` CATALOGUES' `otherwise`, its `formerly` words still a wait); the file a killed import left swept as
+  the phone starts (`CataloguesRunner.sweep`). The app's Settings row and first-start offer are native
+  (`SiteCatalogues`), the shared library page untouched.
 - The phone's own job kinds, which Python never queues (render, inbox, backup, restore, catalogues), are one table with their
   words, `server/jobs/PhoneKinds.kt`, the phone's alone.
 - `app/src/androidTest/` runs on a device or an emulator alone (the device step, below), under `CaracoleTestRunner`:
@@ -2487,10 +2553,14 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     artist page's check, read as strptime reads them, `elsewhere` from the local indexes and `Health.isCooling`);
   - what a job over came to worked out once, the queue's one answer (`SongFacts.ended(queue)`, jobs_routes'
     `_ended`), which every route that says a job's line asks, /jobs.json's and the Requests tab's alike;
+  - a request queued behind a running job of the phone's own (`JobViews.behind`: a PhoneKinds' kind's, a sync's, an
+    index import's, not yielding) says what it waits for, the phone's own, as Python never queues one (`queuedBehind`:
+    "Queued · after the site catalogues (Importing · …)", "Queued · after backing up the book", "Queued · 2 requests
+    ahead, now the sync (Updating the indexes · …)");
   - PhoneKinds' kinds (render, inbox, backup, restore, catalogues) say §5.3's table's words, the ones their run filled in as
     their stage's detail (`context.stage(<its stage>, state, PhoneKinds.fill(…))`, done, running or failed; inbox's
     wait a done detail in `otherwise`'s words: `JobViewsTest.thePhonesOwnKindsSayTheirTablesWordsAsTheirRunFilledThemIn`),
-    and the phone's index import "Merging the computer's index…";
+    and the phone's index import "Merging the computer's index…", its merge's words after it (a long stage);
   - vectors/web/job_views.jsonl (the phone's own jobs), job_views_kinds.jsonl (every kind of commands in every state,
     every stage a line words running, a sync's, a take's and a merge's commands), outcome.jsonl (the same and each
     site's waits and errors, then the tables of words whole, its `tables` record) and job_views_song_of.jsonl
@@ -2559,6 +2629,12 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   songbooks); Library unticked skips the mirror stage, Site indexes unticked the index stage, each saying so. No stage
   is added to a network sync. `Conflicts.ASK` refuses a conflict settled neither way before any change;
   `Conflicts.LEAVE`, the unattended sync's, leaves it (`UNSETTLED`) and never refuses.
+- **Its stages say how far** (`Paced`): the index stage "The computer is copying its indexes…", "Downloading the
+  computer's indexes · 120 of 274 MB" (`PeerClient.index`'s `onBytes`, by Content-Length; none, "· 3.4 MB so far"),
+  the merge's `MergeProgress.words`, "Tidying the database…"; a file's "Copying the file's indexes out…" first. Its
+  hooks take a words callback: `mirrorRefresh: suspend (address, say) -> Unit` (Assembly's: `MirrorSync.sync`'s
+  progress, "120 of 640 pages") and `pagesFromFile: (SyncFile, taken, say) -> Unit` (`SyncFileRoutes.pagesFromFile`:
+  `Mirror.takeLayer`'s `progress`, "12 of 40 pages kept").
 - **A song's overrides entries taken** are read back inside its unit's savepoint, as `put_song_entries` reads them, an
   entry the reader refuses leaving the unit in Python's words; a `[version]` kept by its key and a `[harmonica]`
   reading by the viewer's checks, which core reaches through `OverrideChecks` (the engine's `checks`: Assembly's
@@ -3087,7 +3163,10 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     `http:last_request:`, the global records that gate a request (`lacuerda:search:`, `lacuerda:search-failed`,
     `gtptabs:unusable:`, `ug:artist_url:`, `ug:pasted_tab:`, `ug:unreadable:`, `youtube-search:`), `sync:` (so a
     restored library is the phone's change at the next sync: §11 Q11's default), `phone:settings`, `phone:schema`, the
-    index push's notes and every index's progress records, and each song's records that gate a request (`SONGS`:
+    index push's notes and every index's progress records, the site catalogues' (`catalogues:`: the file the index
+    tables took last, GitHub's ask-again time, a download waiting for a go-ahead, the offer made: a restore never
+    touches those tables, so a tap after one says Up to date exactly when they hold the newest file), and each song's
+    records that gate a request (`SONGS`:
     `megalobiz:checked:` and the other 30-day checks, `ug:artist_page_checked:`) by the song's identity key; the rest
     of kv, and the songs' own columns, are the library's;
   - BackupsTest on the JVM.
@@ -3169,9 +3248,9 @@ CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py  
   `ANDROID_AVD_HOME` that folder), `emulator -avd caracole -gpu host` with `LD_LIBRARY_PATH=/run/opengl-driver/lib`
   (and `QT_QPA_PLATFORM=xcb` on Wayland), a computer of its own for each test that changes the phone's library
   (`nix develop -c python -m tests.helpers.e2e_library serve DIR PORT --address 127.0.0.1`, the emulator's
-  `http://10.0.2.2:PORT`), `adb shell pm clear io.github.danielhp95.caracole` between them, and each class alone with
-  `adb -s emulator-5554 shell am instrument -w -e class io.github.danielhp95.caracole.CLASS [-e server …]
-  io.github.danielhp95.caracole.test/io.github.danielhp95.caracole.CaracoleTestRunner`.
+  `http://10.0.2.2:PORT`), `adb shell pm clear io.github.danielhp95.caracole.debug` between them, and each class alone
+  with `adb -s emulator-5554 shell am instrument -w -e class io.github.danielhp95.caracole.CLASS [-e server …]
+  io.github.danielhp95.caracole.debug.test/io.github.danielhp95.caracole.CaracoleTestRunner`.
 
 - Given no paths, pytest runs on pytest-xdist workers (conftest.py: `-n auto`, at most 12, fewer on a busy machine:
   the cores its load leaves, 2 at least, so suites run at once share it; `--dist worksteal`).
@@ -3309,6 +3388,9 @@ nix flake check
   `${CARACOLE_EMULATOR_LOCK:-${XDG_RUNTIME_DIR:-/tmp}/caracole-emulator.lock}`, the others' the same name with their
   port) while it installs and runs, starts that emulator if it isn't up (each read-only, so several run on the one AVD) and leaves
   it up.
+- **The owner's phone** gets a debug build only through `android/scripts/phone-install.sh` (`-s SERIAL`, `--launch`):
+  `adb install -r --user 0` of `io.github.danielhp95.caracole.debug` alone, so the phone's other user and F-Droid's
+  `io.github.danielhp95.caracole` are never touched; no test runs on it.
 - **Big data sets** (more than a few thousand rows) run only in a `*Bench` class of the gated `bench` task
   (`nix develop ./android -c gradle -p android bench`: a 3 GiB heap, one fork), never in `test`, which excludes them.
 - `load_config` takes `env=`, and unit tests pass it. CLI tests read the real environment: clear what could leak in,
@@ -3526,6 +3608,11 @@ picks one).
   Two requests a download, at a tap, with caracole's own user agent; a 403 or 429 with no requests left is kept (kv
   `catalogues:not-before`) and nothing is asked before it (one more than two hours ahead of the clock passed over,
   `CataloguesRunner.MOST_AHEAD`). No exception to robots.txt is made.
+- The upload script keeps the release a prerelease (made one, or marked one, at each run: `/releases/latest` never
+  answers a prerelease, and the phone reads the tag), and uploads again a file GitHub lists with no digest, which
+  can't be checked, once it is deleted; one listed otherwise than the sidecar says is never replaced. `caracole index
+  publish` refuses a clock that reads earlier than the last file's minute, `--force` or not, and the Keep rule
+  prunes by the higher of the uploader's schema and the newest one the names hold (catalogues.py, above).
 - "caracole itself sends it nowhere" (the exports above) stays true: caracole writes the public file and never
   uploads it; the owner's user service does.
 

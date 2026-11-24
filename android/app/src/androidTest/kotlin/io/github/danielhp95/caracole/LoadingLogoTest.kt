@@ -50,4 +50,18 @@ class LoadingLogoTest {
             }
         }
     }
+
+    @Test
+    fun theShineStopsWithTheScreenEvenInTheOpening() {
+        // The screen gone while it may still open (Back, a recreation): its shine stops with it, and nothing the start
+        // still tells (it goes on in the process) starts it again. On a fast device the page may be drawn first; the
+        // shine is stopped either way.
+        var main: MainActivity? = null
+        ActivityScenario.launch(MainActivity::class.java).use { scenario -> scenario.onActivity { main = it } }
+        val gone = main!!
+        Thread.sleep(500)  // a step the start told after the screen went has had time to land
+        var shines = true
+        androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().runOnMainSync { shines = gone.openingShines }
+        assertTrue("the opening screen's shine runs on for a screen gone", !shines)
+    }
 }

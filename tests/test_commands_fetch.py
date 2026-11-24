@@ -130,6 +130,23 @@ def test_fetch_reports_each_song_and_the_totals(tmp_path, ug):
     assert [tuple(e) for e in events] == [(PERSIANA, "ok"), (SIGNOS, "ok")]
 
 
+def test_fetch_counts_its_requests_on_a_terminal_and_takes_the_line_off_for_each_songs_own(tmp_path, ug, monkeypatch):
+    from helpers.screens import on_screen
+
+    two_songs(tmp_path, ug)
+    screen = on_screen(monkeypatch)
+    result = run(tmp_path)
+    assert result.exit_code == 0, result.output
+    first, second = "Ultimate Guitar · 1 of up to 60 requests", "Ultimate Guitar · 2 of up to 60 requests"
+    parts = screen.getvalue().split("\r")
+    shown = [p.split("  up to ")[0] for p in parts if p.strip()]
+    assert shown == [first, second]
+    # both sheets asked first (the fetch's first pass), then the live line taken off ("\r", blanks, "\r") before the
+    # first song's line, which stdout prints; none left to take off before the second's
+    assert [p.strip() == "" for p in parts[1:]] == [False, False, True, True]
+    assert "Soda Stereo - Signos: sheet 201 (1 request)" in result.stdout and "up to" not in result.stdout
+
+
 def test_nothing_to_fetch(tmp_path, ug):
     conn = connect(tmp_path)
     accepted(conn, "Signos", "signos", 201, added_at="2026-10-01T00:00:00Z", dirty=False)

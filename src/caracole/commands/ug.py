@@ -1,5 +1,6 @@
 """``caracole ug --link URL``: an Ultimate Guitar page pasted into the library page's search box, read now; and
-``caracole ug --directory``: UG's artist directory read (ug/directory.py), bulk work at the pace the owner chose for it.
+``caracole ug --directory``: UG's artist directory read (ug/directory.py), bulk work at the pace the owner chose for it,
+saying how far it is as it goes (progress.py's ``Ticker``: a live line on a terminal, a line a minute in the journal).
 
 A tab's page (``/tab/{id}`` or a slugged one), then its artist's page, whose lists the fetch reads too, or an artist's
 page alone (``/artist/…``): an interactive lookup, at the lookup pace (as ``caracole harptabs --artist`` asks: a
@@ -82,11 +83,12 @@ def _directory(cfg: Config, budget: int | None) -> None:
     do; a block records UG's cooldown (the fetch and lookups cool too) and sends one alert."""
     from contextlib import closing
 
+    from caracole import progress
     from caracole.health import answered_any, get_state, is_cooling, record_block, record_error, record_ok
     from caracole.http import ProviderBlocked
     from caracole.logs import plural
     from caracole.stamps import shown
-    from caracole.ug.directory import PROVIDER, directory_pass, index_state
+    from caracole.ug.directory import PACE, PROVIDER, directory_pass, index_state
 
     overrides = load_ovr(cfg)
     with exclusive(cfg, "ug --directory"), closing(open_db(cfg)) as conn:
@@ -97,8 +99,12 @@ def _directory(cfg: Config, budget: int | None) -> None:
             return
         run_id = _common.run_id_for(now)
         client = _common.directory_client(cfg, conn, run_id, budget=budget)
+        ticker = progress.ticker()  # how far the hour is: a live line on a terminal, a line a minute in the journal
+        counted = progress.Counted(ticker, per_step=PACE)
         try:
-            stats = directory_pass(conn, client, now, overrides=overrides, library_dir=cfg.library_dir)
+            with ticker:
+                stats = directory_pass(conn, client, now, overrides=overrides, library_dir=cfg.library_dir,
+                                       progress=lambda p: counted(p.words(), p.done, p.due, p.phase))
         except ProviderBlocked as e:
             state = record_block(conn, PROVIDER, now, str(e))
             message = (f"{e}\nNo more requests to Ultimate Guitar until {shown(state.cooldown_until)} "

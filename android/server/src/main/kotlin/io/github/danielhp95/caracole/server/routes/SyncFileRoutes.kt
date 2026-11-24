@@ -435,26 +435,32 @@ class SyncFileRoutes(
         /**
          * The engine's `pagesFromFile`: the pages a file held of the units an import took from it ([taken]), kept as
          * a layer of [mirror] (Mirror.takeLayer: under the file's caracole's id, each page checked by its SHA-256,
-         * as the phone serves it), the layers then cut to what [gate] still serves. Nothing for a file of no id (an
+         * as the phone serves it), the layers then cut to what [gate] still serves, saying as it goes how many of
+         * the pages the layer lacked it has kept ("12 of 40 pages kept": [kept]). Nothing for a file of no id (an
          * index export) or no pages.
          */
-        fun pagesFromFile(mirror: Mirror, libraryDir: File, gate: PhoneGate): (SyncFile, List<String>) -> Unit = { file, taken ->
-            val id = file.id
-            if (id != null) {
-                FileSource(file, null, libraryDir).use { source ->
-                    val listed = source.pages()
-                    if (listed != null) {
-                        mirror.takeLayer(id, listed.toString().toByteArray(Charsets.UTF_8), taken.toSet(), gate,
-                                         folderOf = { unit -> PhoneGate.folderOf(gate.database, unit) }) { sha ->
-                            try {
-                                source.page(sha)
-                            } catch (e: PeerError) {
-                                null
+        fun pagesFromFile(mirror: Mirror, libraryDir: File, gate: PhoneGate): (SyncFile, List<String>, (String) -> Unit) -> Unit =
+            { file, taken, say ->
+                val id = file.id
+                if (id != null) {
+                    FileSource(file, null, libraryDir).use { source ->
+                        val listed = source.pages()
+                        if (listed != null) {
+                            mirror.takeLayer(id, listed.toString().toByteArray(Charsets.UTF_8), taken.toSet(), gate,
+                                             folderOf = { unit -> PhoneGate.folderOf(gate.database, unit) },
+                                             progress = { done, total -> say(kept(done, total)) }) { sha ->
+                                try {
+                                    source.page(sha)
+                                } catch (e: PeerError) {
+                                    null
+                                }
                             }
                         }
                     }
                 }
             }
-        }
+
+        /** "12 of 40 pages kept": an import's mirror stage as it keeps a file's pages. */
+        fun kept(done: Int, total: Int): String = "$done of $total pages kept"
     }
 }

@@ -1542,3 +1542,110 @@ def test_the_render_step_puts_lyrics_a_step_before_found_on_an_auto_sheet(conn, 
     assert report.ok and "1 auto sheet given lyrics" in report.summary()
     page = song_dir(cfg.library_dir, song) / "sheet (auto).html"
     assert "Une ligne inventée" in page.read_text(encoding="utf-8")
+
+
+# --- what the run says as it goes: a line as each step starts and ends, and a live line ----------------------------
+
+
+class _Terminal:
+    """A terminal's stderr, for a ticker's live line."""
+
+    def __init__(self):
+        import io
+
+        self.out = io.StringIO()
+
+    def write(self, text):
+        return self.out.write(text)
+
+    def flush(self):
+        pass
+
+    def isatty(self):
+        return True
+
+    def shown(self) -> list[str]:
+        """Every live line written, in turn (each carriage return a rewrite), blank ones left out."""
+        return [part.rstrip() for part in self.out.getvalue().split("\r") if part.strip()]
+
+
+def _ticker(screen):
+    from caracole.progress import Console, Ticker
+
+    return Ticker(Console(screen, environ={"TERM": "xterm"}, width=lambda: 200))
+
+
+def test_each_step_says_when_it_starts_and_how_it_ended_and_a_skipped_step_once(conn, cfg, caplog, monkeypatch):
+    import caracole.pipeline as pipeline
+
+    readings = iter([100.0, 101.0, 103.5, 110.0, 172.0])
+    monkeypatch.setattr(pipeline, "clock", lambda: next(readings, 200.0))
+    record_block(conn, "ug", NOW - timedelta(hours=2), "HTTP 403")
+    steps = [step("sync", result="2 new songs"), step("index", provider="ug"), step("lyrics", provider="lrclib")]
+    with caplog.at_level(logging.INFO, logger="caracole.pipeline"):
+        run_pipeline(cfg, conn=conn, services=services(Outbox()), steps=steps, now=NOW)
+    assert [r.getMessage() for r in caplog.records if r.name == "caracole.pipeline"] == [
+        "[1/3] sync…",
+        "[1/3] sync: 2 new songs (2.5 s)",
+        "[2/3] index: skipped: ug cooling down until 2026-10-19 03:30 UTC",  # nothing ran: one line
+        "[3/3] lyrics…",
+        "[3/3] lyrics: ok (1 min 2 s)",
+    ]
+
+
+def test_a_terminal_sees_the_step_under_way_and_the_line_is_gone_before_the_summary(conn, cfg):
+    screen = _Terminal()
+    ticker = _ticker(screen)
+    seen = []
+
+    def lyrics(ctx):
+        ctx.ticker.show("LRCLIB · 3 of up to 200 requests")
+        seen.append(screen.shown()[-1])
+        return "ok"
+
+    steps = [step("sync"), Step("lyrics", lyrics, provider="lrclib"), step("todo")]
+    run_pipeline(cfg, conn=conn, services=services(Outbox()), steps=steps, now=NOW, ticker=ticker)
+    assert seen == ["[2/3] lyrics · LRCLIB · 3 of up to 200 requests"]
+    assert screen.shown() == ["[1/3] sync…", "[2/3] lyrics…", "[2/3] lyrics · LRCLIB · 3 of up to 200 requests",
+                              "[3/3] todo…"]
+    assert screen.out.getvalue().endswith("\r" + " " * len("[3/3] todo…") + "\r")  # cleared: the summary's turn
+
+
+def test_the_runs_clients_count_their_requests_on_its_ticker(conn, cfg, monkeypatch):
+    # Every provider's client says how far it is into its budget; the heartbeat changes no pause.
+    import httpx
+
+    from caracole.commands import _common
+    from caracole.pipeline import make_services
+
+    monkeypatch.setattr(_common, "transport_for", lambda provider: httpx.MockTransport(lambda r: httpx.Response(200)))
+    monkeypatch.setattr(_common, "sleep", lambda seconds: None)
+    screen = _Terminal()
+    ticker = _ticker(screen)
+    made = make_services(cfg, conn, "2026-10-19T03:30:00Z", ticker=ticker)
+    try:
+        ticker.begin("[6/20] lyrics")
+        made.client("lrclib").get("https://lrclib.net/api/get", params={"track_name": "x"})
+    finally:
+        made.close()
+        ticker.close()
+    assert screen.shown()[-1].startswith("[6/20] lyrics · LRCLIB · 1 of up to 200 requests  up to about ")
+
+
+def test_the_run_ends_with_a_last_status_line_so_no_step_looks_under_way(conn, cfg, monkeypatch):
+    # systemctl status caracole, after the run: what it came to, never "[20/20] backup…".
+    import caracole.pipeline as pipeline
+    from caracole.progress import Ticker
+
+    readings = iter([100.0])
+    monkeypatch.setattr(pipeline, "clock", lambda: next(readings, 225.0))
+    told = []
+    ticker = Ticker(None, status=told.append)
+    report = run_pipeline(cfg, conn=conn, services=services(Outbox()), steps=[step("sync", result="2 new songs")],
+                          now=NOW, ticker=ticker)
+    first = next(line for line in report.summary().splitlines() if line.strip())
+    assert told == ["[1/1] sync…", f"Finished in 2 min 5 s · {first}"]
+    told.clear()
+    failing = run_pipeline(cfg, conn=conn, services=services(Outbox()), now=NOW, ticker=ticker,
+                           steps=[step("match", result=RuntimeError("boom"))])
+    assert told[-1].startswith("Failed in ") and "The match step failed" in told[-1] and not failing.ok

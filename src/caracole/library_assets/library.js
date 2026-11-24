@@ -11,10 +11,12 @@
   const list = byId("list");
   const masthead = document.querySelector(".masthead.lib");
   // A filter reset's focus: the control of the first line (never the box, which would be search and a keyboard; an
-  // artist band's button only if no line has one), one a person can see and press, with no scroll. None: unchanged.
+  // artist band's button only if no line has one), one a person can see and press, with no scroll: the list's, or the
+  // sites' results' while they take its place. None: unchanged.
   const focusList = () => {
     const seen = (n) => (n.checkVisibility ? n.checkVisibility() : n.offsetParent !== null);
-    const pick = (sel) => [...list.querySelectorAll(sel)].find((n) => seen(n));
+    const where = document.body.classList.contains("searching-all") ? results : list;
+    const pick = (sel) => [...where.querySelectorAll(sel)].find((n) => seen(n));
     const first = pick("article.line a[href], article.line button:not(:disabled)") ||
       pick("a[href], button:not(:disabled)");
     if (first) first.focus({ preventScroll: true });
@@ -785,8 +787,9 @@
   // song's line or a result's row (showRequest), where a lookup that runs, with its steps (the view's ``steps``, none
   // for its first second, outcome.py's BAR_AFTER), is a bar of them in place of its words (p ``barred``): a segment a
   // step, then the step in hand, its site and its place, "Sheet · Ultimate Guitar · 3 of 7" (``at``, ``count``),
-  // which is what a screen reader hears; while a nightly run holds the book (``waits``), "Waiting for the book · 1 of
-  // 7", the step drawn waiting. Anywhere else (the tray, a set list) and once it is over, its words.
+  // which is what a screen reader hears, and, for the eye alone, what a long step says it does while it runs,
+  // "Words · 3 of 5 · 1:20 of 3:45" (``doing``); while a nightly run holds the book (``waits``), "Waiting for the
+  // book · 1 of 7", the step drawn waiting. Anywhere else (the tray, a set list) and once it is over, its words.
   // A request that waits, on a served page (the view's id): Cancel beside its place takes it out of the queue
   // (POST /jobs/cancel, the Journal's), never one that runs. Answered, the line says Cancelled, as the next view does;
   // refused or unanswered, what went wrong, and the next view draws the line again.
@@ -811,8 +814,12 @@
     const cancels = Boolean(onLine && server && line.tone === "queued" && view && view.state === "queued"
       && Number.isInteger(view.id));
     const key = (barred ? ["bar", JSON.stringify(chips.map((c) => [c.name, c.site, c.state])), view.at, view.count,
-      view.waits === true] : [line.tone, line.text, to ? to.href : "", more, cancels ? view.id : ""]).map(String).join("|");
-    if (p.dataset.key === key) return;
+      view.waits === true] : [line.tone, line.text, to ? to.href : "", more, cancels ? view.id : ""])
+      .map(String).join("|");
+    if (p.dataset.key === key) {  // the same bar: what its step does, changed in place, unheard (``doingSpan``)
+      if (barred) sayDoing(p, doingOf(view));
+      return;
+    }
     const focused = p !== document.activeElement && p.contains(document.activeElement);
     p.dataset.key = key;
     p.dataset.tone = String(line.tone || "");
@@ -857,10 +864,31 @@
     }
     return segs;
   };
-  // The words beside the bar: the step in hand (the view's ``at``), its site, and its place among them all
-  // (``count``, "3 of 7"); none when the view names no step in hand. While it waits for the book (``waits``), the
-  // wait in place of the step's name.
+  // The words beside the bar: the step in hand (the view's ``at``), its site, its place among them all (``count``,
+  // "3 of 7"), and what it says it does, a long step running (``doing``: "1:20 of 3:45", outcome.py's); none when
+  // the view names no step in hand. While it waits for the book (``waits``), the wait in place of the step's name.
   const WAITS = "Waiting for the book";
+  const doingOf = (view) => (view && typeof view.doing === "string" && view.waits !== true ? view.doing : "");
+  // What a long step does, for the eye alone (``aria-hidden``): the line is a live region, and a screen reader hears
+  // the step and its place change, never each of Whisper's windows; changed in place on the same bar (``sayDoing``).
+  // Its " · " is a span of its own (``.step-sep``), which a phone's bar leaves out with the step's place (steps.css).
+  const doingParts = (said) => [el("span", "step-sep", " · "), document.createTextNode(said)];
+  const doingSpan = (said) => {
+    const span = el("span", "step-doing");
+    span.setAttribute("aria-hidden", "true");
+    span.append(...doingParts(said));
+    return span;
+  };
+  const sayDoing = (p, said) => {
+    const span = p.querySelector(":scope > .step-doing");
+    if (!said) {
+      if (span) span.remove();
+    } else if (span) {
+      if (span.textContent !== " · " + said) span.replaceChildren(...doingParts(said));
+    } else if (p.querySelector(":scope > .step-count")) {
+      p.appendChild(doingSpan(said));
+    }
+  };
   const stepWords = (chips, view) => {
     const at = view ? view.at : null;
     if (!Number.isInteger(at) || at < 0 || at >= chips.length || typeof view.count !== "string") return [];
@@ -868,7 +896,9 @@
     const words = el("span", "step-at");
     words.appendChild(el("b", null, view.waits === true ? WAITS : String(c.name)));
     if (c.site) words.append(" · " + String(c.site));
-    return [words, el("span", "step-count", " · " + view.count)];
+    const parts = [words, el("span", "step-count", " · " + view.count)];
+    if (doingOf(view)) parts.push(doingSpan(doingOf(view)));
+    return parts;
   };
   // The steps as the bar draws them: while a nightly run holds the book (the view's ``waits``, outcome.py's), the step
   // in hand waiting, unlit and steady, as nothing moves.
@@ -901,7 +931,7 @@
     const over = !isActive(view);
     const shown = waitsIn(chips, view);
     const key = JSON.stringify([shown.map((c) => [c.name, c.site, c.state, c.found]), barred, over, view.at,
-      view.count, view.waits === true]);
+      view.count, view.waits === true, doingOf(view)]);
     if (box && box.dataset.key === key) return;
     if (!box) {
       box = el("div", "steps");
@@ -1728,14 +1758,24 @@
   const keepSelected = () => {
     if (selected && !selected.checkVisibility()) unselect();
   };
-  // From 1200 px a line's buttons stay on its row while they fit beside its title (and its artist), and go on a row of
-  // their own under it where they don't (``plays-under``, library.css), at its end either way: measured in the one
-  // row, where a folded or flat line's wrap (the last below the first) and a band's line's cut its title short (their
-  // column takes what they need first), once a line, and again once the list's width, Select, the line itself (refill,
-  // an action gone) or its kind (its artist's band folded or unfolded) changes; a line hidden is measured once it
-  // shows, and a line of a run off the screen (render's runs, which content-visibility leaves unlaid) once its run
-  // comes near it, never by laying the run out to read it. Under 1200 px, none.
+  // A line's buttons stay on its row while they fit beside its title (and its artist), and go on a row of their own
+  // under it where they don't (``plays-under``, library.css), at its end either way: from 720 px a band's line's,
+  // where they wrap in their column (the last below the first: the title's column keeps its least, library.css, so
+  // they wrap rather than cut it) and, from 1200 px, also where its title is cut short; from 1200 px, beside the pane,
+  // a folded or flat line's, where they wrap. Measured in the one row, once a line, and again once the list's width,
+  // the text's size, Select, the line itself (refill, an action gone) or its kind (its artist's band folded or
+  // unfolded) changes; a line hidden is measured once it shows, and a line of a run off the screen (render's runs,
+  // which content-visibility leaves unlaid) once its run comes near it, never by laying the run out to read it. Under
+  // 720 px, none.
   const placedAt = new WeakMap();  // a line -> the list's width, the text's size, Select and its kind it was placed at
+  const bandsWide = window.matchMedia ? window.matchMedia("(min-width: 720px)") : null;
+  const wideAt = (query) => Boolean(query && query.matches);
+  // The text's size: the root's font size and line height, the second what the Android app's pinch grows (the
+  // WebView's text zoom leaves the font size at 16px), and what base.css's --sp, the tiles' size, reads.
+  const textSize = () => {
+    const root = getComputedStyle(document.documentElement);
+    return root.fontSize + "/" + root.lineHeight;
+  };
   const unplace = (line) => {  // placed again when it is a line of the list beside the pane next
     line.classList.remove("plays-under");
     placedAt.delete(line);
@@ -1744,25 +1784,24 @@
   const PLACED = "section.artist .line, section.flat .line";
   const inBand = (line) => Boolean(line.closest("section.artist:not(.folded)"));
   const placeable = (line) => !line.matches(".hit, .miss") && line.querySelector(":scope > .line-title > .line-plays");
+  const placesNow = (line) => wideAt(inBand(line) ? bandsWide : paneWide);  // at this width, of its kind
   // ``lines`` (placeable) placed where they are laid out, or in ``shown`` (runs on the screen), and weren't at this
   // width, text, Select and kind.
   const placeLines = (lines, shown) => {
     const main = libraryView.querySelector(".lib-main");
-    const at = [main ? main.clientWidth : 0, getComputedStyle(document.documentElement).fontSize,
-      document.body.classList.contains("selecting")].join(" ");
+    const at = [main ? main.clientWidth : 0, textSize(), document.body.classList.contains("selecting")].join(" ");
     const kind = (line) => at + (inBand(line) ? " band" : "");
     const todo = lines.filter((line) => placedAt.get(line) !== kind(line)
       && (line.checkVisibility({ contentVisibilityAuto: true })
         || Boolean(shown && line.checkVisibility() && shown.has(line.closest(".cv")))));
     for (const line of todo) line.classList.remove("plays-under");
     const wraps = todo.filter((line) => {
-      if (inBand(line)) {
-        const title = line.querySelector(":scope > .line-title > h3");
-        return Boolean(title) && title.scrollWidth > title.clientWidth;
-      }
       const chips = line.querySelectorAll(":scope > .line-title > .line-plays > .play");
-      return chips.length > 1 && chips[chips.length - 1].getBoundingClientRect().top
-        > chips[0].getBoundingClientRect().top + 1;
+      if (chips.length > 1 && chips[chips.length - 1].getBoundingClientRect().top
+        > chips[0].getBoundingClientRect().top + 1) return true;
+      if (!inBand(line) || !wideAt(paneWide)) return false;
+      const title = line.querySelector(":scope > .line-title > h3");
+      return Boolean(title) && title.scrollWidth > title.clientWidth;
     });
     for (const line of todo) placedAt.set(line, kind(line));
     for (const line of wraps) line.classList.add("plays-under");
@@ -1771,12 +1810,12 @@
     if (playsFrame) cancelAnimationFrame(playsFrame);
     playsFrame = 0;
     const under = Array.from(libraryView.querySelectorAll(".line.plays-under"));
-    if (!paneWide || !paneWide.matches) {
+    if (!wideAt(bandsWide)) {
       for (const line of under) unplace(line);
       return;
     }
-    const lines = new Set(Array.from(libraryView.querySelectorAll(PLACED)).filter(placeable));
-    for (const line of under) if (!lines.has(line)) unplace(line);  // a site's line now, or none of the list's
+    const lines = new Set(Array.from(libraryView.querySelectorAll(PLACED)).filter((l) => placeable(l) && placesNow(l)));
+    for (const line of under) if (!lines.has(line)) unplace(line);  // a site's line now, none of the list's, or folded
     // A list just drawn has its runs laid out only as the next frame is made, so the lines that frame shows would be
     // placed a frame after it: the runs whose own box is on the screen (read without laying out what they hold) are
     // laid out now for their lines, as they would be in this frame anyway; never one off the screen.
@@ -1798,11 +1837,12 @@
     runsFrame = 0;
     const runs = Array.from(shownRuns).filter((run) => run.isConnected);
     shownRuns.clear();
-    if (!paneWide || !paneWide.matches || playsFrame) return;  // every line is to be placed this frame anyway
-    placeLines(runs.flatMap((run) => Array.from(run.querySelectorAll(PLACED))).filter(placeable));
+    if (!wideAt(bandsWide) || playsFrame) return;  // every line is to be placed this frame anyway
+    placeLines(runs.flatMap((run) => Array.from(run.querySelectorAll(PLACED))).filter((l) => placeable(l) &&
+      placesNow(l)));
   };
   list.addEventListener("contentvisibilityautostatechange", (e) => {
-    if (e.skipped || !paneWide || !paneWide.matches) return;
+    if (e.skipped || !wideAt(bandsWide)) return;
     shownRuns.add(e.target);
     if (!runsFrame) runsFrame = requestAnimationFrame(placeRuns);
   }, true);
@@ -1815,6 +1855,7 @@
       more.focus();
     });
   }
+  if (bandsWide && bandsWide.addEventListener) bandsWide.addEventListener("change", () => placePlays());
   if (paneWide) {
     paneWide.addEventListener("change", () => {
       placePlays();
@@ -1825,13 +1866,12 @@
       toWide();
     });
   }
-  if (pane && "ResizeObserver" in window) {  // the list's width, or the text's size (its lines' height): placed again
+  if ("ResizeObserver" in window) {  // the list's width, or the text's size (its lines' height): placed again
     const main = libraryView.querySelector(".lib-main");
     let seen = "";
     if (main) {
       new ResizeObserver((entries) => {
-        const now = entries[entries.length - 1].contentRect.width + " " +
-          getComputedStyle(document.documentElement).fontSize;
+        const now = entries[entries.length - 1].contentRect.width + " " + textSize();
         if (now === seen) return;
         seen = now;
         placePlaysSoon();
@@ -2758,13 +2798,24 @@
   // --- Filter's panel: a popover under it from 720 px, a sheet from the bottom on a phone ------------------------
   // On a computer a dialog of its own (show(), not modal): the list behind it filters as you tap, with no Apply; a
   // click outside it, Escape or Filter again closes it. On a phone a modal one (showModal()), over the page dimmed,
-  // which neither takes a tap nor scrolls behind it; Tab keeps to it, and Show N songs closes it. Either way the
-  // focus goes to the status chosen, and back to Filter once it closes.
+  // which neither takes a tap nor scrolls behind it; Tab keeps to it, and Show N songs closes it; so too from 720 px
+  // where less than POPOVER_LEAST of the text's pixels under Filter would show the popover (a landscape phone, a short
+  // window), a sliver to scroll. Either way the focus goes to the status chosen, and back to Filter once it closes.
   const wide = window.matchMedia("(min-width: 720px)");
+  const POPOVER_LEAST = 240;
+  const panelBody = panel.querySelector(".fbody");  // what scrolls in the popover, its arrow outside it (filter.css)
+  // The room under Filter once the bar sticks at the window's top, where it is wherever the page has scrolled to: the
+  // same window gets the same kind of panel at the page's top (the masthead over the bar) as further down.
+  const underFilter = () => window.innerHeight - 8 -
+    Math.round(filterButton.getBoundingClientRect().bottom - bar.getBoundingClientRect().top + 8);
+  // The text's pixel (base.css --sp) from 720 px: the root's line height, which the Android app's pinch grows.
+  const textPixel = () => parseFloat(getComputedStyle(document.documentElement).lineHeight) / 16 || 1;
+  const asPopover = () => wide.matches && underFilter() >= POPOVER_LEAST * textPixel();
   // The popover under Filter, its right edge with Filter's, kept within the window; its arrow at Filter's middle. It is
   // the search bar's (body.html), so it sticks with the bar, and what the list or the sites' results under it do moves
   // it nowhere: a Matches chip pressed while they show leaves it under Filter. On a window too short for it, it ends
-  // 8 px above the window's foot and scrolls, the page under it scrolling it nowhere.
+  // 8 px above the window's foot and its body scrolls, the page under it scrolling it nowhere; placed again as the
+  // window resizes and as the page scrolls (the bar comes to stick at the window's top, or leaves it).
   const placePanel = () => {
     if (!panel.open || panel.matches(":modal")) return;
     const box = bar.getBoundingClientRect();
@@ -2775,17 +2826,24 @@
     panel.style.left = Math.round(left - box.left) + "px";
     panel.style.top = Math.round(at.bottom - box.top + 8) + "px";
     const under = window.innerHeight - 8 - Math.round(at.bottom + 8);
-    const fits = panel.scrollHeight <= under;
+    // What it holds, its body's padding the popover's own (--filter-pad, filter.css), and the popover's borders.
+    const fits = panelBody.scrollHeight + panel.offsetHeight - panel.clientHeight <= under;
     panel.style.maxHeight = fits ? "" : Math.max(160, under) + "px";
-    panel.style.overflowY = fits ? "" : "auto";
+    panelBody.style.overflowY = fits ? "" : "auto";
     panel.style.setProperty("--arrow", Math.round(at.left + at.width / 2 - left) + "px");
+  };
+  // The sheet keeps none of the popover's places: it is the window's foot, across it.
+  const unplacePanel = () => {
+    for (const name of ["left", "top", "max-height"]) panel.style.removeProperty(name);
+    panelBody.style.removeProperty("overflow-y");
   };
   const openPanel = () => {
     if (panel.open) return;
-    if (wide.matches) {
+    if (asPopover()) {
       panel.show();
       placePanel();
     } else {
+      unplacePanel();
       document.documentElement.classList.add("sheet-open");
       panel.showModal();
     }
@@ -2806,7 +2864,10 @@
     filterButton.setAttribute("aria-expanded", "false");
     document.documentElement.classList.remove("sheet-open");
   };
-  panel.addEventListener("close", closed);  // its event comes a task later: closePanel says so at once
+  // Its event comes a task later: closePanel says so at once, and a panel opened again meanwhile (reopen) stays so.
+  panel.addEventListener("close", () => {
+    if (!panel.open) closed();
+  });
   filterButton.addEventListener("click", () => (panel.open ? closePanel() : openPanel()));
   showN.addEventListener("click", () => closePanel());
   byId("clear-all").addEventListener("click", () => {
@@ -2867,10 +2928,12 @@
     });
   }
   window.addEventListener("resize", placePanel);
+  window.addEventListener("scroll", placePanel, { passive: true });
   const reopen = () => {  // past 720 px either way: the other kind of panel
     if (!panel.open) return;
     const inside = panel.contains(document.activeElement);
     panel.close();
+    closed();
     openPanel();
     if (!inside) filterButton.focus({ preventScroll: true });
   };
@@ -3488,7 +3551,8 @@
       .filter(Boolean).join(" · ");
   };
   // Show all of yours, or Show all while the Matches keep the sites' songs too: every status, instrument, key and
-  // progression, here and in the list; the focus to the box, as the button goes with its note.
+  // progression, here and in the list; the focus to the first line it shows (focusList), as the button goes with its
+  // note.
   const showAll = (go) => {
     const words = state.inst ? "Show all" : "Show all of yours";
     if (go.textContent === words) return;
@@ -3506,7 +3570,7 @@
   }, "Show all of yours: every status, instrument, key and progression"));
   keptNote.hidden = true;
   // What the sites' answer and your songs had, all hidden by the Matches chosen: said, with Show all, as the list's
-  // empty state says it.
+  // empty state says it; the focus to the first result it shows, as the button goes with what it said.
   const filteredOut = () => {
     const box = el("section", "filtered-out");
     box.appendChild(el("p", "empty", "Nothing with " + instsSaid() + " for “" + state.q.trim() + "”."));
@@ -3514,6 +3578,7 @@
       clearFilters();
       render();
       save();
+      focusList();
     }, "Show all: the sites' songs and yours, every status, instrument and key"));
     return box;
   };

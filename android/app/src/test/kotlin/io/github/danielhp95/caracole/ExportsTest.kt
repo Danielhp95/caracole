@@ -100,6 +100,26 @@ class ExportsTest {
     }
 
     @Test
+    fun `a large export is said to be readied before its copy, once the server has answered`() {
+        // The copy before the share sheet is as long as the file (an export with the site indexes: 274 MB): the
+        // screen says it is getting the file ready before it begins, from the server's answer's length.
+        val bytes = ByteArray(4096) { 3 }
+        val told = mutableListOf<Long>()
+        val root = folder.newFolder("readied")
+        Exports.copy(files {
+            Response(200, Body.Bytes(bytes), mutableListOf("Content-Type" to "application/vnd.caracole+zip"))
+        }, "$origin/api/sync/export?export=3333333333333333", root, starting = { length ->
+            assertEquals(emptyList(), root.walk().filter { it.isFile }.toList(), "told before the copy begins")
+            told += length
+        })
+        assertEquals(listOf(4096L), told)
+        assertFalse(Exports.readies(4096), "a small file is shared at once, with nothing said")
+        assertFalse(Exports.readies(52_000_000), "a library and its songbooks: a moment's copy, nothing said")
+        assertTrue(Exports.readies(100_000_000))
+        assertTrue(Exports.readies(274_000_000), "one with the site indexes")
+    }
+
+    @Test
     fun `an export the server no longer has is said, never shared`() {
         val gone = assertIs<Exports.Copied.Refused>(Exports.copy(files {
             Response(404, Body.Bytes("""{"error":"No such export."}""".toByteArray()),

@@ -196,16 +196,75 @@ def test_a_click_outside_closes_the_popover(shelf, laptop):
     assert laptop.js(f"document.activeElement === {FILTER}")  # the click took the focus nowhere: back to Filter
 
 
+# The popover as placed: its foot and the window's, whether its body scrolls (and how), and what is drawn where its
+# arrow points at Filter, 3 px over its top.
+SHORT = ("(() => { const p = " + PANEL + ", r = p.getBoundingClientRect(), b = p.querySelector('.fbody') || p, "
+         "f = " + FILTER + ".getBoundingClientRect(); "
+         "const arrow = document.elementFromPoint(f.left + f.width / 2, r.top - 3); "
+         "return { modal: p.matches(':modal'), bottom: r.bottom, room: innerHeight, "
+         "scrolls: b.scrollHeight > b.clientHeight, overflow: getComputedStyle(b).overflowY, "
+         "arrow: arrow === p || p.contains(arrow) }; })()")
+
+
 def test_on_a_short_window_the_popover_ends_above_its_foot_and_scrolls(shelf, tmp_path):
-    # It is the search bar's, which sticks: where it would pass the window's foot, it stops 8 px above it and scrolls.
+    # It is the search bar's, which sticks: where it would pass the window's foot, it stops 8 px above it and its body
+    # scrolls, its arrow still pointing at Filter, and its foot reached by scrolling it.
     with browser.Browser(tmp_path / "chrome-short", width=1280, height=420) as page:
         page.open(shelf.as_uri())
         page.click("#filter")
         assert page.wait(f"{PANEL}.open")
-        box = page.js("(() => { const p = " + PANEL + ", r = p.getBoundingClientRect(); return { bottom: r.bottom, "
-                      "room: innerHeight, scrolls: p.scrollHeight > p.clientHeight, "
-                      "overflow: getComputedStyle(p).overflowY }; })()")
-        assert box["bottom"] <= box["room"] - 7.5 and box["scrolls"] and box["overflow"] == "auto", box
+        box = page.js(SHORT)
+        assert not box["modal"] and box["bottom"] <= box["room"] - 7.5, box
+        assert box["scrolls"] and box["overflow"] == "auto" and box["arrow"], box
+        page.js("document.getElementById('clear-all').scrollIntoView({ block: 'nearest' })")
+        assert page.js("(() => { const c = document.getElementById('clear-all').getBoundingClientRect(); "
+                       "const hit = document.elementFromPoint(c.left + c.width / 2, c.top + c.height / 2); "
+                       "return hit && hit.closest('#clear-all') !== null; })()")
+        # The page scrolled under it, the bar stuck at the window's top: placed again, it takes the room it has now.
+        page.js("window.scrollTo(0, document.documentElement.scrollHeight)")
+        assert page.wait("document.querySelector('.searchbar').getBoundingClientRect().top === 0")
+        assert page.wait(f"Math.abs({PANEL}.getBoundingClientRect().bottom - (innerHeight - 8)) <= 1"), page.js(SHORT)
+        assert page.js(f"{PANEL}.open") and page.js(SHORT)["arrow"]
+
+
+@pytest.mark.parametrize(("width", "height", "mobile"), [(844, 300, True), (1280, 300, False)],
+                         ids=["landscape-phone", "short-window"])
+@pytest.mark.parametrize("scrolled", [False, True], ids=["top", "scrolled"])
+def test_where_too_little_of_the_popover_would_fit_filter_opens_the_sheet(shelf, tmp_path, width, height, mobile,
+                                                                          scrolled):
+    # A phone held sideways under its bars, or a window too short for a popover worth scrolling (less than 240 of the
+    # text's pixels under Filter, the bar stuck at the window's top): the sheet from the bottom, as on a phone, across
+    # the window, with Show N songs, at the page's top as scrolled.
+    with browser.Browser(tmp_path / "chrome-shorter", width=width, height=height, mobile=mobile) as page:
+        page.open(shelf.as_uri())
+        if scrolled:
+            page.js("window.scrollTo(0, document.documentElement.scrollHeight)")
+            assert page.wait("document.querySelector('.searchbar').getBoundingClientRect().top === 0")
+        page.click("#filter")
+        assert page.wait(f"{PANEL}.open")
+        assert page.js(f"{PANEL}.matches(':modal')")
+        sheet = (f"(() => {{ const r = {PANEL}.getBoundingClientRect(); return [r.left, r.right - innerWidth, "
+                 "r.bottom - innerHeight]; })()")
+        assert page.wait(f"JSON.stringify({sheet}.map(Math.round)) === '[0,0,0]'"), page.js(sheet)  # slid up
+        assert page.js("document.getElementById('show-n').checkVisibility()")
+        page.click("#show-n")
+        assert page.wait(f"!{PANEL}.open && document.activeElement === {FILTER}")
+
+
+@pytest.mark.parametrize("scrolled", [False, True], ids=["top", "scrolled"])
+def test_the_same_window_opens_the_same_kind_of_panel_wherever_the_page_is(shelf, tmp_path, scrolled):
+    # The room is reckoned with the bar stuck at the window's top, where the popover opens once the page scrolls: a
+    # window with 240 of the text's pixels under a stuck Filter gets the popover at the page's top too, where the
+    # masthead leaves less (its body scrolling), never the sheet there and the popover further down.
+    with browser.Browser(tmp_path / "chrome-short", width=1280, height=330) as page:
+        page.open(shelf.as_uri())
+        if scrolled:
+            page.js("window.scrollTo(0, document.documentElement.scrollHeight)")
+            assert page.wait("document.querySelector('.searchbar').getBoundingClientRect().top === 0")
+        page.click("#filter")
+        assert page.wait(f"{PANEL}.open")
+        box = page.js(SHORT)
+        assert not box["modal"] and box["bottom"] <= box["room"] - 7.5 and box["arrow"], box
 
 
 def test_below_720px_filter_opens_a_bottom_sheet_with_show_n_songs(shelf, phone):

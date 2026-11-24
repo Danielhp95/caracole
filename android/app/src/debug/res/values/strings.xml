@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The debug build (io.github.danielhp95.caracole.debug), installed beside F-Droid's caracole: its name in the
+         launcher, the share sheet, its notifications and its title bar, the word that tells them apart first, so a
+         launcher that cuts the name keeps it. -->
+    <string name="app_name">Debug caracole</string>
+</resources>

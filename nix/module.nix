@@ -697,6 +697,10 @@ in
           Type = "oneshot";
           # --config is a root option of the CLI, so it precedes the subcommand.
           ExecStart = "${lib.getExe runPackage} --config ${configFile} run";
+          # The run tells systemd where it is (sd_notify's STATUS=, progress.py), so `systemctl status caracole`
+          # says "Status: [6/20] lyrics · LRCLIB · 37 of up to 200 requests"; the wrapper execs, so the main
+          # process is caracole's own.
+          NotifyAccess = "main";
           # The polite pauses alone come to about 12 minutes, 17 at most (a quarter
           # of what they were before 2026-11-03, the owner's choice): 60 UG, 30 LaCuerda,
           # 20 gtptabs.com, 20 harptabs.com, 20 iReal Pro forum and 10 MuseScore requests 2.5-5 s apart, 20 gametabs.net

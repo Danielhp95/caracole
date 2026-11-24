@@ -63,12 +63,14 @@ from caracole import db, logs
 from caracole.config import Config, ConfigError, ProviderPolicy, load_config
 from caracole.health import EventLog, is_cooling
 from caracole.overrides import Overrides, OverridesError, load_overrides, override_key
+from caracole.progress import SENT  # loaded on every start already
 
 if TYPE_CHECKING:  # the HTTP client waits for a command that makes one (``make_client``)
     import httpx
 
     from caracole.commands.get import _Lines
     from caracole.http import Event, PoliteClient
+    from caracole.progress import Ticker
     from caracole.songs import Song
     from caracole.staged import StagedResult
     from caracole.youtube import YtDlp
@@ -103,10 +105,12 @@ def warn(message: str) -> None:
 
 def staged_end(reporter: _Lines, result: StagedResult, *, progress: bool, refused: str, done: str) -> None:
     """A staged job's last lines (staged.py: ``caracole youtube --sheet``, ``caracole transcribe``), once its stages
-    were said through ``reporter``: ``refused`` and the job's refusal, else ``done``; with ``progress``, the ``done``
-    event caracole serve reads; then exit 1 unless the job was ``ok``."""
-    reporter.flush()
-    typer.echo(f"{refused}: {result.refused}." if result.refused else done)
+    were said through ``reporter`` (its ticker's live line cleared first): ``refused`` and what stopped it (its
+    refusal, what failed, a bug), else ``done``; with ``progress``, the ``done`` event caracole serve reads; then exit
+    1 unless the job was ``ok``."""
+    reporter.close()
+    stopped = result.refused or result.failed or (f"a bug in caracole ({result.bug})" if result.bug else None)
+    typer.echo(f"{refused}: {stopped.rstrip('.')}." if stopped else done)
     if progress:
         typer.echo(reporter.event({"done": {"seconds": round(result.seconds, 3), "requests": result.requests,
                                             "ok": result.ok, "refused": result.refused}}))
@@ -909,9 +913,9 @@ def _locked_client() -> type[PoliteClient]:
     return _LockedClient
 
 
-# Events that were requests: a redirect too, followed or not, which reached the site as any other request did.
 CONNECT_PATIENCE = 60.0  # s: how long bulk work tries again a connection that fails before any byte is sent
-_SENT = ("ok", "not_modified", "redirect", "blocked", "error")
+# Events that were requests: a redirect too, followed or not, which reached the site as any other request did.
+_SENT = SENT  # progress.py's, the one list: the hour, the day and the last request counted as a ticker counts them
 _LAST_SENT = "http:last_request:"  # + provider: when any caracole last sent it a request, in seconds
 
 
@@ -1010,6 +1014,7 @@ def make_client(
     policy: ProviderPolicy | None = None,
     on_event: Callable[[Event], None] | None = None,
     interactive: bool = False,
+    ticker: Ticker | None = None,
 ) -> PoliteClient:
     """A polite client for one provider and one run, logging every request to ``events``.
 
@@ -1032,6 +1037,8 @@ def make_client(
     sent again for up to ``CONNECT_PATIENCE`` (a run that starts as the laptop wakes, before its Wi-Fi has
     an address); a lookup's says at once. Either way, a site with a ``per_day``
     (Megalobiz) gets no more than what the UTC day leaves of it (``within_the_day``).
+    With a ``ticker`` (progress.py), the requests it sends are counted there against that budget
+    (``progress.Requests``), which only counts: its pace and budget are what they would be without.
     """
     if interactive and not run_id.startswith(LOOKUP_RUN):
         run_id = LOOKUP_RUN + run_id
@@ -1042,13 +1049,14 @@ def make_client(
         seen = _handoffs  # a lookup let go first in the pause before its first request counts too
         _pause_after_last_request(conn, provider, policy.delay, cfg=None if interactive else cfg)
         log = EventLog(conn, run_id)
+        heard = _heard(on_event, ticker, provider, policy)
 
         def logged(event: Event) -> None:
             log(event)
             if event.decision in _SENT:
                 db.kv_set(conn, _LAST_SENT + provider, f"{time.time():.3f}")
-            if on_event is not None:
-                on_event(event)
+            if heard is not None:
+                heard(event)
 
         return _locked_client()(
             provider,
@@ -1069,6 +1077,28 @@ def make_client(
     except BaseException:
         _release(lock)
         raise
+
+
+def _heard(on_event: Callable[[Event], None] | None, ticker: Ticker | None, provider: str, policy: ProviderPolicy, *,
+           noun: str = "request", estimate: bool = True) -> Callable[[Event], None] | None:
+    """What a client's events go to once logged: ``on_event``, then, with a ``ticker``, ``progress.Requests``
+    counting them against ``policy``'s budget (none for ``NO_BUDGET``), with the time left unless ``estimate`` is
+    False (yt-dlp's runs)."""
+    if ticker is None:
+        return on_event
+    from caracole.config import NO_BUDGET
+    from caracole.progress import Requests
+
+    beat = Requests(ticker, provider, budget=None if policy.budget == NO_BUDGET else policy.budget,
+                    delay=policy.delay, noun=noun, estimate=estimate)
+    if on_event is None:
+        return beat
+
+    def both(event: Event) -> None:
+        on_event(event)
+        beat(event)
+
+    return both
 
 
 @functools.cache
@@ -1166,10 +1196,12 @@ def make_youtube(
     run_id: str,
     *,
     on_event: Callable[[Event], None] | None = None,
+    ticker: Ticker | None = None,
 ) -> YtDlp:
     """yt-dlp for one run (youtube.py), as ``make_client`` makes a provider's client: it holds
     caracole's lock until it is closed, its first run keeps the pause after the last one any
-    caracole made, and every run is logged to ``events``. Every caller closes it.
+    caracole made, and every run is logged to ``events``, and counted on ``ticker`` as
+    ``make_client``'s requests are. Every caller closes it.
 
     It is bulk work: each pause, its first included, hands the lock to a lookup that waits
     meanwhile (``hand_over``; under a lock taken as asked for now, a YouTube search's, to the
@@ -1181,11 +1213,12 @@ def make_youtube(
         policy = cfg.provider(PROVIDER)
         _pause_after_last_request(conn, PROVIDER, policy.delay, cfg=cfg)
         log = EventLog(conn, run_id)
+        heard = _heard(on_event, ticker, PROVIDER, policy, noun="yt-dlp run", estimate=False)  # a run: minutes
 
         def logged(event: Event) -> None:
             log(event)
-            if on_event is not None:
-                on_event(event)
+            if heard is not None:
+                heard(event)
 
         def pause(seconds: float) -> None:
             _patient_sleep(cfg, conn, seconds, lambda: random.uniform(*policy.delay), lambda s: sleep(s))

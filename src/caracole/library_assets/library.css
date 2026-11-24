@@ -73,6 +73,9 @@
    leaves above it (library-screens.css). */
 :root { --bar-h: 0px; }
 .searchbar { position: sticky; top: 0; z-index: 2; margin: 0 -16px; padding: 10px 16px 8px; background: var(--bg); }
+/* Filter's popover is the bar's (body.html): while it is open the bar is over the list of requests in the corner (.tray,
+   z-index 3), so the popover is drawn over it and takes its own taps. */
+.searchbar:has(> .filter-panel[open]) { z-index: 4; }
 .searchbar.stuck { box-shadow: 0 1px 0 var(--border-strong), 0 8px 16px -10px rgb(0 0 0 / 35%); }
 .bar-edge { height: 0; }
 .field { position: relative; }
@@ -265,13 +268,23 @@ section.nothing .line.miss > .line-panel { gap: 6px; padding: 4px 0 8px; }
 section.artist:not(.folded) .line-by { display: none; }
 @media (min-width: 720px) {
   /* A song of yours: its title's box dissolves into the line's grid, so that its buttons are a column of it after the
-     status, right before the action and the key (rows.css: at the line's end). */
-  section.artist:not(.folded) .line { grid-template-columns: minmax(0, 1fr) calc(104 * var(--sp)) auto auto
-    calc(44 * var(--sp)); grid-template-areas: "title status plays act key"; }
+     status, right before the action and the key (rows.css: at the line's end). Its title keeps 64 of the text's
+     pixels (rows.css's 4rem) whatever the buttons take, which wrap in their column first: grown with the text, an
+     auto column takes all it wants before a 1fr one gets any. */
+  section.artist:not(.folded) .line { grid-template-columns: minmax(calc(64 * var(--sp)), 1fr) calc(104 * var(--sp))
+    auto auto calc(44 * var(--sp)); grid-template-areas: "title status plays act key"; }
   section.artist:not(.folded) .line:not(.hit):not(.miss) > .line-title { display: contents; }
   section.artist:not(.folded) .line:not(.hit):not(.miss) > .line-title > h3 { grid-area: title; }
   section.artist:not(.folded) .line:not(.hit):not(.miss) > .line-title > .line-plays { grid-area: plays;
     max-width: none; }
+  /* Where they would wrap beside the title (library.js placePlays: .plays-under; from 1200 px also where it is cut),
+     they go on a row of their own under it, at its end, left of the key's column, wrapping there, never one a row
+     beside it; the title's row keeps its status, its action and its key. */
+  section.artist:not(.folded) .line.plays-under:not(.hit):not(.miss) { grid-template-columns: minmax(0, 1fr)
+    calc(104 * var(--sp)) auto calc(44 * var(--sp)); grid-template-rows: minmax(calc(28 * var(--sp)), auto);
+    grid-template-areas: "title status act key" "plays plays plays ."; }
+  section.artist:not(.folded) .line.plays-under:not(.hit):not(.miss) > .line-title > .line-plays {
+    margin: 0 0 6px auto; }
   /* A site's line has no key: its status and counts ("chords ×9 · tabs ×2") take most of that room, its marks the
      rest, the rest where yours are (rows.css). */
   section.artist:not(.folded) .line.hit { grid-template-columns: minmax(0, 1fr)
@@ -318,8 +331,8 @@ section.artist.folded .line-by, section.flat .line-by { flex: 0 1 auto; color: v
    150 px) may not fit beside its title, its artist, its key and its chevron. A folded or flat line keeps the one row
    above while they fit; where they don't (library.js placePlays: .plays-under), its first row is the title, its artist
    right after it, the status, the action, the key and the chevron, and its buttons go on a row of their own under it,
-   at its end, left of the key's column, wrapping there. A band's line has them in their column, which wraps them
-   where the title leaves too little room. None ever pushes the key off the line, and the title keeps the room they
+   at its end, left of the key's column, wrapping there. A band's line's are placed so from 720 px (above), and from
+   here where its title is cut short too. None ever pushes the key off the line, and the title keeps the room they
    took from it. */
 @media (min-width: 1200px) {
   .line > .line-title { flex-wrap: wrap; row-gap: 4px; }
@@ -329,10 +342,7 @@ section.artist.folded .line-by, section.flat .line-by { flex: 0 1 auto; color: v
     fit-content(calc(256 * var(--sp))) minmax(0, 1fr) calc(104 * var(--sp)) auto calc(44 * var(--sp));
     grid-template-rows: minmax(calc(28 * var(--sp)), auto);
     grid-template-areas: "name by . status act key" "plays plays plays plays plays ."; }
-  section.artist:not(.folded) .line.plays-under:not(.hit):not(.miss) { grid-template-columns: minmax(0, 1fr)
-    calc(104 * var(--sp)) auto calc(44 * var(--sp)); grid-template-rows: minmax(calc(28 * var(--sp)), auto);
-    grid-template-areas: "title status act key" "plays plays plays ."; }
-  section.artist .line.plays-under:not(.hit):not(.miss) > .line-title > .line-plays,
+  section.artist.folded .line.plays-under:not(.hit):not(.miss) > .line-title > .line-plays,
   section.flat .line.plays-under:not(.hit):not(.miss) > .line-title > .line-plays { margin: 0 0 6px auto; }
 }
 @media (max-width: 719px) {

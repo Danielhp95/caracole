@@ -37,11 +37,11 @@ import java.security.MessageDigest
  * The app against a real caracole serve, on a device or an emulator:
  *
  *     adb shell am instrument -w -e server http://10.0.2.2:8741 \
- *         io.github.danielhp95.caracole.test/io.github.danielhp95.caracole.CaracoleTestRunner
+ *         io.github.danielhp95.caracole.debug.test/io.github.danielhp95.caracole.CaracoleTestRunner
  *
  * (`-e shots 6000` holds each screen 6 s after logging "CARACOLE-SHOT <name>", for screenshots taken from the
  * host.) It syncs a fresh copy, runs Settings' Test (what the computer holds, in its words), opens the library page (the phone's own server's, at its
- * origin, http://127.0.0.1:8738) and a sheet viewer from it, and records what the viewer's sandbox does, that its
+ * origin, http://127.0.0.1:<Caracole.PORT>) and a sheet viewer from it, and records what the viewer's sandbox does, that its
  * Export PDF is the phone's own route (here, a copy of pages with no song, its 404) and each other link it shows to
  * caracole serve's own pages is answered by the phone's stub ("… isn't on the phone yet."), that its script transposes, and that a PDF (a link) and a Guitar Pro file (a download link) go to another app, read from
  * the phone's server with the launch's cookie. Every ACTION_VIEW is stubbed: nothing outside the app opens. Without
@@ -162,6 +162,7 @@ class EndToEndTest {
 
             // Its script runs: one semitone up changes the key and the chords shown, and the address keeps it.
             val shown = "JSON.stringify({key: document.getElementById('key-now').textContent, " +
+                "moved: document.querySelector('#key-now .d').textContent, " +
                 "chords: Array.from(document.querySelectorAll('.c')).slice(0, 4).map(c => c.textContent).join(' '), hash: location.hash})"
             val before = JSONObject(js(shown) as String)
             tap(main, "#t-up")
@@ -169,9 +170,17 @@ class EndToEndTest {
             val after = JSONObject(js(shown) as String)
             record("transpose", JSONObject().put("before", before).put("after", after))
             assertTrue(after.getString("chords") != before.getString("chords"))
-            // One up from where the sheet was: from its own version's move (a song's [version] opens at its t=), or 0.
-            val t = { hash: String -> Regex("(?:^#|&)t=(-?\\d+)").find(hash)?.groupValues?.get(1)?.toInt() ?: 0 }
-            assertEquals(after.getString("hash"), t(before.getString("hash")) + 1, t(after.getString("hash")))
+            // One up from where the sheet was: the address's t= where it names one, else the move the bar says ("−2",
+            // the last signed count under the key; none, 0): a song's own version (its [version]) opens with no t= in
+            // the address (viewer.js save), and one semitone away from it the address names where it is.
+            val t = { hash: String -> Regex("(?:^#|&)t=(-?\\d+)").find(hash)?.groupValues?.get(1)?.toInt() }
+            val moved = { words: String ->
+                Regex("([+−-])(\\d+)$").find(words.trim())?.let {
+                    (if (it.groupValues[1] == "+") 1 else -1) * it.groupValues[2].toInt()
+                } ?: 0
+            }
+            val from = t(before.getString("hash")) ?: moved(before.getString("moved"))
+            assertEquals("$before → $after", from + 1, t(after.getString("hash")) ?: 0)
             shot("sheet-transposed")
 
             Intents.init()

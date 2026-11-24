@@ -66,6 +66,27 @@ def test_publish_refuses_a_name_that_exists(conn_with_index, out):
         catalogues.publish(conn_with_index, out, now=NOW, last=None)
 
 
+def test_publish_refuses_a_clock_gone_back_behind_the_last_files_minute(conn_with_index, out):
+    from datetime import timedelta
+
+    first = catalogues.publish(conn_with_index, out, now=NOW, last=None)
+
+    with pytest.raises(catalogues.PublishError) as refused:
+        catalogues.publish(conn_with_index, out, now=NOW - timedelta(days=1), last=first, after=first)
+    # Either clock may be the wrong one: the one now, or the one that stamped the last file ahead.
+    assert str(refused.value) == (
+        f"the clock reads 2026-11-23 03:12 UTC, earlier than the last file published, {first.name}. If the clock "
+        f"is right, that file was stamped ahead: delete it and published.json from {out} (and its asset from the "
+        "release), then publish again; if not, set the clock right.")
+
+    assert sorted(p.name for p in out.iterdir()) == sorted([first.name, "published.json"])  # nothing changed
+    assert catalogues.published(out) == first
+    later = catalogues.publish(conn_with_index, out, now=NOW + timedelta(minutes=1), last=first, after=first)
+    assert later.name > first.name
+    odd = catalogues.Published("not-a-catalogue-name", 17, "x", 1, 1, "0", {})
+    catalogues.publish(conn_with_index, out, now=NOW, last=None, after=odd)  # a name that holds no minute: no check
+
+
 def test_publish_refuses_an_index_not_built_whole(conn, out):
     with pytest.raises(catalogues.PublishError, match="built whole"):
         catalogues.publish(conn, out, now=NOW, last=None)
@@ -100,6 +121,19 @@ def test_the_publishing_schemas_two_newest_stay_whatever_their_age():
     names = [catalogues.name_for(17, d(2025, 1, 10)), catalogues.name_for(17, d(2025, 1, 3)),
              catalogues.name_for(17, d(2024, 12, 27)), catalogues.name_for(16, d(2025, 1, 1))]
     assert catalogues.kept(names, schema=17, now=d(2026, 11, 24)) == set(names[:2])
+
+
+def test_the_publishing_schema_is_the_newest_the_names_hold_when_it_is_newer_than_the_uploaders():
+    """An uploader built before a schema bump, beside a service after it, keeps what one built after it keeps: the
+    newer schema's two newest, and its own schema's newest while it is young enough."""
+    newer = [catalogues.name_for(18, d(2026, 11, 24)), catalogues.name_for(18, d(2026, 11, 17)),
+             catalogues.name_for(18, d(2026, 11, 10))]
+    older = [catalogues.name_for(17, d(2026, 11, 3)), catalogues.name_for(17, d(2026, 10, 27))]
+    names = newer + older
+    assert catalogues.kept(names, schema=17, now=d(2026, 11, 24)) == set(newer[:2] + older[:1])
+    assert catalogues.kept(names, schema=17, now=d(2026, 11, 24)) == catalogues.kept(names, schema=18,
+                                                                                      now=d(2026, 11, 24))
+    assert catalogues.kept(older, schema=18, now=d(2026, 11, 24)) == set(older[:1])  # the uploader's, when newer
 
 
 def test_a_missing_sidecar_is_none_and_a_corrupt_or_wrongly_typed_one_is_refused(out):

@@ -21,7 +21,7 @@ from helpers.aac import aac_m4a, needs_aac
 from helpers.aac import samples as aac_samples
 from helpers.locks import waiting_for
 from helpers.rendered import fake_chordpro
-from test_youtube_sheet import Heard, Recognizer, beats, wav
+from test_youtube_sheet import Heard, Recognizer, beats, keep_human_sheet, wav
 
 from caracole.autochords import separate
 from caracole.autochords import transcribe as tx
@@ -74,7 +74,7 @@ class Separator:
         self.calls: list[tuple[Path, Path]] = []
         self.fail, self.log = fail, log
 
-    def vocals(self, audio, workdir):
+    def vocals(self, audio, workdir, *, on_tick=None):
         self.calls.append((Path(audio), Path(workdir)))
         if self.log is not None:
             self.log.append("separator")
@@ -92,7 +92,7 @@ class Transcriber:
         self.words, self.language, self.fail, self.log = list(words), language, fail, log
         self.calls: list[tuple[Path, Path, float]] = []
 
-    def hear(self, mix, stem, first_sung_s):
+    def hear(self, mix, stem, first_sung_s, *, on_progress=None):
         self.calls.append((Path(mix), Path(stem), first_sung_s))
         if self.log is not None:
             self.log.append("transcriber")
@@ -202,6 +202,50 @@ def test_an_offered_song_gets_its_transcript_and_its_sheet_over_it(conn, cfg):
     assert not cfg.wanted_file.exists()  # the song was in the book: nothing added
 
 
+class Ticking(Separator):
+    """demucs-rs on the CPU, telling how long it has run at each tick: more than once a minute, past its estimate."""
+
+    def vocals(self, audio, workdir, *, on_tick=None):
+        for ran in (5.0, 61.0, 65.0, 130.0, 290.0, 300.0):
+            on_tick(ran)
+        return super().vocals(audio, workdir)
+
+
+class Hearing(Transcriber):
+    """Whisper, telling how far it has heard the minute of mix, a 30 s window at a time."""
+
+    def hear(self, mix, stem, first_sung_s, *, on_progress=None):
+        for done in (30.0, 60.0):
+            on_progress(done, 60.0)
+        return super().hear(mix, stem, first_sung_s)
+
+
+@pytest.mark.parametrize("gpu,about", [(False, "~5 min"), (True, "~1 min")], ids=["cpu", "gpu"])
+def test_each_long_stage_says_how_far_it_is_as_it_runs(conn, cfg, monkeypatch, gpu, about):
+    # The separator and Whisper take minutes, up to half an hour on a CPU: the song's line moves as they go (the
+    # vocals' minutes against about how long demucs-rs takes for the song's minute here, Whisper's place in the mix,
+    # auto-chords' steps), each change said once, and each stage's end as before.
+    from caracole import youtube_fetch
+
+    monkeypatch.setattr(youtube_fetch, "transcribes_on_the_gpu", lambda cfg: gpu)
+    offered(conn, cfg)
+    result, heard = make(cfg, separator=Ticking(), transcriber=Hearing())
+    assert result.ok, result
+    running = [(e[1], e[3]) for e in heard.events if e[0] == "stage" and e[2] == "running"]
+    vocals = [about] + (["1 of ~5 min", "2 of ~5 min", "4 of ~5 min", "5 min so far"] if not gpu else [
+        "1 min so far", "2 min so far", "4 min so far", "5 min so far"])
+    assert running == [
+        ("song", ""),
+        ("vocals", ""), *(("vocals", said) for said in vocals),
+        ("words", ""), ("words", "0:00 of 1:00"), ("words", "0:30 of 1:00"), ("words", "1:00 of 1:00"),
+        ("chords", ""), ("chords", "setting up the models"), ("chords", "hearing the chords"),
+        ("chords", "finding the beats"), ("chords", "writing the sheet"),
+        ("pdf", ""), ("pages", ""),
+    ]
+    assert heard.ends()["vocals"] == ("done", "sung from 24.8 s, 1 stretch")
+    assert heard.ends()["words"] == ("done", "6 words in 2 lines (es), 1 dropped")
+
+
 def test_words_outside_the_singing_are_dropped(conn, cfg):
     song = offered(conn, cfg)
     result, heard = make(cfg)
@@ -257,19 +301,61 @@ def test_a_stem_shorter_than_the_song_is_the_separators_failure(conn, cfg, monke
 
 
 def test_a_killed_jobs_work_folders_are_swept_when_the_next_job_starts(conn, cfg):
-    # A job killed in its stages leaves its stem (tens of MB) under the cache. The lock lets one transcription run
-    # at a time (it hands the lock to lookups alone), so any work folder there when a job holds it is stale.
+    # A job killed in its stages leaves its stem (tens of MB) under the cache, and its folder no live job holds (its
+    # lock on the folder's owner file went with its process; an older caracole's folder has none).
     offered(conn, cfg)
     stale = [cfg.cache_dir / name for name in ("transcribe-k1ll3d0", "transcribe-0ld")]
     for folder in stale:
         (folder / "song" / "stems").mkdir(parents=True)
         (folder / "song" / "stems" / "vocals.wav").write_bytes(b"RIFF")
+    (stale[0] / ".owner").write_bytes(b"")
     other = cfg.cache_dir / "youtube"
     result, _ = make(cfg)
     assert result.ok, result
     assert not any(folder.exists() for folder in stale)
     assert other.is_dir() and list(other.iterdir())  # the rest of the cache stays
     assert not list(cfg.cache_dir.glob("transcribe-*"))  # and the job's own went with it
+
+
+class StemFirst(Transcriber):
+    """Whisper as WhisperTranscriber.hear runs it: the stem read first, for the language, and a stem that is gone
+    failing as openai-whisper's load_audio fails (ffmpeg 9.0.1's words)."""
+
+    def hear(self, mix, stem, first_sung_s, **kwargs):
+        if not Path(stem).is_file():
+            raise RuntimeError("Failed to load audio: Error opening input files: No such file or directory")
+        return super().hear(mix, stem, first_sung_s, **kwargs)
+
+
+def test_a_second_transcription_in_the_first_ones_hand_over_leaves_its_stem_alone(conn, cfg, monkeypatch):
+    # Before the words, the job hands caracole's lock to the lookups and waits for it with a ticket outside the lane;
+    # another caracole asked for now (a terminal's `caracole transcribe` of another song) may take the lock first once
+    # the lane is empty. Its sweep leaves a live job's folder alone: the first job's stem gone, Whisper would fail on
+    # it, and the song's good audio would be filed as audio that can't be read.
+    first = offered(conn, cfg)
+    offered(conn, cfg, artist="Otro", title="Canción")
+    monkeypatch.setattr(_common, "_handoffs", _common.handoffs())  # put back as it was after the test
+    heard = Heard()
+    second = []
+
+    def hand_over(cfg_, conn_=None) -> bool:
+        if heard.events[-1][1:3] != ("words", "running") or second:  # the second job's own hand-overs: none
+            return False
+        second.append(None)
+        second[0] = make_transcript(cfg_, TranscribeRequest("Otro", "Canción"), Heard(), separator=Separator(),
+                                    transcriber=StemFirst(), recognizer=Recognizer(), beats_fn=beats,
+                                    runner=fake_chordpro, now=NOW)
+        _common._handoffs += 1
+        return True
+
+    monkeypatch.setattr(_common, "hand_over", hand_over)
+    result, _ = make(cfg, transcriber=StemFirst(), progress=heard)
+    assert second and second[0].ok, second
+    assert result.ok, result
+    assert heard.ends()["words"] == ("done", "6 words in 2 lines (es), 1 dropped")
+    assert kv_get(conn, f"autochords:failed:{first.id}") is None
+    assert why_not_offered(conn, cfg, get_song(conn, first.id), Overrides()) == "already transcribed"
+    assert not list(cfg.cache_dir.glob("transcribe-*"))  # both went with their jobs
 
 
 def test_a_song_with_an_auto_sheet_over_no_lyrics_gets_it_made_again_over_its_transcript(conn, cfg):
@@ -288,6 +374,66 @@ def test_a_song_with_an_auto_sheet_over_no_lyrics_gets_it_made_again_over_its_tr
     assert recognizer.calls == [Path(song.audio_path)]
     lines = auto_sheet(cfg, conn, song).read_text(encoding="utf-8").splitlines()
     assert NOTE in lines and "Somos vikingos de prueba" in lines
+
+
+@pytest.mark.parametrize("chart_before", [False, True], ids=["no sheet before", "a chart before"])
+def test_try_again_after_the_chords_failed_makes_the_sheet_over_the_transcript_kept(conn, cfg, monkeypatch,
+                                                                                    chart_before):
+    # The words keep the transcript before the chords run: when auto-chords can't keep the sheet (a full disk), or the
+    # server stops mid-way, Try again runs the same `caracole transcribe`, which goes straight to the chords over the
+    # transcript kept, neither model run again; never "already transcribed", the sheet over it left to the night.
+    from caracole.autochords import run as ac_run
+    from caracole.autochords.run import autochords_pending
+
+    song = offered(conn, cfg)
+    if chart_before:
+        autochords_pending(conn, cfg, recognizer=Recognizer(), beats_fn=beats, only={song.id})
+    keep_sheet = ac_run._keep
+
+    def full_disk(*args, **kwargs):
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(ac_run, "_keep", full_disk)
+    first, _ = make(cfg)
+    assert first.failed and first.failed.startswith("auto-chords can't run here"), first
+    assert transcript_of(conn, get_song(conn, song.id)) is not None
+    monkeypatch.setattr(ac_run, "_keep", keep_sheet)  # room again
+    separator, transcriber, recognizer = Separator(), Transcriber(), Recognizer()
+    again, heard = make(cfg, separator=separator, transcriber=transcriber, recognizer=recognizer)
+    assert again.ok, again
+    ends = heard.ends()
+    assert ends["song"] == ("done", "in the book; transcribed already, its sheet to make")
+    assert ends["vocals"] == ("skipped", "transcribed already")
+    assert ends["words"] == ("done", "the transcript kept")
+    assert ends["chords"] == ("done", "chords over the transcribed lyrics")
+    assert separator.calls == transcriber.calls == [] and recognizer.calls == [Path(song.audio_path)]
+    lines = auto_sheet(cfg, conn, song).read_text(encoding="utf-8").splitlines()
+    assert NOTE in lines and "Somos vikingos de prueba" in lines
+    # Once the sheet is over it, a transcription of it is asked for no more.
+    third, _ = make(cfg)
+    assert third.refused == "Nick Cani - Vikingos veganos isn't offered a transcription: already transcribed"
+
+
+def test_a_songs_auto_sheet_record_that_cant_be_read_is_a_refusal_never_a_traceback(conn, cfg):
+    # Whether a transcribed song's sheet is still to make reads its auto sheet's record (run.py _skip_reason): a
+    # record another device wrote that won't read stops the job as a refusal, in its words, as auto-chords counts
+    # such a song an error and goes on.
+    from caracole.autochords.run import autochords_pending
+    from caracole.autochords.transcript import keep_transcript
+
+    song = offered(conn, cfg)
+    autochords_pending(conn, cfg, recognizer=Recognizer(), beats_fn=beats, only={song.id})
+    keep_transcript(conn, song, Transcript(lrc=LRC, audio=song.audio_path, audio_mtime=song.audio_mtime,
+                                           model="whisper-large-v3", language="es", device="cpu", words_dropped=1,
+                                           made_at="2026-11-19T21:00:00Z"))
+    conn.execute("UPDATE versions SET raw = '{not json' WHERE song_id = ?", (song.id,))
+    separator, transcriber, recognizer = Separator(), Transcriber(), Recognizer()
+    result, heard = make(cfg, separator=separator, transcriber=transcriber, recognizer=recognizer)
+    assert result.bug is None and result.failed is None
+    assert result.refused is not None and result.refused.startswith(
+        "Nick Cani - Vikingos veganos: its auto sheet's record can't be read (JSONDecodeError: "), result.refused
+    assert heard.ends()["song"] == ("failed", result.refused)
+    assert separator.calls == transcriber.calls == recognizer.calls == []
 
 
 def test_with_no_singing_found_whisper_never_runs_and_nothing_sung_is_noted(conn, cfg, monkeypatch):
@@ -464,7 +610,7 @@ def test_a_song_whose_audio_is_the_aac_m4a_youtube_gives_is_transcribed(conn, cf
     assert Path(song.audio_path).suffix == ".m4a"
 
     class Stem(Separator):
-        def vocals(self, audio, workdir):
+        def vocals(self, audio, workdir, **kwargs):
             self.calls.append((Path(audio), Path(workdir)))
             out = Path(workdir) / "stems" / "vocals.wav"
             out.parent.mkdir(parents=True)
@@ -502,11 +648,11 @@ class Built:
                 super().__init__()
                 built.log.append(("demucs built", binary, model, cache_dir))
 
-            def vocals(self, audio, workdir):
+            def vocals(self, audio, workdir, **kwargs):
                 built.log.append(("demucs", Path(audio).name))
                 if separator_fails:
                     raise SeparatorFailed(separator_fails)
-                return super().vocals(audio, workdir)
+                return super().vocals(audio, workdir, **kwargs)
 
         class Whisper(Transcriber):
             def __init__(self, model_path, *, device, cache_dir):
@@ -515,11 +661,11 @@ class Built:
                 if load_fails is not None:
                     raise load_fails
 
-            def hear(self, mix, stem, first_sung_s):
+            def hear(self, mix, stem, first_sung_s, **kwargs):
                 built.log.append(("whisper", Path(mix).name))
                 if whisper_fails is not None and Path(mix).name == "test-tone.wav":
                     raise whisper_fails
-                return super().hear(mix, stem, first_sung_s)
+                return super().hear(mix, stem, first_sung_s, **kwargs)
 
         monkeypatch.setattr(separate, "DemucsSeparator", Demucs)
         monkeypatch.setattr(tx, "WhisperTranscriber", Whisper)
@@ -527,7 +673,8 @@ class Built:
 
 
 class Says(Heard):
-    """The progress, which notes each stage as it starts in the same log as the models."""
+    """The progress, which notes each stage as it starts, and what it says it does while it runs, in the same log as
+    the models."""
 
     def __init__(self, log: list):
         super().__init__()
@@ -536,7 +683,7 @@ class Says(Heard):
     def stage(self, name, state, detail=""):
         super().stage(name, state, detail)
         if state == "running":
-            self.log.append(("stage", name))
+            self.log.append(("doing", name, detail) if detail else ("stage", name))
 
 
 def default_models(cfg, tmp_path):
@@ -559,6 +706,7 @@ def test_the_default_models_are_built_at_their_first_stage_and_whisper_must_hear
                                                                                              monkeypatch):
     # demucs-rs hears no tone: failing on the song is the setup's as failing on a tone would be, and each of its runs
     # costs about 30 s (measured: the results file of docs/superpowers/plans/).
+    monkeypatch.delenv("CARACOLE_TORCH_CUDA", raising=False)  # on the CPU: the separator's pace there
     built = Built(monkeypatch)
     setup = default_models(cfg, tmp_path)
     song = offered(conn, setup)
@@ -569,13 +717,20 @@ def test_the_default_models_are_built_at_their_first_stage_and_whisper_must_hear
         ("stage", "song"),
         ("stage", "vocals"),
         ("demucs built", "demucs-cpu", tmp_path / "htdemucs.safetensors", setup.cache_dir),
+        ("doing", "vocals", "~5 min"),
         ("demucs", audio),
         ("stage", "words"),
+        ("doing", "words", "loading Whisper"),
         ("device", "auto"),
         ("whisper built", tmp_path / "large-v3.pt", "cuda", setup.cache_dir),
         ("whisper", "test-tone.wav"),
+        ("doing", "words", "0:00 of 1:00"),
         ("whisper", audio),
         ("stage", "chords"),
+        ("doing", "chords", "setting up the models"),
+        ("doing", "chords", "hearing the chords"),
+        ("doing", "chords", "finding the beats"),
+        ("doing", "chords", "writing the sheet"),
         ("stage", "pdf"),
         ("stage", "pages"),
     ]
@@ -615,22 +770,34 @@ def test_a_default_model_that_fails_on_the_tone_or_at_load_is_the_setups(conn, c
     ("chords", lambda conn, cfg, song: conn.execute("DELETE FROM songs"),
      "Nick Cani - Vikingos veganos left the book while its lyrics were transcribed (removed, or merged into a song "
      "of the same name)"),
-], ids=["lyrics found before the words", "removed before the chords"])
+    ("chords", keep_human_sheet, "Nick Cani - Vikingos veganos needs no sheet over its transcript now: has a human "
+                                 "sheet"),
+    ("chords", ignored, "Nick Cani - Vikingos veganos needs no sheet over its transcript now: ignored"),
+], ids=["lyrics found before the words", "removed before the chords", "a human sheet before the chords",
+        "ignored before the chords"])
+@pytest.mark.parametrize("earlier", [False, True], ids=["no auto sheet before", "an auto sheet before"])
 def test_a_song_a_lookup_changed_while_it_had_the_lock_ends_the_job_as_a_refusal(conn, cfg, monkeypatch, before,
-                                                                                 change, said):
+                                                                                 change, said, earlier):
     # Before each long stage the job lets a waiting lookup have the lock; meanwhile the song may have found lyrics
-    # (no longer offered) or left the book. The job ends there, a refusal, before the next model runs.
+    # (no longer offered), kept a human sheet (a terminal's `caracole get` found UG's chords), been ignored, or left
+    # the book. The job ends there, a refusal, before the next model runs: never auto-chords' skip said as its own
+    # failure ("made no sheet"), nor an earlier auto sheet said as Ready.
+    from caracole.autochords.run import autochords_pending
+
     song = offered(conn, cfg)
+    if earlier:  # a chart auto-chords made before, with no words
+        autochords_pending(conn, cfg, recognizer=Recognizer(), beats_fn=beats, only={song.id})
     heard = Heard()
     monkeypatch.setattr(_common, "_handoffs", _common.handoffs())  # put back as it was after the test
 
     def hand_over(cfg_, conn_=None) -> bool:
         _common._handoffs += 1
-        if heard.events[-1] == ("stage", before, "running", ""):
+        if heard.events[-1][1:3] == (before, "running"):
             change(conn_, cfg_, song)
         return True
 
     monkeypatch.setattr(_common, "hand_over", hand_over)
+    made_before = auto_sheet(cfg, conn, song).exists()
     transcriber, recognizer = Transcriber(), Recognizer()
     result, _ = make(cfg, transcriber=transcriber, recognizer=recognizer, progress=heard)
     assert result.bug is None and result.failed is None and result.refused == said
@@ -639,7 +806,11 @@ def test_a_song_a_lookup_changed_while_it_had_the_lock_ends_the_job_as_a_refusal
     assert all(ends[name][0] == "skipped" for name in ("chords", "pdf", "pages"))
     assert recognizer.calls == []
     assert (transcriber.calls == []) == (before == "words")
-    assert not auto_sheet(cfg, conn, song).exists()
+    assert auto_sheet(cfg, conn, song).exists() == made_before
+    # Refused at the chords, its transcript is kept, and the job says so (the command's "Transcript kept; ...").
+    assert result.transcript_kept == ("needs no sheet" in said)
+    if result.transcript_kept:
+        assert transcript_of(conn, get_song(conn, song.id)) is not None
 
 
 
@@ -709,7 +880,8 @@ def test_the_lock_goes_to_a_waiting_lookup_before_each_long_stage(conn, cfg, tmp
     class Asked(Heard):
         def stage(self, name, state, detail=""):
             super().stage(name, state, detail)
-            if state == "running" and name in ("vocals", "words", "chords"):  # a lookup asks for the lock now
+            if state == "running" and not detail and name in ("vocals", "words", "chords"):  # as each starts, a
+                # lookup asks for the lock
                 lookup = subprocess.Popen([sys.executable, "-c", LOOKUP, str(config), str(log)], env=env)
                 lookups.append(lookup)
                 assert waiting_for(cfg.state_dir / _common.LOCK_NAME, lambda: lookup.poll() is None)

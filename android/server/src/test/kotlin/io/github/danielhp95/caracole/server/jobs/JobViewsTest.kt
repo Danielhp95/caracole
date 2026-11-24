@@ -15,6 +15,8 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
+import io.github.danielhp95.caracole.core.index.MergeProgress
+import io.github.danielhp95.caracole.core.sync.SyncEngine
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.server.testing.replays.JobViewsReplay
@@ -62,6 +64,135 @@ class JobViewsTest {
                      line(JobViews.view(queue.job(second.id)!!, queue)))
         assertEquals("Queued · 2 requests ahead…", JobViews.line(queue.job(third.id)!!, 2).text)
         gate.complete(Unit)
+    }
+
+    /** A request queued behind a long job of the phone's own, which the queue's one worker runs first, says which
+     * and how far it has got, its words as that job's line says them (the phone's own: Python never queues one). */
+    @Test fun aRequestQueuedBehindAPhonesOwnJobSaysWhatItWaitsFor() = runTest {
+        val queue = queue()
+        val kind = PhoneKinds.CATALOGUES
+        val gate = CompletableDeferred<Unit>()
+        val importing = "Importing · Ultimate Guitar · 600,000 of 1,521,145 tabs"
+        val catalogues = phoneJob(queue, kind, "") { context ->
+            context.stage("catalogues", "running", PhoneKinds.fill(kind.running, "doing" to importing))
+            gate.await()
+        }
+        runCurrent()
+        val lookup = queue.submit(JobSpec("Get Muse - Hysteria", "muse/hysteria", "song", emptyList(),
+                                          commands = JobCommands.lookupSteps("Muse", "Hysteria"), fetching = true)).first
+        val add = queue.submit(JobSpec("Add b", "b", "add", emptyList()) {}).first
+        assertEquals(listOf("queued", "Queued · after the site catalogues ($importing)", null),
+                     line(JobViews.view(queue.job(lookup.id)!!, queue)))
+        assertEquals(listOf("queued", "Queued · 2 requests ahead, now the site catalogues ($importing)", null),
+                     line(JobViews.view(queue.job(add.id)!!, queue)))
+        // Its line alone, given the jobs (the Requests tab's and /jobs.json's).
+        val jobs = queue.snapshot()
+        assertEquals("Queued · after the site catalogues ($importing)",
+                     JobViews.line(queue.job(lookup.id)!!, 1, behind = JobViews.behind(queue.job(lookup.id)!!, jobs)).text)
+        // A sync's: its running stage and its words; a job of commands ahead (Python's too) is counted as ever.
+        assertEquals(null, JobViews.behind(queue.job(catalogues.id)!!, jobs), "a running job waits for none")
+        gate.complete(Unit)
+        runCurrent()
+        val taking = CompletableDeferred<Unit>()
+        val syncing = CompletableDeferred<Unit>()
+        val sync = queue.submit(JobSpec("Sharing logs with studio", "sync:http://pc:8737", "sync", sync,
+                                        display = "Sharing logs with studio") { context ->
+            context.stage("take", "running", "2 of 5 changes")
+            taking.await()
+            context.stage("take", "done", "took 5")
+            context.stage("index", "running", "Downloading the computer's indexes · 120 of 274 MB")
+            syncing.await()
+        }).first
+        runCurrent()
+        val after = queue.submit(JobSpec("Get Muse - Uprising", "muse/uprising", "song", emptyList(),
+                                         commands = JobCommands.lookupSteps("Muse", "Uprising"), fetching = true)).first
+        val waits = { JobViews.line(queue.job(after.id)!!, 1, behind = JobViews.behind(queue.job(after.id)!!,
+                                                                                    queue.snapshot())).text }
+        assertEquals("Queued · after the sync (Taking their entries · 2 of 5 changes)", waits())
+        taking.complete(Unit)
+        runCurrent()
+        // A long stage's line says its words already (Status.LONG_STAGES): said once.
+        assertEquals("Queued · after the sync (Updating the indexes · Downloading the computer's indexes · 120 of 274 MB)",
+                     waits())
+        syncing.complete(Unit)
+        runCurrent()
+        assertEquals(Job.DONE, queue.job(sync.id)!!.state)
+    }
+
+    /** A sync's long stage at a step whose words end in "…" ("Tidying the database…", the merge's and the engine's
+     * own): its line says one, its own, after the stage's detail (SyncEngine.detail leaves theirs off). */
+    @Test fun aSyncTidyingTheDatabaseSaysOneEllipsis() = runTest {
+        val queue = queue()
+        val gate = CompletableDeferred<Unit>()
+        val sync = queue.submit(JobSpec("Sharing logs with studio", "sync:http://pc:8737", "sync", sync,
+                                        display = "Sharing logs with studio") { context ->
+            context.stage("index", "running", SyncEngine.detail(MergeProgress.TIDYING))
+            gate.await()
+        }).first
+        runCurrent()
+        assertEquals("Updating the indexes · Tidying the database…", JobViews.line(queue.job(sync.id)!!).text)
+        val after = queue.submit(JobSpec("Get Muse - Uprising", "muse/uprising", "song", emptyList(),
+                                         commands = JobCommands.lookupSteps("Muse", "Uprising"), fetching = true)).first
+        assertEquals("Queued · after the sync (Updating the indexes · Tidying the database)",
+                     JobViews.line(queue.job(after.id)!!, 1,
+                                   behind = JobViews.behind(queue.job(after.id)!!, queue.snapshot())).text)
+        for (words in listOf(SyncEngine.COPYING_THERE, SyncEngine.COPYING_OUT, MergeProgress.COMPARING,
+                             MergeProgress.READYING, MergeProgress.TIDYING)) {
+            assertEquals(words.removeSuffix("…"), SyncEngine.detail(words))
+        }
+        assertEquals("120 of 640 pages", SyncEngine.detail("120 of 640 pages"))
+        gate.complete(Unit)
+        runCurrent()
+    }
+
+    /** Behind a kind whose line is the same while it runs (a backup, a file filed, a restore): that line once, its
+     * first letter small; behind one that counts (the pages remade), its name and its count, or its name alone before
+     * it has counted anything. No parentheses twice. */
+    @Test fun aRequestQueuedBehindAPhonesOwnJobSaysItsKindsOwnLineOnce() = runTest {
+        val queue = queue()
+        fun behind(spec: JobSpec, said: String?): String {
+            val gate = CompletableDeferred<Unit>()
+            val kind = PhoneKinds.ALL.getValue(spec.kind)
+            val running = queue.submit(spec.copy(run = { context ->
+                context.stage(kind.stage.first, "running", said ?: "")
+                gate.await()
+            })).first
+            runCurrent()
+            val waiting = queue.submit(JobSpec("Add q", "q-${running.id}", "add", emptyList()) {}).first
+            val text = JobViews.line(queue.job(waiting.id)!!, 1, behind = JobViews.behind(queue.job(waiting.id)!!,
+                                                                                          queue.snapshot())).text
+            gate.complete(Unit)
+            runCurrent()
+            return text
+        }
+        fun spec(kind: PhoneKinds.Kind, display: String) =
+            JobSpec(kind.title, kind.key + display, kind.kind, listOf(kind.stage), display = display) {}
+        val backup = PhoneKinds.BACKUP
+        assertEquals("Queued · after backing up the book", behind(spec(backup, "A backup (daily)"), backup.running))
+        val inbox = PhoneKinds.INBOX
+        assertEquals("Queued · after filing song.gp5",
+                     behind(spec(inbox, "song.gp5"), PhoneKinds.fill(inbox.running, "name" to "song.gp5")))
+        val render = PhoneKinds.RENDER
+        assertEquals("Queued · after the phone's pages (Remaking pages · 3 of 10)",
+                     behind(spec(render, render.display),
+                            PhoneKinds.fill(render.running, "done" to 3, "total" to 10)))
+        assertEquals("Queued · after the phone's pages", behind(spec(render, render.display), null))
+        val catalogues = PhoneKinds.CATALOGUES
+        assertEquals("Queued · after the site catalogues", behind(spec(catalogues, catalogues.display), null))
+    }
+
+    /** A request kept in the history from before the metered stop's words changed still reads as a wait. */
+    @Test fun theMeteredStopsFormerWordsStillReadAsAWait() = runTest {
+        val queue = queue()
+        val kind = PhoneKinds.CATALOGUES
+        for (old in listOf("52 MB to download: waiting for Wi-Fi or your go-ahead", "52 MB to download: waiting for your go-ahead to use mobile data")) {
+            val job = phoneJob(queue, kind, old) { context -> context.stage("catalogues", "done", old) }
+            runCurrent()
+            assertEquals(Line("waiting", old, details = "#tab=requests&job=${job.id}"), JobViews.line(queue.job(job.id)!!))
+            assertTrue(kind.waits(old))
+        }
+        assertTrue(kind.waits(PhoneKinds.fill(kind.otherwise!!, "size" to "52 MB")))
+        assertEquals(false, kind.waits("Up to date: the catalogues of 24 Nov 2026"))
     }
 
     @Test fun aRunningJobSaysItsRunningStageElseTheNextOne() = runTest {
@@ -311,7 +442,7 @@ class JobViewsTest {
         }
         runCurrent()
         assertEquals(Line("ready", "Up to date: the catalogues of 24 Nov 2026"), JobViews.line(queue.job(upToDate.id)!!))
-        assertEquals(Line("waiting", "52 MB to download: waiting for Wi-Fi or your go-ahead",
+        assertEquals(Line("waiting", "52 MB to download: waiting for your go-ahead in Settings (a metered network)",
                           details = "#tab=requests&job=${metered.id}"), JobViews.line(queue.job(metered.id)!!))
         val failed = phoneJob(queue, kind, "failed") { context ->
             val line = PhoneKinds.fill(kind.failed, "why" to "No catalogues are published yet.")
@@ -322,7 +453,7 @@ class JobViewsTest {
         assertEquals(Line("failed", "Not imported: No catalogues are published yet.",
                           details = "#tab=requests&job=${failed.id}"), JobViews.line(queue.job(failed.id)!!))
         // A line fits a template with its blanks filled, wherever they are.
-        assertTrue(PhoneKinds.fits("52 MB to download: waiting for Wi-Fi or your go-ahead", kind.otherwise!!))
+        assertTrue(PhoneKinds.fits("52 MB to download: waiting for your go-ahead in Settings (a metered network)", kind.otherwise!!))
         assertTrue(PhoneKinds.fits("Waiting for its song: a.gp5", PhoneKinds.INBOX.otherwise!!))
         assertTrue(PhoneKinds.fits("Filed · a of b", PhoneKinds.INBOX.done))
         assertEquals(false, PhoneKinds.fits("Up to date: the catalogues of 24 Nov 2026", kind.otherwise!!))

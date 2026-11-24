@@ -341,6 +341,20 @@ def test_up_to_date_songs_are_left_alone(conn, cfg, tmp_path):
     assert get_song(conn, s.id).status == "found"
 
 
+def test_each_step_of_a_songs_sheet_is_told_as_it_starts(conn, cfg, tmp_path):
+    # A sheet from a YouTube video and a transcription say where auto-chords is, its models a minute or more on a
+    # CPU: the models set up for the first song due, then each song's chords, beats and sheet.
+    a = with_audio(conn, tmp_path, add_song(conn, "A", "T"))
+    b = with_audio(conn, tmp_path, add_song(conn, "B", "U"))
+    steps: list[str] = []
+    stats = run(conn, cfg, on_step=steps.append)
+    assert stats.generated == 2
+    assert steps == ["setting up the models"] + ["hearing the chords", "finding the beats", "writing the sheet"] * 2
+    steps.clear()
+    run(conn, cfg, on_step=steps.append, only={a.id, b.id})  # up to date: no model set up, nothing told
+    assert steps == []
+
+
 def test_changed_audio_is_generated_again(conn, cfg, tmp_path):
     s = with_audio(conn, tmp_path, add_song(conn, "A", "T"))
     run(conn, cfg)
@@ -1063,6 +1077,27 @@ def test_missing_beat_checkpoint_is_reported_once(conn, cfg, tmp_path):
     stats = autochords_pending(conn, cfg, recognizer=rec)
     assert (stats.failed, rec.calls) == (2, [])
     assert stats.errors == [f"beat_this checkpoint not found: {tmp_path / 'final0.ckpt'}"]
+
+
+def test_each_song_due_is_said_as_its_chords_are_worked_out_n_of_those_due(conn, cfg, tmp_path, caplog):
+    # A song takes minutes: the journal (the command runs at -v) says which one, and how many are left, before each.
+    done = with_audio(conn, tmp_path, add_song(conn, "A", "Done", added_at="2026-10-04T00:00:00Z"), name="done.wav")
+    run(conn, cfg)  # up to date: no longer due
+    with_audio(conn, tmp_path, add_song(conn, "A", "One", added_at="2026-10-03T00:00:00Z"), name="one.wav")
+    with_audio(conn, tmp_path, add_song(conn, "A", "Two", added_at="2026-10-02T00:00:00Z"), name="two.wav")
+    add_song(conn, "A", "No Audio", added_at="2026-10-01T00:00:00Z")
+    with caplog.at_level(logging.INFO, logger="caracole.autochords.run"):
+        stats = run(conn, cfg)
+    assert stats.generated == 2 and done.id
+    said = [r.getMessage() for r in caplog.records if r.getMessage().startswith("Working out")]
+    assert said == ["Working out the chords of A - One (1 of 2)…", "Working out the chords of A - Two (2 of 2)…"]
+    caplog.clear()
+    one = get_song(conn, done.id)
+    update_song(conn, one.id, audio_mtime=one.audio_mtime + 60)  # one song due alone: no count
+    with caplog.at_level(logging.INFO, logger="caracole.autochords.run"):
+        run(conn, cfg, only={one.id})
+    assert [r.getMessage() for r in caplog.records if r.getMessage().startswith("Working out")] == [
+        "Working out the chords of A - Done…"]
 
 
 def test_a_file_that_will_not_decode_fails_alone(conn, cfg, tmp_path, caplog):

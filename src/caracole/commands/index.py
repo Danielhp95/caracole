@@ -282,16 +282,24 @@ def _kept(names: list[str]) -> None:
 
 
 def _publish(cfg: Config, folder: Path, force: bool) -> None:
+    """``caracole index publish DIR``. ``--force`` passes the rows' guard (and a sidecar that can't be read), never
+    the clock's: a file named before the last one's minute is refused either way (``catalogues.publish``'s
+    ``after``)."""
     from caracole import backup, catalogues
 
     now = utcnow()
     out = console()
     with closing(open_db(cfg)) as conn:
         try:
-            last = None if force else catalogues.published(folder)
-            made = catalogues.publish(conn, folder, now=now, last=last, private=[
+            try:
+                previous = catalogues.published(folder)
+            except catalogues.PublishError:
+                if not force:
+                    raise
+                previous = None
+            made = catalogues.publish(conn, folder, now=now, last=None if force else previous, private=[
                 str(p) for p in (cfg.state_dir, cfg.library_dir, cfg.cache_dir, cfg.music_dir, Path.home())],
-                progress=_Publishing(out, folder))
+                progress=_Publishing(out, folder), after=previous)
         except catalogues.PublishError as e:
             with suppress(BrokenPipeError):
                 out.close()
@@ -400,14 +408,113 @@ def _amount(done: int, total: int) -> str:
     return f"{done:,} of {total:,} bytes"
 
 
+def merge_console() -> Console:
+    """Where a merge says how far it has got: stderr, so that stdout stays its report, by the ticker's rules: a live
+    line on a terminal at the default verbosity alone (``progress.live_here``), plain lines else, none at -q. Tests
+    replace it."""
+    import sys
+
+    from caracole import logs, progress
+
+    return Console(sys.stderr, live=progress.live_here(), quiet=logs.level() == logs.QUIET)
+
+
+class Merging:
+    """What a merge says as it goes (``index_transfer.merge``'s ``progress`` and ``backing_up``, in ``MergeWords``'
+    words), for ``caracole index merge`` and commands/peer.py's merges of indexes.
+
+    With ``stage`` (a ``--progress`` run's: caracole serve reads it), each step as that stage's running detail. Else
+    on ``console``: on a terminal one live line, rewritten as each site, action and chunk of UG's sitemap rows goes
+    by; anywhere else (a journal, a pipe) a plain line as the comparison and the backup begin, as each action of a
+    site begins, and as each quarter of UG's sitemap rows is passed. ``say`` is another step of the caller's (a
+    file's indexes copied out first), said the same way. ``close`` clears a live line left.
+
+    A live line is taken off before the log writes a record (``logs.clears_first``), so a warning mid-merge has a line
+    of its own. Once what it writes to fails (``BrokenPipeError``: ``| head``, a caracole serve stopped; a terminal
+    gone, EIO; a stream closed), it says nothing more and the merge goes on, as ``_Publishing`` does: the stream it
+    wrote to (the console's, else ``stream``, where ``stage`` writes) is pointed at /dev/null, so that what the command
+    says after is dropped rather than failing it."""
+
+    def __init__(self, *, console: Console | None = None, stage: Callable[[str], None] | None = None,
+                 stream=None) -> None:
+        from caracole import logs
+        from caracole.index_transfer import MergeWords
+
+        self.console = console
+        self.stage = stage
+        self.stream = console.stream if stage is None and console is not None else stream
+        self._words = MergeWords()
+        self._quarter = 0
+        self._cut = False
+        live = stage is None and console is not None and console.live
+        self._undo = logs.clears_first(self._clear) if live else None
+
+    def _clear(self) -> None:
+        if self.console is not None:
+            self._tell(self.console.close)
+
+    def _tell(self, say: Callable[..., None], *args: str) -> None:
+        if self._cut:
+            return
+        try:
+            say(*args)
+        except (OSError, ValueError):  # its reader gone (a broken pipe), its terminal gone, its stream closed
+            self._cut = True
+            self._unhook()
+            if self.stream is not None:
+                _cut_off(self.stream)
+
+    def _unhook(self) -> None:
+        if self._undo is not None:
+            self._undo()
+            self._undo = None
+
+    def say(self, text: str) -> None:
+        if self.stage is not None:
+            self._tell(self.stage, text)
+        elif self.console is not None:
+            self._tell(self.console.step, f"{text}...")
+
+    def backing_up(self) -> None:
+        self.say(self._words.BACKING_UP)
+
+    def __call__(self, site: str, action: str, done: int, total: int) -> None:
+        from caracole.index_transfer import UG_TABS
+
+        said = self._words(site, action, done, total)
+        if self.stage is not None:
+            self._tell(self.stage, said)
+        elif self.console is None:
+            return
+        elif action == UG_TABS:
+            if self.console.live:
+                self._tell(self.console.status, said)
+            elif total and (quarter := 4 if done >= total else done * 4 // total) > self._quarter:
+                self._quarter = quarter
+                self._tell(self.console.step, said)
+        elif action:
+            self._quarter = 0
+            self._tell(self.console.step, f"{said}...")
+        else:
+            self._tell(self.console.status, f"{said}...")  # a site: the live line alone; a journal hears its actions
+
+    def close(self) -> None:
+        self._clear()
+        self._unhook()
+
+
 def _merge(cfg: Config, file: Path, sites: list[str], *, delete: bool = False, progress: bool = False) -> None:
     """``caracole index merge``. With ``progress`` (caracole serve's, the pages a phone posted: web/jobs.py
     ``index_merge_job``), its one stage, ``merge``, as get.py's JSON lines, ending ``failed`` however the command
     ends short of a merge (the lock or the database not to be had too), and the lock waited for as a lookup waits
-    (the nightly run lets it go first at its next pause). With ``delete``, FILE deleted once it is merged; refused,
-    only when it is an export caracole serve staged (``peer_push.staged_indexes``), which can never merge here, never
-    a file named by hand (the database itself, a backup, a typo); and kept when only the backup first failed, or
-    the lock or the database wasn't to be had, for Try again."""
+    (the nightly run lets it go first at its next pause); how far the merge has got is that stage's running detail
+    (``Merging``). Without it, how far it has got goes to stderr (``merge_console``), its report to stdout. With
+    ``delete``, FILE deleted once it is merged; refused, only when it is an export caracole serve staged
+    (``peer_push.staged_indexes``), which can never merge here, never a file named by hand (the database itself, a
+    backup, a typo); and kept when only the backup first failed, or the lock or the database wasn't to be had, for
+    Try again."""
+    import sys
+
     from caracole import backup
     from caracole import index_transfer as transfer
 
@@ -430,8 +537,14 @@ def _merge(cfg: Config, file: Path, sites: list[str], *, delete: bool = False, p
     stage("running")
     try:
         with exclusive(cfg, "index merge", interactive=progress), closing(open_db(cfg)) as conn:
+            told = (Merging(stage=lambda said: stage("running", said), stream=sys.stdout) if progress
+                    else Merging(console=merge_console()))
             try:
-                merged = transfer.merge(conn, file, sites or None, state_dir=cfg.state_dir, now=utcnow())
+                try:
+                    merged = transfer.merge(conn, file, sites or None, state_dir=cfg.state_dir, now=utcnow(),
+                                            progress=told, backing_up=told.backing_up)
+                finally:
+                    told.close()
             except transfer.NoBackup as e:
                 refused(str(e), 2, done_with=False)
             except transfer.TransferError as e:

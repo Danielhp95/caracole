@@ -79,7 +79,7 @@ def models(monkeypatch) -> list[str]:
         def __init__(self, binary, model, cache_dir, timeout=0.0):
             pass
 
-        def vocals(self, audio, workdir):
+        def vocals(self, audio, workdir, **kwargs):
             heard.append(f"demucs {Path(audio).name}")
             return wav(Path(workdir) / "stems" / "vocals.wav", 1.0)
 
@@ -87,7 +87,7 @@ def models(monkeypatch) -> list[str]:
         def __init__(self, model_path, *, device, cache_dir):
             self.device = device
 
-        def hear(self, mix, stem, first_sung_s):
+        def hear(self, mix, stem, first_sung_s, **kwargs):
             heard.append(f"whisper {Path(mix).name}")
             return tx.Heard("es", list(WORDS))
 
@@ -139,6 +139,39 @@ def test_transcribe_says_each_stage_and_exits_0(tmp_path, config, conn, models, 
     assert kv_get(conn, f"transcript:{song.id}") is not None
 
 
+@pytest.mark.slow
+def test_by_hand_each_long_stage_says_what_it_does_on_a_live_line_cleared_for_each_stages_own(
+        tmp_path, config, conn, models, monkeypatch):
+    # Without --progress, what a long stage is doing goes to the ticker (progress.py): on a terminal a live line on
+    # stderr, taken off before each stage's line on stdout, and none left once the job ends; stdout says what it did
+    # without it.
+    from helpers.screens import on_screen
+
+    monkeypatch.setattr(yf, "transcribe_problem", lambda cfg: None)
+    offered(conn, load_config(config, env={}))
+    screen = on_screen(monkeypatch)
+    result = invoke(config, "--song", "Nick Cani - Vikingos veganos")
+    assert result.exit_code == 0, result.output
+    shown = screen.shown()
+    assert shown[:2] == ["Song…", "Vocals…"] and "Words · loading Whisper" in shown, shown
+    assert any(line.startswith("Vocals · ~") and line.endswith(" min") for line in shown), shown
+    assert any(line.startswith("Words · 0:00 of ") for line in shown), shown
+    assert any(line.startswith("Chords · ") for line in shown), shown
+    assert screen.getvalue().endswith("\r")  # the live line cleared at the end
+    assert " · " not in result.stdout and "Words: 6 words in 2 lines (es), 1 dropped." in result.stdout.splitlines()
+
+
+def test_with_progress_no_live_line_is_drawn(tmp_path, config, conn, models, monkeypatch):
+    from helpers.screens import on_screen
+
+    monkeypatch.setattr(yf, "transcribe_problem", lambda cfg: None)
+    offered(conn, load_config(config, env={}))
+    screen = on_screen(monkeypatch)
+    result = invoke(config, "--song", "Nick Cani - Vikingos veganos", "--progress")
+    assert result.exit_code == 0, result.output
+    assert screen.getvalue() == ""
+
+
 def test_transcribe_refuses_a_song_not_offered_and_exits_1(tmp_path, config, conn, models, monkeypatch):
     monkeypatch.setattr(yf, "transcribe_problem", lambda cfg: None)
     song = offered(conn, load_config(config, env={}))
@@ -148,6 +181,90 @@ def test_transcribe_refuses_a_song_not_offered_and_exits_1(tmp_path, config, con
     assert ("No transcript made: Nick Cani - Vikingos veganos isn't offered a transcription: its lyrics are "
             "found.") in result.output
     assert models == []
+
+
+def test_a_transcription_that_fails_ends_saying_so_never_done_and_exits_1(tmp_path, config, conn, models,
+                                                                           monkeypatch):
+    # The separator can't run here: the last line says what stopped it, as a refusal's does, never "Done in …".
+    monkeypatch.setattr(yf, "transcribe_problem", lambda cfg: None)
+
+    class NoAdapter:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def vocals(self, audio, workdir, **kwargs):
+            raise separate.SeparatorFailed("No possible adapter")
+
+    monkeypatch.setattr(separate, "DemucsSeparator", NoAdapter)
+    offered(conn, load_config(config, env={}))
+    result = invoke(config, "--song", "Nick Cani - Vikingos veganos")
+    assert result.exit_code == 1, result.output
+    lines = result.output.splitlines()
+    assert "Vocals: failed: the separator can't run here (No possible adapter)." in lines
+    assert lines[-1] == "No transcript made: the separator can't run here (No possible adapter)."
+    assert not any(line.startswith("Done in ") for line in lines)
+
+
+def test_a_transcription_refused_at_its_chords_says_its_transcript_is_kept(tmp_path, config, conn, models,
+                                                                            monkeypatch):
+    # A lookup that went first before the chords kept UG's chords: the job ends there, a refusal, but the words were
+    # heard and kept, which its last line says (never "No transcript made").
+    from test_youtube_sheet import keep_human_sheet
+
+    monkeypatch.setattr(yf, "transcribe_problem", lambda cfg: None)
+    cfg = load_config(config, env={})
+    song = offered(conn, cfg)
+    handed: list[int] = []
+    monkeypatch.setattr(_common, "_handoffs", _common.handoffs())  # put back as it was after the test
+
+    def hand_over(cfg_, conn_=None) -> bool:
+        handed.append(1)
+        _common._handoffs += 1
+        if len(handed) == 3:  # before vocals, words, then the chords
+            keep_human_sheet(conn_, cfg_, song)
+        return True
+
+    monkeypatch.setattr(_common, "hand_over", hand_over)
+    result = invoke(config, "--song", "Nick Cani - Vikingos veganos")
+    assert result.exit_code == 1, result.output
+    assert result.output.splitlines()[-1] == ("Transcript kept; no sheet made: Nick Cani - Vikingos veganos needs no "
+                                              "sheet over its transcript now: has a human sheet.")
+    assert kv_get(conn, f"transcript:{song.id}") is not None
+
+
+def test_chords_that_fail_after_the_words_kept_the_transcript_say_it_is_kept(tmp_path, config, conn, models,
+                                                                            monkeypatch):
+    # The words keep the transcript before the chords run; auto-chords then can't keep the sheet (a full disk): the
+    # last line says the transcript is kept, which Try again makes the sheet over, never "No transcript made".
+    def full_disk(*args, **kwargs):
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(yf, "transcribe_problem", lambda cfg: None)
+    monkeypatch.setattr(ac_run, "_keep", full_disk)
+    song = offered(conn, load_config(config, env={}))
+    result = invoke(config, "--song", "Nick Cani - Vikingos veganos")
+    assert result.exit_code == 1, result.output
+    last = result.output.splitlines()[-1]
+    assert last.startswith("Transcript kept; no sheet made: auto-chords can't run here ("), result.output
+    assert kv_get(conn, f"transcript:{song.id}") is not None
+
+
+def test_a_bug_after_the_sheet_over_the_transcript_says_both_are_kept(tmp_path, config, conn, models, monkeypatch):
+    # A bug once the chords kept the sheet (here in the pages): the transcript and the sheet over it are kept, which
+    # the last line says, never "no sheet made".
+    from caracole import todo
+
+    def bug(*args, **kwargs):
+        raise RuntimeError("a bug")
+
+    monkeypatch.setattr(yf, "transcribe_problem", lambda cfg: None)
+    monkeypatch.setattr(todo, "write_pages", bug)
+    offered(conn, load_config(config, env={}))
+    result = invoke(config, "--song", "Nick Cani - Vikingos veganos")
+    assert result.exit_code == 1, result.output
+    assert "Chords: chords over the transcribed lyrics." in result.output.splitlines()
+    assert result.output.splitlines()[-1] == ("Transcript and sheet kept: a bug in caracole (pages: RuntimeError: a "
+                                              "bug)."), result.output
 
 
 def test_transcribe_where_it_cant_run_says_why_and_exits_1(tmp_path, config, conn, models, monkeypatch):
