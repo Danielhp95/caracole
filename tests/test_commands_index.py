@@ -249,6 +249,58 @@ def test_a_merge_on_a_terminal_rewrites_one_live_line_a_chunk_and_clears_it_at_t
     assert "\n" not in out.getvalue() and out.getvalue().endswith("\r")  # one line, cleared once done
 
 
+class Gone:
+    """A stream whose reader is gone (``| head``, a closed terminal): every write a BrokenPipeError, counted."""
+
+    def __init__(self) -> None:
+        self.writes = 0
+
+    def write(self, text):
+        self.writes += 1
+        raise BrokenPipeError(32, "Broken pipe")
+
+    def flush(self):
+        raise BrokenPipeError(32, "Broken pipe")
+
+    def isatty(self):
+        return False
+
+
+def test_a_merge_whose_progress_reader_is_gone_still_merges_and_says_nothing_more(tmp_path, state, monkeypatch):
+    from caracole.commands import index
+    from caracole.progress import Console
+
+    gone = Gone()
+    monkeypatch.setattr(index, "merge_console", lambda: Console(gone))
+    path = phone_reads(tmp_path)
+
+    result = invoke(tmp_path, "merge", str(path))
+
+    assert result.exit_code == 0, (result.output, result.exception)
+    assert f"Merged {path} into {state / 'caracole.sqlite'}:" in result.stdout
+    assert gone.writes == 1  # the first step's write found the reader gone; nothing tried after it
+    conn = db.connect(state / "caracole.sqlite")
+    try:
+        assert conn.execute("SELECT count(*) FROM harptabs_artist_tabs").fetchone()[0] == 2
+    finally:
+        conn.close()
+
+
+def test_merging_whose_stage_reader_is_gone_says_nothing_more_and_never_raises():
+    from caracole.commands.index import Merging
+
+    tried = []
+
+    def stage(text):
+        tried.append(text)
+        raise BrokenPipeError(32, "Broken pipe")
+
+    told = Merging(stage=stage)
+    ug_rows(told)
+    told.say("Copying the file's indexes out")
+    assert tried == ["Comparing with this database's indexes"]
+
+
 def test_a_file_missing_is_a_failed_stage(tmp_path, state):
     path = tmp_path / "gone.sqlite"
 

@@ -735,10 +735,12 @@ def _taken_entries(merged, newest: dict[str, str]) -> list[dict]:
 def _merging(said: _Said):
     """How a merge of indexes says how far it has got (commands/index.py ``Merging``): with ``--progress``, as the
     index stage's running detail, which the Sync sheet shows; else on stderr, stdout staying the report."""
+    import sys
+
     from caracole.commands.index import Merging, merge_console
 
     if said.progress:
-        return Merging(stage=lambda text: said.stage("index", "running", text))
+        return Merging(stage=lambda text: said.stage("index", "running", text), stream=sys.stdout)
     return Merging(console=merge_console())
 
 

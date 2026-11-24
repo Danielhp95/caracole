@@ -424,21 +424,38 @@ class Merging:
     on ``console``: on a terminal one live line, rewritten as each site, action and chunk of UG's sitemap rows goes
     by; anywhere else (a journal, a pipe) a plain line as the comparison and the backup begin, as each action of a
     site begins, and as each quarter of UG's sitemap rows is passed. ``say`` is another step of the caller's (a
-    file's indexes copied out first), said the same way. ``close`` clears a live line left."""
+    file's indexes copied out first), said the same way. ``close`` clears a live line left.
 
-    def __init__(self, *, console: Console | None = None, stage: Callable[[str], None] | None = None) -> None:
+    Once its reader is gone (``BrokenPipeError``: ``| head``, a caracole serve stopped), it says nothing more and the
+    merge goes on, as ``_Publishing`` does: the stream it wrote to (the console's, else ``stream``, where ``stage``
+    writes) is pointed at /dev/null, so that what the command says after is dropped rather than failing it."""
+
+    def __init__(self, *, console: Console | None = None, stage: Callable[[str], None] | None = None,
+                 stream=None) -> None:
         from caracole.index_transfer import MergeWords
 
         self.console = console
         self.stage = stage
+        self.stream = console.stream if stage is None and console is not None else stream
         self._words = MergeWords()
         self._quarter = 0
+        self._cut = False
+
+    def _tell(self, say: Callable[..., None], *args: str) -> None:
+        if self._cut:
+            return
+        try:
+            say(*args)
+        except BrokenPipeError:
+            self._cut = True
+            if self.stream is not None:
+                _cut_off(self.stream)
 
     def say(self, text: str) -> None:
         if self.stage is not None:
-            self.stage(text)
+            self._tell(self.stage, text)
         elif self.console is not None:
-            self.console.step(f"{text}...")
+            self._tell(self.console.step, f"{text}...")
 
     def backing_up(self) -> None:
         self.say(self._words.BACKING_UP)
@@ -448,24 +465,24 @@ class Merging:
 
         said = self._words(site, action, done, total)
         if self.stage is not None:
-            self.stage(said)
+            self._tell(self.stage, said)
         elif self.console is None:
             return
         elif action == UG_TABS:
             if self.console.live:
-                self.console.status(said)
+                self._tell(self.console.status, said)
             elif total and (quarter := 4 if done >= total else done * 4 // total) > self._quarter:
                 self._quarter = quarter
-                self.console.step(said)
+                self._tell(self.console.step, said)
         elif action:
             self._quarter = 0
-            self.console.step(f"{said}...")
+            self._tell(self.console.step, f"{said}...")
         else:
-            self.console.status(f"{said}...")  # a site: the live line alone; its actions say it in a journal
+            self._tell(self.console.status, f"{said}...")  # a site: the live line alone; a journal hears its actions
 
     def close(self) -> None:
         if self.console is not None:
-            self.console.close()
+            self._tell(self.console.close)
 
 
 def _merge(cfg: Config, file: Path, sites: list[str], *, delete: bool = False, progress: bool = False) -> None:
@@ -478,6 +495,8 @@ def _merge(cfg: Config, file: Path, sites: list[str], *, delete: bool = False, p
     (``peer_push.staged_indexes``), which can never merge here, never a file named by hand (the database itself, a
     backup, a typo); and kept when only the backup first failed, or the lock or the database wasn't to be had, for
     Try again."""
+    import sys
+
     from caracole import backup
     from caracole import index_transfer as transfer
 
@@ -500,7 +519,7 @@ def _merge(cfg: Config, file: Path, sites: list[str], *, delete: bool = False, p
     stage("running")
     try:
         with exclusive(cfg, "index merge", interactive=progress), closing(open_db(cfg)) as conn:
-            told = (Merging(stage=lambda said: stage("running", said)) if progress
+            told = (Merging(stage=lambda said: stage("running", said), stream=sys.stdout) if progress
                     else Merging(console=merge_console()))
             try:
                 try:
