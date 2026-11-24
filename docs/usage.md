@@ -3756,7 +3756,7 @@ your home database's indexes into a service's, see
 ### caracole index publish
 
     caracole index publish DIR [--force]
-    caracole index publish DIR --kept NAME...
+    caracole index publish DIR --kept NAME [--kept NAME]...
 
 Writes every site's index as one public file in `DIR`: `indexes-s17-20261124T0312Z.sqlite.gz` (the
 schema and the minute), an export as above, gzipped, with nothing of your own in it (no LaCuerda
@@ -3768,7 +3768,13 @@ It exits 1, leaving nothing behind, when the name exists, when UG's index isn't 
 when a site holds a tenth fewer rows than `published.json` says of the last file. `--force` publishes
 that one anyway.
 
-`--kept NAME...` exports nothing: it prints, one a line, those NAMEs that rule would delete.
+`--kept NAME` (repeated, once for each name) exports nothing. It prints, one a line and each once,
+the names the Keep rule would delete. The rule: this caracole's schema keeps its two newest files
+whatever their age; every other schema keeps its newest for 180 days. A name that isn't a catalogue
+file (`indexes.json`, say) is kept, so never printed.
+
+If `published.json` is there but can't be read, `publish` refuses (exit 1) and tells you to remove it
+or pass `--force`.
 
 ## Two caracoles: the phone's and the computer's
 

@@ -97,3 +97,29 @@ def test_the_publishing_schemas_two_newest_stay_whatever_their_age():
     names = [catalogues.name_for(17, d(2025, 1, 10)), catalogues.name_for(17, d(2025, 1, 3)),
              catalogues.name_for(17, d(2024, 12, 27)), catalogues.name_for(16, d(2025, 1, 1))]
     assert catalogues.kept(names, schema=17, now=d(2026, 11, 24)) == set(names[:2])
+
+
+def test_a_missing_sidecar_is_none_and_a_corrupt_or_wrongly_typed_one_is_refused(out):
+    assert catalogues.published(out) is None
+    for text in ["{not json", "[]", '{"file": "x"}', '{"file": "x", "schema": "s", "made": "m", "bytes": 1, '
+                 '"raw_bytes": 1, "sha256": "h", "sites": {}}', '{"file": "x", "schema": 1, "made": "m", "bytes": 1, '
+                 '"raw_bytes": 1, "sha256": "h", "sites": []}']:
+        (out / "published.json").write_text(text)
+        with pytest.raises(catalogues.PublishError, match="sidecar"):
+            catalogues.published(out)
+
+
+def test_a_sidecar_that_cant_be_written_leaves_no_file_and_is_a_publish_error(conn_with_index, out, monkeypatch):
+    import os
+
+    real = os.replace
+
+    def replace(src, dst):
+        if str(dst).endswith("published.json"):
+            raise OSError("disk full")
+        return real(src, dst)
+
+    monkeypatch.setattr(os, "replace", replace)
+    with pytest.raises(catalogues.PublishError, match="disk full"):
+        catalogues.publish(conn_with_index, out, now=NOW, last=None)
+    assert list(out.iterdir()) == []

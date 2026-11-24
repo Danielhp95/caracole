@@ -82,13 +82,21 @@ def _utc(at: datetime) -> datetime:
 
 
 def published(folder: Path) -> Published | None:
-    """What ``published.json`` in ``folder`` says, or None where it is missing or unreadable."""
+    """What ``published.json`` in ``folder`` says: None where it is missing, ``PublishError`` where it is there and
+    can't be read or isn't a sidecar (a guard silently off is worse than a refusal)."""
     try:
-        d = json.loads((folder / SIDECAR).read_text(encoding="utf-8"))
-        return Published(d["file"], d["schema"], d["made"], d["bytes"], d["raw_bytes"], d["sha256"],
-                         {str(k): int(v) for k, v in d["sites"].items()})
-    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        text = (folder / SIDECAR).read_text(encoding="utf-8")
+    except FileNotFoundError:
         return None
+    except OSError as e:
+        raise PublishError(f"can't read {folder / SIDECAR}: {e}") from e
+    try:
+        d = json.loads(text)
+        return Published(str(d["file"]), int(d["schema"]), str(d["made"]), int(d["bytes"]), int(d["raw_bytes"]),
+                         str(d["sha256"]), {str(k): int(v) for k, v in d["sites"].items()})
+    except (ValueError, KeyError, TypeError, AttributeError) as e:
+        raise PublishError(f"{folder / SIDECAR} isn't a catalogue sidecar ({type(e).__name__}): remove it, or "
+                           f"--force") from e
 
 
 def kept(names: Iterable[str], *, schema: int, now: datetime, keep_days: int = KEEP_DAYS) -> set[str]:
@@ -126,6 +134,7 @@ def publish(conn: sqlite3.Connection, folder: Path, *, now: datetime, last: Publ
     token = secrets.token_hex(6)
     raw = folder / f".export-{token}.sqlite"
     part = folder / f".{name}.{token}.part"
+    side = folder / f".{SIDECAR}.{token}"
     try:
         try:
             exported = transfer.export(conn, raw, now=now, omit=transfer.PUBLIC_OMIT)
@@ -152,17 +161,21 @@ def publish(conn: sqlite3.Connection, folder: Path, *, now: datetime, last: Publ
                     gz.write(chunk)
             out.flush()
             os.fsync(out.fileno())
-        os.replace(part, target)
-        result = Published(name, db.SCHEMA_VERSION, stamps.stamp(now), target.stat().st_size, exported.size,
+        result = Published(name, db.SCHEMA_VERSION, stamps.stamp(now), part.stat().st_size, exported.size,
                            digest.hexdigest(), rows)
+        side.write_text(json.dumps(result.as_json(), indent=2) + "\n", encoding="utf-8")
+        os.replace(part, target)
+        try:
+            os.replace(side, folder / SIDECAR)
+        except OSError:
+            target.unlink(missing_ok=True)
+            raise
     except OSError as e:
         raise PublishError(f"can't write in {folder}: {e}") from e
     finally:
         raw.unlink(missing_ok=True)
         part.unlink(missing_ok=True)
-    side = folder / f".{SIDECAR}.{token}"
-    side.write_text(json.dumps(result.as_json(), indent=2) + "\n", encoding="utf-8")
-    os.replace(side, folder / SIDECAR)
+        side.unlink(missing_ok=True)
     for other in folder.glob(f"{PREFIX}-*.sqlite.gz"):
         if other.name != name:
             other.unlink(missing_ok=True)

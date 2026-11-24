@@ -209,6 +209,52 @@ def test_index_publish_prints_the_file_and_its_rows(tmp_path, state):
     assert f"Published {gz}" in result.stdout and "ug: 2 rows." in result.stdout
 
 
+def high_sidecar(out: Path) -> None:
+    (out / "published.json").write_text(json.dumps({
+        "file": "indexes-s17-20261117T0312Z.sqlite.gz", "schema": 17, "made": "2026-11-17T03:12:00Z", "bytes": 1,
+        "raw_bytes": 1, "sha256": "0", "sites": {"ug": 1000}}))
+
+
+def test_index_publish_refuses_a_site_with_far_fewer_rows_than_the_last_file_unless_forced(tmp_path, state):
+    built(state)
+    out = tmp_path / "pub"
+    out.mkdir()
+    high_sidecar(out)
+
+    result = invoke(tmp_path, "publish", str(out))
+
+    assert result.exit_code == 1 and "--force publishes it" in result.stderr
+    assert [p.name for p in out.iterdir()] == ["published.json"]
+
+    forced = invoke(tmp_path, "publish", str(out), "--force")
+
+    assert forced.exit_code == 0, forced.output
+    (gz,) = out.glob("indexes-s*.sqlite.gz")
+    assert json.loads((out / "published.json").read_text())["file"] == gz.name
+
+
+def test_index_publish_refuses_a_corrupt_sidecar(tmp_path, state):
+    built(state)
+    out = tmp_path / "pub"
+    out.mkdir()
+    (out / "published.json").write_text("{nope")
+
+    result = invoke(tmp_path, "publish", str(out))
+
+    assert result.exit_code == 1 and "sidecar" in result.stderr
+    assert list(out.glob("indexes-*")) == []
+
+
+def test_index_publish_kept_prints_a_repeated_name_once(tmp_path, state):
+    from caracole import catalogues
+
+    old = catalogues.name_for(db.SCHEMA_VERSION - 1, tt.NOW.replace(year=2020))
+
+    result = invoke(tmp_path, "publish", str(tmp_path), "--kept", old, "--kept", old)
+
+    assert result.stdout.split() == [old]
+
+
 def test_index_publish_exits_1_and_leaves_no_file_when_refused(tmp_path, state):
     out = tmp_path / "pub"
     out.mkdir()

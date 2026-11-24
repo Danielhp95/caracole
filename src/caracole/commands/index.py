@@ -270,13 +270,14 @@ def _publish(cfg: Config, folder: Path, force: bool, kept: list[str]) -> None:
     now = utcnow()
     if kept:
         keep = catalogues.kept(kept, schema=db.SCHEMA_VERSION, now=now)
-        for name in kept:
+        for name in dict.fromkeys(kept):
             if name not in keep:
                 typer.echo(name)
         return
     with closing(open_db(cfg)) as conn:
         try:
-            made = catalogues.publish(conn, folder, now=now, last=None if force else catalogues.published(folder))
+            last = None if force else catalogues.published(folder)
+            made = catalogues.publish(conn, folder, now=now, last=last)
         except catalogues.PublishError as e:
             fail(f"index publish: {e}")
     typer.echo(f"Published {folder / made.name} ({backup.size_text(made.bytes)}, {backup.size_text(made.raw_bytes)} "
