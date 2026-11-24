@@ -241,6 +241,31 @@ def test_an_export_never_writes_over_a_file(home, tmp_path):
     assert not list(tmp_path.glob("*.part"))
 
 
+@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores a folder's mode")
+def test_an_export_into_a_folder_it_cant_write_is_a_refusal_never_a_crash(home, tmp_path):
+    there = tmp_path / "locked"
+    there.mkdir()
+    there.chmod(0o555)
+    try:
+        with pytest.raises(transfer.TransferError, match="can't write"):
+            transfer.export(home, there / "indexes.sqlite", now=NOW)
+        assert list(there.iterdir()) == []
+    finally:
+        there.chmod(0o755)
+
+
+def test_an_export_whose_cleanup_fails_too_still_says_why_it_failed(home, tmp_path, monkeypatch):
+    from pathlib import Path
+
+    def refuse(self, missing_ok=False):
+        raise OSError(30, "Read-only file system")
+
+    monkeypatch.setattr(Path, "unlink", refuse)
+    monkeypatch.setattr(transfer, "_write_export", lambda *a: (_ for _ in ()).throw(sqlite3.OperationalError("ro")))
+    with pytest.raises(transfer.TransferError, match="can't write"):
+        transfer.export(home, tmp_path / "indexes.sqlite", now=NOW)
+
+
 def test_an_unknown_site_is_refused(home, tmp_path):
     with pytest.raises(transfer.TransferError, match="no site 'spotify'.*ug, lacuerda"):
         transfer.export(home, tmp_path / "x.sqlite", ["spotify"], now=NOW)

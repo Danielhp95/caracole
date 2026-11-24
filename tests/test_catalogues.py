@@ -127,6 +127,24 @@ def test_a_sidecar_that_cant_be_written_leaves_no_file_and_is_a_publish_error(co
     assert list(out.iterdir()) == []
 
 
+def test_a_publish_whose_cleanup_fails_too_still_says_why_it_failed(conn_with_index, out, monkeypatch):
+    from pathlib import Path
+
+
+    def refuse(self, missing_ok=False):
+        raise OSError(30, "Read-only file system")
+
+    monkeypatch.setattr(Path, "unlink", refuse)
+    import os
+
+    def replace(src, dst):
+        raise OSError(30, "Read-only file system")
+
+    monkeypatch.setattr(os, "replace", replace)
+    with pytest.raises(catalogues.PublishError, match="can't write"):
+        catalogues.publish(conn_with_index, out, now=NOW, last=None)
+
+
 def test_a_value_holding_a_path_of_this_machine_refuses_the_file(conn_with_index, out, tmp_path):
     private = [str(tmp_path / "state")]
     db.kv_set(conn_with_index, "ug:index:refreshed_at", f"read from {private[0]}/x")

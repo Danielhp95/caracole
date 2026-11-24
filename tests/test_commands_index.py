@@ -5,6 +5,7 @@ once it is merged or refused, and kept for Try again when no backup could be mad
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from pathlib import Path
 from types import SimpleNamespace
@@ -86,6 +87,22 @@ def test_a_merge_that_takes_nothing_says_so_and_still_deletes_the_file(tmp_path,
     assert result.exit_code == 0, result.output
     assert events(result.stdout)[-1] == {"stage": "merge", "state": "done", "detail": "Nothing newer"}
     assert not copy.exists()
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores a folder's mode")
+def test_an_export_into_a_folder_it_cant_write_is_a_plain_refusal(tmp_path, state):
+    locked = tmp_path / "locked"
+    locked.mkdir()
+    locked.chmod(0o555)
+    try:
+        result = invoke(tmp_path, "export", str(locked / "indexes.sqlite"))
+    finally:
+        locked.chmod(0o755)
+
+    assert result.exit_code == 2, result.output
+    assert "can't write" in result.stderr
+    assert "Traceback" not in result.stderr and "bug in caracole" not in result.stderr
+    assert result.exception is None or isinstance(result.exception, SystemExit)
 
 
 def test_a_refused_file_serve_staged_fails_its_stage_in_its_words_and_is_deleted(tmp_path, state):

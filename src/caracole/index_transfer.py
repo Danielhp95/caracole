@@ -52,7 +52,7 @@ import os
 import secrets
 import sqlite3
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -259,7 +259,8 @@ def export(conn: sqlite3.Connection, path: Path, sites: Iterable[str] | None = N
     except (OSError, sqlite3.Error) as e:
         raise TransferError(f"can't write {path}: {e}") from e
     finally:
-        part.unlink(missing_ok=True)
+        with suppress(OSError):  # never replace the real error: the folder may be read-only
+            part.unlink(missing_ok=True)
     counts = {table: _count(path, table) for table in tables}
     return Exported(path, names, counts, path.stat().st_size)
 

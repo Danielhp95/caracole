@@ -23,6 +23,7 @@ import re
 import secrets
 import sqlite3
 from collections.abc import Iterable, Sequence
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -170,14 +171,15 @@ def publish(conn: sqlite3.Connection, folder: Path, *, now: datetime, last: Publ
         try:
             os.replace(side, folder / SIDECAR)
         except OSError:
-            target.unlink(missing_ok=True)
+            with suppress(OSError):
+                target.unlink(missing_ok=True)
             raise
     except OSError as e:
         raise PublishError(f"can't write in {folder}: {e}") from e
     finally:
-        raw.unlink(missing_ok=True)
-        part.unlink(missing_ok=True)
-        side.unlink(missing_ok=True)
+        for leftover in (raw, part, side):
+            with suppress(OSError):  # never replace the real error: the folder may be read-only
+                leftover.unlink(missing_ok=True)
     for other in folder.glob(f"{PREFIX}-*.sqlite.gz"):
         if other.name != name:
             other.unlink(missing_ok=True)

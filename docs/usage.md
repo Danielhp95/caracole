@@ -3731,7 +3731,10 @@ The sites are `ug`, `lacuerda`, `gtptabs`, `musescore`, `harptabs` and `gametabs
 `--site`, both commands take every one.
 
 `export` copies the sites' indexes and how far each has got, and nothing of your songs. It takes
-no lock, so it runs beside a nightly run. It never writes over a file, so name a new one.
+no lock, so it runs beside a nightly run. It never writes over a file, so name a new one. On a
+NixOS or Ubuntu service, `sudo caracole-admin` can write only the library, state and cache folders,
+so name a file in the state folder (`/var/lib/caracole/state/indexes.sqlite`); anywhere else it
+exits 2 with "can't write".
 
 `merge` takes caracole's lock, so it waits for a run. The file must be an export of the same
 schema version as this database, or it exits 2 and changes nothing. A site at a time, it takes the
@@ -3763,6 +3766,8 @@ schema and the minute), an export as above, gzipped, with nothing of your own in
 search answers, no path of yours). It also writes `published.json` (the file, its sizes, its sha256
 and each site's rows) and deletes the older `indexes-*.sqlite.gz` in `DIR`. It takes no lock, and like
 `index build` it is refused beside a service unless you name its config or pass `--home`.
+On a NixOS or Ubuntu service, `sudo caracole-admin` can write only the library, state and cache
+folders, so name a `DIR` inside one of them, as deploy.md's `/var/lib/caracole/publish` is.
 
 It exits 1, leaving nothing behind, when the name exists, when UG's index isn't built whole, or
 when a site holds a tenth fewer rows than `published.json` says of the last file. `--force` publishes
