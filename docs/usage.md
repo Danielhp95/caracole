@@ -3976,7 +3976,8 @@ and choose again.
 A unit that changed on either side since the comparison is left, with the reason. That doesn't
 fail the sync (exit 0). The sync then records what the two agree on and the other side's address,
 which the Share tab lists. `--progress` prints the stages (compare, take, give, agree, index),
-each unit and a final report as JSON lines for caracole serve.
+each unit and a final report as JSON lines for caracole serve; while the take renders the songs
+taken, it says which it is at ("12 of 20 songs").
 
 ### Export and import: peer export, peer import
 

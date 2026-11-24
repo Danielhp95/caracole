@@ -227,7 +227,7 @@ def register(app: typer.Typer) -> None:
             done = _pull(cfg, address, [d.id for d in take],
                          {d.id: d.theirs.digest if d.theirs else None for d in take},
                          expected_here={d.id: d.mine.digest if d.mine else None for d in take},
-                         on_unit=said.unit, agree=False)
+                         on_unit=said.unit, on_song=_rendering(said, "take"), agree=False)
             said.stage("take", "done", _taken_detail(done))
             typer.echo(_pulled(done, units=False))
         else:
@@ -427,13 +427,14 @@ def _count(n: int) -> str:
     return f"{n} {'change' if n == 1 else 'changes'}"
 
 
-def _rendering(said: _Said):
-    """``render_all``'s ``on_song`` for a take's or an import's render stage: which of the songs taken it is at, "12 of
-    20 songs", as the stage's running detail (with ``--progress``), which the Sync sheet and the request's line show
-    (web/status.py ``LONG_STAGES``)."""
+def _rendering(said: _Said, stage: str = "render"):
+    """``render_all``'s ``on_song`` for a take's or an import's render stage, or ``peer sync``'s own take, which renders
+    what it took: which of the songs taken it is at, "12 of 20 songs", as the stage's running detail (with
+    ``--progress``), which the Sync sheet shows, and the request's line for a long stage (web/status.py
+    ``LONG_STAGES``: render, never take)."""
 
     def on_song(n: int, total: int, song) -> None:
-        said.stage("render", "running", f"{n:,} of {total:,} {'song' if total == 1 else 'songs'}")
+        said.stage(stage, "running", f"{n:,} of {total:,} {'song' if total == 1 else 'songs'}")
 
     return on_song
 
@@ -544,11 +545,12 @@ def _compare(cfg, address: str, parts: tuple[str, ...] | None = None) -> _Compar
 
 
 def _pull(cfg, address: str, unit_ids: list[str], compared: dict[str, str | None] | None = None, *,
-          expected_here: dict[str, str | None] | None = None, on_unit=None, agree: bool = True):
+          expected_here: dict[str, str | None] | None = None, on_unit=None, on_song=None, agree: bool = True):
     """``caracole peer pull``'s work: see the module's docstring. ``compared``: each unit's digest there as compared
     (None: it had none), so that one changed there since is left; else as it is there now. ``expected_here``: each
-    one's digest here as compared, so that one changed here since is left too. ``agree``: keep what the two agree on
-    after (a sync does once it gave there what goes there). Returns peer_sync's ``Applied``."""
+    one's digest here as compared, so that one changed here since is left too. ``on_song``: ``render_all``'s, as it
+    renders the songs taken. ``agree``: keep what the two agree on after (a sync does once it gave there what goes
+    there). Returns peer_sync's ``Applied``."""
     from caracole import backup
     from caracole import peer_sync as sync
     from caracole.render import render_all
@@ -572,7 +574,7 @@ def _pull(cfg, address: str, unit_ids: list[str], compared: dict[str, str | None
                                         expected_here=expected_here, on_unit=on_unit)
                 overrides = load_ovr(cfg)
                 if done.songs:
-                    render_all(conn, cfg, overrides, song_ids=done.songs)
+                    render_all(conn, cfg, overrides, song_ids=done.songs, on_song=on_song)
                 render_songbooks(conn, cfg, overrides)
                 write_pages(conn, cfg, overrides, utcnow())
                 if agree and state.server is not None:

@@ -367,18 +367,29 @@ def test_a_stale_comparison_is_refused_before_any_change(two):
     assert '"stage":"compare","state":"failed"' in result.output
 
 
-def test_a_syncs_progress_is_its_stages_and_a_line_a_unit(two):
+def test_a_syncs_progress_is_its_stages_and_a_line_a_unit(two, monkeypatch):
     from caracole.get import read_progress_line
 
     here, there, _, _ = two
     unit = two_conflicts(here, there)
+
+    def render_all(conn, cfg, overrides, *, song_ids=(), on_song=None, **kw):  # its turns, as render.py's
+        for n, _song_id in enumerate(sorted(song_ids), 1):
+            on_song(n, len(song_ids), None)
+
+    monkeypatch.setattr("caracole.render.render_all", render_all)
     result = run(here, "peer", "sync", HOST, "--push", "--progress", f"--choose=skip:{unit['Radiohead - Creep']}",
                  f"--choose=there:{unit['Oasis - Wonderwall']}")
     assert result.exit_code == 0, result.output
     events = [e for e in map(read_progress_line, result.output.splitlines()) if e is not None]
-    assert [(e["stage"], e["state"]) for e in events if "stage" in e] == [
+    stages = [(e["stage"], e["state"]) for e in events if "stage" in e]
+    assert [s for n, s in enumerate(stages) if n == 0 or s != stages[n - 1]] == [
         ("compare", "running"), ("compare", "done"), ("take", "running"), ("take", "done"), ("give", "running"),
         ("give", "done"), ("agree", "running"), ("agree", "done"), ("index", "skipped")]
+    # The take renders the songs it took, which of them it is at its running detail, as an import's render stage
+    # says it (the Sync sheet shows it).
+    assert [e["detail"] for e in events if e.get("stage") == "take" and e["state"] == "running"] == [
+        "2 changes", "1 of 2 songs", "2 of 2 songs"]
     assert sorted((e["id"], e["outcome"], e["why"]) for e in events if e.get("event") == "unit") == sorted([
         (unit["Radiohead - Creep"], "left", "skipped, as you chose"), (unit["Oasis - Wonderwall"], "taken", ""),
         (unit["Estopa - Tu Calorro"], "taken", ""), (unit["Muse - Hysteria"], "given", "")])
