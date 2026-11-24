@@ -848,8 +848,10 @@ def test_ugs_sitemap_rows_taken_a_chunk_at_a_time_leave_the_database_as_one_stat
     """The chunks go in tab_id order, as the one statement did, in the same savepoint: every table, its search
     tables, the songs marked and kv come out the same, row for row (8 rows: one chunk of 8, chunks that divide it
     and chunks that don't)."""
+    from caracole import songs
     from caracole.songs import get_song, update_song
 
+    monkeypatch.setattr(songs, "utc_now_iso", lambda: "2026-10-29T18:00:00Z")  # a song marked: one clock for both
     ug_sitemap(home, "1", ["radiohead/creep-chords-4169", "oasis/wonderwall-chords-27596", "blur/tender-chords-8"],
                LATE)
     ug_sitemap(home, "2", ["radiohead/creep-chords-5000", "oasis/live-forever-chords-3", "blur/song-2-chords-1001"],
