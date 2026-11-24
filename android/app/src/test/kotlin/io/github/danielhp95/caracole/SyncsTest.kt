@@ -7,7 +7,9 @@ import io.github.danielhp95.caracole.server.jobs.JobSpec
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -198,6 +200,44 @@ class SyncsTest {
         assertFalse(failed.ok)
         assertEquals("No answer from http://192.168.1.20:8737 (refused).", failed.text)
         assertEquals(emptyList(), notified)
+    }
+
+    @Test
+    fun `the screen's line names the stage the sync is at, and what it says`() = runBlocking {
+        // The library screen's bar under the sync button: "Syncing with the computer · Copying the computer's pages ·
+        // 120 of 640 pages", as the stage goes (SyncState.Running's doing), then what it came to.
+        val queue = JobQueue(scope)
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val side = Syncs.Unattended(
+            alone = { address ->
+                queue.submit(JobSpec(title = "Sync with studio", key = "sync:$address", kind = "sync",
+                                     stages = SyncEngine.STAGES, display = "Sync with studio", run = { job ->
+                    job.stage(SyncEngine.COMPARE, "done", "")
+                    job.stage(SyncEngine.MIRROR, "running", "120 of 640 pages")
+                    gate.await()
+                    job.stage(SyncEngine.MIRROR, "done", "640 pages")
+                    job.outcome(outcome("""{"taken": [], "given": [], "left": []}"""))
+                })).first
+            },
+            await = { id -> queue.await(id) },
+            job = { id -> queue.job(id) },
+        )
+        val seen = java.util.concurrent.CopyOnWriteArrayList<SyncState>()
+        val watching = scope.launch { Caracole.status.collect { seen += it } }
+        val run = scope.async {
+            Syncs.run(settings("http://192.168.1.20:8737"), probe = true, http = Http(), ask = {}, phone = { side },
+                      followMs = 5) { n, songs -> notified.add(n to songs) }
+        }
+        val end = System.nanoTime() + 10_000_000_000L
+        while (SyncState.Running("Copying the computer's pages · 120 of 640 pages") !in seen) {
+            if (System.nanoTime() > end) throw AssertionError("the stage never said: $seen")
+            Thread.sleep(5)
+        }
+        gate.complete(Unit)
+        val done = run.await()!!
+        assertTrue(done.ok)
+        assertEquals(SyncState.Ended(done), Caracole.status.value)
+        watching.cancel()
     }
 
     @Test

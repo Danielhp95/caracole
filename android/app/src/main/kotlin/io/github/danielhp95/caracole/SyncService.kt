@@ -22,8 +22,10 @@ import kotlinx.coroutines.launch
 /**
  * The foreground service (a data sync) that keeps the phone's caracole alive while its job queue works: a sync from
  * the Sync tab, an add, a removal, a lookup on the sites (Fetch, Fetch again, an artist's Songs, LaCuerda's own search,
- * Fetch them) ([Working]). Its notification, on the `jobs` channel, names the job that runs ("Sharing logs with Daniel's
- * library…", "Estopa - Tu calorro · Looking up the lyrics…"); a tap on it opens the library. Started as the queue gets
+ * Fetch them; the site catalogues, the phone's pages, a backup) ([Working]). Its notification, on the `jobs` channel,
+ * names the job that runs and what it is doing ("Sharing logs with Daniel's library · Copying the computer's pages ·
+ * 120 of 640 pages", "The site catalogues · Downloading · 31 of 52 MB", "Estopa - Tu calorro · Looking up the
+ * lyrics…"), its bar filled as far as the job counts ([bar]), else moving; a tap on it opens the library. Started as the queue gets
  * such a job, it stops itself once none waits or runs. An index import has none: its worker is in the foreground with
  * its own notification.
  *
@@ -69,8 +71,8 @@ class SyncService : Service() {
         super.onDestroy()
     }
 
-    private fun show(text: String) {
-        val notification = notification(text)
+    private fun show(shown: Working.Shown) {
+        val notification = notification(shown)
         if (foreground) {
             getSystemService(NotificationManager::class.java)?.notify(NOTIFICATION, notification)
             return
@@ -86,19 +88,21 @@ class SyncService : Service() {
         stopSelf(lastStart)
     }
 
-    private fun notification(text: String): Notification {
+    private fun notification(shown: Working.Shown): Notification {
         Notifications.channel(this)
         val library = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val filled = bar(shown.progress)
         return NotificationCompat.Builder(this, Notifications.JOBS)
             .setSmallIcon(R.drawable.ic_notify)
             .setContentTitle(getString(R.string.app_name))
-            .setContentText(text)
+            .setContentText(shown.text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(shown.text))  // the whole line, the shade pulled down
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setSilent(true)
             .setContentIntent(library)
-            .setProgress(0, 0, true)
+            .setProgress(if (filled == null) 0 else BAR, filled ?: 0, filled == null)
             .build()
     }
 
@@ -107,8 +111,16 @@ class SyncService : Service() {
 
         /** What a start shows with the queue's [line] now, and whether it stops after: [working]'s words and true when
          * there is none, the work over before this start came. */
-        internal fun atStart(line: String?, working: String): Pair<String, Boolean> = (line ?: working) to (line == null)
+        internal fun atStart(line: Working.Shown?, working: String): Pair<Working.Shown, Boolean> =
+            (line ?: Working.Shown(working)) to (line == null)
         private const val NOTIFICATION = 3
+
+        /** The bar's whole: a thousandth of the job a step. */
+        internal const val BAR = 1000
+
+        /** How far the bar is filled for a job [progress] counts (done, in all), of [BAR]; none for none: it moves. */
+        internal fun bar(progress: Pair<Double, Double>?): Int? =
+            progress?.let { (done, all) -> (done / all * BAR).toInt().coerceIn(0, BAR) }
 
         /** Started for the queue's work ([Working]'s start); refused in the background, which is said in the log. */
         fun start(context: Context) {

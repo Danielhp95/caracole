@@ -13,6 +13,7 @@
     <string name="export_gone">That export was sent already, or is too old: export again.</string>
     <string name="export_refused">The phone\'s caracole didn\'t give the export (HTTP %1$d).</string>
     <string name="export_failed">The export couldn\'t be copied for the share sheet: %1$s</string>
+    <string name="export_readying">Getting the file ready to share · %1$s</string>
     <string name="library">Library</string>
     <string name="more">More</string>
 
@@ -51,6 +52,8 @@
     <string name="working">Working…</string>
 
     <string name="syncing">Syncing with the computer…</string>
+    <!-- The unattended sync's stage and what it says (Working.doing): "Updating the indexes · …". -->
+    <string name="syncing_doing">Syncing with the computer · %1$s</string>
 
     <string name="missing">That file isn\'t on the phone. Sync again.</string>
     <string name="not_served">The phone didn\'t serve that file (HTTP %1$d).</string>
@@ -81,6 +84,9 @@
     <string name="backup_exporting">Exporting the backup…</string>
     <string name="backup_exported">Exported.</string>
     <string name="backup_export_failed">Not exported: %1$s</string>
+    <string name="backups_list_failed">Couldn\'t list the backups · %1$s</string>
+    <string name="backup_failed">Couldn\'t back up · %1$s</string>
+    <string name="restore_failed">Couldn\'t restore · %1$s</string>
     <string name="backup_no_picker">No app on this phone picks where a file goes.</string>
     <string name="backup_queue_full">The phone\'s queue is full: try again in a moment.</string>
     <string name="backup_restore_title">Restore the library of %1$s?</string>
@@ -96,7 +102,11 @@
          leaves, and the first start's offer (MainActivity). -->
     <string name="catalogues_label">Site catalogues</string>
     <string name="catalogues_none">None yet</string>
+    <string name="catalogues_date_failed">Couldn\'t read the site indexes\' date · %1$s</string>
     <string name="catalogues_of">Of %1$s · %2$s</string>
+    <!-- A phone that took its site indexes from a computer by a sync, and no catalogue since: how old the computer's
+         were when it merged them. -->
+    <string name="catalogues_of_computer">From the computer · %1$s · %2$s</string>
     <string name="catalogues_today">today</string>
     <plurals name="catalogues_days">
         <item quantity="one">%d day old</item>
@@ -117,8 +127,8 @@
     <string name="catalogues_download">Download the site catalogues</string>
     <string name="catalogues_hint">Every site\'s index, published each week: search Ultimate Guitar, LaCuerda and the other sites with no computer. Nothing is asked of GitHub until you tap.</string>
     <string name="catalogues_queue_full">The phone\'s queue is full: try again in a moment.</string>
-    <string name="catalogues_asking_title">%1$s over mobile data?</string>
-    <string name="catalogues_asking_message">The phone isn\'t on Wi-Fi. Download the site catalogues now, or tap Download again once it is.</string>
+    <string name="catalogues_asking_title">%1$s on a metered network?</string>
+    <string name="catalogues_asking_message">This network is metered (mobile data, a hotspot, or a Wi-Fi marked metered). Download now, or tap Download again later on a network that isn\'t: nothing downloads by itself.</string>
     <string name="catalogues_asking_yes">Download</string>
     <string name="catalogues_asking_no">Not now</string>
     <string name="offer_title">Search the sites offline?</string>

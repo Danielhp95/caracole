@@ -10,7 +10,6 @@ import io.github.danielhp95.caracole.core.http.Transport
 import io.github.danielhp95.caracole.core.index.IndexTransfer
 import io.github.danielhp95.caracole.mirror.Http
 import io.github.danielhp95.caracole.mirror.Mirror
-import io.github.danielhp95.caracole.mirror.Progress
 import io.github.danielhp95.caracole.server.Phone
 import io.github.danielhp95.caracole.server.PhoneDeps
 import io.github.danielhp95.caracole.server.files.FileTypes
@@ -203,8 +202,9 @@ object Caracole {
 sealed interface SyncState {
     data object Idle : SyncState
 
-    /** Running: [progress] is null while it asks caracole for the list. */
-    data class Running(val progress: Progress?) : SyncState
+    /** Running: [doing] is the stage it is at and what that says ("Copying the computer's pages · 120 of 640
+     * pages", Working.doing), null before its job runs a stage. */
+    data class Running(val doing: String?) : SyncState
 
     /** Over, with its [outcome]. */
     data class Ended(val outcome: Outcome) : SyncState

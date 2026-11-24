@@ -13,10 +13,13 @@ import androidx.test.runner.lifecycle.Stage
 import io.github.danielhp95.caracole.core.catalogues.Catalogues
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.index.IndexTransfer
+import io.github.danielhp95.caracole.core.index.ListedIndexes
+import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.index.TabCounts
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.Fixtures
 import io.github.danielhp95.caracole.server.jobs.JobViews
+import io.github.danielhp95.caracole.server.jobs.PhoneKinds
 import io.github.danielhp95.caracole.server.lookups.CataloguesRunner
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -49,9 +52,10 @@ import kotlin.random.Random
  * GitHub is this test's own server on the device's loopback ([GitHub]: its API's release by its tag and an asset's
  * bytes, as CatalogueSource.Api asks them), which [Caracole.cataloguesForTests] points the job at. On a first start
  * (the app's data cleared, as device-test.sh clears it before each class) with no computer set and no index, the
- * library screen offers the catalogues; Download imports them, and Settings, opened after it, says their date; a second
- * Download is Up to date. On a metered network the job stops before downloading and Settings asks "… over mobile
- * data?"; Download there is the go-ahead, which imports.
+ * library screen offers the catalogues; Download imports them, and Settings, opened after it, says their date (the
+ * file's); a second Download is Up to date. On a metered network the job stops before downloading and Settings asks
+ * "… on a metered network?", asked again by the screen a rotation makes; Download there is the go-ahead, which
+ * imports. A job queued by no screen of the app's (the Journal's Try again) that stops so is asked about too, once.
  */
 @RunWith(AndroidJUnit4::class)
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
@@ -76,23 +80,23 @@ class CataloguesTest {
 
     private val first = "indexes-s${Database.SCHEMA_VERSION}-20261124T0312Z.sqlite.gz"
     private val second = "indexes-s${Database.SCHEMA_VERSION}-20261201T0312Z.sqlite.gz"
+    private val third = "indexes-s${Database.SCHEMA_VERSION}-20261208T0312Z.sqlite.gz"
 
     @Test fun a_theFirstStartOffersThemAndSettingsSaysTheirDate() {
         github.publish(first)
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             waitUntil("the first start's offer", 60_000) { onMain { find(scenario).findViewById<View>(R.id.catalogue_offer).isShown } }
-            assertNotNull("offered once", kv(SiteCatalogues.OFFERED))
+            // Shown once the opening screen is gone: never over the logo, nor live under it.
+            assertEquals(View.GONE, onMain { find(scenario).findViewById<View>(R.id.loading).visibility })
             assertEquals(listOf<String>(), github.asked)  // no request until Download is tapped
             onMain { find(scenario).findViewById<View>(R.id.offer_download).performClick() }
+            waitUntil("offered once: its answer recorded") { kv(SiteCatalogues.OFFERED) != null }
 
             val settings = resumed<SettingsActivity>()
             waitUntil("the catalogues imported", 60_000) { kv(Catalogues.IMPORTED) == first }
             assertTrue(Caracole.phone(context).parts.database.read { TabCounts.of(it) }.values.any { it > 0 })
-            val newest = Caracole.phone(context).parts.database.read { SiteCatalogues.newest(IndexTransfer.newest(it)) }
-            assertNotNull(newest)
-            waitUntil("their date in Settings") {
-                text(settings, R.id.catalogues_date).startsWith("Of ${SiteCatalogues.day(newest!!)} · ")
-            }
+            // The file's own date (its name's minute), never the newest read the phone's indexes hold.
+            waitUntil("their date in Settings") { text(settings, R.id.catalogues_date).startsWith("Of 24 Nov 2026 · ") }
             waitUntil("the job's line") { text(settings, R.id.catalogues_status) == "Catalogues of 24 Nov 2026" }
 
             onMain { settings.findViewById<View>(R.id.catalogues_download).performClick() }
@@ -101,6 +105,22 @@ class CataloguesTest {
             }
             onMain { settings.finish() }
         }
+        // No catalogue imported (the record gone, as on a phone whose indexes came from a .caracole file), yet tabs
+        // there: the newest of the sitemap and listing records the indexes hold (ListedIndexes, held to Merge's keys
+        // by core's ListedIndexesTest). This export holds gtptabs.com's and MuseScore's indexes alone, whose newest
+        // read IndexTransfer.newest takes from their sitemaps' records alone (neither has pages a phone reads), so here
+        // the two agree; with UG's artist pages or harptabs.com's artists read later they wouldn't.
+        val database = Caracole.phone(context).parts.database
+        val listed = database.read { ListedIndexes.newest(it) }!!.let { Stamps.instant(Stamps.parse(it)!!) }
+        val sitemaps = database.read { IndexTransfer.newest(it) }.values.mapNotNull { Stamps.parse(it)?.let(Stamps::instant) }.max()
+        assertEquals(sitemaps, listed)
+        database.writeBlocking { it.kvDelete(Catalogues.IMPORTED) }
+        ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
+            waitUntil("the indexes' date") {
+                text(find(scenario), R.id.catalogues_date).startsWith("Of ${SiteCatalogues.day(sitemaps)} · ")
+            }
+        }
+        database.writeBlocking { it.kvSet(Catalogues.IMPORTED, first) }
         // Offered once: the next start, still with nothing set up, opens Settings as ever and offers nothing.
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             resumed<SettingsActivity>().let { onMain { it.finish() } }
@@ -117,11 +137,40 @@ class CataloguesTest {
             var asked: AlertDialog? = null
             waitUntil("the question", 60_000) { onMain { settings.asked }.also { asked = it } != null }
             assertFalse("waiting for the go-ahead, nothing imported", kv(Catalogues.IMPORTED) == second)
-            assertTrue(text(settings, R.id.catalogues_status).endsWith("to download: waiting for Wi-Fi or your go-ahead"))
+            // The kind's wait, in whatever words it has (PhoneKinds' otherwise, its size filled in).
+            assertTrue(PhoneKinds.fits(text(settings, R.id.catalogues_status), PhoneKinds.CATALOGUES.otherwise!!))
             assertNotNull(kv(CataloguesRunner.ASKING))
+            // A rotation: the question goes with its window, unanswered and leaking nothing, and the new screen asks it.
+            scenario.recreate()
+            val again = find(scenario)
+            waitUntil("the question again, after a rotation") { onMain { again.asked }.also { asked = it } != null }
             onMain { asked!!.getButton(AlertDialog.BUTTON_POSITIVE).performClick() }
             waitUntil("the go-ahead imports", 60_000) { kv(Catalogues.IMPORTED) == second }
-            waitUntil("its line") { text(settings, R.id.catalogues_status) == "Catalogues of 1 Dec 2026" }
+            waitUntil("its line") { text(again, R.id.catalogues_status) == "Catalogues of 1 Dec 2026" }
+        }
+    }
+
+    @Test fun c_aStopTheAppDidntQueueIsAskedAboutOnce() {
+        github.publish(third)
+        Caracole.meteredForTests = true
+        // The Journal's Try again: the plain job queued again, by no screen of the app's.
+        val phone = Caracole.phone(context)
+        val tried = phone.queue.submit(phone.catalogues.spec(meteredOk = false)).first
+        waitUntil("the job stopped for the go-ahead", 60_000) { phone.queue.job(tried.id)?.state == "done" }
+        ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
+            val settings = find(scenario)
+            var asked: AlertDialog? = null
+            waitUntil("the question") { onMain { settings.asked }.also { asked = it } != null }
+            onMain { asked!!.getButton(AlertDialog.BUTTON_NEGATIVE).performClick() }
+        }
+        // Answered: the next screen says the job's line and asks nothing.
+        ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
+            val settings = find(scenario)
+            waitUntil("its line") {
+                PhoneKinds.fits(text(settings, R.id.catalogues_status), PhoneKinds.CATALOGUES.otherwise!!)
+            }
+            Thread.sleep(1_000)  // the question, were it asked, comes with the line
+            assertEquals(null, onMain { settings.asked })
         }
     }
 

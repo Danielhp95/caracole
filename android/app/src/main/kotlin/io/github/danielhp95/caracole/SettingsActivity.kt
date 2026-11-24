@@ -18,12 +18,15 @@ import android.widget.TextView
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
-import io.github.danielhp95.caracole.core.index.IndexTransfer
+import io.github.danielhp95.caracole.server.Phone
+import io.github.danielhp95.caracole.server.jobs.Job
 import io.github.danielhp95.caracole.server.jobs.JobViews
 import io.github.danielhp95.caracole.server.lookups.CataloguesRunner
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -35,11 +38,15 @@ import java.time.Instant
  * SyncRoutes.tested's words, "studio answered: 96 songs, 3 songbooks, its indexes read 02/11/26"), the storage the
  * copy takes, Sync on Wi-Fi by itself (the bar's sync, unattended: [Syncs]), Export and Import a file (the library
  * page's sync sheet at that flow, MainActivity's [MainActivity.SHEET]), the text size a pinch left, with Reset, and
- * the phone's backups ([BackupsActivity]), and the site catalogues: the newest of the sites' indexes ("Of 3 Nov 2026 ·
- * 3 weeks old", "None yet") and Download the site catalogues, which asks GitHub nothing until it is tapped, then
- * queues CataloguesRunner's job and says its line as it goes ([followCatalogues]); a job a metered network stopped is
- * asked about ("52 MB over mobile data?"), Download then the owner's go-ahead. Syncing itself is the library screen's
- * bar's sync button. No item's text ends in "…".
+ * the phone's backups ([BackupsActivity]), and the site catalogues: the date of the ones imported last ("Of 24 Nov
+ * 2026 · 3 weeks old"), or of the computer's indexes a sync merged ("From the computer · 3 Nov 2026 · …"), else of
+ * the indexes the phone holds, "None yet" for none (SiteCatalogues.fresh), and Download the site catalogues, which asks GitHub nothing until it
+ * is tapped, then queues CataloguesRunner's job and says its line as it goes ([followCatalogues]); a job a metered
+ * network stopped is asked about ("52 MB on a metered network?"), whoever queued it (the Journal's Try again too),
+ * Download then the owner's go-ahead, the question kept for the next screen until it is answered (a rotation's). A
+ * phone's caracole that can't start is said under the catalogues' button ("Couldn't start · …"), never a crash, and
+ * its start tried again as the screen comes back. Syncing itself is the library screen's bar's sync button.
+ * No item's text ends in "…".
  */
 class SettingsActivity : Activity() {
     private lateinit var settings: Settings
@@ -58,6 +65,9 @@ class SettingsActivity : Activity() {
     /** The question a metered network's stop asks, while it is open (a device test answers it). */
     internal var asked: AlertDialog? = null
         private set
+
+    /** The job [asked] is about (SiteCatalogues.keyOf). */
+    private var askedFor: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -114,6 +124,7 @@ class SettingsActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        if (startFailed) starting = null  // a start that failed is tried again as the screen comes back, once
         showTextSize()
         showStorage()
         showCatalogues()
@@ -129,6 +140,33 @@ class SettingsActivity : Activity() {
         scope.cancel()
         super.onStop()
     }
+
+    override fun onDestroy() {
+        // A rotation, say: the question goes with its window, unanswered (Settings.cataloguesAnswered not written), so
+        // the next screen asks it again, and no window is leaked.
+        asked?.let { it.setOnDismissListener(null); it.dismiss() }
+        asked = null
+        askedFor = null
+        super.onDestroy()
+    }
+
+    /** The phone's caracole asked for, should the library screen's start have failed, once each time the screen comes
+     * back (onResume), never once a row: an update's migration that ran out of room is long. In the process's scope. */
+    private var starting: Deferred<Result<Phone>>? = null
+    private var startFailed = false
+
+    /** The phone's caracole, or null once why it can't start is said ([cantStart]). */
+    private suspend fun phone(): Phone? {
+        val app = applicationContext
+        val asked = starting ?: Caracole.background.async(Dispatchers.IO) { guarded("the phone's caracole didn't start") { Caracole.phone(app) } }
+            .also { starting = it }
+        val started = asked.await()
+        startFailed = started.isFailure
+        return started.onFailure(::cantStart).getOrNull()
+    }
+
+    /** "Couldn't start · database or disk is full", under the catalogues' button: the library screen's words. */
+    private fun cantStart(e: Throwable) = say(getString(R.string.no_server, why(e)))
 
     /** The library page's sync sheet at [flow] (export, import), the address typed kept first: MainActivity, which is
      * single-task, comes to the front with it, and Settings closes. */
@@ -166,15 +204,25 @@ class SettingsActivity : Activity() {
         findViewById<View>(R.id.open_library).visibility = if (mirror.manifest() != null) View.VISIBLE else View.GONE
     }
 
-    /** "Of 3 Nov 2026 · 3 weeks old": the newest of the sites' indexes (IndexTransfer.newest), "None yet" without. */
+    /** "Of 24 Nov 2026 · 3 weeks old", the catalogues imported last (or, neither imported nor synced, the newest
+     * sitemap or listing read the phone's indexes hold); "From the computer · …", a sync's; "None yet"
+     * (SiteCatalogues.fresh). */
     private fun showCatalogues() {
-        val app = applicationContext
         scope.launch {
-            val newest = withContext(Dispatchers.IO) {
-                Caracole.phone(app).parts.database.read { db -> SiteCatalogues.newest(IndexTransfer.newest(db)) }
+            val phone = phone() ?: return@launch
+            val fresh = withContext(Dispatchers.IO) {
+                guarded("the site indexes' date couldn't be read") { phone.parts.database.read { db -> SiteCatalogues.read(db) } }
+            }.getOrElse {
+                say(getString(R.string.catalogues_date_failed, why(it)))
+                return@launch
             }
-            cataloguesDate.text = newest?.let { getString(R.string.catalogues_of, SiteCatalogues.day(it), ageOf(it)) }
-                ?: getString(R.string.catalogues_none)
+            cataloguesDate.text = when (fresh?.source) {
+                null -> getString(R.string.catalogues_none)
+                SiteCatalogues.Source.CATALOGUES, SiteCatalogues.Source.INDEXES ->
+                    getString(R.string.catalogues_of, SiteCatalogues.day(fresh.at), ageOf(fresh.at))
+                SiteCatalogues.Source.COMPUTER ->
+                    getString(R.string.catalogues_of_computer, SiteCatalogues.day(fresh.at), ageOf(fresh.at))
+            }
         }
     }
 
@@ -193,9 +241,9 @@ class SettingsActivity : Activity() {
 
     /** The catalogues' job queued (the go-ahead with [meteredOk]) and followed. */
     private fun downloadCatalogues(meteredOk: Boolean) {
-        val app = applicationContext
         scope.launch {
-            val job = withContext(Dispatchers.IO) { SiteCatalogues.queue(Caracole.phone(app), meteredOk) }
+            val phone = phone() ?: return@launch
+            val job = withContext(Dispatchers.IO) { SiteCatalogues.queue(phone, meteredOk) }
             if (job == null) {
                 say(getString(R.string.catalogues_queue_full))
             } else {
@@ -204,42 +252,28 @@ class SettingsActivity : Activity() {
         }
     }
 
-    /** The newest catalogues job's line (the first start's Download, a tap before this screen was left), followed
-     * while it waits or runs, and its end said once if the app queued it and no screen has said it yet. */
+    /** The newest catalogues job's line (the first start's Download, the Journal's Try again, a tap before this screen
+     * was left), followed while it waits or runs, then its end ([ended]). */
     private fun followCatalogues() {
-        val app = applicationContext
         scope.launch {
-            val job = withContext(Dispatchers.IO) { SiteCatalogues.newestOf(Caracole.phone(app).queue.snapshot()) }
-                ?: return@launch
+            val phone = phone() ?: return@launch
+            val job = SiteCatalogues.newestOf(phone.queue.snapshot()) ?: return@launch
             say(JobViews.line(job).text)
-            when {
-                !SiteCatalogues.over(job.state) -> follow(job.id)
-                SiteCatalogues.toSay(job.id) -> follow(job.id, said = true)  // it ended before this screen showed
-            }
+            if (!SiteCatalogues.over(job.state)) follow(job.id) else ended(phone, job)
         }
     }
 
-    /**
-     * Job [id] followed: its line ("Downloading · 31 of 52 MB") as it goes, then the date again and, when a metered
-     * network stopped it and its end is still to be said ([SiteCatalogues.toSay]; [said]: already taken for it), the
-     * question.
-     */
-    private fun follow(id: Int, said: Boolean = false) {
+    /** Job [id] followed: its line ("Downloading · 31 of 52 MB") as it goes, then the date again and its end. */
+    private fun follow(id: Int) {
         following?.cancel()
-        val app = applicationContext
         following = scope.launch {
-            val phone = withContext(Dispatchers.IO) { Caracole.phone(app) }
+            val phone = phone() ?: return@launch
             while (true) {
                 val job = phone.queue.job(id) ?: return@launch
-                val line = JobViews.line(job)
-                say(line.text)
+                say(JobViews.line(job).text)
                 if (SiteCatalogues.over(job.state)) {
                     showCatalogues()
-                    if (!said && !SiteCatalogues.toSay(id)) return@launch
-                    val asking = withContext(Dispatchers.IO) {
-                        phone.parts.database.read { db -> SiteCatalogues.asking(db.kvGet(CataloguesRunner.ASKING)) }
-                    }
-                    SiteCatalogues.asks(job.state, line.tone, asking)?.let(::askMetered)
+                    ended(phone, job)
                     return@launch
                 }
                 delay(FOLLOW_MS)
@@ -247,15 +281,43 @@ class SettingsActivity : Activity() {
         }
     }
 
-    /** "52 MB over mobile data?": Download, the go-ahead; Not now leaves the job's line, waiting for Wi-Fi. */
-    private fun askMetered(asking: SiteCatalogues.Asking) {
-        asked?.dismiss()
+    /**
+     * [job] over: when it is the newest catalogues job and stopped at the metered step, its file named in kv
+     * `catalogues:asking`, the question, whoever queued it (SiteCatalogues.question), until it is answered.
+     */
+    private suspend fun ended(phone: Phone, job: Job) {
+        if (SiteCatalogues.newestOf(phone.queue.snapshot())?.id != job.id) return
+        val asking = withContext(Dispatchers.IO) {
+            guarded("the catalogues' question couldn't be read") {
+                phone.parts.database.read { db -> SiteCatalogues.asking(db.kvGet(CataloguesRunner.ASKING)) }
+            }
+                .getOrNull()
+        }
+        val key = SiteCatalogues.keyOf(job.id, job.queuedAt)
+        SiteCatalogues.question(job.state, JobViews.line(job).tone, asking, key, settings.cataloguesAnswered)
+            ?.let { askMetered(key, it) }
+    }
+
+    /** "52 MB on a metered network?": Download, the go-ahead; Not now (or Back) leaves the job's line, waiting for it.
+     * Either answer is kept ([Settings.cataloguesAnswered]) for job [key]; the window going without one (a rotation)
+     * leaves it to ask again. */
+    private fun askMetered(key: String, asking: SiteCatalogues.Asking) {
+        if (askedFor == key && asked?.isShowing == true) return
+        asked?.let { it.setOnDismissListener(null); it.dismiss() }
+        askedFor = key
         asked = AlertDialog.Builder(this)
             .setTitle(getString(R.string.catalogues_asking_title, SiteCatalogues.size(asking.bytes)))
             .setMessage(R.string.catalogues_asking_message)
-            .setPositiveButton(R.string.catalogues_asking_yes) { _, _ -> downloadCatalogues(meteredOk = true) }
-            .setNegativeButton(R.string.catalogues_asking_no, null)
-            .setOnDismissListener { asked = null }
+            .setPositiveButton(R.string.catalogues_asking_yes) { _, _ ->
+                settings.cataloguesAnswered = key
+                downloadCatalogues(meteredOk = true)
+            }
+            .setNegativeButton(R.string.catalogues_asking_no) { _, _ -> settings.cataloguesAnswered = key }
+            .setOnCancelListener { settings.cataloguesAnswered = key }
+            .setOnDismissListener {
+                asked = null
+                askedFor = null
+            }
             .show()
     }
 

@@ -83,9 +83,15 @@ class BackupsActivity : Activity() {
     /** The backups listed again. */
     private fun refresh() {
         scope.launch {
-            val backups = withContext(Dispatchers.IO) { Backups.list(phone().parts.stateDir) }
-            show(backups)
+            withContext(Dispatchers.IO) { guarded("the backups couldn't be listed") { Backups.list(phone().parts.stateDir) } }
+                .onSuccess(::show)
+                .onFailure { failed(R.string.backups_list_failed, it) }
         }
+    }
+
+    /** What failed in its own words ("Couldn't list the backups · database or disk is full"), never a crash. */
+    private fun failed(words: Int, e: Throwable) {
+        status.text = getString(words, why(e))
     }
 
     private fun show(backups: List<Backup>) {
@@ -130,9 +136,12 @@ class BackupsActivity : Activity() {
         status.text = getString(R.string.backup_working)
         backupNow.isEnabled = false
         scope.launch {
-            val over = queued { phone -> BackupRunner(phone.parts).backup(Backups.BY_HAND) }
+            val over = guarded("a backup by hand couldn't be queued") {
+                queued { phone -> BackupRunner(phone.parts).backup(Backups.BY_HAND) }
+            }
             backupNow.isEnabled = true
-            status.text = over?.let { JobViews.line(it).text } ?: getString(R.string.backup_queue_full)
+            over.onFailure { failed(R.string.backup_failed, it); return@launch }
+            status.text = over.getOrNull()?.let { JobViews.line(it).text } ?: getString(R.string.backup_queue_full)
             refresh()
         }
     }
@@ -161,12 +170,9 @@ class BackupsActivity : Activity() {
         if (resultCode != RESULT_OK || uri == null || name == null) return
         status.text = getString(R.string.backup_exporting)
         scope.launch {
-            status.text = try {
-                withContext(Dispatchers.IO) { exportTo(this@BackupsActivity, phone(), name, uri) }
-                getString(R.string.backup_exported)
-            } catch (e: Exception) {
-                getString(R.string.backup_export_failed, e.message ?: e.javaClass.simpleName)
-            }
+            status.text = withContext(Dispatchers.IO) {
+                guarded("a backup couldn't be exported") { exportTo(this@BackupsActivity, phone(), name, uri) }
+            }.fold({ getString(R.string.backup_exported) }, { getString(R.string.backup_export_failed, why(it)) })
         }
     }
 
@@ -185,8 +191,9 @@ class BackupsActivity : Activity() {
     private fun restore(backup: Backup) {
         status.text = getString(R.string.backup_restoring)
         scope.launch {
-            val over = queued { phone -> BackupRunner(phone.parts).restore(backup) }
-            status.text = over?.let { JobViews.line(it).text } ?: getString(R.string.backup_queue_full)
+            val over = guarded("a restore couldn't be queued") { queued { phone -> BackupRunner(phone.parts).restore(backup) } }
+            over.onFailure { failed(R.string.restore_failed, it); return@launch }
+            status.text = over.getOrNull()?.let { JobViews.line(it).text } ?: getString(R.string.backup_queue_full)
             refresh()
         }
     }
