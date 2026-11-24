@@ -311,9 +311,44 @@ data class Merged(val sites: Map<String, Map<String, Int>>, val changed: Boolean
  * A merge of nothing newer tells the plan alone.
  */
 data class MergeProgress(val site: String, val action: String, val done: Long, val total: Long) {
+    /** The phone's words for it, as the catalogues job and a sync's index stage say them: [COMPARING] as it plans,
+     * "Importing · Ultimate Guitar · 600,000 of 1,521,145 tabs" for UG's sitemaps' rows (counts grouped by commas, as
+     * the app's other counts are), "Importing · harptabs.com" for any other site's step (its title), and [READYING]
+     * for the full-text indexes. */
+    fun words(): String {
+        val title = Sites.named(site)?.title ?: site
+        return when {
+            action == PLAN -> COMPARING
+            action == OPTIMIZE -> READYING
+            site == "ug" && action == "sitemap" -> "$IMPORTING · $title · ${grouped(done)} of ${grouped(total)} tabs"
+            else -> "$IMPORTING · $title"
+        }
+    }
+
+    /** The step its words are of, for a Paced: each site's each action, a step of its own. */
+    val step: Pair<String, String> get() = site to action
+
     companion object {
         const val PLAN = "plan"
         const val OPTIMIZE = "optimize"
+
+        const val COMPARING = "Comparing with the phone's index…"
+        const val IMPORTING = "Importing"
+        const val READYING = "Making the search index ready…"
+
+        /** What a merge's caller says as it gives the WAL the merge grew back (Database.checkpoint). */
+        const val TIDYING = "Tidying the database…"
+
+        /** Python's `f"{n:,}"`: the digits in threes, by commas, ASCII alone (never a locale's). */
+        fun grouped(n: Long): String {
+            val digits = kotlin.math.abs(n).toString()
+            val out = StringBuilder(if (n < 0) "-" else "")
+            digits.forEachIndexed { i, c ->
+                if (i > 0 && (digits.length - i) % 3 == 0) out.append(',')
+                out.append(c)
+            }
+            return out.toString()
+        }
     }
 }
 
