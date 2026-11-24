@@ -400,14 +400,76 @@ def _amount(done: int, total: int) -> str:
     return f"{done:,} of {total:,} bytes"
 
 
+def merge_console() -> Console:
+    """Where a merge says how far it has got: stderr, so that stdout stays its report, with a live line on a
+    terminal. Tests replace it."""
+    import sys
+
+    return Console(sys.stderr)
+
+
+class Merging:
+    """What a merge says as it goes (``index_transfer.merge``'s ``progress`` and ``backing_up``, in ``MergeWords``'
+    words), for ``caracole index merge`` and commands/peer.py's merges of indexes.
+
+    With ``stage`` (a ``--progress`` run's: caracole serve reads it), each step as that stage's running detail. Else
+    on ``console``: on a terminal one live line, rewritten as each site, action and chunk of UG's sitemap rows goes
+    by; anywhere else (a journal, a pipe) a plain line as the comparison and the backup begin, as each action of a
+    site begins, and as each quarter of UG's sitemap rows is passed. ``say`` is another step of the caller's (a
+    file's indexes copied out first), said the same way. ``close`` clears a live line left."""
+
+    def __init__(self, *, console: Console | None = None, stage: Callable[[str], None] | None = None) -> None:
+        from caracole.index_transfer import MergeWords
+
+        self.console = console
+        self.stage = stage
+        self._words = MergeWords()
+        self._quarter = 0
+
+    def say(self, text: str) -> None:
+        if self.stage is not None:
+            self.stage(text)
+        elif self.console is not None:
+            self.console.step(f"{text}...")
+
+    def backing_up(self) -> None:
+        self.say(self._words.BACKING_UP)
+
+    def __call__(self, site: str, action: str, done: int, total: int) -> None:
+        from caracole.index_transfer import UG_TABS
+
+        said = self._words(site, action, done, total)
+        if self.stage is not None:
+            self.stage(said)
+        elif self.console is None:
+            return
+        elif action == UG_TABS:
+            if self.console.live:
+                self.console.status(said)
+            elif total and (quarter := 4 if done >= total else done * 4 // total) > self._quarter:
+                self._quarter = quarter
+                self.console.step(said)
+        elif action:
+            self._quarter = 0
+            self.console.step(f"{said}...")
+        else:
+            self.console.status(f"{said}...")  # a site: the live line alone; its actions say it in a journal
+
+    def close(self) -> None:
+        if self.console is not None:
+            self.console.close()
+
+
 def _merge(cfg: Config, file: Path, sites: list[str], *, delete: bool = False, progress: bool = False) -> None:
     """``caracole index merge``. With ``progress`` (caracole serve's, the pages a phone posted: web/jobs.py
     ``index_merge_job``), its one stage, ``merge``, as get.py's JSON lines, ending ``failed`` however the command
     ends short of a merge (the lock or the database not to be had too), and the lock waited for as a lookup waits
-    (the nightly run lets it go first at its next pause). With ``delete``, FILE deleted once it is merged; refused,
-    only when it is an export caracole serve staged (``peer_push.staged_indexes``), which can never merge here, never
-    a file named by hand (the database itself, a backup, a typo); and kept when only the backup first failed, or
-    the lock or the database wasn't to be had, for Try again."""
+    (the nightly run lets it go first at its next pause); how far the merge has got is that stage's running detail
+    (``Merging``). Without it, how far it has got goes to stderr (``merge_console``), its report to stdout. With
+    ``delete``, FILE deleted once it is merged; refused, only when it is an export caracole serve staged
+    (``peer_push.staged_indexes``), which can never merge here, never a file named by hand (the database itself, a
+    backup, a typo); and kept when only the backup first failed, or the lock or the database wasn't to be had, for
+    Try again."""
     from caracole import backup
     from caracole import index_transfer as transfer
 
@@ -430,8 +492,14 @@ def _merge(cfg: Config, file: Path, sites: list[str], *, delete: bool = False, p
     stage("running")
     try:
         with exclusive(cfg, "index merge", interactive=progress), closing(open_db(cfg)) as conn:
+            told = (Merging(stage=lambda said: stage("running", said)) if progress
+                    else Merging(console=merge_console()))
             try:
-                merged = transfer.merge(conn, file, sites or None, state_dir=cfg.state_dir, now=utcnow())
+                try:
+                    merged = transfer.merge(conn, file, sites or None, state_dir=cfg.state_dir, now=utcnow(),
+                                            progress=told, backing_up=told.backing_up)
+                finally:
+                    told.close()
             except transfer.NoBackup as e:
                 refused(str(e), 2, done_with=False)
             except transfer.TransferError as e:

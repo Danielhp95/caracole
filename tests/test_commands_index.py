@@ -64,8 +64,13 @@ def test_the_queued_merge_reports_its_stage_and_deletes_the_file_once_merged(tmp
     assert result.exit_code == 0, result.output
     assert events(result.stdout) == [
         {"stage": "merge", "state": "running", "detail": ""},
+        {"stage": "merge", "state": "running", "detail": "Comparing with this database's indexes"},
+        {"stage": "merge", "state": "running", "detail": "Backing up the database first"},
+        {"stage": "merge", "state": "running", "detail": "harptabs.com"},
+        {"stage": "merge", "state": "running", "detail": "harptabs.com · 1 artist page"},
         {"stage": "merge", "state": "done", "detail": "harptabs.com: 1 artist page"},
     ]
+    assert result.stderr == ""  # the stage alone says how far it has got
     assert f"Merged {path} into {state / 'caracole.sqlite'}:" in result.stdout
     assert not path.exists()
     conn = db.connect(state / "caracole.sqlite")
@@ -190,7 +195,58 @@ def test_without_progress_it_says_what_it_always_said(tmp_path, state):
     assert result.exit_code == 0, result.output
     assert events(result.stdout) == []
     assert result.stdout.splitlines()[1] == f"Merged {path} into {state / 'caracole.sqlite'}:"
+    # How far it has got goes to stderr, so stdout stays the report: off a terminal, a plain line a step.
+    assert result.stderr.splitlines() == ["Comparing with this database's indexes...",
+                                          "Backing up the database first...", "harptabs.com · 1 artist page..."]
     assert not path.exists()
+
+
+def merging(live: bool):
+    import io
+
+    from caracole.commands.index import Merging
+    from caracole.progress import Console
+
+    out = io.StringIO()
+    return Merging(console=Console(out, live=live, color=False, width=lambda: 200)), out
+
+
+def ug_rows(told) -> None:
+    """A merge's progress through UG's sitemaps, 1,367,059 rows in chunks of 50,000, then its artist pages."""
+    told("", transfer.PLANNING, 0, 1)
+    told.backing_up()
+    told("ug", "", 0, 1)
+    told("ug", "sitemap", 0, 41)
+    for done in [*range(transfer.UG_CHUNK, 1_367_059, transfer.UG_CHUNK), 1_367_059]:
+        told("ug", transfer.UG_TABS, done, 1_367_059)
+    told("ug", "tab of its artist pages", 0, 12)
+    told.close()
+
+
+def test_a_merge_off_a_terminal_says_a_line_a_step_and_each_quarter_of_ugs_sitemap_rows():
+    told, out = merging(live=False)
+    ug_rows(told)
+    assert out.getvalue().splitlines() == [
+        "Comparing with this database's indexes...",
+        "Backing up the database first...",
+        "Ultimate Guitar · 41 sitemaps...",
+        "Ultimate Guitar · 41 sitemaps · 350,000 of 1,367,059 tabs",
+        "Ultimate Guitar · 41 sitemaps · 700,000 of 1,367,059 tabs",
+        "Ultimate Guitar · 41 sitemaps · 1,050,000 of 1,367,059 tabs",
+        "Ultimate Guitar · 41 sitemaps · 1,367,059 of 1,367,059 tabs",
+        "Ultimate Guitar · 12 tabs of its artist pages...",
+    ]
+
+
+def test_a_merge_on_a_terminal_rewrites_one_live_line_a_chunk_and_clears_it_at_the_end():
+    told, out = merging(live=True)
+    ug_rows(told)
+    shown = [part.strip() for part in out.getvalue().split("\r") if part.strip()]
+    chunks = [s for s in shown if s.endswith(" tabs")]
+    assert len(chunks) == 28 and chunks[0] == "Ultimate Guitar · 41 sitemaps · 50,000 of 1,367,059 tabs"
+    assert shown[:2] == ["Comparing with this database's indexes...", "Backing up the database first..."]
+    assert "Ultimate Guitar..." in shown and shown[-1] == "Ultimate Guitar · 12 tabs of its artist pages..."
+    assert "\n" not in out.getvalue() and out.getvalue().endswith("\r")  # one line, cleared once done
 
 
 def test_a_file_missing_is_a_failed_stage(tmp_path, state):

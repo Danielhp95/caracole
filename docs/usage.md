@@ -3746,7 +3746,11 @@ and the file lacks stays, and how far an index has got never moves back.
   in.
 
 Before it changes anything it backs the database up into `backups/` (`…-before-merge.sqlite`), and
-without room for that copy it merges nothing. It says what each site took:
+without room for that copy it merges nothing. While it works it says how far it has got on stderr:
+the comparison, the backup, each site's sitemaps or pages, and Ultimate Guitar's tabs as they go in
+(`Ultimate Guitar · 41 sitemaps · 600,000 of 1,367,059 tabs`, 50,000 at a time). In a terminal
+that is one live line; in a journal or a pipe, a line a step and one each quarter of UG's tabs.
+Then it says what each site took, on stdout:
 
     Merged /var/lib/caracole/state/indexes.sqlite into /var/lib/caracole/state/caracole.sqlite:
       Ultimate Guitar: nothing read more recently.
@@ -3974,7 +3978,9 @@ With `indexes`, the sync ends by bringing each site's index up to date on both s
 stage). Whichever side read a site more recently gives that index to the other:
 
 - An index taken here is downloaded and merged as `caracole index merge` does, after a backup
-  (`…-before-merge.sqlite`).
+  (`…-before-merge.sqlite`), saying how far the merge has got as `index merge` does. With
+  `--progress` that is the `index` stage's detail, which the Sync sheet shows. A `peer import` of a
+  file's indexes says it the same way.
 - An index given there is exported and uploaded to the other server, which merges it as a queued
   `caracole peer import`. The sync waits up to ten minutes for it. The other side must run this
   version of caracole or a later one.
@@ -4079,8 +4085,8 @@ the Journal:
 This is the usual merge ([caracole index export and merge](#caracole-index-export-and-merge)),
 with a backup of the database first. `--delete` deletes FILE once it is merged. It also deletes a
 refused file that caracole serve staged, never one you named by hand. A file whose merge couldn't
-start stays, so **Try again** works. `--progress` reports the merge as a JSON line for the
-Journal.
+start stays, so **Try again** works. `--progress` reports the merge as JSON lines for the
+Journal, with how far it has got as the stage's detail.
 
 If the computer refuses the file or doesn't answer, the phone keeps the pages for the next sync
 and the sync says why. A 409 means the two run different versions of caracole, or two files

@@ -205,7 +205,10 @@ def test_a_site_read_more_recently_there_is_taken_and_counted(syncing):
     gtptabs_rows(there, BLUR)
     result, events = synced(here)
     assert result.exit_code == 0, result.output
-    assert stage(events, "index") == [("running", "taking 1"), ("done", "took 1 index")]
+    assert stage(events, "index") == [
+        ("running", "taking 1"), ("running", "Comparing with this database's indexes"),
+        ("running", "Backing up the database first"), ("running", "gtptabs.com"),
+        ("running", "gtptabs.com · 1 sitemap"), ("done", "took 1 index")]
     assert index_transfer.tab_counts(here.conn)["gtptabs"] == 2
     assert index_transfer.newest(here.conn)["gtptabs"] == index_transfer.newest(there.conn)["gtptabs"]
     assert ("GET", "/api/peer/index") in asked and ("POST", "/sync/import/open") not in asked
