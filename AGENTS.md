@@ -1886,8 +1886,9 @@ It is rows.js's, shared by both pages:
     one that says what it does (status.py `LONG_STAGES`, `doing`: audio, vocals, words, chords, and a sync's or an
     import's `index`, the phone's `mirror`, an index `merge` and a take's `render`, whose running words their lanes
     add, on the line of the Journal and the tray alone, no song's bar; the number first,
-    nothing the step's name says, "1:20 of 3:45", "2 of ~12 min", so a 390 px phone shows it whole), which
-    `stepWords` says after the count (`.step-doing`, in the room the step and its place leave, `flex: 1 1 0`; for
+    nothing the step's name says, "1:20 of 3:45", "~12 min", "2 of ~12 min"), which `stepWords` says after the
+    count (`.step-doing`, in the room the step and its place leave, `flex: 1 1 0`; under 400 px its bar's place a
+    screen reader's alone, `.step-count` clipped, and its own " · " left out, `.step-sep`, so 320 px shows it whole; for
     the eye alone, `aria-hidden`, changed in place on the same bar, `sayDoing`, so the line's live region never reads
     each of Whisper's windows) and status.py's line after the stage's words ("Transcribing the lyrics · 1:20 of
     3:45…"); the phone's `Status.LONG_STAGES`, `Outcomes.progress` alike. `waits`, true, while that step's running stage waits for the book

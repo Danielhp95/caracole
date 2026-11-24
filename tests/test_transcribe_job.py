@@ -220,7 +220,7 @@ class Hearing(Transcriber):
         return super().hear(mix, stem, first_sung_s)
 
 
-@pytest.mark.parametrize("gpu,about", [(False, "about 5 min"), (True, "about a minute")], ids=["cpu", "gpu"])
+@pytest.mark.parametrize("gpu,about", [(False, "~5 min"), (True, "~1 min")], ids=["cpu", "gpu"])
 def test_each_long_stage_says_how_far_it_is_as_it_runs(conn, cfg, monkeypatch, gpu, about):
     # The separator and Whisper take minutes, up to half an hour on a CPU: the song's line moves as they go (the
     # vocals' minutes against about how long demucs-rs takes for the song's minute here, Whisper's place in the mix,
@@ -717,7 +717,7 @@ def test_the_default_models_are_built_at_their_first_stage_and_whisper_must_hear
         ("stage", "song"),
         ("stage", "vocals"),
         ("demucs built", "demucs-cpu", tmp_path / "htdemucs.safetensors", setup.cache_dir),
-        ("doing", "vocals", "about 5 min"),
+        ("doing", "vocals", "~5 min"),
         ("demucs", audio),
         ("stage", "words"),
         ("doing", "words", "loading Whisper"),

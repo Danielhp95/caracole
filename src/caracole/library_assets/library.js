@@ -869,9 +869,12 @@
   const doingOf = (view) => (view && typeof view.doing === "string" && view.waits !== true ? view.doing : "");
   // What a long step does, for the eye alone (``aria-hidden``): the line is a live region, and a screen reader hears
   // the step and its place change, never each of Whisper's windows; changed in place on the same bar (``sayDoing``).
+  // Its " · " is a span of its own (``.step-sep``), which a phone's bar leaves out with the step's place (steps.css).
+  const doingParts = (said) => [el("span", "step-sep", " · "), document.createTextNode(said)];
   const doingSpan = (said) => {
-    const span = el("span", "step-doing", " · " + said);
+    const span = el("span", "step-doing");
     span.setAttribute("aria-hidden", "true");
+    span.append(...doingParts(said));
     return span;
   };
   const sayDoing = (p, said) => {
@@ -879,7 +882,7 @@
     if (!said) {
       if (span) span.remove();
     } else if (span) {
-      if (span.textContent !== " · " + said) span.textContent = " · " + said;
+      if (span.textContent !== " · " + said) span.replaceChildren(...doingParts(said));
     } else if (p.querySelector(":scope > .step-count")) {
       p.appendChild(doingSpan(said));
     }

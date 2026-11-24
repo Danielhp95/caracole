@@ -388,11 +388,11 @@ class _Transcription(StagedRun):
 
 def _separating(ran: float, takes: float) -> str:
     """What the vocals stage says while demucs-rs runs, the number first and nothing its step's name says already (a
-    phone's bar has room for little more than "2 of ~12 min"): how long it has run, in whole minutes, against about
-    how long it ``takes`` here; once past that, how long it has run alone."""
+    phone's bar has room for little more than "2 of ~12 min"): about how long it ``takes`` here, then how long it has
+    run, in whole minutes, against that; once past it, how long it has run alone."""
     about = round(takes / 60)
     if ran < 60:
-        return f"about {about} min" if about > 1 else "about a minute"
+        return f"~{max(about, 1)} min"
     minutes = int(ran // 60)
     if minutes < about:
         return f"{minutes} of ~{about} min"
