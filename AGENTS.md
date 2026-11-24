@@ -945,15 +945,18 @@ The pages caracole writes and serves are index.html, sheet.html, songbook.html a
   `instruments_of`).
   - The Filter panel's Matches keep a site's songs too while the sites' results show, the owner's ask of 2026-11-22
     ("search yoko kanno while looking only for harmonica songs"): a site's song by what its rows have something for
-    (library.js `rowHas`, `itemHas`: UG's chords, tabs or Ukulele Chords by its counts, LaCuerda's chords, iReal
-    Pro's chart, gtptabs.com's Guitar Pro file, gametabs.net's tab by its instruments, harptabs.com's harmonica tab,
+    (library.js `rowHas`, `itemHas`: UG's chords, tabs or Ukulele Chords by its counts, LaCuerda's chords, iReal Pro's
+    chart, gtptabs.com's Guitar Pro file, gametabs.net's tab by its instruments, harptabs.com's harmonica tab,
     MuseScore's score), a group's "+ N more" and read offers and a title alone by what its site has (`SITE_HAS`,
-    `siteKeeps`), your songs as in the list (`instOf`, a line's holds read the same way). Status, Key and a
-    progression keep to your songs alone: a site's song has no status and no key its index knows. The panel is the
-    search bar's (body.html), so it opens over the results, under Filter, and stays open as you tap; its chips and
-    its Show N songs count what the results show (`resultsHas`, `resultsShown`, drawGroups); the marks under the
-    box count the lines shown (`foundNow`); the results' head says what is kept, with Show all (`keptSaid`), and
-    what the Matches hide whole is said, with Show all (`filteredOut`; test_web_page_search_filters.py).
+    `siteKeeps`), your songs as in the list (`instOf`, a line's holds read the same way). Status, Key and a progression
+    keep to your songs alone: a site's song has no status and no key its index knows. The panel is the search bar's
+    (body.html), so it opens over the results, under Filter, and stays open as you tap (the bar over the list of
+    requests meanwhile, `.searchbar:has(> .filter-panel[open])`; its body, `.fbody`, the one that scrolls on a short
+    window, its arrow outside it; the sheet from the bottom where less than `POPOVER_LEAST`, 240 of the text's pixels,
+    would show under Filter: test_library_filter.py); its chips and its Show N songs count what the results show
+    (`resultsHas`, `resultsShown`, drawGroups); the marks under the box count the lines shown (`foundNow`); the results'
+    head says what is kept, with Show all (`keptSaid`), and what the Matches hide whole is said, with Show all
+    (`filteredOut`; test_web_page_search_filters.py), each giving the focus to the first result (`focusList`).
 - **harptabs.com is searched as UG's index is** (`search.search_harptabs`, `/api/search`'s `harptabs_artists` and
   `harptabs`):
   - its artists, named from their page once read (harptabs_index.py);
@@ -1046,7 +1049,8 @@ It is rows.js's, shared by both pages:
     folding every line;
   - from 1200 px, in the 760 px list beside the pane (where the lanes meet, 12): a folded or flat line keeps that one
     row while its buttons fit; where they don't, `plays-under` (library.js `placePlays`: measured in the one row, where
-    its last button wraps below its first, once a line, by the list's width, the root's font size and Select, again
+    its last button wraps below its first, once a line, by the list's width, the root's font size and line height
+    (`textSize`: the app's pinch grows the second alone) and Select, again
     when the line changes or stops being folded or flat; batched once a frame, `placePlaysSoon`; a line of a run off
     the screen once its run comes near it, `contentvisibilityautostatechange`, `placeRuns`, never by laying the run
     out: below)

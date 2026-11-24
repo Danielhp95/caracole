@@ -50,6 +50,10 @@
 .filter-panel::before { content: ""; position: absolute; top: -7px; left: calc(var(--arrow, 50%) - 6px); width: 12px;
   height: 12px; transform: rotate(45deg); border-top: 1px solid var(--border-strong);
   border-left: 1px solid var(--border-strong); background: var(--surface); }
+/* Where it ends above the window's foot (library.js placePanel), its body scrolls, never the popover itself, whose
+   clip would cut its arrow off: the body as large as the popover's padding box, the popover a column it shrinks in. */
+.filter-panel[open]:not(:modal) { display: flex; flex-direction: column; }
+.filter-panel:not(:modal) > .fbody { min-height: 0; margin: -14px; padding: 14px; border-radius: inherit; }
 .filter-panel:modal { position: fixed; inset: auto 0 0; width: 100%; max-height: calc(100% - 24px); padding: 8px 16px
   calc(14px + env(safe-area-inset-bottom)); overflow-y: auto; overscroll-behavior: contain; border-width: 1px 0 0;
   border-radius: var(--radius-l) var(--radius-l) 0 0; box-shadow: 0 -16px 40px rgb(0 0 0 / 30%); }

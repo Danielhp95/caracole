@@ -306,6 +306,36 @@ def test_a_ready_request_of_a_song_offered_when_the_page_loaded_offers_it_in_the
     assert transcriber.ran[-1] == ("transcribe", "--progress", f"--song={DISPLAY}")
 
 
+def test_a_transcription_asked_in_the_requests_tab_that_failed_is_offered_there_again(able, live, transcriber,
+                                                                                      browser):
+    # Asked for from the Journal, then failed on the GPU: the song stays offered, and once the job is over the page
+    # reads the offer again and offers it again, in the Journal as on its card, with no reload, wherever it was asked.
+    base, posted, queue = live
+    song = transcriber.song
+    transcriber.fail = True
+    sheet, _ = queue.submit(f"Sheet from YouTube: {DISPLAY}", YOUTUBE_SHEET + song.key,
+                            youtube_sheet_steps(DISPLAY, "https://www.youtube.com/watch?v=XFkzRNyygfk"),
+                            display=DISPLAY)
+    over(queue, sheet.id)
+    item = f"#req-{sheet.id}"
+    offer = json.dumps(item + " form.transcribe")
+    browser.open(base + "#tab=requests")
+    browser.js("window.notReloaded = true")
+    assert browser.wait(f"document.querySelector({offer}) !== null")
+    browser.click(item + ' form.transcribe button[type="submit"]')
+    posted.next(0)
+    assert browser.wait(f"document.querySelector({offer}) === null")
+    transcriber.hold.set()
+    over(queue, sheet.id + 1)  # the transcription, failed
+    read_again(posted)
+    assert browser.wait(f"document.querySelector({offer}) !== null"), posted.read[-5:]
+    assert browser.js(NO_RELOAD)
+    browser.click("#tab-library")
+    card = opened(browser, song)
+    assert browser.wait(f"document.querySelector({json.dumps(card + ' form.transcribe')}) !== null")
+    assert browser.js(NO_RELOAD)
+
+
 def test_where_it_cant_run_no_card_offers_one(cfg, tmp_path, browser, monkeypatch):
     monkeypatch.setattr(yf, "autochords_missing", lambda: ["torch"])
     made = FakeTranscribe()

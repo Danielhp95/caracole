@@ -11,10 +11,12 @@
   const list = byId("list");
   const masthead = document.querySelector(".masthead.lib");
   // A filter reset's focus: the control of the first line (never the box, which would be search and a keyboard; an
-  // artist band's button only if no line has one), one a person can see and press, with no scroll. None: unchanged.
+  // artist band's button only if no line has one), one a person can see and press, with no scroll: the list's, or the
+  // sites' results' while they take its place. None: unchanged.
   const focusList = () => {
     const seen = (n) => (n.checkVisibility ? n.checkVisibility() : n.offsetParent !== null);
-    const pick = (sel) => [...list.querySelectorAll(sel)].find((n) => seen(n));
+    const where = document.body.classList.contains("searching-all") ? results : list;
+    const pick = (sel) => [...where.querySelectorAll(sel)].find((n) => seen(n));
     const first = pick("article.line a[href], article.line button:not(:disabled)") ||
       pick("a[href], button:not(:disabled)");
     if (first) first.focus({ preventScroll: true });
@@ -1736,6 +1738,12 @@
   // shows, and a line of a run off the screen (render's runs, which content-visibility leaves unlaid) once its run
   // comes near it, never by laying the run out to read it. Under 1200 px, none.
   const placedAt = new WeakMap();  // a line -> the list's width, the text's size, Select and its kind it was placed at
+  // The text's size: the root's font size and line height, the second what the Android app's pinch grows (the
+  // WebView's text zoom leaves the font size at 16px), and what base.css's --sp, the tiles' size, reads.
+  const textSize = () => {
+    const root = getComputedStyle(document.documentElement);
+    return root.fontSize + "/" + root.lineHeight;
+  };
   const unplace = (line) => {  // placed again when it is a line of the list beside the pane next
     line.classList.remove("plays-under");
     placedAt.delete(line);
@@ -1748,8 +1756,7 @@
   // width, text, Select and kind.
   const placeLines = (lines, shown) => {
     const main = libraryView.querySelector(".lib-main");
-    const at = [main ? main.clientWidth : 0, getComputedStyle(document.documentElement).fontSize,
-      document.body.classList.contains("selecting")].join(" ");
+    const at = [main ? main.clientWidth : 0, textSize(), document.body.classList.contains("selecting")].join(" ");
     const kind = (line) => at + (inBand(line) ? " band" : "");
     const todo = lines.filter((line) => placedAt.get(line) !== kind(line)
       && (line.checkVisibility({ contentVisibilityAuto: true })
@@ -1830,8 +1837,7 @@
     let seen = "";
     if (main) {
       new ResizeObserver((entries) => {
-        const now = entries[entries.length - 1].contentRect.width + " " +
-          getComputedStyle(document.documentElement).fontSize;
+        const now = entries[entries.length - 1].contentRect.width + " " + textSize();
         if (now === seen) return;
         seen = now;
         placePlaysSoon();
@@ -2758,13 +2764,21 @@
   // --- Filter's panel: a popover under it from 720 px, a sheet from the bottom on a phone ------------------------
   // On a computer a dialog of its own (show(), not modal): the list behind it filters as you tap, with no Apply; a
   // click outside it, Escape or Filter again closes it. On a phone a modal one (showModal()), over the page dimmed,
-  // which neither takes a tap nor scrolls behind it; Tab keeps to it, and Show N songs closes it. Either way the
-  // focus goes to the status chosen, and back to Filter once it closes.
+  // which neither takes a tap nor scrolls behind it; Tab keeps to it, and Show N songs closes it; so too from 720 px
+  // where less than POPOVER_LEAST of the text's pixels under Filter would show the popover (a landscape phone, a short
+  // window), a sliver to scroll. Either way the focus goes to the status chosen, and back to Filter once it closes.
   const wide = window.matchMedia("(min-width: 720px)");
+  const POPOVER_LEAST = 240;
+  const panelBody = panel.querySelector(".fbody");  // what scrolls in the popover, its arrow outside it (filter.css)
+  const underFilter = () => window.innerHeight - 8 - Math.round(filterButton.getBoundingClientRect().bottom + 8);
+  // The text's pixel (base.css --sp) from 720 px: the root's line height, which the Android app's pinch grows.
+  const textPixel = () => parseFloat(getComputedStyle(document.documentElement).lineHeight) / 16 || 1;
+  const asPopover = () => wide.matches && underFilter() >= POPOVER_LEAST * textPixel();
   // The popover under Filter, its right edge with Filter's, kept within the window; its arrow at Filter's middle. It is
   // the search bar's (body.html), so it sticks with the bar, and what the list or the sites' results under it do moves
   // it nowhere: a Matches chip pressed while they show leaves it under Filter. On a window too short for it, it ends
-  // 8 px above the window's foot and scrolls, the page under it scrolling it nowhere.
+  // 8 px above the window's foot and its body scrolls, the page under it scrolling it nowhere; placed again as the
+  // window resizes and as the page scrolls (the bar comes to stick at the window's top, or leaves it).
   const placePanel = () => {
     if (!panel.open || panel.matches(":modal")) return;
     const box = bar.getBoundingClientRect();
@@ -2775,17 +2789,23 @@
     panel.style.left = Math.round(left - box.left) + "px";
     panel.style.top = Math.round(at.bottom - box.top + 8) + "px";
     const under = window.innerHeight - 8 - Math.round(at.bottom + 8);
-    const fits = panel.scrollHeight <= under;
+    const fits = panel.offsetHeight - panelBody.clientHeight + panelBody.scrollHeight <= under;
     panel.style.maxHeight = fits ? "" : Math.max(160, under) + "px";
-    panel.style.overflowY = fits ? "" : "auto";
+    panelBody.style.overflowY = fits ? "" : "auto";
     panel.style.setProperty("--arrow", Math.round(at.left + at.width / 2 - left) + "px");
+  };
+  // The sheet keeps none of the popover's places: it is the window's foot, across it.
+  const unplacePanel = () => {
+    for (const name of ["left", "top", "max-height"]) panel.style.removeProperty(name);
+    panelBody.style.removeProperty("overflow-y");
   };
   const openPanel = () => {
     if (panel.open) return;
-    if (wide.matches) {
+    if (asPopover()) {
       panel.show();
       placePanel();
     } else {
+      unplacePanel();
       document.documentElement.classList.add("sheet-open");
       panel.showModal();
     }
@@ -2806,7 +2826,10 @@
     filterButton.setAttribute("aria-expanded", "false");
     document.documentElement.classList.remove("sheet-open");
   };
-  panel.addEventListener("close", closed);  // its event comes a task later: closePanel says so at once
+  // Its event comes a task later: closePanel says so at once, and a panel opened again meanwhile (reopen) stays so.
+  panel.addEventListener("close", () => {
+    if (!panel.open) closed();
+  });
   filterButton.addEventListener("click", () => (panel.open ? closePanel() : openPanel()));
   showN.addEventListener("click", () => closePanel());
   byId("clear-all").addEventListener("click", () => {
@@ -2867,10 +2890,12 @@
     });
   }
   window.addEventListener("resize", placePanel);
+  window.addEventListener("scroll", placePanel, { passive: true });
   const reopen = () => {  // past 720 px either way: the other kind of panel
     if (!panel.open) return;
     const inside = panel.contains(document.activeElement);
     panel.close();
+    closed();
     openPanel();
     if (!inside) filterButton.focus({ preventScroll: true });
   };
@@ -3488,7 +3513,8 @@
       .filter(Boolean).join(" · ");
   };
   // Show all of yours, or Show all while the Matches keep the sites' songs too: every status, instrument, key and
-  // progression, here and in the list; the focus to the box, as the button goes with its note.
+  // progression, here and in the list; the focus to the first line it shows (focusList), as the button goes with its
+  // note.
   const showAll = (go) => {
     const words = state.inst ? "Show all" : "Show all of yours";
     if (go.textContent === words) return;
@@ -3506,7 +3532,7 @@
   }, "Show all of yours: every status, instrument, key and progression"));
   keptNote.hidden = true;
   // What the sites' answer and your songs had, all hidden by the Matches chosen: said, with Show all, as the list's
-  // empty state says it.
+  // empty state says it; the focus to the first result it shows, as the button goes with what it said.
   const filteredOut = () => {
     const box = el("section", "filtered-out");
     box.appendChild(el("p", "empty", "Nothing with " + instsSaid() + " for “" + state.q.trim() + "”."));
@@ -3514,6 +3540,7 @@
       clearFilters();
       render();
       save();
+      focusList();
     }, "Show all: the sites' songs and yours, every status, instrument and key"));
     return box;
   };

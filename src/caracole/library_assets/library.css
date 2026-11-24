@@ -73,6 +73,9 @@
    leaves above it (library-screens.css). */
 :root { --bar-h: 0px; }
 .searchbar { position: sticky; top: 0; z-index: 2; margin: 0 -16px; padding: 10px 16px 8px; background: var(--bg); }
+/* Filter's popover is the bar's (body.html): while it is open the bar is over the list of requests in the corner (.tray,
+   z-index 3), so the popover is drawn over it and takes its own taps. */
+.searchbar:has(> .filter-panel[open]) { z-index: 4; }
 .searchbar.stuck { box-shadow: 0 1px 0 var(--border-strong), 0 8px 16px -10px rgb(0 0 0 / 35%); }
 .bar-edge { height: 0; }
 .field { position: relative; }
@@ -265,9 +268,11 @@ section.nothing .line.miss > .line-panel { gap: 6px; padding: 4px 0 8px; }
 section.artist:not(.folded) .line-by { display: none; }
 @media (min-width: 720px) {
   /* A song of yours: its title's box dissolves into the line's grid, so that its buttons are a column of it after the
-     status, right before the action and the key (rows.css: at the line's end). */
-  section.artist:not(.folded) .line { grid-template-columns: minmax(0, 1fr) calc(104 * var(--sp)) auto auto
-    calc(44 * var(--sp)); grid-template-areas: "title status plays act key"; }
+     status, right before the action and the key (rows.css: at the line's end). Its title keeps 64 of the text's
+     pixels (rows.css's 4rem) whatever the buttons take, which wrap in their column first: grown with the text, an
+     auto column takes all it wants before a 1fr one gets any. */
+  section.artist:not(.folded) .line { grid-template-columns: minmax(calc(64 * var(--sp)), 1fr) calc(104 * var(--sp))
+    auto auto calc(44 * var(--sp)); grid-template-areas: "title status plays act key"; }
   section.artist:not(.folded) .line:not(.hit):not(.miss) > .line-title { display: contents; }
   section.artist:not(.folded) .line:not(.hit):not(.miss) > .line-title > h3 { grid-area: title; }
   section.artist:not(.folded) .line:not(.hit):not(.miss) > .line-title > .line-plays { grid-area: plays;

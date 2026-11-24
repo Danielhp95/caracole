@@ -988,6 +988,44 @@ def test_a_folded_lines_buttons_are_placed_again_whatever_it_was_meanwhile(conn,
         b.close()
 
 
+@pytest.mark.parametrize("touch", [True, False], ids=["touch", "mouse"])
+def test_a_pinch_places_the_lines_buttons_again(conn, cfg, tmp_path, touch):
+    # The Android app's pinch is the WebView's text zoom, which grows the root's line height and leaves its font size
+    # at 16px (test_library_text_size.py): beside the pane, a line whose buttons grow past their room goes under its
+    # title as the text grows (Hotel California, folded, its five buttons wrapping beside its artist; Everything in Its
+    # Right Place, its title cut in Radiohead's band), and back beside it as the text shrinks, as on a page loaded at
+    # either size.
+    from test_library_bands import keyed
+
+    hotel(conn, cfg)
+    _six(conn, cfg, "Radiohead", "Everything in Its Right Place")
+    keyed(conn, cfg, "Radiohead", "Creep")
+    url = write_library_page(cfg.library_dir, page(conn, cfg)).as_uri()
+    b = _opened(tmp_path, url)
+    placed = ("['Hotel California', 'Everything in Its Right Place'].map((t) => { const l = lineOf(t), "
+              "h = l.querySelector('h3'); return [l.classList.contains('plays-under'), h.scrollWidth > h.clientWidth]; })")
+    beside, under = [[False, False], [False, False]], [[True, False], [True, False]]
+
+    def now(lines):
+        return f"JSON.stringify({placed}) === {json.dumps(json.dumps(lines, separators=(',', ':')))}"
+
+    try:
+        if touch:
+            b.send("Emulation.setTouchEmulationEnabled", enabled=True, maxTouchPoints=5)
+            b.send("Emulation.setEmulatedMedia", features=[{"name": "pointer", "value": "coarse"}])
+            b.open(url)  # loaded again on the touch screen
+            cards.install(b)
+            b.js(PANE)
+        assert b.wait("document.querySelectorAll('#list article.line').length === 3")
+        assert b.wait(now(beside)), b.js(placed)
+        b.js("document.documentElement.style.setProperty('line-height', '40px')")  # pinched to 250 %
+        assert b.wait(now(under)), b.js(placed)
+        b.js("document.documentElement.style.removeProperty('line-height')")
+        assert b.wait(now(beside)), b.js(placed)
+    finally:
+        b.close()
+
+
 # --- the pane's forms act on the song's line (served) ------------------------------------------------------------
 
 from test_web_page import QUICK, FakeCaracole, serve  # noqa: E402,F401  (serve: a fixture)

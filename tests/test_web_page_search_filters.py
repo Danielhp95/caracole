@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 
+import pytest
 from helpers.browser import CHROMIUM_MARKS
 from test_web_page_search import (COUNTS, GRID, LINES, answer_to, browser, library, live, phone, same, search,  # noqa: F401
                                   sites)
@@ -170,3 +171,25 @@ def test_on_a_phone_the_sheet_opens_over_the_results_and_its_show_n_songs_counts
     assert phone.wait(f"{LINES}[0][1].map((l) => l[0]).join('|') === \"Piano Man|Vienna!|She's Always a Woman\""), \
         phone.js(LINES)
     assert phone.js("document.documentElement.scrollWidth <= innerWidth")
+
+
+@pytest.mark.parametrize(("address", "show_all"), [("#inst=score", "#results .filtered-out button"),
+                                                   ("#inst=harmonica", "#results p.filtered > button")],
+                         ids=["nothing-with", "with"])
+def test_show_all_pressed_from_the_keyboard_gives_the_focus_to_the_first_result(cfg, live, browser, address,  # noqa: F811
+                                                                                show_all):
+    # Show all under "Nothing with score for “billy joel”", and the results' head's: the button goes with what it
+    # said, and the focus goes to the first of the results it shows, never lost to the page (the next Tab from its
+    # top).
+    base, _, _ = live
+    sites(cfg, ug=BILLY)
+    harptabs(cfg)
+    browser.open(base + address)
+    search(browser, "billy joel")
+    button = json.dumps(show_all)
+    assert browser.wait(f"{answer_to('billy joel')} && !!document.querySelector({button})")
+    browser.js(f"document.querySelector({button}).focus()")
+    browser.press("Enter")
+    assert browser.wait(f"{LINES}.length === 1 && {LINES}[0][1].length === 4"), browser.js(LINES)
+    assert browser.js("document.querySelector('#results article.line').contains(document.activeElement)"), \
+        browser.js("[document.activeElement.tagName, document.activeElement.className]")

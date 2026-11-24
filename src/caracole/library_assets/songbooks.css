@@ -202,8 +202,8 @@ button.plays:hover, button.plays[aria-expanded="true"] { border-color: var(--acc
   .selecting section.artist.folded .line:not(.hit):not(.miss), .selecting section.flat .line:not(.hit):not(.miss) {
     grid-template-columns: 44px minmax(4rem, max-content) fit-content(16rem) minmax(0, 1fr) 6.5rem auto 2.75rem;
     grid-template-areas: "pick name by . status plays key"; }
-  .selecting section.artist:not(.folded) .line { grid-template-columns: 44px minmax(0, 1fr) 6.5rem auto 2.75rem;
-    grid-template-areas: "pick title status plays key"; }
+  .selecting section.artist:not(.folded) .line { grid-template-columns: 44px minmax(calc(64 * var(--sp)), 1fr) 6.5rem
+    auto 2.75rem; grid-template-areas: "pick title status plays key"; }  /* its title's least, as library.css's */
 }
 /* Beside the laptop's pane, a line's buttons under its title where they don't fit beside it (library.css). */
 @media (min-width: 1200px) {

@@ -138,3 +138,34 @@ def test_the_texts_pixel_sizes_boxes_never_a_text_or_its_line_height():
              for name in STYLESHEETS}
     assert {name: ds for name, ds in found.items() if ds} == {}
 
+
+
+# A band's line's title, its buttons, its key and the line: their widths and right edges, at the root's line height
+# ``lh``, as the list draws it and in Select mode.
+BAND_TITLE = r"""
+const measure = (lh, selecting) => {
+  document.documentElement.style.setProperty("line-height", lh);
+  document.body.classList.toggle("selecting", selecting);
+  const line = lineOf("Hotel California");
+  const r = (n) => n.getBoundingClientRect();
+  const sp = parseFloat(getComputedStyle(document.documentElement).lineHeight) / 16;
+  const key = line.querySelector(":scope > .line-key");
+  return { lh, selecting, band: !line.closest("section.artist").classList.contains("folded"),
+    title: Math.round(r(line.querySelector("h3")).width), least: 64 * sp,
+    fits: r(key).right <= r(line).right + 0.5 && r(line).right <= innerWidth + 0.5 &&
+      Array.from(line.querySelectorAll(".line-plays > .play")).every((p) => r(p).right <= r(line).right + 0.5) };
+};
+note("band", [["16px", false], ["32px", false], ["16px", true], ["32px", true]].map(([lh, s]) => measure(lh, s)));
+"""
+
+
+@pytest.mark.parametrize(("size", "touch"), [("844,390", True), ("1024,768", True), ("1180,820", True),
+                                             ("800,600", False)])
+def test_from_720_px_a_bands_line_keeps_its_title_whatever_its_buttons_take(conn, cfg, tmp_path, size, touch):
+    # From 720 px a band's line has its buttons in a column of their own: grown with the text (a landscape phone, a
+    # tablet, the app's pinch), they wrap before they take the title's 64 of the text's pixels, so the song's name
+    # never goes, in Select mode too; the key stays on the line.
+    songs(conn, cfg)
+    drawn = attribute_of(run(conn, cfg, tmp_path, BAND_TITLE, size=size, touch=touch), "data-band")
+    assert all(m["band"] for m in drawn), drawn
+    assert [m for m in drawn if m["title"] < m["least"] - 0.5 or not m["fits"]] == [], drawn

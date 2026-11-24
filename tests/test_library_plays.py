@@ -201,6 +201,28 @@ def test_the_title_and_the_blank_space_open_the_card_and_a_button_never_does(con
     assert shown["drawn"] == [False, 1]  # no chevron drawn: the keyboard's button, out of sight
 
 
+@pytest.mark.parametrize("served", [False, True], ids=["file", "served"])
+@pytest.mark.parametrize("size", ["390,844", "1280,900"])
+def test_a_click_on_the_line_presses_its_chevron_once(conn, cfg, tmp_path, served, size):
+    # The page makes rows.js's kit more than once (library.js twice, sites.js once): the line's click is heard once
+    # for the page all the same, so its card opens and nothing else, never opened, closed (its line scrolled into
+    # view) and opened again in one click.
+    hotel_california(conn, cfg)
+    script = """
+    const line = lineOf("Hotel California");
+    const more = line.querySelector(":scope > .line-more");
+    let presses = 0;
+    more.addEventListener("click", () => { presses += 1; });
+    line.querySelector(".line-title h3").click();
+    const byName = [presses, more.getAttribute("aria-expanded")];
+    line.querySelector(":scope > .line-key").click();
+    note("pressed", { byName, byBlank: [presses - byName[0], more.getAttribute("aria-expanded")] });
+    """
+    shown = attribute_of(run(conn, cfg, tmp_path, script, controls=SERVED if served else None, size=size),
+                         "data-pressed")
+    assert shown == {"byName": [1, "true"], "byBlank": [1, "false"]}, shown
+
+
 # --- Fetch now: the download glyph ------------------------------------------------------------------------------
 
 
