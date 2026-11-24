@@ -351,7 +351,7 @@ def test_a_long_stage_says_how_far_it_is_on_the_line():
     # its own, and a wait for the book is said as ever.
     from caracole.web.status import LONG_STAGES
 
-    assert LONG_STAGES == ("audio", "vocals", "words", "chords")
+    assert LONG_STAGES == ("audio", "vocals", "words", "chords", "index", "mirror", "merge", "render")
     song = SongFacts()
     said = {"vocals": "2 of ~12 min", "words": "1:20 of 3:45",
             "chords": "finding the beats"}
@@ -368,6 +368,29 @@ def test_a_long_stage_says_how_far_it_is_on_the_line():
     # Between two stages, the next one's line, with nothing it said yet.
     assert job_line(transcribe_job(stages={"song": ("done", "in the book"), "vocals": ("done", "sung")}),
                     song).text == "Transcribing the lyrics…"
+
+
+def test_a_syncs_take_s_and_a_merges_long_stages_say_what_they_do_on_the_line():
+    # The stages other lanes give running words to (a sync's and an import's indexes, the phone's mirror, a take's
+    # and an import's pages, an index merge): their line says them as a transcription's does.
+    from test_web_sync import peer_job
+
+    from caracole.web.jobs import Stage
+    from caracole.web.status import _stage_line
+
+    sync = peer_job("sync", "running", {"compare": ("done", "4 differences"), "take": ("done", "took 1"),
+                                        "give": ("done", "gave 1"), "agree": ("done", "12 units"),
+                                        "index": ("running", "taking 2, giving 1")})
+    assert job_line(sync, None).text == "Updating the indexes · taking 2, giving 1…"
+    take = peer_job("peer-push", "running", {"check": ("done", "1 change"), "take": ("done", "took 1"),
+                                             "render": ("running", "12 of 20 songs")})
+    assert job_line(take, None).text == "Making pages of what was taken · 12 of 20 songs…"
+    merge = peer_job("index-merge", "running", {"merge": ("running", "Ultimate Guitar · 600,000 of 1,367,059 tabs")})
+    assert job_line(merge, None).text == ("Merging the other scribe's index pages · Ultimate Guitar · 600,000 of "
+                                          "1,367,059 tabs…")
+    mirror = [Stage("compare", "Comparing", "done"), Stage("mirror", "Copying", "running", "120 of 640 pages")]
+    assert _stage_line(mirror) == "Copying the computer's pages · 120 of 640 pages…"
+    assert job_line(peer_job("sync", "running", {"index": ("running", "")}), None).text == "Updating the indexes…"
 
 
 def test_it_is_ready_once_its_chords_are_made():

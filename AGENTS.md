@@ -1883,7 +1883,9 @@ It is rows.js's, shared by both pages:
   - `at` and `count` ("3 of 7") are the step in hand (`outcome._in_hand`): while it runs the running step, else the
     first waiting, else the last; once over the first that failed, else none; the bar shows them while the request
     runs, and the frozen bar once it is over. `doing`, right after them, while that step's running stage is a long
-    one that says what it does (status.py `LONG_STAGES`, `doing`: audio, vocals, words, chords; the number first,
+    one that says what it does (status.py `LONG_STAGES`, `doing`: audio, vocals, words, chords, and a sync's or an
+    import's `index`, the phone's `mirror`, an index `merge` and a take's `render`, whose running words their lanes
+    add, on the line of the Journal and the tray alone, no song's bar; the number first,
     nothing the step's name says, "1:20 of 3:45", "2 of ~12 min", so a 390 px phone shows it whole), which
     `stepWords` says after the count (`.step-doing`, in the room the step and its place leave, `flex: 1 1 0`; for
     the eye alone, `aria-hidden`, changed in place on the same bar, `sayDoing`, so the line's live region never reads

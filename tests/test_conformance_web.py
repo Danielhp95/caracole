@@ -1039,6 +1039,22 @@ def peer_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | No
              None, None),
             (f"{kind}, interrupted before it ran", _interrupted(peer_job(kind, "queued")), None, 0, None, None),
         ]
+    # A long stage's running words on the line (status.LONG_STAGES): a sync's indexes, a take's pages, a merge.
+    jobs += [
+        ("sync, its indexes saying what they do", peer_job("sync", "running", {
+            "compare": ("done", "4 differences"), "take": ("done", "took 1"), "give": ("done", "gave 1"),
+            "agree": ("done", "12 units the books agree on"), "index": ("running", "taking 2, giving 1")}),
+         None, 0, None, None),
+        ("peer-push, its pages saying what they do", peer_job("peer-push", "running", {
+            "check": ("done", "1 change"), "take": ("done", "took 1"), "render": ("running", "12 of 20 songs")}),
+         None, 0, None, None),
+        ("index-merge, saying what it does", peer_job("index-merge", "running", {
+            "merge": ("running", "Ultimate Guitar · 600,000 of 1,367,059 tabs")}), None, 0, None, None),
+        ("import, its indexes saying what they do", peer_job("import", "running", {
+            "check": ("done", "2 differences"), "take": ("done", "took 1"), "render": ("done", ""),
+            "agree": ("done", "12 units"), "index": ("running", "Ultimate Guitar · 600,000 of 1,367,059 tabs")}),
+         None, 0, None, None),
+    ]
     # A sync's agree stage counted in another script's digits, as Python's \d and int() read them.
     jobs.append(("sync, done, its count in Arabic-Indic digits", peer_job("sync", "done", {
         "compare": ("done", ""), "agree": ("done", " ١٢ units the books agree on\n")}, units=took),

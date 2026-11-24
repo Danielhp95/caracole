@@ -13,9 +13,10 @@ ran. So a job of other commands reads the same way:
   asks LaCuerda, ``get.SHEET_FROM``), or "Waiting for the book…"
   while its lock is held by a nightly run that lets it go first at its next
   pause. A stage that takes minutes (``LONG_STAGES``: a sheet from a YouTube
-  video's audio and chords, a transcription's vocals, words and chords) puts
-  what it says it does after its line, as it goes: "Transcribing the lyrics ·
-  1:20 of 3:45…", so that a line of half an hour moves.
+  video's audio and chords, a transcription's vocals, words and chords, a
+  sync's indexes and pages, an index merge) puts what it says it does after
+  its line, as it goes: "Transcribing the lyrics · 1:20 of 3:45…", so that a
+  line of half an hour moves.
 - **Cancelled**: taken out of the queue before it ran (``JobQueue.cancel``),
   whatever it was for.
 - **Failed**: the error its failing command gave, in one short sentence (the
@@ -146,9 +147,12 @@ INDEX_MERGE_KIND = "index-merge"  # ``caracole index merge --progress``: another
 # How each says it is done.
 _PEER_DONE = {"sync": "Shared", "peer-push": "Taken", "peer-pull": "Taken", INDEX_MERGE_KIND: "Merged"}
 _WAITING = "waiting for the book"  # how get.py's song stage begins while the lock is held
-# The stages that take minutes and say how far they are while they run (staged.py ``_doing``): their line says it
-# after its words, and the library page's bar beside the step (outcome.py ``progress``'s ``doing``).
-LONG_STAGES = ("audio", "vocals", "words", "chords")
+# The stages that take minutes and say how far they are while they run: their line says it after its words, and
+# for a song's job the library page's bar beside the step (outcome.py ``progress``'s ``doing``). A sheet from a
+# YouTube video's audio and chords and a transcription's vocals, words and chords (staged.py ``_doing``); and a sync's
+# or an import's indexes, the phone's copy of the computer's pages, a take's or an import's pages, and an index
+# merge, whose running words the lanes that measure them add.
+LONG_STAGES = ("audio", "vocals", "words", "chords", "index", "mirror", "merge", "render")
 _SHEET_LINES = {said: f"Fetching {said}" for said in SHEET_FROM.values()}  # a running sheet stage's, by its site
 # How ``caracole lacuerda --artist`` and ``--search`` end, by what LaCuerda answered, and the tone of the line.
 _READ_TONES = {"Read: ": "added", "Not found: ": "missing", "Not read: ": "waiting",

@@ -148,8 +148,10 @@ object Status {
     internal val SHEET_LINES = listOf("from LaCuerda", "from UG", "from iReal Pro").associateWith { "Fetching $it" }
 
     /** The stages that take minutes and say how far they are while they run (status.py's LONG_STAGES): their line
-     * says it after its words, and the library page's bar beside the step ([Outcomes.progress]'s `doing`). */
-    val LONG_STAGES: List<String> = listOf("audio", "vocals", "words", "chords")
+     * says it after its words, and for a song's job the library page's bar beside the step ([Outcomes.progress]'s
+     * `doing`). A YouTube sheet's and a transcription's long stages, a sync's or an import's indexes, the phone's
+     * mirror, a take's or an import's pages and an index merge. */
+    val LONG_STAGES: List<String> = listOf("audio", "vocals", "words", "chords", "index", "mirror", "merge", "render")
 
     /** How `caracole lacuerda --artist` and `--search` (and `harptabs --artist`, `youtube --search`) end, by what
      * the site answered, and the line's tone. */
