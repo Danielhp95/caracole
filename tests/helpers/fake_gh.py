@@ -9,8 +9,13 @@
   and ``api -X DELETE repos/R/releases/assets/ID``.
 
 Every call is logged to ``calls.jsonl`` with ``GH_TOKEN``. ``FAKE_GH_FAIL=<kind>:<n>`` makes the
-n-th call of that kind fail (exit 1, nothing changed); kinds: ``create``, ``upload``, and ``api`` for the changing api calls (DELETE) alone. A state's
-``corrupt_upload`` makes an upload list a digest that is not the file's, ``no_digest`` none at all.
+n-th call of that kind fail (exit 1, nothing changed); kinds: ``create``, ``upload``, and ``api`` for the changing
+api calls (DELETE) alone. A state's ``corrupt_upload`` makes an upload list a digest that is not the file's,
+``no_digest`` none at all.
+
+An upload reads its file as gh does, through one open file: ``FAKE_GH_SLOW=<seconds>`` reads it a quarter at a time,
+that long after each (so its position, /proc's fdinfo ``pos``, moves as an upload's would);
+``FAKE_GH_WAIT=<seconds>`` waits that long before it opens the file (no position to read meanwhile).
 """
 
 from __future__ import annotations
@@ -23,7 +28,7 @@ from pathlib import Path
 from typing import Any
 
 SCRIPT = r'''
-import base64, hashlib, json, os, sys
+import base64, hashlib, json, os, sys, time
 from pathlib import Path
 
 here = Path(__file__).resolve().parent
@@ -66,7 +71,15 @@ elif argv[:2] == ["release", "upload"]:
         sys.exit(1)
     fails("upload")
     path = Path(argv[-1])
-    data = path.read_bytes()
+    time.sleep(float(os.environ.get("FAKE_GH_WAIT") or 0))
+    slow = float(os.environ.get("FAKE_GH_SLOW") or 0)
+    with open(path, "rb", buffering=0) as f:
+        size = os.fstat(f.fileno()).st_size
+        parts = []
+        while chunk := f.read(max(1, size // 4) if slow else -1):
+            parts.append(chunk)
+            time.sleep(slow)
+    data = b"".join(parts)
     if asset_by(name=path.name):
         sys.stderr.write("fake gh: an asset of that name exists\n")
         sys.exit(1)

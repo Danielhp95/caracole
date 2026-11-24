@@ -7,6 +7,8 @@ import gzip
 import hashlib
 import json
 import os
+import random
+import re
 import shutil
 import subprocess
 import sys
@@ -35,7 +37,7 @@ def name(day: int, schema: int = SCHEMA) -> str:
 
 
 class Rig:
-    def __init__(self, tmp_path: Path):
+    def __init__(self, tmp_path: Path, data: bytes | None = None):
         self.tmp = tmp_path
         self.gh = FakeGh(tmp_path / "bin")
         caracole = tmp_path / "bin" / "caracole"
@@ -45,7 +47,7 @@ class Rig:
         self.dir.mkdir()
         self.home = tmp_path / "home"
         self.home.mkdir()
-        self.data = gzip.compress(b"a small catalogue", mtime=0)
+        self.data = gzip.compress(b"a small catalogue", mtime=0) if data is None else data
         (self.dir / NEW).write_bytes(self.data)
         self.sha = hashlib.sha256(self.data).hexdigest()
         (self.dir / "published.json").write_text(json.dumps({
@@ -68,12 +70,20 @@ def rig(tmp_path):
     return Rig(tmp_path)
 
 
-def test_a_first_publish_makes_the_release_not_latest_and_uploads(rig):
+def test_a_first_publish_makes_the_release_not_latest_says_each_step_and_uploads(rig):
     done = rig.run()
     assert done.returncode == 0, done.stderr
     rig.gh.load()
     assert "--latest=false" in rig.gh.state["release"]["args"]
     assert rig.gh.names() == [NEW]
+    assert done.stdout.splitlines() == [
+        "publish-indexes: reading the release indexes of o/r...",
+        "publish-indexes: creating the release indexes...",
+        f"publish-indexes: uploading {NEW} ({len(rig.data)} bytes) to o/r, release indexes...",
+        "publish-indexes: checking the upload against published.json...",
+        "publish-indexes: applying the Keep rule to 1 asset...",
+        f"publish-indexes: published {NEW}",
+    ]
 
 
 def test_a_half_upload_left_behind_is_deleted_first(rig):
@@ -138,6 +148,50 @@ def test_no_digest_on_the_read_back_keeps_the_upload_and_fails(rig):
     assert done.returncode == 1
     assert "no digest" in done.stderr
     assert rig.gh.names() == [NEW]
+
+
+def big(tmp_path) -> Rig:
+    """A rig whose file is 400 KB, so that a slow fake gh's quarters are 100 KB."""
+    return Rig(tmp_path, data=random.Random(0).randbytes(400 * 1024))
+
+
+def ticks(done: subprocess.CompletedProcess) -> list[str]:
+    return [line for line in done.stdout.splitlines() if line.startswith("publish-indexes: uploading \u00b7")]
+
+
+def test_a_slow_upload_says_every_tick_how_far_gh_has_read_the_file_and_its_size(tmp_path):
+    rig = big(tmp_path)
+    done = rig.run(FAKE_GH_SLOW="1.5", TICK="1")
+    assert done.returncode == 0, done.stderr
+    said = ticks(done)
+    assert said, done.stdout
+    read = [re.fullmatch(r"publish-indexes: uploading \u00b7 (\d+) of 400 KB \u00b7 (\d+) s so far, "
+                         r"about (\d+) s left", line) for line in said]
+    assert any(read), said  # gh's file read a quarter at a time: its position, read from /proc
+    assert {int(m.group(1)) for m in read if m} <= {100, 200, 300}
+    assert all(m or re.fullmatch(r"publish-indexes: uploading \u00b7 all 400 KB read \u00b7 \d+ s so far, "
+                                 r"waiting for GitHub", line) for m, line in zip(read, said))
+    lines = done.stdout.splitlines()
+    assert lines.index(f"publish-indexes: uploading {NEW} (400 KB) to o/r, release indexes...") < \
+        lines.index(said[0]) < lines.index("publish-indexes: checking the upload against published.json...")
+    assert rig.gh.content(NEW) == rig.data
+
+
+def test_an_upload_whose_file_gh_hasnt_opened_says_the_time_so_far_and_the_size(tmp_path):
+    rig = big(tmp_path)
+    done = rig.run(FAKE_GH_WAIT="2.5", TICK="1")
+    assert done.returncode == 0, done.stderr
+    said = ticks(done)
+    assert said and all(re.fullmatch(r"publish-indexes: uploading \u00b7 \d+ s so far \(400 KB\)", line)
+                        for line in said), said
+
+
+def test_a_failed_slow_upload_still_fails_with_its_step(tmp_path):
+    rig = big(tmp_path)
+    rig.gh.asset(name(17))
+    done = rig.run(FAKE_GH_FAIL="upload:1", TICK="1")
+    assert done.returncode == 1 and "step 4" in done.stderr and "can't be uploaded" in done.stderr
+    assert rig.gh.names() == [name(17)]
 
 
 def test_pruning_runs_on_the_services_machine(rig):
