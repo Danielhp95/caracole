@@ -680,11 +680,16 @@
     title.textContent = sent && sent.title ? sent.title : "Syncing with " + (shown || "another caracole");
     sub.textContent = sent && sent.compared && source && source.address ? source.address : "";
     const line = job && objOf(job.line) ? job.line : {};
-    goingLine.textContent = String(line.text || (job ? job.state : "") || "Sending the sync…");
+    const said = String(line.text || (job ? job.state : "") || "Sending the sync…");
+    goingLine.textContent = said;
     goingLine.dataset.tone = String(line.tone || (job && job.state) || "running");
     const steps = listOf(job && job.steps).filter((s) => objOf(s));
     const now = steps.find((s) => s.state === "running") || steps.find((s) => s.state === "failed" && s.detail);
-    goingDetail.textContent = now && now.detail ? String(now.detail) : "";
+    // A long stage's line ends with what it is doing already (status.py's "… · 600,000 of 1,367,059 tabs…"): its
+    // detail is said once, there.
+    const detail = now && now.detail ? String(now.detail) : "";
+    const bare = (text) => text.replace(/…$/, "");
+    goingDetail.textContent = detail && !bare(said).endsWith(bare(detail)) ? detail : "";
     say("");
     cancel.hidden = true;
     go.hidden = false;

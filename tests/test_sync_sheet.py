@@ -969,6 +969,25 @@ def test_a_sync_on_its_way_as_the_page_loads_is_followed_to_its_summary(served, 
 
 
 @in_chromium
+def test_a_long_stages_detail_is_said_once_in_the_going_line_and_a_short_ones_under_it(served, tmp_path):
+    # A long stage's line ends with what it is doing ("Updating the indexes · Ultimate Guitar · …"): the step's
+    # detail isn't said again under it. A short one's line is its name alone ("Taking their entries…"), its detail
+    # under it.
+    merging = sync_view("running", {"compare": ("done", "9 differences"), "take": ("done", "took 6"),
+                                    "give": ("done", "gave 3"), "agree": ("done", "312 units the two agree on"),
+                                    "index": ("running", "Ultimate Guitar · 600,000 of 1,367,059 tabs")})
+    fake = FakeSync(state=PHONE_STATE, views=[VIEWS[1], merging])
+    url = served(fake, sync="sheet", jobs=(VIEWS[1],)) + "#sheet=sync"
+    going = "['sync-going-line', 'sync-going-detail'].map((id) => document.getElementById(id).textContent)"
+    with opened(tmp_path, url, width=390, height=844, mobile=True) as page:
+        at_view(page, "going")
+        assert page.js(going) == ["Taking their entries…", "6 changes"]
+        fake.at = 1
+        assert page.wait("document.getElementById('sync-going-line').textContent.startsWith('Updating')", 15)
+        assert page.js(going) == ["Updating the indexes · Ultimate Guitar · 600,000 of 1,367,059 tabs…", ""]
+
+
+@in_chromium
 def test_a_report_missing_draws_the_summary_from_the_outcome_alone(served, tmp_path):
     over = sync_view("done", {"compare": ("done", "9 differences"), "take": ("done", "took 6"),
                               "give": ("done", "gave 3"), "agree": ("done", "312 units the two agree on")}, TAKEN_GIVEN)
