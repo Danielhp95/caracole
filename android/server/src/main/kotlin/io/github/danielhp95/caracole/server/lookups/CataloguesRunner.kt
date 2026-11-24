@@ -67,7 +67,8 @@ import java.time.Instant
  *    came of it, the WAL checkpointed ("Tidying the database…") and the search's answers forgotten ([forget]). No
  *    lookup runs inside the merge's write.
  *
- * Its words while it runs come at most once a second of [ticks] within a step, each step's first at once (Paced).
+ * Its words while it runs come at most once a second of [ticks] within a step, each step's first and last at once
+ * (Paced: the last before each yield and the end). [chunk] is IndexTransfer.merge's (a test's fewer rows a chunk).
  * Whatever came of it, the folder `stateDir/cache/catalogues/` is emptied, a file a killed job left among it, and
  * [sweep] empties it as the phone starts. A [Limited] anywhere keeps its time in kv [Catalogues.NOT_BEFORE]. Failed,
  * its words are "Not imported: WHY" (its kind's), the command's exit 1.
@@ -84,6 +85,7 @@ class CataloguesRunner(
     private val forget: () -> Unit = {},
     private val free: (File) -> Long = File::getUsableSpace,
     private val ticks: () -> Long = System::nanoTime,
+    private val chunk: Int = IndexTransfer.UG_CHUNK,
 ) : CommandRunner {
     /** The file a job killed in its middle left in `stateDir/cache/catalogues/` (up to the whole unpacked index)
      * deleted: called as the phone starts, while no job runs. */
@@ -164,10 +166,11 @@ class CataloguesRunner(
         context.yieldToQueued()  // the lookups queued as GitHub was asked go first: the download takes minutes
         doing(downloading(0, bytes), DOWNLOADING)
         val fetched = download(http, take.file, to, source.redirects) { got -> doing(downloading(got, bytes), DOWNLOADING) }
+        paced.flush()  // "Downloading · 52 of 52 MB", its last count, before the lookups go
         context.yieldToQueued()  // and those queued as it came, before the merge's write holds the worker for a minute
         val unknown = try {
             parts.database.write { db ->
-                IndexTransfer.merge(db, fetched.file, Stamps.of(clock()), notAfter = notAfter(),
+                IndexTransfer.merge(db, fetched.file, Stamps.of(clock()), notAfter = notAfter(), chunk = chunk,
                                     progress = { doing(it.words(), it.step) })
                 db.kvSet(Catalogues.IMPORTED, take.file.name)
                 db.kvDelete(ASKING)

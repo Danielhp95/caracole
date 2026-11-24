@@ -58,6 +58,7 @@ class CataloguesRunnerTest {
     private var forgotten = 0
     private var tick = 0L
     private var tickBy = 0L  // how far the clock the job paces its words by moves at each reading
+    private var chunk = io.github.danielhp95.caracole.core.index.IndexTransfer.UG_CHUNK  // UG's rows a statement
 
     @After fun close() {
         scope.cancel()
@@ -121,7 +122,7 @@ class CataloguesRunnerTest {
         val parts = TestParts.of(database, dir, scope, queue)
         val runner = CataloguesRunner(parts, source = { http -> CatalogueSource.Api(http, base = github.base) },
                                       clock = { now }, metered = { metered }, forget = { forgotten++ }, free = { free },
-                                      ticks = { tick.also { tick += tickBy } })
+                                      ticks = { tick.also { tick += tickBy } }, chunk = chunk)
         runners[CataloguesRunner.COMMAND] = runner
         return Phone(parts, queue, runner, runners)
     }
@@ -133,9 +134,17 @@ class CataloguesRunnerTest {
 
     private fun detail(job: Job): String = job.stages.single().detail
 
-    /** An index export of [rows] UG tabs (BigIndex), gtptabs.com's and MuseScore's beside them, gzipped. */
-    private fun bigExport(rows: Int): ByteArray {
+    /** An index export of [rows] UG tabs (BigIndex), gtptabs.com's and MuseScore's beside them, and [padding] bytes
+     * that don't compress in a table no merge reads (so the download has counts to say), gzipped. */
+    private fun bigExport(rows: Int, padding: Int = 300_000): ByteArray {
         val file = io.github.danielhp95.caracole.core.testing.BigIndex(rows).export(File(tmp.newFolder(), "big.sqlite"))
+        val c = BundledSQLiteDriver().open(file.path)
+        try {
+            c.execSQL("CREATE TABLE padding (bytes BLOB NOT NULL)")
+            c.prepare("INSERT INTO padding (bytes) VALUES (?)").use { it.bindBlob(1, Random(5).nextBytes(padding)); it.step() }
+        } finally {
+            c.close()
+        }
         return FakeGitHub.gzip(file.readBytes())
     }
 
@@ -432,42 +441,45 @@ class CataloguesRunnerTest {
     }
 
     @Test fun theImportSaysEachOfItsStepsAndHowFarUltimateGuitarsTabsHaveGot() {
+        chunk = 5  // a dozen rows, three chunks
         val phone = phone()
-        publish(newest to bigExport(120_000))
+        publish(newest to bigExport(12))
         tickBy = 2_000_000_000L  // two seconds a reading: every count is said
         val told = Told()
         runBlocking { phone.runner.run(listOf(CataloguesRunner.COMMAND), told) }
         val steps = listOf(
-            "Asking GitHub for the catalogues…", "Comparing with the phone's index…",
-            "Importing · Ultimate Guitar · 0 of 120,000 tabs", "Importing · Ultimate Guitar · 50,000 of 120,000 tabs",
-            "Importing · Ultimate Guitar · 100,000 of 120,000 tabs",
-            "Importing · Ultimate Guitar · 120,000 of 120,000 tabs", "Importing · gtptabs.com", "Importing · MuseScore",
-            "Making the search index ready…", "Tidying the database…",
+            "Asking GitHub for the catalogues…", "Downloading · 0.0 of 0.3 MB", "Downloading · 0.3 of 0.3 MB",
+            "Comparing with the phone's index…", "Importing · Ultimate Guitar",
+            "Importing · Ultimate Guitar · 5 of 12 tabs", "Importing · Ultimate Guitar · 10 of 12 tabs",
+            "Importing · Ultimate Guitar · 12 of 12 tabs", "Importing · gtptabs.com", "Importing · MuseScore",
+            "Tidying the database…",
         )
         assertTrue(inOrder(told.running(), steps), told.running().joinToString("\n"))
-        assertTrue(told.running().any { it.startsWith("Downloading · ") }, "${told.running()}")
         assertEquals("done Catalogues of 24 Nov 2026", told.said.last())
-        assertEquals(120_000L, phone.parts.database.read { db -> db.one("SELECT COUNT(*) FROM ug_index") { it.long(0)!! } })
+        assertEquals(12L, phone.parts.database.read { db -> db.one("SELECT COUNT(*) FROM ug_index") { it.long(0)!! } })
     }
 
-    @Test fun itsWordsComeAtMostOnceASecondButEachStepAtOnce() {
+    @Test fun itsWordsComeAtMostOnceASecondButEachStepsFirstAndLastAtOnce() {
+        chunk = 5
         val phone = phone()
-        publish(newest to bigExport(120_000))
-        tickBy = 0  // the clock stands still: no count is said twice in a step, each step's first words are
+        publish(newest to bigExport(12))
+        tickBy = 0  // the clock stands still: a step's first count and its last alone, each once
         val told = Told()
         runBlocking { phone.runner.run(listOf(CataloguesRunner.COMMAND), told) }
         val running = told.running()
-        assertTrue(inOrder(running, listOf("Comparing with the phone's index…",
-                                           "Importing · Ultimate Guitar · 0 of 120,000 tabs", "Importing · gtptabs.com",
-                                           "Making the search index ready…", "Tidying the database…")), "$running")
-        assertTrue(running.none { "50,000 of" in it || "100,000 of" in it }, "$running")
-        assertEquals(1, running.count { it.startsWith("Downloading · ") }, "$running")
+        assertTrue(inOrder(running, listOf("Downloading · 0.0 of 0.3 MB", "Downloading · 0.3 of 0.3 MB",
+                                           "Comparing with the phone's index…",
+                                           "Importing · Ultimate Guitar · 5 of 12 tabs",
+                                           "Importing · Ultimate Guitar · 12 of 12 tabs", "Importing · gtptabs.com",
+                                           "Tidying the database…")), "$running")
+        assertTrue(running.none { "10 of 12" in it }, "$running")
+        assertEquals(2, running.count { it.startsWith("Downloading · ") }, "$running")
         assertEquals(running, running.distinct(), "nothing said twice")
     }
 
     @Test fun theLookupsQueuedMeanwhileGoFirstBetweenItsStepsNeverInsideTheMerge() {
         val phone = phone()
-        publish(newest to bigExport(1_000))
+        publish(newest to bigExport(12))
         val told = Told()
         runBlocking { phone.runner.run(listOf(CataloguesRunner.COMMAND), told) }
         val said = told.said.toList()
@@ -475,14 +487,14 @@ class CataloguesRunnerTest {
         assertEquals(2, yields.size, "$said")
         // Once GitHub's list is read, before the download; once the download is in, before the merge.
         assertEquals("running Asking GitHub for the catalogues…", said[yields[0] - 1])
-        assertTrue(said[yields[1] - 1].startsWith("running Downloading · "), "$said")
+        assertEquals("running Downloading · 0.3 of 0.3 MB", said[yields[1] - 1], "the download's last count first")
         assertEquals("running Comparing with the phone's index…", said[yields[1] + 1])
         // A job of the queue's: a lookup queued as GitHub lists the release runs before anything is downloaded, one
         // queued as the file comes before anything is merged.
         val other = phone()
         val log = CopyOnWriteArrayList<String>()
         other.runners["get"] = CommandRunner { args, _ -> log += "${args.last()} after ${asked().size} asked, ${other.tabs()} tabs" }
-        val gz = bigExport(1_000)
+        val gz = bigExport(12)
         publish(newest to gz)
         val list = github.routes.getValue(release)
         github.routes[release] = { other.queue.submit(lookupSpec("A", "1")); list() }

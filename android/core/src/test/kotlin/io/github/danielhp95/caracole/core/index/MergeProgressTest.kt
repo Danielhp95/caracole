@@ -1,5 +1,7 @@
 package io.github.danielhp95.caracole.core.index
 
+import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import androidx.sqlite.execSQL
 import io.github.danielhp95.caracole.core.testing.Dumps
 import io.github.danielhp95.caracole.core.testing.Fixtures
 import io.github.danielhp95.caracole.core.testing.Misses
@@ -12,8 +14,9 @@ import java.io.File
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/** IndexTransfer.merge's progress: what it tells as it goes (before planning, before each site and action, and after
- * each chunk of UG's sitemaps' rows), and that the chunks take exactly what one statement took. */
+/** IndexTransfer.merge's progress, index_transfer.merge's `progress(site, action, done, total)` alike: before it
+ * plans, before each site and action once a site changes anything, and after each chunk of UG's sitemaps' rows; and
+ * that the chunks take exactly what one statement took. */
 class MergeProgressTest {
     @get:Rule val tmp = TemporaryFolder()
 
@@ -28,22 +31,32 @@ class MergeProgressTest {
             database.writeBlocking { IndexTransfer.seedFresh(it) }
             val said = ArrayList<MergeProgress>()
             val merged = database.writeBlocking { IndexTransfer.merge(it, export, now, progress = { p -> said += p }) }
-            assertEquals(MergeProgress("", MergeProgress.PLAN, 0, merged.sites.size.toLong()), said.first())
-            // Each site in caracole's order, its start before its actions, each action as Merged names it.
-            val sites = said.filter { it.action == "" }.map { it.site }
-            assertEquals(merged.sites.keys.toList(), sites)
+            val n = merged.sites.size.toLong()
+            assertEquals(MergeProgress("", MergeProgress.PLANNING, 0, n), said.first())
+            // Each site asked, the i-th from 0 in caracole's order, once any site changes anything.
+            assertEquals(merged.sites.keys.mapIndexed { i, site -> MergeProgress(site, "", i.toLong(), n) },
+                         said.filter { it.action == "" })
             for ((site, taken) in merged.sites) {
-                val actions = said.filter { it.site == site && it.action != "" && it.done == 0L }.map { it.action }
-                assertEquals(taken.keys.toList(), actions, site)
-                assertEquals(MergeProgress(site, "", 0, taken.size.toLong()), said.first { it.site == site })
+                // Each action before it runs, by its count as Merged says it: UG's sitemaps by their number too.
+                val actions = said.filter { it.site == site && it.action != "" && it.action != MergeProgress.TAB }
+                assertEquals(taken.map { (noun, count) -> MergeProgress(site, noun, 0, count.toLong()) }, actions, site)
             }
-            // UG's sitemaps by their rows: none taken yet, then all five.
-            val rows = said.filter { it.site == "ug" && it.action == "sitemap" }
-            assertEquals(listOf(MergeProgress("ug", "sitemap", 0, 5), MergeProgress("ug", "sitemap", 5, 5)), rows)
-            // Every other action before it runs, by its own count.
-            val harp = said.first { it.site == "harptabs" && it.action == "artist page" }
-            assertEquals(merged.sites.getValue("harptabs").getValue("artist page").toLong(), harp.total)
+            // UG's sitemaps' rows, after their one chunk: all five, right after the sitemap action's own word.
+            val tabs = said.filter { it.action == MergeProgress.TAB }
+            assertEquals(listOf(MergeProgress("ug", MergeProgress.TAB, 5, 5)), tabs)
+            assertEquals("sitemap", said[said.indexOf(tabs.single()) - 1].action)
         }
+    }
+
+    /** Python's chunks: while more than [chunk] rows are left, one of [chunk]; then the rest, its last done == total. */
+    private fun chunks(chunk: Long, total: Long): List<Long> {
+        val done = ArrayList<Long>()
+        var at = 0L
+        while (total - at > chunk) {
+            at += chunk
+            done += at
+        }
+        return done + total
     }
 
     @Test fun ugsSitemapsAreTakenInChunksExactlyAsOneStatementTookThem() {
@@ -57,9 +70,24 @@ class MergeProgressTest {
         for (chunk in listOf(1, 2, 3, 4, 5, 6)) {
             val said = ArrayList<MergeProgress>()
             assertEquals(whole, merged(chunk, said), "chunks of $chunk")
-            val done = said.filter { it.site == "ug" && it.action == "sitemap" }.map { it.done }
-            val steps = (0L..5L step chunk.toLong()).toList().let { if (it.last() == 5L) it else it + 5L }
-            assertEquals(steps, done, "chunks of $chunk")
+            val done = said.filter { it.action == MergeProgress.TAB }.map { it.done to it.total }
+            assertEquals(chunks(chunk.toLong(), 5).map { it to 5L }, done, "chunks of $chunk")
+        }
+    }
+
+    @Test fun aSitemapOfNoRowsIsOneChunkOfNone() {
+        val export = export("full-export")
+        BundledSQLiteDriver().open(export.path).let { c ->
+            try {
+                c.execSQL("DELETE FROM ug_index")
+            } finally {
+                c.close()
+            }
+        }
+        TestDb.fresh(tmp.newFolder()).use { database ->
+            val said = ArrayList<MergeProgress>()
+            database.writeBlocking { IndexTransfer.merge(it, export, now, listOf("ug"), progress = { p -> said += p }) }
+            assertEquals(listOf(MergeProgress("ug", MergeProgress.TAB, 0, 0)), said.filter { it.action == MergeProgress.TAB })
         }
     }
 
@@ -70,7 +98,7 @@ class MergeProgressTest {
             val said = ArrayList<MergeProgress>()
             val merged = database.writeBlocking { IndexTransfer.merge(it, export, now, progress = { p -> said += p }) }
             assertTrue(!merged.changed)
-            assertEquals(listOf(MergeProgress("", MergeProgress.PLAN, 0, 2)), said)
+            assertEquals(listOf(MergeProgress("", MergeProgress.PLANNING, 0, 2)), said)
         }
     }
 
@@ -82,6 +110,17 @@ class MergeProgressTest {
             database.writeBlocking { IndexTransfer.merge(it, export, now, optimizeAfter = 0, progress = { p -> said += p }) }
             assertEquals(MergeProgress("ug", MergeProgress.OPTIMIZE, 0, 0), said.last())
         }
+    }
+
+    @Test fun eachStepIsSaidInThePhonesWords() {
+        assertEquals("Comparing with the phone's index…", MergeProgress("", MergeProgress.PLANNING, 0, 6).words())
+        assertEquals("Importing · Ultimate Guitar", MergeProgress("ug", "", 0, 6).words())
+        assertEquals("Importing · Ultimate Guitar", MergeProgress("ug", "sitemap", 0, 41).words())
+        assertEquals("Importing · Ultimate Guitar · 600,000 of 1,521,145 tabs",
+                     MergeProgress("ug", MergeProgress.TAB, 600_000, 1_521_145).words())
+        assertEquals("Importing · harptabs.com", MergeProgress("harptabs", "artist page", 0, 12).words())
+        assertEquals("Making the search index ready…", MergeProgress("ug", MergeProgress.OPTIMIZE, 0, 0).words())
+        assertEquals(MergeProgress("ug", MergeProgress.TAB, 0, 9).step, MergeProgress("ug", MergeProgress.TAB, 5, 9).step)
     }
 
     @Test fun theVectorsReplayInChunksOfOneRowToo() {

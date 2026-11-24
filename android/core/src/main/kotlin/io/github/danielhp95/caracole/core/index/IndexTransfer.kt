@@ -71,8 +71,10 @@ object IndexTransfer {
      * Stamps.parse gives one), a record or page the file says it read after it is never newer than the database's,
      * so that a file dated in the future can't take a site's rows for good (the phone's sync passes its clock; Python's
      * merge has no such bound, and the replays none). UG's sitemaps' rows are taken [chunk] a statement ([UG_CHUNK]),
-     * in the same savepoint and order as one statement took them (the database after is the same), so that
-     * [progress] is told how far it has got as it goes ([MergeProgress]), on the caller's thread, inside its write.
+     * in the same savepoint and order as one statement took them, so that [progress] is told how far it has got as it
+     * goes ([MergeProgress]), on the caller's thread, inside its write: every row, trigger-made row and record comes
+     * out as one statement leaves them (FTS5 lays its segments out by its own flushes, which no reading of it sees).
+     * [backup] is index_transfer.merge's `backing_up()` and the backup alike: called before the first change.
      */
     fun merge(db: Db, export: File, now: String, sites: List<String>? = null,
               optimizeAfter: Long = Warmup.OPTIMIZE_AFTER, notAfter: Long? = null, chunk: Int = UG_CHUNK,
@@ -109,8 +111,8 @@ object IndexTransfer {
             tablesAlone(db, export)
             val meta = meta(db, export)
             val names = mergedSites(export, meta, sites)
+            progress?.invoke(MergeProgress("", MergeProgress.PLANNING, 0, names.size.toLong()))
             Merge.checkColumns(db, export, names)
-            progress?.invoke(MergeProgress("", MergeProgress.PLAN, 0, names.size.toLong()))
             val plans = names.map { Merge.plan(db, it, now, notAfter, chunk) }
             if (plans.none { it.changes }) {
                 return Merged(names.associateWithTo(LinkedHashMap()) { emptyMap<String, Int>() }, false)
@@ -118,7 +120,8 @@ object IndexTransfer {
             backup?.invoke()
             val taken = LinkedHashMap<String, Map<String, Int>>()
             var ugChanges = 0L
-            for (plan in plans) {
+            for ((i, plan) in plans.withIndex()) {
+                progress?.invoke(MergeProgress(plan.site, "", i.toLong(), plans.size.toLong()))
                 val before = Warmup.changes(db)
                 taken[plan.site] = Merge.apply(db, plan, progress)
                 if (plan.site == "ug") ugChanges = Warmup.changes(db) - before
@@ -296,40 +299,43 @@ object IndexTransfer {
 data class Merged(val sites: Map<String, Map<String, Int>>, val changed: Boolean)
 
 /**
- * How far a merge has got (IndexTransfer.merge's `progress`, index_transfer.merge's `progress(site, action, done,
- * total)` alike), told on the writer's thread as the merge goes:
+ * How far a merge has got (IndexTransfer.merge's `progress`), index_transfer.merge's `progress(site, action, done,
+ * total)` event for event, told on the writer's thread as the merge goes:
  *
- * - `("", [PLAN], 0, n)`: before the [n] sites asked are planned (both databases read: what the file read later);
- * - `(site, "", 0, n)`: before a site that changes anything is applied, [n] its actions (0: its records alone);
- * - `(site, action, 0, count)`: before each action, named as Merged names it ("sitemap", "artist page"…), [total]
- *   its count;
- * - but UG's sitemaps, counted by their rows: `("ug", "sitemap", 0, rows)` before, then `("ug", "sitemap", done,
- *   rows)` after each chunk of [IndexTransfer.UG_CHUNK] rows;
+ * - `("", [PLANNING], 0, n)`: once the file is found an export of the n sites asked, before they are planned;
+ * - then, once any site changes anything (a merge of nothing newer tells the plan alone), `(site, "", i, n)` before
+ *   each site asked, the i-th from 0 in caracole's order (one that changes nothing too, as Python's);
+ * - `(site, noun, 0, count)` before each of its actions, as Merged names it and counts it: `("ug", "sitemap", 0, 41)`,
+ *   41 sitemaps;
+ * - `("ug", [TAB], done, rows)` after each chunk of [IndexTransfer.UG_CHUNK] of UG's sitemaps' rows, the last with
+ *   done == rows (no rows: one, 0 of 0);
  * - `("ug", [OPTIMIZE], 0, 0)`: once UG's rows are in, before its full-text indexes are made one segment each (the
  *   phone's alone: Warmup.optimize).
  *
- * A merge of nothing newer tells the plan alone.
+ * index_transfer.merge's `backing_up()` is IndexTransfer.merge's `backup`, before the first change.
  */
 data class MergeProgress(val site: String, val action: String, val done: Long, val total: Long) {
     /** The phone's words for it, as the catalogues job and a sync's index stage say them: [COMPARING] as it plans,
-     * "Importing · Ultimate Guitar · 600,000 of 1,521,145 tabs" for UG's sitemaps' rows (counts grouped by commas, as
-     * the app's other counts are), "Importing · harptabs.com" for any other site's step (its title), and [READYING]
-     * for the full-text indexes. */
+     * "Importing · harptabs.com" for a site and each of its actions (its title), "Importing · Ultimate Guitar · 600,000
+     * of 1,521,145 tabs" for UG's sitemaps' rows (counts grouped by commas, as the app's other counts are), and
+     * [READYING] for the full-text indexes. */
     fun words(): String {
         val title = Sites.named(site)?.title ?: site
-        return when {
-            action == PLAN -> COMPARING
-            action == OPTIMIZE -> READYING
-            site == "ug" && action == "sitemap" -> "$IMPORTING · $title · ${grouped(done)} of ${grouped(total)} tabs"
+        return when (action) {
+            PLANNING -> COMPARING
+            OPTIMIZE -> READYING
+            TAB -> "$IMPORTING · $title · ${grouped(done)} of ${grouped(total)} tabs"
             else -> "$IMPORTING · $title"
         }
     }
 
-    /** The step its words are of, for a Paced: each site's each action, a step of its own. */
+    /** The step its words are of, for a Paced: each site's each action, a step of its own (UG's chunks one). */
     val step: Pair<String, String> get() = site to action
 
     companion object {
-        const val PLAN = "plan"
+        /** index_transfer.PLANNING and UG_TABS. */
+        const val PLANNING = "planning"
+        const val TAB = "tab"
         const val OPTIMIZE = "optimize"
 
         const val COMPARING = "Comparing with the phone's index…"
