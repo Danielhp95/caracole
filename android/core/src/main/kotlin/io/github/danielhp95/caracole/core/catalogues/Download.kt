@@ -23,16 +23,14 @@ class Fetched(val file: File, val raw: Long)
 
 /**
  * [file]'s bytes, asked at its `url` with `Accept: application/octet-stream`, a redirect followed once and only to
- * one of [hosts] over https (GitHub's API sends an asset's bytes from `release-assets.githubusercontent.com`; the
- * default is every host either source allows), streamed: the `.gz` bytes hashed as they come ([onProgress] told how
- * many so far), unpacked through [GZIPInputStream] (gzip's own check of its CRC and size) into [to], stopped past
+ * one of [hosts] over https (the source's `redirects`, always given, so that no other set is passed by omission:
+ * GitHub's API sends an asset's bytes from `release-assets.githubusercontent.com`), streamed: the `.gz` bytes hashed
+ * as they come ([onProgress] told how many so far), unpacked through [GZIPInputStream] (gzip's own check of its CRC and size) into [to], stopped past
  * [Catalogues.CAP_FACTOR] times the `.gz` size listed or past that size itself, then the hash checked against
  * [Listed.sha256]. On any failure [to] is deleted and a [CatalogueError] (a [Limited] for GitHub's hourly share
  * spent) says why; under tests a host but loopback is refused (`RealTransport.refuseUnderTests`) before a socket.
  */
-fun download(http: Http, file: Listed, to: File,
-             hosts: Set<String> = Catalogues.API_REDIRECTS + Catalogues.DOWNLOAD_REDIRECTS,
-             onProgress: (Long) -> Unit): Fetched {
+fun download(http: Http, file: Listed, to: File, hosts: Set<String>, onProgress: (Long) -> Unit): Fetched {
     try {
         val uri = try {
             URI(file.url)

@@ -12,14 +12,16 @@ import java.util.concurrent.Executors
 import java.util.zip.GZIPOutputStream
 
 /**
- * GitHub, for the catalogues' tests: an HttpServer on 127.0.0.1 whose [routes] answer a path ("/repos/…") each, a
- * path with no route 404. [asked] records each request as "GET path · Accept", in order.
+ * GitHub, for the catalogues' tests (core's and the server's job): an HttpServer on 127.0.0.1 whose [routes] answer a
+ * path ("/repos/…") each, a path with no route 404. [asked] records each request as "GET path · Accept", in order,
+ * and [agents] each one's User-Agent.
  */
 class FakeGitHub : AutoCloseable {
     class Reply(val status: Int, val body: ByteArray = ByteArray(0), val headers: Map<String, String> = emptyMap())
 
     val routes = java.util.concurrent.ConcurrentHashMap<String, () -> Reply>()
     val asked = CopyOnWriteArrayList<String>()
+    val agents = CopyOnWriteArrayList<String>()
     private val server = HttpServer.create(InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0)
     val base: URI get() = URI("http://127.0.0.1:${server.address.port}")
 
@@ -32,6 +34,7 @@ class FakeGitHub : AutoCloseable {
     private fun answer(exchange: HttpExchange) {
         val path = exchange.requestURI.rawPath
         asked += "${exchange.requestMethod} $path · ${exchange.requestHeaders.getFirst("Accept")}"
+        agents += exchange.requestHeaders.getFirst("User-Agent").orEmpty()
         val reply = routes[path]?.invoke() ?: Reply(404, """{"message":"Not Found"}""".toByteArray())
         for ((name, value) in reply.headers) exchange.responseHeaders.add(name, value)
         exchange.sendResponseHeaders(reply.status, if (reply.body.isEmpty()) -1 else reply.body.size.toLong())

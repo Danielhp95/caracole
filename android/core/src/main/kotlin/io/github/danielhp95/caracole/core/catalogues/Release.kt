@@ -20,10 +20,9 @@ import java.time.ZoneOffset
 data class Listed(val name: String, val bytes: Long, val sha256: String, val uploaded: Boolean, val url: String)
 
 /**
- * Where the phone lists the release (the owner's switch S1, both built while it is open): [Api], GitHub's REST API's
- * release by its tag, or [Download], the `indexes.json` manifest the release serves beside its files. Each asks
- * GitHub alone, every URI it builds from its [base] and checked by `RealTransport.refuseUnderTests` before it is
- * asked, and follows a redirect only to one of its [redirects], once.
+ * Where the phone lists the release: [Api], GitHub's REST API's release by its tag (the owner's choice S1, for
+ * good). It asks GitHub alone, every URI it builds from its [base] and checked by `RealTransport.refuseUnderTests`
+ * before it is asked, and its files' bytes are followed only to one of its [redirects], once.
  */
 sealed interface CatalogueSource {
     val base: URI
@@ -68,45 +67,6 @@ sealed interface CatalogueSource {
             if (!Py.asciiLower(url).startsWith(prefix)) return false
             val id = url.substring(prefix.length)
             return id.isNotEmpty() && id.all { it in '0'..'9' }
-        }
-    }
-
-    /**
-     * `GET /{REPO}/releases/download/{TAG}/indexes.json` (spec "Plan B"), on a 404 once `indexes.json.prev` (there
-     * exactly while the laptop swaps the two), then [NoRelease]: `{"format": 1, "files": [{file, bytes, sha256, …}]}`,
-     * every file `uploaded` (the laptop lists none it hasn't checked), its `url` beside the manifest.
-     */
-    class Download(private val http: Http, override val base: URI = URI("https://github.com"),
-                   override val redirects: Set<String> = Catalogues.DOWNLOAD_REDIRECTS) : CatalogueSource {
-        private val folder = "/${Catalogues.REPO}/releases/download/${Catalogues.TAG}/"
-
-        override fun list(): List<Listed> {
-            val doc = manifest(MANIFEST) ?: manifest("$MANIFEST.prev") ?: throw NoRelease()
-            val files = (doc as? JsonObject)?.takeIf { number(it["format"]) == 1L }?.get("files") as? JsonArray
-                ?: throw unreadable()
-            return files.mapNotNull { item ->
-                val entry = item as? JsonObject ?: throw unreadable()
-                val name = text(entry["file"]) ?: throw unreadable()
-                val size = number(entry["bytes"]) ?: throw unreadable()
-                val sha256 = text(entry["sha256"]) ?: throw unreadable()
-                // A name that isn't a plain file name is no file of the release's: no address is built of it.
-                if (name.isEmpty() || name.startsWith(".") || !name.all(::plain)) null
-                else Listed(name, size, sha256, true, root(base) + folder + name)
-            }
-        }
-
-        /** The manifest [name] read; null when it answers 404. */
-        private fun manifest(name: String): JsonElement? =
-            ask(http, URI(root(base) + folder + name), "application/json", redirects) { answer ->
-                if (answer.status == 404) null
-                else if (answer.status != 200) throw refusal(answer)
-                else readJson(answer)
-            }
-
-        private fun plain(c: Char) = c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9' || c == '.' || c == '-' || c == '_'
-
-        companion object {
-            const val MANIFEST = "indexes.json"
         }
     }
 }

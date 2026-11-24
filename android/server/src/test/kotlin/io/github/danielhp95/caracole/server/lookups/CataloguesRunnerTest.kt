@@ -2,9 +2,9 @@ package io.github.danielhp95.caracole.server.lookups
 
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import androidx.sqlite.execSQL
-import com.sun.net.httpserver.HttpServer
 import io.github.danielhp95.caracole.core.catalogues.CatalogueSource
 import io.github.danielhp95.caracole.core.catalogues.Catalogues
+import io.github.danielhp95.caracole.core.catalogues.FakeGitHub
 import io.github.danielhp95.caracole.core.catalogues.Limited
 import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.db.Database
@@ -34,17 +34,10 @@ import org.junit.After
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
-import java.io.ByteArrayOutputStream
 import java.io.File
-import java.net.InetAddress
-import java.net.InetSocketAddress
-import java.net.URI
-import java.security.MessageDigest
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.Executors
-import java.util.zip.GZIPOutputStream
 import kotlin.random.Random
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -58,7 +51,7 @@ class CataloguesRunnerTest {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val opened = mutableListOf<Database>()
-    private val github = Release()
+    private val github = FakeGitHub()
     private var now: Instant = Instant.parse("2026-11-24T12:00:00Z")
     private var metered = false
     private var free = Long.MAX_VALUE
@@ -73,32 +66,8 @@ class CataloguesRunnerTest {
     private val newest = "indexes-s17-20261124T0312Z.sqlite.gz"
     private val older = "indexes-s17-20261117T0312Z.sqlite.gz"
 
-    /** The release on loopback: a route a path, a path with none 404; [asked] each path asked, in order. */
-    private class Release : AutoCloseable {
-        class Reply(val status: Int, val body: ByteArray = ByteArray(0), val headers: Map<String, String> = emptyMap())
-
-        val routes = ConcurrentHashMap<String, Reply>()
-        val asked = CopyOnWriteArrayList<String>()
-        val agents = CopyOnWriteArrayList<String>()
-        private val server = HttpServer.create(InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0)
-        val base: URI get() = URI("http://127.0.0.1:${server.address.port}")
-
-        init {
-            server.executor = Executors.newFixedThreadPool(2) { r -> Thread(r, "fake-release").apply { isDaemon = true } }
-            server.createContext("/") { exchange ->
-                val path = exchange.requestURI.rawPath
-                asked += path
-                agents += exchange.requestHeaders.getFirst("User-Agent").orEmpty()
-                val reply = routes[path] ?: Reply(404)
-                for ((name, value) in reply.headers) exchange.responseHeaders.add(name, value)
-                exchange.sendResponseHeaders(reply.status, if (reply.body.isEmpty()) -1 else reply.body.size.toLong())
-                exchange.responseBody.use { it.write(reply.body) }
-            }
-            server.start()
-        }
-
-        override fun close() = server.stop(0)
-    }
+    /** The paths GitHub was asked, in order. */
+    private fun asked(): List<String> = github.asked.map { it.removePrefix("GET ").substringBefore(" ·") }
 
     /** GitHub's API's release of the catalogues, and an asset's address (each file's id its place in the list). */
     private val release = "/repos/${Catalogues.REPO}/releases/tags/${Catalogues.TAG}"
@@ -109,10 +78,10 @@ class CataloguesRunnerTest {
     private fun publish(vararg files: Pair<String, ByteArray>, listed: Map<String, Long> = emptyMap()) {
         val assets = files.joinToString(", ") { (name, gz) ->
             """{"name": "$name", "url": "${github.base}${asset(name)}", "size": ${listed[name] ?: gz.size.toLong()}, """ +
-                """"digest": "sha256:${sha256(gz)}", "state": "uploaded"}"""
+                """"digest": "sha256:${FakeGitHub.sha256(gz)}", "state": "uploaded"}"""
         }
-        github.routes[release] = Release.Reply(200, """{"tag_name": "indexes", "assets": [$assets]}""".toByteArray())
-        for ((name, gz) in files) github.routes[asset(name)] = Release.Reply(200, gz)
+        github.route(release, FakeGitHub.Reply(200, """{"tag_name": "indexes", "assets": [$assets]}""".toByteArray()))
+        for ((name, gz) in files) github.route(asset(name), FakeGitHub.Reply(200, gz))
     }
 
     /** An index export of gtptabs.com's and MuseScore's indexes (the corpus's partial export), its META's schema and
@@ -131,7 +100,7 @@ class CataloguesRunnerTest {
         } finally {
             c.close()
         }
-        return gzip(file.readBytes())
+        return FakeGitHub.gzip(file.readBytes())
     }
 
     private class Phone(val parts: PhoneParts, val queue: JobQueue, val runner: CataloguesRunner) {
@@ -197,7 +166,7 @@ class CataloguesRunnerTest {
         assertEquals("Catalogues of 24 Nov 2026", JobViews.line(job).text)
         assertEquals(newest, phone.kv(Catalogues.IMPORTED))
         assertEquals(4L, phone.tabs())
-        assertEquals(listOf(release, asset(newest)), github.asked)
+        assertEquals(listOf(release, asset(newest)), asked())
         assertEquals(listOf(PhoneConfig.DEFAULTS.userAgent, PhoneConfig.DEFAULTS.userAgent), github.agents)
         assertTrue(forgotten > 0, "the search's answers forgotten")
         assertEquals(emptyList(), phone.cache.listFiles().orEmpty().toList())
@@ -210,7 +179,7 @@ class CataloguesRunnerTest {
         val job = run(phone)
         assertEquals(Job.DONE, job.state, job.asJson().toString())
         assertEquals(Line("ready", "Up to date: the catalogues of 24 Nov 2026"), JobViews.line(job))
-        assertEquals(listOf(release), github.asked)
+        assertEquals(listOf(release), asked())
         assertEquals(0L, phone.tabs())
     }
 
@@ -223,7 +192,7 @@ class CataloguesRunnerTest {
                      detail(job))
         assertEquals("Not imported: The published catalogues are for a newer caracole (schema 18): update the app.",
                      JobViews.line(job).text, "what to do is kept in the line's one sentence")
-        assertEquals(listOf(release), github.asked)
+        assertEquals(listOf(release), asked())
         // No file at all: none published yet.
         github.routes.clear()
         val none = run(phone)
@@ -267,29 +236,29 @@ class CataloguesRunnerTest {
         val job = run(phone)
         assertEquals(Job.FAILED, job.state)
         assertEquals("Not imported: The import needs about 1.2 GB free; the phone has 700 MB.", detail(job))
-        assertEquals(listOf(release), github.asked, "the file never asked for")
+        assertEquals(listOf(release), asked(), "the file never asked for")
         assertNull(phone.kv(Catalogues.IMPORTED))
     }
 
     @Test fun limitedIsKeptAndNothingIsAskedBeforeIt() {
         val phone = phone()
         val until = now.plusSeconds(3600)
-        github.routes[release] = Release.Reply(
+        github.route(release, FakeGitHub.Reply(
             403, """{"message": "API rate limit exceeded"}""".toByteArray(),
             mapOf("x-ratelimit-remaining" to "0", "x-ratelimit-reset" to until.epochSecond.toString()),
-        )
+        ))
         val job = run(phone)
         assertEquals(Job.FAILED, job.state)
         val words = "Not imported: " + Limited(until).message
         assertEquals(words, detail(job))
         assertEquals(Stamps.of(until), phone.kv(Catalogues.NOT_BEFORE))
-        assertEquals(1, github.asked.size)
+        assertEquals(1, asked().size)
         // Before then nothing is asked, and the job says so in the same words.
         publish(newest to export())
         val again = run(phone)
         assertEquals(Job.FAILED, again.state)
         assertEquals(words, detail(again))
-        assertEquals(1, github.asked.size)
+        assertEquals(1, asked().size)
         // Once it has passed, the release is asked again.
         now = until.plusSeconds(1)
         assertEquals(Job.DONE, run(phone).state)
@@ -303,7 +272,7 @@ class CataloguesRunnerTest {
         File(phone.cache, "indexes-s17-20261110T0312Z.sqlite").writeText("left")
         val gz = export()
         publish(newest to gz)
-        github.routes[asset(newest)] = Release.Reply(200, gz + byteArrayOf(0))  // not its bytes
+        github.route(asset(newest), FakeGitHub.Reply(200, gz + byteArrayOf(0)))  // not its bytes
         val bad = run(phone)
         assertEquals(Job.FAILED, bad.state)
         assertEquals("Not imported: The download isn't the file GitHub listed. Try again.", detail(bad))
@@ -324,7 +293,7 @@ class CataloguesRunnerTest {
                           details = "#tab=requests&job=${job.id}"), JobViews.line(job))
         assertEquals(PyJson.loads("""{"name": "$newest", "bytes": 52000000}"""),
                      PyJson.loads(phone.kv(CataloguesRunner.ASKING)!!) as JsonObject)
-        assertEquals(listOf(release), github.asked, "nothing downloaded")
+        assertEquals(listOf(release), asked(), "nothing downloaded")
         assertNull(phone.kv(Catalogues.IMPORTED))
         // The go-ahead: downloaded on the metered network, the question gone.
         publish(newest to export())
@@ -409,13 +378,4 @@ class CataloguesRunnerTest {
         val e = runCatching { runBlocking { phone.runner.run(listOf("catalogues", "--now"), context) } }.exceptionOrNull()
         assertEquals(io.github.danielhp95.caracole.server.jobs.CommandExit::class, e!!::class)
     }
-
-    private fun gzip(bytes: ByteArray): ByteArray {
-        val out = ByteArrayOutputStream()
-        GZIPOutputStream(out).use { it.write(bytes) }
-        return out.toByteArray()
-    }
-
-    private fun sha256(bytes: ByteArray): String =
-        MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 }

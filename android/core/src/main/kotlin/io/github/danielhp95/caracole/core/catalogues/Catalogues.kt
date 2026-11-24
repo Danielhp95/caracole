@@ -8,9 +8,8 @@ import java.time.temporal.ChronoUnit
  * The site catalogues: every site's index, which the laptop publishes each week as a gzip of an index export in the
  * GitHub release [TAG] of [REPO] (`caracole index publish`, nix/publish-indexes.sh), read by a phone with no computer
  * (plan_host_index.md). This package is the one place on the phone that knows GitHub: [Names] reads a file's name,
- * [CatalogueSource] lists the release (GitHub's API, or the release's `indexes.json` manifest: the owner's switch S1,
- * both built while it is open), [choose] picks this app's schema's newest file and [download] streams, unpacks and
- * checks it. The job that merges it is the server's.
+ * [CatalogueSource] lists the release (GitHub's API, the owner's choice S1), [choose] picks this app's schema's newest
+ * file and [download] streams, unpacks and checks it. The job that merges it is the server's.
  */
 object Catalogues {
     const val REPO = "Danielhp95/caracole"
@@ -31,9 +30,6 @@ object Catalogues {
 
     /** The hosts a download from GitHub's API may be redirected to (an asset's bytes). */
     val API_REDIRECTS: Set<String> = setOf("release-assets.githubusercontent.com")
-
-    /** The hosts `github.com/…/releases/download/…` may be redirected to. */
-    val DOWNLOAD_REDIRECTS: Set<String> = setOf("objects.githubusercontent.com", "release-assets.githubusercontent.com")
 }
 
 /** Why the catalogues can't be listed or downloaded, in words the app says as they are. */

@@ -64,9 +64,9 @@ class DownloadTest {
         val e = assertFailsWith<CatalogueError> { download(http, listed(), to, loopback) {} }
         assertEquals("GitHub sent the download to evil.example; nothing was downloaded.", e.message)
         assertFalse(to.exists())
-        // GitHub's own hosts by default: loopback is none of them.
+        // GitHub's own hosts, the API source's: loopback is none of them.
         redirectedTo(gz)
-        val again = assertFailsWith<CatalogueError> { download(http, listed(), to) {} }
+        val again = assertFailsWith<CatalogueError> { download(http, listed(), to, Catalogues.API_REDIRECTS) {} }
         assertEquals("GitHub sent the download to 127.0.0.1; nothing was downloaded.", again.message)
         assertFalse(to.exists())
     }
@@ -166,6 +166,6 @@ class DownloadTest {
     @Test fun aDownloadNeverReachesGitHubFromATest() {
         val file = Listed("indexes-s17-20261124T0312Z.sqlite.gz", 1, "00", true,
                           "https://api.github.com/repos/Danielhp95/caracole/releases/assets/7")
-        assertFailsWith<TransportError> { download(http, file, tmp.root.resolve("x")) {} }
+        assertFailsWith<TransportError> { download(http, file, tmp.root.resolve("x"), Catalogues.API_REDIRECTS) {} }
     }
 }

@@ -167,52 +167,6 @@ class ReleaseTest {
 
     @Test fun aSourceNeverReachesGitHubFromATest() {
         assertFailsWith<TransportError> { CatalogueSource.Api(http).list() }
-        assertFailsWith<TransportError> { CatalogueSource.Download(http).list() }
-    }
-
-    // --- the Download source ----------------------------------------------------------------------------------------
-
-    private val manifestPath = "/Danielhp95/caracole/releases/download/indexes/indexes.json"
-
-    private fun manifest(vararg files: Pair<String, String>) = ("""{"format":1,"files":[""" +
-        files.joinToString(",") { (name, sha) ->
-            """{"file":"$name","schema":17,"made":"2026-11-24T03:12:40Z","bytes":1234,"raw_bytes":20000,""" +
-                """"sha256":"$sha","sites":{"ug":10}}"""
-        } + "]}").toByteArray()
-
-    @Test fun theManifestListsItsFiles() {
-        github.route(manifestPath, Reply(200, manifest("indexes-s17-20261124T0312Z.sqlite.gz" to "aa".repeat(32))))
-        assertEquals(listOf(Listed("indexes-s17-20261124T0312Z.sqlite.gz", 1234, "aa".repeat(32), true,
-                                   "${github.base}/Danielhp95/caracole/releases/download/indexes/indexes-s17-20261124T0312Z.sqlite.gz")),
-                     CatalogueSource.Download(http, github.base).list())
-    }
-
-    @Test fun aManifestBetweenItsTwoRenamesIsReadFromPrev() {
-        github.route("$manifestPath.prev", Reply(200, manifest("indexes-s17-20261117T0310Z.sqlite.gz" to "bb".repeat(32))))
-        assertEquals(listOf("indexes-s17-20261117T0310Z.sqlite.gz"), CatalogueSource.Download(http, github.base).list().map { it.name })
-        assertEquals(listOf("GET $manifestPath", "GET $manifestPath.prev"), github.asked.map { it.substringBefore(" ·") })
-    }
-
-    @Test fun neitherManifestIsNoRelease() {
-        assertFailsWith<NoRelease> { CatalogueSource.Download(http, github.base).list() }
-        assertEquals(2, github.asked.size)
-    }
-
-    @Test fun theManifestIsFollowedToAnAllowedHostOnce() {
-        github.route(manifestPath, Reply(302, headers = mapOf("Location" to "${github.base}/assets/manifest")))
-        github.route("/assets/manifest", Reply(200, manifest("indexes-s17-20261124T0312Z.sqlite.gz" to "aa".repeat(32))))
-        val source = CatalogueSource.Download(http, github.base, redirects = setOf("127.0.0.1"))
-        assertEquals(1, source.list().size)
-        // The default hosts are GitHub's alone.
-        val e = assertFailsWith<CatalogueError> { CatalogueSource.Download(http, github.base).list() }
-        assertEquals("GitHub sent the download to 127.0.0.1; nothing was downloaded.", e.message)
-    }
-
-    @Test fun aManifestEntryThatIsntAPlainFileNameIsPassedOver() {
-        github.route(manifestPath, Reply(200, manifest("../../evil" to "aa".repeat(32), ".hidden" to "aa".repeat(32),
-                                                       "a/b.sqlite.gz" to "aa".repeat(32),
-                                                       "indexes-s17-20261124T0312Z.sqlite.gz" to "aa".repeat(32))))
-        assertEquals(listOf("indexes-s17-20261124T0312Z.sqlite.gz"), CatalogueSource.Download(http, github.base).list().map { it.name })
     }
 
     @Test fun anAssetOfAnotherHostOrRepositoryIsUnreadable() {
@@ -237,16 +191,8 @@ class ReleaseTest {
         assertEquals(listOf("GET $releasePath · application/vnd.github+json"), github.asked)
     }
 
-    @Test fun aManifestOfAnotherFormatIsAnError() {
-        github.route(manifestPath, Reply(200, """{"format":2,"files":[]}""".toByteArray()))
-        assertFailsWith<CatalogueError> { CatalogueSource.Download(http, github.base).list() }
-    }
-
     @Test fun theSourcesAskWhereTheBriefSays() {
         assertEquals(URI("https://api.github.com"), CatalogueSource.Api(http).base)
-        assertEquals(URI("https://github.com"), CatalogueSource.Download(http).base)
         assertEquals(setOf("release-assets.githubusercontent.com"), CatalogueSource.Api(http).redirects)
-        assertEquals(setOf("objects.githubusercontent.com", "release-assets.githubusercontent.com"),
-                     CatalogueSource.Download(http).redirects)
     }
 }
