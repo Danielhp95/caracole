@@ -33,7 +33,7 @@ SIDECAR = "published.json"
 KEEP_DAYS = 180
 FEWER = 0.9
 CHUNK = 1 << 20
-_NAME = re.compile(rf"{PREFIX}-s(\d+)-(\d{{8}}T\d{{4}}Z)\.sqlite\.gz")
+_NAME = re.compile(rf"{PREFIX}-s([1-9][0-9]*)-([0-9]{{8}}T[0-9]{{4}}Z)\.sqlite\.gz")
 _STAMP = "%Y%m%dT%H%MZ"
 
 

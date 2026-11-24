@@ -27,7 +27,9 @@ def names() -> list[str]:
            "indexes2-s17-20261124T0312Z.sqlite.gz", "indexes-s17-20261340T0312Z.sqlite.gz",
            "indexes-sx-20261124T0312Z.sqlite.gz", "indexes-s17-20260229T0312Z.sqlite.gz",
            "indexes-s17-20261124T2460Z.sqlite.gz", "indexes-s17-20261124T0312Z.sqlite", "indexes-s-20261124T0312Z.sqlite.gz",
-           "indexes-s17-20261124T0312.sqlite.gz", "Indexes-s17-20261124T0312Z.sqlite.gz", ""]
+           "indexes-s17-20261124T0312.sqlite.gz", "indexes-s017-20261124T0312Z.sqlite.gz",
+           "indexes-s0-20261124T0312Z.sqlite.gz", "indexes-s17-2026112\u0664T0312Z.sqlite.gz",
+           "indexes-s1\u0667-20261124T0312Z.sqlite.gz", "Indexes-s17-20261124T0312Z.sqlite.gz", ""]
     return good + bad
 
 

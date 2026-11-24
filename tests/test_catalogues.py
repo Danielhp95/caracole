@@ -40,7 +40,9 @@ def test_a_name_holds_the_schema_and_the_minute():
 
 @pytest.mark.parametrize("name", ["indexes.json", "indexes-s17-20261124T0312Z.sqlite.gz.next",
                                   "indexes2-s17-20261124T0312Z.sqlite.gz", "indexes-s17-20261340T0312Z.sqlite.gz",
-                                  "indexes-sx-20261124T0312Z.sqlite.gz"])
+                                  "indexes-sx-20261124T0312Z.sqlite.gz", "indexes-s017-20261124T0312Z.sqlite.gz",
+                                  "indexes-s0-20261124T0312Z.sqlite.gz", "indexes-s17-2026112\u0664T0312Z.sqlite.gz",
+                                  "indexes-s1\u0667-20261124T0312Z.sqlite.gz"])
 def test_other_names_are_none(name):
     assert catalogues.read_name(name) is None
 
