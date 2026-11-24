@@ -147,14 +147,14 @@ class FakeGh:
         return self
 
     def asset(self, name: str, data: bytes = b"x", *, state: str = "uploaded", size: int | None = None,
-              digest: str | None = None) -> FakeGh:
+              digest: str | None = None, no_digest: bool = False) -> FakeGh:
         import base64
 
         self.state["release"] = self.state["release"] or {"tag": "indexes", "args": [], "prerelease": True}
         self.state["next_id"] += 1
         self.state["assets"].append({
             "id": self.state["next_id"], "name": name, "size": len(data) if size is None else size,
-            "state": state, "digest": digest or "sha256:" + hashlib.sha256(data).hexdigest(),
+            "state": state, "digest": None if no_digest else digest or "sha256:" + hashlib.sha256(data).hexdigest(),
             "content": base64.b64encode(data).decode()})
         self.save()
         return self

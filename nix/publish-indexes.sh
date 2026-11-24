@@ -16,8 +16,9 @@
 #     repository's Latest (/releases/latest never answers a prerelease; the phone reads the tag);
 #   2 every asset whose state isn't "uploaded" is deleted (a half upload);
 #   3 the file DIR/published.json names: listed as uploaded with the same size and digest,
-#     "already published" (steps 4 and 5 skipped, 6 still runs); listed otherwise, exit 1 (never
-#     replaced, no --clobber);
+#     "already published" (steps 4 and 5 skipped, 6 still runs); listed with no digest, which
+#     can't be checked, deleted and uploaded again; listed otherwise, exit 1 (never replaced, no
+#     --clobber);
 #   4 uploaded: every TICK seconds a line of how far gh has read the file (its file descriptor's
 #     position, /proc/PID/fdinfo) against its size, else the time so far;
 #   5 read back: size and digest must be published.json's, else it is deleted and exit 1;
@@ -180,6 +181,11 @@ list=$(assets) || die 2 "the release can't be read"
 
 # 3
 there=$(asset "$list" "$file")
+if [ -n "$there" ] && [ -z "$(jq -r '.digest // empty' <<<"$there")" ]; then
+  say "GitHub lists $file with no digest, so it can't be checked: deleting it to upload it again..."
+  delete_id "$(jq -r .id <<<"$there")" || die 3 "$file, listed with no digest, can't be deleted"
+  there=
+fi
 if [ -n "$there" ]; then
   if [ "$(jq -r .size <<<"$there")" = "$bytes" ] && [ "$(jq -r .digest <<<"$there")" = "$digest" ]; then
     say "$file is already published"
@@ -197,7 +203,7 @@ else
   there=$(asset "$list" "$file")
   [ -n "$there" ] || die 5 "$file isn't listed after its upload"
   got=$(jq -r '.digest // empty' <<<"$there")
-  [ -n "$got" ] || die 5 "GitHub gave no digest for $file: kept, not checked"
+  [ -n "$got" ] || die 5 "GitHub gave no digest for $file: kept, not checked (the next run uploads it again)"
   if [ "$(jq -r .state <<<"$there")" != uploaded ] || [ "$(jq -r .size <<<"$there")" != "$bytes" ] \
     || [ "$got" != "$digest" ]; then
     delete_id "$(jq -r .id <<<"$there")" || true

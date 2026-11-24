@@ -165,6 +165,23 @@ def test_a_failed_upload_leaves_last_weeks_file_listed(rig):
     assert rig.gh.names() == [name(17)]
 
 
+def test_an_asset_of_its_name_listed_with_no_digest_is_deleted_and_uploaded_again(rig):
+    """A digest-less asset of the file's name can't be checked: never taken for another file (which would fail every
+    run after), it is deleted and the file uploaded again."""
+    for there in (rig.data, b"half of it"):
+        rig.gh.state = {**rig.gh.state, "assets": []}
+        rig.gh.save()
+        rig.gh.asset(NEW, there, no_digest=True)
+        done = rig.run()
+        assert done.returncode == 0, done.stderr
+        assert f"publish-indexes: GitHub lists {NEW} with no digest, so it can't be checked: deleting it to upload " \
+               "it again..." in done.stdout.splitlines()
+        rig.gh.load()
+        (asset,) = rig.gh.state["assets"]
+        assert asset["name"] == NEW and asset["digest"] == "sha256:" + rig.sha
+        assert rig.gh.content(NEW) == rig.data
+
+
 def test_no_digest_on_the_read_back_keeps_the_upload_and_fails(rig):
     rig.gh.release()
     rig.gh.state["no_digest"] = True

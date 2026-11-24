@@ -264,7 +264,8 @@ asks whether your user manager runs, and starts the upload in it only if it does
 since an upload in a manager with no session would find `gh`'s keyring locked. When it doesn't run,
 the notifier says so in one line, succeeds, and the timer catches up at your next login (`Persistent`);
 any other failure (no such user, no `caracole-upload.service`) fails the notifier, never the publish.
-An upload of a file already there says "already published" and changes nothing. `gh` may keep its
+An upload of a file already there says "already published" and changes nothing; one GitHub lists
+with no digest can't be checked, so it is deleted and uploaded again. `gh` may keep its
 token in a login keyring, locked without a session, which is why the example doesn't enable linger.
 
 Only the service's run starts the upload. After a publish by hand (`sudo caracole-admin index publish
