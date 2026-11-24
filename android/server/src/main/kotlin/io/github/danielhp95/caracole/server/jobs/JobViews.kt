@@ -31,6 +31,12 @@ import java.time.Instant
  *   songs", "Not filed: why").
  * - `details` is the request's output in the Requests tab (`#tab=requests&job=N`), but a sync's, which the Sync tab
  *   shows (`#tab=sync`).
+ *
+ * A request queued behind a long job of the phone's own that runs now ([behind]: the catalogues, a sync, an index
+ * import, the render job…, the queue's one worker running it first) says which and how far it has got, the phone's
+ * alone (Python never queues one): "Queued · after the site catalogues (Importing · Ultimate Guitar · 600,000 of
+ * 1,521,145 tabs)", "Queued · 2 requests ahead, the sync now (Updating the indexes · Downloading the computer's
+ * indexes · 120 of 274 MB)" ([queuedBehind]). While that job lets the lookups queued go first, it waits for none.
  */
 object JobViews {
     const val REQUESTS = Status.REQUESTS
@@ -71,12 +77,13 @@ object JobViews {
         }
     }
 
-    /** [view] with the jobs before a queued one counted in [queue], and its song the one the job knows. */
+    /** [view] with the jobs before a queued one counted in [queue], the job of the phone's own it waits [behind]
+     * there, and its song the one the job knows. */
     fun view(job: Job, queue: JobQueue, card: JsonObject? = null, songbooks: JsonObject? = null,
              facts: SongFacts? = null, songbookPage: String? = null, now: Instant = Instant.now()): JsonObject =
         view(job, if (job.state == Job.QUEUED) queue.ahead(job) else 0,
              (card?.get("id") as? JsonPrimitive)?.content?.toLongOrNull() ?: job.songId, card, songbooks, facts,
-             songbookPage, now)
+             songbookPage, now, behind = if (job.state == Job.QUEUED) behind(job, queue.snapshot()) else null)
 
     /**
      * A job as `/jobs.json` gives it; [ahead], the jobs waiting or running before a queued one; [songId], the song it
@@ -86,10 +93,11 @@ object JobViews {
      * [now], the time it is asked at, for a lookup's steps (Outcomes.progress: none for its first second).
      */
     fun view(job: Job, ahead: Int, songId: Long?, card: JsonObject? = null, songbooks: JsonObject? = null,
-             facts: SongFacts? = null, songbookPage: String? = null, now: Instant = Instant.now()): JsonObject {
+             facts: SongFacts? = null, songbookPage: String? = null, now: Instant = Instant.now(),
+             behind: Job? = null): JsonObject {
         val shape = Shape(job)
         val kind = kindOf(shape)
-        val line = line(shape, ahead, facts, songbookPage)
+        val line = line(shape, ahead, facts, songbookPage, behind)
         val shown = if (kind == "song") Status.songLine(line) else line
         val seen = linkedMapOf<String, JsonElement>(
             "id" to JsonPrimitive(job.id),
@@ -150,13 +158,52 @@ object JobViews {
     }
 
     /** The job's line (status.py's job_line, the phone's own kinds as the class says); [ahead], the jobs before a
-     * queued one; [facts], what the library knows of its song; [songbookPage], a songbook's change's page. */
-    fun line(job: Job, ahead: Int = 0, facts: SongFacts? = null, songbookPage: String? = null): Line =
-        line(Shape(job), ahead, facts, songbookPage)
+     * queued one, and [behind], the job of the phone's own it waits behind ([behind]'s); [facts], what the library
+     * knows of its song; [songbookPage], a songbook's change's page. */
+    fun line(job: Job, ahead: Int = 0, facts: SongFacts? = null, songbookPage: String? = null, behind: Job? = null): Line =
+        line(Shape(job), ahead, facts, songbookPage, behind)
 
-    private fun line(shape: Shape, ahead: Int, facts: SongFacts?, songbookPage: String?): Line {
+    private fun line(shape: Shape, ahead: Int, facts: SongFacts?, songbookPage: String?, behind: Job? = null): Line {
+        if (shape.job.state == Job.QUEUED && behind != null) return Line("queued", queuedBehind(ahead, behind))
         if (shape.own) ownLine(shape)?.let { return it }
         return Status.line(shape, facts, ahead, songbookPage, todo = null)
+    }
+
+    /**
+     * The job of the phone's own a queued [job] waits behind among [jobs] (the queue's snapshot): one queued before
+     * it that runs now, staged (a PhoneKinds' kind's, a sync's, an index import's: one that says how far it has got),
+     * and not letting the lookups queued go first meanwhile (JobQueue's yield: `waitingFor`); null for none, and for a
+     * job that isn't queued.
+     */
+    fun behind(job: Job, jobs: List<Job>): Job? {
+        if (job.state != Job.QUEUED) return null
+        return jobs.firstOrNull { it.id < job.id && it.state == Job.RUNNING && it.waitingFor == 0 && Shape(it).staged }
+    }
+
+    /** "Queued · after the site catalogues (Importing · …)", or with others ahead "Queued · 3 requests ahead, the site
+     * catalogues now (…)": [behind] named ([named]), and what it is doing, its line less its ellipsis, a staged job's
+     * running stage's words after it. */
+    internal fun queuedBehind(ahead: Int, behind: Job): String {
+        val shape = Shape(behind)
+        var doing = line(shape, 0, null, null).text.removeSuffix("…")
+        if (behind.spec.kind !in PhoneKinds.ALL) {
+            val running = behind.stages.firstOrNull { it.state == Job.RUNNING }?.detail.orEmpty()
+            if (running.isNotEmpty()) doing += " · $running"
+        }
+        val who = named(behind)
+        return if (ahead <= 1) "Queued · after $who ($doing)" else "Queued · $ahead requests ahead, $who now ($doing)"
+    }
+
+    /** A job of the phone's own as a line names it: a sync "the sync", any other its display, its first word a small
+     * letter where it is "The" or "A" ("the site catalogues", "a backup (daily)"). */
+    private fun named(job: Job): String {
+        if (job.spec.kind == "sync") return "the sync"
+        val display = job.display
+        return when {
+            display.startsWith("The ") -> "t" + display.substring(1)
+            display.startsWith("A ") -> "a" + display.substring(1)
+            else -> display
+        }
     }
 
     /** The words of the phone's own kinds where they are not caracole serve's; null where they are. */

@@ -64,6 +64,50 @@ class JobViewsTest {
         gate.complete(Unit)
     }
 
+    /** A request queued behind a long job of the phone's own, which the queue's one worker runs first, says which
+     * and how far it has got, its words as that job's line says them (the phone's own: Python never queues one). */
+    @Test fun aRequestQueuedBehindAPhonesOwnJobSaysWhatItWaitsFor() = runTest {
+        val queue = queue()
+        val kind = PhoneKinds.CATALOGUES
+        val gate = CompletableDeferred<Unit>()
+        val importing = "Importing · Ultimate Guitar · 600,000 of 1,521,145 tabs"
+        val catalogues = phoneJob(queue, kind, "") { context ->
+            context.stage("catalogues", "running", PhoneKinds.fill(kind.running, "doing" to importing))
+            gate.await()
+        }
+        runCurrent()
+        val lookup = queue.submit(JobSpec("Get Muse - Hysteria", "muse/hysteria", "song", emptyList(),
+                                          commands = JobCommands.lookupSteps("Muse", "Hysteria"), fetching = true)).first
+        val add = queue.submit(JobSpec("Add b", "b", "add", emptyList()) {}).first
+        assertEquals(listOf("queued", "Queued · after the site catalogues ($importing)", null),
+                     line(JobViews.view(queue.job(lookup.id)!!, queue)))
+        assertEquals(listOf("queued", "Queued · 2 requests ahead, the site catalogues now ($importing)", null),
+                     line(JobViews.view(queue.job(add.id)!!, queue)))
+        // Its line alone, given the jobs (the Requests tab's and /jobs.json's).
+        val jobs = queue.snapshot()
+        assertEquals("Queued · after the site catalogues ($importing)",
+                     JobViews.line(queue.job(lookup.id)!!, 1, behind = JobViews.behind(queue.job(lookup.id)!!, jobs)).text)
+        // A sync's: its running stage and its words; a job of commands ahead (Python's too) is counted as ever.
+        assertEquals(null, JobViews.behind(queue.job(catalogues.id)!!, jobs), "a running job waits for none")
+        gate.complete(Unit)
+        runCurrent()
+        val syncing = CompletableDeferred<Unit>()
+        val sync = queue.submit(JobSpec("Sharing logs with studio", "sync:http://pc:8737", "sync", sync,
+                                        display = "Sharing logs with studio") { context ->
+            context.stage("index", "running", "Downloading the computer's indexes · 120 of 274 MB")
+            syncing.await()
+        }).first
+        runCurrent()
+        val after = queue.submit(JobSpec("Get Muse - Uprising", "muse/uprising", "song", emptyList(),
+                                         commands = JobCommands.lookupSteps("Muse", "Uprising"), fetching = true)).first
+        assertEquals("Queued · after the sync (Updating the indexes · Downloading the computer's indexes · 120 of 274 MB)",
+                     JobViews.line(queue.job(after.id)!!, 1, behind = JobViews.behind(queue.job(after.id)!!,
+                                                                                      queue.snapshot())).text)
+        syncing.complete(Unit)
+        runCurrent()
+        assertEquals(Job.DONE, queue.job(sync.id)!!.state)
+    }
+
     @Test fun aRunningJobSaysItsRunningStageElseTheNextOne() = runTest {
         val queue = queue()
         val step = CompletableDeferred<Unit>()

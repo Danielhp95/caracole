@@ -78,7 +78,8 @@ class JobsRoutes(val queue: JobQueue, val cards: SongCards, val database: Databa
                 val card = song?.let { cardOf(db, it) }
                 val ahead = if (job.state == Job.QUEUED) jobs.count { it.active && it.id < job.id } else 0
                 JobViews.view(job, ahead, songId, card = card, songbooks = if (over && !read) section else null,
-                              facts = facts, songbookPage = songbookPage(db, job), now = now)
+                              facts = facts, songbookPage = songbookPage(db, job), now = now,
+                              behind = JobViews.behind(job, jobs))
             }
         }
         return json(200, JsonObject(linkedMapOf(
