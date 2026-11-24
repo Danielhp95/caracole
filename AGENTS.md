@@ -564,7 +564,7 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 |---|---|
 | config.py | caracole.toml and directories, and no secret (ntfy is a topic's URL alone); `name`, what the pages call the library (`Config.library_name`: else its folder's name); `[ug_directory]` (`DirectoryPolicy`: UG's artist directory's concurrency, delay and budget, politeness that never crosses to the phone) |
 | index_transfer.py | `caracole index export` and `merge` (below) |
-| catalogues.py | `caracole index publish DIR`: every site's index as one public gzip, `indexes-s<schema>-<UTC minute>.sqlite.gz`, its sidecar `published.json` and the Keep rule (`name_for`, `read_name`, `publish`, `kept`), each step told as it goes (`Progress`: the export, each table's rows by `index_transfer.export`'s `copied` and `omitting`, the check, the gzip's bytes read), which commands/index.py's `_Publishing` says through progress.py's `Console` (a terminal's live line at most four times a second, a journal's line a quarter); `index_transfer.PUBLIC_OMIT` leaves out the database's path and LaCuerda's search rows, and a file holding a path of this machine is refused (`_no_paths`: a value with this config's folders, the home folder, the database or `/nix/store/` in it, or beginning with a machine root, `ROOTS`; a name that merely begins with "/" is a site's) |
+| catalogues.py | `caracole index publish DIR`: every site's index as one public gzip, `indexes-s<schema>-<UTC minute>.sqlite.gz`, its sidecar `published.json` and the Keep rule (`name_for`, `read_name`, `publish`, `kept`), each step told as it goes (`Progress`: the export, each table's rows by `index_transfer.export`'s `copied` and `omitting`, the check, the gzip's bytes read), which commands/index.py's `_Publishing` says through progress.py's `Console` (a terminal's live line at most four times a second, a journal's line a quarter); `index_transfer.PUBLIC_OMIT` leaves out the database's path and LaCuerda's search rows, and a file holding a path of this machine is refused (`_no_paths`: a value with this config's folders, the home folder, the database or `/nix/store/` in it, or beginning with a machine root, `ROOTS`; a name that merely begins with "/" is a site's); a clock that reads earlier than the last file's minute is refused too (`publish(after=)`, the sidecar's last publication), which `--force`, passing the rows' guard alone, never passes; the Keep rule's publishing schema is the higher of the uploader's and the newest the names hold, so an uploader built before a schema bump never prunes what a service after it keeps |
 | peer_sync.py | two caracoles compared and synced, unit by unit (below) |
 | canonical.py | canonical JSON: one text, so one digest, for a value in Python and in Kotlin (`dumps`, `digest`, `read`, `stored_hash`; docs/superpowers/specs/2026-11-03-canonical-json.md); the standard library alone |
 | peer_push.py | a push: the units another caracole (the phone) gives this one, staged by caracole serve, taken by `caracole peer take` (below) |
@@ -3606,6 +3606,11 @@ picks one).
   Two requests a download, at a tap, with caracole's own user agent; a 403 or 429 with no requests left is kept (kv
   `catalogues:not-before`) and nothing is asked before it (one more than two hours ahead of the clock passed over,
   `CataloguesRunner.MOST_AHEAD`). No exception to robots.txt is made.
+- The upload script keeps the release a prerelease (made one, or marked one, at each run: `/releases/latest` never
+  answers a prerelease, and the phone reads the tag), and uploads again a file GitHub lists with no digest, which
+  can't be checked, once it is deleted; one listed otherwise than the sidecar says is never replaced. `caracole index
+  publish` refuses a clock that reads earlier than the last file's minute, `--force` or not, and the Keep rule
+  prunes by the higher of the uploader's schema and the newest one the names hold (catalogues.py, above).
 - "caracole itself sends it nowhere" (the exports above) stays true: caracole writes the public file and never
   uploads it; the owner's user service does.
 
