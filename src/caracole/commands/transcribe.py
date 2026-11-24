@@ -59,6 +59,10 @@ def _transcribe(cfg: Config, display: str, *, progress: bool) -> None:
     artist, _, title = display.partition(" - ")
     reporter = _Lines(cfg.library_dir, show=False, json_lines=progress)
     result = make_transcript(cfg, TranscribeRequest(artist.strip(), title.strip()), reporter)
-    staged_end(reporter, result, progress=progress,
-               refused="Transcript kept; no sheet made" if result.transcript_kept else "No transcript made",
-               done=f"Done in {result.seconds:.1f} s.")
+    if not result.transcript_kept:
+        stopped = "No transcript made"
+    elif result.states.get("chords") == "done":  # a bug after the sheet over it was kept
+        stopped = "Transcript and sheet kept"
+    else:
+        stopped = "Transcript kept; no sheet made"
+    staged_end(reporter, result, progress=progress, refused=stopped, done=f"Done in {result.seconds:.1f} s.")

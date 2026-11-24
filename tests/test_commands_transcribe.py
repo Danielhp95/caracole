@@ -199,6 +199,41 @@ def test_a_transcription_refused_at_its_chords_says_its_transcript_is_kept(tmp_p
     assert kv_get(conn, f"transcript:{song.id}") is not None
 
 
+def test_chords_that_fail_after_the_words_kept_the_transcript_say_it_is_kept(tmp_path, config, conn, models,
+                                                                            monkeypatch):
+    # The words keep the transcript before the chords run; auto-chords then can't keep the sheet (a full disk): the
+    # last line says the transcript is kept, which Try again makes the sheet over, never "No transcript made".
+    def full_disk(*args, **kwargs):
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(yf, "transcribe_problem", lambda cfg: None)
+    monkeypatch.setattr(ac_run, "_keep", full_disk)
+    song = offered(conn, load_config(config, env={}))
+    result = invoke(config, "--song", "Nick Cani - Vikingos veganos")
+    assert result.exit_code == 1, result.output
+    last = result.output.splitlines()[-1]
+    assert last.startswith("Transcript kept; no sheet made: auto-chords can't run here ("), result.output
+    assert kv_get(conn, f"transcript:{song.id}") is not None
+
+
+def test_a_bug_after_the_sheet_over_the_transcript_says_both_are_kept(tmp_path, config, conn, models, monkeypatch):
+    # A bug once the chords kept the sheet (here in the pages): the transcript and the sheet over it are kept, which
+    # the last line says, never "no sheet made".
+    from caracole import todo
+
+    def bug(*args, **kwargs):
+        raise RuntimeError("a bug")
+
+    monkeypatch.setattr(yf, "transcribe_problem", lambda cfg: None)
+    monkeypatch.setattr(todo, "write_pages", bug)
+    offered(conn, load_config(config, env={}))
+    result = invoke(config, "--song", "Nick Cani - Vikingos veganos")
+    assert result.exit_code == 1, result.output
+    assert "Chords: chords over the transcribed lyrics." in result.output.splitlines()
+    assert result.output.splitlines()[-1] == ("Transcript and sheet kept: a bug in caracole (pages: RuntimeError: a "
+                                              "bug)."), result.output
+
+
 def test_transcribe_where_it_cant_run_says_why_and_exits_1(tmp_path, config, conn, models, monkeypatch):
     monkeypatch.setattr(yf, "autochords_missing", lambda: ["torch"])
     song = offered(conn, load_config(config, env={}))

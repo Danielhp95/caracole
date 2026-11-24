@@ -310,8 +310,10 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   - Its own audio's transcript kept with no auto sheet over it (the chords failed or were cut off: Try again), the
     job goes straight to the chords (`_sheet_to_make`, run.py `_skip_reason`, guarded as `_due` guards it: a record
     that won't read a refusal in its words), neither model run again.
-  - Refused at the chords, its words kept: `TranscribeResult.transcript_kept`, the command's "Transcript kept; no
-    sheet made: … needs no sheet over its transcript now: …" (`_still_due_its_sheet`).
+  - Refused or failed at the chords, its words kept (`TranscribeResult.transcript_kept`, set as the chords begin,
+    taken back for a song that left the book): the command's "Transcript kept; no sheet made: …" (a refusal "… needs
+    no sheet over its transcript now: …", `_still_due_its_sheet`; a failure auto-chords'), and "Transcript and sheet
+    kept: …" for a bug after the sheet was made.
   - Each long stage says what it does as it runs (staged.py `_doing`, a running event each change): the vocals the
     minutes demucs-rs has run against about how long it takes here (`_separating`, separate.py's `on_tick`,
     `CPU_PACE`, `GPU_PACE`), the words Whisper loading then how far it has heard the mix (`_heard`, transcribe.py's

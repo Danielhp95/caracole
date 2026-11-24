@@ -32,8 +32,9 @@ Before each of vocals, words and chords, the long stages, a waiting lookup goes 
 the song is read again, checked still offered (before the chords, its transcript kept no refusal:
 ``_still_due_its_sheet``), and its audio still the one vocals separated before words and chords. A song that left the
 book, is offered no more (a human sheet kept meanwhile, ignored, lyrics found) or has other audio ends the job there,
-a refusal its song stage says, before the next model runs; at the chords, with the words kept, that its transcript is
-(``TranscribeResult.transcript_kept``: the command's "Transcript kept; no sheet made").
+a refusal its song stage says, before the next model runs. Once the chords begin, the song's transcript is kept for
+its audio, whatever comes of them (``TranscribeResult.transcript_kept``: a refusal or a failure there the command's
+"Transcript kept; no sheet made").
 
 The models default to demucs-rs and Whisper from ``cfg``, each built at its first stage. Whisper is run first on
 run.py's test tone, as auto-chords checks its own: a model that fails there would fail on every song. demucs-rs is
@@ -116,8 +117,9 @@ class TranscribeRequest:
 
 @dataclass
 class TranscribeResult(StagedResult):
-    """What came of a transcription: its stages' ends, and the sheet's files once readable; ``transcript_kept``, refused
-    at its chords with its own audio's transcript kept (the command's "Transcript kept; no sheet made")."""
+    """What came of a transcription: its stages' ends, and the sheet's files once readable; ``transcript_kept``, its
+    chords begun with its own audio's transcript kept (heard now, or before), so that a refusal or a failure from there
+    on leaves it kept (the command's "Transcript kept; no sheet made")."""
 
     transcript_kept: bool = False
 
@@ -155,6 +157,14 @@ class _Transcription(StagedRun):
 
     # --- between the stages ---------------------------------------------------------------------------------
 
+    def _song_again(self) -> None:
+        """The song read again; one that left the book took its transcript with it (``transcript_kept`` no more)."""
+        try:
+            super()._song_again()
+        except _Stop:
+            self.result.transcript_kept = False
+            raise
+
     def _not_offered(self, why: str) -> _Stop:
         return _Stop(f"{self.song.display} isn't offered a transcription: {why}")
 
@@ -174,7 +184,6 @@ class _Transcription(StagedRun):
 
         why = why_not_offered(self.conn, self.cfg, self.song, self.overrides)
         if why is not None and why != ALREADY_TRANSCRIBED:
-            self.result.transcript_kept = True
             raise _Stop(f"{self.song.display} needs no sheet over its transcript now: {why}")
 
     def _sheet_to_make(self) -> bool:
@@ -369,6 +378,7 @@ class _Transcription(StagedRun):
             return "skipped", "no transcript"
         self._after_a_lookup()
         self._same_audio()
+        self.result.transcript_kept = True  # for this audio, in the book: whatever comes of the chords, it stays
         self._still_due_its_sheet()  # a human sheet kept meanwhile, ignored: auto-chords would skip it
         return self._autochords_sheet()
 
