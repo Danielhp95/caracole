@@ -1,0 +1,1 @@
+Progress shown while the catalogues download and import, and while syncing; fixes from a bug hunt
