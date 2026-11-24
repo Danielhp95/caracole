@@ -150,8 +150,8 @@ _WAITING = "waiting for the book"  # how get.py's song stage begins while the lo
 # The stages that take minutes and say how far they are while they run: their line says it after its words, and
 # for a song's job the library page's bar beside the step (outcome.py ``progress``'s ``doing``). A sheet from a
 # YouTube video's audio and chords and a transcription's vocals, words and chords (staged.py ``_doing``); and a sync's
-# or an import's indexes, the phone's copy of the computer's pages, a take's or an import's pages, and an index
-# merge, whose running words the lanes that measure them add.
+# or an import's indexes (commands/peer.py ``_merging``), the phone's copy of the computer's pages, a take's or an
+# import's pages (commands/peer.py ``_rendering``), and an index merge (commands/index.py ``Merging``).
 LONG_STAGES = ("audio", "vocals", "words", "chords", "index", "mirror", "merge", "render")
 _SHEET_LINES = {said: f"Fetching {said}" for said in SHEET_FROM.values()}  # a running sheet stage's, by its site
 # How ``caracole lacuerda --artist`` and ``--search`` end, by what LaCuerda answered, and the tone of the line.

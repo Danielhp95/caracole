@@ -616,11 +616,11 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   - each index's `ensure_current_keys` after, whole where the file's keys record differs;
   - its progress, `merge(progress=, backing_up=)`, which the phone's merge mirrors: `progress(site, action, done,
     total)` once before it plans (`("", PLANNING, 0, sites)`), and once anything changes, `backing_up()`, then
-    `(site, "", i, sites)` before each site, one that changes nothing too, `(site, noun, 0, n)` before each action, and `("ug", UG_TABS, rows
-    taken, rows)` after each chunk of UG's sitemap rows, a statement for each `UG_CHUNK` (50,000) by `tab_id` range,
-    in one statement's order and savepoint, so its rows come out the same (the index corpus with `UG_CHUNK` 1
-    unchanged); `MergeWords` the words, commands/index.py `Merging` where they go (`index merge`'s stderr or
-    `--progress` detail; `peer sync`'s and `peer import`'s `index` stage).
+    `(site, "", i, sites)` before each site, one that changes nothing too, `(site, noun, 0, n)` before each action,
+    and `("ug", UG_TABS, rows taken, rows)` after each chunk of UG's sitemap rows, a statement for each `UG_CHUNK`
+    (50,000) by `tab_id` range, in one statement's order and savepoint, so its rows come out the same (the index
+    corpus with `UG_CHUNK` 1 unchanged); `MergeWords` the words, commands/index.py `Merging` where they go (`index
+    merge`'s stderr or `--progress` detail; `peer sync`'s and `peer import`'s `index` stage).
 
 #### peer_sync.py
 
@@ -1066,24 +1066,25 @@ It is rows.js's, shared by both pages:
     (rows.js `indexLine`'s too, `onSearch`);
   - on a phone library.css's folded grid puts the overline over the title, `.line-title` `display: contents` (its
     `.line-plays` a direct child, card.css's seam: test_library_assets.py), the title's column keeping rows.css's
-    4rem; from 720 px the flat line's columns, the title, then the overline in `by` right after it, then its buttons,
-    the status, the action and the key, at its end (the owner's order; no chevron after it since 2026-11-22: below);
+    4rem; from 720 px the flat line's columns, the title, then the overline in `by` right after it, then the status,
+    its buttons, the action and the key, at its end (the owner's order; no chevron after it since 2026-11-22: below);
     Select mode's are songbooks.css's
     (test_library_bands.py); the same rules are `section.flat .line`'s, a list sorted by title or by when they came
     folding every line;
-  - from 1200 px, in the 760 px list beside the pane (where the lanes meet, 12): a folded or flat line keeps that one
-    row while its buttons fit; where they don't, `plays-under` (library.js `placePlays`: measured in the one row, where
-    its last button wraps below its first, once a line, by the list's width, the root's font size and line height
-    (`textSize`: the app's pinch grows the second alone) and Select, again
-    when the line changes or stops being folded or flat; batched once a frame, `placePlaysSoon`; a line of a run off
-    the screen once its run comes near it, `contentvisibilityautostatechange`, `placeRuns`, never by laying the run
-    out: below)
-    makes its first row the title, its artist right after it, the status, the action and the key, and its
-    buttons a row of their own under the title (library.css, songbooks.css selecting); a band's line, from 720 px
-    (its title's column keeping 64 of the text's pixels), its buttons beside its title where they fit on one row,
-    else under it (`plays-under` where they wrap in their column, and from 1200 px also where its title is cut), so
-    none ever pushes the key off the line nor stacks its buttons one a row beside the title
-    (test_library_card_place.py, test_library_bands.py, test_library_text_size.py).
+  - where a line's buttons go, `plays-under` (library.js `placePlays`: measured in the one row, where its last button
+    wraps below its first, once a line, by the list's width, the root's font size and line height (`textSize`: the
+    app's pinch grows the second alone) and Select, again when the line changes or stops being folded or flat;
+    batched once a frame, `placePlaysSoon`; a line of a run off the screen once its run comes near it,
+    `contentvisibilityautostatechange`, `placeRuns`, never by laying the run out: below), its first row then the
+    title (a folded or flat line's artist right after it), the status, the action and the key, its buttons a row of
+    their own under the title, at its end, left of the key's column (library.css, songbooks.css selecting), so none
+    ever pushes the key off the line:
+    - a folded or flat line from 1200 px, in the 760 px list beside the pane (where the lanes meet, 12): one row while
+      its buttons fit, else `plays-under`;
+    - a band's line from 720 px, its title's column keeping 64 of the text's pixels: its buttons beside its title where
+      they fit on one row, else `plays-under` (where they wrap in their column, and from 1200 px also where its title
+      is cut), never one a row beside the title (test_library_card_place.py, test_library_bands.py,
+      test_library_text_size.py).
 - **The card's place**: from 1200 px a song's card is in the laptop's pane, `#card-pane` (body.html's `.lib-cols`, the
   list's `.lib-main` beside it), one at a time, never under its line; under 1200 px under its line, in one column of
   800 px from 720 px (`#library-view`, the masthead keeping the page's width) (library.js, below; library.css).
@@ -1275,8 +1276,8 @@ It is rows.js's, shared by both pages:
   selector ending `.line-title > .line-plays`, rows.css and library.css) and the laptop's pane (`#card-pane …`,
   library.css) are lane 1's: test_library_assets.py.
 - A song of yours closes to a line: its title, then, at the line's end, left of its action and its key (the owner's
-  ask of 2026-11-22: "always right aligned. That is, left of the key"; rows.css's margin, library.css's columns, a
-  band's line's under its title beside the pane where its title would be cut, library.js `placePlays`), a button for
+  ask of 2026-11-22: "always right aligned. That is, left of the key"; rows.css's margin, library.css's columns,
+  under its title where they would wrap beside it, library.js `placePlays`: Bands and folding, above), a button for
   each thing to play from, none first (card.js
   `plays`, from `things`, what the card's tiles are made of too: each a link that opens it at once, its instrument's
   `glyph`, inline SVG made with `createElementNS`, the one address the page names, an icon tile at every pointer (27 px with a mouse, 43.2 px on a touch screen, a tenth under 30 and 48 by the owner's ask of
@@ -1901,17 +1902,18 @@ It is rows.js's, shared by both pages:
   - `at` and `count` ("3 of 7") are the step in hand (`outcome._in_hand`): while it runs the running step, else the
     first waiting, else the last; once over the first that failed, else none; the bar shows them while the request
     runs, and the frozen bar once it is over. `doing`, right after them, while that step's running stage is a long
-    one that says what it does (status.py `LONG_STAGES`, `doing`: audio, vocals, words, chords, and a sync's or an
-    import's `index`, the phone's `mirror`, an index `merge` and a take's `render`, whose running words their lanes
-    add, on the line of the Journal and the tray alone, no song's bar; the number first,
-    nothing the step's name says, "1:20 of 3:45", "~12 min", "2 of ~12 min"), which `stepWords` says after the
-    count (`.step-doing`, in the room the step and its place leave, `flex: 1 1 0`; under 400 px its bar's place a
-    screen reader's alone, `.step-count` clipped, and its own " · " left out, `.step-sep`, so 320 px shows it whole; for
-    the eye alone, `aria-hidden`, changed in place on the same bar, `sayDoing`, so the line's live region never reads
-    each of Whisper's windows) and status.py's line after the stage's words ("Transcribing the lyrics · 1:20 of
-    3:45…"); the phone's `Status.LONG_STAGES`, `Outcomes.progress` alike. `waits`, true, while that step's running stage waits for the book
-    (`outcome._waits_for_the_book`: its detail begins as status.py's `_WAITING`, the test `_stage_line` makes for
-    "Waiting for the book…"; the phone's `Outcomes.waitsForTheBook`, by the same rule though it takes no lock).
+    one that says what it does (status.py `LONG_STAGES`, `doing`: a YouTube sheet's audio and chords, a
+    transcription's vocals, words and chords; the number first, nothing the step's name says, "1:20 of 3:45", "~12
+    min", "2 of ~12 min"), which `stepWords` says after the count (`.step-doing`, in the room the step and its place
+    leave, `flex: 1 1 0`; under 400 px its bar's place a screen reader's alone, `.step-count` clipped, and its own
+    " · " left out, `.step-sep`, so 320 px shows it whole; for the eye alone, `aria-hidden`, changed in place on the
+    same bar, `sayDoing`, so the line's live region never reads each of Whisper's windows). status.py's line says
+    every long stage's words after its own ("Transcribing the lyrics · 1:20 of 3:45…"), a sync's or an import's
+    `index`, the phone's `mirror`, an index `merge` and a take's or an import's `render` too, which have no bar,
+    their line the Journal's and the tray's ("Making pages of what was taken · 12 of 20 songs…"); the phone's
+    `Status.LONG_STAGES` and `Outcomes.progress` alike. `waits`, true, while that step's running stage waits for the
+    book (`outcome._waits_for_the_book`: its detail begins as status.py's `_WAITING`, the test `_stage_line` makes
+    for "Waiting for the book…"; the phone's `Outcomes.waitsForTheBook`, by the same rule though it takes no lock).
   - Each step (`outcome.Chip`, `{name, site, state, found}`) names its site in full (`site`, `outcome.SITE_NAMES`
     of its tag: "Ultimate Guitar", "LaCuerda", "YouTube"; a tag it lacks as it is) and what it found (`found`,
     `outcome._found`: its stages done in their words, one failed in the outcome's words where they parse, else in
@@ -1952,7 +1954,9 @@ It is rows.js's, shared by both pages:
   on it, `render_all` first thing, so every path to a page gives it them (`merge.with_plain_lyrics`, a version's
   `raw["lyrics"]` then "plain").
 - btc.py (with the vendored btc_model.py and LICENSE-BTC) and beats.py need torch, librosa and beat_this; run.py runs
-  them over the library.
+  them over the library (`autochords_pending`), logging each song it works on and its place among those due
+  ("Working out the chords of A - T (3 of 12)…", `_count_due`), and telling `on_step` each step (`STEPS`: the models
+  set up, a song's chords, beats and sheet), which a staged job's chords stage says.
 - audio.py, `load_mono`: every model's audio, mono at a rate, through librosa (libsndfile: WAV, FLAC, Ogg, MP3), else
   torchaudio (FFmpeg, through torchcodec) for the AAC of an .m4a, as YouTube's audio always is (youtube.py) and an
   iTunes purchase; btc.py `load_audio` and separate.py `frame_db` both read through it, and `load_librosa` gives numba
@@ -2113,11 +2117,12 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     tables alone, read in its `sqlite_master` before any table, `trusted_schema` off while attached, kv's columns
     checked; its `progress`, `MergeProgress`, index_transfer.merge's events one for one: `planning`, each site, each
     action, `tab` after each `UG_CHUNK` of UG's sitemap rows, by `tab_id` range in one statement's order, and the
-    phone's own `optimize`);
+    phone's own `optimize`; `Paced`, a stage's words at most once a second, a step's first and last at once);
   - `library/`: songs.py, removal.py's rules, overrides.toml and songbooks.toml as tables; `sync/`: peer_sync.py,
     and the phone's sync engine and peer client;
   - and milestones 4–6's, each in its section below: `http/`, `health/`, `config/`, `html/`, `lookup/`, `ug/`,
-    `match/`, `lyrics/`, `lacuerda/`, `sites/`, `inbox/`, `share/`, `songbooks/`, `backup/`.
+    `match/`, `lyrics/`, `lacuerda/`, `sites/`, `inbox/`, `share/`, `songbooks/`, `backup/`, and `catalogues/`
+    (GitHub's release of the site catalogues, below).
   - testFixtures: `Corpus`, `Fixtures`, `TestDb`: how every Kotlin test reads the corpus and makes a database.
 - `:server` (plain JVM): web/ on the phone, on Ktor CIO at 127.0.0.1 behind a launch secret: `http/` (app.py,
   security.py, inline.py, the message page), `files/`, `page/` (library_page.py's page, from library_assets/ copied
@@ -2149,9 +2154,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   file of this app's schema, `download` streams it through `GZIPInputStream` into `stateDir/cache/catalogues/`, checks
   GitHub's SHA-256 and a cap of 20 times its size or 64 MiB, the larger, and says why it can't (a newer or older schema only, no release,
   the hour's share spent, no room). server/lookups' `CataloguesRunner` merges it (`IndexTransfer.merge`), kv
-  `catalogues:imported`, saying each step (`MergeProgress.words` through `Paced`: a count at most once a second, each
-  step's first and last at once), the lookups queued meanwhile let go first once GitHub's list is read and once the
-  file is in (`yieldToQueued`), never inside the merge's write; a metered network's stop waits for the go-ahead alone
+  `catalogues:imported`, saying each step (`MergeProgress.words` through `Paced`), the lookups queued meanwhile let
+  go first once GitHub's list is read and once the file is in (`yieldToQueued`), never inside the merge's write; a metered network's stop waits for the go-ahead alone
   (`PhoneKinds` CATALOGUES' `otherwise`, its `formerly` words still a wait); the file a killed import left swept as
   the phone starts (`CataloguesRunner.sweep`). The app's Settings row and first-start offer are native
   (`SiteCatalogues`), the shared library page untouched.
@@ -2544,7 +2548,7 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   - PhoneKinds' kinds (render, inbox, backup, restore, catalogues) say §5.3's table's words, the ones their run filled in as
     their stage's detail (`context.stage(<its stage>, state, PhoneKinds.fill(…))`, done, running or failed; inbox's
     wait a done detail in `otherwise`'s words: `JobViewsTest.thePhonesOwnKindsSayTheirTablesWordsAsTheirRunFilledThemIn`),
-    and the phone's index import "Merging the computer's index…";
+    and the phone's index import "Merging the computer's index…", its merge's words after it (a long stage);
   - vectors/web/job_views.jsonl (the phone's own jobs), job_views_kinds.jsonl (every kind of commands in every state,
     every stage a line words running, a sync's, a take's and a merge's commands), outcome.jsonl (the same and each
     site's waits and errors, then the tables of words whole, its `tables` record) and job_views_song_of.jsonl
