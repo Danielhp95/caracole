@@ -117,6 +117,23 @@ let
     configured
     { services.caracole.publish.enable = true; }
   ];
+  # And, once it is written, the owner's user upload started by the system (docs/deploy.md).
+  publishUpload = evalSystem [
+    stubbed
+    configured
+    {
+      services.caracole.publish = {
+        enable = true;
+        uploadUser = "alice";
+      };
+    }
+  ];
+  # An upload user named while publishing is off: nothing to start.
+  uploadAlone = evalSystem [
+    stubbed
+    configured
+    { services.caracole.publish.uploadUser = "alice"; }
+  ];
   # caracole-web with its defaults, and on a tailnet address.
   webDefault = evalSystem [
     stubbed
@@ -369,6 +386,8 @@ let
   publish = publishOn.systemd.services.caracole-publish;
   publishSc = publish.serviceConfig;
   publishFolder = "/var/lib/caracole/publish";
+  uploadPublish = publishUpload.systemd.services.caracole-publish;
+  uploadNotify = publishUpload.systemd.services.caracole-publish-upload-notify;
 
   adminCuda = findAdmin webCuda;
   webCudaSc = webCuda.systemd.services.caracole-web.serviceConfig;
@@ -629,7 +648,21 @@ let
       lib.elem publishFolder publishSc.ReadWritePaths
       && publish.onFailure == [ "caracole-notify-failure.service" ]
       && publish.onSuccess == [ ]
-      && !(publishOn.systemd.services ? caracole-publish-upload);
+      && !(publishOn.systemd.services ? caracole-publish-upload)
+      && !(publishOn.systemd.services ? caracole-publish-upload-notify);
+    "with publish.uploadUser, a publish that succeeds starts caracole-publish-upload-notify.service" =
+      uploadPublish.onSuccess == [ "caracole-publish-upload-notify.service" ]
+      && uploadPublish.onFailure == [ "caracole-notify-failure.service" ]
+      && uploadPublish.serviceConfig.ExecStart == publishSc.ExecStart;
+    "caracole-publish-upload-notify.service is a oneshot as root that starts the user's caracole-upload.service" =
+      uploadNotify.serviceConfig.Type == "oneshot"
+      && !(uploadNotify.serviceConfig ? User)
+      && !(uploadNotify.serviceConfig ? DynamicUser)
+      && uploadNotify.onSuccess or [ ] == [ ]
+      && uploadNotify.onFailure or [ ] == [ ];
+    "publish.uploadUser without publish adds no unit" =
+      !(uploadAlone.systemd.services ? caracole-publish)
+      && !(uploadAlone.systemd.services ? caracole-publish-upload-notify);
     "caracole-publish.timer fires weekly on Sunday at 05:00" =
       publishOn.systemd.timers.caracole-publish.timerConfig.OnCalendar == "Sun 05:00"
       && publishOn.systemd.timers.caracole-publish.timerConfig.Persistent == true
@@ -652,6 +685,8 @@ let
       webTailnet
       webOpen
       publishOn
+      publishUpload
+      uploadAlone
     ];
     "settings.state_dir is rejected, for stateDir" = says [
       "stateDir, not settings.state_dir"
@@ -759,6 +794,8 @@ else
       adminCudaScript = lib.getExe adminCuda;
       adminMovedScript = lib.getExe adminMoved;
       adminPublishScript = lib.getExe (findAdmin publishOn);
+      uploadNotifyScript = uploadNotify.serviceConfig.ExecStart;
+      systemctl = "${publishUpload.systemd.package}/bin/systemctl";
       movedTmpfiles = "${movedTmpfiles}/lib/tmpfiles.d/caracole.conf";
       passAsFile = [
         "serviceMarker"
@@ -775,6 +812,7 @@ else
         "webDefaultUnit"
         "webAutochordsUnit"
         "publishUnit"
+        "uploadPublishUnit"
       ];
       loadCases = builtins.toJSON [
         (loads nuc defaultLayout)
@@ -794,6 +832,7 @@ else
       webDefaultUnit = unitText webDefault "caracole-web.service";
       webAutochordsUnit = unitText webAutochords "caracole-web.service";
       publishUnit = unitText publishOn "caracole-publish.service";
+      uploadPublishUnit = unitText publishUpload "caracole-publish.service";
     }
     ''
       # Fails the build when the file has the text: `! grep` would not, since
@@ -956,6 +995,19 @@ else
       # The publish unit runs caracole offline and holds no credential.
       grep -qx -- "PrivateNetwork=true" "$publishUnitPath"
       lacks LoadCredential "$publishUnitPath"
+      lacks OnSuccess "$publishUnitPath"
+      # With an upload user, systemd starts the notifier once it succeeds, and the notifier starts the user's
+      # upload in their own manager, with systemd's systemctl by its store path, enqueued and not waited for.
+      grep -qx -- "OnSuccess=caracole-publish-upload-notify.service" "$uploadPublishUnitPath"
+      grep -qxF -- "systemctl=$systemctl" "$uploadNotifyScript"
+      grep -qxF -- "user=alice" "$uploadNotifyScript"
+      grep -qF -- '"$systemctl" --user --machine="$user@" start --no-block caracole-upload.service' "$uploadNotifyScript"
+      lacks GH_TOKEN "$uploadNotifyScript"
+      # No user manager to reach here (the build has no systemd): it says, in one line, that the upload waits
+      # for the user's catch-up timer, and succeeds, so the publish stays a success.
+      "$uploadNotifyScript" > upload-notify.log 2>&1
+      test "$(wc -l < upload-notify.log)" = 1 || { cat upload-notify.log >&2; exit 1; }
+      grep -q "alice's catch-up timer" upload-notify.log
 
       # No unit holds a secret: caracole reads none.
       for file in "$runUnitPath" "$autochordsUnitPath" "$notifyUnitPath" "$webUnitPath" "$webDefaultUnitPath"; do

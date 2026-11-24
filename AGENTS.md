@@ -2012,9 +2012,13 @@ It is rows.js's, shared by both pages:
   - And `/etc/caracole/service`, the service's marker, service.py's.
   - `publish` (off): `caracole-publish.service` and its weekly timer run `caracole index publish` offline into
     `publish.folder` (2750), with no network and no token, which `caracole-admin` may then write too. The upload is
-    the owner's own systemd user service in their own configuration, started by a user path unit as `published.json`
-    changes and by a weekly timer that catches up, running `publish-indexes DIR` with their `gh` login
-    (docs/deploy.md); the module has no token file and no upload unit.
+    the owner's own systemd user service in their own configuration (`caracole-upload.service`), running
+    `publish-indexes DIR` with their `gh` login (docs/deploy.md); the module has no token file and no upload unit.
+    `publish.uploadUser` (null by default) starts it: `caracole-publish.service`'s `OnSuccess=` is
+    `caracole-publish-upload-notify.service`, a oneshot as root, `systemctl --user --machine=<user>@ start --no-block
+    caracole-upload.service` by systemd's store path, which says in one line that the upload waits for the user's
+    catch-up timer when their manager isn't running, and never fails (nor fails the publish). No user path unit: systemd
+    watches every folder from / down to `published.json`, and the 0710 dataDir refuses the user's inotify watch.
 - **module-check.nix**: `checks.module`, which loads the marker with service.py.
 
 #### `docs/`

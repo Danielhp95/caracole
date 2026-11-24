@@ -235,23 +235,22 @@ seconds. [usage.md](usage.md#caracole-serve) says what the page does.
 writes a gzip of every site index into `publish.folder` (`/var/lib/caracole/publish`, mode 2750, group
 `caracole`, so a user in that group can read it).
 
-Uploading to GitHub is your own user's job, with your own `gh` login: the module holds no token. A
-user service in your own configuration, started as the publish writes `published.json`, with a weekly
+Uploading to GitHub is your own user's job, with your own `gh` login: the module holds no token.
+`publish.uploadUser = "<login>";` makes a publish that succeeds start your user service,
+`caracole-upload.service`, in your user manager. Define it in your own configuration, with a weekly
 timer to catch up (the example assumes your user is in group `caracole` and `gh auth login` is done):
 
 ```nix
+  services.caracole.publish.uploadUser = "<login>";
+
   systemd.user.services.caracole-upload = {
     description = "Upload the site indexes to GitHub";
     unitConfig.ConditionPathExists = "/var/lib/caracole/publish/published.json";
     path = [ pkgs.gh ];
     script = ''
-      export GH_TOKEN=$(gh auth token --user <you>)
+      export GH_TOKEN=$(gh auth token --user <account>)
       exec ${caracole.packages.${pkgs.stdenv.hostPlatform.system}.publish-indexes}/bin/publish-indexes /var/lib/caracole/publish
     '';
-  };
-  systemd.user.paths.caracole-upload = {
-    wantedBy = [ "default.target" ];
-    pathConfig.PathChanged = "/var/lib/caracole/publish/published.json";
   };
   systemd.user.timers.caracole-upload = {
     wantedBy = [ "timers.target" ];
@@ -259,11 +258,15 @@ timer to catch up (the example assumes your user is in group `caracole` and `gh 
   };
 ```
 
-`<you>` is the GitHub account that owns the repository: `gh`'s active account may be another. Both
-start the upload only while your user manager runs. The path unit misses a publish made while it
-doesn't, so the timer catches up at your next login (`Persistent`); an upload of a file already there
-says "already published" and changes nothing. `gh` may keep its token in a login keyring, locked
-without a session, which is why the example doesn't enable linger.
+`<login>` is your user on this machine, `<account>` the GitHub account that owns the repository
+(`gh`'s active account may be another). A publish starts the upload only while your user
+manager runs; when it doesn't, `caracole-publish-upload-notify.service` says so in one line and the
+timer catches up at your next login (`Persistent`). An upload of a file already there says "already
+published" and changes nothing. `gh` may keep its token in a login keyring, locked without a session,
+which is why the example doesn't enable linger.
+
+There is no user path unit watching `published.json`: systemd watches every folder from `/` down to
+the file, and your user can't read `/var/lib/caracole` (mode 0710), so such a unit never fires.
 
 `caracole` is the flake input. `publish-indexes DIR` checks what GitHub holds and prunes old files.
 

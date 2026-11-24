@@ -176,6 +176,23 @@ let
 
   ntfyUrl = cfg.settings.ntfy.url or "";
 
+  # As root, after a publish that succeeded: the upload user's own caracole-upload.service started in their
+  # manager, never waited for. A manager that isn't running is no failure: the user's catch-up timer uploads it.
+  uploadUser = toString cfg.publish.uploadUser;
+  uploadNotify = pkgs.writeShellApplication {
+    name = "caracole-publish-upload-notify";
+    text = ''
+      user=${lib.escapeShellArg uploadUser}
+      systemctl=${config.systemd.package}/bin/systemctl
+      if said=$("$systemctl" --user --machine="$user@" start --no-block caracole-upload.service 2>&1); then
+        echo "started $user's caracole-upload.service"
+      else
+        echo "$user's user manager can't be reached, so the upload waits for $user's catch-up timer" \
+          "(caracole-upload.timer): ''${said//$'\n'/ }"
+      fi
+    '';
+  };
+
   notifyFailure = pkgs.writeShellApplication {
     name = "caracole-notify-failure";
     runtimeInputs = [ pkgs.curl ];
@@ -412,6 +429,21 @@ in
         type = lib.types.str;
         default = "Sun 05:00";
         description = "When the publish unit runs, as a systemd OnCalendar value.";
+      };
+
+      uploadUser = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        example = "alice";
+        description = ''
+          The user whose own systemd user service, `caracole-upload.service`,
+          uploads the file (docs/deploy.md). Once a publish succeeds,
+          caracole-publish-upload-notify.service starts it in that user's
+          manager. When the manager isn't running, it says so in one line and
+          the upload waits for that user's catch-up timer; the publish stays a
+          success. A user path unit can't do this: systemd watches every
+          folder from / down to the file, and dataDir is 0710.
+        '';
       };
     };
 
@@ -678,6 +710,8 @@ in
     systemd.services.caracole-publish = lib.mkIf cfg.publish.enable {
       description = "caracole publish: gzip the site indexes for upload";
       onFailure = [ "caracole-notify-failure.service" ];
+      # The owner's upload, started by the system: a user path unit can't watch a file under the 0710 dataDir.
+      onSuccess = lib.optional (cfg.publish.uploadUser != null) "caracole-publish-upload-notify.service";
       restartIfChanged = false;
       unitConfig.RequiresMountsFor = writable;
       environment = cacheEnv;
@@ -693,6 +727,18 @@ in
           TimeoutStartSec = "1h";
         };
     };
+
+    systemd.services.caracole-publish-upload-notify =
+      lib.mkIf (cfg.publish.enable && cfg.publish.uploadUser != null)
+        {
+          description = "Start ${uploadUser}'s caracole-upload.service after a publish";
+          restartIfChanged = false;
+          serviceConfig = {
+            Type = "oneshot";
+            # As root, which may reach any user's manager.
+            ExecStart = lib.getExe uploadNotify;
+          };
+        };
 
     systemd.timers.caracole-publish = lib.mkIf cfg.publish.enable {
       description = "Weekly caracole index publish";
