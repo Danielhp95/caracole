@@ -199,9 +199,6 @@ def test_from_720_px_a_bands_line_keeps_its_title_whatever_its_buttons_take(conn
         b.close()
     said = json.dumps(drawn)
     assert all(m["band"] for m in drawn), said
-    # (Select mode's key column is 2.75rem, never the text's pixels: at 250 % the key, 110 of them, passes the line's
-    # end, as it did before its buttons were placed.)
-    assert [m for m in drawn if m["title"] < m["least"] - 0.5 or not (m["fits"] or m["selecting"] and m["lh"] == "40px")
-            ] == [], said
+    assert [m for m in drawn if m["title"] < m["least"] - 0.5 or not m["fits"]] == [], said
     assert [m for m in drawn if m["plays"] > 1 and m["rows"] >= m["plays"]] == [], said  # never one a row
     assert [m for m in drawn if not m["under"] and m["rows"] > 1] == [], said  # wrapped: under the title instead

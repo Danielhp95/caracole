@@ -197,16 +197,17 @@ button.plays:hover, button.plays[aria-expanded="true"] { border-color: var(--acc
     grid-template-areas: "pick meta plays key" "pick name plays key"; }
 }
 @media (min-width: 720px) {
-  .selecting .line { grid-template-columns: 44px minmax(0, 1fr) minmax(0, .6fr) 6.5rem 2.75rem;
+  .selecting .line { grid-template-columns: 44px minmax(0, 1fr) minmax(0, .6fr) 6.5rem calc(44 * var(--sp));
     grid-template-areas: "pick title by status key"; }
   .selecting section.artist.folded .line:not(.hit):not(.miss), .selecting section.flat .line:not(.hit):not(.miss) {
-    grid-template-columns: 44px minmax(4rem, max-content) fit-content(16rem) minmax(0, 1fr) 6.5rem auto 2.75rem;
-    grid-template-areas: "pick name by . status plays key"; }
+    grid-template-columns: 44px minmax(4rem, max-content) fit-content(16rem) minmax(0, 1fr) 6.5rem auto
+      calc(44 * var(--sp)); grid-template-areas: "pick name by . status plays key"; }
+  /* Its title's least, as library.css's; the key's column the text's pixels, as every other line's (base.css --sp). */
   .selecting section.artist:not(.folded) .line { grid-template-columns: 44px minmax(calc(64 * var(--sp)), 1fr) 6.5rem
-    auto 2.75rem; grid-template-areas: "pick title status plays key"; }  /* its title's least, as library.css's */
+    auto calc(44 * var(--sp)); grid-template-areas: "pick title status plays key"; }
   /* A band's line's buttons under its title where they would wrap beside it (library.css). */
   .selecting section.artist:not(.folded) .line.plays-under:not(.hit):not(.miss) {
-    grid-template-columns: 44px minmax(0, 1fr) 6.5rem 2.75rem;
+    grid-template-columns: 44px minmax(0, 1fr) 6.5rem calc(44 * var(--sp));
     grid-template-areas: "pick title status key" "pick plays plays ."; }
 }
 /* Beside the laptop's pane, a folded or flat line's buttons under its title where they don't fit beside it
@@ -214,7 +215,7 @@ button.plays:hover, button.plays[aria-expanded="true"] { border-color: var(--acc
 @media (min-width: 1200px) {
   .selecting section.artist.folded .line.plays-under:not(.hit):not(.miss),
   .selecting section.flat .line.plays-under:not(.hit):not(.miss) {
-    grid-template-columns: 44px minmax(4rem, max-content) fit-content(16rem) minmax(0, 1fr) 6.5rem 2.75rem;
+    grid-template-columns: 44px minmax(4rem, max-content) fit-content(16rem) minmax(0, 1fr) 6.5rem calc(44 * var(--sp));
     grid-template-areas: "pick name by . status key" "pick plays plays plays plays ."; }
 }
 .selecting .page { padding-bottom: 104px; }
