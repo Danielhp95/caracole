@@ -409,11 +409,14 @@ def _amount(done: int, total: int) -> str:
 
 
 def merge_console() -> Console:
-    """Where a merge says how far it has got: stderr, so that stdout stays its report, with a live line on a
-    terminal. Tests replace it."""
+    """Where a merge says how far it has got: stderr, so that stdout stays its report, by the ticker's rules: a live
+    line on a terminal at the default verbosity alone (``progress.live_here``), plain lines else, none at -q. Tests
+    replace it."""
     import sys
 
-    return Console(sys.stderr)
+    from caracole import logs, progress
+
+    return Console(sys.stderr, live=progress.live_here(), quiet=logs.level() == logs.QUIET)
 
 
 class Merging:
@@ -426,12 +429,15 @@ class Merging:
     site begins, and as each quarter of UG's sitemap rows is passed. ``say`` is another step of the caller's (a
     file's indexes copied out first), said the same way. ``close`` clears a live line left.
 
-    Once its reader is gone (``BrokenPipeError``: ``| head``, a caracole serve stopped), it says nothing more and the
-    merge goes on, as ``_Publishing`` does: the stream it wrote to (the console's, else ``stream``, where ``stage``
-    writes) is pointed at /dev/null, so that what the command says after is dropped rather than failing it."""
+    A live line is taken off before the log writes a record (``logs.clears_first``), so a warning mid-merge has a line
+    of its own. Once what it writes to fails (``BrokenPipeError``: ``| head``, a caracole serve stopped; a terminal
+    gone, EIO; a stream closed), it says nothing more and the merge goes on, as ``_Publishing`` does: the stream it
+    wrote to (the console's, else ``stream``, where ``stage`` writes) is pointed at /dev/null, so that what the command
+    says after is dropped rather than failing it."""
 
     def __init__(self, *, console: Console | None = None, stage: Callable[[str], None] | None = None,
                  stream=None) -> None:
+        from caracole import logs
         from caracole.index_transfer import MergeWords
 
         self.console = console
@@ -440,16 +446,28 @@ class Merging:
         self._words = MergeWords()
         self._quarter = 0
         self._cut = False
+        live = stage is None and console is not None and console.live
+        self._undo = logs.clears_first(self._clear) if live else None
+
+    def _clear(self) -> None:
+        if self.console is not None:
+            self._tell(self.console.close)
 
     def _tell(self, say: Callable[..., None], *args: str) -> None:
         if self._cut:
             return
         try:
             say(*args)
-        except BrokenPipeError:
+        except (OSError, ValueError):  # its reader gone (a broken pipe), its terminal gone, its stream closed
             self._cut = True
+            self._unhook()
             if self.stream is not None:
                 _cut_off(self.stream)
+
+    def _unhook(self) -> None:
+        if self._undo is not None:
+            self._undo()
+            self._undo = None
 
     def say(self, text: str) -> None:
         if self.stage is not None:
@@ -481,8 +499,8 @@ class Merging:
             self._tell(self.console.status, f"{said}...")  # a site: the live line alone; a journal hears its actions
 
     def close(self) -> None:
-        if self.console is not None:
-            self._tell(self.console.close)
+        self._clear()
+        self._unhook()
 
 
 def _merge(cfg: Config, file: Path, sites: list[str], *, delete: bool = False, progress: bool = False) -> None:

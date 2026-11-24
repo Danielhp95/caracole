@@ -286,6 +286,81 @@ def test_a_merge_whose_progress_reader_is_gone_still_merges_and_says_nothing_mor
         conn.close()
 
 
+class Failing(Gone):
+    """A stream that fails another way: a terminal gone (EIO), or one closed (ValueError)."""
+
+    def __init__(self, error: Exception) -> None:
+        super().__init__()
+        self.error = error
+
+    def write(self, text):
+        self.writes += 1
+        raise self.error
+
+    def flush(self):
+        raise self.error
+
+
+@pytest.mark.parametrize("error", [OSError(5, "Input/output error"), ValueError("I/O operation on closed file.")],
+                         ids=["a terminal gone", "a stream closed"])
+def test_merging_whose_terminal_fails_any_way_says_nothing_more_and_never_raises(error):
+    from caracole.commands.index import Merging
+    from caracole.progress import Console
+
+    failing = Failing(error)
+    told = Merging(console=Console(failing, live=False, color=False))
+    ug_rows(told)
+    told.say("Copying the file's indexes out")
+    assert failing.writes == 1
+
+
+@pytest.mark.parametrize(("level", "live", "quiet"), [
+    ("NORMAL", True, False), ("VERBOSE", False, False), ("DEBUG", False, False), ("QUIET", False, True),
+    (None, False, False)])
+def test_a_merges_console_follows_the_tickers_rules(monkeypatch, level, live, quiet):
+    # As progress.ticker(): the live line on a terminal at the default verbosity alone (at -v the log's lines say
+    # more, a caller that set up no log gets none), and -q keeps the report alone.
+    import sys
+
+    from helpers.screens import Terminal
+
+    from caracole import logs
+    from caracole.commands import index
+
+    monkeypatch.setenv("TERM", "xterm")
+    monkeypatch.setattr(sys, "stderr", Terminal())
+    monkeypatch.setattr(logs, "level", lambda: None if level is None else getattr(logs, level))
+    console = index.merge_console()
+    assert (console.stream, console.live, console.quiet) == (sys.stderr, live, quiet)
+
+
+def test_a_warning_mid_merge_takes_the_live_line_off_first_and_none_after_it_closed():
+    import io
+    import logging
+
+    from helpers.screens import Terminal
+
+    from caracole import logs
+    from caracole.commands.index import Merging
+    from caracole.progress import Console
+
+    screen, log = Terminal(), io.StringIO()
+    logs.setup(logs.NORMAL, stream=log)
+    try:
+        told = Merging(console=Console(screen, live=True, color=False, width=lambda: 200))
+        told("ug", "sitemap", 0, 41)
+        told("ug", transfer.UG_TABS, transfer.UG_CHUNK, 1_367_059)
+        assert screen.getvalue().endswith("50,000 of 1,367,059 tabs")
+        logging.getLogger("caracole.index_transfer").warning("a site's rows look odd")
+        assert screen.getvalue().endswith("\r") and log.getvalue() == "warning: a site's rows look odd\n"
+        told.close()
+        written = screen.getvalue()
+        logging.getLogger("caracole.index_transfer").warning("after it")
+        assert screen.getvalue() == written  # its hook gone with it
+    finally:
+        logs.teardown()
+
+
 def test_merging_whose_stage_reader_is_gone_says_nothing_more_and_never_raises():
     from caracole.commands.index import Merging
 

@@ -3800,8 +3800,8 @@ Before it changes anything it backs the database up into `backups/` (`…-before
 without room for that copy it merges nothing. While it works it says how far it has got on stderr:
 the comparison, the backup, each site's sitemaps or pages, and Ultimate Guitar's tabs as they go in
 (`Ultimate Guitar · 41 sitemaps · 600,000 of 1,367,059 tabs`, 50,000 at a time). In a terminal
-that is one live line; in a journal or a pipe, a line a step and one each quarter of UG's tabs.
-Then it says what each site took, on stdout:
+that is one live line, taken off for a warning; in a journal or a pipe, or with `-v`, a line a step
+and one each quarter of UG's tabs; with `-q`, none. Then it says what each site took, on stdout:
 
     Merged /var/lib/caracole/state/indexes.sqlite into /var/lib/caracole/state/caracole.sqlite:
       Ultimate Guitar: nothing read more recently.

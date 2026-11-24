@@ -305,13 +305,18 @@ class Ticker:
         self.close()
 
 
+def live_here() -> bool | None:
+    """A command's live line on stderr, as ``Console`` takes ``live``: the stream's own say (None) at the default
+    verbosity alone, else none (False): at -v the log's own lines say more, -q keeps quiet, and a caller that set up no
+    log, a test's, gets none; nor once a live line failed to be written in this process."""
+    return None if logs.level() == logs.NORMAL and not _screen_gone else False
+
+
 def ticker() -> Ticker:
-    """A command's ``Ticker``: its live line on stderr on a terminal at the default verbosity alone (at -v the log's
-    own lines say more, -q keeps quiet, and a caller that set up no log, a test's, gets none); its log lines whatever
-    the log shows; and the unit's status line where the unit lets it be told (``$NOTIFY_SOCKET``)."""
-    live = None if logs.level() == logs.NORMAL and not _screen_gone else False
+    """A command's ``Ticker``: its live line on stderr as ``live_here`` says; its log lines whatever the log shows;
+    and the unit's status line where the unit lets it be told (``$NOTIFY_SOCKET``)."""
     status = systemd_status if os.environ.get("NOTIFY_SOCKET") else None
-    return Ticker(Console(sys.stderr, live=live), status=status)
+    return Ticker(Console(sys.stderr, live=live_here()), status=status)
 
 
 def systemd_status(text: str, *, environ: Mapping[str, str] | None = None) -> bool:

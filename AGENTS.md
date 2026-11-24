@@ -622,7 +622,9 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     and `("ug", UG_TABS, rows taken, rows)` after each chunk of UG's sitemap rows, a statement for each `UG_CHUNK`
     (50,000) by `tab_id` range, in one statement's order and savepoint, so its rows come out the same (the index
     corpus with `UG_CHUNK` 1 unchanged); `MergeWords` the words, commands/index.py `Merging` where they go (`index
-    merge`'s stderr or `--progress` detail; `peer sync`'s and `peer import`'s `index` stage).
+    merge`'s stderr or `--progress` detail; `peer sync`'s and `peer import`'s `index` stage), stderr's by the
+    ticker's rules (`merge_console`: `progress.live_here`, quiet at -q; a live line taken off before a log record,
+    `logs.clears_first`; any write that fails, a broken pipe, a terminal gone, a stream closed, the last it tries).
 
 #### peer_sync.py
 
