@@ -114,8 +114,9 @@ class ExportsTest {
         })
         assertEquals(listOf(4096L), told)
         assertFalse(Exports.readies(4096), "a small file is shared at once, with nothing said")
-        assertTrue(Exports.readies(Exports.READIES_FROM))
-        assertTrue(Exports.readies(274_000_000))
+        assertFalse(Exports.readies(52_000_000), "a library and its songbooks: a moment's copy, nothing said")
+        assertTrue(Exports.readies(100_000_000))
+        assertTrue(Exports.readies(274_000_000), "one with the site indexes")
     }
 
     @Test
