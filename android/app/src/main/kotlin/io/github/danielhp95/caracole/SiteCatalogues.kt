@@ -5,6 +5,7 @@ import io.github.danielhp95.caracole.core.catalogues.Named
 import io.github.danielhp95.caracole.core.catalogues.Names
 import io.github.danielhp95.caracole.core.catalogues.date
 import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.index.ListedIndexes
 import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.index.TabCounts
 import io.github.danielhp95.caracole.core.json.PyJson
@@ -43,7 +44,7 @@ object SiteCatalogues {
      * `catalogues:imported`, the file's name, which names its minute: core.catalogues' Names), or the computer's
      * indexes as a sync merged them ([computers], each kv [COMPUTERS] record, `{site: stamp}`), the newer of the two
      * (the catalogues on a tie). When neither was ever taken but the phone holds tabs ([holdsTabs], asked last), the
-     * newest of its sitemap and listing records ([listed], [listedOf]), whoever merged them. Never the phone's own
+     * newest of its sitemap and listing records ([listed], core.index's ListedIndexes), whoever merged them. Never the phone's own
      * reads (a lookup's UG artist page, an artist's Songs on harptabs.com), which say nothing of how old the rest is.
      * None for none.
      */
@@ -56,46 +57,13 @@ object SiteCatalogues {
         return if (holdsTabs()) Fresh(Source.INDEXES, indexes) else null
     }
 
-    /** Each record's [field] of a kv record of records by name (a site's sitemaps', `{name: {checked_at, …}}`), a text
-     * alone; none of a record that can't be read. */
-    fun recorded(text: String?, field: String): List<String> {
-        val doc = try {
-            text?.let(PyJson::loads)
-        } catch (e: Exception) {
-            null
-        } as? JsonObject ?: return emptyList()
-        return doc.values.mapNotNull { record ->
-            ((record as? JsonObject)?.get(field) as? JsonPrimitive)?.takeIf { it.isString }?.content
-        }
-    }
-
-    /**
-     * The times of the phone's sitemap and listing records, as IndexTransfer.newest reads them, less the pages a phone
-     * reads itself (UG's artist pages, harptabs.com's, gametabs.net's game pages): UG's sitemaps and index, its
-     * directory's listings, LaCuerda's listing pages, and each other site's sitemaps; their keys are core.index's
-     * (Merge's, internal there).
-     */
-    fun listedOf(db: Db): List<String> {
-        fun kv(key: String) = db.kvGet(key)
-        val sitemaps = listOf("gtptabs", "musescore", "harptabs", "gametabs")
-        val records = recorded(kv("ug:sitemaps"), "indexed_at") +
-            recorded(kv("ug:directory:letters"), "done") + recorded(kv("ug:directory:letters"), "started") +
-            recorded(kv("lacuerda:index:pages"), "checked_at") +
-            sitemaps.flatMap { recorded(kv("$it:sitemaps"), "checked_at") }
-        val progress = (listOf("ug:index:refreshed_at", "ug:index:built_at", "lacuerda:index:complete_at") +
-            sitemaps.map { "$it:index:complete_at" }).mapNotNull(::kv)
-        val seen = db.one("SELECT MAX(seen_at), typeof(MAX(seen_at)) FROM main.ug_directory") {
-            if (it.text(1) == "text") it.text(0) else null
-        }
-        return records + progress + listOfNotNull(seen)
-    }
-
-    /** [fresh] as the phone's database [db] has it: kv `catalogues:imported`, each kv [COMPUTERS] record, then its
-     * sitemap and listing records ([listedOf]) and whether a site's index holds a tab (TabCounts). */
+    /** [fresh] as the phone's database [db] has it: kv `catalogues:imported`, each kv [COMPUTERS] record, then the
+     * newest of its sitemap and listing records (ListedIndexes) and whether a site's index holds a tab (TabCounts). */
     fun read(db: Db): Fresh? = fresh(db.kvGet(Catalogues.IMPORTED),
                                      db.query("SELECT value FROM kv WHERE key >= ? AND key < ?", COMPUTERS,
                                               COMPUTERS.dropLast(1) + ";") { it.text(0) },
-                                     listed = { listedOf(db) }, holdsTabs = { TabCounts.of(db).values.any { it > 0 } })
+                                     listed = { listOfNotNull(ListedIndexes.newest(db)) },
+                                     holdsTabs = { TabCounts.of(db).values.any { it > 0 } })
 
     /** A kv [COMPUTERS] record's stamps; none of a record that isn't a JSON object of texts. */
     private fun stampsOf(text: String?): List<String> {

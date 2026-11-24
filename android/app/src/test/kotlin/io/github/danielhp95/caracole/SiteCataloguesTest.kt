@@ -71,16 +71,6 @@ class SiteCataloguesTest {
     }
 
     @Test
-    fun aRecordOfSitemapsOrListingPagesGivesEachOnesTime() {
-        val record = """{"a.xml": {"checked_at": "2026-10-05T00:00:00Z", "etag": "x"}, "b.xml": {"checked_at": 3},
-                         "c.xml": 7, "d.xml": {"indexed_at": "2026-10-06T00:00:00Z"}}"""
-        assertEquals(listOf("2026-10-05T00:00:00Z"), SiteCatalogues.recorded(record, "checked_at"))
-        assertEquals(listOf("2026-10-06T00:00:00Z"), SiteCatalogues.recorded(record, "indexed_at"))
-        assertEquals(emptyList<String>(), SiteCatalogues.recorded("not json", "checked_at"))
-        assertEquals(emptyList<String>(), SiteCatalogues.recorded(null, "checked_at"))
-    }
-
-    @Test
     fun theDayIsSaidInEnglishInUtc() {
         assertEquals("3 Nov 2026", SiteCatalogues.day(Instant.parse("2026-11-03T03:12:00Z")))
         assertEquals("31 Dec 2025", SiteCatalogues.day(Instant.parse("2025-12-31T23:59:59Z")))

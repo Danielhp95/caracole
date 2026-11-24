@@ -13,6 +13,7 @@ import androidx.test.runner.lifecycle.Stage
 import io.github.danielhp95.caracole.core.catalogues.Catalogues
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.index.IndexTransfer
+import io.github.danielhp95.caracole.core.index.ListedIndexes
 import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.index.TabCounts
 import io.github.danielhp95.caracole.core.testing.Corpus
@@ -105,10 +106,14 @@ class CataloguesTest {
             onMain { settings.finish() }
         }
         // No catalogue imported (the record gone, as on a phone whose indexes came from a .caracole file), yet tabs
-        // there: the newest sitemap read the indexes hold (gtptabs.com's and MuseScore's: no page of theirs the phone
-        // reads itself), as IndexTransfer.newest has it.
+        // there: the newest of the sitemap and listing records the indexes hold (ListedIndexes, held to Merge's keys
+        // by core's ListedIndexesTest). This export holds gtptabs.com's and MuseScore's indexes alone, whose newest
+        // read IndexTransfer.newest takes from their sitemaps' records alone (neither has pages a phone reads), so here
+        // the two agree; with UG's artist pages or harptabs.com's artists read later they wouldn't.
         val database = Caracole.phone(context).parts.database
+        val listed = database.read { ListedIndexes.newest(it) }!!.let { Stamps.instant(Stamps.parse(it)!!) }
         val sitemaps = database.read { IndexTransfer.newest(it) }.values.mapNotNull { Stamps.parse(it)?.let(Stamps::instant) }.max()
+        assertEquals(sitemaps, listed)
         database.writeBlocking { it.kvDelete(Catalogues.IMPORTED) }
         ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
             waitUntil("the indexes' date") {
