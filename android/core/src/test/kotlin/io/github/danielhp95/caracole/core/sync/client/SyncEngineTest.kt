@@ -191,6 +191,8 @@ class SyncEngineTest {
         val outcome = apply(engine.compare(computer.address.toString()))
         assertEquals(listOf(unitOf(song)), outcome.given)
         assertEquals(1, computer.asked("POST", "/peer/push/file").size)
+        // Each file sent counted as "N of M files", a count the notification's bar fills by (Working.counted).
+        assertTrue(Triple("give", "running", "1 of 1 file") in stages, stages.joinToString("\n"))
         val push = computer.pushes.single()
         assertEquals(phoneId, (push["from"] as JsonPrimitive).content)
         assertEquals(JsonPrimitive(computer.now), push["at"])
@@ -747,13 +749,16 @@ class SyncEngineTest {
         apply(engine.compare(computer.address.toString()))
         val said = stages.filter { it.first == "index" && it.second == "running" }.map { it.third }
         val bytes = export.length()
-        val steps = listOf("gtptabs, musescore", "The computer is copying its indexes…",
+        // Each step's words as the stage's detail, one "…" at their end left off: its line puts its own after them
+        // (Status.stageLine, "Updating the indexes · Tidying the database…").
+        val steps = listOf("gtptabs, musescore", "The computer is copying its indexes",
                            "Downloading the computer's indexes · ${CataloguesSizes.of(0, bytes)}",
-                           "Comparing with the phone's index…",
-                           "Importing · gtptabs.com", "Importing · MuseScore", "Tidying the database…")
+                           "Comparing with the phone's index",
+                           "Importing · gtptabs.com", "Importing · MuseScore", "Tidying the database")
         var at = 0
         for (line in said) if (at < steps.size && line == steps[at]) at++
         assertEquals(steps.size, at, said.joinToString("\n"))
+        assertTrue(said.none { it.endsWith("…") }, said.joinToString("\n"))
         assertTrue(said.any { it == "Downloading the computer's indexes · ${CataloguesSizes.of(bytes, bytes)}" },
                    said.joinToString("\n"))
         assertEquals("0.0 of 0.1 MB", CataloguesSizes.of(0, 100_000))

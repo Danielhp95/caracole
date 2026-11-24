@@ -121,7 +121,8 @@ class SameCaracole(message: String) : Exception(message)
  *      `sync:index:<computer id>` records, fetched into `stateDir/cache/` and merged (IndexTransfer.merge) inside
  *      Database.write, the kv brought up to date, then the WAL checkpointed; the stage says each step as it goes
  *      ("The computer is copying its indexes…" until the answer begins, "Downloading the computer's indexes · 120 of
- *      274 MB", the merge's MergeProgress.words, "Tidying the database…"), a count at most once a second ([ticks]);
+ *      274 MB", the merge's MergeProgress.words, "Tidying the database…"), a count at most once a second ([ticks]),
+ *      each step's words the stage's detail with one "…" at their end left off ([detail]: its line adds its own);
  *    - then, merged or not (whatever came of that, a failure too), the pages the phone's lookups stored since the
  *      last push to that computer (Reads.since: what they read, never a time window, since UG's stamp moves with the
  *      computer's nightly refresh and LaCuerda's rows hold no time) exported (IndexExport.export) into
@@ -149,9 +150,10 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
     /** The clock a stage's counts are paced by (Paced: at most one a second within a step); a test's own. */
     internal var ticks: () -> Long = System::nanoTime
 
-    /** A stage's running words, paced (Paced): each step's first at once, a count at most once a second. */
+    /** A stage's running words, paced (Paced): each step's first at once, a count at most once a second; each its
+     * [detail], one "…" at its end left off. */
     private fun paced(stage: (String, String, String) -> Unit, name: String): Paced =
-        Paced({ words -> stage(name, RUNNING, words) }, ticks = ticks)
+        Paced({ words -> stage(name, RUNNING, detail(words)) }, ticks = ticks)
 
     /** The latest time an index merged here may say it was read at (IndexTransfer.merge's `notAfter`): the clock and
      * a day more, for another device's clock ahead of the phone's. */
@@ -629,7 +631,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             val (push, need) = io { client.pushNew(token, me, Give.files(entries)) }
             val unreadable = HashSet<String>()
             need.forEachIndexed { i, sha ->
-                stage(GIVE, RUNNING, "file ${i + 1} of ${need.size}")
+                stage(GIVE, RUNNING, "${i + 1} of ${plural(need.size, "file")}")  // a count the bar fills by
                 val bytes = io { Give.read(database, store.libraryDir, sha) }
                 if (bytes == null) unreadable.add(sha) else io { client.pushFile(token, push, sha, bytes) }
             }
@@ -937,6 +939,12 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         const val COPYING_THERE = "The computer is copying its indexes…"
         const val COPYING_OUT = "Copying the file's indexes out…"
         private const val DOWNLOADING = "downloading"
+
+        /** A step's [words] as a stage's running detail: one "…" at their end left off ("Tidying the database…",
+         * the merge's "Making the search index ready…"), since a long stage's line puts its own after its detail
+         * (Status.stageLine: "Updating the indexes · Tidying the database…"). The catalogues job's words keep theirs:
+         * there the detail is the whole line. */
+        fun detail(words: String): String = words.removeSuffix("…")
 
         /** "Downloading the computer's indexes · 120 of 274 MB"; with no total ([total] -1, an answer of no
          * Content-Length), the bytes so far alone: "· 3.4 MB so far". */

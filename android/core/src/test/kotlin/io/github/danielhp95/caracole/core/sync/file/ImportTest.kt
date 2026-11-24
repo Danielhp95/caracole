@@ -233,8 +233,8 @@ class ImportTest {
         here.engine.ticks = { 0L }  // the clock stands still: each step's first words alone
         here.apply(here.engine.compareFile(there.export(listOf(Scope.LIBRARY, Scope.INDEXES))))
         val said = stages.filter { it.first == "index" && it.second == "running" }.map { it.third }
-        val steps = listOf("", "Copying the file's indexes out…", "Comparing with the phone's index…",
-                           "Importing · Ultimate Guitar", "Importing · LaCuerda", "Tidying the database…")
+        val steps = listOf("", "Copying the file's indexes out", "Comparing with the phone's index",
+                           "Importing · Ultimate Guitar", "Importing · LaCuerda", "Tidying the database")
         var at = 0
         for (line in said) if (at < steps.size && line == steps[at]) at++
         assertEquals(steps.size, at, said.joinToString("\n"))
