@@ -46,10 +46,10 @@ import java.time.Instant
  * 2. the release listed ([CatalogueSource.list]) and its file chosen ([choose]): none of this schema, the reason in
  *    [words] (a newer schema, an older one, none at all); the one imported last (kv [Catalogues.IMPORTED]), "Up to
  *    date: the catalogues of DATE" ([UP_TO_DATE]), done, nothing downloaded;
- * 3. on a metered network ([metered]) with no `--metered-ok`: "52 MB to download: waiting for Wi-Fi or your
- *    go-ahead" (the kind's second way to end, a wait), nothing downloaded, the file's name and size kept in kv
- *    [ASKING] (`{"name", "bytes"}`) for the app's question; asked again with `--metered-ok` (the go-ahead, a job of
- *    its own key, [GO]), downloaded whatever the network;
+ * 3. on a metered network ([metered]) with no `--metered-ok`: "52 MB to download: waiting for your go-ahead to use
+ *    mobile data" (the kind's second way to end, a wait: nothing starts it again on Wi-Fi by itself), nothing
+ *    downloaded, the file's name and size kept in kv [ASKING] (`{"name", "bytes"}`) for the app's question; asked
+ *    again with `--metered-ok` (the go-ahead, a job of its own key, [GO]), downloaded whatever the network;
  * 4. less room in `stateDir` than [Catalogues.ROOM_FACTOR] times the file ([free]): "The import needs about 1.2 GB
  *    free; the phone has 700 MB.", nothing downloaded;
  * 5. the file downloaded ([download]: unpacked and checked) into `stateDir/cache/catalogues/`, saying "Downloading ·

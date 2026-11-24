@@ -27,10 +27,11 @@ object PhoneKinds {
 
     /** The site catalogues GitHub's release holds, downloaded and merged: its stage's words while it runs are what it
      * is doing (`{doing}`), its date the file's; its [Kind.otherwise], a wait, the download a metered network leaves
-     * for the owner's go-ahead ({size}). */
+     * for the owner's go-ahead ({size}): nothing starts it again on Wi-Fi by itself, so its words name the go-ahead
+     * alone. */
     val CATALOGUES = Kind("catalogues", "catalogues:", "Download the site catalogues", "The site catalogues",
                           "catalogues" to "Catalogues", "{doing}", "Catalogues of {date}", "Not imported: {why}",
-                          otherwise = "{size} to download: waiting for Wi-Fi or your go-ahead")
+                          otherwise = "{size} to download: waiting for your go-ahead to use mobile data")
 
     val ALL: Map<String, Kind> = listOf(RENDER, INBOX, BACKUP, RESTORE, CATALOGUES).associateBy { it.kind }
 

@@ -311,7 +311,7 @@ class JobViewsTest {
         }
         runCurrent()
         assertEquals(Line("ready", "Up to date: the catalogues of 24 Nov 2026"), JobViews.line(queue.job(upToDate.id)!!))
-        assertEquals(Line("waiting", "52 MB to download: waiting for Wi-Fi or your go-ahead",
+        assertEquals(Line("waiting", "52 MB to download: waiting for your go-ahead to use mobile data",
                           details = "#tab=requests&job=${metered.id}"), JobViews.line(queue.job(metered.id)!!))
         val failed = phoneJob(queue, kind, "failed") { context ->
             val line = PhoneKinds.fill(kind.failed, "why" to "No catalogues are published yet.")
@@ -322,7 +322,7 @@ class JobViewsTest {
         assertEquals(Line("failed", "Not imported: No catalogues are published yet.",
                           details = "#tab=requests&job=${failed.id}"), JobViews.line(queue.job(failed.id)!!))
         // A line fits a template with its blanks filled, wherever they are.
-        assertTrue(PhoneKinds.fits("52 MB to download: waiting for Wi-Fi or your go-ahead", kind.otherwise!!))
+        assertTrue(PhoneKinds.fits("52 MB to download: waiting for your go-ahead to use mobile data", kind.otherwise!!))
         assertTrue(PhoneKinds.fits("Waiting for its song: a.gp5", PhoneKinds.INBOX.otherwise!!))
         assertTrue(PhoneKinds.fits("Filed · a of b", PhoneKinds.INBOX.done))
         assertEquals(false, PhoneKinds.fits("Up to date: the catalogues of 24 Nov 2026", kind.otherwise!!))
