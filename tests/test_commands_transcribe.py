@@ -79,7 +79,7 @@ def models(monkeypatch) -> list[str]:
         def __init__(self, binary, model, cache_dir, timeout=0.0):
             pass
 
-        def vocals(self, audio, workdir):
+        def vocals(self, audio, workdir, **kwargs):
             heard.append(f"demucs {Path(audio).name}")
             return wav(Path(workdir) / "stems" / "vocals.wav", 1.0)
 
@@ -87,7 +87,7 @@ def models(monkeypatch) -> list[str]:
         def __init__(self, model_path, *, device, cache_dir):
             self.device = device
 
-        def hear(self, mix, stem, first_sung_s):
+        def hear(self, mix, stem, first_sung_s, **kwargs):
             heard.append(f"whisper {Path(mix).name}")
             return tx.Heard("es", list(WORDS))
 

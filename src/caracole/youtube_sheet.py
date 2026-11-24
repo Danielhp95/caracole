@@ -29,6 +29,9 @@ serve reads into the job's stages; staged.py's ``StagedRun`` is that reporting h
   ``song_ids``): the sheet is readable from here on (``Progress.readable``).
 - ``pages``: _todo.md and index.html.
 
+While the audio and the chords run, each says what it does (staged.py ``_doing``), which the song's line shows: the
+video downloaded or searched for, then auto-chords' steps.
+
 A stage that can't go on skips those after it that need it, saying why. A block, a cooldown, a spent budget
 or a site's error is a wait, never a failure, and the command exits 0, as every command does. What waiting
 won't mend is ``SheetResult.failed``, and the command exits 1: a song refused, a video YouTube won't give
@@ -188,6 +191,7 @@ class _Sheet(StagedRun):
             until = get_state(self.conn, PROVIDER).cooldown_until
             when = until.strftime("%Y-%m-%d %H:%M UTC") if until else "later"
             return "skipped", f"waiting out YouTube until {when}"
+        self._doing("audio", "downloading the video's audio" if pasted else "looking for a video on YouTube")
         heard: list[tuple[str, Record]] = []
         runner = make_youtube(self.cfg, self.conn, self.run_id)
         try:

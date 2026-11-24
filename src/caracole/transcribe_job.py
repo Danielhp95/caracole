@@ -23,6 +23,11 @@ its own (staged.py; ``--progress`` writes a JSON line per event, which caracole 
 - ``pdf``: the PDF and the viewer, for this song alone (``render_all``'s ``song_ids``).
 - ``pages``: _todo.md and index.html.
 
+While each of the long stages runs, it says how far it is (staged.py ``_doing``), which the song's line shows: the
+vocals how long demucs-rs has been at it against about how long it takes here (``_separating``: the song's length
+times the separator's pace, the GPU's or the CPU's, ``separate.GPU_PACE``, ``CPU_PACE``), each minute; the words
+Whisper loading, then how far it has heard the mix (``_heard``), a window at a time; the chords auto-chords' steps.
+
 Before each of vocals, words and chords, the long stages, a waiting lookup goes first (``_common.hand_over``); then
 the song is read again, checked still offered (before the chords, its transcript kept no refusal), and its audio
 still the one vocals separated before words and chords. A song that left the book, is offered no more (a human sheet
@@ -126,6 +131,7 @@ class _Transcription(StagedRun):
         self.audio: tuple[str | None, float | None] = (None, None)  # the audio separated: its path and mtime
         self.stem: Path | None = None
         self.spans: list[Any] = []
+        self.length: float | None = None  # the mix's, in seconds, as its loudness read it
         self.kept = False  # its transcript kept already, its sheet over it to make: the chords alone run
 
     def stage(self, name: str, run: Callable[[], tuple[str, str] | str]) -> None:
@@ -216,6 +222,7 @@ class _Transcription(StagedRun):
             from caracole.autochords.run import _test_tone
             from caracole.autochords.transcribe import SetupFailed, WhisperTranscriber, resolve_device
 
+            self._doing("words", "loading Whisper")
             auto = self.cfg.autochords
             transcriber = WhisperTranscriber(auto.whisper_model, device=resolve_device(auto.transcribe_device),
                                              cache_dir=self.cfg.cache_dir)
@@ -260,6 +267,7 @@ class _Transcription(StagedRun):
     def vocals(self) -> tuple[str, str] | str:
         from caracole.autochords import separate
         from caracole.autochords.words import FRAME_S, sung_spans
+        from caracole.youtube_fetch import transcribes_on_the_gpu
 
         if self.kept:
             return "skipped", "transcribed already"
@@ -272,8 +280,12 @@ class _Transcription(StagedRun):
             mix_db = separate.frame_db(mix)
         except Exception as e:  # noqa: BLE001 - the reader's, whatever it is: no proof the audio is bad
             return self._fail(f"can't measure the audio here ({type(e).__name__}: {e})")
+        self.length = len(mix_db) * FRAME_S
+        takes = self.length * (separate.GPU_PACE if transcribes_on_the_gpu(self.cfg) else separate.CPU_PACE)
+        self._doing("vocals", _separating(0.0, takes))
         try:
-            self.stem = separator.vocals(mix, self._folder("song"))
+            self.stem = separator.vocals(mix, self._folder("song"),
+                                         on_tick=lambda ran: self._doing("vocals", _separating(ran, takes)))
         except separate.SeparatorFailed as e:
             return self._fail(f"the separator can't run here ({e})")
         try:
@@ -307,8 +319,10 @@ class _Transcription(StagedRun):
         self._still_offered()
         transcriber = self._the_transcriber()
         mix = Path(self.song.audio_path or "")
+        self._doing("words", _heard(0.0, self.length))
         try:
-            heard = transcriber.hear(mix, self.stem, self.spans[0].start)
+            heard = transcriber.hear(mix, self.stem, self.spans[0].start,
+                                     on_progress=lambda done, whole: self._doing("words", _heard(done, whole)))
         except RuntimeError as e:  # a SetupFailed (the GPU's) is said by ``stage``
             if not is_audio_error(e):
                 raise  # a bug, deep in Whisper or in caracole: said as one, and nothing filed against the song
@@ -345,6 +359,27 @@ class _Transcription(StagedRun):
     def run(self) -> TranscribeResult:
         self._run(f"transcribe {self.request.display}")
         return self.result
+
+
+def _separating(ran: float, takes: float) -> str:
+    """What the vocals stage says while demucs-rs runs: how long it has run, in whole minutes, against about how long
+    it ``takes`` here; once past that, how long it has run alone."""
+    about = round(takes / 60)
+    if ran < 60:
+        return f"separating the voice (about {f'{about} min' if about > 1 else 'a minute'})"
+    minutes = int(ran // 60)
+    if minutes < about:
+        return f"separating the voice: {minutes} of about {about} min"
+    return f"separating the voice: {minutes} min so far"
+
+
+def _heard(done: float, whole: float | None) -> str:
+    """What the words stage says while Whisper hears the mix: how far into it, of its length."""
+    def clock(seconds: float) -> str:
+        whole_s = int(seconds)
+        return f"{whole_s // 60}:{whole_s % 60:02d}"
+
+    return f"heard {clock(done)} of {clock(whole)}" if whole else f"heard {clock(done)}"
 
 
 def _held(folder: Path) -> bool:

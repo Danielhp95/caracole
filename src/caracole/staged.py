@@ -8,6 +8,9 @@ caracole's lock, as asked for now:
 
 - ``stage`` runs one, its end ``(state, detail)`` or a detail of ``done``; an exception it raises is a bug in
   caracole, said in its words, the stages after it going on as they can;
+- ``_doing``: what a long stage is doing, said while it runs (a running event with that detail, each change once),
+  which the song's line shows (web/status.py ``LONG_STAGES``): the models take minutes, and a line that never moves
+  reads as no progress;
 - ``_fail``: an end that waiting won't mend (``result.failed``, and the command exits 1);
 - ``_check_readable``: the sheet said readable (``Progress.readable``) once the chords stage kept it, and again as
   its PDF and viewer come;
@@ -17,7 +20,7 @@ caracole's lock, as asked for now:
   ``_Stop``, before anything more is written for it;
 - ``_refuse``: the job refused, its song stage failed with why, the stages that hadn't ended skipped;
 - the stages both jobs end with: the song's auto sheet from auto-chords (``_autochords_sheet``, the chords stage's
-  end), ``pdf`` and ``pages``.
+  end, each of auto-chords' steps said as it starts), ``pdf`` and ``pages``.
 """
 
 from __future__ import annotations
@@ -80,6 +83,7 @@ class StagedRun:
         self.conn: Any = None
         self.overrides: Any = None
         self.song: Any = None
+        self._told: dict[str, str] = {}  # what each stage said last while it ran
 
     # --- reporting ----------------------------------------------------------------------------------------
 
@@ -87,7 +91,13 @@ class StagedRun:
         self.result.states[name] = state
         if state != "running":
             self.result.details[name] = detail
+        self._told[name] = detail
         self.progress.stage(name, state, detail)
+
+    def _doing(self, name: str, detail: str) -> None:
+        """What the stage ``name``, running, is doing now: said once each time it changes."""
+        if self.result.states.get(name) == "running" and self._told.get(name) != detail:
+            self._report(name, "running", detail)
 
     def stage(self, name: str, run: Callable[[], tuple[str, str] | str]) -> None:
         """Run one stage; what it returns is its end, ``(state, detail)`` or a detail of ``done``."""
@@ -165,7 +175,8 @@ class StagedRun:
         from caracole.youtube_sheet import holds
 
         stats = autochords_pending(self.conn, self.cfg, recognizer=self.recognizer, beats_fn=self.beats_fn,
-                                   now=self.now, overrides=self.overrides, only={self.song.id})
+                                   now=self.now, overrides=self.overrides, only={self.song.id},
+                                   on_step=lambda said: self._doing("chords", said))
         self._song_again()
         if stats.errors:
             return self._fail(f"auto-chords can't run here ({stats.errors[0]})")

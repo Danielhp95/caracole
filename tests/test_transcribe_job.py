@@ -74,7 +74,7 @@ class Separator:
         self.calls: list[tuple[Path, Path]] = []
         self.fail, self.log = fail, log
 
-    def vocals(self, audio, workdir):
+    def vocals(self, audio, workdir, *, on_tick=None):
         self.calls.append((Path(audio), Path(workdir)))
         if self.log is not None:
             self.log.append("separator")
@@ -92,7 +92,7 @@ class Transcriber:
         self.words, self.language, self.fail, self.log = list(words), language, fail, log
         self.calls: list[tuple[Path, Path, float]] = []
 
-    def hear(self, mix, stem, first_sung_s):
+    def hear(self, mix, stem, first_sung_s, *, on_progress=None):
         self.calls.append((Path(mix), Path(stem), first_sung_s))
         if self.log is not None:
             self.log.append("transcriber")
@@ -200,6 +200,54 @@ def test_an_offered_song_gets_its_transcript_and_its_sheet_over_it(conn, cfg):
     files = [e[1] for e in heard.events if e[0] == "files"]
     assert files[-1]["viewer"] == "Nick Cani/Vikingos veganos/sheet (auto).html"
     assert not cfg.wanted_file.exists()  # the song was in the book: nothing added
+
+
+class Ticking(Separator):
+    """demucs-rs on the CPU, telling how long it has run at each tick: more than once a minute, past its estimate."""
+
+    def vocals(self, audio, workdir, *, on_tick=None):
+        for ran in (5.0, 61.0, 65.0, 130.0, 290.0, 300.0):
+            on_tick(ran)
+        return super().vocals(audio, workdir)
+
+
+class Hearing(Transcriber):
+    """Whisper, telling how far it has heard the minute of mix, a 30 s window at a time."""
+
+    def hear(self, mix, stem, first_sung_s, *, on_progress=None):
+        for done in (30.0, 60.0):
+            on_progress(done, 60.0)
+        return super().hear(mix, stem, first_sung_s)
+
+
+@pytest.mark.parametrize("gpu,about", [(False, "about 5 min"), (True, "about a minute")], ids=["cpu", "gpu"])
+def test_each_long_stage_says_how_far_it_is_as_it_runs(conn, cfg, monkeypatch, gpu, about):
+    # The separator and Whisper take minutes, up to half an hour on a CPU: the song's line moves as they go (the
+    # vocals' minutes against about how long demucs-rs takes for the song's minute here, Whisper's place in the mix,
+    # auto-chords' steps), each change said once, and each stage's end as before.
+    from caracole import youtube_fetch
+
+    monkeypatch.setattr(youtube_fetch, "transcribes_on_the_gpu", lambda cfg: gpu)
+    offered(conn, cfg)
+    result, heard = make(cfg, separator=Ticking(), transcriber=Hearing())
+    assert result.ok, result
+    running = [(e[1], e[3]) for e in heard.events if e[0] == "stage" and e[2] == "running"]
+    vocals = [f"separating the voice ({about})"] + ([
+        "separating the voice: 1 of about 5 min", "separating the voice: 2 of about 5 min",
+        "separating the voice: 4 of about 5 min", "separating the voice: 5 min so far"] if not gpu else [
+        "separating the voice: 1 min so far", "separating the voice: 2 min so far",
+        "separating the voice: 4 min so far", "separating the voice: 5 min so far"])
+    assert running == [
+        ("song", ""),
+        ("vocals", ""), *(("vocals", said) for said in vocals),
+        ("words", ""), ("words", "heard 0:00 of 1:00"), ("words", "heard 0:30 of 1:00"),
+        ("words", "heard 1:00 of 1:00"),
+        ("chords", ""), ("chords", "setting up the models"), ("chords", "hearing the chords"),
+        ("chords", "finding the beats"), ("chords", "writing the sheet"),
+        ("pdf", ""), ("pages", ""),
+    ]
+    assert heard.ends()["vocals"] == ("done", "sung from 24.8 s, 1 stretch")
+    assert heard.ends()["words"] == ("done", "6 words in 2 lines (es), 1 dropped")
 
 
 def test_words_outside_the_singing_are_dropped(conn, cfg):
@@ -544,7 +592,7 @@ def test_a_song_whose_audio_is_the_aac_m4a_youtube_gives_is_transcribed(conn, cf
     assert Path(song.audio_path).suffix == ".m4a"
 
     class Stem(Separator):
-        def vocals(self, audio, workdir):
+        def vocals(self, audio, workdir, **kwargs):
             self.calls.append((Path(audio), Path(workdir)))
             out = Path(workdir) / "stems" / "vocals.wav"
             out.parent.mkdir(parents=True)
@@ -582,11 +630,11 @@ class Built:
                 super().__init__()
                 built.log.append(("demucs built", binary, model, cache_dir))
 
-            def vocals(self, audio, workdir):
+            def vocals(self, audio, workdir, **kwargs):
                 built.log.append(("demucs", Path(audio).name))
                 if separator_fails:
                     raise SeparatorFailed(separator_fails)
-                return super().vocals(audio, workdir)
+                return super().vocals(audio, workdir, **kwargs)
 
         class Whisper(Transcriber):
             def __init__(self, model_path, *, device, cache_dir):
@@ -595,11 +643,11 @@ class Built:
                 if load_fails is not None:
                     raise load_fails
 
-            def hear(self, mix, stem, first_sung_s):
+            def hear(self, mix, stem, first_sung_s, **kwargs):
                 built.log.append(("whisper", Path(mix).name))
                 if whisper_fails is not None and Path(mix).name == "test-tone.wav":
                     raise whisper_fails
-                return super().hear(mix, stem, first_sung_s)
+                return super().hear(mix, stem, first_sung_s, **kwargs)
 
         monkeypatch.setattr(separate, "DemucsSeparator", Demucs)
         monkeypatch.setattr(tx, "WhisperTranscriber", Whisper)
@@ -607,7 +655,8 @@ class Built:
 
 
 class Says(Heard):
-    """The progress, which notes each stage as it starts in the same log as the models."""
+    """The progress, which notes each stage as it starts, and what it says it does while it runs, in the same log as
+    the models."""
 
     def __init__(self, log: list):
         super().__init__()
@@ -616,7 +665,7 @@ class Says(Heard):
     def stage(self, name, state, detail=""):
         super().stage(name, state, detail)
         if state == "running":
-            self.log.append(("stage", name))
+            self.log.append(("doing", name, detail) if detail else ("stage", name))
 
 
 def default_models(cfg, tmp_path):
@@ -639,6 +688,7 @@ def test_the_default_models_are_built_at_their_first_stage_and_whisper_must_hear
                                                                                              monkeypatch):
     # demucs-rs hears no tone: failing on the song is the setup's as failing on a tone would be, and each of its runs
     # costs about 30 s (measured: the results file of docs/superpowers/plans/).
+    monkeypatch.delenv("CARACOLE_TORCH_CUDA", raising=False)  # on the CPU: the separator's pace there
     built = Built(monkeypatch)
     setup = default_models(cfg, tmp_path)
     song = offered(conn, setup)
@@ -649,13 +699,20 @@ def test_the_default_models_are_built_at_their_first_stage_and_whisper_must_hear
         ("stage", "song"),
         ("stage", "vocals"),
         ("demucs built", "demucs-cpu", tmp_path / "htdemucs.safetensors", setup.cache_dir),
+        ("doing", "vocals", "separating the voice (about 5 min)"),
         ("demucs", audio),
         ("stage", "words"),
+        ("doing", "words", "loading Whisper"),
         ("device", "auto"),
         ("whisper built", tmp_path / "large-v3.pt", "cuda", setup.cache_dir),
         ("whisper", "test-tone.wav"),
+        ("doing", "words", "heard 0:00 of 1:00"),
         ("whisper", audio),
         ("stage", "chords"),
+        ("doing", "chords", "setting up the models"),
+        ("doing", "chords", "hearing the chords"),
+        ("doing", "chords", "finding the beats"),
+        ("doing", "chords", "writing the sheet"),
         ("stage", "pdf"),
         ("stage", "pages"),
     ]
@@ -800,7 +857,8 @@ def test_the_lock_goes_to_a_waiting_lookup_before_each_long_stage(conn, cfg, tmp
     class Asked(Heard):
         def stage(self, name, state, detail=""):
             super().stage(name, state, detail)
-            if state == "running" and name in ("vocals", "words", "chords"):  # a lookup asks for the lock now
+            if state == "running" and not detail and name in ("vocals", "words", "chords"):  # as each starts, a
+                # lookup asks for the lock
                 lookup = subprocess.Popen([sys.executable, "-c", LOOKUP, str(config), str(log)], env=env)
                 lookups.append(lookup)
                 assert waiting_for(cfg.state_dir / _common.LOCK_NAME, lambda: lookup.poll() is None)

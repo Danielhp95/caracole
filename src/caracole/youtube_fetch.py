@@ -168,10 +168,14 @@ def transcribe_time(cfg: Config) -> str:
     """How long a transcription takes here, for the offer: a couple of minutes on a GPU, else up to half an hour
     (measured: on the GPU 83-87 s warm and 150 s cold for a 149 s song, demucs-rs about half of it; on the CPU
     Whisper is about 2x the song's length, demucs about 4.8x)."""
-    if (os.environ.get("CARACOLE_TORCH_CUDA") == "1" and cfg.autochords.transcribe_device != "cpu"
-            and Path("/dev/nvidiactl").exists()):
-        return "a couple of minutes"
-    return "up to half an hour"
+    return "a couple of minutes" if transcribes_on_the_gpu(cfg) else "up to half an hour"
+
+
+def transcribes_on_the_gpu(cfg: Config) -> bool:
+    """Whether a transcription here runs on the GPU: the CUDA package's (``CARACOLE_TORCH_CUDA``, whose demucs-rs is
+    the wgpu build), Whisper not set to the CPU, and NVIDIA's device there."""
+    return (os.environ.get("CARACOLE_TORCH_CUDA") == "1" and cfg.autochords.transcribe_device != "cpu"
+            and Path("/dev/nvidiactl").exists())
 
 
 def audio_dir(cfg: Config) -> Path:
