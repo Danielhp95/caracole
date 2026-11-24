@@ -66,6 +66,23 @@ def test_publish_refuses_a_name_that_exists(conn_with_index, out):
         catalogues.publish(conn_with_index, out, now=NOW, last=None)
 
 
+def test_publish_refuses_a_clock_gone_back_behind_the_last_files_minute(conn_with_index, out):
+    from datetime import timedelta
+
+    first = catalogues.publish(conn_with_index, out, now=NOW, last=None)
+
+    with pytest.raises(catalogues.PublishError, match="the clock reads 2026-11-23 03:12 UTC, earlier than the last "
+                                                      f"file published, {first.name}: set the clock right"):
+        catalogues.publish(conn_with_index, out, now=NOW - timedelta(days=1), last=first, after=first)
+
+    assert sorted(p.name for p in out.iterdir()) == sorted([first.name, "published.json"])  # nothing changed
+    assert catalogues.published(out) == first
+    later = catalogues.publish(conn_with_index, out, now=NOW + timedelta(minutes=1), last=first, after=first)
+    assert later.name > first.name
+    odd = catalogues.Published("not-a-catalogue-name", 17, "x", 1, 1, "0", {})
+    catalogues.publish(conn_with_index, out, now=NOW, last=None, after=odd)  # a name that holds no minute: no check
+
+
 def test_publish_refuses_an_index_not_built_whole(conn, out):
     with pytest.raises(catalogues.PublishError, match="built whole"):
         catalogues.publish(conn, out, now=NOW, last=None)

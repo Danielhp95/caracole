@@ -3788,6 +3788,10 @@ column: a text value with your folders, your home folder, the database or `/nix/
 that begins with a machine's root (`/home/`, `/var/`, `/nix/`, `/tmp/`, `/data/`, `/sdcard/`,
 `file:` and the like). A site's name that just begins with `/` is no path.
 
+It also refuses to publish while the clock reads earlier than the minute in the last file's name
+(`published.json`), as after the clock has gone back. A file named in the past would never reach the
+phones, which take the newest name. `--force` doesn't pass this one: set the clock right, then publish.
+
 `--kept NAME` (repeated, once for each name) exports nothing and reads no config, so it answers
 beside a service too. It prints, one a line and each once,
 the names the Keep rule would delete. The rule: the publishing schema keeps its two newest files

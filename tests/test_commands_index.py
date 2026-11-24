@@ -405,6 +405,35 @@ def test_index_publish_refuses_a_site_with_far_fewer_rows_than_the_last_file_unl
     assert json.loads((out / "published.json").read_text())["file"] == gz.name
 
 
+def test_index_publish_refuses_a_clock_behind_the_last_file_published_forced_or_not(tmp_path, state):
+    built(state)
+    out = tmp_path / "pub"
+    out.mkdir()
+    ahead = "indexes-s17-20991117T0312Z.sqlite.gz"  # published once by a clock this one is now behind
+    (out / "published.json").write_text(json.dumps({
+        "file": ahead, "schema": 17, "made": "2099-11-17T03:12:00Z", "bytes": 1, "raw_bytes": 1, "sha256": "0",
+        "sites": {"ug": 1}}))
+
+    for forced in ((), ("--force",)):
+        result = invoke(tmp_path, "publish", str(out), *forced)
+
+        assert result.exit_code == 1, result.output
+        assert f"earlier than the last file published, {ahead}: set the clock right" in result.stderr
+        assert [p.name for p in out.iterdir()] == ["published.json"]
+
+
+def test_index_publish_forced_passes_a_corrupt_sidecar(tmp_path, state):
+    built(state)
+    out = tmp_path / "pub"
+    out.mkdir()
+    (out / "published.json").write_text("{nope")
+
+    result = invoke(tmp_path, "publish", str(out), "--force")
+
+    assert result.exit_code == 0, result.output
+    assert len(list(out.glob("indexes-*"))) == 1
+
+
 def test_index_publish_refuses_a_corrupt_sidecar(tmp_path, state):
     built(state)
     out = tmp_path / "pub"

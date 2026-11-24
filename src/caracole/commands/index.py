@@ -282,16 +282,24 @@ def _kept(names: list[str]) -> None:
 
 
 def _publish(cfg: Config, folder: Path, force: bool) -> None:
+    """``caracole index publish DIR``. ``--force`` passes the rows' guard (and a sidecar that can't be read), never
+    the clock's: a file named before the last one's minute is refused either way (``catalogues.publish``'s
+    ``after``)."""
     from caracole import backup, catalogues
 
     now = utcnow()
     out = console()
     with closing(open_db(cfg)) as conn:
         try:
-            last = None if force else catalogues.published(folder)
-            made = catalogues.publish(conn, folder, now=now, last=last, private=[
+            try:
+                previous = catalogues.published(folder)
+            except catalogues.PublishError:
+                if not force:
+                    raise
+                previous = None
+            made = catalogues.publish(conn, folder, now=now, last=None if force else previous, private=[
                 str(p) for p in (cfg.state_dir, cfg.library_dir, cfg.cache_dir, cfg.music_dir, Path.home())],
-                progress=_Publishing(out, folder))
+                progress=_Publishing(out, folder), after=previous)
         except catalogues.PublishError as e:
             with suppress(BrokenPipeError):
                 out.close()
