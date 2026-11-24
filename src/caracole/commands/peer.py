@@ -30,8 +30,9 @@ unit (peer_sync.py; the design: docs/superpowers/specs/2026-10-31-phone-server-s
 - ``caracole peer take DIR`` takes a push another caracole sent (peer_push.py), staged by caracole serve in DIR
   (``state_dir/peer/push-<id>``, ``POST /peer/push`` queues it): its stages check (the push read, each document what
   its digest says), take (a backup first, then each unit as a pull takes one, left when it changed on this side
-  since the pusher compared: ``peer_sync.apply_units`` with ``expected_here``), render and agree, a line (with
-  ``--progress``, get.py's JSON lines and a unit's event) for each; then DIR is deleted. It exits 0 unless a bug.
+  since the pusher compared: ``peer_sync.apply_units`` with ``expected_here``), render (its running detail the song
+  it is at, "12 of 20 songs": ``_rendering``) and agree, a line (with ``--progress``, get.py's JSON lines and a
+  unit's event) for each; then DIR is deleted. It exits 0 unless a bug.
 - ``caracole peer export FILE`` writes this library to a ``.caracole`` file (peer_file.py): its songs with their
   kept files and pages, its songbooks with the songs they list, and with ``--parts`` its site indexes too
   (``--parts library,songbooks``, the default; ``indexes`` adds them), its units in one read transaction, taking no
@@ -43,7 +44,7 @@ unit (peer_sync.py; the design: docs/superpowers/specs/2026-10-31-phone-server-s
   ``state_dir/peer/import-<id>``, deleted once it is over): its stages check (the file read whole, then refused, in
   your words, when it is this library's own export, ``peer_file.check_importable``, or holds nothing left to take
   since the last sync with its caracole, ``peer_file.newer_than``), take (a backup first, then each unit the file gives, as a pull takes one),
-  render, agree (what the two now agree on, stamped with the file's ``made``, and each answer "keep mine" to what
+  render (as a take's, "12 of 20 songs" as it goes), agree (what the two now agree on, stamped with the file's ``made``, and each answer "keep mine" to what
   the file would give remembered: a file takes nothing back; none for an import of the indexes alone) and index (its
   indexes merged, ``index_transfer.merge``), ``PEER_IMPORT_STAGES``. A staged folder is taken only once its file is
   whole (``peer_import.whole``: else refused and left, to be sent on). ``--parts``, ``--choose``, ``--prefer``,
@@ -424,6 +425,17 @@ class _Said:
 
 def _count(n: int) -> str:
     return f"{n} {'change' if n == 1 else 'changes'}"
+
+
+def _rendering(said: _Said):
+    """``render_all``'s ``on_song`` for a take's or an import's render stage: which of the songs taken it is at, "12 of
+    20 songs", as the stage's running detail (with ``--progress``), which the Sync sheet and the request's line show
+    (web/status.py ``LONG_STAGES``)."""
+
+    def on_song(n: int, total: int, song) -> None:
+        said.stage("render", "running", f"{n:,} of {total:,} {'song' if total == 1 else 'songs'}")
+
+    return on_song
 
 
 def _choices(given: list[str]) -> dict[str, str]:
@@ -855,7 +867,7 @@ def _take(cfg, folder, said: _Said) -> None:
         said.stage("render", "running")
         overrides = load_ovr(cfg)
         if done.songs:
-            render_all(conn, cfg, overrides, song_ids=done.songs)
+            render_all(conn, cfg, overrides, song_ids=done.songs, on_song=_rendering(said))
         render_songbooks(conn, cfg, overrides)
         write_pages(conn, cfg, overrides, utcnow())
         said.stage("render", "done")
@@ -1033,7 +1045,7 @@ def _import_under_lock(cfg, conn, file, source, said: _Said, parts: tuple[str, .
             said.stage("render", "running")
             overrides = load_ovr(cfg)
             if done.songs:
-                render_all(conn, cfg, overrides, song_ids=done.songs)
+                render_all(conn, cfg, overrides, song_ids=done.songs, on_song=_rendering(said))
             render_songbooks(conn, cfg, overrides)
             write_pages(conn, cfg, overrides, utcnow())
             said.stage("render", "done")

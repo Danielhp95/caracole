@@ -395,6 +395,23 @@ def test_with_progress_an_import_says_its_stages_its_units_and_a_report(librarie
     assert [name for name, _ in PEER_IMPORT_STAGES] == ["check", "take", "render", "agree", "index"]
 
 
+def test_an_imports_render_stage_says_how_many_of_the_songs_taken_it_has_reached(libraries, tmp_path, monkeypatch):
+    # As a take's: "1 of 2 songs" while the first renders, which the Sync sheet and the request's line show.
+    desk, studio, _ = libraries
+    desk_with_a_songbook(desk)
+
+    def render_all(conn, cfg, overrides, *, song_ids=(), on_song=None, **kw):
+        assert on_song is not None
+        for n, _song_id in enumerate(sorted(song_ids), 1):
+            on_song(n, len(song_ids), None)
+
+    monkeypatch.setattr("caracole.render.render_all", render_all)
+    out = run(studio, "peer", "import", "--yes", "--progress", str(exported(desk, tmp_path / "d.caracole")))
+    assert out.exit_code == 0, out.output
+    assert [(e["state"], e["detail"]) for e in events(out.output) if e.get("stage") == "render"] == [
+        ("running", ""), ("running", "1 of 2 songs"), ("running", "2 of 2 songs"), ("done", "")]
+
+
 def sync_stamp(text: str) -> bool:
     from caracole import stamps
 

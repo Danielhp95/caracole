@@ -3939,7 +3939,8 @@ from <its library>".
 `caracole peer take [--progress] DIR` takes the push the way a pull takes units. It waits for the
 nightly run, backs the database up, leaves any unit that changed here since the phone compared
 ("changed here since the comparison"), then deletes the folder. It exits 0 unless caracole hits a
-bug. `--progress` prints JSON lines for the Journal.
+bug. `--progress` prints JSON lines for the Journal; while it renders the songs taken, its render
+step says which it is at ("12 of 20 songs").
 
 Two pushes can be staged at once, one per caracole (a second gets a 409). A file can be 64 MiB and
 a whole push 2 GiB. A push left for an hour is deleted.
@@ -4007,7 +4008,8 @@ Otherwise it backs the database up (`…-before-sync.sqlite`) and takes each uni
 does. A conflict goes by `--choose`, else `--prefer`, else you are asked, else it is left. A song
 removed there is removed here, but a part the file doesn't hold never removes anything. Then it
 renders the songs taken, records the agreement and merges the file's indexes if `--parts` names
-them. `--progress` names these steps check, take, render, agree and index.
+them. `--progress` names these steps check, take, render, agree and index, and the render step says
+which of the songs taken it is at ("12 of 20 songs").
 
 If you choose to keep your own version of a unit, caracole remembers. The next file from that
 caracole doesn't ask again unless the unit changed, and the next `peer sync` with it gives it your
