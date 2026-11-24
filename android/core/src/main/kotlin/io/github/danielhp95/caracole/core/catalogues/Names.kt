@@ -10,7 +10,7 @@ data class Named(val schema: Int, val at: Instant)
 
 /**
  * catalogues.py's `read_name`: `indexes-s<schema>-<yyyymmdd>T<hhmm>Z.sqlite.gz`, the schema one ASCII digit or more
- * with no leading zero, the stamp a real date (year 1 or later) and time in UTC; any other name (`indexes.json`, a
+ * with first digit 1 to 9, the stamp a real date (year 1 or later) and time in UTC; any other name (`indexes.json`, a
  * `.next`, `indexes2-…`, a 13th month, a 24:00) is none. Read by hand, ASCII alone: no regex's `\d`.
  */
 object Names {
@@ -25,7 +25,7 @@ object Names {
         val schemaText = middle.substring(0, dash)
         val stamp = middle.substring(dash + 1)
         if (schemaText.isEmpty() || schemaText.length > 9 || !schemaText.all(::ascii)) return null
-        if (schemaText.length > 1 && schemaText[0] == '0') return null
+        if (schemaText[0] == '0') return null // [1-9][0-9]*: no zero, no leading zero
         if (stamp.length != 13 || stamp[8] != 'T') return null
         val date = stamp.substring(0, 8)
         val time = stamp.substring(9)

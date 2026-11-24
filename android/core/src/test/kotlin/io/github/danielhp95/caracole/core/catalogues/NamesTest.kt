@@ -1,11 +1,20 @@
 package io.github.danielhp95.caracole.core.catalogues
 
+import io.github.danielhp95.caracole.core.testing.Misses
+import io.github.danielhp95.caracole.core.testing.replays.CataloguesReplay
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 import java.time.Instant
 
 class NamesTest {
+    @Test fun everyRecordOfTheCorpusIsAnsweredAsPythonAnswersIt() {
+        val misses = Misses(CataloguesReplay.area)
+        CataloguesReplay.replay(misses)
+        misses.assertNone()
+    }
+
+
     @Test fun aNameHoldsTheSchemaAndTheMinute() {
         assertEquals(Named(17, Instant.parse("2026-11-24T03:12:00Z")), Names.read("indexes-s17-20261124T0312Z.sqlite.gz"))
     }
