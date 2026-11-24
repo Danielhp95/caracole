@@ -5,7 +5,7 @@
   ``release upload TAG FILE`` (no ``--clobber``: an existing name fails);
 - ``api repos/R/releases/tags/TAG`` (the release, with its ``id``), ``api repos/R/releases/ID/assets``
   (``--paginate``: one JSON array a page of two; the REST asset shape: numeric ``id``, ``name``,
-  ``size``, ``state``, ``digest``), ``api -X PATCH repos/R/releases/assets/ID -f name=NEW``
+  ``size``, ``state``, ``digest``)
   and ``api -X DELETE repos/R/releases/assets/ID``.
 
 Every call is logged to ``calls.jsonl`` with ``GH_TOKEN``. ``FAKE_GH_FAIL=<kind>:<n>`` makes the

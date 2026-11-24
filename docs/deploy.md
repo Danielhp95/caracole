@@ -244,8 +244,8 @@ group `caracole` and `gh auth login` is done):
     description = "Upload the site indexes to GitHub";
     path = [ pkgs.gh ];
     script = ''
-      export GH_TOKEN=$(gh auth token)
-      exec ${caracole.packages.${pkgs.system}.publish-indexes}/bin/publish-indexes /var/lib/caracole/publish
+      export GH_TOKEN=$(gh auth token --user <you>)
+      exec ${caracole.packages.${pkgs.stdenv.hostPlatform.system}.publish-indexes}/bin/publish-indexes /var/lib/caracole/publish
     '';
   };
   systemd.user.timers.caracole-upload = {
@@ -253,6 +253,11 @@ group `caracole` and `gh auth login` is done):
     timerConfig = { OnCalendar = "Sun 06:00"; Persistent = true; };
   };
 ```
+
+`<you>` is the GitHub account that owns the repository: `gh`'s active account may be another. A user
+timer fires only while your user manager runs, so a run missed while you are logged out happens
+(`Persistent`) at your next login; `gh` may keep its token in a login keyring, locked without a session,
+which is why the example doesn't enable linger.
 
 `caracole` is the flake input. `publish-indexes DIR` checks what GitHub holds and prunes old files.
 
