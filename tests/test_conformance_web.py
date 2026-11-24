@@ -889,6 +889,15 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
         "running", "waiting for the book (pid 9: run)")}), facts=ready)
     add("a sheet from YouTube, its audio", in_state(youtube, "running", {"song": ("done", ""),
                                                                         "audio": ("running", "")}), facts=ready)
+    # A long stage says what it does as it runs (status.LONG_STAGES): its line and the bar's ``doing``; any other's
+    # running words stay its own.
+    add("a sheet from YouTube, its audio downloading", in_state(youtube, "running", {
+        "song": ("done", ""), "audio": ("running", "downloading the video's audio")}), facts=ready)
+    add("a sheet from YouTube, its chords' step", in_state(youtube, "running", {
+        "song": ("done", ""), "audio": ("done", "downloaded"), "lyrics": ("done", "LRCLIB has none"),
+        "chords": ("running", "hearing the chords")}), facts=ready)
+    add("a sheet from YouTube, its lyrics saying something", in_state(youtube, "running", {
+        "song": ("done", ""), "audio": ("done", "downloaded"), "lyrics": ("running", "asking LRCLIB")}), facts=ready)
     add("a sheet from YouTube, ready", in_state(youtube, "done", {
         "song": ("done", ""), "audio": ("done", ""), "lyrics": ("done", ""),
         "chords": ("done", "chords over the timed lyrics"), "pdf": ("done", ""), "pages": ("done", "")}), facts=ready)
@@ -906,6 +915,19 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
     add("a transcription, its words", in_state(transcription, "running", {
         "song": ("done", "in the book"), "vocals": ("done", "sung from 9.3 s, 4 stretches"),
         "words": ("running", "")}), facts=_status.SongFacts())
+    add("a transcription, separating its voice", in_state(transcription, "running", {
+        "song": ("done", "in the book"), "vocals": ("running", "2 of ~12 min")}),
+        facts=_status.SongFacts())
+    add("a transcription, Whisper part of the way", in_state(transcription, "running", {
+        "song": ("done", "in the book"), "vocals": ("done", "sung from 9.3 s, 4 stretches"),
+        "words": ("running", "1:20 of 3:45")}), facts=_status.SongFacts())
+    add("a transcription, its chords' step", in_state(transcription, "running", {
+        "song": ("done", "in the book"), "vocals": ("done", "sung from 9.3 s, 4 stretches"),
+        "words": ("done", "212 words in 31 lines (es), 3 dropped"), "chords": ("running", "finding the beats")}),
+        facts=_status.SongFacts())
+    add("a transcription cut off as Whisper heard it", _interrupted(in_state(transcription, "running", {
+        "song": ("done", "in the book"), "vocals": ("done", "sung from 9.3 s, 4 stretches"),
+        "words": ("running", "1:20 of 3:45")})), facts=_status.SongFacts())
     add("a transcription, ready", in_state(transcription, "done", heard | {
         "chords": ("done", "chords over the transcribed lyrics"), "pdf": ("done", "made"),
         "pages": ("done", "_todo.md and index.html rewritten")}), facts=ready)
@@ -1017,6 +1039,22 @@ def peer_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | No
              None, None),
             (f"{kind}, interrupted before it ran", _interrupted(peer_job(kind, "queued")), None, 0, None, None),
         ]
+    # A long stage's running words on the line (status.LONG_STAGES): a sync's indexes, a take's pages, a merge.
+    jobs += [
+        ("sync, its indexes saying what they do", peer_job("sync", "running", {
+            "compare": ("done", "4 differences"), "take": ("done", "took 1"), "give": ("done", "gave 1"),
+            "agree": ("done", "12 units the books agree on"), "index": ("running", "taking 2, giving 1")}),
+         None, 0, None, None),
+        ("peer-push, its pages saying what they do", peer_job("peer-push", "running", {
+            "check": ("done", "1 change"), "take": ("done", "took 1"), "render": ("running", "12 of 20 songs")}),
+         None, 0, None, None),
+        ("index-merge, saying what it does", peer_job("index-merge", "running", {
+            "merge": ("running", "Ultimate Guitar · 600,000 of 1,367,059 tabs")}), None, 0, None, None),
+        ("import, its indexes saying what they do", peer_job("import", "running", {
+            "check": ("done", "2 differences"), "take": ("done", "took 1"), "render": ("done", ""),
+            "agree": ("done", "12 units"), "index": ("running", "Ultimate Guitar · 600,000 of 1,367,059 tabs")}),
+         None, 0, None, None),
+    ]
     # A sync's agree stage counted in another script's digits, as Python's \d and int() read them.
     jobs.append(("sync, done, its count in Arabic-Indic digits", peer_job("sync", "done", {
         "compare": ("done", ""), "agree": ("done", " ١٢ units the books agree on\n")}, units=took),

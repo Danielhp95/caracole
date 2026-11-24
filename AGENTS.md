@@ -304,8 +304,20 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   then its auto sheet made again over them (`make_transcript`).
   - Its stages song, vocals, words, chords, pdf, pages (`STAGES`), reported as a lookup's (staged.py's `StagedRun`).
   - Only a song `transcript.why_not_offered` offers one, by its identity key, never added to wanted.txt; read again
-    after each hand-over (`hand_over` before vocals, words and chords), checked still offered before vocals and
-    words, and its audio still the one vocals separated before words and chords (`_same_audio`), else a refusal.
+    after each hand-over (`hand_over` before vocals, words and chords), checked still offered before vocals, words
+    and chords (its transcript kept no refusal before the chords), and its audio still the one vocals separated
+    before words and chords (`_same_audio`), else a refusal.
+  - Its own audio's transcript kept with no auto sheet over it (the chords failed or were cut off: Try again), the
+    job goes straight to the chords (`_sheet_to_make`, run.py `_skip_reason`, guarded as `_due` guards it: a record
+    that won't read a refusal in its words), neither model run again.
+  - Refused at the chords, its words kept: `TranscribeResult.transcript_kept`, the command's "Transcript kept; no
+    sheet made: … needs no sheet over its transcript now: …" (`_still_due_its_sheet`).
+  - Each long stage says what it does as it runs (staged.py `_doing`, a running event each change): the vocals the
+    minutes demucs-rs has run against about how long it takes here (`_separating`, separate.py's `on_tick`,
+    `CPU_PACE`, `GPU_PACE`), the words Whisper loading then how far it has heard the mix (`_heard`, transcribe.py's
+    `on_progress` off Whisper's own progress bar), the chords auto-chords' steps (run.py `on_step`, `STEPS`), as a
+    YouTube sheet's audio (a video searched for, then its download: youtube_fetch's `on_download`) and chords do
+    too; status.py's `LONG_STAGES` put them on the line and the bar.
   - No sung span: Whisper isn't run, and the song is noted heard to have nothing sung.
   - The pieces are autochords/'s (below); the stem in a temporary folder under `cache_dir`, gone with the job.
   - caracole serve's Transcribe the lyrics runs it (web/transcribe_routes.py).
@@ -1888,7 +1900,16 @@ It is rows.js's, shared by both pages:
     (`skipped`), so the total only rises; a sync's, a take's and a request of commands still leave a skipped one out.
   - `at` and `count` ("3 of 7") are the step in hand (`outcome._in_hand`): while it runs the running step, else the
     first waiting, else the last; once over the first that failed, else none; the bar shows them while the request
-    runs, and the frozen bar once it is over. `waits`, true, right after them, while that step's running stage waits for the book
+    runs, and the frozen bar once it is over. `doing`, right after them, while that step's running stage is a long
+    one that says what it does (status.py `LONG_STAGES`, `doing`: audio, vocals, words, chords, and a sync's or an
+    import's `index`, the phone's `mirror`, an index `merge` and a take's `render`, whose running words their lanes
+    add, on the line of the Journal and the tray alone, no song's bar; the number first,
+    nothing the step's name says, "1:20 of 3:45", "~12 min", "2 of ~12 min"), which `stepWords` says after the
+    count (`.step-doing`, in the room the step and its place leave, `flex: 1 1 0`; under 400 px its bar's place a
+    screen reader's alone, `.step-count` clipped, and its own " · " left out, `.step-sep`, so 320 px shows it whole; for
+    the eye alone, `aria-hidden`, changed in place on the same bar, `sayDoing`, so the line's live region never reads
+    each of Whisper's windows) and status.py's line after the stage's words ("Transcribing the lyrics · 1:20 of
+    3:45…"); the phone's `Status.LONG_STAGES`, `Outcomes.progress` alike. `waits`, true, while that step's running stage waits for the book
     (`outcome._waits_for_the_book`: its detail begins as status.py's `_WAITING`, the test `_stage_line` makes for
     "Waiting for the book…"; the phone's `Outcomes.waitsForTheBook`, by the same rule though it takes no lock).
   - Each step (`outcome.Chip`, `{name, site, state, found}`) names its site in full (`site`, `outcome.SITE_NAMES`
@@ -1962,7 +1983,8 @@ It is rows.js's, shared by both pages:
     or the model's ("Whisper's model won't load": any other load failure, on the GPU too), never the audio's;
     `is_audio_error`, Whisper failing to load the audio.
   - The job works in a `transcribe-*` folder under the cache, gone with it; one a killed job left is swept at the
-    next job's start (`_sweep`, under the lock: one transcription at a time).
+    next job's start (`_sweep`: a folder no live job holds, its `.owner` flocked while its job runs, as another
+    transcription asked for now may take the lock while this one lets the lookups have it).
   - The job builds the default separator and Whisper at their first stage, Whisper run first on run.py's test tone
     (`_test_tone`); demucs-rs not (it fails on the song as on a tone, the setup's alike, and each run costs about
     30 s). Its failures are told apart as run.py's: the setup's and the audio's. The setup's record nothing against

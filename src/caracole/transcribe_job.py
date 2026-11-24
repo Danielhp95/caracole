@@ -6,7 +6,10 @@ For a song whose audio came from YouTube and that every lyrics site switched on 
 its own (staged.py; ``--progress`` writes a JSON line per event, which caracole serve reads into the job's stages):
 
 - ``song``: the song, by its identity key, never added to wanted.txt; refused when it isn't offered a transcription.
-  First, the work folders a killed job left under the cache are swept (``_sweep``).
+  First, the work folders a killed job left under the cache are swept (``_sweep``): those no live job holds. A song
+  whose own audio has its transcript kept already, but no auto sheet over it (the chords stage failed or was cut off
+  after the words kept it: Try again runs the same command), goes straight to the chords: vocals skipped and the
+  words the transcript kept (``_sheet_to_make``), neither model run again.
 - ``vocals``: where the singing is. The mix's loudness frame by frame (``separate.frame_db``), the vocals separated
   by demucs-rs into a temporary folder under the cache, their loudness, then the sung spans (words.py
   ``sung_spans``), over as much of the song as both cover: a stem more than ``SHORT_STEM_FRAMES`` shorter than the
@@ -20,10 +23,17 @@ its own (staged.py; ``--progress`` writes a JSON line per event, which caracole 
 - ``pdf``: the PDF and the viewer, for this song alone (``render_all``'s ``song_ids``).
 - ``pages``: _todo.md and index.html.
 
+While each of the long stages runs, it says how far it is (staged.py ``_doing``), which the song's line shows: the
+vocals how long demucs-rs has been at it against about how long it takes here (``_separating``: the song's length
+times the separator's pace, the GPU's or the CPU's, ``separate.GPU_PACE``, ``CPU_PACE``), each minute; the words
+Whisper loading, then how far it has heard the mix (``_heard``), a window at a time; the chords auto-chords' steps.
+
 Before each of vocals, words and chords, the long stages, a waiting lookup goes first (``_common.hand_over``); then
-the song is read again, checked still offered before vocals and words, and its audio still the one vocals separated
-before words and chords. A song that left the book, is offered no more or has other audio ends the job there, a
-refusal its song stage says, before the next model runs.
+the song is read again, checked still offered (before the chords, its transcript kept no refusal:
+``_still_due_its_sheet``), and its audio still the one vocals separated before words and chords. A song that left the
+book, is offered no more (a human sheet kept meanwhile, ignored, lyrics found) or has other audio ends the job there,
+a refusal its song stage says, before the next model runs; at the chords, with the words kept, that its transcript is
+(``TranscribeResult.transcript_kept``: the command's "Transcript kept; no sheet made").
 
 The models default to demucs-rs and Whisper from ``cfg``, each built at its first stage. Whisper is run first on
 run.py's test tone, as auto-chords checks its own: a model that fails there would fail on every song. demucs-rs is
@@ -36,9 +46,10 @@ What fails is told apart as auto-chords tells it:
 - the setup's, which blames no song and records nothing, the song staying offered: the loudness reader failing on
   the mix, whatever it raises ("can't measure the audio here (...)", in its words: ``frame_db`` reads as BTC does,
   libsndfile, else FFmpeg for the AAC of YouTube's .m4a, so a failure there is no proof the audio is bad), the
-  separator ("the separator can't run here (...)", demucs-rs's own words, or a stem it wrote that can't be read), a
-  GPU missing, busy or out of memory, or a Whisper model that won't load (``SetupFailed``, in its own words: "the GPU
-  failed: ...", "Whisper's model won't load: ...");
+  separator ("the separator can't run here (...)", demucs-rs's own words, or a stem it wrote that can't be read, by
+  the loudness reader or by Whisper, which reads it first for the language), a GPU missing, busy or out of memory,
+  or a Whisper model that won't load (``SetupFailed``, in its own words: "the GPU failed: ...", "Whisper's model
+  won't load: ...");
 - the audio's: Whisper's own "Failed to load audio" on the mix (``transcribe.is_audio_error``, "can't read the
   audio"), alone filed as auto-chords files a file it can't read (run.py ``_unreadable``: kv
   ``autochords:failed:<song id>``), so the song is offered no transcription, nor auto-chords tried on it, until its
@@ -53,6 +64,9 @@ be transcribed here (``youtube_fetch.transcribe_problem``).
 
 from __future__ import annotations
 
+import fcntl
+import logging
+import os
 import shutil
 import subprocess
 import tempfile
@@ -68,6 +82,8 @@ from caracole.get import Progress
 from caracole.logs import plural
 from caracole.staged import StagedResult, StagedRun, _Stop
 
+log = logging.getLogger(__name__)
+
 STAGES = (
     ("song", "Find the song"),
     ("vocals", "Where the singing is"),
@@ -78,6 +94,9 @@ STAGES = (
 )
 UNREADABLE = "can't read the audio"
 WORK_PREFIX = "transcribe-"  # a job's work folder under the cache, its stem in it
+# A file in each work folder, flocked by the job that made it for as long as it runs: a folder whose owner's lock
+# anyone can take (its job killed: the kernel let go of it) is a killed job's, and swept.
+OWNER = ".owner"
 # demucs-rs writes the stem at its own rate: resampled, it may come out a frame or so shorter than the mix, read as
 # far as both go. Shorter than this, the singing past its end would be lost: the separator's failure.
 SHORT_STEM_FRAMES = 4  # 0.2 s
@@ -97,7 +116,10 @@ class TranscribeRequest:
 
 @dataclass
 class TranscribeResult(StagedResult):
-    """What came of a transcription: its stages' ends, and the sheet's files once readable."""
+    """What came of a transcription: its stages' ends, and the sheet's files once readable; ``transcript_kept``, refused
+    at its chords with its own audio's transcript kept (the command's "Transcript kept; no sheet made")."""
+
+    transcript_kept: bool = False
 
 
 class _Transcription(StagedRun):
@@ -112,9 +134,12 @@ class _Transcription(StagedRun):
         self.request = request
         self.separator, self.transcriber = separator, transcriber
         self.work: tempfile.TemporaryDirectory[str] | None = None  # the stem, for the job
+        self.owner: int | None = None  # the descriptor of the work folder's OWNER, flocked while the job runs
         self.audio: tuple[str | None, float | None] = (None, None)  # the audio separated: its path and mtime
         self.stem: Path | None = None
         self.spans: list[Any] = []
+        self.length: float | None = None  # the mix's, in seconds, as its loudness read it
+        self.kept = False  # its transcript kept already, its sheet over it to make: the chords alone run
 
     def stage(self, name: str, run: Callable[[], tuple[str, str] | str]) -> None:
         """A stage, where a SetupFailed (the GPU, Whisper's model) ends it in its own words, as the setup's."""
@@ -134,11 +159,40 @@ class _Transcription(StagedRun):
         return _Stop(f"{self.song.display} isn't offered a transcription: {why}")
 
     def _still_offered(self) -> None:
+        """The song still offered a transcription, else the job ends there (``_Stop``)."""
         from caracole.autochords.transcript import why_not_offered
 
         why = why_not_offered(self.conn, self.cfg, self.song, self.overrides)
         if why is not None:
             raise self._not_offered(why)
+
+    def _still_due_its_sheet(self) -> None:
+        """Before the chords, the song still one a sheet over its transcript is made for: offered a transcription but
+        for the one of its own audio kept, else the job ends there, a refusal that says the transcript is kept (a
+        lookup that went first kept a human sheet, it was ignored, its lyrics came)."""
+        from caracole.autochords.transcript import ALREADY_TRANSCRIBED, why_not_offered
+
+        why = why_not_offered(self.conn, self.cfg, self.song, self.overrides)
+        if why is not None and why != ALREADY_TRANSCRIBED:
+            self.result.transcript_kept = True
+            raise _Stop(f"{self.song.display} needs no sheet over its transcript now: {why}")
+
+    def _sheet_to_make(self) -> bool:
+        """Whether the song, offered no transcription for the one of its own audio kept already, has no auto sheet over
+        it yet (auto-chords would make one: run.py ``_skip_reason``), so the job goes straight to its chords. A song
+        record that can't be read ends the job, a refusal in its words, as auto-chords counts it an error (``_due``)."""
+        from caracole.autochords.run import _skip_reason
+        from caracole.autochords.transcript import ALREADY_TRANSCRIBED, why_not_offered
+
+        if why_not_offered(self.conn, self.cfg, self.song, self.overrides) != ALREADY_TRANSCRIBED:
+            return False
+        try:
+            return _skip_reason(self.conn, self.song, self.overrides) is None
+        except Exception as e:  # noqa: BLE001 - a record another device wrote: the song's, never a bug's traceback
+            log.error("%s: its auto sheet's record can't be read: %s: %s", self.song.display, type(e).__name__, e,
+                      exc_info=not isinstance(e, (OSError, RuntimeError, ValueError)))
+            raise _Stop(f"{self.song.display}: its auto sheet's record can't be read ({type(e).__name__}: "
+                        f"{e})") from e
 
     def _same_audio(self) -> None:
         """The song's audio still the one its vocals were separated from (another caracole may replace it while this
@@ -148,19 +202,22 @@ class _Transcription(StagedRun):
             raise _Stop(f"{self.song.display}: its audio changed while its lyrics were transcribed")
 
     def _folder(self, name: str) -> Path:
-        """A folder of the job's own under the cache, gone with the job."""
+        """A folder of the job's own under the cache, gone with the job, its ``OWNER`` flocked while the job runs.
+        Made under caracole's lock, as ``_sweep`` runs: no sweep sees the folder before its owner's lock is taken."""
         if self.work is None:
             self.cfg.cache_dir.mkdir(parents=True, exist_ok=True)
             self.work = tempfile.TemporaryDirectory(prefix=WORK_PREFIX, dir=self.cfg.cache_dir)
+            self.owner = os.open(Path(self.work.name) / OWNER, os.O_RDWR | os.O_CREAT | os.O_CLOEXEC, 0o600)
+            fcntl.flock(self.owner, fcntl.LOCK_EX)
         return Path(self.work.name) / name
 
     def _sweep(self) -> None:
-        """The work folders a killed job left under the cache, its stem in each, removed. Under caracole's lock, which
-        lets one transcription run at a time (it hands the lock to lookups alone, which make none), any there is
-        stale, as youtube_fetch.py sweeps a download a stopped caracole left half-done."""
+        """The work folders a killed job left under the cache, its stem in each, removed: those no live job holds
+        (``_held``). Not every one there: another transcription may have one, as it lets the lookups have caracole's
+        lock before its words and chords, and this one, asked for now too, may take the lock meanwhile."""
         if self.cfg.cache_dir.is_dir():
             for leftover in self.cfg.cache_dir.glob(f"{WORK_PREFIX}*"):
-                if leftover.is_dir():
+                if leftover.is_dir() and not leftover.is_symlink() and not _held(leftover):
                     shutil.rmtree(leftover, ignore_errors=True)
 
     def _unreadable(self, e: Exception) -> tuple[str, str]:
@@ -190,6 +247,7 @@ class _Transcription(StagedRun):
             from caracole.autochords.run import _test_tone
             from caracole.autochords.transcribe import SetupFailed, WhisperTranscriber, resolve_device
 
+            self._doing("words", "loading Whisper")
             auto = self.cfg.autochords
             transcriber = WhisperTranscriber(auto.whisper_model, device=resolve_device(auto.transcribe_device),
                                              cache_dir=self.cfg.cache_dir)
@@ -221,15 +279,23 @@ class _Transcription(StagedRun):
         if song is None:
             raise _Stop(f"{req.display} isn't in the book")
         self.song = song
-        self._still_offered()
+        said = "in the book"
+        if self._sheet_to_make():
+            self.kept, self.audio = True, (song.audio_path, song.audio_mtime)
+            said += "; transcribed already, its sheet to make"
+        else:
+            self._still_offered()
         self.result.song_id, self.result.display = song.id, song.display
         self.progress.song(song.id, song.display)
-        return "in the book"
+        return said
 
     def vocals(self) -> tuple[str, str] | str:
         from caracole.autochords import separate
         from caracole.autochords.words import FRAME_S, sung_spans
+        from caracole.youtube_fetch import transcribes_on_the_gpu
 
+        if self.kept:
+            return "skipped", "transcribed already"
         self._after_a_lookup()
         self._still_offered()
         separator = self._the_separator()
@@ -239,8 +305,12 @@ class _Transcription(StagedRun):
             mix_db = separate.frame_db(mix)
         except Exception as e:  # noqa: BLE001 - the reader's, whatever it is: no proof the audio is bad
             return self._fail(f"can't measure the audio here ({type(e).__name__}: {e})")
+        self.length = len(mix_db) * FRAME_S
+        takes = self.length * (separate.GPU_PACE if transcribes_on_the_gpu(self.cfg) else separate.CPU_PACE)
+        self._doing("vocals", _separating(0.0, takes))
         try:
-            self.stem = separator.vocals(mix, self._folder("song"))
+            self.stem = separator.vocals(mix, self._folder("song"),
+                                         on_tick=lambda ran: self._doing("vocals", _separating(ran, takes)))
         except separate.SeparatorFailed as e:
             return self._fail(f"the separator can't run here ({e})")
         try:
@@ -262,6 +332,8 @@ class _Transcription(StagedRun):
         from caracole.autochords.transcript import MODEL, Transcript, keep_transcript, note_heard_nothing
         from caracole.autochords.words import guard, lines_of, to_lrc
 
+        if self.kept:
+            return "done", "the transcript kept"
         if self.result.states.get("vocals") != "done" or self.stem is None:
             return "skipped", "no vocals"
         if not self.spans:  # the guard would drop every word Whisper heard: it isn't run
@@ -272,8 +344,10 @@ class _Transcription(StagedRun):
         self._still_offered()
         transcriber = self._the_transcriber()
         mix = Path(self.song.audio_path or "")
+        self._doing("words", _heard(0.0, self.length))
         try:
-            heard = transcriber.hear(mix, self.stem, self.spans[0].start)
+            heard = transcriber.hear(mix, self.stem, self.spans[0].start,
+                                     on_progress=lambda done, whole: self._doing("words", _heard(done, whole)))
         except RuntimeError as e:  # a SetupFailed (the GPU's) is said by ``stage``
             if not is_audio_error(e):
                 raise  # a bug, deep in Whisper or in caracole: said as one, and nothing filed against the song
@@ -295,6 +369,7 @@ class _Transcription(StagedRun):
             return "skipped", "no transcript"
         self._after_a_lookup()
         self._same_audio()
+        self._still_due_its_sheet()  # a human sheet kept meanwhile, ignored: auto-chords would skip it
         return self._autochords_sheet()
 
     # --- the whole run --------------------------------------------------------------------------------
@@ -302,10 +377,53 @@ class _Transcription(StagedRun):
     def _cleanup(self) -> None:
         if self.work is not None:
             self.work.cleanup()
+        if self.owner is not None:
+            os.close(self.owner)
+            self.owner = None
 
     def run(self) -> TranscribeResult:
         self._run(f"transcribe {self.request.display}")
         return self.result
+
+
+def _separating(ran: float, takes: float) -> str:
+    """What the vocals stage says while demucs-rs runs, the number first and nothing its step's name says already (a
+    phone's bar has room for little more than "2 of ~12 min"): about how long it ``takes`` here, then how long it has
+    run, in whole minutes, against that; once past it, how long it has run alone."""
+    about = round(takes / 60)
+    if ran < 60:
+        return f"~{max(about, 1)} min"
+    minutes = int(ran // 60)
+    if minutes < about:
+        return f"{minutes} of ~{about} min"
+    return f"{minutes} min so far"
+
+
+def _heard(done: float, whole: float | None) -> str:
+    """What the words stage says while Whisper hears the mix, the number first: how far into it, of its length."""
+    def clock(seconds: float) -> str:
+        whole_s = int(seconds)
+        return f"{whole_s // 60}:{whole_s % 60:02d}"
+
+    return f"{clock(done)} of {clock(whole)}" if whole else f"{clock(done)} heard"
+
+
+def _held(folder: Path) -> bool:
+    """Whether a live job holds the work folder: its ``OWNER`` flocked. A folder with none (an older caracole's, or
+    one a job was killed in as it made it) is held by none; one whose owner file can't be opened, kept."""
+    try:
+        fd = os.open(folder / OWNER, os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC)
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return True
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return True
+    finally:
+        os.close(fd)
+    return False
 
 
 def make_transcript(cfg: Config, request: TranscribeRequest, progress: Progress | None = None, *,

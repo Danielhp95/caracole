@@ -79,7 +79,7 @@ def models(monkeypatch) -> list[str]:
         def __init__(self, binary, model, cache_dir, timeout=0.0):
             pass
 
-        def vocals(self, audio, workdir):
+        def vocals(self, audio, workdir, **kwargs):
             heard.append(f"demucs {Path(audio).name}")
             return wav(Path(workdir) / "stems" / "vocals.wav", 1.0)
 
@@ -87,7 +87,7 @@ def models(monkeypatch) -> list[str]:
         def __init__(self, model_path, *, device, cache_dir):
             self.device = device
 
-        def hear(self, mix, stem, first_sung_s):
+        def hear(self, mix, stem, first_sung_s, **kwargs):
             heard.append(f"whisper {Path(mix).name}")
             return tx.Heard("es", list(WORDS))
 
@@ -148,6 +148,55 @@ def test_transcribe_refuses_a_song_not_offered_and_exits_1(tmp_path, config, con
     assert ("No transcript made: Nick Cani - Vikingos veganos isn't offered a transcription: its lyrics are "
             "found.") in result.output
     assert models == []
+
+
+def test_a_transcription_that_fails_ends_saying_so_never_done_and_exits_1(tmp_path, config, conn, models,
+                                                                           monkeypatch):
+    # The separator can't run here: the last line says what stopped it, as a refusal's does, never "Done in …".
+    monkeypatch.setattr(yf, "transcribe_problem", lambda cfg: None)
+
+    class NoAdapter:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def vocals(self, audio, workdir, **kwargs):
+            raise separate.SeparatorFailed("No possible adapter")
+
+    monkeypatch.setattr(separate, "DemucsSeparator", NoAdapter)
+    offered(conn, load_config(config, env={}))
+    result = invoke(config, "--song", "Nick Cani - Vikingos veganos")
+    assert result.exit_code == 1, result.output
+    lines = result.output.splitlines()
+    assert "Vocals: failed: the separator can't run here (No possible adapter)." in lines
+    assert lines[-1] == "No transcript made: the separator can't run here (No possible adapter)."
+    assert not any(line.startswith("Done in ") for line in lines)
+
+
+def test_a_transcription_refused_at_its_chords_says_its_transcript_is_kept(tmp_path, config, conn, models,
+                                                                            monkeypatch):
+    # A lookup that went first before the chords kept UG's chords: the job ends there, a refusal, but the words were
+    # heard and kept, which its last line says (never "No transcript made").
+    from test_youtube_sheet import keep_human_sheet
+
+    monkeypatch.setattr(yf, "transcribe_problem", lambda cfg: None)
+    cfg = load_config(config, env={})
+    song = offered(conn, cfg)
+    handed: list[int] = []
+    monkeypatch.setattr(_common, "_handoffs", _common.handoffs())  # put back as it was after the test
+
+    def hand_over(cfg_, conn_=None) -> bool:
+        handed.append(1)
+        _common._handoffs += 1
+        if len(handed) == 3:  # before vocals, words, then the chords
+            keep_human_sheet(conn_, cfg_, song)
+        return True
+
+    monkeypatch.setattr(_common, "hand_over", hand_over)
+    result = invoke(config, "--song", "Nick Cani - Vikingos veganos")
+    assert result.exit_code == 1, result.output
+    assert result.output.splitlines()[-1] == ("Transcript kept; no sheet made: Nick Cani - Vikingos veganos needs no "
+                                              "sheet over its transcript now: has a human sheet.")
+    assert kv_get(conn, f"transcript:{song.id}") is not None
 
 
 def test_transcribe_where_it_cant_run_says_why_and_exits_1(tmp_path, config, conn, models, monkeypatch):

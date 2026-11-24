@@ -418,6 +418,33 @@ def test_a_song_removed_as_the_models_let_a_lookup_go_first_ends_the_sheet_as_a_
     assert not (setup.library_dir / "Nick Cani" / "Vikingos veganos" / "sheet (auto).txt").exists()
 
 
+@pytest.mark.parametrize("earlier", [False, True], ids=["no auto sheet before", "an auto sheet before"])
+def test_a_human_sheet_kept_as_the_models_let_a_lookup_go_first_ends_the_sheet_as_a_refusal(setup, conn, fake, sites,
+                                                                                         tmp_path, monkeypatch,
+                                                                                         earlier):
+    # Meanwhile a terminal's `caracole get` kept UG's chords: auto-chords would skip the song, which is no failure of
+    # the sheet's ("made no sheet") nor, over an earlier auto sheet, a Ready. The sheet ends there, a refusal.
+    vikingos(fake, tmp_path)
+    if earlier:
+        assert make(setup)[0].ok
+    monkeypatch.setattr(_common, "_handoffs", _common.handoffs())  # put back as it was after the test
+
+    def hand_over(cfg_, conn_=None) -> bool:
+        _common._handoffs += 1
+        keep_human_sheet(conn_, cfg_, find_song(conn_, result_key(conn_)))
+        return True
+
+    monkeypatch.setattr(_common, "hand_over", hand_over)
+    recognizer = Recognizer()
+    result, heard = make(setup, recognizer=recognizer)
+    assert result.bug is None and result.failed is None
+    assert result.refused == "Nick Cani - Vikingos veganos already has a sheet"
+    ends = heard.ends()
+    assert ends["song"] == ("failed", result.refused)
+    assert [ends[name][0] for name in ("chords", "pdf", "pages")] == ["skipped"] * 3
+    assert recognizer.calls == []
+
+
 def test_the_audio_it_has_is_not_asked_for_again(setup, conn, fake, sites, tmp_path):
     vikingos(fake, tmp_path)
     assert make(setup)[0].ok
@@ -439,6 +466,25 @@ def test_another_video_replaces_the_audio_and_the_sheet(setup, conn, fake, sites
     text = auto_sheet(setup, conn, find_song(conn, result_key(conn)))
     assert "Audio from YouTube: Vikingos veganos (en directo) (Nick Cani)" in text
     assert [p.name for p in (setup.cache_dir / "youtube").iterdir()] == [f"1-{other}.wav"]
+
+
+@pytest.mark.parametrize("url,asks", [
+    (PASTED, ["downloading the video's audio"]),
+    (None, ["looking for a video on YouTube", "downloading the video's audio"]),
+], ids=["pasted", "searched"])
+def test_the_audio_and_the_chords_say_what_they_do_as_they_run(setup, conn, fake, sites, tmp_path, url, asks):
+    # The song's line moves through the minutes of the models: what the audio stage asks YouTube for (a video
+    # searched for, then its audio once one is found), then auto-chords' steps, each said once.
+    vikingos(fake, tmp_path)
+    fake.search("Nick Cani Vikingos veganos", entry(VIKINGOS, "Vikingos veganos", "Nick Cani"))
+    result, heard = make(setup, url=url)
+    assert result.ok, result
+    running = [(e[1], e[3]) for e in heard.events if e[0] == "stage" and e[2] == "running" and e[3]]
+    assert running == [
+        *(("audio", said) for said in asks),
+        ("chords", "setting up the models"), ("chords", "hearing the chords"), ("chords", "finding the beats"),
+        ("chords", "writing the sheet"),
+    ]
 
 
 def test_every_event_is_plain_data(setup, conn, fake, sites, tmp_path):
