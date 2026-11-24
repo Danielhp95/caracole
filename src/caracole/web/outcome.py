@@ -40,7 +40,10 @@ the job and what the library knows of its song:
   step the lookup has from its start, so the count only rises, and ``waits`` while that step waits for the book
   (a nightly run holds caracole's lock: "Waiting for the book · 1 of 7"); once it ends Ready they fold away, as
   the song's line opens its sheet itself; ended otherwise they stay, to show which step stopped, ``at`` and ``count``
-  naming the first that failed, none when none did. Nothing for its first second (``BAR_AFTER``), decided here,
+  naming the first that failed, none when none did. While a long stage runs (status.py's ``LONG_STAGES``: a
+  transcription's vocals, words and chords, a sheet from a YouTube video's audio and chords), ``doing``, what it says
+  it does ("heard 1:20 of 3:45"), which the bar says after the step's place, so that minutes of one step move.
+  Nothing for its first second (``BAR_AFTER``), decided here,
   so a reload agrees: none while it has run less, and none ever for one over within it, frozen or not. A request
   that runs no lookup keeps its one line.
 - **Outcome** (``outcome``), for one that is over: a word and its tone (Ready, Needs your pick, Not on the sites,
@@ -89,7 +92,7 @@ from caracole.get import GTPTABS_KEPT, MATCH_NOT_FOUND, NAMES, SHEET_FROM
 from caracole.icons import AUTO, INBOX, tag
 from caracole.logs import plural
 from caracole.web.jobs import INDEX_READS, INTERRUPTED, LOOKUP, REMOVING, Job, Stage, song_key_of
-from caracole.web.status import READY, _WAITING, Line, SongFacts, peer_kind
+from caracole.web.status import READY, _WAITING, Line, SongFacts, doing, peer_kind
 
 if TYPE_CHECKING:
     from caracole.config import Config
@@ -333,8 +336,10 @@ def progress(job: Job, line: Line, facts: SongFacts | None, *, now: datetime | N
     """What the library page draws under a song's request line (/jobs.json's view): a lookup's ``steps``
     (``Chip.as_json``, each its name, its site, its state and what it found, every step it has from its start) and the
     step in hand (``_in_hand``): its place, ``at``, and ``count``, "3 of 7", its place among them all, so the count only
-    rises; and ``waits``, true, right after them, while that step waits for the book (``_waits_for_the_book``: a
-    nightly run holds caracole's lock), which the page says in place of its name, the step drawn waiting.
+    rises; ``doing``, right after them, what that step's stage says it does while it runs, a long one
+    (status.py ``doing``: "heard 1:20 of 3:45"), which the page says after its place; and ``waits``, true, while
+    that step waits for the book (``_waits_for_the_book``: a nightly run holds caracole's lock), which the page says
+    in place of its name, the step drawn waiting.
     Nothing (an empty dict) for a request that runs no lookup, one queued or cancelled, and one whose ``line``
     (status.py's) says Ready: its steps fold away, as its song's line opens the sheet. Ended otherwise, its steps
     stay, to show which step stopped: ``at`` and ``count`` name the one that failed, and are left out when none did.
@@ -350,6 +355,9 @@ def progress(job: Job, line: Line, facts: SongFacts | None, *, now: datetime | N
     if at is not None:
         shown["at"] = at
         shown["count"] = f"{at + 1} of {len(chips)}"
+        told = next((s for s in job.stages if s.state == "running"), None) if job.state == "running" else None
+        if told is not None and doing(told):
+            shown["doing"] = told.detail
         if job.state == "running" and _waits_for_the_book(job.stages):
             shown["waits"] = True
     return shown

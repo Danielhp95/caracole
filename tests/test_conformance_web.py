@@ -889,6 +889,15 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
         "running", "waiting for the book (pid 9: run)")}), facts=ready)
     add("a sheet from YouTube, its audio", in_state(youtube, "running", {"song": ("done", ""),
                                                                         "audio": ("running", "")}), facts=ready)
+    # A long stage says what it does as it runs (status.LONG_STAGES): its line and the bar's ``doing``; any other's
+    # running words stay its own.
+    add("a sheet from YouTube, its audio downloading", in_state(youtube, "running", {
+        "song": ("done", ""), "audio": ("running", "downloading the video's audio")}), facts=ready)
+    add("a sheet from YouTube, its chords' step", in_state(youtube, "running", {
+        "song": ("done", ""), "audio": ("done", "downloaded"), "lyrics": ("done", "LRCLIB has none"),
+        "chords": ("running", "hearing the chords")}), facts=ready)
+    add("a sheet from YouTube, its lyrics saying something", in_state(youtube, "running", {
+        "song": ("done", ""), "audio": ("done", "downloaded"), "lyrics": ("running", "asking LRCLIB")}), facts=ready)
     add("a sheet from YouTube, ready", in_state(youtube, "done", {
         "song": ("done", ""), "audio": ("done", ""), "lyrics": ("done", ""),
         "chords": ("done", "chords over the timed lyrics"), "pdf": ("done", ""), "pages": ("done", "")}), facts=ready)
@@ -906,6 +915,19 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
     add("a transcription, its words", in_state(transcription, "running", {
         "song": ("done", "in the book"), "vocals": ("done", "sung from 9.3 s, 4 stretches"),
         "words": ("running", "")}), facts=_status.SongFacts())
+    add("a transcription, separating its voice", in_state(transcription, "running", {
+        "song": ("done", "in the book"), "vocals": ("running", "separating the voice: 2 of about 12 min")}),
+        facts=_status.SongFacts())
+    add("a transcription, Whisper part of the way", in_state(transcription, "running", {
+        "song": ("done", "in the book"), "vocals": ("done", "sung from 9.3 s, 4 stretches"),
+        "words": ("running", "heard 1:20 of 3:45")}), facts=_status.SongFacts())
+    add("a transcription, its chords' step", in_state(transcription, "running", {
+        "song": ("done", "in the book"), "vocals": ("done", "sung from 9.3 s, 4 stretches"),
+        "words": ("done", "212 words in 31 lines (es), 3 dropped"), "chords": ("running", "finding the beats")}),
+        facts=_status.SongFacts())
+    add("a transcription cut off as Whisper heard it", _interrupted(in_state(transcription, "running", {
+        "song": ("done", "in the book"), "vocals": ("done", "sung from 9.3 s, 4 stretches"),
+        "words": ("running", "heard 1:20 of 3:45")})), facts=_status.SongFacts())
     add("a transcription, ready", in_state(transcription, "done", heard | {
         "chords": ("done", "chords over the transcribed lyrics"), "pdf": ("done", "made"),
         "pages": ("done", "_todo.md and index.html rewritten")}), facts=ready)

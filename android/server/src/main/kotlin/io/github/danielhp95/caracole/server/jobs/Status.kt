@@ -147,6 +147,10 @@ object Status {
     /** get.py's SHEET_FROM's words, a running sheet stage's line by its site. */
     internal val SHEET_LINES = listOf("from LaCuerda", "from UG", "from iReal Pro").associateWith { "Fetching $it" }
 
+    /** The stages that take minutes and say how far they are while they run (status.py's LONG_STAGES): their line
+     * says it after its words, and the library page's bar beside the step ([Outcomes.progress]'s `doing`). */
+    val LONG_STAGES: List<String> = listOf("audio", "vocals", "words", "chords")
+
     /** How `caracole lacuerda --artist` and `--search` (and `harptabs --artist`, `youtube --search`) end, by what
      * the site answered, and the line's tone. */
     internal val READ_TONES = linkedMapOf(
@@ -312,8 +316,15 @@ object Status {
         if (stage.name == "song" && new) return "Adding to the book…"
         if (running && stage.name == "sheet" && stage.detail in SHEET_LINES) return "${SHEET_LINES.getValue(stage.detail)}…"
         if (running && stage.name == "songbooks" && stage.detail.isNotEmpty()) return "Remaking songbook ${stage.detail}…"
+        if (doing(stage)) return "${lines[stage.name] ?: stage.label} · ${stage.detail}…"
         return "${lines[stage.name] ?: stage.label}…"
     }
+
+    /** Whether [stage] is a long one ([LONG_STAGES]) that says what it does while it runs, and not that it waits for
+     * the book (status.py's doing). */
+    internal fun doing(stage: Stage): Boolean =
+        stage.state == Job.RUNNING && stage.name in LONG_STAGES && stage.detail.isNotEmpty() &&
+            !stage.detail.startsWith(WAITING)
 
     /** A failure in its failed stage's words (status.py's _stage_failure): never what a stage the queue ended said
      * while it ran ([Stage.runningDetail]); null without one. */

@@ -345,6 +345,31 @@ def test_a_transcription_says_its_running_stage():
     assert job_line(waiting, song).text == "Waiting for the book…"
 
 
+def test_a_long_stage_says_how_far_it_is_on_the_line():
+    # The models take minutes (half an hour on a CPU): a line that never moves reads as no progress. The long stages
+    # (status.LONG_STAGES) put what they say while they run after their line; any other stage's running words stay
+    # its own, and a wait for the book is said as ever.
+    from caracole.web.status import LONG_STAGES
+
+    assert LONG_STAGES == ("audio", "vocals", "words", "chords")
+    song = SongFacts()
+    said = {"vocals": "separating the voice: 2 of about 12 min", "words": "heard 1:20 of 3:45",
+            "chords": "finding the beats"}
+    lines = {"vocals": "Finding where the singing is · separating the voice: 2 of about 12 min…",
+             "words": "Transcribing the lyrics · heard 1:20 of 3:45…",
+             "chords": "Working out the chords · finding the beats…"}
+    for name, text in lines.items():
+        assert job_line(transcribe_job(stages={name: ("running", said[name])}), song) == Line("running", text)
+    assert job_line(youtube_job(stages={"song": ("done", ""), "audio": ("running", "downloading the video's audio")}),
+                    song).text == "Getting the audio · downloading the video's audio…"
+    assert job_line(youtube_job(stages={"lyrics": ("running", "from LRCLIB")}), song).text == "Fetching lyrics…"
+    waiting = transcribe_job(stages={"vocals": ("running", "waiting for the book (pid 9: run)")})
+    assert job_line(waiting, song).text == "Waiting for the book…"
+    # Between two stages, the next one's line, with nothing it said yet.
+    assert job_line(transcribe_job(stages={"song": ("done", "in the book"), "vocals": ("done", "sung")}),
+                    song).text == "Transcribing the lyrics…"
+
+
 def test_it_is_ready_once_its_chords_are_made():
     every = {"song": ("done", "in the book"), "vocals": ("done", "sung from 9.3 s, 4 stretches"),
              "words": ("done", "212 words in 31 lines (es), 3 dropped"),

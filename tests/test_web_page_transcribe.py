@@ -21,7 +21,7 @@ from helpers import cards
 from helpers.browser import CHROMIUM_MARKS, Browser, BrowserError
 from helpers.fake_ytdlp import FakeYtDlp
 from test_autochords_transcript import youtube_song
-from test_web_page_steps import bar_of, wait_for, words_of
+from test_web_page_steps import bar_of, driven, one_row, wait_for, words_of
 from test_web_page_youtube import serve
 
 import caracole.youtube_fetch as yf
@@ -51,6 +51,7 @@ class FakeTranscribe:
         self.ran: list[tuple[str, ...]] = []
         self.hold = threading.Event()
         self.fail = False
+        self.words_said: list[str] = []  # what the words say they do as they run, before the hold
         self.cfg = None
         self.song = None
 
@@ -88,6 +89,8 @@ class FakeTranscribe:
             stage(name, "running")
             stage(name, "done", "in the book" if name == "song" else "sung from 9.3 s, 4 stretches")
         stage("words", "running")
+        for said in self.words_said:
+            stage("words", "running", said)
         self.hold.wait(30)
         if self.fail:
             stage("words", "failed", "the GPU failed: CUDA out of memory")
@@ -210,6 +213,37 @@ def test_a_songs_card_offers_a_transcription_and_its_line_follows_it(able, live,
     assert browser.wait(f"{again} !== null && {again}.querySelector('.card-head') !== null")
     assert not browser.wait("document.querySelector('form.transcribe') !== null", timeout=1.5)
     assert len(posted) == 1
+
+
+@pytest.mark.parametrize("width", [1280, 390])
+def test_the_bar_says_how_far_a_long_stage_is_beside_its_place(able, live, transcriber, tmp_path, width):
+    # Whisper hears a song for up to half an hour on a CPU: the bar says what the words stage says it does, after the
+    # step's place, in the bar's one row (cut short with an ellipsis where it doesn't fit), and follows it.
+    base, posted, _ = live
+    song = transcriber.song
+    transcriber.words_said = ["heard 1:20 of 3:45"]
+    page = driven(tmp_path, width)
+    try:
+        page.open(base)
+        card = opened(page, song)
+        page.click(card + ' form.transcribe button[type="submit"]')
+        posted.next(0)
+        said = json.dumps(f"{line(song)} .progress.barred")
+        words = (f"(() => {{ const b = document.querySelector({said}); "
+                 "const t = (s) => (b && b.querySelector(s) || {}).textContent || ''; "
+                 "return [t('.step-at'), t('.step-count'), t('.step-doing')]; })()")
+        wait_for(page, words, ["Words", " · 3 of 5", " · heard 1:20 of 3:45"])
+        wait_for(page, bar_of(line(song)), ["done", "done", "running", "waiting", "waiting"])
+        one_row(page, line(song))
+        edge = page.js(f"(() => {{ const r = (s) => document.querySelector(s).getBoundingClientRect(); "
+                       f"return [r({json.dumps(line(song) + ' .step-doing')}).right, "
+                       f"r({json.dumps(line(song))}).right]; }})()")
+        assert edge[0] <= edge[1] + 0.5, edge
+        transcriber.hold.set()
+        assert page.wait(f"{tone(song)} === 'ready'")
+        assert page.js(f"document.querySelector({json.dumps(line(song) + ' .step-doing')})") is None
+    finally:
+        page.close()
 
 
 def test_a_sheet_from_a_video_that_found_no_lyrics_offers_it_at_once_with_no_reload(able, live, transcriber,

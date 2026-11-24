@@ -2,7 +2,8 @@
 /* A request's steps (web/outcome.py's). On the library page, a song's line, or a search result's row, while its lookup
    runs: its request line is a bar of them in one row (library.js showLine, ``barred``), a segment a step
    (``.step-segs``, for the eye alone), then the step in hand, its site and its place, "Sheet · Ultimate Guitar · 3 of
-   7". Those done, and a plain one (over and no failure, "Match: not on UG"), in the accent; the one that runs at half,
+   7", and what a long step says it does (``.step-doing``, "heard 1:20 of 3:45"), the first cut short where the row
+   is too narrow. Those done, and a plain one (over and no failure, "Match: not on UG"), in the accent; the one that runs at half,
    pulsing where motion is welcome; those to come grey; a skipped one, with nothing to do for the song, an outline; a
    failed one red and taller, its "!" in it. The segments' ends are square.
    Under the line (library.js drawSteps, ``.steps``): once its lookup ended otherwise than Ready, that bar as it left
@@ -28,6 +29,7 @@
 .step-at { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .step-at b { color: var(--text); font-weight: 600; }
 .step-count { flex: none; }
+.step-doing { flex: 0 1000 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 @media (prefers-reduced-motion: no-preference) {
   .step-segs > .seg.running { animation: step-pulse 1.2s ease-in-out infinite; }
   @keyframes step-pulse { 50% { opacity: .2; } }

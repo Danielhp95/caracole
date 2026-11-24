@@ -728,6 +728,16 @@ def test_a_transcription_shows_its_steps_and_says_what_it_holds_or_what_stopped_
                                                 "count": "3 of 5"}
     waiting = transcribe_job(stages={"song": ("done", ""), "vocals": ("running", "waiting for the book (pid 9: x)")})
     assert progress(waiting, job_line(waiting, SongFacts()), SongFacts())["waits"] is True
+    assert "doing" not in progress(waiting, job_line(waiting, SongFacts()), SongFacts())
+    # A long stage's words while it runs (status.LONG_STAGES), for the bar, after the step's place: "doing".
+    hearing = transcribe_job(stages={"song": ("done", "in the book"),
+                                     "vocals": ("done", "sung from 9.3 s, 4 stretches"),
+                                     "words": ("running", "heard 1:20 of 3:45")})
+    assert list(progress(hearing, job_line(hearing, SongFacts()), SongFacts()).items())[1:] == [
+        ("at", 2), ("count", "3 of 5"), ("doing", "heard 1:20 of 3:45")]
+    assert steps(hearing)[2] == Chip("Words", "running")  # no finding: what it does is the bar's
+    lyrics = youtube_job(stages={"song": ("done", ""), "audio": ("done", "downloaded"), "lyrics": ("running", "x")})
+    assert "doing" not in progress(lyrics, job_line(lyrics, None), None)
     # Ready: what the sheet holds now, its steps folded away; listed in the Requests tab as it left them.
     ready = transcribe_job("done", TRANSCRIBED)
     assert outcome(ready, job_line(ready, SHEET), SHEET) == Outcome(
