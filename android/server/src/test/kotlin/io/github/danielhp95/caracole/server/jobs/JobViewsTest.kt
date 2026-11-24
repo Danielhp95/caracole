@@ -81,7 +81,7 @@ class JobViewsTest {
         val add = queue.submit(JobSpec("Add b", "b", "add", emptyList()) {}).first
         assertEquals(listOf("queued", "Queued · after the site catalogues ($importing)", null),
                      line(JobViews.view(queue.job(lookup.id)!!, queue)))
-        assertEquals(listOf("queued", "Queued · 2 requests ahead, the site catalogues now ($importing)", null),
+        assertEquals(listOf("queued", "Queued · 2 requests ahead, now the site catalogues ($importing)", null),
                      line(JobViews.view(queue.job(add.id)!!, queue)))
         // Its line alone, given the jobs (the Requests tab's and /jobs.json's).
         val jobs = queue.snapshot()
@@ -106,6 +106,55 @@ class JobViewsTest {
         syncing.complete(Unit)
         runCurrent()
         assertEquals(Job.DONE, queue.job(sync.id)!!.state)
+    }
+
+    /** Behind a kind whose line is the same while it runs (a backup, a file filed, a restore): that line once, its
+     * first letter small; behind one that counts (the pages remade), its name and its count, or its name alone before
+     * it has counted anything. No parentheses twice. */
+    @Test fun aRequestQueuedBehindAPhonesOwnJobSaysItsKindsOwnLineOnce() = runTest {
+        val queue = queue()
+        fun behind(spec: JobSpec, said: String?): String {
+            val gate = CompletableDeferred<Unit>()
+            val kind = PhoneKinds.ALL.getValue(spec.kind)
+            val running = queue.submit(spec.copy(run = { context ->
+                context.stage(kind.stage.first, "running", said ?: "")
+                gate.await()
+            })).first
+            runCurrent()
+            val waiting = queue.submit(JobSpec("Add q", "q-${running.id}", "add", emptyList()) {}).first
+            val text = JobViews.line(queue.job(waiting.id)!!, 1, behind = JobViews.behind(queue.job(waiting.id)!!,
+                                                                                          queue.snapshot())).text
+            gate.complete(Unit)
+            runCurrent()
+            return text
+        }
+        fun spec(kind: PhoneKinds.Kind, display: String) =
+            JobSpec(kind.title, kind.key + display, kind.kind, listOf(kind.stage), display = display) {}
+        val backup = PhoneKinds.BACKUP
+        assertEquals("Queued · after backing up the book", behind(spec(backup, "A backup (daily)"), backup.running))
+        val inbox = PhoneKinds.INBOX
+        assertEquals("Queued · after filing song.gp5",
+                     behind(spec(inbox, "song.gp5"), PhoneKinds.fill(inbox.running, "name" to "song.gp5")))
+        val render = PhoneKinds.RENDER
+        assertEquals("Queued · after the phone's pages (Remaking pages · 3 of 10)",
+                     behind(spec(render, render.display),
+                            PhoneKinds.fill(render.running, "done" to 3, "total" to 10)))
+        assertEquals("Queued · after the phone's pages", behind(spec(render, render.display), null))
+        val catalogues = PhoneKinds.CATALOGUES
+        assertEquals("Queued · after the site catalogues", behind(spec(catalogues, catalogues.display), null))
+    }
+
+    /** A request kept in the history from before the metered stop's words changed still reads as a wait. */
+    @Test fun theMeteredStopsFormerWordsStillReadAsAWait() = runTest {
+        val queue = queue()
+        val kind = PhoneKinds.CATALOGUES
+        val old = "52 MB to download: waiting for Wi-Fi or your go-ahead"
+        val job = phoneJob(queue, kind, "old") { context -> context.stage("catalogues", "done", old) }
+        runCurrent()
+        assertEquals(Line("waiting", old, details = "#tab=requests&job=${job.id}"), JobViews.line(queue.job(job.id)!!))
+        assertTrue(kind.waits(old))
+        assertTrue(kind.waits(PhoneKinds.fill(kind.otherwise!!, "size" to "52 MB")))
+        assertEquals(false, kind.waits("Up to date: the catalogues of 24 Nov 2026"))
     }
 
     @Test fun aRunningJobSaysItsRunningStageElseTheNextOne() = runTest {

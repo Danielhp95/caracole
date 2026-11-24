@@ -35,8 +35,9 @@ import java.time.Instant
  * A request queued behind a long job of the phone's own that runs now ([behind]: the catalogues, a sync, an index
  * import, the render job…, the queue's one worker running it first) says which and how far it has got, the phone's
  * alone (Python never queues one): "Queued · after the site catalogues (Importing · Ultimate Guitar · 600,000 of
- * 1,521,145 tabs)", "Queued · 2 requests ahead, the sync now (Updating the indexes · Downloading the computer's
- * indexes · 120 of 274 MB)" ([queuedBehind]). While that job lets the lookups queued go first, it waits for none.
+ * 1,521,145 tabs)", "Queued · after backing up the book", "Queued · 2 requests ahead, now the sync (Updating the
+ * indexes · Downloading the computer's indexes · 120 of 274 MB)" ([queuedBehind]). While that job lets the lookups
+ * queued go first, it waits for none.
  */
 object JobViews {
     const val REQUESTS = Status.REQUESTS
@@ -180,31 +181,48 @@ object JobViews {
         return jobs.firstOrNull { it.id < job.id && it.state == Job.RUNNING && it.waitingFor == 0 && Shape(it).staged }
     }
 
-    /** "Queued · after the site catalogues (Importing · …)", or with others ahead "Queued · 3 requests ahead, the site
-     * catalogues now (…)": [behind] named ([named]), and what it is doing, its line less its ellipsis, a staged job's
-     * running stage's words after it. */
+    /** "Queued · after …", or with others ahead "Queued · 3 requests ahead, now …": what [behind] is doing as
+     * [doing] words it. */
     internal fun queuedBehind(ahead: Int, behind: Job): String {
-        val shape = Shape(behind)
-        var doing = line(shape, 0, null, null).text.removeSuffix("…")
-        if (behind.spec.kind !in PhoneKinds.ALL) {
-            val running = behind.stages.firstOrNull { it.state == Job.RUNNING }?.detail.orEmpty()
-            if (running.isNotEmpty()) doing += " · $running"
-        }
-        val who = named(behind)
-        return if (ahead <= 1) "Queued · after $who ($doing)" else "Queued · $ahead requests ahead, $who now ($doing)"
+        val doing = doing(behind)
+        return if (ahead <= 1) "Queued · after $doing" else "Queued · $ahead requests ahead, now $doing"
     }
 
-    /** A job of the phone's own as a line names it: a sync "the sync", any other its display, its first word a small
-     * letter where it is "The" or "A" ("the site catalogues", "a backup (daily)"). */
+    /** The phone's kinds that count as they go ("{doing}", "{done} of {total}"): named, their count after. */
+    private val COUNTING = setOf(PhoneKinds.CATALOGUES.kind, PhoneKinds.RENDER.kind)
+
+    /**
+     * What a running job of the phone's own is doing, as a queued line says it, each thing once: a kind that counts its
+     * name and what its line says, "the site catalogues (Importing · …)", "the phone's pages (Remaking pages · 3 of
+     * 10)", its name alone before it has said anything; any other of PhoneKinds' its line alone, its first letter
+     * small, "backing up the book", "filing song.gp5"; a sync "the sync" and its running stage's line and words, "(Updating
+     * the indexes · Downloading …)"; an index import its name, and its words when it says any.
+     */
+    private fun doing(job: Job): String {
+        val stage = job.stages.firstOrNull { it.state == Job.RUNNING }
+        val words = stage?.detail.orEmpty()
+        val line = line(Shape(job), 0, null, null).text.removeSuffix("…")
+        return when (job.spec.kind) {
+            in COUNTING -> named(job) + if (words.isEmpty()) "" else " ($line)"
+            in PhoneKinds.ALL -> small(line)
+            "sync" -> "the sync ($line" + (if (words.isEmpty()) "" else " · $words") + ")"
+            else -> named(job) + if (words.isEmpty()) "" else " ($words)"
+        }
+    }
+
+    /** A job of the phone's own by its display, its first word a small letter where it is "The" or "A" ("the site
+     * catalogues", "the computer's index"). */
     private fun named(job: Job): String {
-        if (job.spec.kind == "sync") return "the sync"
         val display = job.display
         return when {
-            display.startsWith("The ") -> "t" + display.substring(1)
-            display.startsWith("A ") -> "a" + display.substring(1)
+            display.startsWith("The ") || display.startsWith("A ") -> small(display)
             else -> display
         }
     }
+
+    /** [text] with its first letter, an ASCII capital, a small one (no case mapping of the JDK's: ForbiddenApis). */
+    private fun small(text: String): String =
+        if (text.isNotEmpty() && text[0] in 'A'..'Z') (text[0] + 32) + text.substring(1) else text
 
     /** The words of the phone's own kinds where they are not caracole serve's; null where they are. */
     private fun ownLine(shape: Shape): Line? {
@@ -236,7 +254,7 @@ object JobViews {
             }
             Job.DONE -> {
                 val said = stage?.detail?.takeIf { it.isNotEmpty() } ?: kind.done.takeIf { '{' !in it } ?: "Done"
-                val waits = kind.otherwise?.let { PhoneKinds.fits(said, it) } == true
+                val waits = kind.waits(said)
                 if (waits) Line("waiting", said, details = details) else Line("ready", said)
             }
             Job.FAILED -> Line("failed", Status.stageFailure(job.stages) ?: Status.failure(Shape(job).steps),
