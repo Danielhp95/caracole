@@ -687,7 +687,7 @@ def _sync_indexes(cfg, address: str, state, parts: tuple[str, ...], said: _Said)
         if take:
             done += _take_indexes(cfg, address, take, said)
         if give:
-            done += _give_indexes(cfg, address, state, give)
+            done += _give_indexes(cfg, address, state, give, said)
     except (sync.PeerError, index_transfer.TransferError, backup.BackupError, OSError) as e:
         said.stage("index", "failed", str(e))
         typer.echo(f"The indexes weren't brought up to date: {e}")
@@ -775,11 +775,12 @@ def _take_indexes(cfg, address: str, sites: list[str], said: _Said) -> list[dict
         path.unlink(missing_ok=True)
 
 
-def _give_indexes(cfg, address: str, state, sites: list[str]) -> list[dict]:
+def _give_indexes(cfg, address: str, state, sites: list[str], said: _Said) -> list[dict]:
     """This side's indexes of ``sites`` given: exported into ``cache_dir/peer`` (``index_transfer.export``, no
     lock), sent to the other side's Import a file (``peer_import.Uploader``: its routes, as its page sends a file),
     compared and synced there, of the indexes alone, and waited for, then deleted; the report's entries, each site's
-    tabs there before and after (``GET /api/sync/indexes``) and its newest read there now."""
+    tabs there before and after (``GET /api/sync/indexes``) and its newest read there now. Each of the three steps
+    is the index stage's running detail as it begins, so a take's last detail never stands for the give."""
     import secrets
 
     from caracole import index_transfer, peer_file, peer_import, peer_push
@@ -788,18 +789,22 @@ def _give_indexes(cfg, address: str, state, sites: list[str]) -> list[dict]:
     now = utcnow()
     path = _private_folder(cfg) / f"give-indexes-{secrets.token_hex(6)}.sqlite"
     name = peer_file.file_name(cfg.library_name, now.astimezone())[:-len(peer_file.SUFFIX)] + ".sqlite"
+    given = _indexes(len(sites))
+    said.stage("index", "running", f"Exporting {given} to give")
     with closing(open_db(cfg)) as conn:
         me = sync.own_id(conn)
         index_transfer.export(conn, path, sites, now=now)
     try:
         with peer_import.Uploader(address, transport=transport_for_peer(), token=state.token, asking=me) as there:
             before = there.indexes()
+            said.stage("index", "running", f"Sending {given} to the other side")
             import_id = there.upload(path, name=name)
             try:
                 job_id = there.apply(there.compare(import_id)["comparison"], ["indexes"])
             except BaseException:
                 there.drop(import_id)
                 raise
+            said.stage("index", "running", f"Waiting for the other side to merge {given}")
             job = peer_push.wait_for(there, job_id, sleep=_sleep)
             if job["state"] != "done":
                 raise sync.PeerError(f"The caracole at {address} didn't merge the indexes given: its request "
