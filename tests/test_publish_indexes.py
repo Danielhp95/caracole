@@ -9,9 +9,12 @@ import json
 import os
 import random
 import re
+import select
 import shutil
+import signal
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -54,15 +57,23 @@ class Rig:
             "file": NEW, "schema": SCHEMA, "made": "2026-11-24T03:12:00Z", "bytes": len(self.data),
             "raw_bytes": 17, "sha256": self.sha, "sites": {}}), encoding="utf-8")
 
-    def run(self, *args: str, **env: str) -> subprocess.CompletedProcess:
+    def env(self, **env: str) -> dict[str, str]:
         full = {**os.environ, "PATH": f"{self.tmp / 'bin'}{os.pathsep}{os.environ['PATH']}",
                 "PYTHONPATH": subprocess_pythonpath(ROOT / "src"), "HOME": str(self.home),
                 "XDG_CONFIG_HOME": str(self.home), "XDG_STATE_HOME": str(self.home), "XDG_CACHE_HOME": str(self.home),
                 "XDG_DATA_HOME": str(self.home), "CARACOLE_SERVICE_FILE": str(self.tmp / "no-service"),
                 "REPO": "o/r", "TAG": "indexes", **env}
         full.pop("GH_TOKEN", None) if "GH_TOKEN" not in env else None
-        return subprocess.run(["bash", str(SCRIPT), *args, str(self.dir)], env=full, capture_output=True, text=True,
-                              timeout=120)
+        return full
+
+    def run(self, *args: str, **env: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["bash", str(SCRIPT), *args, str(self.dir)], env=self.env(**env), capture_output=True,
+                              text=True, timeout=120)
+
+    def start(self, **env: str) -> subprocess.Popen:
+        """The script started, its stdout a pipe to read as it goes (bytes)."""
+        return subprocess.Popen(["bash", str(SCRIPT), str(self.dir)], env=self.env(**env), stdout=subprocess.PIPE,
+                                stderr=subprocess.DEVNULL)
 
 
 @pytest.fixture
@@ -247,6 +258,88 @@ def test_a_failed_slow_upload_still_fails_with_its_step(tmp_path):
     done = rig.run(FAKE_GH_FAIL="upload:1", TICK="1")
     assert done.returncode == 1 and "step 4" in done.stderr and "can't be uploaded" in done.stderr
     assert rig.gh.names() == [name(17)]
+
+
+def until_a_tick(proc: subprocess.Popen, within: float = 30) -> list[str]:
+    """The script's lines up to its first tick of the upload's progress."""
+    lines, rest, end = [], b"", time.monotonic() + within
+    while time.monotonic() < end:
+        if select.select([proc.stdout], [], [], 0.2)[0]:
+            chunk = os.read(proc.stdout.fileno(), 4096)
+            if not chunk:
+                break
+            *whole, rest = (rest + chunk).split(b"\n")
+            lines += [line.decode() for line in whole]
+            if any(line.startswith("publish-indexes: uploading \u00b7") for line in lines):
+                return lines
+    raise AssertionError(f"no tick within {within} s: {lines}")
+
+
+def running(*marks: str, but: int | None = None) -> list[int]:
+    """The processes whose command line holds every one of ``marks``, but ``but``, and no zombie."""
+    found = []
+    for entry in Path("/proc").iterdir():
+        if not entry.name.isdigit() or int(entry.name) == but:
+            continue
+        try:
+            line = (entry / "cmdline").read_bytes()
+            state = (entry / "stat").read_text().rsplit(") ", 1)[1].split()[0]
+        except (OSError, IndexError):
+            continue
+        if all(m.encode() in line for m in marks) and state != "Z":
+            found.append(int(entry.name))
+    return found
+
+
+def none_within(seconds: float, find) -> bool:
+    end = time.monotonic() + seconds
+    while time.monotonic() < end:
+        if not find():
+            return True
+        time.sleep(0.1)
+    return not find()
+
+
+def ended(rig: Rig, proc: subprocess.Popen) -> None:
+    """Whatever of the run is left (the script, its ticker, gh) ended, and its pipe closed."""
+    for pid in [proc.pid, *running(str(rig.dir))]:
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    proc.wait(timeout=10)
+    proc.stdout.close()
+
+
+@pytest.mark.skipif(not Path("/proc/self/stat").exists(), reason="needs /proc")
+def test_the_ticker_stops_once_the_script_is_gone(tmp_path):
+    """Killed mid-upload, the script can't end its ticker: the ticker sees it gone at its next tick and ends, though
+    gh still uploads."""
+    rig = big(tmp_path)
+    proc = rig.start(FAKE_GH_SLOW="3", TICK="1")
+    try:
+        until_a_tick(proc)
+        os.kill(proc.pid, signal.SIGKILL)
+        proc.wait(timeout=10)
+        assert running(str(rig.tmp / "bin" / "gh"))  # gh still at it
+        assert none_within(5, lambda: running(str(SCRIPT), str(rig.dir))), "the ticker still runs"
+    finally:
+        ended(rig, proc)
+
+
+@pytest.mark.skipif(not Path("/proc/self/stat").exists(), reason="needs /proc")
+def test_the_ticker_stops_once_gh_is_gone_though_the_script_cant_end_it(tmp_path):
+    """gh gone (here killed while the script is stopped, so a zombie no one reaps): the ticker ends at its next tick."""
+    rig = big(tmp_path)
+    proc = rig.start(FAKE_GH_SLOW="3", TICK="1")
+    try:
+        until_a_tick(proc)
+        (gh,) = running(str(rig.tmp / "bin" / "gh"))
+        os.kill(proc.pid, signal.SIGSTOP)
+        os.kill(gh, signal.SIGKILL)
+        assert none_within(5, lambda: running(str(SCRIPT), str(rig.dir), but=proc.pid)), "the ticker still runs"
+    finally:
+        ended(rig, proc)
 
 
 def test_pruning_runs_on_the_services_machine(rig):

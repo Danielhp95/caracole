@@ -20,7 +20,8 @@
 #     can't be checked, deleted and uploaded again; listed otherwise, exit 1 (never replaced, no
 #     --clobber);
 #   4 uploaded: every TICK seconds a line of how far gh has read the file (its file descriptor's
-#     position, /proc/PID/fdinfo) against its size, else the time so far;
+#     position, /proc/PID/fdinfo) against its size, else the time so far, until gh or this
+#     script is gone;
 #   5 read back: size and digest must be published.json's, else it is deleted and exit 1;
 #   6 `caracole index publish --kept <every asset name>` prints what the Keep rule drops; those
 #     are deleted.
@@ -109,15 +110,28 @@ read_pos() {
   done
   return 1
 }
+# Whether process $1 still runs: there, and no zombie (one whose stopped parent hasn't reaped it).
+running() {
+  local stat
+  kill -0 "$1" 2>/dev/null || return 1
+  stat=$(cat /proc/"$1"/stat 2>/dev/null) || return 0 # no /proc: kill -0's word
+  stat=${stat##*) }
+  [ "${stat%% *}" != Z ]
+}
 # Every TICK seconds while gh ($1) uploads the file $2 of $3 bytes, begun at $4 (seconds since
-# the epoch): how far it has got. Run in the background; killed (TERM), it ends its nap too.
+# the epoch): how far it has got. Run in the background; killed (TERM), it ends its nap too. It
+# ends by itself at its next tick once gh or this script is gone (the script killed mid-upload
+# can't end it), saying nothing more.
 ticker() {
   local now took pos nap
   trap 'kill "$nap" 2>/dev/null; exit 0' TERM
   while :; do
     sleep "$TICK" >/dev/null 2>&1 &
     nap=$!
-    wait "$nap" || return 0
+    wait "$nap" || exit 0
+    if ! running "$1" || ! running "$$"; then
+      exit 0
+    fi
     printf -v now '%(%s)T' -1
     took=$((now - $4))
     if pos=$(read_pos "$1" "$2") && [ "$pos" -gt 0 ]; then
