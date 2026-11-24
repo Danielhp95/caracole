@@ -3766,7 +3766,8 @@ and each site's rows) and deletes the older `indexes-*.sqlite.gz` in `DIR`. It t
 
 It exits 1, leaving nothing behind, when the name exists, when UG's index isn't built whole, or
 when a site holds a tenth fewer rows than `published.json` says of the last file. `--force` publishes
-that one anyway.
+that one anyway. It also refuses a file that holds a path of this machine (your folders, your home
+folder, `/nix/store/`, or any text value that is an absolute path), naming the table and column.
 
 `--kept NAME` (repeated, once for each name) exports nothing. It prints, one a line and each once,
 the names the Keep rule would delete. The rule: this caracole's schema keeps its two newest files

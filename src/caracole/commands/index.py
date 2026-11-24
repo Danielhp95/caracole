@@ -277,7 +277,8 @@ def _publish(cfg: Config, folder: Path, force: bool, kept: list[str]) -> None:
     with closing(open_db(cfg)) as conn:
         try:
             last = None if force else catalogues.published(folder)
-            made = catalogues.publish(conn, folder, now=now, last=last)
+            made = catalogues.publish(conn, folder, now=now, last=last, private=[
+                str(p) for p in (cfg.state_dir, cfg.library_dir, cfg.cache_dir, cfg.music_dir, Path.home())])
         except catalogues.PublishError as e:
             fail(f"index publish: {e}")
     typer.echo(f"Published {folder / made.name} ({backup.size_text(made.bytes)}, {backup.size_text(made.raw_bytes)} "

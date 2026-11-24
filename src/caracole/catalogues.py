@@ -22,7 +22,7 @@ import os
 import re
 import secrets
 import sqlite3
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -119,7 +119,8 @@ def kept(names: Iterable[str], *, schema: int, now: datetime, keep_days: int = K
     return out
 
 
-def publish(conn: sqlite3.Connection, folder: Path, *, now: datetime, last: Published | None) -> Published:
+def publish(conn: sqlite3.Connection, folder: Path, *, now: datetime, last: Published | None,
+            private: Sequence[str] = ()) -> Published:
     from caracole import db, stamps
     from caracole import index_transfer as transfer
     from caracole.ug.index import BUILT_KEY
@@ -140,6 +141,7 @@ def publish(conn: sqlite3.Connection, folder: Path, *, now: datetime, last: Publ
             exported = transfer.export(conn, raw, now=now, omit=transfer.PUBLIC_OMIT)
         except transfer.TransferError as e:
             raise PublishError(str(e)) from e
+        _no_paths(raw, [*private, "/nix/store/", *_database(conn)])
         rows = {site: exported.rows[transfer.SITES[site].tables[0]] for site in exported.sites}
         if last is not None:
             for site, before in last.rows.items():
@@ -180,6 +182,32 @@ def publish(conn: sqlite3.Connection, folder: Path, *, now: datetime, last: Publ
         if other.name != name:
             other.unlink(missing_ok=True)
     return result
+
+
+def _database(conn: sqlite3.Connection) -> list[str]:
+    return [row[2] for row in conn.execute("PRAGMA database_list") if row[1] == "main" and row[2]]
+
+
+def _no_paths(export: Path, private: Sequence[str]) -> None:
+    """Refuse an export one of whose text values holds any of ``private``, or is an absolute path: no path of this
+    machine goes to a public file. Names the table, the column and the value's first 60 characters."""
+    private = [p for p in dict.fromkeys(private) if p]
+    file = sqlite3.connect(f"file:{export}?mode=ro", uri=True)
+    try:
+        tables = [r[0] for r in file.execute("SELECT name FROM sqlite_master WHERE type = 'table' "
+                                             "AND name NOT LIKE 'sqlite_%' ORDER BY name")]
+        for table in tables:
+            for column in [r[1] for r in file.execute(f'PRAGMA table_info("{table}")')]:
+                test = " OR ".join(["substr({c}, 1, 1) = '/'"] + ["instr({c}, ?) > 0"] * len(private)).format(
+                    c=f'"{column}"')
+                row = file.execute(f'SELECT "{column}" FROM "{table}" WHERE typeof("{column}") = \'text\' '
+                                   f"AND ({test}) LIMIT 1", private).fetchone()
+                if row is not None:
+                    raise PublishError(f"{table}.{column} holds a path of this machine: {row[0][:60]!r}")
+    except sqlite3.Error as e:
+        raise PublishError(f"can't check the export for paths: {e}") from e
+    finally:
+        file.close()
 
 
 class _Hashing:

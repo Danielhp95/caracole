@@ -123,3 +123,37 @@ def test_a_sidecar_that_cant_be_written_leaves_no_file_and_is_a_publish_error(co
     with pytest.raises(catalogues.PublishError, match="disk full"):
         catalogues.publish(conn_with_index, out, now=NOW, last=None)
     assert list(out.iterdir()) == []
+
+
+def test_a_value_holding_a_path_of_this_machine_refuses_the_file(conn_with_index, out, tmp_path):
+    private = [str(tmp_path / "state")]
+    db.kv_set(conn_with_index, "ug:index:refreshed_at", f"read from {private[0]}/x")
+    with pytest.raises(catalogues.PublishError, match=r"kv\.value holds a path of this machine: 'read from"):
+        catalogues.publish(conn_with_index, out, now=NOW, last=None, private=private)
+    assert list(out.iterdir()) == []
+
+
+def test_a_title_holding_the_home_folder_refuses_the_file(conn_with_index, out):
+    from pathlib import Path
+
+    tt.artist_songs(conn_with_index, "slug", "Artist", [f"Song {Path.home()}"])
+    with pytest.raises(catalogues.PublishError, match="lacuerda_index"):
+        catalogues.publish(conn_with_index, out, now=NOW, last=None, private=[str(Path.home())])
+    assert list(out.iterdir()) == []
+
+
+def test_an_absolute_path_or_the_nix_store_refuses_the_file(conn_with_index, out):
+    db.kv_set(conn_with_index, "ug:index:refreshed_at", "/somewhere/else")
+    with pytest.raises(catalogues.PublishError, match="a path of this machine"):
+        catalogues.publish(conn_with_index, out, now=NOW, last=None)
+    db.kv_set(conn_with_index, "ug:index:refreshed_at", "x /nix/store/abc-foo y")
+    with pytest.raises(catalogues.PublishError, match="a path of this machine"):
+        catalogues.publish(conn_with_index, out, now=NOW, last=None)
+    assert list(out.iterdir()) == []
+
+
+def test_a_published_file_and_its_sidecar_hold_no_path(conn_with_index, out):
+    p = catalogues.publish(conn_with_index, out, now=NOW, last=None, private=[str(out)])
+    data = (out / p.name).read_bytes()
+    assert data[3] & 0x08 == 0
+    assert str(out) not in (out / "published.json").read_text()
