@@ -21,9 +21,10 @@ its own (staged.py; ``--progress`` writes a JSON line per event, which caracole 
 - ``pages``: _todo.md and index.html.
 
 Before each of vocals, words and chords, the long stages, a waiting lookup goes first (``_common.hand_over``); then
-the song is read again, checked still offered before vocals and words, and its audio still the one vocals separated
-before words and chords. A song that left the book, is offered no more or has other audio ends the job there, a
-refusal its song stage says, before the next model runs.
+the song is read again, checked still offered (before the chords, its transcript kept no refusal), and its audio
+still the one vocals separated before words and chords. A song that left the book, is offered no more (a human sheet
+kept meanwhile, ignored, lyrics found) or has other audio ends the job there, a refusal its song stage says, before
+the next model runs.
 
 The models default to demucs-rs and Whisper from ``cfg``, each built at its first stage. Whisper is run first on
 run.py's test tone, as auto-chords checks its own: a model that fails there would fail on every song. demucs-rs is
@@ -140,11 +141,13 @@ class _Transcription(StagedRun):
     def _not_offered(self, why: str) -> _Stop:
         return _Stop(f"{self.song.display} isn't offered a transcription: {why}")
 
-    def _still_offered(self) -> None:
-        from caracole.autochords.transcript import why_not_offered
+    def _still_offered(self, *, transcribed: bool = False) -> None:
+        """The song still offered a transcription, else the job ends there (``_Stop``); ``transcribed``: its own
+        audio's transcript kept, as once the words are, is no refusal."""
+        from caracole.autochords.transcript import ALREADY_TRANSCRIBED, why_not_offered
 
         why = why_not_offered(self.conn, self.cfg, self.song, self.overrides)
-        if why is not None:
+        if why is not None and not (transcribed and why == ALREADY_TRANSCRIBED):
             raise self._not_offered(why)
 
     def _same_audio(self) -> None:
@@ -305,6 +308,7 @@ class _Transcription(StagedRun):
             return "skipped", "no transcript"
         self._after_a_lookup()
         self._same_audio()
+        self._still_offered(transcribed=True)  # a human sheet kept meanwhile, ignored: auto-chords would skip it
         return self._autochords_sheet()
 
     # --- the whole run --------------------------------------------------------------------------------

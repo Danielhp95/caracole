@@ -418,6 +418,33 @@ def test_a_song_removed_as_the_models_let_a_lookup_go_first_ends_the_sheet_as_a_
     assert not (setup.library_dir / "Nick Cani" / "Vikingos veganos" / "sheet (auto).txt").exists()
 
 
+@pytest.mark.parametrize("earlier", [False, True], ids=["no auto sheet before", "an auto sheet before"])
+def test_a_human_sheet_kept_as_the_models_let_a_lookup_go_first_ends_the_sheet_as_a_refusal(setup, conn, fake, sites,
+                                                                                         tmp_path, monkeypatch,
+                                                                                         earlier):
+    # Meanwhile a terminal's `caracole get` kept UG's chords: auto-chords would skip the song, which is no failure of
+    # the sheet's ("made no sheet") nor, over an earlier auto sheet, a Ready. The sheet ends there, a refusal.
+    vikingos(fake, tmp_path)
+    if earlier:
+        assert make(setup)[0].ok
+    monkeypatch.setattr(_common, "_handoffs", _common.handoffs())  # put back as it was after the test
+
+    def hand_over(cfg_, conn_=None) -> bool:
+        _common._handoffs += 1
+        keep_human_sheet(conn_, cfg_, find_song(conn_, result_key(conn_)))
+        return True
+
+    monkeypatch.setattr(_common, "hand_over", hand_over)
+    recognizer = Recognizer()
+    result, heard = make(setup, recognizer=recognizer)
+    assert result.bug is None and result.failed is None
+    assert result.refused == "Nick Cani - Vikingos veganos already has a sheet"
+    ends = heard.ends()
+    assert ends["song"] == ("failed", result.refused)
+    assert [ends[name][0] for name in ("chords", "pdf", "pages")] == ["skipped"] * 3
+    assert recognizer.calls == []
+
+
 def test_the_audio_it_has_is_not_asked_for_again(setup, conn, fake, sites, tmp_path):
     vikingos(fake, tmp_path)
     assert make(setup)[0].ok

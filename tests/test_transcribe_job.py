@@ -21,7 +21,7 @@ from helpers.aac import aac_m4a, needs_aac
 from helpers.aac import samples as aac_samples
 from helpers.locks import waiting_for
 from helpers.rendered import fake_chordpro
-from test_youtube_sheet import Heard, Recognizer, beats, wav
+from test_youtube_sheet import Heard, Recognizer, beats, keep_human_sheet, wav
 
 from caracole.autochords import separate
 from caracole.autochords import transcribe as tx
@@ -657,22 +657,33 @@ def test_a_default_model_that_fails_on_the_tone_or_at_load_is_the_setups(conn, c
     ("chords", lambda conn, cfg, song: conn.execute("DELETE FROM songs"),
      "Nick Cani - Vikingos veganos left the book while its lyrics were transcribed (removed, or merged into a song "
      "of the same name)"),
-], ids=["lyrics found before the words", "removed before the chords"])
+    ("chords", keep_human_sheet, "Nick Cani - Vikingos veganos isn't offered a transcription: has a human sheet"),
+    ("chords", ignored, "Nick Cani - Vikingos veganos isn't offered a transcription: ignored"),
+], ids=["lyrics found before the words", "removed before the chords", "a human sheet before the chords",
+        "ignored before the chords"])
+@pytest.mark.parametrize("earlier", [False, True], ids=["no auto sheet before", "an auto sheet before"])
 def test_a_song_a_lookup_changed_while_it_had_the_lock_ends_the_job_as_a_refusal(conn, cfg, monkeypatch, before,
-                                                                                 change, said):
+                                                                                 change, said, earlier):
     # Before each long stage the job lets a waiting lookup have the lock; meanwhile the song may have found lyrics
-    # (no longer offered) or left the book. The job ends there, a refusal, before the next model runs.
+    # (no longer offered), kept a human sheet (a terminal's `caracole get` found UG's chords), been ignored, or left
+    # the book. The job ends there, a refusal, before the next model runs: never auto-chords' skip said as its own
+    # failure ("made no sheet"), nor an earlier auto sheet said as Ready.
+    from caracole.autochords.run import autochords_pending
+
     song = offered(conn, cfg)
+    if earlier:  # a chart auto-chords made before, with no words
+        autochords_pending(conn, cfg, recognizer=Recognizer(), beats_fn=beats, only={song.id})
     heard = Heard()
     monkeypatch.setattr(_common, "_handoffs", _common.handoffs())  # put back as it was after the test
 
     def hand_over(cfg_, conn_=None) -> bool:
         _common._handoffs += 1
-        if heard.events[-1] == ("stage", before, "running", ""):
+        if heard.events[-1][1:3] == (before, "running"):
             change(conn_, cfg_, song)
         return True
 
     monkeypatch.setattr(_common, "hand_over", hand_over)
+    made_before = auto_sheet(cfg, conn, song).exists()
     transcriber, recognizer = Transcriber(), Recognizer()
     result, _ = make(cfg, transcriber=transcriber, recognizer=recognizer, progress=heard)
     assert result.bug is None and result.failed is None and result.refused == said
@@ -681,7 +692,7 @@ def test_a_song_a_lookup_changed_while_it_had_the_lock_ends_the_job_as_a_refusal
     assert all(ends[name][0] == "skipped" for name in ("chords", "pdf", "pages"))
     assert recognizer.calls == []
     assert (transcriber.calls == []) == (before == "words")
-    assert not auto_sheet(cfg, conn, song).exists()
+    assert auto_sheet(cfg, conn, song).exists() == made_before
 
 
 
