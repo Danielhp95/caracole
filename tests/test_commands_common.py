@@ -912,4 +912,64 @@ def test_a_clients_ticker_counts_its_requests_against_the_budget_it_was_given(cf
         no_budget.get("https://www.azlyrics.com/e/epic.html")
     finally:
         no_budget.close()
-    assert screen.getvalue().split("\r")[-1].rstrip() == "AZLyrics · 1 request"
+        ticker.close()
+    assert screen.getvalue().split("\r")[1].rstrip() == "AZLyrics · 1 request"
+
+
+def test_a_ticker_changes_no_pause_a_client_draws(cfg, conn, site, monkeypatch):
+    # Politeness: the heartbeat only counts. The same client, with and without one, sleeps the same pauses.
+    import random
+
+    from caracole.progress import Console, Ticker
+
+    slept: list[float] = []
+    monkeypatch.setattr(_common, "sleep", slept.append)
+
+    def pauses(ticker) -> list[float]:
+        conn.execute("DELETE FROM events")  # each run as the first: no pause after another's last request
+        conn.execute("DELETE FROM kv WHERE key LIKE 'http:last_request:%'")
+        slept.clear()
+        client = make_client(cfg, conn, "ug", "run", ticker=ticker)
+        client._rng, client._clock = random.Random(7), lambda: 0.0  # the same draws, no time passing
+        try:
+            for n in range(5):
+                client.get(f"https://tabs.ultimate-guitar.com/tab/{n}", cache=False)
+        finally:
+            client.close()
+        return list(slept)
+
+    import io
+
+    class Terminal(io.StringIO):
+        def isatty(self):
+            return True
+
+    without = pauses(None)
+    ticker = Ticker(Console(Terminal(), environ={"TERM": "xterm"}, width=lambda: 200))
+    try:
+        assert pauses(ticker) == without and len(without) >= 4  # four pauses, each in slices
+    finally:
+        ticker.close()
+
+
+def test_yt_dlp_runs_are_counted_on_a_ticker_with_no_time_left(cfg, conn, tmp_path, monkeypatch):
+    import io
+
+    from helpers.fake_ytdlp import route_on
+
+    from caracole.progress import Console, Ticker
+
+    class Terminal(io.StringIO):
+        def isatty(self):
+            return True
+
+    ycfg, _ = route_on(cfg, tmp_path, monkeypatch)
+    screen = Terminal()
+    ticker = Ticker(Console(screen, environ={"TERM": "xterm"}, width=lambda: 200))
+    runner = _common.make_youtube(ycfg, conn, "run", ticker=ticker)
+    try:
+        runner._event("ytsearch1:Epic - Song", None, "ok", None)  # a run, as youtube.py records one
+    finally:
+        runner.close()
+        ticker.close()
+    assert screen.getvalue().split("\r")[1].rstrip() == "YouTube · 1 of up to 6 yt-dlp runs"

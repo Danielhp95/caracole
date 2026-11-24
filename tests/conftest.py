@@ -135,6 +135,17 @@ def _no_real_service(monkeypatch, tmp_path_factory):
     monkeypatch.setenv("CARACOLE_SERVICE_FILE", str(tmp_path_factory.getbasetemp() / "no-caracole-service-in-tests"))
 
 
+@pytest.fixture(autouse=True)
+def _no_live_line_left():
+    """No live line (progress.py's ``Ticker``) outlives its test: the clears its tickers left in the log
+    (``logs.clears_first``) go, and a terminal a test made fail is no reason for the next test's to stay off."""
+    yield
+    from caracole import logs, progress
+
+    logs._clearing.clear()
+    progress._screen_gone = False
+
+
 _migrated: dict[tuple, bytes] = {}
 
 

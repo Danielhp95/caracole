@@ -295,6 +295,7 @@ def test_a_clients_requests_are_counted_against_its_budget_with_the_time_left(ca
     # 3 sent, 197 left: 2.5 s from the first to the third for 2, the pacing's 0.875 s counting twice: 1.06 s each
     assert out.getvalue().split("\r")[-1].rstrip() == (
         "[6/20] lyrics · LRCLIB · 3 of up to 200 requests  up to about 3 min left")
+    t.close()
 
 
 def test_a_client_with_no_budget_says_its_count_alone():
@@ -306,6 +307,7 @@ def test_a_client_with_no_budget_says_its_count_alone():
     assert out.getvalue().split("\r")[-1].rstrip() == "AZLyrics · 1 request"
     beat(Ev("ok", "azlyrics"))
     assert out.getvalue().split("\r")[-1].rstrip() == "AZLyrics · 2 requests"
+    t.close()
 
 
 def test_a_clients_pace_starts_again_at_the_runs_next_step():
@@ -322,6 +324,18 @@ def test_a_clients_pace_starts_again_at_the_runs_next_step():
     # 2 sent, of the run's 60; the fetch's first request: the pacing's 3.75 s and 0.5 s of answer, 58 times
     assert out.getvalue().split("\r")[-1].rstrip() == (
         "[9/20] fetch · Ultimate Guitar · 2 of up to 60 requests  up to about 4 min left")
+    t.close()
+
+
+def test_yt_dlp_runs_are_counted_with_no_time_left():
+    # A run is a download of minutes, never the pacing's few seconds: no estimate is better than a wrong one.
+    from caracole.progress import Requests
+
+    t, out = ticker(width=200)
+    beat = Requests(t, "youtube", budget=6, delay=(3.75, 7.5), noun="yt-dlp run", estimate=False)
+    beat(Ev("ok", "youtube"))
+    t.close()
+    assert out.getvalue().split("\r")[1].rstrip() == "YouTube · 1 of up to 6 yt-dlp runs"
 
 
 def test_counted_work_says_how_far_it_is_with_the_time_left_once_measured():
@@ -338,6 +352,83 @@ def test_counted_work_says_how_far_it_is_with_the_time_left_once_measured():
     assert out.getvalue().split("\r")[-1].rstrip() == "PDFs · 2 of 101 songs  about 2 min left"
     count("Bare artists' pages · 0 of 10", 0, 10, kind="bare")  # another kind of step: measured again
     assert out.getvalue().split("\r")[-1].rstrip() == "Bare artists' pages · 0 of 10"
+    t.close()
+
+
+# --- a terminal that can't be written, and its width -----------------------------------------
+
+
+class Gone(Terminal):
+    """A terminal that went away (a closed pty, a hung-up ssh): every write fails."""
+
+    def write(self, text):
+        raise OSError(5, "Input/output error")
+
+
+def test_a_terminal_that_cant_be_written_never_stops_the_work_and_the_live_line_stays_off(log_to_tty):
+    from caracole import logs, progress
+
+    t, _ = ticker(Gone())
+    t.begin("[6/20] lyrics")  # fails: the line goes off, the work goes on
+    t.show("LRCLIB · 3 of up to 200 requests")
+    logging.getLogger("caracole.lyrics").warning("still logged")  # the clears-first filter raises nothing
+    t.close()
+    assert log_to_tty.getvalue() == "warning: still logged\n"
+    assert logs._clearing == []
+    assert progress.ticker().console.live is False  # for the rest of the process
+
+
+def test_a_clear_that_raises_never_stops_a_record(log_to_tty):
+    from caracole import logs
+
+    def broken():
+        raise ValueError("I/O operation on closed file.")
+
+    logs.clears_first(broken)
+    logging.getLogger("caracole.lyrics").warning("written all the same")
+    assert log_to_tty.getvalue() == "warning: written all the same\n" and logs._clearing == []
+
+
+def test_the_live_line_fits_stderrs_terminal_even_with_stdout_redirected(monkeypatch, log_to_tty):
+    import os
+    import sys
+
+    from caracole import progress
+
+    class Stderr(Terminal):
+        def fileno(self):
+            return 2
+
+    def size(fd):
+        if fd != 2:
+            raise OSError(25, "Inappropriate ioctl for device")  # stdout: a file
+        return os.terminal_size((30, 24))
+
+    monkeypatch.delenv("COLUMNS", raising=False)
+    monkeypatch.setenv("TERM", "xterm")
+    monkeypatch.setattr(progress.os, "get_terminal_size", size)
+    monkeypatch.setattr(sys, "stdout", io.StringIO())
+    screen = Stderr()
+    monkeypatch.setattr(sys, "stderr", screen)
+    t = progress.ticker()
+    t.show("UG's listings · 312 of about 3,480 pages", "about 48 min left")
+    t.close()
+    shown = screen.getvalue().split("\r")[1]
+    assert shown == "UG's li...  about 48 min left" and len(shown) == 29  # 30 columns, one kept free
+
+
+def test_a_wide_character_takes_two_columns_of_the_live_line():
+    out = Terminal()
+    c = Console(out, environ={"TERM": "xterm"}, width=lambda: 20)  # 19 columns at most
+    c.status("宋冬野 - 斑马斑马斑马斑马斑马斑马")
+    c.close()
+    line = out.getvalue().split("\r")[1]
+    assert line == "宋冬野 - 斑马斑..."  # 18 columns of 12 characters: by characters it would wrap
+    out = Terminal()
+    c = console(out)
+    c.status("宋冬野 - 斑马斑马")  # 17 columns of 10 characters: its blanks cover 17
+    c.close()
+    assert out.getvalue() == "\r宋冬野 - 斑马斑马\r" + " " * 17 + "\r"
 
 
 # --- systemd's status line ------------------------------------------------------------------
@@ -357,6 +448,30 @@ def test_a_ticker_tells_the_units_status_line_as_each_part_begins_and_every_few_
     t.begin("[7/20] megalobiz")  # a new part: at once
     assert told == ["[6/20] lyrics…", "[6/20] lyrics · LRCLIB · 9 of up to 200 requests  up to about 1 min left",
                     "[7/20] megalobiz…"]
+
+
+def test_a_ticker_finishes_with_a_last_status_line_and_nothing_on_the_screen_or_the_log(caplog):
+    told = []
+    from caracole.progress import Ticker
+
+    t = Ticker(None, status=told.append)
+    t.begin("[20/20] backup")
+    with caplog.at_level(logging.INFO, logger="caracole.progress"):
+        t.finish("Finished in 12 min 3 s · Songs: 3 in wanted.txt, 1 new.")
+    assert told[-1] == "Finished in 12 min 3 s · Songs: 3 in wanted.txt, 1 new." and not caplog.records
+
+
+def test_the_status_line_is_one_line():
+    import os
+    import socket
+
+    from caracole.progress import systemd_status
+
+    name = f"caracole-test-lines-{os.getpid()}"
+    with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as listening:
+        listening.bind("\0" + name)
+        assert systemd_status("First, build the index once.\nUntil then…", environ={"NOTIFY_SOCKET": "@" + name})
+        assert listening.recv(4096) == "STATUS=First, build the index once. Until then…".encode()
 
 
 def test_the_status_line_goes_to_the_socket_systemd_names_and_nowhere_without_one():

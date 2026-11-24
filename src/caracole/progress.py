@@ -4,7 +4,8 @@ A ``Console`` writes four kinds of output. ``say`` is a result, always printed.
 ``note`` says what is about to happen, and ``step`` that one step is done;
 ``status`` says what is under way. On a terminal (``isatty``, and ``TERM``
 isn't ``dumb``), ``step`` and ``status`` share one live line, rewritten in
-place after a carriage return and kept within the terminal's width; ``say``
+place after a carriage return and kept within the terminal's width (its
+stream's own, in display columns: a Chinese character takes two); ``say``
 and ``note`` clear it first. Anywhere else, such as systemd's journal or a
 pipe, a step is one plain line and ``status`` prints nothing: no carriage
 return and no color. Color only ever goes to a terminal, and never when
@@ -30,10 +31,10 @@ from __future__ import annotations
 
 import logging
 import os
-import shutil
 import socket
 import sys
 import time
+import unicodedata
 from collections.abc import Callable, Mapping
 from typing import Any, TextIO
 
@@ -59,8 +60,8 @@ class Console:
         self.live = terminal if live is None else live
         self.color = (terminal and not env.get("NO_COLOR")) if color is None else color
         self.quiet = quiet
-        self._width = width or (lambda: shutil.get_terminal_size().columns)
-        self._shown = 0  # characters of the live line on screen
+        self._width = width or (lambda: _columns_of(self.stream))
+        self._shown = 0  # display columns of the live line on screen
 
     def say(self, text: str = "", **style: Any) -> None:
         """A result: a line of its own, always (``style`` as ``click.style`` takes it, on a terminal)."""
@@ -87,8 +88,8 @@ class Console:
         if self.quiet or not self.live:
             return
         line = _fit(text, tail, max(1, self._width() - 1))  # one column short, so the cursor never wraps
-        click.echo("\r" + line + " " * max(0, self._shown - len(line)), file=self.stream, nl=False, color=False)
-        self._shown = len(line)
+        click.echo("\r" + line + " " * max(0, self._shown - _columns(line)), file=self.stream, nl=False, color=False)
+        self._shown = _columns(line)
 
     def style(self, text: str, **style: Any) -> str:
         return click.style(text, **style) if self.color else text
@@ -113,16 +114,46 @@ def _isatty(stream: TextIO) -> bool:
         return False
 
 
+def _columns_of(stream: TextIO) -> int:
+    """The width of the terminal ``stream`` is, from its own descriptor (stderr's for a ticker, whatever stdout is);
+    80 for one that says none."""
+    try:
+        return os.get_terminal_size(stream.fileno()).columns or 80
+    except (AttributeError, ValueError, OSError):  # no descriptor, a closed one, or no terminal there
+        return 80
+
+
+def _char_columns(ch: str) -> int:
+    """The display columns a character takes, as chordpro.py's ``display_columns`` counts them (not imported: this
+    module loads on every start): a wide East Asian one two, a combining mark none."""
+    if unicodedata.combining(ch):
+        return 0
+    return 2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1
+
+
+def _columns(text: str) -> int:
+    return sum(_char_columns(ch) for ch in text)
+
+
 def _join(text: str, tail: str) -> str:
     return "  ".join(part for part in (text, tail) if part)
 
 
 def _cut(text: str, width: int) -> str:
-    return text if len(text) <= width else text[: max(0, width - 3)] + "..."
+    """``text`` within ``width`` display columns, its end "..." where it is cut."""
+    if _columns(text) <= width:
+        return text
+    kept, used = [], 0
+    for ch in text:
+        used += _char_columns(ch)
+        if used > max(0, width - 3):
+            break
+        kept.append(ch)
+    return "".join(kept) + "..."
 
 
 def _fit(text: str, tail: str, width: int) -> str:
-    room = width - len(tail) - 2
+    room = width - _columns(tail) - 2
     if not tail:
         return _cut(text, width)
     if room < 4:
@@ -186,6 +217,7 @@ def duration(seconds: float) -> str:
 
 
 EVERY = 60.0  # seconds: a ticker's line in the log at most this often
+_screen_gone = False  # a live line failed to be written: none more in this process (``ticker``)
 STATUS_EVERY = 2.0  # seconds: the unit's status line told at most this often, but as a part begins
 ANSWER = 0.5  # seconds a site takes to answer, about, beside the pause before each request
 SENT = ("ok", "not_modified", "redirect", "blocked", "error")  # a request's events, sent: _common._SENT's
@@ -201,7 +233,8 @@ class Ticker:
     its caller. A record the log writes takes the live line off the screen first (``logs.clears_first``), and so does
     ``clear``, before the command prints on stdout; ``close`` does both for good. ``status``, where given, is told
     the line too (the unit's status line, ``systemd_status``): as a part begins, and at most every ``STATUS_EVERY``
-    seconds after.
+    seconds after; ``finish`` tells it the work's last word. A terminal that can't be written (gone, closed) never
+    stops the work: the live line goes off, for the rest of the process.
     """
 
     def __init__(self, console: Console | None = None, *, clock: Callable[[], float] = time.monotonic,
@@ -219,15 +252,13 @@ class Ticker:
     def begin(self, prefix: str) -> None:
         self.prefix = prefix
         self._said = self._told = self._clock()
-        if self.console is not None:
-            self.console.status(prefix + "…")
+        self._on_screen(lambda console: console.status(prefix + "…"))
         if self._status is not None:
             self._status(prefix + "…")
 
     def show(self, text: str = "", tail: str = "") -> None:
         line = " · ".join(part for part in (self.prefix, text) if part)
-        if self.console is not None:
-            self.console.status(line, tail)
+        self._on_screen(lambda console: console.status(line, tail))
         now = self._clock()
         if now - self._said >= self._every:
             self._said = now
@@ -236,12 +267,30 @@ class Ticker:
             self._told = now
             self._status(_join(line, tail))
 
+    def finish(self, text: str) -> None:
+        """The work's last word, for the unit's status line alone (``systemctl status`` after the run)."""
+        if self._status is not None:
+            self._status(text)
+
     def clear(self) -> None:
-        if self.console is not None:
-            self.console.close()
+        self._on_screen(lambda console: console.close())
 
     def close(self) -> None:
         self.clear()
+        self._unhook()
+
+    def _on_screen(self, write: Callable[[Console], object]) -> None:
+        if self.console is None:
+            return
+        try:
+            write(self.console)
+        except (OSError, ValueError):  # the terminal went (EIO, a closed stream): the work goes on, unseen
+            global _screen_gone
+            _screen_gone = True
+            self.console = None
+            self._unhook()
+
+    def _unhook(self) -> None:
         if self._undo is not None:
             self._undo()
             self._undo = None
@@ -257,15 +306,16 @@ def ticker() -> Ticker:
     """A command's ``Ticker``: its live line on stderr on a terminal at the default verbosity alone (at -v the log's
     own lines say more, -q keeps quiet, and a caller that set up no log, a test's, gets none); its log lines whatever
     the log shows; and the unit's status line where the unit lets it be told (``$NOTIFY_SOCKET``)."""
-    live = None if logs.level() == logs.NORMAL else False
+    live = None if logs.level() == logs.NORMAL and not _screen_gone else False
     status = systemd_status if os.environ.get("NOTIFY_SOCKET") else None
     return Ticker(Console(sys.stderr, live=live), status=status)
 
 
 def systemd_status(text: str, *, environ: Mapping[str, str] | None = None) -> bool:
-    """``text`` as the unit's status line (sd_notify's ``STATUS=``, which ``systemctl status`` shows), sent to the
-    socket systemd names in ``$NOTIFY_SOCKET`` (a path, or an abstract address after "@"); True once sent. Nothing
-    without one, or to one of another kind, and a socket that won't take it is no error: the line is a courtesy."""
+    """``text`` as the unit's status line (sd_notify's ``STATUS=``, which ``systemctl status`` shows), on one line,
+    sent to the socket systemd names in ``$NOTIFY_SOCKET`` (a path, or an abstract address after "@"); True once
+    sent. Nothing without one, or to one of another kind, and a socket that won't take it is no error: the line is a
+    courtesy."""
     address = (os.environ if environ is None else environ).get("NOTIFY_SOCKET", "")
     if address.startswith("@"):
         address = "\0" + address[1:]
@@ -274,7 +324,7 @@ def systemd_status(text: str, *, environ: Mapping[str, str] | None = None) -> bo
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM | socket.SOCK_CLOEXEC) as s:
             s.connect(address)
-            s.sendall(("STATUS=" + text).encode("utf-8", "replace"))
+            s.sendall(("STATUS=" + " ".join(text.splitlines())).encode("utf-8", "replace"))
     except OSError:
         return False
     return True
@@ -290,12 +340,13 @@ class Requests:
     """
 
     def __init__(self, ticker: Ticker, provider: str, *, budget: int | None, delay: tuple[float, float],
-                 noun: str = "request", clock: Callable[[], float] = time.monotonic):
+                 noun: str = "request", estimate: bool = True, clock: Callable[[], float] = time.monotonic):
         self.ticker = ticker
         self.name = logs.provider_name(provider)
         self.budget = budget
         self.per_request = sum(delay) / 2 + ANSWER
         self.noun = noun
+        self.estimate = estimate  # False for a yt-dlp run, a download of minutes no pacing foretells
         self.sent = 0
         self._clock = clock
         self._pace: Pace | None = None
@@ -313,7 +364,7 @@ class Requests:
             self.ticker.show(f"{self.name} · {logs.plural(self.sent, self.noun)}")
             return
         left = self._pace.left(max(self.budget - self.sent, 0))
-        tail = f"up to {about(left)} left" if left >= 1 else ""
+        tail = f"up to {about(left)} left" if self.estimate and left >= 1 else ""
         self.ticker.show(f"{self.name} · {self.sent:,} of up to {self.budget:,} {self.noun}s", tail)
 
 

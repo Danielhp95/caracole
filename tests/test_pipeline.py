@@ -1630,3 +1630,22 @@ def test_the_runs_clients_count_their_requests_on_its_ticker(conn, cfg, monkeypa
         made.close()
         ticker.close()
     assert screen.shown()[-1].startswith("[6/20] lyrics · LRCLIB · 1 of up to 200 requests  up to about ")
+
+
+def test_the_run_ends_with_a_last_status_line_so_no_step_looks_under_way(conn, cfg, monkeypatch):
+    # systemctl status caracole, after the run: what it came to, never "[20/20] backup…".
+    import caracole.pipeline as pipeline
+    from caracole.progress import Ticker
+
+    readings = iter([100.0])
+    monkeypatch.setattr(pipeline, "clock", lambda: next(readings, 225.0))
+    told = []
+    ticker = Ticker(None, status=told.append)
+    report = run_pipeline(cfg, conn=conn, services=services(Outbox()), steps=[step("sync", result="2 new songs")],
+                          now=NOW, ticker=ticker)
+    first = next(line for line in report.summary().splitlines() if line.strip())
+    assert told == ["[1/1] sync…", f"Finished in 2 min 5 s · {first}"]
+    told.clear()
+    failing = run_pipeline(cfg, conn=conn, services=services(Outbox()), now=NOW, ticker=ticker,
+                           steps=[step("match", result=RuntimeError("boom"))])
+    assert told[-1].startswith("Failed in ") and "The match step failed" in told[-1] and not failing.ok

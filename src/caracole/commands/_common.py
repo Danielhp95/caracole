@@ -1077,16 +1077,17 @@ def make_client(
 
 
 def _heard(on_event: Callable[[Event], None] | None, ticker: Ticker | None, provider: str, policy: ProviderPolicy, *,
-           noun: str = "request") -> Callable[[Event], None] | None:
+           noun: str = "request", estimate: bool = True) -> Callable[[Event], None] | None:
     """What a client's events go to once logged: ``on_event``, then, with a ``ticker``, ``progress.Requests``
-    counting them against ``policy``'s budget (none for ``NO_BUDGET``)."""
+    counting them against ``policy``'s budget (none for ``NO_BUDGET``), with the time left unless ``estimate`` is
+    False (yt-dlp's runs)."""
     if ticker is None:
         return on_event
     from caracole.config import NO_BUDGET
     from caracole.progress import Requests
 
     beat = Requests(ticker, provider, budget=None if policy.budget == NO_BUDGET else policy.budget,
-                    delay=policy.delay, noun=noun)
+                    delay=policy.delay, noun=noun, estimate=estimate)
     if on_event is None:
         return beat
 
@@ -1209,7 +1210,7 @@ def make_youtube(
         policy = cfg.provider(PROVIDER)
         _pause_after_last_request(conn, PROVIDER, policy.delay, cfg=cfg)
         log = EventLog(conn, run_id)
-        heard = _heard(on_event, ticker, PROVIDER, policy, noun="yt-dlp run")
+        heard = _heard(on_event, ticker, PROVIDER, policy, noun="yt-dlp run", estimate=False)  # a run: minutes
 
         def logged(event: Event) -> None:
             log(event)

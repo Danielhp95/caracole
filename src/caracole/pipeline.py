@@ -852,7 +852,9 @@ def run_pipeline(
     Services the run makes itself (``make_services``) are closed when it ends,
     and with their clients goes the hold they had on caracole's lock. So is the
     ``Ticker`` it makes itself (``progress.ticker``, a command's), whose live line
-    is gone before the summary is printed; one given is its caller's.
+    is gone before the summary is printed; one given is its caller's. Either way its
+    last word to the unit's status line is what the run came to ("Finished in 12 min
+    3 s · " and the summary's first line), so that no step looks under way after it.
     """
     started = clock()
     clock_given = now is not None
@@ -863,19 +865,32 @@ def run_pipeline(
     own_ticker = ticker is None
     ticker = progress.ticker() if ticker is None else ticker
     own = services is None
+    report = None
     try:
         if own:
             services = make_services(cfg, conn, run_id, ticker=ticker)
         try:
-            return _run(cfg, conn, services, steps, now, run_id, clock_given, started, ticker)
+            report = _run(cfg, conn, services, steps, now, run_id, clock_given, started, ticker)
+            return report
         finally:
             if own:
                 services.close()
     finally:
+        ticker.finish(_last_word(report))
         if own_ticker:
             ticker.close()
         else:
             ticker.clear()
+
+
+def _last_word(report: RunReport | None) -> str:
+    """What the run came to, in one line, for the unit's status line: how it ended, how long it took, and the
+    summary's first line, the one that matters most (report.py leads with it)."""
+    if report is None:
+        return "Stopped before its summary"
+    took = f" in {duration(report.seconds)}" if report.seconds is not None else ""
+    first = next((line for line in report.summary().splitlines() if line.strip()), "")
+    return f"{'Finished' if report.ok else 'Failed'}{took}" + (f" · {first}" if first else "")
 
 
 def _skipped(cfg: Config, conn: sqlite3.Connection, report: RunReport, step: Step,

@@ -191,7 +191,11 @@ def clears_first(clear: Callable[[], None]) -> Callable[[], None]:
 
 def _clear_live() -> None:
     for clear in tuple(_clearing):
-        clear()
+        try:
+            clear()
+        except (OSError, ValueError):  # a terminal gone: the record is written all the same, the line no more
+            if clear in _clearing:
+                _clearing.remove(clear)
 
 
 class _ClearsFirst(logging.Filter):

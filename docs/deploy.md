@@ -926,7 +926,8 @@ sudo caracole-admin -v run            # a run now, a line per request, on the te
 While a run goes, the journal gets a line as each step starts and ends, and in between, at most a
 line a minute saying how far the step is (requests against its budget, UG's directory's pages, the
 PDFs made). `systemctl status caracole` shows that as its `Status:` line, updated every few
-seconds ([usage.md](usage.md#what-caracole-prints)):
+seconds, and once the run is over, what it came to: `Finished in 12 min 3 s · ` and the summary's
+first line ([usage.md](usage.md#what-caracole-prints)):
 
     [6/20] lyrics…
     [6/20] lyrics · LRCLIB · 120 of up to 200 requests  up to about 1 min left

@@ -806,3 +806,40 @@ def test_a_database_gets_an_id_of_its_own_once_and_keeps_it(tmp_path):
         assert db.kv_get(again, "sync:id") == made
     finally:
         again.close()
+
+
+def test_an_upgrade_says_so_and_one_waiting_for_another_caracoles_says_that(tmp_path, caplog):
+    # On the progress log (logs.JOURNAL_INFO): the journal and -v show it, -q doesn't. A new database says nothing.
+    import fcntl
+    import logging
+    import os
+    import threading
+
+    path = tmp_path / "caracole.sqlite"
+    old = sqlite3.connect(path)
+    old.executescript(db._MIGRATIONS[1] + "\nPRAGMA user_version = 1;")
+    old.close()
+    lock = os.open(path.with_name("caracole.sqlite.migrating"), os.O_RDWR | os.O_CREAT, 0o600)
+    fcntl.flock(lock, fcntl.LOCK_EX)  # another caracole is upgrading it
+    opened = []
+    with caplog.at_level(logging.INFO, logger="caracole.progress"):
+        waiting = threading.Thread(target=lambda: opened.append(db.connect(path).close()))
+        waiting.start()
+        try:
+            for _ in range(200):
+                if any("Waiting for another caracole" in r.getMessage() for r in caplog.records):
+                    break
+                waiting.join(0.05)
+        finally:
+            os.close(lock)
+        waiting.join(10)
+    assert opened == [None]  # opened, migrated and closed in its thread
+    said = [r.getMessage() for r in caplog.records if r.name == "caracole.progress"]
+    assert said == [f"Waiting for another caracole to upgrade the database ({path})…",
+                    f"Upgrading the database from schema 1 to {db.SCHEMA_VERSION} (a copy first: "
+                    "caracole.sqlite.v1.bak)…"]
+    caplog.clear()
+    with caplog.at_level(logging.INFO, logger="caracole.progress"):
+        db.connect(tmp_path / "new.sqlite").close()
+        db.connect(path).close()  # up to date
+    assert not caplog.records

@@ -538,7 +538,11 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   what needs the user), which report.py turns into the run's summary on stdout and ntfy: a new step plugs in by
   returning one.
 - The log goes to stderr, set up once by the root callback (logs.py: `-v`, `-vv`, `-q`, journal priorities; under
-  systemd, the information of `JOURNAL_INFO`'s loggers too at the default verbosity: page_log.py's).
+  systemd, the information of `JOURNAL_INFO`'s loggers too at the default verbosity: page_log.py's, pipeline.py's
+  step lines and `caracole.progress`'s; `logs.level`; `clears_first`, a live line taken off stderr before a record).
+- While it goes, the run says where it is (pipeline.py `_run`): "[6/20] lyrics…" as a step starts, "[6/20] lyrics:
+  <status> (1 min 2 s)" as it ends, one line for a step that doesn't run; between them its `Ticker` (progress.py,
+  `StepContext.ticker`) says how far the step is, its last word the unit's status line (`_last_word`).
 
 ### Shared by the steps and the commands
 
@@ -554,7 +558,7 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 | peer_import.py | a file to import, staged part by part in `state_dir/peer/import-<id>/` (peer_file.py, below) |
 | politeness.py | the settings the computer gives the phone at a sync (`settings_document`: caracole.toml's name, the user agent, each provider's switch and lookup settings, `[match]`, `[rank]`), never its politeness (Two caracoles, each its own politeness, below); the standard library alone |
 | service.py | whether this machine runs caracole as a service (below) |
-| db.py | the schema, migrations, `kv`, `savepoint` (atomic writes on the autocommit connection) |
+| db.py | the schema, migrations, `kv`, `savepoint` (atomic writes on the autocommit connection); an upgrade, and a wait for another caracole's, said on the progress log (`caracole.progress`, never under -q) |
 | http.py | `PoliteClient`, robots rules, cached answers (`stale`, `read_once_more`; `cached` and `CachedAnswers` read the cache alone, sending nothing); `ParallelClient`, PoliteClient's rules with several requests in flight (`get_many`; each request cleared one at a time under a lock, `_claim`; the events held and drained into the caller's thread, `drain`): UG's artist directory's alone |
 | health.py | cooldowns, `events` |
 | normalize.py | keys, pinyin, `name_forms`; `name_words`, `holds_run` and `PINYIN_PARTIAL_SCALE`, Chinese in pinyin only as whole words, for search.py and lacuerda_index.py |
@@ -575,7 +579,7 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 | keys.py | a song's musical key and where it came from (below) |
 | removal.py | `caracole remove` and the web page's Remove; the tombstones it leaves are songs.py's |
 | sites.py | the library page's Sites tab's data (below) |
-| progress.py | a command's output: a live line on a terminal, plain lines elsewhere |
+| progress.py | a command's output: a live line on a terminal, plain lines elsewhere, fitted in display columns of the stream's own width; `Ticker` (`ticker()`), what long work is doing as it goes: a live line on stderr on a terminal at the default verbosity alone, off for good once a write fails, a `caracole.progress` line a minute, the unit's status line (`systemd_status`, sd_notify `STATUS=`, where `$NOTIFY_SOCKET` is set); `Requests`, a client's requests against its budget (`make_client(ticker=)`, `make_youtube(ticker=)`, its runs with no time left); `Counted`, work of a known size (`directory_pass(progress=)`, `render.rendering`); they only count, never pace |
 | staged.py | a job of stages over one song, each reported as a lookup's stages are, run in order under the lock as asked for now (`StagedRun`: `_run`, `stage`, `_fail`, `_after_a_lookup`, `_song_again`, `_refuse`; the stages both jobs end with, `_autochords_sheet`, `pdf`, `pages`; `StagedResult`; the command's last lines, `_common.staged_end`): youtube_sheet.py's and transcribe_job.py's |
 | progressions.py | each song's progressions (below) |
 
@@ -2010,6 +2014,8 @@ It is rows.js's, shared by both pages:
     nix/module.nix alone, without the flake, doesn't switch `autochords.package`.
     `whisperModel` and `separatorModel` are `CARACOLE_WHISPER_MODEL` and `CARACOLE_DEMUCS_MODEL`.
   - And `/etc/caracole/service`, the service's marker, service.py's.
+  - caracole.service has `NotifyAccess = "main"` (deploy.md's Ubuntu unit too): the run tells systemd its status line
+    (progress.py `systemd_status`), the wrappers exec'ing, so caracole is the main process.
   - `publish` (off): `caracole-publish.service` and its weekly timer run `caracole index publish` offline into
     `publish.folder` (2750), with no network and no token, which `caracole-admin` may then write too. The upload is
     the owner's own systemd user service in their own configuration (`caracole-upload.service`), running

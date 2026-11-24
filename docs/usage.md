@@ -305,6 +305,10 @@ step starts and ends. A step that doesn't run has its one line:
     [6/20] lyrics: 12 found, 3 missing, 0 instrumental, 0 errors (1 min 32 s)
     [7/20] megalobiz: skipped: megalobiz is off ([providers.megalobiz] enabled = false)
 
+An upgrade of the database by a newer caracole says so the same way, and so does a caracole that
+waits for another's: `Upgrading the database from schema 16 to 17 (a copy first:
+caracole.sqlite.v16.bak)…`.
+
 `-q` shows none of it. `-v` shows the minute lines and the step lines among its request lines,
 and no live line. `caracole run`, `fetch`, `render`, `ug --directory` and the passes of `lyrics`,
 `lacuerda`, `gtptabs`, `harptabs`, `gametabs`, `ireal` and `musescore` say how far they are this
