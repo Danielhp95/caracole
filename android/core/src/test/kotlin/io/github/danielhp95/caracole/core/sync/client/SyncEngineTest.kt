@@ -757,6 +757,10 @@ class SyncEngineTest {
         assertTrue(said.any { it == "Downloading the computer's indexes · ${CataloguesSizes.of(bytes, bytes)}" },
                    said.joinToString("\n"))
         assertEquals("0.0 of 0.1 MB", CataloguesSizes.of(0, 100_000))
+        // An answer of no Content-Length: the bytes come so far, no total, no 0.1 MB floor.
+        assertEquals("Downloading the computer's indexes · 0.0 MB so far", SyncEngine.downloading(40_000, -1))
+        assertEquals("Downloading the computer's indexes · 3.4 MB so far", SyncEngine.downloading(3_400_000, -1))
+        assertEquals("Downloading the computer's indexes · 120 MB so far", SyncEngine.downloading(120_000_000, -1))
         assertEquals("merged gtptabs, musescore", stages.last { it.first == "index" }.third)
     }
 

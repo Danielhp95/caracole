@@ -271,9 +271,10 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             stage(MIRROR, SKIPPED_STATE, "no copy of the computer's pages here")
         } else {
             stage(MIRROR, RUNNING, "")
-            val said = paced(stage, MIRROR)
+            val pacer = paced(stage, MIRROR)
             try {
-                refresh(c.address) { words -> said.say(words, MIRROR) }
+                refresh(c.address) { words -> pacer.say(words, MIRROR) }
+                pacer.flush()  // its last count, before the stage's end
                 stage(MIRROR, DONE, "")
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
@@ -422,9 +423,10 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             taken.isEmpty() -> stage(MIRROR, SKIPPED_STATE, "nothing taken")
             else -> {
                 stage(MIRROR, RUNNING, "")
-                val said = paced(stage, MIRROR)
+                val pacer = paced(stage, MIRROR)
                 try {
-                    io { hook(sf, taken) { words -> said.say(words, MIRROR) } }
+                    io { hook(sf, taken) { words -> pacer.say(words, MIRROR) } }
+                    pacer.flush()
                     stage(MIRROR, DONE, plural(taken.size, "unit"))
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
@@ -450,9 +452,9 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             stage(INDEX, SKIPPED_STATE, "")
         } else {
             stage(INDEX, RUNNING, "")
-            val said = paced(stage, INDEX)
+            val pacer = paced(stage, INDEX)
             try {
-                val entries = io { mergeFile(sf, said) }
+                val entries = io { mergeFile(sf, pacer) }
                 done.reported.addAll(entries)
                 done.indexed.addAll(entries.map { Documents.text(it["site"])!! })
                 stage(INDEX, DONE, if (entries.isEmpty()) "nothing read more recently"
@@ -467,11 +469,11 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
 
     /** A file's indexes merged into the database: an index export where it is, a `.caracole` file's copied out to
      * `stateDir/cache/` first and deleted after. The report's entries of the sites it changed. */
-    private fun mergeFile(sf: SyncFile, said: Paced): List<JsonObject> {
+    private fun mergeFile(sf: SyncFile, pacer: Paced): List<JsonObject> {
         val copy = if (sf.indexOnly) null else File(cache(), "import-indexes-${KeptById.newId()}.sqlite")
         try {
             if (copy != null) {
-                said.say(COPYING_OUT)
+                pacer.say(COPYING_OUT)
                 FileSource(sf, database, store.libraryDir).use { it.indexes(copy) }
             }
             val from = copy ?: sf.file
@@ -479,11 +481,11 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             val counted = database.writeBlocking { db ->
                 val before = TabCounts.of(db)
                 val merged = IndexTransfer.merge(db, from, Stamps.of(clock()), notAfter = notAfter(),
-                                                 progress = { said.say(it.words(), it.step) })
+                                                 progress = { pacer.say(it.words(), it.step) })
                 val newest = IndexTransfer.newest(db)
                 taken(merged, before, TabCounts.of(db), merged.sites.keys.toList().ifEmpty { sites }) { newest[it] }
             }
-            said.say(MergeProgress.TIDYING)
+            pacer.say(MergeProgress.TIDYING)
             database.checkpoint()
             return counted
         } finally {
@@ -687,12 +689,12 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             return
         }
         stage(INDEX, RUNNING, if (newer.isEmpty()) sending(noted) else newer.joinToString(", "))
-        val said = paced(stage, INDEX)
+        val pacer = paced(stage, INDEX)
         val parts = ArrayList<String>()
         var failed = false
         if (newer.isNotEmpty()) {
             try {
-                done.reported.addAll(merge(client, computer, had, newer, indexes, said))
+                done.reported.addAll(merge(client, computer, had, newer, indexes, pacer))
                 done.indexed.addAll(newer)
                 parts.add("merged ${newer.joinToString(", ")}")
             } catch (e: Exception) {
@@ -718,20 +720,20 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
      * date, the WAL checkpointed; the file gone after, whatever came of it. The report's entries of the sites the
      * merge changed, each site's tabs counted before and after (TabCounts). */
     private suspend fun merge(client: PeerClient, computer: String, had: Map<String, String>, newer: List<String>,
-                              indexes: Map<String, String>, said: Paced): List<JsonObject> {
+                              indexes: Map<String, String>, pacer: Paced): List<JsonObject> {
         val file = File(cache(), "index-${KeptById.newId()}.sqlite")
         try {
-            said.say(COPYING_THERE)  // the computer exports the whole of them before it sends a byte
-            io { client.index(file, newer) { got, total -> said.say(downloading(got, total), DOWNLOADING) } }
+            pacer.say(COPYING_THERE)  // the computer exports the whole of them before it sends a byte
+            io { client.index(file, newer) { got, total -> pacer.say(downloading(got, total), DOWNLOADING) } }
             return io {
                 val counted = database.write { db ->
                     val before = TabCounts.of(db)
                     val merged = IndexTransfer.merge(db, file, Stamps.of(clock()), newer, notAfter = notAfter(),
-                                                     progress = { said.say(it.words(), it.step) })
+                                                     progress = { pacer.say(it.words(), it.step) })
                     db.kvSetJson(INDEX_KEY + computer, IndexStamps.json(had + newer.associateWith { indexes.getValue(it) }))
                     taken(merged, before, TabCounts.of(db), newer) { indexes[it] }
                 }
-                said.say(MergeProgress.TIDYING)
+                pacer.say(MergeProgress.TIDYING)
                 database.checkpoint()  // the WAL a big merge grew, given back (lane prep-db)
                 counted
             }
@@ -936,10 +938,10 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         const val COPYING_OUT = "Copying the file's indexes out…"
         private const val DOWNLOADING = "downloading"
 
-        /** "Downloading the computer's indexes · 120 of 274 MB" ([total] -1, an answer of no Content-Length: "· 120
-         * MB"). */
+        /** "Downloading the computer's indexes · 120 of 274 MB"; with no total ([total] -1, an answer of no
+         * Content-Length), the bytes so far alone: "· 3.4 MB so far". */
         fun downloading(got: Long, total: Long): String =
-            "Downloading the computer's indexes · " + if (total >= 0) Sizes.of(got, total) else Sizes.size(got)
+            "Downloading the computer's indexes · " + if (total >= 0) Sizes.of(got, total) else Sizes.soFar(got)
 
         /** The index stage's words with no index newer there and no page read here. */
         const val NOTHING_TO_INDEX = "no newer index there, no page read here to send"

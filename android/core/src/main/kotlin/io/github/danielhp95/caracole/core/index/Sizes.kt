@@ -23,6 +23,18 @@ object Sizes {
         return "$so of ${size(total)}"
     }
 
+    /** "3.4 MB so far": [bytes] as [size] says a size, but with no 0.1 MB floor (the start of a download of no
+     * known length is 0.0 MB). */
+    fun soFar(bytes: Long): String {
+        val b = maxOf(bytes, 0)
+        val said = when {
+            b >= GB -> tenths(b, 100_000_000) + " GB"
+            b >= WHOLE_MB -> ((b + 500_000) / 1_000_000).toString() + " MB"
+            else -> tenths(b, 100_000) + " MB"
+        }
+        return "$said so far"
+    }
+
     /** [bytes] in tenths of [tenth] bytes, rounded half up, as "1.2". */
     private fun tenths(bytes: Long, tenth: Long): String {
         val n = (bytes + tenth / 2) / tenth
