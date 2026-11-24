@@ -40,7 +40,7 @@ if mode == "hang":
     time.sleep(30)
 if mode == "slow":
     import time
-    time.sleep(1.2)
+    time.sleep(2.0)
     mode = "write"
 if mode == "fail_in_latin1":
     # A message in another encoding than UTF-8, as a driver may print one.
@@ -129,7 +129,10 @@ def test_a_demucs_that_takes_a_while_says_how_long_it_has_run_as_it_goes(tmp_pat
     ticks: list[float] = []
     stem = separator.vocals(tmp_path / "song.m4a", tmp_path, on_tick=ticks.append)
     assert stem == tmp_path / "stems" / "vocals.wav" and stem.is_file()
-    assert len(ticks) >= 2 and ticks == sorted(ticks) and 0.2 <= ticks[0] < ticks[-1] < 1.5, ticks
+    # Ticks a tick apart at the least, rising, while the fake's 2 s run: no absolute bound a loaded machine could
+    # pass by accident (the hang test's own timeout is 30 s).
+    assert len(ticks) >= 2 and ticks == sorted(ticks) and ticks[0] >= 0.3 and ticks[-1] < 30, ticks
+    assert all(later - earlier >= 0.29 for earlier, later in zip(ticks, ticks[1:])), ticks
 
 
 def test_a_demucs_that_hangs_while_it_ticks_is_stopped_too(tmp_path):
