@@ -943,6 +943,46 @@ def test_ugs_sitemap_rows_taken_a_chunk_at_a_time_leave_the_database_as_one_stat
     assert whole[2] and whole[1]["acoustic"] == []  # a new tab of its song marked it; a row renamed took the file's
 
 
+@pytest.mark.parametrize("chunk", [1, 2, 3])
+def test_a_hand_made_file_repeating_a_tab_id_merges_a_chunk_at_a_time_as_one_statement_does(
+        home, tmp_path, monkeypatch, chunk):
+    """A file whose ug_index has no key of its own and holds a tab_id five times (made by hand, never by an export):
+    its chunks count rows, not tab ids, so a chunk's end may fall past its last tab id; the rest is then one chunk,
+    and the database comes out as one statement leaves it, never a TypeError half-way."""
+    ug_sitemap(home, "1", ["radiohead/creep-chords-4169", "oasis/wonderwall-chords-27596", "blur/tender-chords-8"],
+               LATE)
+    ug_listed(home, ["1"], LATE)
+    path = export(home, tmp_path, ["ug"])
+    cols = "tab_id, artist_key, song_key, type, sitemap, first_seen, path"
+    first = f"SELECT {cols} FROM ug_index WHERE tab_id = (SELECT MIN(tab_id) FROM ug_index)"
+    f = sqlite3.connect(path)
+    f.executescript(f"""
+        CREATE TABLE loose (tab_id INTEGER, artist_key TEXT NOT NULL, song_key TEXT NOT NULL, type TEXT NOT NULL,
+                            sitemap TEXT NOT NULL, first_seen TEXT NOT NULL, path TEXT NOT NULL DEFAULT '');
+        INSERT INTO loose ({cols}) SELECT {cols} FROM ug_index ORDER BY tab_id;
+        INSERT INTO loose ({cols}) {first};
+        INSERT INTO loose ({cols}) {first};
+        INSERT INTO loose ({cols}) {first};
+        INSERT INTO loose ({cols}) {first};
+        DROP TABLE ug_index;
+        ALTER TABLE loose RENAME TO ug_index;
+    """)
+    assert f.execute("SELECT COUNT(*), COUNT(DISTINCT tab_id) FROM ug_index").fetchone() == (7, 3)
+    f.close()
+
+    def merged_with(size: int, name: str):
+        live = database(tmp_path, name)
+        monkeypatch.setattr(transfer, "UG_CHUNK", size)
+        merge(live, path, state=tmp_path / name / "state")
+        taken = rows(live, "ug_index"), kv(live, ug_index.LISTED_KEY)
+        live.close()
+        return taken
+
+    whole = merged_with(50_000, "whole")
+    assert len(whole[0]) == 3
+    assert merged_with(chunk, f"chunked-{chunk}") == whole
+
+
 def test_no_room_for_the_backup_no_merge(home, conn, tmp_path, monkeypatch):
     from types import SimpleNamespace
 

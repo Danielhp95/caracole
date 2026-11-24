@@ -815,16 +815,18 @@ def _take_ug_rows(c: sqlite3.Connection, tell: Progress) -> None:
     ``upsert_rows``): a row the database has keeps where and when it was first seen, and takes the file's keys and
     path. A statement for each ``UG_CHUNK`` of them, in ``tab_id`` order (the order one statement reads the file's
     table in, its rowid's: so the triggers' rows come out the same), each told: a chunk ends at the ``UG_CHUNK``-th
-    row's ``tab_id`` after the last chunk's, the rest one chunk, its bound none."""
+    row's ``tab_id`` after the last chunk's, the rest one chunk, its bound none (and so is a chunk that would end
+    past the file's last row, which a file made by hand repeating a ``tab_id`` may hold)."""
     rows = f"FROM {THEIRS}.ug_index WHERE sitemap IN (SELECT name FROM {_TAKEN})"
     (total,) = c.execute(f"SELECT COUNT(*) {rows}").fetchone()
     done, after = 0, None
     while True:
         lower, low = ("", ()) if after is None else (" AND tab_id > ?", (after,))
         upto = None
-        if total - done > UG_CHUNK:
-            (upto,) = c.execute(f"SELECT tab_id {rows}{lower} ORDER BY tab_id LIMIT 1 OFFSET ?",
-                                (*low, UG_CHUNK - 1)).fetchone()
+        if total - done > UG_CHUNK:  # a file made by hand may repeat a tab_id: no row there, the rest one chunk
+            row = c.execute(f"SELECT tab_id {rows}{lower} ORDER BY tab_id LIMIT 1 OFFSET ?",
+                            (*low, UG_CHUNK - 1)).fetchone()
+            upto = row[0] if row else None
         upper, up = ("", ()) if upto is None else (" AND tab_id <= ?", (upto,))
         c.execute(
             "INSERT INTO main.ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
