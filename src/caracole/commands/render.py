@@ -3,7 +3,10 @@
 ``--song`` renders one song's sheets alone, as the step after a web pick's
 fetch does (web/jobs.py), so another song's failure is not its own, and
 neither is a songbook's. Then it rewrites _todo.md, which says when the PDFs
-were last made and which failed, and index.html, which links them.
+were last made and which failed, and index.html, which links them. While a
+pass over every song goes, it says which song it is on, "PDFs · 37 of 214 songs",
+with the time left (progress.py's ``Ticker``: a live line on stderr on a terminal,
+a line a minute in the journal).
 
 ``--song --version QUERY`` exports the sheet's PDF in that version; with
 ``--mine`` it makes that version the song's own instead (overrides.toml's
@@ -58,7 +61,8 @@ def register(app: typer.Typer) -> None:
         Exits 1 when a sheet or a songbook could not be rendered, or songbooks.toml can't be read; a
         warning says which and why. With --song, only when that song's sheets could not be.
         """
-        from caracole.render import render_all
+        from caracole import progress
+        from caracole.render import render_all, rendering
         from caracole.songbook import render_songbooks
 
         if version is not None and not song:
@@ -77,8 +81,9 @@ def register(app: typer.Typer) -> None:
             song_ids = {song_named(conn, song, overrides).id} if song else None
             # A waiting lookup goes between two songs: --force renders every PDF, minutes of work.
             handed = _common.handoffs()
-            stats = render_all(conn, cfg, overrides, force=force, between=lambda: _common.hand_over(cfg, conn),
-                               song_ids=song_ids)
+            with progress.Ticker() if song else progress.ticker() as ticker:
+                stats = render_all(conn, cfg, overrides, force=force, between=lambda: _common.hand_over(cfg, conn),
+                                   song_ids=song_ids, on_song=rendering(ticker))
             overrides = _common.overrides_since(cfg, overrides, handed)  # what such a lookup changed
             # After the sheets, which they hold; --force --song forces that song's PDFs alone.
             books = render_songbooks(conn, cfg, overrides, force=force and not song)

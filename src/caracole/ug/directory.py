@@ -42,7 +42,8 @@ batch is read, so no rule of the fetch's is written twice. Only names are read, 
 for removes the artist (``artist_tabs.forget``, and their row).
 
 ``caracole ug --directory`` (commands/ug.py) makes a pass, and the nightly run's ``ug-directory`` step one after the
-index refresh (pipeline.py), each with the directory's budget. ``index_state`` says how far it has got, for ``caracole
+index refresh (pipeline.py), each with the directory's budget, each saying how far the pass is as it goes
+(``directory_pass``'s ``progress``: a ``PassProgress`` as each phase starts and after each batch). ``index_state`` says how far it has got, for ``caracole
 index stats``, the Sites tab and the to-do page, with no request. ``ensure_current_keys`` makes every row's key and
 forms again from its name after a change to caracole's keys (``normalize.KEY_VERSION``), with no request.
 """
@@ -52,6 +53,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -80,6 +82,7 @@ REFRESH = timedelta(days=30)  # a letter read again this long after its last who
 FIRST_PAGES = 10  # each letter's first pages, read before any letter's rest
 BATCH = 8  # requests a worker between two looks for a waiting lookup
 PAGES_PER_KIND = 100  # an artist page's list pages a kind at most, in a pass (100 tabs a page)
+PACE = 0.2  # seconds a page, about, for the time left before the pass's own is measured: some five a second
 _ACCEPT = (200, 404)
 _SLACK = timedelta(minutes=1)
 _COLUMNS = ("artist_id", "name", "slug", "letter", "place", "tabs", "updated_at", "artist_key", "forms", "seen_at")
@@ -355,6 +358,35 @@ class DirectoryStats:
         return self.budget_exhausted or self.unavailable
 
 
+@dataclass(frozen=True)
+class PassProgress:
+    """How far a pass is, as each phase starts and after each batch: its ``phase`` ("listings", then "bare"), the
+    listing pages stored or the bare artists' pages handled (``done``) of those due (``due``: the listings' as UG last
+    counted them, about), the requests the pass's client has sent, and the letter of the batch's last listing page."""
+
+    phase: str
+    done: int
+    due: int
+    requests: int
+    letter: str = ""
+
+    def words(self) -> str:
+        """It in words: "UG's listings · 312 of about 1,400 pages · letter m · 2,104 requests"."""
+        sent = f"{self.requests:,} request{'' if self.requests == 1 else 's'}"
+        if self.phase == "listings":
+            letter = f" · letter {self.letter}" if self.letter else ""
+            return f"UG's listings · {self.done:,} of about {self.due:,} pages{letter} · {sent}"
+        return f"UG's bare artists' pages · {self.done:,} of {self.due:,} · {sent}"
+
+
+Progress = Callable[[PassProgress], None]
+
+
+def _say(progress: Progress | None, client: Any, phase: str, done: int, due: int, letter: str = "") -> None:
+    if progress is not None:
+        progress(PassProgress(phase, done, due, int(getattr(client, "requests_made", 0) or 0), letter))
+
+
 @dataclass
 class _Round:
     state: LetterState
@@ -428,30 +460,40 @@ def _raise_stop(answer: BaseException, stats: DirectoryStats) -> bool:
 
 
 def directory_pass(conn: sqlite3.Connection, client: Any, now: datetime, *, overrides: Any = None,
-                   listings: bool = True, bare: bool = True, library_dir: Path | None = None) -> DirectoryStats:
+                   listings: bool = True, bare: bool = True, library_dir: Path | None = None,
+                   progress: Progress | None = None) -> DirectoryStats:
     """The listings due (``listings``), then the bare artists' pages due (``bare``), until the budget ends it; see the
     module docstring. ``client`` is the pass's (``_common.make_parallel_client``: an ``http.ParallelClient``, its
-    ``between`` handing caracole's lock to a waiting lookup). ``ProviderBlocked`` propagates."""
+    ``between`` handing caracole's lock to a waiting lookup). ``progress`` hears how far it is (``PassProgress``) as
+    each phase with something due starts and after each batch, with no request in flight. ``ProviderBlocked``
+    propagates."""
     stats = DirectoryStats()
     now = stamps.utc(now)
     ensure_current_keys(conn)
     if listings:
-        _listings(conn, client, now, stats)
+        _listings(conn, client, now, stats, progress)
     if bare and not stats.stopped:
-        _bare_pages(conn, client, now, stats, overrides=overrides, library_dir=library_dir)
+        _bare_pages(conn, client, now, stats, overrides=overrides, library_dir=library_dir, progress=progress)
     return stats
 
 
-def _listings(conn: sqlite3.Connection, client: Any, now: datetime, stats: DirectoryStats) -> None:
+def _listings(conn: sqlite3.Connection, client: Any, now: datetime, stats: DirectoryStats,
+              progress: Progress | None = None) -> None:
     rounds = _due_rounds(conn, now)
     asked: set[tuple[str, int]] = set()
     size = _batch_size(client)
+    queue = _queue(rounds, asked)
+    if queue:
+        _say(progress, client, "listings", stats.pages, len(queue))
     while True:
-        batch = _queue(rounds, asked)[:size]
+        batch = queue[:size]
         if not batch:
             return
         asked.update(batch)
-        if _listing_batch(conn, client, now, rounds, batch, stats):
+        stop = _listing_batch(conn, client, now, rounds, batch, stats)
+        queue = _queue(rounds, asked)
+        _say(progress, client, "listings", stats.pages, stats.pages + len(queue), batch[-1][0])
+        if stop:
             return
         _between(client)
 
@@ -592,7 +634,7 @@ def due_bare(conn: sqlite3.Connection, now: datetime) -> list[DirectoryArtist]:
 
 
 def _bare_pages(conn: sqlite3.Connection, client: Any, now: datetime, stats: DirectoryStats, *, overrides: Any,
-                library_dir: Path | None) -> None:
+                library_dir: Path | None, progress: Progress | None = None) -> None:
     from caracole.config import RankPolicy
     from caracole.overrides import Overrides
     from caracole.ug.fetch import FetchContext
@@ -602,8 +644,12 @@ def _bare_pages(conn: sqlite3.Connection, client: Any, now: datetime, stats: Dir
                        library_dir=library_dir or Path("."), now=now, artist_pages_per_kind=PAGES_PER_KIND)
     due = due_bare(conn, now)
     size = max(1, int(getattr(client, "workers", 1))) * BATCH // 2  # about two requests an artist
+    if due:
+        _say(progress, client, "bare", 0, len(due))
     for start in range(0, len(due), size):
-        if _bare_batch(conn, client, ctx, planner, due[start:start + size], stats):
+        stop = _bare_batch(conn, client, ctx, planner, due[start:start + size], stats)
+        _say(progress, client, "bare", min(start + size, len(due)), len(due))
+        if stop:
             return
         planner.answers.clear()
         _between(client)

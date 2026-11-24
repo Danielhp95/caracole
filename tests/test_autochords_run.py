@@ -1065,6 +1065,27 @@ def test_missing_beat_checkpoint_is_reported_once(conn, cfg, tmp_path):
     assert stats.errors == [f"beat_this checkpoint not found: {tmp_path / 'final0.ckpt'}"]
 
 
+def test_each_song_due_is_said_as_its_chords_are_worked_out_n_of_those_due(conn, cfg, tmp_path, caplog):
+    # A song takes minutes: the journal (the command runs at -v) says which one, and how many are left, before each.
+    done = with_audio(conn, tmp_path, add_song(conn, "A", "Done", added_at="2026-10-04T00:00:00Z"), name="done.wav")
+    run(conn, cfg)  # up to date: no longer due
+    with_audio(conn, tmp_path, add_song(conn, "A", "One", added_at="2026-10-03T00:00:00Z"), name="one.wav")
+    with_audio(conn, tmp_path, add_song(conn, "A", "Two", added_at="2026-10-02T00:00:00Z"), name="two.wav")
+    add_song(conn, "A", "No Audio", added_at="2026-10-01T00:00:00Z")
+    with caplog.at_level(logging.INFO, logger="caracole.autochords.run"):
+        stats = run(conn, cfg)
+    assert stats.generated == 2 and done.id
+    said = [r.getMessage() for r in caplog.records if r.getMessage().startswith("Working out")]
+    assert said == ["Working out the chords of A - One (1 of 2)…", "Working out the chords of A - Two (2 of 2)…"]
+    caplog.clear()
+    one = get_song(conn, done.id)
+    update_song(conn, one.id, audio_mtime=one.audio_mtime + 60)  # one song due alone: no count
+    with caplog.at_level(logging.INFO, logger="caracole.autochords.run"):
+        run(conn, cfg, only={one.id})
+    assert [r.getMessage() for r in caplog.records if r.getMessage().startswith("Working out")] == [
+        "Working out the chords of A - Done…"]
+
+
 def test_a_file_that_will_not_decode_fails_alone(conn, cfg, tmp_path, caplog):
     bad = with_audio(conn, tmp_path, add_song(conn, "A", "Broken Download"), name="bad.wav")
     good = with_audio(conn, tmp_path, add_song(conn, "A", "Fine"), name="good.wav")

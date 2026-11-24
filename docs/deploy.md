@@ -555,6 +555,7 @@ OnFailure=caracole-notify-failure@%n.service
 [Service]
 Type=oneshot
 ExecStart=/opt/caracole/bin/caracole run
+NotifyAccess=main
 TimeoutStartSec=3h
 MemoryDenyWriteExecute=yes
 EOF
@@ -914,11 +915,23 @@ The units write to the journal, each line at its priority
 ([usage.md](usage.md#what-caracole-prints)):
 
 ```sh
+journalctl -u caracole -f             # a run as it goes
+systemctl status caracole             # Status: the step under way, and how far it is
 journalctl -u caracole -p warning     # only what needs you or went wrong
 journalctl -u caracole -b -o cat      # the lines as caracole wrote them, the summary among them
 journalctl -u caracole-web | grep 'library page'   # each library page served: its songs, the database it read
 sudo caracole-admin -v run            # a run now, a line per request, on the terminal
 ```
+
+While a run goes, the journal gets a line as each step starts and ends, and in between, at most a
+line a minute saying how far the step is (requests against its budget, UG's directory's pages, the
+PDFs made). `systemctl status caracole` shows that as its `Status:` line, updated every few
+seconds, and once the run is over, what it came to: `Finished in 12 min 3 s · ` and the summary's
+first line ([usage.md](usage.md#what-caracole-prints)):
+
+    [6/20] lyrics…
+    [6/20] lyrics · LRCLIB · 120 of up to 200 requests  up to about 1 min left
+    [6/20] lyrics: 12 found, 3 missing, 0 instrumental, 0 errors (1 min 32 s)
 
 A block, a cooldown or a spent budget is not a failure: the run exits 0 and the songs wait for the
 next one. A bug exits 1, and ntfy says the unit failed ([usage.md](usage.md#caracole-run)).

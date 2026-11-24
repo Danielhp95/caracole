@@ -16,7 +16,12 @@ root callback, so every command shares it, and undone when the command ends:
   ``journalctl -p warning`` finds them; there are no timestamps, as journald
   keeps its own. There, by default, the information of ``JOURNAL_INFO``'s
   loggers shows too: the library page's line a build (page_log.py), so the
-  journal says what each page showed (``-q`` still keeps to the problems).
+  journal says what each page showed, and what long work is doing as it goes:
+  ``caracole run``'s step lines (pipeline.py) and a long command's line a
+  minute (progress.py's ``Ticker``). ``-q`` still keeps to the problems.
+- **A live line on stderr** (progress.py's ``Ticker``, on a terminal) is taken
+  off the screen before a record is written (``clears_first``), so the record
+  starts a line of its own.
 - **On a terminal**, the level is coloured, unless ``$NO_COLOR`` is set. Never
   anywhere else.
 
@@ -28,7 +33,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import IO, Any
 
 QUIET, NORMAL, VERBOSE, DEBUG = -1, 0, 1, 2
@@ -40,8 +45,9 @@ THIRD_PARTY = ("httpx", "httpcore", "urllib3", "requests", "numba", "torch", "to
 _LEVELS = {QUIET: logging.WARNING, NORMAL: logging.WARNING, VERBOSE: logging.INFO, DEBUG: logging.DEBUG}
 
 # caracole's loggers whose information the journal keeps at the default verbosity, as -v would show it: the library
-# page's line a build (page_log.py), the evidence asked for of what each page showed.
-JOURNAL_INFO = ("caracole.page_log",)
+# page's line a build (page_log.py), the evidence asked for of what each page showed; caracole run's step lines
+# (pipeline.py) and the line a minute of long work (progress.py's Ticker), so the journal says what is going on.
+JOURNAL_INFO = ("caracole.page_log", "caracole.pipeline", "caracole.progress")
 
 
 PROVIDER_NAMES: Mapping[str, str] = {
@@ -168,6 +174,38 @@ class _OthersQuiet(logging.Filter):
         return record.levelno >= logging.WARNING or _ours(record.name)
 
 
+_clearing: list[Callable[[], None]] = []  # what takes a live line off stderr before a record is written
+
+
+def clears_first(clear: Callable[[], None]) -> Callable[[], None]:
+    """Have ``clear`` called before the log writes each record, and before ``say``: a live line on stderr (progress.py's
+    ``Ticker``) taken off the screen first, so the record starts a line of its own. Returns what undoes it."""
+    _clearing.append(clear)
+
+    def undo() -> None:
+        if clear in _clearing:
+            _clearing.remove(clear)
+
+    return undo
+
+
+def _clear_live() -> None:
+    for clear in tuple(_clearing):
+        try:
+            clear()
+        except (OSError, ValueError):  # a terminal gone: the record is written all the same, the line no more
+            if clear in _clearing:
+                _clearing.remove(clear)
+
+
+class _ClearsFirst(logging.Filter):
+    """Last of the handler's filters, so only a record it writes takes the live line off first."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        _clear_live()
+        return True
+
+
 class _Stderr(logging.StreamHandler):
     """Writes to whatever ``sys.stderr`` is when a record comes, as ``logging.lastResort`` does."""
 
@@ -200,6 +238,7 @@ def setup(level: int, *, stream: IO[str] | None = None, env: Mapping[str, str] |
     handler.setFormatter(style)
     if level < DEBUG:
         handler.addFilter(_OthersQuiet())
+    handler.addFilter(_ClearsFirst())
     root = logging.getLogger()
     for name in ("", "caracole", *THIRD_PARTY, *JOURNAL_INFO):
         _saved[name] = logging.getLogger(name).level
@@ -228,6 +267,12 @@ def at_least(level: int) -> None:
 _current: list[tuple[int, IO[str] | None, Mapping[str, str] | None]] = []  # what setup was last asked for
 
 
+def level() -> int | None:
+    """The verbosity ``setup`` was last asked for (``QUIET``, ``NORMAL``, ``VERBOSE`` or ``DEBUG``); None before it, or
+    after ``teardown`` (a test, or a caller of caracole's functions that set up no log)."""
+    return _current[0][0] if _current else None
+
+
 def teardown() -> None:
     """Undo ``setup``: its handler goes, and the levels it set are as they were."""
     global _handler
@@ -250,5 +295,6 @@ def say(level: int, message: str, *, env: Mapping[str, str] | None = None,
     record = logging.LogRecord("caracole", level, __file__, 0, message, None, exc)
     formatter = _handler.formatter if _handler is not None and env is None else None
     formatter = formatter or _style(sys.stderr, env, NORMAL)
+    _clear_live()
     sys.stderr.write(formatter.format(record) + "\n")
     sys.stderr.flush()

@@ -895,6 +895,20 @@ def test_a_lookup_goes_between_two_songs_and_what_it_changed_is_read_again(conn,
     assert stats.rendered == 1 and not pdf_of(cfg, second).exists()
 
 
+def test_each_songs_turn_is_said_as_it_starts_n_of_the_songs_in_all(conn, cfg):
+    # What caracole render and the run's render step show while a long pass goes: "PDFs · 2 of 3 songs".
+    first = add_song(conn, "Soda Stereo", "De Música Ligera", added_at="2026-10-03T00:00:00Z")
+    human_sheet(conn, cfg, first, tab_id=1)
+    second = add_song(conn, "Soda Stereo", "Persiana Americana", added_at="2026-10-02T00:00:00Z")
+    human_sheet(conn, cfg, second, tab_id=2)
+    add_song(conn, "Soda Stereo", "Ignored", added_at="2026-10-01T00:00:00Z")
+    run, turns = FakeChordPro(), []
+    render(conn, cfg, overrides(cfg, '[ignore]\nsongs = ["Soda Stereo - Ignored"]\n'), runner=run,
+           on_song=lambda n, total, song: turns.append((n, total, song.title, len(run.calls))))
+    assert [(n, total, calls) for n, total, _, calls in turns] == [(1, 3, 0), (2, 3, 1), (3, 3, 2)]
+    assert {title for _, _, title, _ in turns} == {"De Música Ligera", "Persiana Americana", "Ignored"}
+
+
 def test_the_nightly_render_and_caracole_render_hand_the_lock_over_between_songs(cfg, monkeypatch, tmp_path):
     import caracole.render
     from caracole.commands import _common

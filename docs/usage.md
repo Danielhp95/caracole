@@ -290,6 +290,30 @@ A warning starts with `warning:` and an error with `error:`, coloured on a termi
 `$NO_COLOR` is set. Under systemd, each line starts with its journal priority instead
 (see [deploy.md](deploy.md#logs)).
 
+While a long command works, it says how far it is, on stderr. On a terminal that is one line,
+rewritten in place: the run's step, the requests sent against the site's budget, the pages or songs
+done, and the time left. The budget is the most a step may spend, so its time is the most it may
+take:
+
+    [6/20] lyrics · LRCLIB · 37 of up to 200 requests  up to about 1 min left
+
+In the journal the same line comes at most once a minute, and `caracole run` adds a line as each
+step starts and ends. A step that doesn't run has its one line:
+
+    [6/20] lyrics…
+    [6/20] lyrics · LRCLIB · 120 of up to 200 requests  up to about 1 min left
+    [6/20] lyrics: 12 found, 3 missing, 0 instrumental, 0 errors (1 min 32 s)
+    [7/20] megalobiz: skipped: megalobiz is off ([providers.megalobiz] enabled = false)
+
+An upgrade of the database by a newer caracole says so the same way, and so does a caracole that
+waits for another's: `Upgrading the database from schema 16 to 17 (a copy first:
+caracole.sqlite.v16.bak)…`.
+
+`-q` shows none of it. `-v` shows the minute lines and the step lines among its request lines,
+and no live line. `caracole run`, `fetch`, `render`, `ug --directory` and the passes of `lyrics`,
+`lacuerda`, `gtptabs`, `harptabs`, `gametabs`, `ireal` and `musescore` say how far they are this
+way; their report on stdout is as it was. The progress only counts: it changes no pause.
+
 Each build of the library page logs one line. `-v` shows it, and the journal keeps it by default
 (`journalctl -u caracole-web | grep 'library page'`):
 
@@ -804,7 +828,8 @@ to-do page need you, each site's problems with its cooldown, the requests agains
 how long the run took.
 
 The summary is all `caracole run` prints on stdout. Its log, on stderr, shows only the problems the
-summary doesn't already say. For `-v` and `-q`, see [What caracole prints](#what-caracole-prints).
+summary doesn't already say, and while the run goes, where it is: a live line on a terminal, the
+step lines in the journal. For `-v` and `-q`, see [What caracole prints](#what-caracole-prints).
 
 #### Budgets
 
@@ -1082,6 +1107,12 @@ The library page runs this command when you paste a UG link into its search box 
 `--directory` reads [UG's artist directory](#ugs-artist-directory): its letter listings, then the
 page of every artist they name by a bare address. It goes on where the last pass stopped, with
 `[ug_directory]`'s concurrency, pause and budget. `--budget N` sets its requests for this pass.
+While it goes, it says how far it is, after each batch of requests:
+
+    UG's listings · 312 of about 3,480 pages · letter m · 2,104 requests  about 48 min left
+    UG's bare artists' pages · 1,200 of 9,431 · 14,210 requests  about 28 min left
+
+Then what it read:
 
     The directory: 175,420 of about 175,600 artists, 27 of 27 listings read whole; 6,310 of 6,310 bare artists' pages read.
 
@@ -1194,7 +1225,8 @@ the key and the capo ("Soda Stereo · Bm shapes · capo 2 · sounds C#m"). For i
 
 A PDF is made again only when its sheet, its version, the fonts, caracole's PDF style or the text it
 prints changes, or when the file is no longer the one caracole wrote. So annotate a copy, not
-`sheet.pdf`. `--force` makes them all again, or the one song's with `--song`.
+`sheet.pdf`. `--force` makes them all again, or the one song's with `--song`. Meanwhile it says
+which song it is on: `PDFs · 37 of 214 songs · Artist - Title  about 2 min left`.
 
 Each UG version kept beside the sheet gets a viewer of its own, `version-<tab>.html`, in the
 version's own key. It gets no `.cho`, no PDF and no Export PDF. To export one, make it the sheet
@@ -1312,6 +1344,9 @@ says so and exits 1.
 
 A song's sheet is made again when its audio changes, and when timed lyrics arrive after a sheet made
 over plain lyrics or none, so that each chord can go over its word.
+
+A song takes minutes, so it logs a line before each, `Working out the chords of Artist - Title
+(3 of 12)…`, and one after: `Artist - Title: auto sheet written (synced lyrics)`.
 
 ### caracole youtube
 

@@ -159,6 +159,46 @@ def test_under_systemd_the_library_pages_lines_show_by_default_and_nothing_else_
     assert logging.getLogger("caracole.page_log").level == logging.NOTSET  # as setup found it
 
 
+def test_under_systemd_the_runs_steps_and_long_works_progress_show_by_default_and_q_keeps_quiet(tmp_path, log_to):
+    # caracole run's step lines (pipeline.py) and a long command's line a minute (progress.Ticker), so that the journal
+    # says what a run or a pass is doing while it goes, not only once it is over.
+    assert {"caracole.pipeline", "caracole.progress"} <= set(logs.JOURNAL_INFO)
+    f, env = journal_stream(tmp_path)
+    with f:
+        log_to(logs.NORMAL, stream=f, env=env)
+        logging.getLogger("caracole.pipeline").info("[6/20] lyrics…")
+        logging.getLogger("caracole.progress").info("[6/20] lyrics · LRCLIB · 37 of up to 200 requests")
+        logging.getLogger("caracole.pipeline").info("[6/20] lyrics: 37 found, 0 missing (1 min 2 s)")
+        logging.getLogger("caracole.fetch").info("a song's requests")  # caracole's other information stays -v's
+        f.seek(0)
+        assert f.read().splitlines() == ["<6>[6/20] lyrics…", "<6>[6/20] lyrics · LRCLIB · 37 of up to 200 requests",
+                                         "<6>[6/20] lyrics: 37 found, 0 missing (1 min 2 s)"]
+        f.seek(0)
+        f.truncate()
+        log_to(logs.QUIET, stream=f, env=env)
+        logging.getLogger("caracole.pipeline").info("[6/20] lyrics…")
+        logging.getLogger("caracole.progress").info("[6/20] lyrics · LRCLIB · 37 of up to 200 requests")
+        f.seek(0)
+        assert f.read() == ""
+    elsewhere = log_to(logs.NORMAL)  # a terminal's progress is its live line (progress.Ticker), never the log's
+    logging.getLogger("caracole.pipeline").info("[6/20] lyrics…")
+    logging.getLogger("caracole.progress").info("[6/20] lyrics · LRCLIB · 37 of up to 200 requests")
+    assert elsewhere.getvalue() == ""
+    verbose = log_to(logs.VERBOSE)
+    logging.getLogger("caracole.progress").info("[6/20] lyrics · LRCLIB · 37 of up to 200 requests")
+    assert verbose.getvalue() == "[6/20] lyrics · LRCLIB · 37 of up to 200 requests\n"
+
+
+def test_the_verbosity_set_up_is_known_and_none_before(log_to):
+    assert logs.level() is None
+    log_to(logs.QUIET)
+    assert logs.level() == logs.QUIET
+    log_to(logs.VERBOSE)
+    assert logs.level() == logs.VERBOSE
+    logs.teardown()
+    assert logs.level() is None
+
+
 def test_a_journal_stream_that_isnt_this_stream_changes_nothing(tmp_path, log_to):
     f, env = journal_stream(tmp_path)
     with f:

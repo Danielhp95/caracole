@@ -38,12 +38,17 @@ Tables (plan §5, plus ``kv``):
 - ``events``: one row per network request.
 - ``kv``: small state such as provider cooldowns, sitemap validators and learned
   artist page URLs.
+
+An upgrade of a database caracole made before says so as it begins, and so does a
+connection that waits for another caracole's: on the progress log (``caracole.progress``,
+which the journal and -v show, -q not: logs.py ``JOURNAL_INFO``).
 """
 
 from __future__ import annotations
 
 import fcntl
 import json
+import logging
 import os
 import secrets
 import sqlite3
@@ -51,6 +56,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
+_said = logging.getLogger("caracole.progress")  # an upgrade's lines, where long work says what it does
 
 SCHEMA_VERSION = 17
 
@@ -706,7 +712,11 @@ def _migrate(conn: sqlite3.Connection, path: Path) -> None:
     # One migrator at a time: flock's lock belongs to the open file, so another thread's open waits too.
     lock = os.open(path.with_name(f"{path.name}.migrating"), os.O_RDWR | os.O_CREAT | os.O_CLOEXEC, 0o600)
     try:
-        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            _said.info("Waiting for another caracole to upgrade the database (%s)…", path)
+            fcntl.flock(lock, fcntl.LOCK_EX)
         _migrate_locked(conn, path)
     finally:
         os.close(lock)  # and its lock with it
@@ -717,6 +727,8 @@ def _migrate_locked(conn: sqlite3.Connection, path: Path) -> None:
     pending = sorted(v for v in _MIGRATIONS if v > current)
     if current and pending:
         backup = path.with_name(f"{path.name}.v{current}.bak")
+        _said.info("Upgrading the database from schema %s to %s (a copy first: %s)…", current, pending[-1],
+                   backup.name)
         # Made whole under a name of its own, then put in the older copy's place (VACUUM INTO overwrites nothing).
         partial = path.with_name(f"{backup.name}.{secrets.token_hex(6)}.part")
         try:

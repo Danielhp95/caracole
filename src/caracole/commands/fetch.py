@@ -11,6 +11,9 @@ imported inside the command.
 
 It prints a line per song and the totals; for one song (``--song``), that
 song's line alone, which says why when nothing came, and -v adds the rest.
+Between two songs' lines, its requests are counted against the budget as they
+go (progress.py's ``Ticker``: on a terminal a live line on stderr, taken off
+before each song's line; in the journal a line a minute).
 A ``--song`` cut short (a cooldown, a block, a spent budget, an error) marks
 a matched song to fetch, so the next run fetches it even if it was clean.
 """
@@ -66,6 +69,7 @@ def register(app: typer.Typer) -> None:
 
 
 def _fetch(cfg: Config, display: str | None) -> None:
+    from caracole import progress
     from caracole.health import answered_any, get_state, is_cooling, record_block, record_ok
     from caracole.http import ProviderBlocked
     from caracole.overrides import load_overrides
@@ -102,17 +106,20 @@ def _fetch(cfg: Config, display: str | None) -> None:
             return
         run_id = run_id_for(now)
         handed = _common.handoffs()  # the client's first pause may let a lookup go first too
-        client = make_client(cfg, conn, PROVIDER, run_id)
+        one = asked is not None
+        ticker = progress.Ticker() if one else progress.ticker()  # one song's line is all it says
+        client = make_client(cfg, conn, PROVIDER, run_id, ticker=ticker)
         ctx = FetchContext(conn=conn, client=client, overrides=overrides, rank=cfg.rank,
                            library_dir=cfg.library_dir, now=now,
                            reload_overrides=lambda: load_overrides(cfg.overrides_file))
-        one = asked is not None
 
         def said(song: Song, outcome: SongFetchOutcome) -> None:
+            ticker.clear()  # the live line off, for the song's own
             typer.echo(_line(song, outcome, requests=not one))
 
         try:
-            stats = fetch_songs(ctx, songs, on_song=said)
+            with ticker:
+                stats = fetch_songs(ctx, songs, on_song=said)
         except ProviderBlocked as e:
             overrides = _common.overrides_since(cfg, overrides, handed)  # as a lookup let go first left it
             state = record_block(conn, e.provider, now, str(e))
