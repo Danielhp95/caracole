@@ -173,6 +173,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         commands["backup"] = BackupRunner(parts)
         catalogues = CataloguesRunner(parts, source = deps.catalogues, metered = deps.metered,
                                       forget = { search.invalidate() })
+        catalogues.sweep()  // the file an import killed in its middle left (up to the whole unpacked index)
         commands[CataloguesRunner.COMMAND] = catalogues
     }
 

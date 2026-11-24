@@ -60,8 +60,8 @@ import java.time.Instant
  *    against [IndexTransfer.SITES], [unknown]); once the merge has begun, whatever came of it, the WAL checkpointed
  *    and the search's answers forgotten ([forget]).
  *
- * Whatever came of it, the folder `stateDir/cache/catalogues/` is emptied, a file a killed job left among it. A
- * [Limited] anywhere keeps its time in kv [Catalogues.NOT_BEFORE]. Failed, its words are "Not imported: WHY" (its
+ * Whatever came of it, the folder `stateDir/cache/catalogues/` is emptied, a file a killed job left among it, and
+ * [sweep] empties it as the phone starts. A [Limited] anywhere keeps its time in kv [Catalogues.NOT_BEFORE]. Failed, its words are "Not imported: WHY" (its
  * kind's), the command's exit 1.
  *
  * Each run asks GitHub with caracole's user agent as the phone's settings say it then (PhoneConfig.read: the
@@ -76,6 +76,10 @@ class CataloguesRunner(
     private val forget: () -> Unit = {},
     private val free: (File) -> Long = File::getUsableSpace,
 ) : CommandRunner {
+    /** The file a job killed in its middle left in `stateDir/cache/catalogues/` (up to the whole unpacked index)
+     * deleted: called as the phone starts, while no job runs. */
+    fun sweep() = empty(File(parts.stateDir, CACHE))
+
     /** The job the app queues (Settings, the first start): one at a time, a request while one waits or runs answered
      * by that one; with [meteredOk], the owner's go-ahead to download on a metered network, a job of its own key
      * ([GO]), so that a plain job waiting never answers it. */
