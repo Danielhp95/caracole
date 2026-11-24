@@ -20,9 +20,12 @@ import java.io.File
  * more recently, site by site, exactly as `caracole index merge` takes it (tests/conformance/vectors/index/merge.jsonl:
  * the database after equals Python's, its kv text byte for byte).
  *
- * **A merge** attaches the file as `theirs`, and refuses it, writing nothing ([TransferError]), unless its META
- * table (`caracole_export`) says format [FORMAT] and schema [Database.SCHEMA_VERSION], it holds each site asked for,
- * and every table it merges has the database's columns (PRAGMA table_info, in order). Then it plans each site, the two
+ * **A merge** attaches the file as `theirs`, read as anyone's (index_transfer._attached: `trusted_schema` off while
+ * it is attached, so that no function its schema names runs), and refuses it, writing nothing ([TransferError]),
+ * unless it holds tables alone (no view, trigger, index of its own or virtual table: index_transfer._meta's check,
+ * made before any of its tables is read), its META table (`caracole_export`) says format [FORMAT] and schema
+ * [Database.SCHEMA_VERSION], it holds each site asked for, and kv and every table it merges have the database's
+ * columns (PRAGMA table_info, in order). Then it plans each site, the two
  * databases' records compared (stamps.parse's times: [Stamps]):
  *
  * - a sitemap (UG's `ug:sitemaps` by `indexed_at`, a site_index.py site's `<provider>:sitemaps` by `checked_at`) or a
@@ -80,6 +83,22 @@ object IndexTransfer {
         check(Merge.THEIRS !in attached(db)) { "a database is attached as ${Merge.THEIRS} already" }
         if (!export.exists()) throw TransferError("$export: no such file")
         if (sameFile(export, mainFile(db))) throw TransferError("$export is the database itself")
+        // The file may be anyone's (another phone's .caracole, a catalogue someone else published): no function its
+        // schema names runs while it is attached (index_transfer._attached), and the connection as it was after.
+        val trusted = db.one("PRAGMA trusted_schema") { it.long(0)!! }!!
+        db.execute("PRAGMA trusted_schema = OFF")
+        try {
+            return mergeAttached(db, export, now, sites, optimizeAfter, notAfter, chunk, progress, backup)
+        } finally {
+            db.execute("PRAGMA trusted_schema = ${if (trusted != 0L) "ON" else "OFF"}")
+        }
+    }
+
+    /** [merge] with the file read as anyone's: attached as [Merge.THEIRS], refused unless it is an export of this
+     * layout and schema, then planned and applied. */
+    private fun mergeAttached(db: Db, export: File, now: String, sites: List<String>?, optimizeAfter: Long,
+                              notAfter: Long?, chunk: Int, progress: ((MergeProgress) -> Unit)?,
+                              backup: (() -> Unit)?): Merged {
         try {
             db.attach(export, Merge.THEIRS)
         } catch (e: Exception) {
@@ -87,6 +106,7 @@ object IndexTransfer {
             throw noExport(export, e)
         }
         try {
+            tablesAlone(db, export)
             val meta = meta(db, export)
             val names = mergedSites(export, meta, sites)
             Merge.checkColumns(db, export, names)
@@ -186,6 +206,27 @@ object IndexTransfer {
         a.canonicalFile == b.canonicalFile
     } catch (_: java.io.IOException) {
         false
+    }
+
+    /**
+     * _meta's first check: a file of tables alone, as an export makes it (no view, trigger, index of its own or virtual
+     * table, whose reading could run what its maker wrote, or never end: a view of a recursive query), read in its
+     * `sqlite_master` before any of its tables is; the one it holds first refused in Python's words.
+     */
+    private fun tablesAlone(db: Db, export: File) {
+        val odd = try {
+            db.one(
+                "SELECT type, name FROM ${Merge.THEIRS}.sqlite_master WHERE NOT (type = 'table' AND sql LIKE " +
+                    "'CREATE TABLE %') AND NOT (type = 'index' AND sql IS NULL) ORDER BY rowid",
+            ) { it.text(0) to it.text(1) }
+        } catch (e: Exception) {
+            if (!e.isSqliteError()) throw e
+            throw noExport(export, e)
+        }
+        if (odd != null) {
+            throw TransferError("$export holds the ${odd.first} ${odd.second}, and an index export of caracole's holds " +
+                                    "tables alone: `caracole index export` makes one")
+        }
     }
 
     /** _meta: the export's META, refused unless it is an export of this layout and schema. */

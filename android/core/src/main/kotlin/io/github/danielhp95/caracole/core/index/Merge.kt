@@ -89,10 +89,11 @@ internal object Merge {
     fun columns(db: Db, schema: String, table: String): List<String> =
         db.query("PRAGMA $schema.table_info($table)") { it.text(1)!! }
 
-    /** _check_columns: every table of the sites merged has the database's columns, in order. */
+    /** _check_columns: every table of the sites merged has the database's columns, in order, kv too (its records of
+     * how far each index has got). */
     fun checkColumns(db: Db, export: File, names: List<String>) {
         for (name in names) {
-            for (table in Sites.named(name)!!.tables) {
+            for (table in listOf("kv") + Sites.named(name)!!.tables) {
                 val mine = columns(db, "main", table)
                 val theirs = columns(db, THEIRS, table)
                 if (mine != theirs) {
