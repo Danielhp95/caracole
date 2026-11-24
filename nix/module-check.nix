@@ -23,6 +23,8 @@
   autochordsPackage,
   # What autochords.package must default to with autochords.cuda.
   autochordsCudaPackage,
+  # What publish.uploader must default to.
+  publishIndexesPackage,
 }:
 let
   # caracole's source: its config loader, run against the generated files, and
@@ -132,6 +134,8 @@ let
     publish = {
       enable = true;
       tokenFile = "/run/secrets/gh-token";
+      # The flake's module gives it a default; a host that clears it is refused.
+      uploader = lib.mkForce null;
     };
   };
   # caracole-web with its defaults, and on a tailnet address.
@@ -741,6 +745,8 @@ let
     ] stateIsCache;
     "the package defaults to this flake's package" =
       defaults.services.caracole.package.drvPath == defaultPackage.drvPath;
+    "the uploader defaults to this flake's publish-indexes package" =
+      defaults.services.caracole.publish.uploader.drvPath == publishIndexesPackage.drvPath;
     "the auto-chords package defaults to this flake's autochords package" =
       defaults.services.caracole.autochords.package.drvPath == autochordsPackage.drvPath;
     "without the flake, the module builds the same packages from nix/package.nix" =
