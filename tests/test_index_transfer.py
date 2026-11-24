@@ -885,3 +885,37 @@ def test_the_directory_takes_each_artist_seen_later_each_page_read_later_and_eac
     again = transfer.merge(conn, export(home, tmp_path, ["ug"], name="again.sqlite"), state_dir=tmp_path / "state",
                            now=NOW)
     assert not again.changed
+
+
+# --- a public export -----------------------------------------------------------------------------------------------
+
+
+def seed_lacuerda(conn, rows_: list[tuple[str, str]]) -> None:
+    """LaCuerda index rows ``(path, page)``."""
+    for path, page in rows_:
+        conn.execute("INSERT INTO lacuerda_index (path, artist_slug, artist, artist_key, title, title_key, songs, "
+                     "versions, acordes, popular, page) VALUES (?, 'a', 'A', 'a', 'T', 't', 1, 1, 1, 1, ?)",
+                     (path, page))
+
+
+def test_a_public_export_holds_no_source_and_no_lacuerda_search_rows(home, tmp_path):
+    seed_lacuerda(home, [("a/x", "a/"), ("b/y", "busca.php")])
+    out = transfer.export(home, tmp_path / "p.sqlite", now=NOW, omit=transfer.PUBLIC_OMIT)
+    f = sqlite3.connect(out.path)
+    try:
+        assert "source" not in dict(f.execute(f"SELECT key, value FROM {transfer.META}"))
+        assert [r[0] for r in f.execute("SELECT path FROM lacuerda_index")] == ["a/x"]
+    finally:
+        f.close()
+    assert out.rows["lacuerda_index"] == 1
+
+
+def test_an_export_of_pages_omits_nothing(home, tmp_path):
+    with pytest.raises(transfer.TransferError, match="omits nothing"):
+        transfer.export(home, tmp_path / "p.sqlite", now=NOW, pages={"lacuerda": ["a/"]}, omit=transfer.PUBLIC_OMIT)
+
+
+def test_a_public_export_merges_as_any_export(home, conn, tmp_path):
+    seed_lacuerda(home, [("a/x", "a/")])
+    out = transfer.export(home, tmp_path / "p.sqlite", now=NOW, omit=transfer.PUBLIC_OMIT)
+    assert merge(conn, out.path, state=tmp_path / "state").sites

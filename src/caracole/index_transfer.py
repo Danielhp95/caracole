@@ -160,6 +160,18 @@ def counted(n: int, noun: str) -> str:
 
 
 @dataclass(frozen=True)
+class Omit:
+    """Rows an export leaves out: an SQL condition on a table's rows (``table`` ``META``: a meta key dropped)."""
+    table: str
+    where: str
+
+
+# S2: what a public copy of the indexes leaves out. To keep a thing, remove its rule; to drop UG's artist pages, add
+# ``Omit("ug_artist_tabs", "1")``.
+PUBLIC_OMIT: tuple[Omit, ...] = (Omit(META, "key = 'source'"), Omit("lacuerda_index", "page = 'busca.php'"))
+
+
+@dataclass(frozen=True)
 class Exported:
     path: Path
     sites: tuple[str, ...]
@@ -208,13 +220,15 @@ def chosen(names: Iterable[str] | None, among: Sequence[str] | None = None) -> t
 
 
 def export(conn: sqlite3.Connection, path: Path, sites: Iterable[str] | None = None, *, now: datetime,
-           pages: Mapping[str, Sequence[str]] | None = None) -> Exported:
+           pages: Mapping[str, Sequence[str]] | None = None, omit: Sequence[Omit] = ()) -> Exported:
     """The indexes of ``sites`` (every one with none) into a new file at ``path``, in one read transaction; a file
     there already, or the database itself, is refused. Written under a name of its own, then renamed.
 
     With ``pages`` (``{site: [page, …]}``, a lookup's reads: none of ``sites`` then), those sites alone, each table
     of theirs holding only those pages' rows (``PAGES``) and the kv only their keys records; with no site at all for
     an empty one."""
+    if omit and pages is not None:
+        raise TransferError("an export of pages omits nothing")
     if pages is not None:
         if sites is not None:
             raise TransferError("an export of pages exports their sites alone: name no site beside them")
@@ -239,6 +253,8 @@ def export(conn: sqlite3.Connection, path: Path, sites: Iterable[str] | None = N
     keys = [k for n in names for k in (SITES[n].kv if chosen_pages is None else PAGES[n].kv)]
     try:
         _write_export(conn, part, names, tables, keys, now, chosen_pages)
+        if omit:
+            _omit(part, omit)
         os.replace(part, path)
     except (OSError, sqlite3.Error) as e:
         raise TransferError(f"can't write {path}: {e}") from e
@@ -246,6 +262,17 @@ def export(conn: sqlite3.Connection, path: Path, sites: Iterable[str] | None = N
         part.unlink(missing_ok=True)
     counts = {table: _count(path, table) for table in tables}
     return Exported(path, names, counts, path.stat().st_size)
+
+
+def _omit(part: Path, omit: Sequence[Omit]) -> None:
+    """Delete the rows ``omit`` names from the file ``part``, then VACUUM it. The names come from the rules alone."""
+    out = sqlite3.connect(part, isolation_level=None)
+    try:
+        for rule in omit:
+            out.execute(f"DELETE FROM {rule.table} WHERE {rule.where}")
+        out.execute("VACUUM")
+    finally:
+        out.close()
 
 
 def _write_export(conn: sqlite3.Connection, part: Path, names: Sequence[str], tables: Sequence[str],
