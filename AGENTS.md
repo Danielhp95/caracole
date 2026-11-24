@@ -1944,7 +1944,8 @@ It is rows.js's, shared by both pages:
     or the model's ("Whisper's model won't load": any other load failure, on the GPU too), never the audio's;
     `is_audio_error`, Whisper failing to load the audio.
   - The job works in a `transcribe-*` folder under the cache, gone with it; one a killed job left is swept at the
-    next job's start (`_sweep`, under the lock: one transcription at a time).
+    next job's start (`_sweep`: a folder no live job holds, its `.owner` flocked while its job runs, as another
+    transcription asked for now may take the lock while this one lets the lookups have it).
   - The job builds the default separator and Whisper at their first stage, Whisper run first on run.py's test tone
     (`_test_tone`); demucs-rs not (it fails on the song as on a tone, the setup's alike, and each run costs about
     30 s). Its failures are told apart as run.py's: the setup's and the audio's. The setup's record nothing against

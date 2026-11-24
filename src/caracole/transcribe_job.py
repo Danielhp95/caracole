@@ -6,7 +6,7 @@ For a song whose audio came from YouTube and that every lyrics site switched on 
 its own (staged.py; ``--progress`` writes a JSON line per event, which caracole serve reads into the job's stages):
 
 - ``song``: the song, by its identity key, never added to wanted.txt; refused when it isn't offered a transcription.
-  First, the work folders a killed job left under the cache are swept (``_sweep``).
+  First, the work folders a killed job left under the cache are swept (``_sweep``): those no live job holds.
 - ``vocals``: where the singing is. The mix's loudness frame by frame (``separate.frame_db``), the vocals separated
   by demucs-rs into a temporary folder under the cache, their loudness, then the sung spans (words.py
   ``sung_spans``), over as much of the song as both cover: a stem more than ``SHORT_STEM_FRAMES`` shorter than the
@@ -36,9 +36,10 @@ What fails is told apart as auto-chords tells it:
 - the setup's, which blames no song and records nothing, the song staying offered: the loudness reader failing on
   the mix, whatever it raises ("can't measure the audio here (...)", in its words: ``frame_db`` reads as BTC does,
   libsndfile, else FFmpeg for the AAC of YouTube's .m4a, so a failure there is no proof the audio is bad), the
-  separator ("the separator can't run here (...)", demucs-rs's own words, or a stem it wrote that can't be read), a
-  GPU missing, busy or out of memory, or a Whisper model that won't load (``SetupFailed``, in its own words: "the GPU
-  failed: ...", "Whisper's model won't load: ...");
+  separator ("the separator can't run here (...)", demucs-rs's own words, or a stem it wrote that can't be read, by
+  the loudness reader or by Whisper, which reads it first for the language), a GPU missing, busy or out of memory,
+  or a Whisper model that won't load (``SetupFailed``, in its own words: "the GPU failed: ...", "Whisper's model
+  won't load: ...");
 - the audio's: Whisper's own "Failed to load audio" on the mix (``transcribe.is_audio_error``, "can't read the
   audio"), alone filed as auto-chords files a file it can't read (run.py ``_unreadable``: kv
   ``autochords:failed:<song id>``), so the song is offered no transcription, nor auto-chords tried on it, until its
@@ -53,6 +54,8 @@ be transcribed here (``youtube_fetch.transcribe_problem``).
 
 from __future__ import annotations
 
+import fcntl
+import os
 import shutil
 import subprocess
 import tempfile
@@ -78,6 +81,9 @@ STAGES = (
 )
 UNREADABLE = "can't read the audio"
 WORK_PREFIX = "transcribe-"  # a job's work folder under the cache, its stem in it
+# A file in each work folder, flocked by the job that made it for as long as it runs: a folder whose owner's lock
+# anyone can take (its job killed: the kernel let go of it) is a killed job's, and swept.
+OWNER = ".owner"
 # demucs-rs writes the stem at its own rate: resampled, it may come out a frame or so shorter than the mix, read as
 # far as both go. Shorter than this, the singing past its end would be lost: the separator's failure.
 SHORT_STEM_FRAMES = 4  # 0.2 s
@@ -112,6 +118,7 @@ class _Transcription(StagedRun):
         self.request = request
         self.separator, self.transcriber = separator, transcriber
         self.work: tempfile.TemporaryDirectory[str] | None = None  # the stem, for the job
+        self.owner: int | None = None  # the descriptor of the work folder's OWNER, flocked while the job runs
         self.audio: tuple[str | None, float | None] = (None, None)  # the audio separated: its path and mtime
         self.stem: Path | None = None
         self.spans: list[Any] = []
@@ -148,19 +155,22 @@ class _Transcription(StagedRun):
             raise _Stop(f"{self.song.display}: its audio changed while its lyrics were transcribed")
 
     def _folder(self, name: str) -> Path:
-        """A folder of the job's own under the cache, gone with the job."""
+        """A folder of the job's own under the cache, gone with the job, its ``OWNER`` flocked while the job runs.
+        Made under caracole's lock, as ``_sweep`` runs: no sweep sees the folder before its owner's lock is taken."""
         if self.work is None:
             self.cfg.cache_dir.mkdir(parents=True, exist_ok=True)
             self.work = tempfile.TemporaryDirectory(prefix=WORK_PREFIX, dir=self.cfg.cache_dir)
+            self.owner = os.open(Path(self.work.name) / OWNER, os.O_RDWR | os.O_CREAT | os.O_CLOEXEC, 0o600)
+            fcntl.flock(self.owner, fcntl.LOCK_EX)
         return Path(self.work.name) / name
 
     def _sweep(self) -> None:
-        """The work folders a killed job left under the cache, its stem in each, removed. Under caracole's lock, which
-        lets one transcription run at a time (it hands the lock to lookups alone, which make none), any there is
-        stale, as youtube_fetch.py sweeps a download a stopped caracole left half-done."""
+        """The work folders a killed job left under the cache, its stem in each, removed: those no live job holds
+        (``_held``). Not every one there: another transcription may have one, as it lets the lookups have caracole's
+        lock before its words and chords, and this one, asked for now too, may take the lock meanwhile."""
         if self.cfg.cache_dir.is_dir():
             for leftover in self.cfg.cache_dir.glob(f"{WORK_PREFIX}*"):
-                if leftover.is_dir():
+                if leftover.is_dir() and not leftover.is_symlink() and not _held(leftover):
                     shutil.rmtree(leftover, ignore_errors=True)
 
     def _unreadable(self, e: Exception) -> tuple[str, str]:
@@ -302,10 +312,31 @@ class _Transcription(StagedRun):
     def _cleanup(self) -> None:
         if self.work is not None:
             self.work.cleanup()
+        if self.owner is not None:
+            os.close(self.owner)
+            self.owner = None
 
     def run(self) -> TranscribeResult:
         self._run(f"transcribe {self.request.display}")
         return self.result
+
+
+def _held(folder: Path) -> bool:
+    """Whether a live job holds the work folder: its ``OWNER`` flocked. A folder with none (an older caracole's, or
+    one a job was killed in as it made it) is held by none; one whose owner file can't be opened, kept."""
+    try:
+        fd = os.open(folder / OWNER, os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC)
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return True
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return True
+    finally:
+        os.close(fd)
+    return False
 
 
 def make_transcript(cfg: Config, request: TranscribeRequest, progress: Progress | None = None, *,

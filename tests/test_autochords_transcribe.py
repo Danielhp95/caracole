@@ -149,6 +149,27 @@ def test_an_audio_error_while_hearing_is_not_the_setups(monkeypatch, tmp_path, e
     assert raised.value is error
 
 
+def test_a_stem_whisper_cant_load_is_the_separators_never_the_songs(monkeypatch, tmp_path):
+    # Whisper reads the stem first, for the language: a stem it can't load (or one gone from the cache) is no proof
+    # the song's audio is bad, so it is the setup's, said as the separator's, and the song stays offered.
+    _fake_torch(monkeypatch, available=False, allocates=True)
+    model = _Model({"segments": []})
+    _fake_whisper(monkeypatch, model)
+    stem = tmp_path / "vocals.wav"
+
+    def load_audio(path):
+        if path == str(stem):
+            raise RuntimeError("Failed to load audio: Error opening input files: No such file or directory")
+        return [0.0] * 16000 * 40
+
+    sys.modules["whisper"].load_audio = load_audio
+    with pytest.raises(transcribe.SetupFailed, match=r"^the separator can't run here \(its vocals can't be read: "
+                                                     r"RuntimeError: Failed to load audio: Error opening input files: "
+                                                     r"No such file or directory\)$"):
+        _make(monkeypatch, tmp_path).hear(tmp_path / "mix", stem, 0.0)
+    assert model.calls == []  # the mix never heard
+
+
 @pytest.mark.parametrize("device", ["cpu", "cuda"])
 def test_hearing_builds_words_and_calls_whisper_as_pinned(monkeypatch, tmp_path, device):
     from caracole.autochords.words import Word

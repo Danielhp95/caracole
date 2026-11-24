@@ -257,19 +257,61 @@ def test_a_stem_shorter_than_the_song_is_the_separators_failure(conn, cfg, monke
 
 
 def test_a_killed_jobs_work_folders_are_swept_when_the_next_job_starts(conn, cfg):
-    # A job killed in its stages leaves its stem (tens of MB) under the cache. The lock lets one transcription run
-    # at a time (it hands the lock to lookups alone), so any work folder there when a job holds it is stale.
+    # A job killed in its stages leaves its stem (tens of MB) under the cache, and its folder no live job holds (its
+    # lock on the folder's owner file went with its process; an older caracole's folder has none).
     offered(conn, cfg)
     stale = [cfg.cache_dir / name for name in ("transcribe-k1ll3d0", "transcribe-0ld")]
     for folder in stale:
         (folder / "song" / "stems").mkdir(parents=True)
         (folder / "song" / "stems" / "vocals.wav").write_bytes(b"RIFF")
+    (stale[0] / ".owner").write_bytes(b"")
     other = cfg.cache_dir / "youtube"
     result, _ = make(cfg)
     assert result.ok, result
     assert not any(folder.exists() for folder in stale)
     assert other.is_dir() and list(other.iterdir())  # the rest of the cache stays
     assert not list(cfg.cache_dir.glob("transcribe-*"))  # and the job's own went with it
+
+
+class StemFirst(Transcriber):
+    """Whisper as WhisperTranscriber.hear runs it: the stem read first, for the language, and a stem that is gone
+    failing as openai-whisper's load_audio fails (ffmpeg 9.0.1's words)."""
+
+    def hear(self, mix, stem, first_sung_s, **kwargs):
+        if not Path(stem).is_file():
+            raise RuntimeError("Failed to load audio: Error opening input files: No such file or directory")
+        return super().hear(mix, stem, first_sung_s, **kwargs)
+
+
+def test_a_second_transcription_in_the_first_ones_hand_over_leaves_its_stem_alone(conn, cfg, monkeypatch):
+    # Before the words, the job hands caracole's lock to the lookups and waits for it with a ticket outside the lane;
+    # another caracole asked for now (a terminal's `caracole transcribe` of another song) may take the lock first once
+    # the lane is empty. Its sweep leaves a live job's folder alone: the first job's stem gone, Whisper would fail on
+    # it, and the song's good audio would be filed as audio that can't be read.
+    first = offered(conn, cfg)
+    offered(conn, cfg, artist="Otro", title="Canción")
+    monkeypatch.setattr(_common, "_handoffs", _common.handoffs())  # put back as it was after the test
+    heard = Heard()
+    second = []
+
+    def hand_over(cfg_, conn_=None) -> bool:
+        if heard.events[-1][1:3] != ("words", "running") or second:  # the second job's own hand-overs: none
+            return False
+        second.append(None)
+        second[0] = make_transcript(cfg_, TranscribeRequest("Otro", "Canción"), Heard(), separator=Separator(),
+                                    transcriber=StemFirst(), recognizer=Recognizer(), beats_fn=beats,
+                                    runner=fake_chordpro, now=NOW)
+        _common._handoffs += 1
+        return True
+
+    monkeypatch.setattr(_common, "hand_over", hand_over)
+    result, _ = make(cfg, transcriber=StemFirst(), progress=heard)
+    assert second and second[0].ok, second
+    assert result.ok, result
+    assert heard.ends()["words"] == ("done", "6 words in 2 lines (es), 1 dropped")
+    assert kv_get(conn, f"autochords:failed:{first.id}") is None
+    assert why_not_offered(conn, cfg, get_song(conn, first.id), Overrides()) == "already transcribed"
+    assert not list(cfg.cache_dir.glob("transcribe-*"))  # both went with their jobs
 
 
 def test_a_song_with_an_auto_sheet_over_no_lyrics_gets_it_made_again_over_its_transcript(conn, cfg):
