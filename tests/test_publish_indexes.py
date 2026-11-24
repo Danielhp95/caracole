@@ -235,8 +235,11 @@ def test_a_slow_upload_says_every_tick_how_far_gh_has_read_the_file_and_its_size
                          r"about (\d+) s left", line) for line in said]
     assert any(read), said  # gh's file read a quarter at a time: its position, read from /proc
     assert {int(m.group(1)) for m in read if m} <= {100, 200, 300}
+    # At the edges a tick may come before gh has opened the file, or after it closed it: the time so far then.
     assert all(m or re.fullmatch(r"publish-indexes: uploading \u00b7 all 400 KB read \u00b7 \d+ s so far, "
-                                 r"waiting for GitHub", line) for m, line in zip(read, said))
+                                 r"waiting for GitHub", line)
+               or re.fullmatch(r"publish-indexes: uploading \u00b7 \d+ s so far \(400 KB\)", line)
+               for m, line in zip(read, said)), said
     lines = done.stdout.splitlines()
     assert lines.index(f"publish-indexes: uploading {NEW} (400 KB) to o/r, release indexes...") < \
         lines.index(said[0]) < lines.index("publish-indexes: checking the upload against published.json...")
