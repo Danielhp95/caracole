@@ -12,6 +12,8 @@ import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
 import androidx.test.runner.lifecycle.Stage
 import io.github.danielhp95.caracole.core.catalogues.Catalogues
 import io.github.danielhp95.caracole.core.db.Database
+import io.github.danielhp95.caracole.core.index.IndexTransfer
+import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.index.TabCounts
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.Fixtures
@@ -102,6 +104,18 @@ class CataloguesTest {
             }
             onMain { settings.finish() }
         }
+        // No catalogue imported (the record gone, as on a phone whose indexes came from a .caracole file), yet tabs
+        // there: the newest sitemap read the indexes hold (gtptabs.com's and MuseScore's: no page of theirs the phone
+        // reads itself), as IndexTransfer.newest has it.
+        val database = Caracole.phone(context).parts.database
+        val sitemaps = database.read { IndexTransfer.newest(it) }.values.mapNotNull { Stamps.parse(it)?.let(Stamps::instant) }.max()
+        database.writeBlocking { it.kvDelete(Catalogues.IMPORTED) }
+        ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
+            waitUntil("the indexes' date") {
+                text(find(scenario), R.id.catalogues_date).startsWith("Of ${SiteCatalogues.day(sitemaps)} · ")
+            }
+        }
+        database.writeBlocking { it.kvSet(Catalogues.IMPORTED, first) }
         // Offered once: the next start, still with nothing set up, opens Settings as ever and offers nothing.
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             resumed<SettingsActivity>().let { onMain { it.finish() } }

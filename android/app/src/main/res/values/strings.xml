@@ -102,7 +102,7 @@
     <string name="catalogues_of">Of %1$s · %2$s</string>
     <!-- A phone that took its site indexes from a computer by a sync, and no catalogue since: how old the computer's
          were when it merged them. -->
-    <string name="catalogues_of_computer">The computer\'s indexes, of %1$s · %2$s</string>
+    <string name="catalogues_of_computer">From the computer · %1$s · %2$s</string>
     <string name="catalogues_today">today</string>
     <plurals name="catalogues_days">
         <item quantity="one">%d day old</item>

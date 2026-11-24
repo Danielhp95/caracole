@@ -54,6 +54,33 @@ class SiteCataloguesTest {
     }
 
     @Test
+    fun aPhoneWithIndexesFromAFileSaysTheirNewestSitemapOrListingRead() {
+        // No catalogue imported, no computer synced, yet tabs there (a .caracole file's indexes, an index import): the
+        // newest sitemap or listing record (never a page the phone read itself), dated as the indexes'.
+        val listed = { listOf("2026-10-01T00:00:00Z", "2026-10-05T00:00:00Z", "soon") }
+        assertEquals(Fresh(Source.INDEXES, Instant.parse("2026-10-05T00:00:00Z")),
+                     SiteCatalogues.fresh(null, emptyList(), listed) { true })
+        assertNull("no tabs: none yet", SiteCatalogues.fresh(null, emptyList(), listed) { false })
+        assertNull("no record: none yet, no tab counted",
+                   SiteCatalogues.fresh(null, emptyList(), { emptyList() }) { error("the tabs were counted") })
+        // Imported or synced: those, and the records aren't read.
+        assertEquals(Source.CATALOGUES, SiteCatalogues.fresh("indexes-s17-20261124T0312Z.sqlite.gz", emptyList(),
+                                                             { error("read") }) { error("counted") }?.source)
+        assertEquals(Source.COMPUTER, SiteCatalogues.fresh(null, listOf("""{"ug": "2026-11-03T03:12:00Z"}"""),
+                                                           { error("read") }) { error("counted") }?.source)
+    }
+
+    @Test
+    fun aRecordOfSitemapsOrListingPagesGivesEachOnesTime() {
+        val record = """{"a.xml": {"checked_at": "2026-10-05T00:00:00Z", "etag": "x"}, "b.xml": {"checked_at": 3},
+                         "c.xml": 7, "d.xml": {"indexed_at": "2026-10-06T00:00:00Z"}}"""
+        assertEquals(listOf("2026-10-05T00:00:00Z"), SiteCatalogues.recorded(record, "checked_at"))
+        assertEquals(listOf("2026-10-06T00:00:00Z"), SiteCatalogues.recorded(record, "indexed_at"))
+        assertEquals(emptyList<String>(), SiteCatalogues.recorded("not json", "checked_at"))
+        assertEquals(emptyList<String>(), SiteCatalogues.recorded(null, "checked_at"))
+    }
+
+    @Test
     fun theDayIsSaidInEnglishInUtc() {
         assertEquals("3 Nov 2026", SiteCatalogues.day(Instant.parse("2026-11-03T03:12:00Z")))
         assertEquals("31 Dec 2025", SiteCatalogues.day(Instant.parse("2025-12-31T23:59:59Z")))

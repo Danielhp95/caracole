@@ -39,8 +39,8 @@ import java.time.Instant
  * copy takes, Sync on Wi-Fi by itself (the bar's sync, unattended: [Syncs]), Export and Import a file (the library
  * page's sync sheet at that flow, MainActivity's [MainActivity.SHEET]), the text size a pinch left, with Reset, and
  * the phone's backups ([BackupsActivity]), and the site catalogues: the date of the ones imported last ("Of 24 Nov
- * 2026 · 3 weeks old"), or of the computer's indexes a sync merged ("The computer's indexes, of 3 Nov 2026 · …"),
- * "None yet" for neither (SiteCatalogues.fresh), and Download the site catalogues, which asks GitHub nothing until it
+ * 2026 · 3 weeks old"), or of the computer's indexes a sync merged ("From the computer · 3 Nov 2026 · …"), else of
+ * the indexes the phone holds, "None yet" for none (SiteCatalogues.fresh), and Download the site catalogues, which asks GitHub nothing until it
  * is tapped, then queues CataloguesRunner's job and says its line as it goes ([followCatalogues]); a job a metered
  * network stopped is asked about ("52 MB on a metered network?"), whoever queued it (the Journal's Try again too),
  * Download then the owner's go-ahead, the question kept for the next screen until it is answered (a rotation's). A
@@ -204,8 +204,9 @@ class SettingsActivity : Activity() {
         findViewById<View>(R.id.open_library).visibility = if (mirror.manifest() != null) View.VISIBLE else View.GONE
     }
 
-    /** "Of 24 Nov 2026 · 3 weeks old", the catalogues imported last; "The computer's indexes, of …", a sync's; "None
-     * yet" (SiteCatalogues.fresh). */
+    /** "Of 24 Nov 2026 · 3 weeks old", the catalogues imported last (or, neither imported nor synced, the newest
+     * sitemap or listing read the phone's indexes hold); "From the computer · …", a sync's; "None yet"
+     * (SiteCatalogues.fresh). */
     private fun showCatalogues() {
         scope.launch {
             val phone = phone() ?: return@launch
@@ -214,7 +215,8 @@ class SettingsActivity : Activity() {
             }.onFailure(::cantStart).getOrElse { return@launch }
             cataloguesDate.text = when (fresh?.source) {
                 null -> getString(R.string.catalogues_none)
-                SiteCatalogues.Source.CATALOGUES -> getString(R.string.catalogues_of, SiteCatalogues.day(fresh.at), ageOf(fresh.at))
+                SiteCatalogues.Source.CATALOGUES, SiteCatalogues.Source.INDEXES ->
+                    getString(R.string.catalogues_of, SiteCatalogues.day(fresh.at), ageOf(fresh.at))
                 SiteCatalogues.Source.COMPUTER ->
                     getString(R.string.catalogues_of_computer, SiteCatalogues.day(fresh.at), ageOf(fresh.at))
             }
