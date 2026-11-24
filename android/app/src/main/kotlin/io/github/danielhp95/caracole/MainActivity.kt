@@ -61,16 +61,19 @@ import kotlin.coroutines.resume
  * of a sync that left conflicts) opens the sheet at that flow ([SheetAddress]). The WebView carries the launch's
  * cookie and loads that exact origin alone. A pinch sizes the pages' text ([pinchToSize]), and shows the size it is
  * at over the page while it lasts ([sizeLabel]). A first start with no computer set and no site's index offers the
- * site catalogues once ([offerCatalogues]), before Settings opens.
+ * site catalogues once ([offerCatalogues]), once the opening screen is gone, before Settings opens; until answered
+ * (Back is Not now), and gone once a computer is set.
  */
 class MainActivity : Activity() {
     private lateinit var web: WebView
     private lateinit var status: TextView
     private lateinit var title: TextView
     private lateinit var opening: OpeningScreen
-    /** The first start's offer of the site catalogues (SiteCatalogues.offers). */
+    /** The first start's offer of the site catalogues (SiteCatalogues.firstStart). */
     private lateinit var offer: View
-    /** Whether Settings opens once the offer is answered (a first start with nothing set up). */
+    /** Whether the offer waits for its answer (shown, or to show once the opening screen is gone). */
+    private var offering = false
+    /** Whether Settings opens once the offer is answered (a first start with nothing set up, Settings not seen yet). */
     private var offerThenSettings = false
     /** Where links go, once the server has started (the WebView's client reads it on its own threads). */
     @Volatile private var links: Links? = null
@@ -232,9 +235,10 @@ class MainActivity : Activity() {
 
     /**
      * Whether the first start offers the site catalogues ([SiteCatalogues.firstStart]: no computer set, never offered,
-     * no site's index, looked at last), kv [SiteCatalogues.OFFERED] written as it is offered, or once a site's index is
-     * found there (decided: no later start looks again), so a start counts no table once it is decided; false when the
-     * database can't say.
+     * no site's index, looked at last). kv [SiteCatalogues.OFFERED] is written once it is answered ([answerOffer]), so
+     * a start that ends before (the app swiped away) offers it again; or here, once a site's index is found there
+     * (decided: no later start looks again), so a start counts no table once it is decided. False when the database
+     * can't say.
      */
     private fun offerCatalogues(phone: Phone): Boolean = try {
         val db = phone.parts.database
@@ -243,7 +247,7 @@ class MainActivity : Activity() {
                 TabCounts.of(d).values.any { it > 0 }
             }
         }
-        if (start != SiteCatalogues.FirstStart.NOTHING) db.writeBlocking { it.kvSet(SiteCatalogues.OFFERED, Stamps.now()) }
+        if (start == SiteCatalogues.FirstStart.DECIDED) db.writeBlocking { it.kvSet(SiteCatalogues.OFFERED, Stamps.now()) }
         start == SiteCatalogues.FirstStart.OFFER
     } catch (e: CancellationException) {
         throw e
@@ -251,22 +255,52 @@ class MainActivity : Activity() {
         false
     }
 
+    /** The offer shown once the opening screen is gone (never live under the logo, nor drawn over it), Back answering
+     * it Not now. */
     private fun showOffer(thenSettings: Boolean) {
+        offering = true
         offerThenSettings = thenSettings
-        offer.visibility = View.VISIBLE
+        opening.whenGone {
+            if (!offering) return@whenGone
+            offer.visibility = View.VISIBLE
+            offerBack(true)
+        }
     }
 
     /**
      * The offer answered: Download queues the catalogues' job and opens Settings, whose row follows it (and asks
-     * before a download on mobile data); Not now opens Settings only where a first start would have.
+     * before a download on mobile data); Not now (or Back) opens Settings only where a first start would have
+     * ([settingsAfter]). Either way kv [SiteCatalogues.OFFERED] says it was offered, so no start offers it again.
      */
-    private fun answerOffer(download: Boolean) {
+    private fun answerOffer(download: Boolean, settingsAfter: Boolean = offerThenSettings) {
+        if (!offering) return
+        offering = false
         offer.visibility = View.GONE
+        offerBack(false)
         val app = applicationContext
         screen.launch {
-            if (download) withContext(Dispatchers.IO) { SiteCatalogues.queue(Caracole.phone(app), meteredOk = false) }
-            if (download || offerThenSettings) openSettings()
+            withContext(Dispatchers.IO) {
+                guarded<Unit> {
+                    val phone = Caracole.phone(app)
+                    phone.parts.database.writeBlocking { it.kvSet(SiteCatalogues.OFFERED, Stamps.now()) }
+                    if (download) SiteCatalogues.queue(phone, meteredOk = false)
+                }
+            }
+            if (download || settingsAfter) openSettings()
         }
+    }
+
+    /** Back while the offer shows is its Not now (from Android 13 a callback over the WebView's; before, onBackPressed). */
+    private val offerBackCallback: Any? =
+        if (Build.VERSION.SDK_INT >= 33) OnBackInvokedCallback { answerOffer(download = false) } else null
+    private var offerBackRegistered = false
+
+    private fun offerBack(want: Boolean) {
+        if (Build.VERSION.SDK_INT < 33 || want == offerBackRegistered) return
+        val callback = offerBackCallback as OnBackInvokedCallback
+        if (want) onBackInvokedDispatcher.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_OVERLAY, callback)
+        else onBackInvokedDispatcher.unregisterOnBackInvokedCallback(callback)
+        offerBackRegistered = want
     }
 
     /** A song shared to the app while the screen was open (MainActivity is single-task): its page; or the sync sheet
@@ -296,6 +330,9 @@ class MainActivity : Activity() {
         super.onResume()
         pinch.set(settings.textZoom) // as Settings' Reset may have left it
         if (!shown && origin != null) showLibrary()
+        // A computer set meanwhile (⋮ › Settings while the offer waited): the offer, made to a phone with none, is
+        // moot, and goes, opening nothing.
+        if (offering && settings.server.isNotBlank()) answerOffer(download = false, settingsAfter = false)
     }
 
     override fun onStart() {
@@ -311,7 +348,7 @@ class MainActivity : Activity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        if (offer.visibility == View.VISIBLE) {
+        if (offering) {
             outState.putBoolean(OFFERING, true)
             outState.putBoolean(OFFER_SETTINGS, offerThenSettings)
         }
@@ -328,10 +365,17 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        // In the opening too (Back, a recreation): its shine stops with the screen, and the start, which goes on in
+        // the process, shows nothing on it.
+        opening.stop()
+        offerBack(false)
         screen.cancel()
         web.destroy()
         super.onDestroy()
     }
+
+    /** Whether the opening screen's shine runs (a device test's). */
+    internal val openingShines: Boolean get() = opening.shining
 
     /** A page of the phone's server by its path and query ("/share?text=…", already encoded), once it has started. */
     private fun showPage(page: String) {
@@ -380,7 +424,10 @@ class MainActivity : Activity() {
         requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), NOTIFY)
     }
 
-    private fun openSettings() = startActivity(Intent(this, SettingsActivity::class.java))
+    private fun openSettings() {
+        offerThenSettings = false  // seen: the offer's Not now needn't open it again
+        startActivity(Intent(this, SettingsActivity::class.java))
+    }
 
     private fun menu(anchor: View) {
         val popup = PopupMenu(this, anchor)
@@ -588,7 +635,11 @@ class MainActivity : Activity() {
     @SuppressLint("GestureBackNavigation")
     @Deprecated("Android 13 and later use backCallback")
     override fun onBackPressed() {
-        if (web.canGoBack()) web.goBack() else @Suppress("DEPRECATION") super.onBackPressed()
+        when {
+            offering && offer.visibility == View.VISIBLE -> answerOffer(download = false)
+            web.canGoBack() -> web.goBack()
+            else -> @Suppress("DEPRECATION") super.onBackPressed()
+        }
     }
 
     /**

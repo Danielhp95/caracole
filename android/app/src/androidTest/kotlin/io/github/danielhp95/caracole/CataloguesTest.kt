@@ -81,9 +81,11 @@ class CataloguesTest {
         github.publish(first)
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             waitUntil("the first start's offer", 60_000) { onMain { find(scenario).findViewById<View>(R.id.catalogue_offer).isShown } }
-            assertNotNull("offered once", kv(SiteCatalogues.OFFERED))
+            // Shown once the opening screen is gone: never over the logo, nor live under it.
+            assertEquals(View.GONE, onMain { find(scenario).findViewById<View>(R.id.loading).visibility })
             assertEquals(listOf<String>(), github.asked)  // no request until Download is tapped
             onMain { find(scenario).findViewById<View>(R.id.offer_download).performClick() }
+            waitUntil("offered once: its answer recorded") { kv(SiteCatalogues.OFFERED) != null }
 
             val settings = resumed<SettingsActivity>()
             waitUntil("the catalogues imported", 60_000) { kv(Catalogues.IMPORTED) == first }
