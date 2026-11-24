@@ -42,3 +42,4 @@
 {"kept":{"keep_days":180,"names":["indexes-s17-20261124T0312Z.sqlite.gz"],"now":"2026-11-24T03:12:00Z","schema":17},"out":["indexes-s17-20261124T0312Z.sqlite.gz"]}
 {"kept":{"keep_days":180,"names":["indexes-s15-20260401T0312Z.sqlite.gz"],"now":"2027-06-01T03:12:00Z","schema":17},"out":[]}
 {"kept":{"keep_days":180,"names":[],"now":"2026-11-24T03:12:00Z","schema":17},"out":[]}
+{"kept":{"keep_days":180,"names":["indexes-s17-20261124T0312Z.sqlite.gz","indexes-s17-20261117T0312Z.sqlite.gz","indexes-s17-20261110T0312Z.sqlite.gz","indexes-s16-20261103T0312Z.sqlite.gz","indexes-s15-20260401T0312Z.sqlite.gz","indexes.json"],"now":"2026-11-24T03:12:00Z","schema":16},"out":["indexes-s16-20261103T0312Z.sqlite.gz","indexes-s17-20261117T0312Z.sqlite.gz","indexes-s17-20261124T0312Z.sqlite.gz","indexes.json"]}

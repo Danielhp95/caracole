@@ -102,6 +102,19 @@ def test_the_publishing_schemas_two_newest_stay_whatever_their_age():
     assert catalogues.kept(names, schema=17, now=d(2026, 11, 24)) == set(names[:2])
 
 
+def test_the_publishing_schema_is_the_newest_the_names_hold_when_it_is_newer_than_the_uploaders():
+    """An uploader built before a schema bump, beside a service after it, keeps what one built after it keeps: the
+    newer schema's two newest, and its own schema's newest while it is young enough."""
+    newer = [catalogues.name_for(18, d(2026, 11, 24)), catalogues.name_for(18, d(2026, 11, 17)),
+             catalogues.name_for(18, d(2026, 11, 10))]
+    older = [catalogues.name_for(17, d(2026, 11, 3)), catalogues.name_for(17, d(2026, 10, 27))]
+    names = newer + older
+    assert catalogues.kept(names, schema=17, now=d(2026, 11, 24)) == set(newer[:2] + older[:1])
+    assert catalogues.kept(names, schema=17, now=d(2026, 11, 24)) == catalogues.kept(names, schema=18,
+                                                                                      now=d(2026, 11, 24))
+    assert catalogues.kept(older, schema=18, now=d(2026, 11, 24)) == set(older[:1])  # the uploader's, when newer
+
+
 def test_a_missing_sidecar_is_none_and_a_corrupt_or_wrongly_typed_one_is_refused(out):
     assert catalogues.published(out) is None
     for text in ["{not json", "[]", '{"file": "x"}', '{"file": "x", "schema": "s", "made": "m", "bytes": 1, '

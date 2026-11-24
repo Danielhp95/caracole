@@ -12,7 +12,9 @@ for which published files stay.
   error of the folder's: it goes on as itself, nothing left behind.
 - ``kept``: the Keep rule, one function, the upload script's (``caracole index publish --kept``).
   A name that isn't a catalogue file is always kept; of the others, the publishing schema's two newest whatever
-  their age, and every other schema's newest while it is no older than ``keep_days``.
+  their age, and every other schema's newest while it is no older than ``keep_days``. Each file's schema is its
+  name's; the publishing schema the newest the names hold or the uploader's, whichever is higher, so an uploader
+  built before a schema bump, beside a service after it, never prunes what one built after it keeps.
 """
 
 from __future__ import annotations
@@ -127,7 +129,8 @@ def published(folder: Path) -> Published | None:
 
 
 def kept(names: Iterable[str], *, schema: int, now: datetime, keep_days: int = KEEP_DAYS) -> set[str]:
-    """Of ``names``, those the Keep rule keeps."""
+    """Of ``names``, those the Keep rule keeps: ``schema`` is the uploader's, and the publishing schema the higher of
+    it and the newest schema the names hold."""
     now = _utc(now)
     out: set[str] = set()
     by_schema: dict[int, list[tuple[datetime, str]]] = {}
@@ -137,9 +140,10 @@ def kept(names: Iterable[str], *, schema: int, now: datetime, keep_days: int = K
             out.add(name)
         else:
             by_schema.setdefault(named.schema, []).append((named.at, name))
+    publishing = max([schema, *by_schema])
     for s, found in by_schema.items():
         found.sort(reverse=True)
-        if s == schema:
+        if s == publishing:
             out.update(n for _, n in found[:2])
         elif now - found[0][0] <= timedelta(days=keep_days):
             out.add(found[0][1])

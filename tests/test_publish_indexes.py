@@ -192,6 +192,19 @@ def test_no_digest_on_the_read_back_keeps_the_upload_and_fails(rig):
     assert rig.gh.names() == [NEW]
 
 
+def test_an_uploader_of_an_older_schema_never_prunes_what_the_newer_schema_keeps(rig):
+    """The release holds a newer schema's files than this caracole's (another caracole published them): the newer
+    schema is the one publishing, so its two newest stay, as its own caracole's upload would keep them."""
+    newer = [name(d, SCHEMA + 1) for d in (1, 2, 3)]
+    for n in newer:
+        rig.gh.asset(n)
+    done = rig.run()
+    assert done.returncode == 0, done.stderr
+    names = rig.gh.names()
+    assert newer[1] in names and newer[2] in names
+    assert newer[0] not in names and f"publish-indexes: pruned {newer[0]}" in done.stdout.splitlines()
+
+
 def big(tmp_path) -> Rig:
     """A rig whose file is 400 KB, so that a slow fake gh's quarters are 100 KB."""
     return Rig(tmp_path, data=random.Random(0).randbytes(400 * 1024))

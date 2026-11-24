@@ -45,7 +45,8 @@ def test_the_names_corpus():
               catalogues.name_for(17, at(2026, 11, 10)), catalogues.name_for(16, at(2026, 11, 3)),
               catalogues.name_for(15, at(2026, 4, 1)), "indexes.json"]
     cases = [(listed, 17, at(2026, 11, 24), 180), (listed, 17, at(2026, 11, 24), 10), (listed, 18, at(2026, 11, 24), 180),
-             (listed[:1], 17, at(2026, 11, 24), 180), (listed[4:5], 17, at(2027, 6, 1), 180), ([], 17, at(2026, 11, 24), 180)]
+             (listed[:1], 17, at(2026, 11, 24), 180), (listed[4:5], 17, at(2027, 6, 1), 180), ([], 17, at(2026, 11, 24), 180),
+             (listed, 16, at(2026, 11, 24), 180)]  # an uploader older than the names: the newest they hold publishes
     for given, schema, now, days in cases:
         out = sorted(catalogues.kept(given, schema=schema, now=now, keep_days=days))
         records.append({"kept": {"names": given, "schema": schema, "now": stamps.stamp(now), "keep_days": days},

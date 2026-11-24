@@ -3790,9 +3790,11 @@ that begins with a machine's root (`/home/`, `/var/`, `/nix/`, `/tmp/`, `/data/`
 
 `--kept NAME` (repeated, once for each name) exports nothing and reads no config, so it answers
 beside a service too. It prints, one a line and each once,
-the names the Keep rule would delete. The rule: this caracole's schema keeps its two newest files
-whatever their age; every other schema keeps its newest for 180 days. A name that isn't a catalogue
-file (`indexes.json`, say) is kept, so never printed.
+the names the Keep rule would delete. The rule: the publishing schema keeps its two newest files
+whatever their age; every other schema keeps its newest for 180 days. Each file's schema is in its
+name, and the publishing schema is this caracole's or the newest among the names, whichever is
+higher. So an upload script built before a schema change never prunes what a newer caracole
+published. A name that isn't a catalogue file (`indexes.json`, say) is kept, so never printed.
 
 If `published.json` is there but can't be read, `publish` refuses (exit 1) and tells you to remove it
 or pass `--force`.
