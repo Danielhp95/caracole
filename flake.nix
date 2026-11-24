@@ -107,6 +107,7 @@
         default = caracole;
         autochords = caracoleAutochords;
         autochords-cuda = caracoleAutochordsCuda;
+        publish-indexes = pkgs.callPackage ./nix/publish-indexes.nix { inherit caracole; };
         dev-python = devPython;
         dev-python-autochords = devPythonAutochords;
       };

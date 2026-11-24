@@ -3755,7 +3755,7 @@ your home database's indexes into a service's, see
 
 ### caracole index publish
 
-    caracole index publish DIR [--force] [--manifest FILE]
+    caracole index publish DIR [--force]
     caracole index publish DIR --kept NAME...
 
 Writes every site's index as one public file in `DIR`: `indexes-s17-20261124T0312Z.sqlite.gz` (the
@@ -3767,11 +3767,6 @@ and each site's rows) and deletes the older `indexes-*.sqlite.gz` in `DIR`. It t
 It exits 1, leaving nothing behind, when the name exists, when UG's index isn't built whole, or
 when a site holds a tenth fewer rows than `published.json` says of the last file. `--force` publishes
 that one anyway.
-
-`--manifest FILE` reads FILE (a release's `indexes.json`, if it exists) and writes the manifest with
-the new file first and the files worth keeping to `FILE.next`. A file is kept when it is not a
-catalogue file, or is the newest of its schema and under 180 days old, or is the second newest of
-this caracole's schema.
 
 `--kept NAME...` exports nothing: it prints, one a line, those NAMEs that rule would delete.
 

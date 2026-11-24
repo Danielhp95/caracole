@@ -109,13 +109,11 @@ def register(app: typer.Typer) -> None:
         folder: Path = typer.Argument(..., metavar="DIR", help="The folder the public file is written in."),
         force: bool = typer.Option(False, "--force", help="Publish even where a site holds a tenth fewer rows "
                                                           "than the last file's."),
-        manifest: Path | None = typer.Option(None, "--manifest", metavar="FILE",
-                                             help="Write FILE's manifest with the new file to FILE.next."),
         kept: list[str] = typer.Option([], "--kept", metavar="NAME",
                                        help="Print those of the NAMEs the Keep rule deletes; exports nothing."),
     ) -> None:
         """Write every site's index as the public, gzipped catalogue file, and its published.json."""
-        _publish(load_cfg(ctx, builds_index="index publish"), folder, force, manifest, kept)
+        _publish(load_cfg(ctx, builds_index="index publish"), folder, force, kept)
 
     @index.command("merge")
     def merge_cmd(
@@ -266,7 +264,7 @@ def _export(cfg: Config, file: Path, sites: list[str]) -> None:
                                for n, table in enumerate(transfer.SITES[name].tables)) + ".")
 
 
-def _publish(cfg: Config, folder: Path, force: bool, manifest: Path | None, kept: list[str]) -> None:
+def _publish(cfg: Config, folder: Path, force: bool, kept: list[str]) -> None:
     from caracole import backup, catalogues, db
 
     now = utcnow()
@@ -285,19 +283,6 @@ def _publish(cfg: Config, folder: Path, force: bool, manifest: Path | None, kept
                f"unpacked):")
     for site, count in made.rows.items():
         typer.echo(f"  {site}: {count:,} rows.")
-    if manifest is not None:
-        import json
-
-        from caracole.library import write_atomic
-
-        try:
-            old = json.loads(manifest.read_text(encoding="utf-8")) if manifest.is_file() else None
-            new = catalogues.manifest_with(old, made, now=now)
-            target = manifest.with_name(manifest.name + ".next")
-            write_atomic(target, (json.dumps(new, indent=2) + "\n").encode("utf-8"))
-        except (OSError, ValueError) as e:
-            fail(f"index publish: manifest: {e}")
-        typer.echo(f"Wrote {target}.")
 
 
 def _merge(cfg: Config, file: Path, sites: list[str], *, delete: bool = False, progress: bool = False) -> None:

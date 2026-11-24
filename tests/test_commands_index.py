@@ -201,16 +201,12 @@ def test_index_publish_prints_the_file_and_its_rows(tmp_path, state):
     built(state)
     out = tmp_path / "pub"
     out.mkdir()
-    manifest = tmp_path / "indexes.json"
 
-    result = invoke(tmp_path, "publish", str(out), "--manifest", str(manifest))
+    result = invoke(tmp_path, "publish", str(out))
 
     assert result.exit_code == 0, result.output
     (gz,) = out.glob("indexes-s*.sqlite.gz")
     assert f"Published {gz}" in result.stdout and "ug: 2 rows." in result.stdout
-    new = json.loads((tmp_path / "indexes.json.next").read_text())
-    assert [e["file"] for e in new["files"]] == [gz.name]
-    assert not manifest.exists()
 
 
 def test_index_publish_exits_1_and_leaves_no_file_when_refused(tmp_path, state):

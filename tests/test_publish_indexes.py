@@ -1,0 +1,165 @@
+"""nix/publish-indexes.sh, run against a fake ``gh`` (helpers/fake_gh.py) and the real
+``caracole index publish --kept``: no test reaches GitHub."""
+
+from __future__ import annotations
+
+import gzip
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+from conftest import subprocess_pythonpath
+from helpers.fake_gh import FakeGh
+
+from caracole import db
+
+ROOT = Path(__file__).resolve().parent.parent
+SCRIPT = ROOT / "nix" / "publish-indexes.sh"
+
+pytestmark = [
+    pytest.mark.slow,
+    pytest.mark.skipif(not (shutil.which("bash") and shutil.which("jq")), reason="needs bash and jq"),
+]
+
+SCHEMA = db.SCHEMA_VERSION
+NEW = f"indexes-s{SCHEMA}-20261124T0312Z.sqlite.gz"
+
+
+def name(day: int, schema: int = SCHEMA) -> str:
+    return f"indexes-s{schema}-202611{day:02d}T0312Z.sqlite.gz"
+
+
+class Rig:
+    def __init__(self, tmp_path: Path):
+        self.tmp = tmp_path
+        self.gh = FakeGh(tmp_path / "bin")
+        caracole = tmp_path / "bin" / "caracole"
+        caracole.write_text(f"#!{sys.executable}\nfrom caracole.cli import main\nmain()\n", encoding="utf-8")
+        caracole.chmod(0o755)
+        self.dir = tmp_path / "out"
+        self.dir.mkdir()
+        self.home = tmp_path / "home"
+        self.home.mkdir()
+        self.data = gzip.compress(b"a small catalogue", mtime=0)
+        (self.dir / NEW).write_bytes(self.data)
+        self.sha = hashlib.sha256(self.data).hexdigest()
+        (self.dir / "published.json").write_text(json.dumps({
+            "file": NEW, "schema": SCHEMA, "made": "2026-11-24T03:12:00Z", "bytes": len(self.data),
+            "raw_bytes": 17, "sha256": self.sha, "sites": {}}), encoding="utf-8")
+
+    def run(self, *args: str, **env: str) -> subprocess.CompletedProcess:
+        full = {**os.environ, "PATH": f"{self.tmp / 'bin'}{os.pathsep}{os.environ['PATH']}",
+                "PYTHONPATH": subprocess_pythonpath(ROOT / "src"), "HOME": str(self.home),
+                "XDG_CONFIG_HOME": str(self.home), "XDG_STATE_HOME": str(self.home), "XDG_CACHE_HOME": str(self.home),
+                "XDG_DATA_HOME": str(self.home), "CARACOLE_SERVICE_FILE": str(self.tmp / "no-service"),
+                "REPO": "o/r", "TAG": "indexes", **env}
+        full.pop("GH_TOKEN", None) if "GH_TOKEN" not in env else None
+        return subprocess.run(["bash", str(SCRIPT), *args, str(self.dir)], env=full, capture_output=True, text=True,
+                              timeout=120)
+
+
+@pytest.fixture
+def rig(tmp_path):
+    return Rig(tmp_path)
+
+
+def test_a_first_publish_makes_the_release_not_latest_and_uploads(rig):
+    done = rig.run()
+    assert done.returncode == 0, done.stderr
+    rig.gh.load()
+    assert "--latest=false" in rig.gh.state["release"]["args"]
+    assert rig.gh.names() == [NEW]
+
+
+def test_a_half_upload_left_behind_is_deleted_first(rig):
+    rig.gh.asset(name(10), state="starter").asset(name(11))
+    done = rig.run()
+    assert done.returncode == 0, done.stderr
+    assert name(10) not in rig.gh.names()
+    assert NEW in rig.gh.names()
+
+
+def test_an_existing_name_is_refused(rig):
+    rig.gh.asset(NEW, b"another file").asset(name(11))
+    done = rig.run()
+    assert done.returncode == 1
+    assert "different file" in done.stderr
+    assert rig.gh.names() == sorted([NEW, name(11)])
+
+
+def test_the_same_file_again_is_already_published(rig):
+    rig.gh.asset(NEW, rig.data)
+    done = rig.run()
+    assert done.returncode == 0
+    assert "already published" in done.stdout
+    assert not [c for c in rig.gh.calls() if c["argv"][:2] == ["release", "upload"]]
+
+
+def test_a_digest_that_differs_is_deleted_and_fails(rig):
+    rig.gh.release()
+    rig.gh.state["corrupt_upload"] = True
+    rig.gh.save()
+    done = rig.run()
+    assert done.returncode == 1
+    assert "digest" in done.stderr
+    assert rig.gh.names() == []
+
+
+def test_pruning_deletes_only_what_the_keep_rule_names(rig):
+    old = [name(d) for d in (1, 2, 3)]
+    for n in old:
+        rig.gh.asset(n)
+    rig.gh.asset("indexes.json", b"{}").asset("notes.txt")
+    done = rig.run()
+    assert done.returncode == 0, done.stderr
+    # the schema's two newest stay (the new file and the 3rd), the others go; names that aren't files stay
+    assert rig.gh.names() == sorted([NEW, name(3), "indexes.json", "notes.txt"])
+
+
+def test_a_failed_upload_leaves_last_weeks_file_listed(rig):
+    rig.gh.asset(name(17))
+    done = rig.run(FAKE_GH_FAIL="upload:1")
+    assert done.returncode == 1
+    assert "can't be uploaded" in done.stderr
+    assert rig.gh.names() == [name(17)]
+
+
+def test_the_manifest_is_swapped_by_two_renames(rig):
+    rig.gh.asset(name(17), b"last week").asset("indexes.json", b'{"old": 1}')
+    done = rig.run("--manifest")
+    assert done.returncode == 0, done.stderr
+    assert rig.gh.names() == sorted([NEW, name(17), "indexes.json"])
+    manifest = json.loads(rig.gh.content("indexes.json"))
+    assert manifest["format"] == 1
+    assert [f["file"] for f in manifest["files"]] == [NEW, name(17)]
+    first = manifest["files"][0]
+    assert first["made"] == "2026-11-24T03:12:00Z"
+    assert first["sha256"] == rig.sha and first["bytes"] == len(rig.data) and first["schema"] == SCHEMA
+    assert manifest["files"][1]["made"] == "2026-11-17T03:12:00Z"
+    rig.gh.load()
+    mutating = [c["argv"] for c in rig.gh.calls() if c["argv"][0] == "api" and "-X" in c["argv"]]
+    assert [a[a.index("-X") + 1] for a in mutating] == ["PATCH", "PATCH", "DELETE"]
+
+
+def test_a_run_dead_between_the_renames_is_mended_by_the_next(rig):
+    rig.gh.asset("indexes.json", b'{"old": 1}')
+    dead = rig.run("--manifest", FAKE_GH_FAIL="api:2")
+    assert dead.returncode == 1
+    assert "indexes.json.prev" in rig.gh.names() and "indexes.json" not in rig.gh.names()
+    again = rig.run("--manifest")
+    assert again.returncode == 0, again.stderr
+    names = rig.gh.names()
+    assert "indexes.json" in names
+    assert not [n for n in names if n.endswith((".prev", ".next"))]
+
+
+def test_a_token_file_is_used_when_named(rig):
+    token = rig.tmp / "token"
+    token.write_text("secret-token\n", encoding="utf-8")
+    assert rig.run(GH_TOKEN_FILE=str(token)).returncode == 0
+    assert {c["token"] for c in rig.gh.calls()} == {"secret-token"}

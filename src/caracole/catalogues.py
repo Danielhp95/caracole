@@ -1,5 +1,5 @@
 """The public catalogue file: ``caracole index publish DIR`` writes every site's index, gzipped, under a name that
-holds its schema and its minute, with a sidecar (``published.json``) and, for the manifest a release serves, the rule
+holds its schema and its minute, with a sidecar (``published.json``) and the rule
 for which published files stay.
 
 - ``indexes-s17-20261124T0312Z.sqlite.gz``: ``name_for`` and ``read_name``. The gzip is made with no name and a
@@ -8,9 +8,9 @@ for which published files stay.
   ``PRAGMA quick_check``, gzip -9 streamed while hashed, renamed into place, ``published.json`` written, the
   folder's older files deleted. Refused (``PublishError``, nothing left behind) for a name that exists, a UG index
   not built whole, or a site holding a tenth fewer rows than the last file's, unless ``last`` is None (--force).
-- ``kept``: the Keep rule, one function for the script (``caracole index publish --kept``) and ``manifest_with``.
-  A name that isn't a catalogue file is always kept; of the others, each schema's newest while it is no older than
-  ``keep_days``, and the publishing schema's second newest, whatever its age.
+- ``kept``: the Keep rule, one function, the upload script's (``caracole index publish --kept``).
+  A name that isn't a catalogue file is always kept; of the others, the publishing schema's two newest whatever
+  their age, and every other schema's newest while it is no older than ``keep_days``.
 """
 
 from __future__ import annotations
@@ -104,19 +104,11 @@ def kept(names: Iterable[str], *, schema: int, now: datetime, keep_days: int = K
             by_schema.setdefault(named.schema, []).append((named.at, name))
     for s, found in by_schema.items():
         found.sort(reverse=True)
-        if now - found[0][0] <= timedelta(days=keep_days):
+        if s == schema:
+            out.update(n for _, n in found[:2])
+        elif now - found[0][0] <= timedelta(days=keep_days):
             out.add(found[0][1])
-        if s == schema and len(found) > 1:
-            out.add(found[1][1])
     return out
-
-
-def manifest_with(manifest: dict | None, new: Published, *, keep_days: int = KEEP_DAYS, now: datetime) -> dict:
-    """``{"format": 1, "files": [...]}``: ``new`` first, then the manifest's other entries the Keep rule keeps."""
-    old = [e for e in (manifest or {}).get("files", []) if isinstance(e, dict) and e.get("file") != new.name]
-    names = [new.name] + [str(e.get("file")) for e in old]
-    keep = kept(names, schema=new.schema, now=now, keep_days=keep_days)
-    return {"format": 1, "files": [new.as_json()] + [e for e in old if str(e.get("file")) in keep]}
 
 
 def publish(conn: sqlite3.Connection, folder: Path, *, now: datetime, last: Published | None) -> Published:

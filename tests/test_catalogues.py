@@ -1,4 +1,4 @@
-"""catalogues.py: the public catalogue file's name, its gzip and sidecar, the Keep rule and the manifest."""
+"""catalogues.py: the public catalogue file's name, its gzip and sidecar, the Keep rule."""
 
 from __future__ import annotations
 
@@ -93,12 +93,7 @@ def test_the_keep_rule():
     assert catalogues.kept(names, schema=17, now=d(2026, 11, 24)) == set(names[:2] + [names[3], "indexes.json"])
 
 
-def test_a_manifest_lists_the_new_file_first_and_the_kept_ones():
-    old = [catalogues.Published(catalogues.name_for(s, at), s, "m", 1, 2, "h", {"ug": 1}).as_json()
-           for s, at in [(17, d(2026, 11, 17)), (17, d(2026, 11, 10)), (15, d(2026, 4, 1))]]
-    new = catalogues.Published(catalogues.name_for(17, d(2026, 11, 24)), 17, "m", 3, 4, "n", {"ug": 2})
-    out = catalogues.manifest_with({"format": 1, "files": old}, new, now=d(2026, 11, 24))
-    assert out["format"] == 1
-    assert [e["file"] for e in out["files"]] == [new.name, old[0]["file"]]
-    assert out["files"][0] == new.as_json()
-    assert catalogues.manifest_with(None, new, now=d(2026, 11, 24))["files"] == [new.as_json()]
+def test_the_publishing_schemas_two_newest_stay_whatever_their_age():
+    names = [catalogues.name_for(17, d(2025, 1, 10)), catalogues.name_for(17, d(2025, 1, 3)),
+             catalogues.name_for(17, d(2024, 12, 27)), catalogues.name_for(16, d(2025, 1, 1))]
+    assert catalogues.kept(names, schema=17, now=d(2026, 11, 24)) == set(names[:2])
