@@ -728,7 +728,6 @@ in
       timerConfig = {
         OnCalendar = cfg.publish.calendar;
         Persistent = true;
-        RandomizedDelaySec = "30m";
       };
     };
 
