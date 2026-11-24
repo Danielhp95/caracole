@@ -6,7 +6,7 @@ for which published files stay.
   time of 0, so the same export is the same bytes.
 - ``publish``: ``index_transfer.export`` (``PUBLIC_OMIT``: nothing private) into a temporary file in the folder,
   ``PRAGMA quick_check``, gzip -9 streamed while hashed, renamed into place, ``published.json`` written, the
-  folder's older files deleted. Refused (``PublishError``, nothing left behind) for a name that exists, a UG index
+  folder's older files deleted, each step told to ``progress`` as it goes (``Progress``). Refused (``PublishError``, nothing left behind) for a name that exists, a UG index
   not built whole, or a site holding a tenth fewer rows than the last file's, unless ``last`` is None (--force).
 - ``kept``: the Keep rule, one function, the upload script's (``caracole index publish --kept``).
   A name that isn't a catalogue file is always kept; of the others, the publishing schema's two newest whatever
@@ -40,6 +40,30 @@ _STAMP = "%Y%m%dT%H%MZ"
 
 class PublishError(Exception):
     """A publication refused, nothing left behind: its words say why."""
+
+
+class Progress:
+    """What ``publish`` tells as it goes, here told to no one: commands/index.py's ``_Publishing`` puts it into words.
+
+    ``exporting`` as the export starts, ``copied`` after each table (``index_transfer.export``'s), ``omitting``
+    before what stays private is left out, ``checking`` before the path guard and SQLite's quick check, then
+    ``compressing`` with the bytes of the unpacked export read so far and its size: once at 0, then a chunk at a
+    time. None of them changes what is written."""
+
+    def exporting(self) -> None:
+        pass
+
+    def copied(self, table: str, rows: int) -> None:
+        pass
+
+    def omitting(self) -> None:
+        pass
+
+    def checking(self) -> None:
+        pass
+
+    def compressing(self, done: int, total: int) -> None:
+        pass
 
 
 @dataclass(frozen=True)
@@ -121,11 +145,12 @@ def kept(names: Iterable[str], *, schema: int, now: datetime, keep_days: int = K
 
 
 def publish(conn: sqlite3.Connection, folder: Path, *, now: datetime, last: Published | None,
-            private: Sequence[str] = ()) -> Published:
+            private: Sequence[str] = (), progress: Progress | None = None) -> Published:
     from caracole import db, stamps
     from caracole import index_transfer as transfer
     from caracole.ug.index import BUILT_KEY
 
+    told = progress if progress is not None else Progress()
     now = _utc(now)
     name = name_for(db.SCHEMA_VERSION, now)
     target = folder / name
@@ -138,10 +163,13 @@ def publish(conn: sqlite3.Connection, folder: Path, *, now: datetime, last: Publ
     part = folder / f".{name}.{token}.part"
     side = folder / f".{SIDECAR}.{token}"
     try:
+        told.exporting()
         try:
-            exported = transfer.export(conn, raw, now=now, omit=transfer.PUBLIC_OMIT)
+            exported = transfer.export(conn, raw, now=now, omit=transfer.PUBLIC_OMIT, copied=told.copied,
+                                       omitting=told.omitting)
         except transfer.TransferError as e:
             raise PublishError(str(e)) from e
+        told.checking()
         _no_paths(raw, [*private, "/nix/store/", *_database(conn)])
         rows = {site: exported.rows[transfer.SITES[site].tables[0]] for site in exported.sites}
         if last is not None:
@@ -159,9 +187,13 @@ def publish(conn: sqlite3.Connection, folder: Path, *, now: datetime, last: Publ
         digest = hashlib.sha256()
         with open(part, "wb") as out, open(raw, "rb") as src:
             hashed = _Hashing(out, digest)
+            total, done = exported.size, 0
+            told.compressing(done, total)
             with gzip.GzipFile(filename="", mode="wb", compresslevel=9, mtime=0, fileobj=hashed) as gz:
                 while chunk := src.read(CHUNK):
                     gz.write(chunk)
+                    done += len(chunk)
+                    told.compressing(done, total)
             out.flush()
             os.fsync(out.fileno())
         result = Published(name, db.SCHEMA_VERSION, stamps.stamp(now), part.stat().st_size, exported.size,

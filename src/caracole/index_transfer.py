@@ -220,13 +220,19 @@ def chosen(names: Iterable[str] | None, among: Sequence[str] | None = None) -> t
 
 
 def export(conn: sqlite3.Connection, path: Path, sites: Iterable[str] | None = None, *, now: datetime,
-           pages: Mapping[str, Sequence[str]] | None = None, omit: Sequence[Omit] = ()) -> Exported:
+           pages: Mapping[str, Sequence[str]] | None = None, omit: Sequence[Omit] = (),
+           copied: Callable[[str, int], None] | None = None,
+           omitting: Callable[[], None] | None = None) -> Exported:
     """The indexes of ``sites`` (every one with none) into a new file at ``path``, in one read transaction; a file
     there already, or the database itself, is refused. Written under a name of its own, then renamed.
 
     With ``pages`` (``{site: [page, …]}``, a lookup's reads: none of ``sites`` then), those sites alone, each table
     of theirs holding only those pages' rows (``PAGES``) and the kv only their keys records; with no site at all for
-    an empty one."""
+    an empty one.
+
+    ``copied(table, rows)``, after each table is copied, in the export's order, with the rows copied (before
+    ``omit`` leaves any out); ``omitting()``, before the rows ``omit`` names are deleted and the file compacted. Both
+    tell, and change nothing of what is written (``caracole index publish``'s progress)."""
     if omit and pages is not None:
         raise TransferError("an export of pages omits nothing")
     if pages is not None:
@@ -252,8 +258,10 @@ def export(conn: sqlite3.Connection, path: Path, sites: Iterable[str] | None = N
     tables = [t for n in names for t in SITES[n].tables]
     keys = [k for n in names for k in (SITES[n].kv if chosen_pages is None else PAGES[n].kv)]
     try:
-        _write_export(conn, part, names, tables, keys, now, chosen_pages)
+        _write_export(conn, part, names, tables, keys, now, chosen_pages, copied)
         if omit:
+            if omitting is not None:
+                omitting()
             _omit(part, omit)
         os.replace(part, path)
     except (OSError, sqlite3.Error) as e:
@@ -282,7 +290,8 @@ def _omit(part: Path, omit: Sequence[Omit]) -> None:
 
 def _write_export(conn: sqlite3.Connection, part: Path, names: Sequence[str], tables: Sequence[str],
                   keys: Sequence[str], now: datetime,
-                  pages: Mapping[str, tuple[str, list[str]]] | None = None) -> None:
+                  pages: Mapping[str, tuple[str, list[str]]] | None = None,
+                  copied: Callable[[str, int], None] | None = None) -> None:
     """The export's tables, as the database has them, made in a file of their own, then filled from the
     database in one transaction: one snapshot of it for every table, a consistent copy. With ``pages`` (a table's
     column and the pages it names, by table), only those pages' rows, and no row of a table it doesn't name, each
@@ -309,13 +318,16 @@ def _write_export(conn: sqlite3.Connection, part: Path, names: Sequence[str], ta
         try:
             for table in tables:
                 cols = ", ".join(_columns(conn, "main", table))
+                n = 0
                 if pages is None:
-                    conn.execute(f"INSERT INTO exported.{table} ({cols}) SELECT {cols} FROM main.{table}")
+                    n = conn.execute(f"INSERT INTO exported.{table} ({cols}) SELECT {cols} FROM main.{table}").rowcount
                 elif table in pages:
                     column, named = pages[table]
-                    conn.execute(f"INSERT INTO exported.{table} ({cols}) SELECT {cols} FROM main.{table} "
-                                 f"WHERE {column} IN (SELECT value FROM json_each(?)) ORDER BY rowid",
-                                 (json.dumps(named),))
+                    n = conn.execute(f"INSERT INTO exported.{table} ({cols}) SELECT {cols} FROM main.{table} "
+                                     f"WHERE {column} IN (SELECT value FROM json_each(?)) ORDER BY rowid",
+                                     (json.dumps(named),)).rowcount
+                if copied is not None:
+                    copied(table, n)
             marks = ", ".join("?" for _ in keys)
             conn.execute(f"INSERT INTO exported.kv (key, value) SELECT key, value FROM main.kv WHERE key IN "
                          f"({marks})" + ("" if pages is None else " ORDER BY key"), list(keys))

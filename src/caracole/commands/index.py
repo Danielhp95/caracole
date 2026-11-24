@@ -24,6 +24,9 @@ queues ``merge --delete --progress -- FILE`` for the index pages a phone posted
 (``POST /peer/index``): its stage as JSON lines, the lock waited for as a lookup
 waits, and FILE deleted once it is merged, or refused as it was staged (never a
 file named by hand: ``--delete`` deletes a refused one only from serve's staging).
+
+``publish`` writes the public catalogue file (catalogues.py) and says what it does as it goes (``_Publishing``):
+the export, each site's rows, the check and the gzip, on a terminal one live line, in a journal plain lines.
 """
 
 from __future__ import annotations
@@ -281,17 +284,87 @@ def _publish(cfg: Config, folder: Path, force: bool) -> None:
     from caracole import backup, catalogues
 
     now = utcnow()
+    out = console()
     with closing(open_db(cfg)) as conn:
         try:
             last = None if force else catalogues.published(folder)
             made = catalogues.publish(conn, folder, now=now, last=last, private=[
-                str(p) for p in (cfg.state_dir, cfg.library_dir, cfg.cache_dir, cfg.music_dir, Path.home())])
+                str(p) for p in (cfg.state_dir, cfg.library_dir, cfg.cache_dir, cfg.music_dir, Path.home())],
+                progress=_Publishing(out, folder))
         except catalogues.PublishError as e:
+            out.close()
             fail(f"index publish: {e}")
-    typer.echo(f"Published {folder / made.name} ({backup.size_text(made.bytes)}, {backup.size_text(made.raw_bytes)} "
-               f"unpacked):")
+        except BaseException:
+            out.close()
+            raise
+    out.say(f"Published {folder / made.name} ({backup.size_text(made.bytes)}, {backup.size_text(made.raw_bytes)} "
+            f"unpacked):")
     for site, count in made.rows.items():
-        typer.echo(f"  {site}: {count:,} rows.")
+        out.say(f"  {site}: {count:,} rows.")
+
+
+class _Publishing:
+    """What ``caracole index publish`` prints as it goes (``catalogues.Progress``'s steps, put into words).
+
+    A line as the export starts; each site's tables and rows once they are copied, the next site's copy under way
+    on a terminal's live line; leaving out what stays private; the check; then the gzip, "Compressing · 31 of 75
+    MB", by the bytes of the unpacked export read: on a terminal the live line, rewritten at most every
+    ``LIVE_EVERY`` seconds (and at its end), anywhere else (a journal) a line as each quarter is passed."""
+
+    LIVE_EVERY = 0.25
+
+    def __init__(self, console: Console, folder: Path) -> None:
+        from caracole import index_transfer as transfer
+
+        self.console = console
+        self.folder = folder
+        self._sites = list(transfer.SITES.values())
+        self._rows: dict[str, int] = {}
+        self._shown_at: float | None = None
+        self._quarter = 0
+
+    def exporting(self) -> None:
+        self.console.note(f"Exporting every site's index into {self.folder}...")
+        self._copying()
+
+    def copied(self, table: str, rows: int) -> None:
+        self._rows[table] = rows
+        while self._sites and all(t in self._rows for t in self._sites[0].tables):
+            site = self._sites.pop(0)
+            self.console.step(f"  {site.title}: " + ", ".join(
+                f"{t} {self._rows[t]:,}" + (" rows" if n == 0 else "") for n, t in enumerate(site.tables)) + ".")
+            self._copying()
+
+    def _copying(self) -> None:
+        if self._sites:
+            self.console.status(f"Copying {self._sites[0].title}'s index...")
+
+    def omitting(self) -> None:
+        self.console.step("Leaving out what stays private, and compacting the export...")
+
+    def checking(self) -> None:
+        self.console.step("Checking the export: no path of this machine in it, then SQLite's quick check...")
+
+    def compressing(self, done: int, total: int) -> None:
+        line = f"Compressing \u00b7 {_amount(done, total)}"
+        if self.console.live:
+            now = clock()
+            if done >= total or self._shown_at is None or now - self._shown_at >= self.LIVE_EVERY:
+                self._shown_at = now
+                self.console.status(line)
+            return
+        quarter = 4 if done >= total else done * 4 // total
+        if quarter > self._quarter:
+            self._quarter = quarter
+            self.console.step(line)
+
+
+def _amount(done: int, total: int) -> str:
+    """"31 of 75 MB": the two in the unit of the larger, as ``backup.size_text`` picks it."""
+    for unit, scale, places in (("GB", 1 << 30, 1), ("MB", 1 << 20, 0), ("KB", 1 << 10, 0)):
+        if total >= scale:
+            return f"{done / scale:.{places}f} of {total / scale:.{places}f} {unit}"
+    return f"{done:,} of {total:,} bytes"
 
 
 def _merge(cfg: Config, file: Path, sites: list[str], *, delete: bool = False, progress: bool = False) -> None:
