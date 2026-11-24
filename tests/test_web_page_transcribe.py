@@ -278,6 +278,33 @@ def test_a_transcription_that_failed_on_the_gpu_is_offered_again(able, live, tra
     assert browser.js(NO_RELOAD)
 
 
+def test_a_transcription_asked_in_the_requests_tab_that_failed_is_offered_there_again(able, live, transcriber,
+                                                                                      browser):
+    # Pressed on the Journal's Ready request, then failed on the GPU: the song stays offered, and the Journal offers
+    # it again as its card does, with no reload (library.js's word, read again once the job is over).
+    base, posted, queue = live
+    song = transcriber.song
+    transcriber.fail = True
+    sheet, _ = queue.submit(f"Sheet from YouTube: {DISPLAY}", YOUTUBE_SHEET + song.key,
+                            youtube_sheet_steps(DISPLAY, "https://www.youtube.com/watch?v=XFkzRNyygfk"),
+                            display=DISPLAY)
+    over(queue, sheet.id)
+    offer = json.dumps(f"#req-{sheet.id} form.transcribe")
+    browser.open(base + "#tab=requests")
+    browser.js("window.notReloaded = true")
+    assert browser.wait(f"document.querySelector({offer}) !== null")
+    browser.click(f"#req-{sheet.id}" + ' form.transcribe button[type="submit"]')
+    posted.next(0)
+    assert browser.wait(f"document.querySelector({offer}) === null")
+    transcriber.hold.set()
+    read_again(posted)
+    assert browser.wait(f"document.querySelector({offer}) !== null", timeout=10)
+    assert browser.js(NO_RELOAD)
+    browser.click("#tab-library")
+    card = opened(browser, song)
+    assert browser.wait(f"document.querySelector({json.dumps(card + ' form.transcribe')}) !== null")
+
+
 def test_a_ready_request_of_a_song_offered_when_the_page_loaded_offers_it_in_the_requests_tab(able, live, transcriber,
                                                                                              browser):
     # A sheet from YouTube over, chords only, before the page loads (or after a reload): its request offers the
