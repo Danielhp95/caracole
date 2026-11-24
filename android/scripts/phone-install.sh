@@ -39,11 +39,16 @@ done
 adb_bin="${ADB:-$(command -v adb || true)}"
 [ -n "$adb_bin" ] || adb_bin="$(nix develop "$android#emulator" -c sh -c 'command -v adb')"
 
-# 1. The device, before the build: its serial and state, one a line.
-devices="$("$adb_bin" devices | awk 'NR > 1 && NF >= 2 { print $1, $2 }')"
+# 1. The device, before the build: its serial and state, one a line, read after adb's header alone (an adb server
+# that starts says so first: "* daemon not running; starting now", "* daemon started successfully").
+devices="$("$adb_bin" devices | awk '/^List of devices attached/ { listing = 1; next } listing && NF >= 2 { print $1, $2 }')"
 listed() {
-    if [ -z "$devices" ]; then echo "  (none: connect one, android/README.md says how)"
-    else sed 's/^/  /' <<<"$devices"; fi
+    if [ -z "$devices" ]; then
+        echo "  (none: connect one, android/README.md says how)"
+        return
+    fi
+    # shellcheck disable=SC2001  # every line indented: a parameter expansion has no anchor at a line's start
+    sed 's/^/  /' <<<"$devices"
 }
 if [ -n "$serial" ]; then
     state="$(awk -v s="$serial" '$1 == s { print $2; exit }' <<<"$devices")"
@@ -74,11 +79,15 @@ built="$(meta_of applicationId)"
 [ "$built" = "$package" ] || code=4 fail "the APK built is ${built:-of no package}, not $package: nothing installed."
 
 # 3. Installed for the phone's own user alone.
-if ! "$adb_bin" -s "$serial" install -r --user 0 "$apk"; then
-    fail "not installed. A debug build signed with another machine's key installs over none: remove it first with
+if ! said="$("$adb_bin" -s "$serial" install -r --user 0 "$apk" 2>&1)"; then
+    fail "not installed. adb said:
+$(sed 's/\r$//; s/^/  /' <<<"$said")
+Often a debug build signed with another machine's key is installed already, and none installs over it: then remove
+it with
   adb -s $serial uninstall --user 0 $package
-(its library goes with it), then run this again."
+(its library goes with it) and run this again."
 fi
+echo "${said//$'\r'/}" >&2
 version="$("$adb_bin" -s "$serial" shell dumpsys package "$package" | tr -d '\r' \
     | sed -n 's/^ *versionName=\(.*\)$/\1/p' | head -n 1)"
 echo "Installed $package ${version:-$(meta_of versionName)} on $serial."

@@ -26,8 +26,9 @@ if not SCRIPT.exists():  # the package build's tree: pyproject.toml, README.md, 
 
 pytestmark = [pytest.mark.slow, pytest.mark.skipif(not shutil.which("bash"), reason="needs bash")]
 
-# The fake adb: `devices` lists FAKE_ADB_DEVICES ("serial state" a line); `install` says Success unless
-# FAKE_ADB_INSTALL fails it; `shell dumpsys package P` names P's versionName; every call logged to calls.jsonl.
+# The fake adb: `devices` lists FAKE_ADB_DEVICES ("serial state" a line), after an adb server's start-up lines when
+# FAKE_ADB_NOISE is set; `install` says Success unless FAKE_ADB_INSTALL names its Failure; `shell dumpsys package P`
+# names P's versionName; every call logged to calls.jsonl.
 ADB = r'''
 import json, os, sys
 from pathlib import Path
@@ -36,6 +37,9 @@ argv = sys.argv[1:]
 with open(here / "calls.jsonl", "a") as log:
     log.write(json.dumps({"tool": "adb", "argv": argv}) + "\n")
 if argv == ["devices"]:
+    if os.environ.get("FAKE_ADB_NOISE"):
+        print("* daemon not running; starting now at tcp:5037")
+        print("* daemon started successfully")
     print("List of devices attached")
     for line in os.environ.get("FAKE_ADB_DEVICES", "").splitlines():
         if line.strip():
@@ -45,8 +49,9 @@ if argv == ["devices"]:
     sys.exit(0)
 rest = argv[2:] if argv[:1] == ["-s"] else argv
 if rest[:1] == ["install"]:
-    if os.environ.get("FAKE_ADB_INSTALL") == "fail":
-        print("Failure [INSTALL_FAILED_UPDATE_INCOMPATIBLE: signatures do not match]")
+    if os.environ.get("FAKE_ADB_INSTALL"):
+        print("Performing Streamed Install\r")
+        print(f"adb: failed to install app-debug.apk: Failure [{os.environ['FAKE_ADB_INSTALL']}]\r")
         sys.exit(1)
     print("Performing Streamed Install\r\nSuccess\r")
     sys.exit(0)
@@ -188,11 +193,37 @@ def test_no_call_names_the_release_package(rig):
             assert word != RELEASE and not word.startswith(RELEASE + "/"), call
 
 
-def test_an_install_that_fails_says_how_to_remove_the_other_build(rig):
-    done = rig.run(devices=f"{PHONE} device", FAKE_ADB_INSTALL="fail")
+@pytest.mark.parametrize("failure", [
+    "INSTALL_FAILED_UPDATE_INCOMPATIBLE: Existing package io.github.danielhp95.caracole.debug signatures do not match "
+    "newer version; ignoring!",
+    "INSTALL_FAILED_INSUFFICIENT_STORAGE",
+])
+def test_an_install_that_fails_says_what_adb_said_and_what_often_causes_it(rig, failure):
+    done = rig.run(devices=f"{PHONE} device", FAKE_ADB_INSTALL=failure)
     assert done.returncode == 1
+    assert f"  adb: failed to install app-debug.apk: Failure [{failure}]\n" in done.stderr, "adb's own words, whole"
+    assert "\r" not in done.stderr
+    assert "Often a debug build signed with another machine's key" in done.stderr
     assert f"adb -s {PHONE} uninstall --user 0 {DEBUG}" in done.stderr
     assert not any("dumpsys" in c for c in rig.calls("adb"))
+
+
+def test_an_adb_server_starting_says_so_before_the_list_and_none_of_it_is_a_device(rig):
+    done = rig.run(devices=f"emulator-5554 device\n{PHONE} device", FAKE_ADB_NOISE="1")
+    assert done.returncode == 0, done.stderr
+    assert ["-s", PHONE, "install", "-r", "--user", "0", rig.apk] in rig.calls("adb")
+    several = rig.run(devices=f"{PHONE} device\n{OTHER} device", FAKE_ADB_NOISE="1")
+    assert several.returncode == 3
+    listed = several.stderr.split("adb lists:\n", 1)[1]
+    assert listed.splitlines() == [f"  {PHONE} device", f"  {OTHER} device"]
+    alone = rig.run(devices="", FAKE_ADB_NOISE="1")
+    assert alone.returncode == 3 and "(none" in alone.stderr and "daemon" not in alone.stderr
+
+
+@pytest.mark.skipif(not shutil.which("shellcheck"), reason="needs shellcheck")
+def test_shellcheck_finds_nothing():
+    done = subprocess.run(["shellcheck", str(SCRIPT)], capture_output=True, text=True, timeout=60)
+    assert done.returncode == 0, done.stdout
 
 
 def test_an_unknown_argument_prints_the_usage(rig):
