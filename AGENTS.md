@@ -2085,7 +2085,7 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   (`Syncs.run`: `Phone.sync.alone`, a notification on channel `syncs` for the conflicts it left); the queue's work, a
   sync among it, in a foreground service (`SyncService`).
   - Its debug build is an app of its own beside F-Droid's release (`io.github.danielhp95.caracole`, the release key):
-    `io.github.danielhp95.caracole.debug` (`applicationIdSuffix`, versionName `…-debug`), "caracole debug" with an
+    `io.github.danielhp95.caracole.debug` (`applicationIdSuffix`, versionName `…-debug`), "Debug caracole" with an
     amber icon and a DEBUG mark (src/debug/res), its own data and port, its tests
     `io.github.danielhp95.caracole.debug.test`; the classes stay in `io.github.danielhp95.caracole` (the namespace).
     `android/scripts/phone-install.sh` builds a checkout's and installs it on a real phone (tests/test_phone_install.py).

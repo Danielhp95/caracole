@@ -34,6 +34,11 @@ settings, a file read from the phone's server for another app, an index fetched 
 
 ## Install
 
+A phone with an old debug build under the release's package (`io.github.danielhp95.caracole`, signed with your debug
+key) must lose it before F-Droid's caracole can install: sync its library to the computer first, since uninstalling
+deletes its data, then `adb uninstall --user 0 io.github.danielhp95.caracole`. Debug builds made since are an app of
+their own ([below](#your-phone-f-droid-and-a-debug-build-side-by-side)).
+
 1. **Install the app**, from F-Droid or from a build of your own:
    - **From F-Droid** (signed releases, updated by F-Droid): in the F-Droid app, Settings › Repositories › **+**,
      then scan or paste
@@ -42,7 +47,7 @@ settings, a file read from the phone's server for another app, an index fetched 
      link. caracole then appears in F-Droid's list: install it from there. The fingerprint makes F-Droid check that
      the repository's index is the one signed with its key. The APKs are signed with caracole's release key, whose
      certificate's SHA-256 is `332c457ddadd0c7a2f2b7d880c827fec23cd2ab143f21a2f38c759d47b48a8f1`.
-   - **Your own debug APK**, which [Build](#build) made, "caracole debug", installed beside F-Droid's
+   - **Your own debug APK**, which [Build](#build) made, "Debug caracole", installed beside F-Droid's
      ([below](#your-phone-f-droid-and-a-debug-build-side-by-side)):
      - with USB or wireless debugging on: `android/scripts/phone-install.sh`, or
        `adb install -r android/app/build/outputs/apk/debug/app-debug.apk` (`-r` keeps the app's data when it is
@@ -59,9 +64,7 @@ settings, a file read from the phone's server for another app, an index fetched 
    computer off](#search-with-the-computer-off)).
 
 The debug APK is signed with your machine's debug key (`~/.android/debug.keystore`), F-Droid's with the release
-key, and they are two apps: `io.github.danielhp95.caracole.debug` and `io.github.danielhp95.caracole`. A debug APK
-built before they were two had the release's package and blocks F-Droid's: uninstall it first. That deletes its copy
-of the library: sync it first, and a sync after the install brings it back.
+key, and they are two apps: `io.github.danielhp95.caracole.debug` and `io.github.danielhp95.caracole`.
 
 ## Your phone: F-Droid and a debug build side by side
 
@@ -80,7 +83,7 @@ F-Droid's caracole and a debug build of any checkout install at once, and neithe
    It installs for the phone's own user alone (`adb install -r --user 0`), so the phone's other users keep what they
    have, and it never touches F-Droid's caracole. It ends by saying the version installed, `0.3.0-debug`.
 
-**Telling them apart**: the debug build is "caracole debug" in the launcher, the share sheet and its notifications,
+**Telling them apart**: the debug build is "Debug caracole" in the launcher, the share sheet and its notifications,
 and its icon is amber, the logo smaller over a red DEBUG mark. Its server is on 127.0.0.1:8739, the release's on
 8738, so both can run at once.
 
@@ -88,7 +91,7 @@ and its icon is amber, the logo smaller over a red DEBUG mark. Its server is on 
 the bar's sync button), or import a file the computer or the other app exported (Settings › Import a file). Both can
 sync with the same computer, as two phones would.
 
-**Removing it**: `adb uninstall --user 0 io.github.danielhp95.caracole.debug`, or uninstall "caracole debug" on the
+**Removing it**: `adb uninstall --user 0 io.github.danielhp95.caracole.debug`, or uninstall "Debug caracole" on the
 phone. Its library goes with it; F-Droid's caracole keeps its own.
 
 ## Release
@@ -195,7 +198,7 @@ again, and the next sync brings them to the phone.
 ## Search with the computer off
 
 The app runs caracole's own rules (android/core and android/server) on the phone. Its server listens on
-`http://127.0.0.1:8738`, or another free port when that one is taken. The WebView loads the library page from it:
+`http://127.0.0.1:8738` (a debug build on 8739), or another free port when that one is taken. The WebView loads the library page from it:
 caracole's own page, built from the same files caracole serve builds it from, each of your songs' cards made from
 the phone's own library as caracole serve makes it. Sheets, PDFs and songbooks are the copy's files where the phone
 holds the song as the computer did, else the pages the phone makes itself.
