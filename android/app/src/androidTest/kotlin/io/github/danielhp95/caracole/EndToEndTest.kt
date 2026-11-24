@@ -162,6 +162,7 @@ class EndToEndTest {
 
             // Its script runs: one semitone up changes the key and the chords shown, and the address keeps it.
             val shown = "JSON.stringify({key: document.getElementById('key-now').textContent, " +
+                "moved: document.querySelector('#key-now .d').textContent, " +
                 "chords: Array.from(document.querySelectorAll('.c')).slice(0, 4).map(c => c.textContent).join(' '), hash: location.hash})"
             val before = JSONObject(js(shown) as String)
             tap(main, "#t-up")
@@ -169,9 +170,17 @@ class EndToEndTest {
             val after = JSONObject(js(shown) as String)
             record("transpose", JSONObject().put("before", before).put("after", after))
             assertTrue(after.getString("chords") != before.getString("chords"))
-            // One up from where the sheet was: from its own version's move (a song's [version] opens at its t=), or 0.
-            val t = { hash: String -> Regex("(?:^#|&)t=(-?\\d+)").find(hash)?.groupValues?.get(1)?.toInt() ?: 0 }
-            assertEquals(after.getString("hash"), t(before.getString("hash")) + 1, t(after.getString("hash")))
+            // One up from where the sheet was: the address's t= where it names one, else the move the bar says ("−2",
+            // the last signed count under the key; none, 0): a song's own version (its [version]) opens with no t= in
+            // the address (viewer.js save), and one semitone away from it the address names where it is.
+            val t = { hash: String -> Regex("(?:^#|&)t=(-?\\d+)").find(hash)?.groupValues?.get(1)?.toInt() }
+            val moved = { words: String ->
+                Regex("([+−-])(\\d+)$").find(words.trim())?.let {
+                    (if (it.groupValues[1] == "+") 1 else -1) * it.groupValues[2].toInt()
+                } ?: 0
+            }
+            val from = t(before.getString("hash")) ?: moved(before.getString("moved"))
+            assertEquals("$before → $after", from + 1, t(after.getString("hash")) ?: 0)
             shot("sheet-transposed")
 
             Intents.init()
