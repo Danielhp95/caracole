@@ -332,6 +332,44 @@ def test_a_song_with_an_auto_sheet_over_no_lyrics_gets_it_made_again_over_its_tr
     assert NOTE in lines and "Somos vikingos de prueba" in lines
 
 
+@pytest.mark.parametrize("chart_before", [False, True], ids=["no sheet before", "a chart before"])
+def test_try_again_after_the_chords_failed_makes_the_sheet_over_the_transcript_kept(conn, cfg, monkeypatch,
+                                                                                    chart_before):
+    # The words keep the transcript before the chords run: when auto-chords can't keep the sheet (a full disk), or the
+    # server stops mid-way, Try again runs the same `caracole transcribe`, which goes straight to the chords over the
+    # transcript kept, neither model run again; never "already transcribed", the sheet over it left to the night.
+    from caracole.autochords import run as ac_run
+    from caracole.autochords.run import autochords_pending
+
+    song = offered(conn, cfg)
+    if chart_before:
+        autochords_pending(conn, cfg, recognizer=Recognizer(), beats_fn=beats, only={song.id})
+    keep_sheet = ac_run._keep
+
+    def full_disk(*args, **kwargs):
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(ac_run, "_keep", full_disk)
+    first, _ = make(cfg)
+    assert first.failed and first.failed.startswith("auto-chords can't run here"), first
+    assert transcript_of(conn, get_song(conn, song.id)) is not None
+    monkeypatch.setattr(ac_run, "_keep", keep_sheet)  # room again
+    separator, transcriber, recognizer = Separator(), Transcriber(), Recognizer()
+    again, heard = make(cfg, separator=separator, transcriber=transcriber, recognizer=recognizer)
+    assert again.ok, again
+    ends = heard.ends()
+    assert ends["song"] == ("done", "in the book; transcribed already, its sheet to make")
+    assert ends["vocals"] == ("skipped", "transcribed already")
+    assert ends["words"] == ("done", "the transcript kept")
+    assert ends["chords"] == ("done", "chords over the transcribed lyrics")
+    assert separator.calls == transcriber.calls == [] and recognizer.calls == [Path(song.audio_path)]
+    lines = auto_sheet(cfg, conn, song).read_text(encoding="utf-8").splitlines()
+    assert NOTE in lines and "Somos vikingos de prueba" in lines
+    # Once the sheet is over it, a transcription of it is asked for no more.
+    third, _ = make(cfg)
+    assert third.refused == "Nick Cani - Vikingos veganos isn't offered a transcription: already transcribed"
+
+
 def test_with_no_singing_found_whisper_never_runs_and_nothing_sung_is_noted(conn, cfg, monkeypatch):
     # The guard would drop every word Whisper heard: it isn't run (up to half an hour on a CPU).
     song = offered(conn, cfg)

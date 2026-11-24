@@ -6,7 +6,10 @@ For a song whose audio came from YouTube and that every lyrics site switched on 
 its own (staged.py; ``--progress`` writes a JSON line per event, which caracole serve reads into the job's stages):
 
 - ``song``: the song, by its identity key, never added to wanted.txt; refused when it isn't offered a transcription.
-  First, the work folders a killed job left under the cache are swept (``_sweep``): those no live job holds.
+  First, the work folders a killed job left under the cache are swept (``_sweep``): those no live job holds. A song
+  whose own audio has its transcript kept already, but no auto sheet over it (the chords stage failed or was cut off
+  after the words kept it: Try again runs the same command), goes straight to the chords: vocals skipped and the
+  words the transcript kept (``_sheet_to_make``), neither model run again.
 - ``vocals``: where the singing is. The mix's loudness frame by frame (``separate.frame_db``), the vocals separated
   by demucs-rs into a temporary folder under the cache, their loudness, then the sung spans (words.py
   ``sung_spans``), over as much of the song as both cover: a stem more than ``SHORT_STEM_FRAMES`` shorter than the
@@ -123,6 +126,7 @@ class _Transcription(StagedRun):
         self.audio: tuple[str | None, float | None] = (None, None)  # the audio separated: its path and mtime
         self.stem: Path | None = None
         self.spans: list[Any] = []
+        self.kept = False  # its transcript kept already, its sheet over it to make: the chords alone run
 
     def stage(self, name: str, run: Callable[[], tuple[str, str] | str]) -> None:
         """A stage, where a SetupFailed (the GPU, Whisper's model) ends it in its own words, as the setup's."""
@@ -149,6 +153,15 @@ class _Transcription(StagedRun):
         why = why_not_offered(self.conn, self.cfg, self.song, self.overrides)
         if why is not None and not (transcribed and why == ALREADY_TRANSCRIBED):
             raise self._not_offered(why)
+
+    def _sheet_to_make(self) -> bool:
+        """Whether the song, offered no transcription for the one of its own audio kept already, has no auto sheet over
+        it yet (auto-chords would make one: run.py ``_skip_reason``), so the job goes straight to its chords."""
+        from caracole.autochords.run import _skip_reason
+        from caracole.autochords.transcript import ALREADY_TRANSCRIBED, why_not_offered
+
+        why = why_not_offered(self.conn, self.cfg, self.song, self.overrides)
+        return why == ALREADY_TRANSCRIBED and _skip_reason(self.conn, self.song, self.overrides) is None
 
     def _same_audio(self) -> None:
         """The song's audio still the one its vocals were separated from (another caracole may replace it while this
@@ -234,15 +247,22 @@ class _Transcription(StagedRun):
         if song is None:
             raise _Stop(f"{req.display} isn't in the book")
         self.song = song
-        self._still_offered()
+        said = "in the book"
+        if self._sheet_to_make():
+            self.kept, self.audio = True, (song.audio_path, song.audio_mtime)
+            said += "; transcribed already, its sheet to make"
+        else:
+            self._still_offered()
         self.result.song_id, self.result.display = song.id, song.display
         self.progress.song(song.id, song.display)
-        return "in the book"
+        return said
 
     def vocals(self) -> tuple[str, str] | str:
         from caracole.autochords import separate
         from caracole.autochords.words import FRAME_S, sung_spans
 
+        if self.kept:
+            return "skipped", "transcribed already"
         self._after_a_lookup()
         self._still_offered()
         separator = self._the_separator()
@@ -275,6 +295,8 @@ class _Transcription(StagedRun):
         from caracole.autochords.transcript import MODEL, Transcript, keep_transcript, note_heard_nothing
         from caracole.autochords.words import guard, lines_of, to_lrc
 
+        if self.kept:
+            return "done", "the transcript kept"
         if self.result.states.get("vocals") != "done" or self.stem is None:
             return "skipped", "no vocals"
         if not self.spans:  # the guard would drop every word Whisper heard: it isn't run

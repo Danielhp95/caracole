@@ -1558,7 +1558,8 @@ It exits 0 when the sheet is made, and when a block, a cooldown, a spent budget 
 error makes the song wait. It exits 1 when:
 
 - The song has a human sheet, is ignored, has a purchase linked, or has `"none"` under
-  `[youtube]` and you gave no video.
+  `[youtube]` and you gave no video. A human sheet kept, or the song ignored, while a lookup went
+  first before the chords counts too.
 - YouTube won't give the video, or auto-chords can't read the audio.
 - This caracole can't make chords from audio. It says so before it asks anything.
 - Another caracole removed the song meanwhile (`No sheet made: … left the book while its sheet
@@ -1606,13 +1607,15 @@ lyrics missing at every lyrics site you have switched on, and not transcribed ye
 - It prints a line per stage, and `--progress` adds a JSON line per stage, for caracole serve.
   Its library page offers the same on the song's card (see **Lyrics transcribed from the audio**
   under [caracole serve](#caracole-serve)).
+- The transcript is kept before the chords. If they fail, or the server stops then, running it
+  again (the Journal's Try again) goes straight to the chords over the kept transcript.
 
 It exits 0 once the sheet is made, and 1 otherwise:
 
 | It says | What happened | The song afterwards |
 |---|---|---|
 | `caracole transcribes nothing here: …` | This caracole can't transcribe: no Whisper, auto-chords, yt-dlp, demucs-rs or model file, or YouTube is off. | Unchanged. |
-| `No transcript made: …` | The song isn't offered one or isn't in the book. Or, during the job, its lyrics were found, its audio changed or it was removed. | Unchanged. |
+| `No transcript made: …` | The song isn't offered one or isn't in the book. Or, during the job, its lyrics were found, it got a human sheet or was ignored, its audio changed or it was removed. | Unchanged. |
 | `Words: failed: no singing heard.` | Nothing is kept. | Not offered until its audio changes. |
 | `can't read the audio` | Whisper couldn't load the audio. | Not offered, and no chords tried, until its audio changes. The to-do page lists the file. |
 | `can't measure the audio here`, `the separator can't run here`, `its vocals can't be read`, `its vocals are … shorter than the song`, `the GPU failed`, `Whisper's model won't load` | The setup failed, not the song. | Still offered. |
