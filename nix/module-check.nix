@@ -23,8 +23,6 @@
   autochordsPackage,
   # What autochords.package must default to with autochords.cuda.
   autochordsCudaPackage,
-  # What publish.uploader must default to.
-  publishIndexesPackage,
 }:
 let
   # caracole's source: its config loader, run against the generated files, and
@@ -113,31 +111,12 @@ let
     configured
     { services.caracole.autochords.enable = true; }
   ];
-  # The weekly publish of the site catalogues, without and with an upload unit.
+  # The weekly publish of the site catalogues, offline.
   publishOn = evalSystem [
     stubbed
     configured
     { services.caracole.publish.enable = true; }
   ];
-  publishUpload = evalSystem [
-    stubbed
-    configured
-    {
-      services.caracole.publish = {
-        enable = true;
-        tokenFile = "/run/secrets/gh-token";
-        uploader = writeShellScriptBin "publish-indexes" "exit 0";
-      };
-    }
-  ];
-  publishNoUploader = rejections {
-    publish = {
-      enable = true;
-      tokenFile = "/run/secrets/gh-token";
-      # The flake's module gives it a default; a host that clears it is refused.
-      uploader = lib.mkForce null;
-    };
-  };
   # caracole-web with its defaults, and on a tailnet address.
   webDefault = evalSystem [
     stubbed
@@ -389,8 +368,6 @@ let
   adminMoved = findAdmin moved;
   publish = publishOn.systemd.services.caracole-publish;
   publishSc = publish.serviceConfig;
-  upload = publishUpload.systemd.services.caracole-publish-upload;
-  uploadSc = upload.serviceConfig;
   publishFolder = "/var/lib/caracole/publish";
 
   adminCuda = findAdmin webCuda;
@@ -639,7 +616,6 @@ let
       } null;
     "without publish, no publish unit, timer or folder exists" =
       !(nuc.systemd.services ? caracole-publish)
-      && !(nuc.systemd.services ? caracole-publish-upload)
       && !(nuc.systemd.timers ? caracole-publish)
       && !(nuc.systemd.tmpfiles.settings.caracole ? ${publishFolder});
     "caracole-publish.service runs `caracole --config <generated caracole.toml> index publish <folder>`, offline" =
@@ -649,7 +625,7 @@ let
       && !(publishSc ? LoadCredential)
       && sameUser publishSc
       && hardened publishSc;
-    "caracole-publish.service may write its folder, notifies on failure and starts nothing without a token file" =
+    "caracole-publish.service may write its folder, notifies on failure and starts nothing after it" =
       lib.elem publishFolder publishSc.ReadWritePaths
       && publish.onFailure == [ "caracole-notify-failure.service" ]
       && publish.onSuccess == [ ]
@@ -665,20 +641,6 @@ let
         in
         d.user == "caracole" && d.group == "caracole" && d.mode == "2750"
       );
-    "with a token file, caracole-publish-upload.service follows a successful publish, with the network and the token as a credential" =
-      publishUpload.systemd.services.caracole-publish.onSuccess == [ "caracole-publish-upload.service" ]
-      && uploadSc.LoadCredential == [ "gh:/run/secrets/gh-token" ]
-      && uploadSc.Environment == [ "GH_TOKEN_FILE=%d/gh" ]
-      && uploadSc.ExecStart == "${lib.getExe publishUpload.services.caracole.publish.uploader} ${publishFolder}"
-      && !(uploadSc ? PrivateNetwork)
-      && sameUser uploadSc
-      && hardened uploadSc
-      && upload.onFailure == [ "caracole-notify-failure.service" ]
-      && lib.elem "network-online.target" upload.after;
-    "the token reaches no caracole unit" =
-      !(publishUpload.systemd.services.caracole.serviceConfig ? LoadCredential)
-      && !(publishUpload.systemd.services.caracole-publish.serviceConfig ? LoadCredential);
-    "a token file with no uploader is rejected" = says [ "publish.uploader" ] publishNoUploader;
     "caracole-admin is installed" = admin != null && adminMoved != null;
     "the configured systems pass every assertion" = lib.all (system: failedAssertions system == [ ]) [
       nuc
@@ -690,7 +652,6 @@ let
       webTailnet
       webOpen
       publishOn
-      publishUpload
     ];
     "settings.state_dir is rejected, for stateDir" = says [
       "stateDir, not settings.state_dir"
@@ -745,8 +706,6 @@ let
     ] stateIsCache;
     "the package defaults to this flake's package" =
       defaults.services.caracole.package.drvPath == defaultPackage.drvPath;
-    "the uploader defaults to this flake's publish-indexes package" =
-      defaults.services.caracole.publish.uploader.drvPath == publishIndexesPackage.drvPath;
     "the auto-chords package defaults to this flake's autochords package" =
       defaults.services.caracole.autochords.package.drvPath == autochordsPackage.drvPath;
     "without the flake, the module builds the same packages from nix/package.nix" =
@@ -815,7 +774,6 @@ else
         "webDefaultUnit"
         "webAutochordsUnit"
         "publishUnit"
-        "uploadUnit"
       ];
       loadCases = builtins.toJSON [
         (loads nuc defaultLayout)
@@ -835,7 +793,6 @@ else
       webDefaultUnit = unitText webDefault "caracole-web.service";
       webAutochordsUnit = unitText webAutochords "caracole-web.service";
       publishUnit = unitText publishOn "caracole-publish.service";
-      uploadUnit = unitText publishUpload "caracole-publish-upload.service";
     }
     ''
       # Fails the build when the file has the text: `! grep` would not, since
@@ -991,10 +948,7 @@ else
       grep -qx -- "'d' '/data/caracole/state' '0700' 'caracole' 'caracole' '-' *" "$movedTmpfiles"
       grep -qx -- "'d' '/data/caracole/cache' '0700' 'caracole' 'caracole' '-' *" "$movedTmpfiles"
 
-      # The upload unit alone holds the token, as a credential; the publish unit, which
-      # runs caracole, holds none.
-      grep -qx -- "LoadCredential=gh:/run/secrets/gh-token" "$uploadUnitPath"
-      grep -qx -- "Environment=GH_TOKEN_FILE=%d/gh" "$uploadUnitPath"
+      # The publish unit runs caracole offline and holds no credential.
       grep -qx -- "PrivateNetwork=true" "$publishUnitPath"
       lacks LoadCredential "$publishUnitPath"
 

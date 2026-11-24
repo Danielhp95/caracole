@@ -121,7 +121,6 @@
           _file = ./flake.nix;
           imports = [ ./nix/module.nix ];
           services.caracole.package = lib.mkDefault packages.default;
-          services.caracole.publish.uploader = lib.mkDefault packages.publish-indexes;
           services.caracole.autochords.package = lib.mkDefault (
             if config.services.caracole.autochords.cuda then packages.autochords-cuda else packages.autochords
           );
@@ -137,7 +136,6 @@
           defaultPackage = self.packages.${system}.default;
           autochordsPackage = self.packages.${system}.autochords;
           autochordsCudaPackage = self.packages.${system}.autochords-cuda;
-          publishIndexesPackage = self.packages.${system}.publish-indexes;
           cliPython = python.withPackages runtimeDeps;
         };
       };

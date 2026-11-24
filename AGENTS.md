@@ -2010,9 +2010,9 @@ It is rows.js's, shared by both pages:
     `whisperModel` and `separatorModel` are `CARACOLE_WHISPER_MODEL` and `CARACOLE_DEMUCS_MODEL`.
   - And `/etc/caracole/service`, the service's marker, service.py's.
   - `publish` (off): `caracole-publish.service` and its weekly timer run `caracole index publish` offline into
-    `publish.folder` (2750); with `publish.tokenFile` (and `publish.uploader`, the flake's `publish-indexes`) a
-    `caracole-publish-upload.service` follows a successful publish, holding the token as its own credential
-    (`GH_TOKEN_FILE`), never a caracole unit.
+    `publish.folder` (2750), with no network and no token. The upload is the owner's own user timer (a systemd user
+    service in their nix_config, an hour later) running `publish-indexes DIR` with their `gh` login
+    (docs/deploy.md); the module has no token file and no upload unit.
 - **module-check.nix**: `checks.module`, which loads the marker with service.py.
 
 #### `docs/`

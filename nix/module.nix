@@ -394,7 +394,7 @@ in
       enable = lib.mkEnableOption ''
         the weekly caracole-publish unit: `caracole index publish` writes a gzip
         of every site index into `publish.folder`, offline, for the owner to
-        upload to GitHub'';
+        upload to GitHub with their own login (docs/deploy.md)'';
 
       folder = lib.mkOption {
         type = lib.types.path;
@@ -410,27 +410,6 @@ in
         type = lib.types.str;
         default = "Sun 05:00";
         description = "When the publish unit runs, as a systemd OnCalendar value.";
-      };
-
-      tokenFile = lib.mkOption {
-        type = lib.types.nullOr lib.types.path;
-        default = null;
-        description = ''
-          A file holding a GitHub token. When set, caracole-publish-upload.service
-          runs after each successful publish and uploads the folder with
-          `publish.uploader`; the token is a systemd credential of that unit
-          alone, never of a caracole unit. Null: no upload unit, and the folder
-          is left for the owner's own timer to upload.
-        '';
-      };
-
-      uploader = lib.mkOption {
-        type = lib.types.nullOr lib.types.package;
-        default = null;
-        description = ''
-          The package whose `publish-indexes` the upload unit runs (the flake's
-          `publish-indexes`). Required when `tokenFile` is set.
-        '';
       };
     };
 
@@ -593,13 +572,6 @@ in
           '';
         }
         {
-          assertion = cfg.publish.tokenFile == null || cfg.publish.uploader != null;
-          message = ''
-            services.caracole.publish.uploader must be set with publish.tokenFile:
-            the upload unit runs its publish-indexes.
-          '';
-        }
-        {
           assertion = tangles == [ ];
           message = ''
             services.caracole: libraryDir, musicDir, stateDir and cacheDir must be
@@ -704,8 +676,6 @@ in
     systemd.services.caracole-publish = lib.mkIf cfg.publish.enable {
       description = "caracole publish: gzip the site indexes for upload";
       onFailure = [ "caracole-notify-failure.service" ];
-      # The upload follows only a publish that finished.
-      onSuccess = lib.optional (cfg.publish.tokenFile != null) "caracole-publish-upload.service";
       restartIfChanged = false;
       unitConfig.RequiresMountsFor = writable;
       environment = cacheEnv;
@@ -729,30 +699,6 @@ in
         OnCalendar = cfg.publish.calendar;
         Persistent = true;
       };
-    };
-
-    # The only unit that holds a token, as a credential: it runs the uploader,
-    # never caracole. It reads the folder and writes nothing of caracole's.
-    systemd.services.caracole-publish-upload = lib.mkIf (cfg.publish.enable && cfg.publish.tokenFile != null) {
-      description = "caracole publish: upload the site indexes to GitHub";
-      wants = [ "network-online.target" ];
-      after = [
-        "network-online.target"
-        "caracole-publish.service"
-      ];
-      onFailure = [ "caracole-notify-failure.service" ];
-      restartIfChanged = false;
-      serviceConfig =
-        sandbox
-        // identity
-        // {
-          Type = "oneshot";
-          ReadOnlyPaths = [ cfg.publish.folder ];
-          LoadCredential = [ "gh:${cfg.publish.tokenFile}" ];
-          Environment = [ "GH_TOKEN_FILE=%d/gh" ];
-          ExecStart = "${lib.getExe cfg.publish.uploader} ${cfg.publish.folder}";
-          TimeoutStartSec = "1h";
-        };
     };
 
     systemd.services.caracole-autochords = lib.mkIf cfg.autochords.enable {

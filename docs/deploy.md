@@ -235,12 +235,26 @@ seconds. [usage.md](usage.md#caracole-serve) says what the page does.
 writes a gzip of every site index into `publish.folder` (`/var/lib/caracole/publish`, mode 2750, group
 `caracole`, so a user in that group can read it).
 
-Uploading to GitHub is separate:
+Uploading to GitHub is your own user's job, with your own `gh` login: the module holds no token. A
+user timer in your own configuration, an hour after the publish (the example assumes your user is in
+group `caracole` and `gh auth login` is done):
 
-- With `publish.tokenFile` (a file holding a GitHub token) and `publish.uploader` (the flake's
-  `publish-indexes`), `caracole-publish-upload.service` runs after each successful publish. The token
-  is a credential of that unit alone; no caracole unit sees it.
-- Without it, nothing uploads: run `publish-indexes` on the folder yourself, or from a user timer.
+```nix
+  systemd.user.services.caracole-upload = {
+    description = "Upload the site indexes to GitHub";
+    path = [ pkgs.gh ];
+    script = ''
+      export GH_TOKEN=$(gh auth token)
+      exec ${caracole.packages.${pkgs.system}.publish-indexes}/bin/publish-indexes /var/lib/caracole/publish
+    '';
+  };
+  systemd.user.timers.caracole-upload = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = { OnCalendar = "Sun 06:00"; Persistent = true; };
+  };
+```
+
+`caracole` is the flake input. `publish-indexes DIR` checks what GitHub holds and prunes old files.
 
 ## Ubuntu 24.04 without Nix
 
@@ -761,7 +775,9 @@ Then [check that it works](#checking-auto-chords).
 ### 13. Publishing the site indexes
 
 There is no timer here. To publish, run `sudo caracole-admin index publish /var/lib/caracole/publish`,
-then upload the folder with `publish-indexes` by hand.
+then upload the folder with `publish-indexes /var/lib/caracole/publish`, logged in with `gh auth login`
+(`GH_TOKEN` as `gh auth token` prints it, if you like). Both can go in a user crontab, the upload an hour
+after the publish.
 
 ### 14. Upgrades
 

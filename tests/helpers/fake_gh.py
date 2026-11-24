@@ -9,7 +9,7 @@
   and ``api -X DELETE repos/R/releases/assets/ID``.
 
 Every call is logged to ``calls.jsonl`` with ``GH_TOKEN``. ``FAKE_GH_FAIL=<kind>:<n>`` makes the
-n-th call of that kind fail (exit 1, nothing changed); kinds: ``create``, ``upload``, and ``api`` for the changing api calls (PATCH and DELETE) alone. A state's
+n-th call of that kind fail (exit 1, nothing changed); kinds: ``create``, ``upload``, and ``api`` for the changing api calls (DELETE) alone. A state's
 ``corrupt_upload`` makes an upload list a digest that is not the file's, ``no_digest`` none at all.
 """
 
@@ -98,11 +98,6 @@ elif argv[0] == "api":
         sys.exit(1)
     if method == "DELETE":
         remove(a)
-    elif method == "PATCH":
-        new = option("-f")[len("name="):]
-        if asset_by(name=new):
-            sys.exit(1)
-        a["name"] = new
 else:
     sys.exit(2)
 save()

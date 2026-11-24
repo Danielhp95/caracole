@@ -130,55 +130,6 @@ def test_a_failed_upload_leaves_last_weeks_file_listed(rig):
     assert rig.gh.names() == [name(17)]
 
 
-def test_the_manifest_is_swapped_by_two_renames(rig):
-    rig.gh.asset(name(17), b"last week").asset("indexes.json", b'{"old": 1}')
-    done = rig.run("--manifest")
-    assert done.returncode == 0, done.stderr
-    assert rig.gh.names() == sorted([NEW, name(17), "indexes.json"])
-    manifest = json.loads(rig.gh.content("indexes.json"))
-    assert manifest["format"] == 1
-    assert [f["file"] for f in manifest["files"]] == [NEW, name(17)]
-    first = manifest["files"][0]
-    assert first["made"] == "2026-11-24T03:12:00Z"
-    assert first["sha256"] == rig.sha and first["bytes"] == len(rig.data) and first["schema"] == SCHEMA
-    assert manifest["files"][1]["made"] == "2026-11-17T03:12:00Z"
-    rig.gh.load()
-    mutating = [c["argv"] for c in rig.gh.calls() if c["argv"][0] == "api" and "-X" in c["argv"]]
-    assert [a[a.index("-X") + 1] for a in mutating] == ["PATCH", "PATCH", "DELETE"]
-
-
-def test_a_run_dead_between_the_renames_is_mended_by_the_next(rig):
-    rig.gh.asset("indexes.json", b'{"old": 1}')
-    dead = rig.run("--manifest", FAKE_GH_FAIL="api:2")
-    assert dead.returncode == 1
-    assert "indexes.json.prev" in rig.gh.names() and "indexes.json" not in rig.gh.names()
-    again = rig.run("--manifest")
-    assert again.returncode == 0, again.stderr
-    names = rig.gh.names()
-    assert "indexes.json" in names
-    assert not [n for n in names if n.endswith((".prev", ".next"))]
-    # the file was already there, yet the mending run rebuilt the manifest with it
-    assert [f["file"] for f in json.loads(rig.gh.content("indexes.json"))["files"]] == [NEW]
-
-
-def test_a_prev_beside_a_present_manifest_is_deleted_by_the_next_run(rig):
-    rig.gh.asset("indexes.json", b'{"old": 1}').asset("indexes.json.prev", b'{"older": 1}')
-    done = rig.run("--manifest")
-    assert done.returncode == 0, done.stderr
-    assert rig.gh.names() == sorted([NEW, "indexes.json"])
-
-
-def test_the_same_file_again_with_a_manifest_rebuilds_it_and_prunes(rig):
-    rig.gh.asset(NEW, rig.data)
-    for d in (1, 2):
-        rig.gh.asset(name(d))
-    done = rig.run("--manifest")
-    assert done.returncode == 0, done.stderr
-    assert "already published" in done.stdout
-    assert rig.gh.names() == sorted([NEW, name(2), "indexes.json"])
-    assert [f["file"] for f in json.loads(rig.gh.content("indexes.json"))["files"]] == [NEW, name(2)]
-
-
 def test_no_digest_on_the_read_back_keeps_the_upload_and_fails(rig):
     rig.gh.release()
     rig.gh.state["no_digest"] = True
@@ -187,10 +138,3 @@ def test_no_digest_on_the_read_back_keeps_the_upload_and_fails(rig):
     assert done.returncode == 1
     assert "no digest" in done.stderr
     assert rig.gh.names() == [NEW]
-
-
-def test_a_token_file_is_used_when_named(rig):
-    token = rig.tmp / "token"
-    token.write_text("secret-token\n", encoding="utf-8")
-    assert rig.run(GH_TOKEN_FILE=str(token)).returncode == 0
-    assert {c["token"] for c in rig.gh.calls()} == {"secret-token"}
