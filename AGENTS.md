@@ -546,6 +546,7 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 |---|---|
 | config.py | caracole.toml and directories, and no secret (ntfy is a topic's URL alone); `name`, what the pages call the library (`Config.library_name`: else its folder's name); `[ug_directory]` (`DirectoryPolicy`: UG's artist directory's concurrency, delay and budget, politeness that never crosses to the phone) |
 | index_transfer.py | `caracole index export` and `merge` (below) |
+| catalogues.py | `caracole index publish DIR`: every site's index as one public gzip, `indexes-s<schema>-<UTC minute>.sqlite.gz`, its sidecar `published.json` and the Keep rule (`name_for`, `read_name`, `publish`, `kept`); `index_transfer.PUBLIC_OMIT` leaves out the database's path and LaCuerda's search rows, and a file holding a path of this machine is refused (below) |
 | peer_sync.py | two caracoles compared and synced, unit by unit (below) |
 | canonical.py | canonical JSON: one text, so one digest, for a value in Python and in Kotlin (`dumps`, `digest`, `read`, `stored_hash`; docs/superpowers/specs/2026-11-03-canonical-json.md); the standard library alone |
 | peer_push.py | a push: the units another caracole (the phone) gives this one, staged by caracole serve, taken by `caracole peer take` (below) |
@@ -726,7 +727,7 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 - `elsewhere`: the service when a caracole with no config named (no `--config`, no `CARACOLE_CONFIG`) would use
   another database than its. Then, unless the root `--home`:
   - `_common.load_cfg` refuses a command that builds an index (`builds_index=`, its words: run, index build and
-    refresh, gtptabs, musescore, harptabs, gametabs, ireal and lacuerda `--index`, ug `--directory`) with status 2;
+    refresh and publish, gtptabs, musescore, harptabs, gametabs, ireal and lacuerda `--index`, ug `--directory`) with status 2;
   - and any other says `warning` once before it writes (`_common.warn_elsewhere`, as it first takes the lock, or as
     add and serve write first).
 - The standard library alone.
@@ -2086,7 +2087,14 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     run with, as get.py's words for one (`NO_PDFS`) are recorded.
 - Building a `Phone` queues nothing: `Phone.start`, which the app calls once it has wired the queue's `onBusy`, queues
   the render job when the phone owes pages, and a take that owes some queues it after the sync, never inside it.
-- The phone's own job kinds, which Python never queues (render, inbox, backup, restore), are one table with their
+- `core.catalogues` (core/catalogues/) is the one place that knows GitHub's API: `Names` reads a catalogue file's name
+  (catalogues.py's, held by vectors/index/), `CatalogueSource` lists the release, `choose` picks the newest `uploaded`
+  file of this app's schema, `download` streams it through `GZIPInputStream` into `stateDir/cache/catalogues/`, checks
+  GitHub's SHA-256 and a cap of 20 times its size, and says why it can't (a newer or older schema only, no release,
+  the hour's share spent, no room). server/lookups' `CataloguesRunner` merges it (`IndexTransfer.merge`), kv
+  `catalogues:imported`. The app's Settings row and first-start offer are native (`SiteCatalogues`), the shared library
+  page untouched.
+- The phone's own job kinds, which Python never queues (render, inbox, backup, restore, catalogues), are one table with their
   words, `server/jobs/PhoneKinds.kt`, the phone's alone.
 - `app/src/androidTest/` runs on a device or an emulator alone (the device step, below), under `CaracoleTestRunner`:
   `BundledSqliteTest`, `CorpusOnDeviceTest` (one test per corpus area, `core.testing.Replays`,
@@ -3492,6 +3500,22 @@ picks one).
 - What the phone takes from the computer is its settings (provider switches, lookup settings, `[match]`, `[rank]`, the
   user agent, the library's name: `GET /api/peer/state`'s `settings`, politeness.py `settings_document`, which the
   phone keeps as kv `phone:settings`), never its politeness.
+
+#### The site catalogues, published for a phone with no computer
+
+- The owner's choices of 2026-11-24 (plan_host_index.md, "Decided"): the laptop's service writes a gzip of every site
+  index each week (`caracole index publish`, catalogues.py, no network, no lock, no secret); the owner's own user timer
+  uploads it to the GitHub release `indexes` of this repo with their `gh` login (nix/publish-indexes.sh, `publish-indexes
+  DIR`); the Android app downloads it with one tap (Settings, and a first-start offer when no computer is set) and merges
+  it as a sync's index stage does. The public file leaves out the database's path and LaCuerda's search rows
+  (`index_transfer.PUBLIC_OMIT`), and keeps the artist pages read.
+- The phone asks GitHub's REST API, never `github.com/…/releases/download/…`, whose path github.com's robots.txt closes:
+  `api.github.com/repos/Danielhp95/caracole/releases/tags/indexes` (the files, their states and digests), then the
+  chosen asset's address, redirected to `release-assets.githubusercontent.com`, a redirect to any other host refused.
+  Two requests a download, at a tap, with caracole's own user agent; a 403 or 429 with no requests left is kept (kv
+  `catalogues:not-before`) and nothing is asked before it. No exception to robots.txt is made.
+- "caracole itself sends it nowhere" (the exports above) stays true: caracole writes the public file and never
+  uploads it; the owner's timer does.
 
 #### Turning a provider off
 

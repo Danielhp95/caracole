@@ -3,32 +3,22 @@
 Goal: someone installs caracole from F-Droid and gets offline search without running caracole on a
 computer. Visual companion: https://claude.ai/artifact/6UYpwC1MuigC6CDBJ8TQt2
 
-Revised 2026-11-24, after checking the first plan against the code, GitHub's API and its robots.txt.
-What that changed is listed at the end.
+Revised 2026-11-24, after checking the first plan against the code, GitHub's API and its robots.txt, and
+once more after the owner's three decisions below. What the review changed is listed at the end.
 
-## To decide (owner)
+## Decided (2026-11-24)
 
-1. **How the phone asks GitHub.** github.com's robots.txt closes `/*/*/download/*` to every crawler, and
-   that matches `/Danielhp95/caracole/releases/download/indexes/…` (by caracole's own matcher,
-   `http.robots_disallows`, too). AGENTS.md: no URL robots.txt closes is asked for, YouTube the one
-   exception.
-   - **A, what this plan is written for:** the phone asks GitHub's REST API, which is made for programs.
-     `api.github.com` and the host it redirects a download to have no robots.txt. Same release, same files.
-     It also needs no manifest and no swap: the API's list of the release's files is the manifest. Its cost:
-     GitHub answers an address 60 requests an hour without a login, shared with every other app behind that
-     address (a VPN, some mobile networks). A download takes 2.
-   - **B:** `releases/download/indexes/…`, as chosen before this was known, written into AGENTS.md as your
-     exception (caracole's own file, at a tap; GitHub documents the address for linking). No hourly limit,
-     but it needs the manifest and its swap ("Plan B", below).
-2. **What of your own use the file shows.** An export was made for your own devices. A public one holds:
-   - the database's path (`caracole_export.source`): left out, either way;
-   - what LaCuerda's search answered you (`lacuerda_index` rows of page `busca.php`): your searches. This
-     plan leaves them out;
-   - the artist pages caracole read (UG's, LaCuerda's): mostly your songs' artists. This plan keeps them:
-     they are what finds a bare-id tab, and UG's directory pass reads every bare artist's page anyway.
-3. **Who uploads.** This plan: a timer of your own user, with the `gh` login you already have
-   (`gh auth token --user Danielhp95`). No new secret, no agenix, and the module still loads no credential.
-   The other way is a token in a file for a system unit.
+1. **How the phone asks GitHub: its REST API.** github.com's robots.txt closes `/*/*/download/*`, which
+   matches `releases/download/indexes/…`, and AGENTS.md allows no such URL but YouTube's. `api.github.com`
+   and the host it redirects a download to have no robots.txt. The API's list of the release's files is the
+   manifest, so there is no manifest and no swap. Its cost: GitHub answers an address 60 requests an hour
+   without a login, shared with every other app behind that address; a download takes 2.
+2. **What of your own use the file shows.** The public file leaves out the database's path
+   (`caracole_export.source`, and any path of this machine is refused) and what LaCuerda's search answered
+   you (`lacuerda_index` rows of page `busca.php`). It keeps the artist pages caracole read (UG's,
+   LaCuerda's): they find a bare-id tab, and UG's directory pass reads every bare artist's page anyway.
+3. **Who uploads.** The owner's own user, with a systemd user timer and the `gh` login they already have. No
+   token file, no upload unit, no agenix; the module still loads no credential.
 
 ## Decided (owner, 2026-11-24)
 
@@ -51,7 +41,7 @@ What that changed is listed at the end.
   through the triggers: no `--no-fts`, no rebuild step. `--site` exists.
 - Six sites, 1.37 M UG rows: 170 MB raw, **52 MB gzip -9** (zstd -19: 37 MB, with a library).
 - The phone merges 300,000 rows in 7.6 s (docs/android_port.md): the whole index in about half a minute.
-- Estimated on the phone, to measure in step 1: about 450 MB kept (the database with its FTS tables), about
+- Estimated on the phone; Task 0's measurements are pending: about 450 MB kept (the database with its FTS tables), about
   1.2 GB free while it imports (the unpacked file, the database, its WAL). A first sync with a computer costs
   the same today.
 - The repo has no release yet, and its APKs are in `docs/fdroid/`, so nothing else uses the releases.
@@ -59,7 +49,7 @@ What that changed is listed at the end.
 ## The file
 
 `indexes-s<schema>-<UTC time>.sqlite.gz`, as `indexes-s17-20261124T0312Z.sqlite.gz`: an index export of every
-site, less what "To decide" 2 leaves out, vacuumed, `PRAGMA quick_check`ed, gzip -9 with no time in its header.
+site, less what "Decided" 2 leaves out, vacuumed, `PRAGMA quick_check`ed, gzip -9 with no time in its header.
 A name is used once. The schema is in the name and in `caracole_export.schema`, which the merge already checks.
 
 ## The release
@@ -125,8 +115,8 @@ After a schema bump: update the laptop's service and run both by hand once, befo
   6. `IndexTransfer.merge`, as a sync's index stage calls it (its clock as `notAfter`), then the WAL
      checkpointed, the search's answers forgotten, the file deleted.
 - **What it says when it can't**, each before anything is downloaded where it can:
-  - only newer schemas: "The published catalogues are for a newer caracole (schema 18). Update the app.";
-  - only older ones: "The published catalogues are for an older caracole (schema 16). New ones are on
+  - only newer schemas: "The published catalogues are for a newer caracole (schema 18): update the app.";
+  - only older ones: "The published catalogues are for an older caracole (schema 16): new ones are on
     their way.";
   - the file's own schema isn't its name's: "This file is for schema 16; this app reads 17. Nothing was
     imported." (the merge's refusal);
@@ -184,16 +174,6 @@ After a schema bump: update the laptop's service and run both by hand once, befo
    exports' "caracole itself sends it nowhere" stays true, the owner's timer publishes; the module's publish
    unit; android/'s new parts).
 8. The first publish by hand; the download from a phone with no computer set.
-
-## Plan B: `releases/download/indexes/…` (if "To decide" 1 goes that way)
-
-- AGENTS.md's Politeness gains your exception for that one address.
-- A manifest, `indexes.json`, lists the files (schema, name, made, bytes, SHA-256, rows a site).
-- Swapping it without a hole: upload `indexes.json.next`; rename `indexes.json` to `indexes.json.prev`, then
-  `.next` to `indexes.json`; delete `.prev` at the next run. Between the two renames `indexes.json` answers
-  404: the phone then asks `indexes.json.prev`, which is there exactly then, so a run that dies between them
-  breaks nothing either.
-- Everything else as above.
 
 ## What the review changed
 

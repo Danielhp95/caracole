@@ -85,7 +85,11 @@ A release is a signed APK in the F-Droid repository at `docs/fdroid/`, which Git
        cp android/app/build/outputs/apk/release/app-release.apk docs/fdroid/repo/io.github.danielhp95.caracole_<versionCode>.apk
        cd docs/fdroid && nix develop ../../android -c nix shell nixpkgs#fdroidserver -c fdroid update
 
-4. Commit `docs/fdroid/` and push `main`. The app's page in F-Droid (its description, screenshots) is
+4. After a schema bump (`SCHEMA_VERSION`), publish the site catalogues once before releasing the APK, so that the new
+   app finds a file of its own schema: update the laptop's service, run `sudo caracole-admin index publish
+   /var/lib/caracole/publish`, then `publish-indexes /var/lib/caracole/publish` (docs/deploy.md, "Publishing the site
+   indexes"). Until then the app says the published catalogues are for an older version.
+5. Commit `docs/fdroid/` and push `main`. The app's page in F-Droid (its description, screenshots) is
    `docs/fdroid/metadata/`.
 
 Losing either key ends the updates: the release key's APKs install over no other, and F-Droid refuses an index

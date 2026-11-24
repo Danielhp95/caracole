@@ -29,4 +29,14 @@ in caracole.toml.
 - **Links shared to the phone.** Spotify, TIDAL and YouTube forbid automated access. When you
   share a link to the app, it asks that service once for the song's name.
 
+## The published catalogues
+
+Once a week the author's computer writes every site's index (Ultimate Guitar, LaCuerda,
+gtptabs.com, MuseScore, harptabs.com and gametabs.net) into one file, and uploads it to this
+repository's `indexes` release on GitHub. The app's **Download the site catalogues** fetches it
+([the phone](phone.md)). It holds only what the sites list: titles, artists and addresses, and the
+artist pages caracole has read. It leaves out your library, your searches on LaCuerda and any
+path on the computer. To publish your own, see `caracole index publish` in
+[usage.md](usage.md#caracole-index-publish).
+
 The sheets and lyrics are other people's work. Keep your library private.
