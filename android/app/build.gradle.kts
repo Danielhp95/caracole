@@ -41,7 +41,7 @@ android {
 
     buildTypes {
         // A debug build installs beside F-Droid's release, never over it: a package of its own (so its own data and
-        // library), named "caracole debug" with an icon of its own (src/debug/res), and a port of its own, so both
+        // library), named "Debug caracole" with an icon of its own (src/debug/res), and a port of its own, so both
         // keep their origin when they run at once. The test APK is io.github.danielhp95.caracole.debug.test.
         debug {
             applicationIdSuffix = ".debug"
