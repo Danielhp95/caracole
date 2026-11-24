@@ -213,8 +213,9 @@ phone's library page has no Share tab.
    own key, its sheet, its versions, its kept files…). Under "Which version to keep", **Phone** or **Computer**, and
    **Same for the other N**. Above the card, what is to take (↓), to give (↑) and changed on both (⚠). There is no
    Skip: Cancel ends the sync with nothing taken or given.
-3. **The sync** runs in the background, with a notification ("Syncing with <the computer's name>…") that keeps the
-   app working while you leave it, gone once it ends:
+3. **The sync** runs in the background, with a notification that keeps the app working while you leave it, gone
+   once it ends. It names the computer, the stage the sync is at and what that stage says ("Sharing logs with studio
+   · Copying the computer's pages · 120 of 640 pages"), its bar filled where the stage counts:
    1. compared again, refused if either side changed since you compared (compare again then);
    2. a backup of the phone's library (`state/backups/`, the last three kept), then what the computer changed taken,
       each file checked by its SHA-256;
@@ -247,7 +248,8 @@ started again.
 parts, every change made on one side taken or given, and each conflict left as it is on both sides, for the next
 sync you start. First it reads the computer's state at the address in Settings; when nothing answers there, or
 something else does (another network's device, a Wi-Fi login page), it does nothing and says nothing. While it runs,
-the bar's line says so ("Syncing with the computer…"), and at its end what it did for a few seconds ("Up to date · 1
+the bar's line says so and names the stage it is at ("Syncing with the computer · Updating the indexes · …"), and at
+its end what it did for a few seconds ("Up to date · 1
 taken, 2 given"; "2 changed on both sides: tap Sync to choose"; or why it failed, a stage that failed among it, such
 as the copy of the computer's pages). When it left conflicts, a notification on its own channel, Syncs, says so ("2
 songs changed on both sides: tap to choose"), and its tap opens the sheet, whose cards ask; the next one that leaves
