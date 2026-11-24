@@ -264,11 +264,17 @@ asks whether your user manager runs, and starts the upload in it only if it does
 since an upload in a manager with no session would find `gh`'s keyring locked. When it doesn't run,
 the notifier says so in one line, succeeds, and the timer catches up at your next login (`Persistent`);
 any other failure (no such user, no `caracole-upload.service`) fails the notifier, never the publish.
-An upload of a file already there says "already published" and changes nothing. `gh` may keep its
+An upload of a file already there says "already published" and changes nothing; one GitHub lists
+with no digest can't be checked, so it is deleted and uploaded again. `gh` may keep its
 token in a login keyring, locked without a session, which is why the example doesn't enable linger.
 
 Only the service's run starts the upload. After a publish by hand (`sudo caracole-admin index publish
 /var/lib/caracole/publish`), upload it yourself with `systemctl --user start caracole-upload`.
+
+The upload says each step as it begins, and every 30 seconds while `gh` sends the file, how far it has
+read it (`publish-indexes: uploading · 31 of 80 MB · 3 min so far, about 5 min left`; where it can't
+tell, the time so far and the file's size). An 80 MB file can take several minutes. Watch it with
+`journalctl --user -fu caracole-upload`.
 
 There is no user path unit watching `published.json`: systemd watches every folder from `/` down to
 the file, and your user can't read `/var/lib/caracole` (mode 0710), so such a unit never fires.
@@ -817,7 +823,8 @@ sudo caracole-admin index publish /var/lib/caracole/publish
 PATH=/opt/caracole/bin:$PATH publish-indexes /var/lib/caracole/publish
 ```
 
-The publish needs `caracole-admin`, so sudo; the upload is your user's, with your `gh` login.
+The publish needs `caracole-admin`, so sudo; the upload is your user's, with your `gh` login. Both
+say what they do as they go; the upload, every 30 seconds, how much of the file `gh` has sent.
 
 ### 14. Upgrades
 

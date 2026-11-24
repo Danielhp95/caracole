@@ -3781,7 +3781,11 @@ and the file lacks stays, and how far an index has got never moves back.
   in.
 
 Before it changes anything it backs the database up into `backups/` (`…-before-merge.sqlite`), and
-without room for that copy it merges nothing. It says what each site took:
+without room for that copy it merges nothing. While it works it says how far it has got on stderr:
+the comparison, the backup, each site's sitemaps or pages, and Ultimate Guitar's tabs as they go in
+(`Ultimate Guitar · 41 sitemaps · 600,000 of 1,367,059 tabs`, 50,000 at a time). In a terminal
+that is one live line; in a journal or a pipe, a line a step and one each quarter of UG's tabs.
+Then it says what each site took, on stdout:
 
     Merged /var/lib/caracole/state/indexes.sqlite into /var/lib/caracole/state/caracole.sqlite:
       Ultimate Guitar: nothing read more recently.
@@ -3819,11 +3823,21 @@ column: a text value with your folders, your home folder, the database or `/nix/
 that begins with a machine's root (`/home/`, `/var/`, `/nix/`, `/tmp/`, `/data/`, `/sdcard/`,
 `file:` and the like). A site's name that just begins with `/` is no path.
 
+It also refuses to publish while the clock reads earlier than the minute in the last file's name
+(`published.json`). A file named in the past would never reach the phones, which take the newest
+name. `--force` doesn't pass this one. Either clock may be the wrong one:
+
+- If the clock now is wrong (it went back), set it right, then publish.
+- If the clock now is right, the last file was stamped ahead. Delete that file and `published.json`
+  from `DIR`, delete its asset from the release on GitHub, then publish again.
+
 `--kept NAME` (repeated, once for each name) exports nothing and reads no config, so it answers
 beside a service too. It prints, one a line and each once,
-the names the Keep rule would delete. The rule: this caracole's schema keeps its two newest files
-whatever their age; every other schema keeps its newest for 180 days. A name that isn't a catalogue
-file (`indexes.json`, say) is kept, so never printed.
+the names the Keep rule would delete. The rule: the publishing schema keeps its two newest files
+whatever their age; every other schema keeps its newest for 180 days. Each file's schema is in its
+name, and the publishing schema is this caracole's or the newest among the names, whichever is
+higher. So an upload script built before a schema change never prunes what a newer caracole
+published. A name that isn't a catalogue file (`indexes.json`, say) is kept, so never printed.
 
 If `published.json` is there but can't be read, `publish` refuses (exit 1) and tells you to remove it
 or pass `--force`.
@@ -4009,7 +4023,9 @@ With `indexes`, the sync ends by bringing each site's index up to date on both s
 stage). Whichever side read a site more recently gives that index to the other:
 
 - An index taken here is downloaded and merged as `caracole index merge` does, after a backup
-  (`…-before-merge.sqlite`).
+  (`…-before-merge.sqlite`), saying how far the merge has got as `index merge` does. With
+  `--progress` that is the `index` stage's detail, which the Sync sheet shows. A `peer import` of a
+  file's indexes says it the same way.
 - An index given there is exported and uploaded to the other server, which merges it as a queued
   `caracole peer import`. The sync waits up to ten minutes for it. The other side must run this
   version of caracole or a later one.
@@ -4114,8 +4130,8 @@ the Journal:
 This is the usual merge ([caracole index export and merge](#caracole-index-export-and-merge)),
 with a backup of the database first. `--delete` deletes FILE once it is merged. It also deletes a
 refused file that caracole serve staged, never one you named by hand. A file whose merge couldn't
-start stays, so **Try again** works. `--progress` reports the merge as a JSON line for the
-Journal.
+start stays, so **Try again** works. `--progress` reports the merge as JSON lines for the
+Journal, with how far it has got as the stage's detail.
 
 If the computer refuses the file or doesn't answer, the phone keeps the pages for the next sync
 and the sync says why. A 409 means the two run different versions of caracole, or two files

@@ -1,10 +1,11 @@
 # publish-indexes: nix/publish-indexes.sh, the site catalogues' upload to the GitHub release
-# `indexes` (gh, jq and caracole on its PATH). See the script's header for its usage.
+# `indexes` (gh, jq, coreutils, sed and caracole on its PATH). See the script's header for its usage.
 {
   writeShellApplication,
   gh,
   jq,
   coreutils,
+  gnused,
   caracole,
 }:
 writeShellApplication {
@@ -13,6 +14,7 @@ writeShellApplication {
     gh
     jq
     coreutils
+    gnused
     caracole
   ];
   text = builtins.readFile ./publish-indexes.sh;

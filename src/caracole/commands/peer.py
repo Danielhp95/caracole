@@ -685,9 +685,9 @@ def _sync_indexes(cfg, address: str, state, parts: tuple[str, ...], said: _Said)
     done: list[dict] = []
     try:
         if take:
-            done += _take_indexes(cfg, address, take)
+            done += _take_indexes(cfg, address, take, said)
         if give:
-            done += _give_indexes(cfg, address, state, give)
+            done += _give_indexes(cfg, address, state, give, said)
     except (sync.PeerError, index_transfer.TransferError, backup.BackupError, OSError) as e:
         said.stage("index", "failed", str(e))
         typer.echo(f"The indexes weren't brought up to date: {e}")
@@ -732,9 +732,33 @@ def _taken_entries(merged, newest: dict[str, str]) -> list[dict]:
     return taken
 
 
-def _take_indexes(cfg, address: str, sites: list[str]) -> list[dict]:
+def _merging(said: _Said):
+    """How a merge of indexes says how far it has got (commands/index.py ``Merging``): with ``--progress``, as the
+    index stage's running detail, which the Sync sheet shows; else on stderr, stdout staying the report."""
+    import sys
+
+    from caracole.commands.index import Merging, merge_console
+
+    if said.progress:
+        return Merging(stage=lambda text: said.stage("index", "running", text), stream=sys.stdout)
+    return Merging(console=merge_console())
+
+
+def _merge_told(conn, cfg, path, sites, now, told):
+    """``index_transfer.merge`` of the file at ``path``, saying how far it has got on ``told`` (``_merging``)."""
+    from caracole import index_transfer
+
+    try:
+        return index_transfer.merge(conn, path, sites, state_dir=cfg.state_dir, now=now, progress=told,
+                                    backing_up=told.backing_up)
+    finally:
+        told.close()
+
+
+def _take_indexes(cfg, address: str, sites: list[str], said: _Said) -> list[dict]:
     """The other side's indexes of ``sites`` taken: streamed into ``cache_dir/peer`` (``Peer.index``), merged
-    under caracole's lock (``index_transfer.merge``, its backup first), then deleted; the report's entries."""
+    under caracole's lock (``index_transfer.merge``, its backup first, saying how far it has got: ``_merging``), then
+    deleted; the report's entries."""
     import secrets
 
     from caracole import index_transfer
@@ -745,17 +769,18 @@ def _take_indexes(cfg, address: str, sites: list[str]) -> list[dict]:
         with sync.Peer(address, transport=transport_for_peer()) as peer:
             peer.index(path, sites)
         with exclusive(cfg, "peer sync", interactive=True), closing(open_db(cfg)) as conn:
-            merged = index_transfer.merge(conn, path, sites, state_dir=cfg.state_dir, now=utcnow())
+            merged = _merge_told(conn, cfg, path, sites, utcnow(), _merging(said))
             return _taken_entries(merged, index_transfer.newest(conn))
     finally:
         path.unlink(missing_ok=True)
 
 
-def _give_indexes(cfg, address: str, state, sites: list[str]) -> list[dict]:
+def _give_indexes(cfg, address: str, state, sites: list[str], said: _Said) -> list[dict]:
     """This side's indexes of ``sites`` given: exported into ``cache_dir/peer`` (``index_transfer.export``, no
     lock), sent to the other side's Import a file (``peer_import.Uploader``: its routes, as its page sends a file),
     compared and synced there, of the indexes alone, and waited for, then deleted; the report's entries, each site's
-    tabs there before and after (``GET /api/sync/indexes``) and its newest read there now."""
+    tabs there before and after (``GET /api/sync/indexes``) and its newest read there now. Each of the three steps
+    is the index stage's running detail as it begins, so a take's last detail never stands for the give."""
     import secrets
 
     from caracole import index_transfer, peer_file, peer_import, peer_push
@@ -764,18 +789,22 @@ def _give_indexes(cfg, address: str, state, sites: list[str]) -> list[dict]:
     now = utcnow()
     path = _private_folder(cfg) / f"give-indexes-{secrets.token_hex(6)}.sqlite"
     name = peer_file.file_name(cfg.library_name, now.astimezone())[:-len(peer_file.SUFFIX)] + ".sqlite"
+    given = _indexes(len(sites))
+    said.stage("index", "running", f"Exporting {given} to give")
     with closing(open_db(cfg)) as conn:
         me = sync.own_id(conn)
         index_transfer.export(conn, path, sites, now=now)
     try:
         with peer_import.Uploader(address, transport=transport_for_peer(), token=state.token, asking=me) as there:
             before = there.indexes()
+            said.stage("index", "running", f"Sending {given} to the other side")
             import_id = there.upload(path, name=name)
             try:
                 job_id = there.apply(there.compare(import_id)["comparison"], ["indexes"])
             except BaseException:
                 there.drop(import_id)
                 raise
+            said.stage("index", "running", f"Waiting for the other side to merge {given}")
             job = peer_push.wait_for(there, job_id, sleep=_sleep)
             if job["state"] != "done":
                 raise sync.PeerError(f"The caracole at {address} didn't merge the indexes given: its request "
@@ -1034,7 +1063,8 @@ def _merge_indexes(cfg, conn, file, source, said: _Said, parts: tuple[str, ...],
     """The file's indexes merged into this database (``index_transfer.merge``), when it holds them and they are
     asked for: the report's ``indexes``, each site that took something, its first table's rows before and after
     and its newest read; None when the merge failed. An index export is merged where it is; a ``.caracole`` file's
-    indexes.sqlite is copied out into ``cache_dir/peer`` (0700), merged, and deleted."""
+    indexes.sqlite is copied out into ``cache_dir/peer`` (0700), merged, and deleted. Each step said as it begins
+    (``_merging``: the copy, then the merge's)."""
     import os
     import secrets
 
@@ -1045,6 +1075,7 @@ def _merge_indexes(cfg, conn, file, source, said: _Said, parts: tuple[str, ...],
         said.stage("index", "skipped")
         return []
     said.stage("index", "running")
+    told = _merging(said)
     copy = None
     try:
         if file.index_only:
@@ -1054,9 +1085,11 @@ def _merge_indexes(cfg, conn, file, source, said: _Said, parts: tuple[str, ...],
             folder.mkdir(mode=0o700, parents=True, exist_ok=True)
             os.chmod(folder, 0o700)
             copy = merged_from = folder / f"import-indexes-{secrets.token_hex(6)}.sqlite"
+            told.say("Copying the file's indexes out")
             source.indexes(copy)
-        merged = index_transfer.merge(conn, merged_from, state_dir=cfg.state_dir, now=now)
+        merged = _merge_told(conn, cfg, merged_from, None, now, told)
     except (index_transfer.TransferError, backup.BackupError, sync.PeerError, OSError) as e:
+        told.close()
         said.stage("index", "failed", str(e))
         typer.echo(f"The file's indexes weren't merged: {e}")
         return None

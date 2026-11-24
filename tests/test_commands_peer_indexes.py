@@ -205,7 +205,10 @@ def test_a_site_read_more_recently_there_is_taken_and_counted(syncing):
     gtptabs_rows(there, BLUR)
     result, events = synced(here)
     assert result.exit_code == 0, result.output
-    assert stage(events, "index") == [("running", "taking 1"), ("done", "took 1 index")]
+    assert stage(events, "index") == [
+        ("running", "taking 1"), ("running", "Comparing with this database's indexes"),
+        ("running", "Backing up the database first"), ("running", "gtptabs.com"),
+        ("running", "gtptabs.com · 1 sitemap"), ("done", "took 1 index")]
     assert index_transfer.tab_counts(here.conn)["gtptabs"] == 2
     assert index_transfer.newest(here.conn)["gtptabs"] == index_transfer.newest(there.conn)["gtptabs"]
     assert ("GET", "/api/peer/index") in asked and ("POST", "/sync/import/open") not in asked
@@ -223,7 +226,10 @@ def test_a_site_read_more_recently_here_is_given_through_the_others_import_and_c
     gtptabs_rows(here, BLUR)
     result, events = synced(here)
     assert result.exit_code == 0, result.output
-    assert stage(events, "index") == [("running", "giving 1"), ("done", "gave 1 index")]
+    assert stage(events, "index") == [
+        ("running", "giving 1"), ("running", "Exporting 1 index to give"),
+        ("running", "Sending 1 index to the other side"),
+        ("running", "Waiting for the other side to merge 1 index"), ("done", "gave 1 index")]
     assert index_transfer.tab_counts(there.conn)["gtptabs"] == 2
     assert index_transfer.newest(there.conn)["gtptabs"] == "2026-11-02T08:00:00Z"
     posted = [p for m, p in asked if m == "POST"]
@@ -238,6 +244,31 @@ def test_a_site_read_more_recently_here_is_given_through_the_others_import_and_c
     assert report["indexes"] == [{"site": "gtptabs", "title": "gtptabs.com", "direction": "given", "before": 0,
                                   "after": 2, "read": "2026-11-02T08:00:00Z"}]
     assert leftovers(here) == [] and peer_import._imports(there.cfg.state_dir / "peer") == []
+
+
+def musescore_rows(side, locs, at=READ):
+    from caracole import musescore_fetch
+
+    site = musescore_fetch.SITE
+    site_index._store(side.conn, site, "song-1", [site.row(loc) for loc in locs],
+                      {"etag": '"1"', "last_modified": None}, at)
+
+
+def test_a_sync_that_takes_and_gives_says_the_give_once_the_take_is_merged(syncing):
+    """The take's merge says its steps; the give then says its own, so the take's last never stands for the give."""
+    here, there, asked = syncing
+    gtptabs_rows(there, BLUR)
+    musescore_rows(here, ["https://musescore.com/song/wonderwall-1524"])
+    result, events = synced(here)
+    assert result.exit_code == 0, result.output
+    said = stage(events, "index")
+    assert said[0] == ("running", "taking 1, giving 1") and said[-1] == ("done", "took 1 index, gave 1 index")
+    merged = said.index(("running", "gtptabs.com · 1 sitemap"))
+    assert said[merged + 1:-1] == [
+        ("running", "Exporting 1 index to give"), ("running", "Sending 1 index to the other side"),
+        ("running", "Waiting for the other side to merge 1 index")]
+    assert index_transfer.tab_counts(here.conn)["gtptabs"] == 2
+    assert index_transfer.tab_counts(there.conn)["musescore"] == 1
 
 
 def test_nothing_newer_skips_the_index_stage(syncing):

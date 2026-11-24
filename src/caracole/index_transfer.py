@@ -43,6 +43,12 @@ without room for that copy; when nothing does, neither is anything written, so a
 changes nothing. Afterwards each index's keys are made current (``ensure_current_keys``), and made again whole where
 the file's were made by another caracole's normalizer (its keys record differs). ``Merged`` says what each site
 took, and its tables' rows before and after.
+
+**Its progress** (``merge(progress=, backing_up=)``, the phone's core.index alike): before it plans, before the
+backup, before each site and each of its actions, and after each chunk of UG's sitemap rows, which go in a statement
+for each ``UG_CHUNK`` (50,000) of them, by ``tab_id`` range, in the order one statement takes them and in the same
+savepoint: every row, trigger-made row and record comes out as one statement leaves it (FTS5 lays its segments out
+by its own flushes, which no reading of it sees). ``MergeWords`` puts it into words.
 """
 
 from __future__ import annotations
@@ -64,6 +70,12 @@ FORMAT = 1  # the export's own layout: META, kv, and each site's tables as the d
 META = "caracole_export"
 THEIRS = "theirs"  # the export, attached to the database's connection
 _TAKEN = "temp._merge_taken"
+UG_CHUNK = 50_000  # UG's sitemap rows a statement of a merge takes, a step of its progress: the phone's alike
+PLANNING = "planning"  # merge(progress=)'s action before it plans
+UG_TABS = "tab"  # its action as UG's sitemap rows go in, a chunk at a time
+
+# merge(progress=): (site, action, done, total), see ``merge``.
+Progress = Callable[[str, str, int, int], None]
 
 
 class TransferError(Exception):
@@ -157,6 +169,28 @@ _PLURALS = {"tab of its artist pages": "tabs of its artist pages",
 def counted(n: int, noun: str) -> str:
     """"1 game page", "2 game pages", "3 tabs of its artist pages"."""
     return f"{n:,} {noun if n == 1 else _PLURALS.get(noun, noun + 's')}"
+
+
+class MergeWords:
+    """A merge's progress (``merge(progress=)``, ``backing_up``) in words, a line each, as commands/index.py's and
+    commands/peer.py's merges say it: "Comparing with this database's indexes", "Backing up the database first",
+    "Ultimate Guitar" (a site), "Ultimate Guitar · 41 sitemaps" (an action), "Ultimate Guitar · 41 sitemaps ·
+    600,000 of 1,367,059 tabs" (UG's sitemap rows, a chunk at a time)."""
+
+    COMPARING = "Comparing with this database's indexes"
+    BACKING_UP = "Backing up the database first"
+
+    def __init__(self) -> None:
+        self._doing = ""
+
+    def __call__(self, site: str, action: str, done: int, total: int) -> str:
+        if action == PLANNING:
+            return self.COMPARING
+        if action == UG_TABS:
+            return f"{self._doing} · {done:,} of {total:,} tabs"
+        title = SITES[site].title if site in SITES else site
+        self._doing = f"{title} · {counted(total, action)}" if action else title
+        return self._doing
 
 
 @dataclass(frozen=True)
@@ -356,28 +390,45 @@ def _read_only(path: Path) -> str:
 
 
 def merge(conn: sqlite3.Connection, path: Path, sites: Iterable[str] | None = None, *, state_dir: Path,
-          now: datetime) -> Merged:
+          now: datetime, progress: Progress | None = None,
+          backing_up: Callable[[], None] | None = None) -> Merged:
     """Take into the database what the export at ``path`` read more recently, site by site (``sites``: every one
     the file holds, with none), after a copy of it in ``state_dir``'s backups; see the module docstring.
     ``TransferError`` when it is refused, nothing written (``NoBackup`` when only the room for that copy is
-    lacking); backup.py's ``BackupError`` when the copy fails."""
+    lacking); backup.py's ``BackupError`` when the copy fails.
+
+    ``progress(site, action, done, total)`` tells how far it has got, and changes nothing of what is written:
+    ``("", PLANNING, 0, sites)`` once the file is found an export of those sites, before it plans; then, once a site
+    changes anything, ``(site, "", i, sites)`` before each site (the i-th, from 0, in ``SITES``' order), ``(site,
+    noun, 0, n)`` before each of its actions (a ``SiteMerge.taken`` entry: "sitemap", 41), and, while UG's sitemap
+    action takes its rows, ``("ug", UG_TABS, rows taken, rows)`` after each chunk of ``UG_CHUNK`` of them, the last
+    with done == total. ``backing_up()``, before the backup a merge that changes anything makes first."""
+    tell: Progress = progress if progress is not None else _untold
     if _same_file(path, _db_path(conn)):
         raise TransferError(f"{path} is the database itself")
     meta = _meta(path)
     names = _merged_sites(path, meta, sites)
+    tell("", PLANNING, 0, len(names))
     with _attached(conn, path):
         _check_columns(conn, path, names)
-        plans = [_plan(conn, name) for name in names]
+        plans = [_plan(conn, name, tell) for name in names]
     if not any(p.changes for p in plans):
         return Merged([SiteMerge(p.site) for p in plans], None)
+    if backing_up is not None:
+        backing_up()
     copy = backup.make(conn, state_dir, now, label=backup.MERGE)
     if isinstance(copy, backup.Skipped):
         raise NoBackup(f"{copy.reason}, and a merge backs the database up first")
     done: list[SiteMerge] = []
     with _attached(conn, path):
-        for plan in plans:
+        for i, plan in enumerate(plans):
+            tell(plan.site, "", i, len(plans))
             done.append(_apply(conn, plan))
     return Merged(done, copy.backup.path)
+
+
+def _untold(site: str, action: str, done: int, total: int) -> None:
+    pass
 
 
 def check_pages(conn: sqlite3.Connection, path: Path) -> tuple[str, ...]:
@@ -435,23 +486,24 @@ def _untrusted(path: Path) -> sqlite3.Connection:
 
 def _meta(path: Path) -> dict[str, str]:
     """The export's META, once the file is one: of tables alone, as ``export`` makes it (no view, trigger, index of
-    its own or virtual table, whose reading could run what its maker wrote), of this layout and schema."""
+    its own or virtual table, whose reading could run what its maker wrote), of this layout and schema. Its schema
+    is read first, and META only once it is a table: a view in its place (an endless query, say) is never read."""
     if not path.exists():
         raise TransferError(f"{path}: no such file")
     try:
         file = _untrusted(path)
         try:
-            meta = dict(file.execute(f"SELECT key, value FROM {META}").fetchall())
             odd = file.execute(
                 "SELECT type, name FROM sqlite_master WHERE NOT (type = 'table' AND sql LIKE 'CREATE TABLE %') "
                 "AND NOT (type = 'index' AND sql IS NULL) ORDER BY rowid").fetchone()
+            if odd is not None:
+                raise TransferError(f"{path} holds the {odd[0]} {odd[1]}, and an index export of caracole's holds "
+                                    "tables alone: `caracole index export` makes one")
+            meta = dict(file.execute(f"SELECT key, value FROM {META}").fetchall())
         finally:
             file.close()
     except sqlite3.Error as e:
         raise TransferError(f"{path} is no index export of caracole's ({e}): `caracole index export` makes one") from e
-    if odd is not None:
-        raise TransferError(f"{path} holds the {odd[0]} {odd[1]}, and an index export of caracole's holds tables "
-                            "alone: `caracole index export` makes one")
     if meta.get("format") != str(FORMAT):
         raise OtherVersion(f"{path} is an index export of another layout ({meta.get('format')!r}, this caracole's "
                            f"is {FORMAT}): export it again with this caracole")
@@ -556,9 +608,10 @@ def _newer_records(conn: sqlite3.Connection, key: str, stamp: str) -> list[str]:
 @dataclass
 class _Plan:
     """What a merge takes of a site: each action (a noun, how many, and what does it), and the kv records set (a
-    value) or let go (None)."""
+    value) or let go (None); ``tell``, the merge's progress, which an action that goes in chunks tells each of."""
 
     site: str
+    tell: Progress = _untold
     actions: list[tuple[str, int, Callable[[sqlite3.Connection], None]]] = field(default_factory=list)
     kv: dict[str, str | None] = field(default_factory=dict)
     records: list[str] = field(default_factory=list)  # the progress records the kv moves on, in words
@@ -573,8 +626,8 @@ class _Plan:
             self.actions.append((noun, n, action))
 
 
-def _plan(conn: sqlite3.Connection, name: str) -> _Plan:
-    plan = _Plan(name)
+def _plan(conn: sqlite3.Connection, name: str, tell: Progress = _untold) -> _Plan:
+    plan = _Plan(name, tell)
     {"ug": _plan_ug, "lacuerda": _plan_lacuerda, "gtptabs": _plan_sitemaps, "musescore": _plan_sitemaps,
      "harptabs": _plan_harptabs, "gametabs": _plan_gametabs}[name](conn, plan)
     return plan
@@ -717,16 +770,7 @@ def _plan_ug(conn: sqlite3.Connection, plan: _Plan) -> None:
         new = [r[0] for r in c.execute(
             f"SELECT t.tab_id FROM {THEIRS}.ug_index t WHERE t.sitemap IN (SELECT name FROM {_TAKEN}) "
             "AND NOT EXISTS (SELECT 1 FROM main.ug_index m WHERE m.tab_id = t.tab_id) ORDER BY t.tab_id")]
-        # As a refresh stores a sitemap (ug/index.py upsert_rows): a row the database has keeps where and when it
-        # was first seen, and takes the file's keys and path.
-        c.execute(
-            "INSERT INTO main.ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
-            f"SELECT tab_id, artist_key, song_key, type, sitemap, first_seen, path FROM {THEIRS}.ug_index "
-            f"WHERE sitemap IN (SELECT name FROM {_TAKEN}) "
-            "ON CONFLICT (tab_id) DO UPDATE SET artist_key = excluded.artist_key, song_key = excluded.song_key, "
-            "type = excluded.type, path = excluded.path "
-            "WHERE ug_index.artist_key != excluded.artist_key OR ug_index.song_key != excluded.song_key "
-            "OR ug_index.type != excluded.type OR ug_index.path != excluded.path")
+        _take_ug_rows(c, plan.tell)
         _take_records(c, ug.SITEMAPS_KEY, names)
         ug.mark_dirty_for_new(c, new)
 
@@ -763,6 +807,36 @@ def _plan_ug(conn: sqlite3.Connection, plan: _Plan) -> None:
     if built is not None and _kv(conn, "main", ug.BUILT_KEY) is None:
         plan.kv[ug.BUILT_KEY] = built
         plan.records.append("the index built whole")
+
+
+def _take_ug_rows(c: sqlite3.Connection, tell: Progress) -> None:
+    """The file's rows of UG's sitemaps taken (``_TAKEN``), as a refresh stores a sitemap (ug/index.py
+    ``upsert_rows``): a row the database has keeps where and when it was first seen, and takes the file's keys and
+    path. A statement for each ``UG_CHUNK`` of them, in ``tab_id`` order (the order one statement reads the file's
+    table in, its rowid's: so the triggers' rows come out the same), each told: a chunk ends at the ``UG_CHUNK``-th
+    row's ``tab_id`` after the last chunk's, the rest one chunk, its bound none."""
+    rows = f"FROM {THEIRS}.ug_index WHERE sitemap IN (SELECT name FROM {_TAKEN})"
+    (total,) = c.execute(f"SELECT COUNT(*) {rows}").fetchone()
+    done, after = 0, None
+    while True:
+        lower, low = ("", ()) if after is None else (" AND tab_id > ?", (after,))
+        upto = None
+        if total - done > UG_CHUNK:
+            (upto,) = c.execute(f"SELECT tab_id {rows}{lower} ORDER BY tab_id LIMIT 1 OFFSET ?",
+                                (*low, UG_CHUNK - 1)).fetchone()
+        upper, up = ("", ()) if upto is None else (" AND tab_id <= ?", (upto,))
+        c.execute(
+            "INSERT INTO main.ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
+            f"SELECT tab_id, artist_key, song_key, type, sitemap, first_seen, path {rows}{lower}{upper} "
+            "ON CONFLICT (tab_id) DO UPDATE SET artist_key = excluded.artist_key, song_key = excluded.song_key, "
+            "type = excluded.type, path = excluded.path "
+            "WHERE ug_index.artist_key != excluded.artist_key OR ug_index.song_key != excluded.song_key "
+            "OR ug_index.type != excluded.type OR ug_index.path != excluded.path", (*low, *up))
+        done = total if upto is None else done + UG_CHUNK
+        tell("ug", UG_TABS, done, total)
+        if upto is None:
+            return
+        after = upto
 
 
 def _round(entry: Any) -> tuple[Any, ...]:
@@ -890,7 +964,8 @@ def _apply(conn: sqlite3.Connection, plan: _Plan) -> SiteMerge:
     site = SITES[plan.site]
     before = _counts(conn, site)
     with db.savepoint(conn, "index_merge"):
-        for _, _, action in plan.actions:
+        for noun, n, action in plan.actions:
+            plan.tell(plan.site, noun, 0, n)
             action(conn)
         for key, value in plan.kv.items():
             if value is None:

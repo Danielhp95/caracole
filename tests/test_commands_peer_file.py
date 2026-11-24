@@ -434,6 +434,10 @@ def test_an_import_with_indexes_merges_them_and_reports_each_site(libraries, tmp
     assert report["parts"] == ["library", "songbooks", "indexes"]
     assert report["indexes"] == [{"site": "gtptabs", "title": "gtptabs.com", "direction": "taken", "before": 0,
                                   "after": 2, "read": "2026-11-02T08:00:00Z"}]
+    said = [e["detail"] for e in events(out.output) if e.get("stage") == "index" and e["state"] == "running"]
+    assert said[:4] == ["", "Copying the file's indexes out", "Comparing with this database's indexes",
+                        "Backing up the database first"]
+    assert "gtptabs.com · 1 sitemap" in said
     assert not list((studio.cfg.cache_dir / "peer").iterdir())  # the indexes' copy gone
     # --parts without the indexes leaves them
     other = Lib(tmp_path / "other", "Other")
@@ -500,9 +504,14 @@ def test_an_index_file_is_merged_and_records_no_agreement(libraries, tmp_path):
     out = run(studio, "peer", "import", "--yes", "--progress", str(tmp_path / "i.sqlite"))
     assert out.exit_code == 0, out.output
     assert [r[0] for r in studio.conn.execute("SELECT path FROM gtptabs_index")] == ["tabs/3/oasis.html"]
-    assert [(e["stage"], e["state"]) for e in events(out.output) if "stage" in e] == [
-        ("check", "running"), ("check", "done"), ("take", "skipped"), ("render", "skipped"), ("agree", "skipped"),
-        ("index", "running"), ("index", "done")]
+    assert [(e["stage"], e["state"]) for e in events(out.output) if "stage" in e and e["stage"] != "index"] == [
+        ("check", "running"), ("check", "done"), ("take", "skipped"), ("render", "skipped"), ("agree", "skipped")]
+    # The merge says how far it has got as the index stage's running detail, which the Sync sheet shows.
+    assert [(e["state"], e["detail"]) for e in events(out.output) if e.get("stage") == "index"] == [
+        ("running", ""), ("running", "Comparing with this database's indexes"),
+        ("running", "Backing up the database first"), ("running", "Ultimate Guitar"), ("running", "LaCuerda"),
+        ("running", "gtptabs.com"), ("running", "gtptabs.com · 1 sitemap"), ("running", "MuseScore"),
+        ("running", "harptabs.com"), ("running", "gametabs.net"), ("done", "1 index merged")]
     [report] = [e["report"] for e in events(out.output) if e.get("event") == "report"]
     assert report["with"] == {"name": "i.sqlite", "kind": "file", "address": None}
     assert report["parts"] == ["indexes"] and [i["site"] for i in report["indexes"]] == ["gtptabs"]
