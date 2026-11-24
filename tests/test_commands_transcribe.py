@@ -150,6 +150,28 @@ def test_transcribe_refuses_a_song_not_offered_and_exits_1(tmp_path, config, con
     assert models == []
 
 
+def test_a_transcription_that_fails_ends_saying_so_never_done_and_exits_1(tmp_path, config, conn, models,
+                                                                           monkeypatch):
+    # The separator can't run here: the last line says what stopped it, as a refusal's does, never "Done in …".
+    monkeypatch.setattr(yf, "transcribe_problem", lambda cfg: None)
+
+    class NoAdapter:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def vocals(self, audio, workdir, **kwargs):
+            raise separate.SeparatorFailed("No possible adapter")
+
+    monkeypatch.setattr(separate, "DemucsSeparator", NoAdapter)
+    offered(conn, load_config(config, env={}))
+    result = invoke(config, "--song", "Nick Cani - Vikingos veganos")
+    assert result.exit_code == 1, result.output
+    lines = result.output.splitlines()
+    assert "Vocals: failed: the separator can't run here (No possible adapter)." in lines
+    assert lines[-1] == "No transcript made: the separator can't run here (No possible adapter)."
+    assert not any(line.startswith("Done in ") for line in lines)
+
+
 def test_transcribe_where_it_cant_run_says_why_and_exits_1(tmp_path, config, conn, models, monkeypatch):
     monkeypatch.setattr(yf, "autochords_missing", lambda: ["torch"])
     song = offered(conn, load_config(config, env={}))

@@ -1565,6 +1565,8 @@ error makes the song wait. It exits 1 when:
 - Another caracole removed the song meanwhile (`No sheet made: … left the book while its sheet
   was made`).
 
+Its last line then says why (`No sheet made: can't download this video; try another.`).
+
 ### Timed lyrics of another length
 
 LRCLIB times its lyrics against one release of a song. When your audio, a video or a purchase, is
@@ -1621,6 +1623,8 @@ It exits 0 once the sheet is made, and 1 otherwise:
 | `can't measure the audio here`, `the separator can't run here`, `its vocals can't be read`, `its vocals are … shorter than the song`, `the GPU failed`, `Whisper's model won't load` | The setup failed, not the song. | Still offered. |
 
 Anything else Whisper fails on is a bug in caracole. It says so, and the song stays offered.
+Whatever stopped it, its last line says why (`No transcript made: the GPU failed: …`), never
+`Done in …`.
 
 ## The to-do page
 
