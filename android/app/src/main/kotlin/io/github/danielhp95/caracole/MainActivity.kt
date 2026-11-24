@@ -69,12 +69,10 @@ class MainActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var title: TextView
     private lateinit var opening: OpeningScreen
-    /** The first start's offer of the site catalogues (SiteCatalogues.firstStart). */
+    /** The first start's offer of the site catalogues (SiteCatalogues.firstStart): its card, and where it stands
+     * ([CatalogueOffer]: shown once the opening screen is gone, Back its Not now, gone once a computer is set). */
     private lateinit var offer: View
-    /** Whether the offer waits for its answer (shown, or to show once the opening screen is gone). */
-    private var offering = false
-    /** Whether Settings opens once the offer is answered (a first start with nothing set up, Settings not seen yet). */
-    private var offerThenSettings = false
+    private val offerState = CatalogueOffer()
     /** Where links go, once the server has started (the WebView's client reads it on its own threads). */
     @Volatile private var links: Links? = null
     /** The server's files read in this process, once it has started (the WebView's client reads it on its own
@@ -115,8 +113,8 @@ class MainActivity : Activity() {
         title = findViewById(R.id.title)
         opening = OpeningScreen(findViewById(R.id.loading))
         offer = findViewById(R.id.catalogue_offer)
-        findViewById<View>(R.id.offer_download).setOnClickListener { answerOffer(download = true) }
-        findViewById<View>(R.id.offer_not_now).setOnClickListener { answerOffer(download = false) }
+        findViewById<View>(R.id.offer_download).setOnClickListener { offerState.answer(download = true)?.let(::answered) }
+        findViewById<View>(R.id.offer_not_now).setOnClickListener { offerState.answer(download = false)?.let(::answered) }
         settings = Settings(this)
         alphaTab = AlphaTabAssets(this)
         chooser = FileChooser(this)
@@ -225,9 +223,11 @@ class MainActivity : Activity() {
         val first = saved == null && page == null && sheet == null
         val setUp = settings.server.isNotBlank() || Caracole.mirror(this).manifest() != null
         if (saved?.getBoolean(OFFERING) == true) {
-            showOffer(thenSettings = saved.getBoolean(OFFER_SETTINGS))
+            offerState.restore(saved.getBoolean(OFFER_SETTINGS))
+            showOffer()
         } else if (first && withContext(Dispatchers.IO) { offerCatalogues(phone) }) {
-            showOffer(thenSettings = !setUp)
+            offerState.offer(thenSettings = !setUp)
+            showOffer()
         } else if (first && !setUp) {
             openSettings()
         }
@@ -235,7 +235,7 @@ class MainActivity : Activity() {
 
     /**
      * Whether the first start offers the site catalogues ([SiteCatalogues.firstStart]: no computer set, never offered,
-     * no site's index, looked at last). kv [SiteCatalogues.OFFERED] is written once it is answered ([answerOffer]), so
+     * no site's index, looked at last). kv [SiteCatalogues.OFFERED] is written once it is answered ([answered]), so
      * a start that ends before (the app swiped away) offers it again; or here, once a site's index is found there
      * (decided: no later start looks again), so a start counts no table once it is decided. False when the database
      * can't say.
@@ -257,24 +257,22 @@ class MainActivity : Activity() {
 
     /** The offer shown once the opening screen is gone (never live under the logo, nor drawn over it), Back answering
      * it Not now. */
-    private fun showOffer(thenSettings: Boolean) {
-        offering = true
-        offerThenSettings = thenSettings
+    private fun showOffer() {
         opening.whenGone {
-            if (!offering) return@whenGone
+            if (!offerState.openingGone()) return@whenGone
             offer.visibility = View.VISIBLE
             offerBack(true)
         }
     }
 
     /**
-     * The offer answered: Download queues the catalogues' job and opens Settings, whose row follows it (and asks
-     * before a download on mobile data); Not now (or Back) opens Settings only where a first start would have
-     * ([settingsAfter]). Either way kv [SiteCatalogues.OFFERED] says it was offered, so no start offers it again.
+     * The offer answered ([CatalogueOffer.Answer]): the card gone, kv [SiteCatalogues.OFFERED] written, so no start
+     * offers it again; Download queues the catalogues' job; Settings opened where the answer says (Download's, whose
+     * row follows the job and asks before a download on a metered network; Not now's only where a first start would
+     * have).
      */
-    private fun answerOffer(download: Boolean, settingsAfter: Boolean = offerThenSettings) {
-        if (!offering) return
-        offering = false
+    private fun answered(answer: CatalogueOffer.Answer) {
+        val download = answer.download
         offer.visibility = View.GONE
         offerBack(false)
         val app = applicationContext
@@ -286,13 +284,13 @@ class MainActivity : Activity() {
                     if (download) SiteCatalogues.queue(phone, meteredOk = false)
                 }
             }
-            if (download || settingsAfter) openSettings()
+            if (answer.openSettings) openSettings()
         }
     }
 
     /** Back while the offer shows is its Not now (from Android 13 a callback over the WebView's; before, onBackPressed). */
     private val offerBackCallback: Any? =
-        if (Build.VERSION.SDK_INT >= 33) OnBackInvokedCallback { answerOffer(download = false) } else null
+        if (Build.VERSION.SDK_INT >= 33) OnBackInvokedCallback { offerState.back()?.let(::answered) } else null
     private var offerBackRegistered = false
 
     private fun offerBack(want: Boolean) {
@@ -332,7 +330,7 @@ class MainActivity : Activity() {
         if (!shown && origin != null) showLibrary()
         // A computer set meanwhile (⋮ › Settings while the offer waited): the offer, made to a phone with none, is
         // moot, and goes, opening nothing.
-        if (offering && settings.server.isNotBlank()) answerOffer(download = false, settingsAfter = false)
+        offerState.resumed(settings.server)?.let(::answered)
     }
 
     override fun onStart() {
@@ -348,9 +346,9 @@ class MainActivity : Activity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        if (offering) {
+        offerState.saved()?.let { thenSettings ->
             outState.putBoolean(OFFERING, true)
-            outState.putBoolean(OFFER_SETTINGS, offerThenSettings)
+            outState.putBoolean(OFFER_SETTINGS, thenSettings)
         }
         val gone = goneAt
         if (gone != null) {  // the renderer died, its WebView with it: the page it showed, to open again
@@ -425,7 +423,7 @@ class MainActivity : Activity() {
     }
 
     private fun openSettings() {
-        offerThenSettings = false  // seen: the offer's Not now needn't open it again
+        offerState.settingsSeen()  // the offer's Not now needn't open it again
         startActivity(Intent(this, SettingsActivity::class.java))
     }
 
@@ -637,8 +635,9 @@ class MainActivity : Activity() {
     @SuppressLint("GestureBackNavigation")
     @Deprecated("Android 13 and later use backCallback")
     override fun onBackPressed() {
+        val answer = offerState.back()
         when {
-            offering && offer.visibility == View.VISIBLE -> answerOffer(download = false)
+            answer != null -> answered(answer)
             web.canGoBack() -> web.goBack()
             else -> @Suppress("DEPRECATION") super.onBackPressed()
         }
