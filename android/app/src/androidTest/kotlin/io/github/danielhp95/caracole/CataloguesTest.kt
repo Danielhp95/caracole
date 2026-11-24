@@ -12,11 +12,11 @@ import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
 import androidx.test.runner.lifecycle.Stage
 import io.github.danielhp95.caracole.core.catalogues.Catalogues
 import io.github.danielhp95.caracole.core.db.Database
-import io.github.danielhp95.caracole.core.index.IndexTransfer
 import io.github.danielhp95.caracole.core.index.TabCounts
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.Fixtures
 import io.github.danielhp95.caracole.server.jobs.JobViews
+import io.github.danielhp95.caracole.server.jobs.PhoneKinds
 import io.github.danielhp95.caracole.server.lookups.CataloguesRunner
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -49,9 +49,9 @@ import kotlin.random.Random
  * GitHub is this test's own server on the device's loopback ([GitHub]: its API's release by its tag and an asset's
  * bytes, as CatalogueSource.Api asks them), which [Caracole.cataloguesForTests] points the job at. On a first start
  * (the app's data cleared, as device-test.sh clears it before each class) with no computer set and no index, the
- * library screen offers the catalogues; Download imports them, and Settings, opened after it, says their date; a second
- * Download is Up to date. On a metered network the job stops before downloading and Settings asks "… over mobile
- * data?"; Download there is the go-ahead, which imports.
+ * library screen offers the catalogues; Download imports them, and Settings, opened after it, says their date (the
+ * file's); a second Download is Up to date. On a metered network the job stops before downloading and Settings asks
+ * "… over mobile data?", asked again by the screen a rotation makes; Download there is the go-ahead, which imports.
  */
 @RunWith(AndroidJUnit4::class)
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
@@ -88,11 +88,8 @@ class CataloguesTest {
             val settings = resumed<SettingsActivity>()
             waitUntil("the catalogues imported", 60_000) { kv(Catalogues.IMPORTED) == first }
             assertTrue(Caracole.phone(context).parts.database.read { TabCounts.of(it) }.values.any { it > 0 })
-            val newest = Caracole.phone(context).parts.database.read { SiteCatalogues.newest(IndexTransfer.newest(it)) }
-            assertNotNull(newest)
-            waitUntil("their date in Settings") {
-                text(settings, R.id.catalogues_date).startsWith("Of ${SiteCatalogues.day(newest!!)} · ")
-            }
+            // The file's own date (its name's minute), never the newest read the phone's indexes hold.
+            waitUntil("their date in Settings") { text(settings, R.id.catalogues_date).startsWith("Of 24 Nov 2026 · ") }
             waitUntil("the job's line") { text(settings, R.id.catalogues_status) == "Catalogues of 24 Nov 2026" }
 
             onMain { settings.findViewById<View>(R.id.catalogues_download).performClick() }
@@ -117,11 +114,16 @@ class CataloguesTest {
             var asked: AlertDialog? = null
             waitUntil("the question", 60_000) { onMain { settings.asked }.also { asked = it } != null }
             assertFalse("waiting for the go-ahead, nothing imported", kv(Catalogues.IMPORTED) == second)
-            assertTrue(text(settings, R.id.catalogues_status).endsWith("to download: waiting for Wi-Fi or your go-ahead"))
+            // The kind's wait, in whatever words it has (PhoneKinds' otherwise, its size filled in).
+            assertTrue(PhoneKinds.fits(text(settings, R.id.catalogues_status), PhoneKinds.CATALOGUES.otherwise!!))
             assertNotNull(kv(CataloguesRunner.ASKING))
+            // A rotation: the question goes with its window, unanswered and leaking nothing, and the new screen asks it.
+            scenario.recreate()
+            val again = find(scenario)
+            waitUntil("the question again, after a rotation") { onMain { again.asked }.also { asked = it } != null }
             onMain { asked!!.getButton(AlertDialog.BUTTON_POSITIVE).performClick() }
             waitUntil("the go-ahead imports", 60_000) { kv(Catalogues.IMPORTED) == second }
-            waitUntil("its line") { text(settings, R.id.catalogues_status) == "Catalogues of 1 Dec 2026" }
+            waitUntil("its line") { text(again, R.id.catalogues_status) == "Catalogues of 1 Dec 2026" }
         }
     }
 

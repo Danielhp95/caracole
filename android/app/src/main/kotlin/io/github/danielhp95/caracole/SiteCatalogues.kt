@@ -1,7 +1,10 @@
 package io.github.danielhp95.caracole
 
+import io.github.danielhp95.caracole.core.catalogues.Catalogues
 import io.github.danielhp95.caracole.core.catalogues.Named
+import io.github.danielhp95.caracole.core.catalogues.Names
 import io.github.danielhp95.caracole.core.catalogues.date
+import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.server.Phone
@@ -18,17 +21,52 @@ import java.util.Collections
 
 /**
  * What the app says and decides of the site catalogues (CataloguesRunner's job, Settings' row and the first start's
- * card), apart from Android, so that a JVM test holds it: the date Settings shows ([newest], [day], [age]), whether the
- * first start offers them ([offers]), and the question a metered network leaves ([asking], [asks]). Its words are the
- * app's strings.xml; the ones it makes here are the job's ([size]) and core.catalogues' ([day]).
+ * card), apart from Android, so that a JVM test holds it: the date Settings shows ([fresh], [day], [age]), whether the
+ * first start offers them ([firstStart]), and the question a metered network leaves ([asking], [asks], [toSay]). Its
+ * words are the app's strings.xml; the ones it makes here are the job's ([size]) and core.catalogues' ([day]).
  */
 object SiteCatalogues {
-    /** kv: when the first start offered the catalogues, so it offers them once. */
+    /** kv: when the first start offered the catalogues (or found a site's index there already), so it decides once. */
     const val OFFERED = "catalogues:offered"
 
-    /** The newest of the sites' indexes' times (IndexTransfer.newest's), none for none; a time Stamps can't read is
-     * none. */
-    fun newest(times: Map<String, String>): Instant? = times.values.mapNotNull { stamp ->
+    /** kv: the computer's indexes' stamps as the phone merged them last, a record a computer (SyncEngine.INDEX_KEY). */
+    const val COMPUTERS = "sync:index:"
+
+    /** Where the indexes Settings dates came from: the site catalogues imported, or a computer's, by a sync. */
+    enum class Source { CATALOGUES, COMPUTER }
+
+    data class Fresh(val source: Source, val at: Instant)
+
+    /**
+     * How fresh the phone's site indexes are, as Settings says it: the catalogues imported last ([imported], kv
+     * `catalogues:imported`, the file's name, which names its minute: core.catalogues' Names), or the computer's
+     * indexes as a sync merged them ([computers], each kv [COMPUTERS] record, `{site: stamp}`), the newer of the two
+     * (the catalogues on a tie); none when neither was ever taken. Never the phone's own reads (a lookup's UG artist
+     * page, an artist's Songs on harptabs.com), which say nothing of how old the rest is.
+     */
+    fun fresh(imported: String?, computers: List<String?>): Fresh? {
+        val catalogues = imported?.let(Names::read)?.let { Fresh(Source.CATALOGUES, it.at) }
+        val computer = newest(computers.flatMap(::stampsOf))?.let { Fresh(Source.COMPUTER, it) }
+        return listOfNotNull(catalogues, computer).maxByOrNull { it.at }  // the first of the newest: the catalogues
+    }
+
+    /** [fresh] as the phone's database [db] has it: kv `catalogues:imported` and each kv [COMPUTERS] record. */
+    fun read(db: Db): Fresh? = fresh(db.kvGet(Catalogues.IMPORTED),
+                                     db.query("SELECT value FROM kv WHERE key >= ? AND key < ?", COMPUTERS,
+                                              COMPUTERS.dropLast(1) + ";") { it.text(0) })
+
+    /** A kv [COMPUTERS] record's stamps; none of a record that isn't a JSON object of texts. */
+    private fun stampsOf(text: String?): List<String> {
+        val doc = try {
+            text?.let(PyJson::loads)
+        } catch (e: Exception) {
+            null
+        } as? JsonObject ?: return emptyList()
+        return doc.values.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content }
+    }
+
+    /** The newest of [stamps], none for none; a time Stamps can't read is none. */
+    private fun newest(stamps: List<String>): Instant? = stamps.mapNotNull { stamp ->
         try {
             Stamps.parse(stamp)?.let(Stamps::instant)
         } catch (e: ArithmeticException) {
@@ -51,15 +89,25 @@ object SiteCatalogues {
             days < 1 -> Age(Unit.TODAY, 0)
             days < 14 -> Age(Unit.DAYS, days.toInt())
             days < 60 -> Age(Unit.WEEKS, (days / 7).toInt())
-            days < 365 -> Age(Unit.MONTHS, (days / 30).toInt())
+            days < 365 -> Age(Unit.MONTHS, minOf(days / 30, 11L).toInt())  // 360 to 364 days: 11, not 12
             else -> Age(Unit.YEARS, (days / 365).toInt())
         }
     }
 
-    /** Whether the first start offers the catalogues: no computer set ([server] blank), no site's index holds a tab
-     * ([counts], TabCounts.of's), and never offered before ([offered], kv [OFFERED]). */
-    fun offers(server: String, counts: Map<String, Long>, offered: String?): Boolean =
-        server.isBlank() && counts.values.all { it == 0L } && offered == null
+    /** What a start does of the offer: [OFFER] it (recorded once answered), record it [DECIDED] (a site's index is
+     * there already: no later start need look again), or [NOTHING]. */
+    enum class FirstStart { OFFER, DECIDED, NOTHING }
+
+    /**
+     * Whether the start offers the catalogues: no computer set ([server] blank), never offered nor decided before
+     * ([offered], kv [OFFERED]), and no site's index holding a tab ([holdsIndex]), which is asked only once both
+     * cheaper checks leave the offer open, so a start with a computer set, or after the offer, counts no table.
+     */
+    fun firstStart(server: String, offered: String?, holdsIndex: () -> Boolean): FirstStart = when {
+        server.isNotBlank() || offered != null -> FirstStart.NOTHING
+        holdsIndex() -> FirstStart.DECIDED
+        else -> FirstStart.OFFER
+    }
 
     /** The file a metered network left waiting for the owner's go-ahead (kv `catalogues:asking`). */
     data class Asking(val name: String, val bytes: Long)
@@ -88,14 +136,22 @@ object SiteCatalogues {
      * a backup; the job waiting or running answers a second tap (CataloguesRunner.spec); null when the queue is full.
      * Its end is then still to be said ([toSay]). */
     fun queue(phone: Phone, meteredOk: Boolean): Job? = try {
-        phone.queue.submit(phone.catalogues.spec(meteredOk)).first.also { unsaid += it.id }
+        phone.queue.submit(phone.catalogues.spec(meteredOk)).first.also { owe(it.id) }
     } catch (_: QueueFull) {
         null
     }
 
-    /** Whether the end of job [id], one the app queued ([queue]), is still to be said (its question asked): true
-     * once, so that a screen that follows it twice, or opens after it ended, asks once. */
-    fun toSay(id: Int): Boolean = unsaid.remove(id)
+    /** Job [id]'s end to be said ([toSay]), the app having queued it. */
+    internal fun owe(id: Int) {
+        unsaid += id
+    }
+
+    /** Whether the end of job [id], one the app queued ([queue]), is still to be said: until [said], so that a screen
+     * gone before its question is answered (a rotation, Home) leaves it to the next one. */
+    fun toSay(id: Int): Boolean = id in unsaid
+
+    /** Job [id]'s end said: its question answered, or none to ask; true the first time alone. */
+    fun said(id: Int): Boolean = unsaid.remove(id)
 
     /** The newest of [jobs] that is a catalogues job, none for none. */
     fun newestOf(jobs: List<Job>): Job? = jobs.filter { it.spec.kind == PhoneKinds.CATALOGUES.kind }.maxByOrNull { it.id }

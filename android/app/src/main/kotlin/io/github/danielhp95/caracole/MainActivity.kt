@@ -231,15 +231,20 @@ class MainActivity : Activity() {
     }
 
     /**
-     * Whether the first start offers the site catalogues ([SiteCatalogues.offers]: no computer set, no site's index,
-     * never offered), kv [SiteCatalogues.OFFERED] written as it is offered, so it is offered once; false when the
+     * Whether the first start offers the site catalogues ([SiteCatalogues.firstStart]: no computer set, never offered,
+     * no site's index, looked at last), kv [SiteCatalogues.OFFERED] written as it is offered, or once a site's index is
+     * found there (decided: no later start looks again), so a start counts no table once it is decided; false when the
      * database can't say.
      */
     private fun offerCatalogues(phone: Phone): Boolean = try {
         val db = phone.parts.database
-        val offers = db.read { SiteCatalogues.offers(settings.server, TabCounts.of(it), it.kvGet(SiteCatalogues.OFFERED)) }
-        if (offers) db.writeBlocking { it.kvSet(SiteCatalogues.OFFERED, Stamps.now()) }
-        offers
+        val start = db.read { d ->
+            SiteCatalogues.firstStart(settings.server, d.kvGet(SiteCatalogues.OFFERED)) {
+                TabCounts.of(d).values.any { it > 0 }
+            }
+        }
+        if (start != SiteCatalogues.FirstStart.NOTHING) db.writeBlocking { it.kvSet(SiteCatalogues.OFFERED, Stamps.now()) }
+        start == SiteCatalogues.FirstStart.OFFER
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
