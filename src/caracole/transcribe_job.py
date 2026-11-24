@@ -29,10 +29,11 @@ times the separator's pace, the GPU's or the CPU's, ``separate.GPU_PACE``, ``CPU
 Whisper loading, then how far it has heard the mix (``_heard``), a window at a time; the chords auto-chords' steps.
 
 Before each of vocals, words and chords, the long stages, a waiting lookup goes first (``_common.hand_over``); then
-the song is read again, checked still offered (before the chords, its transcript kept no refusal), and its audio
-still the one vocals separated before words and chords. A song that left the book, is offered no more (a human sheet
-kept meanwhile, ignored, lyrics found) or has other audio ends the job there, a refusal its song stage says, before
-the next model runs.
+the song is read again, checked still offered (before the chords, its transcript kept no refusal:
+``_still_due_its_sheet``), and its audio still the one vocals separated before words and chords. A song that left the
+book, is offered no more (a human sheet kept meanwhile, ignored, lyrics found) or has other audio ends the job there,
+a refusal its song stage says, before the next model runs; at the chords, with the words kept, that its transcript is
+(``TranscribeResult.transcript_kept``: the command's "Transcript kept; no sheet made").
 
 The models default to demucs-rs and Whisper from ``cfg``, each built at its first stage. Whisper is run first on
 run.py's test tone, as auto-chords checks its own: a model that fails there would fail on every song. demucs-rs is
@@ -64,6 +65,7 @@ be transcribed here (``youtube_fetch.transcribe_problem``).
 from __future__ import annotations
 
 import fcntl
+import logging
 import os
 import shutil
 import subprocess
@@ -79,6 +81,8 @@ from caracole.config import Config
 from caracole.get import Progress
 from caracole.logs import plural
 from caracole.staged import StagedResult, StagedRun, _Stop
+
+log = logging.getLogger(__name__)
 
 STAGES = (
     ("song", "Find the song"),
@@ -112,7 +116,10 @@ class TranscribeRequest:
 
 @dataclass
 class TranscribeResult(StagedResult):
-    """What came of a transcription: its stages' ends, and the sheet's files once readable."""
+    """What came of a transcription: its stages' ends, and the sheet's files once readable; ``transcript_kept``, refused
+    at its chords with its own audio's transcript kept (the command's "Transcript kept; no sheet made")."""
+
+    transcript_kept: bool = False
 
 
 class _Transcription(StagedRun):
@@ -151,23 +158,41 @@ class _Transcription(StagedRun):
     def _not_offered(self, why: str) -> _Stop:
         return _Stop(f"{self.song.display} isn't offered a transcription: {why}")
 
-    def _still_offered(self, *, transcribed: bool = False) -> None:
-        """The song still offered a transcription, else the job ends there (``_Stop``); ``transcribed``: its own
-        audio's transcript kept, as once the words are, is no refusal."""
+    def _still_offered(self) -> None:
+        """The song still offered a transcription, else the job ends there (``_Stop``)."""
+        from caracole.autochords.transcript import why_not_offered
+
+        why = why_not_offered(self.conn, self.cfg, self.song, self.overrides)
+        if why is not None:
+            raise self._not_offered(why)
+
+    def _still_due_its_sheet(self) -> None:
+        """Before the chords, the song still one a sheet over its transcript is made for: offered a transcription but
+        for the one of its own audio kept, else the job ends there, a refusal that says the transcript is kept (a
+        lookup that went first kept a human sheet, it was ignored, its lyrics came)."""
         from caracole.autochords.transcript import ALREADY_TRANSCRIBED, why_not_offered
 
         why = why_not_offered(self.conn, self.cfg, self.song, self.overrides)
-        if why is not None and not (transcribed and why == ALREADY_TRANSCRIBED):
-            raise self._not_offered(why)
+        if why is not None and why != ALREADY_TRANSCRIBED:
+            self.result.transcript_kept = True
+            raise _Stop(f"{self.song.display} needs no sheet over its transcript now: {why}")
 
     def _sheet_to_make(self) -> bool:
         """Whether the song, offered no transcription for the one of its own audio kept already, has no auto sheet over
-        it yet (auto-chords would make one: run.py ``_skip_reason``), so the job goes straight to its chords."""
+        it yet (auto-chords would make one: run.py ``_skip_reason``), so the job goes straight to its chords. A song
+        record that can't be read ends the job, a refusal in its words, as auto-chords counts it an error (``_due``)."""
         from caracole.autochords.run import _skip_reason
         from caracole.autochords.transcript import ALREADY_TRANSCRIBED, why_not_offered
 
-        why = why_not_offered(self.conn, self.cfg, self.song, self.overrides)
-        return why == ALREADY_TRANSCRIBED and _skip_reason(self.conn, self.song, self.overrides) is None
+        if why_not_offered(self.conn, self.cfg, self.song, self.overrides) != ALREADY_TRANSCRIBED:
+            return False
+        try:
+            return _skip_reason(self.conn, self.song, self.overrides) is None
+        except Exception as e:  # noqa: BLE001 - a record another device wrote: the song's, never a bug's traceback
+            log.error("%s: its auto sheet's record can't be read: %s: %s", self.song.display, type(e).__name__, e,
+                      exc_info=not isinstance(e, (OSError, RuntimeError, ValueError)))
+            raise _Stop(f"{self.song.display}: its auto sheet's record can't be read ({type(e).__name__}: "
+                        f"{e})") from e
 
     def _same_audio(self) -> None:
         """The song's audio still the one its vocals were separated from (another caracole may replace it while this
@@ -344,7 +369,7 @@ class _Transcription(StagedRun):
             return "skipped", "no transcript"
         self._after_a_lookup()
         self._same_audio()
-        self._still_offered(transcribed=True)  # a human sheet kept meanwhile, ignored: auto-chords would skip it
+        self._still_due_its_sheet()  # a human sheet kept meanwhile, ignored: auto-chords would skip it
         return self._autochords_sheet()
 
     # --- the whole run --------------------------------------------------------------------------------

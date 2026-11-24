@@ -172,6 +172,33 @@ def test_a_transcription_that_fails_ends_saying_so_never_done_and_exits_1(tmp_pa
     assert not any(line.startswith("Done in ") for line in lines)
 
 
+def test_a_transcription_refused_at_its_chords_says_its_transcript_is_kept(tmp_path, config, conn, models,
+                                                                            monkeypatch):
+    # A lookup that went first before the chords kept UG's chords: the job ends there, a refusal, but the words were
+    # heard and kept, which its last line says (never "No transcript made").
+    from test_youtube_sheet import keep_human_sheet
+
+    monkeypatch.setattr(yf, "transcribe_problem", lambda cfg: None)
+    cfg = load_config(config, env={})
+    song = offered(conn, cfg)
+    handed: list[int] = []
+    monkeypatch.setattr(_common, "_handoffs", _common.handoffs())  # put back as it was after the test
+
+    def hand_over(cfg_, conn_=None) -> bool:
+        handed.append(1)
+        _common._handoffs += 1
+        if len(handed) == 3:  # before vocals, words, then the chords
+            keep_human_sheet(conn_, cfg_, song)
+        return True
+
+    monkeypatch.setattr(_common, "hand_over", hand_over)
+    result = invoke(config, "--song", "Nick Cani - Vikingos veganos")
+    assert result.exit_code == 1, result.output
+    assert result.output.splitlines()[-1] == ("Transcript kept; no sheet made: Nick Cani - Vikingos veganos needs no "
+                                              "sheet over its transcript now: has a human sheet.")
+    assert kv_get(conn, f"transcript:{song.id}") is not None
+
+
 def test_transcribe_where_it_cant_run_says_why_and_exits_1(tmp_path, config, conn, models, monkeypatch):
     monkeypatch.setattr(yf, "autochords_missing", lambda: ["torch"])
     song = offered(conn, load_config(config, env={}))

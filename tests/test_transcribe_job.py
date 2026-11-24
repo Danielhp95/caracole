@@ -418,6 +418,28 @@ def test_try_again_after_the_chords_failed_makes_the_sheet_over_the_transcript_k
     assert third.refused == "Nick Cani - Vikingos veganos isn't offered a transcription: already transcribed"
 
 
+def test_a_songs_auto_sheet_record_that_cant_be_read_is_a_refusal_never_a_traceback(conn, cfg):
+    # Whether a transcribed song's sheet is still to make reads its auto sheet's record (run.py _skip_reason): a
+    # record another device wrote that won't read stops the job as a refusal, in its words, as auto-chords counts
+    # such a song an error and goes on.
+    from caracole.autochords.run import autochords_pending
+    from caracole.autochords.transcript import keep_transcript
+
+    song = offered(conn, cfg)
+    autochords_pending(conn, cfg, recognizer=Recognizer(), beats_fn=beats, only={song.id})
+    keep_transcript(conn, song, Transcript(lrc=LRC, audio=song.audio_path, audio_mtime=song.audio_mtime,
+                                           model="whisper-large-v3", language="es", device="cpu", words_dropped=1,
+                                           made_at="2026-11-19T21:00:00Z"))
+    conn.execute("UPDATE versions SET raw = '{not json' WHERE song_id = ?", (song.id,))
+    separator, transcriber, recognizer = Separator(), Transcriber(), Recognizer()
+    result, heard = make(cfg, separator=separator, transcriber=transcriber, recognizer=recognizer)
+    assert result.bug is None and result.failed is None
+    assert result.refused is not None and result.refused.startswith(
+        "Nick Cani - Vikingos veganos: its auto sheet's record can't be read (JSONDecodeError: "), result.refused
+    assert heard.ends()["song"] == ("failed", result.refused)
+    assert separator.calls == transcriber.calls == recognizer.calls == []
+
+
 def test_with_no_singing_found_whisper_never_runs_and_nothing_sung_is_noted(conn, cfg, monkeypatch):
     # The guard would drop every word Whisper heard: it isn't run (up to half an hour on a CPU).
     song = offered(conn, cfg)
@@ -752,8 +774,9 @@ def test_a_default_model_that_fails_on_the_tone_or_at_load_is_the_setups(conn, c
     ("chords", lambda conn, cfg, song: conn.execute("DELETE FROM songs"),
      "Nick Cani - Vikingos veganos left the book while its lyrics were transcribed (removed, or merged into a song "
      "of the same name)"),
-    ("chords", keep_human_sheet, "Nick Cani - Vikingos veganos isn't offered a transcription: has a human sheet"),
-    ("chords", ignored, "Nick Cani - Vikingos veganos isn't offered a transcription: ignored"),
+    ("chords", keep_human_sheet, "Nick Cani - Vikingos veganos needs no sheet over its transcript now: has a human "
+                                 "sheet"),
+    ("chords", ignored, "Nick Cani - Vikingos veganos needs no sheet over its transcript now: ignored"),
 ], ids=["lyrics found before the words", "removed before the chords", "a human sheet before the chords",
         "ignored before the chords"])
 @pytest.mark.parametrize("earlier", [False, True], ids=["no auto sheet before", "an auto sheet before"])
@@ -788,6 +811,10 @@ def test_a_song_a_lookup_changed_while_it_had_the_lock_ends_the_job_as_a_refusal
     assert recognizer.calls == []
     assert (transcriber.calls == []) == (before == "words")
     assert auto_sheet(cfg, conn, song).exists() == made_before
+    # Refused at the chords, its transcript is kept, and the job says so (the command's "Transcript kept; ...").
+    assert result.transcript_kept == ("needs no sheet" in said)
+    if result.transcript_kept:
+        assert transcript_of(conn, get_song(conn, song.id)) is not None
 
 
 
