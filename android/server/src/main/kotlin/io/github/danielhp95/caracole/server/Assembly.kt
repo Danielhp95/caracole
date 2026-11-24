@@ -16,6 +16,7 @@ import io.github.danielhp95.caracole.core.lookup.Clients
 import io.github.danielhp95.caracole.core.lookup.Pacing
 import io.github.danielhp95.caracole.core.sync.PeerClient
 import io.github.danielhp95.caracole.core.sync.SyncEngine
+import io.github.danielhp95.caracole.mirror.Http
 import io.github.danielhp95.caracole.mirror.Mirror
 import io.github.danielhp95.caracole.mirror.ServerAddress
 import io.github.danielhp95.caracole.server.files.LibraryFiles
@@ -94,13 +95,17 @@ import io.github.danielhp95.caracole.mirror.SyncEngine as MirrorSync
  * remembers, the launch's secret and form token, and [transport]: how a request reaches a site, by provider, read on
  * every request (the app's `RealTransport`; a test's refusing or fake transport: it has no default, so no test ever
  * reaches a site by accident). [searchesLacuerda] false: `/api/search`'s `lacuerda_search` null, as the computer's
- * `WebApp(searches_lacuerda=False)` (CaracoleTestRunner's).
+ * `WebApp(searches_lacuerda=False)` (CaracoleTestRunner's). [catalogues]: where the site catalogues' job lists
+ * GitHub's release (GitHub's API; a device test's GitHub on loopback), and [metered]: whether the network is metered
+ * now, read as the job runs (the app's ConnectivityManager; none metered by default).
  */
 data class PhoneDeps(val database: Database, val libraryDir: File, val stateDir: File, val mirror: Mirror?,
                      val scope: CoroutineScope, val settings: SyncSettings, val secret: String, val csrf: String,
                      val transport: (provider: String) -> Transport, val version: String = "0.1.0",
                      val alerts: Alerts = Alerts.NONE, val pacing: Pacing = Pacing.REAL,
-                     val searchesLacuerda: Boolean = true)
+                     val searchesLacuerda: Boolean = true,
+                     val catalogues: (Http) -> CatalogueSource = { CatalogueSource.Api(it) },
+                     val metered: () -> Boolean = { false })
 
 /**
  * The phone's caracole, assembled: its route modules in this order, PageRoutes, SearchRoutes, JobsRoutes,
@@ -143,8 +148,9 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
     val parts: PhoneParts
 
     /** The site catalogues' job (`catalogues`), which the app queues ([CataloguesRunner.spec]): GitHub's release read
-     * through its API (the owner's choice S1), asked with caracole's user agent as the settings say it when it runs,
-     * on a network the app doesn't yet say is metered. */
+     * through its API (the owner's choice S1; [PhoneDeps.catalogues], a test's GitHub), asked with caracole's user
+     * agent as the settings say it when it runs, stopping for the owner's go-ahead on a network the app says is
+     * metered ([PhoneDeps.metered]). */
     val catalogues: CataloguesRunner
 
     init {
@@ -165,7 +171,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         commands["songbook"] = SongbookRunner(parts)
         commands["inbox"] = InboxRunner(parts)
         commands["backup"] = BackupRunner(parts)
-        catalogues = CataloguesRunner(parts, source = { http -> CatalogueSource.Api(http) }, metered = { false },
+        catalogues = CataloguesRunner(parts, source = deps.catalogues, metered = deps.metered,
                                       forget = { search.invalidate() })
         commands[CataloguesRunner.COMMAND] = catalogues
     }

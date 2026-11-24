@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The first start's offer of the site catalogues (MainActivity's catalogue_offer): a card on the page's
+     background, its corners the pages' large radius (12px). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/background" />
+    <stroke android:width="1dp" android:color="@color/opening_track" />
+    <corners android:radius="12dp" />
+</shape>

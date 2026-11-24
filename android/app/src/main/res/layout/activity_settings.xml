@@ -160,6 +160,46 @@
                 android:textColor="@color/muted"
                 android:textSize="13sp" />
 
+            <!-- The site catalogues (SiteCatalogues): the newest of the sites' indexes, "Of 3 Nov 2026 · 3 weeks old"
+                 or "None yet", and Download, which queues CataloguesRunner's job; what the job says under it. -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="@string/catalogues_label"
+                android:textColor="@color/muted"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/catalogues_date"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/catalogues_none"
+                android:textColor="@color/text"
+                android:textSize="15sp" />
+
+            <Button
+                android:id="@+id/catalogues_download"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/catalogues_download" />
+
+            <TextView
+                android:id="@+id/catalogues_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:accessibilityLiveRegion="polite"
+                android:textColor="@color/text"
+                android:textSize="13sp"
+                android:visibility="gone" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/catalogues_hint"
+                android:textColor="@color/muted"
+                android:textSize="13sp" />
+
             <!-- The phone's backups (BackupsActivity), apart from the sync's rows. -->
             <TextView
                 android:layout_width="wrap_content"

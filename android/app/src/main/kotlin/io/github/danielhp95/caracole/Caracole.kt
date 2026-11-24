@@ -1,6 +1,8 @@
 package io.github.danielhp95.caracole
 
 import android.content.Context
+import android.net.ConnectivityManager
+import io.github.danielhp95.caracole.core.catalogues.CatalogueSource
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.health.Alerts
 import io.github.danielhp95.caracole.core.http.RealTransport
@@ -20,6 +22,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import java.io.File
+import java.net.URI
 import java.security.SecureRandom
 import java.time.Instant
 import java.util.Locale
@@ -64,6 +67,22 @@ object Caracole {
 
     /** False under CaracoleTestRunner: `/api/search`'s `lacuerda_search` null, so no page sends LaCuerda a search. */
     @Volatile var searchesLacuerdaForTests: Boolean = true
+
+    /** A test's GitHub (CaracoleTestRunner's `-e catalogues URI`, or a device test's server on loopback): the site
+     * catalogues' job lists the release there, read each time it runs; GitHub's API itself when null. */
+    @Volatile var cataloguesForTests: URI? = null
+
+    /** A test's network, metered or not, read each time the catalogues' job asks; Android's when null. */
+    @Volatile var meteredForTests: Boolean? = null
+
+    /** Where the catalogues' job lists the release: GitHub's API, or [cataloguesForTests]. */
+    private fun catalogues(http: Http): CatalogueSource =
+        cataloguesForTests?.let { CatalogueSource.Api(http, base = it) } ?: CatalogueSource.Api(http)
+
+    /** Whether the network the phone uses now is metered (mobile data, a hotspot): [meteredForTests], else Android's
+     * ConnectivityManager, a phone with no way to tell taken as metered. */
+    private fun metered(context: Context): Boolean = meteredForTests
+        ?: (context.getSystemService(ConnectivityManager::class.java)?.isActiveNetworkMetered ?: true)
 
     /** The phone's alerts: [AndroidAlerts] from the start, unless something set others before (lane alerts-backups'
      * Android notifications; they tell no one until it lands). */
@@ -111,7 +130,7 @@ object Caracole {
                 database = database, libraryDir = library, stateDir = state, mirror = mirror(context), scope = background,
                 settings = SavedAddress(Settings(context)), secret = secret, csrf = csrf,
                 transport = { _ -> transport() }, version = BuildConfig.VERSION_NAME, alerts = alerts,
-                searchesLacuerda = searchesLacuerdaForTests,
+                searchesLacuerda = searchesLacuerdaForTests, catalogues = ::catalogues, metered = { metered(context) },
             ))
             // A job the queue gets (a sync from the Sync tab, an add, a removal, a lookup) keeps the process going in
             // the foreground until none waits or runs: the queue tells, the service follows, a lookup's line the
