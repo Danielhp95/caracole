@@ -266,10 +266,14 @@ def export(conn: sqlite3.Connection, path: Path, sites: Iterable[str] | None = N
 
 
 def _omit(part: Path, omit: Sequence[Omit]) -> None:
-    """Delete the rows ``omit`` names from the file ``part``, then VACUUM it. The names come from the rules alone."""
+    """Delete the rows ``omit`` names from the file ``part``, then VACUUM it; a rule for a table the file doesn't
+    hold (an export of some sites) is passed over. The names come from the rules alone."""
     out = sqlite3.connect(part, isolation_level=None)
     try:
+        held = {r[0] for r in out.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
         for rule in omit:
+            if rule.table not in held:
+                continue
             out.execute(f"DELETE FROM {rule.table} WHERE {rule.where}")
         out.execute("VACUUM")
     finally:

@@ -113,7 +113,10 @@ def register(app: typer.Typer) -> None:
                                        help="Print those of the NAMEs the Keep rule deletes; exports nothing."),
     ) -> None:
         """Write every site's index as the public, gzipped catalogue file, and its published.json."""
-        _publish(load_cfg(ctx, builds_index="index publish"), folder, force, kept)
+        if kept:  # the Keep rule reads no config and no database, so the service's guard never refuses it
+            _kept(kept)
+            return
+        _publish(load_cfg(ctx, builds_index="index publish"), folder, force)
 
     @index.command("merge")
     def merge_cmd(
@@ -264,16 +267,20 @@ def _export(cfg: Config, file: Path, sites: list[str]) -> None:
                                for n, table in enumerate(transfer.SITES[name].tables)) + ".")
 
 
-def _publish(cfg: Config, folder: Path, force: bool, kept: list[str]) -> None:
-    from caracole import backup, catalogues, db
+def _kept(names: list[str]) -> None:
+    """``caracole index publish --kept NAME…``: those of the names the Keep rule deletes, a line each."""
+    from caracole import catalogues, db
+
+    keep = catalogues.kept(names, schema=db.SCHEMA_VERSION, now=utcnow())
+    for name in dict.fromkeys(names):
+        if name not in keep:
+            typer.echo(name)
+
+
+def _publish(cfg: Config, folder: Path, force: bool) -> None:
+    from caracole import backup, catalogues
 
     now = utcnow()
-    if kept:
-        keep = catalogues.kept(kept, schema=db.SCHEMA_VERSION, now=now)
-        for name in dict.fromkeys(kept):
-            if name not in keep:
-                typer.echo(name)
-        return
     with closing(open_db(cfg)) as conn:
         try:
             last = None if force else catalogues.published(folder)

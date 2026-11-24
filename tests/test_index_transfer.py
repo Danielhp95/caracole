@@ -935,6 +935,16 @@ def test_a_public_export_holds_no_source_and_no_lacuerda_search_rows(home, tmp_p
     assert out.rows["lacuerda_index"] == 1
 
 
+def test_a_public_export_of_some_sites_skips_a_rule_for_a_table_it_doesnt_hold(home, tmp_path):
+    out = transfer.export(home, tmp_path / "p.sqlite", ["ug"], now=NOW, omit=transfer.PUBLIC_OMIT)
+    f = sqlite3.connect(out.path)
+    try:
+        assert "source" not in dict(f.execute(f"SELECT key, value FROM {transfer.META}"))
+    finally:
+        f.close()
+    assert list(out.sites) == ["ug"]
+
+
 def test_an_export_of_pages_omits_nothing(home, tmp_path):
     with pytest.raises(transfer.TransferError, match="omits nothing"):
         transfer.export(home, tmp_path / "p.sqlite", now=NOW, pages={"lacuerda": ["a/"]}, omit=transfer.PUBLIC_OMIT)

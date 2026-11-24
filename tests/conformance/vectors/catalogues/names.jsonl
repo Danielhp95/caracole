@@ -3,6 +3,7 @@
 {"at":"2026-11-03T03:12:00Z","name":"indexes-s16-20261103T0312Z.sqlite.gz","schema":16}
 {"at":"2000-01-01T00:00:00Z","name":"indexes-s1-20000101T0000Z.sqlite.gz","schema":1}
 {"at":"2026-12-31T23:59:00Z","name":"indexes-s123-20261231T2359Z.sqlite.gz","schema":123}
+{"at":"2026-11-24T03:12:00Z","name":"indexes-s999999999-20261124T0312Z.sqlite.gz","schema":999999999}
 {"at":"2024-02-29T03:12:00Z","name":"indexes-s17-20240229T0312Z.sqlite.gz","schema":17}
 {"at":"2026-11-24T23:59:00Z","name":"indexes-s17-20261124T2359Z.sqlite.gz","schema":17}
 {"at":"2026-01-31T23:59:00Z","name":"indexes-s17-20260131T2359Z.sqlite.gz","schema":17}
@@ -33,6 +34,7 @@
 {"at":null,"name":"indexes-s17-2026112٤T0312Z.sqlite.gz","schema":null}
 {"at":null,"name":"indexes-s1٧-20261124T0312Z.sqlite.gz","schema":null}
 {"at":null,"name":"Indexes-s17-20261124T0312Z.sqlite.gz","schema":null}
+{"at":null,"name":"indexes-s1234567890-20261124T0312Z.sqlite.gz","schema":null}
 {"at":null,"name":"","schema":null}
 {"kept":{"keep_days":180,"names":["indexes-s17-20261124T0312Z.sqlite.gz","indexes-s17-20261117T0312Z.sqlite.gz","indexes-s17-20261110T0312Z.sqlite.gz","indexes-s16-20261103T0312Z.sqlite.gz","indexes-s15-20260401T0312Z.sqlite.gz","indexes.json"],"now":"2026-11-24T03:12:00Z","schema":17},"out":["indexes-s16-20261103T0312Z.sqlite.gz","indexes-s17-20261117T0312Z.sqlite.gz","indexes-s17-20261124T0312Z.sqlite.gz","indexes.json"]}
 {"kept":{"keep_days":10,"names":["indexes-s17-20261124T0312Z.sqlite.gz","indexes-s17-20261117T0312Z.sqlite.gz","indexes-s17-20261110T0312Z.sqlite.gz","indexes-s16-20261103T0312Z.sqlite.gz","indexes-s15-20260401T0312Z.sqlite.gz","indexes.json"],"now":"2026-11-24T03:12:00Z","schema":17},"out":["indexes-s17-20261117T0312Z.sqlite.gz","indexes-s17-20261124T0312Z.sqlite.gz","indexes.json"]}

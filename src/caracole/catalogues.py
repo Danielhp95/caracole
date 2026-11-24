@@ -34,7 +34,7 @@ SIDECAR = "published.json"
 KEEP_DAYS = 180
 FEWER = 0.9
 CHUNK = 1 << 20
-_NAME = re.compile(rf"{PREFIX}-s([1-9][0-9]*)-([0-9]{{8}}T[0-9]{{4}}Z)\.sqlite\.gz")
+_NAME = re.compile(rf"{PREFIX}-s([1-9][0-9]{{0,8}})-([0-9]{{8}}T[0-9]{{4}}Z)\.sqlite\.gz")
 _STAMP = "%Y%m%dT%H%MZ"
 
 
@@ -182,7 +182,8 @@ def publish(conn: sqlite3.Connection, folder: Path, *, now: datetime, last: Publ
                 leftover.unlink(missing_ok=True)
     for other in folder.glob(f"{PREFIX}-*.sqlite.gz"):
         if other.name != name:
-            other.unlink(missing_ok=True)
+            with suppress(OSError):  # the new file is published: an old one left is the next run's to delete
+                other.unlink(missing_ok=True)
     return result
 
 
@@ -190,20 +191,27 @@ def _database(conn: sqlite3.Connection) -> list[str]:
     return [row[2] for row in conn.execute("PRAGMA database_list") if row[1] == "main" and row[2]]
 
 
+# Where a machine's own paths begin, on a computer and a phone: a value that begins with one is a path.
+ROOTS = ("/home/", "/root/", "/var/", "/nix/", "/tmp/", "/etc/", "/run/", "/usr/", "/opt/", "/srv/", "/mnt/",
+         "/media/", "/Users/", "/data/", "/sdcard/", "/storage/", "file:")
+
+
 def _no_paths(export: Path, private: Sequence[str]) -> None:
-    """Refuse an export one of whose text values holds any of ``private``, or is an absolute path: no path of this
-    machine goes to a public file. Names the table, the column and the value's first 60 characters."""
-    private = [p for p in dict.fromkeys(private) if p]
+    """Refuse an export one of whose text values holds any of ``private`` (this config's folders, the home folder,
+    the database, the Nix store), or begins with one of ``ROOTS``: no path of this machine goes to a public file.
+    A value that merely begins with "/" is a site's name ("/Dead Kennedys"), and a private entry of one character
+    (a home of "/") is passed over. Names the table, the column and the value's first 60 characters."""
+    private = [p for p in dict.fromkeys(private) if len(p) > 1]
     file = sqlite3.connect(f"file:{export}?mode=ro", uri=True)
     try:
         tables = [r[0] for r in file.execute("SELECT name FROM sqlite_master WHERE type = 'table' "
                                              "AND name NOT LIKE 'sqlite_%' ORDER BY name")]
         for table in tables:
             for column in [r[1] for r in file.execute(f'PRAGMA table_info("{table}")')]:
-                test = " OR ".join(["substr({c}, 1, 1) = '/'"] + ["instr({c}, ?) > 0"] * len(private)).format(
-                    c=f'"{column}"')
+                test = " OR ".join([f"substr({{c}}, 1, {len(r)}) = ?" for r in ROOTS]
+                                   + ["instr({c}, ?) > 0"] * len(private)).format(c=f'"{column}"')
                 row = file.execute(f'SELECT "{column}" FROM "{table}" WHERE typeof("{column}") = \'text\' '
-                                   f"AND ({test}) LIMIT 1", private).fetchone()
+                                   f"AND ({test}) LIMIT 1", [*ROOTS, *private]).fetchone()
                 if row is not None:
                     raise PublishError(f"{table}.{column} holds a path of this machine: {row[0][:60]!r}")
     except sqlite3.Error as e:

@@ -138,3 +138,14 @@ def test_no_digest_on_the_read_back_keeps_the_upload_and_fails(rig):
     assert done.returncode == 1
     assert "no digest" in done.stderr
     assert rig.gh.names() == [NEW]
+
+
+def test_pruning_runs_on_the_services_machine(rig):
+    """The owner's user runs it beside the service: the marker names another state_dir, and --kept still answers."""
+    marker = rig.tmp / "service"
+    marker.write_text(f'state_dir = "{rig.tmp / "svc-state"}"\nlibrary_dir = "{rig.tmp / "svc-lib"}"\n')
+    for n in (name(1), name(2), name(3)):
+        rig.gh.asset(n)
+    done = rig.run(CARACOLE_SERVICE_FILE=str(marker))
+    assert done.returncode == 0, done.stderr
+    assert rig.gh.names() == sorted([NEW, name(3)])

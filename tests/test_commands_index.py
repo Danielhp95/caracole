@@ -317,3 +317,27 @@ def test_index_publish_is_refused_beside_the_service(tmp_path, monkeypatch):
 
     assert result.exit_code == 2
     assert "caracole --home index publish" in " ".join(result.stderr.split())
+
+
+def test_index_publish_kept_needs_no_config_and_answers_beside_the_service(tmp_path, monkeypatch):
+    """publish-indexes' prune runs as the owner's user on the service's machine: --kept reads nothing, so the
+    service's guard never refuses it."""
+    from datetime import UTC, datetime
+
+    from typer.testing import CliRunner
+
+    from caracole import catalogues
+    from caracole.cli import build_app
+
+    marker = tmp_path / "service"
+    marker.write_text(f'state_dir = "{tmp_path / "svc-state"}"\nlibrary_dir = "{tmp_path / "svc-lib"}"\n')
+    monkeypatch.delenv("CARACOLE_CONFIG", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("CARACOLE_SERVICE_FILE", str(marker))
+    old = catalogues.name_for(db.SCHEMA_VERSION - 1, datetime(2020, 1, 1, tzinfo=UTC))
+
+    result = CliRunner().invoke(build_app(), ["index", "publish", str(tmp_path / "pub"), "--kept", old])
+
+    assert result.exit_code == 0, result.output
+    assert result.stdout.split() == [old]
+    assert not (tmp_path / "home").exists() and not (tmp_path / "svc-state").exists()

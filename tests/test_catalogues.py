@@ -42,7 +42,8 @@ def test_a_name_holds_the_schema_and_the_minute():
                                   "indexes2-s17-20261124T0312Z.sqlite.gz", "indexes-s17-20261340T0312Z.sqlite.gz",
                                   "indexes-sx-20261124T0312Z.sqlite.gz", "indexes-s017-20261124T0312Z.sqlite.gz",
                                   "indexes-s0-20261124T0312Z.sqlite.gz", "indexes-s17-2026112\u0664T0312Z.sqlite.gz",
-                                  "indexes-s1\u0667-20261124T0312Z.sqlite.gz"])
+                                  "indexes-s1\u0667-20261124T0312Z.sqlite.gz",
+                                  "indexes-s1234567890-20261124T0312Z.sqlite.gz"])
 def test_other_names_are_none(name):
     assert catalogues.read_name(name) is None
 
@@ -162,14 +163,45 @@ def test_a_title_holding_the_home_folder_refuses_the_file(conn_with_index, out):
     assert list(out.iterdir()) == []
 
 
-def test_an_absolute_path_or_the_nix_store_refuses_the_file(conn_with_index, out):
-    db.kv_set(conn_with_index, "ug:index:refreshed_at", "/somewhere/else")
-    with pytest.raises(catalogues.PublishError, match="a path of this machine"):
-        catalogues.publish(conn_with_index, out, now=NOW, last=None)
-    db.kv_set(conn_with_index, "ug:index:refreshed_at", "x /nix/store/abc-foo y")
+@pytest.mark.parametrize("value", ["/home/someone/x", "/root/x", "/var/lib/caracole", "/nix/var", "/tmp/x",
+                                   "/etc/caracole/service", "/run/user/1000", "/usr/share", "/opt/x", "/srv/x",
+                                   "/mnt/x", "/media/x", "/Users/someone", "/data/user/0", "/sdcard/Music",
+                                   "/storage/emulated/0", "file:///x", "x /nix/store/abc-foo y"])
+def test_a_machine_root_or_the_nix_store_refuses_the_file(conn_with_index, out, value):
+    db.kv_set(conn_with_index, "ug:index:refreshed_at", value)
     with pytest.raises(catalogues.PublishError, match="a path of this machine"):
         catalogues.publish(conn_with_index, out, now=NOW, last=None)
     assert list(out.iterdir()) == []
+
+
+@pytest.mark.parametrize("value", ["/Dead Kennedys", "/\\/", "/rif", "AC/DC", "/home", "a /home/x"])
+def test_a_name_that_begins_with_a_slash_is_no_path(conn_with_index, out, value):
+    """Sites' names may begin with "/" (an artist, a title): only a machine's roots and its own folders refuse."""
+    tt.artist_songs(conn_with_index, "slug", value, [value])
+    db.kv_set(conn_with_index, "ug:index:refreshed_at", value)
+    catalogues.publish(conn_with_index, out, now=NOW, last=None, private=["/"])
+
+
+def test_a_folder_of_this_config_anywhere_in_a_value_refuses_the_file(conn_with_index, out, tmp_path):
+    db.kv_set(conn_with_index, "ug:index:refreshed_at", f"somewhere {tmp_path}/lib")
+    with pytest.raises(catalogues.PublishError, match="a path of this machine"):
+        catalogues.publish(conn_with_index, out, now=NOW, last=None, private=[str(tmp_path)])
+
+
+def test_the_cleanup_of_older_files_never_fails_a_publish(conn_with_index, out, monkeypatch):
+    from pathlib import Path
+
+    (out / catalogues.name_for(db.SCHEMA_VERSION, d(2026, 11, 17))).write_bytes(b"old")
+    real = Path.unlink
+
+    def unlink(self, missing_ok=False):
+        if self.name.startswith("indexes-") and self.parent == out:
+            raise PermissionError(13, "Permission denied")
+        return real(self, missing_ok=missing_ok)
+
+    monkeypatch.setattr(Path, "unlink", unlink)
+    p = catalogues.publish(conn_with_index, out, now=NOW, last=None)
+    assert (out / p.name).exists()
 
 
 def test_a_published_file_and_its_sidecar_hold_no_path(conn_with_index, out):

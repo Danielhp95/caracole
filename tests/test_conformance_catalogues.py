@@ -20,6 +20,7 @@ def at(y, m, d, hh=3, mm=12):
 def names() -> list[str]:
     good = [catalogues.name_for(17, at(2026, 11, 24)), catalogues.name_for(16, at(2026, 11, 3)),
             catalogues.name_for(1, at(2000, 1, 1, 0, 0)), catalogues.name_for(123, at(2026, 12, 31, 23, 59)),
+            catalogues.name_for(999999999, at(2026, 11, 24)),
             catalogues.name_for(17, at(2024, 2, 29)), catalogues.name_for(17, at(2026, 11, 24, 23, 59))]
     for m, last in enumerate([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31], 1):
         good.append(catalogues.name_for(17, at(2026, m, last, 23, 59)))
@@ -29,7 +30,8 @@ def names() -> list[str]:
            "indexes-s17-20261124T2460Z.sqlite.gz", "indexes-s17-20261124T0312Z.sqlite", "indexes-s-20261124T0312Z.sqlite.gz",
            "indexes-s17-20261124T0312.sqlite.gz", "indexes-s017-20261124T0312Z.sqlite.gz",
            "indexes-s0-20261124T0312Z.sqlite.gz", "indexes-s17-2026112\u0664T0312Z.sqlite.gz",
-           "indexes-s1\u0667-20261124T0312Z.sqlite.gz", "Indexes-s17-20261124T0312Z.sqlite.gz", ""]
+           "indexes-s1\u0667-20261124T0312Z.sqlite.gz", "Indexes-s17-20261124T0312Z.sqlite.gz",
+           "indexes-s1234567890-20261124T0312Z.sqlite.gz", ""]
     return good + bad
 
 
