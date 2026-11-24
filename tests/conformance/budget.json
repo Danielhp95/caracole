@@ -3,6 +3,7 @@
  "data_total": 12000000,
  "areas": {
   "canonical": 1000000,
+  "catalogues": 50000,
   "corpus": 100000,
   "fuzz": 6500000,
   "health": 300000,

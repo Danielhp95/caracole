@@ -183,3 +183,78 @@ def test_a_file_missing_is_a_failed_stage(tmp_path, state):
 
     assert result.exit_code == 2
     assert json.dumps(events(result.stdout)[-1]).count("no such file") == 1
+
+
+# --- caracole index publish ---------------------------------------------------------------------------------------
+
+
+def built(state: Path) -> None:
+    conn = db.connect(state / "caracole.sqlite")
+    try:
+        tt.ug_sitemap(conn, "sitemap1.xml", ["a/b-chords-1", "a/c-chords-2"], tt.LATE)
+        tt.ug_listed(conn, ["sitemap1.xml"], tt.LATE)
+    finally:
+        conn.close()
+
+
+def test_index_publish_prints_the_file_and_its_rows(tmp_path, state):
+    built(state)
+    out = tmp_path / "pub"
+    out.mkdir()
+    manifest = tmp_path / "indexes.json"
+
+    result = invoke(tmp_path, "publish", str(out), "--manifest", str(manifest))
+
+    assert result.exit_code == 0, result.output
+    (gz,) = out.glob("indexes-s*.sqlite.gz")
+    assert f"Published {gz}" in result.stdout and "ug: 2 rows." in result.stdout
+    new = json.loads((tmp_path / "indexes.json.next").read_text())
+    assert [e["file"] for e in new["files"]] == [gz.name]
+    assert not manifest.exists()
+
+
+def test_index_publish_exits_1_and_leaves_no_file_when_refused(tmp_path, state):
+    out = tmp_path / "pub"
+    out.mkdir()
+
+    result = invoke(tmp_path, "publish", str(out))
+
+    assert result.exit_code == 1
+    assert "built whole" in result.stderr
+    assert list(out.iterdir()) == []
+
+
+def test_index_publish_kept_prints_what_to_delete(tmp_path, state):
+    from datetime import UTC, datetime, timedelta
+
+    from caracole import catalogues
+
+    now = datetime.now(UTC)
+    names = [catalogues.name_for(db.SCHEMA_VERSION - 1, now - timedelta(days=400)),  # an old schema, long past
+             catalogues.name_for(db.SCHEMA_VERSION, now - timedelta(days=14)),
+             catalogues.name_for(db.SCHEMA_VERSION, now - timedelta(days=7)),
+             catalogues.name_for(db.SCHEMA_VERSION, now - timedelta(days=1)),
+             "indexes.json"]
+    args = [x for n in names for x in ("--kept", n)]
+
+    result = invoke(tmp_path, "publish", str(tmp_path), *args)
+
+    assert result.exit_code == 0, result.output
+    assert result.stdout.split() == [names[0], names[1]]
+
+
+def test_index_publish_is_refused_beside_the_service(tmp_path, monkeypatch):
+    from typer.testing import CliRunner
+
+    from caracole.cli import build_app
+
+    marker = tmp_path / "service"
+    marker.write_text(f'state_dir = "{tmp_path / "svc-state"}"\nlibrary_dir = "{tmp_path / "svc-lib"}"\n')
+    monkeypatch.delenv("CARACOLE_CONFIG", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("CARACOLE_SERVICE_FILE", str(marker))
+
+    result = CliRunner().invoke(build_app(), ["index", "publish", str(tmp_path)])
+
+    assert result.exit_code == 2
+    assert "caracole --home index publish" in " ".join(result.stderr.split())

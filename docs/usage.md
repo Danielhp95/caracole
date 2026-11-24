@@ -3753,6 +3753,28 @@ Merging the same file again changes nothing and makes no backup (`Nothing to mer
 your home database's indexes into a service's, see
 [deploy.md](deploy.md#moving-an-index-into-the-service).
 
+### caracole index publish
+
+    caracole index publish DIR [--force] [--manifest FILE]
+    caracole index publish DIR --kept NAME...
+
+Writes every site's index as one public file in `DIR`: `indexes-s17-20261124T0312Z.sqlite.gz` (the
+schema and the minute), an export as above, gzipped, with nothing of your own in it (no LaCuerda
+search answers, no path of yours). It also writes `published.json` (the file, its sizes, its sha256
+and each site's rows) and deletes the older `indexes-*.sqlite.gz` in `DIR`. It takes no lock, and like
+`index build` it is refused beside a service unless you name its config or pass `--home`.
+
+It exits 1, leaving nothing behind, when the name exists, when UG's index isn't built whole, or
+when a site holds a tenth fewer rows than `published.json` says of the last file. `--force` publishes
+that one anyway.
+
+`--manifest FILE` reads FILE (a release's `indexes.json`, if it exists) and writes the manifest with
+the new file first and the files worth keeping to `FILE.next`. A file is kept when it is not a
+catalogue file, or is the newest of its schema and under 180 days old, or is the second newest of
+this caracole's schema.
+
+`--kept NAME...` exports nothing: it prints, one a line, those NAMEs that rule would delete.
+
 ## Two caracoles: the phone's and the computer's
 
     caracole peer diff ADDRESS [--json]                        # what differs, and which side each would come from
