@@ -3,14 +3,19 @@
 Whisper hears the full mix (it does worse on a separated stem); the vocal stem only serves to detect the
 language, on the first 30 s of singing. torch and whisper load inside functions: ``caracole --help`` never
 pays for them. Whisper's warnings pass as they are, but for its fallback from Triton's kernels, said once at INFO.
+How far it has heard is read off its own progress bar as it moves (``on_progress``, ``_heard_so_far``).
 """
 
 import logging
 import os
+import sys
+import types
 import warnings
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 from caracole.autochords.words import Word
 
@@ -21,6 +26,7 @@ log = logging.getLogger(__name__)
 ALIGNMENT_HEADS = b"ABzY8gWO1E0{>%R7(9S+Kn!D~%ngiGaR?*L!iJG9p-nab0JQ=-{D1-g00"
 
 SAMPLE_RATE = 16000  # whisper.audio.SAMPLE_RATE
+WHISPER_FRAME_S = 160 / SAMPLE_RATE  # a mel frame, whisper.audio.HOP_LENGTH / SAMPLE_RATE: its progress bar's unit
 DETECT_S = 30.0  # the stretch of singing the language is heard on
 # NixOS's GPU driver libraries. nixpkgs' Triton (triton-bin 3.7.1) gives the linker of its kernels' launcher no
 # libcuda folder (its patched ``libcuda_dirs`` returns one path as a string, spread into characters, and nothing reads
@@ -39,8 +45,12 @@ class Heard:
     words: list[Word]
 
 
+# How far Whisper has heard the mix, and its whole length, in seconds, as it goes.
+Progress = Callable[[float, float], None]
+
+
 class Transcriber(Protocol):
-    def hear(self, mix: Path, stem: Path, first_sung_s: float) -> Heard: ...
+    def hear(self, mix: Path, stem: Path, first_sung_s: float, *, on_progress: Progress | None = None) -> Heard: ...
 
 
 class SetupFailed(Exception):
@@ -101,7 +111,9 @@ class WhisperTranscriber:
             raise SetupFailed(f"Whisper's model won't load: {type(e).__name__}: {e}") from e
         self.model.set_alignment_heads(ALIGNMENT_HEADS)
 
-    def hear(self, mix: Path, stem: Path, first_sung_s: float) -> Heard:
+    def hear(self, mix: Path, stem: Path, first_sung_s: float, *, on_progress: Progress | None = None) -> Heard:
+        """The words Whisper hears in ``mix``, in the language it hears on ``stem``; ``on_progress`` is told how far
+        it has heard the mix as it goes, a window (30 s) at a time."""
         caught: list[warnings.WarningMessage] = []
         try:
             with warnings.catch_warnings(record=True) as caught:
@@ -112,15 +124,16 @@ class WhisperTranscriber:
                         raise
                     raise SetupFailed(f"the separator can't run here (its vocals can't be read: "
                                       f"{type(e).__name__}: {e})") from e
-                result = self.model.transcribe(
-                    str(mix),
-                    language=language,
-                    word_timestamps=True,
-                    condition_on_previous_text=False,
-                    beam_size=5,
-                    best_of=5,
-                    fp16=self.device == "cuda",
-                )
+                with _heard_so_far(on_progress):
+                    result = self.model.transcribe(
+                        str(mix),
+                        language=language,
+                        word_timestamps=True,
+                        condition_on_previous_text=False,
+                        beam_size=5,
+                        best_of=5,
+                        fp16=self.device == "cuda",
+                    )
         except Exception as e:  # noqa: BLE001 - only the setup's errors are told apart
             if is_setup_error(e):
                 raise SetupFailed(f"the GPU failed: {type(e).__name__}: {e}") from e
@@ -162,3 +175,38 @@ class WhisperTranscriber:
             mel = mel.to(torch.float16)
         _, probs = whisper.detect_language(self.model, mel)
         return max(probs, key=probs.get)
+
+
+@contextmanager
+def _heard_so_far(on_progress: Progress | None) -> Iterator[None]:
+    """While Whisper transcribes, its progress bar (openai-whisper's ``transcribe``: ``tqdm.tqdm`` over the mix's mel
+    frames, moved a window at a time, the name read from its module ``whisper.transcribe``) swapped for one that tells
+    ``on_progress`` and draws nothing; put back after. Whisper draws its own only with ``verbose=False``: ours is told
+    whatever ``disable`` says. Nothing is swapped with no ``on_progress``, or a Whisper whose module draws no such bar
+    (tests/test_autochords_transcribe.py pins the version's)."""
+    module = sys.modules.get("whisper.transcribe")
+    bars = getattr(module, "tqdm", None)
+    if on_progress is None or bars is None or not callable(getattr(bars, "tqdm", None)):
+        yield
+        return
+    told = on_progress
+
+    class Told:
+        def __init__(self, total: Any = None, **_: Any):
+            self.total, self.n = (total if isinstance(total, int | float) else 0), 0
+
+        def __enter__(self) -> "Told":
+            return self
+
+        def __exit__(self, *exc: object) -> None:
+            return None
+
+        def update(self, n: Any = 1) -> None:
+            self.n += n if isinstance(n, int | float) else 0
+            told(round(self.n * WHISPER_FRAME_S, 2), round(self.total * WHISPER_FRAME_S, 2))
+
+    module.tqdm = types.SimpleNamespace(tqdm=Told)
+    try:
+        yield
+    finally:
+        module.tqdm = bars

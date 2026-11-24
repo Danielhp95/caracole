@@ -207,6 +207,70 @@ def test_hearing_builds_words_and_calls_whisper_as_pinned(monkeypatch, tmp_path,
     )
 
 
+class _Bar:
+    """openai-whisper's transcribe(): its progress bar over the mix's mel frames (10 ms each), moved a window at a
+    time, as whisper/transcribe.py moves its ``tqdm.tqdm``, read through the module's own ``tqdm`` name."""
+
+    def __init__(self, frames, windows):
+        self.frames, self.windows = frames, windows
+
+    def transcribe(self, audio, **kw):
+        bars = sys.modules["whisper.transcribe"].tqdm
+        with bars.tqdm(total=self.frames, unit="frames", disable=kw.get("verbose") is not False) as pbar:
+            for n in self.windows:
+                pbar.update(n)
+        return {"segments": []}
+
+
+def test_whispers_progress_through_the_mix_is_told_as_it_hears(monkeypatch, tmp_path):
+    # Whisper hears a song window by window, minutes on a CPU: its own progress bar (whisper.transcribe's tqdm, which
+    # it shows only with verbose=False) is read as it moves, in seconds of the mix heard, and given back as it was.
+    _fake_torch(monkeypatch, available=False, allocates=True)
+    model = _Model()
+    model.transcribe = _Bar(22500, [3000, 3000, 16500]).transcribe  # 3 min 45 s, two windows, then the rest
+    _fake_whisper(monkeypatch, model)
+    drawn = []
+
+    class Own:
+        def __init__(self, **kw):
+            drawn.append(kw)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return None
+
+        def update(self, n):
+            pass
+
+    real = types.SimpleNamespace(tqdm=Own)
+    monkeypatch.setitem(sys.modules, "whisper.transcribe", types.SimpleNamespace(tqdm=real))
+    heard = []
+    t = _make(monkeypatch, tmp_path)
+    t.hear(tmp_path / "mix", tmp_path / "stem", 0.0, on_progress=lambda done, total: heard.append((done, total)))
+    assert heard == [(30.0, 225.0), (60.0, 225.0), (225.0, 225.0)]
+    assert drawn == [] and sys.modules["whisper.transcribe"].tqdm is real  # never drawn, and put back
+    t.hear(tmp_path / "mix", tmp_path / "stem", 0.0)  # with none asked, Whisper's own bar, hidden as ever
+    assert drawn == [{"total": 22500, "unit": "frames", "disable": True}]
+
+
+def test_whispers_progress_hook_is_its_versions_own():
+    # The hook reads whisper.transcribe's module-level tqdm, which its transcribe() draws its bar with, over the mel
+    # frames of 10 ms: a Whisper that draws it otherwise fails here, never in a job.
+    import inspect
+
+    pytest.importorskip("whisper")
+    module = sys.modules["whisper.transcribe"]
+    from whisper.audio import HOP_LENGTH, SAMPLE_RATE
+    from whisper.model import Whisper
+
+    assert Whisper.transcribe.__globals__ is vars(module)
+    assert "with tqdm.tqdm(\n        total=content_frames" in inspect.getsource(module)
+    assert "pbar.update(" in inspect.getsource(module)
+    assert HOP_LENGTH / SAMPLE_RATE == transcribe.WHISPER_FRAME_S
+
+
 @pytest.mark.parametrize(("error", "audio"), [
     (RuntimeError("Failed to load audio: song.m4a: Invalid data found when processing input"), True),
     (RuntimeError("expected scalar type Half but found Float"), False),

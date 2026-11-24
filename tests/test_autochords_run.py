@@ -341,6 +341,20 @@ def test_up_to_date_songs_are_left_alone(conn, cfg, tmp_path):
     assert get_song(conn, s.id).status == "found"
 
 
+def test_each_step_of_a_songs_sheet_is_told_as_it_starts(conn, cfg, tmp_path):
+    # A sheet from a YouTube video and a transcription say where auto-chords is, its models a minute or more on a
+    # CPU: the models set up for the first song due, then each song's chords, beats and sheet.
+    a = with_audio(conn, tmp_path, add_song(conn, "A", "T"))
+    b = with_audio(conn, tmp_path, add_song(conn, "B", "U"))
+    steps: list[str] = []
+    stats = run(conn, cfg, on_step=steps.append)
+    assert stats.generated == 2
+    assert steps == ["setting up the models"] + ["hearing the chords", "finding the beats", "writing the sheet"] * 2
+    steps.clear()
+    run(conn, cfg, on_step=steps.append, only={a.id, b.id})  # up to date: no model set up, nothing told
+    assert steps == []
+
+
 def test_changed_audio_is_generated_again(conn, cfg, tmp_path):
     s = with_audio(conn, tmp_path, add_song(conn, "A", "T"))
     run(conn, cfg)

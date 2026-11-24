@@ -1,8 +1,9 @@
 """The vocal stem, separated by demucs-rs, and its loudness frame by frame.
 
 demucs-rs is a Rust program, run as a subprocess; it separates the full mix only so that
-``words.sung_spans`` can tell where someone sings (the transcript is Whisper's, from the mix). The loudness of the
-mix and of the stem is ``frame_db``'s, read through audio.py.
+``words.sung_spans`` can tell where someone sings (the transcript is Whisper's, from the mix). It says nothing of how
+far it is, so the caller is told how long it has run as it goes (``on_tick``). The loudness of the mix and of the
+stem is ``frame_db``'s, read through audio.py.
 """
 
 import logging
@@ -10,6 +11,8 @@ import os
 import re
 import signal
 import subprocess
+import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
 
@@ -20,6 +23,10 @@ log = logging.getLogger(__name__)
 # The cpu build runs about 4.8x the song's length, so a long song takes most of an hour; a run past this is hung
 # (a wgpu or driver stall), not slow.
 TIMEOUT_S = 4 * 3600.0
+TICK_S = 5.0  # how often a run that goes on tells its caller how long it has run (``on_tick``)
+# How long demucs-rs takes for a second of the song, measured: the cpu build about 4.8 s, the GPU (wgpu) build about
+# 0.3 s once its shaders are compiled (half of a 149 s song's 83-87 s transcription; a cold first run adds a minute).
+CPU_PACE, GPU_PACE = 4.8, 0.3
 # demucs-rs 0.3.4 names no adapter or backend (nor does cubecl's CUBECL_DEBUG_LOG make it): what it says that bears
 # on its device is its GPU shaders ("Pre-compiling GPU shaders", the wgpu build) and a driver's own words after it
 # ("NVVM compilation failed: 3", NVIDIA's compiler), logged at INFO so the journal shows where it ran.
@@ -55,7 +62,7 @@ class SeparatorFailed(Exception):
 
 
 class Separator(Protocol):
-    def vocals(self, audio: Path, workdir: Path) -> Path: ...
+    def vocals(self, audio: Path, workdir: Path, *, on_tick: Callable[[float], None] | None = None) -> Path: ...
 
 
 class DemucsSeparator:
@@ -74,13 +81,16 @@ class DemucsSeparator:
     on real songs. A death by a signal once ``Done!`` was said, with vocals.wav written, is therefore taken as a
     success and logged; a positive exit, a signal before ``Done!`` and a missing stem still fail."""
 
-    def __init__(self, binary: str, model: Path, cache_dir: Path, timeout: float = TIMEOUT_S):
+    def __init__(self, binary: str, model: Path, cache_dir: Path, timeout: float = TIMEOUT_S, tick: float = TICK_S):
         self.binary = binary
         self.model = model
         self.cache_dir = cache_dir
         self.timeout = timeout
+        self.tick = tick
 
-    def vocals(self, audio: Path, workdir: Path) -> Path:
+    def vocals(self, audio: Path, workdir: Path, *, on_tick: Callable[[float], None] | None = None) -> Path:
+        """The vocal stem of ``audio``, separated under ``workdir``; ``on_tick`` is told how long demucs-rs has run,
+        in seconds, every ``tick`` while it runs."""
         cache = workdir / "cache"
         (cache / "demucs-rs").mkdir(parents=True, exist_ok=True)
         link = cache / "demucs-rs" / "htdemucs.safetensors"
@@ -92,8 +102,7 @@ class DemucsSeparator:
         stems = workdir / "stems"
         cmd = [self.binary, "-m", "htdemucs", "-s", "vocals", "-o", str(stems), str(audio)]
         try:
-            done = subprocess.run(cmd, env=env, capture_output=True, text=True, errors="replace",
-                                  timeout=self.timeout)
+            done = self._run(cmd, env, on_tick)
         except subprocess.TimeoutExpired as e:
             raise SeparatorFailed(f"demucs-rs took longer than {self.timeout:g} s and was stopped") from e
         except OSError as e:
@@ -109,6 +118,32 @@ class DemucsSeparator:
             raise SeparatorFailed(f"demucs-rs wrote no vocals.wav under {stems}")
         log.info("demucs-rs separated the vocals; %s", _of_its_device(done.stderr))
         return out
+
+    def _run(self, cmd: list[str], env: dict[str, str],
+             on_tick: Callable[[float], None] | None) -> subprocess.CompletedProcess[str]:
+        """demucs-rs run to its end as ``subprocess.run`` runs it (its output captured as text, stopped past
+        ``timeout``, killed on anything raised meanwhile, a Ctrl-C too), ``on_tick`` told every ``tick`` how long it
+        has run."""
+        started = time.monotonic()
+        proc = subprocess.Popen(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                                errors="replace")
+        try:
+            while True:
+                left = self.timeout - (time.monotonic() - started)
+                try:
+                    out, err = proc.communicate(timeout=max(0.0, min(self.tick, left) if on_tick else left))
+                    break
+                except subprocess.TimeoutExpired:
+                    ran = time.monotonic() - started
+                    if ran >= self.timeout:
+                        raise
+                    if on_tick is not None:
+                        on_tick(ran)
+        except BaseException:
+            proc.kill()
+            proc.wait()
+            raise
+        return subprocess.CompletedProcess(cmd, proc.returncode, out, err)
 
 
 def frame_db(path: Path, *, frame_s: float = FRAME_S, rate: int = 16000) -> list[float]:

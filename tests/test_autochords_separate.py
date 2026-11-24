@@ -38,6 +38,10 @@ if mode == "fail":
 if mode == "hang":
     import time
     time.sleep(30)
+if mode == "slow":
+    import time
+    time.sleep(1.2)
+    mode = "write"
 if mode == "fail_in_latin1":
     # A message in another encoding than UTF-8, as a driver may print one.
     sys.stderr.buffer.write("Vulkan: p\\u00e9riph\\u00e9rique introuvable\\n".encode("latin-1"))
@@ -116,6 +120,24 @@ def test_a_demucs_that_writes_no_stem_raises_separator_failed(tmp_path):
     separator, _ = _separator(tmp_path, "nothing")
     with pytest.raises(SeparatorFailed, match="vocals.wav"):
         separator.vocals(tmp_path / "song.m4a", tmp_path)
+
+
+def test_a_demucs_that_takes_a_while_says_how_long_it_has_run_as_it_goes(tmp_path):
+    # demucs-rs says nothing of how far it is (measured, 0.3.4: "Separating...", then "Done!"), and on a CPU it runs
+    # about five times the song's length: the job is told how long it has run, every tick.
+    separator, _ = _separator(tmp_path, "slow", tick=0.3)
+    ticks: list[float] = []
+    stem = separator.vocals(tmp_path / "song.m4a", tmp_path, on_tick=ticks.append)
+    assert stem == tmp_path / "stems" / "vocals.wav" and stem.is_file()
+    assert len(ticks) >= 2 and ticks == sorted(ticks) and 0.2 <= ticks[0] < ticks[-1] < 1.5, ticks
+
+
+def test_a_demucs_that_hangs_while_it_ticks_is_stopped_too(tmp_path):
+    separator, _ = _separator(tmp_path, "hang", timeout=0.7, tick=0.2)
+    ticks: list[float] = []
+    with pytest.raises(SeparatorFailed, match="longer than 0.7 s"):
+        separator.vocals(tmp_path / "song.m4a", tmp_path, on_tick=ticks.append)
+    assert ticks and max(ticks) < 0.7
 
 
 def test_a_demucs_that_hangs_is_stopped_and_raises_separator_failed(tmp_path):
