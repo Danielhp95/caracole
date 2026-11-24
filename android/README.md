@@ -89,8 +89,10 @@ A release is a signed APK in the F-Droid repository at `docs/fdroid/`, which Git
    app finds a file of its own schema: update the laptop's service, run `sudo caracole-admin index publish
    /var/lib/caracole/publish`, then `publish-indexes /var/lib/caracole/publish` (docs/deploy.md, "Publishing the site
    indexes"). Until then the app says the published catalogues are for an older version.
-5. Commit `docs/fdroid/` and push `main`. The app's page in F-Droid (its description, screenshots) is
-   `docs/fdroid/metadata/`.
+5. Commit `docs/fdroid/` whole and push `main`: `git add docs/fdroid` (its `.gitignore` keeps the keys and `tmp/`
+   out). That includes what `fdroid update` writes besides the APK and the index: `repo/diff/` and the app's icon
+   under `repo/io.github.danielhp95.caracole/`. The index names them, and F-Droid fails to update from the last
+   index when they're missing. The app's page in F-Droid (its description, screenshots) is `docs/fdroid/metadata/`.
 
 Losing either key ends the updates: the release key's APKs install over no other, and F-Droid refuses an index
 signed with another key. Keep a copy of both outside the repository.
