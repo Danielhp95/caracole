@@ -157,6 +157,22 @@ def test_without_auto_chords_it_downloads_nothing_and_fails(tmp_path, ntfy, fake
 
 
 @pytest.mark.slow
+def test_by_hand_the_pass_counts_its_yt_dlp_runs_on_a_live_line(tmp_path, ntfy, fake, conn, monkeypatch):
+    # As the nightly run's step does: each yt-dlp run counted on the ticker against the budget (a live line on a
+    # terminal, taken off before each song's line on stdout), none left at the end.
+    from helpers.screens import on_screen
+
+    to_buy(conn)
+    creep(fake)
+    screen = on_screen(monkeypatch)
+    result = invoke(write_config(tmp_path, fake))
+    assert result.exit_code == 0, result.output
+    assert screen.shown() == ["YouTube · 1 of up to 6 yt-dlp runs", "YouTube · 2 of up to 6 yt-dlp runs"]
+    assert screen.getvalue().endswith("\r")
+    assert "Radiohead - Creep: downloaded Creep" in result.stdout and "up to 6" not in result.stdout
+
+
+@pytest.mark.slow
 def test_one_song_by_hand(tmp_path, ntfy, fake, conn):
     song = to_buy(conn)
     other = to_buy(conn, "Radiohead", "Airbag")
@@ -546,6 +562,25 @@ def test_sheet_makes_the_songs_auto_sheet_now_and_says_each_stage(tmp_path, fake
     assert {"stage": "chords", "state": "done", "detail": "chords only, no lyrics"} in events
     assert events[-1]["done"]["ok"] is True
     assert "Done in" in result.output and "1 yt-dlp run" in result.output and len(asked) == 2
+
+
+@pytest.mark.slow
+def test_sheet_by_hand_says_its_long_stages_on_a_live_line(tmp_path, fake, conn, sheet_sites, monkeypatch):
+    # Without --progress, what the audio and the chords are doing is a live line on a terminal (progress.py's
+    # ticker), cleared before each stage's line and at the end; stdout says each stage as before.
+    from helpers.screens import on_screen
+
+    chordpro, audio, _ = sheet_sites
+    fake.video(VIKINGOS, "Vikingos veganos", "HyperFanes", 10, ext="wav", copy=str(audio))
+    screen = on_screen(monkeypatch)
+    result = invoke(write_config(tmp_path, fake, chordpro=chordpro), "--song", "Nick Cani - Vikingos veganos",
+                    "--url", f"https://youtu.be/{VIKINGOS}", "--sheet")
+    assert result.exit_code == 0, result.output
+    shown = screen.shown()
+    assert any(line.startswith("Audio · ") for line in shown), shown
+    assert any(line.startswith("Chords · ") for line in shown), shown
+    assert screen.getvalue().endswith("\r")
+    assert "Chords: chords only, no lyrics." in result.stdout.splitlines() and " · " not in result.stdout
 
 
 def test_sheet_refuses_a_song_with_a_human_sheet_and_exits_1(tmp_path, fake, conn, sheet_sites):

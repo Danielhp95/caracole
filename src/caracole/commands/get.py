@@ -34,6 +34,7 @@ from caracole.commands._common import fail, load_cfg, read_song_text
 if TYPE_CHECKING:
     from caracole.config import Config
     from caracole.get import LookupResult
+    from caracole.progress import Ticker
 
 _SHORT = {"song": "Song", "match": "Match", "sheet": "Sheet", "pdf": "PDF", "lyrics": "Lyrics", "audio": "Audio",
           "chords": "Chords",  # caracole youtube --sheet's (youtube_sheet.py), said the same way
@@ -178,12 +179,17 @@ def _get(cfg: Config, artist: str, title: str, album: str | None, duration_ms: i
 
 
 class _Lines:
-    """The lookup as lines: one per stage, the sheet's path the moment it is readable."""
+    """The lookup as lines: one per stage, the sheet's path the moment it is readable.
 
-    def __init__(self, library: Path, *, show: bool, json_lines: bool):
+    With a ``ticker`` (progress.py's, a staged job's by hand: ``caracole transcribe``, ``youtube --sheet``), what a
+    running stage says it does goes there ("Vocals · 2 of ~12 min"): a live line on a terminal, cleared before each
+    line said here, and a line a minute in the journal; ``close`` clears it for good. ``caracole get`` passes none."""
+
+    def __init__(self, library: Path, *, show: bool, json_lines: bool, ticker: Ticker | None = None):
         self.library, self.show, self.json_lines = library, show, json_lines
         self.held: str | None = None  # the sheet stage's line, said with its path
         self.files: dict[str, str] = {}
+        self.ticker = ticker
 
     def event(self, event: Mapping) -> str:
         from caracole.get import progress_line
@@ -192,12 +198,30 @@ class _Lines:
 
     def _json(self, event: Mapping) -> None:
         if self.json_lines:
-            typer.echo(self.event(event))
+            self._echo(self.event(event))
+
+    def _echo(self, line: str) -> None:
+        if self.ticker is not None:
+            self.ticker.clear()  # the live line off, for a line of its own
+        typer.echo(line)
 
     def flush(self) -> None:
         if self.held is not None:
-            typer.echo(self.held)
+            self._echo(self.held)
             self.held = None
+
+    def close(self) -> None:
+        """The held line said, and the ticker's live line cleared for good: before a command's last lines."""
+        self.flush()
+        if self.ticker is not None:
+            self.ticker.close()
+
+    def __enter__(self) -> _Lines:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        if self.ticker is not None:
+            self.ticker.close()
 
     # --- what get.py calls ---------------------------------------------------------------------
 
@@ -205,6 +229,9 @@ class _Lines:
         self._json({"stage": name, "state": state, "detail": detail})
         if state == "running":
             self.flush()
+            if self.ticker is not None:
+                label = _SHORT.get(name, name)
+                self.ticker.show(f"{label} · {detail}" if detail else f"{label}…")
             return
         said = detail or state
         if state != "done" and detail:
@@ -213,7 +240,7 @@ class _Lines:
         if name == "sheet" and state == "done":
             self.held = line  # said with the sheet's path, next
             return
-        typer.echo(line)
+        self._echo(line)
 
     def song(self, song_id: int, display: str) -> None:
         self._json({"song": {"id": song_id, "display": display}})
@@ -225,17 +252,17 @@ class _Lines:
         if first:
             said = (self.held or "Sheet").rstrip(".")
             self.held = None
-            typer.echo(f"{said}: {sheet}, readable after {seconds:.1f} s.")
+            self._echo(f"{said}: {sheet}, readable after {seconds:.1f} s.")
             if self.show:
-                typer.echo(_sheet_text(sheet))
+                self._echo(_sheet_text(sheet))
         else:
             for name, label in (("pdf", "PDF"), ("viewer", "Viewer")):
                 if name in files and name not in self.files:
-                    typer.echo(f"{label}: {self.library / files[name]}")
+                    self._echo(f"{label}: {self.library / files[name]}")
             if files == self.files:
-                typer.echo(f"Sheet: a better one replaced it, in {sheet}.")
+                self._echo(f"Sheet: a better one replaced it, in {sheet}.")
                 if self.show:
-                    typer.echo(_sheet_text(sheet))
+                    self._echo(_sheet_text(sheet))
         self.files = dict(files)
 
 

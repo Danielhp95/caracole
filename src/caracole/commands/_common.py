@@ -105,9 +105,10 @@ def warn(message: str) -> None:
 
 def staged_end(reporter: _Lines, result: StagedResult, *, progress: bool, refused: str, done: str) -> None:
     """A staged job's last lines (staged.py: ``caracole youtube --sheet``, ``caracole transcribe``), once its stages
-    were said through ``reporter``: ``refused`` and what stopped it (its refusal, what failed, a bug), else ``done``;
-    with ``progress``, the ``done`` event caracole serve reads; then exit 1 unless the job was ``ok``."""
-    reporter.flush()
+    were said through ``reporter`` (its ticker's live line cleared first): ``refused`` and what stopped it (its
+    refusal, what failed, a bug), else ``done``; with ``progress``, the ``done`` event caracole serve reads; then exit
+    1 unless the job was ``ok``."""
+    reporter.close()
     stopped = result.refused or result.failed or (f"a bug in caracole ({result.bug})" if result.bug else None)
     typer.echo(f"{refused}: {stopped.rstrip('.')}." if stopped else done)
     if progress:

@@ -16,7 +16,8 @@ return and no color. Color only ever goes to a terminal, and never when
 
 A ``Ticker`` says what long work is doing while it goes, for whoever watches
 (``caracole run``, ``ug --directory``, the ``--index`` passes, ``render``,
-``fetch``): on a terminal at the default verbosity, the live line of a
+``fetch``, ``youtube``, and the long stages of ``transcribe`` and ``youtube
+--sheet`` by hand): on a terminal at the default verbosity, the live line of a
 ``Console`` on stderr, so stdout stays the command's report; and, at most a
 line a minute, the ``caracole.progress`` log, which the journal keeps at the
 default verbosity (logs.py's ``JOURNAL_INFO``), and -v anywhere; and, in a unit

@@ -139,6 +139,39 @@ def test_transcribe_says_each_stage_and_exits_0(tmp_path, config, conn, models, 
     assert kv_get(conn, f"transcript:{song.id}") is not None
 
 
+@pytest.mark.slow
+def test_by_hand_each_long_stage_says_what_it_does_on_a_live_line_cleared_for_each_stages_own(
+        tmp_path, config, conn, models, monkeypatch):
+    # Without --progress, what a long stage is doing goes to the ticker (progress.py): on a terminal a live line on
+    # stderr, taken off before each stage's line on stdout, and none left once the job ends; stdout says what it did
+    # without it.
+    from helpers.screens import on_screen
+
+    monkeypatch.setattr(yf, "transcribe_problem", lambda cfg: None)
+    offered(conn, load_config(config, env={}))
+    screen = on_screen(monkeypatch)
+    result = invoke(config, "--song", "Nick Cani - Vikingos veganos")
+    assert result.exit_code == 0, result.output
+    shown = screen.shown()
+    assert shown[:2] == ["Song…", "Vocals…"] and "Words · loading Whisper" in shown, shown
+    assert any(line.startswith("Vocals · ~") and line.endswith(" min") for line in shown), shown
+    assert any(line.startswith("Words · 0:00 of ") for line in shown), shown
+    assert any(line.startswith("Chords · ") for line in shown), shown
+    assert screen.getvalue().endswith("\r")  # the live line cleared at the end
+    assert " · " not in result.stdout and "Words: 6 words in 2 lines (es), 1 dropped." in result.stdout.splitlines()
+
+
+def test_with_progress_no_live_line_is_drawn(tmp_path, config, conn, models, monkeypatch):
+    from helpers.screens import on_screen
+
+    monkeypatch.setattr(yf, "transcribe_problem", lambda cfg: None)
+    offered(conn, load_config(config, env={}))
+    screen = on_screen(monkeypatch)
+    result = invoke(config, "--song", "Nick Cani - Vikingos veganos", "--progress")
+    assert result.exit_code == 0, result.output
+    assert screen.getvalue() == ""
+
+
 def test_transcribe_refuses_a_song_not_offered_and_exits_1(tmp_path, config, conn, models, monkeypatch):
     monkeypatch.setattr(yf, "transcribe_problem", lambda cfg: None)
     song = offered(conn, load_config(config, env={}))

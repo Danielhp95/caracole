@@ -305,14 +305,16 @@ step starts and ends. A step that doesn't run has its one line:
     [6/20] lyrics: 12 found, 3 missing, 0 instrumental, 0 errors (1 min 32 s)
     [7/20] megalobiz: skipped: megalobiz is off ([providers.megalobiz] enabled = false)
 
-An upgrade of the database by a newer caracole says so the same way, and so does a caracole that
-waits for another's: `Upgrading the database from schema 16 to 17 (a copy first:
-caracole.sqlite.v16.bak)…`.
+An upgrade of the database by a newer caracole logs one line as it begins, and so does a caracole
+that waits for another's to end: `Upgrading the database from schema 16 to 17 (a copy first:
+caracole.sqlite.v16.bak)…`. The journal keeps it, and `-v` shows it on a terminal; at the default
+verbosity a terminal shows no such line.
 
 `-q` shows none of it. `-v` shows the minute lines and the step lines among its request lines,
-and no live line. `caracole run`, `fetch`, `render`, `ug --directory` and the passes of `lyrics`,
-`lacuerda`, `gtptabs`, `harptabs`, `gametabs`, `ireal` and `musescore` say how far they are this
-way; their report on stdout is as it was. The progress only counts: it changes no pause.
+and no live line. `caracole run`, `fetch`, `render`, `ug --directory`, `youtube` and the passes of
+`lyrics`, `lacuerda`, `gtptabs`, `harptabs`, `gametabs`, `ireal` and `musescore` say how far they
+are this way; so do `transcribe` and `youtube --sheet`, a long stage's line (`Vocals · 2 of ~12
+min`). Their report on stdout is as it was. The progress only counts: it changes no pause.
 
 Each build of the library page logs one line. `-v` shows it, and the journal keeps it by default
 (`journalctl -u caracole-web | grep 'library page'`):
@@ -1379,7 +1381,9 @@ Transcribes, with Whisper, the lyrics of a song whose audio came from YouTube an
 site has. It keeps them as the song's transcript and makes its auto sheet again with the chords over
 them (see [Lyrics transcribed from the audio](#lyrics-transcribed-from-the-audio)). It needs the
 flake's `packages.autochords`, with Whisper, its model files and demucs-rs. Without them it does
-nothing and exits 1.
+nothing and exits 1. It says each stage as it ends; while the vocals, the words and the chords run,
+a live line on a terminal says what they are doing (`Words · 1:12 of 3:58`), and the journal gets
+that line once a minute. `--progress` writes a JSON line per stage instead, for caracole serve.
 
 ### When the pages are rewritten
 
