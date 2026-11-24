@@ -3789,8 +3789,12 @@ that begins with a machine's root (`/home/`, `/var/`, `/nix/`, `/tmp/`, `/data/`
 `file:` and the like). A site's name that just begins with `/` is no path.
 
 It also refuses to publish while the clock reads earlier than the minute in the last file's name
-(`published.json`), as after the clock has gone back. A file named in the past would never reach the
-phones, which take the newest name. `--force` doesn't pass this one: set the clock right, then publish.
+(`published.json`). A file named in the past would never reach the phones, which take the newest
+name. `--force` doesn't pass this one. Either clock may be the wrong one:
+
+- If the clock now is wrong (it went back), set it right, then publish.
+- If the clock now is right, the last file was stamped ahead. Delete that file and `published.json`
+  from `DIR`, delete its asset from the release on GitHub, then publish again.
 
 `--kept NAME` (repeated, once for each name) exports nothing and reads no config, so it answers
 beside a service too. It prints, one a line and each once,

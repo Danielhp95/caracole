@@ -71,9 +71,13 @@ def test_publish_refuses_a_clock_gone_back_behind_the_last_files_minute(conn_wit
 
     first = catalogues.publish(conn_with_index, out, now=NOW, last=None)
 
-    with pytest.raises(catalogues.PublishError, match="the clock reads 2026-11-23 03:12 UTC, earlier than the last "
-                                                      f"file published, {first.name}: set the clock right"):
+    with pytest.raises(catalogues.PublishError) as refused:
         catalogues.publish(conn_with_index, out, now=NOW - timedelta(days=1), last=first, after=first)
+    # Either clock may be the wrong one: the one now, or the one that stamped the last file ahead.
+    assert str(refused.value) == (
+        f"the clock reads 2026-11-23 03:12 UTC, earlier than the last file published, {first.name}. If the clock "
+        f"is right, that file was stamped ahead: delete it and published.json from {out} (and its asset from the "
+        "release), then publish again; if not, set the clock right.")
 
     assert sorted(p.name for p in out.iterdir()) == sorted([first.name, "published.json"])  # nothing changed
     assert catalogues.published(out) == first

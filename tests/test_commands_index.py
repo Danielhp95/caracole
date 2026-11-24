@@ -418,7 +418,9 @@ def test_index_publish_refuses_a_clock_behind_the_last_file_published_forced_or_
         result = invoke(tmp_path, "publish", str(out), *forced)
 
         assert result.exit_code == 1, result.output
-        assert f"earlier than the last file published, {ahead}: set the clock right" in result.stderr
+        assert (f"earlier than the last file published, {ahead}. If the clock is right, that file was stamped "
+                f"ahead: delete it and published.json from {out} (and its asset from the release), then publish "
+                "again; if not, set the clock right.") in result.stderr
         assert [p.name for p in out.iterdir()] == ["published.json"]
 
 

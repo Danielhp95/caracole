@@ -157,7 +157,8 @@ def publish(conn: sqlite3.Connection, folder: Path, *, now: datetime, last: Publ
     """The catalogue file and its sidecar written in ``folder`` (see the module docstring); ``last``, the last
     publication whose rows the new one's are held to (None: --force); ``after``, the last publication, whose file's
     minute (its name's) the new one's may not be before: a clock gone back would name a file the phones never take
-    (they take the newest name) and the Keep rule might prune at once."""
+    (they take the newest name) and the Keep rule might prune at once. The refusal says what to do either way: the
+    clock now set right, or, the clock right, the last file stamped ahead deleted (here and from the release)."""
     from caracole import db, stamps
     from caracole import index_transfer as transfer
     from caracole.ug.index import BUILT_KEY
@@ -171,7 +172,9 @@ def publish(conn: sqlite3.Connection, folder: Path, *, now: datetime, last: Publ
     before = read_name(after.name) if after is not None else None
     if before is not None and read_name(name).at < before.at:
         raise PublishError(f"the clock reads {now:%Y-%m-%d %H:%M} UTC, earlier than the last file published, "
-                           f"{after.name}: set the clock right, then publish again")
+                           f"{after.name}. If the clock is right, that file was stamped ahead: delete it and "
+                           f"{SIDECAR} from {folder} (and its asset from the release), then publish again; if not, "
+                           "set the clock right.")
     if db.kv_get(conn, BUILT_KEY) is None:
         raise PublishError("UG's index isn't built whole yet")
     token = secrets.token_hex(6)
