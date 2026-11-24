@@ -328,7 +328,7 @@ class CataloguesRunnerTest {
         publish(newest to export(), listed = mapOf(newest to 52_000_000L))
         val job = run(phone)
         assertEquals(Job.DONE, job.state, job.asJson().toString())
-        assertEquals(Line("waiting", "52 MB to download: waiting for your go-ahead to use mobile data",
+        assertEquals(Line("waiting", "52 MB to download: waiting for your go-ahead in Settings (a metered network)",
                           details = "#tab=requests&job=${job.id}"), JobViews.line(job))
         assertEquals(PyJson.loads("""{"name": "$newest", "bytes": 52000000}"""),
                      PyJson.loads(phone.kv(CataloguesRunner.ASKING)!!) as JsonObject)

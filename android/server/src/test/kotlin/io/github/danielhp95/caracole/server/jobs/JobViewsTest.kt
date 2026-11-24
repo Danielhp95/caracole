@@ -15,6 +15,8 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
+import io.github.danielhp95.caracole.core.index.MergeProgress
+import io.github.danielhp95.caracole.core.sync.SyncEngine
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.server.testing.replays.JobViewsReplay
@@ -117,6 +119,32 @@ class JobViewsTest {
         assertEquals(Job.DONE, queue.job(sync.id)!!.state)
     }
 
+    /** A sync's long stage at a step whose words end in "…" ("Tidying the database…", the merge's and the engine's
+     * own): its line says one, its own, after the stage's detail (SyncEngine.detail leaves theirs off). */
+    @Test fun aSyncTidyingTheDatabaseSaysOneEllipsis() = runTest {
+        val queue = queue()
+        val gate = CompletableDeferred<Unit>()
+        val sync = queue.submit(JobSpec("Sharing logs with studio", "sync:http://pc:8737", "sync", sync,
+                                        display = "Sharing logs with studio") { context ->
+            context.stage("index", "running", SyncEngine.detail(MergeProgress.TIDYING))
+            gate.await()
+        }).first
+        runCurrent()
+        assertEquals("Updating the indexes · Tidying the database…", JobViews.line(queue.job(sync.id)!!).text)
+        val after = queue.submit(JobSpec("Get Muse - Uprising", "muse/uprising", "song", emptyList(),
+                                         commands = JobCommands.lookupSteps("Muse", "Uprising"), fetching = true)).first
+        assertEquals("Queued · after the sync (Updating the indexes · Tidying the database)",
+                     JobViews.line(queue.job(after.id)!!, 1,
+                                   behind = JobViews.behind(queue.job(after.id)!!, queue.snapshot())).text)
+        for (words in listOf(SyncEngine.COPYING_THERE, SyncEngine.COPYING_OUT, MergeProgress.COMPARING,
+                             MergeProgress.READYING, MergeProgress.TIDYING)) {
+            assertEquals(words.removeSuffix("…"), SyncEngine.detail(words))
+        }
+        assertEquals("120 of 640 pages", SyncEngine.detail("120 of 640 pages"))
+        gate.complete(Unit)
+        runCurrent()
+    }
+
     /** Behind a kind whose line is the same while it runs (a backup, a file filed, a restore): that line once, its
      * first letter small; behind one that counts (the pages remade), its name and its count, or its name alone before
      * it has counted anything. No parentheses twice. */
@@ -157,11 +185,12 @@ class JobViewsTest {
     @Test fun theMeteredStopsFormerWordsStillReadAsAWait() = runTest {
         val queue = queue()
         val kind = PhoneKinds.CATALOGUES
-        val old = "52 MB to download: waiting for Wi-Fi or your go-ahead"
-        val job = phoneJob(queue, kind, "old") { context -> context.stage("catalogues", "done", old) }
-        runCurrent()
-        assertEquals(Line("waiting", old, details = "#tab=requests&job=${job.id}"), JobViews.line(queue.job(job.id)!!))
-        assertTrue(kind.waits(old))
+        for (old in listOf("52 MB to download: waiting for Wi-Fi or your go-ahead", "52 MB to download: waiting for your go-ahead to use mobile data")) {
+            val job = phoneJob(queue, kind, old) { context -> context.stage("catalogues", "done", old) }
+            runCurrent()
+            assertEquals(Line("waiting", old, details = "#tab=requests&job=${job.id}"), JobViews.line(queue.job(job.id)!!))
+            assertTrue(kind.waits(old))
+        }
         assertTrue(kind.waits(PhoneKinds.fill(kind.otherwise!!, "size" to "52 MB")))
         assertEquals(false, kind.waits("Up to date: the catalogues of 24 Nov 2026"))
     }
@@ -413,7 +442,7 @@ class JobViewsTest {
         }
         runCurrent()
         assertEquals(Line("ready", "Up to date: the catalogues of 24 Nov 2026"), JobViews.line(queue.job(upToDate.id)!!))
-        assertEquals(Line("waiting", "52 MB to download: waiting for your go-ahead to use mobile data",
+        assertEquals(Line("waiting", "52 MB to download: waiting for your go-ahead in Settings (a metered network)",
                           details = "#tab=requests&job=${metered.id}"), JobViews.line(queue.job(metered.id)!!))
         val failed = phoneJob(queue, kind, "failed") { context ->
             val line = PhoneKinds.fill(kind.failed, "why" to "No catalogues are published yet.")
@@ -424,7 +453,7 @@ class JobViewsTest {
         assertEquals(Line("failed", "Not imported: No catalogues are published yet.",
                           details = "#tab=requests&job=${failed.id}"), JobViews.line(queue.job(failed.id)!!))
         // A line fits a template with its blanks filled, wherever they are.
-        assertTrue(PhoneKinds.fits("52 MB to download: waiting for your go-ahead to use mobile data", kind.otherwise!!))
+        assertTrue(PhoneKinds.fits("52 MB to download: waiting for your go-ahead in Settings (a metered network)", kind.otherwise!!))
         assertTrue(PhoneKinds.fits("Waiting for its song: a.gp5", PhoneKinds.INBOX.otherwise!!))
         assertTrue(PhoneKinds.fits("Filed · a of b", PhoneKinds.INBOX.done))
         assertEquals(false, PhoneKinds.fits("Up to date: the catalogues of 24 Nov 2026", kind.otherwise!!))

@@ -64,7 +64,8 @@ class RequestsRoutes(val parts: PhoneParts, val clock: () -> Instant = { Instant
      * Every request, as the Requests tab draws it (jobs_routes.requests_json): the one that runs and those queued,
      * then the finished ones, each with its outcome and its next step; what each command printed only for the requests
      * the tab has opened ([open]: `?open=N,M`). Each job's line is the one /jobs.json gives it (JobViews.line: its
-     * song's facts, a songbook's page), the chips of the running one and of each finished one Outcomes.listsSteps
+     * song's facts, a songbook's page, and for a queued one the jobs before it and the long job of the phone's own it
+     * waits behind, JobViews.behind), the chips of the running one and of each finished one Outcomes.listsSteps
      * takes and each finished one's outcome are Outcomes', and a song a finished request waits for a pick of is
      * [picksWaiting]'s. The database unreadable, the lines say only how the jobs went; a bug is the request's error, as
      * caracole serve's.

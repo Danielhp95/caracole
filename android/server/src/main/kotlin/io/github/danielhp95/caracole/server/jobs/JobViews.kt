@@ -37,7 +37,9 @@ import java.time.Instant
  * alone (Python never queues one): "Queued · after the site catalogues (Importing · Ultimate Guitar · 600,000 of
  * 1,521,145 tabs)", "Queued · after backing up the book", "Queued · 2 requests ahead, now the sync (Updating the
  * indexes · Downloading the computer's indexes · 120 of 274 MB)" ([queuedBehind]). While that job lets the lookups
- * queued go first, it waits for none.
+ * queued go first, it waits for none. It says so wherever its line is given [behind]: /jobs.json's views and the
+ * page's controls ([view] with the queue), the Requests tab's lines and Try again's view (RequestsRoutes), and
+ * Settings' line of the catalogues' job; the notification names the job that runs (Working).
  */
 object JobViews {
     const val REQUESTS = Status.REQUESTS

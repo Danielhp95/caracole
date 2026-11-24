@@ -20,7 +20,6 @@ import io.github.danielhp95.caracole.core.index.Paced
 import io.github.danielhp95.caracole.core.index.Sizes
 import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.index.TransferError
-import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.mirror.Http
 import io.github.danielhp95.caracole.server.PhoneParts
@@ -32,7 +31,6 @@ import io.github.danielhp95.caracole.server.jobs.PhoneKinds
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import java.io.File
@@ -49,10 +47,11 @@ import java.time.Instant
  * 2. the release listed ([CatalogueSource.list]) and its file chosen ([choose]): none of this schema, the reason in
  *    [words] (a newer schema, an older one, none at all); the one imported last (kv [Catalogues.IMPORTED]), "Up to
  *    date: the catalogues of DATE" ([UP_TO_DATE]), done, nothing downloaded;
- * 3. on a metered network ([metered]) with no `--metered-ok`: "52 MB to download: waiting for your go-ahead to use
- *    mobile data" (the kind's second way to end, a wait: nothing starts it again on Wi-Fi by itself), nothing
- *    downloaded, the file's name and size kept in kv [ASKING] (`{"name", "bytes"}`) for the app's question; asked
- *    again with `--metered-ok` (the go-ahead, a job of its own key, [GO]), downloaded whatever the network;
+ * 3. on a metered network ([metered]) with no `--metered-ok`: "52 MB to download: waiting for your go-ahead in
+ *    Settings (a metered network)" (the kind's second way to end, a wait: nothing starts it again on Wi-Fi by
+ *    itself), nothing downloaded, the file's name and size kept in kv [ASKING] (`{"name", "bytes"}`) for the app's
+ *    question; asked again with `--metered-ok` (the go-ahead, a job of its own key, [GO]), downloaded whatever the
+ *    network;
  * 4. less room in `stateDir` than [Catalogues.ROOM_FACTOR] times the file ([free]): "The import needs about 1.2 GB
  *    free; the phone has 700 MB.", nothing downloaded;
  * 5. the lookups queued meanwhile let go first (JobContext.yieldToQueued, holding no write), then the file
@@ -63,9 +62,9 @@ import java.time.Instant
  *    (MergeProgress.words: "Comparing with the phone's index…", "Importing · Ultimate Guitar · 600,000 of 1,521,145
  *    tabs", "Importing · harptabs.com", "Making the search index ready…"), kv [Catalogues.IMPORTED] its name once the
  *    merge took it, and "Catalogues of DATE", with a sentence for the sites the file holds that this version doesn't
- *    know (caracole_export's `sites` against [IndexTransfer.SITES], [unknown]); once the merge has begun, whatever
- *    came of it, the WAL checkpointed ("Tidying the database…") and the search's answers forgotten ([forget]). No
- *    lookup runs inside the merge's write.
+ *    know (caracole_export's `sites` as the merge read them, Merged.listed, against [IndexTransfer.SITES],
+ *    [unknown]); once the merge has begun, whatever came of it, the WAL checkpointed ("Tidying the database…") and
+ *    the search's answers forgotten ([forget]). No lookup runs inside the merge's write.
  *
  * Its words while it runs come at most once a second of [ticks] within a step, each step's first and last at once
  * (Paced: the last before each yield and the end). [chunk] is IndexTransfer.merge's (a test's fewer rows a chunk).
@@ -170,11 +169,12 @@ class CataloguesRunner(
         context.yieldToQueued()  // and those queued as it came, before the merge's write holds the worker for a minute
         val unknown = try {
             parts.database.write { db ->
-                IndexTransfer.merge(db, fetched.file, Stamps.of(clock()), notAfter = notAfter(), chunk = chunk,
-                                    progress = { doing(it.words(), it.step) })
+                val merged = IndexTransfer.merge(db, fetched.file, Stamps.of(clock()), notAfter = notAfter(),
+                                                 chunk = chunk, progress = { doing(it.words(), it.step) })
                 db.kvSet(Catalogues.IMPORTED, take.file.name)
                 db.kvDelete(ASKING)
-                sitesOf(db, fetched.file).filter { it !in IndexTransfer.SITES }
+                // As the merge read the file's META, its guard on: the file is never attached again after it.
+                merged.listed.filter { it !in IndexTransfer.SITES }
             }
         } catch (e: CancellationException) {
             throw e
@@ -222,21 +222,6 @@ class CataloguesRunner(
         throw CommandExit(1, line)
     }
 
-    /** The names caracole_export's `sites` lists in [file] (a JSON array of texts), none where it can't be read. */
-    private fun sitesOf(db: Db, file: File): List<String> = try {
-        db.attach(file, READ_AS)
-        try {
-            val text = db.one("SELECT value FROM $READ_AS.${IndexTransfer.META} WHERE key = 'sites'") { it.text(0) }
-            (text?.let(PyJson::loads) as? JsonArray).orEmpty()
-                .mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content }
-        } finally {
-            db.detach(READ_AS)
-        }
-    } catch (e: Exception) {
-        if (e is CancellationException) throw e
-        emptyList()  // the merge read the file whole: what it lists of no use to it is said where it can be read
-    }
-
     /** Every file in [cache] deleted (the folder kept). */
     private fun empty(cache: File) {
         cache.listFiles()?.forEach { it.deleteRecursively() }
@@ -260,7 +245,6 @@ class CataloguesRunner(
         const val CACHE = "cache/catalogues"
 
         private const val STAGE = "catalogues"
-        private const val READ_AS = "catalogue"
         private const val THE_FILE = "the file"
         private const val LISTING = "Asking GitHub for the catalogues…"
 
