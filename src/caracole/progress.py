@@ -12,18 +12,34 @@ return and no color. Color only ever goes to a terminal, and never when
 
 ``Pace`` estimates the time a run of paced steps has left, and ``about`` and
 ``duration`` put times into words.
+
+A ``Ticker`` says what long work is doing while it goes, for whoever watches
+(``caracole run``, ``ug --directory``, the ``--index`` passes, ``render``,
+``fetch``): on a terminal at the default verbosity, the live line of a
+``Console`` on stderr, so stdout stays the command's report; and, at most a
+line a minute, the ``caracole.progress`` log, which the journal keeps at the
+default verbosity (logs.py's ``JOURNAL_INFO``), and -v anywhere; and, in a unit
+that lets it (``$NOTIFY_SOCKET``: nix/module.nix's ``NotifyAccess``), the unit's
+status line, which ``systemctl status`` shows (``systemd_status``, sd_notify's
+``STATUS=``). ``Requests`` counts what a client sends onto one, and ``Counted``
+work of a known size. They only count and say: nothing here paces, delays or
+holds a request.
 """
 
 from __future__ import annotations
 
+import logging
 import os
 import shutil
+import socket
 import sys
 import time
 from collections.abc import Callable, Mapping
 from typing import Any, TextIO
 
 import click
+
+from caracole import logs
 
 
 class Console:
@@ -167,3 +183,157 @@ def duration(seconds: float) -> str:
         return f"{minutes} min {secs} s"
     hours, minutes = divmod(minutes, 60)
     return f"{hours} h {minutes} min"
+
+
+EVERY = 60.0  # seconds: a ticker's line in the log at most this often
+STATUS_EVERY = 2.0  # seconds: the unit's status line told at most this often, but as a part begins
+ANSWER = 0.5  # seconds a site takes to answer, about, beside the pause before each request
+SENT = ("ok", "not_modified", "redirect", "blocked", "error")  # a request's events, sent: _common._SENT's
+
+
+class Ticker:
+    """What long work is doing, as it goes; see the module docstring.
+
+    ``show`` says where the work is (its text, and ``tail``, the time left, which stays when the live line is cut
+    short): the console's live line at once, and a line of the log once ``every`` seconds have passed since the last.
+    ``prefix``, what the work is part of (the run's step, "[6/20] lyrics"), goes before each text; ``begin`` starts
+    such a part, its line live at once and the log's next a whole ``every`` later, its own start line just logged by
+    its caller. A record the log writes takes the live line off the screen first (``logs.clears_first``), and so does
+    ``clear``, before the command prints on stdout; ``close`` does both for good. ``status``, where given, is told
+    the line too (the unit's status line, ``systemd_status``): as a part begins, and at most every ``STATUS_EVERY``
+    seconds after.
+    """
+
+    def __init__(self, console: Console | None = None, *, clock: Callable[[], float] = time.monotonic,
+                 every: float = EVERY, logger: logging.Logger | None = None,
+                 status: Callable[[str], object] | None = None):
+        self.console = console
+        self.prefix = ""
+        self._clock = clock
+        self._every = every
+        self._log = logger or logging.getLogger("caracole.progress")
+        self._said = self._told = clock()
+        self._status = status
+        self._undo = logs.clears_first(self.clear) if console is not None and console.live else None
+
+    def begin(self, prefix: str) -> None:
+        self.prefix = prefix
+        self._said = self._told = self._clock()
+        if self.console is not None:
+            self.console.status(prefix + "…")
+        if self._status is not None:
+            self._status(prefix + "…")
+
+    def show(self, text: str = "", tail: str = "") -> None:
+        line = " · ".join(part for part in (self.prefix, text) if part)
+        if self.console is not None:
+            self.console.status(line, tail)
+        now = self._clock()
+        if now - self._said >= self._every:
+            self._said = now
+            self._log.info("%s", _join(line, tail))
+        if self._status is not None and now - self._told >= STATUS_EVERY:
+            self._told = now
+            self._status(_join(line, tail))
+
+    def clear(self) -> None:
+        if self.console is not None:
+            self.console.close()
+
+    def close(self) -> None:
+        self.clear()
+        if self._undo is not None:
+            self._undo()
+            self._undo = None
+
+    def __enter__(self) -> Ticker:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()
+
+
+def ticker() -> Ticker:
+    """A command's ``Ticker``: its live line on stderr on a terminal at the default verbosity alone (at -v the log's
+    own lines say more, -q keeps quiet, and a caller that set up no log, a test's, gets none); its log lines whatever
+    the log shows; and the unit's status line where the unit lets it be told (``$NOTIFY_SOCKET``)."""
+    live = None if logs.level() == logs.NORMAL else False
+    status = systemd_status if os.environ.get("NOTIFY_SOCKET") else None
+    return Ticker(Console(sys.stderr, live=live), status=status)
+
+
+def systemd_status(text: str, *, environ: Mapping[str, str] | None = None) -> bool:
+    """``text`` as the unit's status line (sd_notify's ``STATUS=``, which ``systemctl status`` shows), sent to the
+    socket systemd names in ``$NOTIFY_SOCKET`` (a path, or an abstract address after "@"); True once sent. Nothing
+    without one, or to one of another kind, and a socket that won't take it is no error: the line is a courtesy."""
+    address = (os.environ if environ is None else environ).get("NOTIFY_SOCKET", "")
+    if address.startswith("@"):
+        address = "\0" + address[1:]
+    elif not address.startswith("/"):
+        return False
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM | socket.SOCK_CLOEXEC) as s:
+            s.connect(address)
+            s.sendall(("STATUS=" + text).encode("utf-8", "replace"))
+    except OSError:
+        return False
+    return True
+
+
+class Requests:
+    """An ``on_event`` (http.py's events, youtube.py's) that counts the requests a client sends on a ``Ticker``:
+    "LRCLIB · 37 of up to 200 requests", "up to about 2 min left", or "AZLyrics · 12 requests" with no budget.
+
+    The budget is what the work may spend, not what it will, hence "up to": the time is what the rest of it would
+    take at the pace measured since the step's first request (``Pace``, from ``delay``'s mean and ``ANSWER`` before
+    any), measured again from the ticker's next ``prefix`` (the run's next step: a client serves several).
+    """
+
+    def __init__(self, ticker: Ticker, provider: str, *, budget: int | None, delay: tuple[float, float],
+                 noun: str = "request", clock: Callable[[], float] = time.monotonic):
+        self.ticker = ticker
+        self.name = logs.provider_name(provider)
+        self.budget = budget
+        self.per_request = sum(delay) / 2 + ANSWER
+        self.noun = noun
+        self.sent = 0
+        self._clock = clock
+        self._pace: Pace | None = None
+        self._prefix = ""
+
+    def __call__(self, event: Any) -> None:
+        if getattr(event, "decision", None) not in SENT:
+            return
+        self.sent += 1
+        if self._pace is None or self.ticker.prefix != self._prefix:
+            self._pace, self._prefix = Pace(self.per_request, clock=self._clock), self.ticker.prefix
+        else:
+            self._pace.step()
+        if self.budget is None:
+            self.ticker.show(f"{self.name} · {logs.plural(self.sent, self.noun)}")
+            return
+        left = self._pace.left(max(self.budget - self.sent, 0))
+        tail = f"up to {about(left)} left" if left >= 1 else ""
+        self.ticker.show(f"{self.name} · {self.sent:,} of up to {self.budget:,} {self.noun}s", tail)
+
+
+class Counted:
+    """Work of a known size on a ``Ticker``: called with its text, the steps done and those in all, it adds the time
+    the rest should take ("about 2 min left") once one step is measured (``Pace``, from ``per_step`` before), measured
+    again for another ``kind`` of step (a pass's next phase)."""
+
+    def __init__(self, ticker: Ticker, *, per_step: float, clock: Callable[[], float] = time.monotonic):
+        self.ticker = ticker
+        self.per_step = per_step
+        self._clock = clock
+        self._pace: Pace | None = None
+        self._kind = ""
+        self._base = 0
+
+    def __call__(self, text: str, done: int, total: int, kind: str = "") -> None:
+        if self._pace is None or kind != self._kind or done < self._base:
+            self._pace, self._kind, self._base = Pace(self.per_step, clock=self._clock), kind, done
+        self._pace.steps = done - self._base
+        left = max(total - done, 0)
+        tail = f"{about(self._pace.left(left))} left" if left and self._pace.steps else ""
+        self.ticker.show(text, tail)

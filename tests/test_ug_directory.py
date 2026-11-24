@@ -225,3 +225,23 @@ def test_a_directory_artists_words_join_the_artist_vocabulary(conn, tmp_path):
     assert conn.execute("SELECT 1 FROM ug_artist_words WHERE term = 'dongye'").fetchone()
     conn.execute("DELETE FROM ug_directory WHERE artist_id = ?", (SONG_DONGYE_ID,))
     assert conn.execute("SELECT 1 FROM ug_artists WHERE artist_key = 'song-dongye-宋冬野'").fetchone() is None
+
+
+def test_a_pass_says_how_far_it_is_after_each_batch_of_listings_then_of_bare_pages(conn, tmp_path):
+    # What caracole ug --directory and the run's step show while the hour goes: pages of the listings due, then the
+    # bare artists' pages due, each with the requests sent so far.
+    site = FakeDirectory({"s": [SONG_DONGYE_ROW, listed(13472, "Кино", tabs=411), *fillers("s", 60, start=50_000)]})
+    seen = []
+    stats, made = _pass(conn, tmp_path, site, workers=1, progress=seen.append)
+    listings = [p for p in seen if p.phase == "listings"]
+    bare = [p for p in seen if p.phase == "bare"]
+    assert [p.phase for p in seen] == ["listings"] * len(listings) + ["bare"] * len(bare)
+    # 28 pages (s has two, which its first says), 8 a batch with one worker: its start, four batches; then the bare
+    # pages' start and their one batch
+    assert [(p.done, p.due) for p in listings] == [(0, 27), (8, 27), (16, 27), (24, 28), (28, 28)]
+    assert [(p.done, p.due) for p in bare] == [(0, 2), (2, 2)]
+    assert bare[-1].requests == made and listings[-1].requests == bare[0].requests == 28
+    assert listings[0].words() == "UG's listings · 0 of about 27 pages · 0 requests"
+    assert listings[1].words() == "UG's listings · 8 of about 27 pages · letter g · 8 requests"
+    assert bare[0].words() == "UG's bare artists' pages · 0 of 2 · 28 requests"
+    assert stats.read + stats.gone == 2

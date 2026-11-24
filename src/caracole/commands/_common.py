@@ -69,6 +69,7 @@ if TYPE_CHECKING:  # the HTTP client waits for a command that makes one (``make_
 
     from caracole.commands.get import _Lines
     from caracole.http import Event, PoliteClient
+    from caracole.progress import Ticker
     from caracole.songs import Song
     from caracole.staged import StagedResult
     from caracole.youtube import YtDlp
@@ -1010,6 +1011,7 @@ def make_client(
     policy: ProviderPolicy | None = None,
     on_event: Callable[[Event], None] | None = None,
     interactive: bool = False,
+    ticker: Ticker | None = None,
 ) -> PoliteClient:
     """A polite client for one provider and one run, logging every request to ``events``.
 
@@ -1032,6 +1034,8 @@ def make_client(
     sent again for up to ``CONNECT_PATIENCE`` (a run that starts as the laptop wakes, before its Wi-Fi has
     an address); a lookup's says at once. Either way, a site with a ``per_day``
     (Megalobiz) gets no more than what the UTC day leaves of it (``within_the_day``).
+    With a ``ticker`` (progress.py), the requests it sends are counted there against that budget
+    (``progress.Requests``), which only counts: its pace and budget are what they would be without.
     """
     if interactive and not run_id.startswith(LOOKUP_RUN):
         run_id = LOOKUP_RUN + run_id
@@ -1042,13 +1046,14 @@ def make_client(
         seen = _handoffs  # a lookup let go first in the pause before its first request counts too
         _pause_after_last_request(conn, provider, policy.delay, cfg=None if interactive else cfg)
         log = EventLog(conn, run_id)
+        heard = _heard(on_event, ticker, provider, policy)
 
         def logged(event: Event) -> None:
             log(event)
             if event.decision in _SENT:
                 db.kv_set(conn, _LAST_SENT + provider, f"{time.time():.3f}")
-            if on_event is not None:
-                on_event(event)
+            if heard is not None:
+                heard(event)
 
         return _locked_client()(
             provider,
@@ -1069,6 +1074,27 @@ def make_client(
     except BaseException:
         _release(lock)
         raise
+
+
+def _heard(on_event: Callable[[Event], None] | None, ticker: Ticker | None, provider: str, policy: ProviderPolicy, *,
+           noun: str = "request") -> Callable[[Event], None] | None:
+    """What a client's events go to once logged: ``on_event``, then, with a ``ticker``, ``progress.Requests``
+    counting them against ``policy``'s budget (none for ``NO_BUDGET``)."""
+    if ticker is None:
+        return on_event
+    from caracole.config import NO_BUDGET
+    from caracole.progress import Requests
+
+    beat = Requests(ticker, provider, budget=None if policy.budget == NO_BUDGET else policy.budget,
+                    delay=policy.delay, noun=noun)
+    if on_event is None:
+        return beat
+
+    def both(event: Event) -> None:
+        on_event(event)
+        beat(event)
+
+    return both
 
 
 @functools.cache
@@ -1166,10 +1192,12 @@ def make_youtube(
     run_id: str,
     *,
     on_event: Callable[[Event], None] | None = None,
+    ticker: Ticker | None = None,
 ) -> YtDlp:
     """yt-dlp for one run (youtube.py), as ``make_client`` makes a provider's client: it holds
     caracole's lock until it is closed, its first run keeps the pause after the last one any
-    caracole made, and every run is logged to ``events``. Every caller closes it.
+    caracole made, and every run is logged to ``events``, and counted on ``ticker`` as
+    ``make_client``'s requests are. Every caller closes it.
 
     It is bulk work: each pause, its first included, hands the lock to a lookup that waits
     meanwhile (``hand_over``; under a lock taken as asked for now, a YouTube search's, to the
@@ -1181,11 +1209,12 @@ def make_youtube(
         policy = cfg.provider(PROVIDER)
         _pause_after_last_request(conn, PROVIDER, policy.delay, cfg=cfg)
         log = EventLog(conn, run_id)
+        heard = _heard(on_event, ticker, PROVIDER, policy, noun="yt-dlp run")
 
         def logged(event: Event) -> None:
             log(event)
-            if on_event is not None:
-                on_event(event)
+            if heard is not None:
+                heard(event)
 
         def pause(seconds: float) -> None:
             _patient_sleep(cfg, conn, seconds, lambda: random.uniform(*policy.delay), lambda s: sleep(s))

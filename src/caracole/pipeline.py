@@ -29,6 +29,15 @@ provider's error left for the next run, and what only you can do. The run's
 summary (``RunReport.summary``, report.py) is made of them, and every ntfy
 message the run sends uses the summary's words. A new step plugs in by
 returning one; a step that returns a line of text, or nothing, still works.
+
+While it goes, it says what it is doing. Each step that runs is logged as it
+starts ("[6/20] lyrics…") and as it ends, with its status line and how long it
+took ("[6/20] lyrics: 37 found, … (1 min 2 s)"); a step that doesn't run, once
+("[3/20] index: skipped: …"). The journal shows those lines at the default
+verbosity (logs.py ``JOURNAL_INFO``). In between, the run's ``Ticker``
+(progress.py) says how far the step is: its clients' requests against their
+budget, UG's directory's pages, the PDFs made; on a terminal as a live line on
+stderr, in the journal a line a minute. They only count: no pause changes.
 """
 
 from __future__ import annotations
@@ -41,12 +50,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
+from caracole import progress
 from caracole.config import DEFAULT_PROVIDERS, NO_BUDGET, SHARE_PROVIDERS, Config
 from caracole.db import kv_set_json
 from caracole.health import alerts, answered_any, get_state, is_cooling, record_block, record_error, record_ok
 from caracole.http import BudgetExhausted, Client, ProviderBlocked, ProviderError
 from caracole.notify import Notifier
 from caracole.overrides import Overrides, OverridesError, load_overrides
+from caracole.progress import Counted, Ticker, duration
 from caracole.report import (
     BUILD_INDEX,
     ERROR,
@@ -150,6 +161,7 @@ class StepContext:
     services: Services
     report: RunReport
     handoffs: int = field(default_factory=_handoffs)  # how many there had been when ``overrides`` was read
+    ticker: Ticker = field(default_factory=Ticker)  # how far the step is, as it goes (progress.py)
 
     def read_overrides_again(self) -> None:
         """overrides.toml read again once the run has let a lookup have caracole's lock since it was read
@@ -247,7 +259,7 @@ def _directory(ctx: StepContext) -> StepResult:
     """UG's artist directory (ug/directory.py): the listings due, then the bare artists' pages due, with the
     directory's own client and budget, so that match and the fetch see what it found."""
     from caracole.ug.bands import LETTERS
-    from caracole.ug.directory import directory_pass, index_state
+    from caracole.ug.directory import PACE, directory_pass, index_state
 
     from caracole.ug.index import index_count
 
@@ -257,7 +269,9 @@ def _directory(ctx: StepContext) -> StepResult:
         return StepResult(status="skipped: no client for it this run")
     if index_count(ctx.conn) == 0:  # the index step says what to do: build it once, then the directory follows
         return StepResult(status="skipped: the index is empty; run `caracole index build` once")
-    s = directory_pass(ctx.conn, client, ctx.now, overrides=ctx.overrides, library_dir=ctx.cfg.library_dir)
+    counted = Counted(ctx.ticker, per_step=PACE)
+    s = directory_pass(ctx.conn, client, ctx.now, overrides=ctx.overrides, library_dir=ctx.cfg.library_dir,
+                       progress=lambda p: counted(p.words(), p.done, p.due, p.phase))
     state = index_state(ctx.conn)
     result = StepResult(
         title=title,
@@ -613,10 +627,11 @@ def _scan(ctx: StepContext) -> StepResult:
 
 def _render(ctx: StepContext) -> StepResult:
     from caracole.commands._common import hand_over
-    from caracole.render import render_all
+    from caracole.render import render_all, rendering
 
     # Many PDFs to make (a new font, say) take minutes: a waiting lookup goes between two songs.
-    s = render_all(ctx.conn, ctx.cfg, ctx.overrides, now=ctx.now, between=lambda: hand_over(ctx.cfg, ctx.conn))
+    s = render_all(ctx.conn, ctx.cfg, ctx.overrides, now=ctx.now, between=lambda: hand_over(ctx.cfg, ctx.conn),
+                   on_song=rendering(ctx.ticker))
     ctx.read_overrides_again()  # and what such a lookup changed, for the songbooks
     tail = f"; {s.font_error}" if s.font_error else ""
     result = StepResult(title="PDFs", done=_counted((s.rendered, "rendered"), _n(s.given, "auto sheet", "given lyrics")),
@@ -739,13 +754,15 @@ def default_steps() -> list[Step]:
 # --- orchestration ---------------------------------------------------------------
 
 
-def make_services(cfg: Config, conn: sqlite3.Connection, run_id: str) -> Services:
+def make_services(cfg: Config, conn: sqlite3.Connection, run_id: str, *, ticker: Ticker | None = None) -> Services:
     """Real clients for a run: one polite client per provider turned on, and yt-dlp when the YouTube
     route is on (``youtube_fetch.route_problem``).
 
     The clients are the commands' own (``commands._common.make_client`` and
     ``make_youtube``): each holds caracole's lock until it is closed, and its first
     request keeps the pause after the provider's last one, whichever caracole sent it.
+    Each counts its requests on ``ticker`` (progress.py), but UG's directory's, whose
+    pass says how far it is itself.
     """
     from caracole.commands._common import directory_client, make_client, make_youtube, transport_for
     from caracole.youtube_fetch import route_problem
@@ -755,9 +772,9 @@ def make_services(cfg: Config, conn: sqlite3.Connection, run_id: str) -> Service
     try:
         for p in PROVIDERS:
             if cfg.provider(p).enabled:
-                clients[p] = make_client(cfg, conn, p, run_id)
+                clients[p] = make_client(cfg, conn, p, run_id, ticker=ticker)
         if route_problem(cfg) is None:
-            clients["youtube"] = make_youtube(cfg, conn, run_id)
+            clients["youtube"] = make_youtube(cfg, conn, run_id, ticker=ticker)
         directory = directory_client(cfg, conn, run_id)
     except BaseException:  # Ctrl-C during a pause, say: the clients made let go of the lock
         for client in clients.values():
@@ -828,11 +845,14 @@ def run_pipeline(
     services: Services | None = None,
     steps: list[Step] | None = None,
     now: datetime | None = None,
+    ticker: Ticker | None = None,
 ) -> RunReport:
     """Run the steps (by default ``default_steps``) and report; see the module docstring.
 
     Services the run makes itself (``make_services``) are closed when it ends,
-    and with their clients goes the hold they had on caracole's lock.
+    and with their clients goes the hold they had on caracole's lock. So is the
+    ``Ticker`` it makes itself (``progress.ticker``, a command's), whose live line
+    is gone before the summary is printed; one given is its caller's.
     """
     started = clock()
     clock_given = now is not None
@@ -840,14 +860,22 @@ def run_pipeline(
     run_id = _iso(now)
     # Before any step reads songs by key, as the sync reads wanted.txt's first-seen times.
     ensure_current_keys(conn)
+    own_ticker = ticker is None
+    ticker = progress.ticker() if ticker is None else ticker
     own = services is None
-    if own:
-        services = make_services(cfg, conn, run_id)
     try:
-        return _run(cfg, conn, services, steps, now, run_id, clock_given, started)
-    finally:
         if own:
-            services.close()
+            services = make_services(cfg, conn, run_id, ticker=ticker)
+        try:
+            return _run(cfg, conn, services, steps, now, run_id, clock_given, started, ticker)
+        finally:
+            if own:
+                services.close()
+    finally:
+        if own_ticker:
+            ticker.close()
+        else:
+            ticker.clear()
 
 
 def _skipped(cfg: Config, conn: sqlite3.Connection, report: RunReport, step: Step,
@@ -891,7 +919,7 @@ def _run_step(ctx: StepContext, step: Step) -> StepResult | str | None:
 
 
 def _run(cfg: Config, conn: sqlite3.Connection, services: Services, steps: list[Step] | None,
-         now: datetime, run_id: str, clock_given: bool, started: float) -> RunReport:
+         now: datetime, run_id: str, clock_given: bool, started: float, ticker: Ticker) -> RunReport:
     report = RunReport(run_id=run_id, started=run_id)
     try:
         overrides = load_overrides(cfg.overrides_file)
@@ -903,13 +931,22 @@ def _run(cfg: Config, conn: sqlite3.Connection, services: Services, steps: list[
         services.notifier.send("caracole run failed", report.summary(), priority="high", tags=["rotating_light"])
         return report
     ctx = StepContext(cfg=cfg, conn=conn, overrides=overrides, now=now, run_id=run_id, services=services,
-                      report=report)
+                      report=report, ticker=ticker)
 
-    for step in steps if steps is not None else default_steps():
+    steps = steps if steps is not None else default_steps()
+    for n, step in enumerate(steps, 1):
         ctx.read_overrides_again()  # what a lookup the step before let go first changed
+        label = f"[{n}/{len(steps)}] {step.name}"
         result = _skipped(cfg, conn, report, step, now)
-        report.record(step.name, result if result is not None else _run_step(ctx, step))
-        log.info("%s: %s", step.name, report.steps[step.name])
+        took = ""
+        if result is None:
+            log.info("%s…", label)
+            ticker.begin(label)
+            began = clock()
+            result = _run_step(ctx, step)
+            took = f" ({duration(clock() - began)})"
+        report.record(step.name, result)
+        log.info("%s: %s%s", label, report.steps[step.name], took)
 
     report.finished = run_id if clock_given else _iso(datetime.now(UTC))
     _settle(conn, report, services, now, started=started)

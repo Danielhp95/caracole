@@ -179,7 +179,8 @@ def test_verbose_adds_a_line_per_request_and_per_step_on_stderr_only(tmp_path, s
     assert "→ 503 Service Unavailable in " in requests[0] and requests[0].endswith(" s (1 of 200 requests)")
     assert requests[1].startswith("LRCLIB GET https://lrclib.net/api/get?")  # once more, after its Retry-After
     assert [line for line in log if "Retry-After: 1; asking once more in " in line]
-    assert "lyrics: 0 found, 0 missing, 0 instrumental, 1 error" in log
+    assert "[6/20] lyrics…" in log  # each step as it starts, and as it ended, with how long it took
+    assert "[6/20] lyrics: 0 found, 0 missing, 0 instrumental, 1 error (0.0 s)" in log
     assert not [line for line in log if "httpx" in line or "HTTP Request" in line]  # the library stays quiet
 
 
@@ -246,6 +247,15 @@ def test_under_systemd_every_line_carries_its_journal_priority(tmp_path):
     [page] = [line for line in lines if "library page" in line]
     assert page.startswith("<4>library page written to ") and " with no songs: " in page
     lines.remove(page)
+    # Each step as it starts and as it ends, information the journal shows by default (logs.JOURNAL_INFO), then the
+    # summary, the run's stdout.
+    steps = [line for line in lines if line.startswith("<6>[")]
+    assert steps[0] == "<6>[1/20] sync…" and steps[1].startswith("<6>[1/20] sync: ") and steps[1].endswith(" s)")
+    ends = [line for line in steps if not line.endswith("…")]
+    assert [line.split("]")[0] for line in ends] == [f"<6>[{n}/20" for n in range(1, 21)]  # every step, once
+    assert "<6>[7/20] megalobiz: skipped: megalobiz is off ([providers.megalobiz] enabled = false)" in ends
+    assert "<6>[7/20] megalobiz…" not in steps  # a step that doesn't run: its one line
+    lines = lines[len(steps):]
     assert lines[:2] == ["<4>First, build the index once: caracole index build (about 4 minutes).",
                          "<4>Until then, no song is matched or looked for on Ultimate Guitar."]
     assert all(line[:3] in ("<3>", "<4>", "<6>", "<7>") for line in lines), lines  # and no blank line
