@@ -988,6 +988,52 @@ def test_a_folded_lines_buttons_are_placed_again_whatever_it_was_meanwhile(conn,
         b.close()
 
 
+@pytest.mark.parametrize("touch", [True, False], ids=["touch", "mouse"])
+def test_a_pinch_places_the_lines_buttons_again(conn, cfg, tmp_path, touch):
+    # The Android app's pinch is the WebView's text zoom, which grows the root's line height and leaves its font size
+    # at 16px (test_library_text_size.py): beside the pane, a line whose buttons grow past their room goes under its
+    # title as the text grows to 200 % and to 250 % (Hotel California, folded, its five buttons wrapping beside its
+    # artist; in Radiohead's band, Everything in Its Right Place, its title cut, and Airbag, whose short title its
+    # column's least never cuts, its six buttons wrapping beside it), and back beside it as the text shrinks, as on a
+    # page loaded at either size.
+    from test_library_bands import keyed
+
+    hotel(conn, cfg)
+    _six(conn, cfg, "Radiohead", "Everything in Its Right Place")
+    _six(conn, cfg, "Radiohead", "Airbag")
+    keyed(conn, cfg, "Radiohead", "Creep")
+    url = write_library_page(cfg.library_dir, page(conn, cfg)).as_uri()
+    b = _opened(tmp_path, url)
+    titles = ["Hotel California", "Everything in Its Right Place", "Airbag"]
+    # Each line: whether its buttons are under its title, whether its title is cut, how many rows they take and how
+    # many they are.
+    placed = (f"{json.dumps(titles)}.map((t) => {{ const l = lineOf(t), h = l.querySelector('h3'), "
+              "p = [...l.querySelectorAll('.line-plays > .play')]; return [l.classList.contains('plays-under'), "
+              "h.scrollWidth > h.clientWidth, new Set(p.map((x) => Math.round(x.getBoundingClientRect().top))).size, "
+              "p.length]; })")
+
+    def now(under):  # each line as ``under`` says, its title whole, its buttons on one row (under it: never one a row)
+        return (f"JSON.stringify({placed}.map((l) => [l[0], l[1], l[2] === 1 || ({json.dumps(under)} && l[2] < l[3])]))"
+                f" === {json.dumps(json.dumps([[under, False, True]] * 3, separators=(',', ':')))}")
+
+    try:
+        if touch:
+            b.send("Emulation.setTouchEmulationEnabled", enabled=True, maxTouchPoints=5)
+            b.send("Emulation.setEmulatedMedia", features=[{"name": "pointer", "value": "coarse"}])
+            b.open(url)  # loaded again on the touch screen
+            cards.install(b)
+            b.js(PANE)
+        assert b.wait("document.querySelectorAll('#list article.line').length === 4")
+        assert b.wait(now(False)), b.js(placed)  # the pages' own size: beside its title, on one row
+        for size in ("32px", "40px"):  # pinched to 200 %, then 250 %: under it
+            b.js(f"document.documentElement.style.setProperty('line-height', '{size}')")
+            assert b.wait(now(True)), (size, b.js(placed))
+        b.js("document.documentElement.style.removeProperty('line-height')")
+        assert b.wait(now(False)), b.js(placed)
+    finally:
+        b.close()
+
+
 # --- the pane's forms act on the song's line (served) ------------------------------------------------------------
 
 from test_web_page import QUICK, FakeCaracole, serve  # noqa: E402,F401  (serve: a fixture)
