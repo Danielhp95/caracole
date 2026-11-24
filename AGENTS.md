@@ -616,7 +616,7 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   - each index's `ensure_current_keys` after, whole where the file's keys record differs;
   - its progress, `merge(progress=, backing_up=)`, which the phone's merge mirrors: `progress(site, action, done,
     total)` once before it plans (`("", PLANNING, 0, sites)`), and once anything changes, `backing_up()`, then
-    `(site, "", i, sites)` before each site, `(site, noun, 0, n)` before each action, and `("ug", UG_TABS, rows
+    `(site, "", i, sites)` before each site, one that changes nothing too, `(site, noun, 0, n)` before each action, and `("ug", UG_TABS, rows
     taken, rows)` after each chunk of UG's sitemap rows, a statement for each `UG_CHUNK` (50,000) by `tab_id` range,
     in one statement's order and savepoint, so its rows come out the same (the index corpus with `UG_CHUNK` 1
     unchanged); `MergeWords` the words, commands/index.py `Merging` where they go (`index merge`'s stderr or

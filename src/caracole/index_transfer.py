@@ -398,11 +398,12 @@ def merge(conn: sqlite3.Connection, path: Path, sites: Iterable[str] | None = No
     lacking); backup.py's ``BackupError`` when the copy fails.
 
     ``progress(site, action, done, total)`` tells how far it has got, and changes nothing of what is written:
-    ``("", PLANNING, 0, sites)`` once the file is found an export of those sites, before it plans; then, once a site
-    changes anything, ``(site, "", i, sites)`` before each site (the i-th, from 0, in ``SITES``' order), ``(site,
-    noun, 0, n)`` before each of its actions (a ``SiteMerge.taken`` entry: "sitemap", 41), and, while UG's sitemap
-    action takes its rows, ``("ug", UG_TABS, rows taken, rows)`` after each chunk of ``UG_CHUNK`` of them, the last
-    with done == total. ``backing_up()``, before the backup a merge that changes anything makes first."""
+    ``("", PLANNING, 0, sites)`` once the file is found an export of those sites, before it plans; then, once any
+    site changes anything (a merge of nothing newer tells the plan alone), ``(site, "", i, sites)`` before every site
+    of those, one that changes nothing too (the i-th, from 0, in ``SITES``' order), ``(site, noun, 0, n)`` before
+    each of its actions (a ``SiteMerge.taken`` entry: "sitemap", 41), and, while UG's sitemap action takes its rows,
+    ``("ug", UG_TABS, rows taken, rows)`` after each chunk of ``UG_CHUNK`` of them, the last with done == total.
+    ``backing_up()``, before the backup a merge that changes anything makes first."""
     tell: Progress = progress if progress is not None else _untold
     if _same_file(path, _db_path(conn)):
         raise TransferError(f"{path} is the database itself")
