@@ -486,23 +486,24 @@ def _untrusted(path: Path) -> sqlite3.Connection:
 
 def _meta(path: Path) -> dict[str, str]:
     """The export's META, once the file is one: of tables alone, as ``export`` makes it (no view, trigger, index of
-    its own or virtual table, whose reading could run what its maker wrote), of this layout and schema."""
+    its own or virtual table, whose reading could run what its maker wrote), of this layout and schema. Its schema
+    is read first, and META only once it is a table: a view in its place (an endless query, say) is never read."""
     if not path.exists():
         raise TransferError(f"{path}: no such file")
     try:
         file = _untrusted(path)
         try:
-            meta = dict(file.execute(f"SELECT key, value FROM {META}").fetchall())
             odd = file.execute(
                 "SELECT type, name FROM sqlite_master WHERE NOT (type = 'table' AND sql LIKE 'CREATE TABLE %') "
                 "AND NOT (type = 'index' AND sql IS NULL) ORDER BY rowid").fetchone()
+            if odd is not None:
+                raise TransferError(f"{path} holds the {odd[0]} {odd[1]}, and an index export of caracole's holds "
+                                    "tables alone: `caracole index export` makes one")
+            meta = dict(file.execute(f"SELECT key, value FROM {META}").fetchall())
         finally:
             file.close()
     except sqlite3.Error as e:
         raise TransferError(f"{path} is no index export of caracole's ({e}): `caracole index export` makes one") from e
-    if odd is not None:
-        raise TransferError(f"{path} holds the {odd[0]} {odd[1]}, and an index export of caracole's holds tables "
-                            "alone: `caracole index export` makes one")
     if meta.get("format") != str(FORMAT):
         raise OtherVersion(f"{path} is an index export of another layout ({meta.get('format')!r}, this caracole's "
                            f"is {FORMAT}): export it again with this caracole")

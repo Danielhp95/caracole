@@ -492,6 +492,59 @@ def test_a_merge_refuses_a_file_that_holds_more_than_tables_and_changes_nothing(
     assert backup.backups(tmp_path / "state") == []
 
 
+ENDLESS = "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n) SELECT 'format' AS key, i AS value FROM n"
+
+
+def refused_within(seconds: float, call) -> BaseException | None:
+    """What ``call()`` raised, once it ended within ``seconds``; a call still running then fails the test (its
+    thread a daemon, so a hung read never holds the process up)."""
+    import threading
+
+    raised: list[BaseException | None] = []
+
+    def run() -> None:
+        try:
+            call()
+        except BaseException as e:  # noqa: BLE001 (handed back to the test)
+            raised.append(e)
+        else:
+            raised.append(None)
+
+    worker = threading.Thread(target=run, daemon=True)
+    worker.start()
+    worker.join(seconds)
+    assert not worker.is_alive(), f"still reading the file after {seconds} s"
+    return raised[0]
+
+
+@pytest.mark.parametrize("sql", [
+    # META itself a view over an endless query: refused before it is read.
+    [f"DROP TABLE {transfer.META}", f"CREATE VIEW {transfer.META} AS {ENDLESS}"],
+    # a table a merge reads made such a view: refused before any table is read.
+    ["DROP TABLE gtptabs_index", f"CREATE VIEW gtptabs_index AS {ENDLESS}"],
+])
+def test_a_file_whose_views_never_end_is_refused_promptly_never_read(home, conn, tmp_path, sql):
+    full(home)
+    path = _altered(export(home, tmp_path), *sql)
+    before = snapshot(conn)
+
+    def in_its_thread(act):  # a connection of the calling thread's own, as sqlite3 asks
+        def call() -> None:
+            mine = db.connect(tmp_path / "state" / "caracole.sqlite")
+            try:
+                act(mine)
+            finally:
+                mine.close()
+        return call
+
+    for act in (lambda c: merge(c, path, state=tmp_path / "state"), lambda c: transfer.check_pages(c, path)):
+        e = refused_within(10, in_its_thread(act))
+        assert isinstance(e, transfer.TransferError) and "holds tables alone" in str(e), e
+
+    assert snapshot(conn) == before
+    assert backup.backups(tmp_path / "state") == []
+
+
 def test_a_merge_trusts_no_function_of_the_files_schema_and_leaves_the_connection_as_it_was(home, conn, tmp_path):
     full(home)
     path = export(home, tmp_path)
