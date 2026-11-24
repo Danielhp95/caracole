@@ -732,9 +732,9 @@ def test_a_transcription_shows_its_steps_and_says_what_it_holds_or_what_stopped_
     # A long stage's words while it runs (status.LONG_STAGES), for the bar, after the step's place: "doing".
     hearing = transcribe_job(stages={"song": ("done", "in the book"),
                                      "vocals": ("done", "sung from 9.3 s, 4 stretches"),
-                                     "words": ("running", "heard 1:20 of 3:45")})
+                                     "words": ("running", "1:20 of 3:45")})
     assert list(progress(hearing, job_line(hearing, SongFacts()), SongFacts()).items())[1:] == [
-        ("at", 2), ("count", "3 of 5"), ("doing", "heard 1:20 of 3:45")]
+        ("at", 2), ("count", "3 of 5"), ("doing", "1:20 of 3:45")]
     assert steps(hearing)[2] == Chip("Words", "running")  # no finding: what it does is the bar's
     lyrics = youtube_job(stages={"song": ("done", ""), "audio": ("done", "downloaded"), "lyrics": ("running", "x")})
     assert "doing" not in progress(lyrics, job_line(lyrics, None), None)

@@ -191,12 +191,14 @@ class _Sheet(StagedRun):
             until = get_state(self.conn, PROVIDER).cooldown_until
             when = until.strftime("%Y-%m-%d %H:%M UTC") if until else "later"
             return "skipped", f"waiting out YouTube until {when}"
-        self._doing("audio", "downloading the video's audio" if pasted else "looking for a video on YouTube")
+        downloading = "downloading the video's audio"
+        self._doing("audio", downloading if pasted else "looking for a video on YouTube")
         heard: list[tuple[str, Record]] = []
         runner = make_youtube(self.cfg, self.conn, self.run_id)
         try:
             stats = youtube_pass(self.conn, runner, self.cfg, self.now, overrides=self.overrides, songs=[self.song],
-                                 on_song=lambda song, outcome, record: heard.append((outcome, record)))
+                                 on_song=lambda song, outcome, record: heard.append((outcome, record)),
+                                 on_download=lambda song, video: self._doing("audio", downloading))
         except ProviderBlocked as e:
             state = record_block(self.conn, PROVIDER, self.now, str(e))
             until = state.cooldown_until.strftime("%Y-%m-%d %H:%M UTC") if state.cooldown_until else "later"

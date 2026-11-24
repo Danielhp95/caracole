@@ -15,7 +15,7 @@ ran. So a job of other commands reads the same way:
   pause. A stage that takes minutes (``LONG_STAGES``: a sheet from a YouTube
   video's audio and chords, a transcription's vocals, words and chords) puts
   what it says it does after its line, as it goes: "Transcribing the lyrics ·
-  heard 1:20 of 3:45…", so that a line of half an hour moves.
+  1:20 of 3:45…", so that a line of half an hour moves.
 - **Cancelled**: taken out of the queue before it ran (``JobQueue.cancel``),
   whatever it was for.
 - **Failed**: the error its failing command gave, in one short sentence (the

@@ -2751,7 +2751,7 @@ request in the Journal offers it too, and a sheet from a video offers it as soon
 Pressing it queues `caracole transcribe --progress --song "Nick Cani - Vikingos veganos"`. The bar
 shows Song, Vocals, Words, Chords and PDF, and how far the long steps are: the minutes the separator
 has run against about how long it takes here, how far Whisper has heard the song ("Words · 3 of 5 ·
-heard 1:20 of 3:45"), and auto-chords' step. When it is Ready, the Journal says "Chords over the
+1:20 of 3:45"), and auto-chords' step. When it is Ready, the Journal says "Chords over the
 transcribed lyrics.". If it fails, the Journal gives the reason ("no singing heard.", "the GPU
 failed: …") with Try again. One runs at a time per song, and never beside another transcription
 or a lookup. A song no longer offered one is refused ("… isn't offered a transcription: its lyrics

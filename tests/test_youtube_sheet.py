@@ -468,18 +468,20 @@ def test_another_video_replaces_the_audio_and_the_sheet(setup, conn, fake, sites
     assert [p.name for p in (setup.cache_dir / "youtube").iterdir()] == [f"1-{other}.wav"]
 
 
-@pytest.mark.parametrize("url,asks", [(PASTED, "downloading the video's audio"),
-                                      (None, "looking for a video on YouTube")], ids=["pasted", "searched"])
+@pytest.mark.parametrize("url,asks", [
+    (PASTED, ["downloading the video's audio"]),
+    (None, ["looking for a video on YouTube", "downloading the video's audio"]),
+], ids=["pasted", "searched"])
 def test_the_audio_and_the_chords_say_what_they_do_as_they_run(setup, conn, fake, sites, tmp_path, url, asks):
-    # The song's line moves through the minutes of the models: what the audio stage asks YouTube for, then
-    # auto-chords' steps, each said once.
+    # The song's line moves through the minutes of the models: what the audio stage asks YouTube for (a video
+    # searched for, then its audio once one is found), then auto-chords' steps, each said once.
     vikingos(fake, tmp_path)
     fake.search("Nick Cani Vikingos veganos", entry(VIKINGOS, "Vikingos veganos", "Nick Cani"))
     result, heard = make(setup, url=url)
     assert result.ok, result
     running = [(e[1], e[3]) for e in heard.events if e[0] == "stage" and e[2] == "running" and e[3]]
     assert running == [
-        ("audio", asks),
+        *(("audio", said) for said in asks),
         ("chords", "setting up the models"), ("chords", "hearing the chords"), ("chords", "finding the beats"),
         ("chords", "writing the sheet"),
     ]

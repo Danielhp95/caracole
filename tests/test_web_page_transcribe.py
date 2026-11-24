@@ -52,6 +52,8 @@ class FakeTranscribe:
         self.hold = threading.Event()
         self.fail = False
         self.words_said: list[str] = []  # what the words say they do as they run, before the hold
+        self.vocals_said: list[str] = []  # what the vocals say they do; with any, they wait for ``vocals_hold``
+        self.vocals_hold = threading.Event()
         self.cfg = None
         self.song = None
 
@@ -87,6 +89,10 @@ class FakeTranscribe:
             return 0
         for name in ("song", "vocals"):
             stage(name, "running")
+            if name == "vocals" and self.vocals_said:
+                for said in self.vocals_said:
+                    stage(name, "running", said)
+                self.vocals_hold.wait(30)
             stage(name, "done", "in the book" if name == "song" else "sung from 9.3 s, 4 stretches")
         stage("words", "running")
         for said in self.words_said:
@@ -134,6 +140,7 @@ def transcriber(able, tmp_path):
     made = FakeTranscribe()
     made.cfg, made.song = able, offered(able, tmp_path)
     yield made
+    made.vocals_hold.set()
     made.hold.set()
 
 
@@ -143,7 +150,8 @@ def live(able, transcriber):
     yield base, posted, queue
     server.shutdown()
     server.server_close()
-    transcriber.hold.set()  # a transcription still held lets go first: the queue stops at once
+    transcriber.vocals_hold.set()  # a transcription still held lets go first: the queue stops at once
+    transcriber.hold.set()
     queue.stop()
 
 
@@ -215,33 +223,45 @@ def test_a_songs_card_offers_a_transcription_and_its_line_follows_it(able, live,
     assert len(posted) == 1
 
 
+def doing_of(song) -> str:
+    """The expression for the words beside the song's running bar, [the step, its place, what it does], each with
+    whether it is cut short (its text wider than its box)."""
+    said = json.dumps(f"{line(song)} .progress.barred")
+    return (f"(() => {{ const b = document.querySelector({said}); "
+            "const t = (s) => { const e = b && b.querySelector(s); "
+            "return e ? [e.textContent, e.scrollWidth > e.clientWidth] : ['', false]; }; "
+            "return [t('.step-at'), t('.step-count'), t('.step-doing')]; })()")
+
+
 @pytest.mark.parametrize("width", [1280, 390])
 def test_the_bar_says_how_far_a_long_stage_is_beside_its_place(able, live, transcriber, tmp_path, width):
-    # Whisper hears a song for up to half an hour on a CPU: the bar says what the words stage says it does, after the
-    # step's place, in the bar's one row (cut short with an ellipsis where it doesn't fit), and follows it.
+    # The separator and Whisper take up to half an hour on a CPU: the bar says what the running stage says it does,
+    # the number first, after the step's place, in the bar's one row; on a phone too, neither the step nor its number
+    # cut short. It is the eye's alone: a screen reader hears the step and its place change, not each window.
     base, posted, _ = live
     song = transcriber.song
-    transcriber.words_said = ["heard 1:20 of 3:45"]
+    transcriber.vocals_said = ["2 of ~12 min"]
+    transcriber.words_said = ["1:20 of 3:45"]
     page = driven(tmp_path, width)
     try:
         page.open(base)
         card = opened(page, song)
         page.click(card + ' form.transcribe button[type="submit"]')
         posted.next(0)
-        said = json.dumps(f"{line(song)} .progress.barred")
-        words = (f"(() => {{ const b = document.querySelector({said}); "
-                 "const t = (s) => (b && b.querySelector(s) || {}).textContent || ''; "
-                 "return [t('.step-at'), t('.step-count'), t('.step-doing')]; })()")
-        wait_for(page, words, ["Words", " · 3 of 5", " · heard 1:20 of 3:45"])
-        wait_for(page, bar_of(line(song)), ["done", "done", "running", "waiting", "waiting"])
+        wait_for(page, doing_of(song), [["Vocals", False], [" · 2 of 5", False], [" · 2 of ~12 min", False]])
+        wait_for(page, bar_of(line(song)), ["done", "running", "waiting", "waiting", "waiting"])
+        one_row(page, line(song))
+        doing = json.dumps(line(song) + " .step-doing")
+        assert page.js(f"document.querySelector({doing}).getAttribute('aria-hidden')") == "true"
+        transcriber.vocals_hold.set()
+        wait_for(page, doing_of(song), [["Words", False], [" · 3 of 5", False], [" · 1:20 of 3:45", False]])
         one_row(page, line(song))
         edge = page.js(f"(() => {{ const r = (s) => document.querySelector(s).getBoundingClientRect(); "
-                       f"return [r({json.dumps(line(song) + ' .step-doing')}).right, "
-                       f"r({json.dumps(line(song))}).right]; }})()")
+                       f"return [r({doing}).right, r({json.dumps(line(song))}).right]; }})()")
         assert edge[0] <= edge[1] + 0.5, edge
         transcriber.hold.set()
         assert page.wait(f"{tone(song)} === 'ready'")
-        assert page.js(f"document.querySelector({json.dumps(line(song) + ' .step-doing')})") is None
+        assert page.js(f"document.querySelector({doing})") is None
     finally:
         page.close()
 

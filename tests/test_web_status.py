@@ -353,10 +353,10 @@ def test_a_long_stage_says_how_far_it_is_on_the_line():
 
     assert LONG_STAGES == ("audio", "vocals", "words", "chords")
     song = SongFacts()
-    said = {"vocals": "separating the voice: 2 of about 12 min", "words": "heard 1:20 of 3:45",
+    said = {"vocals": "2 of ~12 min", "words": "1:20 of 3:45",
             "chords": "finding the beats"}
-    lines = {"vocals": "Finding where the singing is · separating the voice: 2 of about 12 min…",
-             "words": "Transcribing the lyrics · heard 1:20 of 3:45…",
+    lines = {"vocals": "Finding where the singing is · 2 of ~12 min…",
+             "words": "Transcribing the lyrics · 1:20 of 3:45…",
              "chords": "Working out the chords · finding the beats…"}
     for name, text in lines.items():
         assert job_line(transcribe_job(stages={name: ("running", said[name])}), song) == Line("running", text)

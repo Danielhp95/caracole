@@ -784,10 +784,10 @@
   // Its link says where to go next; details, the request's output in the Requests tab, follows it. ``onLine``: a
   // song's line or a result's row (showRequest), where a lookup that runs, with its steps (the view's ``steps``, none
   // for its first second, outcome.py's BAR_AFTER), is a bar of them in place of its words (p ``barred``): a segment a
-  // step, then the step in hand, its site and its place, "Sheet · Ultimate Guitar · 3 of 7" (``at``, ``count``), and
-  // what a long step says it does while it runs, "Words · 3 of 5 · heard 1:20 of 3:45" (``doing``), which is what a
-  // screen reader hears; while a nightly run holds the book (``waits``), "Waiting for the book · 1 of 7", the step
-  // drawn waiting. Anywhere else (the tray, a set list) and once it is over, its words.
+  // step, then the step in hand, its site and its place, "Sheet · Ultimate Guitar · 3 of 7" (``at``, ``count``),
+  // which is what a screen reader hears, and, for the eye alone, what a long step says it does while it runs,
+  // "Words · 3 of 5 · 1:20 of 3:45" (``doing``); while a nightly run holds the book (``waits``), "Waiting for the
+  // book · 1 of 7", the step drawn waiting. Anywhere else (the tray, a set list) and once it is over, its words.
   // A request that waits, on a served page (the view's id): Cancel beside its place takes it out of the queue
   // (POST /jobs/cancel, the Journal's), never one that runs. Answered, the line says Cancelled, as the next view does;
   // refused or unanswered, what went wrong, and the next view draws the line again.
@@ -812,9 +812,12 @@
     const cancels = Boolean(onLine && server && line.tone === "queued" && view && view.state === "queued"
       && Number.isInteger(view.id));
     const key = (barred ? ["bar", JSON.stringify(chips.map((c) => [c.name, c.site, c.state])), view.at, view.count,
-      view.waits === true, doingOf(view)] : [line.tone, line.text, to ? to.href : "", more, cancels ? view.id : ""])
+      view.waits === true] : [line.tone, line.text, to ? to.href : "", more, cancels ? view.id : ""])
       .map(String).join("|");
-    if (p.dataset.key === key) return;
+    if (p.dataset.key === key) {  // the same bar: what its step does, changed in place, unheard (``doingSpan``)
+      if (barred) sayDoing(p, doingOf(view));
+      return;
+    }
     const focused = p !== document.activeElement && p.contains(document.activeElement);
     p.dataset.key = key;
     p.dataset.tone = String(line.tone || "");
@@ -860,11 +863,27 @@
     return segs;
   };
   // The words beside the bar: the step in hand (the view's ``at``), its site, its place among them all (``count``,
-  // "3 of 7"), and what it says it does, a long step running (``doing``: "heard 1:20 of 3:45", outcome.py's); none
-  // when the view names no step in hand. While it waits for the book (``waits``), the wait in place of the step's
-  // name.
+  // "3 of 7"), and what it says it does, a long step running (``doing``: "1:20 of 3:45", outcome.py's); none when
+  // the view names no step in hand. While it waits for the book (``waits``), the wait in place of the step's name.
   const WAITS = "Waiting for the book";
   const doingOf = (view) => (view && typeof view.doing === "string" && view.waits !== true ? view.doing : "");
+  // What a long step does, for the eye alone (``aria-hidden``): the line is a live region, and a screen reader hears
+  // the step and its place change, never each of Whisper's windows; changed in place on the same bar (``sayDoing``).
+  const doingSpan = (said) => {
+    const span = el("span", "step-doing", " · " + said);
+    span.setAttribute("aria-hidden", "true");
+    return span;
+  };
+  const sayDoing = (p, said) => {
+    const span = p.querySelector(":scope > .step-doing");
+    if (!said) {
+      if (span) span.remove();
+    } else if (span) {
+      if (span.textContent !== " · " + said) span.textContent = " · " + said;
+    } else if (p.querySelector(":scope > .step-count")) {
+      p.appendChild(doingSpan(said));
+    }
+  };
   const stepWords = (chips, view) => {
     const at = view ? view.at : null;
     if (!Number.isInteger(at) || at < 0 || at >= chips.length || typeof view.count !== "string") return [];
@@ -873,7 +892,7 @@
     words.appendChild(el("b", null, view.waits === true ? WAITS : String(c.name)));
     if (c.site) words.append(" · " + String(c.site));
     const parts = [words, el("span", "step-count", " · " + view.count)];
-    if (doingOf(view)) parts.push(el("span", "step-doing", " · " + doingOf(view)));
+    if (doingOf(view)) parts.push(doingSpan(doingOf(view)));
     return parts;
   };
   // The steps as the bar draws them: while a nightly run holds the book (the view's ``waits``, outcome.py's), the step

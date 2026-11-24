@@ -232,16 +232,12 @@ def test_each_long_stage_says_how_far_it_is_as_it_runs(conn, cfg, monkeypatch, g
     result, heard = make(cfg, separator=Ticking(), transcriber=Hearing())
     assert result.ok, result
     running = [(e[1], e[3]) for e in heard.events if e[0] == "stage" and e[2] == "running"]
-    vocals = [f"separating the voice ({about})"] + ([
-        "separating the voice: 1 of about 5 min", "separating the voice: 2 of about 5 min",
-        "separating the voice: 4 of about 5 min", "separating the voice: 5 min so far"] if not gpu else [
-        "separating the voice: 1 min so far", "separating the voice: 2 min so far",
-        "separating the voice: 4 min so far", "separating the voice: 5 min so far"])
+    vocals = [about] + (["1 of ~5 min", "2 of ~5 min", "4 of ~5 min", "5 min so far"] if not gpu else [
+        "1 min so far", "2 min so far", "4 min so far", "5 min so far"])
     assert running == [
         ("song", ""),
         ("vocals", ""), *(("vocals", said) for said in vocals),
-        ("words", ""), ("words", "heard 0:00 of 1:00"), ("words", "heard 0:30 of 1:00"),
-        ("words", "heard 1:00 of 1:00"),
+        ("words", ""), ("words", "0:00 of 1:00"), ("words", "0:30 of 1:00"), ("words", "1:00 of 1:00"),
         ("chords", ""), ("chords", "setting up the models"), ("chords", "hearing the chords"),
         ("chords", "finding the beats"), ("chords", "writing the sheet"),
         ("pdf", ""), ("pages", ""),
@@ -721,14 +717,14 @@ def test_the_default_models_are_built_at_their_first_stage_and_whisper_must_hear
         ("stage", "song"),
         ("stage", "vocals"),
         ("demucs built", "demucs-cpu", tmp_path / "htdemucs.safetensors", setup.cache_dir),
-        ("doing", "vocals", "separating the voice (about 5 min)"),
+        ("doing", "vocals", "about 5 min"),
         ("demucs", audio),
         ("stage", "words"),
         ("doing", "words", "loading Whisper"),
         ("device", "auto"),
         ("whisper built", tmp_path / "large-v3.pt", "cuda", setup.cache_dir),
         ("whisper", "test-tone.wav"),
-        ("doing", "words", "heard 0:00 of 1:00"),
+        ("doing", "words", "0:00 of 1:00"),
         ("whisper", audio),
         ("stage", "chords"),
         ("doing", "chords", "setting up the models"),

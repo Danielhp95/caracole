@@ -387,24 +387,25 @@ class _Transcription(StagedRun):
 
 
 def _separating(ran: float, takes: float) -> str:
-    """What the vocals stage says while demucs-rs runs: how long it has run, in whole minutes, against about how long
-    it ``takes`` here; once past that, how long it has run alone."""
+    """What the vocals stage says while demucs-rs runs, the number first and nothing its step's name says already (a
+    phone's bar has room for little more than "2 of ~12 min"): how long it has run, in whole minutes, against about
+    how long it ``takes`` here; once past that, how long it has run alone."""
     about = round(takes / 60)
     if ran < 60:
-        return f"separating the voice (about {f'{about} min' if about > 1 else 'a minute'})"
+        return f"about {about} min" if about > 1 else "about a minute"
     minutes = int(ran // 60)
     if minutes < about:
-        return f"separating the voice: {minutes} of about {about} min"
-    return f"separating the voice: {minutes} min so far"
+        return f"{minutes} of ~{about} min"
+    return f"{minutes} min so far"
 
 
 def _heard(done: float, whole: float | None) -> str:
-    """What the words stage says while Whisper hears the mix: how far into it, of its length."""
+    """What the words stage says while Whisper hears the mix, the number first: how far into it, of its length."""
     def clock(seconds: float) -> str:
         whole_s = int(seconds)
         return f"{whole_s // 60}:{whole_s % 60:02d}"
 
-    return f"heard {clock(done)} of {clock(whole)}" if whole else f"heard {clock(done)}"
+    return f"{clock(done)} of {clock(whole)}" if whole else f"{clock(done)} heard"
 
 
 def _held(folder: Path) -> bool:

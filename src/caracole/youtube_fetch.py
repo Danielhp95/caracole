@@ -341,11 +341,12 @@ def youtube_pass(
     overrides: Overrides,
     songs: list[Song] | None = None,
     on_song: Callable[[Song, str, Record], None] | None = None,
+    on_download: Callable[[Song, Video], None] | None = None,
 ) -> YouTubeStats:
     """Take the audio of the due songs (or of ``songs``) from YouTube; see the module docstring.
 
     ``on_song`` hears each song's outcome (``DOWNLOADED_NOW``, ``MISSED``, ``PASSED_OVER``,
-    ``GAVE_UP`` or "error") with its record. ``ProviderBlocked`` propagates; ``BudgetExhausted`` ends
+    ``GAVE_UP`` or "error") with its record; ``on_download`` each video as its download starts. ``ProviderBlocked`` propagates; ``BudgetExhausted`` ends
     the pass (``budget_exhausted``); any other ``ProviderError`` leaves its song for the
     next run. Before any of it, audio no song needs any more goes (``tidy``).
     """
@@ -365,7 +366,8 @@ def youtube_pass(
     else:  # each song still due, asked again before its turn: a lookup let go first may have kept it a sheet
         due = as_now(conn, songs_for_youtube(conn, overrides, now),
                      lambda song: song.id in {s.id for s in songs_for_youtube(conn, overrides, now)})
-    for song, outcome in each_song(due, stats, lambda song: _one(conn, runner, cfg, song, overrides, now),
+    for song, outcome in each_song(due, stats, lambda song: _one(conn, runner, cfg, song, overrides, now,
+                                                                 on_download),
                                    site="YouTube", level=logging.WARNING, on_error=failed):
         stats.downloaded += outcome == DOWNLOADED_NOW
         stats.missing += outcome == MISSED
@@ -376,7 +378,7 @@ def youtube_pass(
 
 
 def _one(conn: sqlite3.Connection, runner: YtDlp, cfg: Config, song: Song, overrides: Overrides,
-         now: datetime) -> str:
+         now: datetime, on_download: Callable[[Song, Video], None] | None = None) -> str:
     stamp = stamps.stamp(now)
     record = load_record(conn, song.id)
     pasted = overrides.youtube.get(song.key)
@@ -397,6 +399,8 @@ def _one(conn: sqlite3.Connection, runner: YtDlp, cfg: Config, song: Song, overr
         video, source = picked, "search"
         record.video, record.source, record.missing_at = picked, source, None
         _save(conn, song.id, record)
+    if on_download is not None:
+        on_download(song, video)
     try:
         path, got = _download(runner, cfg, song, video)
     except VideoUnavailable as e:
