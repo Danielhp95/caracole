@@ -126,6 +126,17 @@ class WorkingTest {
     }
 
     @Test
+    fun `a file filed from the inbox is said by its line alone, its name in it once`() {
+        val inbox = PhoneKinds.INBOX
+        val gate = CompletableDeferred<Unit>()
+        val job = saying(inbox.kind, "Estopa - Tu calorro.gp5", listOf(inbox.stage),
+                         listOf(Triple(inbox.stage.first, "running", "Filing Estopa - Tu calorro.gp5…")), gate)
+        runningWith(job.id, "Filing Estopa - Tu calorro.gp5…")
+        assertEquals("Filing Estopa - Tu calorro.gp5…", Working.lineOf(queue.snapshot()))
+        gate.complete(Unit)
+    }
+
+    @Test
     fun `a sync names its running stage and what that stage says`() {
         val gate = CompletableDeferred<Unit>()
         val sync = saying("sync", "Share with Daniel's library", SyncEngine.STAGES, listOf(
@@ -145,7 +156,8 @@ class WorkingTest {
                             listOf(Triple(SyncEngine.CHECK, "running", "")), file)
         waitFor("its stage to run") { queue.job(import.id)?.stages?.any { it.state == "running" } == true }
         assertEquals("Sync with a file from Desk · Reading the file…", Working.lineOf(queue.snapshot()))
-        assertEquals("Reading the file", Working.doing(queue.job(import.id)!!))
+        // The library screen's bar words it alike (SyncState.Running's doing).
+        assertEquals("Reading the file…", Working.doing(queue.job(import.id)!!))
         file.complete(Unit)
     }
 
@@ -159,11 +171,14 @@ class WorkingTest {
         assertNull(Working.counted("Importing the catalogues…"))
         assertNull(Working.counted("12 of 10"), "more done than there is: no bar")
         assertNull(Working.counted("0 of 0"))
-        // A count is words of its own: never digits inside a name the stage says ("Filing Top 10 of 2020.gp5…").
+        // A count opens what a stage says, or follows its " · ": never digits inside a name it says.
         assertNull(Working.counted("Filing Top 10 of 2020.gp5…"))
+        assertNull(Working.counted("Filing Top 10 of 2020 (2).gp5…"))
+        assertNull(Working.counted("Filing Live 1 of 2 - Song.gp5…"))
         assertNull(Working.counted("Filing x10 of 20y.gp5…"))
-        assertEquals(3.0 to 12.0, Working.counted("Taken 3 of 12."))
+        assertNull(Working.counted("Taken 3 of 12."))
         assertEquals(3.0 to 12.0, Working.counted("3 of 12 changes · 2 waiting"))
+        assertEquals(3.0 to 12.0, Working.counted("3 of 12."))
         // A lookup's line names its song: no count is read there ("Top 10 of 2020" is a title).
         val gate = CompletableDeferred<Unit>()
         val song = lookup("Fetch Estopa - Top 10 of 2020", "estopa/top-10-of-2020", "Estopa - Top 10 of 2020",

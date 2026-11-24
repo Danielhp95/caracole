@@ -109,8 +109,13 @@ internal class Working(
                 isLookup(job) -> "${job.display} · ${JobViews.line(job, facts = facts(job)).text}" to null
                 own != null -> {
                     val said = JobViews.line(job).text
-                    // Before its stage says anything, JobViews says its stage's label ("Catalogues…"): its name alone.
-                    if (said == "${own.stage.second}…") "${job.display}…" to null else "${job.display} · $said" to said
+                    when {
+                        // Before its stage says anything, JobViews says its stage's label ("Catalogues…"): its name.
+                        said == "${own.stage.second}…" -> "${job.display}…" to null
+                        // A line that names it already ("Filing song.gp5…", the inbox's): the line alone.
+                        job.display in said -> said to said
+                        else -> "${job.display} · $said" to said
+                    }
                 }
                 job.spec.kind == "sync" -> {
                     // a sync with a computer ("Share with <its name>"); a file's import says its own name
@@ -120,11 +125,7 @@ internal class Working(
                         job.display
                     }
                     val stage = job.stages.firstOrNull { it.state == Job.RUNNING }
-                    when {
-                        stage == null -> "$named…" to null
-                        stage.detail.isBlank() -> "$named · ${stage.label}…" to null
-                        else -> "$named · ${stage.label} · ${stage.detail}" to stage.detail
-                    }
+                    if (stage == null) "$named…" to null else "$named · ${doing(job)}" to stage.detail
                 }
                 job.spec.kind == "add" -> "Adding ${job.display}…" to null
                 job.spec.kind == "remove" -> "Removing ${job.display}…" to null
@@ -135,15 +136,17 @@ internal class Working(
         }
 
         /** What a sync's running stage is doing: its label, and what it says ("Copying the computer's pages · 120 of
-         * 640 pages"); none while no stage runs. The library screen's line of an unattended sync says it too. */
+         * 640 pages"), or its label alone with "…" while it says nothing; none while no stage runs. The notification
+         * and the library screen's line of an unattended sync say it alike. */
         fun doing(job: Job): String? {
             val stage = job.stages.firstOrNull { it.state == Job.RUNNING } ?: return null
-            return if (stage.detail.isBlank()) stage.label else "${stage.label} · ${stage.detail}"
+            return if (stage.detail.isBlank()) "${stage.label}…" else "${stage.label} · ${stage.detail}"
         }
 
         /**
          * The count a stage's words say, its last "N of M" ("Downloading · 31 of 52 MB", "1,204 of 10,428", "1.2 of
-         * 2.5 GB"), as done and in all; none for none, for nothing in all, or for more done than there is.
+         * 2.5 GB") where [COUNT] finds one, as done and in all; none for none, for nothing in all, or for more done
+         * than there is.
          */
         fun counted(said: String): Pair<Double, Double>? {
             val last = COUNT.findAll(said).lastOrNull() ?: return null
@@ -152,10 +155,11 @@ internal class Working(
             return if (all > 0 && done <= all) done to all else null
         }
 
-        /** "N of M", each a number as the phone's lines write one (digits grouped by commas, tenths after a point), and
-         * words of their own: never the digits of a name ("Top 10 of 2020.gp5"), so a space, a stop, "…", "·", or the
-         * line's end on either side. */
-        private val COUNT = Regex("(?<![0-9A-Za-z.,_-])([0-9][0-9,]*(?:[.][0-9]+)?) of ([0-9][0-9,]*(?:[.][0-9]+)?)" +
+        /** "N of M", each a number as the phone's lines write one (digits grouped by commas, tenths after a point), at
+         * the start of what a stage says or right after its " · ", and words of their own after it (a space, a stop,
+         * "…", "·", or the line's end): never the digits of a name it says ("Filing Top 10 of 2020 (2).gp5…",
+         * "Filing Live 1 of 2 - Song.gp5…"). */
+        private val COUNT = Regex("(?:^|· )([0-9][0-9,]*(?:[.][0-9]+)?) of ([0-9][0-9,]*(?:[.][0-9]+)?)" +
                                   "(?=$|[\\s…·),;:]|[.](?:$|\\s))")
 
         /** A job named as a request: "Share with Daniel's library", "Add Estopa - Tu calorro", a lookup by its title
