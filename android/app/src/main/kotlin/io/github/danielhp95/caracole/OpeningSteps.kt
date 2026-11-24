@@ -56,40 +56,49 @@ object OpeningSteps {
 
     /**
      * The user_version of the last page 1 [wal] commits, as SQLite's recovery reads a WAL (sqlite.org/fileformat2.html,
-     * "The Write-Ahead Log"): its header's checksum right; then frame after frame while each has the header's salts
-     * (an older generation's frames, after a restart, have others) and its running checksum right (a frame cut short or
-     * torn has not), a frame's page held until a commit frame (its database size not 0) ends its transaction.
+     * "The Write-Ahead Log"): its header's checksum right; then frame after frame, each read alone, while each has the
+     * header's salts (an older generation's frames, after a restart, have others) and its running checksum right (a
+     * frame cut short or torn has not), the first that hasn't ending the read; a frame's page held until a commit frame
+     * (its database size not 0) ends its transaction.
      */
     private fun walVersion(wal: File): Wal {
         if (!wal.isFile || wal.length() < WAL_HEADER) return Wal.None
         if (wal.length() > MOST_WAL) return Wal.Unknown
-        val bytes = wal.readBytes()
-        val bigEndian = when (int(bytes, 0, bigEndian = true)) {
-            MAGIC_BIG -> true
-            MAGIC_LITTLE -> false
-            else -> return Wal.None
-        }
-        val pageSize = int(bytes, 8, bigEndian = true)
-        if (pageSize < 512 || pageSize > 65536 || pageSize and (pageSize - 1) != 0) return Wal.None
-        val salts = int(bytes, 16, true) to int(bytes, 20, true)
-        var sum = checksum(bytes, 0, 24, 0 to 0, bigEndian)
-        if (sum != int(bytes, 24, true) to int(bytes, 28, true)) return Wal.None
-        var at = WAL_HEADER
-        var pending: Int? = null
-        var committed: Int? = null
-        while (at + FRAME_HEADER + pageSize <= bytes.size) {
-            if (int(bytes, at + 8, true) to int(bytes, at + 12, true) != salts) break
-            sum = checksum(bytes, at, at + 8, sum, bigEndian)
-            sum = checksum(bytes, at + FRAME_HEADER, at + FRAME_HEADER + pageSize, sum, bigEndian)
-            if (sum != int(bytes, at + 16, true) to int(bytes, at + 20, true)) break
-            if (int(bytes, at, true) == 1) pending = int(bytes, at + FRAME_HEADER + 60, bigEndian = true)
-            if (int(bytes, at + 4, true) != 0) {  // a commit: its transaction's page 1, if it wrote one, is SQLite's
-                if (pending != null) committed = pending
-                pending = null
+        return RandomAccessFile(wal, "r").use { file ->
+            val header = ByteArray(WAL_HEADER)
+            file.readFully(header)
+            val bigEndian = when (int(header, 0, bigEndian = true)) {
+                MAGIC_BIG -> true
+                MAGIC_LITTLE -> false
+                else -> return Wal.None
             }
-            at += FRAME_HEADER + pageSize
+            val pageSize = int(header, 8, bigEndian = true)
+            if (pageSize < 512 || pageSize > 65536 || pageSize and (pageSize - 1) != 0) return Wal.None
+            val salts = int(header, 16, true) to int(header, 20, true)
+            var sum = checksum(header, 0, 24, 0 to 0, bigEndian)
+            if (sum != int(header, 24, true) to int(header, 28, true)) return Wal.None
+            val frame = ByteArray(FRAME_HEADER)
+            val page = ByteArray(pageSize)
+            var pending: Int? = null
+            var committed: Int? = null
+            var at = WAL_HEADER.toLong()
+            val length = file.length()
+            while (at + FRAME_HEADER + pageSize <= length) {
+                file.readFully(frame)
+                if (int(frame, 8, true) to int(frame, 12, true) != salts) break
+                file.readFully(page)
+                sum = checksum(frame, 0, 8, sum, bigEndian)
+                sum = checksum(page, 0, pageSize, sum, bigEndian)
+                if (sum != int(frame, 16, true) to int(frame, 20, true)) break
+                if (int(frame, 0, true) == 1) pending = int(page, 60, bigEndian = true)
+                if (int(frame, 4, true) != 0) {  // a commit: its transaction's page 1, if it wrote one, is SQLite's
+                    if (pending != null) committed = pending
+                    pending = null
+                }
+                at += FRAME_HEADER + pageSize
+            }
+            committed?.let(Wal::Known) ?: Wal.None
         }
-        return committed?.let(Wal::Known) ?: Wal.None
     }
 
     /** SQLite's WAL checksum of [bytes] from [from] to [to] (a multiple of 8) after [seed]: 32-bit words in the WAL's
