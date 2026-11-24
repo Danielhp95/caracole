@@ -228,6 +228,20 @@ It answers to its IP addresses and the names it knows. Put a full tailnet name i
 the browser gets a 421. If the tailnet address doesn't exist yet at boot, it retries every 10
 seconds. [usage.md](usage.md#caracole-serve) says what the page does.
 
+### 6. Publishing the site indexes
+
+`services.caracole.publish.enable = true` adds `caracole-publish.service` and its timer
+(`publish.calendar`, `Sun 05:00` by default). It runs `caracole index publish` with no network and
+writes a gzip of every site index into `publish.folder` (`/var/lib/caracole/publish`, mode 2750, group
+`caracole`, so a user in that group can read it).
+
+Uploading to GitHub is separate:
+
+- With `publish.tokenFile` (a file holding a GitHub token) and `publish.uploader` (the flake's
+  `publish-indexes`), `caracole-publish-upload.service` runs after each successful publish. The token
+  is a credential of that unit alone; no caracole unit sees it.
+- Without it, nothing uploads: run `publish-indexes` on the folder yourself, or from a user timer.
+
 ## Ubuntu 24.04 without Nix
 
 The same service, without Nix, on an x86-64 machine. What the Nix package brings goes under
@@ -744,7 +758,12 @@ sudo caracole-admin autochords   # auto-chords: 0 generated, 0 skipped, 0 failed
 
 Then [check that it works](#checking-auto-chords).
 
-### 13. Upgrades
+### 13. Publishing the site indexes
+
+There is no timer here. To publish, run `sudo caracole-admin index publish /var/lib/caracole/publish`,
+then upload the folder with `publish-indexes` by hand.
+
+### 14. Upgrades
 
 Each new commit gets its own virtual environment, and the link moves once it is ready:
 
@@ -817,7 +836,7 @@ the Sites tab's YouTube line counts its yt-dlp runs. If the field is missing, th
 
 | It says | Then |
 |---|---|
-| auto-chords isn't installed | NixOS: `autochords.enable`. Ubuntu: section 12's two installs, which an upgrade makes again in each new commit (section 13) |
+| auto-chords isn't installed | NixOS: `autochords.enable`. Ubuntu: section 12's two installs, which an upgrade makes again in each new commit (section 14) |
 | auto-chords' model files are missing | `CARACOLE_BTC_WEIGHTS` or `CARACOLE_BEAT_CHECKPOINT` names no file: on Ubuntu, section 12's downloads |
 | yt-dlp is missing | Ubuntu: section 12's yt-dlp, linked into `/opt/caracole/bin` |
 | YouTube is turned off | `[providers.youtube] enabled = false`: auto-chords for purchases alone |
