@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The debug build's launcher icon's foreground: the app's logo smaller and higher, still within the 66 dp circle every
+     launcher's mask keeps, and the DEBUG mark under it. Insets are fractions of the layer, so it is the same at any
+     size. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <inset android:drawable="@drawable/ic_launcher_foreground"
+            android:insetLeft="14%" android:insetRight="14%" android:insetTop="9.7%" android:insetBottom="18.3%" />
+    </item>
+    <item android:drawable="@drawable/ic_launcher_debug_mark" />
+</layer-list>

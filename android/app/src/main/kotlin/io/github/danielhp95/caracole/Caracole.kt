@@ -40,8 +40,12 @@ import java.util.Locale
  * app, read on every request.
  */
 object Caracole {
-    /** The port the server asks for first: a fixed origin keeps the viewers' localStorage across launches. */
-    const val PORT = 8738
+    /**
+     * The port the server asks for first: a fixed origin keeps the viewers' localStorage across launches. 8738, the
+     * debug build's 8739 (app/build.gradle.kts), so that a debug build beside the release keeps an origin of its own;
+     * one taken all the same (by another app) makes the server listen on a free port (LocalServer.start).
+     */
+    const val PORT = BuildConfig.SERVER_PORT
     private const val DATABASE = "caracole.sqlite"
 
     private val random = SecureRandom()

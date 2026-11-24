@@ -22,6 +22,8 @@ android {
         testInstrumentationRunner = "io.github.danielhp95.caracole.CaracoleTestRunner"
         // The bundled SQLite's native library, for phones and for the emulator.
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
+        // The port the phone's own server asks for first (Caracole.PORT).
+        buildConfigField("int", "SERVER_PORT", "8738")
     }
 
     // The release key, from outside the repo: ~/.gradle/gradle.properties (or -P / ORG_GRADLE_PROJECT_*) names the
@@ -38,6 +40,14 @@ android {
     }
 
     buildTypes {
+        // A debug build installs beside F-Droid's release, never over it: a package of its own (so its own data and
+        // library), named "caracole debug" with an icon of its own (src/debug/res), and a port of its own, so both
+        // keep their origin when they run at once. The test APK is io.github.danielhp95.caracole.debug.test.
+        debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+            buildConfigField("int", "SERVER_PORT", "8739")
+        }
         release {
             signingConfig = releaseSigning
             isMinifyEnabled = true

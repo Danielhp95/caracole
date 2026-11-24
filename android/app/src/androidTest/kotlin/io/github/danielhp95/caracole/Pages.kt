@@ -23,7 +23,10 @@ internal object Pages {
     private const val TAG = "CaracolePages"
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
 
-    /** The phone's caracole's origin ("http://127.0.0.1:8738"), its server started: where every page of the app is. */
+    /**
+     * The phone's caracole's origin ("http://127.0.0.1:8739", the debug build's [Caracole.PORT]), its server started:
+     * where every page of the app is.
+     */
     fun origin(): String = Caracole.phone(instrumentation.targetContext).server.origin
 
     /** [path] of the library ("Estopa/Tu calorro/sheet.html") on the phone's server; "" is the library page. */

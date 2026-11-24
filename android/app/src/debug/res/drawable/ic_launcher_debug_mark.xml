@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The debug build's mark under its logo: a red pill with DEBUG cut out of it in 3x5 pixel letters (one rectangle a run
+     of a letter's row, none overlapping, so the even-odd fill makes each a hole), within the 66 dp circle every
+     launcher's mask keeps. In the themed icon's monochrome layer only its shape counts. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="1080" android:viewportHeight="1080">
+    <path android:fillColor="#C62828" android:fillType="evenOdd"
+        android:pathData="M423 712H657A48 48 0 0 1 657 808H423A48 48 0 0 1 423 712ZM397.5 722.5h30v15h-30ZM397.5 737.5h15v15h-15ZM427.5 737.5h15v15h-15ZM397.5 752.5h15v15h-15ZM427.5 752.5h15v15h-15ZM397.5 767.5h15v15h-15ZM427.5 767.5h15v15h-15ZM397.5 782.5h30v15h-30ZM457.5 722.5h45v15h-45ZM457.5 737.5h15v15h-15ZM457.5 752.5h30v15h-30ZM457.5 767.5h15v15h-15ZM457.5 782.5h45v15h-45ZM517.5 722.5h30v15h-30ZM517.5 737.5h15v15h-15ZM547.5 737.5h15v15h-15ZM517.5 752.5h30v15h-30ZM517.5 767.5h15v15h-15ZM547.5 767.5h15v15h-15ZM517.5 782.5h30v15h-30ZM577.5 722.5h15v15h-15ZM607.5 722.5h15v15h-15ZM577.5 737.5h15v15h-15ZM607.5 737.5h15v15h-15ZM577.5 752.5h15v15h-15ZM607.5 752.5h15v15h-15ZM577.5 767.5h15v15h-15ZM607.5 767.5h15v15h-15ZM577.5 782.5h45v15h-45ZM652.5 722.5h30v15h-30ZM637.5 737.5h15v15h-15ZM637.5 752.5h15v15h-15ZM667.5 752.5h15v15h-15ZM637.5 767.5h15v15h-15ZM667.5 767.5h15v15h-15ZM652.5 782.5h30v15h-30Z" />
+</vector>

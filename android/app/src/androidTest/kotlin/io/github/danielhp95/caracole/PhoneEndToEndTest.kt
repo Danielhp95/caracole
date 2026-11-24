@@ -48,13 +48,13 @@ import kotlin.concurrent.thread
  * The phone's caracole end to end in the app, against the scenario's computer (`python -m tests.helpers.e2e_library
  * serve DIR PORT`, a computer of its own: the test changes the phone's library and the computer's):
  *
- *     adb shell pm clear io.github.danielhp95.caracole
+ *     adb shell pm clear io.github.danielhp95.caracole.debug
  *     adb shell am instrument -w -e class io.github.danielhp95.caracole.PhoneEndToEndTest -e server http://10.0.2.2:PORT \
- *         io.github.danielhp95.caracole.test/io.github.danielhp95.caracole.CaracoleTestRunner
+ *         io.github.danielhp95.caracole.debug.test/io.github.danielhp95.caracole.CaracoleTestRunner
  *
  * In this order, each in the WebView the app shows:
- * - the app's server is at http://127.0.0.1:8738/, the launch's cookie is the WebView's for that origin, and a request
- *   without it is refused ("Not this app's scribe.");
+ * - the app's server is at http://127.0.0.1:<Caracole.PORT>/ (8739 in the debug build), the launch's cookie is the
+ *   WebView's for that origin, and a request without it is refused ("Not this app's scribe.");
  * - another loopback port is never loaded: a link there goes to the browser, a fetch and an image of it are answered
  *   in the app, and that port's server hears nothing;
  * - a sync from the bar's sync button and its sheet (its comparison, Sync, each conflict keeping the computer's),
