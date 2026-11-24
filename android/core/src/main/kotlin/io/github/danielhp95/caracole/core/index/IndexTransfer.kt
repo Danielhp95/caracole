@@ -55,6 +55,9 @@ object IndexTransfer {
     /** The export's own table of what it is (index_transfer.META). */
     const val META = "caracole_export"
 
+    /** The sites a merge knows, by name, in caracole's order (index_transfer.SITES' names). */
+    val SITES: List<String> get() = Sites.ALL.map { it.name }
+
     /**
      * The export's sites into [db] (every one it holds, with none asked for; else those of [sites], in caracole's
      * order), [now] (a stamp) the time a song marked to fetch again is updated at, [backup] called once before the

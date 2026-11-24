@@ -178,8 +178,8 @@ object JobViews {
 
     /** A job of PhoneKinds' (§5.3's table): while it runs, its stage's words, else its kind's running line (its
      * stage's label while that has blanks to fill); once done, its stage's words, else its kind's; failed, its failed
-     * stage's words, else its error line's; a done line in the kind's second way to end ([PhoneKinds.Kind.otherwise])
-     * is a wait. */
+     * stage's words, else its error line's; a done line in the kind's second way to end ([PhoneKinds.Kind.otherwise],
+     * its blanks filled: [PhoneKinds.fits]) is a wait. */
     private fun phoneLine(job: Job, kind: PhoneKinds.Kind, details: String): Line? {
         val stage = job.stages.firstOrNull { it.name == kind.stage.first }
         return when (job.state) {
@@ -189,7 +189,7 @@ object JobViews {
             }
             Job.DONE -> {
                 val said = stage?.detail?.takeIf { it.isNotEmpty() } ?: kind.done.takeIf { '{' !in it } ?: "Done"
-                val waits = kind.otherwise?.substringBefore('{')?.let { it.isNotEmpty() && said.startsWith(it) } == true
+                val waits = kind.otherwise?.let { PhoneKinds.fits(said, it) } == true
                 if (waits) Line("waiting", said, details = details) else Line("ready", said)
             }
             Job.FAILED -> Line("failed", Status.stageFailure(job.stages) ?: Status.failure(Shape(job).steps),

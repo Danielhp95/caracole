@@ -6,12 +6,12 @@ import com.sun.net.httpserver.HttpServer
 import io.github.danielhp95.caracole.core.catalogues.CatalogueSource
 import io.github.danielhp95.caracole.core.catalogues.Catalogues
 import io.github.danielhp95.caracole.core.catalogues.Limited
+import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.testing.Fixtures
 import io.github.danielhp95.caracole.core.testing.TestDb
-import io.github.danielhp95.caracole.mirror.Http
 import io.github.danielhp95.caracole.server.PhoneParts
 import io.github.danielhp95.caracole.server.jobs.CommandRunner
 import io.github.danielhp95.caracole.server.jobs.Commands
@@ -20,6 +20,7 @@ import io.github.danielhp95.caracole.server.jobs.JobContext
 import io.github.danielhp95.caracole.server.jobs.JobQueue
 import io.github.danielhp95.caracole.server.jobs.JobSpec
 import io.github.danielhp95.caracole.server.jobs.JobViews
+import io.github.danielhp95.caracole.server.jobs.Line
 import io.github.danielhp95.caracole.server.jobs.PhoneKinds
 import io.github.danielhp95.caracole.server.testing.TestParts
 import kotlinx.coroutines.CoroutineScope
@@ -51,7 +52,7 @@ import kotlin.test.assertTrue
 
 /** `caracole catalogues` on the phone: the release listed, its file of this schema downloaded, checked and merged,
  * as a queued job of PhoneKinds' catalogues kind, its lines the kind's words. GitHub is a server on loopback that
- * serves the release's `indexes.json` and its files (CatalogueSource.Download's layout). */
+ * answers GitHub's API's release by its tag and serves its assets (CatalogueSource.Api's layout). */
 class CataloguesRunnerTest {
     @get:Rule val tmp = TemporaryFolder()
 
@@ -78,6 +79,7 @@ class CataloguesRunnerTest {
 
         val routes = ConcurrentHashMap<String, Reply>()
         val asked = CopyOnWriteArrayList<String>()
+        val agents = CopyOnWriteArrayList<String>()
         private val server = HttpServer.create(InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0)
         val base: URI get() = URI("http://127.0.0.1:${server.address.port}")
 
@@ -86,6 +88,7 @@ class CataloguesRunnerTest {
             server.createContext("/") { exchange ->
                 val path = exchange.requestURI.rawPath
                 asked += path
+                agents += exchange.requestHeaders.getFirst("User-Agent").orEmpty()
                 val reply = routes[path] ?: Reply(404)
                 for ((name, value) in reply.headers) exchange.responseHeaders.add(name, value)
                 exchange.sendResponseHeaders(reply.status, if (reply.body.isEmpty()) -1 else reply.body.size.toLong())
@@ -97,15 +100,19 @@ class CataloguesRunnerTest {
         override fun close() = server.stop(0)
     }
 
-    private val folder = "/${Catalogues.REPO}/releases/download/${Catalogues.TAG}/"
+    /** GitHub's API's release of the catalogues, and an asset's address (each file's id its place in the list). */
+    private val release = "/repos/${Catalogues.REPO}/releases/tags/${Catalogues.TAG}"
+    private val ids = ConcurrentHashMap<String, Int>()
+    private fun asset(name: String) = "/repos/${Catalogues.REPO}/releases/assets/${ids.getOrPut(name) { ids.size + 1 }}"
 
-    /** The release's files: each name with its gzip (and the size its manifest lists, its own by default). */
+    /** The release's files: each name with its gzip (and the size the API lists, its own by default). */
     private fun publish(vararg files: Pair<String, ByteArray>, listed: Map<String, Long> = emptyMap()) {
-        val entries = files.joinToString(", ") { (name, gz) ->
-            """{"file": "$name", "bytes": ${listed[name] ?: gz.size.toLong()}, "sha256": "${sha256(gz)}"}"""
+        val assets = files.joinToString(", ") { (name, gz) ->
+            """{"name": "$name", "url": "${github.base}${asset(name)}", "size": ${listed[name] ?: gz.size.toLong()}, """ +
+                """"digest": "sha256:${sha256(gz)}", "state": "uploaded"}"""
         }
-        github.routes[folder + "indexes.json"] = Release.Reply(200, """{"format": 1, "files": [$entries]}""".toByteArray())
-        for ((name, gz) in files) github.routes[folder + name] = Release.Reply(200, gz)
+        github.routes[release] = Release.Reply(200, """{"tag_name": "indexes", "assets": [$assets]}""".toByteArray())
+        for ((name, gz) in files) github.routes[asset(name)] = Release.Reply(200, gz)
     }
 
     /** An index export of gtptabs.com's and MuseScore's indexes (the corpus's partial export), its META's schema and
@@ -139,8 +146,8 @@ class CataloguesRunnerTest {
         val runners = HashMap<String, CommandRunner>()
         val queue = JobQueue(scope, commands = Commands(runners))
         val parts = TestParts.of(database, dir, scope, queue)
-        val runner = CataloguesRunner(parts, CatalogueSource.Download(Http(), base = github.base), clock = { now },
-                                      http = Http(), metered = { metered }, forget = { forgotten++ }, free = { free })
+        val runner = CataloguesRunner(parts, source = { http -> CatalogueSource.Api(http, base = github.base) },
+                                      clock = { now }, metered = { metered }, forget = { forgotten++ }, free = { free })
         runners[CataloguesRunner.COMMAND] = runner
         return Phone(parts, queue, runner)
     }
@@ -161,7 +168,25 @@ class CataloguesRunnerTest {
         assertEquals(listOf(kind.stage), spec.stages)
         assertEquals(emptyList(), spec.commands)
         assertEquals(false, spec.join)
-        assertEquals("catalogues:", phone.runner.spec(true).key)
+        assertEquals("catalogues:go", phone.runner.spec(true).key)
+    }
+
+    @Test fun aGoAheadTappedWhileAPlainJobWaitsIsAJobOfItsOwn() {
+        val phone = phone()
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        phone.queue.submit(JobSpec("Hold the queue", "hold", "add", emptyList()) { gate.await() })
+        val plain = phone.queue.submit(phone.runner.spec(false)).first
+        assertEquals(plain.id, phone.queue.submit(phone.runner.spec(false)).first.id, "one at a time")
+        val go = phone.queue.submit(phone.runner.spec(true)).first
+        assertTrue(go.id != plain.id, "the go-ahead is never answered by the plain job waiting")
+        assertEquals(go.id, phone.queue.submit(phone.runner.spec(true)).first.id)
+        metered = true
+        publish(newest to export())
+        gate.complete(Unit)
+        val waited = runBlocking { withTimeout(60_000) { phone.queue.await(plain.id) } }
+        assertEquals("waiting", JobViews.line(waited).tone, "the plain job stopped for the network")
+        assertEquals(Job.DONE, runBlocking { withTimeout(60_000) { phone.queue.await(go.id) } }.state)
+        assertEquals(newest, phone.kv(Catalogues.IMPORTED))
     }
 
     @Test fun importsTheNewestOfItsSchemaAndSaysItsDate() {
@@ -172,7 +197,8 @@ class CataloguesRunnerTest {
         assertEquals("Catalogues of 24 Nov 2026", JobViews.line(job).text)
         assertEquals(newest, phone.kv(Catalogues.IMPORTED))
         assertEquals(4L, phone.tabs())
-        assertEquals(listOf(folder + "indexes.json", folder + newest), github.asked)
+        assertEquals(listOf(release, asset(newest)), github.asked)
+        assertEquals(listOf(PhoneConfig.DEFAULTS.userAgent, PhoneConfig.DEFAULTS.userAgent), github.agents)
         assertTrue(forgotten > 0, "the search's answers forgotten")
         assertEquals(emptyList(), phone.cache.listFiles().orEmpty().toList())
     }
@@ -183,8 +209,8 @@ class CataloguesRunnerTest {
         phone.parts.database.writeBlocking { it.kvSet(Catalogues.IMPORTED, newest) }
         val job = run(phone)
         assertEquals(Job.DONE, job.state, job.asJson().toString())
-        assertEquals("Up to date: the catalogues of 24 Nov 2026", JobViews.line(job).text)
-        assertEquals(listOf(folder + "indexes.json"), github.asked)
+        assertEquals(Line("ready", "Up to date: the catalogues of 24 Nov 2026"), JobViews.line(job))
+        assertEquals(listOf(release), github.asked)
         assertEquals(0L, phone.tabs())
     }
 
@@ -193,11 +219,11 @@ class CataloguesRunnerTest {
         publish("indexes-s18-20261124T0400Z.sqlite.gz" to export(18))
         val job = run(phone)
         assertEquals(Job.FAILED, job.state)
-        assertEquals("Not imported: The published catalogues are for a newer caracole (schema 18). Update the app.",
+        assertEquals("Not imported: The published catalogues are for a newer caracole (schema 18): update the app.",
                      detail(job))
-        assertEquals("Not imported: The published catalogues are for a newer caracole (schema 18).",
-                     JobViews.line(job).text)
-        assertEquals(listOf(folder + "indexes.json"), github.asked)
+        assertEquals("Not imported: The published catalogues are for a newer caracole (schema 18): update the app.",
+                     JobViews.line(job).text, "what to do is kept in the line's one sentence")
+        assertEquals(listOf(release), github.asked)
         // No file at all: none published yet.
         github.routes.clear()
         val none = run(phone)
@@ -241,14 +267,14 @@ class CataloguesRunnerTest {
         val job = run(phone)
         assertEquals(Job.FAILED, job.state)
         assertEquals("Not imported: The import needs about 1.2 GB free; the phone has 700 MB.", detail(job))
-        assertEquals(listOf(folder + "indexes.json"), github.asked, "the file never asked for")
+        assertEquals(listOf(release), github.asked, "the file never asked for")
         assertNull(phone.kv(Catalogues.IMPORTED))
     }
 
     @Test fun limitedIsKeptAndNothingIsAskedBeforeIt() {
         val phone = phone()
         val until = now.plusSeconds(3600)
-        github.routes[folder + "indexes.json"] = Release.Reply(
+        github.routes[release] = Release.Reply(
             403, """{"message": "API rate limit exceeded"}""".toByteArray(),
             mapOf("x-ratelimit-remaining" to "0", "x-ratelimit-reset" to until.epochSecond.toString()),
         )
@@ -277,7 +303,7 @@ class CataloguesRunnerTest {
         File(phone.cache, "indexes-s17-20261110T0312Z.sqlite").writeText("left")
         val gz = export()
         publish(newest to gz)
-        github.routes[folder + newest] = Release.Reply(200, gz + byteArrayOf(0))  // not its bytes
+        github.routes[asset(newest)] = Release.Reply(200, gz + byteArrayOf(0))  // not its bytes
         val bad = run(phone)
         assertEquals(Job.FAILED, bad.state)
         assertEquals("Not imported: The download isn't the file GitHub listed. Try again.", detail(bad))
@@ -294,10 +320,11 @@ class CataloguesRunnerTest {
         publish(newest to export(), listed = mapOf(newest to 52_000_000L))
         val job = run(phone)
         assertEquals(Job.DONE, job.state, job.asJson().toString())
-        assertEquals("52 MB to download: waiting for Wi-Fi or your go-ahead", JobViews.line(job).text)
+        assertEquals(Line("waiting", "52 MB to download: waiting for Wi-Fi or your go-ahead",
+                          details = "#tab=requests&job=${job.id}"), JobViews.line(job))
         assertEquals(PyJson.loads("""{"name": "$newest", "bytes": 52000000}"""),
                      PyJson.loads(phone.kv(CataloguesRunner.ASKING)!!) as JsonObject)
-        assertEquals(listOf(folder + "indexes.json"), github.asked, "nothing downloaded")
+        assertEquals(listOf(release), github.asked, "nothing downloaded")
         assertNull(phone.kv(Catalogues.IMPORTED))
         // The go-ahead: downloaded on the metered network, the question gone.
         publish(newest to export())
@@ -305,6 +332,47 @@ class CataloguesRunnerTest {
         assertEquals(Job.DONE, ahead.state, ahead.asJson().toString())
         assertEquals(newest, phone.kv(Catalogues.IMPORTED))
         assertNull(phone.kv(CataloguesRunner.ASKING))
+    }
+
+    @Test fun anUnreadableNotBeforeIsNone() {
+        val phone = phone()
+        publish(newest to export())
+        for (stored in listOf("soon", "0001-01-01T00:00:00+01:00")) {
+            phone.parts.database.writeBlocking { it.kvSet(Catalogues.NOT_BEFORE, stored) }
+            phone.parts.database.writeBlocking { it.kvDelete(Catalogues.IMPORTED) }
+            val job = run(phone)
+            assertEquals(Job.DONE, job.state, "$stored: ${job.asJson()}")
+        }
+    }
+
+    @Test fun theUserAgentIsTheSettingsWhenItRuns() {
+        val phone = phone()
+        publish(newest to export())
+        phone.parts.database.writeBlocking {
+            it.kvSet(PhoneConfig.SETTINGS_KV, """{"user_agent": "caracole/0.1 (Dani's tabs)"}""")
+        }
+        assertEquals(Job.DONE, run(phone).state)
+        assertEquals(listOf("caracole/0.1 (Dani's tabs)", "caracole/0.1 (Dani's tabs)"), github.agents)
+    }
+
+    @Test fun aRecordReadWithinADayAheadOfThePhonesClockIsStillTaken() {
+        val phone = phone()
+        // The phone read gtptabs.com's first sitemap before; the laptop read it again with its clock half a day ahead
+        // of the phone's, so the file says it read it "after" the phone's now, and its rows are taken all the same.
+        phone.parts.database.writeBlocking {
+            it.kvSet("gtptabs:sitemaps", """{"sitemap-tabs-1.xml": {"checked_at": "2026-10-01T00:00:00Z", "rows": 0}}""")
+        }
+        now = Instant.parse("2026-10-27T16:00:00Z")  // the file's 2026-10-28T03:30:00Z is within a day
+        publish(newest to export())
+        assertEquals(Job.DONE, run(phone).state)
+        assertEquals(4L, phone.tabs())
+    }
+
+    @Test fun aMergeThatFailsStillForgetsTheSearchsAnswers() {
+        val phone = phone()
+        publish(newest to export(schema = 16))
+        assertEquals(Job.FAILED, run(phone).state)
+        assertEquals(1, forgotten)
     }
 
     @Test fun theDownloadSaysHowFarItHasGot() {

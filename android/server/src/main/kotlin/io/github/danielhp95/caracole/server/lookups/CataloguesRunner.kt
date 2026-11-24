@@ -16,7 +16,6 @@ import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.db.isSqliteError
 import io.github.danielhp95.caracole.core.index.IndexTransfer
 import io.github.danielhp95.caracole.core.index.Stamps
-import io.github.danielhp95.caracole.core.index.TabCounts
 import io.github.danielhp95.caracole.core.index.TransferError
 import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.py.Py
@@ -34,6 +33,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import java.io.File
+import java.time.Duration
 import java.time.Instant
 
 /**
@@ -42,45 +42,49 @@ import java.time.Instant
  * the queue's one worker, so never beside a lookup's write or any other job's. Its one stage, `catalogues`, says:
  *
  * 1. a time GitHub said to ask again after (kv [Catalogues.NOT_BEFORE]) still to come: [Limited]'s words, with no
- *    request;
+ *    request (a record that isn't a time is none);
  * 2. the release listed ([CatalogueSource.list]) and its file chosen ([choose]): none of this schema, the reason in
  *    [words] (a newer schema, an older one, none at all); the one imported last (kv [Catalogues.IMPORTED]), "Up to
- *    date: the catalogues of DATE" (the kind's second way to end), nothing downloaded;
+ *    date: the catalogues of DATE" ([UP_TO_DATE]), done, nothing downloaded;
  * 3. on a metered network ([metered]) with no `--metered-ok`: "52 MB to download: waiting for Wi-Fi or your
- *    go-ahead", done, nothing downloaded, the file's name and size kept in kv [ASKING] (`{"name", "bytes"}`) for the
- *    app's question; asked again with `--metered-ok` (the go-ahead), downloaded whatever the network;
+ *    go-ahead" (the kind's second way to end, a wait), nothing downloaded, the file's name and size kept in kv
+ *    [ASKING] (`{"name", "bytes"}`) for the app's question; asked again with `--metered-ok` (the go-ahead, a job of
+ *    its own key, [GO]), downloaded whatever the network;
  * 4. less room in `stateDir` than [Catalogues.ROOM_FACTOR] times the file ([free]): "The import needs about 1.2 GB
  *    free; the phone has 700 MB.", nothing downloaded;
  * 5. the file downloaded ([download]: unpacked and checked) into `stateDir/cache/catalogues/`, saying "Downloading ·
  *    31 of 52 MB" as it goes;
- * 6. in one write, merged (IndexTransfer.merge, `notAfter` the clock: no record dated after now is newer than the
- *    phone's), kv [Catalogues.IMPORTED] its name once the merge took it, and "Catalogues of DATE", with a sentence
- *    for each site the file holds that this version doesn't know (caracole_export's `sites`, [unknown]); then the
- *    WAL checkpointed and the search's answers forgotten ([forget]).
+ * 6. in one write, merged (IndexTransfer.merge, `notAfter` the clock and a day, as a sync's merge: no record dated
+ *    later is newer than the phone's), kv [Catalogues.IMPORTED] its name once the merge took it, and "Catalogues of
+ *    DATE", with a sentence for the sites the file holds that this version doesn't know (caracole_export's `sites`
+ *    against [IndexTransfer.SITES], [unknown]); once the merge has begun, whatever came of it, the WAL checkpointed
+ *    and the search's answers forgotten ([forget]).
  *
  * Whatever came of it, the folder `stateDir/cache/catalogues/` is emptied, a file a killed job left among it. A
  * [Limited] anywhere keeps its time in kv [Catalogues.NOT_BEFORE]. Failed, its words are "Not imported: WHY" (its
  * kind's), the command's exit 1.
  *
- * [source] lists the release (Assembly's GitHub API source, the owner's switch S1); [http] asks for the file, with
- * caracole's user agent; [clock], [metered], [free] and [forget] are the app's (a test's).
+ * Each run asks GitHub with caracole's user agent as the phone's settings say it then (PhoneConfig.read: the
+ * computer's once a sync brought it), through [source] made of that client (GitHub's API, the owner's choice S1);
+ * [clock], [metered], [free] and [forget] are the app's (a test's).
  */
 class CataloguesRunner(
     val parts: PhoneParts,
-    val source: CatalogueSource,
+    val source: (Http) -> CatalogueSource = { CatalogueSource.Api(it) },
     private val clock: () -> Instant = Instant::now,
-    private val http: Http = Http(userAgent = PhoneConfig.DEFAULTS.userAgent),
     private val metered: () -> Boolean = { false },
     private val forget: () -> Unit = {},
     private val free: (File) -> Long = File::getUsableSpace,
 ) : CommandRunner {
     /** The job the app queues (Settings, the first start): one at a time, a request while one waits or runs answered
-     * by that one; with [meteredOk], the owner's go-ahead to download on a metered network. */
+     * by that one; with [meteredOk], the owner's go-ahead to download on a metered network, a job of its own key
+     * ([GO]), so that a plain job waiting never answers it. */
     fun spec(meteredOk: Boolean): JobSpec {
         val kind = PhoneKinds.CATALOGUES
         val args = if (meteredOk) listOf(COMMAND, METERED_OK) else listOf(COMMAND)
-        return JobSpec(title = kind.title, key = kind.key, kind = kind.kind, stages = listOf(kind.stage),
-                       display = kind.display, join = false, run = { context -> run(args, context) })
+        return JobSpec(title = kind.title, key = kind.key + (if (meteredOk) GO else ""), kind = kind.kind,
+                       stages = listOf(kind.stage), display = kind.display, join = false,
+                       run = { context -> run(args, context) })
     }
 
     override suspend fun run(args: List<String>, context: JobContext) {
@@ -93,7 +97,7 @@ class CataloguesRunner(
         try {
             withContext(Dispatchers.IO) { import(meteredOk, cache, context) }
         } catch (e: Limited) {
-            runCatching { parts.database.write { db -> db.kvSet(Catalogues.NOT_BEFORE, Stamps.of(e.until)) } }
+            quietly { parts.database.write { db -> db.kvSet(Catalogues.NOT_BEFORE, Stamps.of(e.until)) } }
             fail(context, e.message.orEmpty())
         } catch (e: CatalogueError) {
             fail(context, e.message.orEmpty())
@@ -106,18 +110,20 @@ class CataloguesRunner(
         val kind = PhoneKinds.CATALOGUES
         fun doing(words: String) = context.stage(STAGE, "running", PhoneKinds.fill(kind.running, "doing" to words))
         context.stage(STAGE, "running")
-        val (notBefore, imported) = parts.database.read { db ->
-            db.kvGet(Catalogues.NOT_BEFORE)?.let(Stamps::parse) to db.kvGet(Catalogues.IMPORTED)
+        val (until, imported, agent) = parts.database.read { db ->
+            Triple(notBefore(db), db.kvGet(Catalogues.IMPORTED), PhoneConfig.read(db).userAgent)
         }
-        if (notBefore != null && Stamps.instant(notBefore).isAfter(clock())) throw Limited(Stamps.instant(notBefore))
+        if (until != null && until.isAfter(clock())) throw Limited(until)
         empty(cache)  // what a killed job left
+        val http = Http(userAgent = agent)
+        val source = source(http)
         doing(LISTING)
         val take = when (val choice = choose(source.list(), Database.SCHEMA_VERSION, imported)) {
             is Choice.Take -> choice
             is Choice.UpToDate -> {
                 parts.database.write { db -> db.kvDelete(ASKING) }
                 val day = Names.read(choice.name)?.let(::date) ?: choice.name
-                context.stage(STAGE, "done", PhoneKinds.fill(kind.otherwise!!, "date" to day))
+                context.stage(STAGE, "done", PhoneKinds.fill(UP_TO_DATE, "date" to day))
                 return
             }
             else -> throw CatalogueError(words(choice)!!)
@@ -128,7 +134,7 @@ class CataloguesRunner(
                 db.kvSetJson(ASKING, JsonObject(linkedMapOf("name" to JsonPrimitive(take.file.name),
                                                             "bytes" to JsonPrimitive(bytes))))
             }
-            context.stage(STAGE, "done", PhoneKinds.fill(WAITING, "size" to size(bytes)))
+            context.stage(STAGE, "done", PhoneKinds.fill(kind.otherwise!!, "size" to size(bytes)))
             return
         }
         val room = free(parts.stateDir)
@@ -150,11 +156,10 @@ class CataloguesRunner(
         doing(IMPORTING)
         val unknown = try {
             parts.database.write { db ->
-                val known = TabCounts.of(db).keys
-                IndexTransfer.merge(db, fetched.file, Stamps.of(clock()), notAfter = Stamps.micros(clock()))
+                IndexTransfer.merge(db, fetched.file, Stamps.of(clock()), notAfter = notAfter())
                 db.kvSet(Catalogues.IMPORTED, take.file.name)
                 db.kvDelete(ASKING)
-                sitesOf(db, fetched.file).filter { it !in known }
+                sitesOf(db, fetched.file).filter { it !in IndexTransfer.SITES }
             }
         } catch (e: CancellationException) {
             throw e
@@ -163,11 +168,35 @@ class CataloguesRunner(
         } catch (e: Exception) {
             if (!e.isSqliteError()) throw e
             throw CatalogueError("The phone's database failed: ${e.message ?: e::class.simpleName}.", e)
+        } finally {
+            // The merge began: whatever it took, the WAL it grew given back and the search's answers forgotten.
+            quietly { parts.database.checkpoint() }
+            forget()
         }
-        runCatching { parts.database.checkpoint() }  // the WAL a big merge grew, given back
-        forget()
         context.stage(STAGE, "done", PhoneKinds.fill(kind.done, "date" to date(take.named)) +
             (if (unknown.isEmpty()) "" else "." + unknown(unknown)))
+    }
+
+    /** The latest time a merged record may say it was read at (IndexTransfer.merge's `notAfter`): the clock and a day
+     * more, for the laptop's clock ahead of the phone's, as a sync's merge (SyncEngine). */
+    private fun notAfter(): Long = Stamps.micros(clock().plus(Duration.ofDays(1)))
+
+    /** kv [Catalogues.NOT_BEFORE] as a time; none for no record, or one that isn't a time Stamps reads. */
+    private fun notBefore(db: Db): Instant? = try {
+        db.kvGet(Catalogues.NOT_BEFORE)?.let(Stamps::parse)?.let(Stamps::instant)
+    } catch (e: ArithmeticException) {
+        null  // a time out of range
+    }
+
+    /** [block] run, a failure of it passed over, but a cancellation's. */
+    private inline fun quietly(block: () -> Unit) {
+        try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // nothing more to do: what it was for is a nicety
+        }
     }
 
     /** The job's stage failed with the kind's words for [why], and the command with them. */
@@ -217,8 +246,11 @@ class CataloguesRunner(
         private const val LISTING = "Asking GitHub for the catalogues…"
         private const val IMPORTING = "Importing the catalogues…"
 
-        /** The line of a download left for the owner's go-ahead, its {size}. */
-        const val WAITING = "{size} to download: waiting for Wi-Fi or your go-ahead"
+        /** The go-ahead's key after the kind's (`catalogues:go`). */
+        const val GO = "go"
+
+        /** The line of a release whose file is the one imported last, its {date}. */
+        const val UP_TO_DATE = "Up to date: the catalogues of {date}"
 
         /** Why not, when the phone has less room than the import needs: {needs} and {has}. */
         const val NO_ROOM = "The import needs about {needs} free; the phone has {has}."

@@ -144,13 +144,13 @@ fun choose(listed: List<Listed>, schema: Int, imported: String?): Choice {
     return Choice.None
 }
 
-/** What the app says of [choice] (the spec's sentences); null for [Choice.Take] and [Choice.UpToDate], which the
- * job words itself. */
+/** What the app says of [choice] (the spec's sentences, each one sentence, so that a line that keeps only a failure's
+ * first sentence keeps what to do too); null for [Choice.Take] and [Choice.UpToDate], which the job words itself. */
 fun words(choice: Choice): String? = when (choice) {
     is Choice.Take, is Choice.UpToDate -> null
-    is Choice.Newer -> "The published catalogues are for a newer caracole (schema ${choice.schema}). Update the app."
+    is Choice.Newer -> "The published catalogues are for a newer caracole (schema ${choice.schema}): update the app."
     is Choice.Older ->
-        "The published catalogues are for an older caracole (schema ${choice.schema}). New ones are on their way."
+        "The published catalogues are for an older caracole (schema ${choice.schema}): new ones are on their way."
     Choice.None -> NoRelease().message
 }
 

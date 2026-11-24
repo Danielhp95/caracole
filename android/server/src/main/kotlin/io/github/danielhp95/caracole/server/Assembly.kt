@@ -16,7 +16,6 @@ import io.github.danielhp95.caracole.core.lookup.Clients
 import io.github.danielhp95.caracole.core.lookup.Pacing
 import io.github.danielhp95.caracole.core.sync.PeerClient
 import io.github.danielhp95.caracole.core.sync.SyncEngine
-import io.github.danielhp95.caracole.mirror.Http
 import io.github.danielhp95.caracole.mirror.Mirror
 import io.github.danielhp95.caracole.mirror.ServerAddress
 import io.github.danielhp95.caracole.server.files.LibraryFiles
@@ -144,8 +143,8 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
     val parts: PhoneParts
 
     /** The site catalogues' job (`catalogues`), which the app queues ([CataloguesRunner.spec]): GitHub's release read
-     * through its API (the owner's switch S1), asked with caracole's user agent (config.py's: no sync's settings are
-     * read to make the phone), on a network the app doesn't yet say is metered. */
+     * through its API (the owner's choice S1), asked with caracole's user agent as the settings say it when it runs,
+     * on a network the app doesn't yet say is metered. */
     val catalogues: CataloguesRunner
 
     init {
@@ -166,9 +165,8 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         commands["songbook"] = SongbookRunner(parts)
         commands["inbox"] = InboxRunner(parts)
         commands["backup"] = BackupRunner(parts)
-        val github = Http(userAgent = PhoneConfig.DEFAULTS.userAgent)
-        val source: CatalogueSource = CatalogueSource.Api(github)
-        catalogues = CataloguesRunner(parts, source, http = github, metered = { false }, forget = { search.invalidate() })
+        catalogues = CataloguesRunner(parts, source = { http -> CatalogueSource.Api(http) }, metered = { false },
+                                      forget = { search.invalidate() })
         commands[CataloguesRunner.COMMAND] = catalogues
     }
 

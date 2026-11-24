@@ -75,8 +75,8 @@ class ReleaseTest {
     }
 
     @Test fun theWordsAreTheSpecs() {
-        assertEquals("The published catalogues are for a newer caracole (schema 18). Update the app.", words(Choice.Newer(18)))
-        assertEquals("The published catalogues are for an older caracole (schema 16). New ones are on their way.",
+        assertEquals("The published catalogues are for a newer caracole (schema 18): update the app.", words(Choice.Newer(18)))
+        assertEquals("The published catalogues are for an older caracole (schema 16): new ones are on their way.",
                      words(Choice.Older(16)))
         assertEquals("No catalogues are published yet.", words(Choice.None))
         assertNull(words(Choice.UpToDate("indexes-s17-20261124T0312Z.sqlite.gz")))
