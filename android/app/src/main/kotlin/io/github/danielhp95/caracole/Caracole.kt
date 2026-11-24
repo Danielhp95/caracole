@@ -84,7 +84,7 @@ object Caracole {
 
     /** Whether the network the phone uses now is metered (mobile data, a hotspot): [meteredForTests], else Android's
      * ConnectivityManager, a phone with no way to tell taken as metered. */
-    private fun metered(context: Context): Boolean = meteredForTests
+    fun metered(context: Context): Boolean = meteredForTests
         ?: (context.getSystemService(ConnectivityManager::class.java)?.isActiveNetworkMetered ?: true)
 
     /** The phone's alerts: [AndroidAlerts] from the start, unless something set others before (lane alerts-backups'

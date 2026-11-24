@@ -20,9 +20,9 @@ import kotlinx.coroutines.launch
  *
  * [busy] is the queue's `onBusy`, told under the queue's lock: it only sets a flag. While the queue is busy, the jobs
  * ([jobs], the queue's snapshot) are read again every [tickMs], so a job asked for while another runs (a sync while
- * the index merges, which tells no busy edge) has its line too. An index import has none: its worker is in the
- * foreground already, its notification saying how far it is (IndexImports), and one notification for one job is
- * enough. The service stops itself once the line is gone. A lookup's line is the library page's: [facts] is what the
+ * the index merges, which tells no busy edge) has its line too. An index import (Phone.importIndex) has none: the
+ * app queues none itself, the device tests and the e2e queue one to give the phone an index, and the service is
+ * never started for one alone. The service stops itself once the line is gone. A lookup's line is the library page's: [facts] is what the
  * library knows of its song now (SongFacts.songOf, the app's database), so a song it has already is never said to be
  * added.
  */
@@ -77,7 +77,7 @@ internal class Working(
         /** How a sync with a computer is named (SyncRoutes'): "Share with <its name>". */
         private const val SHARE_WITH = "Share with "
 
-        /** The kind of job whose worker shows its own notification. */
+        /** The kind of an index import, which the service isn't kept going for (Phone.importIndex). */
         private const val INDEX = "index"
 
         /** Whether [job] is a lookup (JobCommands.isLookup's commands: a song's, Fetch and Fetch again; its versions
@@ -90,7 +90,9 @@ internal class Working(
         /**
          * The line of [jobs] (a queue's snapshot): the job that runs, else the first to run, of those the service
          * keeps going (every kind but an index import), and how many more wait after it; null when none waits or
-         * runs. The job that runs is named, then what it is doing, so that the shade moves as it goes:
+         * runs. Of two that run (a long job of the phone's own letting a lookup queued behind it go first,
+         * JobQueue's yield: its `waitingFor`), the one that isn't waiting for the other: the lookup, so the shade
+         * moves with it rather than standing at the long job's last words. The job that runs is named, then what it is doing, so that the shade moves as it goes:
          * - a lookup by its song (or the page it reads) and the line the library page shows for it ("Estopa - Tu
          *   calorro · Looking up the lyrics…", JobViews.line with [facts], what the library knows of its song);
          * - one of the phone's own kinds (PhoneKinds: the site catalogues, the phone's pages, a backup…) by its name
@@ -102,7 +104,9 @@ internal class Working(
          */
         fun shownOf(jobs: List<Job>, facts: (Job) -> SongFacts? = { null }): Shown? {
             val kept = jobs.filter { it.active && it.spec.kind != INDEX }.sortedBy { it.id }
-            val job = kept.firstOrNull { it.state == Job.RUNNING } ?: kept.firstOrNull() ?: return null
+            val running = kept.filter { it.state == Job.RUNNING }
+            val job = running.firstOrNull { it.waitingFor == 0 } ?: running.firstOrNull() ?: kept.firstOrNull()
+                ?: return null
             if (job.state != Job.RUNNING) return Shown("Waiting · ${what(job)}")
             val own = PhoneKinds.ALL[job.spec.kind]
             val (doing, counts) = when {

@@ -168,7 +168,7 @@ class WorkingTest {
         assertEquals(1204.0 to 10428.0, Working.counted("Remaking pages · 1,204 of 10,428"))
         assertEquals(3.0 to 10.0, Working.counted("Remaking pages · 3 of 10"))
         assertNull(Working.counted("Backing up the book…"))
-        assertNull(Working.counted("Importing the catalogues…"))
+        assertNull(Working.counted("Importing · Ultimate Guitar"))
         assertNull(Working.counted("12 of 10"), "more done than there is: no bar")
         assertNull(Working.counted("0 of 0"))
         // A count opens what a stage says, or follows its " · ": never digits inside a name it says.
@@ -267,6 +267,39 @@ class WorkingTest {
     }
 
     @Test
+    fun `a long job letting a lookup go first gives the line to the lookup, the one that moves`() {
+        val catalogues = PhoneKinds.CATALOGUES
+        val asked = CompletableDeferred<Unit>()
+        val looked = CompletableDeferred<Unit>()
+        val ended = CompletableDeferred<Unit>()
+        val long = lookups.submit(JobSpec(
+            title = catalogues.title, key = catalogues.key, kind = catalogues.kind, display = catalogues.display,
+            stages = listOf(catalogues.stage),
+            run = { context ->
+                context.stage(catalogues.stage.first, "running", "Downloading · 31 of 52 MB")
+                asked.await()
+                context.yieldToQueued()  // the lookup queued meanwhile runs here, the long job waiting for it
+                ended.await()
+            },
+        )).first
+        waitFor("the catalogues to run") { lookups.job(long.id)?.state == "running" }
+        val song = lookup("Fetch Estopa - Fuego", "estopa/fuego", "Estopa - Fuego",
+                          JobCommands.lookupSteps("Estopa", "Fuego"), looked)
+        asked.complete(Unit)
+        waitFor("the lookup to run beside it") { lookups.job(song.id)?.stages?.any { it.state == "running" } == true }
+        assertEquals(1, lookups.job(long.id)!!.waitingFor)
+        val line = Working.lineOf(lookups.snapshot())!!
+        assertTrue(line.startsWith("Estopa - Fuego · "), line)
+        assertTrue(line.endsWith(" · 1 waiting"), line)
+        looked.complete(Unit)
+        waitFor("the lookup to end") { lookups.job(song.id)?.active == false }
+        waitFor("the catalogues' line again") {
+            Working.lineOf(lookups.snapshot()) == "The site catalogues · Downloading · 31 of 52 MB"
+        }
+        ended.complete(Unit)
+    }
+
+    @Test
     fun `a job of the phone's own is no lookup, whatever its kind`() {
         val gate = CompletableDeferred<Unit>()
         val own = submit("song", "Estopa - Tu calorro", gate)
@@ -277,7 +310,7 @@ class WorkingTest {
     }
 
     @Test
-    fun `an index import alone needs no line, its worker showing its own, but a job waiting behind it does`() {
+    fun `an index import alone needs no line, the app queueing none, but a job waiting behind it does`() {
         val merge = CompletableDeferred<Unit>()
         val import = submit("index", "The computer's index", merge)
         running(import.id)
@@ -302,7 +335,7 @@ class WorkingTest {
         sync.complete(Unit)
         waitFor("the line to go") { working.line.value == null }
 
-        // An import alone: its worker is in the foreground already, and the service isn't started for it.
+        // An import alone (the device tests' and the e2e's): the service isn't started for it.
         val merge = CompletableDeferred<Unit>()
         running(submit("index", "The computer's index", merge).id)
         val seen = working.ticks

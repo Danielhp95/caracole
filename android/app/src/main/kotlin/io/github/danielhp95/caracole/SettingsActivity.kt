@@ -42,8 +42,9 @@ import java.time.Instant
  * 2026 · 3 weeks old"), or of the computer's indexes a sync merged ("From the computer · 3 Nov 2026 · …"), else of
  * the indexes the phone holds, "None yet" for none (SiteCatalogues.fresh), and Download the site catalogues, which asks GitHub nothing until it
  * is tapped, then queues CataloguesRunner's job and says its line as it goes ([followCatalogues]); a job a metered
- * network stopped is asked about ("52 MB on a metered network?"), whoever queued it (the Journal's Try again too),
- * Download then the owner's go-ahead, the question kept for the next screen until it is answered (a rotation's). A
+ * network stopped is asked about ("52 MB on a metered network?") while the network is still metered, whoever queued
+ * it (the Journal's Try again too), Download then the owner's go-ahead, the question kept for the next screen until it
+ * is answered (a rotation's). Download asks to show notifications first, the download's own with its bar. A
  * phone's caracole that can't start is said under the catalogues' button ("Couldn't start · …"), never a crash, and
  * its start tried again as the screen comes back. Syncing itself is the library screen's bar's sync button.
  * No item's text ends in "…".
@@ -120,6 +121,8 @@ class SettingsActivity : Activity() {
 
         findViewById<Button>(R.id.backups).setOnClickListener { startActivity(Intent(this, BackupsActivity::class.java)) }
         findViewById<Button>(R.id.catalogues_download).setOnClickListener { downloadCatalogues(meteredOk = false) }
+        // The first start's Download (MainActivity), which queued the job and opened this screen: asked here, on top.
+        if (savedInstanceState == null && intent.getBooleanExtra(ASK_TO_NOTIFY, false)) askToNotify()
     }
 
     override fun onResume() {
@@ -175,7 +178,8 @@ class SettingsActivity : Activity() {
         startActivity(Intent(this, MainActivity::class.java).putExtra(MainActivity.SHEET, flow))
     }
 
-    /** Android 13 and later show the notification of a sync that left conflicts only once asked. */
+    /** Android 13 and later show the notification of a sync that left conflicts, and the site catalogues' download's
+     * (SyncService, its bar), only once asked. */
     private fun askToNotify() {
         if (Build.VERSION.SDK_INT < 33) return
         if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return
@@ -239,8 +243,10 @@ class SettingsActivity : Activity() {
         return resources.getQuantityString(plural, age.count, age.count)
     }
 
-    /** The catalogues' job queued (the go-ahead with [meteredOk]) and followed. */
+    /** The catalogues' job queued (the go-ahead with [meteredOk]) and followed, asking first to show notifications
+     * (the download's, with its bar). */
     private fun downloadCatalogues(meteredOk: Boolean) {
+        askToNotify()
         scope.launch {
             val phone = phone() ?: return@launch
             val job = withContext(Dispatchers.IO) { SiteCatalogues.queue(phone, meteredOk) }
@@ -258,7 +264,7 @@ class SettingsActivity : Activity() {
         scope.launch {
             val phone = phone() ?: return@launch
             val job = SiteCatalogues.newestOf(phone.queue.snapshot()) ?: return@launch
-            say(JobViews.line(job).text)
+            say(lineOf(phone, job))
             if (!SiteCatalogues.over(job.state)) follow(job.id) else ended(phone, job)
         }
     }
@@ -270,7 +276,7 @@ class SettingsActivity : Activity() {
             val phone = phone() ?: return@launch
             while (true) {
                 val job = phone.queue.job(id) ?: return@launch
-                say(JobViews.line(job).text)
+                say(lineOf(phone, job))
                 if (SiteCatalogues.over(job.state)) {
                     showCatalogues()
                     ended(phone, job)
@@ -283,18 +289,20 @@ class SettingsActivity : Activity() {
 
     /**
      * [job] over: when it is the newest catalogues job and stopped at the metered step, its file named in kv
-     * `catalogues:asking`, the question, whoever queued it (SiteCatalogues.question), until it is answered.
+     * `catalogues:asking`, the question, whoever queued it (SiteCatalogues.question), until it is answered, and only
+     * while the network is metered now (Caracole.metered: back on Wi-Fi, the next tap downloads).
      */
     private suspend fun ended(phone: Phone, job: Job) {
         if (SiteCatalogues.newestOf(phone.queue.snapshot())?.id != job.id) return
-        val asking = withContext(Dispatchers.IO) {
+        val app = applicationContext
+        val (asking, metered) = withContext(Dispatchers.IO) {
             guarded("the catalogues' question couldn't be read") {
                 phone.parts.database.read { db -> SiteCatalogues.asking(db.kvGet(CataloguesRunner.ASKING)) }
             }
-                .getOrNull()
+                .getOrNull() to Caracole.metered(app)
         }
         val key = SiteCatalogues.keyOf(job.id, job.queuedAt)
-        SiteCatalogues.question(job.state, JobViews.line(job).tone, asking, key, settings.cataloguesAnswered)
+        SiteCatalogues.question(job.state, JobViews.line(job).tone, asking, key, settings.cataloguesAnswered, metered)
             ?.let { askMetered(key, it) }
     }
 
@@ -319,6 +327,14 @@ class SettingsActivity : Activity() {
                 askedFor = null
             }
             .show()
+    }
+
+    /** [job]'s line as the Journal says it: queued, the jobs before it and the long job of the phone's own it waits
+     * behind ("Queued · after the sync (Updating the indexes · …)", JobViews.behind). */
+    private fun lineOf(phone: Phone, job: Job): String {
+        val jobs = phone.queue.snapshot()
+        val ahead = if (job.state == Job.QUEUED) jobs.count { it.active && it.id < job.id } else 0
+        return JobViews.line(job, ahead, behind = JobViews.behind(job, jobs)).text
     }
 
     /** What the catalogues' job says, under its button. */
@@ -347,10 +363,13 @@ class SettingsActivity : Activity() {
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
-    private companion object {
-        const val NOTIFY = 2
-        const val FOLLOW_MS = 400L
-        const val EXPORT = "export"
-        const val IMPORT = "import"
+    companion object {
+        /** An extra: ask to show notifications as the screen opens (the first start's Download of the catalogues). */
+        const val ASK_TO_NOTIFY = "io.github.danielhp95.caracole.ASK_TO_NOTIFY"
+
+        private const val NOTIFY = 2
+        private const val FOLLOW_MS = 400L
+        private const val EXPORT = "export"
+        private const val IMPORT = "import"
     }
 }

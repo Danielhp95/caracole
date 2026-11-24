@@ -269,12 +269,14 @@ class MainActivity : Activity() {
      * The offer answered ([CatalogueOffer.Answer]): the card gone, kv [SiteCatalogues.OFFERED] written, so no start
      * offers it again; Download queues the catalogues' job; Settings opened where the answer says (Download's, whose
      * row follows the job and asks before a download on a metered network; Not now's only where a first start would
-     * have).
+     * have). Download asks to show notifications (from Android 13), so that the download's, with its bar, shows: in
+     * Settings, which it opens, so that the question is never left under it; here when it opens none.
      */
     private fun answered(answer: CatalogueOffer.Answer) {
         val download = answer.download
         offer.visibility = View.GONE
         offerBack(false)
+        if (download && !answer.openSettings) askToNotify()
         val app = applicationContext
         screen.launch {
             withContext(Dispatchers.IO) {
@@ -284,7 +286,7 @@ class MainActivity : Activity() {
                     if (download) SiteCatalogues.queue(phone, meteredOk = false)
                 }
             }
-            if (answer.openSettings) openSettings()
+            if (answer.openSettings) openSettings(askToNotify = download)
         }
     }
 
@@ -414,17 +416,18 @@ class MainActivity : Activity() {
         shown = true
     }
 
-    /** Android 13 and later show the notification of a sync that runs (SyncService), and of one that left conflicts,
-     * only once asked; it runs either way. */
+    /** Android 13 and later show the notification of a job that runs (SyncService: a sync, the site catalogues'
+     * download), and of a sync that left conflicts, only once asked; it runs either way. */
     private fun askToNotify() {
         if (Build.VERSION.SDK_INT < 33) return
         if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return
         requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), NOTIFY)
     }
 
-    private fun openSettings() {
+    /** Settings; with [askToNotify], asking to show notifications as it opens (SettingsActivity.ASK_TO_NOTIFY). */
+    private fun openSettings(askToNotify: Boolean = false) {
         offerState.settingsSeen()  // the offer's Not now needn't open it again
-        startActivity(Intent(this, SettingsActivity::class.java))
+        startActivity(Intent(this, SettingsActivity::class.java).putExtra(SettingsActivity.ASK_TO_NOTIFY, askToNotify))
     }
 
     private fun menu(anchor: View) {
@@ -448,6 +451,7 @@ class MainActivity : Activity() {
      */
     private fun show(state: SyncState) {
         hiding?.cancel()
+        status.maxLines = 1  // a sync's line, its words changing as it goes: one line, never the bar's height changing
         when (state) {
             SyncState.Idle -> status.visibility = View.GONE
             is SyncState.Running -> {
@@ -485,15 +489,17 @@ class MainActivity : Activity() {
         screen.launch { Exports.share(this@MainActivity, files, url, disposition) }
     }
 
-    /** A line in the status bar, kept until the next sync's. */
     /** The opening screen (OpeningScreen), shown from the app's start until its first page is drawn or a message is said. */
     private fun loaded() {
         opening.done()
     }
 
+    /** What stops the app from opening ("Couldn't start · …"), in the status bar whole, on as many lines as it takes:
+     * the bar is one line, ellipsized, for a sync's words alone, which change as it goes. */
     private fun say(text: String) {
         loaded()
         hiding?.cancel()
+        status.maxLines = Int.MAX_VALUE
         status.text = text
         status.visibility = View.VISIBLE
     }

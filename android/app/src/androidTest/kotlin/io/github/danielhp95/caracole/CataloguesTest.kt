@@ -1,7 +1,9 @@
 package io.github.danielhp95.caracole
 
+import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
+import android.os.Build
 import android.view.View
 import android.widget.TextView
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
@@ -68,6 +70,10 @@ class CataloguesTest {
         Corpus.open = { name -> runCatching { instrumentation.context.assets.open("conformance/$name") }.getOrNull() }
         Caracole.cataloguesForTests = github.base
         Caracole.meteredForTests = false
+        // Download asks to show notifications (from Android 13): granted, so that no system dialog pauses Settings.
+        if (Build.VERSION.SDK_INT >= 33) {
+            instrumentation.uiAutomation.grantRuntimePermission(context.packageName, Manifest.permission.POST_NOTIFICATIONS)
+        }
     }
 
     @After fun close() {

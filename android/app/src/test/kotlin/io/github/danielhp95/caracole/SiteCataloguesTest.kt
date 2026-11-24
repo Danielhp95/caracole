@@ -137,14 +137,18 @@ class SiteCataloguesTest {
         // the metered step, with kv catalogues:asking naming its file, is asked about once, until it is answered.
         val asking = Asking("indexes-s17-20261124T0312Z.sqlite.gz", 52_000_000)
         val job = SiteCatalogues.keyOf(41, Instant.parse("2026-11-24T12:00:00.250Z"))
-        assertEquals(asking, SiteCatalogues.question("done", "waiting", asking, job, answered = null))
+        assertEquals(asking, SiteCatalogues.question("done", "waiting", asking, job, answered = null, metered = true))
         assertEquals("an older job's answer is no answer of this one's",
                      asking, SiteCatalogues.question("done", "waiting", asking, job,
-                                                     SiteCatalogues.keyOf(40, Instant.parse("2026-11-24T11:00:00Z"))))
-        assertNull("answered: never asked again", SiteCatalogues.question("done", "waiting", asking, job, answered = job))
-        assertNull(SiteCatalogues.question("done", "waiting", null, job, answered = null))
-        assertNull(SiteCatalogues.question("done", "ok", asking, job, answered = null))
-        assertNull(SiteCatalogues.question("failed", "error", asking, job, answered = null))
+                                                     SiteCatalogues.keyOf(40, Instant.parse("2026-11-24T11:00:00Z")),
+                                                     metered = true))
+        assertNull("answered: never asked again", SiteCatalogues.question("done", "waiting", asking, job, answered = job, metered = true))
+        assertNull(SiteCatalogues.question("done", "waiting", null, job, answered = null, metered = true))
+        assertNull(SiteCatalogues.question("done", "ok", asking, job, answered = null, metered = true))
+        assertNull(SiteCatalogues.question("failed", "error", asking, job, answered = null, metered = true))
+        // Stopped earlier, on Wi-Fi now: nothing asked; the next tap downloads.
+        assertNull("not metered now", SiteCatalogues.question("done", "waiting", asking, job, answered = null,
+                                                              metered = false))
         // A job's key is its id and the second it was queued, as the Journal's history keeps them across a restart.
         assertEquals(job, SiteCatalogues.keyOf(41, Instant.parse("2026-11-24T12:00:00Z")))
     }

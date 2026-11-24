@@ -138,10 +138,11 @@ object SiteCatalogues {
      * The question to ask after the newest catalogues job, [job] by its key ([keyOf]), ended [state] with its line's
      * [tone]: the file waiting, when the job stopped for a metered network (done, its line a wait: the kind's
      * otherwise) and [asking] names it, whoever queued it (Settings' Download, the first start's, the Journal's Try
-     * again), until it is [answered] (Settings.cataloguesAnswered, the last job's key answered); none else.
+     * again), until it is [answered] (Settings.cataloguesAnswered, the last job's key answered), and only while the
+     * network is [metered] now: on Wi-Fi again, nothing is asked, and the next tap downloads; none else.
      */
-    fun question(state: String, tone: String, asking: Asking?, job: String, answered: String?): Asking? =
-        if (state == Job.DONE && tone == WAITING && job != answered) asking else null
+    fun question(state: String, tone: String, asking: Asking?, job: String, answered: String?, metered: Boolean): Asking? =
+        if (state == Job.DONE && tone == WAITING && job != answered && metered) asking else null
 
     /** A job's key for its question: its id and the second it was queued, as the Journal's history keeps them. */
     fun keyOf(id: Int, queuedAt: Instant): String = "$id@${queuedAt.epochSecond}"
