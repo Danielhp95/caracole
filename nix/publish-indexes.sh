@@ -115,7 +115,7 @@ ticker() {
   local now took pos nap
   trap 'kill "$nap" 2>/dev/null; exit 0' TERM
   while :; do
-    sleep "$TICK" </dev/null >/dev/null 2>&1 &
+    sleep "$TICK" >/dev/null 2>&1 &
     nap=$!
     wait "$nap" || return 0
     printf -v now '%(%s)T' -1
