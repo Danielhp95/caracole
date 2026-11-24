@@ -228,6 +228,45 @@ It answers to its IP addresses and the names it knows. Put a full tailnet name i
 the browser gets a 421. If the tailnet address doesn't exist yet at boot, it retries every 10
 seconds. [usage.md](usage.md#caracole-serve) says what the page does.
 
+### 6. Publishing the site indexes
+
+`services.caracole.publish.enable = true` adds `caracole-publish.service` and its timer
+(`publish.calendar`, `Sun 05:00` by default). It runs `caracole index publish` with no network and
+writes a gzip of every site index into `publish.folder` (`/var/lib/caracole/publish`, mode 2750, group
+`caracole`, so a user in that group can read it).
+
+Uploading to GitHub is your own user's job, with your own `gh` login: the module holds no token. A
+user service in your own configuration, started as the publish writes `published.json`, with a weekly
+timer to catch up (the example assumes your user is in group `caracole` and `gh auth login` is done):
+
+```nix
+  systemd.user.services.caracole-upload = {
+    description = "Upload the site indexes to GitHub";
+    unitConfig.ConditionPathExists = "/var/lib/caracole/publish/published.json";
+    path = [ pkgs.gh ];
+    script = ''
+      export GH_TOKEN=$(gh auth token --user <you>)
+      exec ${caracole.packages.${pkgs.stdenv.hostPlatform.system}.publish-indexes}/bin/publish-indexes /var/lib/caracole/publish
+    '';
+  };
+  systemd.user.paths.caracole-upload = {
+    wantedBy = [ "default.target" ];
+    pathConfig.PathChanged = "/var/lib/caracole/publish/published.json";
+  };
+  systemd.user.timers.caracole-upload = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = { OnCalendar = "Mon 06:00"; Persistent = true; };
+  };
+```
+
+`<you>` is the GitHub account that owns the repository: `gh`'s active account may be another. Both
+start the upload only while your user manager runs. The path unit misses a publish made while it
+doesn't, so the timer catches up at your next login (`Persistent`); an upload of a file already there
+says "already published" and changes nothing. `gh` may keep its token in a login keyring, locked
+without a session, which is why the example doesn't enable linger.
+
+`caracole` is the flake input. `publish-indexes DIR` checks what GitHub holds and prunes old files.
+
 ## Ubuntu 24.04 without Nix
 
 The same service, without Nix, on an x86-64 machine. What the Nix package brings goes under
@@ -744,7 +783,34 @@ sudo caracole-admin autochords   # auto-chords: 0 generated, 0 skipped, 0 failed
 
 Then [check that it works](#checking-auto-chords).
 
-### 13. Upgrades
+### 13. Publishing the site indexes
+
+The publish folder beside the others, which the units and `caracole-admin` may write, and the upload
+script, which needs `gh` and `jq`. Your user reads the folder as a member of group `caracole`:
+
+```sh
+echo 'd /var/lib/caracole/publish 2750 caracole caracole -' | sudo tee -a /etc/tmpfiles.d/caracole.conf > /dev/null
+sudo systemd-tmpfiles --create /etc/tmpfiles.d/caracole.conf
+sudo sed -i '/^ReadWritePaths=/s|$| /var/lib/caracole/publish|' /etc/caracole/units.conf
+sudo systemctl daemon-reload
+sudo apt install gh jq
+sudo curl -fsSLo /usr/local/bin/publish-indexes \
+  https://raw.githubusercontent.com/Danielhp95/caracole/$REV/nix/publish-indexes.sh
+sudo chmod 0755 /usr/local/bin/publish-indexes
+sudo usermod -aG caracole "$USER"   # then log in again
+```
+
+There is no timer here. To publish, then upload, logged in with `gh auth login` (or with `GH_TOKEN`
+as `gh auth token` prints it):
+
+```sh
+sudo caracole-admin index publish /var/lib/caracole/publish
+PATH=/opt/caracole/bin:$PATH publish-indexes /var/lib/caracole/publish
+```
+
+The publish needs `caracole-admin`, so sudo; the upload is your user's, with your `gh` login.
+
+### 14. Upgrades
 
 Each new commit gets its own virtual environment, and the link moves once it is ready:
 
@@ -817,7 +883,7 @@ the Sites tab's YouTube line counts its yt-dlp runs. If the field is missing, th
 
 | It says | Then |
 |---|---|
-| auto-chords isn't installed | NixOS: `autochords.enable`. Ubuntu: section 12's two installs, which an upgrade makes again in each new commit (section 13) |
+| auto-chords isn't installed | NixOS: `autochords.enable`. Ubuntu: section 12's two installs, which an upgrade makes again in each new commit (section 14) |
 | auto-chords' model files are missing | `CARACOLE_BTC_WEIGHTS` or `CARACOLE_BEAT_CHECKPOINT` names no file: on Ubuntu, section 12's downloads |
 | yt-dlp is missing | Ubuntu: section 12's yt-dlp, linked into `/opt/caracole/bin` |
 | YouTube is turned off | `[providers.youtube] enabled = false`: auto-chords for purchases alone |

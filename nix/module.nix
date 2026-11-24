@@ -221,6 +221,8 @@ let
       # As the units: started once the folders' file systems are mounted.
       RequiresMountsFor = writable;
     }
+    # `sudo caracole-admin index publish <publish.folder>` writes there, as the publish unit does.
+    // lib.optionalAttrs cfg.publish.enable { ReadWritePaths = writable ++ [ cfg.publish.folder ]; }
     // lib.optionalAttrs cfg.autochords.enable { MemoryDenyWriteExecute = false; }
     // lib.optionalAttrs cfg.autochords.enable gpu;
   # One --property per list item, as a unit file gets one line per item (for
@@ -387,6 +389,29 @@ in
           tailnet whose interface is in `networking.firewall.trustedInterfaces`
           needs no opening.
         '';
+      };
+    };
+
+    publish = {
+      enable = lib.mkEnableOption ''
+        the weekly caracole-publish unit: `caracole index publish` writes a gzip
+        of every site index into `publish.folder`, offline, for the owner to
+        upload to GitHub with their own login (docs/deploy.md)'';
+
+      folder = lib.mkOption {
+        type = lib.types.path;
+        default = "${cfg.dataDir}/publish";
+        defaultText = lib.literalExpression ''"''${config.services.caracole.dataDir}/publish"'';
+        description = ''
+          Where the gzip is written. Mode 2750, owner and group caracole, so a
+          user in group caracole may read it to upload it.
+        '';
+      };
+
+      calendar = lib.mkOption {
+        type = lib.types.str;
+        default = "Sun 05:00";
+        description = "When the publish unit runs, as a systemd OnCalendar value.";
       };
     };
 
@@ -590,6 +615,13 @@ in
         mode = "0700";
       };
     }
+    // lib.optionalAttrs cfg.publish.enable {
+      ${cfg.publish.folder}.d = {
+        user = "caracole";
+        group = "caracole";
+        mode = "2750";
+      };
+    }
     # dataDir, when it holds any of the four: the group gets through to the
     # library and the music, and no further. ":" applies the owner and mode
     # only to a folder tmpfiles creates, so one that exists keeps its own.
@@ -639,6 +671,35 @@ in
         OnCalendar = cfg.schedule;
         Persistent = true;
         RandomizedDelaySec = "45m";
+      };
+    };
+
+    # Weekly, the site indexes gzipped into a folder: no network, no token.
+    systemd.services.caracole-publish = lib.mkIf cfg.publish.enable {
+      description = "caracole publish: gzip the site indexes for upload";
+      onFailure = [ "caracole-notify-failure.service" ];
+      restartIfChanged = false;
+      unitConfig.RequiresMountsFor = writable;
+      environment = cacheEnv;
+      serviceConfig =
+        sandbox
+        // identity
+        // paths
+        // {
+          ReadWritePaths = writable ++ [ cfg.publish.folder ];
+          Type = "oneshot";
+          ExecStart = "${lib.getExe cfg.package} --config ${configFile} index publish ${cfg.publish.folder}";
+          PrivateNetwork = true;
+          TimeoutStartSec = "1h";
+        };
+    };
+
+    systemd.timers.caracole-publish = lib.mkIf cfg.publish.enable {
+      description = "Weekly caracole index publish";
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        OnCalendar = cfg.publish.calendar;
+        Persistent = true;
       };
     };
 

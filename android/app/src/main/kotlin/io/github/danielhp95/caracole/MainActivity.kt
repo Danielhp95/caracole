@@ -34,6 +34,9 @@ import androidx.core.view.WindowInsetsCompat
 import io.github.danielhp95.caracole.mirror.Links
 import io.github.danielhp95.caracole.mirror.Route
 import io.github.danielhp95.caracole.core.db.Database
+import io.github.danielhp95.caracole.core.index.Stamps
+import io.github.danielhp95.caracole.core.index.TabCounts
+import io.github.danielhp95.caracole.server.Phone
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -57,13 +60,18 @@ import kotlin.coroutines.resume
  * and the unattended sync's line under it. An intent's [SHEET] (Settings' Export and Import a file, the notification
  * of a sync that left conflicts) opens the sheet at that flow ([SheetAddress]). The WebView carries the launch's
  * cookie and loads that exact origin alone. A pinch sizes the pages' text ([pinchToSize]), and shows the size it is
- * at over the page while it lasts ([sizeLabel]).
+ * at over the page while it lasts ([sizeLabel]). A first start with no computer set and no site's index offers the
+ * site catalogues once ([offerCatalogues]), before Settings opens.
  */
 class MainActivity : Activity() {
     private lateinit var web: WebView
     private lateinit var status: TextView
     private lateinit var title: TextView
     private lateinit var opening: OpeningScreen
+    /** The first start's offer of the site catalogues (SiteCatalogues.offers). */
+    private lateinit var offer: View
+    /** Whether Settings opens once the offer is answered (a first start with nothing set up). */
+    private var offerThenSettings = false
     /** Where links go, once the server has started (the WebView's client reads it on its own threads). */
     @Volatile private var links: Links? = null
     /** The server's files read in this process, once it has started (the WebView's client reads it on its own
@@ -103,6 +111,9 @@ class MainActivity : Activity() {
         status = findViewById(R.id.status)
         title = findViewById(R.id.title)
         opening = OpeningScreen(findViewById(R.id.loading))
+        offer = findViewById(R.id.catalogue_offer)
+        findViewById<View>(R.id.offer_download).setOnClickListener { answerOffer(download = true) }
+        findViewById<View>(R.id.offer_not_now).setOnClickListener { answerOffer(download = false) }
         settings = Settings(this)
         alphaTab = AlphaTabAssets(this)
         chooser = FileChooser(this)
@@ -208,9 +219,48 @@ class MainActivity : Activity() {
         } else {
             showLibrary()
         }
-        if (saved == null && page == null && sheet == null && settings.server.isBlank() &&
-            Caracole.mirror(this).manifest() == null) {
+        val first = saved == null && page == null && sheet == null
+        val setUp = settings.server.isNotBlank() || Caracole.mirror(this).manifest() != null
+        if (saved?.getBoolean(OFFERING) == true) {
+            showOffer(thenSettings = saved.getBoolean(OFFER_SETTINGS))
+        } else if (first && withContext(Dispatchers.IO) { offerCatalogues(phone) }) {
+            showOffer(thenSettings = !setUp)
+        } else if (first && !setUp) {
             openSettings()
+        }
+    }
+
+    /**
+     * Whether the first start offers the site catalogues ([SiteCatalogues.offers]: no computer set, no site's index,
+     * never offered), kv [SiteCatalogues.OFFERED] written as it is offered, so it is offered once; false when the
+     * database can't say.
+     */
+    private fun offerCatalogues(phone: Phone): Boolean = try {
+        val db = phone.parts.database
+        val offers = db.read { SiteCatalogues.offers(settings.server, TabCounts.of(it), it.kvGet(SiteCatalogues.OFFERED)) }
+        if (offers) db.writeBlocking { it.kvSet(SiteCatalogues.OFFERED, Stamps.now()) }
+        offers
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        false
+    }
+
+    private fun showOffer(thenSettings: Boolean) {
+        offerThenSettings = thenSettings
+        offer.visibility = View.VISIBLE
+    }
+
+    /**
+     * The offer answered: Download queues the catalogues' job and opens Settings, whose row follows it (and asks
+     * before a download on mobile data); Not now opens Settings only where a first start would have.
+     */
+    private fun answerOffer(download: Boolean) {
+        offer.visibility = View.GONE
+        val app = applicationContext
+        screen.launch {
+            if (download) withContext(Dispatchers.IO) { SiteCatalogues.queue(Caracole.phone(app), meteredOk = false) }
+            if (download || offerThenSettings) openSettings()
         }
     }
 
@@ -256,6 +306,10 @@ class MainActivity : Activity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
+        if (offer.visibility == View.VISIBLE) {
+            outState.putBoolean(OFFERING, true)
+            outState.putBoolean(OFFER_SETTINGS, offerThenSettings)
+        }
         val gone = goneAt
         if (gone != null) {  // the renderer died, its WebView with it: the page it showed, to open again
             outState.putString(SavedScreen.GONE_AT, gone)
@@ -644,6 +698,9 @@ class MainActivity : Activity() {
         const val SYNC = "sync"
 
         private const val SHOW_ENDED_MS = 5_000L
+        /** The saved state's: the catalogues' offer still to answer, and whether Settings opens after it. */
+        private const val OFFERING = "catalogues_offering"
+        private const val OFFER_SETTINGS = "catalogues_offer_settings"
         /** The log's tag for the sync sheet's export, which reaches the app by one way or the other. */
         private const val TAG = "caracole-export"
         private const val NOTIFY = 1

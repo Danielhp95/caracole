@@ -111,6 +111,12 @@ let
     configured
     { services.caracole.autochords.enable = true; }
   ];
+  # The weekly publish of the site catalogues, offline.
+  publishOn = evalSystem [
+    stubbed
+    configured
+    { services.caracole.publish.enable = true; }
+  ];
   # caracole-web with its defaults, and on a tailnet address.
   webDefault = evalSystem [
     stubbed
@@ -360,6 +366,10 @@ let
   admin = findAdmin nuc;
   adminAutochords = findAdmin nucAutochords;
   adminMoved = findAdmin moved;
+  publish = publishOn.systemd.services.caracole-publish;
+  publishSc = publish.serviceConfig;
+  publishFolder = "/var/lib/caracole/publish";
+
   adminCuda = findAdmin webCuda;
   webCudaSc = webCuda.systemd.services.caracole-web.serviceConfig;
   autochordsCudaSc = webCuda.systemd.services.caracole-autochords.serviceConfig;
@@ -604,6 +614,33 @@ let
         state = "/var/lib/caracole";
         cache = "/var/cache/caracole";
       } null;
+    "without publish, no publish unit, timer or folder exists" =
+      !(nuc.systemd.services ? caracole-publish)
+      && !(nuc.systemd.timers ? caracole-publish)
+      && !(nuc.systemd.tmpfiles.settings.caracole ? ${publishFolder});
+    "caracole-publish.service runs `caracole --config <generated caracole.toml> index publish <folder>`, offline" =
+      publishSc.ExecStart == "${lib.getExe stub} --config ${configFile} index publish ${publishFolder}"
+      && publishSc.Type == "oneshot"
+      && publishSc.PrivateNetwork == true
+      && !(publishSc ? LoadCredential)
+      && sameUser publishSc
+      && hardened publishSc;
+    "caracole-publish.service may write its folder, notifies on failure and starts nothing after it" =
+      lib.elem publishFolder publishSc.ReadWritePaths
+      && publish.onFailure == [ "caracole-notify-failure.service" ]
+      && publish.onSuccess == [ ]
+      && !(publishOn.systemd.services ? caracole-publish-upload);
+    "caracole-publish.timer fires weekly on Sunday at 05:00" =
+      publishOn.systemd.timers.caracole-publish.timerConfig.OnCalendar == "Sun 05:00"
+      && publishOn.systemd.timers.caracole-publish.timerConfig.Persistent == true
+      && lib.elem "timers.target" publishOn.systemd.timers.caracole-publish.wantedBy;
+    "the publish folder is made 2750 caracole:caracole" =
+      (
+        let
+          d = publishOn.systemd.tmpfiles.settings.caracole.${publishFolder}.d;
+        in
+        d.user == "caracole" && d.group == "caracole" && d.mode == "2750"
+      );
     "caracole-admin is installed" = admin != null && adminMoved != null;
     "the configured systems pass every assertion" = lib.all (system: failedAssertions system == [ ]) [
       nuc
@@ -614,6 +651,7 @@ let
       webDefault
       webTailnet
       webOpen
+      publishOn
     ];
     "settings.state_dir is rejected, for stateDir" = says [
       "stateDir, not settings.state_dir"
@@ -720,6 +758,7 @@ else
       adminAutochordsScript = lib.getExe adminAutochords;
       adminCudaScript = lib.getExe adminCuda;
       adminMovedScript = lib.getExe adminMoved;
+      adminPublishScript = lib.getExe (findAdmin publishOn);
       movedTmpfiles = "${movedTmpfiles}/lib/tmpfiles.d/caracole.conf";
       passAsFile = [
         "serviceMarker"
@@ -735,6 +774,7 @@ else
         "webUnit"
         "webDefaultUnit"
         "webAutochordsUnit"
+        "publishUnit"
       ];
       loadCases = builtins.toJSON [
         (loads nuc defaultLayout)
@@ -753,6 +793,7 @@ else
       webUnit = unitText webTailnet "caracole-web.service";
       webDefaultUnit = unitText webDefault "caracole-web.service";
       webAutochordsUnit = unitText webAutochords "caracole-web.service";
+      publishUnit = unitText publishOn "caracole-publish.service";
     }
     ''
       # Fails the build when the file has the text: `! grep` would not, since
@@ -818,10 +859,14 @@ else
       ran = []
       for name in ("run", "autochords", "serve"):
           root.commands[name].callback = lambda name=name, **params: ran.append((name, params))
+      root.commands["index"].commands["publish"].callback = (
+          lambda **params: ran.append(("publish", params))
+      )
       units = {
           "runUnit": "run", "movedRunUnit": "run",
           "autochordsUnit": "autochords", "movedAutochordsUnit": "autochords",
           "webUnit": "serve", "webDefaultUnit": "serve", "webAutochordsUnit": "serve",
+          "publishUnit": "publish",
       }
       for unit, command in units.items():
           with open(os.environ[unit + "Path"], encoding="utf-8") as f:
@@ -863,6 +908,10 @@ else
           || { echo "caracole-admin lacks --property=$property" >&2; exit 1; }
       done
       lacks PrivateNetwork "$adminScript"
+      # With publish on, it may write the publish folder too (`caracole-admin index publish`); without, never.
+      grep -q -- "'--property=ReadWritePaths=/var/lib/caracole/publish'" "$adminPublishScript"
+      grep -q -- "'--property=ReadWritePaths=/var/lib/caracole/state'" "$adminPublishScript"
+      lacks ReadWritePaths=/var/lib/caracole/publish "$adminScript"
       # With the auto-chords package, as in its unit, torch may generate code.
       grep -q -- "'--property=MemoryDenyWriteExecute=no'" "$adminAutochordsScript"
       # With autochords.cuda it sees the GPU as caracole-web does; without it, no.
@@ -903,6 +952,10 @@ else
       grep -qx -- "'d' '/data/caracole/library' '2775' 'caracole' 'caracole' '-' *" "$movedTmpfiles"
       grep -qx -- "'d' '/data/caracole/state' '0700' 'caracole' 'caracole' '-' *" "$movedTmpfiles"
       grep -qx -- "'d' '/data/caracole/cache' '0700' 'caracole' 'caracole' '-' *" "$movedTmpfiles"
+
+      # The publish unit runs caracole offline and holds no credential.
+      grep -qx -- "PrivateNetwork=true" "$publishUnitPath"
+      lacks LoadCredential "$publishUnitPath"
 
       # No unit holds a secret: caracole reads none.
       for file in "$runUnitPath" "$autochordsUnitPath" "$notifyUnitPath" "$webUnitPath" "$webDefaultUnitPath"; do

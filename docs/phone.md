@@ -19,6 +19,19 @@ off. It syncs with the computer when you ask, or by itself on Wi-Fi.
    and tap **Test**.
 4. Tap the sync button in the top bar.
 
+## Without a computer
+
+If you have no computer to sync with, search still works. Settings › **Download the site
+catalogues** fetches every site's index, about 80 MB to download and several times that on the
+phone once it is unpacked. The first time you open the app with no computer set, it offers the
+same download. On mobile data it asks first.
+
+The catalogues are made on the author's computer and published once a week, so a download is
+usually a week old at most. Settings shows the date of the ones you have. Tap again to
+get newer ones; it says "Up to date" when there are none. Nothing is asked of GitHub until you
+tap. If the newest file is for a different version of the app, it says so: update the app, or
+wait for new catalogues. Your own songs, sheets and lookups don't depend on them.
+
 ## Sync
 
 The sync button compares the two libraries, and each side takes what the other changed. You
@@ -37,7 +50,7 @@ If the phone can't reach the computer, **Export** in Settings writes the library
 
 - Reading, offline: sheets with all their tools, kept versions, harmonica tabs, Guitar Pro files
   and songbooks.
-- Search across your songs and the sites, offline, once a sync has brought the catalogues.
+- Search across your songs and the sites, offline, once a sync or a download has brought the catalogues.
 - **Fetch**: the phone looks a song up itself, over Wi-Fi or mobile data.
 - Making and editing songbooks, and choosing a sheet's version.
 - **Export PDF** opens Android's print dialog, to print or save as PDF.
@@ -55,8 +68,8 @@ nightly run, after a sync.
 | | Computer | Phone |
 |---|---|---|
 | Nightly run over your song list | Yes | No |
-| Build the site catalogues | Yes | No, gets them by sync |
-| Search, offline | Yes | Yes, once synced |
+| Build the site catalogues | Yes | No, gets them by sync or one tap |
+| Search, offline | Yes | Yes, once synced or downloaded |
 | Fetch one song now | Yes | Yes |
 | Sheets, songbooks, versions, Guitar Pro | Yes | Yes |
 | PDF files | Yes | No, prints instead |

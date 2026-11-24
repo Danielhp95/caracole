@@ -103,6 +103,21 @@ def register(app: typer.Typer) -> None:
         """Copy every site's index, with its progress, into a new SQLite file, for `caracole index merge`."""
         _export(load_cfg(ctx), file, site)
 
+    @index.command("publish")
+    def publish_cmd(
+        ctx: typer.Context,
+        folder: Path = typer.Argument(..., metavar="DIR", help="The folder the public file is written in."),
+        force: bool = typer.Option(False, "--force", help="Publish even where a site holds a tenth fewer rows "
+                                                          "than the last file's."),
+        kept: list[str] = typer.Option([], "--kept", metavar="NAME",
+                                       help="Print those of the NAMEs the Keep rule deletes; exports nothing."),
+    ) -> None:
+        """Write every site's index as the public, gzipped catalogue file, and its published.json."""
+        if kept:  # the Keep rule reads no config and no database, so the service's guard never refuses it
+            _kept(kept)
+            return
+        _publish(load_cfg(ctx, builds_index="index publish"), folder, force)
+
     @index.command("merge")
     def merge_cmd(
         ctx: typer.Context,
@@ -250,6 +265,33 @@ def _export(cfg: Config, file: Path, sites: list[str]) -> None:
         typer.echo(f"  {transfer.SITES[name].title}: "
                    + ", ".join(f"{table} {exported.rows[table]:,}" + (" rows" if n == 0 else "")
                                for n, table in enumerate(transfer.SITES[name].tables)) + ".")
+
+
+def _kept(names: list[str]) -> None:
+    """``caracole index publish --kept NAME…``: those of the names the Keep rule deletes, a line each."""
+    from caracole import catalogues, db
+
+    keep = catalogues.kept(names, schema=db.SCHEMA_VERSION, now=utcnow())
+    for name in dict.fromkeys(names):
+        if name not in keep:
+            typer.echo(name)
+
+
+def _publish(cfg: Config, folder: Path, force: bool) -> None:
+    from caracole import backup, catalogues
+
+    now = utcnow()
+    with closing(open_db(cfg)) as conn:
+        try:
+            last = None if force else catalogues.published(folder)
+            made = catalogues.publish(conn, folder, now=now, last=last, private=[
+                str(p) for p in (cfg.state_dir, cfg.library_dir, cfg.cache_dir, cfg.music_dir, Path.home())])
+        except catalogues.PublishError as e:
+            fail(f"index publish: {e}")
+    typer.echo(f"Published {folder / made.name} ({backup.size_text(made.bytes)}, {backup.size_text(made.raw_bytes)} "
+               f"unpacked):")
+    for site, count in made.rows.items():
+        typer.echo(f"  {site}: {count:,} rows.")
 
 
 def _merge(cfg: Config, file: Path, sites: list[str], *, delete: bool = False, progress: bool = False) -> None:

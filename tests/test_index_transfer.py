@@ -241,6 +241,31 @@ def test_an_export_never_writes_over_a_file(home, tmp_path):
     assert not list(tmp_path.glob("*.part"))
 
 
+@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores a folder's mode")
+def test_an_export_into_a_folder_it_cant_write_is_a_refusal_never_a_crash(home, tmp_path):
+    there = tmp_path / "locked"
+    there.mkdir()
+    there.chmod(0o555)
+    try:
+        with pytest.raises(transfer.TransferError, match="can't write"):
+            transfer.export(home, there / "indexes.sqlite", now=NOW)
+        assert list(there.iterdir()) == []
+    finally:
+        there.chmod(0o755)
+
+
+def test_an_export_whose_cleanup_fails_too_still_says_why_it_failed(home, tmp_path, monkeypatch):
+    from pathlib import Path
+
+    def refuse(self, missing_ok=False):
+        raise OSError(30, "Read-only file system")
+
+    monkeypatch.setattr(Path, "unlink", refuse)
+    monkeypatch.setattr(transfer, "_write_export", lambda *a: (_ for _ in ()).throw(sqlite3.OperationalError("ro")))
+    with pytest.raises(transfer.TransferError, match="can't write"):
+        transfer.export(home, tmp_path / "indexes.sqlite", now=NOW)
+
+
 def test_an_unknown_site_is_refused(home, tmp_path):
     with pytest.raises(transfer.TransferError, match="no site 'spotify'.*ug, lacuerda"):
         transfer.export(home, tmp_path / "x.sqlite", ["spotify"], now=NOW)
@@ -885,3 +910,47 @@ def test_the_directory_takes_each_artist_seen_later_each_page_read_later_and_eac
     again = transfer.merge(conn, export(home, tmp_path, ["ug"], name="again.sqlite"), state_dir=tmp_path / "state",
                            now=NOW)
     assert not again.changed
+
+
+# --- a public export -----------------------------------------------------------------------------------------------
+
+
+def seed_lacuerda(conn, rows_: list[tuple[str, str]]) -> None:
+    """LaCuerda index rows ``(path, page)``."""
+    for path, page in rows_:
+        conn.execute("INSERT INTO lacuerda_index (path, artist_slug, artist, artist_key, title, title_key, songs, "
+                     "versions, acordes, popular, page) VALUES (?, 'a', 'A', 'a', 'T', 't', 1, 1, 1, 1, ?)",
+                     (path, page))
+
+
+def test_a_public_export_holds_no_source_and_no_lacuerda_search_rows(home, tmp_path):
+    seed_lacuerda(home, [("a/x", "a/"), ("b/y", "busca.php")])
+    out = transfer.export(home, tmp_path / "p.sqlite", now=NOW, omit=transfer.PUBLIC_OMIT)
+    f = sqlite3.connect(out.path)
+    try:
+        assert "source" not in dict(f.execute(f"SELECT key, value FROM {transfer.META}"))
+        assert [r[0] for r in f.execute("SELECT path FROM lacuerda_index")] == ["a/x"]
+    finally:
+        f.close()
+    assert out.rows["lacuerda_index"] == 1
+
+
+def test_a_public_export_of_some_sites_skips_a_rule_for_a_table_it_doesnt_hold(home, tmp_path):
+    out = transfer.export(home, tmp_path / "p.sqlite", ["ug"], now=NOW, omit=transfer.PUBLIC_OMIT)
+    f = sqlite3.connect(out.path)
+    try:
+        assert "source" not in dict(f.execute(f"SELECT key, value FROM {transfer.META}"))
+    finally:
+        f.close()
+    assert list(out.sites) == ["ug"]
+
+
+def test_an_export_of_pages_omits_nothing(home, tmp_path):
+    with pytest.raises(transfer.TransferError, match="omits nothing"):
+        transfer.export(home, tmp_path / "p.sqlite", now=NOW, pages={"lacuerda": ["a/"]}, omit=transfer.PUBLIC_OMIT)
+
+
+def test_a_public_export_merges_as_any_export(home, conn, tmp_path):
+    seed_lacuerda(home, [("a/x", "a/")])
+    out = transfer.export(home, tmp_path / "p.sqlite", now=NOW, omit=transfer.PUBLIC_OMIT)
+    assert merge(conn, out.path, state=tmp_path / "state").sites

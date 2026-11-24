@@ -250,7 +250,10 @@ class AssemblyTest {
         assertEquals("error: caracole nothing isn't on the phone", over.output.last())
         assertEquals(listOf(job.id), ended.map { it.id })
         assertEquals(setOf("get", "versions", "lacuerda", "harptabs", "ug", "review", "harmonica", "render", "songbook",
-                           "inbox", "backup"), phone.queue.commands.runners.keys)
+                           "inbox", "backup", "catalogues"), phone.queue.commands.runners.keys)
+        // The site catalogues listed through GitHub's API, the one source.
+        assertTrue(phone.catalogues.source(io.github.danielhp95.caracole.mirror.Http()) is
+                       io.github.danielhp95.caracole.core.catalogues.CatalogueSource.Api)
     }
 
     /** The requests a start ran are the next start's too (docs/android_port.md: the Requests tab's history kept

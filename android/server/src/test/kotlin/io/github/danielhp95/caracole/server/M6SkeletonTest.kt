@@ -24,7 +24,7 @@ class M6SkeletonTest {
     @get:Rule val tmp = TemporaryFolder()
 
     @Test fun thePhonesOwnKindsAreWordedAsThePlanSays() {
-        assertEquals(listOf("render", "inbox", "backup", "restore"), PhoneKinds.ALL.keys.toList())
+        assertEquals(listOf("render", "inbox", "backup", "restore", "catalogues"), PhoneKinds.ALL.keys.toList())
         val render = PhoneKinds.RENDER
         assertEquals("render" to "Making the pages", render.stage)
         assertEquals("Remake the pages" to "The phone's pages", render.title to render.display)

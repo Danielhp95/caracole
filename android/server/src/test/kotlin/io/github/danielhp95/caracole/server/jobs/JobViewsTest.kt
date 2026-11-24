@@ -278,6 +278,60 @@ class JobViewsTest {
         assertEquals(Line("running", "Backing up the book…"), JobViews.line(queue.job(backing.id)!!))
     }
 
+    @Test fun theSiteCataloguesSayWhatTheyDoTheirDateAndWhyNot() = runTest {
+        val queue = queue()
+        val kind = PhoneKinds.CATALOGUES
+        assertEquals(kind, PhoneKinds.ALL["catalogues"])
+        val step = CompletableDeferred<Unit>()
+        val gate = CompletableDeferred<Unit>()
+        val job = phoneJob(queue, kind, "") { context ->
+            context.stage("catalogues", "running")
+            step.await()
+            context.stage("catalogues", "running", PhoneKinds.fill(kind.running, "doing" to "Downloading · 31 of 52 MB"))
+            gate.await()
+            context.stage("catalogues", "done", PhoneKinds.fill(kind.done, "date" to "24 Nov 2026"))
+        }
+        runCurrent()
+        assertEquals(Line("running", "Catalogues…"), JobViews.line(queue.job(job.id)!!))  // nothing filled yet
+        step.complete(Unit)
+        runCurrent()
+        assertEquals(Line("running", "Downloading · 31 of 52 MB"), JobViews.line(queue.job(job.id)!!))
+        gate.complete(Unit)
+        runCurrent()
+        val over = queue.job(job.id)!!
+        assertEquals(Line("ready", "Catalogues of 24 Nov 2026"), JobViews.line(over))
+        assertEquals(JsonPrimitive("catalogues"), JobViews.view(over, queue)["kind"])
+        assertEquals(listOf(Chip("Catalogues", "done")), Outcomes.steps(over))
+        // Up to date: done, as ready as an import; a metered network's stop, the kind's second way to end, a wait.
+        val upToDate = phoneJob(queue, kind, "again") { context ->
+            context.stage("catalogues", "done", "Up to date: the catalogues of 24 Nov 2026")
+        }
+        val metered = phoneJob(queue, kind, "go") { context ->
+            context.stage("catalogues", "done", PhoneKinds.fill(kind.otherwise!!, "size" to "52 MB"))
+        }
+        runCurrent()
+        assertEquals(Line("ready", "Up to date: the catalogues of 24 Nov 2026"), JobViews.line(queue.job(upToDate.id)!!))
+        assertEquals(Line("waiting", "52 MB to download: waiting for Wi-Fi or your go-ahead",
+                          details = "#tab=requests&job=${metered.id}"), JobViews.line(queue.job(metered.id)!!))
+        val failed = phoneJob(queue, kind, "failed") { context ->
+            val line = PhoneKinds.fill(kind.failed, "why" to "No catalogues are published yet.")
+            context.stage("catalogues", "failed", line)
+            throw CommandExit(1, line)
+        }
+        runCurrent()
+        assertEquals(Line("failed", "Not imported: No catalogues are published yet.",
+                          details = "#tab=requests&job=${failed.id}"), JobViews.line(queue.job(failed.id)!!))
+        // A line fits a template with its blanks filled, wherever they are.
+        assertTrue(PhoneKinds.fits("52 MB to download: waiting for Wi-Fi or your go-ahead", kind.otherwise!!))
+        assertTrue(PhoneKinds.fits("Waiting for its song: a.gp5", PhoneKinds.INBOX.otherwise!!))
+        assertTrue(PhoneKinds.fits("Filed · a of b", PhoneKinds.INBOX.done))
+        assertEquals(false, PhoneKinds.fits("Up to date: the catalogues of 24 Nov 2026", kind.otherwise!!))
+        assertEquals(false, PhoneKinds.fits("Filed · a", PhoneKinds.INBOX.done))
+        assertEquals(false, PhoneKinds.fits("Pages remade", PhoneKinds.RENDER.done))
+        // A job read back from the history is of its kind by its key.
+        assertEquals("catalogues", JobCommands.kindOf("catalogues:", emptyList(), listOf("catalogues")))
+    }
+
     @Test fun thePhonesIndexImportSaysTheComputersIndexNotAnotherCaracolesPages() = runTest {
         val queue = queue()
         val gate = CompletableDeferred<Unit>()
