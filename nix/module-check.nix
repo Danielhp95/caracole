@@ -758,6 +758,7 @@ else
       adminAutochordsScript = lib.getExe adminAutochords;
       adminCudaScript = lib.getExe adminCuda;
       adminMovedScript = lib.getExe adminMoved;
+      adminPublishScript = lib.getExe (findAdmin publishOn);
       movedTmpfiles = "${movedTmpfiles}/lib/tmpfiles.d/caracole.conf";
       passAsFile = [
         "serviceMarker"
@@ -907,6 +908,10 @@ else
           || { echo "caracole-admin lacks --property=$property" >&2; exit 1; }
       done
       lacks PrivateNetwork "$adminScript"
+      # With publish on, it may write the publish folder too (`caracole-admin index publish`); without, never.
+      grep -q -- "'--property=ReadWritePaths=/var/lib/caracole/publish'" "$adminPublishScript"
+      grep -q -- "'--property=ReadWritePaths=/var/lib/caracole/state'" "$adminPublishScript"
+      lacks ReadWritePaths=/var/lib/caracole/publish "$adminScript"
       # With the auto-chords package, as in its unit, torch may generate code.
       grep -q -- "'--property=MemoryDenyWriteExecute=no'" "$adminAutochordsScript"
       # With autochords.cuda it sees the GPU as caracole-web does; without it, no.

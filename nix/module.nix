@@ -221,6 +221,8 @@ let
       # As the units: started once the folders' file systems are mounted.
       RequiresMountsFor = writable;
     }
+    # `sudo caracole-admin index publish <publish.folder>` writes there, as the publish unit does.
+    // lib.optionalAttrs cfg.publish.enable { ReadWritePaths = writable ++ [ cfg.publish.folder ]; }
     // lib.optionalAttrs cfg.autochords.enable { MemoryDenyWriteExecute = false; }
     // lib.optionalAttrs cfg.autochords.enable gpu;
   # One --property per list item, as a unit file gets one line per item (for
