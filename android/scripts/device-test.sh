@@ -15,7 +15,8 @@
 #   --sites S       the fake sites server of scenario S (tests/helpers/fake_sites.py serve S PORT, on the host, a
 #                   free port never 8737) for every class run, named to each as -e sites http://10.0.2.2:PORT
 #
-# It builds assembleDebug and assembleDebugAndroidTest first, outside the lock, then takes the first free emulator of
+# It builds assembleDebug and assembleDebugAndroidTest first (the debug build, io.github.danielhp95.caracole.debug, and
+# its tests, io.github.danielhp95.caracole.debug.test), outside the lock, then takes the first free emulator of
 # the pool (CARACOLE_EMULATORS, 3 by default, the owner's choice of 2026-11-10: emulator-5554, -5556, -5558), holding its
 # lock while it installs and runs: emulator-5554's is
 # ${CARACOLE_EMULATOR_LOCK:-${XDG_RUNTIME_DIR:-/tmp}/caracole-emulator.lock}, as before, and each other's the same name
@@ -28,8 +29,9 @@ set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 android="$(dirname "$here")"
 repo="$(dirname "$android")"
-app_id=io.github.danielhp95.caracole
-runner="$app_id.test/$app_id.CaracoleTestRunner"
+ns=io.github.danielhp95.caracole        # the classes' package (the app's namespace)
+app_id="$ns.debug"                      # the debug build's package, which the tests run: never the release's
+runner="$app_id.test/$ns.CaracoleTestRunner"
 lock="${CARACOLE_EMULATOR_LOCK:-${XDG_RUNTIME_DIR:-/tmp}/caracole-emulator.lock}"
 logs="${CARACOLE_DEVICE_LOGS:-${XDG_RUNTIME_DIR:-/tmp}/caracole-device-test}"
 
@@ -179,7 +181,7 @@ results=()
 run_class() {
     local name="$1"; shift
     local out
-    out="$(adb shell am instrument -w -e class "$app_id.$name" "$@" ${site_args[@]+"${site_args[@]}"} "$runner" 2>&1 \
+    out="$(adb shell am instrument -w -e class "$ns.$name" "$@" ${site_args[@]+"${site_args[@]}"} "$runner" 2>&1 \
         | tr -d '\r')" || true
     echo "$out"
     if grep -q '^OK (' <<<"$out" && ! grep -qE 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed' <<<"$out"; then
@@ -221,7 +223,7 @@ for spec in "${classes[@]:-}"; do
     name="${spec%%=*}"
     dir=""
     if [ "$spec" != "$name" ]; then dir="${spec#*=}"; else dir="$computer"; fi
-    name="${name#"$app_id".}"  # a class named in full is the same class
+    name="${name#"$ns".}"  # a class named in full is the same class
     run_with_computer "$name" "$dir"
 done
 

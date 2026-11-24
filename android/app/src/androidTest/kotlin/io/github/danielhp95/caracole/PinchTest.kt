@@ -30,7 +30,7 @@ import kotlin.math.roundToInt
  * A pinch on the app's pages, on a device or an emulator, with the copy synced from a real caracole serve first:
  *
  *     adb shell am instrument -w -e server http://10.0.2.2:8741 -e class io.github.danielhp95.caracole.PinchTest \
- *         io.github.danielhp95.caracole.test/io.github.danielhp95.caracole.CaracoleTestRunner
+ *         io.github.danielhp95.caracole.debug.test/io.github.danielhp95.caracole.CaracoleTestRunner
  *
  * Fingers apart make the text larger, together smaller, in steps of [TextZoom.STEP], of the size Android's font size
  * gives the pages, and the size is kept; Settings' Reset applies when the library screen comes back. On the library

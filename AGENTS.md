@@ -2128,12 +2128,18 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   security.py, inline.py, the message page), `files/`, `page/` (library_page.py's page, from library_assets/ copied
   byte for byte at build time), `jobs/` (jobs.py, jobs_routes.py), `routes/`, and `Assembly.kt`, the phone whole.
 - `:app`: the Android app on its own server (`Caracole.kt`: one `Phone` a process, its server on
-  `http://127.0.0.1:8738`, else a free port; the launch's secret a cookie, `caracole-launch`, set in the WebView, which
-  loads that exact origin alone, `mirror.Links`); the bar's sync button, the library page's sync sheet
+  `http://127.0.0.1:8738`, the debug build's 8739 (`Caracole.PORT`, BuildConfig's `SERVER_PORT`), else a free port;
+  the launch's secret a cookie, `caracole-launch`, set in the WebView, which loads that exact origin alone,
+  `mirror.Links`); the bar's sync button, the library page's sync sheet
   (`SheetAddress`, `#sheet=sync`; Settings' Export and Import a file open it at theirs, the page's file input reaching
   Android's picker, `FileChooser`, its export the share sheet, `Exports`); Sync on Wi-Fi, that sync unattended
   (`Syncs.run`: `Phone.sync.alone`, a notification on channel `syncs` for the conflicts it left); the queue's work, a
   sync among it, in a foreground service (`SyncService`).
+  - Its debug build is an app of its own beside F-Droid's release (`io.github.danielhp95.caracole`, the release key):
+    `io.github.danielhp95.caracole.debug` (`applicationIdSuffix`, versionName `…-debug`), "Debug caracole" with an
+    amber icon and a DEBUG mark (src/debug/res), its own data and port, its tests
+    `io.github.danielhp95.caracole.debug.test`; the classes stay in `io.github.danielhp95.caracole` (the namespace).
+    `android/scripts/phone-install.sh` builds a checkout's and installs it on a real phone (tests/test_phone_install.py).
 - `:viewer` (plain JVM, milestone 5): the page builder, viewer/ in Kotlin, with viewer/'s `.js`, `.css` and voicings
   copied byte for byte at build time (`copyViewerAssets`).
 - `:e2e`: the end-to-end phases against a real caracole serve (`PhoneScenarioTest`, driven by
@@ -3236,9 +3242,9 @@ CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py  
   `ANDROID_AVD_HOME` that folder), `emulator -avd caracole -gpu host` with `LD_LIBRARY_PATH=/run/opengl-driver/lib`
   (and `QT_QPA_PLATFORM=xcb` on Wayland), a computer of its own for each test that changes the phone's library
   (`nix develop -c python -m tests.helpers.e2e_library serve DIR PORT --address 127.0.0.1`, the emulator's
-  `http://10.0.2.2:PORT`), `adb shell pm clear io.github.danielhp95.caracole` between them, and each class alone with
-  `adb -s emulator-5554 shell am instrument -w -e class io.github.danielhp95.caracole.CLASS [-e server …]
-  io.github.danielhp95.caracole.test/io.github.danielhp95.caracole.CaracoleTestRunner`.
+  `http://10.0.2.2:PORT`), `adb shell pm clear io.github.danielhp95.caracole.debug` between them, and each class alone
+  with `adb -s emulator-5554 shell am instrument -w -e class io.github.danielhp95.caracole.CLASS [-e server …]
+  io.github.danielhp95.caracole.debug.test/io.github.danielhp95.caracole.CaracoleTestRunner`.
 
 - Given no paths, pytest runs on pytest-xdist workers (conftest.py: `-n auto`, at most 12, fewer on a busy machine:
   the cores its load leaves, 2 at least, so suites run at once share it; `--dist worksteal`).
@@ -3376,6 +3382,9 @@ nix flake check
   `${CARACOLE_EMULATOR_LOCK:-${XDG_RUNTIME_DIR:-/tmp}/caracole-emulator.lock}`, the others' the same name with their
   port) while it installs and runs, starts that emulator if it isn't up (each read-only, so several run on the one AVD) and leaves
   it up.
+- **The owner's phone** gets a debug build only through `android/scripts/phone-install.sh` (`-s SERIAL`, `--launch`):
+  `adb install -r --user 0` of `io.github.danielhp95.caracole.debug` alone, so the phone's other user and F-Droid's
+  `io.github.danielhp95.caracole` are never touched; no test runs on it.
 - **Big data sets** (more than a few thousand rows) run only in a `*Bench` class of the gated `bench` task
   (`nix develop ./android -c gradle -p android bench`: a 3 GiB heap, one fork), never in `test`, which excludes them.
 - `load_config` takes `env=`, and unit tests pass it. CLI tests read the real environment: clear what could leak in,

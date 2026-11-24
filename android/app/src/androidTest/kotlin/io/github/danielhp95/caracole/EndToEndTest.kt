@@ -37,11 +37,11 @@ import java.security.MessageDigest
  * The app against a real caracole serve, on a device or an emulator:
  *
  *     adb shell am instrument -w -e server http://10.0.2.2:8741 \
- *         io.github.danielhp95.caracole.test/io.github.danielhp95.caracole.CaracoleTestRunner
+ *         io.github.danielhp95.caracole.debug.test/io.github.danielhp95.caracole.CaracoleTestRunner
  *
  * (`-e shots 6000` holds each screen 6 s after logging "CARACOLE-SHOT <name>", for screenshots taken from the
  * host.) It syncs a fresh copy, runs Settings' Test (what the computer holds, in its words), opens the library page (the phone's own server's, at its
- * origin, http://127.0.0.1:8738) and a sheet viewer from it, and records what the viewer's sandbox does, that its
+ * origin, http://127.0.0.1:<Caracole.PORT>) and a sheet viewer from it, and records what the viewer's sandbox does, that its
  * Export PDF is the phone's own route (here, a copy of pages with no song, its 404) and each other link it shows to
  * caracole serve's own pages is answered by the phone's stub ("… isn't on the phone yet."), that its script transposes, and that a PDF (a link) and a Guitar Pro file (a download link) go to another app, read from
  * the phone's server with the launch's cookie. Every ACTION_VIEW is stubbed: nothing outside the app opens. Without

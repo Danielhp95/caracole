@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The debug build's launcher icon's background: amber, where the release's is white. -->
+    <color name="ic_launcher_debug_background">#FFE082</color>
+</resources>

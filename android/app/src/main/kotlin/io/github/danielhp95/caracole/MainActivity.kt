@@ -54,15 +54,15 @@ import java.net.URI
 import kotlin.coroutines.resume
 
 /**
- * The library screen: a WebView showing the phone's own caracole, its server on `http://127.0.0.1:8738` (the library
- * page, and the mirror's pages, caracole's own, unchanged, at their paths on caracole serve: [Links]), with a small
- * bar (the page's title; the sync button, which opens the library page's sync sheet; ⋮ with Library and Settings)
- * and the unattended sync's line under it. An intent's [SHEET] (Settings' Export and Import a file, the notification
- * of a sync that left conflicts) opens the sheet at that flow ([SheetAddress]). The WebView carries the launch's
- * cookie and loads that exact origin alone. A pinch sizes the pages' text ([pinchToSize]), and shows the size it is
- * at over the page while it lasts ([sizeLabel]). A first start with no computer set and no site's index offers the
- * site catalogues once ([offerCatalogues]), once the opening screen is gone, before Settings opens; until answered
- * (Back is Not now), and gone once a computer is set.
+ * The library screen: a WebView showing the phone's own caracole, its server on `http://127.0.0.1:8738` (a debug
+ * build's 8739, [Caracole.PORT]; the library page, and the mirror's pages, caracole's own, unchanged, at their paths on
+ * caracole serve: [Links]), with a small bar (the page's title; the sync button, which opens the library page's sync
+ * sheet; ⋮ with Library and Settings) and the unattended sync's line under it. An intent's [SHEET] (Settings' Export
+ * and Import a file, the notification of a sync that left conflicts) opens the sheet at that flow ([SheetAddress]). The
+ * WebView carries the launch's cookie and loads that exact origin alone. A pinch sizes the pages' text ([pinchToSize]),
+ * and shows the size it is at over the page while it lasts ([sizeLabel]). A first start with no computer set and no
+ * site's index offers the site catalogues once ([offerCatalogues]), once the opening screen is gone, before Settings
+ * opens; until answered (Back is Not now), and gone once a computer is set.
  */
 class MainActivity : Activity() {
     private lateinit var web: WebView
