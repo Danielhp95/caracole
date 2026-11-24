@@ -6,8 +6,10 @@ for which published files stay.
   time of 0, so the same export is the same bytes.
 - ``publish``: ``index_transfer.export`` (``PUBLIC_OMIT``: nothing private) into a temporary file in the folder,
   ``PRAGMA quick_check``, gzip -9 streamed while hashed, renamed into place, ``published.json`` written, the
-  folder's older files deleted, each step told to ``progress`` as it goes (``Progress``). Refused (``PublishError``, nothing left behind) for a name that exists, a UG index
-  not built whole, or a site holding a tenth fewer rows than the last file's, unless ``last`` is None (--force).
+  folder's older files deleted, each step told to ``progress`` as it goes (``Progress``). Refused (``PublishError``,
+  nothing left behind) for a name that exists, a UG index not built whole, or a site holding a tenth fewer rows than
+  the last file's, unless ``last`` is None (--force). A progress whose output is cut off (``BrokenPipeError``) is no
+  error of the folder's: it goes on as itself, nothing left behind.
 - ``kept``: the Keep rule, one function, the upload script's (``caracole index publish --kept``).
   A name that isn't a catalogue file is always kept; of the others, the publishing schema's two newest whatever
   their age, and every other schema's newest while it is no older than ``keep_days``.
@@ -206,6 +208,8 @@ def publish(conn: sqlite3.Connection, folder: Path, *, now: datetime, last: Publ
             with suppress(OSError):
                 target.unlink(missing_ok=True)
             raise
+    except BrokenPipeError:  # a progress's output cut off: no error of the folder's
+        raise
     except OSError as e:
         raise PublishError(f"can't write in {folder}: {e}") from e
     finally:

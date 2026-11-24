@@ -257,3 +257,13 @@ def test_a_publish_told_nothing_writes_the_same_file(conn_with_index, out, tmp_p
     told = catalogues.publish(conn_with_index, out, now=NOW, last=None, progress=Told())
     quiet = catalogues.publish(conn_with_index, tmp_path / "other", now=NOW, last=None)
     assert told == quiet and (out / told.name).read_bytes() == (tmp_path / "other" / quiet.name).read_bytes()
+
+
+def test_a_progress_that_cant_be_told_is_no_error_of_the_folder_and_leaves_nothing(conn_with_index, out):
+    class Cut(Told):
+        def checking(self) -> None:
+            raise BrokenPipeError(32, "Broken pipe")
+
+    with pytest.raises(BrokenPipeError):
+        catalogues.publish(conn_with_index, out, now=NOW, last=None, progress=Cut())
+    assert list(out.iterdir()) == []

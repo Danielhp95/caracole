@@ -240,12 +240,12 @@ def test_index_publish_says_what_it_does_as_it_goes_a_line_a_step_where_no_termi
     lines = result.stdout.splitlines()
     assert lines[:9] == [
         f"Exporting every site's index into {out}...",
-        "  Ultimate Guitar: ug_index 2 rows, ug_artist_tabs 0, ug_directory 0.",
-        "  LaCuerda: lacuerda_index 0 rows.",
-        "  gtptabs.com: gtptabs_index 0 rows.",
-        "  MuseScore: musescore_index 0 rows.",
-        "  harptabs.com: harptabs_index 0 rows, harptabs_artists 0, harptabs_artist_tabs 0.",
-        "  gametabs.net: gametabs_index 0 rows, gametabs_games 0, gametabs_game_tabs 0.",
+        "  Ultimate Guitar: ug_index 2 rows copied, ug_artist_tabs 0, ug_directory 0.",
+        "  LaCuerda: lacuerda_index 0 rows copied.",
+        "  gtptabs.com: gtptabs_index 0 rows copied.",
+        "  MuseScore: musescore_index 0 rows copied.",
+        "  harptabs.com: harptabs_index 0 rows copied, harptabs_artists 0, harptabs_artist_tabs 0.",
+        "  gametabs.net: gametabs_index 0 rows copied, gametabs_games 0, gametabs_game_tabs 0.",
         "Leaving out what stays private, and compacting the export...",
         "Checking the export: no path of this machine in it, then SQLite's quick check...",
     ]
@@ -254,6 +254,35 @@ def test_index_publish_says_what_it_does_as_it_goes_a_line_a_step_where_no_termi
         "  ug: 2 rows.", "  lacuerda: 0 rows.", "  gtptabs: 0 rows.", "  musescore: 0 rows.", "  harptabs: 0 rows.",
         "  gametabs: 0 rows."]
     assert "\r" not in result.stdout
+
+
+def test_index_publish_whose_output_is_cut_off_still_publishes_and_says_no_disk_error(tmp_path, state, monkeypatch):
+    """``caracole index publish DIR | head -1``: once the pipe is closed, nothing more is said, the file is
+    published, and a broken stdout is never worded as the folder's error."""
+    from caracole.commands import index
+    from caracole.progress import Console
+
+    class Closed:
+        def write(self, text):
+            raise BrokenPipeError(32, "Broken pipe")
+
+        def flush(self):
+            raise BrokenPipeError(32, "Broken pipe")
+
+        def isatty(self):
+            return False
+
+    monkeypatch.setattr(index, "console", lambda: Console(Closed()))
+    built(state)
+    out = tmp_path / "pub"
+    out.mkdir()
+
+    result = invoke(tmp_path, "publish", str(out))
+
+    assert result.exit_code == 0, (result.output, result.exception)
+    assert "can't write" not in result.stderr
+    (gz,) = out.glob("indexes-s*.sqlite.gz")
+    assert json.loads((out / "published.json").read_text())["file"] == gz.name
 
 
 def compressed(monkeypatch, console, *, chunks: int = 100, step: float = 0.05) -> None:

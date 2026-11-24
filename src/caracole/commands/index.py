@@ -31,9 +31,10 @@ the export, each site's rows, the check and the gzip, on a terminal one live lin
 
 from __future__ import annotations
 
+import os
 import sqlite3
 import time
-from contextlib import closing
+from contextlib import closing, suppress
 from dataclasses import dataclass
 from datetime import datetime
 from itertools import chain
@@ -292,15 +293,20 @@ def _publish(cfg: Config, folder: Path, force: bool) -> None:
                 str(p) for p in (cfg.state_dir, cfg.library_dir, cfg.cache_dir, cfg.music_dir, Path.home())],
                 progress=_Publishing(out, folder))
         except catalogues.PublishError as e:
-            out.close()
+            with suppress(BrokenPipeError):
+                out.close()
             fail(f"index publish: {e}")
         except BaseException:
-            out.close()
+            with suppress(BrokenPipeError):
+                out.close()
             raise
-    out.say(f"Published {folder / made.name} ({backup.size_text(made.bytes)}, {backup.size_text(made.raw_bytes)} "
-            f"unpacked):")
-    for site, count in made.rows.items():
-        out.say(f"  {site}: {count:,} rows.")
+    try:
+        out.say(f"Published {folder / made.name} ({backup.size_text(made.bytes)}, "
+                f"{backup.size_text(made.raw_bytes)} unpacked):")
+        for site, count in made.rows.items():
+            out.say(f"  {site}: {count:,} rows.")
+    except BrokenPipeError:  # published: an output cut off (`| head`) is no failure of it
+        _cut_off(out.stream)
 
 
 class _Publishing:
@@ -309,7 +315,9 @@ class _Publishing:
     A line as the export starts; each site's tables and rows once they are copied, the next site's copy under way
     on a terminal's live line; leaving out what stays private; the check; then the gzip, "Compressing · 31 of 75
     MB", by the bytes of the unpacked export read: on a terminal the live line, rewritten at most every
-    ``LIVE_EVERY`` seconds (and at its end), anywhere else (a journal) a line as each quarter is passed."""
+    ``LIVE_EVERY`` seconds (and at its end), anywhere else (a journal) a line as each quarter is passed. Its rows
+    are those copied, before what stays private is left out; the summary after it counts the file's. Once its output
+    is cut off (``BrokenPipeError``: ``| head``), it says nothing more and the publish goes on."""
 
     LIVE_EVERY = 0.25
 
@@ -322,28 +330,40 @@ class _Publishing:
         self._rows: dict[str, int] = {}
         self._shown_at: float | None = None
         self._quarter = 0
+        self._cut = False
+
+    def _say(self, say: Callable[..., None], *args: str) -> None:
+        if self._cut:
+            return
+        try:
+            say(*args)
+        except BrokenPipeError:
+            self._cut = True
+            _cut_off(self.console.stream)
 
     def exporting(self) -> None:
-        self.console.note(f"Exporting every site's index into {self.folder}...")
+        self._say(self.console.note, f"Exporting every site's index into {self.folder}...")
         self._copying()
 
     def copied(self, table: str, rows: int) -> None:
         self._rows[table] = rows
         while self._sites and all(t in self._rows for t in self._sites[0].tables):
             site = self._sites.pop(0)
-            self.console.step(f"  {site.title}: " + ", ".join(
-                f"{t} {self._rows[t]:,}" + (" rows" if n == 0 else "") for n, t in enumerate(site.tables)) + ".")
+            self._say(self.console.step, f"  {site.title}: " + ", ".join(
+                f"{t} {self._rows[t]:,}" + (" rows copied" if n == 0 else "") for n, t in enumerate(site.tables))
+                + ".")
             self._copying()
 
     def _copying(self) -> None:
         if self._sites:
-            self.console.status(f"Copying {self._sites[0].title}'s index...")
+            self._say(self.console.status, f"Copying {self._sites[0].title}'s index...")
 
     def omitting(self) -> None:
-        self.console.step("Leaving out what stays private, and compacting the export...")
+        self._say(self.console.step, "Leaving out what stays private, and compacting the export...")
 
     def checking(self) -> None:
-        self.console.step("Checking the export: no path of this machine in it, then SQLite's quick check...")
+        self._say(self.console.step,
+                  "Checking the export: no path of this machine in it, then SQLite's quick check...")
 
     def compressing(self, done: int, total: int) -> None:
         line = f"Compressing \u00b7 {_amount(done, total)}"
@@ -351,12 +371,25 @@ class _Publishing:
             now = clock()
             if done >= total or self._shown_at is None or now - self._shown_at >= self.LIVE_EVERY:
                 self._shown_at = now
-                self.console.status(line)
+                self._say(self.console.status, line)
             return
         quarter = 4 if done >= total else done * 4 // total
         if quarter > self._quarter:
             self._quarter = quarter
-            self.console.step(line)
+            self._say(self.console.step, line)
+
+
+def _cut_off(stream) -> None:
+    """A stream whose reader is gone (``| head``) pointed at /dev/null, so that what it still holds is dropped at
+    exit rather than failing it (Python exits 120 when stdout can't be flushed)."""
+    try:
+        devnull = os.open(os.devnull, os.O_WRONLY)
+        try:
+            os.dup2(devnull, stream.fileno())
+        finally:
+            os.close(devnull)
+    except (OSError, ValueError, AttributeError):  # no file descriptor: nothing to flush at exit either
+        pass
 
 
 def _amount(done: int, total: int) -> str:
