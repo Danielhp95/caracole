@@ -2067,7 +2067,11 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     normalize.py and library.safe_name; `pinyin/`: pypinyin; `fuzz/`: rapidfuzz-cpp;
   - `json/`: canonical.py (canonical JSON, digests) and `json.dumps`'s kv text;
   - `search/`, `ug/`, `sites/`, `lacuerda/`: search.py, ug/key_search.py, ug/artist_tabs.py, lacuerda_index.py and
-    the other sites' search; `names/`: song_names.py; `index/`: index_transfer.py's merge;
+    the other sites' search; `names/`: song_names.py; `index/`: index_transfer.py's merge (its guards: a file of
+    tables alone, read in its `sqlite_master` before any table, `trusted_schema` off while attached, kv's columns
+    checked; its `progress`, `MergeProgress`, index_transfer.merge's events one for one: `planning`, each site, each
+    action, `tab` after each `UG_CHUNK` of UG's sitemap rows, by `tab_id` range in one statement's order, and the
+    phone's own `optimize`);
   - `library/`: songs.py, removal.py's rules, overrides.toml and songbooks.toml as tables; `sync/`: peer_sync.py,
     and the phone's sync engine and peer client;
   - and milestones 4–6's, each in its section below: `http/`, `health/`, `config/`, `html/`, `lookup/`, `ug/`,
@@ -2103,8 +2107,12 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   file of this app's schema, `download` streams it through `GZIPInputStream` into `stateDir/cache/catalogues/`, checks
   GitHub's SHA-256 and a cap of 20 times its size or 64 MiB, the larger, and says why it can't (a newer or older schema only, no release,
   the hour's share spent, no room). server/lookups' `CataloguesRunner` merges it (`IndexTransfer.merge`), kv
-  `catalogues:imported`. The app's Settings row and first-start offer are native (`SiteCatalogues`), the shared library
-  page untouched.
+  `catalogues:imported`, saying each step (`MergeProgress.words` through `Paced`: a count at most once a second, each
+  step's first and last at once), the lookups queued meanwhile let go first once GitHub's list is read and once the
+  file is in (`yieldToQueued`), never inside the merge's write; a metered network's stop waits for the go-ahead alone
+  (`PhoneKinds` CATALOGUES' `otherwise`, its `formerly` words still a wait); the file a killed import left swept as
+  the phone starts (`CataloguesRunner.sweep`). The app's Settings row and first-start offer are native
+  (`SiteCatalogues`), the shared library page untouched.
 - The phone's own job kinds, which Python never queues (render, inbox, backup, restore, catalogues), are one table with their
   words, `server/jobs/PhoneKinds.kt`, the phone's alone.
 - `app/src/androidTest/` runs on a device or an emulator alone (the device step, below), under `CaracoleTestRunner`:
@@ -2487,6 +2495,10 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     artist page's check, read as strptime reads them, `elsewhere` from the local indexes and `Health.isCooling`);
   - what a job over came to worked out once, the queue's one answer (`SongFacts.ended(queue)`, jobs_routes'
     `_ended`), which every route that says a job's line asks, /jobs.json's and the Requests tab's alike;
+  - a request queued behind a running job of the phone's own (`JobViews.behind`: a PhoneKinds' kind's, a sync's, an
+    index import's, not yielding) says what it waits for, the phone's own, as Python never queues one (`queuedBehind`:
+    "Queued · after the site catalogues (Importing · …)", "Queued · after backing up the book", "Queued · 2 requests
+    ahead, now the sync (Updating the indexes · …)");
   - PhoneKinds' kinds (render, inbox, backup, restore, catalogues) say §5.3's table's words, the ones their run filled in as
     their stage's detail (`context.stage(<its stage>, state, PhoneKinds.fill(…))`, done, running or failed; inbox's
     wait a done detail in `otherwise`'s words: `JobViewsTest.thePhonesOwnKindsSayTheirTablesWordsAsTheirRunFilledThemIn`),
@@ -2559,6 +2571,12 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   songbooks); Library unticked skips the mirror stage, Site indexes unticked the index stage, each saying so. No stage
   is added to a network sync. `Conflicts.ASK` refuses a conflict settled neither way before any change;
   `Conflicts.LEAVE`, the unattended sync's, leaves it (`UNSETTLED`) and never refuses.
+- **Its stages say how far** (`Paced`): the index stage "The computer is copying its indexes…", "Downloading the
+  computer's indexes · 120 of 274 MB" (`PeerClient.index`'s `onBytes`, by Content-Length; none, "· 3.4 MB so far"),
+  the merge's `MergeProgress.words`, "Tidying the database…"; a file's "Copying the file's indexes out…" first. Its
+  hooks take a words callback: `mirrorRefresh: suspend (address, say) -> Unit` (Assembly's: `MirrorSync.sync`'s
+  progress, "120 of 640 pages") and `pagesFromFile: (SyncFile, taken, say) -> Unit` (`SyncFileRoutes.pagesFromFile`:
+  `Mirror.takeLayer`'s `progress`, "12 of 40 pages kept").
 - **A song's overrides entries taken** are read back inside its unit's savepoint, as `put_song_entries` reads them, an
   entry the reader refuses leaving the unit in Python's words; a `[version]` kept by its key and a `[harmonica]`
   reading by the viewer's checks, which core reaches through `OverrideChecks` (the engine's `checks`: Assembly's
@@ -3087,7 +3105,10 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     `http:last_request:`, the global records that gate a request (`lacuerda:search:`, `lacuerda:search-failed`,
     `gtptabs:unusable:`, `ug:artist_url:`, `ug:pasted_tab:`, `ug:unreadable:`, `youtube-search:`), `sync:` (so a
     restored library is the phone's change at the next sync: §11 Q11's default), `phone:settings`, `phone:schema`, the
-    index push's notes and every index's progress records, and each song's records that gate a request (`SONGS`:
+    index push's notes and every index's progress records, the site catalogues' (`catalogues:`: the file the index
+    tables took last, GitHub's ask-again time, a download waiting for a go-ahead, the offer made: a restore never
+    touches those tables, so a tap after one says Up to date exactly when they hold the newest file), and each song's
+    records that gate a request (`SONGS`:
     `megalobiz:checked:` and the other 30-day checks, `ug:artist_page_checked:`) by the song's identity key; the rest
     of kv, and the songs' own columns, are the library's;
   - BackupsTest on the JVM.
