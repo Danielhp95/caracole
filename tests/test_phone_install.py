@@ -18,7 +18,7 @@ SCRIPT = ROOT / "android" / "scripts" / "phone-install.sh"
 
 DEBUG = "io.github.danielhp95.caracole.debug"
 RELEASE = "io.github.danielhp95.caracole"
-PHONE = "192.168.12.219:41873"
+PHONE = "192.0.2.10:41873"  # a documentation address (RFC 5737), never a real phone's
 OTHER = "R5CT10ABCDE"
 
 if not SCRIPT.exists():  # the package build's tree: pyproject.toml, README.md, LICENSE, src/ and tests/ alone
@@ -57,7 +57,7 @@ if rest[:1] == ["install"]:
     sys.exit(0)
 if rest[:3] == ["shell", "dumpsys", "package"]:
     print(f"Packages:\r\n  Package [{rest[3]}] (1a2b3c):\r\n    versionCode=3 minSdk=26 targetSdk=36\r\n"
-          f"    versionName=0.3.0-debug\r")
+          f"    versionName=0.3.0-debug+abc1234\r")
     sys.exit(0)
 if rest[:3] == ["shell", "am", "start"]:
     print("Starting: Intent { cmp=... }")
@@ -80,7 +80,7 @@ out.mkdir(parents=True, exist_ok=True)
 (out / "app-debug.apk").write_bytes(b"PK an apk")
 (out / "output-metadata.json").write_text(json.dumps({
     "version": 3, "applicationId": os.environ.get("FAKE_APP_ID", "io.github.danielhp95.caracole.debug"),
-    "variantName": "debug", "elements": [{"type": "SINGLE", "versionCode": 3, "versionName": "0.3.0-debug",
+    "variantName": "debug", "elements": [{"type": "SINGLE", "versionCode": 3, "versionName": "0.3.0-debug+abc1234",
                                            "outputFile": "app-debug.apk"}]}, indent=2))
 '''
 
@@ -127,7 +127,7 @@ def test_the_one_phone_gets_this_checkouts_debug_build_for_user_0_alone(rig):
     assert rig.calls("nix") == [["develop", str(rig.android), "-c", "gradle", "-p", str(rig.android),
                                  ":app:assembleDebug", "--max-workers=2"]]
     assert ["-s", PHONE, "install", "-r", "--user", "0", rig.apk] in rig.calls("adb")
-    assert f"Installed {DEBUG} 0.3.0-debug on {PHONE}." in done.stdout
+    assert f"Installed {DEBUG} 0.3.0-debug+abc1234 on {PHONE}." in done.stdout, "the version names its commit"
     assert not any("am" in c for c in rig.calls("adb")), "no --launch: nothing started"
 
 

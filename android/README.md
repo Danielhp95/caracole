@@ -81,7 +81,9 @@ F-Droid's caracole and a debug build of any checkout install at once, and neithe
        android/scripts/phone-install.sh -s SERIAL   # when adb lists more than one phone
 
    It installs for the phone's own user alone (`adb install -r --user 0`), so the phone's other users keep what they
-   have, and it never touches F-Droid's caracole. It ends by saying the version installed, `0.3.0-debug`.
+   have, and it never touches F-Droid's caracole. It ends by saying the version installed, `0.3.0-debug+abc1234`:
+   a debug build's version names the commit it was built from (`git rev-parse --short HEAD`, `-debug` alone outside
+   a git checkout), and Android's App info shows it too.
 
 **Telling them apart**: the debug build is "Debug caracole" in the launcher, the share sheet and its notifications,
 and its icon is amber, the logo smaller over a red DEBUG mark. Its server is on 127.0.0.1:8739, the release's on
@@ -90,6 +92,12 @@ and its icon is amber, the logo smaller over a red DEBUG mark. Its server is on 
 **Two libraries**: each app keeps its own. A new debug build starts empty: sync it with the computer (Settings, then
 the bar's sync button), or import a file the computer or the other app exported (Settings › Import a file). Both can
 sync with the same computer, as two phones would.
+
+**An older checkout over a newer one**: a build's database moves forward with its schema, never back. Installing an
+older checkout's debug build over the data a newer one left opens to "Couldn't start · …" (the database is too new
+for it) until the debug app's data is cleared, its library with it:
+`adb shell pm clear --user 0 io.github.danielhp95.caracole.debug`. If that library holds anything the computer
+doesn't, sync it from the newer build before installing the older one.
 
 **Removing it**: `adb uninstall --user 0 io.github.danielhp95.caracole.debug`, or uninstall "Debug caracole" on the
 phone. Its library goes with it; F-Droid's caracole keeps its own.
