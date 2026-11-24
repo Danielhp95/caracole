@@ -333,6 +333,27 @@ class CataloguesRunnerTest {
         assertNull(phone.kv(CataloguesRunner.ASKING))
     }
 
+    /** A restore leaves the index tables as they are (no backup holds them), so it leaves the catalogues' records,
+     * which say what those tables hold, as they are too (OwnRecords): after a restore of a backup made before the
+     * import, a tap says Up to date and downloads nothing, the catalogue still in the index. */
+    @Test fun aRestoreLeavesTheRecordOfTheCatalogueTheIndexStillHolds() {
+        val phone = phone()
+        val backup = phone.parts.database.writeBlocking { db ->
+            io.github.danielhp95.caracole.core.backup.Backups.make(db, phone.parts.store, phone.parts.stateDir, now, "by-hand")
+        }!!
+        publish(newest to export())
+        assertEquals(Job.DONE, run(phone).state)
+        phone.parts.database.writeBlocking { it.kvSet(Catalogues.NOT_BEFORE, Stamps.of(now.minusSeconds(60))) }
+        io.github.danielhp95.caracole.core.backup.Backups.restore(phone.parts.database, phone.parts.store, backup)
+        assertEquals(newest, phone.kv(Catalogues.IMPORTED), "the record of what the index holds kept")
+        assertEquals(Stamps.of(now.minusSeconds(60)), phone.kv(Catalogues.NOT_BEFORE), "and GitHub's time, as it is now")
+        assertEquals(4L, phone.tabs(), "the index as it was")
+        github.asked.clear()
+        val again = run(phone)
+        assertEquals(Line("ready", "Up to date: the catalogues of 24 Nov 2026"), JobViews.line(again))
+        assertEquals(listOf(release), asked(), "nothing downloaded")
+    }
+
     @Test fun aNotBeforeFarAheadOfTheClockIsPassedOver() {
         // GitHub's reset is within the hour: one more than two hours on is a clock that was wrong, never a wait.
         val phone = phone()
