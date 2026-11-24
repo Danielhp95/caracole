@@ -572,7 +572,12 @@ class MainActivity : Activity() {
             val files = files ?: return notFound()
             Log.i(TAG, "an export asked by the WebView itself: read here, once")
             return try {
-                when (val got = Exports.copy(files, url, File(cacheDir, Exports.FOLDER))) {
+                val readying = { length: Long ->
+                    if (Exports.readies(length)) runOnUiThread {
+                        Handoff.toast(this@MainActivity, getString(R.string.export_readying, Syncs.size(this@MainActivity, length)))
+                    }
+                }
+                when (val got = Exports.copy(files, url, File(cacheDir, Exports.FOLDER), starting = readying)) {
                     is Exports.Copied.File -> WebResourceResponse(Exports.TYPE, null, 200, "OK",
                         mapOf("Content-Disposition" to got.disposition), ByteArrayInputStream(ByteArray(0)))
                     // The listener hears no download, and says nothing: the refusal is said here.
