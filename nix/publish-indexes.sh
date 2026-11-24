@@ -20,9 +20,9 @@
 #   1 the release exists, else it is created (not "latest");
 #   2 every asset whose state isn't "uploaded" is deleted (a half upload); with --manifest, a
 #     manifest swap that died is mended first (indexes.json missing and .prev there: renamed
-#     back), and a leftover indexes.json.next deleted;
+#     back; both there: .prev deleted), and a leftover indexes.json.next deleted;
 #   3 the file DIR/published.json names: listed as uploaded with the same size and digest,
-#     "already published", exit 0; listed otherwise, exit 1 (never replaced, no --clobber);
+#     "already published" (steps 4 and 5 skipped, 6 and 7 still run); listed otherwise, exit 1 (never replaced, no --clobber);
 #   4 uploaded;
 #   5 read back: size and digest must be published.json's, else it is deleted and exit 1;
 #   6 `caracole index publish --kept <every asset name>` prints what the Keep rule drops; those
@@ -60,7 +60,11 @@ fi
 
 die() { echo "publish-indexes: step $1: $2" >&2; exit 1; }
 
-assets() { gh api "repos/$REPO/releases/tags/$TAG" | jq -c '.assets'; }
+assets() {
+  local id
+  id=$(gh api "repos/$REPO/releases/tags/$TAG" | jq -r .id) || return 1
+  gh api --paginate "repos/$REPO/releases/$id/assets?per_page=100" | jq -cs 'add // []'
+}
 # the asset named $2 of the listing $1, or nothing
 asset() { jq -c --arg n "$2" '[.[] | select(.name == $n)] | first // empty' <<<"$1"; }
 delete_id() { gh api -X DELETE "repos/$REPO/releases/assets/$1" >/dev/null; }
@@ -88,6 +92,10 @@ if [ "$mode" = manifest ]; then
     rename_id "$id" indexes.json || die 2 "indexes.json.prev can't be renamed back"
     list=$(assets) || die 2 "the release can't be read"
   fi
+  if [ -n "$(asset "$list" indexes.json)" ] && [ -n "$(asset "$list" indexes.json.prev)" ]; then
+    delete_id "$(asset "$list" indexes.json.prev | jq -r .id)" || die 2 "a leftover indexes.json.prev can't be deleted"
+    list=$(assets) || die 2 "the release can't be read"
+  fi
   leftover=$(asset "$list" indexes.json.next)
   if [ -n "$leftover" ]; then
     delete_id "$(jq -r .id <<<"$leftover")" || die 2 "a leftover indexes.json.next can't be deleted"
@@ -104,22 +112,24 @@ there=$(asset "$list" "$file")
 if [ -n "$there" ]; then
   if [ "$(jq -r .size <<<"$there")" = "$bytes" ] && [ "$(jq -r .digest <<<"$there")" = "$digest" ]; then
     echo "publish-indexes: $file is already published"
-    exit 0
+  else
+    die 3 "a different file of that name is there: $file"
   fi
-  die 3 "a different file of that name is there: $file"
-fi
+else
+  # 4
+  gh release upload "$TAG" --repo "$REPO" "$dir/$file" || die 4 "$file can't be uploaded"
 
-# 4
-gh release upload "$TAG" --repo "$REPO" "$dir/$file" || die 4 "$file can't be uploaded"
-
-# 5
-list=$(assets) || die 5 "the release can't be read back"
-there=$(asset "$list" "$file")
-[ -n "$there" ] || die 5 "$file isn't listed after its upload"
-if [ "$(jq -r .state <<<"$there")" != uploaded ] || [ "$(jq -r .size <<<"$there")" != "$bytes" ] \
-  || [ "$(jq -r .digest <<<"$there")" != "$digest" ]; then
-  delete_id "$(jq -r .id <<<"$there")" || true
-  die 5 "GitHub holds $file with another size or digest than published.json's: deleted"
+  # 5
+  list=$(assets) || die 5 "the release can't be read back"
+  there=$(asset "$list" "$file")
+  [ -n "$there" ] || die 5 "$file isn't listed after its upload"
+  got=$(jq -r '.digest // empty' <<<"$there")
+  [ -n "$got" ] || die 5 "GitHub gave no digest for $file: kept, not checked"
+  if [ "$(jq -r .state <<<"$there")" != uploaded ] || [ "$(jq -r .size <<<"$there")" != "$bytes" ] \
+    || [ "$got" != "$digest" ]; then
+    delete_id "$(jq -r .id <<<"$there")" || true
+    die 5 "GitHub holds $file with another size or digest than published.json's: deleted"
+  fi
 fi
 
 # 6

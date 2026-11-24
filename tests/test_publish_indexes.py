@@ -98,6 +98,7 @@ def test_the_same_file_again_is_already_published(rig):
     assert done.returncode == 0
     assert "already published" in done.stdout
     assert not [c for c in rig.gh.calls() if c["argv"][:2] == ["release", "upload"]]
+    assert rig.gh.names() == [NEW]
 
 
 def test_a_digest_that_differs_is_deleted_and_fails(rig):
@@ -156,6 +157,36 @@ def test_a_run_dead_between_the_renames_is_mended_by_the_next(rig):
     names = rig.gh.names()
     assert "indexes.json" in names
     assert not [n for n in names if n.endswith((".prev", ".next"))]
+    # the file was already there, yet the mending run rebuilt the manifest with it
+    assert [f["file"] for f in json.loads(rig.gh.content("indexes.json"))["files"]] == [NEW]
+
+
+def test_a_prev_beside_a_present_manifest_is_deleted_by_the_next_run(rig):
+    rig.gh.asset("indexes.json", b'{"old": 1}').asset("indexes.json.prev", b'{"older": 1}')
+    done = rig.run("--manifest")
+    assert done.returncode == 0, done.stderr
+    assert rig.gh.names() == sorted([NEW, "indexes.json"])
+
+
+def test_the_same_file_again_with_a_manifest_rebuilds_it_and_prunes(rig):
+    rig.gh.asset(NEW, rig.data)
+    for d in (1, 2):
+        rig.gh.asset(name(d))
+    done = rig.run("--manifest")
+    assert done.returncode == 0, done.stderr
+    assert "already published" in done.stdout
+    assert rig.gh.names() == sorted([NEW, name(2), "indexes.json"])
+    assert [f["file"] for f in json.loads(rig.gh.content("indexes.json"))["files"]] == [NEW, name(2)]
+
+
+def test_no_digest_on_the_read_back_keeps_the_upload_and_fails(rig):
+    rig.gh.release()
+    rig.gh.state["no_digest"] = True
+    rig.gh.save()
+    done = rig.run()
+    assert done.returncode == 1
+    assert "no digest" in done.stderr
+    assert rig.gh.names() == [NEW]
 
 
 def test_a_token_file_is_used_when_named(rig):

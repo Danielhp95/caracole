@@ -2,16 +2,15 @@
 (``state.json``), so no test reaches GitHub. It answers what nix/publish-indexes.sh asks:
 
 - ``release view TAG`` (exit 1 when there is no release), ``release create TAG ...``,
-  ``release upload TAG FILE`` (no ``--clobber``: an existing name fails), ``release delete-asset``,
-  ``release download TAG -p NAME -D DIR``;
-- ``api repos/R/releases/tags/TAG`` (the release's REST shape: ``assets`` with numeric ``id``,
-  ``name``, ``size``, ``state``, ``digest``), ``api -X PATCH repos/R/releases/assets/ID -f name=NEW``
+  ``release upload TAG FILE`` (no ``--clobber``: an existing name fails);
+- ``api repos/R/releases/tags/TAG`` (the release, with its ``id``), ``api repos/R/releases/ID/assets``
+  (``--paginate``: one JSON array a page of two; the REST asset shape: numeric ``id``, ``name``,
+  ``size``, ``state``, ``digest``), ``api -X PATCH repos/R/releases/assets/ID -f name=NEW``
   and ``api -X DELETE repos/R/releases/assets/ID``.
 
 Every call is logged to ``calls.jsonl`` with ``GH_TOKEN``. ``FAKE_GH_FAIL=<kind>:<n>`` makes the
-n-th call of that kind fail (exit 1, nothing changed); kinds: ``create``, ``upload``, ``download``,
-``delete-asset``, and ``api`` for the changing api calls (PATCH and DELETE) alone. A state's
-``corrupt_upload`` makes an upload list a digest that is not the file's.
+n-th call of that kind fail (exit 1, nothing changed); kinds: ``create``, ``upload``, and ``api`` for the changing api calls (PATCH and DELETE) alone. A state's
+``corrupt_upload`` makes an upload list a digest that is not the file's, ``no_digest`` none at all.
 """
 
 from __future__ import annotations
@@ -77,19 +76,7 @@ elif argv[:2] == ["release", "upload"]:
         digest = "0" * 64
     state["next_id"] += 1
     state["assets"].append({"id": state["next_id"], "name": path.name, "size": len(data), "state": "uploaded",
-                            "digest": "sha256:" + digest, "content": base64.b64encode(data).decode()})
-elif argv[:2] == ["release", "delete-asset"]:
-    fails("delete-asset")
-    a = asset_by(name=argv[-1])
-    if not a:
-        sys.exit(1)
-    remove(a)
-elif argv[:2] == ["release", "download"]:
-    fails("download")
-    a = asset_by(name=option("-p"))
-    if not a:
-        sys.exit(1)
-    (Path(option("-D")) / a["name"]).write_bytes(base64.b64decode(a.get("content", "")))
+                            "digest": None if state.get("no_digest") else "sha256:" + digest, "content": base64.b64encode(data).decode()})
 elif argv[0] == "api":
     method = option("-X") or "GET"
     endpoint = next(x for x in argv[1:] if x.startswith("repos/"))
@@ -97,8 +84,13 @@ elif argv[0] == "api":
         if not state["release"]:
             sys.stderr.write("HTTP 404\n")
             sys.exit(1)
-        print(json.dumps({"tag_name": "indexes", "assets": [{k: v for k, v in a.items() if k != "content"}
-                                                          for a in state["assets"]]}))
+        shown = [{k: v for k, v in a.items() if k != "content"} for a in state["assets"]]
+        if "/assets" in endpoint:
+            # --paginate: one array a page, two assets a page, as GitHub's pages are
+            for n in range(0, max(len(shown), 1), 2):
+                print(json.dumps(shown[n:n + 2]))
+        else:
+            print(json.dumps({"tag_name": "indexes", "id": 7, "assets": shown}))
         sys.exit(0)
     fails("api")
     a = asset_by(id=endpoint.rsplit("/", 1)[1])
