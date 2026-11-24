@@ -971,7 +971,8 @@ class PhoneScenarioTest {
         val sheetPath = ownFile(phone, key, "sheet.html").relativeTo(phone.libraryDir).invariantSeparatorsPath
         val export = phone.get("/export.pdf?sheet=" + quote(sheetPath) + "&t=5&mine=1")
         assertEquals(200, export.status, export.text.take(1000))
-        done(phone.await(phone.phone.queue.snapshot().last { it.key.startsWith("export:$key:") }.id))
+        // The newest of the song's exports (phase 9's is in the history too, which the snapshot lists newest first).
+        done(phone.await(phone.phone.queue.snapshot().filter { it.key.startsWith("export:$key:") }.maxOf { it.id }))
         val version = phone.database.read { db ->
             db.one("SELECT value FROM phone_overrides WHERE tbl = 'version' AND key = ?", key) { it.text(0)!! }
         } ?: fail("no [version] of $key")
