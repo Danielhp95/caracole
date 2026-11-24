@@ -63,6 +63,7 @@ from caracole import db, logs
 from caracole.config import Config, ConfigError, ProviderPolicy, load_config
 from caracole.health import EventLog, is_cooling
 from caracole.overrides import Overrides, OverridesError, load_overrides, override_key
+from caracole.progress import SENT  # loaded on every start already
 
 if TYPE_CHECKING:  # the HTTP client waits for a command that makes one (``make_client``)
     import httpx
@@ -911,9 +912,9 @@ def _locked_client() -> type[PoliteClient]:
     return _LockedClient
 
 
-# Events that were requests: a redirect too, followed or not, which reached the site as any other request did.
 CONNECT_PATIENCE = 60.0  # s: how long bulk work tries again a connection that fails before any byte is sent
-_SENT = ("ok", "not_modified", "redirect", "blocked", "error")
+# Events that were requests: a redirect too, followed or not, which reached the site as any other request did.
+_SENT = SENT  # progress.py's, the one list: the hour, the day and the last request counted as a ticker counts them
 _LAST_SENT = "http:last_request:"  # + provider: when any caracole last sent it a request, in seconds
 
 

@@ -220,7 +220,9 @@ EVERY = 60.0  # seconds: a ticker's line in the log at most this often
 _screen_gone = False  # a live line failed to be written: none more in this process (``ticker``)
 STATUS_EVERY = 2.0  # seconds: the unit's status line told at most this often, but as a part begins
 ANSWER = 0.5  # seconds a site takes to answer, about, beside the pause before each request
-SENT = ("ok", "not_modified", "redirect", "blocked", "error")  # a request's events, sent: _common._SENT's
+# A request's events, sent: a redirect too, followed or not, which reached the site as any other request did. The one
+# list, which commands/_common.py counts the hour's, the day's and the last request by too.
+SENT = ("ok", "not_modified", "redirect", "blocked", "error")
 
 
 class Ticker:
