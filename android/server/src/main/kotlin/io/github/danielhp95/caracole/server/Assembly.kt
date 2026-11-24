@@ -1,5 +1,6 @@
 package io.github.danielhp95.caracole.server
 
+import io.github.danielhp95.caracole.core.catalogues.CatalogueSource
 import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.health.Alerts
@@ -33,6 +34,7 @@ import io.github.danielhp95.caracole.server.jobs.PhoneKinds
 import io.github.danielhp95.caracole.server.jobs.QueueFull
 import io.github.danielhp95.caracole.server.ktor.LocalServer
 import io.github.danielhp95.caracole.server.lookups.BackupRunner
+import io.github.danielhp95.caracole.server.lookups.CataloguesRunner
 import io.github.danielhp95.caracole.server.lookups.GetRunner
 import io.github.danielhp95.caracole.server.lookups.HarmonicaRunner
 import io.github.danielhp95.caracole.server.lookups.HarpTabsRunner
@@ -110,7 +112,8 @@ data class PhoneDeps(val database: Database, val libraryDir: File, val stateDir:
  * the app, a link alone read by asking its service once: ShareReader), then Stubs for every route no module answers; the
  * library's files behind them; one job queue for every write, its requests kept in `stateDir/requests.jsonl`
  * (JobHistory.at) across the app's restarts, its command runners (`get`, `versions`, `lacuerda`,
- * `harptabs`, `ug`, `review`, `harmonica`, `render`, `songbook`, `inbox`, `backup`), and after each job [afterJob]; the
+ * `harptabs`, `ug`, `review`, `harmonica`, `render`, `songbook`, `inbox`, `backup`, `catalogues`: [catalogues]), and
+ * after each job [afterJob]; the
  * phone's own pages ([render]: through its seam the lookup's pdf stage, what follows a sync's take, and the render job
  * queued by [start] when pages are owed), its songbooks' ([songbookPages]: through its seam the songbooks stage); and
  * the local server. Its page has the Sync tab (ServerControls.sync). Building it queues nothing: the app calls
@@ -139,6 +142,11 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
 
     val parts: PhoneParts
 
+    /** The site catalogues' job (`catalogues`), which the app queues ([CataloguesRunner.spec]): GitHub's release read
+     * through its API (the owner's choice S1), asked with caracole's user agent as the settings say it when it runs,
+     * on a network the app doesn't yet say is metered. */
+    val catalogues: CataloguesRunner
+
     init {
         val commands = HashMap<String, io.github.danielhp95.caracole.server.jobs.CommandRunner>()
         queue = JobQueue(deps.scope, commands = Commands(commands), history = JobHistory.at(deps.stateDir))
@@ -157,6 +165,9 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         commands["songbook"] = SongbookRunner(parts)
         commands["inbox"] = InboxRunner(parts)
         commands["backup"] = BackupRunner(parts)
+        catalogues = CataloguesRunner(parts, source = { http -> CatalogueSource.Api(http) }, metered = { false },
+                                      forget = { search.invalidate() })
+        commands[CataloguesRunner.COMMAND] = catalogues
     }
 
     /** The files shared to the app that wait for a song, tried again after each job. */
