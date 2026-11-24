@@ -51,6 +51,8 @@
     <string name="working">Working…</string>
 
     <string name="syncing">Syncing with the computer…</string>
+    <!-- The unattended sync's stage and what it says (Working.doing): "Updating the indexes · …". -->
+    <string name="syncing_doing">Syncing with the computer · %1$s</string>
 
     <string name="missing">That file isn\'t on the phone. Sync again.</string>
     <string name="not_served">The phone didn\'t serve that file (HTTP %1$d).</string>

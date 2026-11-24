@@ -443,16 +443,17 @@ class MainActivity : Activity() {
     }
 
     /**
-     * The unattended sync's line ([Syncs.run]): "Syncing with the computer…" while it runs; at its end, for a few
-     * seconds, what it came to in its own words ("Up to date: 1 taken", "2 changed on both sides: tap Sync to choose",
-     * or why it failed). A sync from the sheet says how it goes in the sheet.
+     * The unattended sync's line ([Syncs.run]): "Syncing with the computer…" while it runs, then the stage it is at and
+     * what that says ("Syncing with the computer · Updating the indexes · …"); at its end, for a few seconds, what it
+     * came to in its own words ("Up to date: 1 taken", "2 changed on both sides: tap Sync to choose", or why it
+     * failed). A sync from the sheet says how it goes in the sheet.
      */
     private fun show(state: SyncState) {
         hiding?.cancel()
         when (state) {
             SyncState.Idle -> status.visibility = View.GONE
             is SyncState.Running -> {
-                status.text = getString(R.string.syncing)
+                status.text = state.doing?.let { getString(R.string.syncing_doing, it) } ?: getString(R.string.syncing)
                 status.visibility = View.VISIBLE
             }
             is SyncState.Ended -> {

@@ -20,6 +20,9 @@ import io.github.danielhp95.caracole.server.http.Refused
 import io.github.danielhp95.caracole.server.jobs.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -41,8 +44,8 @@ object Syncs {
     const val PROBE = "probe"
 
     /** The phone's caracole as the unattended sync asks it: [alone] queues its sync of an address (null: one with that
-     * address waits or runs already), and [await] waits for a job's end. */
-    class Unattended(val alone: (String) -> Job?, val await: suspend (Int) -> Job)
+     * address waits or runs already), [await] waits for a job's end, and [job] reads it as it goes. */
+    class Unattended(val alone: (String) -> Job?, val await: suspend (Int) -> Job, val job: (Int) -> Job? = { null })
 
     /** Syncs every 6 hours on an unmetered network, when caracole answers ([on]), or never by itself. */
     fun onWifi(context: Context, on: Boolean) {
@@ -68,7 +71,7 @@ object Syncs {
         val app = context.applicationContext
         return run(Settings(app), probe, Caracole.http(), phone = {
             val phone = Caracole.phone(app)
-            Unattended(alone = phone.sync::alone, await = phone.queue::await)
+            Unattended(alone = phone.sync::alone, await = phone.queue::await, job = phone.queue::job)
         }, cleared = { Notifications.noConflictsLeft(app) }) { count, songs -> Notifications.conflictsLeft(app, count, songs) }
     }
 
@@ -77,11 +80,12 @@ object Syncs {
      * [PeerError] when no caracole answers), then the phone's sync ([phone], asked only once one does) queued and
      * awaited, and [notify] told how many conflicts it left and whether all are songs, when it left any, else
      * [cleared]. A sync whose job ended done with a stage failed (the copy of the computer's pages, say: the engine
-     * goes on past it) is a failed outcome, in that stage's words.
+     * goes on past it) is a failed outcome, in that stage's words. While it runs, [Caracole.status] says the stage it
+     * is at and what that says (Working.doing), read every [followMs].
      */
     internal suspend fun run(settings: Settings, probe: Boolean, http: Http,
                              ask: (ServerAddress) -> Unit = { PeerClient(it, http).state(null) },
-                             phone: () -> Unattended, cleared: () -> Unit = {},
+                             phone: () -> Unattended, cleared: () -> Unit = {}, followMs: Long = FOLLOW_MS,
                              notify: (Int, Boolean) -> Unit): Outcome? {
         val status = Caracole.status
         val address = try {
@@ -103,7 +107,19 @@ object Syncs {
                 status.value = SyncState.Idle
                 return null
             }
-            val done = side.await(job.id)
+            val done = coroutineScope {
+                val following = launch {
+                    while (true) {
+                        side.job(job.id)?.takeIf { it.active }?.let { status.value = SyncState.Running(Working.doing(it)) }
+                        delay(followMs)
+                    }
+                }
+                try {
+                    side.await(job.id)
+                } finally {
+                    following.cancel()
+                }
+            }
             if (done.state == Job.DONE) {
                 val (left, songs) = conflictsLeft(done.outcome)
                 if (left > 0) notify(left, songs) else cleared()
@@ -207,6 +223,9 @@ object Syncs {
         // An Error too: the phone's caracole that can't start (its SQLite's native library that won't load).
         why(e)
     }
+
+    /** How often the screen's line reads the unattended sync's stage. */
+    private const val FOLLOW_MS = 500L
 
     private const val SONG = "song/"
     private const val UP_TO_DATE = "Up to date"
