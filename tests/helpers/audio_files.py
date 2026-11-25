@@ -7,7 +7,8 @@ writes it. ``write(path, fmt, seconds, artist=, title=, album=)`` writes one at 
 
 WAV and AIFF are PCM, FLAC its frames of a constant sample, MP3 silent MPEG-1 Layer III frames and Ogg Opus's silent
 packets, each a file a decoder plays; M4A is the MP4 container alone (its AAC sample entry, its track's length, an
-mdat of nothing), which mutagen reads and no decoder plays: helpers/aac.py makes real AAC where torch is.
+mdat of nothing), which mutagen reads and no decoder plays: helpers/aac.py makes real AAC where torch is. ``mp4``
+makes one of other brands (YouTube's raw ``dash``, FFmpeg's ``isom``…), or an .mp4 whose one track is video.
 """
 
 from __future__ import annotations
@@ -186,7 +187,10 @@ def _descriptor(tag: int, body: bytes) -> bytes:
     return bytes([tag, len(body)]) + body
 
 
-def _m4a(seconds: float) -> bytes:
+def mp4(seconds: float = 1.0, *, major: bytes = b"M4A ", compatible: tuple[bytes, ...] = (b"M4A ", b"isom", b"mp42"),
+        video: bool = False) -> bytes:
+    """An MP4 file of the brands given (``audio("M4A")``'s are iTunes'), its one track the AAC ``audio("M4A")`` has,
+    or with ``video`` a video track alone (an .mp4 with no sound), whose length is the movie's."""
     scale, duration = 8000, round(seconds * 8000)
     matrix = struct.pack(">9I", 0x10000, 0, 0, 0, 0x10000, 0, 0, 0, 0x40000000)
     mvhd = _full(b"mvhd", struct.pack(">IIII", 0, 0, scale, duration), struct.pack(">IH", 0x10000, 0x100),
@@ -194,21 +198,24 @@ def _m4a(seconds: float) -> bytes:
     tkhd = _box(b"tkhd", bytes([0, 0, 0, 7]), struct.pack(">IIIII", 0, 0, 1, 0, duration), b"\x00" * 8,
                 struct.pack(">hhHH", 0, 0, 0x100, 0), matrix, struct.pack(">II", 0, 0))
     mdhd = _full(b"mdhd", struct.pack(">IIIIHH", 0, 0, scale, duration, 0x55C4, 0))  # "und"
-    hdlr = _full(b"hdlr", struct.pack(">I", 0), b"soun", b"\x00" * 12, b"SoundHandler\x00")
+    kind, name = (b"vide", b"VideoHandler\x00") if video else (b"soun", b"SoundHandler\x00")
+    hdlr = _full(b"hdlr", struct.pack(">I", 0), kind, b"\x00" * 12, name)
     config = _descriptor(0x05, bytes([0x15, 0x88]))  # AAC LC, 8 kHz, mono
     decoder = _descriptor(0x04, bytes([0x40, 0x15]) + b"\x00\x00\x00" + struct.pack(">II", 128000, 128000) + config)
     esds = _full(b"esds", _descriptor(0x03, struct.pack(">HB", 1, 0) + decoder + _descriptor(0x06, b"\x02")))
     mp4a = _box(b"mp4a", b"\x00" * 6, struct.pack(">H", 1), b"\x00" * 8, struct.pack(">HHHHI", 1, 16, 0, 0,
                                                                                          scale << 16), esds)
-    stbl = _box(b"stbl", _full(b"stsd", struct.pack(">I", 1), mp4a), _full(b"stts", struct.pack(">I", 0)),
+    entries = _full(b"stsd", struct.pack(">I", 0)) if video else _full(b"stsd", struct.pack(">I", 1), mp4a)
+    stbl = _box(b"stbl", entries, _full(b"stts", struct.pack(">I", 0)),
                 _full(b"stsc", struct.pack(">I", 0)), _full(b"stsz", struct.pack(">II", 0, 0)),
                 _full(b"stco", struct.pack(">I", 0)))
     dinf = _box(b"dinf", _full(b"dref", struct.pack(">I", 1), _box(b"url ", bytes([0, 0, 0, 1]))))
-    minf = _box(b"minf", _full(b"smhd", struct.pack(">HH", 0, 0)), dinf, stbl)
+    header = _full(b"vmhd", struct.pack(">HHHH", 0, 0, 0, 0)) if video else _full(b"smhd", struct.pack(">HH", 0, 0))
+    minf = _box(b"minf", header, dinf, stbl)
     moov = _box(b"moov", mvhd, _box(b"trak", tkhd, _box(b"mdia", mdhd, hdlr, minf)))
-    ftyp = _box(b"ftyp", b"M4A ", struct.pack(">I", 0), b"M4A isommp42")
+    ftyp = _box(b"ftyp", major, struct.pack(">I", 0), b"".join(compatible))
     return ftyp + moov + _box(b"mdat")
 
 
-_MAKERS = {"MP3": _mp3, "M4A": _m4a, "FLAC": _flac, "WAV": _wav, "Ogg": _ogg, "AIFF": _aiff}
+_MAKERS = {"MP3": _mp3, "M4A": mp4, "FLAC": _flac, "WAV": _wav, "Ogg": _ogg, "AIFF": _aiff}
 FORMATS = tuple(_MAKERS)

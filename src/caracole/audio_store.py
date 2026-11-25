@@ -67,14 +67,17 @@ FORMATS = {"MP3": ".mp3", "M4A": ".m4a", "FLAC": ".flac", "WAV": ".wav", "Ogg": 
 # The mutagen classes that read each format, tried in order.
 _READERS = {
     "MP3": (("mutagen.mp3", "EasyMP3"),),
-    "M4A": (("mutagen.mp4", "EasyMP4"),),
+    "M4A": (("mutagen.easymp4", "EasyMP4"),),
     "FLAC": (("mutagen.flac", "FLAC"),),
     "WAV": (("mutagen.wave", "WAVE"),),
     "Ogg": (("mutagen.oggvorbis", "OggVorbis"), ("mutagen.oggopus", "OggOpus"), ("mutagen.oggflac", "OggFLAC"),
             ("mutagen.oggspeex", "OggSpeex")),
     "AIFF": (("mutagen.aiff", "AIFF"),),
 }
-_MP4_BRANDS = {b"M4A ", b"M4B ", b"mp42", b"isom"}
+# The MP4 brands of audio files: iTunes' (M4A, M4B, mp42), FFmpeg's (isom, iso2, mp41; iso5 and iso6 for DASH),
+# Android's recorders' (mp42, isom), and YouTube's audio as yt-dlp takes it before FFmpeg's fix-up (dash, iso6, mp41).
+# A picture's or a video's alone (heic, avif, qt, M4V, 3gp) is none.
+_MP4_BRANDS = {b"M4A ", b"M4B ", b"mp42", b"isom", b"dash", b"iso2", b"iso5", b"iso6", b"mp41"}
 _EXT = "|".join(re.escape(ext) for ext in FORMATS.values())
 ID = re.compile(r"[0-9a-f]{16}")  # a staged upload's id
 _STAGED = ".upload-"
@@ -148,8 +151,9 @@ def folder(cfg: Config) -> Path:
 
 def sniff(head: bytes) -> str | None:
     """The format the first bytes of a file say it is (a key of ``FORMATS``), or None: an ID3 tag or an MPEG audio
-    frame's header, MP3; ``ftyp`` with an M4A, M4B, mp42 or isom brand, M4A; ``fLaC``, FLAC; ``RIFF…WAVE``, WAV;
-    ``OggS``, Ogg; ``FORM…AIFF`` or ``AIFC``, AIFF."""
+    frame's header, MP3; ``ftyp`` with an MP4 audio brand (``_MP4_BRANDS``) as its major or a compatible one, M4A;
+    ``fLaC``, FLAC; ``RIFF…WAVE``, WAV; ``OggS``, Ogg; ``FORM…AIFF`` or ``AIFC``, AIFF. A first gate alone: mutagen's
+    read of the file decides (``_examine``)."""
     if head[:3] == b"ID3" or _mpeg_frame(head):
         return "MP3"
     if head[4:8] == b"ftyp" and _mp4_audio(head):
@@ -183,7 +187,8 @@ def _mp4_audio(head: bytes) -> bool:
 
 def _examine(f: IO[bytes]) -> Audio:
     """What the file open as ``f`` is: AudioError when its bytes are no format caracole reads, when mutagen can't
-    read it as the one they say, or reads no length (415), and when it is longer than ``MAX_SECONDS`` (422)."""
+    read it as the one they say, or reads no length, or an MP4 with no audio track (415), and when it is longer than
+    ``MAX_SECONDS`` (422)."""
     import mutagen  # here, not on import: the pages and the server import this module
 
     from caracole.music import _ALBUM_KEYS, _ARTIST_KEYS, _TITLE_KEYS, _first
@@ -203,6 +208,10 @@ def _examine(f: IO[bytes]) -> Audio:
         raise AudioError(NOT_AUDIO, 415)
     length = getattr(read.info, "length", None)
     if not isinstance(length, (int, float)) or not math.isfinite(length) or length <= 0:
+        raise AudioError(NOT_AUDIO, 415)
+    if fmt == "M4A" and not (read.info.channels > 0 and read.info.sample_rate > 0):
+        # mutagen reads an MP4 with no sound track ('soun') as long as its movie: a video alone. A sound track's
+        # sample entry gives its channels and rate, whatever its codec.
         raise AudioError(NOT_AUDIO, 415)
     if length > MAX_SECONDS:
         raise AudioError(TOO_LONG, 422)

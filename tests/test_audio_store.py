@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import os
 import stat
 import struct
@@ -14,7 +15,7 @@ from types import SimpleNamespace
 import pytest
 from conftest import add_song, subprocess_pythonpath
 from helpers.audio_files import FORMATS as MADE
-from helpers.audio_files import audio, write
+from helpers.audio_files import audio, mp4, write
 
 from caracole import audio_store
 from caracole.audio_store import (
@@ -97,7 +98,13 @@ def test_sniff_knows_each_format_by_its_bytes(fmt, tmp_path):
     (ftyp(b"mp42", b"isom"), "M4A"),
     (ftyp(b"isom", b"iso2"), "M4A"),
     (ftyp(b"M4B "), "M4A"),
-    (ftyp(b"dash", b"iso6", b"mp42"), "M4A"),  # one of its compatible brands
+    (ftyp(b"dash", b"iso6", b"mp41"), "M4A"),  # YouTube's audio as yt-dlp takes it, before FFmpeg's fix-up
+    (ftyp(b"M4A ", b"M4A ", b"isom", b"iso2"), "M4A"),  # FFmpeg's .m4a
+    (ftyp(b"isom", b"iso2", b"mp41"), "M4A"),  # FFmpeg's .mp4
+    (ftyp(b"iso5", b"iso6", b"mp41"), "M4A"),  # FFmpeg's for DASH
+    (ftyp(b"mp41"), "M4A"),
+    (ftyp(b"iso2"), "M4A"),
+    (ftyp(b"M4V ", b"M4A ", b"mp42", b"isom"), "M4A"),  # one of its compatible brands: its audio track decides
     (b"fLaC\x00\x00\x00\x22", "FLAC"),
     (b"RIFF\x24\x00\x00\x00WAVEfmt ", "WAV"),
     (b"OggS\x00\x02", "Ogg"),
@@ -111,6 +118,10 @@ def test_sniff_knows_each_format_by_its_bytes(fmt, tmp_path):
     (b"\xff\xeb\x90\xc0", None),  # MPEG version 1 is reserved
     (ftyp(b"qt  ", b"qt  "), None),  # QuickTime
     (ftyp(b"heic", b"mif1"), None),  # a picture
+    (ftyp(b"avif", b"mif1", b"miaf"), None),
+    (ftyp(b"M4V ", b"M4V "), None),  # iTunes' video
+    (ftyp(b"3gp4", b"3gp4"), None),
+    (ftyp(b"crx ", b"isom")[:12], None),  # brands cut off where the bytes end
     (b"RIFF\x24\x00\x00\x00AVI LIST", None),
     (b"FORM\x00\x00\x00\x008SVX", None),
     (b"\x89PNG\r\n\x1a\n", None),
@@ -118,6 +129,32 @@ def test_sniff_knows_each_format_by_its_bytes(fmt, tmp_path):
 ])
 def test_sniff_reads_the_bytes_alone(head, fmt):
     assert audio_store.sniff(head) == fmt
+
+
+@pytest.mark.parametrize("fmt", MADE)
+def test_each_format_is_read_with_its_length_and_tags(fmt, cfg, tmp_path):
+    data = write(tmp_path / f"song{FORMATS[fmt]}", fmt, 2.0, artist="Radiohead", title="Creep",
+                 album="Pablo Honey").read_bytes()
+    up = stage(cfg, data, "song", named=())
+    assert (up.format, up.path.suffix) == (fmt, FORMATS[fmt]) and abs(up.duration - 2.0) < 0.05
+    assert up.tags == {"artist": "Radiohead", "title": "Creep", "album": "Pablo Honey"}
+
+
+@pytest.mark.parametrize("major, compatible", [(b"dash", (b"iso6", b"mp41")), (b"isom", (b"iso2", b"mp41")),
+                                               (b"iso5", (b"iso6", b"mp41")), (b"mp42", (b"isom", b"mp42"))])
+def test_an_mp4_of_any_audio_brand_is_an_m4a(cfg, major, compatible):
+    up = stage(cfg, mp4(1.5, major=major, compatible=compatible), "yt.webm", named=())
+    assert (up.format, up.path.suffix, up.duration) == ("M4A", ".m4a", 1.5)
+
+
+def test_an_mp4_with_no_audio_track_is_refused(cfg):
+    # mutagen reads a video alone as long as the movie (its mvhd): the audio track it lacks is what refuses it.
+    from mutagen.mp4 import MP4
+
+    video = mp4(3.0, major=b"isom", compatible=(b"isom", b"iso2", b"avc1", b"mp41"), video=True)
+    assert audio_store.sniff(video[:HEAD]) == "M4A" and MP4(io.BytesIO(video)).info.length == 3.0
+    said = refused(415, stage, cfg, video, "clip.mp4", named=())
+    assert str(said) == NOT_AUDIO and names(cfg) == []
 
 
 def test_a_file_named_mp3_that_isnt_one_is_refused(conn, cfg, tmp_path):
