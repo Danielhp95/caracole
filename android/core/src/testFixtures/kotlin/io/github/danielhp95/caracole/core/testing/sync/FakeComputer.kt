@@ -45,9 +45,11 @@ import java.util.concurrent.TimeUnit
  * units are those caracole's peer_sync gives a library of the same rows: lane sync-units holds the two to the vectors),
  * answering as Python's routes answer (web/peer_routes.py, peer_push.py; the plan's §5.3), in their words:
  *
- * - `GET /api/peer/state?peer=`: its id, version, [name], clock ([now]), [indexes], units in peer_sync._order, the base
- *   it agreed on with the phone that asks and the answers its imports of that phone's files kept (`kept`), its [settings] (politeness.settings_document: none while null, as a
- *   caracole older than them answers) and the form token ([token]).
+ * - `GET /api/peer/state?peer=`: its id, version, [name], clock ([now]), its indexes' newest reads
+ *   (IndexTransfer.newest of [database], as web/peer_routes.state answers them; [indexes] in their place while set),
+ *   units in peer_sync._order, the base it agreed on with the phone that asks and the answers its imports of that
+ *   phone's files kept (`kept`), its [settings] (politeness.settings_document: none while null, as a caracole older
+ *   than them answers) and the form token ([token]).
  * - `GET /api/peer/unit?id=` and `GET /api/peer/file?song=&name=`: a unit's document, a kept file's bytes (404 else).
  * - `POST /peer/push/new`, `/peer/push/file`, `/peer/push`: each with the token in its header, else 403 with
  *   `reload`; each checked as peer_push.py checks it (read_new, new_push: at most [OPEN] pushes here, open or sent
@@ -70,6 +72,8 @@ import java.util.concurrent.TimeUnit
  *   at most [INDEX_OPEN] waiting (409); each kept in [indexPushes], then `caracole index merge --delete --progress`
  *   queued, `202 {"job": N}`, whose one stage, merge, IndexTransfer.merge takes the file into [database] with (the
  *   port of the merge the computer runs), the request "failed" with the stage's words when it refuses it.
+ *   [mergeFails]: the merge fails instead, in those words (no room for its backup, say). [holdTakes]: each merge waits
+ *   for it to count down first, as a take does.
  *
  * [answers] replaces what a route answers ("GET /api/peer/state" → a handler); [requests] records each request as
  * "METHOD path?query"; [onUnit] and [onPoll] run before a unit or a poll is answered (a test changes the library
@@ -83,10 +87,11 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
 
     @Volatile var token: String = "computer-token-1"
     @Volatile var now: String = "2026-11-03T12:00:00Z"
-    @Volatile var indexes: Map<String, String> = emptyMap()
+    @Volatile var indexes: Map<String, String>? = null
     @Volatile var settings: JsonObject? = null
     @Volatile var index: (List<String>?) -> ByteArray = { ByteArray(0) }
     @Volatile var takeFails: String? = null
+    @Volatile var mergeFails: String? = null
     @Volatile var holdTakes: CountDownLatch? = null
     @Volatile var runningPolls: Int = 0
     @Volatile var onUnit: ((String) -> Unit)? = null
@@ -246,7 +251,7 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
 
     /** `GET /api/sync/indexes`'s answer: every site of IndexTransfer's, its newest read and its tabs. */
     fun indexCounts(): JsonObject {
-        val (newest, tabs) = database.read { db -> (IndexTransfer.newest(db) + indexes) to TabCounts.of(db) }
+        val (newest, tabs) = database.read { db -> (IndexTransfer.newest(db) + indexes.orEmpty()) to TabCounts.of(db) }
         return obj("indexes" to JsonObject(tabs.mapValues { (site, count) ->
             obj("read" to JsonPrimitive(newest[site]), "tabs" to JsonPrimitive(count))
         }))
@@ -256,6 +261,7 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
     fun stateDocument(peer: String?): JsonObject {
         val (units, base) = database.read { db -> Units.libraryState(db) to peer?.let { Compare.baseOf(db, it) } }
         val kept = peer?.let { asker -> database.read { db -> Compare.keptOf(db, asker) } }
+        val indexes = indexes ?: database.read { IndexTransfer.newest(it) }
         return JsonObject(linkedMapOf(
             "format" to JsonPrimitive(Units.FORMAT),
             "server" to JsonPrimitive(id),
@@ -471,6 +477,13 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
             holdTakes?.await()
             job.state = "running"
             stage.state = "running"
+            val fails = mergeFails
+            if (fails != null) {
+                stage.state = "failed"
+                stage.detail = fails
+                job.state = "failed"
+                return
+            }
             val merged = database.writeBlocking { db -> IndexTransfer.merge(db, file, now) }
             stage.detail = if (merged.changed) merged.sites.keys.joinToString("; ") else "Nothing newer"
             stage.state = "done"

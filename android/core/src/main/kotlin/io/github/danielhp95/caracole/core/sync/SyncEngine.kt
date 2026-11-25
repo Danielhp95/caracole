@@ -133,9 +133,13 @@ class SameCaracole(message: String) : Exception(message)
  *      last push to that computer (Reads.since: what they read, never a time window, since UG's stamp moves with the
  *      computer's nightly refresh and LaCuerda's rows hold no time) exported (IndexExport.export) into
  *      `stateDir/cache/` within the same write, so that the notes are those of the file, and pushed
- *      (PeerClient.pushIndex, `POST /peer/index`); once the computer answers 202 (its `caracole index merge`
- *      queued), those notes are forgotten (Reads.forget, up to the newest of them), which the stage's detail says.
- *      A push refused or lost keeps them for the next sync. Nothing is sent when none is noted.
+ *      (PeerClient.pushIndex, `POST /peer/index`); once the computer's request that merges them (its `caracole index
+ *      merge`) ends done, those notes are forgotten (Reads.forget, up to the newest of them), which the stage's
+ *      detail says, and each site's stamp there that those pages alone moved (no later than the newest of them, and
+ *      the computer's stamp before the push one the phone held) is kept as what the phone holds of it (kv
+ *      `sync:index:<computer id>`): the next sync downloads no whole index for the phone's own pages. A push
+ *      refused or lost, a merge there that ends otherwise than done, or one still going at the wait's end (10
+ *      minutes) keeps them for the next sync, which sends them again. Nothing is sent when none is noted.
  *    Skipped when no index is newer there and no page was read here. Either part's failure is said on the stage
  *    and stops nothing: the agreement stays as it is. The reads go to the computer the phone syncs with next: a
  *    second computer gets those read after (Reads keeps one record of what was pushed, its notes forgotten once).
@@ -688,8 +692,9 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
     }
 
     /** The computer's request [id] followed, every [pollEveryMs], until it is over (peer_push.wait_for): how it ended.
-     * A PeerError when it isn't over within [polls] asks (it goes on there all the same). */
-    private suspend fun awaitJob(client: PeerClient, id: Int): JsonObject {
+     * A PeerError when it isn't over within [polls] asks (it goes on there all the same), saying what it hasn't
+     * [done] yet. */
+    private suspend fun awaitJob(client: PeerClient, id: Int, done: String = "taken the push"): JsonObject {
         repeat(polls) { asked ->
             val job = io { client.job(id) }
             when (Give.text(job["state"])) {
@@ -697,7 +702,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
                 else -> return job
             }
         }
-        throw PeerError("${client.address} hasn't taken the push yet: its Journal entry $id goes on.")
+        throw PeerError("${client.address} hasn't $done yet: its Journal entry $id goes on.")
     }
 
     /** The computer's newer indexes merged, then the pages the phone's lookups read pushed, merged or not; each
@@ -771,11 +776,16 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
 
     /**
      * The pages Reads noted since the last push to [computer], exported (IndexExport) in the write that reads them, so
-     * that the file holds every page noted and those alone, and pushed (`POST /peer/index`); once the computer answers
-     * 202, the notes forgotten up to the newest of them. What it did, in the stage's words; null when nothing is noted
-     * by then. A PeerError (or mirror's SyncError) when the push fails, the notes kept; the file gone after either way.
-     * Each site given is counted on the computer (`GET /api/sync/indexes`) before the push and after its merge job, for
-     * the report; a computer that can't count them (one older than the app) gives no count, and the report none.
+     * that the file holds every page noted and those alone, and pushed (`POST /peer/index`), then the computer's
+     * request that merges them (its `caracole index merge`) followed to its end; once it ends done, the notes forgotten
+     * up to the newest of them, and what the phone holds of the computer's indexes moved on where those pages alone
+     * moved the computer's stamp ([explained]: kv `sync:index:<computer id>`), so that the next sync never downloads a
+     * site's whole index for the phone's own pages. What it did, in the stage's words; null when nothing is noted by
+     * then. A PeerError (or mirror's SyncError) when the push fails, its request ends otherwise than done, or goes on
+     * past the wait (the next push sends them again, a merge there taking the same rows), the notes kept; the file gone
+     * after either way. Each site given is counted on the computer (`GET /api/sync/indexes`) before the push and after
+     * its merge, for the report and the stamps; a computer that can't count them (one older than the app) gives no
+     * count, the report none, and no stamp is moved.
      */
     private suspend fun pushReads(client: PeerClient, computer: String, token: String, done: Done): String? {
         val file = File(cache(), "reads-${KeptById.newId()}.sqlite")
@@ -793,25 +803,32 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
                 }
             } ?: return null
             val (pages, upTo, read) = noted
+            val them = if (pages.values.sumOf { it.size } == 1) "it" else "them"
             val before = io { counts(client) }
             val job = io { client.pushIndex(token, file) }
-            io { database.write { db -> Reads.forget(db, computer, upTo) } }
-            if (before != null) {
-                val after = try {
-                    val ended = awaitJob(client, job)
-                    if (Give.text(ended["state"]) == "done") io { counts(client) } else null
-                } catch (e: PeerError) {
-                    null
-                }
-                if (after != null) {
-                    for (site in Sites.ALL.map { it.name }.filter { it in pages }) {
-                        val was = before[site] ?: continue
-                        val now = after[site] ?: continue
-                        done.reported.add(entry(site, GIVEN, was.tabs, now.tabs, read[site]))
+            val ended = Give.text(awaitJob(client, job, "merged $them")["state"])
+            if (ended != "done") {
+                throw PeerError("${client.address} didn't merge $them: its Journal entry $job ended $ended.")
+            }
+            val after = if (before == null) null else io { counts(client) }
+            io {
+                database.write { db ->
+                    Reads.forget(db, computer, upTo)
+                    if (before != null && after != null) {
+                        val had = IndexStamps.sites(db.kvGetJson(INDEX_KEY + computer))
+                        val held = explained(read, before, after, had, MergedIndexes.of(db))
+                        if (held.isNotEmpty()) db.kvSetJson(INDEX_KEY + computer, IndexStamps.json(had + held))
                     }
                 }
             }
-            return "sent ${pagesRead(pages)} · its request $job merges them"
+            if (before != null && after != null) {
+                for (site in Sites.ALL.map { it.name }.filter { it in pages }) {
+                    val was = before[site] ?: continue
+                    val now = after[site] ?: continue
+                    done.reported.add(entry(site, GIVEN, was.tabs, now.tabs, read[site]))
+                }
+            }
+            return "sent ${pagesRead(pages)} · its request $job merged $them"
         } finally {
             file.delete()
         }
@@ -1001,6 +1018,27 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             indexes.filter { (site, stamp) ->
                 Sites.named(site) != null && listOfNotNull(had[site], merged[site]).all { IndexStamps.newer(stamp, it) }
             }.keys.sortedBy { site -> Sites.ALL.indexOfFirst { it.name == site } }
+
+        /**
+         * The computer's stamps that the pages the phone pushed alone explain, once its merge of them is done: for kv
+         * `sync:index:<computer id>`, each site of [read] (the newest page pushed of it) whose stamp there now
+         * ([after], `GET /api/sync/indexes`) is a time no later than that page and later than [had]'s, and whose stamp
+         * just before the push ([before]) was one the phone held ([newerThere]'s rule, against [had] and [merged];
+         * none: it had no index of that site). So the computer read nothing of that site that the phone lacks. A stamp
+         * later than the pages, or a site the phone lacked news of before the push (its download failed), is the
+         * computer's own, which the next sync takes.
+         */
+        private fun explained(read: Map<String, String?>, before: Map<String, IndexCount>,
+                              after: Map<String, IndexCount>, had: Map<String, String>,
+                              merged: Map<String, String>): Map<String, String> =
+            read.mapNotNull { (site, pushed) ->
+                val now = after[site]?.read ?: return@mapNotNull null
+                if (pushed == null || !IndexStamps.noLater(now, pushed)) return@mapNotNull null
+                if (had[site]?.let { IndexStamps.newer(now, it) } == false) return@mapNotNull null
+                val was = before[site]?.read
+                if (was != null && newerThere(mapOf(site to was), had, merged).isNotEmpty()) return@mapNotNull null
+                site to now
+            }.toMap()
 
         /** The phone's library's name, and its caracole's version, as its push names them unless it is given others. */
         const val PHONE_NAME = "Phone"

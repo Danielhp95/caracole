@@ -397,7 +397,15 @@ class SyncEngineTest {
 
     private fun noted(): Map<String, List<String>> = phone.read { Reads.since(it, computer.id) }
 
-    @Test fun `the pages read here are pushed though nothing is newer there, and forgotten once their merge is queued`() {
+    /** kv `sync:index:<computer id>`: what the phone holds of the computer's indexes. */
+    private fun held(): String? = phone.read { it.kvGet(SyncEngine.INDEX_KEY + computer.id) }
+
+    /** The phone holds the computer's harptabs.com index as of [at], as an earlier sync took it. */
+    private fun holdingHarptabs(at: String) = phone.writeBlocking { db ->
+        db.kvSetJson(SyncEngine.INDEX_KEY + computer.id, JsonObject(mapOf("harptabs" to JsonPrimitive(at))))
+    }
+
+    @Test fun `the pages read here are pushed though nothing is newer there, and forgotten once their merge is done`() {
         onComputer("Radiohead", "Creep")
         readHere("artist/1178/billy-joel", listOf("Piano Man", "Honesty"), "2026-11-03T09:00:00Z")
         readHere("artist/50/the-beatles", listOf("Yesterday"), "2026-11-03T09:30:00Z")
@@ -409,17 +417,20 @@ class SyncEngineTest {
         assertEquals("done", ended()["index"])
         val detail = stages.last { it.first == "index" }.third
         assertTrue(detail.startsWith("sent 2 pages read here · its request "), detail)
+        assertTrue(detail.endsWith(" merged them"), detail)
         assertEquals(1, computer.indexPushes.size)
-        computer.awaitTakes()
         assertEquals(mapOf("artist/1178/billy-joel" to 2L, "artist/50/the-beatles" to 1L), computerTabs())
         assertEquals("done", computer.jobs().last()["state"].let { (it as JsonPrimitive).content })
-        assertEquals(emptyMap(), noted(), "forgotten once the computer queued their merge")
+        assertEquals(emptyMap(), noted(), "forgotten once the computer merged them")
+        assertEquals("""{"harptabs": "2026-11-03T09:30:00Z"}""", held(),
+                     "the computer's harptabs.com index is the phone's own pages: held here as it is there")
         assertEquals(emptyList(), File(stateDir, "cache").listFiles().orEmpty().toList(), "the export is gone")
 
-        // The next sync, with nothing read since, sends nothing; a page read since goes alone.
+        // The next sync, with nothing read since, sends nothing and asks for no index; a page read since goes alone.
         stages.clear()
         apply(engine.compare(computer.address.toString()))
         assertEquals("skipped", ended()["index"])
+        assertEquals(emptyList(), computer.indexAsked, "the computer's newest read of harptabs.com is the phone's page")
         assertEquals(1, computer.indexPushes.size)
         readHere("artist/7/bob-dylan", listOf("Blowin' in the Wind"), "2026-11-03T11:00:00Z")
         stages.clear()
@@ -505,6 +516,155 @@ class SyncEngineTest {
         assertEquals("1 page read here kept for the next share · ${computer.address} takes no index " +
                          "pages: its caracole may be older than the app.", stages.last { it.first == "index" }.third)
         assertEquals(mapOf("harptabs" to listOf("artist/50/the-beatles")), noted())
+    }
+
+    @Test fun `a merge that fails there keeps the pages read here for the next sync, and the stage says so`() {
+        onComputer("Radiohead", "Creep")
+        readHere("artist/50/the-beatles", listOf("Yesterday"), "2026-11-03T09:30:00Z")
+        computer.mergeFails = "Nothing merged: no backup first (not enough room)."
+
+        val outcome = apply(engine.compare(computer.address.toString()))
+
+        assertEquals("failed", ended()["index"])
+        assertEquals("1 page read here kept for the next share · ${computer.address} didn't merge it: its " +
+                         "Journal entry 1 ended failed.", stages.last { it.first == "index" }.third)
+        assertEquals(mapOf("harptabs" to listOf("artist/50/the-beatles")), noted(), "never merged there: kept here")
+        assertNull(held())
+        assertEquals(1, outcome.agreed, "a merge that fails there stops nothing")
+
+        // Merged the next time.
+        computer.mergeFails = null
+        stages.clear()
+        apply(engine.compare(computer.address.toString()))
+        assertEquals("done", ended()["index"])
+        assertEquals(emptyMap(), noted())
+        assertEquals(mapOf("artist/50/the-beatles" to 1L), computerTabs())
+    }
+
+    @Test fun `a merge still going there at the wait's end keeps the pages read here, sent again the next time`() {
+        onComputer("Radiohead", "Creep")
+        readHere("artist/50/the-beatles", listOf("Yesterday"), "2026-11-03T09:30:00Z")
+        val slow = java.util.concurrent.CountDownLatch(1)
+        computer.holdTakes = slow
+        val waiting = engine().also { it.pollEveryMs = 5; it.polls = 3 }
+
+        apply(waiting.compare(computer.address.toString()), on = waiting)
+
+        assertEquals("failed", ended()["index"])
+        assertEquals("1 page read here kept for the next share · ${computer.address} hasn't merged it yet: its " +
+                         "Journal entry 1 goes on.", stages.last { it.first == "index" }.third)
+        assertEquals(mapOf("harptabs" to listOf("artist/50/the-beatles")), noted())
+        assertNull(held(), "nothing of the computer's held")
+
+        slow.countDown()
+        computer.holdTakes = null
+        computer.awaitTakes()
+        computer.index = { computersExport() }
+        stages.clear()
+        apply(engine.compare(computer.address.toString()))
+        assertEquals("done", ended()["index"])
+        assertEquals(listOf<List<String>?>(listOf("harptabs")), computer.indexAsked,
+                     "a stamp moved by a merge the phone never saw done is taken: it may be the computer's own")
+        assertEquals(2, computer.indexPushes.size, "sent again, merged again there to the same rows")
+        assertEquals(mapOf("artist/50/the-beatles" to 1L), computerTabs())
+        assertEquals(emptyMap(), noted())
+    }
+
+    // --- what the computer's stamps say once it merged the pages read here (sync hunt 2026-11-25) -------------------
+
+    @Test fun `a page read here comes back with no whole index downloaded at the next sync`() {
+        onComputer("Radiohead", "Creep")
+        readThere("artist/1178/billy-joel", "Piano Man", "2026-11-03T03:00:00Z")
+        computer.index = { computersExport() }
+        readHere("artist/50/the-beatles", listOf("Yesterday"), "2026-11-03T09:30:00Z")
+
+        apply(engine.compare(computer.address.toString()))
+
+        assertEquals(listOf<List<String>?>(listOf("harptabs")), computer.indexAsked,
+                     "the first sync takes the computer's harptabs.com index")
+        assertEquals("2026-11-03T09:30:00Z", computer.database.read { IndexTransfer.newest(it) }["harptabs"],
+                     "the computer's newest read of it is the phone's own page now")
+        assertEquals("""{"harptabs": "2026-11-03T09:30:00Z"}""", held())
+
+        // Nothing read anywhere since; the owner syncs again, or Sync on Wi-Fi does.
+        stages.clear()
+        val again = engine.compare(computer.address.toString())
+        assertEquals(emptyList(), again.indexes, "no Site index waits")
+        apply(again)
+        assertEquals(1, computer.indexAsked.size,
+                     "nothing read there but the phone's own page: no whole index downloaded again")
+        assertEquals(Triple("index", "skipped", SyncEngine.NOTHING_TO_INDEX), stages.last { it.first == "index" })
+    }
+
+    @Test fun `the pages read here, pushed, never make the next sync download the index the phone took last time`() {
+        onComputer("Radiohead", "Creep")
+        readThere("artist/1178/billy-joel", "Piano Man", "2026-11-03T00:00:00Z")
+        holdingHarptabs("2026-11-03T00:00:00Z")
+        readHere("artist/50/the-beatles", listOf("Yesterday"), "2026-11-03T09:30:00Z")
+
+        apply(engine.compare(computer.address.toString()))
+        assertEquals(1, computer.indexPushes.size, "the page read here was pushed")
+        assertEquals(emptyList(), computer.indexAsked)
+
+        stages.clear()
+        apply(engine.compare(computer.address.toString()))
+        assertEquals(emptyList(), computer.indexAsked, "the computer's harptabs.com index holds nothing the phone " +
+                         "lacks: " + stages.filter { it.first == "index" })
+    }
+
+    @Test fun `a page the computer read itself as it merged those read here is taken at the next sync`() {
+        onComputer("Radiohead", "Creep")
+        readThere("artist/1178/billy-joel", "Piano Man", "2026-11-03T03:00:00Z")
+        computer.index = { computersExport() }
+        readHere("artist/50/the-beatles", listOf("Yesterday"), "2026-11-03T09:30:00Z")
+        // Its nightly pass reads another artist's page while the phone waits for the merge of those it pushed.
+        val once = java.util.concurrent.atomic.AtomicBoolean(false)
+        computer.onPoll = {
+            if (once.compareAndSet(false, true)) {
+                readThere("artist/7/bob-dylan", "Blowin' in the Wind", "2026-11-03T10:00:00Z")
+            }
+        }
+
+        apply(engine.compare(computer.address.toString()))
+
+        assertEquals(emptyMap(), noted(), "the pages read here merged there")
+        assertEquals("""{"harptabs": "2026-11-03T03:00:00Z"}""", held(),
+                     "a stamp later than the pages pushed is the computer's own news: never held here")
+        stages.clear()
+        val again = engine.compare(computer.address.toString())
+        assertEquals(listOf("harptabs"), again.indexes.filter { it.newer == "there" }.map { it.site })
+        apply(again)
+        assertEquals(listOf<List<String>?>(listOf("harptabs"), listOf("harptabs")), computer.indexAsked)
+        assertEquals(1L, phone.read { db ->
+            db.one("SELECT COUNT(*) FROM harptabs_artist_tabs WHERE artist = 'artist/7/bob-dylan'") { it.long(0) }
+        }, "the computer's own page taken")
+    }
+
+    @Test fun `a computer's index the phone failed to take is asked for again after the pages read here are pushed`() {
+        onComputer("Radiohead", "Creep")
+        readThere("artist/1178/billy-joel", "Piano Man", "2026-11-03T03:00:00Z")
+        holdingHarptabs("2026-11-03T03:00:00Z")
+        // Read there since the phone took it last; its download fails this time.
+        readThere("artist/7/bob-dylan", "Blowin' in the Wind", "2026-11-03T09:00:00Z")
+        computer.index = { "not an index export".toByteArray() }
+        readHere("artist/50/the-beatles", listOf("Yesterday"), "2026-11-03T09:30:00Z")
+
+        apply(engine.compare(computer.address.toString()))
+
+        assertEquals("failed", ended()["index"], "the computer's index wasn't taken")
+        assertEquals(emptyMap(), noted(), "the pages read here pushed and merged all the same")
+        assertEquals("2026-11-03T09:30:00Z", computer.database.read { IndexTransfer.newest(it) }["harptabs"],
+                     "the computer's newest read is the phone's page, later than its own")
+        assertEquals("""{"harptabs": "2026-11-03T03:00:00Z"}""", held(),
+                     "yet the phone lacks the computer's page of 09:00: what it holds of it stays as it was")
+
+        computer.index = { computersExport() }
+        stages.clear()
+        apply(engine.compare(computer.address.toString()))
+        assertEquals(listOf<List<String>?>(listOf("harptabs"), listOf("harptabs")), computer.indexAsked)
+        assertEquals(1L, phone.read { db ->
+            db.one("SELECT COUNT(*) FROM harptabs_artist_tabs WHERE artist = 'artist/7/bob-dylan'") { it.long(0) }
+        })
     }
 
     @Test fun `pushIndex sends the export's bytes with the form token, and the computer's request is its answer`() {

@@ -4156,6 +4156,11 @@ If the computer refuses the file or doesn't answer, the phone keeps the pages fo
 and the sync says why. A 409 means the two run different versions of caracole, or two files
 already wait to be merged. A 404 means the computer's caracole is too old for this route.
 
+The phone waits for that merge, up to 10 minutes, and forgets the pages only once it is done. If
+the merge fails, or is still going, the next sync sends them again; merging the same pages twice
+changes nothing. Once merged, the computer's newest read of a site may be the phone's own page.
+The phone notes that, so its next sync doesn't download the site's whole index for it.
+
 ### What the offline copy lists
 
 `GET /api/offline` ([caracole serve](#caracole-serve)) lists every file the app copies. Each file

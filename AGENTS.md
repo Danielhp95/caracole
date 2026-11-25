@@ -2637,6 +2637,14 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   Reads noted for the next push ("here"), a site of both twice, so the Sync sheet says what the Sync does: where
   sync_routes._waiting compares newest reads, the phone answers otherwise (vectors/web/sync_routes.jsonl's scene holds
   both records, so the two answers agree).
+- **The pages the phone's lookups read** (Reads), pushed at the index stage's end (`POST /peer/index`): their notes
+  forgotten only once the computer's request that merges them (its `caracole index merge`) ends done; kept when it ends
+  otherwise (the stage failed, "… didn't merge them: its Journal entry N ended failed.") or still goes at the wait's
+  end (10 minutes), for the next push, which a merge there takes to the same rows. Once done, each site's stamp there
+  (`GET /api/sync/indexes`) that those pages alone explain (`SyncEngine.explained`: a time no later than the newest
+  page pushed of it, the computer's stamp just before the push one the phone held) goes into kv `sync:index:<computer
+  id>`, so the next sync downloads no site's whole index for the phone's own pages; a stamp later than them, or one the
+  phone lacked before the push (its download failed), is the computer's own reading, which the next sync takes.
 - **`apply(c, choices, prefer, parts, conflicts)`**: only the differences of `parts` are taken, given or left
   (`Scope.inScope`: a part left out is never read as a removal, a song a songbook lists comes along with the
   songbooks); Library unticked skips the mirror stage, Site indexes unticked the index stage, each saying so. No stage
@@ -4212,9 +4220,9 @@ picks one).
   sent); and the index pages a phone's lookups read, `POST /peer/index`'s export of them
   (`state_dir/peer/index-<16 hex>.sqlite`, 0600, at most `peer_push.INDEX_OPEN` waiting, read before its 202 as an
   export of pages alone of this caracole's version, `index_transfer.check_pages`, deleted when it isn't, then
-  `caracole index merge --delete --progress` queued, which deletes it once merged or refused, and `--delete` deletes
-  a refused file of that staging alone, never one named by hand; one an hour old no waiting request names is swept,
-  `peer_push.sweep_indexes`).
+  `caracole index merge --delete --progress` queued, which deletes it once merged or refused (the phone forgets those
+  pages only once that request ends done), and `--delete` deletes a refused file of that staging alone, never one
+  named by hand; one an hour old no waiting request names is swept, `peer_push.sweep_indexes`).
 - And for Export and Import a file (sync_file_routes.py), nothing else: an export's file
   (`cache_dir/peer/export-<16 hex>.caracole`, 0600, one made at a time, its units from one read transaction and its
   indexes from one of their own, no lock; one waits to be sent at most, the one before it deleted as the next is made;
