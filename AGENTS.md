@@ -2137,7 +2137,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   `http://127.0.0.1:8738`, the debug build's 8739 (`Caracole.PORT`, BuildConfig's `SERVER_PORT`), else a free port;
   the launch's secret a cookie, `caracole-launch`, set in the WebView, which loads that exact origin alone,
   `mirror.Links`); the bar's sync button, the library page's sync sheet
-  (`SheetAddress`, `#sheet=sync`; Settings' Export and Import a file open it at theirs, the page's file input reaching
+  (`SheetAddress`, `#sheet=sync`; Settings' Sync, beside Test, opens it at `#sheet=sync`, a blank address said in
+  place as Test says it, and Export and Import a file at theirs, the page's file input reaching
   Android's picker, `FileChooser`, its export the share sheet, `Exports`); Sync on Wi-Fi, that sync unattended
   (`Syncs.run`: `Phone.sync.alone`, a notification on channel `syncs` for the conflicts it left); the queue's work, a
   sync among it, in a foreground service (`SyncService`).
