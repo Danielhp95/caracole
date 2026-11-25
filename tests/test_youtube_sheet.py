@@ -521,4 +521,7 @@ def test_the_ready_line_says_the_lyrics_are_transcribed():
     assert HOLDS["transcript"] == "chords over the transcribed lyrics"
     assert holds({"lyrics": "synced", "lyrics_source": "transcript"}) == "chords over the transcribed lyrics"
     assert holds({"lyrics": "synced"}) == "chords over the lyrics"
+    assert HOLDS["silent"] == "chords only: nothing sung was heard"
+    assert holds({"lyrics": "none", "heard_nothing": True}) == "chords only: nothing sung was heard"
+    assert holds({"lyrics": "none"}) == "chords only, no lyrics"
     assert holds({}) == "chords"

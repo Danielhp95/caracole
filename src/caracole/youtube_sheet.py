@@ -74,13 +74,19 @@ HOLDS = {
     "synced": "chords over the lyrics",
     "plain": "chords, then the lyrics",
     "none": "chords only, no lyrics",
+    "silent": "chords only: nothing sung was heard",  # ``raw["heard_nothing"]``
     "transcript": "chords over the transcribed lyrics",  # synced, over Whisper's words (``raw["lyrics_source"]``)
 }
 
 
 def holds(raw: dict[str, object]) -> str:
     """What the auto sheet's version (its ``raw``) says the sheet holds."""
-    used = "transcript" if raw.get("lyrics_source") == "transcript" else str(raw.get("lyrics"))
+    if raw.get("lyrics_source") == "transcript":
+        used = "transcript"
+    elif raw.get("heard_nothing") and raw.get("lyrics") == "none":
+        used = "silent"
+    else:
+        used = str(raw.get("lyrics"))
     return HOLDS.get(used, "chords")
 NO_AUDIO = "no audio"
 

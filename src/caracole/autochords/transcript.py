@@ -31,6 +31,7 @@ HEARD_NOTHING = "transcribe:none:"  # + song id: when the song's audio was trans
 UNREADABLE = "autochords:failed:"  # + song id: audio auto-chords or a transcription couldn't read (run.py writes it)
 LYRICS_SOURCE = "transcript"  # a version's raw["lyrics_source"] when the sheet's words are the transcript's
 NOTE = "Lyrics transcribed from the audio (Whisper), unverified"
+SILENT = "Instrumental: nothing sung was heard in the audio"  # the sheet's note line over nothing sung
 ALREADY_TRANSCRIBED = "already transcribed"  # why_not_offered's word for a song whose own audio has a transcript
 MODEL = "whisper-large-v3"
 
