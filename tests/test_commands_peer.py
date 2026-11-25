@@ -250,6 +250,57 @@ def test_once_synced_a_song_removed_there_is_removed_here(two):
     assert find_wanted(here.cfg.wanted_file, "Radiohead", "Creep") is None
 
 
+def by_keys(transport: httpx.MockTransport, version: int) -> httpx.MockTransport:
+    """``transport``'s caracole serve answering as a caracole whose songs are keyed by ``version``
+    (``normalize.KEY_VERSION``), whatever this side's are: the two in this process, its every answer, and every
+    command it runs as it answers, made under its own."""
+    from caracole import normalize
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        here_keys, normalize.KEY_VERSION = normalize.KEY_VERSION, version
+        try:
+            return transport.handler(request)
+        finally:
+            normalize.KEY_VERSION = here_keys
+
+    return httpx.MockTransport(handler)
+
+
+def answering_by_keys(monkeypatch, version: int) -> None:
+    """There's caracole serve, as ``caracole peer`` asks it, answering as a caracole of the song keys of ``version``."""
+    from caracole.commands import peer
+
+    there = by_keys(peer.transport_for_peer(), version)
+    monkeypatch.setattr("caracole.commands.peer.transport_for_peer", lambda: there)
+
+
+def test_a_caracole_whose_song_keys_changed_never_syncs_with_one_of_the_old_keys_and_neither_loses_the_song(
+        two, monkeypatch):
+    from caracole import normalize, songs
+
+    here, there, asked, _ = two
+    creep = there.song()
+    assert run(here, "peer", "sync", HOST, "--push", "--yes").exit_code == 0  # the two agree on Creep
+    # Here is upgraded: its normalizer keys Creep otherwise (a KEY_VERSION bump), and it re-keys its songs. There
+    # still runs the caracole before, which keys it as it did: to it, here's song/<old key> is gone.
+    old = songs.identity_key
+    monkeypatch.setattr(songs, "identity_key", lambda a, t: old(a, t) + "-v3" if t == "Creep" else old(a, t))
+    songs.rekey_songs(here.conn)
+    monkeypatch.setattr(songs, "identity_key", old)
+    assert find_song(here.conn, creep.key + "-v3") is not None
+    monkeypatch.setattr(normalize, "KEY_VERSION", normalize.KEY_VERSION + 1)
+    answering_by_keys(monkeypatch, normalize.KEY_VERSION - 1)
+    mine, theirs = here.units(), there.units()
+    asked.clear()
+
+    for args in (["diff"], ["sync", "--push", "--yes", "--prefer=here"], ["pull", f"--unit=song/{creep.key}"]):
+        result = run(here, "peer", args[0], HOST, *args[1:])
+        assert result.exit_code == 1 and sync.OTHER_KEYS in result.output, (args, result.output)
+    assert {path for _, path in asked} == {"/api/peer/state"}  # refused as the state is read: nothing asked after
+    assert find_song(there.conn, creep.key) is not None and removed_song(there.conn, creep.key) is None
+    assert here.units() == mine and there.units() == theirs and there.app.queue.snapshot() == []
+
+
 def test_a_songbook_comes_with_its_songs_in_order(two):
     here, there, _, _ = two
     make_songbook(songbooks_file(there.cfg.library_dir), "Campfire", [CREEP, "Oasis - Wonderwall"])

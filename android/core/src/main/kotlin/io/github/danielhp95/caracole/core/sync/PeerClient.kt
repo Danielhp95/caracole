@@ -17,11 +17,12 @@ import java.io.IOException
 import java.io.InputStream
 
 /** /api/peer/state, as the phone reads it: [kept], the answers the computer's imports of the phone's files
- * remembered for it, as it keeps them (`here` the computer's), its odd entries left out. */
+ * remembered for it, as it keeps them (`here` the computer's), its odd entries left out; [keyVersion], the rules its
+ * songs are keyed by as it says them (`key_version`; null: it says none, a computer older than the member). */
 data class PeerState(val format: Int, val server: String?, val caracole: String, val name: String, val now: String?,
                      val units: Map<String, SyncUnit>, val base: Base?, val token: String,
                      val indexes: Map<String, String> = emptyMap(), val settings: JsonObject? = null,
-                     val kept: Kept = emptyMap()) {
+                     val kept: Kept = emptyMap(), val keyVersion: JsonElement? = null) {
     companion object {
         /** A state document, read as [PeerClient.state] reads the computer's (read_state_document): its `settings`
          * the computer's settings, none for a member that isn't an object. A [PeerError] for one that can't be read. */
@@ -39,7 +40,12 @@ data class IndexCount(val read: String?, val tabs: Long)
 
 /** What the computer answered that the phone can't go on with, said as one sentence ([message]); [status], the
  * HTTP status it answered with, when it answered one. Nothing answering at all is mirror's SyncError.NoAnswer. */
-class PeerError(message: String, val status: Int? = null, cause: Throwable? = null) : Exception(message, cause)
+open class PeerError(message: String, val status: Int? = null, cause: Throwable? = null) : Exception(message, cause)
+
+/** peer_sync.OtherKeys: the computer keys its songs by other rules than the phone (its state's `key_version`,
+ * Units.otherKeys): the two never compare nor take from each other until both are updated to one version, said in
+ * Units.OTHER_KEYS. */
+class OtherKeys(message: String) : PeerError(message, 200)
 
 /**
  * The computer's peer routes, from the phone (peer_sync.Peer's reads, and the push the phone sends because it serves
@@ -65,7 +71,9 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
     private var asking: String? = null
     private val renewed = HashMap<String, String>()
 
-    /** GET /api/peer/state, a 60 s read timeout: the computer's state, with its base for [asking] (the phone's id). */
+    /** GET /api/peer/state, a 60 s read timeout: the computer's state, with its base for [asking] (the phone's id);
+     * [OtherKeys] for one whose songs are keyed by other rules than the phone's, so that no comparison, take or push
+     * follows it (peer_sync.Peer.state). */
     fun state(asking: String?): PeerState {
         this.asking = asking
         val answer = get(STATE_PATH + (asking?.let { "?peer=" + Documents.quote(it) } ?: ""), STATE_TIMEOUT_MS)
@@ -74,11 +82,13 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
                             "something else?", 404)
         }
         if (answer.status != 200) throw refused(answer)
-        return try {
+        val state = try {
             Documents.state(answer.json())
         } catch (e: Documents.Unreadable) {
             throw PeerError("$address answered ${e.message}.", 200, e)
         }
+        if (Units.otherKeys(state.keyVersion)) throw OtherKeys(Units.OTHER_KEYS)
+        return state
     }
 
     /** POST /peer/push/new: the push's id, and the shas the computer needs. */

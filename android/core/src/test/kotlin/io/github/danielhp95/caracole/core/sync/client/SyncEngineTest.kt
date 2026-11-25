@@ -5,6 +5,7 @@ import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.index.Reads
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.json.PyJson
+import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.index.IndexTransfer
@@ -14,6 +15,7 @@ import io.github.danielhp95.caracole.core.sync.Comparison
 import io.github.danielhp95.caracole.core.sync.Conflicts
 import io.github.danielhp95.caracole.core.sync.IndexWaiting
 import io.github.danielhp95.caracole.core.sync.KeptPair
+import io.github.danielhp95.caracole.core.sync.OtherKeys
 import io.github.danielhp95.caracole.core.sync.Scope
 import io.github.danielhp95.caracole.core.sync.PeerClient
 import io.github.danielhp95.caracole.core.sync.PeerError
@@ -195,6 +197,7 @@ class SyncEngineTest {
         assertTrue(Triple("give", "running", "1 of 1 file") in stages, stages.joinToString("\n"))
         val push = computer.pushes.single()
         assertEquals(phoneId, (push["from"] as JsonPrimitive).content)
+        assertEquals(JsonPrimitive(Normalize.KEY_VERSION), push["key_version"], "the rules its songs are keyed by")
         assertEquals(JsonPrimitive(computer.now), push["at"])
         assertEquals(phoneState().keys, (push["units"] as JsonObject).keys, "the phone's whole state, after its take")
         assertEquals(computer.state(), phoneState())
@@ -269,6 +272,32 @@ class SyncEngineTest {
         // The base records what the two hold alike alone.
         val base = assertNotNull(phone.read { Compare.baseOf(it, computer.id) })
         assertNull(base[unitOf(creep)]?.first)
+    }
+
+    @Test fun `a computer whose songs are keyed by other rules is refused before anything changes on either side`() {
+        // The computer is updated past the phone (or the other way round): a KEY_VERSION bump re-keyed its songs, so a
+        // song both hold would read as removed on one side and new on the other (python.md's F1). Neither a
+        // comparison, Test nor the Sync of a comparison made before goes on: nothing taken, given or agreed.
+        onPhone("Muse", "Hysteria")
+        onComputer("Radiohead", "Creep")
+        val c = engine.compare(computer.address.toString())  // compared while the two keyed songs alike
+        computer.keyVersion = JsonPrimitive(Normalize.KEY_VERSION + 1)
+        val before = phoneState() to computer.state()
+        val address = computer.address.toString()
+        assertEquals(Units.OTHER_KEYS, assertFailsWith<OtherKeys> { engine.compare(address) }.message)
+        assertEquals(Units.OTHER_KEYS, assertFailsWith<OtherKeys> { engine.tested(address) }.message)
+        val refused = assertFailsWith<SyncFailed> { apply(c) }
+        assertEquals(Units.OTHER_KEYS, refused.message)
+        assertNull(refused.outcome)
+        assertEquals(listOf(Triple("compare", "running", ""), Triple("compare", "failed", Units.OTHER_KEYS)), stages)
+        assertEquals(before, phoneState() to computer.state())
+        assertEquals(emptyList(), computer.asked("POST", "/peer/push/new") + computer.asked("GET", "/api/peer/unit"))
+        assertNull(phone.read { Compare.baseOf(it, computer.id) })
+        assertFalse(File(stateDir, "backups").exists())
+        // An older computer, whose state names no key version, is compared as before: the gap that closes only once
+        // both sides are updated.
+        computer.keyVersion = null
+        assertEquals(c.hash, engine.compare(address).hash)
     }
 
     @Test fun `two libraries changed since the comparison are refused at its stage, before any change`() {

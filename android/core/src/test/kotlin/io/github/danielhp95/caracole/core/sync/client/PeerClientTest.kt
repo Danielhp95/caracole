@@ -2,9 +2,13 @@ package io.github.danielhp95.caracole.core.sync.client
 
 import com.sun.net.httpserver.HttpExchange
 import io.github.danielhp95.caracole.core.json.Canonical
+import io.github.danielhp95.caracole.core.keys.Normalize
+import io.github.danielhp95.caracole.core.sync.OtherKeys
 import io.github.danielhp95.caracole.core.sync.PeerClient
 import io.github.danielhp95.caracole.core.sync.PeerError
+import io.github.danielhp95.caracole.core.sync.PeerState
 import io.github.danielhp95.caracole.core.sync.SyncUnit
+import io.github.danielhp95.caracole.core.sync.Units
 import io.github.danielhp95.caracole.core.testing.sync.FakeComputer
 import io.github.danielhp95.caracole.mirror.Http
 import io.github.danielhp95.caracole.mirror.SyncError
@@ -96,6 +100,26 @@ class PeerClientTest {
         assertTrue("a unit that can't be read" in assertFailsWith<PeerError> { client.state("me") }.message!!)
         answer("GET /api/peer/state", 200, "<html>a Wi-Fi login</html>", type = "text/html")
         assertTrue("isn't JSON" in assertFailsWith<PeerError> { client.state("me") }.message!!)
+    }
+
+    @Test fun `a state whose songs are keyed by other rules is refused, and one that says none is read as before`() {
+        // peer_sync.Peer.state: a state of another key_version is OtherKeys, in its words; an older computer's, which
+        // names none (or null), as before (the gap that closes once both sides are updated); 2.0 is 2, as Python's ==.
+        fun saying(keys: String) = state.replace("\"name\":\"Desk\",", "\"name\":\"Desk\",\"key_version\":$keys,")
+        val ours = Normalize.KEY_VERSION
+        answer("GET /api/peer/state", 200, state)
+        assertNull(client.state("me").keyVersion)  // an older computer's state names none
+        for (same in listOf("$ours", "$ours.0", "null")) {
+            answer("GET /api/peer/state", 200, saying(same))
+            assertEquals("Desk", client.state("me").name, same)
+        }
+        for (other in listOf("${ours + 1}", "${ours - 1}", "\"$ours\"", "true", "[2]", "{}")) {
+            answer("GET /api/peer/state", 200, saying(other))
+            val refused = assertFailsWith<OtherKeys>(other) { client.state("me") }
+            assertEquals(Units.OTHER_KEYS, refused.message)
+            assertTrue(refused is PeerError)
+            assertEquals(Canonical.parse(other), PeerState.read(Canonical.parse(saying(other))).keyVersion)
+        }
     }
 
     @Test fun `the state takes as long as a minute, where another read gives up sooner`() {

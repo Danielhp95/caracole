@@ -2,6 +2,7 @@ package io.github.danielhp95.caracole.core.sync.internal.client
 
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.json.Canonical
+import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.sync.SyncUnit
 import io.github.danielhp95.caracole.core.sync.Units
 import kotlinx.serialization.json.JsonArray
@@ -53,13 +54,15 @@ internal object Give {
         return null
     }
 
-    /** The push document: who pushes, its state after its own take ([state]), and the units the computer takes. */
+    /** The push document: who pushes, the rules its songs are keyed by (Normalize.KEY_VERSION), its state after its
+     * own take ([state]), and the units the computer takes. */
     fun document(from: String, name: String, caracole: String, at: String, state: Map<String, SyncUnit>,
                  entries: List<Entry>): JsonObject = JsonObject(linkedMapOf(
         "format" to JsonPrimitive(Units.FORMAT),
         "from" to JsonPrimitive(from),
         "name" to JsonPrimitive(name),
         "caracole" to JsonPrimitive(caracole),
+        "key_version" to JsonPrimitive(Normalize.KEY_VERSION),
         "at" to JsonPrimitive(at),
         "units" to JsonObject(state.values.associate { unit ->
             unit.id to JsonObject(linkedMapOf("label" to JsonPrimitive(unit.label), "digest" to JsonPrimitive(unit.digest)))

@@ -2,9 +2,10 @@
 unit whole, its kept files, a pull of another caracole's units queued, another caracole's push staged (peer_push.py),
 and this library's site indexes.
 
-    GET  /api/peer/state?peer=   this caracole's id, its version, its library's name, each unit of its library (a song,
-                                 a removal, a songbook, an artist's alias or UG page, a blocked tab) with its label and
-                                 its digest, and what it last agreed on with the caracole ``peer`` names (its id)
+    GET  /api/peer/state?peer=   this caracole's id, its version, its library's name, the rules its songs are keyed by
+                                 (``key_version``), each unit of its library (a song, a removal, a songbook, an
+                                 artist's alias or UG page, a blocked tab) with its label and its digest, and what it
+                                 last agreed on with the caracole ``peer`` names (its id)
                                  and the answers "keep mine" its imports of that one's files remembered (``kept``):
                                  ``peer_sync.state_document``; its settings, which a phone takes
                                  (``politeness.settings_document``); and the form token, for a pull's form
@@ -16,9 +17,10 @@ and this library's site indexes.
     POST /peer/push/new          A push opened (JSON ``{"format", "from", "files"}``): its id and the files of
                                  ``files`` this side needs sent, ``{"push", "need"}`` (``peer_push.new_push``)
     POST /peer/push/file?push=&sha256=   A file the push needs, its bytes (``peer_push.stage_file``): ``{"ok": true}``
-    POST /peer/push?push=        The push sent (JSON: its document, ``peer_push.read_push_document``), checked and
-                                 kept (``peer_push.send``), then ``caracole peer take --progress DIR`` queued, as
-                                 Changes from <its library>: ``{"job": view}``
+    POST /peer/push?push=        The push sent (JSON: its document, ``peer_push.read_push_document``: 409 for one
+                                 of songs keyed by other rules), checked and kept (``peer_push.send``), then
+                                 ``caracole peer take --progress DIR`` queued, as Changes from <its library>:
+                                 ``{"job": view}``
     GET  /api/peer/index[?sites=]   this library's site indexes (``sites``: those named, by commas; every one with
                                  none), as ``caracole index export`` writes them, a SQLite file streamed, one at a
                                  time

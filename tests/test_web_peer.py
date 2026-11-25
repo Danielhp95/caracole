@@ -7,8 +7,8 @@ import json
 import pytest
 from conftest import add_song
 
+from caracole import normalize, stamps
 from caracole import peer_sync as sync
-from caracole import stamps
 from caracole.db import kv_set, kv_set_json
 from caracole.library import keep_file
 from caracole.overrides import add_version
@@ -52,6 +52,7 @@ def test_the_state_lists_each_unit_with_this_sides_id_and_its_base_with_the_peer
     assert stamps.parse(doc["now"]) is not None and stamps.stamp(stamps.parse(doc["now"])) == doc["now"]
     assert isinstance(doc["indexes"], dict)
     assert sync.read_state_document(doc).now == doc["now"]
+    assert doc["key_version"] == sync.read_state_document(doc).key_version == normalize.KEY_VERSION  # its keys' rules
     assert set(doc["units"]) == {f"song/{song.key}", "songbook/campfire"}
     assert doc["units"][f"song/{song.key}"]["label"] == "Radiohead - Creep"
     assert answer(app, "/api/peer/state?peer=phone")[1]["base"] == {f"song/{song.key}": ["d", NOW]}
@@ -112,7 +113,8 @@ def test_nothing_of_this_sides_politeness_is_in_the_state_or_a_unit(cfg, conn):
 
     state = get(app, "/api/peer/state")
     doc = json.loads(state.body)
-    assert set(doc) == {"format", "server", "caracole", "name", "now", "indexes", "units", "base", "settings", "token"}
+    assert set(doc) == {"format", "server", "caracole", "name", "key_version", "now", "indexes", "units", "base",
+                        "settings", "token"}
     assert doc["format"] == sync.FORMAT and doc["units"] == before
     unit = get(app, f"/api/peer/unit?id=song/{song.key}")
     assert json.loads(unit.body) == unit_before

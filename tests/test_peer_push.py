@@ -332,6 +332,19 @@ def test_a_push_document_is_read_back_whole_and_refused_when_it_isnt_one():
             peer_push.read_push_document(bad)
 
 
+def test_a_push_whose_songs_are_keyed_by_other_rules_is_refused_and_one_that_says_none_is_read_as_before():
+    from caracole import normalize
+
+    doc = a_push_document({}, [])
+    assert peer_push.read_push_document(doc).take == ()  # an older caracole's push says no key version
+    assert peer_push.read_push_document(doc | {"key_version": normalize.KEY_VERSION}).take == ()
+    assert peer_push.read_push_document(doc | {"key_version": None}).take == ()
+    for other in (normalize.KEY_VERSION + 1, normalize.KEY_VERSION - 1, str(normalize.KEY_VERSION), [2], True):
+        with pytest.raises(peer_push.PushError) as refused:
+            peer_push.read_push_document(doc | {"key_version": other})
+        assert (str(refused.value), refused.value.status) == (sync.OTHER_KEYS, 409), other
+
+
 def test_the_files_a_push_names_are_its_song_documents_kept_files():
     doc = a_push_document({}, [
         {"id": "song/a/b", "expected": None, "digest": None, "unit": None},
@@ -673,6 +686,40 @@ def test_a_push_is_refused_for_a_document_its_digest_isnt_a_file_never_sent_or_a
     assert send(push2, doc)[0] == 200  # sent whole
     assert send(push2, doc)[1]["error"] == "That push is sent already."
     assert find_job(computer).song_key == f"peer-push:{me}" and song.key in json.dumps(doc)
+
+
+def test_a_push_whose_songs_are_keyed_by_other_rules_is_refused_before_its_take_is_queued_and_never_taken(pair):
+    from caracole import normalize
+
+    from test_commands_peer import run
+
+    computer, phone, pusher, rendered = pair
+    phone.song()
+    state, found = comparison(phone, pusher)
+    me = sync.own_id(phone.conn)
+    before = computer.units()
+    push, _ = pusher.push_new(me, [sha(b"[Am]Creep")])
+    pusher.push_file(push, sha(b"[Am]Creep"), b"[Am]Creep")
+    other = push_document(phone, pusher, found, key_version=normalize.KEY_VERSION + 1)
+    with pytest.raises(sync.PeerError) as refused:
+        pusher.push(push, other)
+    assert str(refused.value) == f"{pusher.address} answered 409: {sync.OTHER_KEYS}"
+    folder = computer.cfg.state_dir / "peer" / f"push-{push}"
+    assert computer.app.queue.snapshot() == [] and not (folder / peer_push.DOCUMENT).exists()
+
+    # A push staged as sent all the same (by a caracole serve of before, say) is refused by its take, which takes
+    # nothing of it.
+    (folder / peer_push.DOCUMENT).write_text(json.dumps(other), encoding="utf-8")
+    result = run(computer, "peer", "take", "--progress", "--", str(folder))
+    assert result.exit_code == 1 and sync.OTHER_KEYS in result.output
+    assert '"stage":"check","state":"failed"' in result.output
+    assert computer.units() == before and rendered == [] and not (computer.cfg.state_dir / "backups").exists()
+
+    # The push a caracole sends says the rules its songs are keyed by.
+    push_all(phone, pusher, state, found)
+    (sent,) = [p for p in pushes(computer.cfg) if (computer.cfg.state_dir / "peer" / p / peer_push.DOCUMENT).exists()]
+    document = json.loads((computer.cfg.state_dir / "peer" / sent / peer_push.DOCUMENT).read_text(encoding="utf-8"))
+    assert document["key_version"] == normalize.KEY_VERSION
 
 
 def find_job(side):

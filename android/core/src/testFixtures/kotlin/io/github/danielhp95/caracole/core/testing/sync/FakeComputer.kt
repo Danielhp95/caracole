@@ -8,6 +8,7 @@ import io.github.danielhp95.caracole.core.index.TabCounts
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.json.CanonicalError
 import io.github.danielhp95.caracole.core.json.PyJson
+import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.py.PyUnicode
@@ -45,14 +46,16 @@ import java.util.concurrent.TimeUnit
  * units are those caracole's peer_sync gives a library of the same rows: lane sync-units holds the two to the vectors),
  * answering as Python's routes answer (web/peer_routes.py, peer_push.py; the plan's §5.3), in their words:
  *
- * - `GET /api/peer/state?peer=`: its id, version, [name], clock ([now]), [indexes], units in peer_sync._order, the base
+ * - `GET /api/peer/state?peer=`: its id, version, [name], the rules its songs are keyed by ([keyVersion]: none while
+ *   null, as a caracole older than the member answers), clock ([now]), [indexes], units in peer_sync._order, the base
  *   it agreed on with the phone that asks and the answers its imports of that phone's files kept (`kept`), its [settings] (politeness.settings_document: none while null, as a
  *   caracole older than them answers) and the form token ([token]).
  * - `GET /api/peer/unit?id=` and `GET /api/peer/file?song=&name=`: a unit's document, a kept file's bytes (404 else).
  * - `POST /peer/push/new`, `/peer/push/file`, `/peer/push`: each with the token in its header, else 403 with
  *   `reload`; each checked as peer_push.py checks it (read_new, new_push: at most [OPEN] pushes here, open or sent
- *   and not taken yet, 409 else; stage_file; read_push_document, check_digests and send: each file a song document
- *   keeps staged or kept here, 400 else), each refusal `{error}` with its status. The push's take is queued as
+ *   and not taken yet, 409 else; stage_file; read_push_document, 409 for a push of songs keyed by other rules,
+ *   check_digests and send: each file a song document keeps staged or kept here, 400 else), each refusal `{error}`
+ *   with its status. The push's take is queued as
  *   `caracole peer take` is, under `peer-push:<from>` (a take of that caracole's that waits or runs refuses the push,
  *   409 "Taking already", which leaves it open), and runs after the answer on the fake's one worker: its stages check,
  *   take, render, agree (jobs.PEER_TAKE_STAGES), each unit taken or left said as its `units` (Job.as_json), the take
@@ -92,6 +95,7 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
     @Volatile var onUnit: ((String) -> Unit)? = null
     @Volatile var onPoll: ((Int) -> Unit)? = null
     @Volatile var countsIndexes: Boolean = true
+    @Volatile var keyVersion: JsonElement? = JsonPrimitive(Normalize.KEY_VERSION)  // null: says none, as an older one
 
     val requests = CopyOnWriteArrayList<String>()
     val answers = ConcurrentHashMap<String, (HttpExchange) -> Unit>()
@@ -277,6 +281,7 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
                     JsonArray(listOf(JsonPrimitive(e.here), JsonPrimitive(e.there), JsonPrimitive(e.at)))
                 })
             }
+            keyVersion?.let { doc["key_version"] = it }
             settings?.let { doc["settings"] = it }
         } + ("token" to JsonPrimitive(token)))
     }
@@ -508,6 +513,7 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
         if (data == null || data["format"] != JsonPrimitive(Units.FORMAT)) {
             throw Refusal(400, "That isn't a push of format ${Units.FORMAT} (the other caracole may be of another version).")
         }
+        if (Units.otherKeys(data["key_version"])) throw Refusal(409, Units.OTHER_KEYS)
         val from = text(data["from"])
         if (from == null || !ID.matches(from)) throw Refusal(400, "Who pushes? Its caracole's id is 16 hex.")
         val name = text(data["name"])

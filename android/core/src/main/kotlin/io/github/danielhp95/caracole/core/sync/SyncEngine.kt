@@ -169,7 +169,8 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
     private val kept = KeptById<Comparison>(KEPT_SECONDS)
 
     /** The phone and the computer at [address] (a [peerAddress]), compared; kept by its id for 10 minutes. A
-     * [PeerError] (or mirror's SyncError) when the computer can't be asked; [SameCaracole] when it is this phone. */
+     * [PeerError] (or mirror's SyncError) when the computer can't be asked, an [OtherKeys] when it keys its songs by
+     * other rules than the phone (PeerClient.state); [SameCaracole] when it is this phone. */
     fun compare(address: String): Comparison {
         val compared = compared(client(address), address)
         val comparison = Comparison(KeptById.newId(), address, compared.peer, compared.syncedBefore, compared.differences,

@@ -58,6 +58,10 @@ indexes, by commas; all three by default): a difference outside them is neither 
 a songbook lists comes along with the songbooks (``peer_sync.in_scope``). A sync compares with the answers an
 import remembered (``peer_sync.merged_kept``): a unit kept here then is given there now.
 
+Each of diff, pull, sync, take and import refuses, before anything changes, a caracole (or its push, or its file)
+whose songs are keyed by other rules than this one's (``peer_sync.OTHER_KEYS``, ``peer_file.OTHER_KEYS``): a song
+re-keyed on one side would read as removed on the other.
+
 ``caracole sync`` is another command: wanted.txt read into the library.
 """
 

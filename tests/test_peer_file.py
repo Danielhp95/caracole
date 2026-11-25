@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from caracole import db, index_transfer, peer_file
+from caracole import db, index_transfer, normalize, peer_file
 from caracole import peer_sync as sync
 from caracole.library import song_dir
 from helpers.peer_libraries import Library
@@ -75,11 +75,12 @@ def test_an_export_holds_its_manifest_state_units_and_each_kept_file_once(desk, 
     got = members(made.path)
     manifest = json.loads(got["caracole.json"])
     assert manifest == {"format": 1, "caracole": "0.1.0", "schema": db.SCHEMA_VERSION, "sync": sync.FORMAT,
-                        "id": OWN_ID, "name": "Desk", "made": MADE, "parts": ["library", "songbooks"], "songs": 2,
-                        "songbooks": 1, "units": 3, "files": 2, "pages": 0, "indexes": []}
+                        "key_version": normalize.KEY_VERSION, "id": OWN_ID, "name": "Desk", "made": MADE,
+                        "parts": ["library", "songbooks"], "songs": 2, "songbooks": 1, "units": 3, "files": 2,
+                        "pages": 0, "indexes": []}
     state = sync.read_state_document(json.loads(got["state.json"]))
-    assert state.units == desk.units() and (state.server, state.name, state.now, state.indexes) == (
-        OWN_ID, "Desk", MADE, {})
+    assert state.units == desk.units() and (state.server, state.name, state.now, state.indexes, state.key_version) == (
+        OWN_ID, "Desk", MADE, {}, normalize.KEY_VERSION)
     assert json.loads(got["state.json"])["kept"] == {}
     units = lines_of(got["units.jsonl"])
     assert [u["id"] for u in units] == [u.id for u in sorted(state.units.values(), key=sync._order)]
@@ -538,6 +539,18 @@ def test_another_format_is_said_by_its_number(tmp_path):
     later = json.loads(MANIFEST_OK) | {"sync": sync.FORMAT + 1}
     with pytest.raises(peer_file.FileError, match="another version of caracole"):
         peer_file.read_file(zip_with(tmp_path, {**SMALL, "caracole.json": json.dumps(later).encode()}, "s3"))
+
+
+def test_a_file_whose_songs_are_keyed_by_other_rules_is_refused_and_one_that_says_none_is_read_as_before(tmp_path):
+    assert "key_version" not in json.loads(MANIFEST_OK)  # an older caracole's file says none
+    assert peer_file.read_file(zip_with(tmp_path, SMALL, "older")).id == OWN_ID
+    same = json.loads(MANIFEST_OK) | {"key_version": normalize.KEY_VERSION}
+    assert peer_file.read_file(zip_with(tmp_path, {**SMALL, "caracole.json": json.dumps(same).encode()}, "s")).id
+    for n, other in enumerate((normalize.KEY_VERSION + 1, normalize.KEY_VERSION - 1, str(normalize.KEY_VERSION))):
+        manifest = json.loads(MANIFEST_OK) | {"key_version": other}
+        with pytest.raises(peer_file.FileError) as refused:
+            peer_file.read_file(zip_with(tmp_path, {**SMALL, "caracole.json": json.dumps(manifest).encode()}, f"k{n}"))
+        assert str(refused.value) == peer_file.OTHER_KEYS
 
 
 @pytest.mark.parametrize("change", [{"id": None}, {"id": "nothex"}, {"made": "yesterday"}, {"parts": "library"}])

@@ -11,8 +11,9 @@ in its header (web/app.py's ``json`` and ``bytes`` routes):
    SHA-256).
 2. ``POST /peer/push/file?push=&sha256=``, once a file needed: its bytes, checked by their SHA-256 and kept as
    ``files/<sha256>`` (``stage_file``).
-3. ``POST /peer/push?push=``: the push document (``read_push_document``), each unit's document checked against its
-   digest (``check_digests``) and each file its songs keep staged or kept here, then kept as ``push.json``
+3. ``POST /peer/push?push=``: the push document (``read_push_document``: refused, 409, from a caracole whose songs
+   are keyed by other rules, its ``key_version``), each unit's document checked against its digest
+   (``check_digests``) and each file its songs keep staged or kept here, then kept as ``push.json``
    (``send``); ``caracole peer take DIR`` is queued, which takes its units from a ``StagedSource``, as a pull takes
    a peer's, and deletes the folder once it is over.
 
@@ -52,8 +53,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from caracole import normalize, stamps
 from caracole import peer_sync as sync
-from caracole import stamps
 
 ID = re.compile(r"[0-9a-f]{16}")  # a push's id, and a caracole's (kv sync:id: db.py's schema 15, peer_sync.new_id)
 SHA256 = re.compile(r"[0-9a-f]{64}")
@@ -460,11 +461,15 @@ class Push:
 
 
 def read_push_document(data: Any) -> Push:
-    """``POST /peer/push``'s document read: ``{"format", "from", "name", "caracole", "at", "units": {id: {label,
-    digest}}, "take": [{id, expected, digest, unit}]}``, each unit given once, a document with each digest and none
-    without, and each digest the one its state gives it. PushError for anything else."""
+    """``POST /peer/push``'s document read: ``{"format", "from", "name", "caracole", "key_version", "at", "units": {id:
+    {label, digest}}, "take": [{id, expected, digest, unit}]}``, each unit given once, a document with each digest and
+    none without, and each digest the one its state gives it. PushError for anything else; 409 (``OTHER_KEYS``) for a
+    push of a caracole whose songs are keyed by other rules (``peer_sync.other_keys``: one that says none is an older
+    caracole's, read as before)."""
     if not isinstance(data, Mapping) or data.get("format") != sync.FORMAT:
         raise PushError(f"That isn't a push of format {sync.FORMAT} (the other caracole may be of another version).")
+    if sync.other_keys(data.get("key_version")):
+        raise PushError(sync.OTHER_KEYS, 409)
     sender, name, version, at = data.get("from"), data.get("name"), data.get("caracole"), data.get("at")
     if not isinstance(sender, str) or not ID.fullmatch(sender):
         raise PushError("Who pushes? Its caracole's id is 16 hex.")
@@ -753,7 +758,8 @@ def push_units(pusher: Pusher, conn: sqlite3.Connection, cfg, overrides, books: 
         for entry in [e for e in take if files_of.get(e["id"], set()) & unreadable]:
             take.remove(entry)
             left.append((entry["id"], "a file it keeps changed here since we kept it"))
-    document = {"format": sync.FORMAT, "from": own, "name": name, "caracole": version, "at": at,
+    document = {"format": sync.FORMAT, "from": own, "name": name, "caracole": version,
+                "key_version": normalize.KEY_VERSION, "at": at,
                 "units": {u.id: {"label": u.label, "digest": u.digest} for u in units.values()}, "take": take}
     return Pushed(pusher.push(push_id, document), tuple(e["id"] for e in take), tuple(left))
 

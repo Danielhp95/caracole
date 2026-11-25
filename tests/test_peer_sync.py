@@ -240,6 +240,26 @@ def test_the_peer_is_asked_once_and_what_it_answers_otherwise_is_said():
         read("http://phone:8737", httpx.MockTransport(refused))
 
 
+def test_a_peer_whose_songs_are_keyed_by_other_rules_is_refused_as_its_state_is_read_and_one_saying_none_is_not():
+    from caracole import normalize
+
+    doc = sync.state_document("abc", "0.1.0", "Phone", {"song/a": sync.Unit("song/a", "A - B", "d")})
+    assert doc["key_version"] == normalize.KEY_VERSION
+
+    def answering(state):
+        return httpx.MockTransport(lambda request: httpx.Response(200, json=state))
+
+    older = {k: v for k, v in doc.items() if k != "key_version"}  # a caracole before the member says none
+    for state in (doc, older, doc | {"key_version": None}):
+        assert read("http://phone:8737", answering(state)).units == {"song/a": sync.Unit("song/a", "A - B", "d")}
+    assert sync.read_state_document(older).key_version is None
+    for other in (normalize.KEY_VERSION + 1, normalize.KEY_VERSION - 1, str(normalize.KEY_VERSION), [2], {}):
+        assert sync.read_state_document(doc | {"key_version": other}).key_version == other  # read as it says it
+        with pytest.raises(sync.OtherKeys) as refused:
+            read("http://phone:8737", answering(doc | {"key_version": other}))
+        assert str(refused.value) == sync.OTHER_KEYS and isinstance(refused.value, sync.PeerError)
+
+
 # --- FORMAT 3 --------------------------------------------------------------------------------------------------
 
 

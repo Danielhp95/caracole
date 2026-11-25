@@ -497,6 +497,14 @@ def test_a_file_refused_says_its_words_and_is_deleted(pair, tmp_path, monkeypatc
         status, said = file_compared(studio.app, sent(studio.app, data[:len(data) // 2]))  # cut short
         assert status == 400 and said["error"].startswith("That file can't be read whole")
         assert staged_imports(studio) == []
+
+        from caracole import normalize
+
+        with monkeypatch.context() as upgraded:  # Desk's caracole keys its songs by other rules
+            upgraded.setattr(normalize, "KEY_VERSION", normalize.KEY_VERSION + 1)
+            other = desk_file(desk, tmp_path)
+        status, said = file_compared(studio.app, sent(studio.app, other))
+        assert (status, said["error"]) == (409, peer_file.OTHER_KEYS) and staged_imports(studio) == []
     finally:
         monkeypatch.undo()
         time.tzset()

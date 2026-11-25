@@ -3128,7 +3128,7 @@ kept file while it is as kept. These reads take no lock and ask no site. `POST /
 | `GET /api/sync/export?export=ID` | Sends it once and deletes it. An unsent one goes when the next is made, or after an hour. |
 | `POST /sync/import/open` | JSON `{"size", "name"}`, 8 GiB at most, one at a time. Answers an id and the part size (8 MiB). |
 | `POST /sync/import/part?import=ID&at=N` | Sends each part, in order, into `state_dir/peer/import-<id>/`. |
-| `POST /sync/import/compare` | Form field `import`. Reads the file whole and compares it as `POST /sync/compare` does, or refuses it in `caracole peer import`'s words and deletes it: 400 for a file caracole didn't export, of another version or cut short; 409 for this library's own export, or one with nothing new since your last sync with its caracole. |
+| `POST /sync/import/compare` | Form field `import`. Reads the file whole and compares it as `POST /sync/compare` does, or refuses it in `caracole peer import`'s words and deletes it: 400 for a file caracole didn't export, of another version or cut short; 409 for this library's own export, one with nothing new since your last sync with its caracole, or one whose caracole names songs by different rules. |
 | `POST /sync/apply` | On that comparison, queues `caracole peer import` ("Sync with a file from <its library>"), which deletes the folder when done. |
 | `POST /sync/import/drop` | JSON `{"import"}`. Deletes it now, as Cancel does (409 while its import waits or runs). |
 
@@ -3900,6 +3900,14 @@ upgrade from an older format, the first sync compares with no history. A song on
 the meantime then shows up as a song to take from the other side. To keep it removed, choose `here`
 for it on the side that removed it.
 
+Both sides must also name songs by the same rules. A caracole whose rules changed (a new version
+can spell a song's key otherwise) would see each of the other's songs as one removed and one added.
+So a comparison, a pull, a push and an import between two such caracoles are refused before
+anything changes: "This caracole and the other name songs by different rules: update both to the
+same version, then sync." The Share tab answers it with a 409, and the commands exit 1 (an import,
+2). A caracole older than this check says nothing of its rules and is read as before, so update
+both sides.
+
 `caracole peer diff` asks the other library what it holds, in one request, and lists every
 difference with the side it would come from:
 
@@ -4005,6 +4013,8 @@ changes. A file takes nothing back. To give your changes, export a file of your 
 Import refuses a file, before changing anything (exit 2), when the file:
 
 - isn't a caracole export, or comes from another version of caracole;
+- comes from a caracole that names songs by different rules ("That file's caracole and this one
+  name songs by different rules: update both to the same version, then export it again.");
 - is cut short or damaged ("That file can't be read whole (…): export it again.");
 - is this library's own export (`caracole backup` keeps copies to go back to);
 - holds nothing newer than your last sync with its caracole ("Nothing in this file is newer than

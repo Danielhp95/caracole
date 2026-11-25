@@ -6,11 +6,12 @@ design: docs/superpowers/specs/2026-11-03-sync-redesign-design.md; the plan's §
 state document, the bases it keeps, each unit's document, the kept files those documents name, the pages caracole
 made of them, and its site indexes. Its members, in this order:
 
-- ``caracole.json``, the manifest: ``{"format": 1, "caracole", "schema", "sync", "id", "name", "made", "parts",
-  "songs", "songbooks", "units", "files", "pages", "indexes"}``: the file's own format (``FORMAT``), the caracole and
-  schema that wrote it, the sync's format (``peer_sync.FORMAT``), the library's id (kv ``sync:id``) and name, when it
-  was made (a stamp), its parts (``peer_sync.PARTS``, in that order), how many songs, songbooks, unit documents, kept
-  files and pages it holds, and the sites of its indexes;
+- ``caracole.json``, the manifest: ``{"format": 1, "caracole", "schema", "sync", "key_version", "id", "name", "made",
+  "parts", "songs", "songbooks", "units", "files", "pages", "indexes"}``: the file's own format (``FORMAT``), the
+  caracole and schema that wrote it, the sync's format (``peer_sync.FORMAT``), the rules its songs are keyed by
+  (``normalize.KEY_VERSION``), the library's id (kv ``sync:id``) and name, when it was made (a stamp), its parts
+  (``peer_sync.PARTS``, in that order), how many songs, songbooks, unit documents, kept files and pages it holds, and
+  the sites of its indexes;
 - ``state.json``: ``peer_sync.state_document`` of the file's units, as of ``made``, with the newest read of its
   indexes when it holds them and no kept answer (``{}``);
 - ``bases.json``: ``{"<peer id>": {"units", "kept"}}``, every base this library keeps (kv ``sync:base:*`` of
@@ -37,16 +38,17 @@ longer as its manifest says is left out. It takes no lock, and is written under 
 then renamed.
 
 **Reading it** (``read_file``): its manifest first (a zip whose first member isn't ``caracole.json`` is no file of
-caracole's, ``NOT_A_FILE``; another ``format``, or another sync's, ``OTHER_FORMAT``), then its central directory,
-every name in the layout above (``files/`` and ``pages/`` names 64 lowercase hex, nothing else, each once), each blob
-at most ``FILE_MAX``, each JSON member at most ``JSON_MAX``, the whole at most ``IMPORT_MAX``, nothing encrypted
-(``UNREADABLE``); then its state and its bases. The parts it holds (``SyncFile.holds``) are its manifest's, the
-indexes only when its schema is this database's. A file of ``caracole index export`` (an SQLite file holding
-``index_transfer.META``) is a file of the indexes alone, with no id, named by its own name. Blobs are read when asked
-for, each checked by its SHA-256; ``check_whole`` reads every member through before an import takes anything (a CRC
-error, a member cut short, a blob that isn't its name, a unit document that isn't what its state says, a file a song
-names or a page pages.json lists that the file lacks: ``UNREADABLE``), so a file that can't be read whole is refused
-whole.
+caracole's, ``NOT_A_FILE``; another ``format``, or another sync's, ``OTHER_FORMAT``; songs keyed by other rules, its
+``key_version``, ``OTHER_KEYS``, as ``peer_sync.other_keys`` reads it: a file that says none is an older caracole's,
+read as before), then its central directory, every name in the layout above (``files/`` and ``pages/`` names 64
+lowercase hex, nothing else, each once), each blob at most ``FILE_MAX``, each JSON member at most ``JSON_MAX``, the
+whole at most ``IMPORT_MAX``, nothing encrypted (``UNREADABLE``); then its state and its bases. The parts it holds
+(``SyncFile.holds``) are its manifest's, the indexes only when its schema is this database's. A file of ``caracole
+index export`` (an SQLite file holding ``index_transfer.META``) is a file of the indexes alone, with no id, named by
+its own name. Blobs are read when asked for, each checked by its SHA-256; ``check_whole`` reads every member through
+before an import takes anything (a CRC error, a member cut short, a blob that isn't its name, a unit document that
+isn't what its state says, a file a song names or a page pages.json lists that the file lacks: ``UNREADABLE``), so a
+file that can't be read whole is refused whole.
 
 **Importing it** is a sync with the file (commands/peer.py's ``peer import``): ``check_importable`` refuses a
 library's own export (``OWN_EXPORT``); ``compare_file`` compares this library with the file's state, against the base
@@ -83,8 +85,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from caracole import normalize, stamps
 from caracole import peer_sync as sync
-from caracole import stamps
 
 FORMAT = 1  # the file's own layout: changes only with it
 SUFFIX = ".caracole"
@@ -107,6 +109,9 @@ _ZIP = b"PK\x03\x04"
 
 NOT_A_FILE = "That isn't a file caracole exported: a .caracole file, or an index from caracole index export."
 OTHER_FORMAT = "That file was made by another version of caracole (format {format}): export it again with this one."
+# A file of a caracole whose songs are keyed by other rules (its manifest's key_version: peer_sync.other_keys).
+OTHER_KEYS = ("That file's caracole and this one name songs by different rules: update both to the same version, "
+              "then export it again.")
 OWN_EXPORT = ("That file is this library's own export: a library takes nothing from itself. caracole backup keeps "
               "copies of the computer's database to go back to.")
 OLDER = "Nothing in this file is newer than your sync with {name} on {day}."
@@ -217,7 +222,8 @@ def export_file(conn: sqlite3.Connection, cfg, overrides, books: Sequence, path:
             listed = (_pages_held(pages, snapshot.state, held, set(snapshot.files), spooled)
                       if pages is not None and "library" in parts else None)
             manifest = {
-                "format": FORMAT, "caracole": version, "schema": _schema(), "sync": sync.FORMAT, "id": snapshot.own,
+                "format": FORMAT, "caracole": version, "schema": _schema(), "sync": sync.FORMAT,
+                "key_version": normalize.KEY_VERSION, "id": snapshot.own,
                 "name": name, "made": made, "parts": list(parts),
                 "songs": sum(1 for d in snapshot.documents if d["id"].startswith("song/")),
                 "songbooks": sum(1 for d in snapshot.documents if d["id"].startswith("songbook/")),
@@ -547,6 +553,8 @@ def read_file(path: Path, *, name: str | None = None) -> SyncFile:
             raise FileError(OTHER_FORMAT.format(format=manifest.get("format")))
         if manifest.get("sync") != sync.FORMAT:
             raise FileError(OTHER_FORMAT.format(format=f"{FORMAT}, its sync's {manifest.get('sync')}"))
+        if sync.other_keys(manifest.get("key_version")):
+            raise FileError(OTHER_KEYS)
         _check_layout(infos)
         _check_manifest(manifest)
         names = {info.filename: info for info in infos}

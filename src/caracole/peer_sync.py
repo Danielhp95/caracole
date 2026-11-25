@@ -35,6 +35,12 @@ is no base (``base_of``), so the first sync after an upgrade compares as a first
 was made by its side's clock (``now``), which both sides stamp their agreement with, and the newest read of each of
 its site indexes (``indexes``: ``index_transfer.newest``); a reader ignores what it doesn't know.
 
+**The song keys' rules.** Units are named by identity keys, so two caracoles that key songs by different rules (a
+``normalize.KEY_VERSION`` bump on one side alone) would read a song the upgraded side re-keyed as removed and a new
+one: the state document says its side's (``key_version``), as do the push document and a file's manifest, and one of
+other rules (``other_keys``) is refused before anything changes (``Peer.state``'s ``OtherKeys``, ``OTHER_KEYS``),
+the bases left as they are, never re-keyed. A document that says none is an older caracole's, read as before.
+
 **Comparing** (``compare``) is three-way once the two have synced: for each unit, its digest when the two last held
 it the same, the **base**. Each side keeps its own (kv ``sync:base:<peer id>``, ``{"format": 3, "units": {unit:
 [digest or None, when]}}``: None for a unit both lacked, ``record_agreement``), written at the end of every sync it
@@ -101,10 +107,13 @@ from pathlib import Path
 from pathlib import PurePosixPath
 from typing import Any, Callable, Iterable, Mapping, Protocol, Sequence
 
-from caracole import canonical
+from caracole import canonical, normalize
 from caracole.db import kv_get, kv_get_json, kv_set, kv_set_json, savepoint
 
 FORMAT = 3  # of every document a side answers, and of the base it keeps: changes with their shapes and digests
+# Why two caracoles whose songs are keyed by different rules (another normalize.KEY_VERSION) never sync: units are named
+# by those keys, so a song one side re-keyed would read as removed there and a new one here.
+OTHER_KEYS = "This caracole and the other name songs by different rules: update both to the same version, then sync."
 ID_KEY = "sync:id"
 # kv, then a peer's id: {"format": FORMAT, "units": {unit: [digest or None, when]}} as of the last time the two agreed,
 # and "kept": {unit: [digest here, digest there, when]}, the answers an import remembered (none: no member)
@@ -442,15 +451,16 @@ def state_document(server: str | None, version: str, name: str, units: Mapping[s
                    base: Base | None = None, *, now: str | None = None,
                    indexes: Mapping[str, str] | None = None,
                    kept: Mapping[str, tuple] | None = None) -> dict[str, Any]:
-    """``GET /api/peer/state``'s answer: who this side is, its units by id, and, for the peer that asked, what this
-    side last agreed on with it (``base``, null if never) and the answers its imports of that peer's files remembered
-    (``kept``, ``kept_of``'s, as stored: ``here`` this side's; no member unless given); ``now``, this side's clock (a
-    stamp; the time it answers, unless given), which a sync stamps its agreement with on both sides, and ``indexes``,
-    the newest read of each of its site indexes (``index_transfer.newest``), so the other side asks only for what is
-    newer."""
+    """``GET /api/peer/state``'s answer: who this side is, the rules its songs are keyed by (``key_version``,
+    ``normalize.KEY_VERSION``), its units by id, and, for the peer that asked, what this side last agreed on with it
+    (``base``, null if never) and the answers its imports of that peer's files remembered (``kept``, ``kept_of``'s, as
+    stored: ``here`` this side's; no member unless given); ``now``, this side's clock (a stamp; the time it answers,
+    unless given), which a sync stamps its agreement with on both sides, and ``indexes``, the newest read of each of
+    its site indexes (``index_transfer.newest``), so the other side asks only for what is newer."""
     from caracole import stamps
 
     doc = {"format": FORMAT, "server": server, "caracole": version, "name": name,
+           "key_version": normalize.KEY_VERSION,
            "now": now if now is not None else stamps.stamp(datetime.now(UTC)),
            "indexes": dict(indexes or {}),
            "units": {u.id: {"label": u.label, "digest": u.digest} for u in sorted(units.values(), key=_order)},
@@ -473,10 +483,19 @@ class PeerState:
     now: str | None = None  # its clock when it answered
     indexes: dict[str, str] = field(default_factory=dict)  # the newest read of each of its site indexes
     kept: Kept = field(default_factory=dict)  # the answers its imports of the asker's files remembered, as kept
+    key_version: Any = None  # the rules its songs are keyed by, as it says them; None: it says none (an older one)
 
 
 class StateError(ValueError):
     """A peer's answer that isn't a document this caracole reads."""
+
+
+def other_keys(said: Any) -> bool:
+    """Whether a document's ``key_version`` (``said``: a state's, a push's, a file's manifest's) names other rules
+    than this caracole keys its songs by: any value but its ``normalize.KEY_VERSION``, as ``!=`` compares it. None (no
+    member, or null: a caracole older than the member, which says none) is read as before, the one gap that closes
+    only once both sides are updated. Such a document is refused before anything changes (``OTHER_KEYS``)."""
+    return said is not None and said != normalize.KEY_VERSION
 
 
 def read_state_document(data: Any) -> PeerState:
@@ -498,7 +517,7 @@ def read_state_document(data: Any) -> PeerState:
               if isinstance(site, str) and isinstance(stamp, str)}
     return PeerState(server, str(version or "?"), str(name or ""), read, _read_units(data.get("base")),
                      token if isinstance(token, str) and token else None, now if isinstance(now, str) else None, stamps,
-                     _read_kept(data.get("kept")))
+                     _read_kept(data.get("kept")), data.get("key_version"))
 
 
 def unit_document(conn: sqlite3.Connection, cfg, overrides, books: Iterable, unit_id: str) -> dict[str, Any] | None:
@@ -941,6 +960,11 @@ class PeerError(Exception):
     """The other caracole couldn't be asked, or answered with something else: what to tell the owner."""
 
 
+class OtherKeys(PeerError):
+    """The other caracole keys its songs by other rules than this one (its state's ``key_version``, ``other_keys``):
+    the two never compare nor take from each other until both are updated to one version (``OTHER_KEYS``)."""
+
+
 class UnitSource(Protocol):
     """Where a take reads the units it takes and their songs' kept files: another caracole (``Peer``), or a push it
     sent, staged here."""
@@ -1011,7 +1035,8 @@ class Peer:
                          + (f": {said}" if said else "."))
 
     def state(self, asking: str | None = None) -> PeerState:
-        """Its ``state_document``, with its base for ``asking`` (this side's id)."""
+        """Its ``state_document``, with its base for ``asking`` (this side's id); ``OtherKeys`` for one whose songs
+        are keyed by other rules than this side's, so that no comparison, pull or push follows it."""
         response = self._get(STATE_PATH, {"peer": asking} if asking else None)
         if response.status_code == 404:
             raise PeerError(f"{self.address} answered, but not as a caracole that shares. An older caracole, "
@@ -1019,9 +1044,12 @@ class Peer:
         if response.status_code != 200:
             raise self._refused(response)
         try:
-            return read_state_document(response.json())
+            state = read_state_document(response.json())
         except (ValueError, StateError) as e:
             raise PeerError(f"{self.address} answered {e}.") from None
+        if other_keys(state.key_version):
+            raise OtherKeys(OTHER_KEYS)
+        return state
 
     def unit(self, unit_id: str) -> dict[str, Any] | None:
         """The unit's document (its ``unit_document``'s ``"unit"``), or None for a unit it hasn't got."""

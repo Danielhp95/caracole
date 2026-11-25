@@ -24,7 +24,7 @@ docs/superpowers/plans/2026-11-03-sync-redesign.md §3.4.2).
                               which queues ``caracole peer import`` of its folder): the other side the file
                               (``peer.kind`` ``"file"``, its ``made``), ``holds`` the parts it holds; or the file
                               refused, in the owner's words (400 ``NOT_A_FILE``, ``OTHER_FORMAT``, ``UNREADABLE``;
-                              409 ``OWN_EXPORT``, ``OLDER``), and deleted
+                              409 ``OWN_EXPORT``, ``OLDER``, ``OTHER_KEYS``), and deleted
     POST /sync/import/drop    that file deleted now (JSON ``{"import"}``: the page's Cancel, an upload that failed):
                               ``{"dropped"}``; 409 while an import takes it or its request waits
 
@@ -352,11 +352,12 @@ class _FileFound:
 
 def _refusal_of(e: Exception) -> _FileRefused:
     """How a file refused is answered: 409 for one this library takes nothing from (its own export, one no newer
-    than the last sync with its caracole), 400 for one that isn't a file, of another format, or can't be read."""
+    than the last sync with its caracole, one whose songs are keyed by other rules), 400 for one that isn't a file, of
+    another format, or can't be read."""
     from caracole import peer_file
 
     said = str(e)
-    if said == peer_file.OWN_EXPORT or said.startswith(peer_file.OLDER.partition("{")[0]):
+    if said in (peer_file.OWN_EXPORT, peer_file.OTHER_KEYS) or said.startswith(peer_file.OLDER.partition("{")[0]):
         return _FileRefused(409, said)
     return _FileRefused(400, said)
 

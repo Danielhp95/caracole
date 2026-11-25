@@ -143,6 +143,22 @@ def file_of(corpus: FileCorpus, given: Any) -> tuple[bytes, Any]:
     return given["bytes"], {"bytes": base64.b64encode(given["bytes"]).decode("ascii")}
 
 
+def other_keys(corpus: FileCorpus) -> bytes:
+    """``full``'s manifest, state, bases and units, its manifest naming other rules its songs are keyed by: refused as
+    its manifest is read, so nothing more of it is needed."""
+    with zipfile.ZipFile(corpus.file_path("full")) as z:
+        members = [(name, z.read(name)) for name in ("caracole.json", "state.json", "bases.json", "units.jsonl")]
+    manifest = json.loads(members[0][1])
+    manifest["key_version"] += 1
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w") as z:
+        for name, data in [("caracole.json", json.dumps(manifest).encode()), *members[1:]]:
+            info = zipfile.ZipInfo(name, date_time=(2026, 11, 3, 21, 10, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            z.writestr(info, data)
+    return out.getvalue()
+
+
 def route_records(corpus: FileCorpus) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
 
@@ -233,7 +249,9 @@ def route_records(corpus: FileCorpus) -> list[dict[str, Any]]:
              ("plain", "full", creep_later, IMPORTER, "a unit agreed on since the file was made is left out"),
              ("plain", "full", later, IMPORTER, "refused: no newer than the last sync with its caracole"),
              ("plain", {"bytes": b"hello, not a file"}, {}, IMPORTER, "refused: no file caracole exported"),
-             ("plain", {"file": "full", "cut": 200}, {}, IMPORTER, "refused: a file cut short"))
+             ("plain", {"file": "full", "cut": 200}, {}, IMPORTER, "refused: a file cut short"),
+             ("plain", {"bytes": other_keys(corpus)}, {}, IMPORTER,
+              "refused: a file of a caracole whose songs are keyed by other rules"))
     for fixture, given, kv, sync_id, note in cases:
         here = Here(corpus, fixture, f"-file-routes-compare-{len(records)}", sync_id=sync_id, kv=kv)
         data, named = file_of(corpus, given)
@@ -340,6 +358,8 @@ def test_the_vectors_show_what_each_case_says(made):
         "indexes"][0]["newer"] == "there"
     own = by["POST /sync/import/compare", "refused: this library's own export"]
     assert (own["status"], own["out"]["error"], own["staged"]) == (409, peer_file.OWN_EXPORT, False)
+    keys = by["POST /sync/import/compare", "refused: a file of a caracole whose songs are keyed by other rules"]
+    assert (keys["status"], keys["out"]["error"], keys["staged"]) == (409, peer_file.OTHER_KEYS, False)
     since = by["POST /sync/import/compare", "a unit agreed on since the file was made is left out"]
     assert since["status"] == 200 and "song/radiohead/creep" not in {d["id"] for d in since["out"]["differences"]}
     older = by["POST /sync/import/compare", "refused: no newer than the last sync with its caracole"]

@@ -275,6 +275,30 @@ def test_a_librarys_own_export_is_refused_and_changes_nothing(libraries, tmp_pat
     assert not (desk.cfg.state_dir / "backups").exists()
 
 
+def test_a_file_of_a_caracole_whose_song_keys_changed_is_refused_and_takes_nothing(libraries, tmp_path,
+                                                                                     monkeypatch):
+    from caracole import normalize, songs
+
+    desk, studio, _ = libraries
+    desk_with_a_songbook(desk)
+    assert run(studio, "peer", "import", "--yes", str(exported(desk, tmp_path / "d.caracole"))).exit_code == 0
+    # Desk is upgraded: its normalizer keys Creep otherwise (a KEY_VERSION bump), it re-keys its songs, and exports.
+    with monkeypatch.context() as upgraded:
+        old = songs.identity_key
+        upgraded.setattr(songs, "identity_key", lambda a, t: old(a, t) + "-v3" if t == "Creep" else old(a, t))
+        upgraded.setattr(normalize, "KEY_VERSION", normalize.KEY_VERSION + 1)
+        songs.rekey_songs(desk.conn)
+        f = exported(desk, tmp_path / "e.caracole")
+    before, base, backups = studio.units(), db.kv_get(studio.conn, sync.BASE_KEY + desk.id()), sorted(
+        (studio.cfg.state_dir / "backups").iterdir())
+    out = run(studio, "peer", "import", "--yes", "--progress", str(f))
+    assert out.exit_code == 2 and peer_file.OTHER_KEYS in out.output, out.output
+    assert [(e["stage"], e["state"]) for e in events(out.output)] == [("check", "running"), ("check", "failed")]
+    assert find_song(studio.conn, "radiohead/creep") is not None and removed_song(studio.conn, "radiohead/creep") is None
+    assert studio.units() == before and db.kv_get(studio.conn, sync.BASE_KEY + desk.id()) == base
+    assert sorted((studio.cfg.state_dir / "backups").iterdir()) == backups
+
+
 def test_something_that_isnt_a_file_caracole_exported_is_refused(libraries, tmp_path):
     _, studio, _ = libraries
     (tmp_path / "notes.txt").write_text("hello\n", encoding="utf-8")

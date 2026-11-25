@@ -646,6 +646,14 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 - **FORMAT 3** (`FORMAT`) is of every document a side answers (the state, a unit, a push) and of the base each keeps
   (`{"format": 3, "units": …}`): a base of another format reads as none, so the first sync after a format bump
   compares as a first sync (no shim). FORMAT 2's digests hashed UG's ratings and votes.
+- **The song keys' rules**: units are named by identity keys, so two caracoles that key songs by different rules (a
+  `normalize.KEY_VERSION` bump on one side alone) would read each song the upgraded side re-keyed as removed and a new
+  one. The state document, the push document and a `.caracole` file's manifest say their side's (`key_version`), and
+  one of other rules (`other_keys`, as `!=` compares it) is refused before anything changes, in `OTHER_KEYS`' words:
+  `Peer.state` raises `OtherKeys` (`peer diff`, `sync`, `pull`: exit 1; the Sync tab's Test and compare: 409), a push
+  is refused at `POST /peer/push` and by `caracole peer take` (409), a file at `read_file` (`peer_file.OTHER_KEYS`,
+  409); no base is re-keyed, and FORMAT stays 3. A document that says none is an older caracole's, read as before:
+  the one gap, which closes only once both sides are updated.
 - **Comparing** (`compare`): three ways, against the base.
   - The base is each side's agreements with that peer (kv `sync:base:<peer id>`: a digest or None, and when),
     recorded by `record_agreement` at the end of every pull, and merged with the peer's by the later
@@ -695,8 +703,8 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   docs/superpowers/specs/2026-11-03-sync-redesign-design.md, the layout docs/superpowers/plans/2026-11-03-sync-redesign.md
   §3.3.
 - **The file** (`FORMAT` 1): a zip of what a sync reads from the other side, its members in order:
-  - `caracole.json`, the manifest (the caracole, schema and sync format that made it, the library's id and name,
-    `made`, its parts, its counts, its indexes' sites);
+  - `caracole.json`, the manifest (the caracole, schema and sync format that made it, the rules its songs are keyed
+    by, `key_version`, the library's id and name, `made`, its parts, its counts, its indexes' sites);
   - `state.json` (`peer_sync.state_document` of its units), `bases.json` (every base it keeps), `units.jsonl` (each
     unit's document), `files/<sha256>` (each kept file once);
   - with the library, `pages.json` and `pages/<sha256>`, the pages made of its units (`offline_routes.library_pages`:
@@ -719,11 +727,12 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     document its state's digest, each kept file a song names and each page pages.json lists held): a file that can't
     be read whole is refused whole.
 - **Refusals**, in the owner's words and the phone's alike, the whys caracole's own (`NOT_A_FILE`, `OTHER_FORMAT`,
-  `OWN_EXPORT`, `OLDER`, `UNREADABLE`): `check_importable` refuses a library's own export; `newer_than` (in
-  `compare_file`) leaves out each unit agreed on or answered with the file's caracole at or after its `made`, and
-  refuses a file with nothing left to take (no difference this side would take, no index read more recently) and no
-  newer than this side's last sync with its caracole (its base's latest time, the kept answers' included), so an
-  import of some parts, or one that left a unit, leaves the rest of the same file to take.
+  `OTHER_KEYS`, `OWN_EXPORT`, `OLDER`, `UNREADABLE`): `read_file` refuses a manifest of songs keyed by other rules
+  (`peer_sync.other_keys`; one naming none read as before); `check_importable` refuses a library's own export;
+  `newer_than` (in `compare_file`) leaves out each unit agreed on or answered with the file's caracole at or after its
+  `made`, and refuses a file with nothing left to take (no difference this side would take, no index read more
+  recently) and no newer than this side's last sync with its caracole (its base's latest time, the kept answers'
+  included), so an import of some parts, or one that left a unit, leaves the rest of the same file to take.
 - **An import is a sync with the file**:
   - `compare_file`: this side's base for the file's caracole merged with the one the file keeps for this side, and the
     answers both remembered (`peer_sync.merged_kept`), within the parts the file holds (`in_scope(holds=)`);
@@ -2619,6 +2628,11 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   `"kept"` only when it holds one; `PeerState.kept`, the state's `kept`) and `Scope`'s parts (`PARTS`, `partOf`,
   `listedSongs` through `Songbooks.entryKeys`, `inScope`, `changeOf`, `namesOf`): vectors/sync/kept.jsonl and
   scope.jsonl.
+- **The song keys' rules** (peer_sync.py's): `PeerClient.state` refuses a computer whose state names other rules
+  (`PeerState.keyVersion`, `Units.otherKeys`: an `OtherKeys`, a PeerError, in `Units.OTHER_KEYS`' words), so
+  `compare`, `tested` and `apply`'s compare stage stop before any change (SyncRoutes: 409); `Give.document` and
+  `SyncFiles.export` say the phone's (`key_version`, Normalize.KEY_VERSION), and `SyncFiles.read` refuses a file of
+  other rules (`FileError.OTHER_KEYS`, SyncFileRoutes: 409). A computer or a file that names none is read as before.
 - **The engine's comparison** (`SyncEngine.compare`) carries, beside its differences, its `kind` (`"computer"` or
   `"file"`), the parts the other side `holds`, the merged `base` and `kept` answers it compared against, the songs
   either side's songbooks `listed` (each songbook difference's document asked of the computer once,
@@ -2644,8 +2658,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 - **An import** (`compareFile`, then `apply` of its comparison) is a sync with a `.caracole` file (core.sync.file,
   peer_file.py's port: `SyncFiles`, `SyncFile`, `FileSource`, `FileError` in its words, vectors/sync/file.jsonl), in
   `FILE_STAGES` (check, take, mirror, agree, index): the file read and refused whole before anything changes (another
-  format, this library's own export, one no newer than the last sync with its caracole, one that can't be read
-  whole), compared within the parts it holds
+  format, songs keyed by other rules, this library's own export, one no newer than the last sync with its caracole,
+  one that can't be read whole), compared within the parts it holds
   (a part it lacks is never read as a removal), taken from as from the computer, the units taken handed to the
   `pagesFromFile` hook, the agreement kept with the file's caracole at its `made` for the units it speaks for, each
   "keep mine" remembered (`SyncFiles.recordImport`), its indexes merged; it gives nothing back.
