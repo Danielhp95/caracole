@@ -2555,8 +2555,11 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     `_ended`), which every route that says a job's line asks, /jobs.json's and the Requests tab's alike;
   - a request queued behind a running job of the phone's own (`JobViews.behind`: a PhoneKinds' kind's, a sync's, an
     index import's, not yielding) says what it waits for, the phone's own, as Python never queues one (`queuedBehind`:
-    "Queued · after the site catalogues (Importing · …)", "Queued · after backing up the book", "Queued · 2 requests
-    ahead, now the sync (Updating the indexes · …)");
+    "Queued · waits for the site catalogues to finish importing (79 %)", "Queued · after backing up the book", "Queued
+    · 2 requests ahead, now the sync (Updating the indexes · …)");
+  - the catalogues' line never carries the import's count of tabs (every row of GitHub's file, none of the request's):
+    its share is the stage's `done` and `total` (`JobContext.progress`, `Stage.done`), data beside the words, left out
+    while there is no total;
   - PhoneKinds' kinds (render, inbox, backup, restore, catalogues) say §5.3's table's words, the ones their run filled in as
     their stage's detail (`context.stage(<its stage>, state, PhoneKinds.fill(…))`, done, running or failed; inbox's
     wait a done detail in `otherwise`'s words: `JobViewsTest.thePhonesOwnKindsSayTheirTablesWordsAsTheirRunFilledThemIn`),

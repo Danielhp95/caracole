@@ -1296,3 +1296,24 @@ def test_choose_a_file_is_a_tab_stop_and_opens_the_files_chooser(served, tmp_pat
         page.js("window.chose = 0; document.getElementById('sync-file').click = () => { window.chose += 1; }")
         page.press("Enter")
         assert page.js("window.chose") == 1
+
+
+@in_chromium
+def test_a_sync_queued_behind_the_catalogues_import_says_its_share_never_the_imports_tabs(served, tmp_path):
+    """The phone queues a sync pressed during the site catalogues' import behind it (JobViews.queuedBehind, the line
+    the server gives: JobViewsTest holds its words); the sheet's going view draws that line alone, with no count of
+    tabs, the sync's own stages still waiting."""
+    line = "Queued · waits for the site catalogues to finish importing (79 %)"
+    queued = sync_view("queued", {})
+    queued = dict(queued, line=dict(queued["line"], tone="queued", text=line))
+    fake = FakeSync(state=PHONE_STATE, views=[queued])
+    url = served(fake, sync="sheet", jobs=(queued,)) + "#sheet=sync"
+    with opened(tmp_path, url, width=390, height=844, mobile=True) as page:
+        at_view(page, "going")
+        said = page.js("[document.getElementById('sync-title').textContent, "
+                       "document.getElementById('sync-going-line').textContent, "
+                       "document.getElementById('sync-going-detail').textContent]")
+        assert said == ["Syncing with Studio", line, ""]
+        assert "tabs" not in said[1]
+        assert page.js(CHIPS) == [["Compared", "done"], ["Your choice", "done"], ["Library", ""], ["Songbooks", ""],
+                                  ["Indexes", ""]]

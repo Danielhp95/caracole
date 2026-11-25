@@ -170,7 +170,12 @@ class CataloguesRunner(
         val unknown = try {
             parts.database.write { db ->
                 val merged = IndexTransfer.merge(db, fetched.file, Stamps.of(clock()), notAfter = notAfter(),
-                                                 chunk = chunk, progress = { doing(it.words(), it.step) })
+                                                 chunk = chunk, progress = {
+                                                     val tabs = it.action == MergeProgress.TAB  // a share of UG's rows
+                                                     context.progress(STAGE, if (tabs) it.done else null,
+                                                                      if (tabs) it.total else null)
+                                                     doing(it.words(), it.step)
+                                                 })
                 db.kvSet(Catalogues.IMPORTED, take.file.name)
                 db.kvDelete(ASKING)
                 // As the merge read the file's META, its guard on: the file is never attached again after it.
