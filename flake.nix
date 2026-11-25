@@ -10,7 +10,13 @@
       python = pkgs.python3;
       runtimeDeps = ps: with ps; [ httpx selectolax rapidfuzz typer click mutagen tomlkit pypinyin opencc ];
       testDeps = ps: with ps; [ pytest pytest-xdist ];
-      autochordsDeps = ps: with ps; [ torch torchaudio torchcodec beat-this librosa numpy scipy soundfile pyyaml openai-whisper ];
+      autochordsDeps = ps: with ps; [ torch torchaudio torchcodec beat-this librosa numpy scipy soundfile pyyaml openai-whisper onnx ];
+      # For the model tests alone, in `.#autochords`: ONNX Runtime runs export.py's graphs, mir_eval scores them.
+      autochordsTestDeps = ps: [
+        ps.onnxruntime
+        # Its matplotlib image baselines fail against this nixpkgs' matplotlib; the tests use mir_eval.beat and .chord.
+        (ps.mir-eval.overridePythonAttrs (old: { disabledTestPaths = [ "test_display.py" ]; }))
+      ];
       # A second nixpkgs, whose python takes its torch from torch-bin (prebuilt CUDA; plain torch is
       # CPU-only), package-wide: one dependency on the CPU torch and buildEnv meets two torch builds.
       # triton-bin, too: nixpkgs' source triton cannot find libcuda for its JIT, which openai-whisper's
@@ -63,7 +69,7 @@
       };
       pythonCuda = pkgsCuda.python3;
       devPython = python.withPackages (ps: runtimeDeps ps ++ testDeps ps);
-      devPythonAutochords = python.withPackages (ps: runtimeDeps ps ++ testDeps ps ++ autochordsDeps ps);
+      devPythonAutochords = python.withPackages (ps: runtimeDeps ps ++ testDeps ps ++ autochordsDeps ps ++ autochordsTestDeps ps);
       devPythonAutochordsCuda = pythonCuda.withPackages (ps: runtimeDeps ps ++ testDeps ps ++ autochordsDeps ps);
       # The chordpro the package's wrapper runs, without its GUI (about 130 MiB, not 1 GiB),
       # so the PDF tests here run the program the package does.
@@ -108,6 +114,8 @@
         autochords = caracoleAutochords;
         autochords-cuda = caracoleAutochordsCuda;
         publish-indexes = pkgs.callPackage ./nix/publish-indexes.nix { inherit caracole; };
+        # BTC and beat_this as ONNX, for chords on the phone (nix/autochords-onnx.nix).
+        chord-models = pkgs.callPackage ./nix/autochords-onnx.nix { };
         dev-python = devPython;
         dev-python-autochords = devPythonAutochords;
       };

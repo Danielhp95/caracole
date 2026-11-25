@@ -33,8 +33,9 @@
   };
 
   # HTDemucs as demucs-rs reads it (safetensors), which separates the vocals from the mix so the
-  # transcript can be checked against where the singing is. Meta's Demucs: MIT License. Converted
-  # by set-soft, pinned at a commit; 84,030,696 bytes.
+  # transcript can be checked against where the singing is. Demucs' code is MIT (Meta); of its weights,
+  # its author's README says "The license of the weights is not clear". Converted by set-soft, pinned
+  # at a commit; 84,030,696 bytes.
   htdemucs = fetchurl {
     name = "htdemucs.safetensors";
     url = "https://huggingface.co/set-soft/audio_separation/resolve/939723568b2dca203e61cc7294317ba38549964f/Demucs/htdemucs.safetensors";

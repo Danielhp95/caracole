@@ -28,7 +28,7 @@ Homepage = "https://github.com/Danielhp95/caracole"
 Repository = "https://github.com/Danielhp95/caracole"
 
 [project.optional-dependencies]
-autochords = ["torch", "torchaudio", "torchcodec", "beat-this", "librosa", "numpy", "scipy", "soundfile", "pyyaml", "openai-whisper"]
+autochords = ["torch", "torchaudio", "torchcodec", "beat-this", "librosa", "numpy", "scipy", "soundfile", "pyyaml", "openai-whisper", "onnx"]
 
 [project.scripts]
 caracole = "caracole.cli:main"

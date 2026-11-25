@@ -51,3 +51,18 @@ to half an hour on a CPU and a couple of minutes on a GPU.
 | `caracole transcribe --song "Artist - Title"` | Transcribes the lyrics, then remakes the sheet |
 
 None of this runs on the phone. Details: [Audio from YouTube](usage.md#audio-from-youtube).
+
+## The models for the phone
+
+Chords on the phone are not built yet. A first step is in: `nix build .#chord-models` exports both
+models to ONNX, the format the phone will run them in.
+
+| File | Size | What it is |
+|---|---|---|
+| `btc-graph.onnx` | 1.4 MB | BTC, the chords model, without its weights |
+| `btc_model_large_voca.pt` | 12.2 MB | BTC's weights: its authors' own file, unchanged. The graph reads them from it |
+| `beat_this-final0.onnx` | 83.2 MB | beat_this, the beats model |
+| `beat_this-final0-fp16.onnx` | 42.7 MB | the same, its weights stored at half precision |
+
+caracole never republishes BTC's weights; the graph only points into its authors' file. Two builds
+give the same bytes.

@@ -2015,6 +2015,21 @@ It is rows.js's, shared by both pages:
   - `_skip_reason` makes the song due again when such a sheet finds a site's lyrics or an instrumental verdict, or finds the kept transcript's
     `made_at` is not its own (other audio, or transcribed again), and when a sheet of none finds a transcript (not for an instrumental song).
   - youtube_sheet.py's `holds` says "chords over the transcribed lyrics" for it.
+- export.py, for the phone (nothing on the computer runs it but `nix build .#chord-models` and its tests): BTC and
+  beat_this as ONNX graphs, `CONTRACT` what each takes and gives, torch's TorchScript exporter at opset 17:
+  - `export_btc`: `btc-graph.onnx`, raw log-CQT frames (`features`, [N, 108, 144]) to `logits` ([N, 108, 170]),
+    normalized inside in float32 as btc.py does (a window's frames past the audio's end are the checkpoint's mean),
+    its layer norms' unbiased std written out, nothing folded; every tensor of the state dict an external initializer
+    at its offset in the authors' `btc_model_large_voca.pt`, copied beside it unchanged, its bytes checked there:
+    BTC's weights are never re-hosted;
+  - `export_beats`: beat_this's final0, `spect` ([1, T, 128]) to `beat` and `downbeat`, and with `fp16` its weights
+    stored as float16, cast to float32 as it loads;
+  - `pt_offsets`: each tensor's offset and length in a checkpoint in torch's legacy format (pickles, then each
+    storage's raw float32 bytes), read by a strict standard-library unpickler (`_Strict`: only the six globals that
+    format needs, anything else a ValueError) that imports no torch, since the phone will fetch such a file;
+  - tests/test_autochords_export.py holds them to torch's answers in `.#autochords` (ONNX Runtime and mir_eval, its
+    test-only packages): BTC's max abs 1e-4 and every argmax, beat_this's 1e-4 in fp32, the fp16 one 1e-2 on seeded
+    frames and beats F ≥ 0.99 on music, the same bytes twice.
 
 #### `tests/`
 
@@ -2046,6 +2061,8 @@ It is rows.js's, shared by both pages:
     a transcription as "a couple of minutes" rather than "up to half an hour"; the package check fails a CPU wrapper
     that sets it.
 - **autochords.nix**: the model files, fixed-output.
+- **autochords-onnx.nix**: `packages.chord-models`, export.py's four files from autochords.nix's pins, the same bytes
+  every build (`nix build --rebuild`).
 - **module.nix**: `services.caracole`: units, timer, `caracole-admin`.
   - No `credentials` option, as caracole reads no secret, so no unit and not `caracole-admin` loads one.
   - With auto-chords on, the nightly unit runs the auto-chords package, for its youtube step, and caracole-web and
@@ -3288,7 +3305,8 @@ CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py  
 
 - Both shells set `CARACOLE_CJK_FONT` to the packages' font, `CARACOLE_PDF_FONTS` to their PDF fonts
   (nix/pdf-fonts.nix), and `CARACOLE_ALPHATAB_DIR` to alphaTab (nix/alphatab.nix).
-- `.#autochords` adds torch, beat-this, librosa and openai-whisper, and sets `CARACOLE_BTC_WEIGHTS` and
+- `.#autochords` adds torch, beat-this, librosa, openai-whisper and onnx, and for the tests alone onnxruntime and
+  mir-eval (its image tests off: their baselines fail against this nixpkgs' matplotlib), and sets `CARACOLE_BTC_WEIGHTS` and
   `CARACOLE_BEAT_CHECKPOINT` to the files nix/autochords.nix fetches, and `CARACOLE_WHISPER_MODEL` and
   `CARACOLE_DEMUCS_MODEL` to Whisper large-v3 and HTDemucs (about 3.1 GB, fetched on a first build); both
   auto-chords shells put `demucs` on PATH: `.#autochords` the `cpu` build of demucs-rs (backend fixed at compile
@@ -3310,6 +3328,7 @@ CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py  
 | `CARACOLE_ALPHATAB_DIR`: alphaTab's three files (`helpers.guitar.alphatab_dir`) | test_web_guitar_browser.py: the Guitar Pro page in Chromium | both shells |
 | `pdftotext` on PATH, or `CARACOLE_PDFTOTEXT` | the PDFs' text in test_render_all.py (fewer checks without it, no skip) | neither: `nix shell --inputs-from . nixpkgs#poppler-utils` |
 | torch, librosa, beat_this, and `CARACOLE_BTC_WEIGHTS` with `CARACOLE_BEAT_CHECKPOINT`, or `CARACOLE_MODELS_DIR` (searched for `btc_model_large_voca.pt` and `final0.ckpt`) | the tests marked `autochords` | `.#autochords` |
+| those and onnx, onnxruntime and mir_eval | test_autochords_export.py's tests marked `autochords` | `.#autochords` |
 | `CARACOLE_BTC_MAJMIN_WEIGHTS`, or `btc_model.pt` under `CARACOLE_MODELS_DIR` | `test_the_major_minor_model_loads_too` | neither |
 | `ffmpeg` on PATH | `test_btc_reads_aac_from_the_itunes_store` | neither |
 | `chromium` on PATH | the tests marked `@in_chromium` (Browser tests, above): the pages caracole writes and serves, in a real browser | neither |
