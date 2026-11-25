@@ -651,8 +651,9 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   one. The state document, the push document and a `.caracole` file's manifest say their side's (`key_version`), and
   one of other rules (`other_keys`, as `!=` compares it) is refused before anything changes, in `OTHER_KEYS`' words:
   `Peer.state` raises `OtherKeys` (`peer diff`, `sync`, `pull`: exit 1; the Sync tab's Test and compare: 409), a push
-  is refused at `POST /peer/push` and by `caracole peer take` (409), a file at `read_file` (`peer_file.OTHER_KEYS`,
-  409); no base is re-keyed, and FORMAT stays 3. A document that says none is an older caracole's, read as before:
+  is refused at `POST /peer/push` (409) and by `caracole peer take` (exit 1), a file at `read_file`
+  (`peer_file.OTHER_KEYS`; the Sync tab's import compare 409, `peer import` exit 2); no base is re-keyed, and FORMAT
+  stays 3. A document that says none is an older caracole's, read as before:
   the one gap, which closes only once both sides are updated.
 - **Comparing** (`compare`): three ways, against the base.
   - The base is each side's agreements with that peer (kv `sync:base:<peer id>`: a digest or None, and when),
@@ -2630,9 +2631,11 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   scope.jsonl.
 - **The song keys' rules** (peer_sync.py's): `PeerClient.state` refuses a computer whose state names other rules
   (`PeerState.keyVersion`, `Units.otherKeys`: an `OtherKeys`, a PeerError, in `Units.OTHER_KEYS`' words), so
-  `compare`, `tested` and `apply`'s compare stage stop before any change (SyncRoutes: 409); `Give.document` and
-  `SyncFiles.export` say the phone's (`key_version`, Normalize.KEY_VERSION), and `SyncFiles.read` refuses a file of
-  other rules (`FileError.OTHER_KEYS`, SyncFileRoutes: 409). A computer or a file that names none is read as before.
+  `compare`, `tested` and `apply`'s compare stage stop before any change (SyncRoutes: 409); Sync on Wi-Fi's probe
+  (`Syncs.run`, the unattended sync's first read) ends as a failed outcome in those words on the bar, never the
+  silence of no caracole answering (any other PeerError or SyncError there); `Give.document` and `SyncFiles.export`
+  say the phone's (`key_version`, Normalize.KEY_VERSION), and `SyncFiles.read` refuses a file of other rules
+  (`FileError.OTHER_KEYS`, SyncFileRoutes: 409). A computer or a file that names none is read as before.
 - **The engine's comparison** (`SyncEngine.compare`) carries, beside its differences, its `kind` (`"computer"` or
   `"file"`), the parts the other side `holds`, the merged `base` and `kept` answers it compared against, the songs
   either side's songbooks `listed` (each songbook difference's document asked of the computer once,

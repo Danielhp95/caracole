@@ -3951,8 +3951,9 @@ from <its library>".
 
 `caracole peer take [--progress] DIR` takes the push the way a pull takes units. It waits for the
 nightly run, backs the database up, leaves any unit that changed here since the phone compared
-("changed here since the comparison"), then deletes the folder. It exits 0 unless caracole hits a
-bug. `--progress` prints JSON lines for the Journal; while it renders the songs taken, its render
+("changed here since the comparison"), then deletes the folder. It exits 1 for a push it refuses
+(one that is gone, or from a caracole that names songs by different rules), else 0 unless caracole
+hits a bug. `--progress` prints JSON lines for the Journal; while it renders the songs taken, its render
 step says which it is at ("12 of 20 songs").
 
 Two pushes can be staged at once, one per caracole (a second gets a 409). A file can be 64 MiB and

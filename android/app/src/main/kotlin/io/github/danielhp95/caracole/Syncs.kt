@@ -10,6 +10,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import io.github.danielhp95.caracole.core.sync.OtherKeys
 import io.github.danielhp95.caracole.core.sync.PeerClient
 import io.github.danielhp95.caracole.core.sync.PeerError
 import io.github.danielhp95.caracole.core.sync.SyncEngine
@@ -37,7 +38,8 @@ import java.util.concurrent.TimeUnit
  * taken or given, each conflict left as it is on both sides), awaited; then a notification only for the conflicts it
  * left ([conflictsLeft], "2 songs changed on both sides: tap to choose"), whose tap opens the sheet, and that
  * notification taken back by a sync that left none. No address, nothing answering there, or something else answering
- * (a Wi-Fi login page): it does nothing and says nothing.
+ * (a Wi-Fi login page): it does nothing and says nothing. A caracole whose songs are keyed by other rules (OtherKeys)
+ * is no silence: its refusal is the outcome, said on the bar.
  */
 object Syncs {
     private const val WIFI = "caracole-sync-wifi"
@@ -77,11 +79,12 @@ object Syncs {
 
     /**
      * [run]'s own, over [settings]: the probe ([ask], the computer's state read through [http]; a [SyncError] or a
-     * [PeerError] when no caracole answers), then the phone's sync ([phone], asked only once one does) queued and
-     * awaited, and [notify] told how many conflicts it left and whether all are songs, when it left any, else
-     * [cleared]. A sync whose job ended done with a stage failed (the copy of the computer's pages, say: the engine
-     * goes on past it) is a failed outcome, in that stage's words. While it runs, [Caracole.status] says the stage it
-     * is at and what that says (Working.doing), read every [followMs].
+     * [PeerError] when no caracole answers, silent; [OtherKeys] when one answers whose songs are keyed by other rules,
+     * a failed outcome in Units.OTHER_KEYS' words, never silent), then the phone's sync ([phone], asked only once one
+     * does) queued and awaited, and [notify] told how many conflicts it left and whether all are songs, when it left
+     * any, else [cleared]. A sync whose job ended done with a stage failed (the copy of the computer's pages, say: the
+     * engine goes on past it) is a failed outcome, in that stage's words. While it runs, [Caracole.status] says the
+     * stage it is at and what that says (Working.doing), read every [followMs].
      */
     internal suspend fun run(settings: Settings, probe: Boolean, http: Http,
                              ask: (ServerAddress) -> Unit = { PeerClient(it, http).state(null) },
@@ -95,7 +98,8 @@ object Syncs {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            if (probe && (e is SyncError || e is PeerError)) return null
+            // No caracole answering is silent; one whose songs are keyed by other rules answered: its refusal said.
+            if (probe && (e is SyncError || (e is PeerError && e !is OtherKeys))) return null
             return ended(settings, Outcome(System.currentTimeMillis(), false, words(e)))
         }
         status.value = SyncState.Running(null)

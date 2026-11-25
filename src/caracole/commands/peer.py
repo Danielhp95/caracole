@@ -32,7 +32,8 @@ unit (peer_sync.py; the design: docs/superpowers/specs/2026-10-31-phone-server-s
   its digest says), take (a backup first, then each unit as a pull takes one, left when it changed on this side
   since the pusher compared: ``peer_sync.apply_units`` with ``expected_here``), render (its running detail the song
   it is at, "12 of 20 songs": ``_rendering``) and agree, a line (with ``--progress``, get.py's JSON lines and a
-  unit's event) for each; then DIR is deleted. It exits 0 unless a bug.
+  unit's event) for each; then DIR is deleted. It exits 1 for a push its check refuses (gone, or of a caracole whose
+  songs are keyed by other rules: below), else 0 unless a bug.
 - ``caracole peer export FILE`` writes this library to a ``.caracole`` file (peer_file.py): its songs with their
   kept files and pages, its songbooks with the songs they list, and with ``--parts`` its site indexes too
   (``--parts library,songbooks``, the default; ``indexes`` adds them), its units in one read transaction, taking no
