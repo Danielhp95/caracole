@@ -1780,3 +1780,74 @@ def test_real_models_read_an_itunes_m4a(conn, real_models, tmp_path):
     mono = torch.tensor(samples[None, :], dtype=torch.float32)
     encoders.AudioEncoder(mono, sample_rate=sr).to_file(str(audio))
     assert_chords_over_synced_lyrics(conn, real_models, audio)
+
+
+def silent(conn, song):
+    from caracole.autochords.transcript import note_heard_nothing
+
+    note_heard_nothing(conn, song, "2026-11-20T01:00:00Z", why="sung 6.2 s", by="caracole")
+
+
+def test_a_sheet_over_nothing_sung_says_so_and_keeps_it_in_raw(conn, cfg, tmp_path):
+    from caracole.autochords.transcript import SILENT
+
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"))
+    silent(conn, s)
+    run(conn, cfg)
+    lines = auto_sheet(cfg, conn, s).splitlines()
+    assert lines[lines.index("Nobody - River Road") + 1] == SILENT
+    raw = auto_raw(conn, s)
+    assert raw["lyrics"] == "none" and raw["heard_nothing"] is True
+
+
+def test_a_note_of_other_audio_says_nothing(conn, cfg, tmp_path):
+    from caracole.autochords.transcript import SILENT
+
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"))
+    silent(conn, s)
+    update_song(conn, s.id, audio_mtime=(s.audio_mtime or 0) + 5)
+    run(conn, cfg)
+    assert SILENT not in auto_sheet(cfg, conn, s) and "heard_nothing" not in auto_raw(conn, s)
+
+
+def test_a_chords_only_sheet_is_made_again_once_when_nothing_sung_is_noted(conn, cfg, tmp_path):
+    from caracole.autochords.transcript import SILENT
+
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"))
+    run(conn, cfg)
+    assert "heard_nothing" not in auto_raw(conn, s)
+    rec = FakeRecognizer()
+    assert (run(conn, cfg, rec).skipped, rec.calls) == (1, [])
+    silent(conn, s)
+    rec = FakeRecognizer()
+    assert (run(conn, cfg, rec).generated, rec.calls) == (1, [Path(s.audio_path)])
+    assert SILENT in auto_sheet(cfg, conn, s)
+    rec = FakeRecognizer()
+    assert (run(conn, cfg, rec).skipped, rec.calls) == (1, [])
+
+
+def test_a_sites_lyrics_later_replace_a_nothing_sung_sheet(conn, cfg, tmp_path):
+    from caracole.autochords.transcript import SILENT
+
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"))
+    silent(conn, s)
+    run(conn, cfg)
+    assert auto_raw(conn, s)["heard_nothing"] is True
+    update_song(conn, s.id, lyrics_status="found", lyrics_json=lyrics_json(plain="A site's words"))
+    rec = FakeRecognizer()
+    assert (run(conn, cfg, rec).generated, rec.calls) == (1, [Path(s.audio_path)])
+    text = auto_sheet(cfg, conn, s)
+    assert "A site's words" in text and SILENT not in text
+    assert "heard_nothing" not in auto_raw(conn, s) and get_song(conn, s.id).lyrics_status == "found"
+
+
+def test_a_sites_instrumental_gets_no_note(conn, cfg, tmp_path):
+    from caracole.autochords.transcript import SILENT
+
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"))
+    instrumental(conn, s)
+    silent(conn, s)
+    run(conn, cfg)
+    assert SILENT not in auto_sheet(cfg, conn, s) and "heard_nothing" not in auto_raw(conn, s)
+    rec = FakeRecognizer()
+    assert (run(conn, cfg, rec).skipped, rec.calls) == (1, [])

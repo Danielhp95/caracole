@@ -270,6 +270,17 @@ def test_transcription_settings(tmp_path):
     assert cfg.autochords.transcribe_device == "auto"
 
 
+def test_the_words_are_heard_wherever_a_sheet_is_made_unless_transcribe_is_off(tmp_path):
+    # On by default: a sheet from a video hears its words where no lyrics site has them. Off, the song is offered
+    # Transcribe the lyrics on its card alone, as before.
+    assert load_config(None, env={"HOME": str(tmp_path)}).autochords.transcribe is True
+    p = write(tmp_path, "[autochords]\ntranscribe = false\n")
+    assert load_config(p, env={"HOME": str(tmp_path)}).autochords.transcribe is False
+    p = write(tmp_path, '[autochords]\ntranscribe = "no"\n')
+    with pytest.raises(ConfigError, match=r'^\[autochords\]\.transcribe must be true or false, not "no"$'):
+        load_config(p, env={"HOME": str(tmp_path)})
+
+
 @pytest.mark.parametrize("device", ["auto", "cpu", "cuda"])
 def test_transcribe_device_is_auto_cpu_or_cuda(tmp_path, device):
     p = write(tmp_path, f'[autochords]\ntranscribe_device = "{device}"\n')

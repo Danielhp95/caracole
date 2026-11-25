@@ -22,9 +22,13 @@ More on this: [the sites caracole reads](sources.md).
 When a site has the lyrics, the chords go over the words. If the lyrics were timed for a
 recording of another length, caracole shifts them to fit and says so on the sheet.
 
-When no site has them and the audio came from YouTube, **Transcribe the lyrics** on the song's
-card (or `caracole transcribe`) writes them down from the audio with Whisper. The sheet is marked
+When no site has them and the song has audio of its own (YouTube's or a purchase's), **Transcribe the
+lyrics** on the song's card (or `caracole transcribe`) writes them down from the audio with Whisper. The sheet is marked
 as transcribed, and lyrics from a site replace them later.
+
+A sheet from a video you paste does this by itself: the lyrics sites first, then, if every one missed, the words
+heard from the audio, then the chords over them. If the transcription fails, you still get the chords, and the card
+still offers Transcribe the lyrics. `[autochords] transcribe = false` in caracole.toml turns this off.
 
 ## Install
 

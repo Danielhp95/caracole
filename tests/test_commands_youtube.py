@@ -554,6 +554,9 @@ def test_sheet_makes_the_songs_auto_sheet_now_and_says_each_stage(tmp_path, fake
     lines = result.output.splitlines()
     assert f"Audio: downloaded Vikingos veganos (HyperFanes), https://www.youtube.com/watch?v={VIKINGOS}." in lines
     assert "Lyrics: LRCLIB has none; nor has Megalobiz; nor has AZLyrics." in lines
+    # No words heard where they can't be: no Whisper here, or no model file of it in this config.
+    assert any(line.startswith("Vocals: skipped: not transcribed here: ") for line in lines), lines
+    assert "Words: skipped: no vocals." in lines
     assert "Chords: chords only, no lyrics." in lines
     sheet = tmp_path / "lib" / "Nick Cani" / "Vikingos veganos" / "sheet (auto).txt"
     assert any(line.startswith(f"Sheet: {sheet}, readable after") for line in lines)
@@ -581,6 +584,57 @@ def test_sheet_by_hand_says_its_long_stages_on_a_live_line(tmp_path, fake, conn,
     assert any(line.startswith("Chords · ") for line in shown), shown
     assert screen.getvalue().endswith("\r")
     assert "Chords: chords only, no lyrics." in result.stdout.splitlines() and " · " not in result.stdout
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("gpu_fails", [False, True], ids=["heard", "the GPU failed"])
+def test_sheet_hears_the_words_no_site_has_before_the_chords_and_exits_0(tmp_path, fake, conn, sheet_sites,
+                                                                         monkeypatch, gpu_fails):
+    # Where this caracole can transcribe, the models the command builds (fakes here) hear the words of a song no lyrics
+    # site has, and the chords go over them; a transcription that fails here makes the chords alone, and exits 0.
+    from test_transcribe_job import MIX, SAID, STEM, WORDS
+    from test_youtube_sheet import wav
+
+    from caracole.autochords import separate
+    from caracole.autochords import transcribe as tx
+
+    class Demucs:
+        def __init__(self, binary, model, cache_dir, timeout=0.0):
+            pass
+
+        def vocals(self, audio, workdir, **kwargs):
+            return wav(Path(workdir) / "stems" / "vocals.wav", 1.0)
+
+    class Whisper:
+        def __init__(self, model_path, *, device, cache_dir):
+            self.device = device
+
+        def hear(self, mix, stem, first_sung_s, **kwargs):
+            if gpu_fails:
+                raise tx.SetupFailed("the GPU failed: OutOfMemoryError: CUDA out of memory")
+            return tx.Heard("es", list(WORDS))
+
+    monkeypatch.setattr(yf, "transcribe_problem", lambda cfg: None)  # as with Whisper, its models and demucs-rs
+    monkeypatch.setattr(separate, "DemucsSeparator", Demucs)
+    monkeypatch.setattr(separate, "frame_db", lambda path, **kw: list(STEM if Path(path).name == "vocals.wav" else MIX))
+    monkeypatch.setattr(tx, "WhisperTranscriber", Whisper)
+    monkeypatch.setattr(tx, "resolve_device", lambda setting: "cpu")
+    chordpro, _, _ = sheet_sites
+    audio = wav(tmp_path / "audio" / "a-minute.wav", 60.0)
+    fake.video(VIKINGOS, "Vikingos veganos", "HyperFanes", 60, ext="wav", copy=str(audio))
+    result = invoke(write_config(tmp_path, fake, chordpro=chordpro), "--song", "Nick Cani - Vikingos veganos",
+                    "--url", f"https://youtu.be/{VIKINGOS}", "--sheet")
+    assert result.exit_code == 0, result.output
+    lines = result.output.splitlines()
+    assert "Lyrics: LRCLIB has none; nor has Megalobiz; nor has AZLyrics." in lines
+    assert "Vocals: sung from 24.8 s, 1 stretch." in lines
+    if gpu_fails:
+        assert "Words: failed: the GPU failed: OutOfMemoryError: CUDA out of memory." in lines
+        assert "Chords: chords only, no lyrics." in lines
+    else:
+        assert f"Words: {SAID}." in lines
+        assert "Chords: chords over the transcribed lyrics." in lines
+    assert lines[-1].startswith("Done in "), lines
 
 
 def test_sheet_refuses_a_song_with_a_human_sheet_and_exits_1(tmp_path, fake, conn, sheet_sites):
