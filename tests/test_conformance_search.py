@@ -816,7 +816,10 @@ def names_records(corpus: Corpus) -> list[dict]:
                               tsn.test_each_bracket_closes_on_its_own_mark, tsn.test_words_glued_to_a_bracket_are_words)
                for t, _ in _parametrized(test)]
     extra = ["Song (Official Music Video) [HD]", "「MV」 曲", "Artist – Title (Lyric Video) 4K", "''",
-             "Song【官方M/V】", "【告白氣球 Official MV】", "Kanpai // Kotaro", "Song[Official Video]Remix", "「」 x", "x 【】"]
+             "Song【官方M/V】", "【告白氣球 Official MV】", "Kanpai // Kotaro", "Song[Official Video]Remix", "「」 x", "x 【】",
+             # The edges of CJK's ranges (U+F8FF, U+F900, U+A000, U+D7B0), and nested groups.
+             "Song (Official Video \uf8ff)", "Song (Official Video \uf900)", "Song (Official Video \ua000)",
+             "Song (Official Video \ud7b0)", "Song (Official Video (HD))", "Song [Official Video (HD)] x"]
     for text in dict.fromkeys([*cleaned, *extra]):
         out.append(record("caracole.song_names.clean", None, [text], {}, lambda: clean(text)))
     channels = [c for c, _ in _parametrized(tsn.test_a_channels_name_loses_its_label_words)]

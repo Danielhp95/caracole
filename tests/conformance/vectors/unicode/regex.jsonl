@@ -8773,6 +8773,14 @@
 {"args":["['’‘`´ʼ]","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"repl":"|"},"out":"《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"}
 {"args":["['’‘`´ʼ]","𠀀𮯯 𮯰"],"fn":"re.findall","out":[]}
 {"args":["['’‘`´ʼ]","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["['’‘`´ʼ]","Official Video "],"fn":"re.findall","out":[]}
+{"args":["['’‘`´ʼ]","Official Video "],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video "}
+{"args":["['’‘`´ʼ]","Official Video 豈"],"fn":"re.findall","out":[]}
+{"args":["['’‘`´ʼ]","Official Video 豈"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video 豈"}
+{"args":["['’‘`´ʼ]","Official Video ꀀ"],"fn":"re.findall","out":[]}
+{"args":["['’‘`´ʼ]","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ꀀ"}
+{"args":["['’‘`´ʼ]","Official Video ힰ"],"fn":"re.findall","out":[]}
+{"args":["['’‘`´ʼ]","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ힰ"}
 {"args":["[\\W_]+","Hotel California - 2013 Remaster"],"fn":"re.findall","out":[" "," - "," "]}
 {"args":["[\\W_]+","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hotel|California|2013|Remaster"}
 {"args":["[\\W_]+","Creep (Acoustic)"],"fn":"re.findall","out":[" (",")"]}
@@ -8863,6 +8871,14 @@
 {"args":["[\\W_]+","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"repl":"|"},"out":"|孤勇者|陈奕迅|动态歌词版|公式|歌詞付き|フル|가사|純音樂|"}
 {"args":["[\\W_]+","𠀀𮯯 𮯰"],"fn":"re.findall","out":["𮯯 "]}
 {"args":["[\\W_]+","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"repl":"|"},"out":"𠀀|𮯰"}
+{"args":["[\\W_]+","Official Video "],"fn":"re.findall","out":[" "," "]}
+{"args":["[\\W_]+","Official Video "],"fn":"re.sub","kw":{"repl":"|"},"out":"Official|Video|"}
+{"args":["[\\W_]+","Official Video 豈"],"fn":"re.findall","out":[" "," "]}
+{"args":["[\\W_]+","Official Video 豈"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official|Video|豈"}
+{"args":["[\\W_]+","Official Video ꀀ"],"fn":"re.findall","out":[" "," "]}
+{"args":["[\\W_]+","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official|Video|ꀀ"}
+{"args":["[\\W_]+","Official Video ힰ"],"fn":"re.findall","out":[" "," "]}
+{"args":["[\\W_]+","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official|Video|ힰ"}
 {"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hotel California - 2013 Remaster"],"fn":"re.findall","out":[]}
 {"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Creep (Acoustic)"],"fn":"re.findall","out":[]}
@@ -8953,6 +8969,14 @@
 {"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"repl":"|"},"out":"《|||》||| (|||||)〈||〉〖||||〗〔||〕［||］（|||）"}
 {"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","𠀀𮯯 𮯰"],"fn":"re.findall","out":["𠀀","𮯯"]}
 {"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"repl":"|"},"out":"|| 𮯰"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video "],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video "],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video "}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video 豈"],"fn":"re.findall","out":["豈"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video 豈"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video ꀀ"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ꀀ"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video ힰ"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ힰ"}
 {"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Hotel California - 2013 Remaster"],"fn":"re.findall","out":[]}
 {"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Creep (Acoustic)"],"fn":"re.findall","out":[]}
@@ -9043,6 +9067,14 @@
 {"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"repl":"|"},"out":"《|||》||| (|||||)〈||〉〖|||き〗〔フル〕［가사］（|||）"}
 {"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","𠀀𮯯 𮯰"],"fn":"re.findall","out":["𠀀","𮯯"]}
 {"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"repl":"|"},"out":"|| 𮯰"}
+{"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Official Video "],"fn":"re.findall","out":[]}
+{"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Official Video "],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video "}
+{"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Official Video 豈"],"fn":"re.findall","out":["豈"]}
+{"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Official Video 豈"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video |"}
+{"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Official Video ꀀ"],"fn":"re.findall","out":[]}
+{"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ꀀ"}
+{"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Official Video ힰ"],"fn":"re.findall","out":[]}
+{"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ힰ"}
 {"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Hotel California - 2013 Remaster"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[" - 2013 Remaster"]}
 {"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Hotel California|"}
 {"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Creep (Acoustic)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
@@ -9133,6 +9165,14 @@
 {"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"}
 {"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","𠀀𮯯 𮯰"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Official Video "],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Official Video "],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video "}
+{"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Official Video 豈"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Official Video 豈"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video 豈"}
+{"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Official Video ꀀ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Official Video ꀀ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ꀀ"}
+{"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Official Video ힰ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Official Video ힰ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ힰ"}
 {"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Hotel California - 2013 Remaster"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Creep (Acoustic)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
@@ -9223,6 +9263,14 @@
 {"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"}
 {"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","𠀀𮯯 𮯰"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Official Video "],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Official Video "],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video "}
+{"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Official Video 豈"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Official Video 豈"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video 豈"}
+{"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Official Video ꀀ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Official Video ꀀ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ꀀ"}
+{"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Official Video ힰ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Official Video ힰ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ힰ"}
 {"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Hotel California - 2013 Remaster"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Creep (Acoustic)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[" (Acoustic)"]}
@@ -9313,6 +9361,14 @@
 {"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"}
 {"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","𠀀𮯯 𮯰"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Official Video "],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Official Video "],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video "}
+{"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Official Video 豈"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Official Video 豈"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video 豈"}
+{"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Official Video ꀀ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Official Video ꀀ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ꀀ"}
+{"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Official Video ힰ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Official Video ힰ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ힰ"}
 {"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Hotel California - 2013 Remaster"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Creep (Acoustic)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":["Acoustic"]}
@@ -9403,6 +9459,14 @@
 {"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"}
 {"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","𠀀𮯯 𮯰"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Official Video "],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Official Video "],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video "}
+{"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Official Video 豈"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Official Video 豈"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video 豈"}
+{"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Official Video ꀀ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Official Video ꀀ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ꀀ"}
+{"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Official Video ힰ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Official Video ힰ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ힰ"}
 {"args":["\\b(?:live|vivo|directo)\\b","Hotel California - 2013 Remaster"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\b(?:live|vivo|directo)\\b","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["\\b(?:live|vivo|directo)\\b","Creep (Acoustic)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
@@ -9493,6 +9557,14 @@
 {"args":["\\b(?:live|vivo|directo)\\b","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"}
 {"args":["\\b(?:live|vivo|directo)\\b","𠀀𮯯 𮯰"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\b(?:live|vivo|directo)\\b","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["\\b(?:live|vivo|directo)\\b","Official Video "],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\b(?:live|vivo|directo)\\b","Official Video "],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video "}
+{"args":["\\b(?:live|vivo|directo)\\b","Official Video 豈"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\b(?:live|vivo|directo)\\b","Official Video 豈"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video 豈"}
+{"args":["\\b(?:live|vivo|directo)\\b","Official Video ꀀ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\b(?:live|vivo|directo)\\b","Official Video ꀀ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ꀀ"}
+{"args":["\\b(?:live|vivo|directo)\\b","Official Video ힰ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\b(?:live|vivo|directo)\\b","Official Video ힰ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ힰ"}
 {"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Hotel California - 2013 Remaster"],"fn":"re.findall","out":[" - "]}
 {"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hotel California|2013 Remaster"}
 {"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Creep (Acoustic)"],"fn":"re.findall","out":["(",")"]}
@@ -9583,6 +9655,14 @@
 {"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"repl":"|"},"out":"|孤勇者|陈奕迅 |动态歌词版||公式||歌詞付き||フル||가사||純音樂|"}
 {"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","𠀀𮯯 𮯰"],"fn":"re.findall","out":[]}
 {"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Official Video "],"fn":"re.findall","out":[]}
+{"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Official Video "],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video "}
+{"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Official Video 豈"],"fn":"re.findall","out":[]}
+{"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Official Video 豈"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video 豈"}
+{"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Official Video ꀀ"],"fn":"re.findall","out":[]}
+{"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ꀀ"}
+{"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Official Video ힰ"],"fn":"re.findall","out":[]}
+{"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ힰ"}
 {"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Hotel California - 2013 Remaster"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Creep (Acoustic)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
@@ -9673,6 +9753,14 @@
 {"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"}
 {"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","𠀀𮯯 𮯰"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Official Video "],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Official Video "],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video "}
+{"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Official Video 豈"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Official Video 豈"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video 豈"}
+{"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Official Video ꀀ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Official Video ꀀ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ꀀ"}
+{"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Official Video ힰ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Official Video ힰ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ힰ"}
 {"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Hotel California - 2013 Remaster"],"fn":"re.findall","out":[]}
 {"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Creep (Acoustic)"],"fn":"re.findall","out":["(Acoustic)"]}
@@ -9763,6 +9851,14 @@
 {"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"repl":"|"},"out":"《孤勇者》陈奕迅 |〈公式〉〖歌詞付き〗〔フル〕||"}
 {"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","𠀀𮯯 𮯰"],"fn":"re.findall","out":[]}
 {"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Official Video "],"fn":"re.findall","out":[]}
+{"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Official Video "],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video "}
+{"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Official Video 豈"],"fn":"re.findall","out":[]}
+{"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Official Video 豈"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video 豈"}
+{"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Official Video ꀀ"],"fn":"re.findall","out":[]}
+{"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ꀀ"}
+{"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Official Video ힰ"],"fn":"re.findall","out":[]}
+{"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ힰ"}
 {"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Hotel California - 2013 Remaster"],"fn":"re.findall","out":["","","","","","","","","",""]}
 {"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"H||l C|l||r|| - 2013 R||s|r"}
 {"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Creep (Acoustic)"],"fn":"re.findall","out":["","","","",""]}
@@ -9853,6 +9949,14 @@
 {"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"repl":"|"},"out":"《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"}
 {"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","𠀀𮯯 𮯰"],"fn":"re.findall","out":[]}
 {"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Official Video "],"fn":"re.findall","out":["f","","","","","",""]}
+{"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Official Video "],"fn":"re.sub","kw":{"repl":"|"},"out":"O||||l V||| "}
+{"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Official Video 豈"],"fn":"re.findall","out":["f","","","","","",""]}
+{"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Official Video 豈"],"fn":"re.sub","kw":{"repl":"|"},"out":"O||||l V||| 豈"}
+{"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Official Video ꀀ"],"fn":"re.findall","out":["f","","","","","",""]}
+{"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"O||||l V||| ꀀ"}
+{"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Official Video ힰ"],"fn":"re.findall","out":["f","","","","","",""]}
+{"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"O||||l V||| ힰ"}
 {"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Hotel California - 2013 Remaster"],"fn":"re.findall","out":[" - "]}
 {"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hotel California|2013 Remaster"}
 {"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Creep (Acoustic)"],"fn":"re.findall","out":[]}
@@ -9943,6 +10047,14 @@
 {"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"repl":"|"},"out":"《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"}
 {"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","𠀀𮯯 𮯰"],"fn":"re.findall","out":[]}
 {"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Official Video "],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Official Video "],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video "}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Official Video 豈"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Official Video 豈"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video 豈"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Official Video ꀀ"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ꀀ"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Official Video ힰ"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ힰ"}
 {"args":["\\s+by\\s+","Hotel California - 2013 Remaster"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\s+by\\s+","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["\\s+by\\s+","Creep (Acoustic)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
@@ -10033,6 +10145,14 @@
 {"args":["\\s+by\\s+","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"}
 {"args":["\\s+by\\s+","𠀀𮯯 𮯰"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\s+by\\s+","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["\\s+by\\s+","Official Video "],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s+by\\s+","Official Video "],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video "}
+{"args":["\\s+by\\s+","Official Video 豈"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s+by\\s+","Official Video 豈"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video 豈"}
+{"args":["\\s+by\\s+","Official Video ꀀ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s+by\\s+","Official Video ꀀ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ꀀ"}
+{"args":["\\s+by\\s+","Official Video ힰ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s+by\\s+","Official Video ힰ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ힰ"}
 {"args":["(?:19|20)\\d\\d","Hotel California - 2013 Remaster"],"fn":"re.findall","out":["2013"]}
 {"args":["(?:19|20)\\d\\d","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hotel California - | Remaster"}
 {"args":["(?:19|20)\\d\\d","Creep (Acoustic)"],"fn":"re.findall","out":[]}
@@ -10123,6 +10243,14 @@
 {"args":["(?:19|20)\\d\\d","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"repl":"|"},"out":"《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"}
 {"args":["(?:19|20)\\d\\d","𠀀𮯯 𮯰"],"fn":"re.findall","out":[]}
 {"args":["(?:19|20)\\d\\d","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["(?:19|20)\\d\\d","Official Video "],"fn":"re.findall","out":[]}
+{"args":["(?:19|20)\\d\\d","Official Video "],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video "}
+{"args":["(?:19|20)\\d\\d","Official Video 豈"],"fn":"re.findall","out":[]}
+{"args":["(?:19|20)\\d\\d","Official Video 豈"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video 豈"}
+{"args":["(?:19|20)\\d\\d","Official Video ꀀ"],"fn":"re.findall","out":[]}
+{"args":["(?:19|20)\\d\\d","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ꀀ"}
+{"args":["(?:19|20)\\d\\d","Official Video ힰ"],"fn":"re.findall","out":[]}
+{"args":["(?:19|20)\\d\\d","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ힰ"}
 {"args":["\\([^()]*\\)|\\[[^\\[\\]]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Hotel California - 2013 Remaster"],"fn":"re.findall","out":[]}
 {"args":["\\([^()]*\\)|\\[[^\\[\\]]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["\\([^()]*\\)|\\[[^\\[\\]]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Creep (Acoustic)"],"fn":"re.findall","out":["(Acoustic)"]}
@@ -10213,6 +10341,14 @@
 {"args":["\\([^()]*\\)|\\[[^\\[\\]]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"repl":"|"},"out":"|陈奕迅 ||||||"}
 {"args":["\\([^()]*\\)|\\[[^\\[\\]]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","𠀀𮯯 𮯰"],"fn":"re.findall","out":[]}
 {"args":["\\([^()]*\\)|\\[[^\\[\\]]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["\\([^()]*\\)|\\[[^\\[\\]]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Official Video "],"fn":"re.findall","out":[]}
+{"args":["\\([^()]*\\)|\\[[^\\[\\]]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Official Video "],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video "}
+{"args":["\\([^()]*\\)|\\[[^\\[\\]]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Official Video 豈"],"fn":"re.findall","out":[]}
+{"args":["\\([^()]*\\)|\\[[^\\[\\]]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Official Video 豈"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video 豈"}
+{"args":["\\([^()]*\\)|\\[[^\\[\\]]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Official Video ꀀ"],"fn":"re.findall","out":[]}
+{"args":["\\([^()]*\\)|\\[[^\\[\\]]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ꀀ"}
+{"args":["\\([^()]*\\)|\\[[^\\[\\]]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Official Video ힰ"],"fn":"re.findall","out":[]}
+{"args":["\\([^()]*\\)|\\[[^\\[\\]]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ힰ"}
 {"args":["^(.*\\S)\\s+-\\s+topic$","Hotel California - 2013 Remaster"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["^(.*\\S)\\s+-\\s+topic$","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["^(.*\\S)\\s+-\\s+topic$","Creep (Acoustic)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
@@ -10303,6 +10439,14 @@
 {"args":["^(.*\\S)\\s+-\\s+topic$","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"}
 {"args":["^(.*\\S)\\s+-\\s+topic$","𠀀𮯯 𮯰"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["^(.*\\S)\\s+-\\s+topic$","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["^(.*\\S)\\s+-\\s+topic$","Official Video "],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["^(.*\\S)\\s+-\\s+topic$","Official Video "],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video "}
+{"args":["^(.*\\S)\\s+-\\s+topic$","Official Video 豈"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["^(.*\\S)\\s+-\\s+topic$","Official Video 豈"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video 豈"}
+{"args":["^(.*\\S)\\s+-\\s+topic$","Official Video ꀀ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["^(.*\\S)\\s+-\\s+topic$","Official Video ꀀ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ꀀ"}
+{"args":["^(.*\\S)\\s+-\\s+topic$","Official Video ힰ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["^(.*\\S)\\s+-\\s+topic$","Official Video ힰ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ힰ"}
 {"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Hotel California - 2013 Remaster"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Creep (Acoustic)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
@@ -10393,276 +10537,210 @@
 {"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"}
 {"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","𠀀𮯯 𮯰"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"𠀀𮯯 𮯰"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hotel California - 2013 Remaster"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hotel California - 2013 Remaster"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Creep (Acoustic)"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Creep (Acoustic)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Creep (Acoustic)"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Wonderwall - Live at Knebworth"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Wonderwall - Live at Knebworth"],"fn":"re.sub","kw":{"repl":"|"},"out":"Wonderwall - Live at Knebworth"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hurt (feat. X)"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hurt (feat. X)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hurt (feat. X)"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Ma Di (feat. 宋冬野)"],"fn":"re.findall","out":["宋","冬","野"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Ma Di (feat. 宋冬野)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Ma Di (feat. |||)"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","南山南（feat. 宋冬野）"],"fn":"re.findall","out":["南","山","南","宋","冬","野"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","南山南（feat. 宋冬野）"],"fn":"re.sub","kw":{"repl":"|"},"out":"|||（feat. |||）"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Song Dongye (宋冬野)"],"fn":"re.findall","out":["宋","冬","野"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Song Dongye (宋冬野)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song Dongye (|||)"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","【斑马斑马】Zebra Zebra"],"fn":"re.findall","out":["斑","马","斑","马"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","【斑马斑马】Zebra Zebra"],"fn":"re.sub","kw":{"repl":"|"},"out":"【||||】Zebra Zebra"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Rock'n’Roll"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Rock'n’Roll"],"fn":"re.sub","kw":{"repl":"|"},"out":"Rock'n’Roll"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Clandestino - En Vivo"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Clandestino - En Vivo"],"fn":"re.sub","kw":{"repl":"|"},"out":"Clandestino - En Vivo"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Lamento Boliviano - Versión Acústica"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Lamento Boliviano - Versión Acústica"],"fn":"re.sub","kw":{"repl":"|"},"out":"Lamento Boliviano - Versión Acústica"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","LIVE AND LET DIE"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","LIVE AND LET DIE"],"fn":"re.sub","kw":{"repl":"|"},"out":"LIVE AND LET DIE"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Yesterday - Remastered 2009"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Yesterday - Remastered 2009"],"fn":"re.sub","kw":{"repl":"|"},"out":"Yesterday - Remastered 2009"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Sunday Bloody Sunday - Live From Red Rocks"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Sunday Bloody Sunday - Live From Red Rocks"],"fn":"re.sub","kw":{"repl":"|"},"out":"Sunday Bloody Sunday - Live From Red Rocks"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Africa by Toto"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Africa by Toto"],"fn":"re.sub","kw":{"repl":"|"},"out":"Africa by Toto"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Toto - Topic"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Toto - Topic"],"fn":"re.sub","kw":{"repl":"|"},"out":"Toto - Topic"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Toto VEVO"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Toto VEVO"],"fn":"re.sub","kw":{"repl":"|"},"out":"Toto VEVO"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Toto Official Channel"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Toto Official Channel"],"fn":"re.sub","kw":{"repl":"|"},"out":"Toto Official Channel"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Imagine (1971)"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Imagine (1971)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Imagine (1971)"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Smells Like Teen Spirit (Remastered 2021)"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Smells Like Teen Spirit (Remastered 2021)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Smells Like Teen Spirit (Remastered 2021)"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hallelujah - From \"Shrek\" Soundtrack"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hallelujah - From \"Shrek\" Soundtrack"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hallelujah - From \"Shrek\" Soundtrack"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Ojitos Lindos - ACÚSTICO"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Ojitos Lindos - ACÚSTICO"],"fn":"re.sub","kw":{"repl":"|"},"out":"Ojitos Lindos - ACÚSTICO"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hello / Adele"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hello / Adele"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hello / Adele"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Café Tacvba | Eres"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Café Tacvba | Eres"],"fn":"re.sub","kw":{"repl":"|"},"out":"Café Tacvba | Eres"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Desert Rose ~ Sting"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Desert Rose ~ Sting"],"fn":"re.sub","kw":{"repl":"|"},"out":"Desert Rose ~ Sting"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Kanpai // Kotaro"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Kanpai // Kotaro"],"fn":"re.sub","kw":{"repl":"|"},"out":"Kanpai // Kotaro"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Sakura sakura"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Sakura sakura"],"fn":"re.sub","kw":{"repl":"|"},"out":"Sakura sakura"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Tsunami"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Tsunami"],"fn":"re.sub","kw":{"repl":"|"},"out":"Tsunami"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Konnichiwa"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Konnichiwa"],"fn":"re.sub","kw":{"repl":"|"},"out":"Konnichiwa"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Shinkansen"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Shinkansen"],"fn":"re.sub","kw":{"repl":"|"},"out":"Shinkansen"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Kitte"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Kitte"],"fn":"re.sub","kw":{"repl":"|"},"out":"Kitte"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Matcha"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Matcha"],"fn":"re.sub","kw":{"repl":"|"},"out":"Matcha"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Ninja"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Ninja"],"fn":"re.sub","kw":{"repl":"|"},"out":"Ninja"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Itto"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Itto"],"fn":"re.sub","kw":{"repl":"|"},"out":"Itto"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","ΚΑΛΗΜΕΡΑ ΣΑΣ"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","ΚΑΛΗΜΕΡΑ ΣΑΣ"],"fn":"re.sub","kw":{"repl":"|"},"out":"ΚΑΛΗΜΕΡΑ ΣΑΣ"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Straße — Live"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Straße — Live"],"fn":"re.sub","kw":{"repl":"|"},"out":"Straße — Live"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","İstanbul (Live)"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","İstanbul (Live)"],"fn":"re.sub","kw":{"repl":"|"},"out":"İstanbul (Live)"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","ΚΕΛΒΙΝ kK"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","ΚΕΛΒΙΝ kK"],"fn":"re.sub","kw":{"repl":"|"},"out":"ΚΕΛΒΙΝ kK"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","x́ (acústica)"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","x́ (acústica)"],"fn":"re.sub","kw":{"repl":"|"},"out":"x́ (acústica)"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Dancing Queen – Single Version"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Dancing Queen – Single Version"],"fn":"re.sub","kw":{"repl":"|"},"out":"Dancing Queen – Single Version"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.findall","out":["孟","维","来","野","人","不","再","借","世","人","的","手","替","我","开","脱","遍","野","的","花","骨","朵","也","能","够","耐","住","寂","寞","动","态","歌","词"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.sub","kw":{"repl":"|"},"out":"||| - ||『||||||| ||||，|||||| |||||||。』『||||MV』"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.findall","out":["林","俊","傑","修","煉","愛","情","華","納","高","畫","質","官","方","完","整","版"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.sub","kw":{"repl":"|"},"out":"||| JJ Lin - |||| Practice Love (|| official ||| HD |||||m/v)"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.findall","out":["아","이","유","블","루","밍"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.sub","kw":{"repl":"|"},"out":"[MV] IU(|||) _ Blueming(|||)"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.findall","out":["孤","勇","者","陈","奕","迅","动","态","歌","词","版","公","式","歌","詞","付","き","フ","ル","가","사","純","音","樂"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"repl":"|"},"out":"《|||》||| (|||||)〈||〉〖||||〗〔||〕［||］（|||）"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","𠀀𮯯 𮯰"],"fn":"re.findall","out":["𠀀","𮯯"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"repl":"|"},"out":"|| 𮯰"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Hotel California - 2013 Remaster"],"fn":"re.findall","out":["Hotel","California","2013","Remaster"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | - | |"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Creep (Acoustic)"],"fn":"re.findall","out":["Creep","Acoustic"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Creep (Acoustic)"],"fn":"re.sub","kw":{"repl":"|"},"out":"| (|)"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Wonderwall - Live at Knebworth"],"fn":"re.findall","out":["Wonderwall","Live","at","Knebworth"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Wonderwall - Live at Knebworth"],"fn":"re.sub","kw":{"repl":"|"},"out":"| - | | |"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Hurt (feat. X)"],"fn":"re.findall","out":["Hurt","feat","X"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Hurt (feat. X)"],"fn":"re.sub","kw":{"repl":"|"},"out":"| (|. |)"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Ma Di (feat. 宋冬野)"],"fn":"re.findall","out":["Ma","Di","feat","宋冬野"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Ma Di (feat. 宋冬野)"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | (|. |)"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","南山南（feat. 宋冬野）"],"fn":"re.findall","out":["南山南","feat","宋冬野"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","南山南（feat. 宋冬野）"],"fn":"re.sub","kw":{"repl":"|"},"out":"|（|. |）"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Song Dongye (宋冬野)"],"fn":"re.findall","out":["Song","Dongye","宋冬野"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Song Dongye (宋冬野)"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | (|)"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","【斑马斑马】Zebra Zebra"],"fn":"re.findall","out":["斑马斑马","Zebra","Zebra"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","【斑马斑马】Zebra Zebra"],"fn":"re.sub","kw":{"repl":"|"},"out":"【|】| |"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Rock'n’Roll"],"fn":"re.findall","out":["Rock","n","Roll"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Rock'n’Roll"],"fn":"re.sub","kw":{"repl":"|"},"out":"|'|’|"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Clandestino - En Vivo"],"fn":"re.findall","out":["Clandestino","En","Vivo"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Clandestino - En Vivo"],"fn":"re.sub","kw":{"repl":"|"},"out":"| - | |"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Lamento Boliviano - Versión Acústica"],"fn":"re.findall","out":["Lamento","Boliviano","Versión","Acústica"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Lamento Boliviano - Versión Acústica"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | - | |"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","LIVE AND LET DIE"],"fn":"re.findall","out":["LIVE","AND","LET","DIE"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","LIVE AND LET DIE"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | | |"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Yesterday - Remastered 2009"],"fn":"re.findall","out":["Yesterday","Remastered","2009"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Yesterday - Remastered 2009"],"fn":"re.sub","kw":{"repl":"|"},"out":"| - | |"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Sunday Bloody Sunday - Live From Red Rocks"],"fn":"re.findall","out":["Sunday","Bloody","Sunday","Live","From","Red","Rocks"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Sunday Bloody Sunday - Live From Red Rocks"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | | - | | | |"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Africa by Toto"],"fn":"re.findall","out":["Africa","by","Toto"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Africa by Toto"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | |"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Toto - Topic"],"fn":"re.findall","out":["Toto","Topic"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Toto - Topic"],"fn":"re.sub","kw":{"repl":"|"},"out":"| - |"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Toto VEVO"],"fn":"re.findall","out":["Toto","VEVO"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Toto VEVO"],"fn":"re.sub","kw":{"repl":"|"},"out":"| |"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Toto Official Channel"],"fn":"re.findall","out":["Toto","Official","Channel"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Toto Official Channel"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | |"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Imagine (1971)"],"fn":"re.findall","out":["Imagine","1971"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Imagine (1971)"],"fn":"re.sub","kw":{"repl":"|"},"out":"| (|)"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Smells Like Teen Spirit (Remastered 2021)"],"fn":"re.findall","out":["Smells","Like","Teen","Spirit","Remastered","2021"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Smells Like Teen Spirit (Remastered 2021)"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | | | (| |)"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Hallelujah - From \"Shrek\" Soundtrack"],"fn":"re.findall","out":["Hallelujah","From","Shrek","Soundtrack"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Hallelujah - From \"Shrek\" Soundtrack"],"fn":"re.sub","kw":{"repl":"|"},"out":"| - | \"|\" |"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Ojitos Lindos - ACÚSTICO"],"fn":"re.findall","out":["Ojitos","Lindos","ACÚSTICO"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Ojitos Lindos - ACÚSTICO"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | - |"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Hello / Adele"],"fn":"re.findall","out":["Hello","Adele"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Hello / Adele"],"fn":"re.sub","kw":{"repl":"|"},"out":"| / |"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Café Tacvba | Eres"],"fn":"re.findall","out":["Café","Tacvba","Eres"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Café Tacvba | Eres"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | | |"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Desert Rose ~ Sting"],"fn":"re.findall","out":["Desert","Rose","Sting"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Desert Rose ~ Sting"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | ~ |"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Kanpai // Kotaro"],"fn":"re.findall","out":["Kanpai","Kotaro"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Kanpai // Kotaro"],"fn":"re.sub","kw":{"repl":"|"},"out":"| // |"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Sakura sakura"],"fn":"re.findall","out":["Sakura","sakura"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Sakura sakura"],"fn":"re.sub","kw":{"repl":"|"},"out":"| |"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Tsunami"],"fn":"re.findall","out":["Tsunami"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Tsunami"],"fn":"re.sub","kw":{"repl":"|"},"out":"|"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Konnichiwa"],"fn":"re.findall","out":["Konnichiwa"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Konnichiwa"],"fn":"re.sub","kw":{"repl":"|"},"out":"|"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Shinkansen"],"fn":"re.findall","out":["Shinkansen"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Shinkansen"],"fn":"re.sub","kw":{"repl":"|"},"out":"|"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Kitte"],"fn":"re.findall","out":["Kitte"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Kitte"],"fn":"re.sub","kw":{"repl":"|"},"out":"|"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Matcha"],"fn":"re.findall","out":["Matcha"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Matcha"],"fn":"re.sub","kw":{"repl":"|"},"out":"|"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Ninja"],"fn":"re.findall","out":["Ninja"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Ninja"],"fn":"re.sub","kw":{"repl":"|"},"out":"|"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Itto"],"fn":"re.findall","out":["Itto"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Itto"],"fn":"re.sub","kw":{"repl":"|"},"out":"|"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","ΚΑΛΗΜΕΡΑ ΣΑΣ"],"fn":"re.findall","out":["ΚΑΛΗΜΕΡΑ","ΣΑΣ"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","ΚΑΛΗΜΕΡΑ ΣΑΣ"],"fn":"re.sub","kw":{"repl":"|"},"out":"| |"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Straße — Live"],"fn":"re.findall","out":["Straße","Live"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Straße — Live"],"fn":"re.sub","kw":{"repl":"|"},"out":"| — |"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","İstanbul (Live)"],"fn":"re.findall","out":["İstanbul","Live"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","İstanbul (Live)"],"fn":"re.sub","kw":{"repl":"|"},"out":"| (|)"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","ΚΕΛΒΙΝ kK"],"fn":"re.findall","out":["ΚΕΛΒΙΝ","kK"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","ΚΕΛΒΙΝ kK"],"fn":"re.sub","kw":{"repl":"|"},"out":"| |"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","x́ (acústica)"],"fn":"re.findall","out":["x","acústica"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","x́ (acústica)"],"fn":"re.sub","kw":{"repl":"|"},"out":"|́ (|)"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Dancing Queen – Single Version"],"fn":"re.findall","out":["Dancing","Queen","Single","Version"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Dancing Queen – Single Version"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | – | |"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.findall","out":["孟维来","野人","不再借世人的手","替我开脱","遍野的花骨朵","也能够耐住寂寞","动态歌词","MV"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.sub","kw":{"repl":"|"},"out":"| - |『| |，| |。』『||』"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.findall","out":["林俊傑","JJ","Lin","修煉愛情","Practice","Love","華納","official","高畫質","HD","官方完整版","m/v"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | | - | | | (| | | | ||)"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.findall","out":["MV","IU","아이유","Blueming","블루밍"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.sub","kw":{"repl":"|"},"out":"[|] |(|) _ |(|)"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.findall","out":["孤勇者","陈奕迅","动态歌词版","公式","歌詞付き","フル","가사","純音樂"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"repl":"|"},"out":"《|》| (|)〈|〉〖|〗〔|〕［|］（|）"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","𠀀𮯯 𮯰"],"fn":"re.findall","out":["𠀀𮯯","𮯰"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"repl":"|"},"out":"| |"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hotel California - 2013 Remaster"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hotel California - 2013 Remaster"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Creep (Acoustic)"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Creep (Acoustic)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Creep (Acoustic)"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Wonderwall - Live at Knebworth"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Wonderwall - Live at Knebworth"],"fn":"re.sub","kw":{"repl":"|"},"out":"Wonderwall - Live at Knebworth"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hurt (feat. X)"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hurt (feat. X)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hurt (feat. X)"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Ma Di (feat. 宋冬野)"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Ma Di (feat. 宋冬野)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Ma Di (feat. 宋冬野)"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","南山南（feat. 宋冬野）"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","南山南（feat. 宋冬野）"],"fn":"re.sub","kw":{"repl":"|"},"out":"南山南（feat. 宋冬野）"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Song Dongye (宋冬野)"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Song Dongye (宋冬野)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song Dongye (宋冬野)"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","【斑马斑马】Zebra Zebra"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","【斑马斑马】Zebra Zebra"],"fn":"re.sub","kw":{"repl":"|"},"out":"【斑马斑马】Zebra Zebra"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Rock'n’Roll"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Rock'n’Roll"],"fn":"re.sub","kw":{"repl":"|"},"out":"Rock'n’Roll"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Clandestino - En Vivo"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Clandestino - En Vivo"],"fn":"re.sub","kw":{"repl":"|"},"out":"Clandestino - En Vivo"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Lamento Boliviano - Versión Acústica"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Lamento Boliviano - Versión Acústica"],"fn":"re.sub","kw":{"repl":"|"},"out":"Lamento Boliviano - Versión Acústica"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","LIVE AND LET DIE"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","LIVE AND LET DIE"],"fn":"re.sub","kw":{"repl":"|"},"out":"LIVE AND LET DIE"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Yesterday - Remastered 2009"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Yesterday - Remastered 2009"],"fn":"re.sub","kw":{"repl":"|"},"out":"Yesterday - Remastered 2009"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Sunday Bloody Sunday - Live From Red Rocks"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Sunday Bloody Sunday - Live From Red Rocks"],"fn":"re.sub","kw":{"repl":"|"},"out":"Sunday Bloody Sunday - Live From Red Rocks"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Africa by Toto"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Africa by Toto"],"fn":"re.sub","kw":{"repl":"|"},"out":"Africa by Toto"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Toto - Topic"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Toto - Topic"],"fn":"re.sub","kw":{"repl":"|"},"out":"Toto - Topic"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Toto VEVO"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Toto VEVO"],"fn":"re.sub","kw":{"repl":"|"},"out":"Toto VEVO"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Toto Official Channel"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Toto Official Channel"],"fn":"re.sub","kw":{"repl":"|"},"out":"Toto Official Channel"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Imagine (1971)"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Imagine (1971)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Imagine (1971)"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Smells Like Teen Spirit (Remastered 2021)"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Smells Like Teen Spirit (Remastered 2021)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Smells Like Teen Spirit (Remastered 2021)"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hallelujah - From \"Shrek\" Soundtrack"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hallelujah - From \"Shrek\" Soundtrack"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hallelujah - From \"Shrek\" Soundtrack"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Ojitos Lindos - ACÚSTICO"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Ojitos Lindos - ACÚSTICO"],"fn":"re.sub","kw":{"repl":"|"},"out":"Ojitos Lindos - ACÚSTICO"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hello / Adele"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hello / Adele"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hello / Adele"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Café Tacvba | Eres"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Café Tacvba | Eres"],"fn":"re.sub","kw":{"repl":"|"},"out":"Café Tacvba | Eres"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Desert Rose ~ Sting"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Desert Rose ~ Sting"],"fn":"re.sub","kw":{"repl":"|"},"out":"Desert Rose ~ Sting"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Kanpai // Kotaro"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Kanpai // Kotaro"],"fn":"re.sub","kw":{"repl":"|"},"out":"Kanpai // Kotaro"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Sakura sakura"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Sakura sakura"],"fn":"re.sub","kw":{"repl":"|"},"out":"Sakura sakura"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Tsunami"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Tsunami"],"fn":"re.sub","kw":{"repl":"|"},"out":"Tsunami"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Konnichiwa"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Konnichiwa"],"fn":"re.sub","kw":{"repl":"|"},"out":"Konnichiwa"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Shinkansen"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Shinkansen"],"fn":"re.sub","kw":{"repl":"|"},"out":"Shinkansen"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Kitte"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Kitte"],"fn":"re.sub","kw":{"repl":"|"},"out":"Kitte"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Matcha"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Matcha"],"fn":"re.sub","kw":{"repl":"|"},"out":"Matcha"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Ninja"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Ninja"],"fn":"re.sub","kw":{"repl":"|"},"out":"Ninja"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Itto"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Itto"],"fn":"re.sub","kw":{"repl":"|"},"out":"Itto"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","ΚΑΛΗΜΕΡΑ ΣΑΣ"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","ΚΑΛΗΜΕΡΑ ΣΑΣ"],"fn":"re.sub","kw":{"repl":"|"},"out":"ΚΑΛΗΜΕΡΑ ΣΑΣ"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Straße — Live"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Straße — Live"],"fn":"re.sub","kw":{"repl":"|"},"out":"Straße — Live"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","İstanbul (Live)"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","İstanbul (Live)"],"fn":"re.sub","kw":{"repl":"|"},"out":"İstanbul (Live)"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","ΚΕΛΒΙΝ kK"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","ΚΕΛΒΙΝ kK"],"fn":"re.sub","kw":{"repl":"|"},"out":"ΚΕΛΒΙΝ kK"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","x́ (acústica)"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","x́ (acústica)"],"fn":"re.sub","kw":{"repl":"|"},"out":"x́ (acústica)"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Dancing Queen – Single Version"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Dancing Queen – Single Version"],"fn":"re.sub","kw":{"repl":"|"},"out":"Dancing Queen – Single Version"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.findall","out":["手 替","朵 也"]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.sub","kw":{"repl":"|"},"out":"孟维来 - 野人『不再借世人的|我开脱，遍野的花骨|能够耐住寂寞。』『动态歌词MV』"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.sub","kw":{"repl":"|"},"out":"林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.sub","kw":{"repl":"|"},"out":"[MV] IU(아이유) _ Blueming(블루밍)"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"repl":"|"},"out":"《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","𠀀𮯯 𮯰"],"fn":"re.findall","out":[]}
-{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Official Video "],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Official Video "],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video "}
+{"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Official Video 豈"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Official Video 豈"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video 豈"}
+{"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Official Video ꀀ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Official Video ꀀ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ꀀ"}
+{"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Official Video ힰ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Official Video ힰ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ힰ"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Hotel California - 2013 Remaster"],"fn":"re.findall","out":["Hotel","California","2013","Remaster"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | - | |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Creep (Acoustic)"],"fn":"re.findall","out":["Creep","Acoustic"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Creep (Acoustic)"],"fn":"re.sub","kw":{"repl":"|"},"out":"| (|)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Wonderwall - Live at Knebworth"],"fn":"re.findall","out":["Wonderwall","Live","at","Knebworth"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Wonderwall - Live at Knebworth"],"fn":"re.sub","kw":{"repl":"|"},"out":"| - | | |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Hurt (feat. X)"],"fn":"re.findall","out":["Hurt","feat","X"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Hurt (feat. X)"],"fn":"re.sub","kw":{"repl":"|"},"out":"| (|. |)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Ma Di (feat. 宋冬野)"],"fn":"re.findall","out":["Ma","Di","feat","宋冬野"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Ma Di (feat. 宋冬野)"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | (|. |)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","南山南（feat. 宋冬野）"],"fn":"re.findall","out":["南山南","feat","宋冬野"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","南山南（feat. 宋冬野）"],"fn":"re.sub","kw":{"repl":"|"},"out":"|（|. |）"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Song Dongye (宋冬野)"],"fn":"re.findall","out":["Song","Dongye","宋冬野"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Song Dongye (宋冬野)"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | (|)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","【斑马斑马】Zebra Zebra"],"fn":"re.findall","out":["斑马斑马","Zebra","Zebra"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","【斑马斑马】Zebra Zebra"],"fn":"re.sub","kw":{"repl":"|"},"out":"【|】| |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Rock'n’Roll"],"fn":"re.findall","out":["Rock","n","Roll"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Rock'n’Roll"],"fn":"re.sub","kw":{"repl":"|"},"out":"|'|’|"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Clandestino - En Vivo"],"fn":"re.findall","out":["Clandestino","En","Vivo"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Clandestino - En Vivo"],"fn":"re.sub","kw":{"repl":"|"},"out":"| - | |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Lamento Boliviano - Versión Acústica"],"fn":"re.findall","out":["Lamento","Boliviano","Versión","Acústica"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Lamento Boliviano - Versión Acústica"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | - | |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","LIVE AND LET DIE"],"fn":"re.findall","out":["LIVE","AND","LET","DIE"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","LIVE AND LET DIE"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | | |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Yesterday - Remastered 2009"],"fn":"re.findall","out":["Yesterday","Remastered","2009"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Yesterday - Remastered 2009"],"fn":"re.sub","kw":{"repl":"|"},"out":"| - | |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Sunday Bloody Sunday - Live From Red Rocks"],"fn":"re.findall","out":["Sunday","Bloody","Sunday","Live","From","Red","Rocks"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Sunday Bloody Sunday - Live From Red Rocks"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | | - | | | |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Africa by Toto"],"fn":"re.findall","out":["Africa","by","Toto"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Africa by Toto"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Toto - Topic"],"fn":"re.findall","out":["Toto","Topic"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Toto - Topic"],"fn":"re.sub","kw":{"repl":"|"},"out":"| - |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Toto VEVO"],"fn":"re.findall","out":["Toto","VEVO"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Toto VEVO"],"fn":"re.sub","kw":{"repl":"|"},"out":"| |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Toto Official Channel"],"fn":"re.findall","out":["Toto","Official","Channel"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Toto Official Channel"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Imagine (1971)"],"fn":"re.findall","out":["Imagine","1971"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Imagine (1971)"],"fn":"re.sub","kw":{"repl":"|"},"out":"| (|)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Smells Like Teen Spirit (Remastered 2021)"],"fn":"re.findall","out":["Smells","Like","Teen","Spirit","Remastered","2021"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Smells Like Teen Spirit (Remastered 2021)"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | | | (| |)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Hallelujah - From \"Shrek\" Soundtrack"],"fn":"re.findall","out":["Hallelujah","From","Shrek","Soundtrack"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Hallelujah - From \"Shrek\" Soundtrack"],"fn":"re.sub","kw":{"repl":"|"},"out":"| - | \"|\" |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Ojitos Lindos - ACÚSTICO"],"fn":"re.findall","out":["Ojitos","Lindos","ACÚSTICO"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Ojitos Lindos - ACÚSTICO"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | - |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Hello / Adele"],"fn":"re.findall","out":["Hello","Adele"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Hello / Adele"],"fn":"re.sub","kw":{"repl":"|"},"out":"| / |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Café Tacvba | Eres"],"fn":"re.findall","out":["Café","Tacvba","Eres"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Café Tacvba | Eres"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | | |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Desert Rose ~ Sting"],"fn":"re.findall","out":["Desert","Rose","Sting"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Desert Rose ~ Sting"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | ~ |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Kanpai // Kotaro"],"fn":"re.findall","out":["Kanpai","Kotaro"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Kanpai // Kotaro"],"fn":"re.sub","kw":{"repl":"|"},"out":"| // |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Sakura sakura"],"fn":"re.findall","out":["Sakura","sakura"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Sakura sakura"],"fn":"re.sub","kw":{"repl":"|"},"out":"| |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Tsunami"],"fn":"re.findall","out":["Tsunami"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Tsunami"],"fn":"re.sub","kw":{"repl":"|"},"out":"|"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Konnichiwa"],"fn":"re.findall","out":["Konnichiwa"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Konnichiwa"],"fn":"re.sub","kw":{"repl":"|"},"out":"|"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Shinkansen"],"fn":"re.findall","out":["Shinkansen"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Shinkansen"],"fn":"re.sub","kw":{"repl":"|"},"out":"|"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Kitte"],"fn":"re.findall","out":["Kitte"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Kitte"],"fn":"re.sub","kw":{"repl":"|"},"out":"|"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Matcha"],"fn":"re.findall","out":["Matcha"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Matcha"],"fn":"re.sub","kw":{"repl":"|"},"out":"|"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Ninja"],"fn":"re.findall","out":["Ninja"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Ninja"],"fn":"re.sub","kw":{"repl":"|"},"out":"|"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Itto"],"fn":"re.findall","out":["Itto"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Itto"],"fn":"re.sub","kw":{"repl":"|"},"out":"|"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","ΚΑΛΗΜΕΡΑ ΣΑΣ"],"fn":"re.findall","out":["ΚΑΛΗΜΕΡΑ","ΣΑΣ"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","ΚΑΛΗΜΕΡΑ ΣΑΣ"],"fn":"re.sub","kw":{"repl":"|"},"out":"| |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Straße — Live"],"fn":"re.findall","out":["Straße","Live"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Straße — Live"],"fn":"re.sub","kw":{"repl":"|"},"out":"| — |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","İstanbul (Live)"],"fn":"re.findall","out":["İstanbul","Live"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","İstanbul (Live)"],"fn":"re.sub","kw":{"repl":"|"},"out":"| (|)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","ΚΕΛΒΙΝ kK"],"fn":"re.findall","out":["ΚΕΛΒΙΝ","kK"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","ΚΕΛΒΙΝ kK"],"fn":"re.sub","kw":{"repl":"|"},"out":"| |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","x́ (acústica)"],"fn":"re.findall","out":["x","acústica"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","x́ (acústica)"],"fn":"re.sub","kw":{"repl":"|"},"out":"|́ (|)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Dancing Queen – Single Version"],"fn":"re.findall","out":["Dancing","Queen","Single","Version"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Dancing Queen – Single Version"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | – | |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.findall","out":["孟维来","野人","不再借世人的手","替我开脱","遍野的花骨朵","也能够耐住寂寞","动态歌词","MV"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.sub","kw":{"repl":"|"},"out":"| - |『| |，| |。』『||』"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.findall","out":["林俊傑","JJ","Lin","修煉愛情","Practice","Love","華納","official","高畫質","HD","官方完整版","m/v"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | | - | | | (| | | | ||)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.findall","out":["MV","IU","아이유","Blueming","블루밍"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.sub","kw":{"repl":"|"},"out":"[|] |(|) _ |(|)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.findall","out":["孤勇者","陈奕迅","动态歌词版","公式","歌詞付き","フル","가사","純音樂"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"repl":"|"},"out":"《|》| (|)〈|〉〖|〗〔|〕［|］（|）"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","𠀀𮯯 𮯰"],"fn":"re.findall","out":["𠀀𮯯","𮯰"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"repl":"|"},"out":"| |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Official Video "],"fn":"re.findall","out":["Official","Video"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Official Video "],"fn":"re.sub","kw":{"repl":"|"},"out":"| | "}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Official Video 豈"],"fn":"re.findall","out":["Official","Video","豈"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Official Video 豈"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Official Video ꀀ"],"fn":"re.findall","out":["Official","Video","ꀀ"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Official Video ힰ"],"fn":"re.findall","out":["Official","Video","ힰ"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hotel California - 2013 Remaster"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hotel California - 2013 Remaster"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Creep (Acoustic)"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Creep (Acoustic)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Creep (Acoustic)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Wonderwall - Live at Knebworth"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Wonderwall - Live at Knebworth"],"fn":"re.sub","kw":{"repl":"|"},"out":"Wonderwall - Live at Knebworth"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hurt (feat. X)"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hurt (feat. X)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hurt (feat. X)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Ma Di (feat. 宋冬野)"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Ma Di (feat. 宋冬野)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Ma Di (feat. 宋冬野)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","南山南（feat. 宋冬野）"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","南山南（feat. 宋冬野）"],"fn":"re.sub","kw":{"repl":"|"},"out":"南山南（feat. 宋冬野）"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Song Dongye (宋冬野)"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Song Dongye (宋冬野)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song Dongye (宋冬野)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","【斑马斑马】Zebra Zebra"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","【斑马斑马】Zebra Zebra"],"fn":"re.sub","kw":{"repl":"|"},"out":"【斑马斑马】Zebra Zebra"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Rock'n’Roll"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Rock'n’Roll"],"fn":"re.sub","kw":{"repl":"|"},"out":"Rock'n’Roll"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Clandestino - En Vivo"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Clandestino - En Vivo"],"fn":"re.sub","kw":{"repl":"|"},"out":"Clandestino - En Vivo"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Lamento Boliviano - Versión Acústica"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Lamento Boliviano - Versión Acústica"],"fn":"re.sub","kw":{"repl":"|"},"out":"Lamento Boliviano - Versión Acústica"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","LIVE AND LET DIE"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","LIVE AND LET DIE"],"fn":"re.sub","kw":{"repl":"|"},"out":"LIVE AND LET DIE"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Yesterday - Remastered 2009"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Yesterday - Remastered 2009"],"fn":"re.sub","kw":{"repl":"|"},"out":"Yesterday - Remastered 2009"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Sunday Bloody Sunday - Live From Red Rocks"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Sunday Bloody Sunday - Live From Red Rocks"],"fn":"re.sub","kw":{"repl":"|"},"out":"Sunday Bloody Sunday - Live From Red Rocks"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Africa by Toto"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Africa by Toto"],"fn":"re.sub","kw":{"repl":"|"},"out":"Africa by Toto"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Toto - Topic"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Toto - Topic"],"fn":"re.sub","kw":{"repl":"|"},"out":"Toto - Topic"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Toto VEVO"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Toto VEVO"],"fn":"re.sub","kw":{"repl":"|"},"out":"Toto VEVO"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Toto Official Channel"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Toto Official Channel"],"fn":"re.sub","kw":{"repl":"|"},"out":"Toto Official Channel"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Imagine (1971)"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Imagine (1971)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Imagine (1971)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Smells Like Teen Spirit (Remastered 2021)"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Smells Like Teen Spirit (Remastered 2021)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Smells Like Teen Spirit (Remastered 2021)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hallelujah - From \"Shrek\" Soundtrack"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hallelujah - From \"Shrek\" Soundtrack"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hallelujah - From \"Shrek\" Soundtrack"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Ojitos Lindos - ACÚSTICO"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Ojitos Lindos - ACÚSTICO"],"fn":"re.sub","kw":{"repl":"|"},"out":"Ojitos Lindos - ACÚSTICO"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hello / Adele"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hello / Adele"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hello / Adele"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Café Tacvba | Eres"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Café Tacvba | Eres"],"fn":"re.sub","kw":{"repl":"|"},"out":"Café Tacvba | Eres"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Desert Rose ~ Sting"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Desert Rose ~ Sting"],"fn":"re.sub","kw":{"repl":"|"},"out":"Desert Rose ~ Sting"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Kanpai // Kotaro"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Kanpai // Kotaro"],"fn":"re.sub","kw":{"repl":"|"},"out":"Kanpai // Kotaro"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Sakura sakura"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Sakura sakura"],"fn":"re.sub","kw":{"repl":"|"},"out":"Sakura sakura"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Tsunami"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Tsunami"],"fn":"re.sub","kw":{"repl":"|"},"out":"Tsunami"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Konnichiwa"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Konnichiwa"],"fn":"re.sub","kw":{"repl":"|"},"out":"Konnichiwa"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Shinkansen"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Shinkansen"],"fn":"re.sub","kw":{"repl":"|"},"out":"Shinkansen"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Kitte"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Kitte"],"fn":"re.sub","kw":{"repl":"|"},"out":"Kitte"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Matcha"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Matcha"],"fn":"re.sub","kw":{"repl":"|"},"out":"Matcha"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Ninja"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Ninja"],"fn":"re.sub","kw":{"repl":"|"},"out":"Ninja"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Itto"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Itto"],"fn":"re.sub","kw":{"repl":"|"},"out":"Itto"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","ΚΑΛΗΜΕΡΑ ΣΑΣ"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","ΚΑΛΗΜΕΡΑ ΣΑΣ"],"fn":"re.sub","kw":{"repl":"|"},"out":"ΚΑΛΗΜΕΡΑ ΣΑΣ"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Straße — Live"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Straße — Live"],"fn":"re.sub","kw":{"repl":"|"},"out":"Straße — Live"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","İstanbul (Live)"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","İstanbul (Live)"],"fn":"re.sub","kw":{"repl":"|"},"out":"İstanbul (Live)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","ΚΕΛΒΙΝ kK"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","ΚΕΛΒΙΝ kK"],"fn":"re.sub","kw":{"repl":"|"},"out":"ΚΕΛΒΙΝ kK"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","x́ (acústica)"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","x́ (acústica)"],"fn":"re.sub","kw":{"repl":"|"},"out":"x́ (acústica)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Dancing Queen – Single Version"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Dancing Queen – Single Version"],"fn":"re.sub","kw":{"repl":"|"},"out":"Dancing Queen – Single Version"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.findall","out":["手 替","朵 也"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.sub","kw":{"repl":"|"},"out":"孟维来 - 野人『不再借世人的|我开脱，遍野的花骨|能够耐住寂寞。』『动态歌词MV』"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.sub","kw":{"repl":"|"},"out":"林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.sub","kw":{"repl":"|"},"out":"[MV] IU(아이유) _ Blueming(블루밍)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"repl":"|"},"out":"《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","𠀀𮯯 𮯰"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video "],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video "],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video "}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video 豈"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video 豈"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video 豈"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video ꀀ"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ꀀ"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video ힰ"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ힰ"}
 {"args":["뮤직비디오|中英字幕|动态歌词|動態歌詞|歌詞付き|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Hotel California - 2013 Remaster"],"fn":"re.findall","out":[]}
 {"args":["뮤직비디오|中英字幕|动态歌词|動態歌詞|歌詞付き|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["뮤직비디오|中英字幕|动态歌词|動態歌詞|歌詞付き|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Creep (Acoustic)"],"fn":"re.findall","out":[]}
@@ -10753,3 +10831,11 @@
 {"args":["뮤직비디오|中英字幕|动态歌词|動態歌詞|歌詞付き|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"repl":"|"},"out":"《孤勇者》陈奕迅 (||)〈|〉〖|〗〔|〕［|］（|）"}
 {"args":["뮤직비디오|中英字幕|动态歌词|動態歌詞|歌詞付き|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","𠀀𮯯 𮯰"],"fn":"re.findall","out":[]}
 {"args":["뮤직비디오|中英字幕|动态歌词|動態歌詞|歌詞付き|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["뮤직비디오|中英字幕|动态歌词|動態歌詞|歌詞付き|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Official Video "],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中英字幕|动态歌词|動態歌詞|歌詞付き|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Official Video "],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video "}
+{"args":["뮤직비디오|中英字幕|动态歌词|動態歌詞|歌詞付き|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Official Video 豈"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中英字幕|动态歌词|動態歌詞|歌詞付き|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Official Video 豈"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video 豈"}
+{"args":["뮤직비디오|中英字幕|动态歌词|動態歌詞|歌詞付き|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Official Video ꀀ"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中英字幕|动态歌词|動態歌詞|歌詞付き|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ꀀ"}
+{"args":["뮤직비디오|中英字幕|动态歌词|動態歌詞|歌詞付き|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Official Video ힰ"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中英字幕|动态歌词|動態歌詞|歌詞付き|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ힰ"}

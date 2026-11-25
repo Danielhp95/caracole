@@ -703,6 +703,13 @@
 {"args":["Song (Ao Vivo)"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["song-ao-vivo","song"],"name_forms":["song-ao-vivo"],"original_part":"Song (Ao Vivo)"}}
 {"args":["Song (En Directo)"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["song-en-directo","song"],"name_forms":["song-en-directo"],"original_part":"Song (En Directo)"}}
 {"args":["Song (Live at Wembley)"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["song-live-at-wembley","song"],"name_forms":["song-live-at-wembley"],"original_part":"Song (Live at Wembley)"}}
+{"args":["Song (Official MV ꜱ)"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["song-official-mv-ꜱ","song"],"name_forms":["song-official-mv-ꜱ"],"original_part":"Song (Official MV ꜱ)"}}
+{"args":["Song (Official Video (HD))"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["song-official-video-hd","song"],"name_forms":["song-official-video-hd"],"original_part":"Song (Official Video (HD))"}}
+{"args":["Song (Official Video ꀀ)"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["song-official-video-ꀀ","song","official-video-ꀀ"],"name_forms":["song-official-video-ꀀ","song","official-video-ꀀ"],"original_part":"Official Video ꀀ"}}
+{"args":["Song (Official Video ힰ)"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["song-official-video-ힰ","song","official-video-ힰ"],"name_forms":["song-official-video-ힰ","song","official-video-ힰ"],"original_part":"Official Video ힰ"}}
+{"args":["Song (Official Video )"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["song-official-video","song"],"name_forms":["song-official-video"],"original_part":"Song (Official Video )"}}
+{"args":["Song (Official Video 豈)"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["song-official-video-豈","song","official-video-豈"],"name_forms":["song-official-video-豈","song","official-video-豈"],"original_part":"Official Video 豈"}}
+{"args":["Song (Official Video)"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["song-official-video","song"],"name_forms":["song-official-video"],"original_part":"Song (Official Video)"}}
 {"args":["Song (Official Video】"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["song-official-video","song"],"name_forms":["song-official-video"],"original_part":"Song (Official Video】"}}
 {"args":["Song (Versión Acústica)"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["song-version-acustica","song"],"name_forms":["song-version-acustica"],"original_part":"Song (Versión Acústica)"}}
 {"args":["Song (feat. X)"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["song-feat-x","song"],"name_forms":["song-feat-x","song"],"original_part":"Song"}}

@@ -706,8 +706,8 @@ def _caracole_patterns() -> list[re.Pattern]:
     names = ["_APOSTROPHES", "_SPLIT", "_CJK", "_HAN", "_DASH_SUFFIX", "_PAREN_FEAT", "_PAREN_SUFFIX",
              "_ACOUSTIC_WORD", "_LIVE_WORD", "_PART_BREAK", "_FEATURING", "_BRACKETED", "_MORA"]
     out = [getattr(normalize, n) for n in names]
-    out += [getattr(song_names, n) for n in ("_MARK", "_BY", "_YEAR", "_GROUPS", "_TOPIC", "_LABEL", "_CJK", "_PIECE",
-                                             "_CJK_GAP", "_CJK_NOISE_PHRASE")]
+    out += [getattr(song_names, n) for n in ("_MARK", "_BY", "_YEAR", "_GROUPS", "_TOPIC", "_LABEL", "_PIECE",
+                                             "_CJK_GAP", "_CJK_NOISE_PHRASE")]  # its _CJK is normalize.py's
     return out
 
 
@@ -723,6 +723,8 @@ NAMES = [
     "孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』",
     "林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)", "[MV] IU(아이유) _ Blueming(블루밍)",
     "《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）", "\U00020000\U0002ebef \U0002ebf0",
+    # The edges of CJK's ranges, beside a video's words: U+F8FF, U+F900, U+A000, U+D7B0.
+    "Official Video \uf8ff", "Official Video \uf900", "Official Video \ua000", "Official Video \ud7b0",
 ]
 
 

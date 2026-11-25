@@ -21,9 +21,7 @@ object SongNames {
      * lyric quoted, a last part of a video's words after a mark, such words loose at its end, quotes around it), its
      * spaces folded; its case, accents and marks kept as written. */
     fun clean(text: String): String {
-        val folded = Py.split(text).joinToString(" ")
-        val kept = PyRe.sub(GROUPS, folded) { m -> if (decoration(m, folded)) " " else m.value }
-        var t = Py.split(kept).joinToString(" ")
+        var t = Py.split(undecorated(Py.split(text).joinToString(" "))).joinToString(" ")
         while (true) { // "… | Official Video"
             val last = MARK.findAll(t).lastOrNull() ?: break
             if (!noise(t.substring(last.range.last + 1))) break
@@ -192,6 +190,22 @@ object SongNames {
         val inner = group.value.substring(1, group.value.length - 1)
         return noiseGroup(inner) || group.value[0] in LYRIC_QUOTES && lyric(inner) &&
             !(group.range.first == 0 && group.range.last + 1 == text.length)
+    }
+
+    /** [text], whose spaces are folded, without its groups that are a video's, each with the spaces before it. */
+    private fun undecorated(text: String): String {
+        val out = StringBuilder()
+        var at = 0
+        for (group in PyRe.finditer(GROUPS, text)) {
+            out.append(text, at, group.range.first)
+            if (decoration(group, text)) {
+                while (out.isNotEmpty() && out[out.length - 1] == ' ') out.setLength(out.length - 1)
+            } else {
+                out.append(group.value)
+            }
+            at = group.range.last + 1
+        }
+        return out.append(text, at, text.length).toString()
     }
 
     /** A word of a text whose spaces are folded, where it begins, and whether it is a group. */

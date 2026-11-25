@@ -78,7 +78,7 @@ import unicodedata
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
-from caracole.normalize import compact, identity_key, name_forms, name_words, placeholder_artist, slug_key
+from caracole.normalize import _CJK, compact, identity_key, name_forms, name_words, placeholder_artist, slug_key
 
 if TYPE_CHECKING:
     from caracole.songs import Song
@@ -106,8 +106,7 @@ _CJK_NOISE = (
     "가사", "뮤직비디오", "공식",
 )
 _CJK_NOISE_PHRASE = re.compile("|".join(sorted(_CJK_NOISE, key=lambda p: (-len(p), p))))  # the longest first
-_CJK_LETTERS = "ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿\U00020000-\U0002ebef"  # Hangul, kana and Han, as normalize.py's _CJK
-_CJK = re.compile(f"[{_CJK_LETTERS}]")
+_CJK_LETTERS = _CJK.pattern[1:-1]  # Hangul, kana and Han: normalize.py's _CJK, its one class
 # A text holding CJK in words: runs of CJK, and of other letters and digits ("m/v" whole), marks and spaces between.
 _PIECE = re.compile(f"[{_CJK_LETTERS}]+|m/v(?![^\\W_{_CJK_LETTERS}])|[^\\W_{_CJK_LETTERS}]+")
 _CJK_GAP = re.compile(f"[{_CJK_LETTERS}]\\s+[{_CJK_LETTERS}]")  # a space between two CJK characters: a sentence's
@@ -210,6 +209,16 @@ def _tokens(text: str) -> list[tuple[int, str, bool]]:
     return out
 
 
+def _undecorated(text: str) -> str:
+    """``text``, whose spaces are folded, without its groups that are a video's, each with the spaces before it."""
+    out, at = "", 0
+    for group in _GROUPS.finditer(text):
+        out += text[at:group.start()]
+        out = out.rstrip(" ") if _decoration(group, text) else out + group.group()
+        at = group.end()
+    return out + text[at:]
+
+
 def _unquoted(text: str) -> str:
     while len(text) > 1 and text[0] in _QUOTES and text[-1] in _QUOTES:
         text = text[1:-1].strip()
@@ -218,8 +227,7 @@ def _unquoted(text: str) -> str:
 
 def clean(text: str) -> str:
     """``text`` without what a video's title adds to a song's name (module docstring), its spaces folded."""
-    text = " ".join(text.split())
-    text = " ".join(_GROUPS.sub(lambda m: " " if _decoration(m, text) else m.group(), text).split())
+    text = " ".join(_undecorated(" ".join(text.split())).split())
     while (marks := list(_MARK.finditer(text))) and _noise(text[marks[-1].end():]):
         text = text[:marks[-1].start()]  # "… | Official Video"
     words = _tokens(text)

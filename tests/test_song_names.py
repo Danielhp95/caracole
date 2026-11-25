@@ -42,6 +42,7 @@ VIKINGOS_VIDEO = ("Somos vikingos veganos - Hyperfanes", "kintanedu")  # a fan's
     ("Radiohead - Creep | Pablo Honey", "Radiohead - Creep | Pablo Honey"),  # the marks as written
     ("  silvana  estrada   qué problema ", "silvana estrada qué problema"),  # spaces folded
     ("(Official Video)", ""),
+    ("Song (Official Video (HD))", "Song (Official Video)"),  # the inner group goes with the spaces before it
 ])
 def test_a_text_loses_what_a_videos_title_adds_to_a_songs_name(text, cleaned):
     assert clean(text) == cleaned
@@ -121,6 +122,13 @@ def test_a_quoted_lyric_goes_wherever_it_is_but_a_short_quote_is_a_title(text, c
     ("起风了 (Pinyin Lyrics)", "起风了"),
     ("晴天 [KTV]", "晴天"),
     ("Creep (Live Version)", "Creep (Live Version)"),
+    # CJK is Hangul, kana and Han alone, as normalize.py's _CJK: a letter just outside them is no CJK, so its group is
+    # read by the Latin rule (written as escapes: a source that is NFC-normalized turns U+F900 into U+8C48).
+    ("Song (Official Video \uf900)", "Song"),
+    ("Song (Official Video \uf8ff)", "Song (Official Video \uf8ff)"),
+    ("Song (Official Video \ua000)", "Song (Official Video \ua000)"),
+    ("Song (Official Video \ud7b0)", "Song (Official Video \ud7b0)"),
+    ("Song (Official MV \ua731)", "Song (Official MV \ua731)"),
 ])
 def test_cjk_noise_goes_by_its_share_of_the_group(text, cleaned):
     assert clean(text) == cleaned

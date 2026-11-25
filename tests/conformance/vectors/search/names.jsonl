@@ -13,6 +13,7 @@
 {"args":["Radiohead - Creep | Pablo Honey"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"Radiohead - Creep | Pablo Honey"}
 {"args":["  silvana  estrada   qué problema "],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"silvana estrada qué problema"}
 {"args":["(Official Video)"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":""}
+{"args":["Song (Official Video (HD))"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"Song (Official Video)"}
 {"args":["孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"孟维来 - 野人"}
 {"args":["毛不易 - 消愁「当你走进这欢乐场 背上所有的梦与想」【動態歌詞Lyrics】"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"毛不易 - 消愁"}
 {"args":["【抖音】海来阿木 - 别知己【动态歌词】"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"海来阿木 - 别知己"}
@@ -60,6 +61,11 @@
 {"args":["起风了 (Pinyin Lyrics)"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"起风了"}
 {"args":["晴天 [KTV]"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"晴天"}
 {"args":["Creep (Live Version)"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"Creep (Live Version)"}
+{"args":["Song (Official Video 豈)"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"Song"}
+{"args":["Song (Official Video )"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"Song (Official Video )"}
+{"args":["Song (Official Video ꀀ)"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"Song (Official Video ꀀ)"}
+{"args":["Song (Official Video ힰ)"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"Song (Official Video ힰ)"}
+{"args":["Song (Official MV ꜱ)"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"Song (Official MV ꜱ)"}
 {"args":["Song （Official Video）"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"Song"}
 {"args":["Song ［Official Audio］"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"Song"}
 {"args":["晴天〈官方MV〉"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"晴天"}
@@ -78,9 +84,10 @@
 {"args":["Song【官方M/V】"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"Song"}
 {"args":["【告白氣球 Official MV】"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":""}
 {"args":["Kanpai // Kotaro"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"Kanpai // Kotaro"}
-{"args":["Song[Official Video]Remix"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"Song Remix"}
+{"args":["Song[Official Video]Remix"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"SongRemix"}
 {"args":["「」 x"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"「」 x"}
 {"args":["x 【】"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"x 【】"}
+{"args":["Song [Official Video (HD)] x"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"Song [Official Video (HD)] x"}
 {"args":["Radiohead - Topic"],"fixture":null,"fn":"caracole.song_names.clean_channel","kw":{},"out":"Radiohead"}
 {"args":["AdeleVEVO"],"fixture":null,"fn":"caracole.song_names.clean_channel","kw":{},"out":"Adele"}
 {"args":["EstopaVEVO"],"fixture":null,"fn":"caracole.song_names.clean_channel","kw":{},"out":"Estopa"}
