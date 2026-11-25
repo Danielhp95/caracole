@@ -296,9 +296,19 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   - `song_states`: where each song stands for the pages: `todo.write_pages` asks once and hands it to both, a
     one-song card asks of its song alone.
 - youtube_sheet.py is no step but `caracole youtube --sheet`: one song's auto sheet from a video now.
-  - Its stages song, audio, lyrics, chords, pdf, pages, reported as a lookup's (staged.py's `StagedRun`).
+  - Its stages song, audio, lyrics, vocals, words, chords, pdf, pages (`STAGES`), reported as a lookup's (staged.py's
+    `StagedRun`).
   - LRCLIB asked with the audio's length.
-  - `autochords_pending(only=)`.
+  - Its vocals and words are `HearsWords`' (transcribe_job.py, below), the owner's "transcribed by default"
+    (2026-11-25): only after the lyrics stage, and only where every lyrics site missed (`_why_not_heard`:
+    `why_not_offered`, "not transcribed: …"), `[autochords] transcribe` is on (`TURNED_OFF`) and this caracole can
+    transcribe (`transcribe_reason`, "not transcribed here: …"); `make_sheet(hears=)` True passes over the last two
+    (tests), False is off. After each hand-over the song still one for YouTube (`_still_for_youtube`, else a refusal)
+    and still offered (else that stage skipped, the chords over the lyrics a lookup found). `WORDS_FAIL_THE_JOB`
+    false: a failure to hear fails its own stage alone, the chords made chords-only, the command exiting 0, the song
+    still offered Transcribe the lyrics; nothing sung is the words' done "nothing sung was heard (why)".
+  - `autochords_pending(only=)`, once, after the words: run.py `_make_sheet` takes the transcript; before it, the
+    audio still the one the vocals separated (`_same_audio`) where they ran.
   - caracole serve's sheet from a YouTube video runs it (web/youtube_routes.py).
 - transcribe_job.py is no step either but `caracole transcribe`: a YouTube song's lyrics transcribed from its audio,
   then its auto sheet made again over them (`make_transcript`).
@@ -322,7 +332,8 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     `on_download`) and chords do too; status.py's `LONG_STAGES` put them on the line and the bar.
   - Its vocals and words stages are `HearsWords`' (a mixin for a job of stages, on autochords/hearing.py's `Hearing`,
     below): the job says whether it hears the song (`_why_not_heard`: here, its transcript kept already, vocals
-    skipped "transcribed already") and checks the song after each hand-over (`_still_to_hear`: here, still offered);
+    skipped "transcribed already") and checks the song after each hand-over (`_still_to_hear`: None to go on, a skip
+    of that stage in its words, or a refusal; here, still offered else a refusal);
     `WORDS_FAIL_THE_JOB`, true here, makes a failure to hear and nothing sung fail the job, else they end their
     stage alone (nothing sung done "nothing sung was heard (why)").
   - Nothing sung, by words.py's rule (no sung span or under `MIN_SUNG_S` of them: Whisper isn't run; too few words
@@ -4130,8 +4141,9 @@ picks one).
   (`test_commands_lock.py::test_lookups_take_the_lock_in_the_lane_what_the_owner_asked_for_now_as_a_lookup_and_bulk_work_neither`,
   `test_web_jobs.py::test_a_lookup_queued_behind_an_add_never_waits_behind_the_whole_nightly_run`).
   - A process holding the lock as asked for now hands it to the lane's lookups alone (`hand_over`), at its hand-over
-    points (a yt-dlp pause, a YouTube sheet before its models, a transcription before each of vocals, words and chords
-    (`test_transcribe_job.py::test_the_lock_goes_to_a_waiting_lookup_before_each_long_stage`), `fetch --song`'s
+    points (a yt-dlp pause, a YouTube sheet and a transcription before each of vocals, words and chords
+    (`test_transcribe_job.py::test_the_lock_goes_to_a_waiting_lookup_before_each_long_stage`,
+    `test_youtube_sheet.py::test_the_lock_goes_to_a_waiting_lookup_before_vocals_words_and_chords`), `fetch --song`'s
     pauses), taking the gate only if it is free (held, it is the bulk work that let it in), and waits with a ticket
     of its own, written before it lets go, to
     take it back once the lane is empty; so bulk work that let it in gives it back at its next pause

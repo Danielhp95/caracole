@@ -94,31 +94,31 @@ class HearsWords:
     """The vocals and words stages of a ``StagedRun`` over one song, on its ``hearing`` (autochords/hearing.py), which
     goes with the job (``_cleanup``).
 
-    Before each, a waiting lookup goes first, and the song is checked still the job's (``_still_to_hear``); before the
-    words, its audio still the one the vocals were separated from (``_same_audio``). The job says whether it hears the
-    song at all (``_why_not_heard``), and whether its words not coming fail it (``WORDS_FAIL_THE_JOB``): the setup's
-    failure, the audio's and nothing sung then fail the job (``_fail``, the command exits 1), else end their stage
-    alone, nothing sung done "nothing sung was heard (why)"."""
+    Before each, a waiting lookup goes first, and the song is checked still the job's and still to hear
+    (``_still_to_hear``); before the words, its audio still the one the vocals were separated from (``_same_audio``).
+    The job says whether it hears the song at all (``_why_not_heard``), and whether its words not coming fail it
+    (``WORDS_FAIL_THE_JOB``): the setup's failure, the audio's and nothing sung then fail the job (``_fail``, the
+    command exits 1), else end their stage alone, nothing sung done "nothing sung was heard (why)"."""
 
     WORDS_FAIL_THE_JOB = False
     hearing: Hearing
     voiced: Vocals | None = None  # what the vocals stage heard
-    audio: tuple[str | None, float | None] = (None, None)  # the audio separated: its path and mtime
+    separated: tuple[str | None, float | None] = (None, None)  # the audio the vocals were separated from: path, mtime
 
     def _why_not_heard(self) -> str | None:
         """Why the song's words aren't heard, the vocals stage's skip in its words, or None to hear them."""
         raise NotImplementedError
 
-    def _still_to_hear(self) -> None:
-        """After a lookup went first, before the vocals and the words: the song still one the job hears, else the job
-        ends there (``_Stop``)."""
+    def _still_to_hear(self) -> str | None:
+        """After a lookup went first, before the vocals and the words: None for the song still one the job hears; why
+        it isn't heard now, that stage's skip in its words; or the job ends there (``_Stop``)."""
         raise NotImplementedError
 
     def _same_audio(self) -> None:
         """The song's audio still the one its vocals were separated from (another caracole may replace it while this
         one lets the lookups have the lock), else the job ends there, a refusal: the stem and the sung spans are no
         use to other audio, which is offered a transcription of its own."""
-        if (self.song.audio_path, self.song.audio_mtime) != self.audio:
+        if (self.song.audio_path, self.song.audio_mtime) != self.separated:
             raise _Stop(f"{self.song.display}: its audio changed while its lyrics were transcribed")
 
     def _not_heard(self, failed: HearingFailed) -> tuple[str, str]:
@@ -129,8 +129,9 @@ class HearsWords:
         if why is not None:
             return "skipped", why
         self._after_a_lookup()
-        self._still_to_hear()
-        self.audio = (self.song.audio_path, self.song.audio_mtime)
+        if (why := self._still_to_hear()) is not None:
+            return "skipped", why
+        self.separated = (self.song.audio_path, self.song.audio_mtime)
         try:
             self.voiced = self.hearing.vocals(self.song, on_doing=lambda said: self._doing("vocals", said))
         except HearingFailed as e:
@@ -142,7 +143,8 @@ class HearsWords:
             return "skipped", "no vocals"
         self._after_a_lookup()
         self._same_audio()
-        self._still_to_hear()
+        if (why := self._still_to_hear()) is not None:
+            return "skipped", why
         try:
             heard = self.hearing.words(self.conn, self.song, self.voiced, self.run_id,
                                        on_doing=lambda said: self._doing("words", said))
@@ -226,7 +228,7 @@ class _Transcription(HearsWords, StagedRun):
         return "transcribed already" if self.kept else None
 
     def _still_to_hear(self) -> None:
-        self._still_offered()
+        self._still_offered()  # offered no more ends the job: its transcription is all it does
 
     # --- the stages ----------------------------------------------------------------------------------------
 
@@ -242,7 +244,7 @@ class _Transcription(HearsWords, StagedRun):
         self.song = song
         said = "in the book"
         if self._sheet_to_make():
-            self.kept, self.audio = True, (song.audio_path, song.audio_mtime)
+            self.kept, self.separated = True, (song.audio_path, song.audio_mtime)
             said += "; transcribed already, its sheet to make"
         else:
             self._still_offered()

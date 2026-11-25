@@ -145,13 +145,14 @@ scored_sheets = 3                 # sheets per song scored for coverage: the top
 label_penalty = 0.5               # off the rating of an intro, solo, outro, riff or lesson
 variant_bonus = 0.25              # onto an acoustic or live version, when your song is one
 
-[autochords]                      # read only by `caracole autochords` and `caracole transcribe`
+[autochords]                      # read by `caracole autochords`, `transcribe` and `youtube --sheet`
 # btc_weights = "/path/to/weights.pt"         # or $CARACOLE_BTC_WEIGHTS
 # beat_checkpoint = "/path/to/final0.ckpt"    # or $CARACOLE_BEAT_CHECKPOINT
 device = "cpu"                    # where the models run
 # whisper_model = "/path/to/large-v3.pt"      # or $CARACOLE_WHISPER_MODEL
 # separator_model = "/path/to/htdemucs.safetensors"  # or $CARACOLE_DEMUCS_MODEL
 transcribe_device = "auto"        # where Whisper runs: "auto" (the GPU when there is one), "cpu" or "cuda"
+transcribe = true                 # a sheet from a video hears the words no lyrics site has; false: the card offers it
 ```
 
 caracole keeps one sheet and one text tab per song, and beside the sheet the other Ultimate Guitar
@@ -1587,14 +1588,23 @@ page, or run:
 
 - A song the library doesn't have goes into wanted.txt, and the video goes under `[youtube]`.
   Without `--url`, caracole uses the video under `[youtube]`, else the one its search picks.
-- It prints a line per stage: the audio (on the terms above), the lyrics, the chords (a few
-  minutes on a CPU), then the PDF, the viewer `sheet (auto).html` and the pages. `--progress`
-  adds a JSON line per stage, for caracole serve.
+- It prints a line per stage: the audio (on the terms above), the lyrics, the vocals and the
+  words, the chords (a few minutes on a CPU), then the PDF, the viewer `sheet (auto).html` and
+  the pages. `--progress` adds a JSON line per stage, for caracole serve.
+- The lyrics sites are always asked first. When every one has missed, the words are heard from
+  the audio, as `caracole transcribe` hears them (see [Lyrics transcribed from the
+  audio](#lyrics-transcribed-from-the-audio)), and the chords are made once, over them. That
+  takes a couple of minutes more on a GPU, up to half an hour on a CPU. Otherwise `Vocals:
+  skipped: not transcribed: its lyrics are found.`, or `not transcribed here: …` where this
+  caracole can't transcribe, or `turned off` with `[autochords] transcribe = false`.
 - With timed lyrics, each chord goes over its word, as on Ultimate Guitar. With plain lyrics you
-  get a chord chart, then the lyrics. With none, only the chart.
+  get a chord chart, then the lyrics. With none, only the chart. When nothing sung was heard, the
+  chart says `Instrumental: nothing sung was heard in the audio`.
 
 It exits 0 when the sheet is made, and when a block, a cooldown, a spent budget or a network
-error makes the song wait. It exits 1 when:
+error makes the song wait. A transcription that fails here (the separator, the GPU, Whisper's
+model) fails its own stage alone: the sheet is made with the chords only, and the song's card
+still offers Transcribe the lyrics. It exits 1 when:
 
 - The song has a human sheet, is ignored, has a purchase linked, or has `"none"` under
   `[youtube]` and you gave no video. A human sheet kept, or the song ignored, while a lookup went
@@ -1632,6 +1642,8 @@ the words itself, with Whisper large-v3, and make the auto sheet again with the 
 
     caracole transcribe --song "Nick Cani - Vikingos veganos"
 
+A sheet from a video does this by itself, before its chords (see [A sheet from a video,
+now](#a-sheet-from-a-video-now)); this command is for a song whose sheet came without the words.
 It never adds a song to wanted.txt, and it takes only a song that is offered a transcription.
 That is a song with audio caracole can read, no human sheet, not ignored,
 lyrics missing at every lyrics site you have switched on, and not transcribed yet.

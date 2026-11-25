@@ -487,7 +487,8 @@ YOUTUBE_SHEET = "youtube:"  # a sheet from a YouTube video: its job's key, the s
 
 def youtube_sheet_steps(display: str, url: str) -> list[tuple[str, tuple[str, ...]]]:
     """Make a song's auto sheet from a YouTube video now: ``caracole youtube --sheet --progress``, one process for
-    every stage (youtube_sheet.py's ``STAGES``): the audio with yt-dlp, the lyrics, the chords, the PDF. ``url`` is
+    every stage (youtube_sheet.py's ``STAGES``): the audio with yt-dlp, the lyrics, the words heard where no site has
+    them, the chords, the PDF. ``url`` is
     the video's plain address (youtube_urls.watch_url)."""
     return [("Making the sheet",
              ("youtube", "--sheet", "--progress", f"--url={url}", f"--song={display}"))]

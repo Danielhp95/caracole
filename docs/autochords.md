@@ -26,6 +26,10 @@ When no site has them and the song has audio of its own (YouTube's or a purchase
 lyrics** on the song's card (or `caracole transcribe`) writes them down from the audio with Whisper. The sheet is marked
 as transcribed, and lyrics from a site replace them later.
 
+A sheet from a video you paste does this by itself: the lyrics sites first, then, if every one missed, the words
+heard from the audio, then the chords over them. If the transcription fails, you still get the chords, and the card
+still offers Transcribe the lyrics. `[autochords] transcribe = false` in caracole.toml turns this off.
+
 ## Install
 
 ```sh

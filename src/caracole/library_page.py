@@ -1274,7 +1274,7 @@ _YOUTUBE_FIELD = (
     '<input name="youtube" maxlength="600" autocomplete="off" inputmode="url" spellcheck="false" '
     'placeholder="youtube.com/watch?v=…"></label>'
 )
-_YOUTUBE_HINT = '<p class="hint">Sheet made from video</p>'
+_YOUTUBE_HINT = '<p class="hint">Sheet made from the video, its lyrics heard from it when no site has them</p>'
 
 
 def _request_form(controls: WebControls | None, youtube_problem: str | None = None) -> str:

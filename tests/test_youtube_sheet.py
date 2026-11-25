@@ -1,13 +1,17 @@
 """youtube_sheet.py: a song's auto sheet from a YouTube video, now, stage by stage.
 
 yt-dlp is ``FakeYtDlp`` (helpers/fake_ytdlp.py), LRCLIB a fake behind ``_common.transport_for``, ntfy
-another, auto-chords' models a fake recognizer and fake beats, and chordpro ``fake_chordpro``: nothing
-reaches the network, and no model runs.
+another, auto-chords' models a fake recognizer and fake beats, demucs-rs and Whisper test_transcribe_job.py's
+fakes (``Ears``), and chordpro ``fake_chordpro``: nothing reaches the network, and no model runs.
 """
 
 from __future__ import annotations
 
+import importlib.util
 import json
+import os
+import subprocess
+import sys
 import wave
 from dataclasses import replace
 from datetime import UTC, datetime
@@ -15,15 +19,19 @@ from pathlib import Path
 
 import httpx
 import pytest
-from conftest import add_song
+from conftest import add_song, subprocess_pythonpath
 from helpers.fake_ytdlp import FakeYtDlp, entry
 from helpers.azlyrics_site import FakeAzLyrics
+from helpers.locks import waiting_for
 from helpers.megalobiz_site import FakeMegalobiz
 from helpers.megalobiz_site import record as megalobiz_record
 from helpers.rendered import fake_chordpro
 
-from caracole.autochords import ChordSegment
+from caracole import youtube_fetch as yf
+from caracole.autochords import ChordSegment, separate
+from caracole.autochords.transcript import NOTE, SILENT, heard_nothing, transcript_of, why_not_offered
 from caracole.commands import _common
+from caracole.db import kv_get
 from caracole.config import AutochordsConfig
 from caracole.get import Progress
 from caracole.health import get_state, is_cooling
@@ -151,16 +159,44 @@ def fake(tmp_path):
 
 
 @pytest.fixture
-def setup(cfg, fake, tmp_path):
-    """The config: the fake yt-dlp, no pause between its runs, model files (unread), an ntfy topic."""
+def setup(cfg, fake, tmp_path, monkeypatch):
+    """The config: the fake yt-dlp, no pause between its runs, model files (unread), an ntfy topic; auto-chords and
+    Whisper taken to be there, with their files, and demucs-rs not: a sheet hears no words here unless its test says
+    so (``hears=True``), its vocals skipped "not transcribed here: demucs-rs is missing"."""
     from caracole.config import NtfyConfig
 
-    files = {"btc_weights": tmp_path / "btc.pt", "beat_checkpoint": tmp_path / "final0.ckpt"}
+    find_spec = importlib.util.find_spec
+    monkeypatch.setattr(yf, "autochords_missing", lambda: [])
+    monkeypatch.setattr(importlib.util, "find_spec",
+                        lambda name, *args: object() if name == "whisper" else find_spec(name, *args))
+    files = {"btc_weights": tmp_path / "btc.pt", "beat_checkpoint": tmp_path / "final0.ckpt",
+             "whisper_model": tmp_path / "large-v3.pt", "separator_model": tmp_path / "htdemucs.safetensors"}
     for path in files.values():
         path.write_bytes(b"model")
     youtube = replace(cfg.provider("youtube"), delay=(0.0, 0.0))
-    return replace(cfg, ytdlp_bin=fake.bin, autochords=AutochordsConfig(**files),
-                   providers={**cfg.providers, "youtube": youtube}, ntfy=NtfyConfig(url=NTFY))
+    return replace(cfg, ytdlp_bin=fake.bin, demucs_bin=str(tmp_path / "no-demucs-here"),
+                   autochords=AutochordsConfig(**files), providers={**cfg.providers, "youtube": youtube},
+                   ntfy=NtfyConfig(url=NTFY))
+
+
+class Ears:
+    """demucs-rs and Whisper, test_transcribe_job.py's fakes, each noting in ``log`` that it ran, and the loudness they
+    are read by: the vocal stem's ``stem`` (sung from 25 s to the mix's minute; a test may silence it), the mix's loud
+    throughout."""
+
+    def __init__(self, monkeypatch):
+        from test_transcribe_job import MIX, STEM, Separator, Transcriber
+
+        self.log: list[str] = []
+        self.separator, self.transcriber = Separator(log=self.log), Transcriber(log=self.log)
+        self.stem = list(STEM)
+        monkeypatch.setattr(separate, "frame_db",
+                            lambda path, **kw: list(self.stem if Path(path).name == "vocals.wav" else MIX))
+
+
+@pytest.fixture
+def ears(monkeypatch):
+    return Ears(monkeypatch)
 
 
 def vikingos(fake, tmp_path, seconds=200.0, **spec):
@@ -168,10 +204,13 @@ def vikingos(fake, tmp_path, seconds=200.0, **spec):
     fake.video(VIKINGOS, "Vikingos veganos", "HyperFanes", seconds, ext="wav", copy=str(audio), **spec)
 
 
-def make(cfg, url=PASTED, *, artist="Nick Cani", title="Vikingos veganos", recognizer=None):
-    heard = Heard()
+def make(cfg, url=PASTED, *, artist="Nick Cani", title="Vikingos veganos", recognizer=None, ears=None, hears=None,
+         progress=None):
+    heard = progress or Heard()
     result = make_sheet(cfg, SheetRequest(artist, title, url), heard, runner=fake_chordpro,
-                        recognizer=recognizer or Recognizer(), beats_fn=beats, now=NOW)
+                        recognizer=recognizer or Recognizer(), beats_fn=beats, now=NOW,
+                        separator=ears.separator if ears else None, transcriber=ears.transcriber if ears else None,
+                        hears=hears)
     return result, heard
 
 
@@ -192,6 +231,8 @@ def test_a_song_new_to_the_library_gets_its_sheet_from_the_video(setup, conn, fa
     assert ends["song"] == ("done", f"added to wanted.txt, line 16; noted under [youtube]: https://www.youtube.com/watch?v={VIKINGOS}")
     assert ends["audio"] == ("done", f"downloaded Vikingos veganos (HyperFanes), https://www.youtube.com/watch?v={VIKINGOS}")
     assert ends["lyrics"] == ("done", "found, timed")
+    assert ends["vocals"] == ("skipped", "not transcribed here: demucs-rs is missing")
+    assert ends["words"] == ("skipped", "no vocals")
     assert ends["chords"] == ("done", "chords over the lyrics")
     assert ends["pdf"] == ("done", "made")
     # A song comes from a wanted.txt line, and the video goes under [youtube], as caracole youtube --url writes it.
@@ -513,6 +554,260 @@ def test_without_lyrics_on_lrclib_or_megalobiz_azlyrics_plain_ones_go_on_the_she
     song = find_song(conn, result_key(conn))
     assert song.lyrics_status == "found"
     assert "Des mots inventés" in auto_sheet(setup, conn, song)
+
+
+# --- the words heard from the audio, where no site has them ------------------------------------------------------
+
+
+def nowhere(sites):
+    """No lyrics site has the song: LRCLIB's record gone (Megalobiz and AZLyrics have none already)."""
+    sites[0].records.clear()
+
+
+def the_song(conn):
+    return get_song(conn, find_song(conn, result_key(conn)).id)
+
+
+def auto_raw(conn, song) -> dict:
+    from caracole.songs import AUTO_SHEET
+    from caracole.versions import get_version
+
+    [version_id] = conn.execute("SELECT version_id FROM files WHERE song_id = ? AND name = ?",
+                                (song.id, AUTO_SHEET)).fetchone()
+    return get_version(conn, version_id).raw
+
+
+def test_a_video_no_site_has_lyrics_for_gets_its_words_heard_before_its_chords(setup, conn, fake, sites, ears,
+                                                                                tmp_path):
+    # The owner's rule: the lyrics sites are asked first, and only once every one missed are the words heard from the
+    # audio; the chords are then made once, over them.
+    from test_transcribe_job import SAID
+
+    nowhere(sites)
+    vikingos(fake, tmp_path)
+    recognizer = Recognizer()
+    result, heard = make(setup, recognizer=recognizer, ears=ears, hears=True)
+    assert result.ok, result
+    names = ["song", "audio", "lyrics", "vocals", "words", "chords", "pdf", "pages"]
+    assert [name for name, _ in STAGES] == names
+    assert [e[1] for e in heard.events if e[0] == "stage" and e[2] != "running"] == names
+    ends = heard.ends()
+    assert ends["lyrics"] == ("done", "LRCLIB has none; nor has Megalobiz; nor has AZLyrics")
+    assert ends["vocals"] == ("done", "sung from 24.8 s, 1 stretch")
+    assert ends["words"] == ("done", SAID)
+    assert ends["chords"] == ("done", "chords over the transcribed lyrics")
+    assert ends["pdf"] == ("done", "made")
+    song = the_song(conn)
+    # The separator and Whisper heard the video's audio, then the chords were made of it once.
+    assert ears.log == ["separator", "transcriber"]
+    [(separated, _)] = ears.separator.calls
+    assert separated == Path(song.audio_path) and recognizer.calls == [Path(song.audio_path)]
+    raw = auto_raw(conn, song)
+    assert raw["lyrics_source"] == "transcript" and raw["transcript_made_at"] == transcript_of(conn, song).made_at
+    lines = auto_sheet(setup, conn, song).splitlines()
+    assert NOTE in lines and "Somos vikingos de prueba" in lines
+    assert (song.lyrics_status, song.lyrics_json) == ("missing", None)  # a transcript is no site's lyrics
+    assert not list(setup.cache_dir.glob("transcribe-*"))  # the stem went with the job
+
+
+@pytest.mark.parametrize("found,said,chords", [
+    (record(200.0), "its lyrics are found", "chords over the lyrics"),
+    ({**record(200.0), "instrumental": True, "plainLyrics": None, "syncedLyrics": None}, "its lyrics are instrumental",
+     "chords only, no lyrics"),
+], ids=["lyrics", "an instrumental"])
+def test_a_sites_lyrics_skip_the_vocals_and_the_words(setup, conn, fake, sites, ears, tmp_path, found, said, chords):
+    sites[0].records[:] = [found]
+    vikingos(fake, tmp_path)
+    result, heard = make(setup, ears=ears, hears=True)
+    assert result.ok, result
+    ends = heard.ends()
+    assert ends["vocals"] == ("skipped", f"not transcribed: {said}")
+    assert ends["words"] == ("skipped", "no vocals")
+    assert ends["chords"] == ("done", chords)
+    assert ears.log == []
+
+
+@pytest.mark.parametrize("stem,words,why,ran", [
+    ([-80.0] * 1200, None, "sung 0.0 s", ["separator"]),  # no singing found: Whisper isn't run
+    (None, 6, "5 words in 0:35 sung", ["separator", "transcriber"]),  # a shouted line: too few words to be lyrics
+], ids=["no singing found", "five words"])
+def test_nothing_sung_makes_a_chords_only_sheet_that_says_so_and_exits_0(setup, conn, fake, sites, ears, tmp_path,
+                                                                         stem, words, why, ran):
+    from test_transcribe_job import WORDS
+
+    nowhere(sites)
+    if stem is not None:
+        ears.stem = stem
+    if words is not None:
+        ears.transcriber.words = WORDS[:words]
+    vikingos(fake, tmp_path)
+    result, heard = make(setup, ears=ears, hears=True)
+    assert result.ok and result.failed is None, result  # the command exits 0
+    ends = heard.ends()
+    assert ends["vocals"][0] == "done"
+    assert ends["words"] == ("done", f"nothing sung was heard ({why})")
+    assert ends["chords"] == ("done", "chords only: nothing sung was heard")
+    assert ends["pdf"] == ("done", "made")
+    assert ears.log == ran
+    song = the_song(conn)
+    assert heard_nothing(conn, song) and transcript_of(conn, song) is None
+    assert auto_raw(conn, song)["heard_nothing"] is True
+    assert SILENT in auto_sheet(setup, conn, song).splitlines()
+
+
+@pytest.mark.parametrize("fails,stage,said,ran", [
+    ("separator", "vocals", "the separator can't run here (No possible adapter)", ["separator"]),
+    ("whisper", "words", "the GPU failed: OutOfMemoryError: CUDA out of memory", ["separator", "transcriber"]),
+], ids=["the separator", "the GPU"])
+def test_a_transcription_that_fails_here_still_makes_the_chords_and_exits_0(setup, conn, fake, sites, ears, tmp_path,
+                                                                            fails, stage, said, ran):
+    # The setup's failure, not the song's: its stage says so, the sheet is made chords-only all the same, and the song
+    # stays offered a transcription, for Transcribe the lyrics to try again.
+    from caracole.autochords import transcribe as tx
+
+    nowhere(sites)
+    if fails == "separator":
+        ears.separator.fail = "No possible adapter"
+    else:
+        ears.transcriber.fail = tx.SetupFailed(said)
+    vikingos(fake, tmp_path)
+    recognizer = Recognizer()
+    result, heard = make(setup, recognizer=recognizer, ears=ears, hears=True)
+    assert result.ok and result.failed is None and result.bug is None, result  # the command exits 0
+    ends = heard.ends()
+    assert ends[stage] == ("failed", said)
+    if stage == "vocals":
+        assert ends["words"] == ("skipped", "no vocals")
+    assert ends["chords"] == ("done", "chords only, no lyrics")
+    assert ends["pdf"] == ("done", "made")
+    assert ears.log == ran
+    song = the_song(conn)
+    assert recognizer.calls == [Path(song.audio_path)]
+    assert transcript_of(conn, song) is None and not heard_nothing(conn, song)
+    assert kv_get(conn, f"autochords:failed:{song.id}") is None
+    assert why_not_offered(conn, setup, song, load_overrides(setup.overrides_file)) is None
+
+
+@pytest.mark.parametrize("before,ran", [("vocals", []), ("words", ["separator"])])
+def test_lyrics_a_lookup_found_as_it_went_first_skip_the_hearing_and_the_chords_go_over_them(
+        setup, conn, fake, sites, ears, tmp_path, monkeypatch, before, ran):
+    # Before the vocals and the words a waiting lookup goes first: one that found the song's lyrics meanwhile (a
+    # terminal's `caracole get`) leaves nothing to hear, and the sheet goes on, over those lyrics, never a refusal.
+    from caracole.lyrics import Lyrics
+
+    nowhere(sites)
+    vikingos(fake, tmp_path)
+    heard = Heard()
+    monkeypatch.setattr(_common, "_handoffs", _common.handoffs())  # put back as it was after the test
+
+    def hand_over(cfg_, conn_=None) -> bool:
+        if heard.events[-1][1:3] != (before, "running"):  # no lookup waits: a pause's look finds none
+            return False
+        _common._handoffs += 1
+        song = find_song(conn_, result_key(conn_))
+        update_song(conn_, song.id, lyrics_status="found", lyrics_json=Lyrics.from_record(record(200.0)).to_json())
+        return True
+
+    monkeypatch.setattr(_common, "hand_over", hand_over)
+    result, _ = make(setup, ears=ears, hears=True, progress=heard)
+    assert result.ok and result.refused is None, result
+    ends = heard.ends()
+    assert ends[before] == ("skipped", "not transcribed: its lyrics are found")
+    assert ends["words"][0] == "skipped"
+    assert ends["chords"] == ("done", "chords over the lyrics")
+    assert ears.log == ran
+    assert transcript_of(conn, the_song(conn)) is None
+
+
+@pytest.mark.parametrize("transcribe", [True, False], ids=["on", "off"])
+def test_transcribe_off_in_the_config_skips_them(setup, conn, fake, sites, ears, tmp_path, monkeypatch, transcribe):
+    # Where the words can be heard here, [autochords] transcribe decides: off, the sheet is made as before, chords
+    # only, and the song is offered Transcribe the lyrics on its card.
+    from test_transcribe_job import SAID
+
+    monkeypatch.setattr(yf, "transcribe_problem", lambda cfg: None)  # Whisper, its models and demucs-rs here
+    nowhere(sites)
+    vikingos(fake, tmp_path)
+    result, heard = make(replace(setup, autochords=replace(setup.autochords, transcribe=transcribe)), ears=ears)
+    assert result.ok, result
+    ends = heard.ends()
+    if transcribe:
+        assert ends["words"] == ("done", SAID)
+        assert ends["chords"] == ("done", "chords over the transcribed lyrics")
+        return
+    assert ends["vocals"] == ("skipped", "not transcribed: turned off ([autochords] transcribe = false)")
+    assert ends["words"] == ("skipped", "no vocals")
+    assert ends["chords"] == ("done", "chords only, no lyrics")
+    assert ears.log == []
+    assert why_not_offered(conn, setup, the_song(conn), load_overrides(setup.overrides_file)) is None
+
+
+LOOKUP = r"""
+import sys
+from pathlib import Path
+from caracole.commands import _common
+from caracole.config import load_config
+
+cfg = load_config(Path(sys.argv[1]))
+with _common.exclusive(cfg, "get Nick Cani - Vikingos veganos", lane=True):
+    with open(sys.argv[2], "a", encoding="utf-8") as log:
+        log.write("lookup\n")
+"""
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("sung,order", [
+    (True, ["lookup", "separator", "lookup", "transcriber", "lookup", "recognizer"]),
+    (False, ["lookup", "separator", "lookup", "lookup", "recognizer"]),
+], ids=["sung", "no singing found"])
+def test_the_lock_goes_to_a_waiting_lookup_before_vocals_words_and_chords(setup, conn, fake, sites, ears, tmp_path,
+                                                                          sung, order):
+    # The separator, Whisper and auto-chords take minutes each: a lookup asked meanwhile goes before each of them, and
+    # before the words where no singing was found too, as nothing sung is noted only after it.
+    nowhere(sites)
+    vikingos(fake, tmp_path)
+    if not sung:
+        ears.stem = [-80.0] * 1200
+    config = tmp_path / "caracole.toml"
+    config.write_text(f'state_dir = "{setup.state_dir}"\ncache_dir = "{setup.cache_dir}"\n'
+                      f'library_dir = "{setup.library_dir}"\n', encoding="utf-8")
+    log = tmp_path / "order.log"
+    env = {**os.environ, "PYTHONPATH": subprocess_pythonpath(Path(__file__).parents[1] / "src")}
+    lookups: list[subprocess.Popen] = []
+
+    class Asked(Heard):
+        def stage(self, name, state, detail=""):
+            super().stage(name, state, detail)
+            if state == "running" and not detail and name in ("vocals", "words", "chords"):  # as each starts, a
+                # lookup asks for the lock
+                lookup = subprocess.Popen([sys.executable, "-c", LOOKUP, str(config), str(log)], env=env)
+                lookups.append(lookup)
+                assert waiting_for(setup.state_dir / _common.LOCK_NAME, lambda: lookup.poll() is None)
+
+    class Noted:
+        """Where each model notes that it runs: the log the lookups write too."""
+
+        def append(self, what):
+            with open(log, "a", encoding="utf-8") as out:
+                out.write(what + "\n")
+
+    class Recognized(Recognizer):
+        def recognize(self, path):
+            Noted().append("recognizer")
+            return super().recognize(path)
+
+    ears.separator.log = ears.transcriber.log = Noted()
+    handed = _common.handoffs()
+    try:
+        result, heard = make(setup, recognizer=Recognized(), ears=ears, hears=True, progress=Asked())
+        assert [lookup.wait(30) for lookup in lookups] == [0, 0, 0]
+    finally:
+        for lookup in lookups:
+            lookup.kill()
+    assert result.ok, result
+    assert heard.ends()["words"][0] == "done"
+    assert log.read_text(encoding="utf-8").splitlines() == order
+    assert _common.handoffs() == handed + 3
 
 
 def test_the_ready_line_says_the_lyrics_are_transcribed():
