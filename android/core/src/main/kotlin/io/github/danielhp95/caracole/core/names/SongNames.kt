@@ -14,7 +14,7 @@ import io.github.danielhp95.caracole.core.py.PyUnicode
  * keeps them in the same order, each regex Python's through [PyRegex] (an IGNORECASE one with sre's `(?i)`), each
  * word and key [Normalize]'s.
  *
- * The phone suggests no YouTube video for a query, so `read_names`' `video` (its rule 4) has no counterpart here.
+ * The phone suggests no YouTube video for a query, so `read_names`' `video` (its rule 5) has no counterpart here.
  */
 object SongNames {
     /** [text] without what a video's title adds to a song's name (a group of a video's or a lyric channel's words, a
@@ -58,9 +58,9 @@ object SongNames {
         val hints = listOfNotNull(channel).filter { it.isNotEmpty() }.map { cleanChannel(it) }.filter { it.isNotEmpty() }
         val known = Known(db, songs, hints)
         val cleaned = clean(text)
-        val named = twoParts(cleaned, known) ?: knownArtistIn(cleaned, known)
+        val named = twoParts(cleaned, known) ?: bracketed(cleaned) ?: knownArtistIn(cleaned, known)
         if (named != null) return named
-        if (channel != null) return cleanChannel(channel) to cleaned
+        if (channel != null) return cleanChannel(channel) to own(cleaned)
         return null
     }
 
@@ -118,6 +118,9 @@ object SongNames {
 
     /** The groups that quote a lyric. */
     private const val LYRIC_QUOTES = "\u300c\u300e"
+
+    /** The groups that name a title: \u3010\u3011\u300a\u300b\u300c\u300d\u300e\u300f\u3008\u3009. */
+    private const val TITLE_OPENERS = "\u3010\u300a\u300c\u300e\u3008"
     private val SENTENCE_END = Py.codePoints("\u3002\uff01\uff1f\u2026").toSet()
 
     /** The first splits "Artist - Title". */
@@ -244,17 +247,68 @@ object SongNames {
 
     // --- the rules -----------------------------------------------------------------------------------------------
 
-    /** Rule 1: "A - B", turned round when only B is a known artist. */
+    /** Rule 1: "A - B", each its own words, turned round when only B is a known artist. */
     private fun twoParts(text: String, known: Known): Pair<String, String>? {
         val mark = MARK.find(text) ?: return null
-        val first = unquoted(Py.strip(text.substring(0, mark.range.first)))
-        val second = unquoted(Py.strip(text.substring(mark.range.last + 1)))
+        val first = unquoted(own(Py.strip(text.substring(0, mark.range.first))))
+        val second = unquoted(own(Py.strip(text.substring(mark.range.last + 1))))
         if (Normalize.nameWords(first).isEmpty() || Normalize.nameWords(second).isEmpty()) return null
         if (known.artist(second) != null && known.artist(first) == null) return second to first
         return first to second
     }
 
-    /** Rule 2: a known artist first, or after the last " by ", the one of more words; none for a title whole. */
+    /** [text]'s CJK title groups (【】《》「」『』〈〉), in order. */
+    private fun titles(text: String): List<MatchResult> =
+        PyRe.finditer(GROUPS, text).filter { it.value[0] in TITLE_OPENERS }.toList()
+
+    /** A group's content, its spaces stripped. */
+    private fun inner(group: MatchResult): String = Py.strip(group.value.substring(1, group.value.length - 1))
+
+    /** [text] less every group, its spaces folded. */
+    private fun ungrouped(text: String): String = Py.split(PyRe.sub(GROUPS, text) { " " }).joinToString(" ")
+
+    /** Whether [text] has words of its own outside its groups: a video's alone ("MV") are none. */
+    private fun ownWords(text: String): Boolean {
+        val words = ungrouped(text)
+        return Normalize.nameWords(words).isNotEmpty() && !noiseWord(words)
+    }
+
+    /** [text], its spaces folded, less a video's words loose at its end ("米津玄師 MV" is 米津玄師). */
+    private fun lessLooseNoise(text: String): String {
+        val words = Py.split(text).toMutableList()
+        while (words.isNotEmpty() && noiseWord(words.last())) words.removeAt(words.lastIndex)
+        return words.joinToString(" ")
+    }
+
+    /** A part's own words (rule 1): the part less its CJK title groups where words of its own are outside its groups,
+     * else its first title group's content, its spaces folded; a part with no title group as it is. */
+    private fun own(part: String): String {
+        val titles = titles(part)
+        if (titles.isEmpty()) return part
+        if (!ownWords(part)) return inner(titles[0])
+        val out = StringBuilder()
+        var at = 0
+        for (group in titles) {
+            out.append(part, at, group.range.first).append(' ')
+            at = group.range.last + 1
+        }
+        return Py.split(out.append(part, at, part.length).toString()).joinToString(" ")
+    }
+
+    /** Rule 2: a text no mark parts, its first CJK title group the title; the words before it the artist, less a
+     * video's words loose at their end, else the words after it, less their groups; none for a title group alone. */
+    private fun bracketed(text: String): Pair<String, String>? {
+        val titles = titles(text)
+        if (PyRe.search(MARK, text) != null || titles.isEmpty()) return null
+        val title = inner(titles[0])
+        val before = lessLooseNoise(text.substring(0, titles[0].range.first))
+        val after = text.substring(titles[0].range.last + 1)
+        val artist = if (ownWords(before)) before else lessLooseNoise(ungrouped(after))
+        if (Normalize.nameWords(artist).isEmpty() || Normalize.nameWords(title).isEmpty()) return null
+        return artist to title
+    }
+
+    /** Rule 3: a known artist first, or after the last " by ", the one of more words; none for a title whole. */
     private fun knownArtistIn(text: String, known: Known): Pair<String, String>? {
         val found = listOfNotNull(afterBy(text, known), first(text, known))
         if (found.isEmpty() || known.title(text)) return null

@@ -829,7 +829,9 @@ def names_records(corpus: Corpus) -> list[dict]:
               *_parametrized(tsn.test_a_videos_title_none_of_the_rules_reads_is_its_channels_song),
               *_parametrized(tsn.test_an_underscore_between_spaces_parts_the_text),
               (*tsn.VIKINGOS_VIDEO, None), (*tsn.SILVANA_VIDEO, None), ("Wonderwall - Oasis", "Oasis", None),
-              ("Silvana Estrada Que problema", "kintanedu", None), ("Love Me Tender", "Elvis Presley - Topic", None)]
+              ("Silvana Estrada Que problema", "kintanedu", None), ("Love Me Tender", "Elvis Presley - Topic", None),
+              *_parametrized(tsn.test_a_cjk_lyric_videos_title_names_its_song)]
+    videos = list(dict.fromkeys((title, channel) for title, channel, *_ in videos))  # a title of two tests once
     texts = ["Silvana Estrada - Que problema", "Silvana Estrada – Que problema", "Silvana Estrada — Que problema",
              "Silvana Estrada | Que problema", "Muse - Hysteria - Live", "Nick Cani – Vikingos veganos",
              "宋冬野 - 斑马斑马", "Sílvana Éstrada - Qué problema", " - Creep", "Radiohead - ", "!! - Creep", "-", "",
@@ -844,14 +846,19 @@ def names_records(corpus: Corpus) -> list[dict]:
              "bjork army of me", "Joaquín Sabina 19 días y 500 noches", "joaquin sabina y nos dieron las diez",
              "Estopa La raja de tu falda", "Hasta la Raíz", "Billy Joel Uptown girl", "Silvana Tregua",
              "silvana tregua", "Hyperfanes Somos vikingos veganos", "hyperfanes Somos vikingos veganos",
-             "nick cani vikingos veganos", "onda una mas", "Onda Una más", "lumbre agua", "creep"]
+             "nick cani vikingos veganos", "onda una mas", "Onda Una más", "lumbre agua", "creep",
+             *(t for test in (tsn.test_a_part_of_brackets_alone_is_its_first_brackets_content,
+                              tsn.test_a_part_less_its_title_brackets_is_its_own_words,
+                              tsn.test_a_bracket_is_the_title_when_no_mark_parts_the_text)
+               for t, _ in _parametrized(test)),
+             "周杰倫 Jay Chou【告白氣球 Love Confession】Official MV", "周杰倫 七里香"]
     for name in [None, *FIXTURES]:
         with corpus.conn(name) if name else _no_conn() as conn:
             songs = list_songs(conn) if conn is not None else ()
             for text in list(dict.fromkeys([*texts, *(queries(name) if name else ())])):
                 out.append(record("caracole.song_names.read_names", name, [text], {},
                                   lambda: read_names(conn, text, songs=songs)))
-            for title, channel, *_ in videos:
+            for title, channel in videos:
                 out.append(record("caracole.song_names.read_names", name, [title], {"channel": channel},
                                   lambda: read_names(conn, title, songs=songs, channel=channel)))
     return out

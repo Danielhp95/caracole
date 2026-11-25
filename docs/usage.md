@@ -437,13 +437,18 @@ quote is a title and stays: "宋冬野「斑马，斑马」". Then the first rul
 
 1. **Artist - Title.** The first dash with a space on each side splits them. An en or em dash, "|",
    "~", "//" and "_" work too. "Muse - Hysteria - Live" is "Hysteria - Live" by Muse. The two are
-   swapped when only the second part is a known artist, as in a fan's upload.
-2. **A known artist first, or after "by".** "silvana estrada que problema" or "Que problema by
+   swapped when only the second part is a known artist, as in a fan's upload. A part's brackets
+   of 【】《》「」『』〈〉 are left out of it: "【翻唱】周深" is 周深. A part that is only brackets is
+   the first one's words: "《消愁》" is 消愁.
+2. **A title in brackets.** With no dash, the first of those brackets is the title. The words
+   before it are the artist, and what follows it is left out: "米津玄師 MV「Lemon」" is "Lemon" by
+   米津玄師. With no words before it, the words after it are the artist: "《孤勇者》陈奕迅".
+3. **A known artist first, or after "by".** "silvana estrada que problema" or "Que problema by
    Silvana Estrada", once caracole knows her. A known song title is left whole: "Love Me Tender" is
    not "Me Tender" by Love.
-3. **A video's channel.** A pasted video's title that names no artist is its channel's song:
+4. **A video's channel.** A pasted video's title that names no artist is its channel's song:
    "Creep" from "Radiohead - Topic" is Radiohead's.
-4. **The video suggested for a search.** When YouTube's first video for a query is that very song,
+5. **The video suggested for a search.** When YouTube's first video for a query is that very song,
    its artist is used: "creep" is Radiohead's "Creep".
 
 If no rule fits, the text doesn't say who its artist is, and it is never cut at its first space. A

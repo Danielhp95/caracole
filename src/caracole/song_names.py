@@ -34,18 +34,26 @@ accents and marks are kept as written.
    mark) with a word on each side is the artist A and the title B, whoever they are, as wanted.txt reads a line
    ("Silvana Estrada – Que problema"; "Muse - Hysteria - Live" is "Hysteria - Live" by Muse; "IU(아이유) _
    Blueming(블루밍)"); turned round when B is a known artist and A isn't, as in a fan's upload ("Somos vikingos
-   veganos - Hyperfanes", once Hyperfanes is known).
-2. **A known artist first, or after " by ".** The longest run of the first words that is a known artist's whole name
+   veganos - Hyperfanes", once Hyperfanes is known). Each part is its own words (``_own``): less its CJK title groups
+   (【】《》「」『』〈〉) where words of its own are outside its groups, a video's alone being none ("消愁《Xiao Chou》"
+   is 消愁, "【翻唱】周深" 周深); else its first title group's content ("《消愁》「Xiao Chou」" is 消愁). Its other groups
+   are its own words, as written ("(En Vivo)", "（feat. 宋冬野）").
+2. **A bracketed title.** A text no mark parts that holds a CJK title group has the first as the title. The words
+   before it are the artist, less a video's words loose at their end ("米津玄師 MV「Lemon」" is Lemon by 米津玄師), and
+   what follows it is decoration: a video's words, a film's name, the artist written again ("周杰倫 Jay Chou【告白氣球
+   Love Confession】Official MV"). With no words before it, the words after it, less their groups, are the artist
+   ("《孤勇者》陈奕迅"). A title group alone names no one.
+3. **A known artist first, or after " by ".** The longest run of the first words that is a known artist's whole name
    is the artist, the rest the title ("silvana estrada que problema"; never a name that ends with a word names leave
    out, ``identity_key``: "Joaquín Sabina y nos dieron las diez"); or the words after the last " by " are, those before
    it the title ("Que problema by Silvana Estrada"). Where both read the text, the artist of more words ("Ben E King
    Stand by Me" is Ben E King's even where an index knows an artist "Me"); of as many, " by "'s. Neither reads a text
    that is a song's title whole, yours, Ultimate Guitar's or LaCuerda's ("Love Me Tender" is no song "Me Tender" by
    Love, "Stand by Me" none by Me).
-3. **A video's channel.** The title of a video (``channel``) that neither reads is its channel's song: the channel,
-   its label words gone (``clean_channel``: "Radiohead - Topic", "EstopaVEVO", "Queen Official"), is the artist ("Creep"
-   from "Radiohead - Topic").
-4. **The suggested video's song.** A query that neither reads, whose suggested video (``video``) is that song, names
+4. **A video's channel.** The title of a video (``channel``) that none of these reads is its channel's song: the
+   channel, its label words gone (``clean_channel``: "Radiohead - Topic", "EstopaVEVO", "Queen Official"), is the
+   artist ("Creep" from "Radiohead - Topic"), the title its own words as a part's are ("《孤勇者》" from 陈奕迅's).
+5. **The suggested video's song.** A query none of these reads, whose suggested video (``video``) is that song, names
    the video's artist: the video's own title read by these rules, with its channel, gives a title of the query's very
    words ("creep", and Radiohead's "Creep"; "que problema", and Silvana Estrada's "Qué Problema"). A video of another
    song names no one ("vikingos veganos", and a fan's "Somos vikingos veganos - Hyperfanes").
@@ -114,6 +122,7 @@ _CJK_GAP = re.compile(f"[{_CJK_LETTERS}]\\s+[{_CJK_LETTERS}]")  # a space betwee
 _GROUPS = re.compile(r"\([^()]*\)|\[[^\[\]]*\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》"
                      r"|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕")
 _LYRIC_QUOTES = "「『"  # the groups that quote a lyric
+_TITLE_OPENERS = "【《「『〈"  # the groups that name a title: 【】《》「」『』〈〉
 _SENTENCE_END = "。！？…"
 _QUOTES = "\"'“”‘’«»「」『』"
 _TOPIC = re.compile(r"^(.*\S)\s+-\s+topic$", re.IGNORECASE)
@@ -270,11 +279,11 @@ def read_names(conn: sqlite3.Connection | None, text: str, *, songs: Sequence[So
     hints = [h for h in (clean_channel(c) for c in (channel, video[1] if video else None) if c) if h]
     known = _Known(conn, songs, hints)
     cleaned = clean(text)
-    named = _two_parts(cleaned, known) or _known_artist_in(cleaned, known)
+    named = _two_parts(cleaned, known) or _bracketed(cleaned) or _known_artist_in(cleaned, known)
     if named is not None:
         return named
     if channel is not None:
-        return clean_channel(channel), cleaned
+        return clean_channel(channel), _own(cleaned)
     if video is not None and name_words(cleaned):
         artist, title = read_names(conn, video[0], songs=songs, channel=video[1])
         if artist and name_words(title) == name_words(cleaned):
@@ -283,11 +292,11 @@ def read_names(conn: sqlite3.Connection | None, text: str, *, songs: Sequence[So
 
 
 def _two_parts(text: str, known: _Known) -> tuple[str, str] | None:
-    """Rule 1: "A - B", turned round when only B is a known artist."""
+    """Rule 1: "A - B", each its own words, turned round when only B is a known artist."""
     mark = _MARK.search(text)
     if mark is None:
         return None
-    first, second = _unquoted(text[:mark.start()].strip()), _unquoted(text[mark.end():].strip())
+    first, second = _unquoted(_own(text[:mark.start()].strip())), _unquoted(_own(text[mark.end():].strip()))
     if not name_words(first) or not name_words(second):
         return None
     if known.artist(second) is not None and known.artist(first) is None:
@@ -295,8 +304,62 @@ def _two_parts(text: str, known: _Known) -> tuple[str, str] | None:
     return first, second
 
 
+def _titles(text: str) -> list[re.Match[str]]:
+    """``text``'s CJK title groups (【】《》「」『』〈〉), in order."""
+    return [group for group in _GROUPS.finditer(text) if group.group()[0] in _TITLE_OPENERS]
+
+
+def _ungrouped(text: str) -> str:
+    """``text`` less every group, its spaces folded."""
+    return " ".join(_GROUPS.sub(" ", text).split())
+
+
+def _own_words(text: str) -> bool:
+    """Whether ``text`` has words of its own outside its groups: a video's alone ("MV") are none."""
+    words = _ungrouped(text)
+    return bool(name_words(words)) and not _noise_word(words)
+
+
+def _less_loose_noise(text: str) -> str:
+    """``text``, its spaces folded, less a video's words loose at its end ("米津玄師 MV" is 米津玄師)."""
+    words = text.split()
+    while words and _noise_word(words[-1]):
+        words.pop()
+    return " ".join(words)
+
+
+def _own(part: str) -> str:
+    """A part's own words (rule 1): the part less its CJK title groups where words of its own are outside its groups
+    ("消愁《Xiao Chou》" is 消愁, "【翻唱】周深" 周深), else its first title group's content ("《消愁》「Xiao Chou」" is
+    消愁), its spaces folded; a part with no title group as it is."""
+    titles = _titles(part)
+    if not titles:
+        return part
+    if not _own_words(part):
+        return titles[0].group()[1:-1].strip()
+    out, at = "", 0
+    for group in titles:
+        out += part[at:group.start()] + " "
+        at = group.end()
+    return " ".join((out + part[at:]).split())
+
+
+def _bracketed(text: str) -> tuple[str, str] | None:
+    """Rule 2: a text no mark parts, its first CJK title group the title; the words before it the artist, less a video's
+    words loose at their end, else the words after it, less their groups; none for a title group alone."""
+    titles = _titles(text)
+    if _MARK.search(text) or not titles:
+        return None
+    title = titles[0].group()[1:-1].strip()
+    before = _less_loose_noise(text[:titles[0].start()])
+    artist = before if _own_words(before) else _less_loose_noise(_ungrouped(text[titles[0].end():]))
+    if not name_words(artist) or not name_words(title):
+        return None
+    return artist, title
+
+
 def _known_artist_in(text: str, known: _Known) -> tuple[str, str] | None:
-    """Rule 2: a known artist first, or after the last " by ", the one of more words; none for a title whole."""
+    """Rule 3: a known artist first, or after the last " by ", the one of more words; none for a title whole."""
     found = [named for named in (_after_by(text, known), _first(text, known)) if named is not None]
     if not found or known.title(text):
         return None

@@ -156,6 +156,34 @@
 {"args":["Onda Una más"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["lumbre agua"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["creep"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["毛不易 - 《消愁》「当你走进这欢乐场 背上所有的梦与想」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 《消愁》「Xiao Chou」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 『消愁』"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["《毛不易》 - 〈消愁〉【Xiao Chou】"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - MV「消愁」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 《消愁》(Live)"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 消愁《Xiao Chou》"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["【翻唱】周深 - 大鱼"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":["周深","大鱼"]}
+{"args":["周深 - 大鱼「Big Fish」 Live"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":["周深","大鱼 Live"]}
+{"args":["Los Prisioneros - El Baile de los que Sobran (En Vivo)"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":["Los Prisioneros","El Baile de los que Sobran (En Vivo)"]}
+{"args":["马頔 - 南山南（feat. 宋冬野）"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":["马頔","南山南（feat. 宋冬野）"]}
+{"args":["宋冬野 - 斑马〖Live〗"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":["宋冬野","斑马〖Live〗"]}
+{"args":["歌手《歌名》"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["米津玄師 MV「Lemon」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":["米津玄師","Lemon"]}
+{"args":["周深 Zhou Shen《大鱼》Big Fish"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":["周深 Zhou Shen","大鱼"]}
+{"args":["歌手〈歌名〉 歌手"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["歌手『歌名』「別名」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["IU(아이유)【Blueming】"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":["IU(아이유)","Blueming"]}
+{"args":["【歌名】歌手"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["《孤勇者》陈奕迅 (Live)"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":["陈奕迅","孤勇者"]}
+{"args":["MV「Lemon」米津玄師"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":["米津玄師","Lemon"]}
+{"args":["《孤勇者》"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅 (孤勇者)"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅（孤勇者）"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅〖孤勇者〗"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅【】"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["周杰倫 Jay Chou【告白氣球 Love Confession】Official MV"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
+{"args":["周杰倫 七里香"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["Radiohead - Creep"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"Radiohead"},"out":["Radiohead","Creep"]}
 {"args":["Oasis - Wonderwall (Official Video)"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"Oasis"},"out":["Oasis","Wonderwall"]}
 {"args":["Queen – Bohemian Rhapsody (Official Video Remastered)"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"Queen Official"},"out":["Queen","Bohemian Rhapsody"]}
@@ -173,26 +201,37 @@
 {"args":["【抖音】海来阿木 - 别知己【动态歌词】"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"抖音"},"out":["海来阿木","别知己"]}
 {"args":["【純音樂】久石讓 - Summer"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"純音樂"},"out":["久石讓","Summer"]}
 {"args":["林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版MV)"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"華納音樂 Warner Music Taiwan"},"out":["林俊傑 JJ Lin","修煉愛情 Practice Love"]}
+{"args":["【MV】周杰倫 - 晴天"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周杰倫","晴天"]}
+{"args":["BLACKPINK - '뚜두뚜두 (DDU-DU DDU-DU)' M/V"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"BLACKPINK"},"out":["BLACKPINK","뚜두뚜두 (DDU-DU DDU-DU)"]}
+{"args":["鄧紫棋 G.E.M. - 句號 Full Stop (Official Music Video)"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"G.E.M. 鄧紫棋"},"out":["鄧紫棋 G.E.M.","句號 Full Stop"]}
 {"args":["Creep"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"Radiohead - Topic"},"out":["Radiohead","Creep"]}
 {"args":["Hello"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"AdeleVEVO"},"out":["Adele","Hello"]}
 {"args":["Me Gustas Tú (Con Letra)"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"Manu Chao"},"out":["Manu Chao","Me Gustas Tú"]}
 {"args":["Vegan Vikings"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"Nick Cani"},"out":["Nick Cani","Vegan Vikings"]}
-{"args":["宋冬野 - 斑马斑马"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马斑马"]}
-{"args":["Silvana Estrada — Qué Problema (Visualizer)"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"Silvana Estrada"},"out":["Silvana Estrada","Qué Problema"]}
-{"args":["Rosalía - DESPECHÁ (Official Video)"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"RosaliaVEVO"},"out":["Rosalía","DESPECHÁ"]}
-{"args":["Soda Stereo - De Música Ligera (Video Oficial)"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"Soda Stereo"},"out":["Soda Stereo","De Música Ligera"]}
 {"args":["Stand by Me"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"Ben E. King - Topic"},"out":["Ben E. King","Stand by Me"]}
 {"args":["野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"孟维来"},"out":["孟维来","野人"]}
+{"args":["《孤勇者》"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["MV「Lemon」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["“Bohemian Rhapsody” (Official Lyric Video)"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"Queen Official"},"out":["Queen","Bohemian Rhapsody"]}
 {"args":[""],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":""},"out":["",""]}
 {"args":["(Official Video)"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"Oasis"},"out":["Oasis",""]}
 {"args":["[MV] IU(아이유) _ Blueming(블루밍)"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"1theK (원더케이)"},"out":["IU(아이유)","Blueming(블루밍)"]}
 {"args":["[MV] BTS(방탄소년단) _ Dynamite"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"1theK (원더케이)"},"out":["BTS(방탄소년단)","Dynamite"]}
 {"args":["Hot_Chip - Over and Over"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"Hot Chip"},"out":["Hot_Chip","Over and Over"]}
 {"args":["Somos vikingos veganos - Hyperfanes"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"kintanedu"},"out":["Somos vikingos veganos","Hyperfanes"]}
-{"args":["Silvana Estrada — Qué Problema (Visualizer)"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"Silvana Estrada"},"out":["Silvana Estrada","Qué Problema"]}
 {"args":["Wonderwall - Oasis"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"Oasis"},"out":["Oasis","Wonderwall"]}
 {"args":["Silvana Estrada Que problema"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"kintanedu"},"out":["kintanedu","Silvana Estrada Que problema"]}
 {"args":["Love Me Tender"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"Elvis Presley - Topic"},"out":["Elvis Presley","Love Me Tender"]}
+{"args":["周杰倫 Jay Chou【告白氣球 Love Confession】Official MV"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫 Jay Chou"},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
+{"args":["告五人 Accusefive【愛人錯過 Somewhere in Time】Official Music Video"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"告五人 Accusefive"},"out":["告五人 Accusefive","愛人錯過 Somewhere in Time"]}
+{"args":["薛之谦 Joker Xue【演员】官方完整版 MV"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"薛之谦 Joker Xue"},"out":["薛之谦 Joker Xue","演员"]}
+{"args":["《起风了》买辣椒也用券【动态歌词/Pinyin Lyrics】"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"動態歌詞"},"out":["买辣椒也用券","起风了"]}
+{"args":["《孤勇者》陈奕迅 (动态歌词版)"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"動態歌詞"},"out":["陈奕迅","孤勇者"]}
+{"args":["周深 Zhou Shen《大鱼》Big Fish「动态歌词Lyrics」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深 Zhou Shen","大鱼"]}
+{"args":["G.E.M.【光年之外 LIGHT YEARS AWAY】MV (電影《太空潛航者 Passengers》中文主題曲)[HD] 鄧紫棋"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"GEM鄧紫棋"},"out":["G.E.M.","光年之外 LIGHT YEARS AWAY"]}
+{"args":["YOASOBI「夜に駆ける」Official Music Video"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"Ayase / YOASOBI"},"out":["YOASOBI","夜に駆ける"]}
+{"args":["米津玄師 MV「Lemon」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["宋冬野「斑马，斑马」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马，斑马"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -249,6 +288,34 @@
 {"args":["Onda Una más"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["lumbre agua"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["creep"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["毛不易 - 《消愁》「当你走进这欢乐场 背上所有的梦与想」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 《消愁》「Xiao Chou」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 『消愁』"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["《毛不易》 - 〈消愁〉【Xiao Chou】"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - MV「消愁」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 《消愁》(Live)"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 消愁《Xiao Chou》"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["【翻唱】周深 - 大鱼"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["周深","大鱼"]}
+{"args":["周深 - 大鱼「Big Fish」 Live"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["周深","大鱼 Live"]}
+{"args":["Los Prisioneros - El Baile de los que Sobran (En Vivo)"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["Los Prisioneros","El Baile de los que Sobran (En Vivo)"]}
+{"args":["马頔 - 南山南（feat. 宋冬野）"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["马頔","南山南（feat. 宋冬野）"]}
+{"args":["宋冬野 - 斑马〖Live〗"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["宋冬野","斑马〖Live〗"]}
+{"args":["歌手《歌名》"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["米津玄師 MV「Lemon」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["米津玄師","Lemon"]}
+{"args":["周深 Zhou Shen《大鱼》Big Fish"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["周深 Zhou Shen","大鱼"]}
+{"args":["歌手〈歌名〉 歌手"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["歌手『歌名』「別名」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["IU(아이유)【Blueming】"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["IU(아이유)","Blueming"]}
+{"args":["【歌名】歌手"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["《孤勇者》陈奕迅 (Live)"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["陈奕迅","孤勇者"]}
+{"args":["MV「Lemon」米津玄師"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["米津玄師","Lemon"]}
+{"args":["《孤勇者》"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅 (孤勇者)"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅（孤勇者）"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅〖孤勇者〗"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅【】"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["周杰倫 Jay Chou【告白氣球 Love Confession】Official MV"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
+{"args":["周杰倫 七里香"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":[" — "],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["a"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["x"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":null}
@@ -337,26 +404,37 @@
 {"args":["【抖音】海来阿木 - 别知己【动态歌词】"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"抖音"},"out":["海来阿木","别知己"]}
 {"args":["【純音樂】久石讓 - Summer"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"純音樂"},"out":["久石讓","Summer"]}
 {"args":["林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版MV)"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"華納音樂 Warner Music Taiwan"},"out":["林俊傑 JJ Lin","修煉愛情 Practice Love"]}
+{"args":["【MV】周杰倫 - 晴天"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周杰倫","晴天"]}
+{"args":["BLACKPINK - '뚜두뚜두 (DDU-DU DDU-DU)' M/V"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"BLACKPINK"},"out":["BLACKPINK","뚜두뚜두 (DDU-DU DDU-DU)"]}
+{"args":["鄧紫棋 G.E.M. - 句號 Full Stop (Official Music Video)"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"G.E.M. 鄧紫棋"},"out":["鄧紫棋 G.E.M.","句號 Full Stop"]}
 {"args":["Creep"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"Radiohead - Topic"},"out":["Radiohead","Creep"]}
 {"args":["Hello"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"AdeleVEVO"},"out":["Adele","Hello"]}
 {"args":["Me Gustas Tú (Con Letra)"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"Manu Chao"},"out":["Manu Chao","Me Gustas Tú"]}
 {"args":["Vegan Vikings"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"Nick Cani"},"out":["Nick Cani","Vegan Vikings"]}
-{"args":["宋冬野 - 斑马斑马"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马斑马"]}
-{"args":["Silvana Estrada — Qué Problema (Visualizer)"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"Silvana Estrada"},"out":["Silvana Estrada","Qué Problema"]}
-{"args":["Rosalía - DESPECHÁ (Official Video)"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"RosaliaVEVO"},"out":["Rosalía","DESPECHÁ"]}
-{"args":["Soda Stereo - De Música Ligera (Video Oficial)"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"Soda Stereo"},"out":["Soda Stereo","De Música Ligera"]}
 {"args":["Stand by Me"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"Ben E. King - Topic"},"out":["Ben E. King","Stand by Me"]}
 {"args":["野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"孟维来"},"out":["孟维来","野人"]}
+{"args":["《孤勇者》"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["MV「Lemon」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["“Bohemian Rhapsody” (Official Lyric Video)"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"Queen Official"},"out":["Queen","Bohemian Rhapsody"]}
 {"args":[""],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":""},"out":["",""]}
 {"args":["(Official Video)"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"Oasis"},"out":["Oasis",""]}
 {"args":["[MV] IU(아이유) _ Blueming(블루밍)"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"1theK (원더케이)"},"out":["IU(아이유)","Blueming(블루밍)"]}
 {"args":["[MV] BTS(방탄소년단) _ Dynamite"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"1theK (원더케이)"},"out":["BTS(방탄소년단)","Dynamite"]}
 {"args":["Hot_Chip - Over and Over"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"Hot Chip"},"out":["Hot_Chip","Over and Over"]}
 {"args":["Somos vikingos veganos - Hyperfanes"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"kintanedu"},"out":["Somos vikingos veganos","Hyperfanes"]}
-{"args":["Silvana Estrada — Qué Problema (Visualizer)"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"Silvana Estrada"},"out":["Silvana Estrada","Qué Problema"]}
 {"args":["Wonderwall - Oasis"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"Oasis"},"out":["Oasis","Wonderwall"]}
 {"args":["Silvana Estrada Que problema"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"kintanedu"},"out":["kintanedu","Silvana Estrada Que problema"]}
 {"args":["Love Me Tender"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"Elvis Presley - Topic"},"out":["Elvis Presley","Love Me Tender"]}
+{"args":["周杰倫 Jay Chou【告白氣球 Love Confession】Official MV"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫 Jay Chou"},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
+{"args":["告五人 Accusefive【愛人錯過 Somewhere in Time】Official Music Video"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"告五人 Accusefive"},"out":["告五人 Accusefive","愛人錯過 Somewhere in Time"]}
+{"args":["薛之谦 Joker Xue【演员】官方完整版 MV"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"薛之谦 Joker Xue"},"out":["薛之谦 Joker Xue","演员"]}
+{"args":["《起风了》买辣椒也用券【动态歌词/Pinyin Lyrics】"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"動態歌詞"},"out":["买辣椒也用券","起风了"]}
+{"args":["《孤勇者》陈奕迅 (动态歌词版)"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"動態歌詞"},"out":["陈奕迅","孤勇者"]}
+{"args":["周深 Zhou Shen《大鱼》Big Fish「动态歌词Lyrics」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深 Zhou Shen","大鱼"]}
+{"args":["G.E.M.【光年之外 LIGHT YEARS AWAY】MV (電影《太空潛航者 Passengers》中文主題曲)[HD] 鄧紫棋"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"GEM鄧紫棋"},"out":["G.E.M.","光年之外 LIGHT YEARS AWAY"]}
+{"args":["YOASOBI「夜に駆ける」Official Music Video"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"Ayase / YOASOBI"},"out":["YOASOBI","夜に駆ける"]}
+{"args":["米津玄師 MV「Lemon」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["宋冬野「斑马，斑马」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马，斑马"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -413,6 +491,34 @@
 {"args":["Onda Una más"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["lumbre agua"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["creep"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["毛不易 - 《消愁》「当你走进这欢乐场 背上所有的梦与想」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 《消愁》「Xiao Chou」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 『消愁』"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["《毛不易》 - 〈消愁〉【Xiao Chou】"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - MV「消愁」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 《消愁》(Live)"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 消愁《Xiao Chou》"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["【翻唱】周深 - 大鱼"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["周深","大鱼"]}
+{"args":["周深 - 大鱼「Big Fish」 Live"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["周深","大鱼 Live"]}
+{"args":["Los Prisioneros - El Baile de los que Sobran (En Vivo)"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["Los Prisioneros","El Baile de los que Sobran (En Vivo)"]}
+{"args":["马頔 - 南山南（feat. 宋冬野）"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["马頔","南山南（feat. 宋冬野）"]}
+{"args":["宋冬野 - 斑马〖Live〗"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["宋冬野","斑马〖Live〗"]}
+{"args":["歌手《歌名》"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["米津玄師 MV「Lemon」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["米津玄師","Lemon"]}
+{"args":["周深 Zhou Shen《大鱼》Big Fish"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["周深 Zhou Shen","大鱼"]}
+{"args":["歌手〈歌名〉 歌手"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["歌手『歌名』「別名」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["IU(아이유)【Blueming】"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["IU(아이유)","Blueming"]}
+{"args":["【歌名】歌手"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["《孤勇者》陈奕迅 (Live)"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["陈奕迅","孤勇者"]}
+{"args":["MV「Lemon」米津玄師"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["米津玄師","Lemon"]}
+{"args":["《孤勇者》"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅 (孤勇者)"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅（孤勇者）"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅〖孤勇者〗"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅【】"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["周杰倫 Jay Chou【告白氣球 Love Confession】Official MV"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
+{"args":["周杰倫 七里香"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":[" — "],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["a"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["x"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":null}
@@ -499,26 +605,37 @@
 {"args":["【抖音】海来阿木 - 别知己【动态歌词】"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"抖音"},"out":["海来阿木","别知己"]}
 {"args":["【純音樂】久石讓 - Summer"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"純音樂"},"out":["久石讓","Summer"]}
 {"args":["林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版MV)"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"華納音樂 Warner Music Taiwan"},"out":["林俊傑 JJ Lin","修煉愛情 Practice Love"]}
+{"args":["【MV】周杰倫 - 晴天"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周杰倫","晴天"]}
+{"args":["BLACKPINK - '뚜두뚜두 (DDU-DU DDU-DU)' M/V"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"BLACKPINK"},"out":["BLACKPINK","뚜두뚜두 (DDU-DU DDU-DU)"]}
+{"args":["鄧紫棋 G.E.M. - 句號 Full Stop (Official Music Video)"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"G.E.M. 鄧紫棋"},"out":["鄧紫棋 G.E.M.","句號 Full Stop"]}
 {"args":["Creep"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"Radiohead - Topic"},"out":["Radiohead","Creep"]}
 {"args":["Hello"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"AdeleVEVO"},"out":["Adele","Hello"]}
 {"args":["Me Gustas Tú (Con Letra)"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"Manu Chao"},"out":["Manu Chao","Me Gustas Tú"]}
 {"args":["Vegan Vikings"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"Nick Cani"},"out":["Nick Cani","Vegan Vikings"]}
-{"args":["宋冬野 - 斑马斑马"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马斑马"]}
-{"args":["Silvana Estrada — Qué Problema (Visualizer)"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"Silvana Estrada"},"out":["Silvana Estrada","Qué Problema"]}
-{"args":["Rosalía - DESPECHÁ (Official Video)"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"RosaliaVEVO"},"out":["Rosalía","DESPECHÁ"]}
-{"args":["Soda Stereo - De Música Ligera (Video Oficial)"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"Soda Stereo"},"out":["Soda Stereo","De Música Ligera"]}
 {"args":["Stand by Me"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"Ben E. King - Topic"},"out":["Ben E. King","Stand by Me"]}
 {"args":["野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"孟维来"},"out":["孟维来","野人"]}
+{"args":["《孤勇者》"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["MV「Lemon」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["“Bohemian Rhapsody” (Official Lyric Video)"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"Queen Official"},"out":["Queen","Bohemian Rhapsody"]}
 {"args":[""],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":""},"out":["",""]}
 {"args":["(Official Video)"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"Oasis"},"out":["Oasis",""]}
 {"args":["[MV] IU(아이유) _ Blueming(블루밍)"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"1theK (원더케이)"},"out":["IU(아이유)","Blueming(블루밍)"]}
 {"args":["[MV] BTS(방탄소년단) _ Dynamite"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"1theK (원더케이)"},"out":["BTS(방탄소년단)","Dynamite"]}
 {"args":["Hot_Chip - Over and Over"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"Hot Chip"},"out":["Hot_Chip","Over and Over"]}
 {"args":["Somos vikingos veganos - Hyperfanes"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"kintanedu"},"out":["Somos vikingos veganos","Hyperfanes"]}
-{"args":["Silvana Estrada — Qué Problema (Visualizer)"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"Silvana Estrada"},"out":["Silvana Estrada","Qué Problema"]}
 {"args":["Wonderwall - Oasis"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"Oasis"},"out":["Oasis","Wonderwall"]}
 {"args":["Silvana Estrada Que problema"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"kintanedu"},"out":["kintanedu","Silvana Estrada Que problema"]}
 {"args":["Love Me Tender"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"Elvis Presley - Topic"},"out":["Elvis Presley","Love Me Tender"]}
+{"args":["周杰倫 Jay Chou【告白氣球 Love Confession】Official MV"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫 Jay Chou"},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
+{"args":["告五人 Accusefive【愛人錯過 Somewhere in Time】Official Music Video"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"告五人 Accusefive"},"out":["告五人 Accusefive","愛人錯過 Somewhere in Time"]}
+{"args":["薛之谦 Joker Xue【演员】官方完整版 MV"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"薛之谦 Joker Xue"},"out":["薛之谦 Joker Xue","演员"]}
+{"args":["《起风了》买辣椒也用券【动态歌词/Pinyin Lyrics】"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"動態歌詞"},"out":["买辣椒也用券","起风了"]}
+{"args":["《孤勇者》陈奕迅 (动态歌词版)"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"動態歌詞"},"out":["陈奕迅","孤勇者"]}
+{"args":["周深 Zhou Shen《大鱼》Big Fish「动态歌词Lyrics」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深 Zhou Shen","大鱼"]}
+{"args":["G.E.M.【光年之外 LIGHT YEARS AWAY】MV (電影《太空潛航者 Passengers》中文主題曲)[HD] 鄧紫棋"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"GEM鄧紫棋"},"out":["G.E.M.","光年之外 LIGHT YEARS AWAY"]}
+{"args":["YOASOBI「夜に駆ける」Official Music Video"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"Ayase / YOASOBI"},"out":["YOASOBI","夜に駆ける"]}
+{"args":["米津玄師 MV「Lemon」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["宋冬野「斑马，斑马」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马，斑马"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -575,6 +692,34 @@
 {"args":["Onda Una más"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["lumbre agua"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["creep"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["毛不易 - 《消愁》「当你走进这欢乐场 背上所有的梦与想」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 《消愁》「Xiao Chou」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 『消愁』"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["《毛不易》 - 〈消愁〉【Xiao Chou】"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - MV「消愁」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 《消愁》(Live)"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 消愁《Xiao Chou》"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["【翻唱】周深 - 大鱼"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["周深","大鱼"]}
+{"args":["周深 - 大鱼「Big Fish」 Live"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["周深","大鱼 Live"]}
+{"args":["Los Prisioneros - El Baile de los que Sobran (En Vivo)"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["Los Prisioneros","El Baile de los que Sobran (En Vivo)"]}
+{"args":["马頔 - 南山南（feat. 宋冬野）"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["马頔","南山南（feat. 宋冬野）"]}
+{"args":["宋冬野 - 斑马〖Live〗"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["宋冬野","斑马〖Live〗"]}
+{"args":["歌手《歌名》"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["米津玄師 MV「Lemon」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["米津玄師","Lemon"]}
+{"args":["周深 Zhou Shen《大鱼》Big Fish"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["周深 Zhou Shen","大鱼"]}
+{"args":["歌手〈歌名〉 歌手"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["歌手『歌名』「別名」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["IU(아이유)【Blueming】"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["IU(아이유)","Blueming"]}
+{"args":["【歌名】歌手"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["《孤勇者》陈奕迅 (Live)"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["陈奕迅","孤勇者"]}
+{"args":["MV「Lemon」米津玄師"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["米津玄師","Lemon"]}
+{"args":["《孤勇者》"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅 (孤勇者)"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅（孤勇者）"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅〖孤勇者〗"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅【】"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["周杰倫 Jay Chou【告白氣球 Love Confession】Official MV"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
+{"args":["周杰倫 七里香"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":[" — "],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["a"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["x"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":null}
@@ -645,26 +790,37 @@
 {"args":["【抖音】海来阿木 - 别知己【动态歌词】"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"抖音"},"out":["海来阿木","别知己"]}
 {"args":["【純音樂】久石讓 - Summer"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"純音樂"},"out":["久石讓","Summer"]}
 {"args":["林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版MV)"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"華納音樂 Warner Music Taiwan"},"out":["林俊傑 JJ Lin","修煉愛情 Practice Love"]}
+{"args":["【MV】周杰倫 - 晴天"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周杰倫","晴天"]}
+{"args":["BLACKPINK - '뚜두뚜두 (DDU-DU DDU-DU)' M/V"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"BLACKPINK"},"out":["BLACKPINK","뚜두뚜두 (DDU-DU DDU-DU)"]}
+{"args":["鄧紫棋 G.E.M. - 句號 Full Stop (Official Music Video)"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"G.E.M. 鄧紫棋"},"out":["鄧紫棋 G.E.M.","句號 Full Stop"]}
 {"args":["Creep"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"Radiohead - Topic"},"out":["Radiohead","Creep"]}
 {"args":["Hello"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"AdeleVEVO"},"out":["Adele","Hello"]}
 {"args":["Me Gustas Tú (Con Letra)"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"Manu Chao"},"out":["Manu Chao","Me Gustas Tú"]}
 {"args":["Vegan Vikings"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"Nick Cani"},"out":["Nick Cani","Vegan Vikings"]}
-{"args":["宋冬野 - 斑马斑马"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马斑马"]}
-{"args":["Silvana Estrada — Qué Problema (Visualizer)"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"Silvana Estrada"},"out":["Silvana Estrada","Qué Problema"]}
-{"args":["Rosalía - DESPECHÁ (Official Video)"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"RosaliaVEVO"},"out":["Rosalía","DESPECHÁ"]}
-{"args":["Soda Stereo - De Música Ligera (Video Oficial)"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"Soda Stereo"},"out":["Soda Stereo","De Música Ligera"]}
 {"args":["Stand by Me"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"Ben E. King - Topic"},"out":["Ben E. King","Stand by Me"]}
 {"args":["野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"孟维来"},"out":["孟维来","野人"]}
+{"args":["《孤勇者》"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["MV「Lemon」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["“Bohemian Rhapsody” (Official Lyric Video)"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"Queen Official"},"out":["Queen","Bohemian Rhapsody"]}
 {"args":[""],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":""},"out":["",""]}
 {"args":["(Official Video)"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"Oasis"},"out":["Oasis",""]}
 {"args":["[MV] IU(아이유) _ Blueming(블루밍)"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"1theK (원더케이)"},"out":["IU(아이유)","Blueming(블루밍)"]}
 {"args":["[MV] BTS(방탄소년단) _ Dynamite"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"1theK (원더케이)"},"out":["BTS(방탄소년단)","Dynamite"]}
 {"args":["Hot_Chip - Over and Over"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"Hot Chip"},"out":["Hot_Chip","Over and Over"]}
 {"args":["Somos vikingos veganos - Hyperfanes"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"kintanedu"},"out":["Somos vikingos veganos","Hyperfanes"]}
-{"args":["Silvana Estrada — Qué Problema (Visualizer)"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"Silvana Estrada"},"out":["Silvana Estrada","Qué Problema"]}
 {"args":["Wonderwall - Oasis"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"Oasis"},"out":["Oasis","Wonderwall"]}
 {"args":["Silvana Estrada Que problema"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"kintanedu"},"out":["kintanedu","Silvana Estrada Que problema"]}
 {"args":["Love Me Tender"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"Elvis Presley - Topic"},"out":["Elvis Presley","Love Me Tender"]}
+{"args":["周杰倫 Jay Chou【告白氣球 Love Confession】Official MV"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫 Jay Chou"},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
+{"args":["告五人 Accusefive【愛人錯過 Somewhere in Time】Official Music Video"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"告五人 Accusefive"},"out":["告五人 Accusefive","愛人錯過 Somewhere in Time"]}
+{"args":["薛之谦 Joker Xue【演员】官方完整版 MV"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"薛之谦 Joker Xue"},"out":["薛之谦 Joker Xue","演员"]}
+{"args":["《起风了》买辣椒也用券【动态歌词/Pinyin Lyrics】"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"動態歌詞"},"out":["买辣椒也用券","起风了"]}
+{"args":["《孤勇者》陈奕迅 (动态歌词版)"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"動態歌詞"},"out":["陈奕迅","孤勇者"]}
+{"args":["周深 Zhou Shen《大鱼》Big Fish「动态歌词Lyrics」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深 Zhou Shen","大鱼"]}
+{"args":["G.E.M.【光年之外 LIGHT YEARS AWAY】MV (電影《太空潛航者 Passengers》中文主題曲)[HD] 鄧紫棋"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"GEM鄧紫棋"},"out":["G.E.M.","光年之外 LIGHT YEARS AWAY"]}
+{"args":["YOASOBI「夜に駆ける」Official Music Video"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"Ayase / YOASOBI"},"out":["YOASOBI","夜に駆ける"]}
+{"args":["米津玄師 MV「Lemon」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["宋冬野「斑马，斑马」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马，斑马"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -721,6 +877,34 @@
 {"args":["Onda Una más"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["lumbre agua"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["creep"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["毛不易 - 《消愁》「当你走进这欢乐场 背上所有的梦与想」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 《消愁》「Xiao Chou」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 『消愁』"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["《毛不易》 - 〈消愁〉【Xiao Chou】"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - MV「消愁」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 《消愁》(Live)"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 消愁《Xiao Chou》"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["【翻唱】周深 - 大鱼"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["周深","大鱼"]}
+{"args":["周深 - 大鱼「Big Fish」 Live"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["周深","大鱼 Live"]}
+{"args":["Los Prisioneros - El Baile de los que Sobran (En Vivo)"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["Los Prisioneros","El Baile de los que Sobran (En Vivo)"]}
+{"args":["马頔 - 南山南（feat. 宋冬野）"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["马頔","南山南（feat. 宋冬野）"]}
+{"args":["宋冬野 - 斑马〖Live〗"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["宋冬野","斑马〖Live〗"]}
+{"args":["歌手《歌名》"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["米津玄師 MV「Lemon」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["米津玄師","Lemon"]}
+{"args":["周深 Zhou Shen《大鱼》Big Fish"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["周深 Zhou Shen","大鱼"]}
+{"args":["歌手〈歌名〉 歌手"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["歌手『歌名』「別名」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["IU(아이유)【Blueming】"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["IU(아이유)","Blueming"]}
+{"args":["【歌名】歌手"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["《孤勇者》陈奕迅 (Live)"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["陈奕迅","孤勇者"]}
+{"args":["MV「Lemon」米津玄師"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["米津玄師","Lemon"]}
+{"args":["《孤勇者》"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅 (孤勇者)"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅（孤勇者）"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅〖孤勇者〗"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅【】"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["周杰倫 Jay Chou【告白氣球 Love Confession】Official MV"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
+{"args":["周杰倫 七里香"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":[" — "],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["a"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["x"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":null}
@@ -801,26 +985,37 @@
 {"args":["【抖音】海来阿木 - 别知己【动态歌词】"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"抖音"},"out":["海来阿木","别知己"]}
 {"args":["【純音樂】久石讓 - Summer"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"純音樂"},"out":["久石讓","Summer"]}
 {"args":["林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版MV)"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"華納音樂 Warner Music Taiwan"},"out":["林俊傑 JJ Lin","修煉愛情 Practice Love"]}
+{"args":["【MV】周杰倫 - 晴天"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周杰倫","晴天"]}
+{"args":["BLACKPINK - '뚜두뚜두 (DDU-DU DDU-DU)' M/V"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"BLACKPINK"},"out":["BLACKPINK","뚜두뚜두 (DDU-DU DDU-DU)"]}
+{"args":["鄧紫棋 G.E.M. - 句號 Full Stop (Official Music Video)"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"G.E.M. 鄧紫棋"},"out":["鄧紫棋 G.E.M.","句號 Full Stop"]}
 {"args":["Creep"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"Radiohead - Topic"},"out":["Radiohead","Creep"]}
 {"args":["Hello"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"AdeleVEVO"},"out":["Adele","Hello"]}
 {"args":["Me Gustas Tú (Con Letra)"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"Manu Chao"},"out":["Manu Chao","Me Gustas Tú"]}
 {"args":["Vegan Vikings"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"Nick Cani"},"out":["Nick Cani","Vegan Vikings"]}
-{"args":["宋冬野 - 斑马斑马"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马斑马"]}
-{"args":["Silvana Estrada — Qué Problema (Visualizer)"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"Silvana Estrada"},"out":["Silvana Estrada","Qué Problema"]}
-{"args":["Rosalía - DESPECHÁ (Official Video)"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"RosaliaVEVO"},"out":["Rosalía","DESPECHÁ"]}
-{"args":["Soda Stereo - De Música Ligera (Video Oficial)"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"Soda Stereo"},"out":["Soda Stereo","De Música Ligera"]}
 {"args":["Stand by Me"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"Ben E. King - Topic"},"out":["Ben E. King","Stand by Me"]}
 {"args":["野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"孟维来"},"out":["孟维来","野人"]}
+{"args":["《孤勇者》"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["MV「Lemon」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["“Bohemian Rhapsody” (Official Lyric Video)"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"Queen Official"},"out":["Queen","Bohemian Rhapsody"]}
 {"args":[""],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":""},"out":["",""]}
 {"args":["(Official Video)"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"Oasis"},"out":["Oasis",""]}
 {"args":["[MV] IU(아이유) _ Blueming(블루밍)"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"1theK (원더케이)"},"out":["IU(아이유)","Blueming(블루밍)"]}
 {"args":["[MV] BTS(방탄소년단) _ Dynamite"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"1theK (원더케이)"},"out":["BTS(방탄소년단)","Dynamite"]}
 {"args":["Hot_Chip - Over and Over"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"Hot Chip"},"out":["Hot_Chip","Over and Over"]}
 {"args":["Somos vikingos veganos - Hyperfanes"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"kintanedu"},"out":["Somos vikingos veganos","Hyperfanes"]}
-{"args":["Silvana Estrada — Qué Problema (Visualizer)"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"Silvana Estrada"},"out":["Silvana Estrada","Qué Problema"]}
 {"args":["Wonderwall - Oasis"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"Oasis"},"out":["Oasis","Wonderwall"]}
 {"args":["Silvana Estrada Que problema"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"kintanedu"},"out":["kintanedu","Silvana Estrada Que problema"]}
 {"args":["Love Me Tender"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"Elvis Presley - Topic"},"out":["Elvis Presley","Love Me Tender"]}
+{"args":["周杰倫 Jay Chou【告白氣球 Love Confession】Official MV"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫 Jay Chou"},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
+{"args":["告五人 Accusefive【愛人錯過 Somewhere in Time】Official Music Video"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"告五人 Accusefive"},"out":["告五人 Accusefive","愛人錯過 Somewhere in Time"]}
+{"args":["薛之谦 Joker Xue【演员】官方完整版 MV"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"薛之谦 Joker Xue"},"out":["薛之谦 Joker Xue","演员"]}
+{"args":["《起风了》买辣椒也用券【动态歌词/Pinyin Lyrics】"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"動態歌詞"},"out":["买辣椒也用券","起风了"]}
+{"args":["《孤勇者》陈奕迅 (动态歌词版)"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"動態歌詞"},"out":["陈奕迅","孤勇者"]}
+{"args":["周深 Zhou Shen《大鱼》Big Fish「动态歌词Lyrics」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深 Zhou Shen","大鱼"]}
+{"args":["G.E.M.【光年之外 LIGHT YEARS AWAY】MV (電影《太空潛航者 Passengers》中文主題曲)[HD] 鄧紫棋"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"GEM鄧紫棋"},"out":["G.E.M.","光年之外 LIGHT YEARS AWAY"]}
+{"args":["YOASOBI「夜に駆ける」Official Music Video"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"Ayase / YOASOBI"},"out":["YOASOBI","夜に駆ける"]}
+{"args":["米津玄師 MV「Lemon」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["宋冬野「斑马，斑马」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马，斑马"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -877,6 +1072,34 @@
 {"args":["Onda Una más"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["lumbre agua"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["creep"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["毛不易 - 《消愁》「当你走进这欢乐场 背上所有的梦与想」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 《消愁》「Xiao Chou」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 『消愁』"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["《毛不易》 - 〈消愁〉【Xiao Chou】"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - MV「消愁」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 《消愁》(Live)"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 消愁《Xiao Chou》"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["【翻唱】周深 - 大鱼"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["周深","大鱼"]}
+{"args":["周深 - 大鱼「Big Fish」 Live"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["周深","大鱼 Live"]}
+{"args":["Los Prisioneros - El Baile de los que Sobran (En Vivo)"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["Los Prisioneros","El Baile de los que Sobran (En Vivo)"]}
+{"args":["马頔 - 南山南（feat. 宋冬野）"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["马頔","南山南（feat. 宋冬野）"]}
+{"args":["宋冬野 - 斑马〖Live〗"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["宋冬野","斑马〖Live〗"]}
+{"args":["歌手《歌名》"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["米津玄師 MV「Lemon」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["米津玄師","Lemon"]}
+{"args":["周深 Zhou Shen《大鱼》Big Fish"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["周深 Zhou Shen","大鱼"]}
+{"args":["歌手〈歌名〉 歌手"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["歌手『歌名』「別名」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["IU(아이유)【Blueming】"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["IU(아이유)","Blueming"]}
+{"args":["【歌名】歌手"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["《孤勇者》陈奕迅 (Live)"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["陈奕迅","孤勇者"]}
+{"args":["MV「Lemon」米津玄師"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["米津玄師","Lemon"]}
+{"args":["《孤勇者》"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅 (孤勇者)"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅（孤勇者）"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅〖孤勇者〗"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅【】"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["周杰倫 Jay Chou【告白氣球 Love Confession】Official MV"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
+{"args":["周杰倫 七里香"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":[" — "],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["a"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["x"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":null}
@@ -961,26 +1184,37 @@
 {"args":["【抖音】海来阿木 - 别知己【动态歌词】"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"抖音"},"out":["海来阿木","别知己"]}
 {"args":["【純音樂】久石讓 - Summer"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"純音樂"},"out":["久石讓","Summer"]}
 {"args":["林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版MV)"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"華納音樂 Warner Music Taiwan"},"out":["林俊傑 JJ Lin","修煉愛情 Practice Love"]}
+{"args":["【MV】周杰倫 - 晴天"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周杰倫","晴天"]}
+{"args":["BLACKPINK - '뚜두뚜두 (DDU-DU DDU-DU)' M/V"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"BLACKPINK"},"out":["BLACKPINK","뚜두뚜두 (DDU-DU DDU-DU)"]}
+{"args":["鄧紫棋 G.E.M. - 句號 Full Stop (Official Music Video)"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"G.E.M. 鄧紫棋"},"out":["鄧紫棋 G.E.M.","句號 Full Stop"]}
 {"args":["Creep"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"Radiohead - Topic"},"out":["Radiohead","Creep"]}
 {"args":["Hello"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"AdeleVEVO"},"out":["Adele","Hello"]}
 {"args":["Me Gustas Tú (Con Letra)"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"Manu Chao"},"out":["Manu Chao","Me Gustas Tú"]}
 {"args":["Vegan Vikings"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"Nick Cani"},"out":["Nick Cani","Vegan Vikings"]}
-{"args":["宋冬野 - 斑马斑马"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马斑马"]}
-{"args":["Silvana Estrada — Qué Problema (Visualizer)"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"Silvana Estrada"},"out":["Silvana Estrada","Qué Problema"]}
-{"args":["Rosalía - DESPECHÁ (Official Video)"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"RosaliaVEVO"},"out":["Rosalía","DESPECHÁ"]}
-{"args":["Soda Stereo - De Música Ligera (Video Oficial)"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"Soda Stereo"},"out":["Soda Stereo","De Música Ligera"]}
 {"args":["Stand by Me"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"Ben E. King - Topic"},"out":["Ben E. King","Stand by Me"]}
 {"args":["野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"孟维来"},"out":["孟维来","野人"]}
+{"args":["《孤勇者》"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["MV「Lemon」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["“Bohemian Rhapsody” (Official Lyric Video)"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"Queen Official"},"out":["Queen","Bohemian Rhapsody"]}
 {"args":[""],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":""},"out":["",""]}
 {"args":["(Official Video)"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"Oasis"},"out":["Oasis",""]}
 {"args":["[MV] IU(아이유) _ Blueming(블루밍)"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"1theK (원더케이)"},"out":["IU(아이유)","Blueming(블루밍)"]}
 {"args":["[MV] BTS(방탄소년단) _ Dynamite"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"1theK (원더케이)"},"out":["BTS(방탄소년단)","Dynamite"]}
 {"args":["Hot_Chip - Over and Over"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"Hot Chip"},"out":["Hot_Chip","Over and Over"]}
 {"args":["Somos vikingos veganos - Hyperfanes"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"kintanedu"},"out":["Somos vikingos veganos","Hyperfanes"]}
-{"args":["Silvana Estrada — Qué Problema (Visualizer)"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"Silvana Estrada"},"out":["Silvana Estrada","Qué Problema"]}
 {"args":["Wonderwall - Oasis"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"Oasis"},"out":["Oasis","Wonderwall"]}
 {"args":["Silvana Estrada Que problema"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"kintanedu"},"out":["kintanedu","Silvana Estrada Que problema"]}
 {"args":["Love Me Tender"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"Elvis Presley - Topic"},"out":["Elvis Presley","Love Me Tender"]}
+{"args":["周杰倫 Jay Chou【告白氣球 Love Confession】Official MV"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫 Jay Chou"},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
+{"args":["告五人 Accusefive【愛人錯過 Somewhere in Time】Official Music Video"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"告五人 Accusefive"},"out":["告五人 Accusefive","愛人錯過 Somewhere in Time"]}
+{"args":["薛之谦 Joker Xue【演员】官方完整版 MV"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"薛之谦 Joker Xue"},"out":["薛之谦 Joker Xue","演员"]}
+{"args":["《起风了》买辣椒也用券【动态歌词/Pinyin Lyrics】"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"動態歌詞"},"out":["买辣椒也用券","起风了"]}
+{"args":["《孤勇者》陈奕迅 (动态歌词版)"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"動態歌詞"},"out":["陈奕迅","孤勇者"]}
+{"args":["周深 Zhou Shen《大鱼》Big Fish「动态歌词Lyrics」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深 Zhou Shen","大鱼"]}
+{"args":["G.E.M.【光年之外 LIGHT YEARS AWAY】MV (電影《太空潛航者 Passengers》中文主題曲)[HD] 鄧紫棋"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"GEM鄧紫棋"},"out":["G.E.M.","光年之外 LIGHT YEARS AWAY"]}
+{"args":["YOASOBI「夜に駆ける」Official Music Video"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"Ayase / YOASOBI"},"out":["YOASOBI","夜に駆ける"]}
+{"args":["米津玄師 MV「Lemon」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["宋冬野「斑马，斑马」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马，斑马"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -1037,6 +1271,34 @@
 {"args":["Onda Una más"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["Onda","Una más"]}
 {"args":["lumbre agua"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["Lumbre","agua"]}
 {"args":["creep"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["毛不易 - 《消愁》「当你走进这欢乐场 背上所有的梦与想」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 《消愁》「Xiao Chou」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 『消愁』"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["《毛不易》 - 〈消愁〉【Xiao Chou】"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - MV「消愁」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 《消愁》(Live)"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 消愁《Xiao Chou》"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["【翻唱】周深 - 大鱼"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["周深","大鱼"]}
+{"args":["周深 - 大鱼「Big Fish」 Live"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["周深","大鱼 Live"]}
+{"args":["Los Prisioneros - El Baile de los que Sobran (En Vivo)"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["Los Prisioneros","El Baile de los que Sobran (En Vivo)"]}
+{"args":["马頔 - 南山南（feat. 宋冬野）"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["马頔","南山南（feat. 宋冬野）"]}
+{"args":["宋冬野 - 斑马〖Live〗"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["宋冬野","斑马〖Live〗"]}
+{"args":["歌手《歌名》"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["米津玄師 MV「Lemon」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["米津玄師","Lemon"]}
+{"args":["周深 Zhou Shen《大鱼》Big Fish"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["周深 Zhou Shen","大鱼"]}
+{"args":["歌手〈歌名〉 歌手"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["歌手『歌名』「別名」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["IU(아이유)【Blueming】"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["IU(아이유)","Blueming"]}
+{"args":["【歌名】歌手"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["《孤勇者》陈奕迅 (Live)"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["陈奕迅","孤勇者"]}
+{"args":["MV「Lemon」米津玄師"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["米津玄師","Lemon"]}
+{"args":["《孤勇者》"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅 (孤勇者)"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅（孤勇者）"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅〖孤勇者〗"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅【】"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["周杰倫 Jay Chou【告白氣球 Love Confession】Official MV"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
+{"args":["周杰倫 七里香"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":[" — "],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["a"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["x"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":null}
@@ -1085,26 +1347,37 @@
 {"args":["【抖音】海来阿木 - 别知己【动态歌词】"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"抖音"},"out":["海来阿木","别知己"]}
 {"args":["【純音樂】久石讓 - Summer"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"純音樂"},"out":["久石讓","Summer"]}
 {"args":["林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版MV)"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"華納音樂 Warner Music Taiwan"},"out":["林俊傑 JJ Lin","修煉愛情 Practice Love"]}
+{"args":["【MV】周杰倫 - 晴天"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周杰倫","晴天"]}
+{"args":["BLACKPINK - '뚜두뚜두 (DDU-DU DDU-DU)' M/V"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"BLACKPINK"},"out":["BLACKPINK","뚜두뚜두 (DDU-DU DDU-DU)"]}
+{"args":["鄧紫棋 G.E.M. - 句號 Full Stop (Official Music Video)"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"G.E.M. 鄧紫棋"},"out":["鄧紫棋 G.E.M.","句號 Full Stop"]}
 {"args":["Creep"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"Radiohead - Topic"},"out":["Radiohead","Creep"]}
 {"args":["Hello"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"AdeleVEVO"},"out":["Adele","Hello"]}
 {"args":["Me Gustas Tú (Con Letra)"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"Manu Chao"},"out":["Me","Gustas Tú"]}
 {"args":["Vegan Vikings"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"Nick Cani"},"out":["Nick Cani","Vegan Vikings"]}
-{"args":["宋冬野 - 斑马斑马"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马斑马"]}
-{"args":["Silvana Estrada — Qué Problema (Visualizer)"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"Silvana Estrada"},"out":["Silvana Estrada","Qué Problema"]}
-{"args":["Rosalía - DESPECHÁ (Official Video)"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"RosaliaVEVO"},"out":["Rosalía","DESPECHÁ"]}
-{"args":["Soda Stereo - De Música Ligera (Video Oficial)"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"Soda Stereo"},"out":["Soda Stereo","De Música Ligera"]}
 {"args":["Stand by Me"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"Ben E. King - Topic"},"out":["Ben E. King","Stand by Me"]}
 {"args":["野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"孟维来"},"out":["孟维来","野人"]}
+{"args":["《孤勇者》"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["MV「Lemon」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["“Bohemian Rhapsody” (Official Lyric Video)"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"Queen Official"},"out":["Queen","Bohemian Rhapsody"]}
 {"args":[""],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":""},"out":["",""]}
 {"args":["(Official Video)"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"Oasis"},"out":["Oasis",""]}
 {"args":["[MV] IU(아이유) _ Blueming(블루밍)"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"1theK (원더케이)"},"out":["IU(아이유)","Blueming(블루밍)"]}
 {"args":["[MV] BTS(방탄소년단) _ Dynamite"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"1theK (원더케이)"},"out":["BTS(방탄소년단)","Dynamite"]}
 {"args":["Hot_Chip - Over and Over"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"Hot Chip"},"out":["Hot_Chip","Over and Over"]}
 {"args":["Somos vikingos veganos - Hyperfanes"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"kintanedu"},"out":["Hyperfanes","Somos vikingos veganos"]}
-{"args":["Silvana Estrada — Qué Problema (Visualizer)"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"Silvana Estrada"},"out":["Silvana Estrada","Qué Problema"]}
 {"args":["Wonderwall - Oasis"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"Oasis"},"out":["Oasis","Wonderwall"]}
 {"args":["Silvana Estrada Que problema"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"kintanedu"},"out":["Silvana Estrada","Que problema"]}
 {"args":["Love Me Tender"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"Elvis Presley - Topic"},"out":["Elvis Presley","Love Me Tender"]}
+{"args":["周杰倫 Jay Chou【告白氣球 Love Confession】Official MV"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫 Jay Chou"},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
+{"args":["告五人 Accusefive【愛人錯過 Somewhere in Time】Official Music Video"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"告五人 Accusefive"},"out":["告五人 Accusefive","愛人錯過 Somewhere in Time"]}
+{"args":["薛之谦 Joker Xue【演员】官方完整版 MV"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"薛之谦 Joker Xue"},"out":["薛之谦 Joker Xue","演员"]}
+{"args":["《起风了》买辣椒也用券【动态歌词/Pinyin Lyrics】"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"動態歌詞"},"out":["买辣椒也用券","起风了"]}
+{"args":["《孤勇者》陈奕迅 (动态歌词版)"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"動態歌詞"},"out":["陈奕迅","孤勇者"]}
+{"args":["周深 Zhou Shen《大鱼》Big Fish「动态歌词Lyrics」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深 Zhou Shen","大鱼"]}
+{"args":["G.E.M.【光年之外 LIGHT YEARS AWAY】MV (電影《太空潛航者 Passengers》中文主題曲)[HD] 鄧紫棋"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"GEM鄧紫棋"},"out":["G.E.M.","光年之外 LIGHT YEARS AWAY"]}
+{"args":["YOASOBI「夜に駆ける」Official Music Video"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"Ayase / YOASOBI"},"out":["YOASOBI","夜に駆ける"]}
+{"args":["米津玄師 MV「Lemon」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["宋冬野「斑马，斑马」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马，斑马"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -1161,6 +1434,34 @@
 {"args":["Onda Una más"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["lumbre agua"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["creep"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["毛不易 - 《消愁》「当你走进这欢乐场 背上所有的梦与想」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 《消愁》「Xiao Chou」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 『消愁』"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["《毛不易》 - 〈消愁〉【Xiao Chou】"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - MV「消愁」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 《消愁》(Live)"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 消愁《Xiao Chou》"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["【翻唱】周深 - 大鱼"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["周深","大鱼"]}
+{"args":["周深 - 大鱼「Big Fish」 Live"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["周深","大鱼 Live"]}
+{"args":["Los Prisioneros - El Baile de los que Sobran (En Vivo)"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["Los Prisioneros","El Baile de los que Sobran (En Vivo)"]}
+{"args":["马頔 - 南山南（feat. 宋冬野）"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["马頔","南山南（feat. 宋冬野）"]}
+{"args":["宋冬野 - 斑马〖Live〗"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["宋冬野","斑马〖Live〗"]}
+{"args":["歌手《歌名》"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["米津玄師 MV「Lemon」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["米津玄師","Lemon"]}
+{"args":["周深 Zhou Shen《大鱼》Big Fish"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["周深 Zhou Shen","大鱼"]}
+{"args":["歌手〈歌名〉 歌手"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["歌手『歌名』「別名」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["IU(아이유)【Blueming】"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["IU(아이유)","Blueming"]}
+{"args":["【歌名】歌手"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["《孤勇者》陈奕迅 (Live)"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["陈奕迅","孤勇者"]}
+{"args":["MV「Lemon」米津玄師"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["米津玄師","Lemon"]}
+{"args":["《孤勇者》"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅 (孤勇者)"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅（孤勇者）"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅〖孤勇者〗"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅【】"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["周杰倫 Jay Chou【告白氣球 Love Confession】Official MV"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
+{"args":["周杰倫 七里香"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":[" — "],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["a"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["x"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
@@ -1220,26 +1521,37 @@
 {"args":["【抖音】海来阿木 - 别知己【动态歌词】"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"抖音"},"out":["海来阿木","别知己"]}
 {"args":["【純音樂】久石讓 - Summer"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"純音樂"},"out":["久石讓","Summer"]}
 {"args":["林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版MV)"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"華納音樂 Warner Music Taiwan"},"out":["林俊傑 JJ Lin","修煉愛情 Practice Love"]}
+{"args":["【MV】周杰倫 - 晴天"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周杰倫","晴天"]}
+{"args":["BLACKPINK - '뚜두뚜두 (DDU-DU DDU-DU)' M/V"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"BLACKPINK"},"out":["BLACKPINK","뚜두뚜두 (DDU-DU DDU-DU)"]}
+{"args":["鄧紫棋 G.E.M. - 句號 Full Stop (Official Music Video)"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"G.E.M. 鄧紫棋"},"out":["鄧紫棋 G.E.M.","句號 Full Stop"]}
 {"args":["Creep"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Radiohead - Topic"},"out":["Radiohead","Creep"]}
 {"args":["Hello"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"AdeleVEVO"},"out":["Adele","Hello"]}
 {"args":["Me Gustas Tú (Con Letra)"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Manu Chao"},"out":["Manu Chao","Me Gustas Tú"]}
 {"args":["Vegan Vikings"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Nick Cani"},"out":["Nick Cani","Vegan Vikings"]}
-{"args":["宋冬野 - 斑马斑马"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马斑马"]}
-{"args":["Silvana Estrada — Qué Problema (Visualizer)"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Silvana Estrada"},"out":["Silvana Estrada","Qué Problema"]}
-{"args":["Rosalía - DESPECHÁ (Official Video)"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"RosaliaVEVO"},"out":["Rosalía","DESPECHÁ"]}
-{"args":["Soda Stereo - De Música Ligera (Video Oficial)"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Soda Stereo"},"out":["Soda Stereo","De Música Ligera"]}
 {"args":["Stand by Me"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Ben E. King - Topic"},"out":["Ben E. King","Stand by Me"]}
 {"args":["野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"孟维来"},"out":["孟维来","野人"]}
+{"args":["《孤勇者》"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["MV「Lemon」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["“Bohemian Rhapsody” (Official Lyric Video)"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Queen Official"},"out":["Queen","Bohemian Rhapsody"]}
 {"args":[""],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":""},"out":["",""]}
 {"args":["(Official Video)"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Oasis"},"out":["Oasis",""]}
 {"args":["[MV] IU(아이유) _ Blueming(블루밍)"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"1theK (원더케이)"},"out":["IU(아이유)","Blueming(블루밍)"]}
 {"args":["[MV] BTS(방탄소년단) _ Dynamite"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"1theK (원더케이)"},"out":["BTS(방탄소년단)","Dynamite"]}
 {"args":["Hot_Chip - Over and Over"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Hot Chip"},"out":["Hot_Chip","Over and Over"]}
 {"args":["Somos vikingos veganos - Hyperfanes"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"kintanedu"},"out":["Somos vikingos veganos","Hyperfanes"]}
-{"args":["Silvana Estrada — Qué Problema (Visualizer)"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Silvana Estrada"},"out":["Silvana Estrada","Qué Problema"]}
 {"args":["Wonderwall - Oasis"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Oasis"},"out":["Oasis","Wonderwall"]}
 {"args":["Silvana Estrada Que problema"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"kintanedu"},"out":["kintanedu","Silvana Estrada Que problema"]}
 {"args":["Love Me Tender"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Elvis Presley - Topic"},"out":["Elvis Presley","Love Me Tender"]}
+{"args":["周杰倫 Jay Chou【告白氣球 Love Confession】Official MV"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫 Jay Chou"},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
+{"args":["告五人 Accusefive【愛人錯過 Somewhere in Time】Official Music Video"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"告五人 Accusefive"},"out":["告五人 Accusefive","愛人錯過 Somewhere in Time"]}
+{"args":["薛之谦 Joker Xue【演员】官方完整版 MV"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"薛之谦 Joker Xue"},"out":["薛之谦 Joker Xue","演员"]}
+{"args":["《起风了》买辣椒也用券【动态歌词/Pinyin Lyrics】"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"動態歌詞"},"out":["买辣椒也用券","起风了"]}
+{"args":["《孤勇者》陈奕迅 (动态歌词版)"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"動態歌詞"},"out":["陈奕迅","孤勇者"]}
+{"args":["周深 Zhou Shen《大鱼》Big Fish「动态歌词Lyrics」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深 Zhou Shen","大鱼"]}
+{"args":["G.E.M.【光年之外 LIGHT YEARS AWAY】MV (電影《太空潛航者 Passengers》中文主題曲)[HD] 鄧紫棋"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"GEM鄧紫棋"},"out":["G.E.M.","光年之外 LIGHT YEARS AWAY"]}
+{"args":["YOASOBI「夜に駆ける」Official Music Video"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Ayase / YOASOBI"},"out":["YOASOBI","夜に駆ける"]}
+{"args":["米津玄師 MV「Lemon」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["宋冬野「斑马，斑马」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马，斑马"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -1296,6 +1608,34 @@
 {"args":["Onda Una más"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["lumbre agua"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["creep"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["毛不易 - 《消愁》「当你走进这欢乐场 背上所有的梦与想」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 《消愁》「Xiao Chou」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 『消愁』"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["《毛不易》 - 〈消愁〉【Xiao Chou】"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - MV「消愁」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 《消愁》(Live)"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["毛不易 - 消愁《Xiao Chou》"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["毛不易","消愁"]}
+{"args":["【翻唱】周深 - 大鱼"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["周深","大鱼"]}
+{"args":["周深 - 大鱼「Big Fish」 Live"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["周深","大鱼 Live"]}
+{"args":["Los Prisioneros - El Baile de los que Sobran (En Vivo)"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["Los Prisioneros","El Baile de los que Sobran (En Vivo)"]}
+{"args":["马頔 - 南山南（feat. 宋冬野）"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["马頔","南山南（feat. 宋冬野）"]}
+{"args":["宋冬野 - 斑马〖Live〗"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["宋冬野","斑马〖Live〗"]}
+{"args":["歌手《歌名》"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["米津玄師 MV「Lemon」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["米津玄師","Lemon"]}
+{"args":["周深 Zhou Shen《大鱼》Big Fish"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["周深 Zhou Shen","大鱼"]}
+{"args":["歌手〈歌名〉 歌手"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["歌手『歌名』「別名」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["IU(아이유)【Blueming】"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["IU(아이유)","Blueming"]}
+{"args":["【歌名】歌手"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["歌手","歌名"]}
+{"args":["《孤勇者》陈奕迅 (Live)"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["陈奕迅","孤勇者"]}
+{"args":["MV「Lemon」米津玄師"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["米津玄師","Lemon"]}
+{"args":["《孤勇者》"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅 (孤勇者)"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅（孤勇者）"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅〖孤勇者〗"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["陈奕迅【】"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["周杰倫 Jay Chou【告白氣球 Love Confession】Official MV"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
+{"args":["周杰倫 七里香"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":[" — "],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["a"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["x"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":null}
@@ -1340,23 +1680,34 @@
 {"args":["【抖音】海来阿木 - 别知己【动态歌词】"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"抖音"},"out":["海来阿木","别知己"]}
 {"args":["【純音樂】久石讓 - Summer"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"純音樂"},"out":["久石讓","Summer"]}
 {"args":["林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版MV)"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"華納音樂 Warner Music Taiwan"},"out":["林俊傑 JJ Lin","修煉愛情 Practice Love"]}
+{"args":["【MV】周杰倫 - 晴天"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周杰倫","晴天"]}
+{"args":["BLACKPINK - '뚜두뚜두 (DDU-DU DDU-DU)' M/V"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"BLACKPINK"},"out":["BLACKPINK","뚜두뚜두 (DDU-DU DDU-DU)"]}
+{"args":["鄧紫棋 G.E.M. - 句號 Full Stop (Official Music Video)"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"G.E.M. 鄧紫棋"},"out":["鄧紫棋 G.E.M.","句號 Full Stop"]}
 {"args":["Creep"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"Radiohead - Topic"},"out":["Radiohead","Creep"]}
 {"args":["Hello"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"AdeleVEVO"},"out":["Adele","Hello"]}
 {"args":["Me Gustas Tú (Con Letra)"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"Manu Chao"},"out":["Manu Chao","Me Gustas Tú"]}
 {"args":["Vegan Vikings"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"Nick Cani"},"out":["Nick Cani","Vegan Vikings"]}
-{"args":["宋冬野 - 斑马斑马"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马斑马"]}
-{"args":["Silvana Estrada — Qué Problema (Visualizer)"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"Silvana Estrada"},"out":["Silvana Estrada","Qué Problema"]}
-{"args":["Rosalía - DESPECHÁ (Official Video)"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"RosaliaVEVO"},"out":["Rosalía","DESPECHÁ"]}
-{"args":["Soda Stereo - De Música Ligera (Video Oficial)"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"Soda Stereo"},"out":["Soda Stereo","De Música Ligera"]}
 {"args":["Stand by Me"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"Ben E. King - Topic"},"out":["Ben E. King","Stand by Me"]}
 {"args":["野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"孟维来"},"out":["孟维来","野人"]}
+{"args":["《孤勇者》"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["MV「Lemon」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["“Bohemian Rhapsody” (Official Lyric Video)"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"Queen Official"},"out":["Queen","Bohemian Rhapsody"]}
 {"args":[""],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":""},"out":["",""]}
 {"args":["(Official Video)"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"Oasis"},"out":["Oasis",""]}
 {"args":["[MV] IU(아이유) _ Blueming(블루밍)"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"1theK (원더케이)"},"out":["IU(아이유)","Blueming(블루밍)"]}
 {"args":["[MV] BTS(방탄소년단) _ Dynamite"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"1theK (원더케이)"},"out":["BTS(방탄소년단)","Dynamite"]}
 {"args":["Hot_Chip - Over and Over"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"Hot Chip"},"out":["Hot_Chip","Over and Over"]}
 {"args":["Somos vikingos veganos - Hyperfanes"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"kintanedu"},"out":["Somos vikingos veganos","Hyperfanes"]}
-{"args":["Silvana Estrada — Qué Problema (Visualizer)"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"Silvana Estrada"},"out":["Silvana Estrada","Qué Problema"]}
 {"args":["Wonderwall - Oasis"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"Oasis"},"out":["Oasis","Wonderwall"]}
 {"args":["Silvana Estrada Que problema"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"kintanedu"},"out":["kintanedu","Silvana Estrada Que problema"]}
 {"args":["Love Me Tender"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"Elvis Presley - Topic"},"out":["Elvis Presley","Love Me Tender"]}
+{"args":["周杰倫 Jay Chou【告白氣球 Love Confession】Official MV"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫 Jay Chou"},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
+{"args":["告五人 Accusefive【愛人錯過 Somewhere in Time】Official Music Video"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"告五人 Accusefive"},"out":["告五人 Accusefive","愛人錯過 Somewhere in Time"]}
+{"args":["薛之谦 Joker Xue【演员】官方完整版 MV"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"薛之谦 Joker Xue"},"out":["薛之谦 Joker Xue","演员"]}
+{"args":["《起风了》买辣椒也用券【动态歌词/Pinyin Lyrics】"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"動態歌詞"},"out":["买辣椒也用券","起风了"]}
+{"args":["《孤勇者》陈奕迅 (动态歌词版)"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"動態歌詞"},"out":["陈奕迅","孤勇者"]}
+{"args":["周深 Zhou Shen《大鱼》Big Fish「动态歌词Lyrics」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深 Zhou Shen","大鱼"]}
+{"args":["G.E.M.【光年之外 LIGHT YEARS AWAY】MV (電影《太空潛航者 Passengers》中文主題曲)[HD] 鄧紫棋"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"GEM鄧紫棋"},"out":["G.E.M.","光年之外 LIGHT YEARS AWAY"]}
+{"args":["YOASOBI「夜に駆ける」Official Music Video"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"Ayase / YOASOBI"},"out":["YOASOBI","夜に駆ける"]}
+{"args":["米津玄師 MV「Lemon」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["宋冬野「斑马，斑马」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马，斑马"]}
