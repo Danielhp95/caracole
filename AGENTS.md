@@ -2623,10 +2623,20 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 - **The engine's comparison** (`SyncEngine.compare`) carries, beside its differences, its `kind` (`"computer"` or
   `"file"`), the parts the other side `holds`, the merged `base` and `kept` answers it compared against, the songs
   either side's songbooks `listed` (each songbook difference's document asked of the computer once,
-  `Scope.listedOn`), each songbook difference's two documents (`songbooks`) and each site whose newest read differs
-  (`indexes`, `IndexWaiting`); its hash is of the differences unscoped. `documents` gives a unit's two documents (a
-  file's none of a unit it left out or of a part it doesn't hold, `FileSource.says`) and `tested` what the computer
-  holds (its state read once, nothing changed).
+  `Scope.listedOn`), each songbook difference's two documents (`songbooks`) and the indexes (`indexes`,
+  `IndexWaiting`: below; a file's, each site whose newest read differs); its hash is of the differences unscoped.
+  `documents` gives a unit's two documents (a file's none of a unit it left out or of a part it doesn't hold,
+  `FileSource.says`) and `tested` what the computer holds (its state read once, nothing changed).
+- **The indexes a sync takes** (`SyncEngine.newerThere`, the index stage's rule and its comparison's): each site whose
+  stamp in the computer's state is later than both kv `sync:index:<computer id>` (what the phone took of that computer
+  last) and kv `index:merged` (core.index's `MergedIndexes`: each site's newest read of the whole exports the phone
+  merged, read over each file as its merge read it, `Merged.newest`, a site dated after the merge's `notAfter` left
+  out; written by a sync's own merge, a file's indexes, the site catalogues and an index import, the later kept), never
+  by the phone's own newest, which its lookups' reads move. So a sync after the catalogues or a file of the computer's
+  downloads only what the computer read since. The comparison lists those (`newer` "there") and each site whose pages
+  Reads noted for the next push ("here"), a site of both twice, so the Sync sheet says what the Sync does: where
+  sync_routes._waiting compares newest reads, the phone answers otherwise (vectors/web/sync_routes.jsonl's scene holds
+  both records, so the two answers agree).
 - **`apply(c, choices, prefer, parts, conflicts)`**: only the differences of `parts` are taken, given or left
   (`Scope.inScope`: a part left out is never read as a removal, a song a songbook lists comes along with the
   songbooks); Library unticked skips the mirror stage, Site indexes unticked the index stage, each saying so. No stage
@@ -3166,7 +3176,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     `http:last_request:`, the global records that gate a request (`lacuerda:search:`, `lacuerda:search-failed`,
     `gtptabs:unusable:`, `ug:artist_url:`, `ug:pasted_tab:`, `ug:unreadable:`, `youtube-search:`), `sync:` (so a
     restored library is the phone's change at the next sync: §11 Q11's default), `phone:settings`, `phone:schema`, the
-    index push's notes and every index's progress records, the site catalogues' (`catalogues:`: the file the index
+    index push's notes and every index's progress records, what the whole exports it merged read (`index:merged`,
+    which a sync asks the computer by), the site catalogues' (`catalogues:`: the file the index
     tables took last, GitHub's ask-again time, a download waiting for a go-ahead, the offer made: a restore never
     touches those tables, so a tap after one says Up to date exactly when they hold the newest file), and each song's
     records that gate a request (`SONGS`:

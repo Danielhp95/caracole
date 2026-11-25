@@ -180,4 +180,68 @@ class IndexTransferTest {
             }
         }
     }
+
+    /** What a merge says it read (Merged.newest): each site's newest read in the file, as `newest` reads a database,
+     * never the database's after it, which the phone's own reads move; of the sites merged alone. */
+    @Test fun aMergeSaysEachSitesNewestReadInTheFileNeverTheDatabases() {
+        TestDb.fresh(tmp.newFolder()).use { database ->
+            // A whole export into a new phone: the file's newest is what the phone's database says after it.
+            val merged = database.writeBlocking { IndexTransfer.merge(it, export("full-export"), now) }
+            assertEquals(database.read { IndexTransfer.newest(it) }, merged.newest)
+            assertEquals(IndexTransfer.SITES.toSet(), merged.newest.keys, "every site the file holds a read of")
+        }
+        TestDb.fresh(tmp.newFolder()).use { database ->
+            // The phone's own read of gtptabs.com since (a progress record of its own, later than the file's).
+            database.writeBlocking { it.kvSet("gtptabs:index:complete_at", "2026-11-02T09:00:00Z") }
+            val gtptabs = listOf("gtptabs")
+            val merged = database.writeBlocking { IndexTransfer.merge(it, export("partial-export"), now, gtptabs) }
+            assertEquals(mapOf("gtptabs" to "2026-10-28T03:30:00Z"), merged.newest, "the file's, of the site merged")
+            assertEquals("2026-11-02T09:00:00Z", database.read { IndexTransfer.newest(it) }["gtptabs"])
+            // A merge of nothing newer says the file's all the same.
+            val again = database.writeBlocking { IndexTransfer.merge(it, export("partial-export"), now, gtptabs) }
+            assertEquals(false, again.changed)
+            assertEquals(mapOf("gtptabs" to "2026-10-28T03:30:00Z"), again.newest)
+            val both = database.writeBlocking { IndexTransfer.merge(it, export("partial-export"), now) }
+            assertEquals(mapOf("gtptabs" to "2026-10-28T03:30:00Z", "musescore" to "2026-10-28T03:30:00Z"), both.newest)
+        }
+    }
+
+    /** A site the file says it read after the clock's bound (`notAfter`) is left out of what it says it read: its
+     * records that late were never taken. */
+    @Test fun aSiteTheFileDatesAfterTheBoundIsNoReadItSaysItTook() {
+        TestDb.fresh(tmp.newFolder()).use { database ->
+            val bound = Stamps.parse("2026-10-27T00:00:00Z")!!
+            val merged = database.writeBlocking {
+                IndexTransfer.merge(it, export("partial-export"), now, notAfter = bound)
+            }
+            assertEquals(emptyMap(), merged.newest)
+            val at = Stamps.parse("2026-10-28T03:30:00Z")!!
+            val later = database.writeBlocking { IndexTransfer.merge(it, export("partial-export"), now, notAfter = at) }
+            assertEquals(mapOf("gtptabs" to "2026-10-28T03:30:00Z", "musescore" to "2026-10-28T03:30:00Z"),
+                         later.newest, "a read at the bound itself is no later than it")
+        }
+    }
+
+    /** kv `index:merged` (MergedIndexes): each site's latest newest read of the whole exports merged, never moved back
+     * by an older file, a site it never merged left as it was; its odd entries none. */
+    @Test fun theRecordOfTheExportsMergedKeepsEachSitesLatest() {
+        TestDb.fresh(tmp.newFolder()).use { database ->
+            assertEquals(emptyMap(), database.read { MergedIndexes.of(it) })
+            fun record(vararg sites: Pair<String, String>) = database.writeBlocking {
+                MergedIndexes.record(it, Merged(emptyMap(), false, newest = mapOf(*sites)))
+            }
+            record("ug" to "2026-11-17T03:30:00Z", "gtptabs" to "2026-11-10T03:30:00Z")
+            record("ug" to "2026-11-10T03:30:00Z", "lacuerda" to "2026-11-01T00:00:00+01:00")
+            assertEquals(mapOf("gtptabs" to "2026-11-10T03:30:00Z", "lacuerda" to "2026-11-01T00:00:00+01:00",
+                               "ug" to "2026-11-17T03:30:00Z"), database.read { MergedIndexes.of(it) })
+            assertEquals("""{"gtptabs": "2026-11-10T03:30:00Z", "lacuerda": "2026-11-01T00:00:00+01:00", """ +
+                             """"ug": "2026-11-17T03:30:00Z"}""", database.read { it.kvGet(MergedIndexes.KEY) },
+                         "its sites in code-point order, as kv text")
+            database.writeBlocking { it.kvSet(MergedIndexes.KEY, """{"ug": "not a time", "lacuerda": 3}""") }
+            assertEquals(mapOf("ug" to "not a time"), database.read { MergedIndexes.of(it) })
+            record("ug" to "2026-11-10T03:30:00Z")
+            assertEquals(mapOf("ug" to "2026-11-10T03:30:00Z"), database.read { MergedIndexes.of(it) },
+                         "a stamp that is no time gives way")
+        }
+    }
 }

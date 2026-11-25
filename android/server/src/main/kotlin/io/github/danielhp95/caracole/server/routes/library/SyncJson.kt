@@ -27,7 +27,8 @@ internal object SyncJson {
      * never); the parts the other side holds; each difference with its kind, its proposal, why, each side's digest,
      * a song's names (Scope.namesOf; null for another kind), what each side did since the two last agreed
      * (Scope.changeOf), its part (Scope.partOf) and the songbooks that list it; each songbook difference's two
-     * documents; and each site whose newest read differs.
+     * documents; and the indexes (IndexWaiting: with the computer, each its Sync takes and gives; with a file, each
+     * site whose newest read differs).
      */
     fun comparison(c: Comparison): JsonObject = JsonObject(linkedMapOf(
         "comparison" to JsonPrimitive(c.id),

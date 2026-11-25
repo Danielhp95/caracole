@@ -232,7 +232,12 @@ def route_records(corpus: Corpus, monkeypatch) -> list[dict[str, Any]]:
     agreed_on[creep] = ("1" * 64, AGREED_AT)  # both changed since
     base = {"format": sync.FORMAT, "units": {k: list(v) for k, v in sorted(agreed_on.items())}}
     indexed = {"ug:index:refreshed_at": "2026-11-01T03:30:00Z", "lacuerda:index:complete_at": "2026-10-20T03:30:00Z",
-               "musescore:index:complete_at": "2026-10-22T03:30:00Z"}
+               "musescore:index:complete_at": "2026-10-22T03:30:00Z",
+               # The phone's own records, which a computer never reads: there's MuseScore index merged as there has
+               # it (a file's, the catalogues), and a LaCuerda page its lookup read. The phone lists the indexes its
+               # sync takes and gives by them, as here lists those whose newest read differs: the same three.
+               "index:merged": {"musescore": "2026-10-22T03:30:00Z"},
+               "phone:read:lacuerda:estopa/": "2026-11-02T18:00:00Z"}
     agreed = Sides(corpus, "rich", "-routes-agreed", {f"sync:base:{THERE_ID}": base, **{
         k: v for k, v in peers.items() if k == f"sync:peer:{THERE_ID}"}, **indexed})
     overrides, books = lib.overrides(), lib.books()

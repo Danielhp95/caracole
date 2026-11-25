@@ -2,7 +2,11 @@ package io.github.danielhp95.caracole.core.sync.client
 
 import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.db.Database
+import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.index.Merge
+import io.github.danielhp95.caracole.core.index.MergedIndexes
 import io.github.danielhp95.caracole.core.index.Reads
+import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.library.LibraryStore
@@ -22,11 +26,14 @@ import io.github.danielhp95.caracole.core.sync.SyncEngine
 import io.github.danielhp95.caracole.core.sync.SyncFailed
 import io.github.danielhp95.caracole.core.sync.SyncOutcome
 import io.github.danielhp95.caracole.core.sync.Units
+import io.github.danielhp95.caracole.core.sync.file.IndexFile
+import io.github.danielhp95.caracole.core.sync.file.SyncFiles
 import io.github.danielhp95.caracole.core.testing.TestDb
 import io.github.danielhp95.caracole.core.testing.sync.FakeComputer
 import io.github.danielhp95.caracole.mirror.ServerAddress
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.After
@@ -37,6 +44,7 @@ import org.junit.rules.TemporaryFolder
 import java.io.File
 import java.io.IOException
 import java.io.RandomAccessFile
+import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.test.assertEquals
@@ -780,6 +788,8 @@ class SyncEngineTest {
         assertEquals("done", ended()["index"])
         assertEquals("""{"gtptabs": "2026-11-03T10:00:00Z", "musescore": "2026-11-03T11:00:00Z"}""",
                      phone.read { it.kvGet(SyncEngine.INDEX_KEY + computer.id) })
+        assertEquals(phone.read { IndexTransfer.newest(it) }.filterKeys { it == "gtptabs" || it == "musescore" },
+                     phone.read { MergedIndexes.of(it) }, "and what the file merged read, of the sites merged")
         assertTrue(phone.read { db -> db.one("SELECT COUNT(*) FROM gtptabs_index") { it.long(0) } }!! > 0)
         assertEquals(0L, phone.read { db -> db.one("SELECT COUNT(*) FROM ug_index") { it.long(0) } },
                      "a site not newer there is not merged")
@@ -951,8 +961,160 @@ class SyncEngineTest {
         assertEquals(JsonArray(emptyList()), older.report!!["indexes"])
     }
 
+    // --- after the site catalogues or a file's indexes: the sites asked for, and those the sheet lists -------------
+
+    /** A UG sitemap read at [at], as ug/index.py `_store` leaves it: its rows (a row kept keeps its sitemap) and its
+     * record in kv `ug:sitemaps`. */
+    private fun sitemap(db: Db, name: String, ids: LongRange, at: String) {
+        for (i in ids) {
+            db.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) " +
+                           "VALUES (?, ?, ?, 'chords', ?, ?, ?) ON CONFLICT (tab_id) DO NOTHING",
+                       i, "artist-${i % 97}", "song-$i", name, at, "artist-${i % 97}/song-$i-chords-$i")
+        }
+        val records = LinkedHashMap(Merge.records(db, "main", Merge.UG_SITEMAPS))
+        records[name] = JsonObject(linkedMapOf("etag" to JsonPrimitive("\"$name-$at\""), "last_modified" to JsonNull,
+                                               "indexed_at" to JsonPrimitive(at),
+                                               "rows" to JsonPrimitive(ids.count())))
+        db.kvSetJson(Merge.UG_SITEMAPS, JsonObject(records))
+    }
+
+    /** The computer's index export, as `GET /api/peer/index` sends it (index_transfer.export of its database). */
+    private fun computersExport(): ByteArray {
+        val file = File(tmp.root, "export-${System.nanoTime()}.sqlite")
+        computer.database.writeBlocking { db -> IndexFile.export(db, file, CATALOGUES_AT, "0.1.0") }
+        return file.readBytes().also { file.delete() }
+    }
+
+    /** The computer's index as its nightly runs left it (UG's and gtptabs.com's), published as the site catalogues,
+     * which the phone imports as CataloguesRunner does (its merge, bounded by its clock and a day, then what it read
+     * recorded); the computer answering its state with its indexes' newest reads, as the real one does. */
+    private fun catalogued() {
+        engine.clock = { Instant.parse(SYNCED_AT) }
+        computer.database.writeBlocking { db ->
+            sitemap(db, "1", 1L..400L, EARLY)
+            sitemap(db, "2", 401L..800L, EARLY)
+            sitemap(db, "last", 801L..810L, EARLY)
+            db.kvSetJson(Merge.UG_LISTED, JsonArray(listOf("1", "2", "last").map(::JsonPrimitive)))
+            db.kvSet(Merge.UG_REFRESHED, EARLY)
+            db.kvSet(Merge.UG_BUILT, EARLY)
+            for (i in 1..50) {
+                db.execute("INSERT INTO gtptabs_index (path, artist_path, artist_key, title_key, base_key, sitemap) " +
+                               "VALUES (?, 'tabs/2/blur.html', 'blur', ?, ?, 'sitemap-tabs-1.xml')",
+                           "tabs/2/blur/song-$i.html", "song-$i", "song-$i")
+            }
+            db.kvSetJson(Merge.sitemapsKey("gtptabs"), JsonObject(mapOf("sitemap-tabs-1.xml" to JsonObject(mapOf(
+                "etag" to JsonPrimitive("\"1\""), "last_modified" to JsonNull, "checked_at" to JsonPrimitive(EARLY),
+                "rows" to JsonPrimitive(50))))))
+            db.kvSet(Merge.completeKey("gtptabs"), EARLY)
+        }
+        val catalogue = File(tmp.root, "catalogue.sqlite").apply { writeBytes(computersExport()) }
+        phone.writeBlocking { db ->
+            val bound = Stamps.micros(Instant.parse(CATALOGUES_AT).plus(Duration.ofDays(1)))
+            MergedIndexes.record(db, IndexTransfer.merge(db, catalogue, CATALOGUES_AT, notAfter = bound))
+        }
+        computer.index = { computersExport() }
+    }
+
+    private fun computerAnswersAsItIs() {
+        computer.indexes = computer.database.read { IndexTransfer.newest(it) }
+    }
+
+    @Test fun `after the site catalogues, a sync asks the computer only for the sites newer there`() {
+        catalogued()
+        // A week of nightly refreshes there: sitemap "last" read with 5 tabs more, sitemap "2" read again.
+        computer.database.writeBlocking { db ->
+            sitemap(db, "last", 801L..815L, LATE)
+            sitemap(db, "2", 401L..800L, LATE)
+            db.kvSet(Merge.UG_REFRESHED, LATE)
+        }
+        computerAnswersAsItIs()
+        val c = engine.compare(computer.address.toString())
+        assertEquals(listOf("ug"), c.indexes.filter { it.newer == "there" }.map { it.site })
+        val outcome = apply(c)
+        assertEquals(listOf<List<String>?>(listOf("ug")), computer.indexAsked,
+                     "gtptabs.com, as the catalogues gave it, is never downloaded again")
+        val ug = (outcome.report!!["indexes"] as JsonArray).map { it as JsonObject }.single()
+        assertEquals(JsonPrimitive("ug"), ug["site"])
+        assertEquals(JsonPrimitive(810L) to JsonPrimitive(815L), ug["before"] to ug["after"])
+        assertEquals(mapOf("gtptabs" to EARLY, "ug" to LATE), phone.read { MergedIndexes.of(it) },
+                     "the sync's own merge recorded what its file read")
+    }
+
+    @Test fun `after the site catalogues, a computer no newer is asked for no index, and the sheet lists none`() {
+        catalogued()
+        computerAnswersAsItIs()
+        assertEquals(computer.database.read { IndexTransfer.newest(it) }, phone.read { IndexTransfer.newest(it) })
+        val c = engine.compare(computer.address.toString())
+        assertEquals(emptyList(), c.indexes, "no Site index waits")
+        apply(c)
+        assertEquals(emptyList(), computer.indexAsked)
+        assertEquals(Triple("index", "skipped", SyncEngine.NOTHING_TO_INDEX), stages.last { it.first == "index" })
+    }
+
+    /** A harptabs.com artist page the computer's nightly pass read at [at]. */
+    private fun readThere(path: String, title: String, at: String) = computer.database.writeBlocking { db ->
+        db.execute("INSERT OR REPLACE INTO harptabs_artists (path, page_id, key, name, tabs, read_at) VALUES " +
+                       "(?, ?, ?, ?, 1, ?)", path, path.split('/')[1].toLong(), path.substringAfterLast('/'),
+                   path.substringAfterLast('/'), at)
+        db.execute("INSERT OR REPLACE INTO harptabs_artist_tabs (artist, tab_id, path, title, song_key, place) " +
+                       "VALUES (?, ?, ?, ?, ?, 0)", path, path.split('/')[1].toLong() * 10, "tab/1/x", title,
+                   title.lowercase())
+    }
+
+    @Test fun `the sheet lists the indexes the sync takes and those it gives, and those alone`() {
+        engine.clock = { Instant.parse(NOW) }
+        readThere("artist/1178/billy-joel", "Piano Man", "2026-11-03T03:00:00Z")
+        val catalogue = File(tmp.root, "catalogue.sqlite").apply { writeBytes(computersExport()) }
+        phone.writeBlocking { db -> MergedIndexes.record(db, IndexTransfer.merge(db, catalogue, CATALOGUES_AT)) }
+        computer.index = { computersExport() }
+        // A page the phone's lookup read since, later than any of the computer's, and one the computer read since.
+        readHere("artist/50/the-beatles", listOf("Yesterday"), "2026-11-03T09:30:00Z")
+        readThere("artist/7/bob-dylan", "Blowin' in the Wind", "2026-11-03T08:00:00Z")
+        computerAnswersAsItIs()
+
+        val c = engine.compare(computer.address.toString())
+        val harptabs = { newer: String ->
+            IndexWaiting("harptabs", "harptabs.com", "2026-11-03T09:30:00Z", "2026-11-03T08:00:00Z", newer)
+        }
+        assertEquals(listOf(harptabs("there"), harptabs("here")), c.indexes,
+                     "taken from the computer, its pages read here given")
+        apply(c)
+        assertEquals(c.indexes.filter { it.newer == "there" }.map { it.site },
+                     computer.indexAsked.flatMap { it.orEmpty() },
+                     "the sync takes the indexes the sheet said it would, and those alone")
+        assertEquals(1, computer.indexPushes.size, "and gives the pages it said it would")
+        assertEquals(emptyMap(), noted())
+    }
+
+    @Test fun `indexes taken from the computer's file are never asked for again at the next sync`() {
+        onComputer("Radiohead", "Creep")
+        readThere("artist/50/the-beatles", "Yesterday", "2026-11-03T08:00:00Z")
+        computerAnswersAsItIs()
+        val file = File(tmp.newFolder(), "file.caracole")
+        computer.database.writeBlocking { db ->
+            SyncFiles.export(db, computer.libraryDir, null, file, listOf(Scope.LIBRARY, Scope.INDEXES), NOW,
+                             Compare.ownId(db), "Desk", "0.1.0")
+        }
+        apply(engine.compareFile(file))
+        assertEquals(computer.database.read { IndexTransfer.newest(it) }["harptabs"],
+                     phone.read { IndexTransfer.newest(it) }["harptabs"], "the file's index merged here")
+
+        stages.clear()
+        val c = engine.compare(computer.address.toString())
+        assertEquals(emptyList(), c.indexes)
+        apply(c)
+        assertEquals(emptyList(), computer.indexAsked, "the phone holds the computer's harptabs.com index as it is")
+        assertEquals("skipped", ended()["index"])
+    }
+
     private companion object {
         const val NOW = "2026-11-03T10:00:00Z"
         const val RICH = "sync/fixtures/rich.jsonl"
+
+        /** The catalogues' story: the computer's index read, published, read again a week on, and the sync. */
+        const val EARLY = "2026-11-17T03:30:00Z"
+        const val CATALOGUES_AT = "2026-11-18T04:00:00Z"
+        const val LATE = "2026-11-24T03:30:00Z"
+        const val SYNCED_AT = "2026-11-25T10:00:00Z"
     }
 }

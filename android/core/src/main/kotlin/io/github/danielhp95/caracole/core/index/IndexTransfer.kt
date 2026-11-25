@@ -114,9 +114,14 @@ object IndexTransfer {
             val names = mergedSites(export, listed, sites)
             progress?.invoke(MergeProgress("", MergeProgress.PLANNING, 0, names.size.toLong()))
             Merge.checkColumns(db, export, names)
+            // What the file read of each site merged, read as the merge reads it: a site it says it read after the
+            // bound left out, its records that late never taken.
+            val read = newest(db, Merge.THEIRS, names).filterValues { stamp ->
+                notAfter == null || Stamps.parse(stamp)!! <= notAfter
+            }
             val plans = names.map { Merge.plan(db, it, now, notAfter, chunk) }
             if (plans.none { it.changes }) {
-                return Merged(names.associateWithTo(LinkedHashMap()) { emptyMap<String, Int>() }, false, listed)
+                return Merged(names.associateWithTo(LinkedHashMap()) { emptyMap<String, Int>() }, false, listed, read)
             }
             backup?.invoke()
             val taken = LinkedHashMap<String, Map<String, Int>>()
@@ -131,7 +136,7 @@ object IndexTransfer {
                 progress?.invoke(MergeProgress("ug", MergeProgress.OPTIMIZE, 0, 0))
                 Warmup.optimize(db)  // one segment each (prep-db)
             }
-            return Merged(taken, true, listed)
+            return Merged(taken, true, listed, read)
         } finally {
             db.detach(Merge.THEIRS)
         }
@@ -162,34 +167,40 @@ object IndexTransfer {
      * its sitemaps' or listing pages' records, the read of each page of its that has one, its progress records), as
      * stored ("2026-10-28T03:30:00Z"); a site with none is left out. The state document's `indexes`.
      */
-    fun newest(db: Db): Map<String, String> {
+    fun newest(db: Db): Map<String, String> = newest(db, "main", SITES)
+
+    /** [newest] of the database [schema] names ("main", or a file attached as [Merge.THEIRS]), of [sites] alone (a
+     * file holds the tables of the sites it holds alone). */
+    private fun newest(db: Db, schema: String, sites: Collection<String>): Map<String, String> {
         fun recorded(key: String, stamp: String) =
-            Merge.records(db, "main", key).values.filterIsInstance<JsonObject>().map { it[stamp].text() }
-        fun readAt(table: String) = db.query("SELECT DISTINCT read_at, typeof(read_at) FROM main.$table") {
+            Merge.records(db, schema, key).values.filterIsInstance<JsonObject>().map { it[stamp].text() }
+        fun readAt(table: String) = db.query("SELECT DISTINCT read_at, typeof(read_at) FROM $schema.$table") {
             if (it.text(1) == "text") it.text(0) else null
         }
-        fun kv(key: String) = Merge.kv(db, "main", key)
+        fun kv(key: String) = Merge.kv(db, schema, key)
         // The directory's latest listing seen and page read: SQLite's MAX of each, a text alone (Python's isinstance).
-        val directory = db.one(
-            "SELECT MAX(seen_at), typeof(MAX(seen_at)), MAX(read_at), typeof(MAX(read_at)) FROM main.ug_directory",
+        fun directory() = db.one(
+            "SELECT MAX(seen_at), typeof(MAX(seen_at)), MAX(read_at), typeof(MAX(read_at)) FROM $schema.ug_directory",
         ) { listOf(if (it.text(1) == "text") it.text(0) else null, if (it.text(3) == "text") it.text(2) else null) }
             .orEmpty()
         fun siteIndex(provider: String) =
             recorded(Merge.sitemapsKey(provider), "checked_at") + kv(Merge.completeKey(provider))
 
-        val times: Map<String, List<String?>> = linkedMapOf(
-            "ug" to recorded(Merge.UG_SITEMAPS, "indexed_at") + readAt("ug_artist_tabs") +
-                listOf(kv(Merge.UG_REFRESHED), kv(Merge.UG_BUILT)) + directory +
-                recorded(Merge.UG_DIR_LETTERS, "done") + recorded(Merge.UG_DIR_LETTERS, "started"),
-            "lacuerda" to recorded(Merge.LC_PAGES, "checked_at") + kv(Merge.LC_COMPLETE),
-            "gtptabs" to siteIndex("gtptabs"),
-            "musescore" to siteIndex("musescore"),
-            "harptabs" to siteIndex("harptabs") + readAt("harptabs_artists"),
-            "gametabs" to siteIndex("gametabs") + readAt("gametabs_games"),
-        )
+        fun times(site: String): List<String?> = when (site) {
+            "ug" -> recorded(Merge.UG_SITEMAPS, "indexed_at") + readAt("ug_artist_tabs") +
+                listOf(kv(Merge.UG_REFRESHED), kv(Merge.UG_BUILT)) + directory() +
+                recorded(Merge.UG_DIR_LETTERS, "done") + recorded(Merge.UG_DIR_LETTERS, "started")
+            "lacuerda" -> recorded(Merge.LC_PAGES, "checked_at") + kv(Merge.LC_COMPLETE)
+            "gtptabs" -> siteIndex("gtptabs")
+            "musescore" -> siteIndex("musescore")
+            "harptabs" -> siteIndex("harptabs") + readAt("harptabs_artists")
+            "gametabs" -> siteIndex("gametabs") + readAt("gametabs_games")
+            else -> error("no site $site")
+        }
         val found = LinkedHashMap<String, String>()
         for (site in Sites.ALL) {
-            val latest = times.getValue(site.name).mapNotNull { Stamps.parse(it) }.maxOrNull() ?: continue
+            if (site.name !in sites) continue
+            val latest = times(site.name).mapNotNull { Stamps.parse(it) }.maxOrNull() ?: continue
             found[site.name] = Stamps.stamp(latest)
         }
         return found
@@ -299,9 +310,12 @@ object IndexTransfer {
  * `SiteMerge.taken`: "sitemap", "tab of its artist pages", "listing page"…), and whether anything changed (a page
  * taken or a progress record moved on); [listed], the names the file's META `sites` lists, as written and in its
  * order, a site this version doesn't know among them (none where it lists none it can read), read as the merge read
- * the file, never by attaching it again (the catalogues job's sentence on what it doesn't read). */
+ * the file, never by attaching it again (the catalogues job's sentence on what it doesn't read); and [newest], each
+ * site merged's newest read in the file, as [IndexTransfer.newest] reads a database (never the database's after the
+ * merge, which the phone's own reads move), a site the file says it read after the merge's `notAfter` left out, its
+ * records that late never taken: what MergedIndexes records. */
 data class Merged(val sites: Map<String, Map<String, Int>>, val changed: Boolean,
-                  val listed: List<String> = emptyList())
+                  val listed: List<String> = emptyList(), val newest: Map<String, String> = emptyMap())
 
 /**
  * How far a merge has got (IndexTransfer.merge's `progress`), index_transfer.merge's `progress(site, action, done,

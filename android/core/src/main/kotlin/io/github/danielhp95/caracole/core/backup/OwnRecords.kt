@@ -1,6 +1,7 @@
 package io.github.danielhp95.caracole.core.backup
 
 import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.index.MergedIndexes
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.library.internal.SongKv
 import kotlinx.serialization.json.JsonArray
@@ -23,10 +24,11 @@ import kotlinx.serialization.json.jsonPrimitive
  *   records), so the restored library is the phone's own change, given to the computer at the next sync;
  * - the computer's settings (`phone:settings`), the phone's own schema record, and its indexes' progress and the
  *   pages it read for them (`phone:read:`, `phone:pushed:`, each site's sitemaps, `:index:`, `:keys` records, UG's
- *   artist directory's listings and keys, `ug:directory:`): the index tables are no backup's, so their records stay
- *   theirs; and the site catalogues' (`catalogues:`: the file those tables took last, which a tap compares with
- *   GitHub's newest to say Up to date, the time GitHub said to ask again after, a download waiting for a go-ahead,
- *   the offer made), so that a restore never has a tap download again a catalogue the index still holds;
+ *   artist directory's listings and keys, `ug:directory:`), and the newest read of the whole exports it merged
+ *   (`index:merged`, MergedIndexes, which a sync asks the computer by): the index tables are no backup's, so their
+ *   records stay theirs; and the site catalogues' (`catalogues:`: the file those tables took last, which a tap
+ *   compares with GitHub's newest to say Up to date, the time GitHub said to ask again after, a download waiting for
+ *   a go-ahead, the offer made), so that a restore never has a tap download again a catalogue the index still holds;
  * - and each song's records that gate a request ([SONGS]: a site's 30-day check, UG's artist page checked), kept by
  *   the song's identity key, since a song's id may differ in the backup: a song the backup has takes the records the
  *   phone has now for that song (none, if it has none now), and one only the backup has keeps its own.
@@ -37,7 +39,7 @@ import kotlinx.serialization.json.jsonPrimitive
 object OwnRecords {
     /** Records kept by their whole key. */
     val KEYS: Set<String> = setOf(
-        "phone:settings", "phone:schema", "lacuerda:search-failed", "ug:link-failed",
+        "phone:settings", "phone:schema", "lacuerda:search-failed", "ug:link-failed", MergedIndexes.KEY,
         "ug:sitemaps", "gtptabs:sitemaps", "musescore:sitemaps", "harptabs:sitemaps", "gametabs:sitemaps",
     )
 

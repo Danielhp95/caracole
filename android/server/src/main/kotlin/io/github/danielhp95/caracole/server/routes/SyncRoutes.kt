@@ -65,7 +65,8 @@ interface SyncSettings {
  *                             (`synced_before`, null: never), the parts it holds, each difference (its kind, proposal,
  *                             why, each side's digest, a song's names, each side's change since the two agreed, its
  *                             part and the songbooks that list it), each songbook difference's two documents, and the
- *                             indexes newer on either side; the comparison kept 10 minutes
+ *                             indexes its Sync will take and give (SyncEngine's index stage's rule, not
+ *                             sync_routes._waiting's); the comparison kept 10 minutes
  *     GET  /api/sync/unit?comparison=&id=   a unit of a comparison kept, its two documents (`here`, the phone's now;
  *                             `there`, the computer's, asked of it now; null where a side hasn't got it): the page's
  *                             script alone asks it

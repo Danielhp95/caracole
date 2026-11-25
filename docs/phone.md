@@ -39,6 +39,10 @@ choose what to include: your songs, your songbooks, and the site catalogues that
 If a song changed on both sides, you pick which one to keep. The phone backs up its library
 before it takes anything.
 
+A sync downloads a site's catalogue only when the computer has read that site since the phone's
+copy, whether that copy came from an earlier sync, a file or the downloaded catalogues. The
+**Site indexes** line lists those, and the pages your lookups read that go to the computer.
+
 **Sync on Wi-Fi**, in Settings, does this every 6 hours. It leaves conflicts for you and sends a
 notification.
 

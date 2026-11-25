@@ -447,7 +447,9 @@ class BackupsTest {
                            "ug:directory:letters", "ug:directory:keys",
                            // The site catalogues': the file the index tables hold, when GitHub may be asked again, the
                            // download waiting for a go-ahead, the offer made: of the index tables and this phone alone.
-                           "catalogues:imported", "catalogues:not-before", "catalogues:asking", "catalogues:offered")) {
+                           "catalogues:imported", "catalogues:not-before", "catalogues:asking", "catalogues:offered",
+                           // What the whole exports it merged read, which the index tables hold: a sync asks by it.
+                           "index:merged")) {
             assertTrue(OwnRecords.isOwn(key), key)
         }
         for (key in listOf("songs:key_version", "wanted:first_seen:x", "render:1:phone", "render:files:1",
