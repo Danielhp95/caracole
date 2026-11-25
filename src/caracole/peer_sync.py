@@ -51,8 +51,9 @@ owner answers "keep mine" in an import is remembered beside the base (``record_k
 document gives the asker the entries kept for it (``"kept"``, read into ``PeerState.kept``), and for each unit the
 latest of the four records (each side's agreement and kept answer) counts, an agreement on a tie (``merged_kept``,
 the other side's read with its two digests swapped): a kept answer that counts makes the unit, while neither side has
-changed it since, the chooser's, ``KEPT_HERE`` or ``KEPT_THERE``, never a conflict asked again; a change on either
-side after it is compared as usual (``compare``'s ``kept``). An agreement drops the kept answer of every unit it
+changed it since, the chooser's, ``KEPT_HERE`` or ``KEPT_THERE``, never a conflict asked again; a change after it on
+the chooser's side alone keeps it the chooser's, and one on the other side, whose version still lacks the one kept,
+is a ``CONFLICT``, never taken unasked (``compare``'s ``kept``). An agreement drops the kept answer of every unit it
 agrees on, both sides' versions alike or both lacking it (``record_agreement``), and a base with no kept answer is
 written as before, with no ``"kept"``; the state document carries ``"kept"`` only when given one.
 
@@ -690,7 +691,8 @@ def compare(mine: Mapping[str, Unit], theirs: Mapping[str, Unit],
     """Every unit the two sides hold differently, with what the sync proposes for it (see the module's docstring),
     in ``_order``: songs first, by their label. A unit ``kept`` names (``merged_kept``) is compared with the two
     versions kept, whatever the base says: changed on neither side since, the chooser's (``KEPT_HERE``,
-    ``KEPT_THERE``); else as usual."""
+    ``KEPT_THERE``); on the chooser's side alone, the chooser's, in the usual words; on the other side, a
+    ``CONFLICT`` (``_since_kept``)."""
     found = []
     for unit_id in set(mine) | set(theirs):
         a, b = mine.get(unit_id), theirs.get(unit_id)
@@ -717,14 +719,17 @@ def compare(mine: Mapping[str, Unit], theirs: Mapping[str, Unit],
 
 
 def _since_kept(a: Unit | None, b: Unit | None, pair: KeptPair) -> tuple[str, str]:
+    """A kept unit against the two versions the owner chose between: changed on neither side since, the chooser's;
+    on the chooser's side alone, the chooser's still; on the other side, whose version still lacks the one kept, a
+    conflict, as both books then changed it since they last agreed."""
     was_here, was_there, chooser = pair
     a_changed = (a.digest if a else None) != was_here
     b_changed = (b.digest if b else None) != was_there
     if not a_changed and not b_changed:
         return (MINE, KEPT_HERE) if chooser == MINE else (THEIRS, KEPT_THERE)
-    if a_changed and not b_changed:
+    if chooser == MINE and not b_changed:
         return MINE, _changed("here", a, was_here)
-    if b_changed and not a_changed:
+    if chooser != MINE and not a_changed:
         return THEIRS, _changed("there", b, was_there)
     return CONFLICT, "both books changed it since the last share"
 

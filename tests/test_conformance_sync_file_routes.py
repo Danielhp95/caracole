@@ -54,7 +54,7 @@ from caracole.web import sync_file_routes
 from caracole.web.app import Request, WebApp
 from caracole.web.jobs import JobQueue
 
-from test_conformance_sync_file import EXPORTER, IMPORTER, MADE, FileCorpus
+from test_conformance_sync_file import EXPORTER, FRESH, IMPORTER, MADE, FileCorpus
 from test_web_app import ALLOWED, HOST, Recorder
 
 MADE_BY = "tests/test_conformance_sync_file_routes.py"
@@ -253,15 +253,18 @@ def route_records(corpus: FileCorpus) -> list[dict[str, Any]]:
                                                                                            "0123456789abcdef"})
 
     # --- Sync on a file's comparison, and a file dropped ------------------------------------------------------
-    for fixture, form, moved, note in (
-            ("plain", {"prefer": "", "choices": ""}, None, "taken as compared: peer import queued"),
-            ("file_conflict", {"prefer": "", "choices": ""}, None, "refused: a conflict with no side"),
-            ("file_conflict", {"prefer": "", "choices": "here\tsong/radiohead/creep\nthere\tsong/radiohead/"
-                                                        "karma-police"}, None, "each conflict chosen"),
-            ("file_conflict", {"prefer": "there", "choices": "", "parts": "songbooks"}, None,
+    # plain as a caracole the file knows nothing of (FRESH): as IMPORTER it would read the file's kept answer for Karma
+    # Police, which it lacks, and so a conflict
+    for fixture, sync_id, form, moved, note in (
+            ("plain", FRESH, {"prefer": "", "choices": ""}, None, "taken as compared: peer import queued"),
+            ("file_conflict", IMPORTER, {"prefer": "", "choices": ""}, None, "refused: a conflict with no side"),
+            ("file_conflict", IMPORTER, {"prefer": "", "choices": "here\tsong/radiohead/creep\nthere\tsong/radiohead/"
+                                                                  "karma-police"}, None, "each conflict chosen"),
+            ("file_conflict", IMPORTER, {"prefer": "there", "choices": "", "parts": "songbooks"}, None,
              "of the songbooks alone, every other conflict preferred so"),
-            ("plain", {"prefer": "", "choices": ""}, ("Muse", "Uprising"), "refused: this library moved since")):
-        here = Here(corpus, fixture, f"-file-routes-apply-{len(records)}")
+            ("plain", FRESH, {"prefer": "", "choices": ""}, ("Muse", "Uprising"),
+             "refused: this library moved since")):
+        here = Here(corpus, fixture, f"-file-routes-apply-{len(records)}", sync_id=sync_id)
         import_id = here.send(corpus.file_path("full").read_bytes(), "lib-03-11-26.caracole")
         _, found = here.json("POST", "/sync/import/compare", form={"import": import_id})
         if moved is not None:

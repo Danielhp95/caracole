@@ -36,7 +36,9 @@ data class KeptPair(val here: String?, val there: String?, val chooser: String)
  * can't take this side's version. The state document gives the asker the entries kept for it ([PeerState.kept]),
  * and for each unit the latest of the four records (each side's agreement and kept answer) counts, an agreement on a
  * tie ([mergedKept]); while neither side changed the unit since, it is the chooser's ([KEPT_HERE], [KEPT_THERE]),
- * never a conflict asked again. An agreement drops the kept answer of each unit it agrees on ([recordAgreement]).
+ * never a conflict asked again, and so while only the chooser's side changed it; a change on the other side, whose
+ * version still lacks the one kept, is a conflict, never taken unasked. An agreement drops the kept answer of each
+ * unit it agrees on ([recordAgreement]).
  */
 object Compare {
     /** What a comparison proposes for a unit: this side's (the peer takes it), the peer's, or the owner's choice. */
@@ -164,7 +166,8 @@ object Compare {
 
     /** Every unit the two sides hold differently, with what the sync proposes for it, in [order]. A unit [kept]
      * names ([mergedKept]) is compared with the two versions kept, whatever the base says: changed on neither side
-     * since, the chooser's ([KEPT_HERE], [KEPT_THERE]); else as usual. */
+     * since, the chooser's ([KEPT_HERE], [KEPT_THERE]); on the chooser's side alone, the chooser's, in the usual words;
+     * on the other side, a conflict ([sinceKept]). */
     fun compare(mine: Map<String, SyncUnit>, theirs: Map<String, SyncUnit>, base: Map<String, String?>?,
                 kept: Map<String, KeptPair>? = null): List<Difference> {
         val found = ArrayList<Difference>()
@@ -193,13 +196,17 @@ object Compare {
         return order(found)
     }
 
+    /** peer_sync._since_kept: a kept unit against the two versions the owner chose between. Changed on neither side
+     * since, the chooser's; on the chooser's side alone, the chooser's still; on the other side, whose version still
+     * lacks the one kept, a conflict, as both books then changed it since they last agreed. */
     private fun sinceKept(a: SyncUnit?, b: SyncUnit?, pair: KeptPair): Pair<String, String> {
         val aChanged = a?.digest != pair.here
         val bChanged = b?.digest != pair.there
+        val keptHere = pair.chooser == MINE
         return when {
-            !aChanged && !bChanged -> if (pair.chooser == MINE) MINE to KEPT_HERE else THEIRS to KEPT_THERE
-            aChanged && !bChanged -> MINE to changed("here", a, pair.here)
-            bChanged && !aChanged -> THEIRS to changed("there", b, pair.there)
+            !aChanged && !bChanged -> if (keptHere) MINE to KEPT_HERE else THEIRS to KEPT_THERE
+            keptHere && !bChanged -> MINE to changed("here", a, pair.here)
+            !keptHere && !aChanged -> THEIRS to changed("there", b, pair.there)
             else -> CONFLICT to "both books changed it since the last share"
         }
     }

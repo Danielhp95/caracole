@@ -848,6 +848,26 @@ class SyncEngineTest {
         assertEquals(emptyList(), engine.compare(computer.address.toString()).differences)
     }
 
+    @Test fun `a unit kept at an import then changed on the computer is a conflict, which the unattended sync leaves`() {
+        val here = onPhone("Eagles", "Hotel California", album = "kept on the phone")
+        onComputer("Eagles", "Hotel California", album = "the file's")
+        val unit = unitOf(here)
+        val (mine, theirs) = phoneState().getValue(unit).digest to computer.state().getValue(unit).digest
+        // An import of the computer's file answered "keep mine" for it; the computer changes its own after, its nightly
+        // run, say: its version still lacks the phone's, so both changed it since they last agreed.
+        phone.writeBlocking { db -> Compare.recordKept(db, computer.id, mapOf(unit to (mine to theirs)), "2026-11-02T09:00:00Z") }
+        computer.database.writeBlocking { it.execute("UPDATE songs SET album = 'the computer''s, later' WHERE key = ?", here.key) }
+
+        val c = engine.compare(computer.address.toString())
+        assertEquals(listOf(Triple(unit, Compare.CONFLICT, "both books changed it since the last share")),
+                     c.differences.map { Triple(it.id, it.proposal, it.why) })
+        val outcome = apply(c, conflicts = Conflicts.LEAVE)  // Sync on Wi-Fi's
+        assertEquals(listOf(unit to SyncEngine.UNSETTLED), outcome.left)
+        assertEquals(mine, phoneState().getValue(unit).digest, "the version kept here, as it was")
+        // Asked of the owner, the same comparison is refused before any change: the sheet asks.
+        assertFailsWith<SyncFailed> { apply(engine.compare(computer.address.toString())) }
+    }
+
     @Test fun `the comparison carries each difference's names, change, part and songbooks, and the indexes waiting`() {
         computer.load(RICH)
         val gone = onPhone("Oasis", "Wonderwall")

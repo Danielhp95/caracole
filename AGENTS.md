@@ -658,7 +658,9 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     which `GET /api/peer/state` serves from sync-exchange on; `merged_kept` takes, a unit at a time, the latest of
     each side's agreement and kept answer, an agreement on a tie, the other's swapped.
   - `compare(..., kept=)`: a unit changed on neither side since is the chooser's (`KEPT_HERE`, `KEPT_THERE`), never
-    a conflict asked again; a change after it is compared as usual.
+    a conflict asked again; changed on the chooser's side alone, the chooser's still, in the usual words; changed on
+    the other side, whose version still lacks the one kept, a `CONFLICT` (`_since_kept`), never taken unasked: left
+    by a sync with no `--prefer` and by the phone's unattended one (`Conflicts.LEAVE`).
   - An agreement (`record_agreement`, given each side's whole state) drops the answer of each unit it agrees on,
     both sides' alike or both lacking it, and a base with none is written as before.
 - **Parts** (`PARTS`: library, songbooks, indexes; `part_of`, by a unit's kind; no unit is of the indexes):

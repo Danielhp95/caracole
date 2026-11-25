@@ -358,9 +358,15 @@ def test_a_conflict_kept_here_is_remembered_and_not_asked_again_at_the_next_impo
     assert [e for e in events(out.output) if e.get("event") == "unit"] == []
     assert "Nothing to take. 1 kept as they are here" in out.output
     assert load_overrides(studio.cfg.overrides_file).version == {override_key(CREEP): "key=Gm&capo=0"}
-    # a change on the file's side after the answer is the file's again
+    # a change on the file's side after the answer, which still lacks the version kept, is a conflict again: left
+    # unasked, the version kept here as it was, until the owner takes the file's
     add_version(desk.cfg.overrides_file, CREEP, "key=Em&capo=0")
-    out = run(studio, "peer", "import", "--yes", str(exported(desk, tmp_path / "3.caracole")))
+    third = exported(desk, tmp_path / "3.caracole")
+    out = run(studio, "peer", "import", "--yes", str(third))
+    assert out.exit_code == 0, out.output
+    assert "Left song/radiohead/creep: both books changed it: choose one" in out.output
+    assert load_overrides(studio.cfg.overrides_file).version == {override_key(CREEP): "key=Gm&capo=0"}
+    out = run(studio, "peer", "import", "--yes", f"--choose=there:{unit}", str(third))
     assert out.exit_code == 0, out.output
     assert load_overrides(studio.cfg.overrides_file).version == {override_key(CREEP): "key=Em&capo=0"}
     assert sync.kept_of(studio.conn, desk.id()) == {}

@@ -144,14 +144,17 @@ def compare_records() -> list[dict]:
         ("kept here, changed on neither side since: this side's", _units(a="h"), _units(a="t"), {}, {a: here}),
         ("kept there, changed on neither side since: the other's", _units(a="h"), _units(a="t"), {}, {a: there}),
         ("kept here, changed here since: this side's, as usual", _units(a="h2"), _units(a="t"), {}, {a: here}),
-        ("kept here, changed there since: the other's", _units(a="h"), _units(a="t2"), {}, {a: here}),
-        ("kept there, changed here since: this side's", _units(a="h2"), _units(a="t"), {}, {a: there}),
+        ("kept there, changed there since: the other's, as usual", _units(a="h"), _units(a="t2"), {}, {a: there}),
+        ("kept here, changed there since: a conflict", _units(a="h"), _units(a="t2"), {}, {a: here}),
+        ("kept there, changed here since: a conflict", _units(a="h2"), _units(a="t"), {}, {a: there}),
         ("kept here, changed on both sides since: a conflict", _units(a="h2"), _units(a="t2"), {}, {a: here}),
         ("kept, alike on both sides now: no difference", _units(a="x"), _units(a="x"), {}, {a: here}),
         ("kept, gone here since", {}, _units(a="t"), {}, {a: here}),
         ("kept, gone there since", _units(a="h"), {}, {}, {a: there}),
+        ("kept here, gone there since: a conflict", _units(a="h"), {}, {}, {a: here}),
         ("a lack kept here, the other's version not taken: this side's", {}, _units(a="t"), {},
          {a: (None, "t", "mine")}),
+        ("a lack kept here, changed there since: a conflict", {}, _units(a="t2"), {}, {a: (None, "t", "mine")}),
         ("a lack kept here, new here since", _units(a="h"), _units(a="t"), {}, {a: (None, "t", "mine")}),
         ("a lack kept there, new there since", _units(a="h"), _units(a="t"), {}, {a: ("h", None, "theirs")}),
         ("kept with no base at all: the kept answer still counts", _units(a="h"), _units(a="t"), None, {a: there}),
@@ -535,6 +538,10 @@ def test_the_vectors_show_what_the_design_says(conn):
     assert kept["compare", "kept there, changed on neither side since: the other's"] == [
         ["song/a", sync.THEIRS, sync.KEPT_THERE]]
     assert kept["compare", "kept, alike on both sides now: no difference"] == []
+    assert kept["compare", "kept here, changed there since: a conflict"] == [
+        ["song/a", sync.CONFLICT, "both books changed it since the last share"]]
+    assert kept["compare", "kept here, changed here since: this side's, as usual"] == [
+        ["song/a", sync.MINE, "changed here since the last share"]]
     assert kept["merged_kept", "the other side's alone: read with its two digests swapped"] == {
         "song/a": ["h", "t", "theirs"]}
     assert kept["merged_kept", "stamps compared as text, by code point: a supplementary letter after U+FF61"] == {
