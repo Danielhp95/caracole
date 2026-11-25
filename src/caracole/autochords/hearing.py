@@ -34,7 +34,9 @@ What fails is ``HearingFailed``, told apart as auto-chords tells it:
 - ``"audio"``: Whisper's own "Failed to load audio" on the mix (``transcribe.is_audio_error``, "can't read the
   audio"), alone filed as auto-chords files a file it can't read (run.py ``_unreadable``: kv
   ``autochords:failed:<song id>``), so the song is offered no transcription, nor auto-chords tried on it, until its
-  audio changes.
+  audio changes. Not filed for a caller that makes the chords all the same (``file_unreadable=False``, "Whisper
+  can't read the audio"): Whisper reads the mix through the ffmpeg program, auto-chords through its own reader, the
+  one the vocals read the mix with already, which gives its own verdict as the chords are made.
 
 Anything else is a bug, caracole's or deep in Whisper, raised as it is and filing nothing against the song. Beside the
 audio's, only nothing sung is recorded against the song.
@@ -64,6 +66,7 @@ if TYPE_CHECKING:
     from caracole.songs import Song
 
 UNREADABLE = "can't read the audio"  # the audio's failure, in the words a job says it
+WHISPER_UNREADABLE = "Whisper can't read the audio"  # the same, not filed: auto-chords' reader still to say
 WORK_PREFIX = "transcribe-"  # a Hearing's work folder under the cache, the stems in it
 # A file in each work folder, flocked by the Hearing that made it for as long as it lives: a folder whose owner's lock
 # anyone can take (its job killed: the kernel let go of it) is a killed job's, and swept.
@@ -166,9 +169,10 @@ class Hearing:
         return Vocals(audio, stem, sung_spans(stem_db[:both], mix_db[:both]), length)
 
     def words(self, conn: sqlite3.Connection, song: Song, vocals: Vocals, stamp: str, *, on_doing: Doing,
-              anyway: bool = False) -> Kept | Nothing:
+              anyway: bool = False, file_unreadable: bool = True) -> Kept | Nothing:
         """The song's words heard where its ``vocals`` say it is sung, kept as its transcript made at ``stamp``, or
-        nothing sung noted (the module docstring); ``HearingFailed`` the setup's or the audio's."""
+        nothing sung noted (the module docstring); ``HearingFailed`` the setup's or the audio's, the audio's filed
+        against the song unless ``file_unreadable`` is false."""
         from caracole.autochords.transcribe import SetupFailed, is_audio_error
         from caracole.autochords.transcript import MODEL, Transcript, keep_transcript, note_heard_nothing
         from caracole.autochords.words import Span, guard, lines_of, to_lrc, too_few_words, too_little_sung
@@ -190,9 +194,11 @@ class Hearing:
         except RuntimeError as e:
             if not is_audio_error(e):
                 raise  # a bug, deep in Whisper or in caracole: said as one, and nothing filed against the song
-            from caracole.autochords.run import _unreadable as file_unreadable
+            if not file_unreadable:  # auto-chords' own reader says, as the chords are made
+                raise HearingFailed("audio", WHISPER_UNREADABLE) from e
+            from caracole.autochords.run import _unreadable
 
-            file_unreadable(conn, song, e, stamp)
+            _unreadable(conn, song, e, stamp)
             raise HearingFailed("audio", UNREADABLE) from e
         spans = vocals.spans or [Span(0.0, vocals.length)]  # no span (``anyway`` alone gets here): the whole song
         kept, dropped = guard(heard.words, spans)

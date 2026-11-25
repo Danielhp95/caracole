@@ -98,7 +98,9 @@ class HearsWords:
     (``_still_to_hear``); before the words, its audio still the one the vocals were separated from (``_same_audio``).
     The job says whether it hears the song at all (``_why_not_heard``), and whether its words not coming fail it
     (``WORDS_FAIL_THE_JOB``): the setup's failure, the audio's and nothing sung then fail the job (``_fail``, the
-    command exits 1), else end their stage alone, nothing sung done "nothing sung was heard (why)"."""
+    command exits 1), audio Whisper can't load filed against the song; else they end their stage alone, nothing sung
+    done "nothing sung was heard (why)", and the audio's filed nothing, auto-chords' own reader giving its verdict as
+    the job makes the chords (hearing.py's ``file_unreadable``)."""
 
     WORDS_FAIL_THE_JOB = False
     hearing: Hearing
@@ -145,9 +147,10 @@ class HearsWords:
         self._same_audio()
         if (why := self._still_to_hear()) is not None:
             return "skipped", why
-        try:
+        try:  # audio Whisper can't load is filed only where the words are the job: else the chords' reader says
             heard = self.hearing.words(self.conn, self.song, self.voiced, self.run_id,
-                                       on_doing=lambda said: self._doing("words", said))
+                                       on_doing=lambda said: self._doing("words", said),
+                                       file_unreadable=self.WORDS_FAIL_THE_JOB)
         except HearingFailed as e:
             return self._not_heard(e)
         if isinstance(heard, Nothing):

@@ -23,10 +23,13 @@ serve reads into the job's stages; staged.py's ``StagedRun`` is that reporting h
   someone sings, then Whisper over the mix, kept as the song's transcript, or nothing sung noted), only once every
   lyrics site was asked and missed (transcript.py ``why_not_offered``), where this caracole can transcribe
   (``youtube_fetch.transcribe_problem``) and ``[autochords] transcribe`` is on; else vocals skipped "not
-  transcribed: why" ("not transcribed here: why" for this caracole's reason), and words "no vocals". A waiting lookup
-  goes first before each, the song checked still one for YouTube and still offered after it. Their failing here (the
-  separator, the GPU, Whisper's model) fails their stage alone, never the sheet (``WORDS_FAIL_THE_JOB``): the chords
-  are made chords-only, and the song stays offered Transcribe the lyrics.
+  transcribed: why", and words "no vocals". A site's words or instrumental verdict is said first, whatever this
+  caracole can do ("not transcribed: its lyrics are found"); only otherwise the setting off, or "not transcribed here:
+  why" for this caracole's reason, then the offer's other reasons. A waiting lookup goes first before each, the song
+  checked still one for YouTube and still offered after it. Their failing here (the separator, the GPU, Whisper's
+  model, audio Whisper can't load) fails their stage alone, never the sheet (``WORDS_FAIL_THE_JOB``), and files
+  nothing against the song: the chords are made chords-only by auto-chords' own reader, and the song stays offered
+  Transcribe the lyrics.
 - ``chords``: auto-chords for this song alone (``autochords_pending``'s ``only``), once the audio is the
   video's; a waiting lookup goes first (``_common.hand_over``), as the models take minutes. The chords go
   over the timed lyrics when their length fits the audio, else above the lyrics as a chart (merge.py), over the
@@ -84,6 +87,7 @@ STAGES = (
     ("pages", "The logbook page"),
 )
 TURNED_OFF = "not transcribed: turned off ([autochords] transcribe = false)"  # the vocals' skip, so set
+SITES_ANSWERED = ("found", "instrumental")  # a song's lyrics status once a site gave words or its verdict
 # What the chords stage says the sheet holds, by the lyrics auto-chords laid the chords over
 # (autochords/run.py's version ``raw["lyrics"]``), which caracole serve's Ready says.
 HOLDS = {
@@ -142,13 +146,17 @@ class _Sheet(HearsWords, StagedRun):
 
     def _why_not_heard(self) -> str | None:
         """Before the vocals: why the song's words aren't heard, or None to hear them. Not without the video's audio;
-        not with ``[autochords] transcribe`` off, nor where this caracole can't transcribe (``hears`` True passes
-        over both, False is off); and not unless every lyrics site was asked and missed, the lyrics stage's answer
+        not for a song a lyrics site gave words or its instrumental verdict, said first in the offer's words, whatever
+        this caracole can do (a site's lyrics on a caracole that can't transcribe are no fault of its); not with
+        ``[autochords] transcribe`` off, nor where this caracole can't transcribe (``hears`` True passes over both,
+        False is off); and not unless every lyrics site was asked and missed, the lyrics stage's answer
         (``why_not_offered``)."""
         from caracole.youtube_fetch import transcribe_reason
 
         if self.result.states.get("audio") != "done":
             return NO_AUDIO
+        if self.song.lyrics_status in SITES_ANSWERED:
+            return self._not_offered()  # "not transcribed: its lyrics are found"
         if self.hears is False or (self.hears is None and not self.cfg.autochords.transcribe):
             return TURNED_OFF
         if self.hears is None and (reason := transcribe_reason(self.cfg)) is not None:

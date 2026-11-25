@@ -162,7 +162,8 @@ def fake(tmp_path):
 def setup(cfg, fake, tmp_path, monkeypatch):
     """The config: the fake yt-dlp, no pause between its runs, model files (unread), an ntfy topic; auto-chords and
     Whisper taken to be there, with their files, and demucs-rs not: a sheet hears no words here unless its test says
-    so (``hears=True``), its vocals skipped "not transcribed here: demucs-rs is missing"."""
+    so (``hears=True``), its vocals skipped "not transcribed here: demucs-rs is missing" where no site has its lyrics
+    ("not transcribed: its lyrics are found" where one has)."""
     from caracole.config import NtfyConfig
 
     find_spec = importlib.util.find_spec
@@ -231,7 +232,7 @@ def test_a_song_new_to_the_library_gets_its_sheet_from_the_video(setup, conn, fa
     assert ends["song"] == ("done", f"added to wanted.txt, line 16; noted under [youtube]: https://www.youtube.com/watch?v={VIKINGOS}")
     assert ends["audio"] == ("done", f"downloaded Vikingos veganos (HyperFanes), https://www.youtube.com/watch?v={VIKINGOS}")
     assert ends["lyrics"] == ("done", "found, timed")
-    assert ends["vocals"] == ("skipped", "not transcribed here: demucs-rs is missing")
+    assert ends["vocals"] == ("skipped", "not transcribed: its lyrics are found")  # whatever this caracole can do
     assert ends["words"] == ("skipped", "no vocals")
     assert ends["chords"] == ("done", "chords over the lyrics")
     assert ends["pdf"] == ("done", "made")
@@ -280,6 +281,7 @@ def test_without_lyrics_on_lrclib_the_sheet_is_the_chords_alone(setup, conn, fak
     result, heard = make(setup)
     assert result.ok
     assert heard.ends()["lyrics"] == ("done", "LRCLIB has none; nor has Megalobiz; nor has AZLyrics")
+    assert heard.ends()["vocals"] == ("skipped", "not transcribed here: demucs-rs is missing")
     assert heard.ends()["chords"] == ("done", "chords only, no lyrics")
     text = auto_sheet(setup, conn, find_song(conn, result_key(conn)))
     assert "[Chords]" in text and "[Lyrics]" not in text
@@ -627,6 +629,32 @@ def test_a_sites_lyrics_skip_the_vocals_and_the_words(setup, conn, fake, sites, 
     assert ears.log == []
 
 
+@pytest.mark.parametrize("lyrics,transcribe,said", [
+    ("found", True, "not transcribed: its lyrics are found"),
+    ("found", False, "not transcribed: its lyrics are found"),
+    ("instrumental", True, "not transcribed: its lyrics are instrumental"),
+    ("none", True, "not transcribed here: demucs-rs is missing"),
+    ("none", False, "not transcribed: turned off ([autochords] transcribe = false)"),
+    ("unavailable", True, "not transcribed here: demucs-rs is missing"),
+], ids=["lyrics", "lyrics, turned off", "an instrumental", "none", "none, turned off", "LRCLIB unavailable"])
+def test_a_sites_lyrics_are_said_first_whatever_this_caracole_can_do(setup, conn, fake, sites, monkeypatch, tmp_path,
+                                                                     lyrics, transcribe, said):
+    # On a caracole that can't transcribe (no demucs-rs here), a sheet whose lyrics a site found says so, which is no
+    # fault; only a song no site has words or a verdict for says the setting, or why this caracole can't.
+    lrclib, _ = sites
+    if lyrics == "instrumental":
+        lrclib.records[:] = [{**record(200.0), "instrumental": True, "plainLyrics": None, "syncedLyrics": None}]
+    elif lyrics == "none":
+        lrclib.records.clear()
+    elif lyrics == "unavailable":
+        monkeypatch.setattr(lrclib, "handler", lambda request: httpx.Response(503, text="Service Unavailable"))
+    vikingos(fake, tmp_path)
+    result, heard = make(replace(setup, autochords=replace(setup.autochords, transcribe=transcribe)))
+    assert result.ok, result
+    assert heard.ends()["vocals"] == ("skipped", said)
+    assert heard.ends()["words"] == ("skipped", "no vocals")
+
+
 @pytest.mark.parametrize("stem,words,why,ran", [
     ([-80.0] * 1200, None, "sung 0.0 s", ["separator"]),  # no singing found: Whisper isn't run
     (None, 6, "5 words in 0:35 sung", ["separator", "transcriber"]),  # a shouted line: too few words to be lyrics
@@ -658,18 +686,23 @@ def test_nothing_sung_makes_a_chords_only_sheet_that_says_so_and_exits_0(setup, 
 @pytest.mark.parametrize("fails,stage,said,ran", [
     ("separator", "vocals", "the separator can't run here (No possible adapter)", ["separator"]),
     ("whisper", "words", "the GPU failed: OutOfMemoryError: CUDA out of memory", ["separator", "transcriber"]),
-], ids=["the separator", "the GPU"])
+    ("audio", "words", "Whisper can't read the audio", ["separator", "transcriber"]),
+], ids=["the separator", "the GPU", "audio Whisper can't load"])
 def test_a_transcription_that_fails_here_still_makes_the_chords_and_exits_0(setup, conn, fake, sites, ears, tmp_path,
                                                                             fails, stage, said, ran):
     # The setup's failure, not the song's: its stage says so, the sheet is made chords-only all the same, and the song
-    # stays offered a transcription, for Transcribe the lyrics to try again.
+    # stays offered a transcription, for Transcribe the lyrics to try again. So does audio Whisper can't load (it reads
+    # through the ffmpeg program): auto-chords reads it with its own reader, the one the vocals read it with, and files
+    # nothing against it when it can.
     from caracole.autochords import transcribe as tx
 
     nowhere(sites)
     if fails == "separator":
         ears.separator.fail = "No possible adapter"
-    else:
+    elif fails == "whisper":
         ears.transcriber.fail = tx.SetupFailed(said)
+    else:
+        ears.transcriber.fail = RuntimeError("Failed to load audio: [mov,mp4] moov atom not found")
     vikingos(fake, tmp_path)
     recognizer = Recognizer()
     result, heard = make(setup, recognizer=recognizer, ears=ears, hears=True)

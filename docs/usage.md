@@ -1594,17 +1594,19 @@ page, or run:
 - The lyrics sites are always asked first. When every one has missed, the words are heard from
   the audio, as `caracole transcribe` hears them (see [Lyrics transcribed from the
   audio](#lyrics-transcribed-from-the-audio)), and the chords are made once, over them. That
-  takes a couple of minutes more on a GPU, up to half an hour on a CPU. Otherwise `Vocals:
-  skipped: not transcribed: its lyrics are found.`, or `not transcribed here: …` where this
-  caracole can't transcribe, or `turned off` with `[autochords] transcribe = false`.
+  takes a couple of minutes more on a GPU, up to half an hour on a CPU. A song a site has
+  lyrics for says `Vocals: skipped: not transcribed: its lyrics are found.` (or `instrumental`)
+  wherever it runs. For a song no site has words for, it says `turned off` with `[autochords]
+  transcribe = false`, or `not transcribed here: …` where this caracole can't transcribe.
 - With timed lyrics, each chord goes over its word, as on Ultimate Guitar. With plain lyrics you
   get a chord chart, then the lyrics. With none, only the chart. When nothing sung was heard, the
   chart says `Instrumental: nothing sung was heard in the audio`.
 
 It exits 0 when the sheet is made, and when a block, a cooldown, a spent budget or a network
 error makes the song wait. A transcription that fails here (the separator, the GPU, Whisper's
-model) fails its own stage alone: the sheet is made with the chords only, and the song's card
-still offers Transcribe the lyrics. It exits 1 when:
+model, or `Whisper can't read the audio`) fails its own stage alone and marks nothing against
+the song: the sheet is made with the chords only, and the song's card still offers Transcribe
+the lyrics. It exits 1 when:
 
 - The song has a human sheet, is ignored, has a purchase linked, or has `"none"` under
   `[youtube]` and you gave no video. A human sheet kept, or the song ignored, while a lookup went

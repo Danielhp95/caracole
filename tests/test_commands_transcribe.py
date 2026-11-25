@@ -205,6 +205,35 @@ def test_a_transcription_that_fails_ends_saying_so_never_done_and_exits_1(tmp_pa
     assert not any(line.startswith("Done in ") for line in lines)
 
 
+def test_audio_whisper_cant_load_is_filed_and_exits_1(tmp_path, config, conn, models, monkeypatch):
+    # Its words are all this job is for: audio Whisper can't load is filed as auto-chords files a file it can't read,
+    # so the song is offered no transcription again until its audio changes (a sheet from a video files nothing).
+    from caracole.autochords.transcript import why_not_offered
+    from caracole.overrides import Overrides
+    from caracole.songs import get_song
+
+    class Undecodable:
+        def __init__(self, model_path, *, device, cache_dir):
+            self.device = device
+
+        def hear(self, mix, stem, first_sung_s, **kwargs):
+            if Path(mix).name == "test-tone.wav":
+                return tx.Heard("en", [])
+            raise RuntimeError("Failed to load audio: [mov,mp4] moov atom not found")
+
+    monkeypatch.setattr(yf, "transcribe_problem", lambda cfg: None)
+    monkeypatch.setattr(tx, "WhisperTranscriber", Undecodable)
+    cfg = load_config(config, env={})
+    song = offered(conn, cfg)
+    result = invoke(config, "--song", "Nick Cani - Vikingos veganos")
+    assert result.exit_code == 1, result.output
+    lines = result.output.splitlines()
+    assert "Words: failed: can't read the audio." in lines
+    assert lines[-1] == "No transcript made: can't read the audio."
+    assert kv_get(conn, f"autochords:failed:{song.id}") is not None
+    assert why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) == "its audio can't be read"
+
+
 def test_a_transcription_refused_at_its_chords_says_its_transcript_is_kept(tmp_path, config, conn, models,
                                                                             monkeypatch):
     # A lookup that went first before the chords kept UG's chords: the job ends there, a refusal, but the words were

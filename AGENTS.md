@@ -302,11 +302,16 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   - Its vocals and words are `HearsWords`' (transcribe_job.py, below), the owner's "transcribed by default"
     (2026-11-25): only after the lyrics stage, and only where every lyrics site missed (`_why_not_heard`:
     `why_not_offered`, "not transcribed: …"), `[autochords] transcribe` is on (`TURNED_OFF`) and this caracole can
-    transcribe (`transcribe_reason`, "not transcribed here: …"); `make_sheet(hears=)` True passes over the last two
-    (tests), False is off. After each hand-over the song still one for YouTube (`_still_for_youtube`, else a refusal)
-    and still offered (else that stage skipped, the chords over the lyrics a lookup found). `WORDS_FAIL_THE_JOB`
-    false: a failure to hear fails its own stage alone, the chords made chords-only, the command exiting 0, the song
-    still offered Transcribe the lyrics; nothing sung is the words' done "nothing sung was heard (why)".
+    transcribe (`transcribe_reason`, "not transcribed here: …"); a site's words or instrumental verdict
+    (`SITES_ANSWERED`) said first, whatever this caracole can do, the controller's ruling of 2026-11-25 (on a
+    caracole that can't transcribe, a sheet whose lyrics were found would read as a fault); `make_sheet(hears=)` True
+    passes over the setting and the machine (tests), False is off. After each hand-over the song still one for YouTube
+    (`_still_for_youtube`, else a refusal) and still offered (else that stage skipped, the chords over the lyrics a
+    lookup found). `WORDS_FAIL_THE_JOB` false: a failure to hear fails its own stage alone, the chords made
+    chords-only, the command exiting 0, the song still offered Transcribe the lyrics; audio Whisper can't load filed
+    nothing ("Whisper can't read the audio", hearing.py's `file_unreadable`: auto-chords' own reader, the one the
+    vocals read the mix with, gives its verdict as the chords are made); nothing sung is the words' done "nothing sung
+    was heard (why)".
   - `autochords_pending(only=)`, once, after the words: run.py `_make_sheet` takes the transcript; before it, the
     audio still the one the vocals separated (`_same_audio`) where they ran.
   - caracole serve's sheet from a YouTube video runs it (web/youtube_routes.py).
@@ -2031,8 +2036,10 @@ It is rows.js's, shared by both pages:
     mix ("the separator can't run here (…)"), and `SetupFailed`. The audio's (`"audio"`, "can't read the audio") is
     Whisper's own "Failed to load audio" on the mix alone (transcribe.py `is_audio_error`), filed as run.py files
     audio it can't read (`_unreadable`, kv `autochords:failed:`, transcript.py's `UNREADABLE`), which
-    `why_not_offered` reads ("its audio can't be read") until the audio changes; anything else Whisper raises is a
-    bug, raised as it is, filing nothing; and nothing sung is noted.
+    `why_not_offered` reads ("its audio can't be read") until the audio changes, unless the caller makes the chords
+    all the same (`Hearing.words(file_unreadable=False)`, a sheet from a video's: "Whisper can't read the audio",
+    nothing filed, as Whisper reads through the ffmpeg program and auto-chords through its own reader, which says);
+    anything else Whisper raises is a bug, raised as it is, filing nothing; and nothing sung is noted.
 - Which words go under the chords (run.py `_make_sheet`): a site's lyrics whenever the song has any (a site's
   verdict that it is instrumental wins too: a chart alone, the transcript kept unused), else the
   transcript of its current audio (transcript.py `transcript_of`: its own audio and mtime only), else none.

@@ -37,13 +37,13 @@ def stem(monkeypatch):
     return frames
 
 
-def hear(cfg, conn, song, *, separator=None, transcriber=None, anyway=False):
+def hear(cfg, conn, song, *, separator=None, transcriber=None, anyway=False, **words):
     """The song heard, vocals then words, by a Hearing of the fakes: the words' answer and what it said it did."""
     said: list[str] = []
     hearing = Hearing(cfg, separator=separator or Separator(), transcriber=transcriber or Transcriber())
     try:
         vocals = hearing.vocals(song, on_doing=said.append)
-        return hearing.words(conn, song, vocals, STAMP, on_doing=said.append, anyway=anyway), said
+        return hearing.words(conn, song, vocals, STAMP, on_doing=said.append, anyway=anyway, **words), said
     finally:
         hearing.close()
 
@@ -143,6 +143,18 @@ def test_a_failure_says_whose_it_is_and_only_the_audios_is_filed(conn, cfg, sepa
     assert (failed.value.kind, failed.value.words, str(failed.value)) == (kind, words, words)
     assert (kv_get(conn, f"autochords:failed:{song.id}") is not None) == (kind == "audio")
     assert noted(conn, song) is None and kv_get(conn, f"{TRANSCRIPT}{song.id}") is None
+
+
+def test_audio_whisper_cant_read_is_filed_only_where_the_caller_says(conn, cfg):
+    # Whisper reads the mix through the ffmpeg program, auto-chords through its own reader, which the vocals read it
+    # with already: a job that makes the chords all the same files nothing, and auto-chords gives its own verdict.
+    song = offered(conn, cfg)
+    with pytest.raises(HearingFailed) as failed:
+        hear(cfg, conn, song, transcriber=Transcriber(fail=RuntimeError("Failed to load audio: moov atom not found")),
+             file_unreadable=False)
+    assert (failed.value.kind, failed.value.words) == ("audio", "Whisper can't read the audio")
+    assert kv_get(conn, f"autochords:failed:{song.id}") is None
+    assert why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) is None
 
 
 def test_hearing_builds_each_model_once_a_run(conn, cfg, tmp_path, monkeypatch):
