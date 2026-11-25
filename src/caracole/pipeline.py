@@ -605,10 +605,12 @@ def _youtube(ctx: StepContext) -> StepResult:
 
 
 def _scan(ctx: StepContext) -> StepResult:
+    from caracole.audio_store import folder, tidy
     from caracole.inbox import file_inbox
     from caracole.music import scan_music
 
-    music = scan_music(ctx.conn, ctx.cfg.music_dir)
+    music = scan_music(ctx.conn, ctx.cfg.music_dir, uploads=folder(ctx.cfg))
+    tidy(ctx.conn, ctx.cfg)  # the audio files you gave caracole that no song's audio is now
     inbox = file_inbox(ctx.conn, ctx.cfg.library_dir)
     refused = len(inbox.refused)  # links in the inbox, or in its place, never read: the to-do page names them
     links = f", {plural(refused, 'symbolic link')} refused" if refused else ""

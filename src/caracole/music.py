@@ -25,6 +25,7 @@ from typing import Any
 
 from rapidfuzz import fuzz
 
+from caracole.audio_store import kept_in
 from caracole.normalize import clean_title, identity_key, name_forms
 from caracole.songs import Song, list_songs, update_song
 
@@ -221,13 +222,15 @@ def _matches(audio: Sequence[AudioFile], songs: Sequence[Song]) -> list[_Match]:
     return found
 
 
-def scan_music(conn: sqlite3.Connection, music_dir: Path) -> ScanStats:
+def scan_music(conn: sqlite3.Connection, music_dir: Path, *, uploads: Path | None = None) -> ScanStats:
     """Link purchased files to wanted songs (``songs.audio_path``); forget files that are gone.
 
     A song keeps its file while that file is one of its matches; it moves to
     a file that is the song by identity when the linked one isn't. A folder
     with no audio at all, or no folder, is taken for a disk that isn't there
-    tonight, so nothing is unlinked.
+    tonight, so nothing is unlinked. A song whose audio is a file you gave it,
+    kept in ``uploads`` (audio_store.py's folder), keeps it: no purchase takes
+    an upload's place (the owner's decision of 2026-11-25).
     """
     stats = ScanStats()
     if not music_dir.is_dir():
@@ -259,7 +262,7 @@ def scan_music(conn: sqlite3.Connection, music_dir: Path) -> ScanStats:
     for s in songs:
         mine = by_song.get(s.id, [])
         files = [m.audio for m in mine if m.exact] or [m.audio for m in mine]
-        if not files:
+        if not files or (uploads is not None and kept_in(uploads, s.audio_path) is not None):
             continue
         af = next((f for f in files if str(f.path) == s.audio_path), files[0])
         if s.audio_path != str(af.path) or s.audio_mtime != af.mtime:

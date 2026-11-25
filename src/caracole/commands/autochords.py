@@ -62,6 +62,7 @@ def register(app: typer.Typer) -> None:
         missing = missing_packages()
         if missing:
             fail(f"{NOT_BUILT} (missing: {', '.join(missing)})")
+        from caracole.audio_store import folder
         from caracole.autochords.run import autochords_pending
         from caracole.music import scan_music
 
@@ -72,7 +73,7 @@ def register(app: typer.Typer) -> None:
         with exclusive(cfg, "autochords"):
             # A track dropped in after the night's run, with the unit started by hand, is
             # linked here first.
-            music = scan_music(conn, cfg.music_dir)
+            music = scan_music(conn, cfg.music_dir, uploads=folder(cfg))
             files = "file" if music.seen == 1 else "files"
             typer.echo(f"Music: {music.seen} {files}, {music.matched} linked")
             only = {song_named(conn, song, overrides).id} if song is not None else None

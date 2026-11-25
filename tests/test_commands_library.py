@@ -585,6 +585,19 @@ def test_scan_rewrites_the_pages_holding_the_lock(tmp_path, monkeypatch):
     assert get_song(conn, sid).audio_path is not None and "斑马斑马" in page.read_text(encoding="utf-8")
 
 
+def test_scan_leaves_a_songs_own_audio_file_as_it_is(tmp_path):
+    # A file you gave the song (audio_store.py) is its audio: no purchase takes its place.
+    from helpers.audio_files import given
+
+    conn, sid = seed(tmp_path)
+    mine = given(conn, tmp_path / "state", get_song(conn, sid), "MP3")
+    (tmp_path / "music").mkdir()
+    (tmp_path / "music" / "宋冬野 - 斑马斑马.mp3").write_bytes(b"not audio")
+    result = run(tmp_path, "scan")
+    assert result.exit_code == 0, result.output
+    assert get_song(conn, sid).audio_path == str(mine)
+
+
 @pytest.mark.parametrize("folder, said", [(None, "is missing"), ("empty", "has no audio files")])
 def test_scan_says_why_it_unlinked_nothing(tmp_path, folder, said):
     # A Music/ folder missing or without audio is taken for a disk that isn't mounted tonight.

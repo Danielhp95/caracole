@@ -57,7 +57,7 @@ Below the table, a section for each step whose modules have more to say.
 | fetch | ug/fetch.py, ug/page.py, ug/artist.py, ug/artist_tabs.py, rank.py, coverage.py, versions.py, sheet_versions.py |
 | lacuerda | lacuerda.py, lacuerda_fetch.py, lacuerda_index.py, lacuerda_search.py |
 | ireal | ireal.py, ireal_fetch.py, ireal_index.py |
-| scan | music.py (Music/), inbox.py (`_inbox/`), musicxml.py |
+| scan | music.py (Music/), inbox.py (`_inbox/`), musicxml.py, audio_store.py (`tidy`) |
 | gtptabs | gtptabs.py (URLs, parsing), gtptabs_fetch.py (the step) |
 | harptabs | harptabs.py, harptabs_fetch.py, harptabs_index.py |
 | gametabs | gametabs.py, gametabs_fetch.py, gametabs_index.py |
@@ -592,6 +592,7 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 | provider_pass.py | one song at a time through a provider (`each_song`, `PassStats`): the lyrics, LaCuerda, gtptabs.com and YouTube passes share its ladder of errors that are never misses, and name the songs an error left (`failures`) |
 | keys.py | a song's musical key and where it came from (below) |
 | removal.py | `caracole remove` and the web page's Remove; the tombstones it leaves are songs.py's |
+| audio_store.py | the audio files you give caracole for a song, in `state_dir/audio/` (0700, each file 0600): an upload staged by its 16-hex id (`stage`, `staged`, `drop`, `sweep`, one no job names at a time), a song's own `<song id>-<sha256 16 hex><ext>` (`keep`, `uploaded`), what no song names deleted (`tidy`, the scan step's); the format from the bytes (`sniff`, `FORMATS`), then mutagen's read, imported inside; an upload always wins, the owner's decision of 2026-11-25: `keep` replaces a purchase (its file in Music/ stays) or YouTube's audio, and `music.scan_music(uploads=)` links no purchase over it |
 | sites.py | the library page's Sites tab's data (below) |
 | progress.py | a command's output: a live line on a terminal, plain lines elsewhere, fitted in display columns of the stream's own width; `Ticker` (`ticker()`), what long work is doing as it goes: a live line on stderr on a terminal at the default verbosity alone, off for good once a write fails, a `caracole.progress` line a minute, the unit's status line (`systemd_status`, sd_notify `STATUS=`, where `$NOTIFY_SOCKET` is set); `Requests`, a client's requests against its budget (`make_client(ticker=)`, `make_youtube(ticker=)`, its runs with no time left); `Counted`, work of a known size (`directory_pass(progress=)`, `render.rendering`); a staged job by hand (`caracole transcribe`, `youtube --sheet`) its long stages' running details on one (commands/get.py `_Lines(ticker=)`, none with `--progress`, nor for `caracole get`); they only count, never pace |
 | staged.py | a job of stages over one song, each reported as a lookup's stages are, run in order under the lock as asked for now (`StagedRun`: `_run`, `stage`, `_fail`, `_after_a_lookup`, `_song_again`, `_refuse`; the stages both jobs end with, `_autochords_sheet`, `pdf`, `pages`; `StagedResult`; the command's last lines, `_common.staged_end`): youtube_sheet.py's and transcribe_job.py's |
@@ -4032,14 +4033,16 @@ picks one).
 - Write one with `library.write_atomic`: a random temporary name opened exclusively, then a rename. Never `mkstemp`,
   whose mode 0600 hides files from Syncthing.
 - Nothing private or bulky goes there: the database, the lock, caracole serve's request history (`requests.jsonl`,
-  0600), the HTTP cache and the audio taken from YouTube (`cache_dir/youtube/`, youtube_fetch.py) stay in `state_dir`
-  and `cache_dir`, and chordpro works on a copy in a 0700 folder under the cache (render.py).
+  0600), the HTTP cache, the audio taken from YouTube (`cache_dir/youtube/`, youtube_fetch.py) and the audio files you
+  give caracole (`state_dir/audio/`, audio_store.py) stay in `state_dir` and `cache_dir`, and chordpro works on a copy
+  in a 0700 folder under the cache (render.py).
   tests/test_library_safety.py.
 - A removal deletes only what caracole wrote in the song's folder, by name, through descriptors opened with
   `O_NOFOLLOW` from the library down, and names everything it leaves:
   - `removal._caracoles`: kept files, the outputs of a kept sheet (its Traditional PDF among them) or of a render
     record, its exports, a version's or a harmonica tab's page `render:files:` records, LRCLIB's lyrics, info.json;
-  - it never touches Music/, and deletes the song's audio taken from YouTube from the cache (tests/test_removal.py).
+  - it never touches Music/, and deletes the song's audio taken from YouTube from the cache and the audio file you
+    gave it from `state_dir/audio/` (tests/test_removal.py).
 
 ### One caracole at a time
 

@@ -1144,6 +1144,28 @@ def test_default_scan_step_says_how_many_links_the_inbox_refused(conn, cfg, tmp_
     assert _scan(ctx).status == "0 purchases linked, 0 Guitar Pro files filed, 2 symbolic links refused"
 
 
+def test_the_scan_step_keeps_a_songs_own_audio_file_and_lets_go_of_one_no_song_names(conn, cfg):
+    # audio_store.py's files: a purchase the scan finds never takes an upload's place, and tidy deletes the rest.
+    from conftest import add_song
+    from helpers.audio_files import given, write
+
+    from caracole.overrides import Overrides
+    from caracole.pipeline import StepContext, _scan
+    from caracole.songs import get_song
+
+    song = add_song(conn, "Radiohead", "Creep", duration_ms=None)
+    gone = add_song(conn, "Oasis", "Wonderwall", duration_ms=None)
+    mine = given(conn, cfg.state_dir, song, "FLAC")
+    left = given(conn, cfg.state_dir, gone, "MP3")
+    conn.execute("DELETE FROM songs WHERE id = ?", (gone.id,))  # a song merged into another, say
+    write(cfg.music_dir / "Radiohead - Creep.wav", "WAV", artist="Radiohead", title="Creep")
+    ctx = StepContext(cfg=cfg, conn=conn, overrides=Overrides(), now=NOW, run_id="r", services=services(Outbox()),
+                      report=RunReport(run_id="r", started="r"))
+    _scan(ctx)
+    assert get_song(conn, song.id).audio_path == str(mine) and mine.exists()
+    assert not left.exists()
+
+
 def test_fetch_summary_counts_settled_sheets(conn, cfg, monkeypatch):
     import caracole.ug.fetch as fetch
     from caracole.overrides import Overrides
