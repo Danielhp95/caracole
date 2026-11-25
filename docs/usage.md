@@ -1627,13 +1627,13 @@ or a purchase, makes the sheet again.
 
 ### Lyrics transcribed from the audio
 
-For a song whose audio came from YouTube and that no lyrics site has words for, caracole can hear
+For a song with audio of its own (taken from YouTube, or a purchase) that no lyrics site has words for, caracole can hear
 the words itself, with Whisper large-v3, and make the auto sheet again with the chords over them:
 
     caracole transcribe --song "Nick Cani - Vikingos veganos"
 
 It never adds a song to wanted.txt, and it takes only a song that is offered a transcription.
-That is a song with audio from YouTube that caracole can read, no human sheet, not ignored,
+That is a song with audio caracole can read, no human sheet, not ignored,
 lyrics missing at every lyrics site you have switched on, and not transcribed yet.
 
 - demucs-rs separates the vocals, to find where someone sings. Whisper then hears the whole song.
@@ -1655,7 +1655,7 @@ It exits 0 once the sheet is made, and 1 otherwise:
 
 | It says | What happened | The song afterwards |
 |---|---|---|
-| `caracole transcribes nothing here: …` | This caracole can't transcribe: no Whisper, auto-chords, yt-dlp, demucs-rs or model file, or YouTube is off. | Unchanged. |
+| `caracole transcribes nothing here: …` | This caracole can't transcribe: no Whisper, auto-chords, demucs-rs or model file, or a CUDA build on a machine that doesn't see the GPU. YouTube and yt-dlp aren't needed. | Unchanged. |
 | `No transcript made: …` | The song isn't offered one or isn't in the book. Or, during the job, its lyrics were found, it got a human sheet or was ignored, its audio changed or it was removed. | Unchanged. |
 | `Transcript kept; no sheet made: …` | The words were heard and kept, but before the chords the song got a human sheet, was ignored or found its lyrics, or the chords then failed. | Its transcript is kept, unused while it has a human sheet or lyrics; after a failure, Try again makes the sheet over it. |
 | `Transcript and sheet kept: a bug in caracole …` | The sheet over the transcript was made, then caracole hit a bug. | Both are kept. |

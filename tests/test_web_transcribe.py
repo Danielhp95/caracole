@@ -167,9 +167,16 @@ def test_a_song_not_offered_is_refused_with_its_reason(able, queue, conn, tmp_pa
     bought = add_song(conn, "Estopa", "Como Camarón")
     response = post(app_for(able, queue), {"song": str(bought.id), "identity": bought.key})
     assert response.status == 409
-    assert answer(response)["error"] == ("Estopa - Como Camarón isn't offered a transcription: its audio isn't from "
-                                         "YouTube.")
+    assert answer(response)["error"] == ("Estopa - Como Camarón isn't offered a transcription: it has no audio.")
     assert queue.snapshot() == []
+
+
+def test_a_purchases_song_is_accepted_once_offered(able, queue, conn, tmp_path):
+    song = youtube_song(conn, tmp_path, "Estopa", "Como Camarón")
+    conn.execute("DELETE FROM kv WHERE key = ?", (f"youtube:{song.id}",))  # a purchase: audio, no YouTube record
+    response = post(app_for(able, queue), {"song": str(song.id), "identity": song.key})
+    assert response.status == 200, response.body
+    assert len(queue.snapshot()) == 1
 
 
 def test_a_song_the_library_hasnt_or_another_by_its_id_is_refused(able, queue, conn, tmp_path):

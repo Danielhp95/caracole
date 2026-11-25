@@ -1,6 +1,6 @@
 """A song's transcript, kept apart from its lyrics, and which songs are offered one.
 
-Whisper's words from a YouTube song's audio (when no lyrics site has the song's) are kept in kv
+Whisper's words from a song's own audio (YouTube's or a purchase's) (when no lyrics site has the song's) are kept in kv
 ``transcript:<song id>``, never in ``songs.lyrics_json``: a site's lyrics always win, the transcript stays
 kept, unused while the song has lyrics, and goes with the song (songs._PER_SONG_KV). It is the song's only while
 its ``audio`` and ``audio_mtime`` are the song's own: other audio (another video pasted, a purchase dropped into
@@ -25,7 +25,6 @@ from caracole.db import kv_delete, kv_get, kv_get_json, kv_set_json
 from caracole.library import kept_files
 from caracole.overrides import Overrides
 from caracole.songs import HUMAN_SHEET, Song, list_songs
-from caracole.youtube_fetch import youtube_audio
 
 TRANSCRIPT = "transcript:"  # + song id: the Transcript kept for the song's audio
 HEARD_NOTHING = "transcribe:none:"  # + song id: when the song's audio was transcribed to nothing
@@ -108,10 +107,13 @@ def unreadable(conn: sqlite3.Connection, song: Song) -> bool:
     return isinstance(kept, dict) and _own_audio(song, kept.get("audio"), kept.get("audio_mtime"))
 
 
-def why_not_offered(conn: sqlite3.Connection, cfg: Config, song: Song, overrides: Overrides) -> str | None:
-    """None when the song is due for an offer of a transcript, else one short reason."""
-    if youtube_audio(conn, song) is None:
-        return "its audio isn't from YouTube"
+def why_not_offered(conn: sqlite3.Connection, cfg: Config, song: Song, overrides: Overrides, *,
+                    anyway: bool = False) -> str | None:
+    """None when the song is due for an offer of a transcript, else one short reason. Any audio of the song's own
+    counts, a purchase's as well as YouTube's; the lyrics sites always come first. ``anyway`` passes over a song
+    noted as heard to have nothing sung, and nothing else."""
+    if not song.audio_path:
+        return "it has no audio"
     if not Path(song.audio_path or "").is_file():
         return "its audio file is missing"
     if unreadable(conn, song):
@@ -129,7 +131,7 @@ def why_not_offered(conn: sqlite3.Connection, cfg: Config, song: Song, overrides
             return f"{provider} hasn't been asked"
     if transcript_of(conn, song) is not None:
         return ALREADY_TRANSCRIBED
-    if heard_nothing(conn, song):
+    if not anyway and heard_nothing(conn, song):
         return "nothing sung was heard"
     return None
 

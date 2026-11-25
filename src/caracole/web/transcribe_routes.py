@@ -1,4 +1,4 @@
-"""caracole serve's lyrics transcribed from a song's audio: a YouTube song every lyrics site missed, its words heard
+"""caracole serve's lyrics transcribed from a song's audio: a song with audio of its own that every lyrics site missed, its words heard
 from the audio now, and its auto sheet made again over them.
 
     POST /transcribe      a song's lyrics transcribed from its audio (``song``, its id, and its ``identity``: its
@@ -19,8 +19,8 @@ how it goes, its stages as steps (outcome.py ``TRANSCRIBE_STEPS``).
 
 Refused, with nothing queued (``pages.Refused``): a caracole that transcribes nothing
 (``youtube_fetch.transcribe_reason``, 409, in its words: no auto-chords, no Whisper, a model file or demucs-rs
-missing, as the library page then offers it on no card), and a song not offered a transcription (409, in
-``transcript.why_not_offered``'s words: its audio isn't from YouTube, a lyrics site has its lyrics or hasn't been
+missing, a CUDA build without its GPU, as the library page then offers it on no card), and a song not offered a transcription (409, in
+``transcript.why_not_offered``'s words: it has no audio, a lyrics site has its lyrics or hasn't been
 asked, it was transcribed already…), as the command refuses it again when it runs (the library may change while it
 waits).
 """

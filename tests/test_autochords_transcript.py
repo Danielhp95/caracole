@@ -98,7 +98,7 @@ def _human_sheet(conn, cfg, song):
     keep_file(conn, cfg.library_dir, song=song, version_id=vid, name="sheet.txt", data=b"[ch]G[/ch]\nHi", rank=1)
 
 
-@pytest.mark.parametrize("what", ["pending", "found", "instrumental", "human", "ignored", "overridden", "bought"])
+@pytest.mark.parametrize("what", ["pending", "found", "instrumental", "human", "ignored", "overridden"])
 def test_no_offer_for_pending_or_found_or_instrumental_lyrics_a_human_sheet_an_ignored_song_or_bought_audio(
         conn, cfg, tmp_path, what):
     song = youtube_song(conn, tmp_path)
@@ -111,9 +111,34 @@ def test_no_offer_for_pending_or_found_or_instrumental_lyrics_a_human_sheet_an_i
         update_song(conn, song.id, status="ignored")
     elif what == "overridden":
         overrides = Overrides(ignore=frozenset({song.key}))
-    else:
-        conn.execute("DELETE FROM kv WHERE key = ?", (f"youtube:{song.id}",))
     assert tr.why_not_offered(conn, cfg, get_song(conn, song.id), overrides)
+
+
+def test_a_purchase_is_offered_a_transcription(conn, cfg, tmp_path):
+    song = youtube_song(conn, tmp_path)
+    conn.execute("DELETE FROM kv WHERE key = ?", (f"youtube:{song.id}",))  # audio that isn't from YouTube
+    assert tr.why_not_offered(conn, cfg, song, Overrides()) is None
+    assert song.id in tr.offered_song_ids(conn, cfg, Overrides())
+
+
+def test_a_song_with_no_audio_isnt_offered(conn, cfg, tmp_path):
+    song = add_song(conn, "A", "T")
+    update_song(conn, song.id, lyrics_status="missing", lyrics_at="2026-11-01T00:00:00Z")
+    kv_set(conn, f"megalobiz:checked:{song.id}", "2026-11-01T00:00:00Z")
+    kv_set(conn, f"azlyrics:checked:{song.id}", "2026-11-01T00:00:00Z")
+    assert tr.why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) == "it has no audio"
+
+
+def test_anyway_passes_over_nothing_sung_and_nothing_else(conn, cfg, tmp_path):
+    song = youtube_song(conn, tmp_path)
+    tr.note_heard_nothing(conn, song, "2026-11-20T00:00:00Z", why="sung 2 s", by="caracole")
+    assert tr.why_not_offered(conn, cfg, song, Overrides()) == "nothing sung was heard"
+    assert tr.why_not_offered(conn, cfg, song, Overrides(), anyway=True) is None
+    update_song(conn, song.id, lyrics_status="found")  # the sites come first, forced or not
+    assert tr.why_not_offered(conn, cfg, get_song(conn, song.id), Overrides(), anyway=True)
+    update_song(conn, song.id, lyrics_status="missing")
+    tr.keep_transcript(conn, song, made(song))
+    assert tr.why_not_offered(conn, cfg, song, Overrides(), anyway=True) == tr.ALREADY_TRANSCRIBED
 
 
 def test_a_song_whose_audio_file_is_gone_is_not_offered(conn, cfg, tmp_path):
