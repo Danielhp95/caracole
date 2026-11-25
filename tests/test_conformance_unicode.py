@@ -706,7 +706,8 @@ def _caracole_patterns() -> list[re.Pattern]:
     names = ["_APOSTROPHES", "_SPLIT", "_CJK", "_HAN", "_DASH_SUFFIX", "_PAREN_FEAT", "_PAREN_SUFFIX",
              "_ACOUSTIC_WORD", "_LIVE_WORD", "_PART_BREAK", "_FEATURING", "_BRACKETED", "_MORA"]
     out = [getattr(normalize, n) for n in names]
-    out += [getattr(song_names, n) for n in ("_MARK", "_BY", "_YEAR", "_BRACKETS", "_TOPIC", "_LABEL")]
+    out += [getattr(song_names, n) for n in ("_MARK", "_BY", "_YEAR", "_GROUPS", "_TOPIC", "_LABEL", "_CJK", "_PIECE",
+                                             "_CJK_GAP", "_CJK_NOISE_PHRASE")]
     return out
 
 
@@ -719,6 +720,9 @@ NAMES = [
     "Ojitos Lindos - ACÚSTICO", "Hello / Adele", "Café Tacvba | Eres", "Desert Rose ~ Sting", "Kanpai // Kotaro",
     "Sakura sakura", "Tsunami", "Konnichiwa", "Shinkansen", "Kitte", "Matcha", "Ninja", "Itto", "ΚΑΛΗΜΕΡΑ ΣΑΣ",
     "Straße — Live", "İstanbul (Live)", "ΚΕΛΒΙΝ k\u212a", "x\u0301 (acústica)", "Dancing Queen – Single Version",
+    "孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』",
+    "林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)", "[MV] IU(아이유) _ Blueming(블루밍)",
+    "《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）", "\U00020000\U0002ebef \U0002ebf0",
 ]
 
 

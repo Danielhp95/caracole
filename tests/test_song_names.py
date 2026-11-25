@@ -47,6 +47,112 @@ def test_a_text_loses_what_a_videos_title_adds_to_a_songs_name(text, cleaned):
     assert clean(text) == cleaned
 
 
+# The owner's 野人 of 2026-11-25 and its kin: titles of Chinese, Japanese and Korean lyric channels, which put their
+# own words and a line of the song's lyrics in brackets around its name.
+@pytest.mark.parametrize("text,cleaned", [
+    ("孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』", "孟维来 - 野人"),
+    ("毛不易 - 消愁「当你走进这欢乐场 背上所有的梦与想」【動態歌詞Lyrics】", "毛不易 - 消愁"),
+    ("【抖音】海来阿木 - 别知己【动态歌词】", "海来阿木 - 别知己"),
+    ("【純音樂】久石讓 - Summer", "久石讓 - Summer"),
+    ("林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版MV)", "林俊傑 JJ Lin - 修煉愛情 Practice Love"),
+    ("周杰倫 Jay Chou【告白氣球 Love Confession】Official MV", "周杰倫 Jay Chou【告白氣球 Love Confession】"),
+    ("告五人 Accusefive【愛人錯過 Somewhere in Time】Official Music Video", "告五人 Accusefive【愛人錯過 Somewhere in Time】"),
+    ("薛之谦 Joker Xue【演员】官方完整版 MV", "薛之谦 Joker Xue【演员】"),
+    ("《起风了》买辣椒也用券【动态歌词/Pinyin Lyrics】", "《起风了》买辣椒也用券"),
+    ("《孤勇者》陈奕迅 (动态歌词版)", "《孤勇者》陈奕迅"),
+    ("周深 Zhou Shen《大鱼》Big Fish「动态歌词Lyrics」", "周深 Zhou Shen《大鱼》Big Fish"),
+    ("G.E.M.【光年之外 LIGHT YEARS AWAY】MV (電影《太空潛航者 Passengers》中文主題曲)[HD] 鄧紫棋",
+     "G.E.M.【光年之外 LIGHT YEARS AWAY】MV (電影《太空潛航者 Passengers》中文主題曲) 鄧紫棋"),
+    ("YOASOBI「夜に駆ける」Official Music Video", "YOASOBI「夜に駆ける」"),
+    ("米津玄師 MV「Lemon」", "米津玄師 MV「Lemon」"),
+    ("宋冬野「斑马，斑马」", "宋冬野「斑马，斑马」"),
+    ("野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』", "野人"),
+    ("[MV] IU(아이유) _ Blueming(블루밍)", "IU(아이유) _ Blueming(블루밍)"),
+    ("[MV] BTS(방탄소년단) _ Dynamite", "BTS(방탄소년단) _ Dynamite"),
+])
+def test_a_cjk_lyric_videos_title_loses_its_channels_words_and_its_quoted_lyrics(text, cleaned):
+    assert clean(text) == cleaned
+
+
+@pytest.mark.parametrize("text,cleaned", [
+    # A sentence: it ends as one (。！？…), a space parts two CJK characters in it, or it is longer than LYRIC_CHARS.
+    ("野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』", "野人"),
+    ("消愁「当你走进这欢乐场 背上所有的梦与想」", "消愁"),
+    ("海阔天空「原谅我这一生不羁放纵爱自由！」", "海阔天空"),
+    ("晴天「为什么？」", "晴天"),
+    ("晴天「我想你…」", "晴天"),
+    ("消愁「当你走进这欢乐场背上所有的梦与想啊」", "消愁"),  # 17 characters
+    ("消愁「当你走进这欢乐场背上所有的梦与想」", "消愁「当你走进这欢乐场背上所有的梦与想」"),  # 16: a title's length
+    # Wherever it is: before the song's name, between it and a word of the song's own.
+    ("『不再借世人的手 替我开脱。』孟维来 - 野人", "孟维来 - 野人"),
+    ("孟维来 - 野人『不再借世人的手 替我开脱。』 Live", "孟维来 - 野人 Live"),
+    # A short quote is a title; so is a quote of the whole text; a space beside a Latin word parts no sentence.
+    ("宋冬野「斑马，斑马」", "宋冬野「斑马，斑马」"),
+    ("YOASOBI「夜に駆ける」", "YOASOBI「夜に駆ける」"),
+    ("周杰倫「告白 Love」", "周杰倫「告白 Love」"),
+    ("『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』", "不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。"),
+    # Only 「」 and 『』 quote a lyric.
+    ("消愁《当你走进这欢乐场 背上所有的梦与想》", "消愁《当你走进这欢乐场 背上所有的梦与想》"),
+    ("消愁 (当你走进这欢乐场 背上所有的梦与想)", "消愁 (当你走进这欢乐场 背上所有的梦与想)"),
+])
+def test_a_quoted_lyric_goes_wherever_it_is_but_a_short_quote_is_a_title(text, cleaned):
+    assert clean(text) == cleaned
+
+
+@pytest.mark.parametrize("text,cleaned", [
+    # A group holding CJK goes once noise covers two thirds of its letters (CJK characters and Latin letters).
+    ("林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版MV)",
+     "林俊傑 JJ Lin - 修煉愛情 Practice Love"),  # 20 of 22
+    ("《孤勇者》陈奕迅 (动态歌词版)", "《孤勇者》陈奕迅"),
+    ("野人『动态歌词MV』", "野人"),
+    ("消愁【動態歌詞Lyrics】", "消愁"),
+    ("【抖音】别知己", "别知己"),
+    ("【純音樂】Summer", "Summer"),
+    ("晴天 (官方 MV 现场)", "晴天"),  # 4 of 6: two thirds
+    ("晴天 (官方 现场版)", "晴天 (官方 现场版)"),  # 3 of 5
+    ("一点点 (Cover 葛東琪)", "一点点 (Cover 葛東琪)"),  # none of it
+    ("夜に駆ける (公式 歌詞付き)", "夜に駆ける"),
+    ("夜に駆ける [フル]", "夜に駆ける"),
+    ("밤편지 [가사]", "밤편지"),
+    ("Dynamite (공식 뮤직비디오)", "Dynamite"),
+    # A group of Latin words alone: every word a video's, one strong among them, a lyric channel's beside them too.
+    ("Bohemian Rhapsody (Karaoke Version)", "Bohemian Rhapsody"),
+    ("Creep [8D Audio]", "Creep"),
+    ("起风了 (Pinyin Lyrics)", "起风了"),
+    ("晴天 [KTV]", "晴天"),
+    ("Creep (Live Version)", "Creep (Live Version)"),
+])
+def test_cjk_noise_goes_by_its_share_of_the_group(text, cleaned):
+    assert clean(text) == cleaned
+
+
+@pytest.mark.parametrize("text,cleaned", [
+    ("Song （Official Video）", "Song"),
+    ("Song ［Official Audio］", "Song"),
+    ("晴天〈官方MV〉", "晴天"),
+    ("晴天〖动态歌词〗", "晴天"),
+    ("晴天〔高清〕", "晴天"),
+    ("晴天《动态歌词》", "晴天"),
+    ("南山南（feat. 宋冬野）", "南山南（feat. 宋冬野）"),  # as written
+    ("Song (Official Video】", "Song (Official Video】"),  # "(" closes on ")" alone
+])
+def test_each_bracket_closes_on_its_own_mark(text, cleaned):
+    assert clean(text) == cleaned
+
+
+@pytest.mark.parametrize("text,cleaned", [
+    # A group's edges are word edges for the words loose at the end: "Official MV" after "】" goes, as after a space.
+    ("周杰倫 Jay Chou【告白氣球 Love Confession】Official MV", "周杰倫 Jay Chou【告白氣球 Love Confession】"),
+    ("Hysteria [Live]HD", "Hysteria [Live]"),
+    # A lyric channel's words are a video's there too: 官方完整版 is made of them alone.
+    ("薛之谦 Joker Xue【演员】官方完整版 MV", "薛之谦 Joker Xue【演员】"),
+    ("薛之谦 - 演员 官方完整版 MV", "薛之谦 - 演员"),
+    ("周杰倫 - 晴天 高清 HD", "周杰倫 - 晴天"),
+])
+def test_words_glued_to_a_bracket_are_words(text, cleaned):
+    assert clean(text) == cleaned
+
+
 @pytest.mark.parametrize("channel,expected", [
     ("Radiohead - Topic", "Radiohead"), ("AdeleVEVO", "Adele"), ("EstopaVEVO", "Estopa"), ("Queen Official", "Queen"),
     ("Shakira Oficial", "Shakira"), ("Nick Cani", "Nick Cani"), ("VEVO", "VEVO"), ("", ""),
@@ -98,8 +204,25 @@ def test_a_videos_title_noise_goes_before_its_parts_are_read(conn):
     ("Queen - “Bohemian Rhapsody”", "Queen Official", ("Queen", "Bohemian Rhapsody")),
     # The owner's second example: the artist's own upload, an em dash, a Visualizer: never "Silvana" and "Estrada".
     ("Silvana Estrada — Qué Problema (Visualizer)", "Silvana Estrada", ("Silvana Estrada", "Qué Problema")),
+    # Lyric channels' uploads: their words and a line of the lyrics in brackets, never the song's.
+    ("孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』", "雲夢music", ("孟维来", "野人")),
+    ("毛不易 - 消愁「当你走进这欢乐场 背上所有的梦与想」【動態歌詞Lyrics】", "火星電台", ("毛不易", "消愁")),
+    ("【抖音】海来阿木 - 别知己【动态歌词】", "抖音", ("海来阿木", "别知己")),
+    ("【純音樂】久石讓 - Summer", "純音樂", ("久石讓", "Summer")),
+    ("林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版MV)", "華納音樂 Warner Music Taiwan",
+     ("林俊傑 JJ Lin", "修煉愛情 Practice Love")),
 ])
 def test_a_videos_title_of_two_parts_is_its_artist_and_its_song(conn, title, channel, expected):
+    assert read_names(conn, title, channel=channel) == expected
+
+
+@pytest.mark.parametrize("title,channel,expected", [
+    ("[MV] IU(아이유) _ Blueming(블루밍)", "1theK (원더케이)", ("IU(아이유)", "Blueming(블루밍)")),
+    ("[MV] BTS(방탄소년단) _ Dynamite", "1theK (원더케이)", ("BTS(방탄소년단)", "Dynamite")),
+    ("Hot_Chip - Over and Over", "Hot Chip", ("Hot_Chip", "Over and Over")),  # one inside a word parts nothing
+])
+def test_an_underscore_between_spaces_parts_the_text(conn, title, channel, expected):
+    # 1theK's uploads: " _ " is a mark, as " | " is.
     assert read_names(conn, title, channel=channel) == expected
 
 
@@ -256,6 +379,7 @@ def test_an_artist_of_yours_of_two_words_or_more_is_known_however_few_their_song
     ("Rosalía - DESPECHÁ (Official Video)", "RosaliaVEVO", ("Rosalía", "DESPECHÁ")),
     ("Soda Stereo - De Música Ligera (Video Oficial)", "Soda Stereo", ("Soda Stereo", "De Música Ligera")),
     ("Stand by Me", "Ben E. King - Topic", ("Ben E. King", "Stand by Me")),
+    ("野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』", "孟维来", ("孟维来", "野人")),  # a lyric quoted goes
     ("", "", ("", "")),
     ("(Official Video)", "Oasis", ("Oasis", "")),
 ])

@@ -11,18 +11,30 @@ Those paths, each reading names here and nowhere else (no page splits a text its
 - ``caracole add TEXT`` and ``caracole get TEXT`` (commands/_common.py ``read_song_text``). Two arguments, ``caracole
   add ARTIST TITLE``, are the names themselves, never read.
 
-**The text, cleaned** (``clean``): its spaces folded; a bracket made only of a video's words ("(Official Video)",
-"[Videoclip Oficial]", "(Letra)", "(Visualizer)", "【MV】", a year beside them too) goes, then a last part of such words
-after a mark ("… | Official Video"), then such words loose at its end, two or more ("… Official Video", "… Con Letra")
-or one of a format's ("HD", "4K", "MV"), and quotes around it. The song's own words stay: "(feat. …)", "(En Vivo)", a
-title that ends with one such word ("Radio Video"). Its case, accents and marks are kept as written.
+**The text, cleaned** (``clean``): its spaces folded; then, of its groups, each bracket pair closed by its own mark
+(( ) [ ] （ ） ［ ］ 【 】 「 」 『 』 《 》 〈 〉 〖 〗 〔 〕), these go wherever they are:
+
+- a group of a video's words: of Latin words, every one a video's with one strong among them ("(Official Video)",
+  "[Videoclip Oficial]", "(Letra)", "(Visualizer)", "(Karaoke Version)", "【MV】", a year beside them too); holding CJK,
+  two thirds of its letters (CJK characters, Latin letters and digits) a video's or a lyric channel's (``_CJK_NOISE``:
+  "『动态歌词MV』", "【抖音】", "(華納 official 高畫質 HD 官方完整版MV)", 20 of 22; never "(Cover 葛東琪)");
+- a lyric quoted in 「」 or 『』, a sentence (ending in 。！？…, a space between two CJK characters, or longer than
+  ``LYRIC_CHARS``), unless it is the whole text: "野人『不再借世人的手 替我开脱，…也能够耐住寂寞。』" is 野人, and
+  "宋冬野「斑马，斑马」" stays.
+
+Then a last part of a video's words after a mark ("… | Official Video"), then such words loose at its end, two or more
+("… Official Video", "… Con Letra", "… 官方完整版 MV": a run of a lyric channel's words is one of them) or one of a
+format's ("HD", "4K", "MV"), a group's edges being word edges ("…Love Confession】Official MV"), and quotes around it.
+The song's own words stay: "(feat. …)", "(En Vivo)", a title that ends with one such word ("Radio Video"). Its case,
+accents and marks are kept as written.
 
 **The rules, in order** (the first that reads the cleaned text names the song):
 
-1. **Two parts.** "A - B" (an en or em dash, "|", "~" or "//" too, with a space on each side, at the first such mark)
-   with a word on each side is the artist A and the title B, whoever they are, as wanted.txt reads a line ("Silvana
-   Estrada – Que problema"; "Muse - Hysteria - Live" is "Hysteria - Live" by Muse); turned round when B is a known
-   artist and A isn't, as in a fan's upload ("Somos vikingos veganos - Hyperfanes", once Hyperfanes is known).
+1. **Two parts.** "A - B" (an en or em dash, "|", "~", "//" or "_" too, with a space on each side, at the first such
+   mark) with a word on each side is the artist A and the title B, whoever they are, as wanted.txt reads a line
+   ("Silvana Estrada – Que problema"; "Muse - Hysteria - Live" is "Hysteria - Live" by Muse; "IU(아이유) _
+   Blueming(블루밍)"); turned round when B is a known artist and A isn't, as in a fan's upload ("Somos vikingos
+   veganos - Hyperfanes", once Hyperfanes is known).
 2. **A known artist first, or after " by ".** The longest run of the first words that is a known artist's whole name
    is the artist, the rest the title ("silvana estrada que problema"; never a name that ends with a word names leave
    out, ``identity_key``: "Joaquín Sabina y nos dieron las diez"); or the words after the last " by " are, those before
@@ -72,7 +84,8 @@ if TYPE_CHECKING:
     from caracole.songs import Song
 
 ONE_WORD_ARTIST = 5  # a one-word name is an index's artist with this many songs there, or a credible one of yours
-_MARK = re.compile(r"\s+(?:-|–|—|\||~|//)\s+")  # the first splits "Artist - Title"
+LYRIC_CHARS = 16  # a 「」 or 『』 group longer than this quotes a lyric, no title
+_MARK = re.compile(r"\s+(?:-|–|—|\||~|//|_)\s+")  # the first splits "Artist - Title"
 _BY = re.compile(r"\s+by\s+", re.IGNORECASE)  # "Title by Artist"
 
 # A video's words, no song's: a bracket of them alone goes, and so do they at the title's end.
@@ -80,11 +93,29 @@ _NOISE = frozenset({
     "official", "oficial", "officiel", "ufficiale", "music", "musical", "video", "vídeo", "videoclip", "clip",
     "audio", "lyric", "lyrics", "letra", "letras", "con", "with", "hd", "hq", "4k", "1080p", "720p", "mv", "m/v",
     "visualizer", "visualiser", "remastered", "remaster", "remasterizado", "remasterizada", "version", "versión",
+    "pinyin", "karaoke", "ktv", "8d",
 })
 _STRONG = _NOISE - {"music", "musical", "con", "with", "version", "versión", "clip"}  # one of them makes words noise
 _FORMAT = frozenset({"hd", "hq", "4k", "1080p", "720p", "mv", "m/v"})  # noise alone, even loose at a title's end
 _YEAR = re.compile(r"(?:19|20)\d\d")
-_BRACKETS = re.compile(r"\s*[(\[【「]([^()\[\]【】「」]*)[)\]】」]")
+# A lyric channel's words, no song's, in simplified and traditional characters, Japanese and Korean: noise as _NOISE's.
+_CJK_NOISE = (
+    "动态歌词", "動態歌詞", "歌词", "歌詞", "字幕", "中英字幕", "拼音", "官方", "完整版", "高音质", "高音質", "高画质", "高畫質",
+    "高清", "无损", "無損", "纯音乐", "純音樂", "抖音", "热门", "熱門", "循环", "循環", "版",
+    "公式", "歌詞付き", "フル",
+    "가사", "뮤직비디오", "공식",
+)
+_CJK_NOISE_PHRASE = re.compile("|".join(sorted(_CJK_NOISE, key=lambda p: (-len(p), p))))  # the longest first
+_CJK_LETTERS = "ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿\U00020000-\U0002ebef"  # Hangul, kana and Han, as normalize.py's _CJK
+_CJK = re.compile(f"[{_CJK_LETTERS}]")
+# A text holding CJK in words: runs of CJK, and of other letters and digits ("m/v" whole), marks and spaces between.
+_PIECE = re.compile(f"[{_CJK_LETTERS}]+|m/v(?![^\\W_{_CJK_LETTERS}])|[^\\W_{_CJK_LETTERS}]+")
+_CJK_GAP = re.compile(f"[{_CJK_LETTERS}]\\s+[{_CJK_LETTERS}]")  # a space between two CJK characters: a sentence's
+# A bracket pair, each opener closed by its own closer (the full-width （） and ［］ as () and [] are, kept as written).
+_GROUPS = re.compile(r"\([^()]*\)|\[[^\[\]]*\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》"
+                     r"|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕")
+_LYRIC_QUOTES = "「『"  # the groups that quote a lyric
+_SENTENCE_END = "。！？…"
 _QUOTES = "\"'“”‘’«»「」『』"
 _TOPIC = re.compile(r"^(.*\S)\s+-\s+topic$", re.IGNORECASE)
 _LABEL = re.compile(r"\s*(?:vevo|official|oficial|officiel)(?:\s+channel)?$", re.IGNORECASE)
@@ -94,19 +125,89 @@ _LABEL = re.compile(r"\s*(?:vevo|official|oficial|officiel)(?:\s+channel)?$", re
 
 
 def _words(text: str) -> list[str]:
+    """The words of ``text``, NFKC casefolded: split at spaces and Latin punctuation; in a text holding CJK, its runs
+    of CJK and of other letters (``_PIECE``), marks left out."""
     folded = unicodedata.normalize("NFKC", text).casefold()
+    if _CJK.search(folded):
+        return _PIECE.findall(folded)
     return [w for w in re.split(r"[\s,.:!¡¿?\-–—]+", folded) if w]
 
 
+def _covered(run: str) -> int:
+    """How many characters of a run of CJK its ``_CJK_NOISE`` phrases cover."""
+    return sum(len(m.group()) for m in _CJK_NOISE_PHRASE.finditer(run))
+
+
+def _is_noise(word: str) -> bool:
+    """Whether one of ``_words``' words is a video's: in ``_NOISE``, a year, or a run of CJK of noise phrases alone."""
+    if _CJK.match(word):
+        return _covered(word) == len(word)
+    return word in _NOISE or _YEAR.fullmatch(word) is not None
+
+
+def _letters(word: str) -> int:
+    return len(word) - word.count("/")  # "m/v"'s two
+
+
+def _noise_letters(word: str) -> int:
+    """How many of a word's letters are a video's: all of a word of ``_NOISE`` or a year's, those its phrases cover of
+    a run of CJK."""
+    if _CJK.match(word):
+        return _covered(word)
+    return _letters(word) if _is_noise(word) else 0
+
+
 def _noise(text: str) -> bool:
-    """Whether words are a video's alone: one strong word at least, a year beside them too."""
+    """Whether words are a video's alone: one strong word at least, a year or a lyric channel's words beside them."""
     words = _words(text)
-    return bool(words) and any(w in _STRONG for w in words) and all(w in _NOISE or _YEAR.fullmatch(w) for w in words)
+    return bool(words) and any(w in _STRONG for w in words) and all(_is_noise(w) for w in words)
 
 
 def _noise_word(word: str) -> bool:
     words = _words(word)
-    return bool(words) and all(w in _NOISE or _YEAR.fullmatch(w) for w in words)
+    return bool(words) and all(_is_noise(w) for w in words)
+
+
+def _noise_group(inner: str) -> bool:
+    """Whether a bracket's words are a video's: Latin ones by ``_noise``; ones holding CJK when a video's and a lyric
+    channel's words are two thirds of their letters or more (CJK characters, Latin letters and digits)."""
+    if not _CJK.search(unicodedata.normalize("NFKC", inner)):
+        return _noise(inner)
+    words = _words(inner)
+    letters = sum(_letters(w) for w in words)
+    return letters > 0 and 3 * sum(_noise_letters(w) for w in words) >= 2 * letters
+
+
+def _lyric(inner: str) -> bool:
+    """Whether a 「」 or 『』 group's words are a sentence: ending as one, a space between two CJK characters, or
+    longer than ``LYRIC_CHARS``."""
+    inner = inner.strip()
+    return bool(inner) and (inner[-1] in _SENTENCE_END or _CJK_GAP.search(inner) is not None
+                            or len(inner) > LYRIC_CHARS)
+
+
+def _decoration(group: re.Match[str], text: str) -> bool:
+    """Whether a group of ``text`` is a video's: its words noise, or a lyric quoted where it isn't the whole text."""
+    inner = group.group()[1:-1]
+    return _noise_group(inner) or group.group()[0] in _LYRIC_QUOTES and _lyric(inner) \
+        and not (group.start() == 0 and group.end() == len(text))
+
+
+def _tokens(text: str) -> list[tuple[int, str, bool]]:
+    """The words of ``text``, whose spaces are folded, each with where it begins and whether it is a group: a group
+    whole, and each run of other characters between spaces and groups (a group's edges are word edges)."""
+    out: list[tuple[int, str, bool]] = []
+    at = 0
+    for group in [*_GROUPS.finditer(text), None]:
+        end = group.start() if group else len(text)
+        for word in text[at:end].split(" "):
+            if word:
+                out.append((at, word, False))
+            at += len(word) + 1
+        if group:
+            out.append((group.start(), group.group(), True))
+            at = group.end()
+    return out
 
 
 def _unquoted(text: str) -> str:
@@ -117,17 +218,18 @@ def _unquoted(text: str) -> str:
 
 def clean(text: str) -> str:
     """``text`` without what a video's title adds to a song's name (module docstring), its spaces folded."""
-    text = " ".join(_BRACKETS.sub(lambda m: "" if _noise(m.group(1)) else m.group(0), " ".join(text.split())).split())
+    text = " ".join(text.split())
+    text = " ".join(_GROUPS.sub(lambda m: " " if _decoration(m, text) else m.group(), text).split())
     while (marks := list(_MARK.finditer(text))) and _noise(text[marks[-1].end():]):
         text = text[:marks[-1].start()]  # "… | Official Video"
-    words = text.split()
+    words = _tokens(text)
     cut = len(words)
-    while cut > 1 and _noise_word(words[cut - 1]):
+    while cut > 1 and not words[cut - 1][2] and _noise_word(words[cut - 1][1]):
         cut -= 1
-    loose = words[cut:]
+    loose = [word for _, word, _ in words[cut:]]
     if len(loose) > 1 and _noise(" ".join(loose)) or len(loose) == 1 and _words(loose[0]) and \
             all(w in _FORMAT for w in _words(loose[0])):
-        text = " ".join(words[:cut])
+        text = text[:words[cut][0]].rstrip()
     text = _unquoted(text)
     return "" if _noise(text) else text
 

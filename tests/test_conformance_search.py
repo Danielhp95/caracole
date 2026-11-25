@@ -809,14 +809,22 @@ def names_records(corpus: Corpus) -> list[dict]:
     from caracole.songs import list_songs
 
     out = []
-    cleaned = [t for t, _ in _parametrized(tsn.test_a_text_loses_what_a_videos_title_adds_to_a_songs_name)]
-    for text in [*cleaned, "Song (Official Music Video) [HD]", "「MV」 曲", "Artist – Title (Lyric Video) 4K", "''"]:
+    cleaned = [t for test in (tsn.test_a_text_loses_what_a_videos_title_adds_to_a_songs_name,
+                              tsn.test_a_cjk_lyric_videos_title_loses_its_channels_words_and_its_quoted_lyrics,
+                              tsn.test_a_quoted_lyric_goes_wherever_it_is_but_a_short_quote_is_a_title,
+                              tsn.test_cjk_noise_goes_by_its_share_of_the_group,
+                              tsn.test_each_bracket_closes_on_its_own_mark, tsn.test_words_glued_to_a_bracket_are_words)
+               for t, _ in _parametrized(test)]
+    extra = ["Song (Official Music Video) [HD]", "「MV」 曲", "Artist – Title (Lyric Video) 4K", "''",
+             "Song【官方M/V】", "【告白氣球 Official MV】", "Kanpai // Kotaro", "Song[Official Video]Remix", "「」 x", "x 【】"]
+    for text in dict.fromkeys([*cleaned, *extra]):
         out.append(record("caracole.song_names.clean", None, [text], {}, lambda: clean(text)))
     channels = [c for c, _ in _parametrized(tsn.test_a_channels_name_loses_its_label_words)]
     for channel in [*channels, "Silvana Estrada - Topic", "BTSVEVO", "Rosalía Official", "VEVO - Topic"]:
         out.append(record("caracole.song_names.clean_channel", None, [channel], {}, lambda: clean_channel(channel)))
     videos = [*_parametrized(tsn.test_a_videos_title_of_two_parts_is_its_artist_and_its_song),
               *_parametrized(tsn.test_a_videos_title_none_of_the_rules_reads_is_its_channels_song),
+              *_parametrized(tsn.test_an_underscore_between_spaces_parts_the_text),
               (*tsn.VIKINGOS_VIDEO, None), (*tsn.SILVANA_VIDEO, None), ("Wonderwall - Oasis", "Oasis", None),
               ("Silvana Estrada Que problema", "kintanedu", None), ("Love Me Tender", "Elvis Presley - Topic", None)]
     texts = ["Silvana Estrada - Que problema", "Silvana Estrada – Que problema", "Silvana Estrada — Que problema",

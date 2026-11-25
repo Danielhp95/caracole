@@ -431,10 +431,12 @@ never read.
 
 First, what a video's title adds is dropped: brackets such as "(Official Video)" or "(Letra)", a
 last part such as "… | Official Video", format words such as "HD" or "4K", and quotes around the
-text. "(feat. …)" and "(En Vivo)" stay. Then the first rule that fits names the song:
+text. "(feat. …)" and "(En Vivo)" stay. Lyric channels' brackets go too: their own words, as in
+"【動態歌詞Lyrics】" or "(官方完整版MV)", and a line of the lyrics quoted in 「」 or 『』. A short
+quote is a title and stays: "宋冬野「斑马，斑马」". Then the first rule that fits names the song:
 
 1. **Artist - Title.** The first dash with a space on each side splits them. An en or em dash, "|",
-   "~" and "//" work too. "Muse - Hysteria - Live" is "Hysteria - Live" by Muse. The two are
+   "~", "//" and "_" work too. "Muse - Hysteria - Live" is "Hysteria - Live" by Muse. The two are
    swapped when only the second part is a known artist, as in a fan's upload.
 2. **A known artist first, or after "by".** "silvana estrada que problema" or "Que problema by
    Silvana Estrada", once caracole knows her. A known song title is left whole: "Love Me Tender" is
