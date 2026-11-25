@@ -315,13 +315,19 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     no sheet over its transcript now: …", `_still_due_its_sheet`; a failure auto-chords'), and "Transcript and sheet
     kept: …" for a bug after the sheet was made.
   - Each long stage says what it does as it runs (staged.py `_doing`, a running event each change): the vocals the
-    minutes demucs-rs has run against about how long it takes here (`_separating`, separate.py's `on_tick`,
-    `CPU_PACE`, `GPU_PACE`), the words Whisper loading then how far it has heard the mix (`_heard`, transcribe.py's
-    `on_progress` off Whisper's own progress bar), the chords auto-chords' steps (run.py `on_step`, `STEPS`), as a
-    YouTube sheet's audio (a video searched for, then its download: youtube_fetch's `on_download`) and chords do
-    too; status.py's `LONG_STAGES` put them on the line and the bar.
-  - No sung span: Whisper isn't run, and the song is noted heard to have nothing sung.
-  - The pieces are autochords/'s (below); the stem in a temporary folder under `cache_dir`, gone with the job.
+    minutes demucs-rs has run against about how long it takes here (hearing.py `_separating`, separate.py's
+    `on_tick`, `CPU_PACE`, `GPU_PACE`), the words Whisper loading then how far it has heard the mix (hearing.py
+    `_heard`, transcribe.py's `on_progress` off Whisper's own progress bar), the chords auto-chords' steps (run.py
+    `on_step`, `STEPS`), as a YouTube sheet's audio (a video searched for, then its download: youtube_fetch's
+    `on_download`) and chords do too; status.py's `LONG_STAGES` put them on the line and the bar.
+  - Its vocals and words stages are `HearsWords`' (a mixin for a job of stages, on autochords/hearing.py's `Hearing`,
+    below): the job says whether it hears the song (`_why_not_heard`: here, its transcript kept already, vocals
+    skipped "transcribed already") and checks the song after each hand-over (`_still_to_hear`: here, still offered);
+    `WORDS_FAIL_THE_JOB`, true here, makes a failure to hear and nothing sung fail the job, else they end their
+    stage alone (nothing sung done "nothing sung was heard (why)").
+  - Nothing sung, by words.py's rule (no sung span or under `MIN_SUNG_S` of them: Whisper isn't run; too few words
+    kept, under `MIN_WORDS` or `MIN_WORDS_A_MINUTE`), is noted with why, and the job fails "no singing heard".
+  - The stem in hearing.py's work folder under `cache_dir`, gone with the job.
   - caracole serve's Transcribe the lyrics runs it (web/transcribe_routes.py).
 - youtube_search.py is `caracole youtube --search`: a search's first video and its thumbnail, suggested on the
   library page (`gate`, `sheet_on_screen`, `checked_jpeg`).
@@ -1973,12 +1979,14 @@ It is rows.js's, shared by both pages:
   - `shifted_lrc` moves line and word stamps alike, so word-timed lines keep their words;
   - the shift said on a line of the sheet's after the song's name, after the video's credit for audio from YouTube,
     and kept as `raw["lyrics_shift"]`.
-- A song's lyrics transcribed from its YouTube audio, which transcribe_job.py composes from:
+- A song's lyrics transcribed from its YouTube audio, which hearing.py composes from, for transcribe_job.py:
   - words.py, pure Python: where someone sings, from the stem's loudness against the mix's (`sung_spans`); the words
-    outside it dropped (`guard`); the lines (`lines_of`) and the enhanced LRC (`to_lrc`);
+    outside it dropped (`guard`); nothing sung (`too_little_sung`: under `MIN_SUNG_S`, 10 s; `too_few_words`: under
+    `MIN_WORDS`, 8, or `MIN_WORDS_A_MINUTE`, 20, each with its why, "sung 6.2 s", "5 words in 1:10 sung"); the lines
+    (`lines_of`) and the enhanced LRC (`to_lrc`);
   - transcript.py, no third-party import (every page build asks it): kv `transcript:<id>` and `transcribe:none:<id>`
-    (`keep_transcript`, `note_heard_nothing`), and which songs are offered one (`why_not_offered`, which also reads
-    run.py's `autochords:failed:<id>`, its key `UNREADABLE`);
+    (`keep_transcript`, `note_heard_nothing`, its `why` and `by`), and which songs are offered one (`why_not_offered`,
+    which also reads run.py's `autochords:failed:<id>`, its key `UNREADABLE`);
   - separate.py: demucs-rs, a program run as a subprocess (`DemucsSeparator`; `SeparatorFailed` in its own words,
     its output read as UTF-8 with what isn't replaced; a wgpu demucs-rs that dies by a signal after "Done!" with the
     stem written, as it does from Python, has separated it, logged; on success, what it said of its device logged
@@ -1992,19 +2000,28 @@ It is rows.js's, shared by both pages:
     `SetupFailed`, the GPU's (`is_setup_error`: out of memory, CUDA, cuDNN, device-side; at load as while hearing)
     or the model's ("Whisper's model won't load": any other load failure, on the GPU too), never the audio's;
     `is_audio_error`, Whisper failing to load the audio.
-  - The job works in a `transcribe-*` folder under the cache, gone with it; one a killed job left is swept at the
-    next job's start (`_sweep`: a folder no live job holds, its `.owner` flocked while its job runs, as another
-    transcription asked for now may take the lock while this one lets the lookups have it).
-  - The job builds the default separator and Whisper at their first stage, Whisper run first on run.py's test tone
-    (`_test_tone`); demucs-rs not (it fails on the song as on a tone, the setup's alike, and each run costs about
-    30 s). Its failures are told apart as run.py's: the setup's and the audio's. The setup's record nothing against
-    the song, which stays offered: `frame_db` failing on the mix, whatever it raises ("can't measure the audio here
-    (…)": a reader's failure is no proof the audio is bad), `SeparatorFailed`, a stem `frame_db` can't read or one
-    more than `SHORT_STEM_FRAMES` (4, 0.2 s) shorter than the mix ("the separator can't run here (…)"), and
-    `SetupFailed`. The audio's is Whisper's own "Failed to load audio" on the mix
-    alone (transcribe.py `is_audio_error`), filed as run.py files audio it can't read (`_unreadable`, kv
-    `autochords:failed:`, transcript.py's `UNREADABLE`), which `why_not_offered` reads ("its audio can't be read")
-    until the audio changes; anything else Whisper raises is a bug, filing nothing; and no singing heard is noted.
+  - hearing.py, the one place both models run, no third-party import at its top and no job's stages
+    (`Hearing(cfg, separator=, transcriber=)`, for a job of stages, transcribe_job.py's `HearsWords`, or a pass alike):
+    `vocals(song, on_doing=)`, the mix's loudness, the stem, the sung spans (`Vocals`); `words(conn, song, vocals,
+    stamp, on_doing=, anyway=)`, words.py's rule applied (Whisper not run under `MIN_SUNG_S`; nothing kept on too
+    few words), the transcript kept (`Kept`) or nothing sung noted with why, by "caracole" (`Nothing`); `anyway`
+    skips both rules, Whisper run whatever the spans, its words kept within them, or all of them with no span (the
+    whole song one), only no word at all nothing sung; `close`.
+  - It works in a `transcribe-*` folder under the cache (`WORK_PREFIX`), one song's stem at a time, gone with
+    `close`; one a killed job left is swept at the next job's start (`sweep`: a folder no live Hearing holds
+    (`_held`), its `OWNER`, `.owner`, flocked while it lives, as another transcription asked for now may take the lock
+    while this one lets the lookups have it).
+  - It builds the default separator and Whisper once a Hearing, at their first use, Whisper run first on run.py's
+    test tone (`_test_tone`); demucs-rs not (it fails on the song as on a tone, the setup's alike, and each run costs
+    about 30 s). Its failures are `HearingFailed(kind, words)`, told apart as run.py's: the setup's and the audio's.
+    The setup's (`"setup"`) record nothing against the song, which stays offered: `frame_db` failing on the mix,
+    whatever it raises ("can't measure the audio here (…)": a reader's failure is no proof the audio is bad),
+    `SeparatorFailed`, a stem `frame_db` can't read or one more than `SHORT_STEM_FRAMES` (4, 0.2 s) shorter than the
+    mix ("the separator can't run here (…)"), and `SetupFailed`. The audio's (`"audio"`, "can't read the audio") is
+    Whisper's own "Failed to load audio" on the mix alone (transcribe.py `is_audio_error`), filed as run.py files
+    audio it can't read (`_unreadable`, kv `autochords:failed:`, transcript.py's `UNREADABLE`), which
+    `why_not_offered` reads ("its audio can't be read") until the audio changes; anything else Whisper raises is a
+    bug, raised as it is, filing nothing; and nothing sung is noted.
 - Which words go under the chords (run.py `_make_sheet`): a site's lyrics whenever the song has any (a site's
   verdict that it is instrumental wins too: a chart alone, the transcript kept unused), else the
   transcript of its current audio (transcript.py `transcript_of`: its own audio and mtime only), else none.

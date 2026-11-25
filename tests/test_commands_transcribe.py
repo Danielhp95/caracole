@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 from conftest import subprocess_pythonpath
-from test_transcribe_job import MIX, STEM, WORDS, offered
+from test_transcribe_job import MIX, SAID, STEM, WORDS, offered
 from test_youtube_sheet import wav
 from typer.testing import CliRunner
 
@@ -122,13 +122,13 @@ def test_transcribe_says_each_stage_and_exits_0(tmp_path, config, conn, models, 
     assert result.exit_code == 0, result.output
     lines = result.output.splitlines()
     for said in ("Song: in the book.", "Vocals: sung from 24.8 s, 1 stretch.",
-                 "Words: 6 words in 2 lines (es), 1 dropped.", "Chords: chords over the transcribed lyrics.",
+                 f"Words: {SAID}.", "Chords: chords over the transcribed lyrics.",
                  "PDF: made.", "Pages: _todo.md and index.html rewritten."):
         assert said in lines, result.output
     sheet = tmp_path / "lib" / "Nick Cani" / "Vikingos veganos" / "sheet (auto).txt"
     assert any(line.startswith(f"Sheet: {sheet}, readable after") for line in lines)
     events = [e for e in map(read_progress_line, lines) if e is not None]
-    assert {"stage": "words", "state": "done", "detail": "6 words in 2 lines (es), 1 dropped"} in events
+    assert {"stage": "words", "state": "done", "detail": SAID} in events
     assert {"song": {"id": song.id, "display": "Nick Cani - Vikingos veganos"}} in events
     assert events[-1]["done"]["ok"] is True and events[-1]["done"]["refused"] is None
     assert any(line.startswith("Done in ") for line in lines)
@@ -158,7 +158,7 @@ def test_by_hand_each_long_stage_says_what_it_does_on_a_live_line_cleared_for_ea
     assert any(line.startswith("Words · 0:00 of ") for line in shown), shown
     assert any(line.startswith("Chords · ") for line in shown), shown
     assert screen.getvalue().endswith("\r")  # the live line cleared at the end
-    assert " · " not in result.stdout and "Words: 6 words in 2 lines (es), 1 dropped." in result.stdout.splitlines()
+    assert " · " not in result.stdout and f"Words: {SAID}." in result.stdout.splitlines()
 
 
 def test_with_progress_no_live_line_is_drawn(tmp_path, config, conn, models, monkeypatch):

@@ -5,8 +5,9 @@ Whisper's words from a YouTube song's audio (when no lyrics site has the song's)
 kept, unused while the song has lyrics, and goes with the song (songs._PER_SONG_KV). It is the song's only while
 its ``audio`` and ``audio_mtime`` are the song's own: other audio (another video pasted, a purchase dropped into
 Music/) is no use to it, and the song is offered a transcript again. A song heard to have nothing sung keeps
-``transcribe:none:<song id>`` instead, for that audio alone; one whose audio can't be read, auto-chords' record of it,
-``autochords:failed:<song id>`` (run.py's, which the transcription files too), and is offered none until it changes.
+``transcribe:none:<song id>`` instead, for that audio alone, with why and by whom; one whose audio can't be read,
+auto-chords' record of it, ``autochords:failed:<song id>`` (run.py's, which the transcription files too), and is
+offered none until it changes.
 
 This module imports nothing third-party: the transcribing itself is elsewhere, and ``why_not_offered`` runs on
 every page build.
@@ -88,9 +89,11 @@ def transcript_of(conn: sqlite3.Connection, song: Song) -> Transcript | None:
     return kept
 
 
-def note_heard_nothing(conn: sqlite3.Connection, song: Song, stamp: str) -> None:
+def note_heard_nothing(conn: sqlite3.Connection, song: Song, stamp: str, *, why: str, by: str) -> None:
+    """The song's current audio noted to have nothing sung, at ``stamp``: ``why`` (words.py's "sung 6.2 s", "5 words
+    in 1:10 sung") and ``by`` whom ("caracole", by those rules)."""
     kv_set_json(conn, f"{HEARD_NOTHING}{song.id}",
-                {"audio": song.audio_path, "audio_mtime": song.audio_mtime, "at": stamp})
+                {"audio": song.audio_path, "audio_mtime": song.audio_mtime, "at": stamp, "why": why, "by": by})
 
 
 def heard_nothing(conn: sqlite3.Connection, song: Song) -> bool:

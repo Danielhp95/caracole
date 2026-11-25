@@ -1659,7 +1659,7 @@ It exits 0 once the sheet is made, and 1 otherwise:
 | `No transcript made: …` | The song isn't offered one or isn't in the book. Or, during the job, its lyrics were found, it got a human sheet or was ignored, its audio changed or it was removed. | Unchanged. |
 | `Transcript kept; no sheet made: …` | The words were heard and kept, but before the chords the song got a human sheet, was ignored or found its lyrics, or the chords then failed. | Its transcript is kept, unused while it has a human sheet or lyrics; after a failure, Try again makes the sheet over it. |
 | `Transcript and sheet kept: a bug in caracole …` | The sheet over the transcript was made, then caracole hit a bug. | Both are kept. |
-| `Words: failed: no singing heard.` | Nothing is kept. | Not offered until its audio changes. |
+| `Words: failed: no singing heard.` | Less than 10 seconds of singing, so Whisper didn't run, or too few words in it (under 8, or under 20 a minute). Nothing is kept. | Not offered until its audio changes. |
 | `can't read the audio` | Whisper couldn't load the audio. | Not offered, and no chords tried, until its audio changes. The to-do page lists the file. |
 | `can't measure the audio here`, `the separator can't run here`, `its vocals can't be read`, `its vocals are … shorter than the song`, `the GPU failed`, `Whisper's model won't load` | The setup failed, not the song. | Still offered. |
 

@@ -12,7 +12,7 @@ from conftest import add_song
 
 from caracole.autochords import transcript as tr
 from caracole.config import ProviderPolicy
-from caracole.db import kv_get, kv_set
+from caracole.db import kv_get, kv_get_json, kv_set
 from caracole.library import keep_file
 from caracole.overrides import Overrides
 from caracole.songs import get_song, update_song
@@ -65,14 +65,17 @@ def test_a_transcript_of_other_audio_is_none_and_the_offer_comes_back(conn, cfg,
 def test_heard_nothing_holds_for_that_audio_alone(conn, cfg, tmp_path):
     song = youtube_song(conn, tmp_path)
     assert not tr.heard_nothing(conn, song)
-    tr.note_heard_nothing(conn, song, "2026-11-20T00:00:00Z")
+    tr.note_heard_nothing(conn, song, "2026-11-20T00:00:00Z", why="sung 6.2 s", by="caracole")
     assert tr.heard_nothing(conn, song)
+    assert kv_get_json(conn, f"{tr.HEARD_NOTHING}{song.id}") == {
+        "audio": song.audio_path, "audio_mtime": song.audio_mtime, "at": "2026-11-20T00:00:00Z", "why": "sung 6.2 s",
+        "by": "caracole"}
     assert tr.why_not_offered(conn, cfg, song, Overrides()) is not None
     update_song(conn, song.id, audio_mtime=song.audio_mtime + 5)
     other = get_song(conn, song.id)
     assert not tr.heard_nothing(conn, other)
     assert tr.why_not_offered(conn, cfg, other, Overrides()) is None
-    tr.note_heard_nothing(conn, song, "2026-11-20T00:00:00Z")
+    tr.note_heard_nothing(conn, song, "2026-11-20T00:00:00Z", why="you said so", by="you")
     tr.keep_transcript(conn, song, made(song))
     assert kv_get(conn, f"{tr.HEARD_NOTHING}{song.id}") is None
 
