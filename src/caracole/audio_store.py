@@ -42,7 +42,6 @@ import re
 import secrets
 import sqlite3
 import stat
-import struct
 import threading
 import time
 import unicodedata
@@ -86,7 +85,6 @@ _STAGED_AUDIO = re.compile(rf"\.upload-(?P<id>[0-9a-f]{{16}})(?:{_EXT})")
 KEPT = re.compile(rf"[0-9]+-[0-9a-f]{{16}}(?:{_EXT})")  # a kept file: <song id>-<sha256 16 hex><ext>
 _PART = re.compile(r"\.keep-[0-9a-f]{16}\.part")  # a copy into the folder, until it is whole
 _RECORD_MAX = 64 * 1024  # a staged upload's record's bytes, at most
-_PARSE_ERRORS = (ValueError, EOFError, IndexError, KeyError, TypeError, OverflowError, struct.error, RecursionError)
 
 NOT_AUDIO = "Not an audio file caracole reads (MP3, M4A, FLAC, WAV, Ogg or AIFF)."
 TOO_BIG = "That file is too big: an audio file is 128 MiB at most; `caracole audio FILE` takes any."
@@ -188,24 +186,36 @@ def _mp4_audio(head: bytes) -> bool:
 def _examine(f: IO[bytes]) -> Audio:
     """What the file open as ``f`` is: AudioError when its bytes are no format caracole reads, when mutagen can't
     read it as the one they say, or reads no length, or an MP4 with no audio track (415), and when it is longer than
-    ``MAX_SECONDS`` (422)."""
-    import mutagen  # here, not on import: the pages and the server import this module
+    ``MAX_SECONDS`` (422).
 
-    from caracole.music import _ALBUM_KEYS, _ARTIST_KEYS, _TITLE_KEYS, _first
-
+    The bytes are anyone's, made to crash a reader as well as not: whatever mutagen raises on them is a refusal
+    (mutagen 1.48's OggSpeex divides by its header's rate, unguarded), but an OSError reading a file of the disk,
+    which is the disk's."""
     f.seek(0)
     fmt = sniff(f.read(HEAD))
     if fmt is None:
         raise AudioError(NOT_AUDIO, 415)
     for module, name in _READERS[fmt]:
+        reader = getattr(importlib.import_module(module), name)  # here, not on import: the pages import this module
         f.seek(0)
         try:
-            read = getattr(importlib.import_module(module), name)(f)
-            break
-        except (mutagen.MutagenError, *_PARSE_ERRORS):  # a file anyone may send: whatever it holds
-            continue
-    else:
-        raise AudioError(NOT_AUDIO, 415)
+            return _read(reader, f, fmt)
+        except AudioError:
+            raise
+        except OSError:
+            if not isinstance(f, io.BytesIO):
+                raise
+        except Exception:  # noqa: BLE001 (a file anyone may send: whatever it makes the reader raise)
+            pass
+    raise AudioError(NOT_AUDIO, 415)
+
+
+def _read(reader: Any, f: IO[bytes], fmt: str) -> Audio:
+    """The file ``f`` read by the mutagen class ``reader`` of the format ``fmt``: AudioError as ``_examine`` says;
+    whatever else the reader raises, ``_examine``'s to judge."""
+    from caracole.music import _ALBUM_KEYS, _ARTIST_KEYS, _TITLE_KEYS, _first
+
+    read = reader(f)
     length = getattr(read.info, "length", None)
     if not isinstance(length, (int, float)) or not math.isfinite(length) or length <= 0:
         raise AudioError(NOT_AUDIO, 415)
@@ -449,14 +459,19 @@ def sweep(cfg: Config, named: Collection[str], *, now: float | None = None) -> l
 
 
 def kept_in(store: Path, audio_path: str | None) -> Path | None:
-    """The kept file ``audio_path`` names in the folder ``store``: a regular file of it (no link) by a kept file's
-    name; None for any other path, or none."""
+    """The kept file ``audio_path`` names in the folder ``store``, as ``store`` spells it: a regular file of that
+    folder (no link) by a kept file's name, however the path spells the folder (a link to the state directory, a
+    "..": another process's config may); None for any other path, or none."""
     if not audio_path:
         return None
     path = Path(audio_path)
-    if path.parent != store or not KEPT.fullmatch(path.name) or not _is_store(store) or not _regular(path):
+    if not KEPT.fullmatch(path.name) or not _is_store(store) or not _regular(path):
         return None
-    return path
+    try:
+        same = os.path.samefile(path.parent, store)
+    except OSError:
+        return None
+    return store / path.name if same else None
 
 
 def uploaded(cfg: Config, song: Song) -> Path | None:
@@ -544,8 +559,9 @@ def tidy(conn: sqlite3.Connection, cfg: Config) -> int:
     root = folder(cfg)
     if not _is_store(root):
         return 0
-    named = {Path(path).name for (path,) in conn.execute("SELECT audio_path FROM songs WHERE audio_path IS NOT NULL")
-             if Path(path).parent == root}
+    # By the files' names alone, however a path spells the folder (a kept file's name is unique in it): a name a song
+    # names elsewhere keeps a file, never deletes one.
+    named = {Path(path).name for (path,) in conn.execute("SELECT audio_path FROM songs WHERE audio_path IS NOT NULL")}
     deleted = 0
     with os.scandir(root) as entries:
         for entry in list(entries):

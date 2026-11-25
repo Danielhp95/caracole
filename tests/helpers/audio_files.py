@@ -8,7 +8,8 @@ writes it. ``write(path, fmt, seconds, artist=, title=, album=)`` writes one at 
 WAV and AIFF are PCM, FLAC its frames of a constant sample, MP3 silent MPEG-1 Layer III frames and Ogg Opus's silent
 packets, each a file a decoder plays; M4A is the MP4 container alone (its AAC sample entry, its track's length, an
 mdat of nothing), which mutagen reads and no decoder plays: helpers/aac.py makes real AAC where torch is. ``mp4``
-makes one of other brands (YouTube's raw ``dash``, FFmpeg's ``isom``…), or an .mp4 whose one track is video.
+makes one of other brands (YouTube's raw ``dash``, FFmpeg's ``isom``…), or an .mp4 whose one track is video;
+``ogg_speex(rate)`` an Ogg Speex header, at a rate of 0 a file made to crash a tag reader.
 """
 
 from __future__ import annotations
@@ -172,6 +173,19 @@ def _ogg(seconds: float) -> bytes:
         out += _ogg_page([silence] * n, granule=pre_skip + 960 * done, sequence=sequence, last=done == packets)
         sequence += 1
     return out
+
+
+def ogg_speex(rate: int = 8000, seconds: float = 2.0) -> bytes:
+    """An Ogg stream of a Speex header at ``rate`` Hz, its comments and one page of no real Speex whose granule says
+    ``seconds``: mutagen's OggSpeex reads its length from the header alone. With ``rate`` 0 it is a hostile file:
+    mutagen 1.48 divides by the rate, unguarded."""
+    head = bytearray(b"Speex   " + b"\x00" * 72)
+    struct.pack_into("<I", head, 36, rate)
+    struct.pack_into("<I", head, 48, 1)  # one channel
+    tags = struct.pack("<II", 0, 0)  # no vendor, no comment
+    granule = round(seconds * (rate or 8000))
+    return (_ogg_page([bytes(head)], granule=0, sequence=0, first=True) + _ogg_page([tags], granule=0, sequence=1)
+            + _ogg_page([b"\x00" * 10], granule=granule, sequence=2, last=True))
 
 
 def _box(kind: bytes, *parts: bytes) -> bytes:

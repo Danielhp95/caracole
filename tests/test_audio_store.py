@@ -15,7 +15,7 @@ from types import SimpleNamespace
 import pytest
 from conftest import add_song, subprocess_pythonpath
 from helpers.audio_files import FORMATS as MADE
-from helpers.audio_files import audio, mp4, write
+from helpers.audio_files import audio, mp4, ogg_speex, write
 
 from caracole import audio_store
 from caracole.audio_store import (
@@ -155,6 +155,34 @@ def test_an_mp4_with_no_audio_track_is_refused(cfg):
     assert audio_store.sniff(video[:HEAD]) == "M4A" and MP4(io.BytesIO(video)).info.length == 3.0
     said = refused(415, stage, cfg, video, "clip.mp4", named=())
     assert str(said) == NOT_AUDIO and names(cfg) == []
+
+
+def test_whatever_a_hostile_file_makes_the_tag_reader_raise_is_a_refusal(conn, cfg, tmp_path, monkeypatch):
+    # mutagen 1.48's OggSpeex divides by its header's rate, unguarded: a rate of 0 raised ZeroDivisionError.
+    said = refused(415, stage, cfg, ogg_speex(rate=0), "speex.ogg", named=())
+    assert str(said) == NOT_AUDIO and names(cfg) == []
+    from mutagen.wave import WAVE
+
+    def raising(error):
+        def load(self, *args, **kwargs):
+            raise error
+        return load
+
+    for error in (ArithmeticError("anything"), AttributeError("a reader's bug"), MemoryError(), OSError("bytes")):
+        monkeypatch.setattr(WAVE, "load", raising(error))
+        refused(415, stage, cfg, audio("WAV"), "song.wav", named=())  # bytes in memory: whatever it is, theirs
+    assert names(cfg) == []
+    song = add_song(conn, "Radiohead", "Creep")
+    with pytest.raises(OSError, match="the disk's"):  # reading a file of the disk: the disk's, no refusal
+        monkeypatch.setattr(WAVE, "load", raising(OSError("the disk's")))
+        keep(cfg, conn, song, write(tmp_path / "song.wav", "WAV"), move=False)
+    with pytest.raises(KeyboardInterrupt):
+        monkeypatch.setattr(WAVE, "load", raising(KeyboardInterrupt()))
+        stage(cfg, audio("WAV"), "song.wav", named=())
+    monkeypatch.undo()
+    monkeypatch.setattr(audio_store, "disk_usage", lambda path: SimpleNamespace(total=10**15, used=0, free=10**15))
+    up = stage(cfg, ogg_speex(rate=8000), "speex.ogg", named=())  # the same file at a rate is read
+    assert (up.format, up.duration) == ("Ogg", 2.0)
 
 
 def test_a_file_named_mp3_that_isnt_one_is_refused(conn, cfg, tmp_path):
@@ -313,6 +341,28 @@ def test_a_songs_audio_is_an_upload_only_when_it_is_a_kept_file_of_the_store(con
     assert uploaded(cfg, get_song(conn, song.id)) is None
     update_song(conn, song.id, audio_path=None)
     assert uploaded(cfg, get_song(conn, song.id)) is None
+
+
+def test_an_upload_spelled_through_another_path_to_the_store_is_still_the_songs_upload(conn, cfg, tmp_path):
+    # A process may spell state_dir otherwise (a link to it, ".."): the folder is the same, its files the song's.
+    from caracole.music import scan_music
+    from caracole.removal import plan_removal
+
+    song = add_song(conn, "Radiohead", "Creep", duration_ms=None)
+    given = write(tmp_path / "creep.mp3", "MP3")
+    kept = keep(cfg, conn, song, given, move=False)
+    alias = tmp_path / "alias"
+    alias.symlink_to(cfg.state_dir)
+    write(cfg.music_dir / "Radiohead - Creep.wav", "WAV", artist="Radiohead", title="Creep")
+    for spelled in (alias / "audio" / kept.name, store(cfg) / ".." / "audio" / kept.name):
+        update_song(conn, song.id, audio_path=str(spelled))
+        assert uploaded(cfg, get_song(conn, song.id)) == kept
+        assert plan_removal(conn, cfg, get_song(conn, song.id)).uploaded_audio == str(kept)
+        assert tidy(conn, cfg) == 0 and kept.exists()
+        scan_music(conn, cfg.music_dir, uploads=store(cfg))
+        assert get_song(conn, song.id).audio_path == str(spelled)  # no purchase took its place
+        assert keep(cfg, conn, song, given, move=False) == kept and kept.exists()  # the same file, never deleted
+        assert get_song(conn, song.id).audio_path == str(kept)
 
 
 def test_a_new_upload_replaces_the_songs_old_one(conn, cfg, tmp_path):
