@@ -32,7 +32,8 @@ import java.io.File
  *   listing page of LaCuerda's (`lacuerda:index:pages`) the file read later, or the database never read, replaces its
  *   rows and its record: UG's rows upserted as a refresh stores them (a row the database has keeps its sitemap and
  *   first sighting), the songs its new tabs are for marked to fetch again ([NewTabs]); the others' deleted and
- *   inserted;
+ *   inserted, but for a sitemap the file merely checked again and found unchanged (its record alike but its
+ *   `checked_at`: Merge.unchanged), whose record alone moves on, no row of it written;
  * - a page the file read later by its `read_at` (harptabs.com's artist pages, gametabs.net's game pages), or one the
  *   database never read, replaces its tabs and its row; UG's artist pages' tabs a row at a time, where the file's read
  *   is later, then filed again (ArtistTabs.refile);

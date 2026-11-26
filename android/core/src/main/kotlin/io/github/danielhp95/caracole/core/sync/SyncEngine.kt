@@ -971,10 +971,9 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             ))
 
         /** A report's entries of the sites a merge changed (its rows, or its first table's count), in caracole's
-         * order, each counted [before] and [after] the merge, [read] the site's newest read merged. Python's
-         * `_merge_indexes` reports every site whose own merge changed anything, its progress records alone too;
-         * IndexTransfer's Merged says that of the merge as a whole, so a site whose progress alone moved (no row
-         * taken, its count the same) is left out here until Merged says it of each site (index-push's). */
+         * order, each counted [before] and [after] the merge, [read] the site's newest read merged; a site whose
+         * progress alone moved (no page taken, its count the same: a sitemap found unchanged) has none, as Python's
+         * `_taken_entries`. */
         internal fun taken(merged: Merged, before: Map<String, Long>, after: Map<String, Long>, sites: List<String>,
                            read: (String) -> String?): List<JsonObject> =
             Sites.ALL.map { it.name }.filter { it in sites }.mapNotNull { site ->

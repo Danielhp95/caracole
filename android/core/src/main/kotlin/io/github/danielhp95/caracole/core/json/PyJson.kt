@@ -32,6 +32,40 @@ object PyJson {
         return out.toString()
     }
 
+    /** Python's `==` of two values json.loads gave: objects by their members, lists in order, a number by its exact
+     * value (True is 1, 2 is 2.0; a literal past a float's range infinite, NaN equal to nothing), a string by its
+     * text, None by None alone. */
+    fun equal(a: JsonElement, b: JsonElement): Boolean = when {
+        a is JsonNull || b is JsonNull -> a is JsonNull && b is JsonNull
+        a is JsonObject && b is JsonObject -> a.keys == b.keys && a.all { (k, v) -> equal(v, b.getValue(k)) }
+        a is JsonArray && b is JsonArray -> a.size == b.size && a.indices.all { equal(a[it], b[it]) }
+        a is JsonPrimitive && b is JsonPrimitive -> when {
+            a.isString || b.isString -> a.isString && b.isString && a.content == b.content
+            else -> {
+                val x = numeric(a)
+                val y = numeric(b)
+                if (x is BigDecimal && y is BigDecimal) x.compareTo(y) == 0 else x == y
+            }
+        }
+        else -> false
+    }
+
+    /** A number or a boolean as Python compares it: its exact value, or a double for the infinities, NaN an object
+     * equal to nothing. */
+    private fun numeric(p: JsonPrimitive): Any {
+        val text = p.content
+        return when {
+            text == "true" -> BigDecimal.ONE
+            text == "false" -> BigDecimal.ZERO
+            text == "NaN" -> Any()
+            text == "Infinity" -> Double.POSITIVE_INFINITY
+            text == "-Infinity" -> Double.NEGATIVE_INFINITY
+            text.any { it == '.' || it == 'e' || it == 'E' } ->
+                text.toDouble().let { if (it.isInfinite()) it else BigDecimal(it) }
+            else -> BigDecimal(text)
+        }
+    }
+
     /** The Python float [value] as a JSON number: its literal [floatText]'s, for PyJson.dumps and Canonical alike. */
     fun float(value: Double): JsonPrimitive = JsonUnquotedLiteral(floatText(value))
 

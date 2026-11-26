@@ -22,6 +22,9 @@ made ``BUILT``:
   normalizer: its ``keys`` (META) and its kv keys records ``"1"``, ``harptabs:index:keys`` absent (a merge goes by
   the kv records). ``schema-export``, ``format-export``: META's ``schema`` ``"14"``, ``format`` ``"2"``;
   ``columns-export``: ``gtptabs_index`` with a column more; ``nometa-export``: no ``caracole_export`` table.
+  ``rechecked-export``: the sitemap sites of ``full-export`` as the next re-check left their records: some found
+  unchanged (``checked_at`` alone moved: merged into ``phone-after``, their records move on and no row of theirs is
+  written), the others differing beside it (an etag, no validators, a field lacking: taken).
 - ``fresh-before``: a new phone database, ``fresh_kv.json`` seeded; ``unseeded-before``: the same without it (its
   first merge re-keys every index whole); ``phone-before``: a phone's indexes, some pages read later than the
   computer's, some earlier, some the computer never read, a time written with an offset (``gtptabs:sitemaps``' second
@@ -402,8 +405,41 @@ def _patch_rekey(c: sqlite3.Connection) -> None:
     c.execute("DELETE FROM kv WHERE key = 'harptabs:index:keys'")
 
 
+def _patch_rechecked(c: sqlite3.Connection) -> None:
+    """The sitemap sites' records as the computer's next re-check left them, a week after ``full``'s: gtptabs.com's
+    first sitemap, MuseScore's (its rows written ``1.0``, which json.loads reads equal to 1) found unchanged, only their
+    ``checked_at`` moved; gtptabs.com's second checked too (its etag the computer's, the phone's own another);
+    harptabs.com's re-read with no validators, and gametabs.net's record written without its ``keys``."""
+    def recheck(key: str, edit) -> None:
+        (text,) = c.execute("SELECT value FROM kv WHERE key = ?", (key,)).fetchone()
+        records = json.loads(text)
+        edit(records)
+        c.execute("UPDATE kv SET value = ? WHERE key = ?", (json.dumps(records, ensure_ascii=False), key))
+
+    later = "2026-11-01T03:30:00Z"
+
+    def gtptabs(r: dict) -> None:
+        r["sitemap-tabs-1.xml"]["checked_at"] = r["sitemap-tabs-2.xml"]["checked_at"] = later
+
+    def musescore(r: dict) -> None:
+        r["song-1"].update(checked_at=later, rows=1.0)
+
+    def harptabs(r: dict) -> None:
+        r[site_index.ONE].update(checked_at=later, etag=None)
+
+    def gametabs(r: dict) -> None:
+        r["sitemap-games.xml"]["checked_at"] = later
+        del r["sitemap-games.xml"]["keys"]
+
+    recheck(gtptabs_fetch.SITE.sitemaps_key, gtptabs)
+    recheck(musescore_fetch.SITE.sitemaps_key, musescore)
+    recheck(harptabs_fetch.SITE.sitemaps_key, harptabs)
+    recheck(gametabs_fetch.SITE.sitemaps_key, gametabs)
+
+
 EXPORTS: dict[str, tuple[tuple[str, ...] | None, Any]] = {
     "full": (None, None),
+    "rechecked": (("gtptabs", "musescore", "harptabs", "gametabs"), _patch_rechecked),
     "partial": (("gtptabs", "musescore"), None),
     "rekey": (None, _patch_rekey),
     "schema": (None, lambda c: c.execute(f"UPDATE {index_transfer.META} SET value = '14' WHERE key = 'schema'")),
@@ -428,6 +464,7 @@ MERGES: list[tuple[str, str, str, list[str] | None]] = [
     ("unseeded", "full", "unseeded-before", None),
     ("phone", "full", "phone-before", None),
     ("again", "full", "phone-after", None),
+    ("rechecked", "rechecked", "phone-after", None),
     ("phone-sites", "full", "phone-before", ["musescore", "gtptabs"]),
     ("rekey", "rekey", "phone-before", None),
     ("fresh-rekey", "rekey", "fresh-before", None),

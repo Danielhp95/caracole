@@ -5,6 +5,7 @@ import androidx.sqlite.execSQL
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.json.PyJson
+import io.github.danielhp95.caracole.core.sync.SyncEngine
 import io.github.danielhp95.caracole.core.testing.Dumps
 import io.github.danielhp95.caracole.core.testing.Fixtures
 import io.github.danielhp95.caracole.core.testing.Misses
@@ -242,6 +243,42 @@ class IndexTransferTest {
             record("ug" to "2026-11-10T03:30:00Z")
             assertEquals(mapOf("ug" to "2026-11-10T03:30:00Z"), database.read { MergedIndexes.of(it) },
                          "a stamp that is no time gives way")
+        }
+    }
+
+    /** A sitemap the computer re-checked and found unchanged (its record's `checked_at` alone moved: a 304) moves the
+     * phone's record on and writes no row of it, and is no site taken: no action told, none in a sync's report; a
+     * second merge writes nothing (index_transfer._sitemaps alike, its merge.jsonl's `rechecked` record). */
+    @Test fun aSitemapFoundUnchangedMovesItsRecordAloneAndIsNoSiteTaken() {
+        val export = export("rechecked-export")
+        TestDb.fresh(tmp.newFolder()).use { database ->
+            database.writeBlocking { Fixtures.load(it, "index/fixtures/phone-after.jsonl") }
+            val rows = { database.read { db -> db.query("SELECT * FROM musescore_index ORDER BY path") { it.text(0) } } }
+            val before = rows()
+            val said = ArrayList<MergeProgress>()
+            val (merged, written) = database.writeBlocking { db ->
+                val changes = db.one("SELECT total_changes()") { it.long(0)!! }!!
+                val merged = IndexTransfer.merge(db, export, now, listOf("musescore"), progress = { said += it })
+                merged to db.one("SELECT total_changes()") { it.long(0)!! }!! - changes
+            }
+            assertTrue(merged.changed)
+            assertEquals(mapOf("musescore" to emptyMap()), merged.sites)
+            assertEquals(1L, written, "its record alone")
+            assertEquals(before, rows())
+            val theirs = BundledSQLiteDriver().open(export.path).let { c ->
+                try {
+                    c.prepare("SELECT value FROM kv WHERE key = 'musescore:sitemaps'").use { it.step(); it.getText(0) }
+                } finally {
+                    c.close()
+                }
+            }
+            assertTrue(PyJson.equal(Canonical.parse(theirs),
+                                    Canonical.parse(database.read { it.kvGet("musescore:sitemaps") }!!)))
+            assertTrue(said.none { it.site == "musescore" && it.action == "sitemap" })
+            val counts = mapOf("musescore" to 1L)
+            assertEquals(emptyList(), SyncEngine.taken(merged, counts, counts, listOf("musescore")) { null })
+            val again = database.writeBlocking { IndexTransfer.merge(it, export, now, listOf("musescore")) }
+            assertTrue(!again.changed, "a second merge writes nothing")
         }
     }
 }

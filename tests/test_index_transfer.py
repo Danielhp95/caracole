@@ -679,6 +679,58 @@ def test_a_sitemap_read_more_recently_replaces_its_rows_and_the_others_stay(home
     assert merged.sites[0].rows["gtptabs_index"] == (4, 5)
 
 
+def rechecked(conn, site: site_index.Site, name: str, at: datetime) -> None:
+    """A sitemap found unchanged (a 304) at its re-check: only its record's ``checked_at`` moves (site_index.py)."""
+    site_index._record(conn, site, name, {**site_index.sitemaps(conn, site)[name], "checked_at": db_stamp(at)})
+
+
+def test_a_sitemap_rechecked_and_found_unchanged_moves_its_record_alone_and_is_no_site_taken(home, conn, tmp_path):
+    from caracole.commands.peer import _taken_entries
+
+    site = gtptabs_fetch.SITE
+    locs = [f"https://gtptabs.com/tabs/2/blur/song-{i}.html" for i in range(1, 51)]
+    sitemap(home, site, "sitemap-tabs-1.xml", locs, EARLY)
+    merge(conn, export(home, tmp_path, ["gtptabs"], name="first.sqlite"), state=tmp_path / "state")
+    before = rows(conn, "gtptabs_index")
+    rechecked(home, site, "sitemap-tabs-1.xml", LATE)
+    path = export(home, tmp_path, ["gtptabs"], name="week.sqlite")
+    changes = conn.total_changes
+
+    merged, told = told_merge(conn, path, state=tmp_path / "state")
+
+    assert conn.total_changes - changes == 1  # its record alone: no row deleted or inserted
+    assert rows(conn, "gtptabs_index") == before
+    assert site_index.sitemaps(conn, site) == site_index.sitemaps(home, site)  # the record moved on
+    done = merged.sites[0]
+    assert (done.taken, done.checked, done.rows["gtptabs_index"]) == ([], 0, (50, 50))
+    assert done.records == ["sitemaps found unchanged"]
+    assert ("gtptabs", "sitemap", 0, 1) not in told  # no action told for it
+    assert _taken_entries(merged, {}) == []  # no site of a sync's report
+    assert not merge(conn, path, state=tmp_path / "state").changed  # and a second merge writes nothing
+
+
+@pytest.mark.parametrize("change", ["etag", "last_modified", "rows", "keys", "no validators", "older record"])
+def test_a_sitemap_whose_record_differs_beside_its_time_is_taken_as_before(home, conn, tmp_path, change):
+    site = gtptabs_fetch.SITE
+    sitemap(home, site, "sitemap-tabs-1.xml", ["https://gtptabs.com/tabs/2/blur.html"], EARLY)
+    merge(conn, export(home, tmp_path, ["gtptabs"], name="first.sqlite"), state=tmp_path / "state")
+    entry = {**site_index.sitemaps(conn, site)["sitemap-tabs-1.xml"], "checked_at": db_stamp(LATE)}
+    if change == "no validators":  # a site that sends none: a re-read with the same count may hold other rows
+        site_index._record(conn, site, "sitemap-tabs-1.xml", {**entry, "etag": None, "checked_at": db_stamp(EARLY)})
+        entry = {**entry, "etag": None}
+    elif change == "older record":  # a record written without a field the other side's has
+        entry.pop("keys")
+    else:
+        entry[change] = {"etag": '"other"', "last_modified": "Wed, 28 Oct 2026 03:30:00 GMT", "rows": 2,
+                         "keys": normalize.KEY_VERSION - 1}[change]
+    site_index._record(home, site, "sitemap-tabs-1.xml", entry)
+
+    merged = merge(conn, export(home, tmp_path, ["gtptabs"], name="week.sqlite"), state=tmp_path / "state")
+
+    assert merged.sites[0].taken == [("sitemap", 1)] and merged.sites[0].checked == 1
+    assert site_index.sitemaps(conn, site)["sitemap-tabs-1.xml"] == entry
+
+
 def test_ug_takes_each_sitemap_indexed_more_recently_and_marks_the_songs_its_new_tabs_are_for(home, conn, tmp_path):
     from caracole.songs import get_song, update_song
 

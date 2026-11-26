@@ -608,7 +608,9 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     Journal or the Sync sheet (`refusal_words`: "The other side's index export", "The file", "The index export");
   - else per site what the file read more recently:
     - a sitemap or LaCuerda listing page by its record's time (UG's rows upserted as a refresh stores them, its new
-      tabs' songs marked);
+      tabs' songs marked); a site_index.py sitemap whose record differs only there (a re-check found it unchanged:
+      its etag, date, rows and keys alike, `_unchanged`) its record alone, no row written and no site of a sync's
+      report;
     - harptabs.com's artist and gametabs.net's game pages by `read_at`;
     - UG's artist pages' tabs a row at a time;
     - UG's artist directory (`ug_directory`): a row seen later in a listing (`seen_at`) its listing columns, a page

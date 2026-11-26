@@ -742,15 +742,17 @@ def _taken_entries(merged, newest: dict[str, str]) -> list[dict]:
     """A report's ``indexes`` of the sites a merge took something of: each site's first table's rows before and
     after (``index_transfer.SITES[site].tables[0]``), ``new`` the rows it had not (after − before: a UG merge never
     deletes one; a site whose sitemaps no longer list some, negative), ``checked`` the file's rows of the sitemaps and
-    listing pages it took, which the merge read (``SiteMerge.checked``), and its newest read now."""
+    listing pages it took, which the merge read (``SiteMerge.checked``), and its newest read now. A site whose merge
+    moved its progress records alone (no page taken, its count the same: a sitemap found unchanged) has none, as the
+    phone's report (SyncEngine.taken)."""
     from caracole import index_transfer
 
     taken = []
     for site in merged.sites:
-        if not site.changed:
-            continue
         first = index_transfer.SITES[site.site].tables[0]
         before, after = site.rows.get(first, (0, 0))
+        if not site.taken and before == after:
+            continue
         taken.append({"site": site.site, "title": index_transfer.SITES[site.site].title, "direction": "taken",
                       "before": before, "after": after, "new": after - before, "checked": site.checked,
                       "read": newest.get(site.site)})

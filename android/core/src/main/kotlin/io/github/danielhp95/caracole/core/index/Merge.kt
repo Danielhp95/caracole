@@ -167,14 +167,39 @@ internal object Merge {
         if (plan.actions.isNotEmpty() && kv(db, THEIRS, key) != kv(db, "main", key)) plan.kv[key] = null
     }
 
-    /** _sitemaps: a site_index.py site's sitemaps the file read later, and its `complete_at`. */
+    /** _SAME_SITEMAP: a site_index.py record's fields beside its `checked_at`. */
+    private val SAME_SITEMAP = listOf("etag", "last_modified", "rows", "keys")
+
+    /** _unchanged: whether the file's record of a sitemap says its rows are the database's: each of [SAME_SITEMAP]
+     * alike as Python's `==` (a field one record lacks and the other holds differs), with a validator to tell by. A
+     * re-check that found it unchanged (a 304) moves its `checked_at` alone; with no etag and no date, a re-read of as
+     * many rows may hold others. */
+    private fun unchanged(theirs: JsonElement?, mine: JsonElement?): Boolean {
+        if (theirs !is JsonObject || mine !is JsonObject) return false
+        val alike = SAME_SITEMAP.all { k ->
+            val a = theirs[k]
+            val b = mine[k]
+            if (a == null || b == null) a == null && b == null else PyJson.equal(a, b)
+        }
+        return alike && listOf("etag", "last_modified").any { theirs[it].let { v -> v != null && v !is JsonNull } }
+    }
+
+    /** _sitemaps: a site_index.py site's sitemaps the file read later, and its `complete_at`: one whose rows differ
+     * taken ([unchanged]), one the file merely checked again only its record moved on, no row of it written. */
     private fun sitemaps(db: Db, plan: Plan, provider: String, table: String) {
         val key = sitemapsKey(provider)
-        val names = plan.newerRecords(db, key, "checked_at")
+        val read = plan.newerRecords(db, key, "checked_at")
+        val mine = records(db, "main", key)
+        val theirs = records(db, THEIRS, key)
+        val names = read.filter { !unchanged(theirs[it], mine[it]) }
         plan.take("sitemap", names.size) { c ->
             taken(c, names)
             plan.checked += replace(c, table, "sitemap")
-            takeRecords(c, key, names)
+        }
+        if (read.isNotEmpty()) {
+            val merged = LinkedHashMap(mine)
+            for (name in read) merged[name] = theirs.getValue(name)
+            plan.kv[key] = PyJson.dumps(pyLoaded(JsonObject(merged)))  // json.dumps, ensure_ascii=False
         }
         later(db, plan, completeKey(provider))
     }

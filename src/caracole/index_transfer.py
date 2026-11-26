@@ -28,7 +28,8 @@ what the file read more recently, the database's records and the file's compared
   (``lacuerda:index:pages``) the file read or checked later, or one the database never read, replaces its rows and
   its record, as reading it again would: UG's rows upserted as a refresh stores them (a row the database has keeps
   its sitemap and first sighting), and the songs its new tabs are for marked to fetch again; the others' rows
-  deleted and inserted;
+  deleted and inserted, but for a sitemap the file merely checked again and found unchanged (its record alike but
+  its ``checked_at``: ``_unchanged``), whose record alone moves on, no row of it written;
 - a page the file read later by its ``read_at`` (harptabs.com's artist pages, gametabs.net's game pages), or one
   the database never read, replaces its tabs and its row; UG's artist pages' tabs, a row at a time, where the file's
   read is later, then filed again (ug/artist_tabs.py ``refile``);
@@ -692,16 +693,36 @@ def _take_records(conn: sqlite3.Connection, key: str, names: Sequence[str]) -> N
     db.kv_set_json(conn, key, {**mine, **{n: theirs[n] for n in names}})
 
 
+_SAME_SITEMAP = ("etag", "last_modified", "rows", "keys")  # a site_index.py record beside its checked_at
+_LACKED = object()  # a field a record lacks, which no value json.loads gives equals
+
+
+def _unchanged(theirs: Any, mine: Any) -> bool:
+    """Whether the file's record of a sitemap says its rows are the database's: each of ``_SAME_SITEMAP`` alike (a
+    field one record lacks and the other holds differs), with a validator to tell by. A re-check that found it
+    unchanged (a 304) moves its ``checked_at`` alone; with no etag and no date, a re-read of as many rows may hold
+    others."""
+    return isinstance(theirs, dict) and isinstance(mine, dict) \
+        and all(theirs.get(k, _LACKED) == mine.get(k, _LACKED) for k in _SAME_SITEMAP) \
+        and (theirs.get("etag") is not None or theirs.get("last_modified") is not None)
+
+
 def _sitemaps(conn: sqlite3.Connection, plan: _Plan, site: Any, noun: str = "sitemap") -> None:
-    """A site_index.py site's sitemaps the file read later, and its ``complete_at``."""
-    names = _newer_records(conn, site.sitemaps_key, "checked_at")
+    """A site_index.py site's sitemaps the file read later, and its ``complete_at``: one whose rows differ taken
+    (``_unchanged``), one the file merely checked again only its record moved on, no row of it written."""
+    read = _newer_records(conn, site.sitemaps_key, "checked_at")
+    mine, theirs = _records(conn, "main", site.sitemaps_key), _records(conn, THEIRS, site.sitemaps_key)
+    names = [n for n in read if not _unchanged(theirs[n], mine.get(n))]
 
     def take(c: sqlite3.Connection) -> None:
         _taken(c, names)
         plan.checked += _replace(c, site.table, "sitemap")
-        _take_records(c, site.sitemaps_key, names)
 
     plan.take(noun, len(names), take)
+    if read:
+        plan.kv[site.sitemaps_key] = json.dumps({**mine, **{n: theirs[n] for n in read}}, ensure_ascii=False)
+    if len(names) < len(read):
+        plan.records.append(f"{noun}s found unchanged")
     _later(conn, plan, site.complete_key, f"{noun}s read whole")
 
 

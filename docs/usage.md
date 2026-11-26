@@ -3796,6 +3796,9 @@ and the file lacks stays, and how far an index has got never moves back.
 - New Ultimate Guitar tabs mark their songs to be fetched again, as a refresh does.
 - LaCuerda's artist pages and search answers carry no time, so only those the database lacks come
   in.
+- A gtptabs.com, MuseScore, harptabs.com or gametabs.net sitemap the file only checked again and
+  found unchanged moves its record on, and none of its rows is written ("its progress (sitemaps
+  found unchanged)"); a sync's report leaves such a site out.
 
 Before it changes anything it backs the database up into `backups/` (`…-before-merge.sqlite`), and
 without room for that copy it merges nothing. While it works it says how far it has got on stderr:
