@@ -1211,6 +1211,11 @@ It is rows.js's, shared by both pages:
   `caracole songbook add`, both or neither: `JobQueue.submit_all`).
 - A change that ends seconds after its tap moves nothing on the screen: what it took away says so where it was until
   the next click or key (test_songbooks_tab.py).
+- A songbook's line on the list says its counts and its day (`5 songs · 3 without a sheet`, `made 26/11/26`) a line
+  each, neither able to wrap (songbooks.js `metaOf`, songbooks.css `.book-meta`; the separator between them visually
+  hidden, so its text reads as one): the font's digits are proportional, so a day or a count a hundredth of a pixel
+  wider wrapped the line, and a lookup that turned "3" into "2" un-wrapped it and moved every line and + New songbook
+  under it. The test pins a wide day (`made_on`), never the clock's.
 
 #### index.html's assets (library_assets/)
 

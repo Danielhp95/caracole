@@ -20,6 +20,10 @@ button.book-line:hover { background: var(--raised); }
 .book-line[aria-current="true"] { background: var(--raised); box-shadow: inset 3px 0 0 var(--accent); }
 .book-name { font-weight: 650; line-height: 1.3; overflow-wrap: anywhere; }
 .book-meta { color: var(--muted); font-size: .8rem; line-height: 1.35; }
+/* A songbook's counts, then its day, a line each, as tall whatever they say: a count or a day a little wider (its
+   digits are as wide as the font draws them) never wraps one, moving the lines and + New songbook under it. */
+.book-line .book-meta > span:not(.visually-hidden) { display: block; overflow: hidden; white-space: nowrap;
+  text-overflow: ellipsis; }
 .book-line.gone .book-name { color: var(--muted); }
 .new-book { justify-self: start; }
 .sb-error { margin: 0; color: var(--failed); font-weight: 600; overflow-wrap: anywhere; }
