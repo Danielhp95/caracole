@@ -1469,6 +1469,8 @@ minutes at most), now:
   `Audio: has this file's audio already.` while the song's audio is that file. An upload lost before
   its Audio step (a request interrupted, its file swept after an hour or replaced by another upload),
   or one a later file of yours has replaced since, says the upload is gone: choose it again.
+  A request cut off while it kept the file and never asked again leaves the file in `audio/` for
+  those 30 days; then it is deleted.
 - No file of yours is deleted while another song's audio is that file too.
 - Two songs merged into one (after an upgrade that spells a song's key anew) keep the file you gave
   either; of two such files, the one given last, and the next scan deletes the older.

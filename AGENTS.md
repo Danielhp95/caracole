@@ -343,8 +343,10 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     waiting job Interrupted, its staged file swept or let go by another upload), or whose file is no longer the song's
     (a later upload kept since), is refused "That upload is gone…" (commands/audio.py `_given_already`, audio_sheet.py
     `audio`). `stage` and `sweep` never take a marked id for a staged upload no job names; `sweep` lets a marker go,
-    with what is left of its upload, once its file is gone or `MARKED` (the Journal's 30 days, web/history.py `DAYS`:
-    Try again can't come later) after its keep, so a cut-off keep can be finished for 30 days; `tidy` spares the file a
+    with what is left of its upload, `MARKED` (the Journal's 30 days, web/history.py `DAYS`: Try again can't come
+    later) after its keep, and before that only once the kept file it names and its staged data are both gone and no
+    waiting or running job names its id (a marker is written before the move: one with its data still staged is a keep
+    under way or cut off), so a cut-off keep can be finished for 30 days; `tidy` spares the file a
     marker of an unfinished keep names (`_live_kept`).
   - No kept file is deleted while another song's row names it (`audio_store._named_by_another`, one query): not by
     `keep` replacing a song's file, nor by a removal, whose plan then names no audio of yours to delete.

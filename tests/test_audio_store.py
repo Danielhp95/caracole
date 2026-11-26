@@ -614,3 +614,49 @@ def test_a_kept_file_another_song_names_is_never_deleted(conn, cfg, tmp_path):
     assert not any("audio file you gave" in line for line in goes) and "audio file you gave" not in brief(plan)
     remove_song(conn, cfg, plan)
     assert shared.exists() and get_song(conn, two.id).audio_path == str(shared)
+
+
+# --- sweep and a marker written before its move ---------------------------------------------------------------------
+
+
+def _stopped_before_the_move(cfg, conn, monkeypatch):
+    """A keep stopped after its marker and before the data's move (the data's rename raising): the song, the upload."""
+    song = add_song(conn, "Radiohead", "Creep")
+    up = stage(cfg, audio("MP3"), "creep.mp3", named=())
+    real = audio_store.os.rename
+
+    def rename(src, dst, *args, **kwargs):
+        if str(src).endswith(".mp3"):
+            raise KeyboardInterrupt
+        return real(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(audio_store.os, "rename", rename)
+    with pytest.raises(KeyboardInterrupt):
+        keep(cfg, conn, song, staged(cfg, up.id).path, move=True)
+    monkeypatch.setattr(audio_store.os, "rename", real)
+    assert markers(cfg) == [f".upload-{up.id}.kept"] and staged(cfg, up.id).path.exists()
+    return song, up
+
+
+def test_sweep_leaves_a_marker_and_its_staged_data_before_the_move(conn, cfg, monkeypatch):
+    song, up = _stopped_before_the_move(cfg, conn, monkeypatch)
+    sweep(cfg, ())  # no job holds it: still the keep's to finish
+    sweep(cfg, (), now=up.at + EXPIRES + 1)
+    assert markers(cfg) == [f".upload-{up.id}.kept"] and staged(cfg, up.id).path.exists()
+    kept = keep(cfg, conn, song, staged(cfg, up.id).path, move=True)
+    assert get_song(conn, song.id).audio_path == str(kept)
+
+
+def test_sweep_lets_a_pre_move_marker_go_with_its_data_past_its_window(conn, cfg, monkeypatch):
+    song, up = _stopped_before_the_move(cfg, conn, monkeypatch)
+    sweep(cfg, (), now=time.time() + audio_store.MARKED + 1)
+    assert markers(cfg) == [] and names(cfg) == []
+
+
+def test_sweep_leaves_a_marker_a_job_holds_and_drops_one_with_neither_file_nor_data_at_once(conn, cfg, monkeypatch):
+    song, up = _stopped_before_the_move(cfg, conn, monkeypatch)
+    staged(cfg, up.id).path.unlink()  # the data gone, no kept file: only a job naming it keeps the marker
+    sweep(cfg, (up.id,))
+    assert markers(cfg) == [f".upload-{up.id}.kept"]
+    sweep(cfg, ())
+    assert markers(cfg) == [] and names(cfg) == []

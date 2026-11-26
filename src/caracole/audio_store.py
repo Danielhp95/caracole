@@ -575,8 +575,10 @@ def sweep(cfg: Config, named: Collection[str] | Callable[[], Collection[str]], *
           now: float | None = None) -> list[str]:
     """Delete each staged upload left ``EXPIRES`` (an hour) that ``named`` (the ids the waiting and running jobs name,
     or a function giving them, called under the lock) doesn't hold, whatever is left of it; the ids deleted. A moved
-    upload's marker (``marked``) is no staged upload: it goes, with what is left of its upload, once the file it names
-    is gone or ``MARKED`` (30 days) after its keep."""
+    upload's marker (``marked``) is no staged upload: it goes, with what is left of its upload, ``MARKED`` (30 days)
+    after its keep, and before that only once the kept file it names and its staged data are both gone and no job
+    names its id. A marker is written before the data's move, so one whose kept file isn't there yet, with the data
+    still staged, is a keep under way or cut off: left whole for it, or for its job asked again."""
     now = time.time() if now is None else now
     with _lock:
         root = folder(cfg)
@@ -587,11 +589,20 @@ def sweep(cfg: Config, named: Collection[str] | Callable[[], Collection[str]], *
                       if now - _touched(root, upload_id) > EXPIRES)
         for upload_id in gone:
             _drop_pieces(root, upload_id)
-        for upload_id in _markers(root):  # a marker whose file is gone, or past the Journal's history, and its record
+        for upload_id in _markers(root):
             found = _read_marker(root, upload_id)
-            if found is None or not _regular(found.path) or now - found.at > MARKED:
-                _drop_pieces(root, upload_id)
-                _unlink(_marker(root, upload_id))
+            marker = _marker(root, upload_id)
+            try:
+                at = found.at if found is not None else os.lstat(marker).st_mtime
+            except OSError:
+                continue
+            data = any(os.path.lexists(root / f"{_STAGED}{upload_id}{ext}") for ext in FORMATS.values())
+            if now - at > MARKED:
+                pass  # past the Journal's history: its job can't be asked again
+            elif data or upload_id in held or (found is not None and _regular(found.path)):
+                continue  # a keep's to finish (written before the move, or a job on it), or Try again's to come
+            _drop_pieces(root, upload_id)
+            _unlink(marker)
     return gone
 
 

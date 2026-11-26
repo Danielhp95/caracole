@@ -519,3 +519,84 @@ def test_a_keep_cut_off_anywhere_is_finished_by_the_same_job_again(setup, conn, 
     kept = audio_store.uploaded(setup, the_song(conn))
     assert kept is not None and kept.name == f"{the_song(conn).id}-{up.sha256[:16]}.mp3"
     assert [n for n in kept_files(setup) if not n.endswith(".kept")] == [kept.name]  # nothing else staged or lost
+
+
+@pytest.mark.parametrize("between", ["a sweep", "another upload"])
+def test_a_keep_stopped_before_the_move_survives_a_sweep_or_another_upload_and_is_finished(setup, conn, sites,
+                                                                                            monkeypatch, between):
+    up = audio_store.stage(setup, audio("MP3", 200.0), "Vikingos.mp3", named=())
+    real = audio_store.os.rename
+
+    def rename(src, dst, *args, **kwargs):
+        if str(src).endswith(".mp3"):
+            raise KeyboardInterrupt  # cut off after the marker, before the data's move
+        return real(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(audio_store.os, "rename", rename)
+    with pytest.raises(KeyboardInterrupt):
+        make(setup, AudioRequest(*NICK, upload=up.id))
+    monkeypatch.setattr(audio_store.os, "rename", real)
+    if between == "a sweep":
+        audio_store.sweep(setup, (), now=up.at + audio_store.EXPIRES + 1)
+    else:
+        audio_store.stage(setup, audio("WAV", 3.0), "other.wav", named=())
+    result, heard = make(setup, AudioRequest(*NICK, upload=up.id))
+    assert result.ok, result
+    assert heard.ends()["audio"] == ("done", "kept as its audio: MP3, 3:20")
+    assert audio_store.uploaded(setup, the_song(conn)).name == f"{the_song(conn).id}-{up.sha256[:16]}.mp3"
+
+
+# --- histories (no new behaviour) ------------------------------------------------------------------------------
+
+
+def test_the_same_bytes_uploaded_twice_keep_one_file_and_try_again_of_either_is_up_to_date(setup, conn, sites):
+    x = audio_store.stage(setup, audio("MP3", 200.0), "x.mp3", named=())
+    assert make(setup, AudioRequest(*NICK, upload=x.id))[0].ok
+    kept = audio_store.uploaded(setup, the_song(conn))
+    y = audio_store.stage(setup, audio("MP3", 200.0), "y.mp3", named=())
+    assert make(setup, AudioRequest(*NICK, upload=y.id))[0].ok
+    assert kept.exists() and audio_store.uploaded(setup, the_song(conn)) == kept
+    for job in (x, y):
+        result, heard = make(setup, AudioRequest(*NICK, upload=job.id))
+        assert result.ok and heard.ends()["audio"] == ("done", "has this file's audio already")
+
+
+def test_try_again_after_the_song_was_merged_goes_on_with_the_file_its_row_names(setup, conn, sites):
+    # The upload kept for a song that a re-keying then merges into an older spelling of it: the merged song has the
+    # file, and Try again of the old job finds it by its name.
+    from test_songs import older_song
+
+    from caracole.db import kv_set
+    from caracole.normalize import KEY_VERSION
+    from caracole.songs import KEY_VERSION_KV, ensure_current_keys
+
+    artist, title = "Enanitos Verdes", "Lamento Boliviano"
+    older = older_song(conn, "Los Enanitos Verdes", title, "los-enanitos-verdes/lamento-boliviano",
+                       source="wanted", source_id="los-enanitos-verdes/lamento-boliviano")
+    kv_set(conn, KEY_VERSION_KV, str(KEY_VERSION))  # not re-keyed yet: the upload's song is a record of its own
+    up = audio_store.stage(setup, audio("MP3", 200.0), "lamento.mp3", named=())
+    assert make(setup, AudioRequest(artist, title, upload=up.id))[0].ok
+    from caracole.normalize import identity_key
+
+    mine = find_song(conn, identity_key(artist, title))
+    assert mine.id != older
+    kept = audio_store.uploaded(setup, mine)
+    conn.execute("DELETE FROM kv WHERE key = ?", (KEY_VERSION_KV,))
+    ensure_current_keys(conn)
+    merged = get_song(conn, older)
+    assert merged.audio_path == str(kept)
+    result, heard = make(setup, AudioRequest(artist, title, upload=up.id))
+    assert result.ok and heard.ends()["audio"] == ("done", "has this file's audio already")
+    assert get_song(conn, older).audio_path == str(kept)
+
+
+def test_try_again_after_the_song_was_removed_and_asked_for_again_is_refused(setup, conn, sites):
+    from caracole.removal import plan_removal, remove_song
+
+    up = audio_store.stage(setup, audio("MP3", 200.0), "Vikingos.mp3", named=())
+    assert make(setup, AudioRequest(*NICK, upload=up.id))[0].ok
+    remove_song(conn, setup, plan_removal(conn, setup, the_song(conn)))
+    result, heard = make(setup, AudioRequest(*NICK, upload=up.id))
+    assert not result.ok and result.failed.startswith("that upload is gone")
+    again = the_song(conn)
+    assert again is None or again.audio_path is None
