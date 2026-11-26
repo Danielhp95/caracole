@@ -321,6 +321,8 @@ def _lyrics_as(cfg: Config, display: str, typed: str) -> None:
 
     Its last line starts with what came of it, which caracole serve's request line reads: "Searched: " (rows),
     "Nothing found: " (every site asked answered none) or "Not searched: " (no rows, a site failed or waited)."""
+    import shlex
+
     from caracole.lyrics_search import FAR, SITES, is_own_name, last_line, search_lyrics
 
     name = _typed_name(cfg, typed)
@@ -345,12 +347,13 @@ def _lyrics_as(cfg: Config, display: str, typed: str) -> None:
         if any(row.site == site for row in found.rows):
             continue
         said, who = found.said.get(site, ""), provider_name(site)
-        typer.echo(f"{said[:1].upper()}{said[1:]}." if who in said else f"{who}: {said}.")
+        line = f"{said[:1].upper()}{said[1:]}" if who in said else f"{who}: {said}"
+        typer.echo(line if line.endswith(".") else f"{line}.")  # an error's own full stop, never two
     if found.instrumental:
         typer.echo(f"{plural(found.instrumental, 'record')} marked instrumental "
                    f"{'isn\'t' if found.instrumental == 1 else 'aren\'t'} listed.")
     if found.rows:
-        typer.echo(f'Take one: caracole lyrics --song "{song.display}" --pick 1')
+        typer.echo(f"Take one: caracole lyrics --song {shlex.quote(song.display)} --pick 1")
     typer.echo(last_line(found))
 
 

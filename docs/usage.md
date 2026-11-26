@@ -977,7 +977,8 @@ ignored. The name is noted first as the song's `[lyrics]` `as`, so later nights 
 typing the song's own name takes it out. Then each site is asked once, now, at a lookup's pace:
 LRCLIB's search (and its exact match, with the audio's length, when nothing it lists fits),
 Megalobiz's search, and AZLyrics' page of the artist you typed (never for a name with no Latin
-letter). That is 2 to 4 requests; the same name again answers from the cache. Nothing of the
+letter). That is 2 to 4 requests. The same name again within 7 days answers from the cache with
+none; after that the sites are asked again, so a record they added since is listed. Nothing of the
 song's lyrics changes.
 
     Asked as 孟维来 - 野人 (its audio is 3:45); noted under [lyrics].
@@ -985,14 +986,15 @@ song's lyrics changes.
      2. Megalobiz  (no artist) - 野人 · 3:45 · timed
     AZLyrics: no artist page for 孟维来.
     2 records marked instrumental aren't listed.
-    Take one: caracole lyrics --song "孟维来 - 野人『…』" --pick 1
+    Take one: caracole lyrics --song '孟维来 - 野人『…』' --pick 1
     Searched: LRCLIB and Megalobiz list 2 records for “孟维来 - 野人”.
 
 The best fit is the record the nightly passes would keep, then the records that fit the name, then
 the rest, 40 at most; a record more than 10 s off the audio says its gap ("4:31, audio 3:45").
-Instrumental records are counted, never listed. A site off, cooling down, out of its hour, blocking
-or failing is said and the others are listed; with no rows the last line is `Not searched: …`,
-never `Nothing found`. The list is kept for 7 days to pick from, until the song's next search.
+Instrumental records are counted, never listed. A site cooling down, out of its asks, blocking or
+failing is said and the others are listed; with no rows the last line is then `Not searched: …`,
+never `Nothing found`. A site turned off is said and left out: the others answering none is
+`Nothing found`. The list is kept for 7 days to pick from, until the song's next search.
 `--song` and `--as` go together (exit 2); a song not in the book or ignored exits 1.
 
 ### caracole fetch

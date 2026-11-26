@@ -7,6 +7,8 @@ reaches the network. The records are real response shapes with invented words.
 
 from __future__ import annotations
 
+import json
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import httpx
@@ -18,7 +20,7 @@ from helpers.megalobiz_site import record as mz_record
 
 from caracole import db
 from caracole.commands import _common
-from caracole.health import get_state, is_cooling, record_block
+from caracole.health import get_state, is_cooling
 from caracole.lyrics_search import KV, MOST_ROWS, PICKABLE_FOR, kept_search, row_of, search_lyrics
 from caracole.overrides import load_overrides, override_key, set_lyrics_record
 from caracole.songs import get_song, update_song
@@ -41,13 +43,15 @@ class Lrclib:
 
     def __init__(self, search=(), got=None, status=None):
         self.search, self.got, self.status = list(search), got, status
+        self.failing: dict[str, int] = {}  # an endpoint ("search", "get") and the status it answers
         self.requests: list[tuple[str, dict]] = []
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         endpoint = request.url.path.removeprefix("/api/")
         self.requests.append((endpoint, dict(request.url.params)))
-        if self.status is not None:
-            return httpx.Response(self.status, text="Bad Gateway")
+        status = self.failing.get(endpoint, self.status)
+        if status is not None:
+            return httpx.Response(status, text="Bad Gateway")
         if endpoint == "search":
             return httpx.Response(200, json=self.search)
         if endpoint == "get":
@@ -93,6 +97,26 @@ def song(cfg, conn):
 
 def search(cfg, conn, song, name=NAME, now=NOW):
     return search_lyrics(cfg, conn, get_song(conn, song.id), name, now=now)
+
+
+def off(cfg, *sites):
+    """``cfg`` with ``sites`` turned off, as ``enabled = false`` in caracole.toml turns them off."""
+    return replace(cfg, providers={**cfg.providers,
+                                   **{site: replace(cfg.provider(site), enabled=False) for site in sites}})
+
+
+def age_the_cache(cfg, by: timedelta) -> None:
+    """Every answer the HTTP cache holds made ``by`` older, as if it had been fetched then."""
+    for meta in (cfg.cache_dir / "http").rglob("*"):
+        if meta.is_file():
+            try:
+                data = json.loads(meta.read_text(encoding="utf-8"))
+            except (ValueError, UnicodeDecodeError):
+                continue
+            if isinstance(data, dict) and "fetched_at" in data:
+                when = datetime.strptime(data["fetched_at"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC) - by
+                data["fetched_at"] = when.strftime("%Y-%m-%dT%H:%M:%SZ")
+                meta.write_text(json.dumps(data), encoding="utf-8")
 
 
 def records(found) -> list[str]:
@@ -283,12 +307,38 @@ def test_the_search_is_kept_in_kv_and_replaced_by_the_next(cfg, conn, song, site
 def test_a_kept_row_of_another_shape_is_never_given(cfg, conn, song, sites):
     db.kv_set_json(conn, f"{KV}{song.id}", {
         "at": "2026-11-25T13:00:00Z", "as": list(NAME), "length": None, "lrclib": {}, "instrumental": 0, "said": {},
+        "state": {"lrclib": "rows", "megalobiz": "none", "azlyrics": "none"},
         "rows": [{"record": "azlyrics:../x", "site": "azlyrics", "artist": "", "title": "", "album": "",
                   "duration": None, "timed": False, "best": False, "fits": False},
                  {"record": "megalobiz:8", "site": "lrclib", "artist": "", "title": "", "album": "",
                   "duration": None, "timed": False, "best": False, "fits": False}]})
     back = kept_search(conn, song.id, NOW)
     assert back.rows == () and row_of(back, "azlyrics:../x") is None
+
+
+def test_a_kept_search_without_each_sites_state_is_none_to_pick_from(cfg, conn, song, sites):
+    search(cfg, conn, song)
+    kept = db.kv_get_json(conn, f"{KV}{song.id}")
+    assert kept["state"] == {"lrclib": "none", "megalobiz": "none", "azlyrics": "none"}
+    del kept["state"]
+    db.kv_set_json(conn, f"{KV}{song.id}", kept)
+    assert kept_search(conn, song.id, NOW) is None
+
+
+def test_each_sites_state_is_kept_and_a_kept_searchs_last_line_is_the_one_it_printed(cfg, conn, song, sites):
+    from caracole.lyrics_search import last_line
+
+    sites.lrclib.failing = {"search": 502}
+    sites.megalobiz.records = [mz_record(lrc_id=24519, title="Vikingos veganos", artist="Nick Cani")]
+    found = search_lyrics(off(cfg, "azlyrics"), conn, get_song(conn, song.id), NAME, now=NOW)
+    assert found.state == {"lrclib": "failed", "megalobiz": "rows", "azlyrics": "off"}
+    back = kept_search(conn, song.id, NOW)
+    assert back.state == found.state and last_line(back) == last_line(found)
+    sites.lrclib.failing = {}
+    sites.megalobiz.records = []
+    found = search(cfg, conn, song, ("Nick Cani", "Otra"))
+    assert last_line(kept_search(conn, song.id, NOW)) == last_line(found)
+    assert last_line(found).startswith("Nothing found: ")
 
 
 def test_a_search_changes_no_lyrics(cfg, conn, song, sites):
@@ -365,10 +415,30 @@ def test_a_search_sends_two_to_four_requests_at_a_lookups_pace(cfg, conn, song, 
     assert sites.requests() == 4
     runs = {run for (run,) in conn.execute("SELECT DISTINCT run FROM events")}
     assert runs and all(run.startswith(_common.LOOKUP_RUN) for run in runs)
-    sites.lrclib.search = [lrc(77)]
+
+
+def test_the_same_name_again_within_a_kept_searchs_life_asks_nothing(cfg, conn, song, sites):
+    sites.azlyrics.pages = {"/n/nickcani.html": artist_page().replace("Pomme Lyrics", "Nick Cani Lyrics")}
+    sites.lrclib.search = [lrc(90, track="Otra", artist="Otro")]
+    first = search(cfg, conn, song)
     asked = sites.requests()
-    search(cfg, conn, song, ("Nick Cani", "Vikingos veganos"), now=NOW)  # asked before: the cache answers
-    assert sites.requests() - asked <= 2
+    assert asked == 4
+    age_the_cache(cfg, PICKABLE_FOR - timedelta(hours=1))
+    again = search(cfg, conn, song)
+    assert sites.requests() == asked and records(again) == records(first)  # the cache's answers, a 404 too
+
+
+def test_the_same_name_after_a_kept_searchs_life_asks_again_and_lists_what_came_since(cfg, conn, song, sites):
+    sites.azlyrics.pages = {"/n/nickcani.html": artist_page().replace("Pomme Lyrics", "Nick Cani Lyrics")}
+    sites.lrclib.search = [lrc(90, track="Otra", artist="Otro")]  # none fits, and /api/get's 404
+    search(cfg, conn, song)
+    asked = sites.requests()
+    age_the_cache(cfg, PICKABLE_FOR + timedelta(hours=1))
+    sites.lrclib.search = [lrc(90, track="Otra", artist="Otro"), lrc(77)]  # added since
+    sites.megalobiz.records = [mz_record(lrc_id=24519, title="Vikingos veganos", artist="Nick Cani")]
+    found = search(cfg, conn, song)
+    assert sites.requests() - asked == 3  # past the cache: LRCLIB's search (fits now: no get), Megalobiz, AZLyrics
+    assert records(found)[:2] == ["lrclib:77", "megalobiz:24519"]
 
 
 def test_a_spent_hour_is_said_and_asks_nothing(cfg, conn, song, sites):
@@ -395,17 +465,77 @@ def test_lookups_go_first_in_the_searchs_pauses(cfg, conn, song, sites, monkeypa
     assert turns == ["search"]  # before LRCLIB's second request: each client's first goes at once
 
 
-def test_a_block_sends_no_alert(cfg, conn, song, sites, monkeypatch):
-    record_block(conn, "azlyrics", NOW - timedelta(days=30), "403")  # long over
+def test_a_block_cools_the_site_down_once_and_sends_no_alert(cfg, conn, song, sites, monkeypatch):
+    from caracole import notify
+
+    alerts: list[tuple] = []
+    monkeypatch.setattr(_common, "alert_block", lambda *args, **kwargs: alerts.append(args))
+    monkeypatch.setattr(notify.Notifier, "send", lambda self, *args, **kwargs: alerts.append(args) or True)
     sites.lrclib.status = 403
-    search(cfg, conn, song)
-    assert "ntfy" not in sites.made
+    found = search(cfg, conn, song)
+    assert found.state["lrclib"] == "blocked" and alerts == []
+    state = get_state(conn, "lrclib")
+    assert state.strikes == 1 and is_cooling(conn, "lrclib", NOW)
+    assert [e for e, _ in sites.lrclib.requests] == ["search"]  # nothing more sent once it turned us back
 
 
-def test_a_removal_or_a_merge_drops_the_kept_search(cfg, conn, song, sites):
-    from caracole.songs import delete_song_kv
+# --- a site turned off is not asked, and never a wait ------------------------------------------------------------
 
-    search(cfg, conn, song)
-    assert kept_search(conn, song.id, NOW) is not None
-    delete_song_kv(conn, song.id)  # what a removal and a merge delete (songs._PER_SONG_KV)
-    assert kept_search(conn, song.id, NOW) is None
+
+def test_a_site_off_and_the_others_answering_none_is_nothing_found(cfg, conn, song, sites):
+    from caracole.lyrics_search import last_line
+
+    found = search_lyrics(off(cfg, "megalobiz"), conn, get_song(conn, song.id), NAME, now=NOW)
+    assert sites.megalobiz.requests == [] and found.said["megalobiz"] == "Megalobiz is off (caracole.toml)"
+    assert last_line(found) == "Nothing found: LRCLIB and AZLyrics list nothing for “Nick Cani - Vikingos veganos”."
+
+
+def test_a_site_off_and_one_erring_is_not_searched_naming_the_one_that_erred(cfg, conn, song, sites):
+    from caracole.lyrics_search import last_line
+
+    sites.lrclib.status = 502
+    found = search_lyrics(off(cfg, "megalobiz"), conn, get_song(conn, song.id), NAME, now=NOW)
+    line = last_line(found)
+    assert line.startswith("Not searched: LRCLIB failed (") and line.endswith("; try again later.")
+    assert "Megalobiz" not in line
+
+
+def test_every_site_off_asks_nothing_and_says_so(cfg, conn, song, sites):
+    from caracole.lyrics_search import last_line
+
+    found = search_lyrics(off(cfg, "lrclib", "megalobiz", "azlyrics"), conn, get_song(conn, song.id), NAME, now=NOW)
+    assert sites.requests() == 0 and sites.made == []
+    assert last_line(found) == "Not searched: every lyrics site is off (caracole.toml); nothing asked."
+
+
+# --- LRCLIB's exact-name ask, after its search answered ----------------------------------------------------------
+
+
+@pytest.mark.parametrize("failing,state,said", [
+    (502, "rows", "listed 1; its ask by the exact name not made: LRCLIB failed ("),
+    (403, "rows", "listed 1; its ask by the exact name not made: LRCLIB turned us back; no asks until "),
+], ids=["an error", "a block"])
+def test_lrclibs_search_rows_stay_when_its_get_fails(cfg, conn, song, sites, failing, state, said):
+    sites.lrclib.search = [lrc(90, track="Otra", artist="Otro")]
+    sites.lrclib.failing = {"get": failing}
+    found = search(cfg, conn, song)
+    assert records(found)[:1] == ["lrclib:90"]
+    assert found.state["lrclib"] == state and found.said["lrclib"].startswith(said)
+
+
+def test_lrclibs_get_cut_by_the_searchs_budget_keeps_its_rows_and_says_so(cfg, conn, song, sites):
+    cfg = replace(cfg, providers={**cfg.providers, "lrclib": replace(cfg.provider("lrclib"), lookup_requests=1)})
+    sites.lrclib.search = [lrc(90, track="Otra", artist="Otro")]
+    found = search_lyrics(cfg, conn, get_song(conn, song.id), NAME, now=NOW)
+    assert records(found)[:1] == ["lrclib:90"] and [e for e, _ in sites.lrclib.requests] == ["search"]
+    assert found.said["lrclib"] == ("listed 1; its ask by the exact name not made: this search's 1 asks of LRCLIB are "
+                                    "spent")
+
+
+def test_with_no_rows_a_get_that_fails_is_not_searched(cfg, conn, song, sites):
+    from caracole.lyrics_search import last_line
+
+    sites.lrclib.failing = {"get": 502}
+    found = search(cfg, conn, song)
+    assert found.state["lrclib"] == "failed"
+    assert last_line(found).startswith("Not searched: nothing listed; its ask by the exact name not made: LRCLIB failed")

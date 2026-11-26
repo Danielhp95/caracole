@@ -434,28 +434,57 @@ def fetch_lyrics(
     (``read_once_more``) goes past the cache. By default a cached answer is used
     forever; ``cache=False`` asks LRCLIB again.
     """
-    track = clean_title(title)
-    params: dict[str, str | int] = {"artist_name": artist, "track_name": track}
-    if album:
-        params["album_name"] = album
-    if duration_s is not None:
-        params["duration"] = round(duration_s)
-    url = f"{LRCLIB_API}/get"
-    resp = client.get(url, params=params, accept=_GET_ACCEPT, cache=cache)
-    found = read_once_more(client, resp, url, _get_record, LrclibParseError, params=params, accept=_GET_ACCEPT)
+    found = get_match(client, get_params(artist, title, album=album, duration_s=duration_s), cache=cache)
     if found is not None:
         outcome = _outcome(Lyrics.from_record(found))
         if outcome is not None:
             return outcome
 
-    url = f"{LRCLIB_API}/search"
-    query = {"track_name": _search_title(track), "artist_name": artist}
-    resp = client.get(url, params=query, accept=(200,), cache=cache)
-    cands = read_once_more(client, resp, url, lambda r: _json(r, list), LrclibParseError, params=query,
-                           accept=(200,))
+    cands = search_records(client, search_query(artist, title), cache=cache)
     best = pick_candidate(cands, artist=artist, title=title, duration_s=duration_s)
     outcome = _outcome(Lyrics.from_record(best)) if best is not None else None
     return outcome or LyricsResult("missing", None)
+
+
+def _aged(max_age: timedelta | None) -> dict[str, timedelta]:
+    """``max_age`` for a client's ``get`` only when it is given: a client of the tests' that takes none still asks."""
+    return {} if max_age is None else {"max_age": max_age}
+
+
+def get_params(artist: str, title: str, *, album: str | None, duration_s: float | None) -> dict[str, str | int]:
+    """What ``/api/get`` is sent for a song: its cleaned title, its artist as written and, when known, its album and
+    its length in whole seconds."""
+    params: dict[str, str | int] = {"artist_name": artist, "track_name": clean_title(title)}
+    if album:
+        params["album_name"] = album
+    if duration_s is not None:
+        params["duration"] = round(duration_s)
+    return params
+
+
+def search_query(artist: str, title: str) -> dict[str, str]:
+    """What ``/api/search`` is sent for a song: its cleaned title as LRCLIB's search reads it (``_search_title``)
+    and its artist as written."""
+    return {"track_name": _search_title(clean_title(title)), "artist_name": artist}
+
+
+def get_match(client: Client, params: Mapping[str, str | int], *, cache: bool = True,
+              max_age: timedelta | None = None) -> Mapping[str, Any] | None:
+    """``/api/get``'s record for ``params`` (``get_params``), or None for its miss; a cached answer that can't be
+    read asked for once more, past the cache. ``cache`` and ``max_age`` go to the first request."""
+    url = f"{LRCLIB_API}/get"
+    resp = client.get(url, params=params, accept=_GET_ACCEPT, cache=cache, **_aged(max_age))
+    return read_once_more(client, resp, url, _get_record, LrclibParseError, params=params, accept=_GET_ACCEPT)
+
+
+def search_records(client: Client, query: Mapping[str, str], *, cache: bool = True,
+                   max_age: timedelta | None = None) -> list[Any]:
+    """``/api/search``'s records for ``query`` (``search_query``), in its order, as fetch_lyrics' fallback reads
+    them; ``cache`` and ``max_age`` go to the first request."""
+    url = f"{LRCLIB_API}/search"
+    resp = client.get(url, params=query, accept=(200,), cache=cache, **_aged(max_age))
+    return read_once_more(client, resp, url, lambda r: _json(r, list), LrclibParseError, params=query,
+                          accept=(200,))
 
 
 def fetch_lrclib_record(client: Client, lrclib_id: int, *, cache: bool = True) -> Lyrics | None:

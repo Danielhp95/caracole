@@ -11,13 +11,18 @@ run ``lookup:…``), in the lookups' lane, where another lookup goes first in th
 - AZLyrics' page of the typed artist, only where one can be named (``azlyrics.artist_url``): the songs on it whose
   title fits the typed one. Its search, which robots.txt closes, is never asked.
 
-So 2 to 4 requests, each answered from the HTTP cache once asked (a 200 is kept forever, as the passes keep theirs).
-A site turned off, cooling down, out of its hour or failing is passed over and said (``Search.said``), never a miss;
-a block cools it down, with no alert, as a lookup's does. Nothing of the song's lyrics changes.
+So 2 to 4 requests. Each answer is read through the HTTP cache while it is younger than ``PICKABLE_FOR``, the life of
+a kept search (the same name typed again costs nothing, and a pick reads LRCLIB's answer with no request), and asked
+again, past the cache, once older (``max_age``: a cached 404 alike), so a record a site adds later is listed. The
+nightly passes read the same addresses through the cache with no age (AZLyrics' artist page; LRCLIB's search and
+get, for a song asked under ``as``): a search's fresher copy is theirs too, and theirs one younger than a week is the
+search's. A site turned off, cooling down, out of its asks or failing is passed over and said (``Search.said``, with
+its ``Search.state``), never a miss; a block cools it down, with no alert, as a lookup's does. Nothing of the song's
+lyrics changes.
 
 The rows are kept in kv ``lyrics-search:<song id>`` (``KV``), replaced by the song's next search, for a pick within
 ``PICKABLE_FOR`` (``kept_search``, ``row_of``). A row names its record only by an id the site answered, of the shape
-``[lyrics]`` takes (``overrides._LYRICS_RECORD_IDS``): one of any other shape is dropped as it is read, from the site
+``[lyrics]`` takes (``overrides.LYRICS_RECORD_IDS``): one of any other shape is dropped as it is read, from the site
 or from kv.
 """
 
@@ -36,7 +41,7 @@ from caracole import stamps
 from caracole.config import Config
 from caracole.db import kv_get_json, kv_set_json
 from caracole.logs import plural, provider_name
-from caracole.overrides import _LYRICS_RECORD_IDS
+from caracole.overrides import LYRICS_RECORD_IDS
 from caracole.songs import Song
 
 log = logging.getLogger(__name__)
@@ -46,6 +51,11 @@ PICKABLE_FOR = timedelta(days=7)  # a search may be picked from this long after 
 MOST_ROWS = 40  # rows a search keeps
 FAR = 10.0  # seconds off the audio's length past which a row is listed with its gap (lyrics.fits' second band)
 SITES = ("lrclib", "megalobiz", "azlyrics")  # in the order they are asked and listed
+# Each site's state in a search, beside its words: it answered with rows or none; or it wasn't asked (turned off,
+# cooling down, its hour's, day's or search's asks spent); or it blocked caracole or failed.
+ROWS, NONE, OFF, COOLING, SPENT, BLOCKED, FAILED = "rows", "none", "off", "cooling", "spent", "blocked", "failed"
+STATES = (ROWS, NONE, OFF, COOLING, SPENT, BLOCKED, FAILED)
+ANSWERED = (ROWS, NONE)
 _AZLYRICS_PAGE = re.compile(r"https://www\.azlyrics\.com/lyrics/([a-z0-9-]+/[a-z0-9-]+)\.html")
 
 
@@ -74,8 +84,8 @@ class Row:
 @dataclass(frozen=True)
 class Search:
     """A song's search: when, the name asked (``asked``) and the audio's length, LRCLIB's exact query (a pick reads
-    its answer from the HTTP cache), the rows, each site's words, and how many records marked instrumental weren't
-    listed. ``answered``: the sites that answered (not kept: a search read back from kv has none)."""
+    its answer from the HTTP cache), the rows, each site's words and its state (``STATES``), and how many records
+    marked instrumental weren't listed."""
 
     at: str
     asked: tuple[str, str]
@@ -83,8 +93,8 @@ class Search:
     lrclib: dict[str, str]
     rows: tuple[Row, ...]
     said: dict[str, str]
+    state: dict[str, str]
     instrumental: int = 0
-    answered: tuple[str, ...] = field(default=(), compare=False)
 
     @property
     def name(self) -> str:
@@ -92,7 +102,7 @@ class Search:
 
     def as_json(self) -> dict[str, Any]:
         return {"at": self.at, "as": list(self.asked), "length": self.length, "lrclib": dict(self.lrclib),
-                "rows": [row.as_json() for row in self.rows], "said": dict(self.said),
+                "rows": [row.as_json() for row in self.rows], "said": dict(self.said), "state": dict(self.state),
                 "instrumental": self.instrumental}
 
 
@@ -104,7 +114,7 @@ def _record(site: str, record_id: Any) -> str | None:
     if site != "azlyrics" and not isinstance(record_id, int):
         return None
     text = str(record_id)
-    return f"{site}:{text}" if _LYRICS_RECORD_IDS[site].fullmatch(text) else None
+    return f"{site}:{text}" if LYRICS_RECORD_IDS[site].fullmatch(text) else None
 
 
 def is_own_name(song: Song, name: tuple[str, str]) -> bool:
@@ -142,27 +152,16 @@ class _Found:
     best: str | None = None  # the record today's rules keep, of this site
     said: str = ""
     instrumental: int = 0
+    state: str | None = None  # a state of STATES; None until the asking sets it (ROWS or NONE for an answer)
+    after: Exception | None = None  # what stopped a second ask of the site (LRCLIB's get) after its first answered
 
 
 def _lrclib(client: Any, name: tuple[str, str], length: float | None, query: dict[str, str]) -> _Found:
-    from caracole.http import read_once_more
-    from caracole.lyrics import (
-        _GET_ACCEPT,
-        LRCLIB_API,
-        Lyrics,
-        LrclibParseError,
-        _get_record,
-        _json,
-        fits,
-        pick_candidate,
-    )
-    from caracole.normalize import clean_title
+    from caracole.http import BudgetExhausted, ProviderError
+    from caracole.lyrics import Lyrics, fits, get_match, get_params, pick_candidate, search_records
 
     artist, title = name
-    url = f"{LRCLIB_API}/search"
-    resp = client.get(url, params=query, accept=(200,))
-    answered = read_once_more(client, resp, url, lambda r: _json(r, list), LrclibParseError, params=query,
-                              accept=(200,))
+    answered = search_records(client, query, max_age=PICKABLE_FOR)
     found = _Found()
     listed: dict[str, Mapping[str, Any]] = {}
     seen: set[Any] = set()
@@ -182,12 +181,10 @@ def _lrclib(client: Any, name: tuple[str, str], length: float | None, query: dic
         take(cand)
     best = pick_candidate(listed.values(), artist=artist, title=title, duration_s=length)
     if best is None:  # no record of the search fits: LRCLIB's own match of the name, with the audio's length
-        params: dict[str, str | int] = {"artist_name": artist, "track_name": clean_title(title)}
-        if length is not None:
-            params["duration"] = round(length)
-        url = f"{LRCLIB_API}/get"
-        resp = client.get(url, params=params, accept=_GET_ACCEPT)
-        got = read_once_more(client, resp, url, _get_record, LrclibParseError, params=params, accept=_GET_ACCEPT)
+        try:
+            got = get_match(client, get_params(artist, title, album=None, duration_s=length), max_age=PICKABLE_FOR)
+        except (ProviderError, BudgetExhausted) as e:  # the search's rows stay; the asking says what stopped it
+            got, found.after = None, e
         if got is not None:
             take(got)
             record = _record("lrclib", got.get("id"))
@@ -213,7 +210,7 @@ def _megalobiz(client: Any, name: tuple[str, str], length: float | None) -> _Fou
 
     artist, title = name
     params = search_params(artist, title, length)
-    resp = client.get(SEARCH, params=params)
+    resp = client.get(SEARCH, params=params, max_age=PICKABLE_FOR)
     results = read_once_more(client, resp, SEARCH, parse_search, MegalobizParseError, params=params)
     best = pick_result(results, artist=artist, title=title, duration_s=length)
     found = _Found()
@@ -241,7 +238,7 @@ def _azlyrics(client: Any, name: tuple[str, str]) -> _Found:
     if url is None:
         found.said = f"no artist page for {artist}"
         return found
-    resp = client.get(url, accept=(200, 404))
+    resp = client.get(url, accept=(200, 404), max_age=PICKABLE_FOR)
     if resp.status == 404:
         found.said = f"no artist page for {artist}"
         return found
@@ -272,13 +269,12 @@ def search_lyrics(cfg: Config, conn: sqlite3.Connection, song: Song, name: tuple
     """Note ``name`` (artist, title) under the song's ``[lyrics]`` (its ``as``; taken out for the song's own name),
     then ask each lyrics site what it lists under it, and keep the rows (module docstring). The caller holds the
     lock in the lane."""
-    from caracole.lyrics import _search_title
-    from caracole.normalize import clean_title
+    from caracole.lyrics import search_query
     from caracole.overrides import set_lyrics_name
 
     set_lyrics_name(cfg.overrides_file, song.display, None if is_own_name(song, name) else f"{name[0]} - {name[1]}")
     length = audio_length(conn, song)
-    query = {"track_name": _search_title(clean_title(name[1])), "artist_name": name[0]}
+    query = search_query(name[0], name[1])
     ask = _Asking(cfg, conn, now)
     finds: dict[str, _Found] = {}
     works: dict[str, Callable[[Any], _Found]] = {
@@ -291,13 +287,13 @@ def search_lyrics(cfg: Config, conn: sqlite3.Connection, song: Song, name: tuple
             from caracole.azlyrics import artist_url
 
             if artist_url(name[0]) is None:  # a name with no Latin letter or digit: nothing to ask
-                finds[site] = _Found(said=f"no artist page for {name[0]}")
-                ask.answered.append(site)
+                finds[site] = _Found(said=f"no artist page for {name[0]}", state=NONE)
                 continue
         finds[site] = ask(site, works[site])
     search = Search(at=stamps.stamp(now), asked=(name[0], name[1]), length=length, lrclib=query,
                     rows=_ordered(finds), said={site: _said(finds[site]) for site in SITES},
-                    instrumental=sum(f.instrumental for f in finds.values()), answered=tuple(ask.answered))
+                    state={site: finds[site].state or NONE for site in SITES},
+                    instrumental=sum(f.instrumental for f in finds.values()))
     if conn.execute("SELECT 1 FROM songs WHERE id = ? AND key = ?", (song.id, song.key)).fetchone() is not None:
         kv_set_json(conn, f"{KV}{song.id}", search.as_json())  # never under an id another lookup gave a new song
     return search
@@ -321,44 +317,60 @@ def _ordered(finds: Mapping[str, _Found]) -> tuple[Row, ...]:
 
 
 class _Asking:
-    """One site asked, as a lookup asks it: off, cooling down or out of its hour passed over and said; a block cooled
-    down (no alert), an error recorded, a good run after its own client's answers; each in its words."""
+    """One site asked, as a lookup asks it: off, cooling down or out of its asks passed over and said; a block cooled
+    down (no alert), an error recorded, a good run after its own client's answers; each in its words and state."""
 
     def __init__(self, cfg: Config, conn: sqlite3.Connection, now: datetime):
         self.cfg, self.conn, self.now = cfg, conn, now
-        self.answered: list[str] = []
 
     def __call__(self, site: str, work: Callable[[Any], _Found]) -> _Found:
-        from caracole.commands._common import lookup_run_id, make_client, requests_today
-        from caracole.health import get_state, is_cooling, record_block, record_error, record_ok
-        from caracole.http import BudgetExhausted, ProviderBlocked, ProviderError
+        from caracole.commands._common import lookup_run_id, make_client
+        from caracole.health import get_state, is_cooling, record_ok
+        from caracole.http import BudgetExhausted, ProviderError
 
         name, p = provider_name(site), self.cfg.provider(site)
         if not p.enabled:
-            return _Found(said=f"{name} is off (caracole.toml)")
+            return _Found(said=f"{name} is off (caracole.toml)", state=OFF)
         if is_cooling(self.conn, site, self.now):
-            return _Found(said=f"waiting out {name} until {stamps.shown(get_state(self.conn, site).cooldown_until)}")
+            until = stamps.shown(get_state(self.conn, site).cooldown_until)
+            return _Found(said=f"waiting out {name} until {until}", state=COOLING)
         client = make_client(self.cfg, self.conn, site, lookup_run_id(self.now), interactive=True)
         try:
             found = work(client)
-        except ProviderBlocked as e:
-            state = record_block(self.conn, site, self.now, str(e))
-            return _Found(said=f"{name} turned us back; no asks until {stamps.shown(state.cooldown_until)}")
-        except BudgetExhausted:
-            if p.per_day is not None and requests_today(self.conn, site, self.now) >= p.per_day:
-                return _Found(said=f"no more asks of {name} today ({p.per_day} spent)")
-            if client.policy.budget < p.lookup_requests:
-                return _Found(said=f"no more asks of {name} this hour ({p.lookup_per_hour} spent)")
-            return _Found(said=f"this search's {p.lookup_requests} asks of {name} are spent")
-        except ProviderError as e:
-            record_error(self.conn, site, self.now, str(e))
-            return _Found(said=f"{name} failed ({e})")
+        except (ProviderError, BudgetExhausted) as e:
+            state, said = self._stopped(site, client, e)
+            return _Found(said=said, state=state)
         finally:
             client.close()
         if client.answered_any():  # its own client's answers, never another lookup's of the same second
             record_ok(self.conn, site, self.now)
-        self.answered.append(site)
+        if found.after is not None:  # a second ask stopped after the first answered: its rows stay, said
+            state, said = self._stopped(site, client, found.after)
+            listed = f"listed {len(found.rows)}" if found.rows else "nothing listed"
+            found.said = f"{listed}; its ask by the exact name not made: {said}"
+            found.state = ROWS if found.rows else state
+            return found
+        found.state = ROWS if found.rows else NONE
         return found
+
+    def _stopped(self, site: str, client: Any, e: Exception) -> tuple[str, str]:
+        """What stopped a site's ask, recorded as a lookup records it, as a state and words."""
+        from caracole.commands._common import requests_today
+        from caracole.health import record_block, record_error
+        from caracole.http import BudgetExhausted, ProviderBlocked
+
+        name, p = provider_name(site), self.cfg.provider(site)
+        if isinstance(e, ProviderBlocked):
+            state = record_block(self.conn, site, self.now, str(e))
+            return BLOCKED, f"{name} turned us back; no asks until {stamps.shown(state.cooldown_until)}"
+        if isinstance(e, BudgetExhausted):
+            if p.per_day is not None and requests_today(self.conn, site, self.now) >= p.per_day:
+                return SPENT, f"no more asks of {name} today ({p.per_day} spent)"
+            if client.policy.budget < p.lookup_requests:
+                return SPENT, f"no more asks of {name} this hour ({p.lookup_per_hour} spent)"
+            return SPENT, f"this search's {p.lookup_requests} asks of {name} are spent"
+        record_error(self.conn, site, self.now, str(e))
+        return FAILED, f"{name} failed ({e})"
 
 
 def last_line(search: Search) -> str:
@@ -370,11 +382,13 @@ def last_line(search: Search) -> str:
     if listing:
         return (f"Searched: {_joined(listing)} {'lists' if len(listing) == 1 else 'list'} "
                 f"{plural(len(search.rows), 'record')} for {quoted}.")
-    left = [site for site in SITES if site not in search.answered]
-    if search.answered and not left:
-        verb = "lists" if len(search.answered) == 1 else "list"
-        return f"Nothing found: {_joined(search.answered)} {verb} nothing for {quoted}."
-    return f"Not searched: {'; '.join(search.said[site] for site in left)}; try again later."
+    answered = [site for site in SITES if search.state.get(site) in ANSWERED]
+    left = [site for site in SITES if site not in answered and search.state.get(site) != OFF]  # a site off isn't asked
+    if left:
+        return f"Not searched: {'; '.join(search.said.get(site, '') for site in left)}; try again later."
+    if answered:
+        return f"Nothing found: {_joined(answered)} {'lists' if len(answered) == 1 else 'list'} nothing for {quoted}."
+    return "Not searched: every lyrics site is off (caracole.toml); nothing asked."
 
 
 def _joined(sites: Any) -> str:
@@ -392,7 +406,7 @@ def _row(value: Any) -> Row | None:
     site, record = value.get("site"), value.get("record")
     if site not in SITES or not isinstance(record, str) or not record.startswith(f"{site}:"):
         return None
-    if not _LYRICS_RECORD_IDS[site].fullmatch(record.removeprefix(f"{site}:")):
+    if not LYRICS_RECORD_IDS[site].fullmatch(record.removeprefix(f"{site}:")):
         return None
     duration = value.get("duration")
     text = {k: value.get(k) if isinstance(value.get(k), str) else "" for k in ("artist", "title", "album")}
@@ -412,7 +426,9 @@ def kept_search(conn: sqlite3.Connection, song_id: int, now: datetime) -> Search
         return None
     if not (isinstance(asked, list) and len(asked) == 2 and all(isinstance(part, str) for part in asked)):
         return None
-    length, query, said = kept.get("length"), kept.get("lrclib"), kept.get("said")
+    length, query, said, state = kept.get("length"), kept.get("lrclib"), kept.get("said"), kept.get("state")
+    if not isinstance(state, Mapping) or any(state.get(site) not in STATES for site in SITES):
+        return None  # a search kept before each site's state was: none to pick from
     rows = tuple(row for row in map(_row, kept.get("rows") if isinstance(kept.get("rows"), list) else []) if row)
     count = kept.get("instrumental")
     return Search(
@@ -420,6 +436,7 @@ def kept_search(conn: sqlite3.Connection, song_id: int, now: datetime) -> Search
         length=float(length) if isinstance(length, (int, float)) and not isinstance(length, bool) else None,
         lrclib={k: v for k, v in query.items() if isinstance(v, str)} if isinstance(query, Mapping) else {},
         rows=rows, said={k: v for k, v in said.items() if isinstance(v, str)} if isinstance(said, Mapping) else {},
+        state={site: state[site] for site in SITES},
         instrumental=count if isinstance(count, int) and not isinstance(count, bool) else 0)
 
 

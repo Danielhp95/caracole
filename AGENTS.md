@@ -128,13 +128,16 @@ sitemaps list by bare ids alone, and the fetch their page.
   `as` first (`set_lyrics_name`; the song's own name takes it out), then `search_lyrics` asks each site once by a
   lookup's client of its own: LRCLIB's `/api/search` (its query kept, `Search.lrclib`), `/api/get` only when no record
   of it fits (`pick_candidate` over the records with lyrics), Megalobiz's search, AZLyrics' artist page (none for a
-  name with no Latin letter): 2–4 requests, the cache's answer for a name asked before. Rows (`Row`: `record`, site,
+  name with no Latin letter): 2–4 requests, each through the cache for `PICKABLE_FOR` and asked again past it once
+  older (`max_age`, a cached 404 alike; the passes read the same addresses with no age: a fresher copy is theirs
+  too); LRCLIB's search rows kept when its get then fails or is cut. Rows (`Row`: `record`, site,
   names, album, length, timed, `best`, `fits`), the best fit first (LRCLIB's `pick_candidate`, else `pick_result`, else
   `pick_song`), then those that fit, then the rest, `MOST_ROWS` (40); an instrumental or empty record counted, never
-  listed; a record only by an id the site answered, of `[lyrics]`' shape (`overrides._LYRICS_RECORD_IDS`), checked as
-  it is read and again from kv. A site off, cooling, spent, blocked (no alert) or failing is said in `said`, never a
-  miss, the others listed; `last_line`: "Searched: " rows, "Nothing found: " every site asked answered none, "Not
-  searched: " else. Kept in kv `lyrics-search:<song id>` (`KV`, in `songs._PER_SONG_KV` and SongKv.kt; no unit's,
+  listed; a record only by an id the site answered, of `[lyrics]`' shape (`overrides.LYRICS_RECORD_IDS`), checked as
+  it is read and again from kv. Each site's `state` (`STATES`: rows, none, off, cooling, spent, blocked, failed) and
+  its words (`said`), never a miss, the others listed; `last_line`: "Searched: " rows, "Nothing found: " every site
+  asked answered none (a site off isn't asked: left out), "Not searched: " a site cooling, spent, blocked or failing,
+  or every site off. Kept in kv `lyrics-search:<song id>` (`KV`, in `songs._PER_SONG_KV` and SongKv.kt; no unit's,
   never crossing to the phone), replaced by the next search, never under an id another song took meanwhile;
   `kept_search` gives it for `PICKABLE_FOR` (7 days), `row_of` a record's row. It changes no lyrics.
 

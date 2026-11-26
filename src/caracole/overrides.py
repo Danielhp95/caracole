@@ -115,7 +115,7 @@ AZLYRICS_BASE = "https://www.azlyrics.com"
 # A [lyrics] record: a site of the three lyrics sites and its id there, of exactly the shape that site's ids have, so
 # that no record names another path of the site: LRCLIB's and Megalobiz's records by their number (the APIs' ``id``),
 # AZLyrics' by its page's artist and song, the two slugs of /lyrics/<artist>/<song>.html (_AZLYRICS_PATH's).
-_LYRICS_RECORD_IDS = {"lrclib": re.compile(r"[1-9][0-9]{0,11}"), "megalobiz": re.compile(r"[1-9][0-9]{0,11}"),
+LYRICS_RECORD_IDS = {"lrclib": re.compile(r"[1-9][0-9]{0,11}"), "megalobiz": re.compile(r"[1-9][0-9]{0,11}"),
                       "azlyrics": re.compile(r"[a-z0-9-]+/[a-z0-9-]+")}
 LYRICS_SHAPE = '{ as = "Artist - Title", record = "lrclib:ID" | "megalobiz:ID" | "azlyrics:ARTIST/SONG" }'
 _GAMETABS_HOST = re.compile(r"(?:www\.)?gametabs\.net")
@@ -751,9 +751,9 @@ def _lyrics_asked(value: Any, where: str, entry: Any) -> tuple[str, str]:
 
 
 def _lyrics_record(value: Any, where: str, entry: Any) -> LyricsRecord:
-    """``record``: ``site:id``, a site of ``_LYRICS_RECORD_IDS`` and an id of its shape, as it is."""
+    """``record``: ``site:id``, a site of ``LYRICS_RECORD_IDS`` and an id of its shape, as it is."""
     site, sep, record_id = value.partition(":") if isinstance(value, str) else ("", "", "")
-    shape = _LYRICS_RECORD_IDS.get(site)
+    shape = LYRICS_RECORD_IDS.get(site)
     if not sep or shape is None or not shape.fullmatch(record_id):
         raise _lyrics_refused(entry, where)
     return LyricsRecord(site, record_id)

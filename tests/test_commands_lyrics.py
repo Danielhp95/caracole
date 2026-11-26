@@ -1318,7 +1318,7 @@ def test_lyrics_as_lists_numbered_rows_and_ends_in_its_last_line(tmp_path, sites
         " 3. Megalobiz  (no artist) - Vikingos veganos · 3:20 · timed",
         "AZLyrics: no artist page for Nick Cani.",
         "1 record marked instrumental isn't listed.",
-        'Take one: caracole lyrics --song "Nick Cani - Vikingos veganos (Video Oficial)" --pick 1',
+        "Take one: caracole lyrics --song 'Nick Cani - Vikingos veganos (Video Oficial)' --pick 1",
         "Searched: LRCLIB and Megalobiz list 3 records for “Nick Cani - Vikingos veganos”.",
     ]
     conn = open_db(tmp_path)
@@ -1359,3 +1359,37 @@ def test_lyrics_options_that_dont_go_together_exit_2(tmp_path, sites, args):
     result = run(tmp_path, "lyrics", *args)
     assert result.exit_code == 2, result.output
     assert sites.lrclib.requests == [] and not (tmp_path / "lib" / "overrides.toml").exists()
+
+
+def test_lyrics_as_hints_a_command_line_a_shell_reads_back_whatever_the_title_holds(tmp_path, sites, quick):
+    import shlex
+
+    from test_lyrics_search import Lrclib, lrc
+
+    (tmp_path / "state").mkdir()
+    title = 'Don\'t say "never"'
+    conn = open_db(tmp_path)
+    try:
+        add_song(conn, "Nick Cani", title, duration_ms=200000)
+    finally:
+        conn.close()
+    sites.lrclib = Lrclib([lrc(77, track="Don't say never")])
+    result = run(tmp_path, "lyrics", f"--song=Nick Cani - {title}", "--as=Nick Cani - Don't say never")
+    assert result.exit_code == 0, result.output
+    [hint] = [line for line in result.stdout.splitlines() if line.startswith("Take one: ")]
+    assert shlex.split(hint.removeprefix("Take one: ")) == ["caracole", "lyrics", "--song", f"Nick Cani - {title}",
+                                                           "--pick", "1"]
+
+
+def test_lyrics_as_says_a_sites_words_with_one_full_stop(tmp_path, sites, quick):
+    (tmp_path / "state").mkdir()
+    conn = open_db(tmp_path)
+    try:
+        add_song(conn, "R.E.M.", "Losing My Religion (Live)", duration_ms=None)
+    finally:
+        conn.close()
+    result = run(tmp_path, "lyrics", "--song=R.E.M. - Losing My Religion (Live)", "--as=R.E.M. - Losing My Religion")
+    assert result.exit_code == 0, result.output
+    assert "AZLyrics: no song titled Losing My Religion on" not in result.stdout  # its page is a 404 here
+    assert "AZLyrics: no artist page for R.E.M." in result.stdout.splitlines()
+    assert ".." not in result.stdout
