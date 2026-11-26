@@ -2373,7 +2373,7 @@ It is rows.js's, shared by both pages:
     frontend's three a frequency band, the transformer's six a head) each one Scan of MatMul, Softmax and MatMul over
     a slice at a time (`_attention_by_slices`), the whole attention's answers to the bit in a fraction of the memory
     (a 1500-frame chunk's scores and softmax were two [32, 1, 1500, 1500] float32s at once, 576 MB of the phone's
-    peak; android/README.md's bench);
+    peak, `_attention_by_slices`' docstring);
   - `pt_offsets`: each tensor's offset and length in a checkpoint in torch's legacy format (pickles, then each
     storage's raw float32 bytes), since the phone will fetch such a file read by `_Strict`, the standard library's
     pure-Python unpickler guarded opcode by opcode (its notes): protocol 2's opcodes alone, the six globals of

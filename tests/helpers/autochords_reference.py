@@ -17,8 +17,9 @@
   and ``peaks_of(beat, downbeat)``, its minimal postprocessor's beats and downbeats.
 - ``python -m tests.helpers.autochords_reference IN OUT``: the reference of every audio file in the folder ``IN`` (or
   of the one file ``IN``), each as ``OUT/<name>.json`` (``reference_name``: the audio's stem, what a phone's shared
-  storage refuses in a name, a colon among them, made a hyphen) (the arrays base64 of little-endian float32, as the corpus
-  writes them, ``encoded``), for songs that are never committed: the owner's own, kept outside the repository.
+  storage refuses in a name, a colon among them, made a hyphen; two files of one name refused before any is read), the
+  arrays base64 of little-endian float32, as the corpus writes them (``encoded``), for songs that are never committed:
+  the owner's own, kept outside the repository.
 
 torch, librosa, numpy and beat_this are imported inside the functions: only the auto-chords environment has them.
 """
@@ -190,6 +191,12 @@ def main(argv: list[str]) -> int:
     if not files:
         print(f"no audio file in {given}", file=sys.stderr)
         return 1
+    named: dict[str, Path] = {}
+    for f in files:
+        if (first := named.setdefault(reference_name(f), f)) != f:
+            print(f"{first.name} and {f.name} would both be written as {reference_name(f)}: rename one, or give "
+                  "them apart", file=sys.stderr)
+            return 2
     out.mkdir(parents=True, exist_ok=True)
     for f in files:
         doc = {"file": f.name, **encoded(reference(f, threads=os.cpu_count() or 1))}

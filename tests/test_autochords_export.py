@@ -358,7 +358,8 @@ print(next(int(line.split()[1]) for line in open("/proc/self/status") if line.st
 def _peak_mb(path: Path) -> int:
     """A fresh process's peak RSS, in MB, as it runs a whole 1500-frame chunk through the graph at ``path``: its own
     memory's high-water mark (VmHWM), never ``ru_maxrss``, which a child keeps from the process it was forked from."""
-    done = subprocess.run([sys.executable, "-c", _PEAK, str(path)], capture_output=True, text=True, check=True)
+    done = subprocess.run([sys.executable, "-c", _PEAK, str(path)], capture_output=True, text=True)
+    assert done.returncode == 0, f"the peak's child failed:\n{done.stderr}"
     return int(done.stdout.split()[-1])
 
 
@@ -388,6 +389,29 @@ def test_beat_this_attends_one_slice_at_a_time_and_answers_to_the_bit_as_the_who
                 assert np.array_equal(got, want), (name, frames)
         # A whole chunk's scores and their softmax, two [32, 1, 1500, 1500] float32s at once: 576 MB of the peak.
         assert _peak_mb(out / name) <= _peak_mb(whole / name) - 300, name
+
+
+def test_an_attention_the_rewrite_cant_slice_refuses_the_export_and_says_what_it_found():
+    """A beat_this whose attention over time puts an op between its scores' MatMul and their Softmax (here an Add)
+    leaves that attention whole: the export refuses, never a graph that keeps a whole [T, T] softmax unsaid."""
+    pytest.importorskip("onnx")
+    from onnx import TensorProto, helper
+
+    from caracole.autochords.export import _attention_by_slices
+
+    value = functools.partial(helper.make_tensor_value_info, elem_type=TensorProto.FLOAT, shape=None)
+    graph = helper.make_model(helper.make_graph(
+        [helper.make_node("MatMul", ["q", "k"], ["s"], name="/partial/attnT/attend/MatMul"),
+         helper.make_node("Add", ["s", "bias"], ["b"], name="/partial/attnT/attend/Add"),
+         helper.make_node("Softmax", ["b"], ["w"], name="/partial/attnT/attend/Softmax", axis=-1),
+         helper.make_node("MatMul", ["w", "v"], ["out"], name="/partial/attnT/attend/MatMul_1")],
+        "one attention", [value(name=n) for n in ("q", "k", "bias", "v")], [value(name="out")]))
+    with pytest.raises(ValueError) as refused:
+        _attention_by_slices(graph)
+    said = str(refused.value)
+    assert "0 sliced, not 9" in said
+    assert "left whole (no MatMul, Softmax, MatMul chain): ['/partial/attnT/attend/Softmax']" in said
+    assert [n.op_type for n in graph.graph.node] == ["MatMul", "Add", "Softmax", "MatMul"]
 
 
 # --- both --------------------------------------------------------------------------------------

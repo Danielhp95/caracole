@@ -218,15 +218,19 @@ def _traced(model, example, *, inputs: list[str], outputs: list[str], dynamic: d
 # slice is taken along: its frontend's over time attend once a frequency band (scores [bands, heads, T, T]: the
 # bands, 32, 16 and 8), its transformer blocks' once a chunk (scores [1, 16, T, T]: the heads).
 _ATTENDS_OVER_TIME = (("/partial/attnT/attend/", 0), ("/transformer_blocks/", 1))
+# beat_this's attentions over time: the frontend's three partial ones and the transformer's six.
+ATTENTIONS = 9
 
 
-def _attention_by_slices(graph: onnx.ModelProto) -> int:
+def _attention_by_slices(graph: onnx.ModelProto, expected: int = ATTENTIONS) -> int:
     """Each of beat_this's attentions over time, its scores' MatMul, their Softmax and the MatMul by the values, as one
     Scan over the axis ``_ATTENDS_OVER_TIME`` gives it: the same three ops over each slice in turn, the outputs put
     together where they were. Each slice's answers are the whole's to the bit (each is its own matrix product and
     its own rows' softmax either way), and a 1500-frame chunk's scores and softmax are no longer two [32, 1, 1500,
     1500] float32s at once, 576 MB, but one slice's at a time (36 MB at most): the phone's peak memory (the
-    chords-on-the-phone design's B0 memory gate, 1 GB) is that pair's. The count of attentions rewritten."""
+    chords-on-the-phone design's B0 memory gate, 1 GB) is that pair's. The count of attentions rewritten, which must
+    be ``expected``: a ValueError else, naming each attention's softmax found and those left whole (a beat_this that
+    renamed its nodes, or put an op between a MatMul and its Softmax), never a graph that silently keeps them."""
     from onnx import TensorProto, helper
 
     nodes = list(graph.graph.node)
@@ -237,11 +241,15 @@ def _attention_by_slices(graph: onnx.ModelProto) -> int:
             readers[i].append(n)
     rewritten: dict[str, object] = {}
     dropped: set[str] = set()
+    found: list[str] = []
     for softmax in (n for n in nodes if n.op_type == "Softmax"):
         axis = next((a for name, a in _ATTENDS_OVER_TIME if name in softmax.name), None)
+        if axis is None:
+            continue
+        found.append(softmax.name)
         scores = producer.get(softmax.input[0])
         after = readers[softmax.output[0]]
-        if axis is None or scores is None or scores.op_type != "MatMul" or len(after) != 1:
+        if scores is None or scores.op_type != "MatMul" or len(after) != 1:
             continue
         by_values = after[0]
         if by_values.op_type != "MatMul" or by_values.input[0] != softmax.output[0]:
@@ -262,6 +270,10 @@ def _attention_by_slices(graph: onnx.ModelProto) -> int:
             name=f"{softmax.name}/by_slices", num_scan_inputs=3, body=body, scan_input_axes=[axis] * 3,
             scan_output_axes=[axis])
         dropped |= {scores.name, softmax.name}
+    if len(rewritten) != expected:
+        whole = [name for name in found if name not in dropped]
+        raise ValueError(f"beat_this's attentions over time: {len(rewritten)} sliced, not {expected}; its softmaxes "
+                         f"found: {found or 'none'}; left whole (no MatMul, Softmax, MatMul chain): {whole or 'none'}")
     kept = [rewritten.get(n.name, n) for n in nodes if n.name not in dropped]
     del graph.graph.node[:]
     graph.graph.node.extend(kept)

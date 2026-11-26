@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from helpers.autochords_reference import reference_name
+from helpers.autochords_reference import main, reference_name
 
 
 @pytest.mark.parametrize(("audio", "want"), [
@@ -19,3 +19,15 @@ from helpers.autochords_reference import reference_name
 ])
 def test_a_references_name_is_its_audios_stem_with_what_shared_storage_refuses_made_a_hyphen(audio, want):
     assert reference_name(audio) == want
+
+
+@pytest.mark.parametrize("names", [("a:b.wav", "a-b.wav"), ("x.flac", "x.mp3")])
+def test_two_audio_files_of_one_references_name_are_refused_before_any_is_read(names, tmp_path, capsys):
+    given, out = tmp_path / "in", tmp_path / "out"
+    given.mkdir()
+    for name in names:
+        (given / name).write_bytes(b"not audio: nothing is read")
+    assert main([str(given), str(out)]) == 2
+    assert not out.exists()
+    said = capsys.readouterr().err
+    assert all(name in said for name in names) and reference_name(names[0]) in said
