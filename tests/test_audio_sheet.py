@@ -158,7 +158,7 @@ def test_an_upload_is_moved_into_place(setup, conn, sites, tmp_path):
     assert heard.ends()["audio"] == ("done", "kept as its audio: MP3, 3:20")
     kept = audio_store.uploaded(setup, the_song(conn))
     assert kept is not None and kept.name == f"{the_song(conn).id}-{up.sha256[:16]}.mp3"
-    assert kept_files(setup) == [kept.name]  # moved: neither the staged file nor its record is left
+    assert set(kept_files(setup)) == {kept.name, f".upload-{up.id}.kept"}  # moved: its marker alone stays
     with pytest.raises(audio_store.AudioError):
         audio_store.staged(setup, up.id)
 
@@ -431,14 +431,14 @@ def test_the_same_job_again_after_its_audio_stage_makes_the_sheet_from_the_file_
         first, _ = make(setup, AudioRequest(*NICK, upload=up.id))
         assert not first.ok
     kept = audio_store.uploaded(setup, the_song(conn))
-    assert kept is not None and kept_files(setup) == [kept.name]
+    assert kept is not None and kept.name in kept_files(setup)
     monkeypatch.setattr(_Sheet, "_autochords_sheet", real)
     recognizer = Recognizer()
     result, heard = make(setup, AudioRequest(*NICK, upload=up.id), recognizer=recognizer)
     assert result.ok, result
     assert heard.ends()["audio"] == ("done", "has this file's audio already")
     assert kept.name in [p.name for p in recognizer.calls] and auto_sheet(setup, conn)  # made from the file kept
-    assert kept_files(setup) == [kept.name]  # nothing staged, the one file
+    assert set(kept_files(setup)) == {kept.name, f".upload-{up.id}.kept"}  # nothing staged: the file and its marker
 
 
 def test_an_upload_gone_is_still_refused_for_a_song_whose_audio_is_no_file_given(setup, conn, sites, tmp_path):
@@ -446,3 +446,76 @@ def test_an_upload_gone_is_still_refused_for_a_song_whose_audio_is_no_file_given
     update_song(conn, song.id, audio_path=str(a_file(tmp_path)), audio_mtime=1.0)  # a purchase
     result, heard = make(setup, AudioRequest(*NICK, upload="0123456789abcdef"))
     assert not result.ok and result.failed.startswith("that upload is gone")
+
+
+def sheet_of(setup, conn) -> str:
+    return auto_sheet(setup, conn)
+
+
+@pytest.mark.parametrize("lost", ["another upload", "the hour's sweep"])
+def test_a_new_upload_lost_before_its_audio_stage_is_refused_and_the_older_file_stays(setup, conn, sites, monkeypatch,
+                                                                                    lost):
+    # A song with a file given; a new file uploaded for it, its job interrupted before its Audio stage, the staged file
+    # let go (another upload, or the hour's sweep): Try again is refused as gone, the song's audio and sheet as they
+    # were. Never "has this file's audio already" for a file that was never kept.
+    from caracole.audio_sheet import _AudioSheet
+
+    first = audio_store.stage(setup, audio("MP3", 200.0), "first.mp3", named=())
+    assert make(setup, AudioRequest(*NICK, upload=first.id))[0].ok
+    song = the_song(conn)
+    before, sheet = song.audio_path, sheet_of(setup, conn)
+    second = audio_store.stage(setup, audio("WAV", 200.0), "second.wav", named=())
+    real = _AudioSheet.find_song
+
+    def interrupted(self):
+        raise KeyboardInterrupt  # serve restarted while the job ran its song stage: Interrupted, before Audio
+
+    monkeypatch.setattr(_AudioSheet, "find_song", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        make(setup, AudioRequest(*NICK, upload=second.id))
+    monkeypatch.setattr(_AudioSheet, "find_song", real)
+    if lost == "another upload":
+        audio_store.stage(setup, audio("MP3", 3.0), "another.mp3", named=())  # every staged upload no job names goes
+    else:
+        audio_store.sweep(setup, (), now=second.at + audio_store.EXPIRES + 1)
+    with pytest.raises(audio_store.AudioError):
+        audio_store.staged(setup, second.id)
+    result, heard = make(setup, AudioRequest(*NICK, upload=second.id))
+    assert not result.ok and result.failed.startswith("that upload is gone")
+    assert the_song(conn).audio_path == before and sheet_of(setup, conn) == sheet
+
+
+def test_try_again_of_an_older_job_once_a_later_file_is_kept_is_refused(setup, conn, sites):
+    first = audio_store.stage(setup, audio("MP3", 200.0), "first.mp3", named=())
+    assert make(setup, AudioRequest(*NICK, upload=first.id))[0].ok
+    second = audio_store.stage(setup, audio("WAV", 200.0), "second.wav", named=())
+    assert make(setup, AudioRequest(*NICK, upload=second.id))[0].ok
+    later = the_song(conn).audio_path
+    result, _ = make(setup, AudioRequest(*NICK, upload=first.id))
+    assert not result.ok and result.failed.startswith("that upload is gone")
+    assert the_song(conn).audio_path == later
+
+
+@pytest.mark.parametrize("cut", ["before the move", "after the move, before the row"])
+def test_a_keep_cut_off_anywhere_is_finished_by_the_same_job_again(setup, conn, sites, monkeypatch, cut):
+    up = audio_store.stage(setup, audio("MP3", 200.0), "Vikingos.mp3", named=())
+    target = (audio_store.os, "rename") if cut == "before the move" else (audio_store, "update_song")
+    real = getattr(*target)
+
+    def killed(*args, **kwargs):
+        if cut == "before the move" and not str(args[0]).endswith(".mp3"):
+            return real(*args, **kwargs)  # the marker's own rename goes through: cut after it, before the data's
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(*target, killed)
+    with pytest.raises(KeyboardInterrupt):
+        make(setup, AudioRequest(*NICK, upload=up.id))
+    monkeypatch.setattr(*target, real)
+    assert audio_store.uploaded(setup, the_song(conn)) is None
+    assert any(n == f".upload-{up.id}.kept" for n in kept_files(setup))  # its marker, written before the move
+    result, heard = make(setup, AudioRequest(*NICK, upload=up.id))
+    assert result.ok, result
+    assert heard.ends()["audio"] == ("done", "kept as its audio: MP3, 3:20")
+    kept = audio_store.uploaded(setup, the_song(conn))
+    assert kept is not None and kept.name == f"{the_song(conn).id}-{up.sha256[:16]}.mp3"
+    assert [n for n in kept_files(setup) if not n.endswith(".kept")] == [kept.name]  # nothing else staged or lost

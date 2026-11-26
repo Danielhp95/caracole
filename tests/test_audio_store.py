@@ -9,6 +9,7 @@ import stat
 import struct
 import subprocess
 import sys
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -52,8 +53,8 @@ def store(cfg) -> Path:
 
 
 def names(cfg) -> list[str]:
-    """What the store holds, by name: none when there is no store."""
-    return sorted(p.name for p in store(cfg).iterdir()) if store(cfg).exists() else []
+    """What the store holds, by name, a moved upload's marker (``.upload-<id>.kept``) aside: none with no store."""
+    return sorted(p.name for p in store(cfg).iterdir() if not p.name.endswith(".kept")) if store(cfg).exists() else []
 
 
 def mode(path: Path) -> int:
@@ -538,15 +539,18 @@ def test_a_merge_of_two_uploads_keeps_the_newer_and_lets_the_other_go(conn, cfg,
     assert tidy(conn, cfg) == 1 and last.exists() and not first.exists()
 
 
-# --- a keep killed between the move and the song's row ---------------------------------------------------------------
+# --- the marker a moved upload leaves (``.upload-<id>.kept``) ------------------------------------------------------
 
 
-def test_a_keep_cut_off_after_the_move_loses_nothing_and_the_same_upload_is_kept_again(conn, cfg, monkeypatch):
-    # The staged record goes only once the song's row names the kept file: cut off between the two, the record still
-    # names the upload, tidy leaves the moved file alone, and the same upload asked again adopts it by its digest.
+def markers(cfg) -> list[str]:
+    return sorted(p.name for p in store(cfg).iterdir() if p.name.endswith(".kept"))
+
+
+def test_a_keep_cut_off_after_the_move_leaves_its_marker_and_tidy_spares_the_file(conn, cfg, monkeypatch):
+    # The marker is written before the move, the staged record goes only once the song's row names the kept file: cut
+    # off between the move and the row, the marker and the record name the kept file, which tidy leaves alone.
     song = add_song(conn, "Radiohead", "Creep")
     up = stage(cfg, audio("MP3"), "creep.mp3", named=())
-    real = audio_store.update_song
 
     def killed(*args, **kwargs):
         raise KeyboardInterrupt  # the job stopped, a kill's place
@@ -554,14 +558,59 @@ def test_a_keep_cut_off_after_the_move_loses_nothing_and_the_same_upload_is_kept
     monkeypatch.setattr(audio_store, "update_song", killed)
     with pytest.raises(KeyboardInterrupt):
         keep(cfg, conn, song, staged(cfg, up.id).path, move=True)
-    monkeypatch.setattr(audio_store, "update_song", real)
     moved = store(cfg) / f"{song.id}-{up.sha256[:16]}.mp3"
     assert moved.exists() and get_song(conn, song.id).audio_path is None
-    assert tidy(conn, cfg) == 0 and moved.exists()  # a staged record still names it
-    again = staged(cfg, up.id)
-    assert again.path == moved and again.sha256 == up.sha256
-    kept = keep(cfg, conn, song, again.path, move=True, upload_id=up.id)
-    assert kept == moved and get_song(conn, song.id).audio_path == str(moved)
-    with pytest.raises(AudioError):
-        staged(cfg, up.id)  # its record gone now the row names the file
-    assert sorted(p.name for p in store(cfg).iterdir()) == [moved.name]
+    assert markers(cfg) == [f".upload-{up.id}.kept"]
+    assert audio_store.marked(cfg, up.id).path == moved
+    assert tidy(conn, cfg) == 0 and moved.exists()  # its keep isn't over: the upload's still
+    assert sweep(cfg, (), now=up.at + EXPIRES + 1) == [] and moved.exists()  # nor is it a staged upload no job names
+
+
+def test_stage_and_sweep_leave_markers_alone_and_sweep_lets_go_of_one_whose_file_is_gone(conn, cfg):
+    song = add_song(conn, "Radiohead", "Creep")
+    up = stage(cfg, audio("MP3"), "creep.mp3", named=())
+    kept = keep(cfg, conn, song, staged(cfg, up.id).path, move=True)
+    assert markers(cfg) == [f".upload-{up.id}.kept"]
+    other = stage(cfg, audio("WAV"), "other.wav", named=())  # another file: every staged upload no job names goes
+    assert markers(cfg) == [f".upload-{up.id}.kept"]
+    assert sweep(cfg, (), now=other.at + EXPIRES + 1) == [other.id] and markers(cfg) == [f".upload-{up.id}.kept"]
+    assert audio_store.marked(cfg, up.id).path == kept
+    kept.unlink()
+    sweep(cfg, ())
+    assert markers(cfg) == [] and audio_store.marked(cfg, up.id) is None
+    # One past the Journal's history (web/history.py DAYS) goes too: Try again can't come later.
+    up2 = stage(cfg, audio("MP3", 2.0), "b.mp3", named=())
+    keep(cfg, conn, song, staged(cfg, up2.id).path, move=True)
+    sweep(cfg, (), now=time.time() + audio_store.MARKED + 1)
+    assert markers(cfg) == []
+
+
+def test_the_markers_life_is_the_journals_history(conn, cfg):
+    from caracole.web.history import DAYS
+
+    assert audio_store.MARKED == DAYS * 86400
+
+
+# --- two rows naming one kept file ---------------------------------------------------------------------------------
+
+
+def test_a_kept_file_another_song_names_is_never_deleted(conn, cfg, tmp_path):
+    # However two rows came to name one file (identical bytes given to a song that took a merged song's id), removing
+    # one song or replacing its audio leaves the file and the other song's audio.
+    from helpers.audio_files import given
+
+    from caracole.removal import brief, describe, plan_removal, remove_song
+
+    one = add_song(conn, "Radiohead", "Creep")
+    two = add_song(conn, "Oasis", "Wonderwall")
+    shared = given(conn, cfg.state_dir, one, "MP3")
+    update_song(conn, two.id, audio_path=str(shared), audio_mtime=shared.stat().st_mtime)
+    keep(cfg, conn, get_song(conn, one.id), write(tmp_path / "new.wav", "WAV"), move=False)
+    assert shared.exists() and get_song(conn, two.id).audio_path == str(shared)
+    update_song(conn, one.id, audio_path=str(shared), audio_mtime=shared.stat().st_mtime)
+    plan = plan_removal(conn, cfg, get_song(conn, one.id))
+    assert plan.uploaded_audio is None and plan.audio is None
+    goes, stays, _ = describe(plan, cfg)
+    assert not any("audio file you gave" in line for line in goes) and "audio file you gave" not in brief(plan)
+    remove_song(conn, cfg, plan)
+    assert shared.exists() and get_song(conn, two.id).audio_path == str(shared)

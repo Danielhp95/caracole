@@ -109,27 +109,16 @@ def _audio(cfg: Config, file: Path | None, upload: str | None, display: str | No
 
 
 def _given_already(cfg: Config, upload: str | None, display: str | None) -> Path | None:
-    """The file given the song ``display`` names, when ``upload`` is gone (``audio_store.gone``) and the song's audio
-    is one (``audio_store.uploaded``): the upload a first run of the same job moved into place. None otherwise, and
-    for a database caracole can't open now."""
-    import sqlite3
-
-    from caracole import audio_store, db
-    from caracole.normalize import identity_key
-    from caracole.songs import find_song
+    """The kept file a gone ``upload`` became, by its marker (``audio_store.marked``): this job's upload, moved into
+    place by a run before (Try again after the Audio stage, or a run cut off), read for its names; the audio stage
+    then checks it is still the song's (audio_sheet.py). None for an upload not gone, one with no marker, or no
+    ``--song``."""
+    from caracole import audio_store
 
     if upload is None or display is None or not audio_store.gone(cfg, upload):
         return None
-    artist, _, title = display.partition(" - ")
-    try:
-        conn = db.connect(cfg.db_path)
-    except (OSError, sqlite3.Error):
-        return None
-    try:
-        song = find_song(conn, identity_key(artist.strip(), title.strip()))
-    finally:
-        conn.close()
-    return audio_store.uploaded(cfg, song) if song is not None else None
+    mark = audio_store.marked(cfg, upload)
+    return mark.path if mark is not None else None
 
 
 def _named(cfg: Config, name: str, tags: dict[str, str | None]) -> tuple[str, str]:

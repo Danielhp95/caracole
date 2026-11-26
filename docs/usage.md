@@ -1464,11 +1464,14 @@ minutes at most), now:
   pages. A lookup waiting for the lock goes first before the vocals, the words and the chords.
 - `--upload ID` takes a file caracole serve was sent, moved into place rather than copied. Without
   `--song`, the song is the one the file's tags or name say, as for a file (the page always names it).
-  Asked again once the file is the song's audio (Try again after the Audio step), it goes on with that
-  file (`Audio: has this file's audio already.`); for a song with no file of yours it says the upload
-  is gone.
+  Once moved, the upload leaves a small marker beside the file for 30 days (the Journal's history),
+  so the same request again (Try again after the Audio step, or one cut off on the way) goes on:
+  `Audio: has this file's audio already.` while the song's audio is that file. An upload lost before
+  its Audio step (a request interrupted, its file swept after an hour or replaced by another upload),
+  or one a later file of yours has replaced since, says the upload is gone: choose it again.
+- No file of yours is deleted while another song's audio is that file too.
 - Two songs merged into one (after an upgrade that spells a song's key anew) keep the file you gave
-  either; of two such files, the one given last.
+  either; of two such files, the one given last, and the next scan deletes the older.
 
 It needs the flake's `packages.autochords` (auto-chords and its model files; no YouTube, no yt-dlp).
 It exits 0 once the sheet is made, and when a site's block, cooldown, spent budget or error makes

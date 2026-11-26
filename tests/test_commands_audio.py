@@ -113,8 +113,9 @@ def invoke(config: Path, *args: str):
 
 
 def kept_files(tmp_path) -> list[str]:
+    """The files in caracole's audio folder, a moved upload's marker (``.upload-<id>.kept``) aside."""
     folder = tmp_path / "state" / "audio"
-    return sorted(p.name for p in folder.iterdir()) if folder.exists() else []
+    return sorted(p.name for p in folder.iterdir() if not p.name.endswith(".kept")) if folder.exists() else []
 
 
 # --- the whole way ---------------------------------------------------------------------------------------------

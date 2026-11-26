@@ -33,7 +33,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 
-from caracole.audio_store import uploaded
+from caracole.audio_store import named_by_another, uploaded
 from caracole.config import Config
 from caracole.db import kv_delete, kv_get_json, savepoint
 from caracole.logs import plural
@@ -122,7 +122,10 @@ def plan_removal(conn: sqlite3.Connection, cfg: Config, song: Song) -> RemovalPl
     versions = conn.execute("SELECT COUNT(*) FROM versions WHERE song_id = ?", (song.id,)).fetchone()[0]
     youtube = _youtube_audio(conn, cfg, song)
     given = uploaded(cfg, song)
-    bought = song.audio_path if song.audio_path and song.audio_path not in youtube and given is None else None
+    shared = given is not None and named_by_another(conn, given, song.id)  # another song's audio too: it stays
+    bought = (song.audio_path if song.audio_path and song.audio_path not in youtube and given is None else None)
+    if shared:
+        given = None
     return RemovalPlan(song, folder, tuple(sorted(delete)), tuple(sorted(keep)), problem, tuple(elsewhere),
                        lines, wanted_problem, bought, versions, youtube, str(given) if given else None)
 
