@@ -1,10 +1,9 @@
 /* A song of yours opened (card.js) under its line: its line and what its chevron unfolds, one card raised over the
-   list, its border the line's and the next line's edge; removed while open, its line keeps that box (library.js). A
-   line whose card is in the laptop's pane (.selected, library.css) is no card: its card is beside the list. A site's
+   list, its border the line's and the next line's edge (a removal sent closes it: library.js). A line whose card is in the laptop's pane (.selected, library.css) is no card: its card is beside the list. A site's
    song in the search keeps its plain panel. */
-.line:not(.hit):not(.selected):has(> .line-more[aria-expanded="true"]), .line.card-gone { margin: 6px 6px 8px;
+.line:not(.hit):not(.selected):has(> .line-more[aria-expanded="true"]) { margin: 6px 6px 8px;
   border: 1px solid var(--border-strong); border-radius: var(--radius-l, 12px); background: var(--card); box-shadow: var(--card-shadow); }
-.line:not(.hit):not(.selected):has(> .line-more[aria-expanded="true"]) + .line, .line.card-gone + .line {
+.line:not(.hit):not(.selected):has(> .line-more[aria-expanded="true"]) + .line {
   border-top: 0; }
 /* The card itself, wherever it is (under its line, in the pane): its parts' gap and its bottom padding, which
    library.css's head and pane rules read. */

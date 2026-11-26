@@ -123,7 +123,7 @@ PLAY = re.compile(r"\.(?:play|line-plays|foot(?:-[a-z]+)?)(?![\w-])")
 LINE = re.compile(r"\.line(?:-panel|-title)?(?![\w-])")
 PLACED = re.compile(r"\.line-title > \.line-plays$")  # lane 1's: where the buttons sit on a line
 PANE = re.compile(r"^#card-pane(?![\w-])")  # lane 1's: the laptop's pane (1d.6)
-BOX = re.compile(r"^\.line(?::not\(\.hit\)|\.card-gone)|^\.line-panel\.song-card(?![\w-])")  # the opened card's box
+BOX = re.compile(r"^\.line:not\(\.hit\)|^\.line-panel\.song-card(?![\w-])")  # the opened card's box
 LANE_1 = {"rows.css": (PLACED,), "library.css": (PLACED, PANE)}
 
 
