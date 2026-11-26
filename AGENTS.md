@@ -2623,6 +2623,16 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     TelemetryInitializer or bench entry in its manifest; each APK by output-metadata.json's name; the controls: the
     debug classpath and APK (no weights' file there either), `.#chord-models`' names, the AAR's own manifest. It handles
     no text: no ForbiddenApiTest.
+  - Its native build (stage B1): `externalNativeBuild` of autochords/native/CMakeLists.txt for arm64-v8a and x86_64,
+    NDK r28c (`ndkVersion`, android/flake.nix's `ndkVersion` and `cmakeVersion` 3.31.6): `libcaracole_soxr.so`, 16 KB
+    aligned, its reproducibility flags the CMakeLists' (§7: `-ffile-prefix-map`, `--build-id=none`,
+    `--hash-style=gnu`, `.comment` removed), `-ffp-contract=off`.
+- `:autochords` (plain JVM, stage B1): the front ends of the chords from audio; for now `frontend.Soxr`, libsoxr 0.1.3
+  over JNI (`resample(x, from, to)`, python-soxr's `soxr.resample` at HQ, call for call: soxr_jni.c), held by
+  `SoxrTest` to vectors/autochords/soxr.jsonl within 1e-6, its lengths equal. libsoxr is vendored in
+  autochords/native/soxr/ (LGPL-2.1+; nixpkgs' source, its `arm64-check.patch` and caracole's `aarch64.patch`
+  applied: NEON on arm64, the HQ engine python-soxr runs, cr32s over PFFFT), built by the host's cmake and gcc
+  (`hostSoxr`, its folder the tests' `java.library.path`) with the CMakeLists the NDK builds in `:ml`.
 - Milestones 1–6 are built (docs/android_port.md's status, "Built: milestones 4 to 6"), each route a module of its
   own:
   - `server/routes/Stubs.kt` keeps YouTube's routes and `GET /lookup` alone, answering "…: not on the phone yet."

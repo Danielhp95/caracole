@@ -17,6 +17,8 @@ android {
     namespace = "io.github.danielhp95.caracole.ml"
     compileSdk = 36
     buildToolsVersion = "36.0.0"
+    // r28c, android/flake.nix's ndkVersion: it builds libcaracole_soxr.so (autochords/native/), 16 KB aligned.
+    ndkVersion = "28.2.13676358"
 
     defaultConfig {
         minSdk = 26
@@ -28,6 +30,15 @@ android {
 
     buildFeatures {
         buildConfig = true
+    }
+
+    // libsoxr and its JNI (autochords/native/CMakeLists.txt, the one the JVM's tests build for this machine), for the
+    // two ABIs, by android/flake.nix's CMake; its reproducibility flags are the CMakeLists' own (the design's §7).
+    externalNativeBuild {
+        cmake {
+            path = file("../autochords/native/CMakeLists.txt")
+            version = "3.31.6"
+        }
     }
 
     compileOptions {

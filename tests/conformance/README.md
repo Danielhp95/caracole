@@ -31,5 +31,7 @@ the same bits on every run on a CPU of the kernels its meta names (`cpu_capabili
 mismatch is expected, and the generator skips its byte check there, saying so; there, as for the phone's runtime,
 the check that counts is the gates', which `vectors/autochords/models.jsonl`'s meta record holds (`gates`: BTC's
 argmax and logits, beat_this's fp32 logits, the fp16-stored file's beats and downbeats by F, with no logit bound).
+`vectors/autochords/soxr.jsonl` (python-soxr's HQ resampling, which the phone's libsoxr is held to within 1e-6) needs
+only python-soxr, on any CPU: it is never skipped there.
 `data/caracole/autochords/` ships in the debug build alone, as android/ml's resources: `:core`, whose resource root
 is `data/`, leaves it out, so the release carries none of it until the stage that ships the models.

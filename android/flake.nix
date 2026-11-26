@@ -17,12 +17,19 @@
       # What app/build.gradle.kts compiles against: they change together.
       platformVersion = "36";
       buildToolsVersion = "36.0.0";
+      # What ml/build.gradle.kts's externalNativeBuild names: they change together.
+      ndkVersion = "28.2.13676358";
+      cmakeVersion = "3.31.6";
 
       sdkFor = emulator: pkgs.androidenv.composeAndroidPackages ({
         platformVersions = [ platformVersion ];
         buildToolsVersions = [ buildToolsVersion ];
-        includeNDK = false;
-        includeCmake = false;
+        # The NDK and CMake build libsoxr for the phone's ABIs (autochords/native/, ml/build.gradle.kts's
+        # externalNativeBuild): r28c, which ml/build.gradle.kts's ndkVersion names too.
+        includeNDK = true;
+        ndkVersions = [ ndkVersion ];
+        includeCmake = true;
+        cmakeVersions = [ cmakeVersion ];
         includeSources = false;
         includeEmulator = emulator;
         includeSystemImages = emulator;
@@ -53,7 +60,9 @@
           sdk = (sdkFor emulator).androidsdk;
           home = "${sdk}/libexec/android-sdk";
         in pkgs.mkShell {
-          packages = [ jdk gradle sdk ];
+          # The host's CMake and gcc build the same libsoxr for the JVM's tests (autochords/build.gradle.kts's
+          # hostSoxr task).
+          packages = [ jdk gradle sdk pkgs.cmake pkgs.gcc ];
           JAVA_HOME = jdk.home;
           CARACOLE_ALPHATAB_DIR = "${alphatab}";
           ANDROID_HOME = home;

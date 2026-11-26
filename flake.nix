@@ -14,6 +14,8 @@
       # For the model tests alone, in `.#autochords`: ONNX Runtime runs export.py's graphs, mir_eval scores them.
       autochordsTestDeps = ps: [
         ps.onnxruntime
+        # python-soxr (librosa's resampler), whose answers the phone's libsoxr is held to (vectors/autochords/soxr.jsonl).
+        ps.soxr
         # Its matplotlib image baselines fail against this nixpkgs' matplotlib; the tests use mir_eval.beat and .chord.
         (ps.mir-eval.overridePythonAttrs (old: { disabledTestPaths = (old.disabledTestPaths or [ ]) ++ [ "test_display.py" ]; }))
       ];

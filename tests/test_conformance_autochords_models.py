@@ -30,6 +30,13 @@ row-major; every number in a record a float32's value or an int, written as JSON
     stored (float16, read as float32), in its 1500-frame chunks, and its minimal postprocessor's ``beats`` and
     ``downbeats``, which are the computer's for the clip's audio too;
   - ``known``: the chords, beats and downbeats as synth_music.py played them.
+- ``vectors/autochords/soxr.jsonl``: a ``meta`` record (python-soxr's and libsoxr's versions, its engine, the
+  tolerance the phone's libsoxr is held to), then a record a conversion: python-soxr's ``resample`` at HQ (libsoxr
+  0.1.3, linear phase, nixpkgs' own build, which python-soxr links) of seeded noise (its samples in the record) or of
+  an excerpt of a clip (a fixture reference, its first sample and its count, read as soundfile reads it as float32),
+  from 22,050 to 11,025 Hz (the CQT's halvings), 44,100 and 48,000 to 22,050 Hz; one of 120,000 samples, past
+  python-soxr's chunk of 96,000 inputs. Needs only numpy, soundfile and soxr, and no CPU's kernels: never skipped
+  for them.
 - ``data/caracole/autochords/btc-graph.onnx``: export.py's BTC graph, the APK's.
 - ``data/caracole/autochords/models.json``: the pins: the contract; each file's name, bytes and SHA-256 (BTC's
   authors' file with its git blob id, repository, commit and path, from nix/autochords.nix's pin); BTC's mean and std
@@ -411,6 +418,73 @@ def test_onnx_runtime_meets_the_gates_on_the_stored_inputs(exports):
                 assert mir_eval.beat.f_measure(ref, est, half["window"]) >= half["f_measure_min"], (clip, name)
 
 
+# soxr.jsonl's conversions (from, to), its noise's lengths (each its own seed) and its clips' excerpts: every clip's
+# SOXR_EXCERPT samples from its SOXR_OFFSET-th (where silence.wav's music begins), and long.wav's first SOXR_LONG at
+# the conversions of SOXR_LONG_AT, past python-soxr's 96,000 and 104,489 inputs a call (its ``div_len``).
+SOXR_CONVERSIONS = ((22050, 11025), (44100, 22050), (48000, 22050))
+SOXR_NOISE = (0, 1, 2, 7, 100, 1001, 9600)
+SOXR_OFFSET, SOXR_EXCERPT = 27562, 8192
+SOXR_LONG, SOXR_LONG_AT = 120000, ((22050, 11025), (48000, 22050))
+SOXR_TOLERANCE = 1e-6
+
+
+def soxr_records() -> list[dict]:
+    """soxr.jsonl's records."""
+    import numpy as np
+    import soundfile
+    import soxr
+
+    from helpers.autochords_reference import array
+    from helpers.corpus import fixture_ref
+
+    engine = soxr.ResampleStream(44100, 22050, 1, dtype="float32", quality="HQ")._csoxr.engine()
+    records: list[dict] = [{
+        "kind": "meta", "quality": "HQ", "engine": engine, "tolerance": SOXR_TOLERANCE,
+        "arrays": "base64 of little-endian values, row-major",
+        "libraries": {"soxr": soxr.__version__, "libsoxr": soxr.__libsoxr_version__, "numpy": np.__version__,
+                      "soundfile": soundfile.__version__},
+    }]
+
+    def record(source: dict, x, conversions) -> None:
+        for rate_in, rate_out in conversions:
+            y = soxr.resample(x, rate_in, rate_out, quality="HQ")
+            assert y.dtype == np.float32
+            records.append({"kind": "resample", **source, "from": rate_in, "to": rate_out, "length": len(y),
+                            "y": array(y)})
+
+    for n in SOXR_NOISE:
+        x = np.random.default_rng(n).uniform(-1.0, 1.0, n).astype(np.float32)
+        record({"noise": {"seed": n, "x": array(x)}}, x, SOXR_CONVERSIONS)
+    for clip in synth_music.CLIPS:
+        wav = CLIPS / f"{clip.name}.wav"
+        samples, _ = soundfile.read(wav, dtype="float32")
+        x = np.ascontiguousarray(samples[SOXR_OFFSET:SOXR_OFFSET + SOXR_EXCERPT])
+        record({"clip": {"wav": fixture_ref(wav), "offset": SOXR_OFFSET, "count": len(x)}}, x, SOXR_CONVERSIONS)
+        if clip.name == "long":
+            x = np.ascontiguousarray(samples[:SOXR_LONG])
+            record({"clip": {"wav": fixture_ref(wav), "offset": 0, "count": len(x)}}, x, SOXR_LONG_AT)
+    return records
+
+
+_SOXR_TEXT = """
+import pathlib, sys
+sys.path[:0] = ["tests"]
+import test_conformance_autochords_models as m
+from helpers.corpus import jsonl
+text = jsonl(m.soxr_records(), corpus="autochords/soxr", made_by=m.MADE_BY)
+pathlib.Path(sys.argv[1], "soxr.jsonl").write_text(text, encoding="utf-8")
+"""
+
+
+@pytest.mark.autochords
+def test_soxr_vectors():
+    """python-soxr's answers, made in a fresh process as the models' records are."""
+    if not _installed("numpy", "soundfile", "soxr"):
+        pytest.skip("needs numpy, soundfile and soxr: nix develop .#autochords")
+    (text,) = _child_texts(_SOXR_TEXT, ("soxr.jsonl",))
+    check(AREA / "soxr.jsonl", text)
+
+
 _TEXTS = """
 import pathlib, sys
 sys.path[:0] = ["tests"]
@@ -421,7 +495,7 @@ for name, text in zip(("frontend.jsonl", "models.jsonl"), m._texts()):
 """
 
 
-def _fresh_texts(**env: str) -> tuple[str, str]:
+def _fresh_texts(**env: str) -> tuple[str, ...]:
     """frontend.jsonl's and models.jsonl's texts as a fresh process writes them, under [env] besides this one's.
 
     Never this process's. The fresh process is a canonicalisation: the records are beat_this at 1 thread in a
@@ -434,11 +508,16 @@ def _fresh_texts(**env: str) -> tuple[str, str]:
     kept alive or let go (1500 frames of zeros at 8 threads through the cached tracker, then the cache cleared, moved
     nothing, as real audio then the cache cleared doesn't). So it is no cached object nor thread count alone, and a
     cache_clear in the reference would close one way in of several."""
+    return _child_texts(_TEXTS, ("frontend.jsonl", "models.jsonl"), **env)
+
+
+def _child_texts(script: str, names: tuple[str, ...], **env: str) -> tuple[str, ...]:
+    """The files [names] that [script], run in a fresh process with a temporary folder as its argument, writes."""
     with tempfile.TemporaryDirectory() as tmp:
-        done = subprocess.run([sys.executable, "-c", _TEXTS, tmp], cwd=ROOT, capture_output=True, text=True,
+        done = subprocess.run([sys.executable, "-c", script, tmp], cwd=ROOT, capture_output=True, text=True,
                               env={**os.environ, "PYTHONPATH": subprocess_pythonpath(ROOT / "src"), **env})
         assert done.returncode == 0, f"the records' child failed:\n{done.stderr}"
-        return tuple((Path(tmp) / name).read_text(encoding="utf-8") for name in ("frontend.jsonl", "models.jsonl"))
+        return tuple((Path(tmp) / name).read_text(encoding="utf-8") for name in names)
 
 
 @pytest.mark.autochords

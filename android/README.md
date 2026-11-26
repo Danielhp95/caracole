@@ -22,7 +22,8 @@ From the repository's root, with Nix:
     nix develop ./android -c gradle -p android assembleDebug
 
 The APK is `android/app/build/outputs/apk/debug/app-debug.apk`. `android/flake.nix` provides JDK 17, Gradle and
-the Android SDK (platform 36, build tools 36.0.0) from caracole's own nixpkgs. The build uses that pinned Gradle
+the Android SDK (platform 36, build tools 36.0.0, NDK r28c and CMake 3.31.6) from caracole's own nixpkgs, and the
+host's CMake and gcc, which build libsoxr for the JVM's tests (below). The build uses that pinned Gradle
 rather than a Gradle wrapper, which would download a second copy. The flake also points the Android Gradle
 plugin at the SDK's aapt2, because NixOS can't run the copy the plugin fetches from Maven. The first build
 downloads the plugin and the libraries from Google's Maven and Maven Central.
@@ -791,6 +792,19 @@ APK by the name its `output-metadata.json` gives, and checks that the release's 
 (aapt2). Every probe has a control that shows it can see what it looks for: the debug build's classpath and APK
 (which hold all of it but the provider, and none of the weights' files), the names of the files `.#chord-models`
 makes, and the runtime's own AAR, whose manifest declares the provider.
+
+## Chords from audio: the resampler
+
+The computer resamples audio for its models with python-soxr, librosa's resampler, which runs libsoxr 0.1.3; the phone
+runs the same C. It is vendored in `autochords/native/soxr/` (LGPL-2.1+, its README names its source, its hash and its
+two patches) and built with caracole's JNI to it (`soxr_jni.c`, python-soxr's `resample` call for call) into one
+shared library, `libcaracole_soxr.so`, by `autochords/native/CMakeLists.txt`: by the NDK for arm64-v8a and x86_64 in
+`:ml` (its `externalNativeBuild`, so the debug build's alone, 16 KB aligned), and by the host's gcc for the JVM's tests
+(`:autochords`'s `hostSoxr` task, its folder on the tests' `java.library.path`). `:autochords`, plain JVM, holds the
+front ends of the chords from audio; for now `Soxr.resample(x, from, to)`, which `SoxrTest` holds to python-soxr's
+answers (`tests/conformance/vectors/autochords/soxr.jsonl`) within 1e-6:
+
+    nix develop ./android -c gradle -p android :autochords:test
 
 ## The Chords bench (debug build)
 
