@@ -820,6 +820,29 @@ class SyncEngineTest {
         assertEquals(emptyList(), computer.asked("POST", "/peer/push"))
     }
 
+    @Test fun `a give that stops at its second push of three says what the computer's says, of the whole give`() {
+        // peer sync --push's words: the whole give counted (a unit left too big among it), then how far it got, why,
+        // and that the pushes taken stay taken (commands/peer.py TAKEN_STAY).
+        smallPushes()
+        songs(12)
+        val big = onPhone("Bach", "Mass in B minor")
+        val path = phoneStore.folderOf(big).relativeTo(phoneLibrary).path + "/score-1.pdf"
+        RandomAccessFile(File(phoneLibrary, path).apply { parentFile.mkdirs() }, "rw").use { it.setLength(64L * 1024 * 1024 + 1) }
+        phone.writeBlocking { db ->
+            db.execute("INSERT INTO versions (provider, tab_id, song_id, slot, kind, url, fetched_at) " +
+                       "VALUES ('inbox', 'score-1', ?, 'guitar', 'score', '', ?)", big.id, NOW)
+            db.execute("INSERT INTO files (version_id, song_id, name, path, sha256, kept_rank, created_at) " +
+                       "VALUES (?, ?, 'score-1.pdf', ?, ?, 0, ?)", db.lastRowid(), big.id, path, "ab".repeat(32), NOW)
+        }
+        computer.refuse = { route, n -> if (route == "POST /peer/push" && n == 2) 503 else null }
+        val failed = assertFailsWith<SyncFailed> { apply(engine.compare(computer.address.toString())) }
+        val first = computer.taken.single().taken.size
+        val why = "$first given in the first push of 3; then push 2 of 3: ${computer.address} answered 503: Not now. " +
+            SyncEngine.TAKEN_STAY
+        assertEquals("Couldn't give them 13: $why", failed.message)
+        assertEquals(why, stages.last { it.first == "give" }.third)
+    }
+
     @Test fun `a song with a kept file past 64 MiB is left out of the give in the export's words, the rest given`() {
         val big = onPhone("Bach", "Mass in B minor")
         val path = phoneStore.folderOf(big).relativeTo(phoneLibrary).path + "/score-1.pdf"

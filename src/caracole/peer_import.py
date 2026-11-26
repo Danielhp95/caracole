@@ -217,10 +217,11 @@ def _touched(folder: Path) -> float:
 def kept(folder: Path) -> None:
     """The import in ``folder``, kept by an import that ended where a comparison again may settle it, touched now:
     its hour (``sweep``) runs from that end, never from its last part, so a Compare again finds it however long the
-    import waited in the queue. Nothing for a folder deleted meanwhile."""
+    import waited in the queue. Nothing for a folder deleted meanwhile, nor one that can't be touched (it runs as an
+    import ends, whatever ended it: its own ending stands; such a folder keeps the hour of its last part)."""
     try:
         os.utime(folder, follow_symlinks=False)
-    except FileNotFoundError:
+    except OSError:
         pass
 
 

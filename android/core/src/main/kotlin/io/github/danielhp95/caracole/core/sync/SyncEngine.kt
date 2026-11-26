@@ -728,9 +728,10 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
                 if (dropping != null && job == null) io { client.pushDrop(token, dropping, me) }
                 val far = if (n == 0) "" else "${done.given.size - givenBefore} given in the first " +
                     (if (n == 1) "push" else "$n pushes") + " of ${pushes.size}; then "
-                val why = far + which + said(e)
+                // commands/peer.py's words: the whole give counted, and once a push was taken, that it stays so.
+                val why = far + which + said(e) + (if (n == 0) "" else " $TAKEN_STAY")
                 stage(GIVE, FAILED, why)
-                throw SyncFailed("Couldn't give them ${entries.size}: $why", done.outcome(), e)
+                throw SyncFailed("Couldn't give them ${toGive.size}: $why", done.outcome(), e)
             }
             val units = Give.units(ended)
             val jobState = Give.text(ended["state"])
@@ -1063,6 +1064,10 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         const val UNSETTLED = "both books changed it: choose one"
         const val CHANGED_HERE = "changed here since compared"
         const val FILE_CHANGED = "a file it keeps changed here since we kept it"
+
+        /** A give that stopped after some of its pushes were taken: what the owner may count on (commands/peer.py's
+         * TAKEN_STAY). */
+        const val TAKEN_STAY = "The pushes taken there stay taken; the next sync gives the rest."
 
         /** sync_routes.STALE (and commands/peer.py's): the two changed since the comparison. */
         const val STALE = "Both books changed since that comparison. Compare again, then choose again."

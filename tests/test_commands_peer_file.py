@@ -679,6 +679,30 @@ def test_a_stale_import_keeps_its_staged_file_to_compare_again_and_takes_it_then
     assert "oasis/wonderwall" in studio.songs() and not folder.exists()
 
 
+def test_a_kept_folder_that_cant_be_touched_leaves_the_imports_own_ending(libraries, tmp_path, monkeypatch):
+    # peer_import.kept runs in a finally: a touch refused (another owner, a read-only mount) never stands for how
+    # the import ended.
+    from caracole.commands.peer import STALE
+
+    desk, studio, _ = libraries
+    desk_with_a_songbook(desk)
+    folder = stage(studio, exported(desk, tmp_path / "d.caracole").read_bytes())
+    shown = compared_in_the_tab(studio, folder)
+    studio.song("Muse", "Hysteria", version=None)
+
+    def refused(*args, **kw):
+        raise PermissionError(1, "Operation not permitted")
+
+    monkeypatch.setattr(peer_import.os, "utime", refused)
+    out = run(studio, "peer", "import", "--yes", "--progress", f"--compared={shown}", str(folder))
+    assert out.exit_code == 1 and STALE in out.output, out.output
+    assert isinstance(out.exception, SystemExit) and folder.exists(), out.exception  # no traceback over it
+    out = run(studio, "peer", "import", "--yes", "--progress", f"--compared={compared_in_the_tab(studio, folder)}",
+              str(folder))
+    assert out.exit_code == 0 and not isinstance(out.exception, OSError), (out.output, out.exception)
+    assert not folder.exists()
+
+
 def test_an_import_a_new_comparison_can_settle_keeps_its_staged_file_and_lets_go_of_it(libraries, tmp_path):
     desk, studio, _ = libraries
     f = a_file_that_removed_a_song_changed_here(desk, studio, tmp_path)

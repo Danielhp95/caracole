@@ -4110,7 +4110,10 @@ Import refuses a file, before changing anything (exit 2), when the file:
 
 Otherwise it backs the database up (`…-before-sync.sqlite`) and takes each unit as `peer pull`
 does. A conflict goes by `--choose`, else `--prefer`, else you are asked, else it is left. A song
-removed there is removed here, but a part the file doesn't hold never removes anything. Then it
+removed there is removed here, but a part the file doesn't hold never removes anything. Nor is the
+removal taken while the song stays here: if you keep your song, the removal is answered with it,
+and if the song's conflict is left, so is the removal ("its song is here: its removal there is not
+taken"). Then it
 renders the songs taken, records the agreement and merges the file's indexes if `--parts` names
 them. `--progress` names these steps check, take, render, agree and index, and the render step says
 which of the songs taken it is at ("12 of 20 songs").
