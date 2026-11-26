@@ -133,8 +133,38 @@ class BenchReportTest {
         assertEquals(JsonNull, none.getValue("rss_steady_mb"))
     }
 
-    private fun session(peak: Long?, fresh: Boolean = true, round: String = "on", pid: Int? = 4242) =
-        Session(BenchReport.BEATS_FP16, 4, false, round, 0.7, peak, null, null, null, null, pid = pid, fresh = fresh)
+    private fun session(peak: Long?, fresh: Boolean = true, round: String = "on", pid: Int? = 4242,
+                        failure: String? = null, stopped: String? = null, complete: Boolean = true,
+                        outOfMemory: Boolean = false) =
+        Session(BenchReport.BEATS_FP16, 4, false, round, 0.7, peak, null, null, failure, stopped, pid = pid,
+            fresh = fresh, complete = complete, outOfMemory = outOfMemory)
+
+    @Test fun aSessionThatDidntFinishItsHearingGivesNoMemoryVerdictAndOneOutOfMemoryAFalseOne() {
+        val warm = listOf(run(model = BenchReport.BEATS_FP16, pass = 2, rss = 800_000))
+        fun gated(vararg sessions: Session) = summary(report(warm, sessions = sessions.toList()), "references").single()
+        for (unfinished in listOf(
+            session(900_000, failure = "OrtException: some error", complete = false),
+            session(900_000, stopped = "stopped by the owner (Stop)", complete = false),
+            session(900_000, stopped = "the phone's thermal status reached critical", complete = false),
+            session(900_000, complete = false),
+        )) {
+            val g = gated(session(900_000), unfinished)
+            assertEquals(unfinished.toString(), JsonNull, g.getValue("memory_ok"))
+            assertEquals(JsonNull, g.getValue("rss_hearing_mb"))
+            assertTrue(g.str("memory_note"), g.str("memory_note").contains("sessions[].failure"))
+        }
+        // Out of memory, said by the runtime or by Android: false, whatever the peak read before it.
+        val oom = gated(session(900_000), session(700_000, failure = "OutOfMemoryError: …", complete = false,
+            outOfMemory = true))
+        assertFalse(oom.getValue("memory_ok").jsonPrimitive.boolean)
+        assertTrue(oom.str("memory_note").contains("out of memory"))
+        val notFresh = gated(session(900_000, fresh = false))
+        assertTrue(notFresh.str("memory_note").contains("fresh"))
+        assertEquals(JsonNull, gated(session(900_000)).let { it["memory_note"] ?: JsonNull })
+        val gates = report(warm).getValue("summary").jsonObject.getValue("gates").jsonObject
+        assertEquals(1024.0, gates.num("memory_mb"), 0.0)
+        assertEquals(0.125, gates.num("rtf_max"), 0.0)
+    }
 
     @Test fun gateB0sMemoryIsAHearingsWholePeakItsLoadAndColdRunIn() {
         val warm = listOf(run(model = BenchReport.BEATS_FP16, pass = 2, rss = 800_000),
@@ -226,8 +256,10 @@ class BenchReportTest {
         val btc = BtcParity("steady", 4, true, 130, 0.99, listOf(0.0005f), 1.5e-5f)
         val beat = BeatParity("long", BenchReport.BEATS_FP16, 4, true, 0.39f, 1.0, null)
         val session = Session(BenchReport.BEATS_FP16, 4, true, "off", 2.5, 900_000, 1, 2, null, "hot", pid = 99,
-            fresh = true)
-        val back = BenchCodec.decode(BenchCodec.encode(SessionResult(session, listOf(r), listOf(btc), listOf(beat))))
+            fresh = true, complete = true, outOfMemory = true)
+        val sent = SessionResult(session, listOf(r), listOf(btc), listOf(beat), ended = false, nextSeconds = 240.5)
+        val back = BenchCodec.decode(BenchCodec.encode(sent))
+        assertEquals(sent, back)
         assertEquals(session, back.session)
         assertEquals(listOf(r), back.runs)
         assertEquals(listOf(btc), back.btc)

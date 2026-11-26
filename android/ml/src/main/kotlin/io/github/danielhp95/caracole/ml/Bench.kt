@@ -71,8 +71,10 @@ class AndroidProbe(context: Context) : Probe {
  * reads its true peak RSS (reset as it began, and said not to be when the reset didn't take); a file's first pass is
  * compared with the computer's outputs. Before each run the heat guard looks at the phone: at critical or worse
  * ([Heat.TOO_HOT]) the session stops, keeping what it measured, and says why. Anything thrown, an
- * [OutOfMemoryError] among them, ends the session as its failure, never losing its runs. The bench runs each session
- * in a process of its own (the app's BenchWorkerService), so that a session's memory is its own.
+ * [OutOfMemoryError] among them, ends the session as its failure, never losing its runs; the session reports itself
+ * whole after each run (`progress`), so that whatever ends it (Stop, a crash, a kill, a hang) loses only the run in
+ * flight. The bench runs each session in a process of its own (the app's BenchWorkerService), so that a session's
+ * memory is its own.
  *
  * BTC's features are padded to whole windows with [padding] (models.json's mean, as the graph's metadata says),
  * beat_this's mel cut into [chunk]-frame pieces with [border] (beat_this's `split_predict_aggregate`,
@@ -93,18 +95,27 @@ class Bench(
     /** One session over [sources], in the [round] ("on" or "off") the screen is meant to be; stops before the next run
      * once [stopped] says so. */
     fun session(model: String, threads: Int, arena: Boolean, round: String, passes: Int, sources: List<Source>,
-                stopped: () -> Boolean): SessionResult {
+                stopped: () -> Boolean, progress: (SessionResult) -> Unit = {}): SessionResult {
         runs.clear(); btc.clear(); beats.clear()
         peak = probe.rssPeakKb()
         val start = probe.heat()
         var load: Double? = null
         var failure: String? = null
-        var tooHot: String? = null
+        var cut: String? = null
+        var outOfMemory = false
+        var unread = 0
         val file = when (model) {
             BenchReport.BTC -> OrtModels.BEATS_FP16  // unused: BTC's session alone is opened
             BenchReport.BEATS_FP16 -> OrtModels.BEATS_FP16
             BenchReport.BEATS_FP32 -> OrtModels.BEATS_FP32
             else -> throw IllegalArgumentException("no model $model")
+        }
+        fun now(ended: Boolean, next: Double? = null): SessionResult {
+            notePeak()
+            val session = Session(model, threads, arena, round, load, peak, start.chargeUah, probe.heat().chargeUah,
+                failure, cut, complete = ended && failure == null && cut == null && unread == 0 &&
+                    runs.size == sources.size * passes, outOfMemory = outOfMemory)
+            return SessionResult(session, runs.toList(), btc.toList(), beats.toList(), ended, next)
         }
         say("$model, $threads thread(s), arena ${if (arena) "on" else "off"}, screen $round")
         try {
@@ -113,37 +124,44 @@ class Bench(
                 ort.load(model == BenchReport.BTC)
                 load = (System.nanoTime() - began) / 1e9
                 say("loaded in ${"%.2f".format(load)} s")
+                progress(now(ended = false))
                 var cold = true
                 sources@ for (source in sources) {
-                    if (stopped()) break
+                    if (stopped()) {
+                        cut = STOPPED
+                        break
+                    }
                     val input = try {
                         source.read()
                     } catch (e: Exception) {
+                        unread += 1
                         say("${source.name}: not read (${e.message ?: e.javaClass.simpleName}), passed over")
                         continue
                     }
                     for (pass in 1..passes) {
-                        if (stopped()) break@sources
-                        val thermal = probe.heat().thermal
-                        if (thermal in Heat.TOO_HOT) {
-                            tooHot = "the phone's thermal status reached $thermal"
-                            say("stopped: $tooHot")
+                        if (stopped()) {
+                            cut = STOPPED
                             break@sources
                         }
+                        val thermal = probe.heat().thermal
+                        if (thermal in Heat.TOO_HOT) {
+                            cut = "the phone's thermal status reached $thermal"
+                            break@sources
+                        }
+                        progress(now(ended = false, next = input.duration))
                         one(ort, model, threads, arena, input, pass, cold)
                         cold = false
+                        progress(now(ended = false))
                     }
                 }
             }
         } catch (e: Throwable) {
             failure = "${e.javaClass.simpleName}: ${e.message}"
+            outOfMemory = outOfMemory(e)
             say("the session failed: $failure")
         }
-        notePeak()
-        val end = probe.heat()
-        val session = Session(model, threads, arena, round, load, peak, start.chargeUah, end.chargeUah, failure,
-            tooHot)
-        return SessionResult(session, runs.toList(), btc.toList(), beats.toList())
+        cut?.let { say("stopped: $it") }
+        return now(ended = true)
     }
 
     /** The session's peak so far: VmHWM read before each reset, so the highest of them is its whole life's. */
@@ -221,6 +239,14 @@ class Bench(
     }
 
     companion object {
+        /** A session's [Session.stopped] when the owner's Stop ended it. */
+        const val STOPPED = "stopped by the owner (Stop)"
+
+        /** Whether [e] is running out of memory, as the JVM says it ([OutOfMemoryError]) or ONNX Runtime does (its
+         * allocators' "Failed to allocate memory"); anything else is not known to be. */
+        fun outOfMemory(e: Throwable): Boolean =
+            e is OutOfMemoryError || e.message.orEmpty().contains("Failed to allocate memory")
+
         /** How often the process is looked at while a model runs: PSS is a walk of its mappings, so not much more. */
         const val SAMPLE_MS = 1000L
     }

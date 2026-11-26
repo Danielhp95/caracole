@@ -761,12 +761,14 @@ chain of iptables and ip6tables rules at the head of OUTPUT that counts the pack
 installed (the debug app, its test APK, `:ml`'s test APK) by `-m owner --uid-owner`. Packets to 10.0.2.2 and to loopback
 are counted apart; any other packet of theirs fails the run. A control proves the rules see the app's traffic: a
 connection to a listener on the host's loopback, sent as the debug app (`run-as`) before and after the classes, must be
-counted, each on its own: the counters are read between, and the control after the classes must raise them.
-`caracole_own` must also still be the first rule of OUTPUT in both tables as the classes end. The rules come off however
-the run ends. What the gate proves: nothing caracole's own uids sent left for a host other than 10.0.2.2 or loopback.
-What it doesn't: traffic another uid makes on caracole's behalf, a name lookup among it (Android's resolver sends from
-its own process, and whether it charges the asking app wasn't shown on this image: a lookup of an `.invalid` name as the
-app sent no packet at all). For that part, the capture is the evidence. The whole interface is captured too, as
+counted, each on its own: the counters are read just before each, and each must raise them by its own packets (the
+classes' own packets to 10.0.2.2 are printed apart). `caracole_own` must also still be the first rule of OUTPUT in both
+tables as the classes end. The rules come off however the run ends. What the gate proves: nothing caracole's own uids
+sent left for a host other than 10.0.2.2 or loopback. What it doesn't: traffic another uid makes on caracole's behalf, a
+name lookup among it (Android's resolver sends from its own process, and whether it charges the asking app wasn't shown
+on this image: a lookup of an `.invalid` name as the app sent no packet at all). The capture lists such traffic but
+can't attribute it: a lookup shows as a packet to or from the emulator's DNS (10.0.2.3), printed under a heading of its
+own, listed, not attributed, and the reader's to judge; it never fails the run. The whole interface is captured too, as
 evidence, with Wi-Fi off so that everything goes through the network the emulator's console captures. Its own control (a
 ping of 10.0.2.2 and a connection to the listener) must be in FILE, and each packet to or from another host is listed
 with the uid holding its socket as the classes end. It fails the run only when that uid is caracole's: the emulator's
@@ -800,13 +802,16 @@ will add the decoding and the features' time. And its parity is frame for frame 
 chord-by-chord scores (WCSR) come with the labels, in B1.
 
 It runs in sessions: one model on one thread count and memory setting, over every file. Each session runs in a fresh
-process, so that its memory is its own; starting one costs a second or two. Each session in the report names its
-process (`pid`) and says whether it was `fresh` (no earlier session's process still up). One that writes no result
-within 15 minutes plus 10 a file a pass, or within a minute of Stop, is recorded as failed, and the bench goes on. A session loads its model first and
-times the load apart. Each run's `rss_peak_mb` is its true peak (the process's peak memory, reset as the run begins),
-or null with `"reset": false` where the phone refused the reset. `pss_peak_mb` is sampled once a second: a run of BTC
-lasts about a tenth of that, so its PSS is a reading taken around the call. If the phone's thermal status reaches
-critical, the session stops, keeping what it measured, and the bench stops after it; the report says why.
+process, so that its memory is its own; starting one costs a second or two. Each session in the report names its process
+(`pid`) and says whether it was `fresh` (no earlier session's process still up). A session writes what it measured after
+every run, so whatever ends it (Stop, a crash, Android killing it, a hang) loses only the run in flight. One that writes
+nothing for longer than a run of its could take (four times the audio of the run in flight, 5 minutes at least), or
+whose run in flight doesn't end within a minute of Stop, is given up, its finished runs kept, and the bench goes on; the
+session says why it ended (`failure`, or `stopped`). A session loads its model first and times the load apart. Each
+run's `rss_peak_mb` is its true peak (the process's peak memory, reset as the run begins), or null with `"reset": false`
+where the phone refused the reset. `pss_peak_mb` is sampled once a second: a run of BTC lasts about a tenth of that, so
+its PSS is a reading taken around the call. If the phone's thermal status reaches critical, the session stops, keeping
+what it measured, and the bench stops after it; the report says why.
 
 1. **Install the debug build**: `android/scripts/phone-install.sh` (above). The APK is about 98 MB, the runtime's
    libraries most of it; it holds no model file.
@@ -845,12 +850,16 @@ What Gate B0 reads in it:
   `rtf_median` and `rtf_max` (the model's seconds over the audio's), with `speed_ok` when `rtf_max` is 0.125 or less.
   `memory_ok` is true when `rss_hearing_mb` is 1 GB or less: the highest whole-life peak of that setting's sessions,
   each a fresh process holding the model's load, its first inference and every run after, as a hearing on the phone
-  would (its clips included). It is null when any of those sessions has no peak of its own (its process not fresh,
-  `"fresh": false`). Beside it, `rss_steady_mb` is the warm runs' highest true peak, the load left out. A
-  beat_this that can't reach RTF 0.25 stops stage B. `summary.clips` gives the same numbers for the committed clips,
-  with no gate: they are parity's, and a short clip's chunk overhead is no measure of a song. Both leave each
-  session's first run out (`cold`: its first inference warms the runtime), so a bench of 1 pass over a single file
-  has an empty block, and a `references_note` or `clips_note` beside it says why.
+  would (its clips included). It is null when no whole hearing was measured, and `memory_note` says why: a session that
+  failed or was stopped before its planned runs were done (`sessions[].failure`, `sessions[].stopped`, and `complete:
+  false`: an error, a dead process, the heat guard, your Stop, a hang), or one whose process wasn't fresh
+  (`sessions[].fresh`). It is false when a session ran out of memory (`out_of_memory: true`): Java's OutOfMemoryError,
+  ONNX Runtime's "Failed to allocate memory", or Android's own record that it killed the process for memory.
+  `summary.gates` gives the limits it is held to. Beside it, `rss_steady_mb` is the warm runs' highest true peak, the
+  load left out. A beat_this that can't reach RTF 0.25 stops stage B. `summary.clips` gives the same numbers for the
+  committed clips, with no gate: they are parity's, and a short clip's chunk overhead is no measure of a song. Both
+  leave each session's first run out (`cold`: its first inference warms the runtime), so a bench of 1 pass over a single
+  file has an empty block, and a `references_note` or `clips_note` beside it says why.
 - `parity.pass`: BTC's chords the computer's frame for frame but where the computer itself was within 0.001 of a tie,
   beat_this fp32's logits within 0.001, and the fp16 file's beats and downbeats at F ≥ 0.99.
 - `runs`: each run with its `thermal` states, its `headroom_max` (read at most every 10 s) and its `battery_uah`

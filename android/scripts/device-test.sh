@@ -31,8 +31,10 @@
 #                   rule of OUTPUT in both tables as the classes end, or the rules prove nothing. What it proves:
 #                   nothing caracole's own uids sent left for a host but 10.0.2.2 or loopback. Not what another uid
 #                   sends on caracole's behalf, a name lookup among it (Android's resolver sends from its own
-#                   process; whether it charges the asking app was not shown on this image): for that, the
-#                   capture's stray endpoints, each with its socket's uid, are the evidence.
+#                   process; whether it charges the asking app was not shown on this image). The capture lists such
+#                   traffic but can't attribute it: a lookup shows as a packet to or from the emulator's DNS
+#                   (10.0.2.3), printed under a heading of its own, listed, not attributed, the reader's to judge,
+#                   never a failure.
 #                   The rules come off on every exit.
 #                   Beside it, as evidence, every packet the emulator sends or gets goes into FILE (pcap), with Wi-Fi
 #                   off so that all of it goes through the one interface the emulator's console captures (its
@@ -381,6 +383,9 @@ done
 # it, each packet to or from another host printed with the uid holding that host's socket, a failure only for one of
 # caracole's.
 if [ -n "$capture" ]; then
+    # What the classes left counted (some talk to a computer at 10.0.2.2 as the app), so the control after them is
+    # its own count alone.
+    counters_mid="$(owner_counters)"
     control
     adb emu network capture stop >/dev/null
     # Who holds each socket, and the rules' counters, as the classes end, before anything moves on.
@@ -388,7 +393,8 @@ if [ -n "$capture" ]; then
     packages="$(adb shell pm list packages -U | tr -d '\r')"
     counters="$(owner_counters)"
     # caracole_own must still head OUTPUT in both tables, or what came before it may have seen the app's packets.
-    heads="$(adb shell "su 0 sh -c 'iptables -S OUTPUT | sed -n 2p; ip6tables -S OUTPUT | sed -n 2p'" | tr -d '\r')"
+    head4="$(adb shell "su 0 iptables -S OUTPUT" | tr -d '\r' | sed -n 2p)"
+    head6="$(adb shell "su 0 ip6tables -S OUTPUT" | tr -d '\r' | sed -n 2p)"
     unown
     owned=0
     adb shell svc wifi enable
@@ -398,14 +404,15 @@ if [ -n "$capture" ]; then
     printf '%s\n' "$packages" >"$tcpdump.packages"
     printf '%s\n' "$counters" >"$tcpdump.counters"
     printf '%s\n' "$counters_before" >"$tcpdump.counters-before"
-    printf '%s\n' "$heads" >"$tcpdump.heads"
+    printf '%s\n' "$counters_mid" >"$tcpdump.counters-mid"
 
     own_ok=0
-    python3 - "$tcpdump.counters-before" "$tcpdump.counters" "$tcpdump.heads" "$app_uid" "${own_uids[*]}" \
-        <<'EOF' || own_ok=$?
+    python3 - "$tcpdump.counters-before" "$tcpdump.counters-mid" "$tcpdump.counters" "$app_uid" "${own_uids[*]}" \
+        "$head4" "$head6" <<'EOF' || own_ok=$?
 import sys
 
 app, uids = sys.argv[4], sys.argv[5].split()
+heads = {"iptables": sys.argv[6].strip(), "ip6tables": sys.argv[7].strip()}
 
 
 def read(path):
@@ -427,23 +434,23 @@ def read(path):
 
 
 before, _ = read(sys.argv[1])
-after, sent = read(sys.argv[2])
-heads = [line.strip() for line in open(sys.argv[3]).read().splitlines() if line.strip()]
-lost = [table for table, head in zip(("iptables", "ip6tables"), heads + ["", ""])
-        if head != "-A OUTPUT -j caracole_own"]
-print(f"owner rules (uids {', '.join(uids)}): {len(sent)} count(s) of packets elsewhere; the control as the app "
-      f"(uid {app}): {before} packet(s) to 10.0.2.2 before the classes, {after - before} more after them")
+mid, _ = read(sys.argv[2])
+after, sent = read(sys.argv[3])
+lost = [table for table, head in heads.items() if head != "-A OUTPUT -j caracole_own"]
+print(f"owner rules (uids {', '.join(uids)}): {len(sent)} count(s) of packets elsewhere; the app (uid {app}) to "
+      f"10.0.2.2: the control before the classes {before} packet(s), the classes {mid - before}, the control after "
+      f"them {after - mid} on its own")
 for line in sent:
     print(f"  {line}")
 if before < 2:
     print("  the control before the classes wasn't counted: the rules saw nothing of the app's")
-if after - before < 2:
+if after - mid < 2:
     print("  the control after the classes wasn't counted: the rules stopped seeing the app's packets, and prove "
           "nothing of the classes")
 for table in lost:
-    print(f"  caracole_own no longer heads {table}'s OUTPUT as the classes end: another chain may have seen the "
-          "app's packets first")
-sys.exit(1 if sent or before < 2 or after - before < 2 or lost else 0)
+    print(f"  caracole_own no longer heads {table}'s OUTPUT as the classes end (its first rule: "
+          f"{heads[table] or 'none'}): another chain may have seen the app's packets first")
+sys.exit(1 if sent or before < 2 or after - mid < 2 or lost else 0)
 EOF
     if [ "$own_ok" = 0 ]; then results+=("PASS owner rules"); else results+=("FAIL owner rules"); failed=1; fi
 
@@ -524,7 +531,9 @@ print("  control (before and after the classes): " + ", ".join(f"{name} {n}" for
 for line in sorted(set(allowed)):
     print(f"  allowed: {line}")
 ours = 0
-for endpoint, dst in sorted(set(others), key=str):
+dns = ipaddress.ip_address("10.0.2.3")
+lookups = [(src, dst) for src, dst in others if dst is not None and dns in (src, dst)]
+for endpoint, dst in sorted(set(others) - set(lookups), key=str):
     if dst is None:
         print(f"  {endpoint}")
         continue
@@ -534,6 +543,12 @@ for endpoint, dst in sorted(set(others), key=str):
     said = ", ".join(f"uid {u} ({' '.join(names.get(u, ['the system']))})" for u in sorted(uids)) or "no socket left"
     print(f"  {src} -> {dst}: {said}")
     ours += bool(uids & own)
+if lookups:
+    # Android's resolver asks the emulator's DNS from its own process: who asked can't be told from here.
+    print(f"  to or from the emulator's DNS (10.0.2.3), listed, not attributed, the reader's to judge: "
+          f"{len(lookups)} packet(s)")
+    for src, dst in sorted(set(lookups), key=str):
+        print(f"    {src} -> {dst}")
 if ours:
     print(f"  {ours} of them to or from a socket of caracole's")
 sys.exit(1 if ours or missing else 0)

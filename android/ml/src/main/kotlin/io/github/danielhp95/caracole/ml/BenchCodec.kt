@@ -18,9 +18,11 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 
-/** What one session's process measured, whole: its [Session], its runs and its parity entries. */
+/** What one session's process measured, whole: its [Session], its runs and its parity entries; [ended] once the
+ * session is over (false in the writes it makes after each run as it goes), [nextSeconds] the audio's length of the
+ * run it is about to make, which bounds how long the bench waits for its next write. */
 data class SessionResult(val session: Session, val runs: List<Run>, val btc: List<BtcParity>,
-                         val beats: List<BeatParity>)
+                         val beats: List<BeatParity>, val ended: Boolean = true, val nextSeconds: Double? = null)
 
 /**
  * A [SessionResult] as the text that crosses from the session's process to the bench's (a file the session writes as
@@ -28,12 +30,15 @@ data class SessionResult(val session: Session, val runs: List<Run>, val btc: Lis
  */
 object BenchCodec {
     fun encode(r: SessionResult): String = buildJsonObject {
+        put("ended", r.ended)
+        put("next_seconds", r.nextSeconds)
         put("session", buildJsonObject {
             val s = r.session
             put("model", s.model); put("threads", s.threads); put("arena", s.arena); put("round", s.round)
             put("load_seconds", s.loadSeconds); put("rss_peak_kb", s.rssPeakKb)
             put("battery_start_uah", s.batteryStartUah); put("battery_end_uah", s.batteryEndUah)
             put("failure", s.failure); put("stopped", s.stopped); put("pid", s.pid); put("fresh", s.fresh)
+            put("complete", s.complete); put("out_of_memory", s.outOfMemory)
         })
         put("runs", JsonArray(r.runs.map { run ->
             buildJsonObject {
@@ -70,7 +75,8 @@ object BenchCodec {
             session = Session(s.str("model"), s.int("threads"), s.bool("arena"), s.str("round"),
                 s.double("load_seconds"), s.long("rss_peak_kb"), s.long("battery_start_uah"),
                 s.long("battery_end_uah"), s.strOrNull("failure"), s.strOrNull("stopped"),
-                (s.value("pid") as? JsonPrimitive)?.content?.toIntOrNull(), s.bool("fresh")),
+                (s.value("pid") as? JsonPrimitive)?.content?.toIntOrNull(), s.bool("fresh"), s.bool("complete"),
+                s.bool("out_of_memory")),
             runs = o.getValue("runs").jsonArray.map { it.jsonObject }.map { r ->
                 Run(file = r.str("file"), kind = r.str("kind"), model = r.str("model"), pass = r.int("pass"),
                     threads = r.int("threads"), arena = r.bool("arena"), screen = r.str("screen"),
@@ -90,6 +96,8 @@ object BenchCodec {
                 BeatParity(b.str("file"), b.str("model"), b.int("threads"), b.bool("arena"),
                     b.getValue("logits_max_abs").jsonPrimitive.float, b.double("beats_f"), b.double("downbeats_f"))
             },
+            ended = o.bool("ended"),
+            nextSeconds = o.double("next_seconds"),
         )
     }
 

@@ -67,7 +67,7 @@ class ChordsBenchTest {
         val results = listOf(BenchReport.BTC, BenchReport.BEATS_FP16, BenchReport.BEATS_FP32).flatMap { model ->
             listOf(false, true).map { arena ->
                 BenchSessions.run(context, SessionSpec(model, 1, arena, "on", 1, models().path, null, clips = true,
-                    references = false), clips.inputs.size, { false }, { lines += it }) { pids += it }
+                    references = false), { false }, { lines += it }) { pids += it }
             }
         }
         lines.forEach(::println)
@@ -87,6 +87,7 @@ class ChordsBenchTest {
             assertTrue(session.toString(), session.num("load_seconds") > 0)
             assertTrue(session.toString(), session.num("rss_peak_mb") > 0)
             assertTrue("each session's process fresh: $session", session.getValue("fresh").jsonPrimitive.boolean)
+            assertTrue("each session complete: $session", session.getValue("complete").jsonPrimitive.boolean)
         }
         assertEquals(pids, sessions.map { it.getValue("pid").jsonPrimitive.content.toInt() })
         val runs = report.getValue("runs").jsonArray.map { it.jsonObject }
@@ -117,6 +118,25 @@ class ChordsBenchTest {
         assertTrue("clips_note" !in summary)
     }
 
+    @Test fun aSessionStoppedMidwayKeepsTheRunsItFinished() {
+        val lines = mutableListOf<String>()
+        var asked = false
+        val result = BenchSessions.run(context, SessionSpec(BenchReport.BEATS_FP16, 1, false, "on", 3, models().path,
+            null, clips = true, references = false), { asked }, { line ->
+            lines += line
+            // Stop once the session has finished its second run.
+            if (Regex(" #2: ").containsMatchIn(line)) asked = true
+        })
+        lines.forEach(::println)
+        assertTrue("asked to stop", asked)
+        assertTrue("its finished runs kept: ${result.runs.size}", result.runs.size >= 2)
+        assertTrue(result.runs.size < 4 * 3)
+        assertEquals(io.github.danielhp95.caracole.ml.Bench.STOPPED, result.session.stopped)
+        assertTrue(!result.session.complete)
+        assertEquals("no hearing's peak to trust", null, result.session.hearingPeakKb)
+        assertEquals(1, result.beats.size)  // the first file's first pass
+    }
+
     @Test fun aReferenceOfTheOwnersIsReadAsTheComputerWroteItAndRun() {
         val clips = BenchClips.read(context)
         val steady = clips.inputs.first { it.name == "steady" }
@@ -144,7 +164,7 @@ class ChordsBenchTest {
             file.inputStream().use { BenchInputs.reference("steady.json", it, 50) }
         }
         val results = listOf(BenchReport.BTC, BenchReport.BEATS_FP16).map { model ->
-            bench.session(model, 1, false, "on", 2, listOf(source)) { false }
+            bench.session(model, 1, false, "on", 2, listOf(source), stopped = { false })
         }
         val report = BenchReport.ofSessions(results, clips.gates, Device.here(BuildConfig.VERSION_NAME),
             "2026-11-25T21:00:00Z")

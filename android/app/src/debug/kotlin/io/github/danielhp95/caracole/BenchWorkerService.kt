@@ -1,6 +1,7 @@
 package io.github.danielhp95.caracole
 
 import android.app.ActivityManager
+import android.app.ApplicationExitInfo
 import android.app.Service
 import android.content.ComponentName
 import android.content.Context
@@ -8,6 +9,7 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.net.Uri
 import android.os.Binder
+import android.os.Build
 import android.os.IBinder
 import android.os.Process
 import io.github.danielhp95.caracole.ml.AndroidProbe
@@ -48,20 +50,22 @@ internal class SessionSpec(
  * memory is its own: nothing an earlier session's allocator kept, and its peak RSS its life's. [run] binds the
  * service for one session (a new address each time), follows its lines and waits for its result file, then unbinds,
  * which ends that process ([BenchWorkerService.onDestroy]), and waits for it to be gone before the next. A process
- * that dies first (out of memory) is that session's failure, and so is one that writes no result within its time
- * ([allowed]: a floor and a share of its planned work) or within a minute of Stop. Each session's result says its
+ * that dies first is that session's failure (Android's own word on why, for memory, kept); one that writes nothing
+ * for longer than a run of its could take ([quiet]) is given up, and so is one whose run in flight doesn't end within
+ * a minute of Stop: either way its last write, every run it finished, is kept, and the session says why it ended. Each session's result says its
  * process's pid and whether it was fresh: no earlier session's process still up as it began. Starting a process
  * costs a second or two a session.
  */
 internal object BenchSessions {
     const val PROCESS_SUFFIX = ":benchrun"
-    private const val FLOOR_MS = 15 * 60_000L
-    private const val A_FILE_A_PASS_MS = 10 * 60_000L
+    private const val FLOOR_MS = 5 * 60_000L
+    private const val RUNS_OF_AN_RTF = 4
     private const val AFTER_STOP_MS = 60_000L
 
-    /** How long a session of [files] files may take before it is given up: 15 minutes, and 10 a file a pass (a
-     * four-minute song's run at an RTF of 1 is four). */
-    fun allowed(spec: SessionSpec, files: Int): Long = FLOOR_MS + A_FILE_A_PASS_MS * files * spec.passes
+    /** How long the bench waits for a session's next write before it gives the session up: its runs write as they
+     * end, so the bound is one run's, four times the audio of the run in flight (an RTF of 4), 5 minutes at least
+     * (the model's load, a short file). */
+    fun quiet(nextSeconds: Double?): Long = maxOf(FLOOR_MS, ((nextSeconds ?: 0.0) * 1000 * RUNS_OF_AN_RTF).toLong())
 
     /** What a session that crashed or was killed left in `no_backup/bench-sessions/` (a `.json.part`, a log), gone: the
      * bench's start, while no session runs. */
@@ -69,7 +73,7 @@ internal object BenchSessions {
         File(context.applicationContext.noBackupFilesDir, "bench-sessions").listFiles()?.forEach { it.delete() }
     }
 
-    fun run(context: Context, spec: SessionSpec, files: Int, stopped: () -> Boolean, say: (String) -> Unit,
+    fun run(context: Context, spec: SessionSpec, stopped: () -> Boolean, say: (String) -> Unit,
             onProcess: (Int) -> Unit = {}): SessionResult {
         val app = context.applicationContext
         val dir = File(app.noBackupFilesDir, "bench-sessions").apply { mkdirs() }
@@ -95,12 +99,22 @@ internal object BenchSessions {
         }
         var said = 0L
         var seen: Int? = null
-        val began = System.currentTimeMillis()
-        val deadline = began + allowed(spec, files)
+        var last: SessionResult? = null
+        var lastStamp = -1L
+        var lastWrite = System.currentTimeMillis()
         var stopAt: Long? = null
-        var givenUp: String? = null
+        var cut: String? = null  // why the bench ended the session itself
+        fun read() {
+            val stamp = result.lastModified()
+            if (stamp == 0L || stamp == lastStamp) return
+            last = try {
+                BenchCodec.decode(result.readText()).also { lastStamp = stamp; lastWrite = System.currentTimeMillis() }
+            } catch (e: Exception) {
+                last  // mid-rename: the next poll reads it
+            }
+        }
         try {
-            while (!result.exists() && !gone.get()) {
+            while (last?.ended != true && !gone.get()) {
                 Thread.sleep(500)
                 if (seen == null) seen = pid(app)?.also(onProcess)
                 if (stopped() && stopAt == null) {
@@ -108,16 +122,19 @@ internal object BenchSessions {
                     stopAt = System.currentTimeMillis()
                 }
                 said = follow(log, said, say)
+                read()
                 val now = System.currentTimeMillis()
-                if (now > deadline) {
-                    givenUp = "no result within ${allowed(spec, files) / 60_000} minutes: given up"
+                val bound = quiet(last?.nextSeconds)
+                if (now - lastWrite > bound) {
+                    cut = "no word from the session for ${bound / 60_000} minutes: given up, its run in flight left out"
                     break
                 }
                 if (stopAt != null && now - stopAt > AFTER_STOP_MS) {
-                    givenUp = "stopped: its run didn't end within a minute, given up"
+                    cut = "${Bench.STOPPED}: its run in flight didn't end within a minute and is left out"
                     break
                 }
             }
+            read()
             follow(log, said, say)
         } finally {
             app.unbindService(connection)
@@ -125,14 +142,40 @@ internal object BenchSessions {
         val gone30 = System.currentTimeMillis() + 30_000
         while (pid(app) != null && System.currentTimeMillis() < gone30) Thread.sleep(200)
         seen?.let { if (pid(app) == it) Process.killProcess(it) }  // a worker given up on, ended (one uid)
-        val out = if (givenUp == null && result.exists()) BenchCodec.decode(result.readText()) else {
-            val why = givenUp ?: "the session's process died before its end (out of memory?)"
-            say(why)
-            SessionResult(Session(spec.model, spec.threads, spec.arena, spec.round, null, null, null, null, why,
-                null), emptyList(), emptyList(), emptyList())
+        val got = last
+        val out = when {
+            got != null && got.ended -> got
+            else -> {
+                // What it last wrote, every run it finished; why it ended, the bench's word.
+                val died = cut == null
+                val oom = died && seen?.let { killedForMemory(app, it) } == true
+                val why = cut ?: ("the session's process died before its end" +
+                    if (oom) ": Android killed it for memory" else "")
+                say(why)
+                val partial = got?.session ?: Session(spec.model, spec.threads, spec.arena, spec.round, null, null,
+                    null, null, null, null)
+                SessionResult(partial.copy(
+                    failure = if (died) why else partial.failure,
+                    stopped = if (died) partial.stopped else why,
+                    complete = false, outOfMemory = partial.outOfMemory || oom,
+                ), got?.runs.orEmpty(), got?.btc.orEmpty(), got?.beats.orEmpty())
+            }
         }
         for (f in listOf(result, stop, log, File(dir, "$id.json.part"))) f.delete()
         return out.copy(session = out.session.copy(pid = seen, fresh = fresh))
+    }
+
+    /** Whether Android says it ended the process [pid] for want of memory (its exit reasons, from Android 11; before
+     * that, unknown: false). */
+    private fun killedForMemory(context: Context, pid: Int): Boolean {
+        if (Build.VERSION.SDK_INT < 30) return false
+        return try {
+            context.getSystemService(ActivityManager::class.java)
+                .getHistoricalProcessExitReasons(context.packageName, pid, 1)
+                .any { it.reason == ApplicationExitInfo.REASON_LOW_MEMORY }
+        } catch (e: Exception) {
+            false
+        }
     }
 
     /** The session process's pid, while it runs. */
@@ -164,20 +207,27 @@ class BenchWorkerService : Service() {
         val log = File(dir, "$id.log")
         thread(name = "caracole-bench-session") {
             val say: (String) -> Unit = { line -> synchronized(log) { log.appendText(line + "\n") } }
+            // The session whole after each run, and as it ends: a Stop, a crash, a kill or a hang loses the run in
+            // flight alone.
+            val write: (SessionResult) -> Unit = { now ->
+                val part = File(dir, "$id.json.part")
+                part.writeText(BenchCodec.encode(now))
+                part.renameTo(File(dir, "$id.json"))
+            }
             val out = try {
-                session(spec, say) { File(dir, "$id.stop").exists() }
+                session(spec, say, { File(dir, "$id.stop").exists() }, write)
             } catch (e: Throwable) {
                 SessionResult(Session(spec.model, spec.threads, spec.arena, spec.round, null, null, null, null,
-                    "${e.javaClass.simpleName}: ${e.message}", null), emptyList(), emptyList(), emptyList())
+                    "${e.javaClass.simpleName}: ${e.message}", null, outOfMemory = Bench.outOfMemory(e)),
+                    emptyList(), emptyList(), emptyList())
             }
-            val part = File(dir, "$id.json.part")
-            part.writeText(BenchCodec.encode(out))
-            part.renameTo(File(dir, "$id.json"))
+            write(out)
         }
         return Binder()
     }
 
-    private fun session(spec: SessionSpec, say: (String) -> Unit, stopped: () -> Boolean): SessionResult {
+    private fun session(spec: SessionSpec, say: (String) -> Unit, stopped: () -> Boolean,
+                        progress: (SessionResult) -> Unit): SessionResult {
         val clips = BenchClips.read(this)
         val pins = BenchModels.pins()
         val beats = pins.getJSONObject("beats")
@@ -196,7 +246,7 @@ class BenchWorkerService : Service() {
         }
         val bench = Bench(File(spec.models), pins.getJSONObject("btc").getDouble("mean").toFloat(), fps,
             beats.getInt("chunk"), beats.getInt("border"), clips.gates, AndroidProbe(this), say)
-        return bench.session(spec.model, spec.threads, spec.arena, spec.round, spec.passes, sources, stopped)
+        return bench.session(spec.model, spec.threads, spec.arena, spec.round, spec.passes, sources, stopped, progress)
     }
 
     override fun onUnbind(intent: Intent?): Boolean = false

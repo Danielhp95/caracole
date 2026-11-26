@@ -58,16 +58,20 @@ data class Run(
  * its session opened before the first run), the process's peak RSS over its whole life (VmHWM as it ends: the
  * session's own, its inputs' reading in it), the battery's charge counter as it began and ended, and why it ended
  * early: [failure] (an error, or its process dead) or [stopped] (the heat guard); its process's [pid], and [fresh],
- * true only when the bench saw the earlier session's process gone before it began this one.
+ * true only when the bench saw the earlier session's process gone before it began this one; [complete], every run it
+ * planned done; [outOfMemory], known to have run out of memory (an [OutOfMemoryError], ONNX Runtime's "Failed to
+ * allocate memory", or Android's own word that it killed the process for memory).
  */
 data class Session(
     val model: String, val threads: Int, val arena: Boolean, val round: String, val loadSeconds: Double?,
     val rssPeakKb: Long?, val batteryStartUah: Long?, val batteryEndUah: Long?, val failure: String?,
-    val stopped: String?, val pid: Int? = null, val fresh: Boolean = false,
+    val stopped: String?, val pid: Int? = null, val fresh: Boolean = false, val complete: Boolean = false,
+    val outOfMemory: Boolean = false,
 ) {
-    /** The whole-life peak where it is this session's alone: its process fresh (no earlier session's still up as it
-     * began), a peak read. Gate B0's memory: a hearing is a load and a first run, and this holds both. */
-    val hearingPeakKb: Long? get() = rssPeakKb.takeIf { fresh }
+    /** The whole-life peak where it is a whole hearing's and this session's alone: its process fresh (no earlier
+     * session's still up as it began), every run it planned done ([complete]: no failure, nothing stopped it), a peak
+     * read. Gate B0's memory: a hearing is a load and a first run, and this holds both. */
+    val hearingPeakKb: Long? get() = rssPeakKb.takeIf { fresh && complete && failure == null && stopped == null }
 }
 
 /** The battery over the whole bench: its charge counter and percent at its start and end, and whether it was
@@ -223,6 +227,10 @@ object BenchReport {
         put("sessions", JsonArray(sessions.map(::session)))
         put("runs", JsonArray(runs.map(::run)))
         put("summary", buildJsonObject {
+            put("gates", buildJsonObject {
+                put("memory_mb", MEMORY_GATE_MB)
+                put("rtf_max", RTF_GATE)
+            })
             for ((key, kind) in listOf("references" to BenchInput.REFERENCE, "clips" to BenchInput.CLIP)) {
                 val ofKind = runs.filter { it.kind == kind }
                 val block = summary(ofKind, sessions, gate = kind == BenchInput.REFERENCE)
@@ -289,6 +297,8 @@ object BenchReport {
         put("stopped", s.stopped)
         put("pid", s.pid)
         put("fresh", s.fresh)
+        put("complete", s.complete)
+        put("out_of_memory", s.outOfMemory)
     }
 
     private fun run(r: Run): JsonObject = buildJsonObject {
@@ -330,6 +340,22 @@ object BenchReport {
             }
             val hearing = if (theirs.isEmpty() || theirs.any { it.hearingPeakKb == null }) null
             else theirs.maxOf { it.hearingPeakKb!! }
+            val memoryNote = when {
+                theirs.isEmpty() -> "no session of this setting measured its hearing's peak"
+                theirs.any { it.outOfMemory } -> "a session of this setting ran out of memory: see sessions[].failure"
+                theirs.any { it.failure != null || it.stopped != null || !it.complete } ->
+                    "a session of this setting didn't finish its runs, so its peak is no hearing's: see " +
+                        "sessions[].failure and sessions[].stopped"
+                theirs.any { !it.fresh } -> "a session of this setting didn't start in a fresh process (an earlier " +
+                    "one's still up), so its peak may not be its own: see sessions[].fresh"
+                hearing == null -> "a session of this setting gave no peak"
+                else -> null
+            }
+            val memoryOk = when {
+                theirs.any { it.outOfMemory } -> JsonPrimitive(false)
+                hearing == null -> JsonNull
+                else -> JsonPrimitive(hearing / 1024.0 <= MEMORY_GATE_MB)
+            }
             buildJsonObject {
                 put("model", first.model)
                 put("threads", first.threads)
@@ -343,7 +369,8 @@ object BenchReport {
                 put("rss_hearing_mb", mb(hearing))
                 if (gate) {
                     put("speed_ok", rtfs.last() <= RTF_GATE)
-                    put("memory_ok", hearing?.let { JsonPrimitive(it / 1024.0 <= MEMORY_GATE_MB) } ?: JsonNull)
+                    put("memory_ok", memoryOk)
+                    if (memoryNote != null) put("memory_note", memoryNote)
                 }
             }
         }

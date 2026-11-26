@@ -138,7 +138,6 @@ class BenchService : Service() {
         val probe = AndroidProbe(this)
         val clipInputs = BenchClips.read(this)
         val gates = clipInputs.gates
-        val files = referenceCount + if (clips) clipInputs.inputs.size else 0
         BenchSessions.sweep(this)
         val start = probe.heat()
         val results = mutableListOf<SessionResult>()
@@ -176,7 +175,7 @@ class BenchService : Service() {
                 }
             }
             val result = try {
-                BenchSessions.run(this, spec, files, { BenchSession.stopAsked }, say)
+                BenchSessions.run(this, spec, { BenchSession.stopAsked }, say)
             } catch (e: Throwable) {
                 SessionResult(Session(spec.model, spec.threads, spec.arena, spec.round, null, null, null, null,
                     "${e.javaClass.simpleName}: ${e.message}", null), emptyList(), emptyList(), emptyList())
