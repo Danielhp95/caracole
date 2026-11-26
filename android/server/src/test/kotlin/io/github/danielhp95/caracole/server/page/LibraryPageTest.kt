@@ -68,8 +68,10 @@ class LibraryPageTest {
         )
         val member = page.withServer(mirroredData(emptyList()), controls).getValue("server").jsonObject
         assertEquals(server.getValue("member"), member)
-        assertEquals(listOf("csrf", "busy", "active", "removing", "jobs", "guitar", "youtube", "transcribe", "audio"),
+        assertEquals(listOf("csrf", "busy", "active", "removing", "jobs", "guitar", "youtube", "transcribe", "audio",
+                            "lyricsSearch"),
                      member.keys.toList())
+        assertEquals(JsonPrimitive(false), member.getValue("lyricsSearch"))  // lyrics searched on the computer alone
         assertEquals(listOf("ok", "why", "off"), member.getValue("youtube").jsonObject.keys.toList())
         assertEquals(listOf("ok", "why", "songs", "nothing", "unsung", "transcribed", "time"),
                      member.getValue("transcribe").jsonObject.keys.toList())
@@ -92,7 +94,8 @@ class LibraryPageTest {
                                              "unsung" to emptyList<Int>(), "transcribed" to emptyList<Int>(),
                                              "time" to ""),
                          "audio" to obj("ok" to false, "why" to LibraryPage.AUDIO_PROBLEM, "limit" to 0,
-                                        "too_big" to "")),
+                                        "too_big" to ""),
+                         "lyricsSearch" to false),
                      served.getValue("server"))
         for (name in data.keys - "songs") assertEquals(data.getValue(name), served.getValue(name), name)
     }

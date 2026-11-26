@@ -865,6 +865,154 @@ def test_a_transcription_shows_its_steps_and_says_what_it_holds_or_what_stopped_
         "Chords over the lyrics.")
 
 
+# --- a song's lyrics searched under a name, and a record of it picked --------------------------------------------
+
+YEREN = "孟维来 - 野人"
+
+
+def lyrics_pick_job(state="running", stages=None, *, record="lrclib:28399373", output=()):
+    from caracole.lyrics_pick import STAGES as PICK_STAGES
+    from caracole.web.jobs import LYRICS_PICK, lyrics_pick_steps
+
+    said = stages or {}
+    made = [Step(label, tuple(args)) for label, args in lyrics_pick_steps(f"{YEREN} (官方MV)", record)]
+    if state != "running":
+        made[0].state = "done" if state == "done" else "failed"
+    made[0].output = list(output)
+    return Job(10, f"Lyrics for {YEREN} (官方MV)", LYRICS_PICK + "孟维来/野人", made, state=state,
+               display=f"{YEREN} (官方MV)", **times(state),
+               stages=[Stage(name, label, *said.get(name, ("waiting", ""))) for name, label in PICK_STAGES])
+
+
+TAKEN = {"song": ("done", "in the book; its last search's lrclib:28399373"),
+         "lyrics": ("done", f"timed lyrics from LRCLIB: {YEREN} (野人, 3:46); in place of AZLyrics' plain lyrics"),
+         "chords": ("done", "chords over the lyrics"), "pdf": ("done", "made"), "pages": ("done", "")}
+AGAIN = Action("Try again", post="/jobs/again", fields=(("job", "10"),))
+
+
+def test_a_lyrics_picks_steps_are_song_lyrics_chords_pdf():
+    from caracole.web.outcome import LYRICS_PICK_STEPS, lists_steps
+
+    assert LYRICS_PICK_STEPS == (("Song", ("song",)), ("Lyrics", ("lyrics",)), ("Chords", ("chords",)),
+                                 ("PDF", ("pdf",)))
+    running = lyrics_pick_job(stages={"song": TAKEN["song"], "lyrics": ("running", "")})
+    # Its Lyrics step names the picked record's site in full, from the start; the pages are the line's.
+    assert steps(running) == [Chip("Song", "done", "", TAKEN["song"][1]), Chip("Lyrics", "running", "LRCLIB"),
+                              Chip("Chords", "waiting"), Chip("PDF", "waiting")]
+    assert progress(running, job_line(running, SongFacts()), SongFacts()) == {
+        "steps": [c.as_json() for c in steps(running)], "at": 1, "count": "2 of 4"}
+    made = lyrics_pick_job("done", TAKEN, record="megalobiz:8")
+    assert steps(made)[1] == Chip("Lyrics", "done", "Megalobiz", TAKEN["lyrics"][1])  # what it took, in its words
+    assert lists_steps(made) and progress(made, job_line(made, SHEET), SHEET) == {}  # Ready: folded away
+    assert steps(lyrics_pick_job(stages={}, record="azlyrics:a/b"))[1].site == "AZLyrics"
+    # A site's error is the step that stopped it, found in the stage's words; a wait leaves it skipped.
+    failed = lyrics_pick_job("done", TAKEN | {"lyrics": ("failed", "LRCLIB failed (lrclib: 503: x); nothing kept"),
+                                              "chords": ("skipped", "no new lyrics"),
+                                              "pdf": ("skipped", "no new lyrics")})
+    assert steps(failed)[1] == Chip("Lyrics", "failed", "LRCLIB", "LRCLIB failed (lrclib: 503: x); nothing kept")
+    assert progress(failed, job_line(failed, SHEET), SHEET)["count"] == "2 of 4"
+
+
+def test_its_ready_says_what_it_took_and_what_it_replaced():
+    ready = lyrics_pick_job("done", TAKEN)
+    assert outcome(ready, job_line(ready, SHEET), SHEET) == Outcome(
+        "ready", "Ready", f"Timed lyrics from LRCLIB: {YEREN} (野人, 3:46); in place of AZLyrics' plain lyrics.",
+        Action("Open", href="/" + SHEET.sheet))
+    took = f"Timed lyrics from LRCLIB: {YEREN} (野人, 3:46); in place of AZLyrics' plain lyrics."
+    # Its chords skipped: what became of the sheet follows what it took, a sentence of its own.
+    alone = lyrics_pick_job("done", TAKEN | {"chords": ("skipped", "no audio to make an auto sheet from"),
+                                             "pdf": ("skipped", "no sheet")})
+    assert outcome(alone, job_line(alone, SongFacts()), SongFacts()) == Outcome(
+        "ready", "Ready", f"{took} No audio to make an auto sheet from.")
+    absent = lyrics_pick_job("done", TAKEN | {"chords": ("skipped", "auto-chords isn't here (no torch); tonight's run "
+                                                                   "makes it again")})
+    assert outcome(absent, job_line(absent, SHEET), SHEET) == Outcome(
+        "ready", "Ready", f"{took} Auto-chords isn't here (no torch); tonight's run makes it again.",
+        Action("Open", href="/" + SHEET.sheet))
+    human = lyrics_pick_job("done", TAKEN | {
+        "chords": ("skipped", "its sheet is a site's: no auto sheet to make again")})
+    assert outcome(human, job_line(human, SHEET), SHEET).reason == (
+        f"{took} Its sheet is a site's: no auto sheet to make again.")
+    # Chords that ran are their step's to say; "no new lyrics" is never said after lyrics kept.
+    assert outcome(ready, job_line(ready, SHEET), SHEET).reason == took
+    # Kept, then the server stopped: the lyrics said kept before the stop.
+    cut = lyrics_pick_job(INTERRUPTED, TAKEN | {"chords": (INTERRUPTED, "finding the beats"),
+                                                "pdf": ("skipped", ""), "pages": ("skipped", "")})
+    assert outcome(cut, job_line(cut, SHEET), SHEET) == Outcome(
+        "waiting", "Interrupted", "Lyrics kept. The server stopped mid-way. Try again to finish.", AGAIN)
+    early = lyrics_pick_job(INTERRUPTED, {"song": ("done", ""), "lyrics": (INTERRUPTED, "")})
+    assert outcome(early, job_line(early, SHEET), SHEET).reason == "The server stopped mid-way. Try again to finish."
+    # Kept, then failed after: Failed, the lyrics said kept, Try again.
+    after = lyrics_pick_job("failed", TAKEN | {"chords": ("failed", "auto-chords can't read the audio"),
+                                               "pdf": ("skipped", "no new lyrics")},
+                            output=["Lyrics kept; the job failed after: auto-chords can't read the audio."])
+    assert outcome(after, job_line(after, SHEET), SHEET) == Outcome(
+        "failed", "Failed", "Lyrics kept; the job failed after: auto-chords can't read the audio.", AGAIN)
+
+
+def test_a_lyrics_pick_that_kept_none_says_why_and_tries_again():
+    none = {"chords": ("skipped", "no new lyrics"), "pdf": ("skipped", "no new lyrics")}
+    for state, said, reason in (
+            ("skipped", "waiting out LRCLIB until 27 Nov 03:00; nothing kept",
+             "Waiting out LRCLIB until 27 Nov 03:00; nothing kept."),
+            ("failed", "LRCLIB failed (lrclib: 503: x); nothing kept", "LRCLIB failed (lrclib: 503: x); nothing kept."),
+            ("skipped", "no more asks of LRCLIB this hour (60 spent); nothing kept",
+             "No more asks of LRCLIB this hour (60 spent); nothing kept.")):
+        job = lyrics_pick_job("done", TAKEN | {"lyrics": (state, said)} | none)
+        assert outcome(job, job_line(job, SHEET), SHEET) == Outcome("waiting", "Not kept", reason, AGAIN)
+    # A record gone answers the same when asked again: missing, and no Try again (the card's pick another is next).
+    gone = lyrics_pick_job("done", TAKEN | {"lyrics": ("skipped", "LRCLIB's record 28399373 has no lyrics now; "
+                                                                  "nothing kept")} | none)
+    assert outcome(gone, job_line(gone, SHEET), SHEET) == Outcome(
+        "missing", "Not kept", "LRCLIB's record 28399373 has no lyrics now; nothing kept.")
+    refused = lyrics_pick_job("failed", {"song": ("failed", "“lrclib:1” isn't among the records its last search "
+                                                            "listed")})
+    assert outcome(refused, job_line(refused, SHEET), SHEET) == Outcome(
+        "failed", "Failed", "“lrclib:1” isn't among the records its last search listed.", AGAIN)
+
+
+def test_a_lyrics_search_says_its_last_lines_words_as_a_site_reads():
+    from caracole.web.jobs import LYRICS_SEARCH, lyrics_search_steps
+
+    def search(said):
+        made = [Step(label, tuple(args), state="done", output=[said])
+                for label, args in lyrics_search_steps(f"{YEREN} (官方MV)", YEREN)]
+        return Job(11, f"Lyrics under “{YEREN}”", LYRICS_SEARCH + "孟维来/野人", made, state="done", **times("done"))
+
+    found = search(f"Searched: LRCLIB lists 2 records for “{YEREN}”.")
+    assert outcome(found, job_line(found, None), None) == Outcome(
+        "added", "Searched", f"LRCLIB lists 2 records for “{YEREN}”.")
+    nothing = search(f"Nothing found: LRCLIB lists nothing for “{YEREN}”.")
+    assert outcome(nothing, job_line(nothing, None), None) == Outcome(
+        "missing", "Nothing found", f"LRCLIB lists nothing for “{YEREN}”.")
+    waited = search("Not searched: waiting out LRCLIB until 27 Nov 03:00; try again later.")
+    assert outcome(waited, job_line(waited, None), None) == Outcome(
+        "waiting", "Not searched", "waiting out LRCLIB until 27 Nov 03:00.",  # its words, as LaCuerda's search's
+        Action("Try again", post="/jobs/again", fields=(("job", "11"),)))
+    assert steps(found) == [Chip("Looking for lyrics under “孟维来 - 野人”", "done")]  # no stages: its command
+
+
+def test_a_lyrics_clear_is_cleared_or_nothing_to_clear_in_the_commands_words():
+    from caracole.web.jobs import LYRICS_CLEAR, lyrics_clear_steps
+
+    def clear(state, said):
+        made = [Step(label, tuple(args), state=state, output=[said])
+                for label, args in lyrics_clear_steps(f"{YEREN} (官方MV)")]
+        return Job(12, f"Clear the lyrics record: {YEREN} (官方MV)", LYRICS_CLEAR + "孟维来/野人", made, state=state,
+                   **times(state))
+
+    done = clear("done", f"Cleared the record you picked for {YEREN} (官方MV) (lrclib 28399373); every lyrics site "
+                         "is asked again under its own name, tonight or at a lookup.")
+    assert outcome(done, job_line(done, None), None) == Outcome(
+        "added", "Cleared", f"The record you picked for {YEREN} (官方MV) (lrclib 28399373); every lyrics site is "
+                            "asked again under its own name, tonight or at a lookup.")
+    refused = clear("failed", f"error: {YEREN} (官方MV) has no lyrics record picked under [lyrics]: nothing to "
+                              "clear.")
+    assert outcome(refused, job_line(refused, None), None) == Outcome(
+        "added", "Nothing to clear", "No lyrics record is picked.")
+    assert steps(done) == [Chip("Clearing the lyrics record you picked", "done")]
+
+
 def test_a_sync_whose_indexes_were_of_another_schema_says_so_after_what_it_shared():
     """A sync between databases of different schemas skips its index stage before any download (I4): its outcome
     says why in one sentence after what it did, as the stage said it; an index stage skipped for nothing newer, or

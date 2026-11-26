@@ -39,6 +39,11 @@ Tables:
 - ``[azlyrics]``: "Artist - Title" → the song's lyrics page on AZLyrics, for a song
   its artist's name doesn't lead to (azlyrics_fetch.py): that page, for a song with no
   lyrics, whoever it credits.
+- ``[lyrics]``: "Artist - Title" → ``{ as = "Artist - Title", record = "site:id" }``, either part or both
+  (``LyricsPick``): ``as`` the name the song's lyrics are asked under, where its own finds nothing, and ``record``
+  the record you picked (``LyricsRecord``), on LRCLIB or Megalobiz by its id (``lrclib:28399373``), on AZLyrics by its
+  page's artist and song (``azlyrics:pomme/mononoke``); ``set_lyrics_name`` and ``set_lyrics_record`` write them,
+  ``clear_lyrics_record`` takes the record out.
 - ``[gametabs]``: "Artist - Title" → the gametabs.net tab (its page) you picked
   (``GameTabsPick``): gametabs_fetch.py keeps that tab for the song, as its next
   ``gametab-N.txt`` beside any it has, whatever game or composer its page names.
@@ -90,7 +95,7 @@ _SCHEME = re.compile(r"[a-z][a-z0-9+.-]*://", re.IGNORECASE)
 ARTIST_PAGE_SHAPE = f"{_ARTIST_HOST}/artist/…"
 TAB_PAGE_SHAPE = f"{_TAB_HOST}/tab/…"
 _TABLES = {"alias", "match", "artist_url", "pin", "transpose", "ignore", "block", "reject", "youtube", "lacuerda",
-           "harptabs", "gametabs", "ireal", "azlyrics", "version", "harmonica"}
+           "harptabs", "gametabs", "ireal", "azlyrics", "lyrics", "version", "harmonica"}
 _HARMONICA_TAB = re.compile(r"harmonica-[1-9][0-9]{0,3}\.txt")  # a harmonica tab's name, as inbox.py keeps it
 # How messages and the to-do page write a YouTube video's address, and the value that says "no video".
 VIDEO_SHAPE = "https://www.youtube.com/watch?v=…"
@@ -108,6 +113,12 @@ HARPTABS_PAGE_SHAPE = f"{HARPTABS_BASE}/tab/<id>/<slug>"
 _AZLYRICS_HOST = re.compile(r"(?:www\.)?azlyrics\.com")
 _AZLYRICS_PATH = re.compile(r"/lyrics/[a-z0-9-]+/[a-z0-9-]+\.html")
 AZLYRICS_BASE = "https://www.azlyrics.com"
+# A [lyrics] record: a site of the three lyrics sites and its id there, of exactly the shape that site's ids have, so
+# that no record names another path of the site: LRCLIB's and Megalobiz's records by their number (the APIs' ``id``),
+# AZLyrics' by its page's artist and song, the two slugs of /lyrics/<artist>/<song>.html (_AZLYRICS_PATH's).
+LYRICS_RECORD_IDS = {"lrclib": re.compile(r"[1-9][0-9]{0,11}"), "megalobiz": re.compile(r"[1-9][0-9]{0,11}"),
+                      "azlyrics": re.compile(r"[a-z0-9-]+/[a-z0-9-]+")}
+LYRICS_SHAPE = '{ as = "Artist - Title", record = "lrclib:ID" | "megalobiz:ID" | "azlyrics:ARTIST/SONG" }'
 _GAMETABS_HOST = re.compile(r"(?:www\.)?gametabs\.net")
 _GAMETABS_PATH = re.compile(r"/tabs/([a-z0-9_-]{1,200})/([a-z0-9_-]{1,200})")
 GAMETABS_BASE = "https://gametabs.net"
@@ -155,6 +166,7 @@ class Overrides:
     gametabs: Mapping[str, GameTabsPick] = field(default_factory=dict)
     ireal: Mapping[str, IRealPick] = field(default_factory=dict)
     azlyrics: Mapping[str, str] = field(default_factory=dict)  # the page's address, as caracole asks for it
+    lyrics: Mapping[str, LyricsPick] = field(default_factory=dict)
     version: Mapping[str, str] = field(default_factory=dict)
     harmonica: Mapping[str, Mapping[str, str | Mapping[str, str]]] = field(default_factory=dict)
     tables: frozenset[str] = frozenset()
@@ -164,6 +176,34 @@ class Overrides:
         header kept from the docs' sample): lines to paste then come without its header, as a table declared
         twice makes the whole file unreadable."""
         return name in self.tables or bool(getattr(self, name, None))
+
+
+@dataclass(frozen=True)
+class LyricsRecord:
+    """A song's lyrics record you picked (``[lyrics]``'s ``record``): a lyrics site (``lrclib``, ``megalobiz``,
+    ``azlyrics``) and its id there, a number, or AZLyrics' ``artist/song``."""
+
+    site: str
+    id: str
+
+    @property
+    def text(self) -> str:
+        """As the entry writes it: ``lrclib:28399373``."""
+        return f"{self.site}:{self.id}"
+
+    @property
+    def page(self) -> str | None:
+        """AZLyrics' page of it, which caracole asks for; None for the others, whose records are asked by their id."""
+        return f"{AZLYRICS_BASE}/lyrics/{self.id}.html" if self.site == "azlyrics" else None
+
+
+@dataclass(frozen=True)
+class LyricsPick:
+    """A song's ``[lyrics]`` entry: ``asked``, the (artist, title) its lyrics are asked under, and ``record``, the
+    record you picked; either may be None, never both."""
+
+    asked: tuple[str, str] | None
+    record: LyricsRecord | None
 
 
 @dataclass(frozen=True)
@@ -507,13 +547,14 @@ def _parse(data: Mapping[str, Any]) -> Overrides:
     gametabs = _read_picks(data, "gametabs", gametabs_pick_from_url, "a gametabs.net tab's page")
     ireal = _read_picks(data, "ireal", ireal_pick_from_url, "an iReal Pro forum's thread")
     azlyrics = _read_picks(data, "azlyrics", azlyrics_page_from_url)
+    lyrics = _read_entries(data, "lyrics", _lyrics_pick)
     version = _read_entries(data, "version", _version)
     harmonica = _read_harmonica(data)
     return Overrides(
         alias=alias, match=match, artist_url=artist_url, pin=pin, transpose=transpose,
         ignore=ignore, block=block, pin_urls=pin_urls, reject=reject,
         artist_url_names=artist_url_names, youtube=youtube, lacuerda=lacuerda, harptabs=harptabs, gametabs=gametabs,
-        ireal=ireal, azlyrics=azlyrics, version=version, harmonica=harmonica, tables=frozenset(data),
+        ireal=ireal, azlyrics=azlyrics, lyrics=lyrics, version=version, harmonica=harmonica, tables=frozenset(data),
     )
 
 
@@ -696,6 +737,45 @@ def _version(value: Any, where: str) -> str:
         except ValueError as e:
             raise OverridesError(f"{where}: {e}") from e
     return text
+
+
+def _lyrics_refused(value: Any, where: str) -> OverridesError:
+    return OverridesError(f"{where}: expected {LYRICS_SHAPE}, got {value!r}")
+
+
+def _lyrics_asked(value: Any, where: str, entry: Any) -> tuple[str, str]:
+    """``as``: "Artist - Title", split at the first " - " and stripped, as ``override_key`` splits a key."""
+    artist, sep, title = value.partition(" - ") if isinstance(value, str) else ("", "", "")
+    if not sep or not artist.strip() or not title.strip():
+        raise _lyrics_refused(entry, where)
+    return artist.strip(), title.strip()
+
+
+def _lyrics_record(value: Any, where: str, entry: Any) -> LyricsRecord:
+    """``record``: ``site:id``, a site of ``LYRICS_RECORD_IDS`` and an id of its shape, as it is."""
+    site, sep, record_id = value.partition(":") if isinstance(value, str) else ("", "", "")
+    shape = LYRICS_RECORD_IDS.get(site)
+    if not sep or shape is None or not shape.fullmatch(record_id):
+        raise _lyrics_refused(entry, where)
+    return LyricsRecord(site, record_id)
+
+
+def _lyrics_pick(value: Any, where: str) -> LyricsPick:
+    """A ``[lyrics]`` value: a table of ``as``, ``record`` or both, and no other key."""
+    if not isinstance(value, Mapping) or not value or not set(value) <= {"as", "record"}:
+        raise _lyrics_refused(value, where)
+    return LyricsPick(asked=_lyrics_asked(value["as"], where, value) if "as" in value else None,
+                      record=_lyrics_record(value["record"], where, value) if "record" in value else None)
+
+
+def _lyrics_value(pick: LyricsPick) -> dict[str, str]:
+    """A pick as the entry writes it, and as ``song_entries`` gives it: only the parts set."""
+    value = {}
+    if pick.asked is not None:
+        value["as"] = f"{pick.asked[0]} - {pick.asked[1]}"
+    if pick.record is not None:
+        value["record"] = pick.record.text
+    return value
 
 
 def _edit(path: Path, change) -> None:
@@ -930,6 +1010,73 @@ def add_harmonica(path: Path, display: str, tab: str, reading: str | Mapping[str
     _edit(path, change)
 
 
+_KEEP = object()  # a part of a [lyrics] entry left as it is
+
+
+def _set_lyrics(path: Path, display: str, asked: Any = _KEEP, record: Any = _KEEP) -> bool:
+    """Set the parts of the song's ``[lyrics]`` entry given (a part None takes it out), keeping the other, and say
+    whether the entry changed. The song's entry is found by its key, as the table is read (the last one counts), so the
+    song written another way changes the entry it has; the same again writes nothing, and the entry goes once neither
+    part is left. A table written by hand (``[lyrics."Artist - Title"]``) keeps its lines and comments while a part of
+    it is left."""
+    wanted = override_key(display)
+    where = f"[lyrics] {display!r}"
+    if asked not in (None, _KEEP):
+        asked = _lyrics_asked(asked, where, asked)
+    if record not in (None, _KEEP):
+        record = _lyrics_record(record, where, record)
+    changed = False
+
+    def change(doc) -> None:
+        nonlocal changed
+        if "lyrics" not in doc and asked in (None, _KEEP) and record in (None, _KEEP):
+            return
+        t = _table_of(doc, "lyrics")
+        key = _last_entry(t, wanted)
+        before = LyricsPick(None, None) if key is None else _lyrics_pick(t[key], f"[lyrics] {key!r}")
+        now = LyricsPick(asked=before.asked if asked is _KEEP else asked,
+                         record=before.record if record is _KEEP else record)
+        if now == before:
+            return
+        changed = True
+        value = _lyrics_value(now)
+        if not value:
+            del t[key]
+        elif key is not None and isinstance(t[key], Mapping) and not isinstance(t[key], tomlkit.items.InlineTable):
+            entry = t[key]
+            for part in ("as", "record"):
+                if part not in value and part in entry:
+                    del entry[part]
+                elif part in value and entry.get(part) != value[part]:
+                    entry[part] = value[part]
+        else:
+            made = tomlkit.inline_table()
+            made.update(value)
+            t[key if key is not None else display] = made
+
+    _edit(path, change)
+    return changed
+
+
+def set_lyrics_name(path: Path, display: str, name: str | None) -> bool:
+    """Set the name ("Artist - Title") the song's lyrics are asked under, its ``[lyrics]`` entry's ``as``, or with
+    None take it out, keeping the record you picked (``_set_lyrics``); whether it changed."""
+    return _set_lyrics(path, display, asked=name)
+
+
+def set_lyrics_record(path: Path, display: str, record: str) -> bool:
+    """Set the lyrics record you picked for the song (``lrclib:ID``, ``megalobiz:ID``, ``azlyrics:ARTIST/SONG``), its
+    ``[lyrics]`` entry's ``record``, keeping the name its lyrics are asked under (``_set_lyrics``); whether it
+    changed."""
+    return _set_lyrics(path, display, record=record)
+
+
+def clear_lyrics_record(path: Path, display: str) -> bool:
+    """Take the record you picked out of the song's ``[lyrics]`` entry, keeping the name its lyrics are asked under
+    (``_set_lyrics``: the entry goes once no ``as`` is left); whether there was one."""
+    return _set_lyrics(path, display, record=None)
+
+
 def add_artist_url(path: Path, artist: str, url: str) -> None:
     page = _artist_url_value(url)
     if page is None:
@@ -1012,7 +1159,7 @@ def add_block(path: Path, tab_id: int) -> None:
 
 # The tables an entry of which is about one song, keyed by its "Artist - Title"; ``[ignore] songs`` is the other.
 SONG_TABLES = ("match", "pin", "transpose", "reject", "youtube", "lacuerda", "harptabs", "gametabs", "ireal",
-               "azlyrics", "version", "harmonica")
+               "azlyrics", "lyrics", "version", "harmonica")
 
 
 def song_entries(overrides: Overrides, key: str) -> dict[str, Any]:
@@ -1034,6 +1181,8 @@ def song_entries(overrides: Overrides, key: str) -> dict[str, Any]:
             value = NO_VIDEO if value is None else watch_url(value)
         elif table in ("lacuerda", "harptabs", "gametabs", "ireal"):
             value = value.url
+        elif table == "lyrics":
+            value = _lyrics_value(value)
         elif table == "harmonica":
             value = {tab: dict(spec) if isinstance(spec, Mapping) else spec for tab, spec in value.items()}
         found[table] = value

@@ -267,6 +267,7 @@ class _Lookup:
         self.sheet_from: str | None = None  # the site the sheet stage said it asks (SHEET_FROM), if it said one
         self.conn = None
         self.overrides = None
+        self.asked_under_name = False  # the lyrics stage's: a site asked under [lyrics]' name (``lyrics``)
         self.song = None
         self.sheet_version: int | None = None
         # The handoffs (``_common.handoffs``) the overrides and the song were read at: a turn since, they are read
@@ -324,6 +325,13 @@ class _Lookup:
             except KeyError:
                 raise self._left() from None
         self.handed = handoffs()
+
+    def _overrides_now(self) -> Any:
+        """overrides.toml as it is now: what a lyrics pass reads again once its client handed the lock over (lyrics.py
+        ``Turns``)."""
+        from caracole.overrides import load_overrides
+
+        return load_overrides(self.cfg.overrides_file)
 
     def _gone(self) -> bool:
         """Whether the lookup's song left the book after it was found (``_left``); False when the database can't
@@ -727,30 +735,52 @@ class _Lookup:
         return "made" if stats.rendered else "up to date"
 
     def lyrics(self) -> tuple[str, str] | str:
+        from caracole.lyrics import asked_name, picked_record, picked_said, said_under
         from caracole.songs import get_song, update_song
 
+        record = picked_record(self.song, self.overrides.lyrics)
+        self.asked_under_name = False
+        if record is not None and record.site != "lrclib":
+            # A record you picked is final ([lyrics]): its own site alone is asked, for it alone.
+            own = self._megalobiz() if record.site == "megalobiz" else self._azlyrics()
+            if own is not None:
+                return own
+            found = get_song(self.conn, self.song.id).lyrics_status in ("found", "instrumental")
+            return "already there" if found else picked_said(record, kept=False, gone=False)
         out = self._lrclib()
         megalobiz = self._megalobiz()
         out = self._then(out, megalobiz)
         out = self._then(out, self._azlyrics())
         # Megalobiz skipped before it was asked (its cooldown) answered no miss: a song LRCLIB missed is put back to
-        # pending, as an error or a cut turn puts it (megalobiz_fetch.py), unless AZLyrics then found its lyrics.
-        if isinstance(megalobiz, tuple) and get_song(self.conn, self.song.id).lyrics_status == "missing":
+        # pending, as an error or a cut turn puts it (megalobiz_fetch.py), unless AZLyrics then found its lyrics. Not
+        # a song whose record you picked: no other site is asked about it, so none's cooldown or error concerns it,
+        # and its miss stays the record's, asked again past the cache once its 30 days are over.
+        if (record is None and isinstance(megalobiz, tuple)
+                and get_song(self.conn, self.song.id).lyrics_status == "missing"):
             update_song(self.conn, self.song.id, lyrics_status="pending", lyrics_at=None)
             self.song = get_song(self.conn, self.song.id)
-        return out
+        name = asked_name(self.song, self.overrides.lyrics) if record is None and self.asked_under_name else None
+        return (out[0], said_under(out[1], name)) if isinstance(out, tuple) else said_under(out, name)
 
     def _lrclib(self) -> tuple[str, str] | str:
-        from caracole.lyrics import fetch_pending_lyrics
+        from caracole.lyrics import asked_name, fetch_pending_lyrics, picked_record, picked_said
         from caracole.songs import get_song
 
+        picks = self.overrides.lyrics
+        record = picked_record(self.song, picks)
+        named = record is None and asked_name(self.song, picks) is not None
+
         def ask(client) -> tuple[str, str] | str:
-            s = fetch_pending_lyrics(self.conn, client, self.cfg.library_dir, self.now, only={self.song.id})
+            s = fetch_pending_lyrics(self.conn, client, self.cfg.library_dir, self.now, only={self.song.id},
+                                     picks=picks, reload_overrides=self._overrides_now)
+            self.asked_under_name |= named and bool(s.tried)
             if s.budget_exhausted:
                 raise BudgetExhausted("lrclib")
             if s.failures:
                 _, e = s.failures[0]
                 raise e
+            if record is not None and record.site == "lrclib":  # kept, gone, or not asked within its 30 days
+                return picked_said(record, kept=bool(s.found or s.instrumental), gone=bool(s.missing))
             return {(1, 0, 0): "found", (0, 1, 0): "LRCLIB has none",
                     (0, 0, 1): "an instrumental"}.get((s.found, s.missing, s.instrumental), "already there")
 
@@ -779,39 +809,60 @@ class _Lookup:
 
     def _megalobiz(self) -> tuple[str, str] | str | None:
         """Megalobiz's timed lyrics for the song, when LRCLIB left it without (megalobiz_fetch.py); None when there
-        is nothing to ask it (lyrics timed already, an instrumental, Megalobiz turned off)."""
+        is nothing to ask it (lyrics timed already, an instrumental, Megalobiz turned off, a record picked on another
+        site)."""
+        from caracole.lyrics import asked_name, picked_record, picked_said
         from caracole.megalobiz_fetch import megalobiz_lyrics, songs_to_ask
 
-        if not self.cfg.provider("megalobiz").enabled or not songs_to_ask(self.conn, self.now, only={self.song.id}):
+        picks = self.overrides.lyrics
+        if (not self.cfg.provider("megalobiz").enabled
+                or not songs_to_ask(self.conn, self.now, only={self.song.id}, picks=picks)):
             return None
+        record = picked_record(self.song, picks)
+        named = record is None and asked_name(self.song, picks) is not None
 
         def ask(client) -> str:
-            s = megalobiz_lyrics(self.conn, client, self.cfg.library_dir, self.now, only={self.song.id})
+            s = megalobiz_lyrics(self.conn, client, self.cfg.library_dir, self.now, only={self.song.id}, picks=picks,
+                                 reload_overrides=self._overrides_now)
+            self.asked_under_name |= named and bool(s.tried)
             if s.budget_exhausted:
                 raise BudgetExhausted("megalobiz")
             if s.failures:
                 raise s.failures[0][1]
+            if record is not None:
+                return picked_said(record, kept=bool(s.found or s.timed), gone=bool(s.missing))
             return "timed lyrics from Megalobiz" if s.found or s.timed else "Megalobiz has no timed ones"
 
         return self.asking("megalobiz", ask)
 
     def _azlyrics(self) -> tuple[str, str] | str | None:
         """AZLyrics' plain lyrics for the song, when the sites before it left it without any (azlyrics_fetch.py); None
-        when there is nothing to ask it (lyrics there already, an instrumental, AZLyrics turned off)."""
+        when there is nothing to ask it (lyrics there already, an instrumental, AZLyrics turned off, a record picked on
+        another site)."""
         from caracole.azlyrics_fetch import azlyrics_lyrics, songs_to_ask
+        from caracole.lyrics import PAGE_NAMED, asked_name, picked_record, picked_said
+        from caracole.overrides import override_key
 
-        picks = self.overrides.azlyrics
+        picks, lyrics = self.overrides.azlyrics, self.overrides.lyrics
         if (not self.cfg.provider("azlyrics").enabled
-                or not songs_to_ask(self.conn, self.now, picks=picks, only={self.song.id})):
+                or not songs_to_ask(self.conn, self.now, picks=picks, only={self.song.id}, lyrics=lyrics)):
             return None
+        record = picked_record(self.song, lyrics)
+        paged = override_key(self.song.display) in picks  # an [azlyrics] page: asked for it, not by name
+        has_name = record is None and asked_name(self.song, lyrics) is not None
 
         def ask(client) -> str:
-            s = azlyrics_lyrics(self.conn, client, self.cfg.library_dir, self.now, picks=picks, only={self.song.id})
+            s = azlyrics_lyrics(self.conn, client, self.cfg.library_dir, self.now, picks=picks, only={self.song.id},
+                                lyrics=lyrics, reload_overrides=self._overrides_now)
+            self.asked_under_name |= has_name and not paged and bool(s.tried)
             if s.budget_exhausted:
                 raise BudgetExhausted("azlyrics")
             if s.failures:
                 raise s.failures[0][1]
-            return "lyrics from AZLyrics" if s.found else "AZLyrics has none"
+            if record is not None:
+                return picked_said(record, kept=bool(s.found), gone=bool(s.missing))
+            said = "lyrics from AZLyrics" if s.found else "AZLyrics has none"
+            return said + PAGE_NAMED if has_name and paged and s.tried else said
 
         return self.asking("azlyrics", ask)
 

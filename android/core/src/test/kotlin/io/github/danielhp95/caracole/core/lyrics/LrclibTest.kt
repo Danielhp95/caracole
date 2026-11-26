@@ -11,6 +11,9 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.long
 import kotlinx.serialization.json.jsonPrimitive
+import io.github.danielhp95.caracole.core.library.LyricsPick
+import io.github.danielhp95.caracole.core.library.LyricsRecord
+import io.github.danielhp95.caracole.core.library.OverrideUrls
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -132,5 +135,26 @@ class LrclibTest {
         assertTrue(cases.any { r -> (r["out"]?.jsonObject?.get("requests") as? JsonArray)?.size == 2 &&
             r.getValue("case").jsonPrimitive.content.startsWith("LRCLIB's 503") })
         assertTrue(cases.first().getValue("kw").jsonObject.getValue("only").jsonArray.isNotEmpty())
+    }
+
+    @Test fun aLyricsNameIsAskedCleanedWithNoAlbumAndAPickedRecordByItsId() {
+        LyricsWorld(tmp.newFolder()).use { w ->
+            val named = w.song("Soda", "Ligera (Video Oficial)", 213_000L)
+            val picked = w.song("Soda", "Otra", 213_000L)
+            val picks = mapOf(
+                OverrideUrls.overrideKey(named.display) to LyricsPick("Soda\u0007 Stereo" to "De Música\tLigera", null),
+                OverrideUrls.overrideKey(picked.display) to LyricsPick(null, LyricsRecord("lrclib", "1040023")))
+            assertEquals(Triple("Soda Stereo", "De Música Ligera", null), Lyrics.askedAs(named, picks))
+            assertEquals(Triple("Soda", "Otra", null), Lyrics.askedAs(picked, picks))
+            assertEquals("A".repeat(Lyrics.ASKED_MOST), Lyrics.askedPart("\u200b" + "A".repeat(300)))
+            val get = "GET https://lrclib.net/api/get?artist_name=Soda+Stereo&track_name=De+M%C3%BAsica+Ligera&duration=213"
+            val byId = "GET https://lrclib.net/api/get/1040023"
+            val hit = answer(200, LyricsWorld.fixture("lrclib/get_hit.json"))
+            val (client, site) = w.client("lrclib", mapOf(get to hit, byId to hit))
+            val stats = w.db { Lrclib.fetchPendingLyrics(it, client, w.library, w.now, setOf(named.id, picked.id), picks = picks) }
+            assertEquals(2, stats.found)
+            assertEquals(setOf(get, byId), site.said.toSet())
+            assertEquals(2, site.said.size)
+        }
     }
 }

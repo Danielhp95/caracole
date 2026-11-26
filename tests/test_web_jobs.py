@@ -804,6 +804,152 @@ def test_a_transcription_is_one_caracole_transcribe_whose_progress_is_its_stages
     assert done.steps[0].output == ["demucs: separating"]  # its progress is data, not output
 
 
+# --- a song's lyrics searched under a name, and a record of it picked --------------------------------------------
+
+VIKINGOS = "nick cani/vikingos veganos"
+
+
+def test_a_lyrics_search_is_the_lanes_and_no_songs():
+    from caracole.web.jobs import INDEX_READS, LYRICS_SEARCH, _reports, lyrics_search_steps, song_key_of
+
+    steps = lyrics_search_steps("Nick Cani - Vikingos veganos (Video Oficial)", "Nick Cani - Vikingos veganos")
+    assert steps == [("Looking for lyrics under “Nick Cani - Vikingos veganos”",
+                      ("lyrics", "--song=Nick Cani - Vikingos veganos (Video Oficial)",
+                       "--as=Nick Cani - Vikingos veganos"))]
+    assert lane_of(steps) and not _reports(steps[0][1])  # no --progress, no stages: its line is its last line
+    assert not lane_of([("Clear", ("lyrics", "--song=A - T", "--clear"))])
+    assert not lane_of([("The nightly pass", ("lyrics",))])
+    key = LYRICS_SEARCH + VIKINGOS
+    assert key.startswith(INDEX_READS) and song_key_of(key) == key  # no song's: the page follows it by its id
+    queue = JobQueue(FakeRunner(lines={"lyrics": ["LRCLIB: 2 records", "Searched: 2 records, best fit first."]}),
+                     lane=LANE)
+    job, new = queue.submit("Lyrics under Nick Cani - Vikingos veganos", key, steps)
+    assert new and job.lane and job.stages == []
+    again, new = queue.submit("Lyrics under Nick Cani - Vikingos veganos", key, steps)
+    assert not new and again.id == job.id  # pressed again: the one waiting is the answer
+    queue.run_pending()
+    done = queue.job(job.id)
+    assert done.state == "done" and done.steps[0].output[-1] == "Searched: 2 records, best fit first."
+    assert not done.picks_lyrics and not done.looks_up
+
+
+def test_a_lyrics_pick_is_the_queues_and_its_songs():
+    from caracole.lyrics_pick import STAGES
+    from caracole.web.jobs import LYRICS_PICK, _reports, lyrics_pick_steps, song_key_of, song_of_job
+
+    steps = lyrics_pick_steps("Nick Cani - Vikingos veganos (Video Oficial)", "lrclib:28399373")
+    assert steps == [("Taking the lyrics", ("lyrics", "--song=Nick Cani - Vikingos veganos (Video Oficial)",
+                                            "--record=lrclib:28399373", "--progress"))]
+    assert _reports(steps[0][1]) and not lane_of(steps)
+    key = LYRICS_PICK + VIKINGOS
+    assert song_key_of(key) == song_of_job(key) == VIKINGOS
+    progress = ['caracole-progress: {"song":{"id":7,"display":"Nick Cani - Vikingos veganos (Video Oficial)"}}',
+                'caracole-progress: {"stage":"lyrics","state":"done","detail":"timed lyrics from LRCLIB"}',
+                "kept"]
+    queue = JobQueue(FakeRunner(lines={"lyrics": progress}), lane=LANE)
+    job, new = queue.submit("Lyrics for Nick Cani - Vikingos veganos (Video Oficial)", key, steps,
+                            display="Nick Cani - Vikingos veganos (Video Oficial)")
+    assert new and not job.lane and [(s.name, s.label) for s in job.stages] == list(STAGES)
+    again, new = queue.submit("Lyrics for Nick Cani - Vikingos veganos (Video Oficial)", key,
+                              lyrics_pick_steps("Nick Cani - Vikingos veganos (Video Oficial)", "megalobiz:8"))
+    assert not new and again.id == job.id  # one at a time a song: the one waiting is the answer
+    # A lookup of the song asked while it waits goes into the queue behind it, never beside it in the lane.
+    lookup, new = queue.submit("Fetch Nick Cani - Vikingos veganos", VIKINGOS,
+                               lookup_steps("Nick Cani", "Vikingos veganos"), fetching=True)
+    assert new and not lookup.lane and lookup.id > job.id
+    queue.run_pending()
+    done = queue.job(job.id)
+    assert done.state == "done" and done.song_id == 7 and done.picks_lyrics
+    assert not done.looks_up and not done.transcribes and not done.from_youtube
+    assert {s.name: s.state for s in done.stages}["lyrics"] == "done"
+    assert done.steps[0].output == ["kept"]  # its progress is data, not output
+
+
+def test_a_lyrics_clear_is_the_queues_and_its_songs_with_no_stages():
+    from caracole.web.jobs import LYRICS_CLEAR, LYRICS_PICK, _reports, lyrics_clear_steps, lyrics_pick_steps
+    from caracole.web.jobs import song_key_of, song_of_job
+
+    steps = lyrics_clear_steps("Nick Cani - Vikingos veganos (Video Oficial)")
+    assert steps == [("Clearing the lyrics record you picked",
+                      ("lyrics", "--song=Nick Cani - Vikingos veganos (Video Oficial)", "--clear"))]
+    assert not _reports(steps[0][1]) and not lane_of(steps)
+    key = LYRICS_CLEAR + VIKINGOS
+    assert song_key_of(key) == song_of_job(key) == VIKINGOS  # its view is the song's
+    queue = JobQueue(FakeRunner(), lane=LANE)
+    pick, _ = queue.submit("Lyrics for …", LYRICS_PICK + VIKINGOS, lyrics_pick_steps("Nick Cani - Vikingos veganos",
+                                                                                    "lrclib:1"), join=False)
+    clear, new = queue.submit("Clear the lyrics record: …", key, steps, join=False)
+    assert new and not clear.lane and clear.stages == [] and clear.id != pick.id  # after the pick, in the queue
+    again, new = queue.submit("Clear the lyrics record: …", key, steps, join=False)
+    assert not new and again.id == clear.id
+
+
+def test_neither_joins_the_songs_lookup():
+    from caracole.web.jobs import LYRICS_PICK, LYRICS_SEARCH, lyrics_pick_steps, lyrics_search_steps
+
+    queue = JobQueue(FakeRunner())
+    get, _ = queue.submit("Fetch Nick Cani - Vikingos veganos", VIKINGOS, lookup_steps("Nick Cani", "Vikingos veganos"),
+                          fetching=True)
+    search, new = queue.submit("Lyrics under …", LYRICS_SEARCH + VIKINGOS,
+                               lyrics_search_steps("Nick Cani - Vikingos veganos", "Nick Cani - Vikingos"))
+    assert new and search.id != get.id
+    pick, new = queue.submit("Lyrics for …", LYRICS_PICK + VIKINGOS,
+                             lyrics_pick_steps("Nick Cani - Vikingos veganos", "lrclib:1"), join=False)
+    assert new and pick.id not in (get.id, search.id)
+    assert [s.args[0] for s in queue.job(get.id).steps] == ["get"]  # the lookup as it was
+    after, new = queue.submit("Fetch Nick Cani - Vikingos veganos", VIKINGOS,
+                              lookup_steps("Nick Cani", "Vikingos veganos"), fetching=True)
+    assert not new and after.id == get.id  # nor a lookup either of them
+
+
+def test_a_lyrics_search_and_a_pick_or_transcription_of_one_song_never_run_at_once():
+    from caracole.web.jobs import LYRICS_PICK, LYRICS_SEARCH, TRANSCRIBE, lyrics_pick_steps, lyrics_search_steps
+    from caracole.web.jobs import transcribe_steps
+
+    for first_key, first_steps in ((LYRICS_PICK + VIKINGOS, lyrics_pick_steps("Nick Cani - Vikingos veganos", "x:1")),
+                                   (TRANSCRIBE + VIKINGOS, transcribe_steps("Nick Cani - Vikingos veganos"))):
+        queue = JobQueue(FakeRunner(), lane=LANE)
+        first, _ = queue.submit("First", first_key, first_steps)
+        assert queue._next(False).id == first.id  # it runs, in the queue
+        search, new = queue.submit("Lyrics under …", LYRICS_SEARCH + VIKINGOS,
+                                   lyrics_search_steps("Nick Cani - Vikingos veganos", "Nick Cani - Vikingos"))
+        assert new and not search.lane  # behind the song's job, in the queue
+        assert queue._next(True) is None  # no lane worker starts it beside it; the queue's one runs it after
+        other, _ = queue.submit("Lyrics under …", LYRICS_SEARCH + "muse/uprising",
+                                lyrics_search_steps("Muse - Uprising", "Muse - Uprising"))
+        assert other.lane and queue._next(True).id == other.id  # another song's: at once, in the lane
+    queue = JobQueue(FakeRunner(), lane=LANE)
+    search, _ = queue.submit("Lyrics under …", LYRICS_SEARCH + VIKINGOS,
+                             lyrics_search_steps("Nick Cani - Vikingos veganos", "Nick Cani - Vikingos"))
+    assert search.lane and queue._next(True).id == search.id
+    pick, _ = queue.submit("Lyrics for …", LYRICS_PICK + VIKINGOS,
+                           lyrics_pick_steps("Nick Cani - Vikingos veganos", "x:1"))
+    assert not pick.lane and queue._next(False) is None  # it waits for the search to end
+
+
+def test_a_lyrics_search_and_a_lookup_of_one_song_both_the_lanes_run_one_after_the_other():
+    from caracole.web.jobs import LYRICS_SEARCH, lyrics_search_steps
+
+    def search(queue):
+        return queue.submit("Lyrics under …", LYRICS_SEARCH + VIKINGOS,
+                            lyrics_search_steps("Nick Cani - Vikingos veganos", "Nick Cani - Vikingos"))[0]
+
+    def get(queue):
+        return queue.submit("Fetch Nick Cani - Vikingos veganos", VIKINGOS,
+                            lookup_steps("Nick Cani", "Vikingos veganos"), fetching=True)[0]
+
+    for first, second in ((search, get), (get, search)):
+        queue = JobQueue(FakeRunner(), lane=LANE)
+        one = first(queue)
+        assert one.lane and queue._next(True).id == one.id
+        two = second(queue)
+        assert two.lane and two.id != one.id  # neither joins the other
+        assert queue._next(True) is None  # never beside it: the song's job runs
+        with queue._lock:
+            next(job for job in queue._jobs if job.id == one.id).state = "done"
+        assert queue._next(True).id == two.id  # then it, in the lane
+
+
 # --- a sync's report, and an import's stages ------------------------------------------------------------------------
 
 REPORT = {"with": {"name": "Studio", "kind": "server", "address": "http://192.168.1.20:8737"},

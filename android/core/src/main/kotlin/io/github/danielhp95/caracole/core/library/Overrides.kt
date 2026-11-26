@@ -37,6 +37,7 @@ data class Overrides(
     val gametabs: Map<String, GameTabsPick> = emptyMap(),
     val ireal: Map<String, IRealPick> = emptyMap(),
     val azlyrics: Map<String, String> = emptyMap(),
+    val lyrics: Map<String, LyricsPick> = emptyMap(),
     val version: Map<String, String> = emptyMap(),
     val harmonica: Map<String, Map<String, JsonElement>> = emptyMap(),
     val tables: Set<String> = emptySet(),
@@ -57,6 +58,7 @@ data class Overrides(
         "gametabs" -> gametabs.isNotEmpty()
         "ireal" -> ireal.isNotEmpty()
         "azlyrics" -> azlyrics.isNotEmpty()
+        "lyrics" -> lyrics.isNotEmpty()
         "version" -> version.isNotEmpty()
         "harmonica" -> harmonica.isNotEmpty()
         else -> false
@@ -80,8 +82,8 @@ data class Overrides(
     companion object {
         /** overrides._TABLES. */
         private val TABLES = setOf("alias", "match", "artist_url", "pin", "transpose", "ignore", "block", "reject",
-                                   "youtube", "lacuerda", "harptabs", "gametabs", "ireal", "azlyrics", "version",
-                                   "harmonica")
+                                   "youtube", "lacuerda", "harptabs", "gametabs", "ireal", "azlyrics", "lyrics",
+                                   "version", "harmonica")
 
         private class Entry(val key: String, val written: String, val value: JsonElement) {
             val where: String get() = PyStr.repr(written)
@@ -179,6 +181,8 @@ data class Overrides(
             val gametabs = picks(of("gametabs"), "gametabs", "a gametabs.net tab's page", Addresses::gametabsPickFromUrl)
             val ireal = picks(of("ireal"), "ireal", "an iReal Pro forum's thread", Addresses::irealPickFromUrl)
             val azlyrics = picks(of("azlyrics"), "azlyrics", null, Addresses::azlyricsPageFromUrl)
+            val lyrics = LinkedHashMap<String, LyricsPick>()
+            for (e in of("lyrics")) lyrics[e.key] = Readers.lyricsPick(e.value, "[lyrics] ${e.where}")
             val version = LinkedHashMap<String, String>()
             for (e in of("version")) version[e.key] = Readers.version(e.value, "[version] ${e.where}", keyVersion)
             val harmonica = LinkedHashMap<String, Map<String, JsonElement>>()
@@ -195,7 +199,7 @@ data class Overrides(
                 alias = alias, match = match, artistUrl = artistUrl, pin = pin, transpose = transpose, ignore = ignore,
                 block = block, pinUrls = pinUrls, reject = reject, artistUrlNames = artistUrlNames, youtube = youtube,
                 lacuerda = lacuerda, harptabs = harptabs, gametabs = gametabs, ireal = ireal, azlyrics = azlyrics,
-                version = version,
+                lyrics = lyrics, version = version,
                 harmonica = harmonica, tables = by.keys.toSet(),
             )
         }

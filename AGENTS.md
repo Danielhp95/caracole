@@ -53,7 +53,7 @@ Below the table, a section for each step whose modules have more to say.
 | index | ug/sitemap.py, ug/index.py |
 | ug-directory | ug/bands.py, ug/directory.py |
 | match | match.py, ug/lookup.py |
-| lyrics | lyrics.py |
+| lyrics | lyrics.py, lyrics_search.py and lyrics_pick.py (`caracole lyrics --song`: no step) |
 | megalobiz | megalobiz.py, megalobiz_fetch.py |
 | azlyrics | azlyrics.py, azlyrics_fetch.py |
 | fetch | ug/fetch.py, ug/page.py, ug/artist.py, ug/artist_tabs.py, rank.py, coverage.py, versions.py, sheet_versions.py |
@@ -105,6 +105,82 @@ sitemaps list by bare ids alone, and the fetch their page.
   - `Lyrics.provider` and `.url`: who answered and the page to link back to.
   - `fits` and `another_version`: the matching rules another site's picker keeps.
   - kv `lyrics:failed:`: the songs LRCLIB failed on.
+  - `[lyrics]` (`Overrides.lyrics`, each pass's `picks=`, AZLyrics' `lyrics=`), the three sites alike: `asked_as`, the
+    name asked under (its `as`, cleaned: NFC, control characters out, `ASKED_MOST` characters, with no album; one that
+    cleans to nothing no name); `picked_record` and `picked_due`, a record picked final: only its site asks, for it
+    alone (`fetch_lrclib_record`, `/api/get/{id}`; Megalobiz's `fetch_record`; AZLyrics' page), while the song is
+    pending, or missing for 30 days; that record gone its lyrics missing, logged ("the record you picked is gone"),
+    and asked past the cache from then on (Megalobiz's and AZLyrics' kv `checked:`, which an error leaves; LRCLIB's
+    `lyrics_at`, an error leaving the song missing). A record wins over an `[azlyrics]` page, which wins over `as`.
+    An entry on a song already missing waits for its 30 days. Without it, every request is what it was.
+  - Every caller hands the passes `overrides.lyrics` (pipeline.py's three steps, commands/lyrics.py, get.py,
+    youtube_sheet.py; the phone's three lookup stages `ctx.overrides.lyrics`), a lookup the table read again after a
+    turn. A lookup's and a YouTube sheet's lyrics stage with a record picked on Megalobiz or AZLyrics asks that site
+    alone (the frame's short cut, LookupRun.kt `lyrics` alike), and get.py's put-back to pending (Megalobiz skipped
+    for its cooldown) never touches a song with a record: no other site concerns it. Their words: `said_under`, the
+    name said once, first, when a site was asked under `as` ("under “A - T”: LRCLIB has none; …"; the frame's,
+    LookupRun.kt by `StageContext.askedUnderName`; `PAGE_NAMED` after AZLyrics' words for an `[azlyrics]` page while a
+    name holds), `picked_said` ("the record you picked: lrclib 9", "… is gone: …", "… isn't asked now: …", an LRCLIB
+    record within its 30 days too). A song with a record and no lyrics is never heard (transcript.py
+    `picked_without_lyrics`).
+  - After a hand-over in a pass's client's pauses (a pick, a clear or a search of the owner's let in), the three
+    passes read `[lyrics]` again, one rule: lyrics.py's `Turns` (each pass's `reload_overrides=`, every caller's;
+    provider_pass.py `Reread`): before each song's turn (`due`), and after it, an answer of a turn a hand-over came
+    in kept only for a song still due with the entry the turn asked under (`answered`), an error's put-back to
+    pending or LRCLIB's `lyrics:failed:` only for a song still asked so (`still_asked`); so a pick stays final and
+    a cleared record is never asked (the pass tests' `helpers/handing_over.py`).
+- lyrics_search.py: `caracole lyrics --song X --as "A - T"` (commands/lyrics.py `_lyrics_as`, the typed text read by
+  song_names.py's `read_names`, each part cleaned as `as` is), an interactive lookup in the lane: the name written as
+  `as` first (`set_lyrics_name`; the song's own name takes it out), then `search_lyrics` asks each site once by a
+  lookup's client of its own: LRCLIB's `/api/search` (its query kept, `Search.lrclib`), `/api/get` only when no record
+  of it fits (`pick_candidate` over the records with lyrics), Megalobiz's search, AZLyrics' artist page (none for a
+  name with no Latin letter): 2–4 requests, each through the cache for `PICKABLE_FOR` and asked again past it once
+  older (`max_age`, a cached 404 alike; the passes read the same addresses with no age: a fresher copy is theirs
+  too); LRCLIB's search rows kept when its get then fails or is cut. Rows (`Row`: `record`, site,
+  names, album, length, timed, `best`, `fits`), the best fit first (LRCLIB's `pick_candidate`, else `pick_result`, else
+  `pick_song`), then those that fit, then the rest, `MOST_ROWS` (40); an instrumental or empty record counted, never
+  listed; a record only by an id the site answered, of `[lyrics]`' shape (`overrides.LYRICS_RECORD_IDS`), checked as
+  it is read and again from kv. Each site's `state` (`STATES`: rows, none, off, cooling, spent, blocked, failed) and
+  its words (`said`), never a miss, the others listed; `last_line`: "Searched: " rows, "Nothing found: " every site
+  asked answered none (a site off isn't asked: left out), "Not searched: " a site cooling, spent, blocked or failing.
+  A block at any of a site's requests is its strike, with no good run recorded over it. Kept in kv `lyrics-search:<song id>` (`KV`, in `songs._PER_SONG_KV` and SongKv.kt; no unit's,
+  never crossing to the phone), replaced by the next search, never under an id another song took meanwhile;
+  `kept_search` gives it for `PICKABLE_FOR` (7 days), `row_of` a record's row; past it `last_search(now)` gives the
+  name and the day alone, no row, and the nightly lyrics step (pipeline.py `_lyrics`) keeps only those
+  (`sweep_searches`: one scan of kv, no request, a record that won't read deleted). A search's and a pick's length of
+  the audio is one rule (`audio_length`: the line's, else the video's, else the file's; staged.py `_audio_length`),
+  their off and cooling words one (`not_now`). It changes no stored lyrics; a new name
+  resets the question (`ask_anew(renamed=True)`, right after the entry's write: for a song pending or missing alone,
+  kv `lyrics:failed:`, `megalobiz:checked:` and `azlyrics:checked:` deleted and `pending` with no `lyrics_at`; found
+  lyrics or an instrumental verdict keep their state and stamps), so no transcription is offered before every site
+  answered under it. A pick (any state: a verdict yields to it) and a clear reset through the same function. Its
+  words for what stopped an ask are `stopped` (`whose`, `why`), the pick's too.
+- lyrics_pick.py: `caracole lyrics --song X --pick N | --record SITE:ID` (commands/lyrics.py `_lyrics_pick`), a
+  `StagedRun` (`_Pick`, `STAGES` song, lyrics, chords, pdf, pages) under the lock as asked for now, never in the
+  lane; its client a lookup's (`make_client(..., interactive=True)`), 0 or 1 request:
+  - song: by its identity key, the row of its `kept_search` (`--pick` its Nth, `--record` one of its rows: never a
+    record from the argument alone); refused not in the book, ignored, no search, one over a week, not listed;
+  - lyrics: LRCLIB's from the search's cached answers (`/api/search`, its `/api/get`; `CachedAnswers`, no request),
+    else `fetch_lrclib_record`; Megalobiz's `fetch_record`, AZLyrics' `fetch_azlyrics(page=)`. None now: skipped,
+    nothing kept; off, cooling, spent, blocked: skipped, an error: failed (lyrics_search.py `stopped`'s words,
+    `whose="this pick's"`, a block's reason said), each with no change to the song, its `[lyrics]` or its kv (errors
+    are never misses), the command exiting 0. Kept, in this order: `write_lyrics`, then `set_lyrics_record` (`as`
+    kept: before the savepoint, so a failure to note it keeps nothing; a pick cut off between them is picked again,
+    as no pass asks a found song's record), then in one savepoint `ask_anew`, found, and the auto sheet made due where the words changed
+    (`autochords_mtime` cleared, as new audio clears it: run.py `_skip_reason`, so a sheet made before its
+    `lyrics_key` is remade too), then info.json; the files or overrides.toml failing puts the files back
+    (`_put_back`), changes nothing else and fails the job (`_fail`, exit 1);
+  - chords (§4.5): skipped "no new lyrics", "its sheet is a site's: …", "no audio to make an auto sheet from" or
+    "auto-chords isn't here (…); tonight's run makes it again" (`youtube_fetch.autochords_problem`; a chart takes
+    plain words at the PDF's render meanwhile, sheet_lyrics.py); else `_after_a_lookup`, then `_autochords_sheet`,
+    which makes the sheet or makes it again (models imported only then); pdf: `render_all` whenever it keeps any
+    sheet, a failure the job's (`_fail`); pages.
+  - `clear_pick`, `--clear`: `overrides.clear_lyrics_record` (`as` kept), the lyrics that record gave dropped (files,
+    `lyrics_json`, the auto sheet due), `ask_anew`, no request, under the lock as asked for now; exit 1 with no record;
+    a lyric file that can't be removed is said, the clear standing.
+  - A search's reset, a pick or a clear changes the song unit's `lyrics_status`, `lyrics_json` and `lyrics_at`
+    (peer_sync.py `SONG_COLUMNS`) and its `[lyrics]` entry: a sync carries them; the kv it deletes is no unit's.
+    Nothing of it runs on the phone.
 
 #### megalobiz
 
@@ -655,20 +731,20 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 | page_log.py | the library page's line in the log, one a build (below) |
 | page_icon.py | caracole's logo (docs/logo/) drawn in SVG, its black and its copper traced by docs/logo/trace.py: every page's tab (`LINK`, a `data:` URI for a page's head; `SVG`, caracole serve's `/favicon.ico`) and bar (`mark`); the standard library alone |
 | library_name.py | which library a page shows (below) |
-| overrides.py | overrides.toml (`[harmonica]`: a tab's reading pinned, `add_harmonica`, checked by viewer/harptab.py `check_spec`) |
+| overrides.py | overrides.toml (`[harmonica]`: a tab's reading pinned, `add_harmonica`, checked by viewer/harptab.py `check_spec`; `[lyrics]`: the name a song's lyrics are asked under and the record picked, `LyricsPick`, `LyricsRecord` (`site:id`, a site of `LYRICS_RECORD_IDS` and an id of its shape alone), `set_lyrics_name`, `set_lyrics_record`) |
 | ug_urls.py | UG's addresses as an address bar shows them, the one reading of them: overrides.py's (`ug_path`, `pin_url`, `artist_page_address`) and a pasted link's (`read_link`), which library.js's `ugLink` mirrors (helpers/ug_links.py's shapes); the standard library alone |
 | library.py | song folders, safe file access in the synced library |
 | download_names.py | the name a kept file downloads under ("Eagles - Hotel California (2).gp5"): web/app.py's `Content-Disposition`, the `download` of index.html's and the viewer's links; the standard library alone (the viewer imports it) |
 | notify.py | ntfy |
 | site_index.py | a site's sitemaps into a table, resumed across runs; one that answers cut short, before its closing `</urlset>` or `</sitemapindex>`, an error that leaves the table as it was, never fewer rows |
 | stamps.py | how caracole stores a time and shows one (below) |
-| provider_pass.py | one song at a time through a provider (`each_song`, `PassStats`): the lyrics, LaCuerda, gtptabs.com and YouTube passes share its ladder of errors that are never misses, and name the songs an error left (`failures`) |
+| provider_pass.py | one song at a time through a provider (`each_song`, `PassStats`): the lyrics, LaCuerda, gtptabs.com and YouTube passes share its ladder of errors that are never misses, and name the songs an error left (`failures`); each song read again before its turn (`as_now`, `again`), and what a pass holds of overrides.toml after a hand-over (`Reread`) |
 | keys.py | a song's musical key and where it came from (below) |
 | removal.py | `caracole remove` and the web page's Remove; the tombstones it leaves are songs.py's |
 | audio_store.py | the audio files you give caracole for a song, in `state_dir/audio/` (0700, each file 0600): an upload staged by its 16-hex id (`stage`, `staged`, `drop`, `sweep`, one no job names at a time), a song's own `<song id>-<sha256 16 hex><ext>` (`keep`, `uploaded`), what no song names deleted (`tidy`, the scan step's); the format from the bytes (`sniff`, `FORMATS`), then mutagen's read, imported inside (a file of your own's too, `examine`), a song gone a refusal of `keep`'s; an upload always wins, the owner's decision of 2026-11-25: `keep` replaces a purchase (its file in Music/ stays) or YouTube's audio, and `music.scan_music(uploads=)` links no purchase over it |
 | sites.py | the library page's Sites tab's data (below) |
 | progress.py | a command's output: a live line on a terminal, plain lines elsewhere, fitted in display columns of the stream's own width; `Ticker` (`ticker()`), what long work is doing as it goes: a live line on stderr on a terminal at the default verbosity alone, off for good once a write fails, a `caracole.progress` line a minute, the unit's status line (`systemd_status`, sd_notify `STATUS=`, where `$NOTIFY_SOCKET` is set); `Requests`, a client's requests against its budget (`make_client(ticker=)`, `make_youtube(ticker=)`, its runs with no time left); `Counted`, work of a known size (`directory_pass(progress=)`, `render.rendering`); a staged job by hand (`caracole transcribe`, `youtube --sheet`) its long stages' running details on one (commands/get.py `_Lines(ticker=)`, none with `--progress`, nor for `caracole get`); they only count, never pace |
-| staged.py | a job of stages over one song, each reported as a lookup's stages are, run in order under the lock as asked for now (`StagedRun`: `_run`, `stage`, `_fail`, `_after_a_lookup`, `_song_again`, `_refuse`; the stages both jobs end with, `_autochords_sheet`, `pdf`, `pages`; `StagedResult`; the command's last lines, `_common.staged_end`): youtube_sheet.py's (and audio_sheet.py's, a subclass of its) and transcribe_job.py's |
+| staged.py | a job of stages over one song, each reported as a lookup's stages are, run in order under the lock as asked for now (`StagedRun`: `_run`, `stage`, `_fail`, `_after_a_lookup`, `_song_again`, `_refuse`; the stages both jobs end with, `_autochords_sheet`, `pdf`, `pages`; `StagedResult`; the command's last lines, `_common.staged_end`): youtube_sheet.py's (and audio_sheet.py's, a subclass of its), transcribe_job.py's and lyrics_pick.py's (`_audio_length`, the song's audio's length, theirs) |
 | progressions.py | each song's progressions (below) |
 
 #### index_transfer.py
@@ -1567,8 +1643,9 @@ It is rows.js's, shared by both pages:
     chevron's `aria-controls` naming it (test_library_card_place.py);
   - its parts in the phone's order, at every width: `cardHead` (`.card-head` > `.card-head-in` > `h2.card-name` and
     `.card-close`, `aria-hidden` and tabindex -1 in place), the facts, what needs you, the tiles, the foot (Fetch
-    again, Use LaCuerda's sheet, Add to a songbook…, ⋯), the Files group, On the sites, Elsewhere, Progressions
-    (test_library_card_place.py);
+    again, Use LaCuerda's sheet, Add to a songbook…, ⋯), Lyrics under another name… (served), the Files group, On the
+    sites, Elsewhere, Progressions (test_library_card_place.py); a song with no lyrics has its lyrics' search in what
+    needs you instead, open, above Transcribe the lyrics (`lyricsPanel`, web/lyrics_routes.py's);
   - in place, its head takes no room and sticks under the search bar (`--bar-h` on `:root`, the bar's border box,
     which a ResizeObserver writes; the panel a flex column, so it sticks the whole card): shown (`head-away` on the
     card) only while the card is on the screen and the whole of its line (its title's row, a request's `.progress`
@@ -2084,7 +2161,8 @@ It is rows.js's, shared by both pages:
     Make sheet through `sendRequest`, the request form's own path (the line under the bar, `track`); Cancel or
     Escape `POST /audio/drop`. A card's Sheet from an audio file… (not ignored, no human sheet by its `files`, a
     purchase or YouTube's audio no matter: the cards' data unchanged) opens it for that song, its names not to edit,
-    and posts its `songForm` in place (`song`, `identity`, `upload`), its upload sent with the song so the dialog says
+    and posts its `songForm` in place (`song`, `identity`, `upload`; `form.audio-sheet`, a class the dialog shares,
+    whose box filter.css gives `dialog.audio-sheet` alone), its upload sent with the song so the dialog says
     what that song's audio is; its transcription offers read again as after a YouTube sheet (`offerAfter`). The served
     page never lets a drop load another page (library.js `keepDrops`): a file dropped where nothing takes it, or a
     link or text outside a field, is taken and nothing done; into a field a drop is the browser's.
@@ -2093,6 +2171,50 @@ It is rows.js's, shared by both pages:
   request and no lock: its state, the tab's names, its artist's page, `guess`, the library's `song`, `hits` as
   /api/search's `index` items) and `POST /ug/link` (`caracole ug --link --progress` queued under `jobs.UG_LINK`, among
   `INDEX_READS`, its stages `UG_LINK_STAGES`, when the state is `auto`; 409 known, other or gone, 429 not now).
+- **lyrics_routes.py** is a song's lyrics looked up under a name the owner types, for the card's panel (library.js
+  `lyricsPanel`, below):
+  `POST /lyrics/search` (`song`, `identity`, `artist`, `title`: `caracole lyrics --song --as` queued under
+  `jobs.LYRICS_SEARCH`, the lane's, a lookup the owner presses, never sent by the page by itself; 202 `{job, url, as}`,
+  `as` the name the command reads from the fields joined, lyrics_search.py `typed_name`, never the fields as typed;
+  pressed again, the search on its way, its `as` that one and `said` naming it when another was typed), `GET
+  /api/lyrics/search?song=` (no request, no lock, no write: `[lyrics]`' `as` and `picked`, `picked_why`
+  (`transcript.picked_without_lyrics`), the audio's `length`, the kept search however old, `lyrics_search.last_search`,
+  past its week the name and the day alone, no row, `line` None; the song's `lyrics` and, pending under its `as` with
+  no record, `lyrics_note` ("Its lyrics are asked for again under “…”, tonight or at a lookup."); with `card=1` its
+  card as `/jobs.json` gives one;
+  its `as`, the `length` its rows were scored against, rows each with `far` (`lyrics_search.far`) and `facts` (its
+  line as the command lists it, `row_facts`), `asked` (`asked_line`: the name it asked under and when), `said`, `state`,
+  `instrumental`, `pickable`, `notes` (`lyrics_search.notes`, the command's lines of each site with no rows) and
+  `line`, its last line's words, `lyrics_search.last_line`; and `picked_note`, the card's sentence of the record
+  picked), `POST /lyrics/pick` (`record`, a row of the kept
+  search within its week, 409 "Search again: …" else; its site on; `caracole lyrics --record --progress` under
+  `jobs.LYRICS_PICK`; another record while a pick waits or runs refused 409 in words, never dropped) and `POST
+  /lyrics/clear` (`caracole lyrics --clear` under `jobs.LYRICS_CLEAR`; 409 nothing to clear); each 404 no song, 409
+  `same_song`, 409 ignored. The phone has none of them (lyrics are searched on the computer, for now): its page offers
+  no control for them, as for Transcribe (test_web_lyrics_routes.py).
+  - The card's panel (library.js `lyricsPanel`, card.css `details.lyrics-search`) is served where the data's
+    `server.lyricsSearch` is true (`WebControls.lyrics_search`, which library_routes.py sets; last in the member, the
+    phone's LibraryPage.kt `false` at the same place; the cards' own data unchanged), for a song not ignored with no
+    request of it waiting or running (`freeToAsk`): open in what needs you, before `transcribeOffer`, for a song with
+    lyrics `missing` (the lyrics sites before Whisper), else folded right under the foot, a part of its own. Opened
+    it reads the GET once; only its Search (or Enter in its fields) posts `/lyrics/search`, never the card opening,
+    typing or a timer. The search, a job of no song's, is followed on `/api/jobs/N` (`followSearch`, kept by song id
+    in `lyricsSearches`, so a card drawn again meanwhile follows it), its live line (`p.lyrics-said`, a status
+    region kept in the accessibility tree while empty) "Asking LRCLIB, Megalobiz and AZLyrics under “…”…", then the
+    GET read again and drawn with its words as given, none composed on the page but its controls' and the search's
+    progress: `search.line`, `search.asked`, `picked_note`, `search.notes` (lyrics_search.py `notes`, the command's
+    own lines) and each row's `facts`. Its form is the pasted
+    link's (`.link-form`, `.f`), its rows the drawer's version rows (`ol.vrows`, `.vrow`, `.ver`, `.stars`, `.note`,
+    `.vbtns`, `.inuse`, `.cur`), its notes `.hint` lines; a long list grows the card (from 1200 px the pane scrolls).
+    A busy button is `aria-disabled` (`busyWith`), never `disabled`, so the focus a key gave it stays; a card drawn
+    again while its panel held the focus gives it to the same control (`lyricsFocus`, `lyricsRefocus` in `refill`,
+    for the line being drawn again alone: another song's touches no focus).
+    Use these lyrics and Clear the pick post in place (`postHere`: the focus to the song's line, the panel hidden,
+    the line following the job, a refusal said in the panel's line), and once that job is over the offers are read
+    again (`lyricsJobs`, `readTranscriptions`). A search it followed over, it reads the GET with `card=1`: a song the
+    search asked anew (its `lyrics` changed: missing, pending now) has its card drawn again (`songAgain`, as a job's
+    view's card is, the focus kept by `refill`) and the offers read again, so Transcribe the lyrics goes with no
+    reload. A search over 7 days old lists no rows, its asked line alone (test_web_page_lyrics_search.py).
 - **offline_routes.py** is `GET /api/offline`, the manifest caracole's Android app copies the library by (read-only:
   each file the written index.html links to, as `WebApp._file` sends it now, its bytes' SHA-256 and its headers;
   test_web_offline.py).
@@ -2190,11 +2312,16 @@ It is rows.js's, shared by both pages:
 
 - Beyond a wanted.txt line, every change runs as a `caracole` command queued in jobs.py (One caracole at a time,
   below): in the queue, one at a time, or in the lookups' lane (`jobs.lane_of`: a lookup, a pasted UG link,
-  LaCuerda's search, an artist's page), up to `LANE` (3) at once on workers of their own (`caracole-lane-N`), started
-  at once unless the song has a job in the queue. The queue's worker starts a job only while no lane job runs or
-  waits, a lane worker the first lane job whose song has no job running (`JobQueue._take`, which `_next` wraps;
-  `jobs.song_of_job`, Make this my version's and a harmonica reading's jobs the song's too): a song never has two jobs
-  running, and its own job keeps its order (`test_web_jobs.py::test_a_songs_own_job_keeps_its_order`,
+  LaCuerda's search, an artist's page, a song's lyrics searched under a name, `lyrics --as`), up to `LANE` (3) at once
+  on workers of their own (`caracole-lane-N`), started at once unless the song has a job in the queue. The queue's
+  worker starts a job only while no lane job runs or waits, a lane worker the first lane job whose song has no job
+  running (`JobQueue._take`, which `_next` wraps; `jobs.song_of_job`, Make this my version's and a harmonica reading's
+  jobs the song's too, and a lyrics search's, `LYRICS_SEARCH`, no song's everywhere else, among `INDEX_READS`): a song
+  never has two jobs running, a lyrics search, its pick (`LYRICS_PICK`, `lyrics --record --progress`, the queue's and
+  the song's, `song_key_of`, joining no lookup), the pick taken back (`LYRICS_CLEAR`, `lyrics --clear`, the queue's and
+  the song's, no stages) and its transcription never at once
+  (`test_web_jobs.py::test_a_lyrics_search_and_a_pick_or_transcription_of_one_song_never_run_at_once`), and its own
+  job keeps its order (`test_web_jobs.py::test_a_songs_own_job_keeps_its_order`,
   `::test_a_lookup_asked_while_the_songs_own_change_waits_or_runs_goes_into_the_queue_behind_it`). A queued one's
   line counts what it waits for (`jobs.ahead`: a lookup the lane's before it, any other every one before it and every
   lookup), and the Journal says its place among those queued in its own place, the queue's next "Queued · next,
@@ -2206,15 +2333,32 @@ It is rows.js's, shared by both pages:
   library_assets/requests.js, drawn from `/requests.json`: web/feed.py; no page of its own, every link and redirect to
   a request is `/#tab=requests&job=N`, status.py `details_href`.
   - Its finished requests keep their steps (feed.py `_finished`, `"steps"` right after `"reason"`): a lookup's, a
-    sheet from a YouTube video's, a transcription's or a sheet from an audio file's that started (`outcome.lists_steps`; the phone's
+    sheet from a YouTube video's, a transcription's, a sheet from an audio file's or a lyrics pick's that started
+    (`outcome.lists_steps`; the phone's
     `Outcomes.listsSteps`, whose `RequestsRoutes` hands `Feed.feed` their chips), never one cancelled before it ran
     nor a request of other commands.
-  - The three staged jobs over one song (staged.py: a sheet from a YouTube video, `YOUTUBE_STEPS`; a transcription,
-    `TRANSCRIBE_STEPS`; a sheet from an audio file, `AUDIO_STEPS`, the YouTube sheet's, its Audio step naming no site)
-    share outcome.py's rules, each given its own stages (`_staged`: its steps, the stage of its words and the site its
-    Audio step names): `_staged_steps`, `_staged_holds` (Ready: what the chords stage says the sheet holds, or why its words
-    wait; a YouTube sheet whose lyrics were done but whose heard words failed: "Chords only, no lyrics: the words
-    couldn't be heard here (why)."; a YouTube sheet's one Words step is its vocals and words stages) and `_staged_stopped` (Not made yet: the first stage after the song's that stopped it).
+  - The four staged jobs over one song (staged.py: a sheet from a YouTube video, `YOUTUBE_STEPS`; a transcription,
+    `TRANSCRIBE_STEPS`; a sheet from an audio file, `AUDIO_STEPS`, the YouTube sheet's, its Audio step naming no site;
+    a lyrics pick, `LYRICS_PICK_STEPS`, Song, Lyrics, Chords and PDF, its Lyrics step naming the record's site) share
+    outcome.py's rules, each given its own stages (`_staged`, a `Staged`: its steps, the stage of its words that may
+    wait, the stage whose words its Ready says, the chords or the pick's lyrics, and the step that names a site and
+    which): `_staged_steps`, `_staged_holds` (Ready: what that stage says, the sheet's chords or the lyrics a pick took
+    and what they replaced, or why its words wait; a YouTube sheet whose lyrics were done but whose heard words failed:
+    "Chords only, no lyrics: the words couldn't be heard here (why)."; a YouTube sheet's one Words step is its vocals
+    and words stages) and `_staged_stopped` (Not made yet, a pick's Not kept: the first stage after the song's that
+    stopped it).
+  - A lyrics search (`LYRICS_SEARCH`, no stages) says its step's label while it runs, then its last line's words as
+    LaCuerda's search's (`_artist_read`: Searched, Nothing found, Not searched with Try again; cut at its first "; "
+    or " (" outside a “quoted” name, `_cut`, Status.kt's `cut`, so "(Live)" in the name is said whole); a lyrics pick
+    (`LYRICS_PICK`) is Ready once its lyrics stage kept them, its chords skipped but for no new lyrics said after what
+    it took ("… No audio to make an auto sheet from."), else Not kept: a wait or an error with Try again, a record
+    gone (`lyrics_pick.NO_LYRICS_NOW`, status.py `record_gone`) missing with none; failed after the keep it says so in
+    the command's last line ("Lyrics kept; the job failed after: …", `lyrics_pick.KEPT_FAILED_AFTER`, status.py
+    `_kept_failed`), and interrupted after it "Lyrics kept." before the stop; that pick taken back (`LYRICS_CLEAR`, no
+    stages) says its step's label while it runs, then its command's one line ("Cleared the record you picked for …",
+    `lyrics_pick.CLEARED`, status.py `cleared`; outcome Cleared and the rest of it), and for a song with no record
+    picked "Nothing to clear: …" (`lyrics_pick.NOTHING_TO_CLEAR`), an answer, never a failure; Status.kt and
+    Outcomes.kt alike.
 - The library page's lines read only its steps (`outcome.progress`: while a lookup runs, once it has run a second
   (`BAR_AFTER`), its line, a song's or a result's row, is a bar of them, library.js `showLine`'s `barred`: a segment
   a step, `segsOf`, then the step in hand, its site and `count`, `stepWords`, "Sheet · Ultimate Guitar · 3 of 7",
@@ -2281,7 +2425,7 @@ It is rows.js's, shared by both pages:
 - merge.py is pure Python and the only module `__init__.py` imports.
 - sheet_lyrics.py, no model either (render.py imports it, in any package), puts lyrics that came after a sheet of none
   on it, `render_all` first thing, so every path to a page gives it them (`merge.with_plain_lyrics`, a version's
-  `raw["lyrics"]` then "plain").
+  `raw["lyrics"]` then "plain", and `raw["lyrics_key"]` their words' `lyrics_key`).
 - btc.py (with the vendored btc_model.py and LICENSE-BTC) and beats.py need torch, librosa and beat_this; run.py runs
   them over the library (`autochords_pending`), logging each song it works on and its place among those due
   ("Working out the chords of A - T (3 of 12)…", `_count_due`), and telling `on_step` each step (`STEPS`: the models
@@ -2330,7 +2474,13 @@ It is rows.js's, shared by both pages:
     (`keep_transcript`, `note_heard_nothing`, its `why` and `by`), `transcribe:unreadable:<id>` (`WHISPER_CANT_READ`,
     `note_whisper_cant_read`: audio Whisper can't load, which auto-chords reads; of the current audio alone), and which
     songs are offered one (`why_not_offered`, which also reads run.py's `autochords:failed:<id>`, its key
-    `UNREADABLE`; "Whisper can't read its audio" for the second, `anyway` or not);
+    `UNREADABLE`; "Whisper can't read its audio" for the second, `anyway` or not; a song with a `[lyrics]` record and
+    no lyrics never, `anyway` or not, after a human sheet and before its lyrics' status, by the record alone and no
+    `checked:` kv: `picked_without_lyrics`, `PICKED_NONE` "the record you picked (lrclib 9) has given no lyrics: pick
+    another, or clear the pick" while missing, true whether its site answered it a miss or a record written by hand on
+    a song missing under its own name waits its 30 days, `PICKED_UNREAD` while it is pending, the owner's rule of the
+    databases first, as one record of one site is all that is asked; Not sung: chords only, which runs no Whisper, as
+    before it, `why_not_unsung` and `offers`' `transcribed` weighing no record, `without_picks`);
   - separate.py: demucs-rs, a program run as a subprocess (`DemucsSeparator`; `SeparatorFailed` in its own words,
     its output read as UTF-8 with what isn't replaced; a wgpu demucs-rs that dies by a signal after "Done!" with the
     stem written, as it does from Python, has separated it, logged; on success, what it said of its device logged
@@ -2378,6 +2528,10 @@ It is rows.js's, shared by both pages:
     says `transcript.NOTE` after the credit and the shift's line.
   - The version's `raw` gets `lyrics_source` "transcript", `transcript` (the LRC) and `transcript_made_at`, and none of
     the three otherwise; `raw["lyrics"]` stays "synced".
+  - A sheet over the song's own lyrics (synced or plain, no transcript) keeps `raw["lyrics_key"]`, 16 hex digits of
+    the SHA-256 of their plain text, its lines stripped and its blank runs folded (sheet_lyrics.py `lyrics_key`, run.py
+    `_lyrics_key`): `_skip_reason` makes it due again once the song's are other words; one with no key (made before
+    it) never for that.
   - `_skip_reason` makes the song due again when such a sheet finds a site's lyrics or an instrumental verdict, or finds the kept transcript's
     `made_at` is not its own (other audio, or transcribed again), and when a sheet of none finds a transcript (not for an instrumental song).
   - youtube_sheet.py's `holds` says "chords over the transcribed lyrics" for it.
@@ -3891,8 +4045,8 @@ picks one).
 #### Bulk work
 
 - The nightly run (its index refresh and UG's artist directory included), `caracole index build` and every command
-  but `caracole get`, `caracole versions`, `caracole lacuerda --artist` and `--search`, `caracole harptabs --artist`
-  and `caracole ug --link`.
+  but `caracole get`, `caracole versions`, `caracole lacuerda --artist` and `--search`, `caracole harptabs --artist`,
+  `caracole ug --link`, `caracole lyrics --song --as` and `caracole lyrics --song --pick | --record`.
 - Budgets per run (`config.DEFAULT_PROVIDERS`):
   - `ug` 60, and UG's artist directory a budget of its own, `[ug_directory].budget` (25,000; below);
   - `lrclib` 200;
@@ -3961,7 +4115,11 @@ picks one).
   - `caracole harptabs --artist`, one artist's page (an artist's Songs, once in 30 days);
   - `caracole ug --link`, a UG page pasted into the library page's box: a tab's page, then its artist's lists, or an
     artist's lists (ug/link.py), each list page 30 days from the cache;
-  - and `caracole lacuerda --search`, one query of LaCuerda's search (one request).
+  - `caracole lacuerda --search`, one query of LaCuerda's search (one request);
+  - `caracole lyrics --song --as`, what the three lyrics sites list under a name typed (lyrics_search.py, 2–4
+    requests, one client a site);
+  - and `caracole lyrics --song --pick | --record`, a row of that search made its lyrics (lyrics_pick.py, 0 or 1
+    request), under the lock as asked for now, as `versions --keep`.
 - `caracole lacuerda --search`:
   - a query at most once in 30 days, kv `lacuerda:search:<key>`, its words' key in alphabetical order;
   - none once your library or LaCuerda's index answers it well, `lacuerda_search.answered`, checked again after the
@@ -4524,8 +4682,8 @@ picks one).
     it;
   - one its process left, or untouched for `TICKET_STALE` s, a lookup killed while it waited, no longer counts.
 - Lookups take the lock in the lane (`exclusive(..., lane=True)`, which implies `interactive`): `caracole get`
-  (get.py `_Lookup.run`), `ug --link` (commands/ug.py `_read`), `lacuerda --search` and `--artist`, and `harptabs
-  --artist` (commands/lyrics.py), the five
+  (get.py `_Lookup.run`), `ug --link` (commands/ug.py `_read`), `lacuerda --search` and `--artist`, `harptabs
+  --artist` and `lyrics --song --as` (commands/lyrics.py), the six
   (`test_commands_lock.py::test_lookups_take_the_lock_in_the_lane_what_the_owner_asked_for_now_as_a_lookup_and_bulk_work_neither`):
   - a shared flock of `state_dir/caracole.lock.lane` (`LANE_NAME`) from before they ask for the lock until they let
     go of it (`_release`), so a lookup run in a process that goes on, or whose acquire was interrupted, leaves it;
@@ -4567,7 +4725,7 @@ picks one).
   - a waiting lookup's `on_wait` is told whom it waits for after `WAIT_SAID` (1 s), its warning at once
     (test_commands_lane.py).
 - `caracole versions --keep`, `--keep-more` and `--clear` (which writes overrides.toml under it) wait so too, and
-  `--choose` through get.
+  `--choose` through get; so do `caracole lyrics --song --pick`, `--record` and `--clear` (lyrics_pick.py).
 - So does everything else caracole serve queues that the owner asked for just now, so a lookup queued behind it in
   serve's one-at-a-time queue never waits behind the whole run either: `add`, `remove`, `review`, `fetch --song`,
   `render --song`, `youtube --song` (`--sheet`, `--none`), `youtube --search` and `--video`, `transcribe` and `audio`
@@ -4626,7 +4784,9 @@ picks one).
   - every pass through provider_pass.py (LRCLIB, Megalobiz, AZLyrics, gtptabs.com, harptabs.com, gametabs.net,
     YouTube) reads each song again just before its turn (`as_now`), passing over one removed or no longer due
     (`test_megalobiz_fetch.py::test_a_song_a_sync_removed_in_the_passs_pause_is_passed_over`,
-    `test_youtube_fetch.py::test_a_song_a_lookup_kept_a_human_sheet_for_in_the_passs_pause_is_left_alone`);
+    `test_youtube_fetch.py::test_a_song_a_lookup_kept_a_human_sheet_for_in_the_passs_pause_is_left_alone`), and the
+    three lyrics passes `[lyrics]` too (lyrics.py `Turns`), keeping an answer of a turn a pick or a clear came in only
+    for a song still asked so;
   - and `autochords_pending` and `render_all` read each song after and overrides.toml again;
   - what comes after reads overrides.toml again too (`_common.overrides_since`): the run's next steps,
     `StepContext.read_overrides_again`; the songbooks and pages of `caracole render` and `autochords`; the pages of

@@ -200,6 +200,10 @@ object OverridesReplay : AreaReplay {
         "harptabs" to obj(o.harptabs) { p -> JsonObject((pick(p) as JsonObject) - "url" - "path") },
         "gametabs" to obj(o.gametabs) { p -> JsonObject((pick(p) as JsonObject) - "url" - "path") },
         "azlyrics" to obj(o.azlyrics) { JsonPrimitive(it) },
+        "lyrics" to obj(o.lyrics) { p ->
+            val record = p.record?.let { JsonObject(mapOf("site" to JsonPrimitive(it.site), "id" to JsonPrimitive(it.id))) }
+            JsonObject(mapOf("asked" to (p.asked?.let(::pair) ?: JsonNull), "record" to (record ?: JsonNull)))
+        },
         "version" to obj(o.version) { JsonPrimitive(it) },
         "harmonica" to obj(o.harmonica) { JsonObject(it) },
         "tables" to strings(o.tables.sortedWith(Py.CODE_POINT_ORDER)),

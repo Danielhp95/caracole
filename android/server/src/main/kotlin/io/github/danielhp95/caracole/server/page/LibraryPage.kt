@@ -64,7 +64,8 @@ class LibraryPage(val assets: LibraryAssets, val requests: RequestsTab = Request
     /**
      * build_library_page's part of the served page: [data] with the server's own member (`server`, where caracole
      * serve puts it: before the songbooks), the form token, the songs a request waits or runs for, the requests, no
-     * Guitar Pro page, no sheet from YouTube and none from an audio file on the phone, and the tests' timers if any; and each song's
+     * Guitar Pro page, no sheet from YouTube and none from an audio file on the phone, no lyrics looked up under another
+     * name (`lyricsSearch` false), and the tests' timers if any; and each song's
      * `fetchable`, false for a song a review must come first for ([ServerControls.held]) and for a card of a song the
      * phone hasn't got (a negative id, [MirrorPageData]).
      */
@@ -84,6 +85,7 @@ class LibraryPage(val assets: LibraryAssets, val requests: RequestsTab = Request
                                                "transcribed" to JsonArray(emptyList()), "time" to JsonPrimitive(""))))
             put("audio", JsonObject(mapOf("ok" to JsonPrimitive(false), "why" to JsonPrimitive(AUDIO_PROBLEM),
                                           "limit" to JsonPrimitive(0), "too_big" to JsonPrimitive(""))))
+            put("lyricsSearch", JsonPrimitive(false))  // lyrics looked up under another name: the computer's alone
             controls.timers?.let { timers -> put("timers", JsonObject(timers.mapValues { JsonPrimitive(it.value) })) }
         })
         val out = LinkedHashMap<String, JsonElement>()

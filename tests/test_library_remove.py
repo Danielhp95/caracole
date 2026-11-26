@@ -535,3 +535,35 @@ def test_in_a_long_list_scrolled_deep_what_is_on_the_screen_stays_where_it_was(
     assert any(t > left_at for t, _, _ in frames) and len(frames) > 10, frames
     off = [(t, y, at) for t, y, at in frames if at is None or abs(at - top) > 1]
     assert off == [], (top, left_at, off)
+
+
+def test_a_line_leaving_keeps_another_songs_lyrics_panel_its_text_and_its_focus(serve, cfg, conn, tmp_path):  # noqa: F811
+    # Creep removed; while its line says Removed, the owner types half a name into Airbag's lyrics panel (its lyrics
+    # missing). Creep's line leaves and the list is drawn again: Airbag's line and card are the same nodes, the panel
+    # keeps what was typed and the focus stays in its field.
+    from caracole.normalize import identity_key
+    from caracole.songs import update_song
+
+    creep, _ = library(conn)
+    airbag = find_song(conn, identity_key("Radiohead", "Airbag"))
+    update_song(conn, airbag.id, lyrics_status="missing")
+    url = serve(FakeCaracole(cfg), "(() => {})();\n", timers=QUICK)
+    item, other = f'#list [data-id="{creep.id}"]', f'#list [data-id="{airbag.id}"]'
+    with browser.Browser(tmp_path / "chrome", width=PHONE[0], height=PHONE[1]) as page:
+        page.open(url)
+        page.js(f"window.song = document.querySelector('{item}')")
+        cards.install(page)
+        assert page.js(WATCH)
+        page.click(cards.name_of(item))
+        press_remove(page, item)
+        assert page.wait("window.removedAt !== undefined", timeout=20), page.js("window.lines")
+        page.click(cards.name_of(other))
+        card = cards.card_js(other)
+        field = f"{card}.querySelector('details.lyrics-search input[name=title]')"
+        assert page.wait(f"{card} !== null && {field} !== null")
+        page.js(f"(() => {{ window.typedIn = {field}; window.typedIn.focus(); window.typedIn.select(); }})()")
+        page.type("Air")
+        assert page.wait("window.leftAt !== undefined", timeout=10)
+        kept = page.js(f"""(() => ({{ same: window.typedIn.isConnected && window.typedIn === {field},
+          value: window.typedIn.value, focus: document.activeElement === window.typedIn }}))()""")
+    assert kept == {"same": True, "value": "Air", "focus": True}, kept

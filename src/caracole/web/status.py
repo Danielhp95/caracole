@@ -61,6 +61,19 @@ ran. So a job of other commands reads the same way:
   "Not made yet"; it says why it failed in its failed stage's words ("no
   singing heard", "the GPU failed: …"). So does a sheet from an audio file
   you gave (``jobs.AUDIO_SHEET``).
+  A song's lyrics searched under a name (``jobs.LYRICS_SEARCH``), no song's, says
+  while it runs its step's label ("Looking for lyrics under “Artist - Title”…"),
+  then the words ``caracole lyrics --as`` ends with, as LaCuerda's search's:
+  "Searched: …", "Nothing found: …" or "Not searched: …" (a site failed or waited).
+  A record of it picked (``jobs.LYRICS_PICK``) says Ready once its lyrics stage
+  kept them, a sheet or none to open, else "Not kept" (a site waited or failed,
+  a wait; or the record has no lyrics now, missing; each exits 0); failed after the keep (its
+  chords, its PDF or info.json), it says so as the command's last line does
+  ("Lyrics kept; the job failed after: …"), else in its failed stage's words.
+  That record taken back (``jobs.LYRICS_CLEAR``), the song's, says while it runs
+  its step's label, then its command's one line ("Cleared the record you picked
+  for …"), and for a song with no record picked "Nothing to clear: …", an answer,
+  never a failure.
   A sync with another caracole (``caracole peer sync``, the Sync tab's: sync_routes.py) says "Shared", and a push
   another caracole sent taken (``caracole peer take``, peer_routes.py) or a pull of its units "Taken"; with a unit
   left as it was (the owner skipped it, or it changed on a side since the comparison), "Shared · 2 changes left as
@@ -86,12 +99,15 @@ from typing import Any
 
 from caracole.get import SHEET_FROM
 from caracole.logs import plural
+from caracole.lyrics_pick import CLEARED, KEPT_FAILED_AFTER, NO_LYRICS_NOW, NOTHING_KEPT, NOTHING_TO_CLEAR
 from caracole.web.jobs import (
     AUDIO_SHEET,
     EXPORTING,
     INDEX_MERGE_COMMAND,
     INDEX_READS,
     INTERRUPTED,
+    LYRICS_CLEAR,
+    LYRICS_PICK,
     PEER,
     READING,
     REMOVING,
@@ -106,6 +122,7 @@ from caracole.web.songbooks import DONE, OPENS, songbook_of
 TODO = "_todo.md"
 REQUESTS = "#tab=requests"  # the library page's Requests tab
 READY = "Ready"  # a song's request that ended with its sheet there
+NOTHING_PICKED = "Nothing to clear: no lyrics record is picked."  # a lyrics clear refused for a song with none
 MAX_TEXT = 160  # characters of an error's sentence
 _ERROR = re.compile(r"^(?:<\d>)?error: (.+)$")
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s")
@@ -274,6 +291,10 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page:
                 return Line("review", "Needs your pick", _review_link(song, todo), details)
             if song.not_found:
                 return Line("missing", "Not on the sites", _todo_link(todo), details)
+        if job.song_key.startswith(LYRICS_PICK) and _lyrics_kept(job):  # kept, then failed: said kept
+            return Line("failed", _kept_failed(job), details=details)
+        if job.song_key.startswith(LYRICS_CLEAR) and _nothing_to_clear(job):  # an answer, never a failure
+            return Line("added", NOTHING_PICKED)
         return Line("failed", _stage_failure(job.stages) or _failure(job.steps), details=details)
     kind = peer_kind(job)
     if kind is not None:  # no song's: what it took, gave and left
@@ -300,6 +321,13 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page:
         if made and song is not None and song.sheet:
             return Line("ready", READY, ("Open", song.sheet))
         return Line("waiting", "Not made yet", details=details)
+    if job.song_key.startswith(LYRICS_CLEAR):  # its command's one line, whatever sheet the song has
+        said = cleared(job)
+        return Line("added", _short(said.split("; ", 1)[0].rstrip(".") + ".") if said else "Cleared.")
+    if job.song_key.startswith(LYRICS_PICK):  # Ready once its lyrics are kept, whatever sheet there is to open
+        if _lyrics_kept(job):
+            return Line("ready", READY, ("Open", song.sheet) if song and song.sheet else None)
+        return Line("missing" if record_gone(job) else "waiting", "Not kept", details=details)
     if song is not None and song.sheet:
         return Line("ready", READY, ("Open", song.sheet))
     if song is not None and song.ignored:
@@ -325,7 +353,8 @@ def song_line(line: Line) -> Line:
 def _artist_read(steps: list[Step], details: str) -> Line:
     """A LaCuerda artist page's read, or a query of its search, or a harptabs.com artist page's read, or a UG link's,
     over: the sentence ``caracole lacuerda --artist`` (or ``--search``, ``caracole harptabs --artist``, ``caracole ug
-    --link``) ends with (commands/lyrics.py, commands/ug.py), up to its first "; " or bracket. "Read: …", "Searched: …" and
+    --link``) ends with (commands/lyrics.py, commands/ug.py), up to its first "; " or bracket outside a “quoted” name
+    (``_cut``: a lyrics search's name is said whole, "(Live)" and all). "Read: …", "Searched: …" and
     "Found already: …" are done, "Not found: …" and "Nothing found: …" LaCuerda's answer that it has no such page or
     song, and "Not read: …" and "Not searched: …" a cooldown, a block, a spent budget or an error, each a wait; any
     other ending, "Done"."""
@@ -334,8 +363,59 @@ def _artist_read(steps: list[Step], details: str) -> Line:
     if said is None:
         return Line("added", "Done", details=details)
     tone = next(t for prefix, t in _READ_TONES.items() if said.startswith(prefix))
-    text = said.split("; ", 1)[0].split(" (", 1)[0].rstrip(".") + "."
+    text = _cut(said).rstrip(".") + "."
     return Line(tone, _short(text), details=None if tone == "added" else details)
+
+
+def _cut(said: str) -> str:
+    """``said`` up to its first "; " or " (" outside a “quoted” name (a quote opened and not closed runs to the end)."""
+    depth = 0
+    for i, c in enumerate(said):
+        if c == "“":
+            depth += 1
+        elif c == "”":
+            depth = max(depth - 1, 0)
+        elif depth == 0 and said.startswith(("; ", " ("), i):
+            return said[:i]
+    return said
+
+
+def _lyrics_kept(job: Job) -> bool:
+    """Whether a lyrics pick's lyrics stage kept the record's lyrics."""
+    return any(stage.name == "lyrics" and stage.state == "done" for stage in job.stages)
+
+
+def record_gone(job: Job) -> bool:
+    """Whether a lyrics pick kept nothing because its record has no lyrics now (lyrics_pick.py ``NO_LYRICS_NOW``): an
+    answer, which asking the same record again answers alike, never a wait or an error."""
+    return any(stage.name == "lyrics" and stage.state == "skipped"
+               and stage.detail.endswith(NO_LYRICS_NOW + NOTHING_KEPT) for stage in job.stages)
+
+
+def cleared(job: Job) -> str | None:
+    """A lyrics clear's line, as ``caracole lyrics --clear`` ends ("Cleared the record you picked for …",
+    lyrics_pick.py ``CLEARED``); None with no such line (its output lost)."""
+    return next((line.strip() for step in reversed(job.steps) for line in reversed(step.output)
+                 if line.startswith(CLEARED + " ")), None)
+
+
+def _nothing_to_clear(job: Job) -> bool:
+    """Whether a lyrics clear failed for a song with no record picked (lyrics_pick.py ``NOTHING_TO_CLEAR``)."""
+    return any((m := _ERROR.match(line)) is not None and m.group(1).strip().endswith(NOTHING_TO_CLEAR)
+               for step in job.steps for line in step.output)
+
+
+def _kept_failed(job: Job) -> str:
+    """A lyrics pick that failed after its lyrics were kept: the command's last line ("Lyrics kept; the job failed
+    after: …", lyrics_pick.py ``KEPT_FAILED_AFTER``), its first sentence; with no such line (its output lost), the
+    same words over its failed stage's."""
+    said = next((line.strip() for step in reversed(job.steps) for line in reversed(step.output)
+                 if line.startswith(KEPT_FAILED_AFTER + ": ")), None)
+    if said is None:
+        failed = _stage_failure(job.stages)
+        said = f"{KEPT_FAILED_AFTER}: {failed}" if failed else f"{KEPT_FAILED_AFTER}."
+    said = _short(_SENTENCE_END.split(said, maxsplit=1)[0])
+    return said if said.endswith((".", "!", "?", "…")) else said + "."
 
 
 def changes_left(job: Job) -> list[tuple[str, str]]:

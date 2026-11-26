@@ -382,6 +382,33 @@ def test_lyrics_a_site_answers_with_as_the_job_runs_leave_nothing_to_hear(setup,
     assert [r[0] for r in sites.requests][:1] == ["get"]
 
 
+def test_a_sheet_from_a_file_asks_its_lyrics_under_the_lyrics_name(setup, conn, sites, tmp_path):
+    # [lyrics]' `as`, which the YouTube sheet's lyrics stage hands the passes: the sites are asked under it.
+    from caracole.overrides import set_lyrics_name
+
+    set_lyrics_name(setup.overrides_file, "Nick Cani - Vikingos veganos", "Nick Cani - Vikingos")
+    result, heard = make(setup, AudioRequest(*NICK, file=a_file(tmp_path)))
+    assert result.ok, result
+    assert sites.requests[0] == ("get", {"artist_name": "Nick Cani", "track_name": "Vikingos", "duration": "200"})
+    assert heard.ends()["lyrics"][1].startswith("under “Nick Cani - Vikingos”: ")
+
+
+def test_a_picked_record_gone_makes_a_chords_only_sheet_from_a_file_its_words_never_heard(setup, conn, sites, ears,
+                                                                                         tmp_path):
+    from caracole.autochords.transcript import PICKED_NONE
+    from caracole.overrides import set_lyrics_record
+
+    set_lyrics_record(setup.overrides_file, "Nick Cani - Vikingos veganos", "megalobiz:8")
+    result, heard = make(setup, AudioRequest(*NICK, file=a_file(tmp_path)), ears=ears, hears=True)
+    assert result.ok, result
+    ends = heard.ends()
+    assert ends["lyrics"] == ("done", "the record you picked is gone: megalobiz 8")
+    assert sites.requests == []  # LRCLIB never asked: the record is Megalobiz's
+    assert ends["vocals"] == ("skipped", "not transcribed: " + PICKED_NONE.format(record="megalobiz 8"))
+    assert ears.log == []
+    assert ends["chords"] == ("done", "chords only, no lyrics")
+
+
 def test_lyrics_a_site_has_skip_the_hearing(setup, conn, sites, ears, tmp_path):
     song = add_song(conn, *NICK, duration_ms=200000)
     update_song(conn, song.id, lyrics_status="found", lyrics_json=Lyrics.from_record(record(200.0)).to_json())

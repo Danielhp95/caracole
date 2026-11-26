@@ -17,8 +17,9 @@ caracole to compare and take, its units taken, another caracole's units pushed t
 peer_sync.py, peer_push.py), sync_routes.py (the Sync tab: this library and another caracole's compared, and
 synced as the owner chose), youtube_routes.py (a song's auto sheet from a YouTube video pasted on the library
 page), transcribe_routes.py (a YouTube song's lyrics transcribed from its audio), audio_routes.py (an audio file
-uploaded from the library page, made into its song's auto sheet) and ug_link_routes.py (an Ultimate Guitar page
-pasted into the library page's search box, read). A new route, or a new module of them, changes
+uploaded from the library page, made into its song's auto sheet), ug_link_routes.py (an Ultimate Guitar page
+pasted into the library page's search box, read) and lyrics_routes.py (a song's lyrics looked up under a name you type,
+a record of them picked, the pick taken back). A new route, or a new module of them, changes
 nothing here. This module answers the rest:
 
     GET  /<file>          a file of the library (files.py), or a page caracole wrote there, such as

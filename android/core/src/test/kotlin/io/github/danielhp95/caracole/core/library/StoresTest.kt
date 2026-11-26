@@ -88,6 +88,39 @@ class StoresTest {
         assertEquals(listOf(listOf("alias", "a", "A", "[\"a-ug\"]")), rows())
     }
 
+    @Test fun aSongsLyricsEntryIsTakenAndReadAsTheComputerReadsIt() {
+        val lyrics = buildJsonObject { put("as", "Radiohead - Creep (Acoustic)"); put("record", "lrclib:28399373") }
+        write { db ->
+            OverridesStore.putSongEntries(db, "radiohead/creep", "Radiohead - Creep", buildJsonObject {
+                put("lyrics", lyrics); put("match", "radiohead/creep")
+            })
+            Overrides.checkSong(db, "radiohead/creep")
+        }
+        assertEquals(listOf(
+            listOf("lyrics", "radiohead/creep", "Radiohead - Creep",
+                   """{"as":"Radiohead - Creep (Acoustic)","record":"lrclib:28399373"}"""),
+            listOf("match", "radiohead/creep", "Radiohead - Creep", "\"radiohead/creep\""),
+        ), rows())
+        assertEquals(listOf("match", "lyrics"), read { db -> OverridesStore.songEntries(db, "radiohead/creep") }.keys.toList())
+        val pick = read { db -> Overrides.read(db) }.lyrics.getValue("radiohead/creep")
+        assertEquals(LyricsPick("Radiohead" to "Creep (Acoustic)", LyricsRecord("lrclib", "28399373")), pick)
+        assertEquals("lrclib:28399373", pick.record!!.text)
+        assertNull(pick.record!!.page)
+        assertEquals("https://www.azlyrics.com/lyrics/radiohead/creep.html", LyricsRecord("azlyrics", "radiohead/creep").page)
+        assertTrue(read { db -> Overrides.read(db) }.hasTable("lyrics"))
+        // A record of another shape is refused by the read back a take makes, in Python's words.
+        val e = assertFailsWith<OverridesError> {
+            write { db ->
+                OverridesStore.putSongEntries(db, "a/b", "A - B", buildJsonObject {
+                    put("lyrics", buildJsonObject { put("record", "azlyrics:../b") })
+                })
+                Overrides.checkSong(db, "a/b")
+            }
+        }
+        assertEquals("[lyrics] 'A - B': expected { as = \"Artist - Title\", record = \"lrclib:ID\" | \"megalobiz:ID\" | " +
+                         "\"azlyrics:ARTIST/SONG\" }, got {'record': 'azlyrics:../b'}", e.message)
+    }
+
     @Test fun aTableNoSongHasIsRefusedAndNothingIsWritten() {
         write { db -> OverridesStore.putSongEntries(db, "a/b", "A - B", buildJsonObject { put("transpose", 1) }) }
         for (table in listOf("alias", "artist_url", "block", "nonsense")) {

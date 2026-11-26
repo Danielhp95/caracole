@@ -207,7 +207,7 @@ def test_auto_sheet_kept_with_its_version_and_the_song_becomes_found(conn, cfg, 
     assert (v.rating, v.votes, v.version, v.label) == (0, 0, 1, None)
     assert v.url == "file://" + s.audio_path
     assert v.raw == {"audio": s.audio_path, "model": "btc_large_voca", "lyrics": "plain", "columns": "display",
-                     "key": "G"}
+                     "key": "G", "lyrics_key": "109883467b713436"}  # sha256("Walking down\nSinging on")[:16]
     assert v.fetched_at == "2026-10-18T04:05:00Z"
 
     song = get_song(conn, s.id)
@@ -685,6 +685,48 @@ def test_an_older_plain_sheet_beside_timed_lyrics_is_made_again_once(conn, cfg, 
     assert (run(conn, cfg, rec).skipped, rec.calls) == (1, [])
 
 
+def test_a_sheet_over_lyrics_replaced_by_other_words_is_made_again_once(conn, cfg, tmp_path):
+    # A pick of other lyrics replaces the words the sheet was made over: once more, over the new words, and then the
+    # sheet is up to date again. The same words timed otherwise are no other words.
+    timed = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"), name="timed.wav",
+                       lyrics_status="found", lyrics_json=lyrics_json(synced=SYNCED))
+    plain = with_audio(conn, tmp_path, add_song(conn, "Nobody", "Hill Song"), name="plain.wav",
+                       lyrics_status="found", lyrics_json=lyrics_json(plain="Up the hill\nDown again"))
+    assert run(conn, cfg).generated == 2
+    assert (auto_raw(conn, timed)["lyrics"], auto_raw(conn, plain)["lyrics"]) == ("synced", "plain")
+    assert all(len(auto_raw(conn, s)["lyrics_key"]) == 16 for s in (timed, plain))
+
+    retimed = SYNCED.replace("[00:05.20]", "[00:05.40]")
+    update_song(conn, timed.id, lyrics_json=lyrics_json(synced=retimed))
+    rec = FakeRecognizer()
+    assert (run(conn, cfg, rec).skipped, rec.calls) == (2, [])
+
+    other = "[00:00.50]Rolling down the river bend\n[00:05.20]Calling to the evening light\n"
+    update_song(conn, timed.id, lyrics_json=lyrics_json(synced=other))
+    update_song(conn, plain.id, lyrics_json=lyrics_json(plain="Over the hill\nNever again"))
+    rec = FakeRecognizer()
+    assert (run(conn, cfg, rec).generated, sorted(rec.calls)) == (2, sorted([Path(timed.audio_path),
+                                                                           Path(plain.audio_path)]))
+    assert "Rolling down the river bend" in auto_sheet(cfg, conn, timed)
+    assert "Over the hill" in auto_sheet(cfg, conn, plain) and "Up the hill" not in auto_sheet(cfg, conn, plain)
+    rec = FakeRecognizer()
+    assert (run(conn, cfg, rec).skipped, rec.calls) == (2, [])
+
+
+def test_a_sheet_made_before_it_kept_a_lyrics_key_is_up_to_date_with_other_words(conn, cfg, tmp_path):
+    # An older caracole kept no key of the words: the sheet isn't made again for that alone.
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"), lyrics_status="found",
+                   lyrics_json=lyrics_json(synced=SYNCED))
+    run(conn, cfg)
+    vid = next(f.version_id for f in kept_files(conn, s.id) if f.name == AUTO_SHEET)
+    conn.execute("UPDATE versions SET raw = json_remove(raw, '$.lyrics_key') WHERE id = ?", (vid,))
+    other = "[00:00.50]Rolling down the river bend\n[00:05.20]Calling to the evening light\n"
+    update_song(conn, s.id, lyrics_json=lyrics_json(synced=other))
+    rec = FakeRecognizer()
+    assert (run(conn, cfg, rec).skipped, rec.calls) == (1, [])
+    assert "lyrics_key" not in auto_raw(conn, s)
+
+
 def test_a_sheet_laid_out_by_characters_over_lyrics_wider_than_them_is_made_again_once(conn, cfg, tmp_path):
     # An older caracole wrote a chord over a Chinese line at its character's index, half its display column, so
     # the converted sheet had it on an earlier character: such a sheet is made again, once. One over lines of
@@ -735,6 +777,17 @@ def test_a_song_with_no_lyrics_and_a_transcript_gets_its_chords_over_the_transcr
     assert (raw["lyrics"], raw["lyrics_source"], raw["transcript"], raw["transcript_made_at"]) == (
         "synced", "transcript", TRANSCRIBED, "2026-11-20T01:00:00Z")
     assert "lyrics_shift" not in raw
+
+
+def test_a_sheet_over_a_transcript_keeps_no_lyrics_key(conn, cfg, tmp_path):
+    # Its words are the transcript's, which transcript_made_at follows; a chart keeps none either.
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"), name="heard.wav")
+    chart = with_audio(conn, tmp_path, add_song(conn, "Nobody", "Hill Song"), name="chart.wav")
+    transcribed(conn, s)
+    assert run(conn, cfg).generated == 2
+    assert auto_raw(conn, s)["lyrics_source"] == "transcript"
+    assert auto_raw(conn, chart)["lyrics"] == "none"
+    assert "lyrics_key" not in auto_raw(conn, s) and "lyrics_key" not in auto_raw(conn, chart)
 
 
 def test_a_sites_lyrics_win_over_the_transcript(conn, cfg, tmp_path):
@@ -1935,6 +1988,24 @@ def test_the_run_hears_up_to_its_cap_newest_first(conn, cfg, tmp_path, loud):
     record = kv_get_json(conn, STATUS)
     assert (record["heard"], record["silent"], record["transcribe_problem"]) == (2, 0, None)
     assert stats.summary() == "3 generated, 0 skipped, 0 failed; words heard for 2, nothing sung in 0"
+
+
+def test_a_song_with_a_picked_record_and_no_lyrics_is_never_heard_and_spends_no_slot(conn, cfg, tmp_path, loud):
+    # The newest song's lyrics record you picked has none: the owner's rule keeps it from Whisper (its lyrics are a
+    # pick's, the other databases never asked), so the one slot goes to the next song; it gets its chords alone.
+    from caracole.overrides import set_lyrics_record
+
+    older = offered_song(conn, cfg, tmp_path, "Older", added_at="2026-10-01T00:00:00Z")
+    picked = offered_song(conn, cfg, tmp_path, "Picked", added_at="2026-10-02T00:00:00Z")
+    set_lyrics_record(cfg.overrides_file, picked.display, "lrclib:9")
+    hearing = hearing_of(cfg)
+    try:
+        stats = run(conn, cfg, hearing=hearing, transcriptions=1)
+    finally:
+        hearing.close()
+    assert heard_names(hearing) == ["Older.wav"]
+    assert (stats.generated, stats.heard) == (2, 1)
+    assert over_words(conn, older) and not over_words(conn, picked)
 
 
 def test_a_song_past_the_cap_gets_its_chords_now_and_its_words_a_run_later(conn, cfg, tmp_path, loud):

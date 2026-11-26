@@ -27,6 +27,7 @@ every page build.
 
 from __future__ import annotations
 
+import dataclasses
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -36,7 +37,7 @@ from typing import Any
 from caracole.config import Config
 from caracole.db import kv_delete, kv_get, kv_get_json, kv_set_json
 from caracole.library import kept_files
-from caracole.overrides import Overrides
+from caracole.overrides import Overrides, override_key
 from caracole.songs import HUMAN_SHEET, Song, list_songs
 from caracole.stamps import before
 
@@ -56,6 +57,9 @@ LYRICS_SOURCE = "transcript"  # a version's raw["lyrics_source"] when the sheet'
 NOTE = "Lyrics transcribed from the audio (Whisper), unverified"
 SILENT = "Instrumental: nothing sung was heard in the audio"  # the sheet's note line over nothing sung
 NOT_SUNG = "Chords only: you said it isn't sung"  # the sheet's note line over the owner's mark (``said_not_sung``)
+# why_not_offered's words for a song whose picked lyrics record (``[lyrics]``) gave none (``picked_without_lyrics``)
+PICKED_NONE = "the record you picked ({record}) has given no lyrics: pick another, or clear the pick"
+PICKED_UNREAD = "the record you picked isn't read yet ({record}): tonight's run or a lookup reads it"
 ALREADY_TRANSCRIBED = "already transcribed"  # why_not_offered's word for a song whose own audio has a transcript
 MODEL = "whisper-large-v3"
 
@@ -197,7 +201,7 @@ def why_not_offered(conn: sqlite3.Connection, cfg: Config, song: Song, overrides
     them yet, is told that before anything a hearing left. ``anyway``, the owner's ask by hand (Transcribe anyway,
     ``caracole transcribe --force``), passes over nothing sung, caracole's verdict or the owner's own word, and audio
     Whisper couldn't load (after an ffmpeg or Whisper upgrade, the one case where trying again is right), and nothing
-    else."""
+    else: never a song whose lyrics record you picked gave none (``picked_without_lyrics``)."""
     if not song.audio_path:
         return "it has no audio"
     if not Path(song.audio_path or "").is_file():
@@ -208,6 +212,9 @@ def why_not_offered(conn: sqlite3.Connection, cfg: Config, song: Song, overrides
         return "ignored"
     if any(f.name == HUMAN_SHEET for f in kept_files(conn, song.id)):
         return "has a human sheet"
+    picked = picked_without_lyrics(song, overrides)
+    if picked is not None:
+        return picked
     if song.lyrics_status != "missing":
         return f"its lyrics are {song.lyrics_status}"
     if not anyway and whisper_cant_read(conn, song) is not None:
@@ -224,6 +231,29 @@ def why_not_offered(conn: sqlite3.Connection, cfg: Config, song: Song, overrides
     return None
 
 
+def picked_without_lyrics(song: Song, overrides: Overrides) -> str | None:
+    """Why a song whose lyrics record you picked (``[lyrics]``' ``record``) and that has no lyrics is never heard,
+    ``anyway`` or not, else None. A record picked is final: one record of one site is all that is ever asked about
+    the song, and the other lyrics sites never are, so the owner's rule (the lyrics databases before Whisper) keeps
+    it from Whisper until you pick another record or clear the pick. ``PICKED_NONE`` while its lyrics are missing,
+    true whether its site answered the record a miss or hasn't asked it yet (a song missing under its own name when the
+    record was written by hand waits its 30 days: ``lyrics_at`` can't tell the two apart); ``PICKED_UNREAD`` while it
+    is pending (never asked yet, or its last ask an error); no ``checked:`` record is read, as one may be older than the
+    pick."""
+    pick = overrides.lyrics.get(override_key(song.display))
+    if pick is None or pick.record is None or song.lyrics_status not in ("pending", "missing"):
+        return None
+    record = f"{pick.record.site} {pick.record.id}"
+    return (PICKED_NONE if song.lyrics_status == "missing" else PICKED_UNREAD).format(record=record)
+
+
+def without_picks(overrides: Overrides) -> Overrides:
+    """``overrides`` with no ``[lyrics]`` record weighed: for Not sung, chords only (``why_not_unsung``, and its job's
+    check before the chords), which runs no Whisper and only drops a transcript, so the databases-first rule
+    (``picked_without_lyrics``) doesn't refuse it."""
+    return dataclasses.replace(overrides, lyrics={})
+
+
 def refused_for(why: str) -> str:
     """``why_not_offered``'s reason as a refusal says it: Whisper's refusal of the audio with what to do about it."""
     return f"{why} ({WHISPER_UNREADABLE_DO})" if why == WHISPER_UNREADABLE_WHY else why
@@ -233,7 +263,7 @@ def why_not_unsung(conn: sqlite3.Connection, cfg: Config, song: Song, overrides:
     """None when the owner may say the song isn't sung (Not sung: chords only, ``caracole transcribe --none``): a song
     a transcription would be offered to but for the transcript of its own audio kept, its auto sheet over it; else one
     short reason."""
-    why = why_not_offered(conn, cfg, song, overrides, anyway=True)
+    why = why_not_offered(conn, cfg, song, without_picks(overrides), anyway=True)
     if why == ALREADY_TRANSCRIBED:
         return None
     return why if why is not None else NO_TRANSCRIPT
@@ -253,8 +283,9 @@ def offers(conn: sqlite3.Connection, cfg: Config, overrides: Overrides) -> dict[
         why = why_not_offered(conn, cfg, s, overrides)
         if why is None:
             songs.append(s.id)
-        elif why == ALREADY_TRANSCRIBED:
-            transcribed.append(s.id)
+        elif why == ALREADY_TRANSCRIBED or (picked_without_lyrics(s, overrides) is not None
+                                            and why_not_unsung(conn, cfg, s, overrides) is None):
+            transcribed.append(s.id)  # Not sung: chords only, which a record picked since doesn't refuse
         elif (heard_nothing(conn, s) and whisper_cant_read(conn, s) is None
               and why_not_offered(conn, cfg, s, overrides, anyway=True) is None):
             (unsung if said_not_sung(conn, s) else nothing).append(s.id)
