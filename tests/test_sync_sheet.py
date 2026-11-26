@@ -594,10 +594,17 @@ def fresh(fake: FakeSync) -> FakeSync:
     return fake
 
 
-def start_on_the_laptop(page: Browser) -> None:
-    """The Sync tab, its address the one it synced with last, then Sync: the sheet, compared."""
+def tab_drawn(page: Browser) -> None:
+    """The Sync tab as GET /api/sync's answer draws it: its address the one it synced with last, and its last-sync
+    line, which takes room only once drawn (sync.css ``.sync-last:empty``) and so moves the panels' buttons down.
+    A click on one of them waits for it, else it may land where the button was (escape-flake.md)."""
     assert page.wait(f"document.getElementById('sync-address').value === '{ADDRESS}'")
     assert page.wait("document.getElementById('sync-last').textContent.startsWith('Last synced with Studio ')")
+
+
+def start_on_the_laptop(page: Browser) -> None:
+    """The Sync tab, drawn (``tab_drawn``), then Sync: the sheet, compared."""
+    tab_drawn(page)
     page.click("#sync-start")
     at_view(page, "what")
     assert page.wait("!document.getElementById('sync-counts').hidden")
@@ -1303,6 +1310,7 @@ def test_export_offers_the_parts_with_their_sizes_indexes_unticked_and_downloads
     downloads.mkdir()
     with opened(tmp_path, served(fake) + "#tab=sync") as page:
         page._send("Browser.setDownloadBehavior", behavior="allow", downloadPath=str(downloads))
+        tab_drawn(page)
         page.click("#sync-export")
         at_view(page, "what")
         assert page.wait("!document.getElementById('sync-go').disabled")
@@ -1522,6 +1530,7 @@ def test_escape_in_the_sheet_is_its_cancel_and_leaves_the_librarys_search_alone(
         assert page.js(results)
         page.click("#tab-sync")
         assert page.wait("!document.getElementById('sync').hidden")
+        tab_drawn(page)
         page.click("#sync-export")
         at_view(page, "what")
         page.press("Escape")
