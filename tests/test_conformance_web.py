@@ -48,6 +48,7 @@ import pytest
 from caracole import download_names, inline, page_icon
 from caracole.get import GTPTABS_KEPT, MATCH_NOT_FOUND, SHEET_FROM
 from caracole.library_name import SCRATCH_LINK, LibraryName
+from caracole.youtube_sheet import HOLDS as _YOUTUBE_HOLDS
 from caracole.web import app as app_module
 from caracole.web import files, pages, security
 from caracole.web.app import Request, Response, Route, WebApp, html_response, json_response
@@ -904,6 +905,26 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
     add("a sheet from YouTube, not made", in_state(youtube, "done", {
         "song": ("done", ""), "audio": ("skipped", "waiting out YouTube until 2026-11-04 11:30 UTC")}),
         facts=_status.SongFacts())
+    sheet_stages = {"song": ("done", ""), "audio": ("done", "downloaded"), "lyrics": ("done", "LRCLIB has none")}
+    add("a sheet from YouTube, its words running", in_state(youtube, "running", sheet_stages | {
+        "vocals": ("running", "2 of ~12 min")}), facts=ready)
+    add("a sheet from YouTube, its words heard", in_state(youtube, "done", sheet_stages | {
+        "vocals": ("done", "sung from 9.3 s"), "words": ("done", "212 words in 31 lines (en)"),
+        "chords": ("done", "chords over the transcribed lyrics"), "pdf": ("done", ""), "pages": ("done", "")}),
+        facts=ready)
+    add("a sheet from YouTube, its words skipped", in_state(youtube, "done", sheet_stages | {
+        "vocals": ("skipped", "not transcribed here: demucs-rs is missing"), "words": ("skipped", "no vocals"),
+        "chords": ("done", _YOUTUBE_HOLDS["none"]), "pdf": ("done", ""), "pages": ("done", "")}), facts=ready)
+    add("a sheet from YouTube, its words failed", in_state(youtube, "done", sheet_stages | {
+        "vocals": ("done", "sung from 9.3 s"), "words": ("failed", "Whisper can't read the audio"),
+        "chords": ("done", _YOUTUBE_HOLDS["none"]), "pdf": ("done", ""), "pages": ("done", "")}), facts=ready)
+    add("a sheet from YouTube, its vocals failed", in_state(youtube, "done", sheet_stages | {
+        "vocals": ("failed", "the separator can't run here (no GPU adapter)"), "words": ("skipped", "no vocals"),
+        "chords": ("done", _YOUTUBE_HOLDS["none"]), "pdf": ("done", ""), "pages": ("done", "")}), facts=ready)
+    add("a sheet from YouTube, nothing sung", in_state(youtube, "done", sheet_stages | {
+        "vocals": ("done", "sung 6.2 s"), "words": ("done", "nothing sung was heard (6.2 s sung)"),
+        "chords": ("done", _YOUTUBE_HOLDS["silent"]), "pdf": ("done", ""), "pages": ("done", "")}),
+        facts=ready)
     # A song's lyrics transcribed from its audio (caracole transcribe: transcribe_job.STAGES).
     transcription = queued_job(f"Lyrics from the audio: {V_DISPLAY}", _jobs.TRANSCRIBE + V_KEY,
                                _jobs.transcribe_steps(V_DISPLAY), display=V_DISPLAY)

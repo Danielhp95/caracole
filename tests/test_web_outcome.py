@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 
 from caracole.get import GTPTABS_KEPT, MATCH_NOT_FOUND, NOT_IN_INDEX, SHEET_FROM, STAGES
 from caracole.songs import get_song, update_song
+from caracole.youtube_sheet import HOLDS
 from caracole.web.jobs import (
     INTERRUPTED,
     KEEP_STAGES,
@@ -638,7 +639,8 @@ def youtube_job(state="running", stages=None):
 
 
 EVERY = {"song": ("done", "added to wanted.txt, line 16"), "audio": ("done", "downloaded Vikingos veganos"),
-         "lyrics": ("done", "found, timed"), "chords": ("done", "chords over the lyrics"),
+         "lyrics": ("done", "found, timed"), "vocals": ("skipped", "not transcribed: its lyrics are found"),
+         "words": ("skipped", "no vocals"), "chords": ("done", "chords over the lyrics"),
          "pdf": ("done", "made"), "pages": ("done", "")}
 SHEET = SongFacts(sheet="Nick%20Cani/Vikingos%20veganos/sheet%20%28auto%29.html")
 
@@ -647,9 +649,10 @@ def test_a_sheet_from_youtube_shows_its_steps_audio_from_youtube():
     job = youtube_job(stages={"song": ("done", ""), "audio": ("done", "downloaded Vikingos veganos"),
                               "lyrics": ("running", "")})
     assert steps(job) == [Chip("Song", "done"), Chip("Audio", "done", "YouTube", "downloaded Vikingos veganos"),
-                          Chip("Lyrics", "running"), Chip("Chords", "waiting"), Chip("PDF", "waiting")]
+                          Chip("Lyrics", "running"), Chip("Words", "waiting"), Chip("Chords", "waiting"),
+                          Chip("PDF", "waiting")]
     line = job_line(job, None)
-    assert progress(job, line, None) == {"steps": [c.as_json() for c in steps(job)], "at": 2, "count": "3 of 5"}
+    assert progress(job, line, None) == {"steps": [c.as_json() for c in steps(job)], "at": 2, "count": "3 of 6"}
     ready = youtube_job("done", EVERY)
     assert progress(ready, job_line(ready, SHEET), SHEET) == {}  # Ready: its steps fold away
     waited = youtube_job("done", EVERY | {"audio": ("skipped", "YouTube turned us back; waiting until "
@@ -662,6 +665,7 @@ def test_a_sheet_from_youtube_shows_its_steps_audio_from_youtube():
         {"name": "Audio", "site": "YouTube", "state": "failed",
          "found": "YouTube turned us back; waiting until 2026-10-30 20:00 UTC"},
         {"name": "Lyrics", "site": "", "state": "done", "found": "found, timed"},
+        {"name": "Words", "site": "", "state": "skipped", "found": ""},
         {"name": "Chords", "site": "", "state": "skipped", "found": ""},
         {"name": "PDF", "site": "", "state": "done", "found": "made"}]
     # Cut off as it took the audio: failed, and nothing found, what it said while it ran being no finding.
@@ -687,6 +691,45 @@ def test_a_sheet_from_youtube_says_what_it_holds_or_what_stopped_it():
                            Action("Try again", post="/jobs/again", fields=(("job", "6"),)))
     failed = youtube_job("failed", EVERY | {"chords": ("failed", "auto-chords can't read the audio")})
     assert outcome(failed, job_line(failed, None), None).word == "Failed"
+
+
+def test_a_youtube_sheets_steps_are_song_audio_lyrics_words_chords_pdf():
+    # One Words step for the vocals and words stages, between Lyrics and Chords.
+    job = youtube_job(stages=EVERY | {"vocals": ("done", "sung from 9.3 s"), "words": ("done", "212 words")})
+    assert [c.name for c in steps(job)] == ["Song", "Audio", "Lyrics", "Words", "Chords", "PDF"]
+    assert steps(job)[3] == Chip("Words", "done", "", "sung from 9.3 s \u00b7 212 words")
+    # Skipped, it keeps its place; running vocals is the Words step in hand.
+    assert steps(youtube_job(stages=EVERY))[3].state == "skipped"
+    running = youtube_job(stages={"song": ("done", ""), "audio": ("done", ""), "lyrics": ("done", "none"),
+                                  "vocals": ("running", "2 of ~12 min")})
+    shown = progress(running, job_line(running, None), None)
+    assert shown["at"] == 3 and shown["count"] == "4 of 6" and shown["steps"][3]["state"] == "running"
+
+
+def test_a_sheet_whose_words_failed_is_ready_and_says_why():
+    job = youtube_job("done", EVERY | {"vocals": ("done", "sung from 9.3 s"),
+                                       "words": ("failed", "Whisper can't read the audio"),
+                                       "chords": ("done", HOLDS["none"])})
+    assert steps(job)[3].state == "failed"
+    assert outcome(job, job_line(job, SHEET), SHEET) == Outcome(
+        "ready", "Ready", "Chords only, no lyrics: the words couldn't be heard here (Whisper can't read the audio).",
+        Action("Open", href="/" + SHEET.sheet))
+
+
+def test_a_sheet_whose_vocals_failed_says_why_with_the_stages_own_words():
+    why = "the separator can't run here (no GPU adapter)"
+    job = youtube_job("done", EVERY | {"vocals": ("failed", why), "words": ("skipped", "no vocals"),
+                                       "chords": ("done", HOLDS["none"])})
+    assert steps(job)[3] == Chip("Words", "failed", "", why)
+    assert outcome(job, job_line(job, SHEET), SHEET).reason == (
+        f"Chords only, no lyrics: the words couldn't be heard here ({why}).")
+
+
+def test_a_sheet_over_nothing_sung_is_ready_chords_only():
+    job = youtube_job("done", EVERY | {"vocals": ("done", "sung 6.2 s"),
+                                       "words": ("done", "nothing sung was heard (6.2 s sung)"),
+                                       "chords": ("done", HOLDS["silent"])})
+    assert outcome(job, job_line(job, SHEET), SHEET).reason == "Chords only: nothing sung was heard."
 
 
 # --- a song's lyrics transcribed from its audio ---------------------------------------------------------------

@@ -459,7 +459,11 @@
     go.type = "submit";
     go.setAttribute("aria-label", "Make the sheet of " + String(s.title) + " by " + String(s.artist) +
       " from this video");
-    go.title = "Chords from its audio, lyrics from LRCLIB. A few minutes.";
+    // Where the lyrics are heard from the audio on a CPU alone, the time says so (``server.transcribe.time``).
+    const slow = server && server.transcribe && server.transcribe.ok === true &&
+      String(server.transcribe.time || "").indexOf("half an hour") >= 0;
+    go.title = "Chords from its audio; lyrics from the lyrics sites, else heard from the audio. A few minutes." +
+      (slow ? " (up to half an hour when they're heard)" : "");
     form.append(label, go);
     postInPlace(form, go, s);
     return form;
