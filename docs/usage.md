@@ -4239,7 +4239,12 @@ where comparing again can settle it (the library changed since the comparison, a
 keeps the folder for an hour from its end, so the Sync tab's Compare again needs no new upload.
 
 `--choose`, `--prefer`, `--compared`, `--progress` and `--yes` work as for `peer sync`. Import
-exits 2 for a file refused, 1 for a unit left or indexes not merged, and 0 otherwise.
+exits 2 for a file refused or an option it can't take (a `--choose` that names no difference
+now). It exits 1 when the library changed since the comparison, you answer no to "Go on?",
+overrides.toml or songbooks.toml can't be read, it took nothing for want of a backup, its indexes
+weren't merged, or for a bug. Otherwise it exits 0. A unit left is no failure, as for `peer sync`:
+the Journal says "Shared · 1 change left as it was", as the phone's does, and its Output names the
+unit and why.
 
 ### Syncing parts, and the indexes
 

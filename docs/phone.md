@@ -62,7 +62,8 @@ update both to the same version, then sync."
 
 If the phone can't reach the computer, **Export** in Settings writes the library to a
 `.caracole` file and **Import a file** reads one. Two computers sync the same way, with
-[`caracole peer`](usage.md#two-caracoles-the-phones-and-the-computers).
+[`caracole peer`](usage.md#two-caracoles-the-phones-and-the-computers). An import that left
+something reads the same on both: "Shared · 1 change left as it was", its Output naming each and why.
 
 ## What works on the phone
 

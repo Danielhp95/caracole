@@ -57,7 +57,10 @@ unit (peer_sync.py; the design: docs/superpowers/specs/2026-10-31-phone-server-s
   whole (``peer_import.whole``: else refused and left, to be sent on). ``--parts``, ``--choose``, ``--prefer``,
   ``--compared``, ``--progress`` and ``--yes`` as ``peer sync``'s; at the end, with ``--progress``, ``{"event":
   "report", "report": …}``, what it did for the Sync tab's summary, also when it took nothing. It exits 2 for a file
-  refused, 1 for a unit left or its indexes not merged, else 0.
+  refused or options it can't take (a ``--choose`` of no difference among them); 1 for ``STALE``, a "Go on?"
+  answered no, this library's overrides.toml or songbooks.toml unreadable, nothing taken for want of a backup, its
+  indexes not merged, or a bug; else 0: a unit left as it was is no failure, as it is none of ``peer sync``'s (its
+  staged file kept all the same).
 - ``peer sync`` and ``peer import`` work on copies of the indexes in ``cache_dir/peer`` (``sync-indexes-``,
   ``give-indexes-``, ``import-indexes-…``), each held while its merge or upload reads it (``peer_push.holding_copy``)
   and deleted after; as either starts, those a killed one left an hour ago are swept (``peer_push.sweep_copies``).
@@ -1208,20 +1211,22 @@ def _import(cfg, path, *, name: str | None, said: _Said, parts: tuple[str, ...],
             raise typer.Exit(1)
         for unit_id, why in left:
             said.unit(unit_id, "left", why)
-        done, indexed = _import_under_lock(cfg, conn, file, source, said, parts, take, kept_here)
+        done, failed = _import_under_lock(cfg, conn, file, source, said, parts, take, kept_here)
     typer.echo(f"From {shown}'s file: " + _pulled(done, units=False))
     if done.respelled:
         typer.echo("Respelled as it writes their artist: " + ", ".join(done.respelled))
-    if done.left or not indexed:
+    if failed:
         raise typer.Exit(1)
-    spent()
+    if not done.left:  # a unit left is no failure (as a sync's), but the file is kept for a comparison again
+        spent()
 
 
 def _import_under_lock(cfg, conn, file, source, said: _Said, parts: tuple[str, ...], take: list,
                        kept_here: dict) -> tuple[object, bool]:
     """An import's take, render, agree and index, under caracole's lock, waiting for the nightly run as a lookup
-    does; then its report, also when nothing could be taken. Returns peer_sync's ``Applied``, and whether its
-    indexes were merged as asked (False: the index stage failed, or was never reached)."""
+    does; then its report, also when nothing could be taken. Returns peer_sync's ``Applied``, and whether it failed:
+    no backup could be made first, so nothing was taken, or its indexes weren't merged as asked (the index stage
+    failed). A unit the take left as it was is no failure."""
     from caracole import backup, stamps
     from caracole import peer_file
     from caracole import peer_sync as sync
@@ -1250,7 +1255,7 @@ def _import_under_lock(cfg, conn, file, source, said: _Said, parts: tuple[str, .
                 typer.echo(nothing)
                 said.report({"with": {"name": file.name, "kind": "file", "address": None}, "at": stamps.stamp(now),
                              "parts": held, "indexes": []})
-                return done, "indexes" not in held
+                return done, True
             said.stage("take", "running", _count(len(take)))
             wanted = [(d.id, d.theirs.digest if d.theirs else None) for d in take]
             done = sync.apply_units(conn, cfg, source, wanted, stamps.stamp(now),
@@ -1288,7 +1293,7 @@ def _import_under_lock(cfg, conn, file, source, said: _Said, parts: tuple[str, .
         indexes = _merge_indexes(cfg, conn, file, source, said, parts, now)
     said.report({"with": {"name": file.name, "kind": "file", "address": None}, "at": stamps.stamp(now),
                  "parts": held, "indexes": indexes or []})
-    return done, indexes is not None
+    return done, indexes is None
 
 
 def _merge_indexes(cfg, conn, file, source, said: _Said, parts: tuple[str, ...], now) -> list[dict] | None:
