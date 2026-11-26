@@ -9,6 +9,10 @@ the same library.
   tabs' names and pages', the lyrics sites that ask a link back, phone_render's record's suffix, and what a viewer's
   ``kinds`` reads (render.py ``_kinds_data``: the kinds in the card's order, the files' names, the scores' formats,
   the inbox's source).
+- ``lyrics_key``: ``args`` ``[text]``, ``out`` ``autochords.sheet_lyrics.lyrics_key(text)``, the key of the words an
+  auto sheet was made over, which both sides write into its version's raw (so into the song's unit): the texts of
+  ``LYRICS_KEY_TEXTS``, each what could read otherwise in Kotlin (Python's whitespace at a line's ends and inside it,
+  line endings, characters that aren't whitespace, blank runs, past the BMP, NFC and NFD).
 - ``phone_render``: ``args`` ``[fixture, steps]``, a library (``helpers.corpus.dump_fixture``'s records: its
   database's rows, its kv, the phone's overrides as ``phone_overrides`` rows of overrides.toml, and the files of its
   songs' folders) and what is done to it in turn, each step one of ``{"render": song ids or null}`` (``phone_render``
@@ -54,6 +58,7 @@ import pytest
 from caracole import canonical, db, inbox, keys, library, render, songs
 from caracole.autochords import ChordSegment, build_sheet
 from caracole.autochords.merge import AUTO_MARKER, youtube_credit
+from caracole.autochords.sheet_lyrics import lyrics_key
 from caracole.chordpro import to_chordpro
 from caracole.config import load_config
 from caracole.icons import INBOX, YOUTUBE
@@ -483,8 +488,31 @@ def run_case(root: Path, name: str) -> dict[str, Any]:
         w.close()
 
 
+# Each written as escapes, so that no editor folds them. Python's str.strip() takes U+00A0, U+3000, a form feed,
+# U+0085, U+2028 and U+2029 off a line's ends; inside a line they stay (the text is split on LF alone, after CRLF and
+# CR are read as LF); U+FEFF and U+200B are no whitespace to it.
+LYRICS_KEY_TEXTS = [
+    "Walking down the river road\nSinging to the morning light",
+    "\u00a0Walking down\u00a0the river\u00a0\n\u3000Singing\u3000to the light\u3000",
+    "Walking\fdown\nthe\u2028river\nroad\u2029home\nand\u0085back",
+    "\fWalking down\f\n\u2028the river\u2028\n\u2029road\u2029\n\u0085home\u0085",
+    "Walking down\r\nthe river\rroad\nhome\r\n\r\nagain\r",
+    "\ufeffWalking down\nthe\u200briver road\u200b",
+    "\n\n\nWalking down\n\n\n\nthe river\n \n\t\n\nroad\n\n\n",
+    "   \n\t\nWalking down\n    \nthe river",
+    "",
+    " \t\n\u00a0\n\u3000\r\n",
+    "\u7b2c\u4e00\u884c\u6b4c\u8bcd\u5728\u8fd9\u91cc\n\n\u7b2c\u4e8c\u884c\u6b4c\u8bcd\u3000\u5728\u8fd9\u91cc",
+    "Walking down \U0001f3b8 the river\n\U00020000 road",
+    "Caf\u00e9 du r\u00e9veil",
+    "Cafe\u0301 du re\u0301veil",
+]
+
+
 def render_records(root: Path) -> list[dict[str, Any]]:
-    return [{"fn": "constants", "out": CONSTANTS}] + [run_case(root, name) for name in CASES]
+    return ([{"fn": "constants", "out": CONSTANTS}]
+            + [{"fn": "lyrics_key", "args": [text], "out": lyrics_key(text)} for text in LYRICS_KEY_TEXTS]
+            + [run_case(root, name) for name in CASES])
 
 
 def test_render_vectors_are_render_pys_page_path_with_no_pdf(tmp_path):
@@ -494,9 +522,25 @@ def test_render_vectors_are_render_pys_page_path_with_no_pdf(tmp_path):
 # --- the cases reach what they are for ---------------------------------------------------------------------------
 
 
+def test_the_words_keys_pin_what_python_strips_and_what_it_keeps():
+    key = dict(zip(LYRICS_KEY_TEXTS, map(lyrics_key, LYRICS_KEY_TEXTS), strict=True))
+    plain = lyrics_key("Walking down the river road\nSinging to the morning light")
+    assert lyrics_key("Walking down\u00a0the river\nSinging\u3000to the light") == key[LYRICS_KEY_TEXTS[1]]
+    assert lyrics_key("\fWalking down\f") == lyrics_key("Walking down")  # a form feed is whitespace at the ends
+    assert lyrics_key("Walking down\nthe river\nroad\nhome\n\nagain") == key[LYRICS_KEY_TEXTS[4]]
+    assert key[LYRICS_KEY_TEXTS[5]] != lyrics_key("Walking down\nthe river road")  # BOM and ZWSP are kept
+    assert key[LYRICS_KEY_TEXTS[6]] == lyrics_key("Walking down\n\nthe river\n\nroad")
+    assert key[""] == key[LYRICS_KEY_TEXTS[9]] == hashlib.sha256(b"").hexdigest()[:16]
+    assert key[LYRICS_KEY_TEXTS[12]] != key[LYRICS_KEY_TEXTS[13]]  # NFC and NFD: other bytes, other words
+    assert len(set(key.values())) == len(key) - 1 and plain == key[LYRICS_KEY_TEXTS[0]]
+    # Inside a line, the "line breaks" Python's splitlines knows are no breaks here
+    assert key[LYRICS_KEY_TEXTS[2]] != lyrics_key("Walking\ndown\nthe\nriver\nroad\nhome\nand\nback")
+
+
+
 @pytest.fixture(scope="module")
 def records(tmp_path_factory) -> dict[str, dict[str, Any]]:
-    return {r["case"]: r for r in render_records(tmp_path_factory.mktemp("render"))[1:]}
+    return {r["case"]: r for r in render_records(tmp_path_factory.mktemp("render")) if r["fn"] == "phone_render"}
 
 
 def _names(out: dict[str, Any]) -> set[str]:
