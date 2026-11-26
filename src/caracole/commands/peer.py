@@ -430,8 +430,9 @@ def _interactive() -> bool:
 
 
 def left_line(name: str, why: str) -> str:
-    """A unit left as it was, said by ``name`` (its label, else its id), with why (``LEFT``)."""
-    return f"{LEFT}: {name}: {CONFLICT_LEFT if why == UNSETTLED else why}"
+    """A unit left as it was, said by ``name`` (its label, else its id), with why (``LEFT``): on one line, the name's
+    whitespace collapsed (a songbook named over two lines)."""
+    return f"{LEFT}: {' '.join(name.split()) or name}: {CONFLICT_LEFT if why == UNSETTLED else why}"
 
 
 class _Said:
@@ -469,7 +470,7 @@ class _Said:
         elif outcome == "left":
             typer.echo("  " + left_line(self.names.get(unit_id) or unit_id, why))
         else:
-            typer.echo(f"  {DONE[outcome]} {unit_id}" + (f": {why}" if why else ""))
+            typer.echo(f"  {DONE[outcome]} {self.names.get(unit_id) or unit_id}" + (f": {why}" if why else ""))
 
 
 def _count(n: int) -> str:
@@ -601,7 +602,8 @@ def _pull(cfg, address: str, unit_ids: list[str], compared: dict[str, str | None
     one's digest here as compared, so that one changed here since is left too. ``on_song``: ``render_all``'s, as it
     renders the songs taken. What was taken is kept as agreed as the take ends, whatever ``agree`` says
     (``peer_sync.record_taken``). ``agree``: keep what the two agree on after (a sync does once it gave there what goes
-    there). ``names``, when given, gets each unit's label there, by its id, for what is said of it. Returns
+    there). ``names``, when given, gets each unit's label there (one gone there, this side's), by its id, for what is
+    said of it. Returns
     peer_sync's ``Applied``."""
     from caracole import backup
     from caracole import peer_sync as sync
@@ -613,7 +615,12 @@ def _pull(cfg, address: str, unit_ids: list[str], compared: dict[str, str | None
         try:
             with sync.Peer(address, transport=transport_for_peer()) as peer:
                 state = peer.state(me)
-                if names is not None:
+                if names is not None:  # there's label, else (a unit gone there) this side's, as compared
+                    gone = [u for u in unit_ids if u not in state.units]
+                    if gone:
+                        books_here, _ = _songbooks(cfg)
+                        mine = sync.library_state(conn, load_ovr(cfg), books_here or [])
+                        names.update({u: mine[u].label for u in gone if u in mine})
                     names.update({u: state.units[u].label for u in unit_ids if u in state.units})
                 if state.server == me:
                     fail(f"The scribe at {address} is this one: nothing to take. caracole peer new-id gives one a new "
@@ -700,7 +707,7 @@ def _push(cfg, address: str, state, give: list, here_now: dict[str, str | None],
 
     def far(sent: int, pushes: int) -> str:
         """How far a give that stopped got, before why: the pushes taken before it."""
-        return f"{counted['given']} given in the first {_pushes(sent)} of {pushes}; then " if sent else ""
+        return given_so_far(counted["given"], sent, pushes) if sent else ""
 
     def stopped(sent: int, pushes: int, why: str) -> NoReturn:
         rest = f" {TAKEN_STAY}" if sent else ""
@@ -774,6 +781,13 @@ def _handing_over(cfg, conn):
             _sleep(seconds)
 
     return pause
+
+
+def given_so_far(given: int, sent: int, pushes: int) -> str:
+    """How far a give that stopped after ``sent`` of its ``pushes`` got, before why: "350 given in the first 2 pushes
+    of 4; then ". The Journal's outcome reads these words to say the count once (outcome.py ``_GIVEN_SO_FAR``, the
+    phone's SyncEngine and Outcomes alike)."""
+    return f"{given} given in the first {_pushes(sent)} of {pushes}; then "
 
 
 def _pushes(n: int) -> str:

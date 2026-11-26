@@ -937,7 +937,9 @@ def test_a_removal_there_of_a_song_changed_on_both_is_counted_to_take_only_once_
 def test_what_the_sheet_counts_to_take_is_what_the_done_view_says_the_sync_took(served, tmp_path, side):
     """Wonderwall changed here and removed there, its removal to take, Hotel California changed on both, Let It Be
     there alone: each conflict kept ``side``, the ↓ the sheet counts as Sync goes, with the conflicts chosen there, is
-    what the sync took (peer_sync.decide and answered_by_its_song over the choices posted), as the done view says."""
+    what peer_sync.decide and answered_by_its_song take over the choices posted. The done view is fed that take
+    itself (no server takes anything here): this guards the sheet's count against those rules, and that the done
+    view shows each unit of it, never the server's own take."""
     from types import SimpleNamespace
 
     from caracole import peer_sync as sync

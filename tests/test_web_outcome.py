@@ -3,6 +3,8 @@ finished one ended, with the next step to take."""
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from caracole.get import GTPTABS_KEPT, MATCH_NOT_FOUND, NOT_IN_INDEX, SHEET_FROM, STAGES
 from caracole.songs import get_song, update_song
 from caracole.youtube_sheet import HOLDS
@@ -954,6 +956,53 @@ def test_a_sync_whose_indexes_or_pages_failed_after_its_changes_says_what_it_sha
     # Nothing shared: the failure's words, as before.
     assert said("done", {"index": ("failed", index)}, []) == ("waiting", "Not taken", f"{index}.", "Compare again")
     assert said("failed", {"index": ("failed", index)}, []) == ("failed", "Failed", f"{index}.", "Compare again")
+
+
+def test_an_interrupted_take_or_pull_names_what_the_owner_can_do_never_a_try_again_it_has_not():
+    """A take (the phone's push) or a pull (asked by the other caracole) the server stopped offers no action: its
+    words send the owner to the other device, where the next share or sync gives it again."""
+    import dataclasses
+
+    from caracole.web.outcome import (INTERRUPTED_PULL_RAN, INTERRUPTED_PULL_WAITED, INTERRUPTED_TAKE_RAN,
+                                      INTERRUPTED_TAKE_WAITED)
+
+    from test_web_sync import peer_job
+
+    assert INTERRUPTED_TAKE_RAN == "The server stopped mid-way. Share again from the other device to finish."
+    assert INTERRUPTED_TAKE_WAITED == "The server stopped before it ran. Share again from the other device to run it."
+    assert INTERRUPTED_PULL_RAN == "The server stopped mid-way. Sync again from the other caracole to finish."
+    assert INTERRUPTED_PULL_WAITED == "The server stopped before it ran. Sync again from the other caracole to run it."
+    take = peer_job("peer-push", "running", {"check": ("running", "")})
+    pull = dataclasses.replace(take, steps=[dataclasses.replace(take.steps[0], args=(
+        "peer", "pull", "--unit=song/a/b", "--", "http://192.168.1.10:8737"))])
+    for job, ran, waited in ((take, INTERRUPTED_TAKE_RAN, INTERRUPTED_TAKE_WAITED),
+                             (pull, INTERRUPTED_PULL_RAN, INTERRUPTED_PULL_WAITED)):
+        job.state = INTERRUPTED
+        over = outcome(job, job_line(job, None))
+        assert (over.word, over.reason, over.action) == ("Interrupted", ran, None)
+        job.started_at = None
+        over = outcome(job, job_line(job, None))
+        assert (over.word, over.reason, over.action) == ("Interrupted", waited, None)
+
+
+@pytest.mark.parametrize("given, sent, pushes", [(1, 1, 3), (350, 2, 4)])
+def test_a_give_stopped_after_its_pushes_says_its_count_once_in_the_words_peer_sync_really_writes(given, sent, pushes):
+    """commands/peer.py's own words for how far a stopped give got (``given_so_far``, what ``_push`` fails with): the
+    outcome says what was given there alone, so a rewording of them that the outcome stops reading fails here."""
+    from caracole.commands.peer import TAKEN_STAY, given_so_far
+
+    from test_web_sync import peer_job
+
+    far = given_so_far(given, sent, pushes)
+    assert far.startswith(f"{given} given in the first ")
+    failure = f"Couldn't give them {given + 5}: {far}push {sent + 1} of {pushes}: the computer answered 503."
+    units = [("song/oasis/wonderwall", "taken", "")] + [(f"song/a/{n}", "given", "") for n in range(given)]
+    job = peer_job("sync", "failed", {"compare": ("done", ""), "take": ("done", "took 1"),
+                                      "give": ("failed", f"{failure} {TAKEN_STAY}")},
+                   units=units, output=(f"error: {failure} {TAKEN_STAY}",))
+    reason = outcome(job, job_line(job, None)).reason
+    assert reason == f"1 change taken. {failure}", reason
+    assert "change given" not in reason and "changes given" not in reason  # the count said once, the failure's
 
 
 def test_a_sync_that_failed_at_any_stage_after_its_changes_says_what_it_shared_first():

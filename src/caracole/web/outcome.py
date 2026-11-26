@@ -173,8 +173,18 @@ INTERRUPTED_WAITED = "The server stopped before it ran. Try again runs it."
 # A sync's, whose next step is Compare again (COMPARE_AGAIN), never Try again: the action its entry offers named.
 INTERRUPTED_SYNC_RAN = "The server stopped mid-way. Compare again to finish."
 INTERRUPTED_SYNC_WAITED = "The server stopped before it ran. Compare again to run it."
-# A give stopped after some of its pushes, in commands/peer.py's words (``_push``'s ``far``): "3 given in the first 2
-# pushes of 4; then …", the count of what was given said there, so its outcome says it once.
+# A take's (the other device pushed) and a pull's (the other caracole asked), whose entry offers no action: what the
+# owner can do, from the other side.
+INTERRUPTED_TAKE_RAN = "The server stopped mid-way. Share again from the other device to finish."
+INTERRUPTED_TAKE_WAITED = "The server stopped before it ran. Share again from the other device to run it."
+INTERRUPTED_PULL_RAN = "The server stopped mid-way. Sync again from the other caracole to finish."
+INTERRUPTED_PULL_WAITED = "The server stopped before it ran. Sync again from the other caracole to run it."
+_INTERRUPTED = {"sync": (INTERRUPTED_SYNC_RAN, INTERRUPTED_SYNC_WAITED),
+                "peer-push": (INTERRUPTED_TAKE_RAN, INTERRUPTED_TAKE_WAITED),
+                "peer-pull": (INTERRUPTED_PULL_RAN, INTERRUPTED_PULL_WAITED)}
+# A give stopped after some of its pushes, in commands/peer.py's words (``given_so_far``): "3 given in the first 2
+# pushes of 4; then …", the count of what was given said there, so its outcome says it once (test_web_outcome.py feeds
+# it given_so_far's own words).
 _GIVEN_SO_FAR = re.compile(r"\b\d+ given in the first ")
 _ELSEWHERE = {"lacuerda": "LaCuerda has a sheet", "gtptabs": "gtptabs lists a page for it"}
 # A sync's and a take's steps, by their stages' names (jobs.PEER_SYNC_STAGES, PEER_TAKE_STAGES; the phone's sync adds
@@ -498,8 +508,7 @@ def _peer_outcome(job: Job, kind: str, line: Line) -> Outcome:
     # sheet titles it "Synced with", then the failure, never doubling what its words say already.
     shared = bool(taken or given)
     if job.state == INTERRUPTED:
-        ran, waited = ((INTERRUPTED_SYNC_RAN, INTERRUPTED_SYNC_WAITED) if action
-                       else (INTERRUPTED_RAN, INTERRUPTED_WAITED))
+        ran, waited = _INTERRUPTED.get(kind, (INTERRUPTED_RAN, INTERRUPTED_WAITED))
         stopped = ran if job.started_at else waited
         return Outcome("waiting", "Interrupted", f"{said}{kept} {stopped}" if shared else stopped, action)
     after = shared and (line.tone == "failed" or any(s.state == "failed" for s in job.stages))

@@ -355,9 +355,12 @@ class SyncRoutes(val engine: SyncEngine, val queue: JobQueue, val settings: Sync
          * (Syncs' "tap Sync to choose"); the computer's command says its own way to settle one. */
         const val CONFLICT_LEFT = "changed on both sides: tap Sync to choose"
 
-        /** [name] left as it was, with [why] ([LEFT]). */
-        fun leftLine(name: String, why: String): String =
-            "$LEFT: $name: ${if (why == SyncEngine.UNSETTLED) CONFLICT_LEFT else why}"
+        /** [name] left as it was, with [why] ([LEFT]): on one line, the name's whitespace collapsed as Python's
+         * split() and join collapse it (a songbook named over two lines). */
+        fun leftLine(name: String, why: String): String {
+            val shown = Py.split(name).joinToString(" ").ifEmpty { name }
+            return "$LEFT: $shown: ${if (why == SyncEngine.UNSETTLED) CONFLICT_LEFT else why}"
+        }
 
         /** POST /sync/apply's form at most: a line a difference, for a library's every unit. */
         const val APPLY_LIMIT = 1_048_576

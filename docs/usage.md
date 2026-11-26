@@ -4294,8 +4294,9 @@ read 02/11/26"). **Sync** opens the sheet:
 The sync runs as a request in the Journal. Behind it is
 `caracole peer sync ADDRESS --push --parts=… --compared HASH --choose=SIDE:ID …`. If it left
 something or failed, the Journal offers **Compare again**, because your choices belonged to a
-comparison that is past. Its Output names each unit left and why, as the phone's Journal does. If the libraries changed after the comparison, Sync is refused and the
-sheet compares again, keeping your choices.
+comparison that is past. Its Output names each unit left and why, as the phone's Journal does.
+If the libraries changed after the comparison, Sync is refused and the sheet compares again,
+keeping your choices.
 
 **Export** shows each part's size. Library and Songbooks are ticked. Site indexes is not, because
 it is big. The browser saves `<library name>-dd-mm-yy.caracole`

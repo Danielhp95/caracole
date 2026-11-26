@@ -499,6 +499,12 @@ class SyncRoutesTest {
         assertTrue(routes.alone(address) != null, "once over, another may be queued")
     }
 
+    @Test fun `a name holding a newline is said on one line, as commands-peer's left_line says it`() {
+        assertEquals("Left as it was: songbook Wedding set: changed here since compared",
+                     SyncRoutes.leftLine("songbook Wedding\n set", "changed here since compared"))
+        assertTrue("\n" !in SyncRoutes.leftLine("Radiohead -\tCreep\r\n", SyncEngine.UNSETTLED))
+    }
+
     @Test fun `a removal on the computer of a song left in conflict is no unit not synced, in the outcome or the Output`() {
         val creep = onComputer("Radiohead", "Creep")
         val address = computer.address.toString()

@@ -149,9 +149,19 @@ object Outcomes {
      * named (outcome.py's INTERRUPTED_SYNC_RAN and INTERRUPTED_SYNC_WAITED). */
     const val INTERRUPTED_SYNC_RAN = "The server stopped mid-way. Compare again to finish."
     const val INTERRUPTED_SYNC_WAITED = "The server stopped before it ran. Compare again to run it."
-    /** A give stopped after some of its pushes, in commands/peer.py's words (SyncEngine's alike): "3 given in the
-     * first 2 pushes of 4; then …", the count of what was given said there, so its outcome says it once
-     * (outcome.py's _GIVEN_SO_FAR). */
+    /** A take's (the other device pushed) and a pull's (the other caracole asked), whose entry offers no action: what
+     * the owner can do, from the other side (outcome.py's INTERRUPTED_TAKE_* and INTERRUPTED_PULL_*). */
+    const val INTERRUPTED_TAKE_RAN = "The server stopped mid-way. Share again from the other device to finish."
+    const val INTERRUPTED_TAKE_WAITED = "The server stopped before it ran. Share again from the other device to run it."
+    const val INTERRUPTED_PULL_RAN = "The server stopped mid-way. Sync again from the other caracole to finish."
+    const val INTERRUPTED_PULL_WAITED = "The server stopped before it ran. Sync again from the other caracole to run it."
+    private val INTERRUPTED = mapOf("sync" to (INTERRUPTED_SYNC_RAN to INTERRUPTED_SYNC_WAITED),
+                                    "peer-push" to (INTERRUPTED_TAKE_RAN to INTERRUPTED_TAKE_WAITED),
+                                    "peer-pull" to (INTERRUPTED_PULL_RAN to INTERRUPTED_PULL_WAITED))
+    /** A give stopped after some of its pushes, in commands/peer.py's words: its `given_so_far` ("3 given in the
+     * first 2 pushes of 4; then …"), which SyncEngine's give writes alike; the count of what was given said there, so
+     * its outcome says it once (outcome.py's _GIVEN_SO_FAR, test_web_outcome.py feeding it given_so_far's own
+     * words). Reword those and this with them. */
     private val GIVEN_SO_FAR = PyRegex.compile("""\b\d+ given in the first """)
     internal val ELSEWHERE = mapOf("lacuerda" to "LaCuerda has a sheet",
                                   "gtptabs" to "gtptabs lists a page for it")
@@ -399,8 +409,8 @@ object Outcomes {
         // said first, as the Sync sheet titles it "Synced with", then the failure, never doubling its words.
         val shared = taken > 0 || given > 0
         if (job.state == Job.INTERRUPTED) {
-            val stopped = if (action != null) (if (job.startedAt != null) INTERRUPTED_SYNC_RAN else INTERRUPTED_SYNC_WAITED)
-                          else if (job.startedAt != null) INTERRUPTED_RAN else INTERRUPTED_WAITED
+            val (ran, waited) = INTERRUPTED[kind] ?: (INTERRUPTED_RAN to INTERRUPTED_WAITED)
+            val stopped = if (job.startedAt != null) ran else waited
             return Outcome("waiting", "Interrupted", if (shared) "$said$kept $stopped" else stopped, action)
         }
         val after = shared && (line.tone == "failed" || job.stages.any { it.state == Job.FAILED })

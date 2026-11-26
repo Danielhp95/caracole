@@ -788,7 +788,8 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
                 if (dropping != null && job == null) io { client.pushDrop(token, dropping, me) }
                 val far = if (n == 0) "" else "${done.given.size - givenBefore} given in the first " +
                     (if (n == 1) "push" else "$n pushes") + " of ${pushes.size}; then "
-                // commands/peer.py's words: the whole give counted, and once a push was taken, that it stays so.
+                // commands/peer.py's words (given_so_far, which Outcomes.GIVEN_SO_FAR reads to say the count once):
+                // the whole give counted, and once a push was taken, that it stays so.
                 val why = far + which + said(e) + (if (n == 0) "" else " $TAKEN_STAY")
                 stage(GIVE, FAILED, why)
                 throw SyncFailed("Couldn't give them ${toGive.size}: $why", done.outcome(), e)

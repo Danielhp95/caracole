@@ -1401,9 +1401,10 @@ It is rows.js's, shared by both pages:
   agrees with that title for any sync that took or gave changes and then failed, whatever stage (the give or one of its
   pushes, the agreement, the pages, the indexes) or the server stopping it: what was shared first, then the failure
   ("Failed" where the job failed, "Shared" waiting where it is done but a stage failed, "Interrupted", which ends
-  "Compare again to finish.", the action its entry offers, `INTERRUPTED_SYNC_RAN`, never Try again's), the count of
+  "Compare again to finish.", the action its entry offers, `INTERRUPTED_SYNC_RAN`, never Try again's; a take's and a
+  pull's, which offer none, send the owner to the other side, `INTERRUPTED_TAKE_*`, `INTERRUPTED_PULL_*`), the count of
   what was given said once (a give stopped after a push counts it in its own words, "1 given in the first push of 3",
-  so the lead then says what was taken alone, `_GIVEN_SO_FAR`); with nothing shared the failure alone (outcome.py
+  so the lead then says what was taken alone, `_GIVEN_SO_FAR`, reading commands/peer.py's `given_so_far`); with nothing shared the failure alone (outcome.py
   `_peer_outcome`, `Outcomes.peerOutcome`). Indexes skipped for the other's database of another schema (the report's `indexes_skipped`,
   commands/peer.py's and SyncEngine's) are its indexes row, "Indexes not synced". The headline's tone is the one its
   sides share, none when they differ. Sending a file says both numbers in the size's unit (sync-words.js `sizeOf`, "1.5
