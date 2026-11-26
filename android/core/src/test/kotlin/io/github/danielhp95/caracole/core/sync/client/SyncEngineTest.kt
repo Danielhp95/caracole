@@ -1427,8 +1427,73 @@ class SyncEngineTest {
         assertTrue("POST /peer/index/newer" in computer.requests.map { it.substringBefore('?') }, computer.requests.toString())
         assertEquals(listOf<List<String>?>(IndexTransfer.SITES), computer.indexAsked)
         assertEquals(indexRows(Dumps.fixture("tonight-after")), indexRows(phone.read { Dumps.lines(it) }))
-        assertEquals(IndexTransfer.SITES.associateWith { "2026-11-04T12:00:00Z" }, phone.read { Have.cuts(it, computer.id) },
-                     "a whole export of the computer's is a cut too")
+        assertEquals(IndexTransfer.SITES.associateWith { "2026-11-03T12:00:00Z" }, phone.read { Have.cuts(it, computer.id) },
+                     "a whole export is no cut: an older computer notes no arrivals")
+    }
+
+    @Test fun `after a whole export from an older computer, the first part asked of it once updated is uncut`() {
+        aNightOn(cut = false)  // the route answers 404: an older caracole serve
+        apply(engine.compare(computer.address.toString()))
+        assertEquals("done", ended()["index"], stages.joinToString("\n"))
+        assertEquals(listOf<List<String>?>(IndexTransfer.SITES), computer.indexAsked)
+        assertEquals(emptyMap(), phone.read { Have.cuts(it, computer.id) }, "no cut taken from a whole export")
+        // The computer updated, a night on: it answers the route.
+        computer.newer = { corpusExport("uncut") }
+        computer.indexes = IndexTransfer.SITES.associateWith { "2026-11-05T03:30:00Z" }
+        stages.clear()
+        apply(engine.compare(computer.address.toString()))
+        assertEquals("done", ended()["index"], stages.joinToString("\n"))
+        val have = computer.newerAsked.single()["have"] as JsonObject
+        assertTrue(IndexTransfer.SITES.all { (have[it] as JsonObject)["since"] == JsonNull }, have.toString())
+        assertEquals(IndexTransfer.SITES.associateWith { "2026-11-04T12:00:00Z" }, phone.read { Have.cuts(it, computer.id) })
+    }
+
+    @Test fun `a document too large for the computer, or a computer that allows no POST there, gets the whole export`() {
+        for (status in listOf(413, 405)) {
+            aNightOnAgain()
+            computer.newer = { corpusExport("newer") }
+            computer.newerRefusal = status
+            apply(engine.compare(computer.address.toString()))
+            assertEquals("done", ended()["index"], "$status: " + stages.joinToString("\n"))
+            assertEquals(listOf<List<String>?>(IndexTransfer.SITES), computer.indexAsked, "$status")
+            assertEquals(indexRows(Dumps.fixture("tonight-after")), indexRows(phone.read { Dumps.lines(it) }), "$status")
+        }
+    }
+
+    @Test fun `a 400 from the part's route fails the index stage, a bug that shows, never the whole in its place`() {
+        aNightOn(cut = true)
+        computer.newer = { corpusExport("newer") }
+        computer.newerRefusal = 400
+        apply(engine.compare(computer.address.toString()))
+        assertEquals("failed", stages.last { it.first == "index" }.second)
+        assertEquals(emptyList(), computer.indexAsked)
+    }
+
+    @Test fun `a part whose time is past the merge's clock bound is merged but cuts nothing`() {
+        aNightOn(cut = true)
+        // The phone's clock: two days before the computer made the part (2026-11-04T12:00Z), a day's bound short of it.
+        engine.clock = { Instant.parse("2026-11-02T10:00:00Z") }
+        computer.newer = { corpusExport("newer") }
+        apply(engine.compare(computer.address.toString()))
+        assertEquals("done", ended()["index"], stages.joinToString("\n"))
+        assertEquals(1, computer.newerAsked.size)
+        assertEquals(IndexTransfer.SITES.associateWith { "2026-11-03T12:00:00Z" }, phone.read { Have.cuts(it, computer.id) },
+                     "rows dated after the bound were passed over: the cut stays")
+    }
+
+    /** [aNightOn] again, with the phone and the computer as they were: a fresh phone and FakeComputer. */
+    private fun aNightOnAgain() {
+        computer.close()
+        phone.close()
+        val dir = tmp.newFolder()
+        phone = TestDb.fresh(dir)
+        phoneLibrary = File(dir, "library").apply { mkdirs() }
+        phoneStore = LibraryStore(phoneLibrary)
+        stateDir = tmp.newFolder()
+        computer = FakeComputer(tmp.newFolder())
+        engine = engine()
+        stages.clear()
+        aNightOn(cut = true)
     }
 
     @Test fun `any other refusal of the part fails the index stage, and the whole is never asked for in its place`() {

@@ -3965,7 +3965,9 @@ merged from this computer (JSON, with the form token, 1 MiB at most). The answer
 sitemap whose record differs, with all of its rows, the pages read a page at a time since then
 (less an hour, and earlier for pages a merge brought in meanwhile), and every progress record.
 After a night's refresh that is a few sitemaps of Ultimate Guitar's instead of all of them. A
-computer older than the route answers 404, and the phone downloads the whole index as before.
+computer older than the route answers 404, and the phone downloads the whole index as before; so
+does a document past the limit (413). The first part after such a whole download sends every
+page read a page at a time, once.
 
 ### Syncing by hand: peer sync --push, --choose, --compared
 

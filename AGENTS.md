@@ -617,7 +617,14 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   pushed pages, another caracole's, a file's, whose times are another clock's; every row with no `since`: a
   catalogue's stamp is no bound), and the kv records whole; META's `partial` says what it was cut by (`{site:
   {since, from, same}}`). `merge(arrivals=)` notes the arrivals (kv `index:arrived`, at most `ARRIVALS_KEPT` a site,
-  the oldest two made one); the phone, which makes no export, and the corpus's merges note none.
+  the oldest two made one); the phone, which makes no export, and the corpus's merges note none. An arrival reaches a
+  phone only once its gate opens (the computer's `newest` for the site later than what the phone holds, the phone's
+  `newerThere`), as before partial exports. A `since` later than this side's clock as it exports is none (every row,
+  once). Times are compared as text, as the merge compares them (`_TIMED`: UTC "Z" stamps; one of another offset by
+  its digits). The risk accepted, for one owner's NTP-synced computer: after its clock steps back by more than
+  `SINCE_MARGIN`, pages stamped between the stepped-back time and the cut less an hour reach the phone only once read
+  again. `read_have`'s count (`HAVE_SITEMAPS`) never refuses a body the route's 1 MiB lets through (a sitemap named
+  in 6 bytes at the least), so its 413 is the one size refusal.
 - **Merge**: such a file into the database under the lock:
   - refused whole (`TransferError`, status 2) for another schema or other columns, its words naming a copy caracole
     keeps (a sync's download, a staged export or import) as the file it is, never by its path, wherever they reach the
@@ -1847,8 +1854,8 @@ It is rows.js's, shared by both pages:
     route (the form token, `HAVE_MAX` 1 MiB) that is a read: what the body says is data (`index_transfer.read_have`,
     400 in its words), compared with this side's records alone, nothing written but the temporary export, no lock;
     streamed as the whole is, one copy at a time. The phone asks it first (PeerClient.indexNewer, its document
-    core.index.Have) and the whole on a 404 or 405 alone (an older computer), any other refusal its index stage's
-    failure.
+    core.index.Have) and the whole on a 404 or 405 (an older computer) or a 413 (its document too large) alone,
+    any other refusal (a 400 among them) its index stage's failure.
 - **sync_routes.py** is the library page's Sync tab (its label Share; library_assets/sync.js, sync-tab.html,
   sync-panel.html), the sync redesign's §3.4.1:
   - `GET /api/sync`: this caracole, its `device` (`computer`, the phone's `phone`), its songs and songbooks counted;
@@ -2702,12 +2709,16 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   `Have` document (the phone's record of each sitemap but its `checked_at`, and `since`, kv `sync:cut:<computer id>`,
   `Have.CUT_KEY`: the computer's own `exported_at` of the last export of its the phone merged, whole or partial, kept
   apart from `sync:index:`, whose stamps the phone's own pushed pages move: a page the computer read meanwhile is
-  later than the cut, so it comes whatever the push did); a computer that answers 404 or 405 (older) the whole, any
-  other refusal the stage's failure. Once merged, the file's META `partial` is checked to be the cut asked for
+  later than the cut, so it comes whatever the push did); a computer that answers 404 or 405 (older) or 413 (a
+  document too large) the whole, any other refusal the stage's failure. Once merged, the file's META `partial` is checked to be the cut asked for
   (`Have.mismatch`: every site, its `since`, nothing left out the phone lacks) and no sitemap it left out held
   otherwise (`Merged.unheld`), else the stage fails in "… isn't the part asked for" and nothing is recorded (its merge
-  lost no row); else `sync:index:`, `index:merged` (the file's newest, a part's no later than the whole's) and
-  `sync:cut:` move on, true as after a whole export: the phone holds every row the computer held as of it.
+  lost no row); else `sync:index:` and `index:merged` (the file's newest, a part's no later than the whole's) move
+  on, true as after a whole export: the phone holds every row the computer held as of it. `sync:cut:` moves on only
+  for a partial export of the cut asked whose `exported_at` is no later than the merge's `notAfter`: never from a
+  whole export (an older computer notes no arrivals, so rows it merged with old times before its update would fall
+  below that cut; the first part after the update is uncut, once), nor past the bound (a row the merge passed over
+  for being dated after it would fall below the cut).
 - **A computer of another schema** (its state's `schema`, `PeerState.schema`, read as an integer, none else): none
   taken and none of the pages read here given (`SyncEngine.indexesSkipped`, the index stage skipped in
   `INDEXES_NEWER`'s or `INDEXES_OLDER`'s words before anything is downloaded or pushed, the notes kept), the
@@ -4301,8 +4312,8 @@ picks one).
     (test_web_history.py).
 - It also writes, for the phone's sync alone, and nothing else: a push's staging folder (`state_dir/peer/push-<id>/`,
   0700, its files checked by their SHA-256, deleted once `caracole peer take` is over or an hour after); a
-  temporary index export for `GET /api/peer/index` (`cache_dir/peer/`, one read transaction, no lock, deleted once
-  sent); and the index pages a phone's lookups read, `POST /peer/index`'s export of them
+  temporary index export for `GET /api/peer/index` and `POST /peer/index/newer`'s part of it (`cache_dir/peer/`, one
+  read transaction, no lock, one at a time, deleted once sent); and the index pages a phone's lookups read, `POST /peer/index`'s export of them
   (`state_dir/peer/index-<16 hex>.sqlite`, 0600, at most `peer_push.INDEX_OPEN` waiting, read before its 202 as an
   export of pages alone of this caracole's version, `index_transfer.check_pages`, deleted when it isn't, then
   `caracole index merge --delete --progress` queued, which deletes it once merged or refused (the phone forgets those

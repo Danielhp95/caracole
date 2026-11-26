@@ -69,7 +69,7 @@ import sqlite3
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -86,7 +86,12 @@ PARTIAL = "partial"  # META's key of a partial export (export(have=)): what it w
 SINCE_MARGIN = timedelta(hours=1)  # a read stamped before an export's snapshot and stored after it, at most
 ARRIVED_KEY = "index:arrived"  # this side's own: when a merge took rows read a row or a page at a time, by site
 ARRIVALS_KEPT = 32  # the arrivals kept a site, the oldest two made one past it
-HAVE_SITEMAPS = 20_000  # the sitemaps (listing pages) a have names at most, every site's together
+# The sitemaps (listing pages) a have names at most, every site's together: the most a body within POST
+# /peer/index/newer's limit (web/peer_routes.py HAVE_MAX, 1 MiB) can name at 6 bytes the smallest ('"":{},'), so this
+# count never refuses what that limit lets through (its 413 the one size refusal, after which the phone asks for the
+# whole). Real ones are far smaller: a UG record is about 160 bytes a sitemap, tens of them; a have of every site is
+# tens to a few hundred KB today.
+HAVE_SITEMAPS = -(-1024 * 1024 // 6)  # rounded up
 
 # merge(progress=): (site, action, done, total), see ``merge``.
 Progress = Callable[[str, str, int, int], None]
@@ -218,8 +223,12 @@ def _sitemapped() -> dict[str, Sitemapped]:
 SITEMAPPED: dict[str, Sitemapped] = _sitemapped()
 
 # The tables read a row or a page at a time, whose rows a partial export cuts by a time: by site, each table's
-# condition on a row read or seen at or after the bound (``:b``), its time compared as the merge compares it, as text
-# (a time that isn't text always sent), and the time columns a merge into this side reads them by (``ARRIVED_KEY``).
+# condition on a row read or seen at or after the bound (``:b``), and the time columns a merge into this side reads
+# them by (``ARRIVED_KEY``). Times are compared as text, here and in ``_note_arrival``'s MIN(), as the merge compares
+# them (``t.read_at > m.read_at``): caracole writes every stamp in UTC with a "Z" (``stamps.stamp``), so text order is
+# time order; a time that isn't text is always sent. A stamp written with another offset (the index corpus holds one at
+# +02:00 on purpose) compares by its digits as written: one ahead of UTC reads later than it is (sent once more), one
+# behind reads earlier (passed over by up to its offset), as a merge would take or keep it the same way.
 _TIMED: dict[str, dict[str, str]] = {
     "ug": {"ug_artist_tabs": "typeof(read_at) != 'text' OR read_at >= :b",
            "ug_directory": "typeof(seen_at) != 'text' OR seen_at >= :b OR typeof(read_at) != 'text' "
@@ -510,7 +519,7 @@ class _Cut:
     said: dict[str, dict[str, Any]]
 
 
-def _cut(conn: sqlite3.Connection, names: Sequence[str], have: Mapping[str, Have]) -> _Cut:
+def _cut(conn: sqlite3.Connection, names: Sequence[str], have: Mapping[str, Have], now: datetime) -> _Cut:
     """What a partial export of ``names`` holds for an asker that holds ``have`` (``export(have=)``). The records are
     this database's as the export reads them: a record read before its snapshot, a sitemap re-read meanwhile sent
     whole by its record's next comparison."""
@@ -527,7 +536,7 @@ def _cut(conn: sqlite3.Connection, names: Sequence[str], have: Mapping[str, Have
         if name == "lacuerda":  # its artist pages' and search's rows hold no time: sent whole
             held = f"page NOT LIKE 'tabs/%' OR {held}"
         where[mapped.table] = (held, {"sent": sent})
-        bound = _bound(conn, name, asked.since)
+        bound = _bound(conn, name, asked.since, now)
         if bound is not None:
             for table, condition in _TIMED.get(name, {}).items():
                 where[table] = (condition, {"b": bound})
@@ -535,14 +544,16 @@ def _cut(conn: sqlite3.Connection, names: Sequence[str], have: Mapping[str, Have
     return _Cut(where, said)
 
 
-def _bound(conn: sqlite3.Connection, site: str, since: str | None) -> str | None:
+def _bound(conn: sqlite3.Connection, site: str, since: str | None, now: datetime) -> str | None:
     """The earliest read or sighting a partial export sends of a site's tables read a row or a page at a time (a
     time compared as text, as a merge compares them), or None for every row: ``since`` (when the asker last merged
     an export of this side's, this side's clock) less ``SINCE_MARGIN``, for a read stamped before that export's
     snapshot and stored after it; and earlier where a merge since took rows of other times here (a phone's pages,
     another caracole's, a file's: ``ARRIVED_KEY``), to the earliest of them, so that none is missed. None with no
-    ``since``: a stamp of another caracole's (a catalogue's) is never a bound for this side's rows."""
-    if since is None:
+    ``since``: a stamp of another caracole's (a catalogue's) is never a bound for this side's rows; nor with a
+    ``since`` later than ``now``, this side's clock as it exports (its clock stepped back since, or a cut of another
+    clock's): every row, once, META's ``partial`` saying the ``since`` asked and no ``from``."""
+    if since is None or stamps.parse(since) > stamps.utc(now):
         return None
     floor = stamps.parse(since) - SINCE_MARGIN
     bounds = [stamps.stamp(floor)]
@@ -590,7 +601,7 @@ def _write_export(conn: sqlite3.Connection, part: Path, names: Sequence[str], ta
     try:
         conn.execute("BEGIN")
         try:
-            cut = None if have is None else _cut(conn, names, have)
+            cut = None if have is None else _cut(conn, names, have, now)
             if cut is not None:
                 conn.execute(f"UPDATE exported.{META} SET value = ? WHERE key = ?",
                              (json.dumps(cut.said, ensure_ascii=False), PARTIAL))
@@ -1163,11 +1174,8 @@ def _round(entry: Any) -> tuple[Any, ...]:
     """How far a listing's round of UG's artist directory has got, to compare two: its last whole read, then its
     round's start, then its next page (ug/directory.py ``LetterState``); a time missing or unreadable is earlier than
     any."""
-    from datetime import UTC
-    from datetime import datetime as _dt
-
     entry = entry if isinstance(entry, dict) else {}
-    earliest = _dt.min.replace(tzinfo=UTC)
+    earliest = datetime.min.replace(tzinfo=UTC)
 
     def when(key: str) -> Any:
         value = entry.get(key)
@@ -1313,8 +1321,6 @@ def _note_arrival(conn: sqlite3.Connection, site: str) -> None:
     the site's tables read a row or a page at a time (text alone; "" for none, every row), appended to the site's
     list, the oldest two made one (the later time, the earlier low) past ``ARRIVALS_KEPT``: whatever a merge took,
     a partial export made after it sends (``_bound``), the rows of other caracoles' times among them."""
-    from datetime import UTC
-
     lows = [conn.execute(f"SELECT MIN({column}) FROM {THEIRS}.{table} WHERE typeof({column}) = 'text' "
                          f"AND {column} != ''").fetchone()[0] for table, column in _TIMES[site]]
     low = min((v for v in lows if v is not None), default="")

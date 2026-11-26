@@ -179,8 +179,9 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
     /** POST /peer/index/newer: the part of the computer's indexes the phone doesn't hold ([have], its document:
      * core.index.Have), streamed into [to] as [index] streams the whole, with the form token in its header (a 403 that
      * says reload asks once more with a fresh one); false, nothing written, for a computer that doesn't know the route
-     * (404 or 405: older than the app), which the caller asks for the whole instead; a [PeerError] for any other
-     * refusal, in the computer's words, never taken for an older computer. */
+     * (404 or 405: older than the app) or refuses the document as too large (413), which the caller asks for the whole
+     * instead ([WHOLE_INSTEAD]); a [PeerError] for any other refusal, in the computer's words (a 400 a bug, which must
+     * show), never taken for an older computer. */
     fun indexNewer(token: String, to: File, have: JsonObject,
                    onBytes: ((got: Long, total: Long) -> Unit)? = null): Boolean {
         val body = PyJson.dumps(have, compact = true).toByteArray(Charsets.UTF_8)
@@ -196,7 +197,7 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
                     Answered(answer.status, readAtMost(answer.body, MAX_JSON))
                 }
             } ?: return true
-            if (refusal.status == 404 || refusal.status == 405) return false
+            if (refusal.status in WHOLE_INSTEAD) return false
             if (refusal.status != 403 || !saysReload(refusal) || asked > 0) throw refused(refusal)
             val fresh = state(asking).token
             renewed[token] = fresh
@@ -355,6 +356,10 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
         const val PUSH_PATH = "/peer/push"
         const val INDEX_PUSH_PATH = "/peer/index"
         const val INDEX_NEWER_PATH = "/peer/index/newer"
+
+        /** The statuses of `POST /peer/index/newer` after which the whole export is asked for: a computer older than
+         * the route (404, 405) and a document past its limit (413). Any other is the index stage's failure. */
+        val WHOLE_INSTEAD = setOf(404, 405, 413)
         const val JOBS_PATH = "/api/jobs/"
         const val SYNC_INDEXES_PATH = "/api/sync/indexes"
         const val TOKEN_HEADER = "X-Caracole-Form-Token"

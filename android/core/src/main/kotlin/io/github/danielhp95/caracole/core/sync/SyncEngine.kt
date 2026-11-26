@@ -776,13 +776,22 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
      *
      * Only the part the phone doesn't hold is asked for (`POST /peer/index/newer`, Have's document of [newer]: its
      * records of each sitemap, and kv [Have.CUT_KEY]'s time of the last export it merged from this computer); a
-     * computer older than the route (404, 405) is asked for the whole (`GET /api/peer/index`), any other refusal the
-     * stage's failure. A partial export is checked to be the part asked for once merged (its META's `partial`:
-     * Have.mismatch; no sitemap it left out held otherwise, Merged.unheld), else a TransferError: its merge lost no row
-     * (a sitemap it left out is never read as gone), and nothing is recorded as held, so the next sync asks again.
-     * Once it is (or the export is whole), the phone holds every row the computer held as of the export, as a whole
-     * export's merge leaves it: kv `sync:index:`, MergedIndexes and kv [Have.CUT_KEY] (its META's `exported_at`, the
-     * computer's own clock) move on.
+     * computer older than the route (404, 405), or one that refuses the document as too large (413), is asked for the
+     * whole (`GET /api/peer/index`), any other refusal the stage's failure (a 400 is a bug, which must show). A partial
+     * export is checked to be the part asked for once merged (its META's `partial`: Have.mismatch; no sitemap it left
+     * out held otherwise, Merged.unheld), else a TransferError: its merge lost no row (a sitemap it left out is never
+     * read as gone), and nothing is recorded as held, so the next sync asks again. Once it is (or the export is whole),
+     * the phone holds every row the computer held as of the export, as a whole export's merge leaves it: kv
+     * `sync:index:` and MergedIndexes move on.
+     *
+     * kv [Have.CUT_KEY] (the file's META `exported_at`, the computer's own clock) moves on only for a partial export of
+     * the cut asked, and only when that time is no later than the merge's `notAfter`:
+     * - a whole export comes from a computer older than the route, which notes no arrivals (`index:arrived`): rows it
+     *   merges with old times before it is updated would fall below a cut taken from it, and never come; so the first
+     *   partial export after its update is uncut, once;
+     * - a row the merge passed over for being dated after `notAfter` is later than every time the file holds no later
+     *   than it: with `exported_at` no later than `notAfter`, such a row is later than the cut too, and the next part
+     *   sends it again; with `exported_at` past it (a computer's clock a day ahead), nothing is recorded.
      */
     private suspend fun merge(client: PeerClient, computer: String, had: Map<String, String>, newer: List<String>,
                               indexes: Map<String, String>, pacer: Paced, token: String): List<JsonObject> {
@@ -799,8 +808,9 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
                     val before = TabCounts.of(db)
                     // A site the phone holds rows of is updated: its words what is newer there and the rows checked.
                     val words = MergeProgress.Updating(before.filterValues { it > 0 }.keys)
+                    val bound = notAfter()
                     val merged = namingFileAs(file, THE_COMPUTERS) {
-                        IndexTransfer.merge(db, file, Stamps.of(clock()), newer, notAfter = notAfter(),
+                        IndexTransfer.merge(db, file, Stamps.of(clock()), newer, notAfter = bound,
                                             progress = { pacer.say(words.words(it), it.step) })
                     }
                     if (partial) {
@@ -816,7 +826,13 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
                     }
                     db.kvSetJson(INDEX_KEY + computer, IndexStamps.json(had + newer.associateWith { indexes.getValue(it) }))
                     MergedIndexes.record(db, merged)
-                    merged.exported?.let { Have.record(db, computer, newer, it) }
+                    val exported = merged.exported
+                    val cutAt = exported?.let {
+                        try { Stamps.parse(it) } catch (_: ArithmeticException) { null }
+                    }
+                    if (partial && merged.partial != null && exported != null && cutAt != null && cutAt <= bound) {
+                        Have.record(db, computer, newer, exported)
+                    }
                     taken(merged, before, TabCounts.of(db), newer) { indexes[it] }
                 }
                 pacer.say(MergeProgress.TIDYING)

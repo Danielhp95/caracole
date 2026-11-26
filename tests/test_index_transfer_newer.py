@@ -357,3 +357,23 @@ def test_what_the_asker_holds_is_read_by_site_in_caracoles_order():
     assert sites == ("ug", "gtptabs")
     assert have == {"ug": transfer.Have({"1": {"etag": '"a"', "rows": 5, "pages": ["x"], "tabs": {"other": {"pro": 2}}}},
                                         "2026-11-05T12:00:00Z")}
+
+
+def test_a_since_later_than_this_sides_clock_sends_every_row_once(week, tmp_path):
+    home, phone, since = week
+    path = tmp_path / "ahead.sqlite"
+    ahead = stamps.stamp(TONIGHT + timedelta(days=3))  # this side's clock stepped back, or a cut of another clock's
+
+    transfer.export(home, path, now=TONIGHT, have=have_of(phone, since=ahead))
+
+    assert len(exported(path)["ug_artist_tabs"]) == 3 and len(exported(path)["ug_directory"]) == 3
+    cut = json.loads(meta(path)[transfer.PARTIAL])["ug"]
+    assert cut["since"] == ahead and cut["from"] is None  # the cut asked said back, every row sent
+
+
+def test_no_body_the_route_takes_names_more_sitemaps_than_read_have_allows():
+    from caracole.web import peer_routes
+
+    # The smallest sitemap a have can name, '"":{},', is 6 bytes: a body within the route's limit stays within
+    # read_have's count, so the one size refusal is the route's 413, after which the phone asks for the whole.
+    assert transfer.HAVE_SITEMAPS * 6 >= peer_routes.HAVE_MAX
