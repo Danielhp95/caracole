@@ -14,6 +14,7 @@ import io.github.danielhp95.caracole.core.index.TabCounts
 import io.github.danielhp95.caracole.core.index.Reads
 import io.github.danielhp95.caracole.core.index.Sites
 import io.github.danielhp95.caracole.core.index.Stamps
+import io.github.danielhp95.caracole.core.index.TransferError
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.OverrideChecks
 import io.github.danielhp95.caracole.core.json.Canonical
@@ -59,7 +60,8 @@ data class IndexWaiting(val site: String, val title: String, val here: String?, 
  * holds: all three for a computer), and [hash] (Compare.comparedHash) of those; [base] and [kept], the merged base and
  * the kept answers they were compared against (Compare.mergedBase, mergedKept); [listed], the songs either side's
  * songbooks list (Scope.listedSongs); [songbooks], each songbook difference's two documents; [indexes], the sites the
- * index stage will take and give (IndexWaiting).
+ * index stage will take and give (IndexWaiting), none with a computer of another schema, whose [indexesSkipped] says
+ * why (SyncEngine.indexesSkipped; null else).
  */
 data class Comparison(val id: String, val address: String, val peer: PeerState, val syncedBefore: String?,
                       val differences: List<Difference>, val hash: String,
@@ -67,7 +69,7 @@ data class Comparison(val id: String, val address: String, val peer: PeerState, 
                       val holds: List<String> = Scope.PARTS, val listed: Map<String, List<String>> = emptyMap(),
                       val songbooks: Map<String, Pair<JsonObject?, JsonObject?>> = emptyMap(),
                       val indexes: List<IndexWaiting> = emptyList(), val base: Map<String, String?>? = null,
-                      val kept: Map<String, KeptPair> = emptyMap())
+                      val kept: Map<String, KeptPair> = emptyMap(), val indexesSkipped: String? = null)
 
 /** What a sync did: the units taken here, given there, and left (with why), how many the two agree on after, the
  * sites merged; and [report], the sync's report (the sync redesign's §3.5: with whom, when, its parts, each index
@@ -140,9 +142,13 @@ class SameCaracole(message: String) : Exception(message)
  *      `sync:index:<computer id>`): the next sync downloads no whole index for the phone's own pages. A push
  *      refused or lost, a merge there that ends otherwise than done, or one still going at the wait's end (10
  *      minutes) keeps them for the next sync, which sends them again. Nothing is sent when none is noted.
- *    Skipped when no index is newer there and no page was read here. Either part's failure is said on the stage
- *    and stops nothing: the agreement stays as it is. The reads go to the computer the phone syncs with next: a
- *    second computer gets those read after (Reads keeps one record of what was pushed, its notes forgotten once).
+ *    Skipped when no index is newer there and no page was read here; and, before anything is asked for either way,
+ *    when the computer's database is of another schema (its state's `schema`, [indexesSkipped]'s words: its index
+ *    export would be downloaded whole to be refused by the merge here, the pages read here refused by its), the
+ *    pages read here kept for once the two agree. A merge's refusal is said with its file named, never by the path
+ *    of its copy here ([namingFileAs]). Either part's failure is said on the stage and stops nothing: the
+ *    agreement stays as it is. The reads go to the computer the phone syncs with next: a second computer gets those
+ *    read after (Reads keeps one record of what was pushed, its notes forgotten once).
  *
  * Any stage that stops the sync is a [SyncFailed], with the outcome so far; a refusal before any change has none.
  * The push names the phone's library [name] and its caracole's [version] (the app's own, which it may pass).
@@ -184,7 +190,8 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         val compared = compared(client(address), address)
         val comparison = Comparison(KeptById.newId(), address, compared.peer, compared.syncedBefore, compared.differences,
                                     compared.hash, COMPUTER, null, Scope.PARTS, compared.listed, compared.songbooks,
-                                    compared.indexes, compared.base, compared.kept)
+                                    compared.indexes, compared.base, compared.kept,
+                                    indexesSkipped(compared.peer.schema))
         kept.put(comparison.id, comparison, clock())
         return comparison
     }
@@ -316,8 +323,12 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         stage(AGREE, DONE, "${plural(done.agreed, "unit")} the books agree on")
 
         // 6. index
-        if (Scope.INDEXES !in asked) stage(INDEX, SKIPPED_STATE, INDEXES_LEFT_OUT)
-        else index(client, stage, done, computer, after.indexes, after.token)
+        val skipped = indexesSkipped(after.schema)
+        when {
+            Scope.INDEXES !in asked -> stage(INDEX, SKIPPED_STATE, INDEXES_LEFT_OUT)
+            skipped != null -> stage(INDEX, SKIPPED_STATE, skipped)  // nothing asked either way: a merge refuses both
+            else -> index(client, stage, done, computer, after.indexes, after.token)
+        }
         return done.outcome(report(after.name, COMPUTER, c.address, done.at ?: Stamps.of(clock()), asked, done.reported))
     }
 
@@ -493,8 +504,10 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             val sites = (sf.manifest["indexes"] as? JsonArray)?.mapNotNull { Documents.text(it) } ?: emptyList()
             val counted = database.writeBlocking { db ->
                 val before = TabCounts.of(db)
-                val merged = IndexTransfer.merge(db, from, Stamps.of(clock()), notAfter = notAfter(),
-                                                 progress = { pacer.say(it.words(), it.step) })
+                val merged = namingFileAs(from, THE_FILE) {
+                    IndexTransfer.merge(db, from, Stamps.of(clock()), notAfter = notAfter(),
+                                        progress = { pacer.say(it.words(), it.step) })
+                }
                 MergedIndexes.record(db, merged)
                 val newest = IndexTransfer.newest(db)
                 taken(merged, before, TabCounts.of(db), merged.sites.keys.toList().ifEmpty { sites }) { newest[it] }
@@ -554,8 +567,10 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         val listed = listed(read.books, songbooks.mapValues { it.value.second }, read.mine.keys + peer.units.keys)
         val agreed = listOfNotNull(read.base, peer.base).flatMap { b -> b.values.map { it.second } }
         val taken = newerThere(peer.indexes, read.had, read.merged)
+        val indexes = if (indexesSkipped(peer.schema) != null) emptyList()
+                      else waiting(read.newest, peer.indexes, taken, read.noted)
         return Compared(peer, found, agreed.maxWithOrNull(Py.CODE_POINT_ORDER), Compare.comparedHash(found), base,
-                        keptAnswers, listed, songbooks, waiting(read.newest, peer.indexes, taken, read.noted))
+                        keptAnswers, listed, songbooks, indexes)
     }
 
     /** What [compared] reads of the phone, in one read: with its indexes' newest reads, the records the index stage
@@ -759,8 +774,10 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             return io {
                 val counted = database.write { db ->
                     val before = TabCounts.of(db)
-                    val merged = IndexTransfer.merge(db, file, Stamps.of(clock()), newer, notAfter = notAfter(),
-                                                     progress = { pacer.say(it.words(), it.step) })
+                    val merged = namingFileAs(file, THE_COMPUTERS) {
+                        IndexTransfer.merge(db, file, Stamps.of(clock()), newer, notAfter = notAfter(),
+                                            progress = { pacer.say(it.words(), it.step) })
+                    }
                     db.kvSetJson(INDEX_KEY + computer, IndexStamps.json(had + newer.associateWith { indexes.getValue(it) }))
                     MergedIndexes.record(db, merged)
                     taken(merged, before, TabCounts.of(db), newer) { indexes[it] }
@@ -874,8 +891,20 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
 
     private suspend fun <T> io(block: suspend () -> T): T = withContext(Dispatchers.IO) { block() }
 
+    /** [block], a merge of the index export at [file]; a refusal of it again in the owner's words, [name] ("The
+     * computer's index export") where they say the file's path: a copy in the phone's cache, which tells the owner
+     * nothing (CataloguesRunner says its catalogue's so). */
+    private inline fun <T> namingFileAs(file: File, name: String, block: () -> T): T = try {
+        block()
+    } catch (e: TransferError) {
+        throw TransferError(e.message.orEmpty().replace(file.path, name))
+    }
+
+    /** A failure in a stage's words: a refusal's own (a merge's among them, never its class's name), else what it
+     * is and its message. */
     private fun said(e: Throwable): String = when (e) {
-        is SyncError, is PeerError, is SyncFailed, is SameCaracole -> e.message ?: e.javaClass.simpleName
+        is SyncError, is PeerError, is SyncFailed, is SameCaracole, is TransferError ->
+            e.message ?: e.javaClass.simpleName
         else -> "${e.javaClass.simpleName}${e.message?.let { ": $it" } ?: ""}"
     }
 
@@ -982,6 +1011,10 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         const val COPYING_OUT = "Copying the file's indexes out…"
         private const val DOWNLOADING = "downloading"
 
+        /** What a merge's refusal calls the file it refused, in place of its copy's path ([namingFileAs]). */
+        private const val THE_COMPUTERS = "The computer's index export"
+        private const val THE_FILE = "The file"
+
         /** A step's [words] as a stage's running detail: one "…" at their end left off ("Tidying the database…",
          * the merge's "Making the search index ready…"), since a long stage's line puts its own after its detail
          * (Status.stageLine: "Updating the indexes · Tidying the database…"). The catalogues job's words keep theirs:
@@ -995,6 +1028,22 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
 
         /** The index stage's words with no index newer there and no page read here. */
         const val NOTHING_TO_INDEX = "no newer index there, no page read here to send"
+
+        /** Why the index stage takes and gives none ([indexesSkipped]): the computer's database is of another schema,
+         * whose index export the phone's merge refuses once downloaded whole, as the computer's refuses the phone's
+         * pages. */
+        const val INDEXES_NEWER = "The computer's indexes are of a newer caracole: update the app to take them"
+        const val INDEXES_OLDER = "The computer's indexes are of an older caracole: update the computer to share them"
+
+        /** Why a sync with a computer whose database is at [schema] (its state's, PeerState.schema) asks for no index
+         * and gives none, before anything is downloaded ([INDEXES_NEWER], [INDEXES_OLDER]); null at the phone's schema,
+         * or for a state that says none (a computer older than the member: asked as before, the merge refusing an
+         * export of another schema in its words). sync_routes.indexes_skipped's rule, in the phone's words. */
+        fun indexesSkipped(schema: Long?): String? = when {
+            schema == null || schema == Database.SCHEMA_VERSION.toLong() -> null
+            schema > Database.SCHEMA_VERSION -> INDEXES_NEWER
+            else -> INDEXES_OLDER
+        }
 
         /** "3 pages read here", of Reads.since's pages. */
         fun pagesRead(pages: Map<String, List<String>>): String = plural(pages.values.sumOf { it.size }, "page") + " read here"

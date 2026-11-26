@@ -75,6 +75,18 @@ class PeerClientTest {
                            "songbook/campfire" to (null to "2026-11-01T00:00:00Z")), peer.base)
     }
 
+    @Test fun `the state's schema is its database's, an integer, and none for any other value`() {
+        answer("GET /api/peer/state", 200, state)
+        assertNull(client.state("me").schema, "a caracole older than the member says none")
+        answer("GET /api/peer/state", 200, state.replace("\"name\":\"Desk\",", "\"schema\":17,\"name\":\"Desk\","))
+        assertEquals(17L, client.state("me").schema)
+        for (said in listOf("\"17\"", "17.0", "1e1", "true", "null", "[17]")) {
+            answer("GET /api/peer/state", 200,
+                   state.replace("\"name\":\"Desk\",", "\"schema\":$said,\"name\":\"Desk\","))
+            assertNull(client.state("me").schema, said)
+        }
+    }
+
     @Test fun `a state asked by no one has no peer, and one never synced has no base`() {
         val got = mutableListOf<Got>()
         answer("GET /api/peer/state", 200, state.replace(Regex(""""base":\{.*?\]\},"""), """"base":null,"""), got)

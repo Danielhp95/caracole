@@ -356,7 +356,8 @@ object SyncFiles {
         val ordered = Compare.order(units.values.map { Difference(it.id, it.label, it, null, "", "") })
         return obj(
             "format" to JsonPrimitive(Units.FORMAT), "server" to JsonPrimitive(id), "caracole" to JsonPrimitive(version),
-            "name" to JsonPrimitive(name), "now" to JsonPrimitive(now),
+            "schema" to JsonPrimitive(Database.SCHEMA_VERSION), "name" to JsonPrimitive(name),
+            "now" to JsonPrimitive(now),
             "indexes" to JsonObject(indexes.mapValues { JsonPrimitive(it.value) }),
             "units" to JsonObject(ordered.associateTo(LinkedHashMap()) { d ->
                 d.id to obj("label" to JsonPrimitive(d.label), "digest" to JsonPrimitive(d.mine!!.digest))

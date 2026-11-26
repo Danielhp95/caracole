@@ -3115,7 +3115,8 @@ the file as a download.
 `GET /api/peer/state` answers what this library holds, unit by unit, for another caracole's
 `caracole peer` (see [Two caracoles](#two-caracoles-the-phones-and-the-computers)). It includes
 what the two last agreed on and each "keep mine" this library remembered from imports of that
-caracole's files. `GET /api/peer/unit` gives one unit whole, and `GET /api/peer/file` a song's
+caracole's files, and the schema of this database, so that a caracole of another asks for none of
+its indexes. `GET /api/peer/unit` gives one unit whole, and `GET /api/peer/file` a song's
 kept file while it is as kept. These reads take no lock and ask no site. `POST /peer/pull` queues
 `caracole peer pull` of the units another caracole asks this one to take.
 
@@ -4049,8 +4050,12 @@ stage). Whichever side read a site more recently gives that index to the other:
   `caracole peer import`. The sync waits up to ten minutes for it. The other side must run this
   version of caracole or a later one.
 
-If neither side is newer, nothing is sent ("no index is newer on either side"). If the stage
-fails, the sync says why and exits 1, and the units stay synced.
+If neither side is newer, nothing is sent ("no index is newer on either side"). If the other
+side's database is of another schema, no index goes either way, since its merge would refuse the
+file once downloaded: the stage says which side to update ("The indexes there are of a newer
+caracole: update this one to take them"), and so does the Sync sheet's **Site indexes** line.
+The units still sync. If the stage fails, the sync says why and exits 1, and the units stay
+synced.
 
 ### The Share tab
 
@@ -4099,7 +4104,7 @@ The tab's routes, which the phone's own server answers the same way:
 |---|---|
 | `GET /api/sync` | This caracole's id, name and `device` (`computer` or `phone`), its counts, the addresses it synced with. |
 | `POST /sync/test` | What the caracole at `address` holds. 400 for a bad address, 502 when nothing answers, 409 for this very caracole. |
-| `POST /sync/compare` | The comparison. |
+| `POST /sync/compare` | The comparison, with `indexes_skipped` saying why no index goes when the other's database is of another schema. |
 | `GET /api/sync/unit?comparison=&id=` | One unit as both sides hold it. |
 | `GET /api/sync/indexes` | Each site's index: its newest read and the tabs it tracks. |
 | `POST /sync/apply` | Queues the sync. `parts` works as `--parts`. |

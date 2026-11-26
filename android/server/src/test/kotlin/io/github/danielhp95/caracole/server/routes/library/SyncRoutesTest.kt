@@ -157,8 +157,9 @@ class SyncRoutesTest {
     @Test fun `compare answers the comparison the tab draws, and remembers the address`() {
         val creep = onComputer("Radiohead", "Creep")
         val compared = compare()
-        assertEquals(listOf("comparison", "peer", "synced_before", "holds", "differences", "songbooks", "indexes"),
-                     compared.keys.toList())
+        assertEquals(listOf("comparison", "peer", "synced_before", "holds", "differences", "songbooks", "indexes",
+                            "indexes_skipped"), compared.keys.toList())
+        assertEquals(JsonNull, compared["indexes_skipped"])
         assertEquals(JsonObject(linkedMapOf(
             "address" to JsonPrimitive(computer.address.toString()), "server" to JsonPrimitive(computer.id),
             "caracole" to JsonPrimitive("0.1.0"), "name" to JsonPrimitive("Desk"), "kind" to JsonPrimitive("computer"),
@@ -421,6 +422,16 @@ class SyncRoutesTest {
         val sites = indexes.json.jsonObject.getValue("indexes").jsonObject
         assertEquals(listOf("ug", "lacuerda", "gtptabs", "musescore", "harptabs", "gametabs"), sites.keys.toList())
         assertEquals(JsonObject(linkedMapOf("read" to JsonNull, "tabs" to JsonPrimitive(0))), sites["ug"])
+    }
+
+    @Test fun `a computer of another schema is compared with no index waiting, and the comparison says why`() {
+        onComputer("Radiohead", "Creep")
+        computer.indexes = mapOf("ug" to "2026-11-03T10:00:00Z")
+        computer.schema = io.github.danielhp95.caracole.core.db.Database.SCHEMA_VERSION + 1
+        val compared = compare()
+        assertEquals(JsonArray(emptyList()), compared["indexes"])
+        assertEquals(JsonPrimitive(SyncEngine.INDEXES_NEWER), compared["indexes_skipped"])
+        assertEquals(1, compared.getValue("differences").jsonArray.size, "its units compared as ever")
     }
 
     @Test fun `apply sends the parts to the engine`() {

@@ -244,11 +244,13 @@
     if (line) line.textContent = words;
   };
   // What waits in a part, where it is known: "2 changed on Studio", "newer on the computer: Ultimate Guitar (read
-  // today) and 1 more".
+  // today) and 1 more"; or why no index goes either way, in the server's words (indexes_skipped: the other's database
+  // of another schema), said here alone.
   const waiting = (part) => {
     if (!compared) return "";
     const sides = sidesNow();
     if (part === "indexes") {
+      if (typeof compared.indexes_skipped === "string" && compared.indexes_skipped) return compared.indexes_skipped;
       const said = [];
       for (const [newer, side] of [["there", sides.there], ["here", sides.here]]) {
         if (newer === "here" && isFile()) continue;

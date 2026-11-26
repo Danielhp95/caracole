@@ -91,6 +91,13 @@ class OtherVersion(TransferError):
     version, never before."""
 
 
+def refusal_words(e: Exception, path: Path, name: str) -> str:
+    """``e``'s words with the file at ``path`` called ``name`` ("The index export": a refusal's words begin with the
+    file) where they say its path, a copy caracole keeps in a folder of its own (its cache, a staging folder), which
+    tells the owner nothing: the words a merge refused in, wherever they reach the Journal or the Sync sheet."""
+    return str(e).replace(str(path), name)
+
+
 @dataclass(frozen=True)
 class Site:
     """A site's index: its name (``--site``), its name for people, its tables, and the kv records of its progress."""

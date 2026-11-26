@@ -32,8 +32,10 @@ from it alone (``value_of_document``), so a side checks what it is given before 
 side keeps. It hashes a version's raw record without UG's ratings and votes, which FORMAT 2 hashed, so that a tab
 one side read again a day later no longer differs. A side refuses a document of another format; a base kept by another format
 is no base (``base_of``), so the first sync after an upgrade compares as a first sync, with no translation. The state document says when it
-was made by its side's clock (``now``), which both sides stamp their agreement with, and the newest read of each of
-its site indexes (``indexes``: ``index_transfer.newest``); a reader ignores what it doesn't know.
+was made by its side's clock (``now``), which both sides stamp their agreement with, the schema its database is at
+(``schema``, ``db.SCHEMA_VERSION``: an index export of another is refused at its merge, so a sync asks for none
+before it downloads one; a state that says none is an older caracole's, asked as before), and the newest read of
+each of its site indexes (``indexes``: ``index_transfer.newest``); a reader ignores what it doesn't know.
 
 **Comparing** (``compare``) is three-way once the two have synced: for each unit, its digest when the two last held
 it the same, the **base**. Each side keeps its own (kv ``sync:base:<peer id>``, ``{"format": 3, "units": {unit:
@@ -441,15 +443,16 @@ def state_document(server: str | None, version: str, name: str, units: Mapping[s
                    base: Base | None = None, *, now: str | None = None,
                    indexes: Mapping[str, str] | None = None,
                    kept: Mapping[str, tuple] | None = None) -> dict[str, Any]:
-    """``GET /api/peer/state``'s answer: who this side is, its units by id, and, for the peer that asked, what this
-    side last agreed on with it (``base``, null if never) and the answers its imports of that peer's files remembered
-    (``kept``, ``kept_of``'s, as stored: ``here`` this side's; no member unless given); ``now``, this side's clock (a
-    stamp; the time it answers, unless given), which a sync stamps its agreement with on both sides, and ``indexes``,
-    the newest read of each of its site indexes (``index_transfer.newest``), so the other side asks only for what is
-    newer."""
-    from caracole import stamps
+    """``GET /api/peer/state``'s answer: who this side is (with the schema its database is at, ``schema``), its units
+    by id, and, for the peer that asked, what this side last agreed on with it (``base``, null if never) and the
+    answers its imports of that peer's files remembered (``kept``, ``kept_of``'s, as stored: ``here`` this side's; no
+    member unless given); ``now``, this side's clock (a stamp; the time it answers, unless given), which a sync stamps
+    its agreement with on both sides, and ``indexes``, the newest read of each of its site indexes
+    (``index_transfer.newest``), so the other side asks only for what is newer, and for none at all of another
+    schema."""
+    from caracole import db, stamps
 
-    doc = {"format": FORMAT, "server": server, "caracole": version, "name": name,
+    doc = {"format": FORMAT, "server": server, "caracole": version, "schema": db.SCHEMA_VERSION, "name": name,
            "now": now if now is not None else stamps.stamp(datetime.now(UTC)),
            "indexes": dict(indexes or {}),
            "units": {u.id: {"label": u.label, "digest": u.digest} for u in sorted(units.values(), key=_order)},
@@ -472,6 +475,7 @@ class PeerState:
     now: str | None = None  # its clock when it answered
     indexes: dict[str, str] = field(default_factory=dict)  # the newest read of each of its site indexes
     kept: Kept = field(default_factory=dict)  # the answers its imports of the asker's files remembered, as kept
+    schema: int | None = None  # the schema its database is at; None: it says none (an older caracole)
 
 
 class StateError(ValueError):
@@ -495,9 +499,11 @@ def read_state_document(data: Any) -> PeerState:
     token, now, indexes = data.get("token"), data.get("now"), data.get("indexes")
     stamps = {site: stamp for site, stamp in (indexes.items() if isinstance(indexes, Mapping) else ())
               if isinstance(site, str) and isinstance(stamp, str)}
+    schema = data.get("schema")  # an integer, or none: never a schema guessed from another value
     return PeerState(server, str(version or "?"), str(name or ""), read, _read_units(data.get("base")),
                      token if isinstance(token, str) and token else None, now if isinstance(now, str) else None, stamps,
-                     _read_kept(data.get("kept")))
+                     _read_kept(data.get("kept")),
+                     schema if isinstance(schema, int) and not isinstance(schema, bool) else None)
 
 
 def unit_document(conn: sqlite3.Connection, cfg, overrides, books: Iterable, unit_id: str) -> dict[str, Any] | None:

@@ -102,7 +102,7 @@ COMPARISON = {"comparison": "5a1c0ffee0ddba11",
               "differences": DIFFERENCES,
               "songbooks": {"songbook/campfire": {"here": CAMPFIRE_HERE, "there": CAMPFIRE_THERE},
                             "songbook/wedding set": {"here": None, "there": WEDDING}},
-              "indexes": INDEXES}
+              "indexes": INDEXES, "indexes_skipped": None}
 
 
 def song_doc(artist: str, title: str, *, version: str | None = None, pick=("ug", "1234567"), more=(),
@@ -985,6 +985,33 @@ def test_a_long_stages_detail_is_said_once_in_the_going_line_and_a_short_ones_un
         fake.at = 1
         assert page.wait("document.getElementById('sync-going-line').textContent.startsWith('Updating')", 15)
         assert page.js(going) == ["Updating the indexes · Ultimate Guitar · 600,000 of 1,367,059 tabs…", ""]
+
+
+@in_chromium
+@pytest.mark.parametrize("device", ["computer", "phone"])
+def test_indexes_of_another_schema_say_why_none_goes_once_and_never_as_a_failure(served, tmp_path, device):
+    from caracole.web import sync_routes
+
+    # The two caracoles' databases of different schemas: no index waits, and the comparison says why in the words of
+    # the server that compared (the phone's: SyncEngine.INDEXES_NEWER).
+    words = (sync_routes.INDEXES_NEWER if device == "computer"
+             else "The computer's indexes are of a newer caracole: update the app to take them")
+    over = sync_view("done", {"compare": ("done", "9 differences"), "take": ("done", "took 6"),
+                              "give": ("done", "gave 3"), "agree": ("done", "312 units the two agree on"),
+                              "index": ("skipped", words)}, TAKEN_GIVEN, dict(REPORT, indexes=[]))
+    fake = FakeSync(state=PHONE_STATE if device == "phone" else STATE, views=VIEWS[:-1] + [over],
+                    comparison=dict(COMPARISON, indexes=[], indexes_skipped=words))
+    url = served(fake, sync="sheet" if device == "phone" else "tab") + "#sheet=sync"
+    with opened(tmp_path, url, width=390 if device == "phone" else 1280, height=844, mobile=device == "phone") as page:
+        at_view(page, "what")
+        assert page.wait("!document.getElementById('sync-counts').hidden")
+        assert page.js(PARTS_SAID)[2] == [f"Site indexes · For searching offline · {words}", True, False]
+        assert page.js(f"{STATUS}") == ""  # no failure: the units sync as ever
+        sync_through(page, fake)
+        assert page.js("document.getElementById('sync-title').textContent") == "Synced with: Studio"
+        assert page.js("document.getElementById('sync-check').hidden") is False and page.js(STATUS) == ""
+        assert [s["kind"] for s in page.js(SUMMARY)] == ["taken", "given", "conflicts", "songbooks"]  # no indexes
+        assert words not in page.js(f"{SHEET}.innerText"), "said once, where the parts are chosen"
 
 
 @in_chromium

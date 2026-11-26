@@ -45,7 +45,8 @@ import java.util.concurrent.TimeUnit
  * units are those caracole's peer_sync gives a library of the same rows: lane sync-units holds the two to the vectors),
  * answering as Python's routes answer (web/peer_routes.py, peer_push.py; the plan's §5.3), in their words:
  *
- * - `GET /api/peer/state?peer=`: its id, version, [name], clock ([now]), its indexes' newest reads
+ * - `GET /api/peer/state?peer=`: its id, version, the [schema] its database is at (none while null, as a caracole
+ *   older than the member answers), [name], clock ([now]), its indexes' newest reads
  *   (IndexTransfer.newest of [database], as web/peer_routes.state answers them; [indexes] in their place while set),
  *   units in peer_sync._order, the base it agreed on with the phone that asks and the answers its imports of that
  *   phone's files kept (`kept`), its [settings] (politeness.settings_document: none while null, as a caracole older
@@ -87,6 +88,7 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
 
     @Volatile var token: String = "computer-token-1"
     @Volatile var now: String = "2026-11-03T12:00:00Z"
+    @Volatile var schema: Int? = Database.SCHEMA_VERSION
     @Volatile var indexes: Map<String, String>? = null
     @Volatile var settings: JsonObject? = null
     @Volatile var index: (List<String>?) -> ByteArray = { ByteArray(0) }
@@ -262,10 +264,11 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
         val (units, base) = database.read { db -> Units.libraryState(db) to peer?.let { Compare.baseOf(db, it) } }
         val kept = peer?.let { asker -> database.read { db -> Compare.keptOf(db, asker) } }
         val indexes = indexes ?: database.read { IndexTransfer.newest(it) }
-        return JsonObject(linkedMapOf(
+        return JsonObject(linkedMapOf(*listOfNotNull(
             "format" to JsonPrimitive(Units.FORMAT),
             "server" to JsonPrimitive(id),
             "caracole" to JsonPrimitive("0.1.0"),
+            schema?.let { "schema" to JsonPrimitive(it) },
             "name" to JsonPrimitive(name),
             "now" to JsonPrimitive(now),
             "indexes" to JsonObject(indexes.toSortedMap(Py.CODE_POINT_ORDER).mapValues { JsonPrimitive(it.value) }),
@@ -277,7 +280,7 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
                     JsonArray(listOf(entry.first?.let(::JsonPrimitive) ?: JsonNull, JsonPrimitive(entry.second)))
                 })
             } ?: JsonNull),
-        ).also { doc ->
+        ).toTypedArray()).also { doc ->
             kept?.let { k ->
                 doc["kept"] = JsonObject(k.toSortedMap(Py.CODE_POINT_ORDER).mapValues { (_, e) ->
                     JsonArray(listOf(JsonPrimitive(e.here), JsonPrimitive(e.there), JsonPrimitive(e.at)))

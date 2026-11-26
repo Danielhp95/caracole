@@ -603,7 +603,9 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 - **Export**: every site's index (`SITES`: its tables and the kv records of its progress) into a new SQLite file, in
   one read transaction, with its `caracole_export` table (format, schema, sites).
 - **Merge**: such a file into the database under the lock:
-  - refused whole (`TransferError`, status 2) for another schema or other columns;
+  - refused whole (`TransferError`, status 2) for another schema or other columns, its words naming a copy caracole
+    keeps (a sync's download, a staged export or import) as the file it is, never by its path, wherever they reach the
+    Journal or the Sync sheet (`refusal_words`: "The other side's index export", "The file", "The index export");
   - else per site what the file read more recently:
     - a sitemap or LaCuerda listing page by its record's time (UG's rows upserted as a refresh stores them, its new
       tabs' songs marked);
@@ -646,6 +648,11 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 - **FORMAT 3** (`FORMAT`) is of every document a side answers (the state, a unit, a push) and of the base each keeps
   (`{"format": 3, "units": …}`): a base of another format reads as none, so the first sync after a format bump
   compares as a first sync (no shim). FORMAT 2's digests hashed UG's ratings and votes.
+- **The state document** (`state_document`) says who its side is with the schema its database is at (`schema`,
+  `db.SCHEMA_VERSION`, after `caracole`; `PeerState.schema`, an integer or none): a sync with a caracole of another
+  asks for no index either way, before any download (`sync_routes.indexes_skipped`: `INDEXES_NEWER`,
+  `INDEXES_OLDER`; the phone's `SyncEngine.indexesSkipped`), since each side's merge refuses the other's export; the
+  units sync as ever. A state that says none is an older caracole's, its indexes asked for as before.
 - **Comparing** (`compare`): three ways, against the base.
   - The base is each side's agreements with that peer (kv `sync:base:<peer id>`: a digest or None, and when),
     recorded by `record_agreement` at the end of every pull, and merged with the peer's by the later
@@ -1158,6 +1165,8 @@ It is rows.js's, shared by both pages:
   ⚠ changed on both, counted in the parts ticked as `peer_sync.in_scope` counts them for `POST /sync/apply` (sync.js
   `inScope`, with `_removes`: a song a songbook lists comes along with Songbooks, but a removal of it is the
   library's), and the chips Compared, Your choice and the parts. A part a file doesn't hold: "Not in this file".
+  With a caracole of another schema, Site indexes says why none goes, in the server's words (the comparison's
+  `indexes_skipped`), there alone: the done view adds nothing of it, and it is no failure.
 - **A card for each conflict** in those parts: its two documents (`GET /api/sync/unit`, once a card; a file's read from
   the file) told apart by sync-words.js's `differ`, this device on the left; a button for each side, named for it
   (Phone and Computer, This computer and the server's name, File: `#sync-keep-here`, `#sync-keep-there`), and Same
@@ -1784,9 +1793,9 @@ It is rows.js's, shared by both pages:
 - **offline_routes.py** is `GET /api/offline`, the manifest caracole's Android app copies the library by (read-only:
   each file the written index.html links to, as `WebApp._file` sends it now, its bytes' SHA-256 and its headers;
   test_web_offline.py).
-- **peer_routes.py** is `GET /api/peer/state`, this library's units for another caracole to compare, with what it
-  agreed on with the asker and the answers its imports of the asker's files kept (`kept`), the settings a phone
-  takes (`settings`, politeness.py) and the form token (no wider than a
+- **peer_routes.py** is `GET /api/peer/state`, this library's units for another caracole to compare, with the schema
+  its database is at (`schema`), what it agreed on with the asker and the answers its imports of the asker's files
+  kept (`kept`), the settings a phone takes (`settings`, politeness.py) and the form token (no wider than a
   page's, which any client that reaches the server reads, for a sync's `POST /peer/pull`); `GET /api/peer/unit` and `/api/peer/file` (peer_sync.py, read-only, as
   `/api/offline` is); and `POST /peer/pull`, `caracole peer pull` queued as any change (test_web_peer.py).
   - A push, the phone's (peer_push.py): `POST /peer/push/new`, `/peer/push/file` and `/peer/push`, `json` and `bytes`
@@ -1802,8 +1811,9 @@ It is rows.js's, shared by both pages:
     the other has; compared with the kept answers (`peer_sync.merged_kept`), as `peer sync` compares; each
     difference's `names`, `change`, `part` and `with` (`peer_sync.names_of`, `change_of`, `part_of`,
     `listed_songs` of both sides' songbooks), `songbooks` (both documents of each that differs), `indexes` (the sites
-    newer on either side); kept 10 minutes (`Compared`, its `found` for a Sync's scope: one kept without it has every
-    conflict it proposes chosen first);
+    newer on either side; none with a caracole of another schema, `indexes_skipped` saying why, null else); kept 10
+    minutes (`Compared`, its `found` for a Sync's scope: one kept without it has every conflict it proposes chosen
+    first);
   - `GET /api/sync/unit` (script only): a kept comparison's unit, both documents, the other's asked now, an import's
     read from its staged file (`sync_file_routes.file_unit`, as the phone's `SyncEngine.documents` reads a file's);
   - `GET /api/sync/indexes`: each site's newest read and tabs (`index_transfer.newest`, `tab_counts`), which the
@@ -2637,6 +2647,12 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   Reads noted for the next push ("here"), a site of both twice, so the Sync sheet says what the Sync does: where
   sync_routes._waiting compares newest reads, the phone answers otherwise (vectors/web/sync_routes.jsonl's scene holds
   both records, so the two answers agree).
+- **A computer of another schema** (its state's `schema`, `PeerState.schema`, read as an integer, none else): none
+  taken and none of the pages read here given (`SyncEngine.indexesSkipped`, the index stage skipped in
+  `INDEXES_NEWER`'s or `INDEXES_OLDER`'s words before anything is downloaded or pushed, the notes kept), the
+  comparison listing no index and saying why (`Comparison.indexesSkipped`, `indexes_skipped`, the sheet's Site
+  indexes); a state with none (a computer older than the member) asked as before. A merge's refusal names its file
+  ("The computer's index export", "The file": `namingFileAs`), never its copy's path, and no class name.
 - **The pages the phone's lookups read** (Reads), pushed at the index stage's end (`POST /peer/index`): their notes
   forgotten only once the computer's request that merges them (its `caracole index merge`) ends done; kept when it ends
   otherwise (the stage failed, "… didn't merge them: its Journal entry N ended failed.") or still goes at the wait's

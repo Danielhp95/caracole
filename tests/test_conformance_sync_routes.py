@@ -14,7 +14,7 @@ SyncRoutes (lane phone-sync-routes, then sync-routes) and JobViews (lane jobs) a
   - ``POST /sync/test``: ``form`` ``{address}``, ``out`` ``{peer, songs, songbooks, indexes, synced_at, said}`` or
     the refusal;
   - ``POST /sync/compare``: ``form`` ``{address}``, ``out`` ``{comparison, peer, synced_before, holds, differences,
-    songbooks, indexes}`` with the comparison's id masked (``"<comparison>"``);
+    songbooks, indexes, indexes_skipped}`` with the comparison's id masked (``"<comparison>"``);
   - ``GET /api/sync/unit``: ``compare`` the form of the comparison it follows, ``query`` ``{comparison, id}``
     (``comparison`` ``"<comparison>"`` for that one's id; any other text is one no comparison has), ``out`` ``{id,
     here, there}`` or the refusal;

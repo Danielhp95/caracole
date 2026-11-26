@@ -1267,6 +1267,79 @@ class SyncEngineTest {
         assertEquals("skipped", ended()["index"])
     }
 
+    // --- a computer of another schema (sync hunt 2026-11-25) --------------------------------------------------------
+
+    /** The computer's index export as a caracole whose database is at [schema] sends it. */
+    private fun computersExportAt(schema: Int): ByteArray {
+        val file = File(tmp.root, "export-${System.nanoTime()}.sqlite")
+        computer.database.writeBlocking { db -> IndexFile.export(db, file, CATALOGUES_AT, "0.1.0") }
+        val c = androidx.sqlite.driver.bundled.BundledSQLiteDriver().open(file.path)
+        try {
+            c.prepare("UPDATE ${IndexTransfer.META} SET value = '$schema' WHERE key = 'schema'").use { it.step() }
+        } finally {
+            c.close()
+        }
+        return file.readBytes().also { file.delete() }
+    }
+
+    /** The computer updated to a caracole of [schema] (its state says it, its index export is of it), harptabs.com
+     * read there and a page of it read here: an index newer on either side. */
+    private fun computerAt(schema: Int) {
+        onComputer("Radiohead", "Creep")
+        readThere("artist/1178/billy-joel", "Piano Man", "2026-11-03T03:00:00Z")
+        readHere("artist/50/the-beatles", listOf("Yesterday"), "2026-11-03T09:30:00Z")
+        computer.schema = schema
+        computer.index = { computersExportAt(schema) }
+        computerAnswersAsItIs()
+    }
+
+    @Test fun `a computer of a newer schema is asked for no index at any sync, and the stage says why`() {
+        computerAt(Database.SCHEMA_VERSION + 1)  // the computer updated; the phone's app not yet
+        repeat(3) {
+            stages.clear()
+            val c = engine.compare(computer.address.toString())
+            assertEquals(emptyList(), c.indexes, "the sheet lists no index waiting")
+            assertEquals(SyncEngine.INDEXES_NEWER, c.indexesSkipped, "and says why")
+            val outcome = apply(c)
+            assertEquals(Triple("index", "skipped", SyncEngine.INDEXES_NEWER), stages.last { it.first == "index" })
+            assertEquals(1, outcome.agreed, "the units sync as ever")
+            assertEquals(JsonArray(emptyList()), outcome.report!!["indexes"])
+        }
+        assertEquals(emptyList(), computer.indexAsked, "no index downloaded, at any sync")
+        assertEquals(emptyList(), computer.indexPushes, "nor the pages read here given: its merge refuses them")
+        assertEquals(mapOf("harptabs" to listOf("artist/50/the-beatles")), noted(), "kept for once the two agree")
+        assertNull(held())
+        assertTrue(stages.none { stateDir.path in it.third || "Error" in it.third }, stages.toString())
+    }
+
+    @Test fun `a computer of an older schema is asked for no index either, in the mirror image's words`() {
+        computerAt(Database.SCHEMA_VERSION - 1)
+        val c = engine.compare(computer.address.toString())
+        assertEquals(emptyList(), c.indexes)
+        assertEquals(SyncEngine.INDEXES_OLDER, c.indexesSkipped)
+        apply(c)
+        assertEquals(Triple("index", "skipped", SyncEngine.INDEXES_OLDER), stages.last { it.first == "index" })
+        assertEquals(emptyList(), computer.indexAsked)
+        assertEquals(emptyList(), computer.indexPushes)
+    }
+
+    @Test fun `a computer that says no schema is asked as before, and its refusal names no path and no class`() {
+        computerAt(Database.SCHEMA_VERSION + 1)
+        computer.schema = null  // a caracole older than the member says none
+        val c = engine.compare(computer.address.toString())
+        assertNull(c.indexesSkipped)
+        assertEquals(listOf("there", "here"), c.indexes.map { it.newer }, "listed as before")
+        apply(c)
+        assertEquals(listOf<List<String>?>(listOf("harptabs")), computer.indexAsked, "downloaded as before")
+        val (_, state, detail) = stages.last { it.first == "index" }
+        assertEquals("failed", state)
+        assertTrue(detail.startsWith("The computer's index export was exported at schema version " +
+                                         "${Database.SCHEMA_VERSION + 1}, and this caracole's database is at " +
+                                         "${Database.SCHEMA_VERSION}"), detail)
+        assertFalse(stateDir.path in detail || "TransferError" in detail, detail)
+        assertEquals(emptyList(), File(stateDir, "cache").listFiles().orEmpty().toList(), "the file fetched is gone")
+    }
+
     private companion object {
         const val NOW = "2026-11-03T10:00:00Z"
         const val RICH = "sync/fixtures/rich.jsonl"

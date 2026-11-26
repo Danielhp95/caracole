@@ -120,8 +120,9 @@ def test_a_refused_file_serve_staged_fails_its_stage_in_its_words_and_is_deleted
     assert result.exit_code == 2
     [running, failed] = events(result.stdout)
     assert running["state"] == "running" and failed["state"] == "failed"
-    assert failed["detail"].startswith(f"{path} is no index export of caracole's")
-    assert "no index export" in result.stderr
+    # Of the file posted, never of the path serve staged it at, which the Journal would show.
+    assert failed["detail"].startswith("The index export is no index export of caracole's")
+    assert "no index export" in result.stderr and str(path) not in result.output
     assert not path.exists()  # it can never be merged here
 
 

@@ -361,5 +361,7 @@ def push_index(app: WebApp, data: bytes) -> Response:
 
 def _unstaged(e: Exception, path) -> str:
     """A refusal of a staged export in words of the file posted, never of the path it was staged at."""
-    said = str(e).replace(str(path), "The index export")
+    from caracole import index_transfer
+
+    said = index_transfer.refusal_words(e, path, "The index export")
     return said[:1].upper() + said[1:] + ("" if said.endswith(".") else ".")

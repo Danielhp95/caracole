@@ -289,6 +289,70 @@ def test_nothing_newer_skips_the_index_stage(syncing):
     assert reports(events)[0]["parts"] == ["library", "songbooks"] and reports(events)[0]["indexes"] == []
 
 
+def answering_at_schema(monkeypatch, schema: int | None) -> None:
+    """The other side's state as a caracole whose database is at ``schema`` answers it (``None``: one older than the
+    member, which says none): its other members its own."""
+    real = sync.state_document
+
+    def said(*args, **kwargs):
+        doc = {k: v for k, v in real(*args, **kwargs).items() if k != "schema"}
+        return doc if schema is None else {**doc, "schema": schema}
+
+    monkeypatch.setattr(sync, "state_document", said)
+
+
+@pytest.mark.parametrize("there_is", [1, -1], ids=["newer", "older"])
+def test_a_caracole_of_another_schema_is_asked_for_no_index_either_way_and_the_stage_says_why(syncing, monkeypatch,
+                                                                                               there_is):
+    from caracole import db
+    from caracole.web import sync_routes
+
+    here, there, asked = syncing
+    gtptabs_rows(there, BLUR)  # read there alone: newer there
+    musescore_rows(here, ["https://musescore.com/song/wonderwall-1524"])  # read here alone: newer here
+    answering_at_schema(monkeypatch, db.SCHEMA_VERSION + there_is)
+    words = sync_routes.INDEXES_NEWER if there_is > 0 else sync_routes.INDEXES_OLDER
+    for _ in range(2):  # and the next sync alike: nothing downloaded at every sync to be refused
+        result, events = synced(here)
+        assert result.exit_code == 0, result.output
+        assert stage(events, "index") == [("skipped", words)]
+        assert f"{words}." in result.output
+        assert reports(events)[0]["indexes"] == []
+    assert ("GET", "/api/peer/index") not in asked and ("POST", "/sync/import/open") not in asked
+    assert index_transfer.tab_counts(here.conn)["gtptabs"] == 0
+    assert index_transfer.tab_counts(there.conn)["musescore"] == 0 and leftovers(here) == []
+
+
+def test_a_caracole_that_says_no_schema_is_asked_as_before_and_its_refusal_names_no_path(syncing, monkeypatch):
+    from contextlib import closing
+
+    from caracole import db
+
+    here, there, asked = syncing
+    gtptabs_rows(there, BLUR)
+    answering_at_schema(monkeypatch, None)  # a caracole older than the member, one schema behind
+    real = index_transfer.export
+
+    def older(conn, path, *args, **kwargs):
+        made = real(conn, path, *args, **kwargs)
+        with closing(sqlite3.connect(path)) as file:
+            file.execute(f"UPDATE {index_transfer.META} SET value = ? WHERE key = 'schema'",
+                         (str(db.SCHEMA_VERSION - 1),))
+            file.commit()
+        return made
+
+    monkeypatch.setattr(index_transfer, "export", older)
+    result, events = synced(here)
+    assert result.exit_code == 1
+    assert ("GET", "/api/peer/index") in asked  # its indexes asked for, as before the member
+    (_, detail), = [s for s in stage(events, "index") if s[0] == "failed"]
+    assert detail.startswith(f"The other side's index export was exported at schema version {db.SCHEMA_VERSION - 1}, "
+                             f"and this caracole's database is at {db.SCHEMA_VERSION}"), detail
+    assert str(here.cfg.cache_dir) not in result.output and "sync-indexes-" not in result.output
+    assert "TransferError" not in result.output and "OtherVersion" not in result.output
+    assert index_transfer.tab_counts(here.conn)["gtptabs"] == 0 and leftovers(here) == []
+
+
 def test_indexes_that_cant_be_given_say_so_and_the_sync_exits_1_once_the_rest_is_done(syncing, monkeypatch):
     here, there, _ = syncing
     here.song()

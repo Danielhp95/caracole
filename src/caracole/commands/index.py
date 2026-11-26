@@ -508,7 +508,8 @@ def _merge(cfg: Config, file: Path, sites: list[str], *, delete: bool = False, p
     ``index_merge_job``), its one stage, ``merge``, as get.py's JSON lines, ending ``failed`` however the command
     ends short of a merge (the lock or the database not to be had too), and the lock waited for as a lookup waits
     (the nightly run lets it go first at its next pause); how far the merge has got is that stage's running detail
-    (``Merging``). Without it, how far it has got goes to stderr (``merge_console``), its report to stdout. With
+    (``Merging``). Without it, how far it has got goes to stderr (``merge_console``), its report to stdout. A refusal
+    of an export caracole serve staged names it "the index export", never the path it is staged at. With
     ``delete``, FILE deleted once it is merged; refused, only when it is an export caracole serve staged
     (``peer_push.staged_indexes``), which can never merge here, never a file named by hand (the database itself, a
     backup, a typo); and kept when only the backup first failed, or the lock or the database wasn't to be had, for
@@ -528,6 +529,9 @@ def _merge(cfg: Config, file: Path, sites: list[str], *, delete: bool = False, p
 
             typer.echo(progress_line({"stage": "merge", "state": state, "detail": detail}))
 
+    def said_of(e: Exception) -> str:
+        return transfer.refusal_words(e, file, "The index export") if _staged_here(cfg, file) else str(e)
+
     def refused(said: str, code: int, *, done_with: bool) -> NoReturn:
         stage("failed", said)
         if delete and done_with and _staged_here(cfg, file):
@@ -546,9 +550,9 @@ def _merge(cfg: Config, file: Path, sites: list[str], *, delete: bool = False, p
                 finally:
                     told.close()
             except transfer.NoBackup as e:
-                refused(str(e), 2, done_with=False)
+                refused(said_of(e), 2, done_with=False)
             except transfer.TransferError as e:
-                refused(str(e), 2, done_with=True)
+                refused(said_of(e), 2, done_with=True)
             except backup.BackupError as e:
                 refused(f"No backup, so no merge: {e}. Nothing changed.", 1, done_with=False)
     except typer.Exit:

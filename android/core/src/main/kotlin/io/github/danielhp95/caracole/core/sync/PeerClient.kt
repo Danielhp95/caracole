@@ -17,11 +17,12 @@ import java.io.IOException
 import java.io.InputStream
 
 /** /api/peer/state, as the phone reads it: [kept], the answers the computer's imports of the phone's files
- * remembered for it, as it keeps them (`here` the computer's), its odd entries left out. */
+ * remembered for it, as it keeps them (`here` the computer's), its odd entries left out; [schema], the schema the
+ * computer's database is at (null: it says none, an older caracole's state, or a value that is no integer). */
 data class PeerState(val format: Int, val server: String?, val caracole: String, val name: String, val now: String?,
                      val units: Map<String, SyncUnit>, val base: Base?, val token: String,
                      val indexes: Map<String, String> = emptyMap(), val settings: JsonObject? = null,
-                     val kept: Kept = emptyMap()) {
+                     val kept: Kept = emptyMap(), val schema: Long? = null) {
     companion object {
         /** A state document, read as [PeerClient.state] reads the computer's (read_state_document): its `settings`
          * the computer's settings, none for a member that isn't an object. A [PeerError] for one that can't be read. */

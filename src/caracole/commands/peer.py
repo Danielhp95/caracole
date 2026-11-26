@@ -22,7 +22,8 @@ unit (peer_sync.py; the design: docs/superpowers/specs/2026-10-31-phone-server-s
   index goes the way of the later read: one the other side read more recently is taken (``GET /api/peer/index``,
   merged as ``caracole index merge`` merges, its backup first), and one this side read more recently given, sent to
   the other's Import a file as its page sends one (peer_import.py ``Uploader``: open, parts, compare, then Sync of the
-  indexes alone), and its import waited for. ``--progress``: get.py's JSON lines, its stages compare, take, give,
+  indexes alone), and its import waited for; none either way with a caracole whose database is of another schema
+  (its state's ``schema``), which the stage says. ``--progress``: get.py's JSON lines, its stages compare, take, give,
   agree and index (web/jobs.py ``PEER_SYNC_STAGES``), ``{"event": "unit", "id", "outcome", "why"}`` for each unit
   taken, given or left, and at its end ``{"event": "report", "report": …}``, what it did for the Sync tab's summary
   (each index taken or given, its tabs before and after). It exits 1 when the indexes couldn't be brought up to
@@ -678,14 +679,21 @@ def _sync_indexes(cfg, address: str, state, parts: tuple[str, ...], said: _Said)
     """``peer sync``'s index stage, with ``"indexes"`` among ``parts``: each site the other side read more recently
     than this one (its state's ``indexes``, as compared) taken (``_take_indexes``), and each this side read more
     recently given (``_give_indexes``), so that each side ends with the later; skipped with nothing newer on either
-    side. Returns the report's ``indexes`` (each site taken or given, its tabs before and after, its newest read)
-    and whether a part of it failed, said in its stage's words."""
+    side, and with none asked for either way when the other's database is of another schema (its state's
+    ``schema``: ``sync_routes.indexes_skipped``'s words), whose index export a merge here refuses once downloaded, as
+    its merge refuses this one's. Returns the report's ``indexes`` (each site taken or given, its tabs before and
+    after, its newest read) and whether a part of it failed, said in its stage's words."""
     from caracole import backup, index_transfer
     from caracole import peer_sync as sync
-    from caracole.web.sync_routes import _waiting
+    from caracole.web.sync_routes import _waiting, indexes_skipped
 
     if "indexes" not in parts:
         said.stage("index", "skipped", INDEXES_LEFT_OUT)
+        return [], False
+    skipped = indexes_skipped(state.schema)
+    if skipped is not None:
+        said.stage("index", "skipped", skipped)
+        typer.echo(f"{skipped}.")
         return [], False
     with closing(open_db(cfg)) as conn:
         waiting = _waiting(index_transfer.newest(conn), state.indexes)
@@ -772,7 +780,8 @@ def _merge_told(conn, cfg, path, sites, now, told):
 def _take_indexes(cfg, address: str, sites: list[str], said: _Said) -> list[dict]:
     """The other side's indexes of ``sites`` taken: streamed into ``cache_dir/peer`` (``Peer.index``), merged
     under caracole's lock (``index_transfer.merge``, its backup first, saying how far it has got: ``_merging``), then
-    deleted; the report's entries."""
+    deleted; the report's entries. A merge refused says so of "the other side's index export", never of the copy's
+    path here."""
     import secrets
 
     from caracole import index_transfer
@@ -783,7 +792,10 @@ def _take_indexes(cfg, address: str, sites: list[str], said: _Said) -> list[dict
         with sync.Peer(address, transport=transport_for_peer()) as peer:
             peer.index(path, sites)
         with exclusive(cfg, "peer sync", interactive=True), closing(open_db(cfg)) as conn:
-            merged = _merge_told(conn, cfg, path, sites, utcnow(), _merging(said))
+            try:
+                merged = _merge_told(conn, cfg, path, sites, utcnow(), _merging(said))
+            except index_transfer.TransferError as e:
+                raise type(e)(index_transfer.refusal_words(e, path, "The other side's index export")) from e
             return _taken_entries(merged, index_transfer.newest(conn))
     finally:
         path.unlink(missing_ok=True)
@@ -1078,7 +1090,8 @@ def _merge_indexes(cfg, conn, file, source, said: _Said, parts: tuple[str, ...],
     asked for: the report's ``indexes``, each site that took something, its first table's rows before and after
     and its newest read; None when the merge failed. An index export is merged where it is; a ``.caracole`` file's
     indexes.sqlite is copied out into ``cache_dir/peer`` (0700), merged, and deleted. Each step said as it begins
-    (``_merging``: the copy, then the merge's)."""
+    (``_merging``: the copy, then the merge's). A failure says so of "the file", never of the path it is staged at
+    or copied out to."""
     import os
     import secrets
 
@@ -1090,7 +1103,7 @@ def _merge_indexes(cfg, conn, file, source, said: _Said, parts: tuple[str, ...],
         return []
     said.stage("index", "running")
     told = _merging(said)
-    copy = None
+    copy = merged_from = None
     try:
         if file.index_only:
             merged_from = file.path
@@ -1104,8 +1117,9 @@ def _merge_indexes(cfg, conn, file, source, said: _Said, parts: tuple[str, ...],
         merged = _merge_told(conn, cfg, merged_from, None, now, told)
     except (index_transfer.TransferError, backup.BackupError, sync.PeerError, OSError) as e:
         told.close()
-        said.stage("index", "failed", str(e))
-        typer.echo(f"The file's indexes weren't merged: {e}")
+        why = str(e) if merged_from is None else index_transfer.refusal_words(e, merged_from, "The file")
+        said.stage("index", "failed", why)
+        typer.echo(f"The file's indexes weren't merged: {why}")
         return None
     finally:
         if copy is not None:
