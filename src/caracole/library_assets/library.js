@@ -2529,7 +2529,7 @@
 
   const plural = (n, word) => n + " " + word + (n === 1 ? "" : "s");
   const arrived = new Map();  // song id -> the data of a song new to the library since the page loaded
-  // A song removed since the page loaded counts nowhere, though its line says Removed until the next load.
+  // A song removed since the page loaded counts nowhere, and its line leaves the list (leaveSoon).
   const counted = (s) => s.status !== "removed";
   const narrow = window.matchMedia ? window.matchMedia("(max-width: 719px)") : null;  // a phone: the placeholder is short
   const summarize = () => {
@@ -2771,7 +2771,7 @@
     matchingNow = ORDERS[state.sort].filter((i) => (!state.prog || playsProg(songs[i], state.prog)) && fits(i));
     tallyChips();
     const matching = matchingNow.filter((i) => keyFits(i) && instFits(i));
-    const shown = matching.filter((i) => SHOWS[state.show](songs[i]));
+    const shown = matching.filter((i) => counted(songs[i]) && SHOWS[state.show](songs[i]));  // a removed one has left
     sort.value = state.sort;
     clear.hidden = !state.q;
     if (state.q) searchMode(true);  // a query in the box is search, however it came
@@ -5040,8 +5040,8 @@
     if (badge) badge.textContent = n ? String(n) : "";
   };
 
-  // A song caracole removed: its line says so until the page is loaded again, with nothing left to open, fetch or
-  // pick (its files are gone, and so is its data-id, which the Select mode finds songs by).
+  // A song caracole removed: its line says so where it was, with nothing left to open, fetch or pick (its files are
+  // gone, and so is its data-id, which the Select mode finds songs by), then leaves the list (leaveSoon).
   const goneItem = (s) => {
     const artist = listOf(s.artists).length > 1 ? listOf(s.artists).join(", ") : String(s.artist);
     const line = resultRow({ dense: true, title: s.title, artist, status: "removed" });
@@ -5077,9 +5077,64 @@
       return kept;
     };
     lines.set(i, gone(lines.get(i)));
+    leaveSoon(lines.get(i));
     summarize();
     tallyChips();
     tell();
+  };
+  // A removed song's line says Removed where it was for GONE_AFTER ms, as tall as it was, then leaves the list, the
+  // lines under it moving up (the owner's ask of 2026-11-26: "the tile should dissapear"), never while a finger or
+  // the mouse is down on the page, whose tap would land on the line that takes its place. The focus on it goes to
+  // the line after it (else before it); an artist it leaves with one line folds into it, one it leaves with none
+  // goes; the pane, its card's, stays empty until it holds another (placeAgain).
+  const GONE_AFTER = paced("gone", 2000);
+  const pressing = new Set();  // the pointers down on the page
+  let pressedLast = 0;  // when the last of them was let go (performance.now())
+  addEventListener("pointerdown", (e) => pressing.add(e.pointerId), true);
+  for (const name of ["pointerup", "pointercancel"]) {
+    addEventListener(name, (e) => {
+      pressing.delete(e.pointerId);
+      pressedLast = performance.now();
+    }, true);
+  }
+  const leaveSoon = (node) => {
+    const leave = () => {
+      if (pressing.size || performance.now() - pressedLast < 400) {  // its click, or a second tap, still to come
+        setTimeout(leave, 200);
+        return;
+      }
+      if (!node.isConnected || !node.classList.contains("gone")) return;
+      const listed = Array.from(document.querySelectorAll("#list article.line, #requested article.line"));
+      const at = listed.indexOf(node);
+      const next = listed.slice(at + 1).concat(listed.slice(0, Math.max(at, 0)).reverse())
+        .find((line) => !line.classList.contains("gone"));
+      const focused = node.contains(document.activeElement);
+      const group = node.closest("section.artist");
+      const run = node.parentNode && node.parentNode.classList.contains("run") ? node.parentNode : null;
+      node.remove();
+      if (run && !run.children.length) run.remove();
+      if (group) {
+        const left = Array.from(group.querySelectorAll(":scope > .lines article.line"));
+        const box = group.parentNode && group.parentNode.classList.contains("run") ? group.parentNode : null;
+        if (!left.length) group.remove();
+        else if (left.length === 1 && !group.matches(".folded, .meant") && !group.querySelector(":scope > .lines ~ *")
+                 && shownSongs.has(left[0])) {
+          const s = shownSongs.get(left[0]);
+          const mine = songs.concat(Array.from(arrived.values())).filter(counted)
+            .filter((x) => String(x.sortArtist || "") === String(group.dataset.artist || "")).length;
+          group.replaceWith(artistGroup({ key: group.dataset.artist, name: String(shownName(s, s.artist)) }, left,
+                                        { mine }));
+        }
+        if (box && !box.children.length) box.remove();
+      }
+      if (focused && next) {
+        const more = next.querySelector(".line-more");
+        (more || next).focus({ preventScroll: true });
+      }
+      placePlaysSoon();
+      keepSelected();
+    };
+    setTimeout(leave, GONE_AFTER);
   };
   // A song new to the page since it loaded (``arrived``: its line under the bar, or a result's row), removed: drawn
   // as gone where it shows, as a song the page was loaded with is, and counted no more.
@@ -5090,7 +5145,10 @@
     for (const [job, node] of Array.from(spots)) {
       const view = views.get(job);
       if (!view || songOf(view) !== id) continue;
-      if (!drawn.has(node)) drawn.set(node, refill(node, goneItem(s)));
+      if (!drawn.has(node)) {
+        drawn.set(node, refill(node, goneItem(s)));
+        leaveSoon(drawn.get(node));
+      }
       spots.set(job, drawn.get(node));
     }
     summarize();

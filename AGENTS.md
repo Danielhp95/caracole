@@ -1319,6 +1319,12 @@ It is rows.js's, shared by both pages:
 
 - select.js knows only the songs the page was loaded with, less those gone since: a line offers Add to a songbook…
   for those alone.
+- A song removed (its removal done on the page, or learnt of as below) says Removed on its line, where it was and as
+  tall as it was, for `GONE_AFTER` (2 s, the timers' `gone`), then its line leaves the list, the lines under it moving
+  up, never while a pointer is down (library.js `leaveSoon`, the owner's ask of 2026-11-26 from the phone: "the tile
+  should dissapear"; it stayed until a reload, the height of its open card, which a phone's app never does): its
+  artist left with one line folds into it, with none goes; the focus on it goes to the next line; a render after it
+  draws no removed song; a song new to the page (`arrived`) leaves "Just requested" alike (test_library_remove.py).
 - songs.id has no AUTOINCREMENT, so the next song added may get a removed song's id:
   - library.js knows a song gone by its removal done on the page, or by a view or a card of `/jobs.json` that names
     another song's identity under its id (the view's `identity`, `jobs_routes.view`);
