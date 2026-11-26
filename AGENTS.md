@@ -811,7 +811,8 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 - **peer_import.py**: an upload staged part by part, `state_dir/peer/import-<16 hex>/` (0700: `file.caracole` and
   `open.json`, 0600), one at a time, each part 8 MiB at most and the next one, 8 GiB in all; one untouched an hour is
   swept unless `held`; `staged_folder` checks the folder `peer import` is given, which it deletes once the file is
-  refused or taken with nothing left, and keeps for a comparison again else (`STALE`, a unit left).
+  refused or taken with nothing left, and keeps for a comparison again else (`STALE`, a unit left), its hour from
+  then (`kept`).
 - `peer sync --parts` and `peer import --parts`: the parts of a sync, a difference outside them neither taken, given
   nor said; a sync compares with the kept answers, so a unit kept here at an import is given there at the next one.
   - `peer sync --compared HASH` applies the comparison its hash names: with the kept answers (`peer diff`'s, and
@@ -4309,17 +4310,19 @@ picks one).
   no export is made); and a file to import's staging folder (`state_dir/peer/import-<16 hex>/`, peer_import.py:
   0700, its `file.caracole` and `open.json` 0600, one at a time, each part 8 MiB at most and the next one, 8 GiB in
   all), deleted once its import has taken it with nothing left, refused at its comparison or its import (it can't be
-  read whole, another format, this library's own export, nothing newer in it), dropped (`POST /sync/import/drop`),
-  let go as another is opened when no request names it and it is whole or its upload stopped (`peer_import.let_go`,
-  `STOPPED`), or an hour after its last part, unless an import holds it; an import a comparison again may settle
-  (`STALE`, a `--choose` of no difference, a unit left, its indexes not merged) keeps it, its hold let go, for the
-  page's Compare again. Everything else stays a queued command's.
+  read whole, another format, this library's own export, its songs keyed by other rules, a document of it unreadable,
+  nothing newer in it), dropped (`POST /sync/import/drop`), let go as another is opened when no request names it and
+  it is whole or its upload stopped (`peer_import.let_go`, `STOPPED`), or an hour after its last part, unless an
+  import holds it; every other end of an import keeps it, its hold let go and its hour run from that end
+  (`peer_import.kept`), for the page's Compare again: `STALE`, a `--choose` of no difference, a unit left, its indexes
+  not merged, this library unreadable, a "Go on?" answered no, a bug. Everything else stays a queued command's.
 - The copies of the indexes the queued `peer sync` and `peer import` work on are theirs, in `cache_dir/peer/`
   (`sync-indexes-`, `give-indexes-`, `import-indexes-<12 hex>.sqlite`, an export's `.part` and SQLite's `-journal`,
   `-wal` and `-shm` beside them): deleted once merged or given, and, one a killed command left, swept an hour after
   its last write (`peer_push.sweep_copies`: those names alone, regular files, no link followed) as either command
   starts and as `GET /api/peer/index` comes, never while its command holds it (`peer_push.holding_copy`, an flock
-  from its download's or export's end until its merge or upload is over, gone with a killed process).
+  from the end of its download, its export or its copy out of the file until its merge or upload is over, gone
+  with a killed process).
 
 ### wanted.txt is the one source of songs
 

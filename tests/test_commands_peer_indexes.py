@@ -424,12 +424,15 @@ def test_peer_import_and_peer_sync_sweep_the_copies_left_as_they_start(libraries
     desk.song()
     folder = studio.cfg.cache_dir / "peer"
     folder.mkdir(parents=True, exist_ok=True)
-    for command in (["peer", "import", "--yes", str(exported(desk, tmp_path / "d.caracole"))],
-                    ["peer", "sync", HOST, "--yes"]):
+    # The import takes Desk's Creep, then the sync with Desk's caracole serve (the fixture's) finds nothing to do.
+    for command, said in ((["peer", "import", "--yes", str(exported(desk, tmp_path / "d.caracole"))],
+                           "Took song/radiohead/creep"),
+                          (["peer", "sync", HOST, "--yes"], "Nothing differs.")):
         left = folder / "give-indexes-0123456789ab.sqlite"
         left.write_bytes(b"x")
         aged(left)
-        run(studio, *command)
+        out = run(studio, *command)
+        assert out.exit_code == 0 and said in out.output, out.output
         assert not left.exists(), command
 
 

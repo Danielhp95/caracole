@@ -9,7 +9,7 @@ file as it comes (0600); ``add_part`` writes each part where the last one ended,
 refusing a part that isn't the next one or would pass the size; ``whole`` is the file once every part has come. Then
 ``caracole peer import <folder>`` holds it (``held``), takes it as it takes any file, and deletes it (``remove``)
 once the file is refused or taken with nothing left; an import a comparison again may settle (stale, a unit left)
-lets go of it, kept for that comparison.
+lets go of it, kept for that comparison, its hour running from then (``kept``).
 
 Nothing of it goes into the library. An import's id is 16 hex, checked before any path is built of it, and
 ``staged_folder`` checks the one an import is given, so that a take, which deletes its folder, deletes no other. At
@@ -203,7 +203,8 @@ def _imports(root: Path) -> list[Path]:
 
 
 def _touched(folder: Path) -> float:
-    """When the import in ``folder`` last changed: opened, or a part written."""
+    """When the import in ``folder`` last changed: opened, a part written, or an import that kept it over
+    (``kept``)."""
     times = []
     for path in (folder, folder / FILE, folder / OPENED):
         try:
@@ -211,6 +212,16 @@ def _touched(folder: Path) -> float:
         except FileNotFoundError:
             pass
     return max(times, default=0.0)
+
+
+def kept(folder: Path) -> None:
+    """The import in ``folder``, kept by an import that ended where a comparison again may settle it, touched now:
+    its hour (``sweep``) runs from that end, never from its last part, so a Compare again finds it however long the
+    import waited in the queue. Nothing for a folder deleted meanwhile."""
+    try:
+        os.utime(folder, follow_symlinks=False)
+    except FileNotFoundError:
+        pass
 
 
 def sweep(state_dir: Path, now: float | None = None) -> list[str]:

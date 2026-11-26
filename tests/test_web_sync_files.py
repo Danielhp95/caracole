@@ -588,6 +588,10 @@ def test_a_sync_on_an_import_gone_stale_before_its_job_ran_keeps_the_file_to_com
     _, found = file_compared(studio.app, import_id)
     assert applied(studio.app, found["comparison"], prefer="there")[0] == 200
     studio.song("Muse", "Hysteria", version=None)  # a request ahead of it in the queue moved the library on
+    folder = staged(studio, import_id)
+    then = time.time() - peer_import.EXPIRES - 600  # and ran for over an hour after the last part came
+    for path in (folder / peer_import.FILE, folder / peer_import.OPENED, folder):
+        os.utime(path, (then, then))
     studio.app.queue.run_pending()
     (job,) = studio.app.queue.snapshot()
     assert job.state == "failed" and f"error: {STALE}" in job.steps[0].output, [s.output for s in job.steps]

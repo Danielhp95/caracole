@@ -650,6 +650,16 @@ def compared_in_the_tab(lib: Lib, folder: Path) -> str:
         return sync.compared_hash(peer_file.compare_file(lib.conn, overrides, books, file, source).found)
 
 
+def staged_long_ago(folder: Path) -> None:
+    """The staged import in ``folder`` last touched more than ``peer_import.EXPIRES`` ago: its last part came in
+    long before its import ran (a long job ahead of it in the queue, the owner choosing sides)."""
+    import os
+
+    then = time.time() - peer_import.EXPIRES - 600
+    for path in (folder / peer_import.FILE, folder / peer_import.OPENED, folder):
+        os.utime(path, (then, then))
+
+
 def test_a_stale_import_keeps_its_staged_file_to_compare_again_and_takes_it_then(libraries, tmp_path):
     from caracole.commands.peer import STALE
 
@@ -658,9 +668,11 @@ def test_a_stale_import_keeps_its_staged_file_to_compare_again_and_takes_it_then
     folder = stage(studio, exported(desk, tmp_path / "d.caracole").read_bytes())
     shown = compared_in_the_tab(studio, folder)
     studio.song("Muse", "Hysteria", version=None)  # the library moves on before the job runs (a lookup, the night)
+    staged_long_ago(folder)  # and the job ran over an hour after the last part came
     out = run(studio, "peer", "import", "--yes", "--progress", f"--compared={shown}", str(folder))
     assert out.exit_code == 1 and STALE in out.output, out.output
     assert folder.exists() and studio.songs() == {"muse/hysteria"}  # kept, nothing taken
+    assert peer_import.sweep(studio.cfg.state_dir) == []  # its hour runs from the import's end
     out = run(studio, "peer", "import", "--yes", "--progress", f"--compared={compared_in_the_tab(studio, folder)}",
               str(folder))
     assert out.exit_code == 0, out.output
@@ -686,6 +698,7 @@ def test_a_file_an_import_refuses_or_takes_whole_is_deleted(libraries, tmp_path)
     folder = stage(studio, data)
     assert run(studio, "peer", "import", "--yes", str(folder)).exit_code == 0 and not folder.exists()
     again = stage(studio, data)  # the same file: nothing newer in it
+    staged_long_ago(again)
     out = run(studio, "peer", "import", "--yes", str(again))
     assert out.exit_code == 2 and "Nothing in this file is newer" in out.output and not again.exists()
     own = stage(studio, exported(studio, tmp_path / "own.caracole").read_bytes())

@@ -383,9 +383,12 @@ def register(app: typer.Typer) -> None:
                     # Not whole yet: refused, and left for the rest to come (a sweep deletes it after an hour).
                     path = peer_import.whole(cfg.state_dir, folder.name[len(peer_import.PREFIX):])
                     # Deleted once the file is refused or taken whole; kept for a comparison again else (STALE, a
-                    # unit left), let go as another file is opened or an hour on.
-                    _import(cfg, path, name=peer_import.opened_name(folder), spent=lambda: peer_import.remove(folder),
-                            **options)
+                    # unit left), let go as another file is opened or an hour after this import's end.
+                    try:
+                        _import(cfg, path, name=peer_import.opened_name(folder),
+                                spent=lambda: peer_import.remove(folder), **options)
+                    finally:
+                        peer_import.kept(folder)
             finally:
                 peer_import.sweep(cfg.state_dir)
         except peer_import.StagingError as e:

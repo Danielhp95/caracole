@@ -4052,7 +4052,7 @@ of an upload that caracole serve staged (`state_dir/peer/import-<id>/`, one at a
 most). That folder is refused until every part has arrived ("That file isn't whole yet: send the
 rest of it."), and deleted after the import or an hour after its last part. An import that stops
 where comparing again can settle it (the library changed since the comparison, a unit left)
-keeps the folder for an hour, so the Sync tab's Compare again needs no new upload.
+keeps the folder for an hour from its end, so the Sync tab's Compare again needs no new upload.
 
 `--choose`, `--prefer`, `--compared`, `--progress` and `--yes` work as for `peer sync`. Import
 exits 2 for a file refused, 1 for a unit left or indexes not merged, and 0 otherwise.
@@ -4079,7 +4079,7 @@ fails, the sync says why and exits 1, and the units stay synced.
 
 The copies of an index being taken, given or merged live in `cache_dir/peer/` and are deleted once
 done. A copy left by a sync or import that was killed is deleted an hour later, when the next
-`peer sync` or `peer import` starts.
+`peer sync` or `peer import` starts, or when caracole serve is next asked for its indexes.
 
 ### The Share tab
 
