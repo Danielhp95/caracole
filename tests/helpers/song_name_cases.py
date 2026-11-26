@@ -56,10 +56,36 @@ READ: list[tuple[str, str | None, tuple[str, str] | None]] = [
     ("「夜に駆ける」 Live", "YOASOBI", ("YOASOBI", "夜に駆ける")),
     ("「夜に駆ける」 Live", None, None),
     ("《孤勇者》 by 陈奕迅", None, ("陈奕迅", "孤勇者")),
-    # A short quote that ends as a sentence, with no pause inside it, is a title.
+    # A quote that ends as a sentence is a lyric, but a title after an artist known whole, or alone once the noise
+    # groups go.
     ("KOKIA「ありがとう…」", "KOKIA", ("KOKIA", "ありがとう…")),
+    ("KOKIA「ありがとう…」", None, None),
     ("Aimer「どうして？」", "Aimer", ("Aimer", "どうして？")),
+    ("ヨルシカ「言って。」", "ヨルシカ", ("ヨルシカ", "言って。")),
+    ("五月天「倔強！」", "五月天", ("五月天", "倔強！")),
+    ("宋冬野「斑马，斑马。」", "宋冬野", ("宋冬野", "斑马，斑马。")),
+    ("KOKIA「さよなら、また明日。」", "KOKIA", ("KOKIA", "さよなら、また明日。")),  # "Artist" is a placeholder: no one
     ("「夜に駆ける。」(Official Video)", "YOASOBI", ("YOASOBI", "夜に駆ける。")),
+    ("晴天「为什么？」", "周杰倫", ("周杰倫", "晴天")),
+    ("晴天「为什么？」", None, None),
+    ("晴天「为什么？」", "周杰倫 Jay Chou", ("周杰倫 Jay Chou", "晴天")),
+    ("晴天「为什么？」 周杰倫", None, None),
+    ("晴天「我想你…」", "周杰倫", ("周杰倫", "晴天")),
+    ("晴天「我想你…」", None, None),
+    ("海阔天空「原谅我这一生不羁放纵爱自由！」", "Beyond", ("Beyond", "海阔天空")),
+    ("海阔天空「原谅我这一生不羁放纵爱自由！」", None, None),
+    ("七里香「雨下整夜…」", "周杰倫", ("周杰倫", "七里香")),
+    ("七里香「雨下整夜…」", None, None),
+    ("孤勇者「爱你孤身走暗巷！」", "陈奕迅", ("陈奕迅", "孤勇者")),
+    ("孤勇者「爱你孤身走暗巷！」", None, None),
+    ("小幸运「原来你是我最想留住的幸运…」", "田馥甄", ("田馥甄", "小幸运")),
+    ("小幸运「原来你是我最想留住的幸运…」", None, None),
+    ("Lemon「夢ならばどれほど…」", "米津玄師", ("米津玄師", "Lemon")),
+    ("Lemon「夢ならばどれほど…」", None, None),
+    # After the title bracket, a tag's words then "by" and a name: the name.
+    ("《孤勇者》 Cover by 某某", None, ("某某", "孤勇者")),
+    ("《孤勇者》 Piano Cover by Jane", None, ("Jane", "孤勇者")),
+    ("「Title」 Cover Me Band", None, ("Cover Me Band", "Title")),
 ]
 
 KNOWN: list[tuple[str, str, tuple[str, str] | None]] = [
@@ -70,7 +96,7 @@ CLEAN: list[tuple[str, str]] = [
     # A lyric channel's group goes (two thirds of its letters its words).
     ("【抖音】别知己", "别知己"),
     ("【純音樂】Summer", "Summer"),
-    # A quote that ends as a sentence is a lyric only with a pause inside it (，、； or a space).
+    # A quote that ends as a sentence is a lyric, a pause in it (，、；) or not.
     ("晴天「故事的小黄花，从出生那年就飘着。」", "晴天"),
     ("晴天「为什么、为什么？」", "晴天"),
     ("晴天「为什么；为什么？」", "晴天"),

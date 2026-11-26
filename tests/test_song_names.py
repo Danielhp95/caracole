@@ -77,13 +77,12 @@ def test_a_cjk_lyric_videos_title_loses_its_channels_words_and_its_quoted_lyrics
 
 
 @pytest.mark.parametrize("text,cleaned", [
-    # A sentence: it ends as one (。！？…) with a pause in it, a space parts two CJK characters in it, or it is longer
-    # than LYRIC_CHARS.
+    # A sentence: it ends as one (。！？…), a space parts two CJK characters in it, or it is longer than LYRIC_CHARS.
     ("野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』", "野人"),
     ("消愁「当你走进这欢乐场 背上所有的梦与想」", "消愁"),
-    ("海阔天空「原谅我这一生不羁放纵爱自由！」", "海阔天空「原谅我这一生不羁放纵爱自由！」"),  # an end alone: a title
-    ("晴天「为什么？」", "晴天「为什么？」"),
-    ("晴天「我想你…」", "晴天「我想你…」"),
+    ("海阔天空「原谅我这一生不羁放纵爱自由！」", "海阔天空"),
+    ("晴天「为什么？」", "晴天"),
+    ("晴天「我想你…」", "晴天"),
     ("消愁「当你走进这欢乐场背上所有的梦与想啊」", "消愁"),  # 17 characters
     ("消愁「当你走进这欢乐场背上所有的梦与想」", "消愁「当你走进这欢乐场背上所有的梦与想」"),  # 16: a title's length
     # Wherever it is: before the song's name, between it and a word of the song's own.

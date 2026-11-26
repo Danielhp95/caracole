@@ -33,9 +33,9 @@
 {"args":["[MV] IU(아이유) _ Blueming(블루밍)"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"IU(아이유) _ Blueming(블루밍)"}
 {"args":["[MV] BTS(방탄소년단) _ Dynamite"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"BTS(방탄소년단) _ Dynamite"}
 {"args":["消愁「当你走进这欢乐场 背上所有的梦与想」"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"消愁"}
-{"args":["海阔天空「原谅我这一生不羁放纵爱自由！」"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"海阔天空「原谅我这一生不羁放纵爱自由！」"}
-{"args":["晴天「为什么？」"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"晴天「为什么？」"}
-{"args":["晴天「我想你…」"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"晴天「我想你…」"}
+{"args":["海阔天空「原谅我这一生不羁放纵爱自由！」"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"海阔天空"}
+{"args":["晴天「为什么？」"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"晴天"}
+{"args":["晴天「我想你…」"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"晴天"}
 {"args":["消愁「当你走进这欢乐场背上所有的梦与想啊」"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"消愁"}
 {"args":["消愁「当你走进这欢乐场背上所有的梦与想」"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"消愁「当你走进这欢乐场背上所有的梦与想」"}
 {"args":["『不再借世人的手 替我开脱。』孟维来 - 野人"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"孟维来 - 野人"}
@@ -313,8 +313,32 @@
 {"args":["「夜に駆ける」 Live"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"YOASOBI"},"out":["YOASOBI","夜に駆ける"]}
 {"args":["「夜に駆ける」 Live"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
 {"args":["KOKIA「ありがとう…」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"KOKIA"},"out":["KOKIA","ありがとう…"]}
+{"args":["KOKIA「ありがとう…」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
 {"args":["Aimer「どうして？」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"Aimer"},"out":["Aimer","どうして？"]}
+{"args":["ヨルシカ「言って。」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"ヨルシカ"},"out":["ヨルシカ","言って。"]}
+{"args":["五月天「倔強！」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"五月天"},"out":["五月天","倔強！"]}
+{"args":["宋冬野「斑马，斑马。」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马，斑马。"]}
+{"args":["KOKIA「さよなら、また明日。」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"KOKIA"},"out":["KOKIA","さよなら、また明日。"]}
 {"args":["「夜に駆ける。」(Official Video)"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"YOASOBI"},"out":["YOASOBI","夜に駆ける。"]}
+{"args":["晴天「为什么？」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫"},"out":["周杰倫","晴天"]}
+{"args":["晴天「为什么？」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["晴天「为什么？」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫 Jay Chou"},"out":["周杰倫 Jay Chou","晴天"]}
+{"args":["晴天「为什么？」 周杰倫"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["晴天「我想你…」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫"},"out":["周杰倫","晴天"]}
+{"args":["晴天「我想你…」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["海阔天空「原谅我这一生不羁放纵爱自由！」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"Beyond"},"out":["Beyond","海阔天空"]}
+{"args":["海阔天空「原谅我这一生不羁放纵爱自由！」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["七里香「雨下整夜…」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫"},"out":["周杰倫","七里香"]}
+{"args":["七里香「雨下整夜…」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["孤勇者「爱你孤身走暗巷！」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["孤勇者「爱你孤身走暗巷！」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["小幸运「原来你是我最想留住的幸运…」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"田馥甄"},"out":["田馥甄","小幸运"]}
+{"args":["小幸运「原来你是我最想留住的幸运…」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["Lemon「夢ならばどれほど…」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["Lemon「夢ならばどれほど…」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["《孤勇者》 Cover by 某某"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["某某","孤勇者"]}
+{"args":["《孤勇者》 Piano Cover by Jane"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Jane","孤勇者"]}
+{"args":["「Title」 Cover Me Band"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Cover Me Band","Title"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -590,8 +614,32 @@
 {"args":["「夜に駆ける」 Live"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"YOASOBI"},"out":["YOASOBI","夜に駆ける"]}
 {"args":["「夜に駆ける」 Live"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
 {"args":["KOKIA「ありがとう…」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"KOKIA"},"out":["KOKIA","ありがとう…"]}
+{"args":["KOKIA「ありがとう…」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
 {"args":["Aimer「どうして？」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"Aimer"},"out":["Aimer","どうして？"]}
+{"args":["ヨルシカ「言って。」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"ヨルシカ"},"out":["ヨルシカ","言って。"]}
+{"args":["五月天「倔強！」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"五月天"},"out":["五月天","倔強！"]}
+{"args":["宋冬野「斑马，斑马。」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马，斑马。"]}
+{"args":["KOKIA「さよなら、また明日。」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"KOKIA"},"out":["KOKIA","さよなら、また明日。"]}
 {"args":["「夜に駆ける。」(Official Video)"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"YOASOBI"},"out":["YOASOBI","夜に駆ける。"]}
+{"args":["晴天「为什么？」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫"},"out":["周杰倫","晴天"]}
+{"args":["晴天「为什么？」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["晴天「为什么？」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫 Jay Chou"},"out":["周杰倫 Jay Chou","晴天"]}
+{"args":["晴天「为什么？」 周杰倫"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["晴天「我想你…」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫"},"out":["周杰倫","晴天"]}
+{"args":["晴天「我想你…」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["海阔天空「原谅我这一生不羁放纵爱自由！」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"Beyond"},"out":["Beyond","海阔天空"]}
+{"args":["海阔天空「原谅我这一生不羁放纵爱自由！」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["七里香「雨下整夜…」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫"},"out":["周杰倫","七里香"]}
+{"args":["七里香「雨下整夜…」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["孤勇者「爱你孤身走暗巷！」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["孤勇者「爱你孤身走暗巷！」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["小幸运「原来你是我最想留住的幸运…」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"田馥甄"},"out":["田馥甄","小幸运"]}
+{"args":["小幸运「原来你是我最想留住的幸运…」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["Lemon「夢ならばどれほど…」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["Lemon「夢ならばどれほど…」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["《孤勇者》 Cover by 某某"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["某某","孤勇者"]}
+{"args":["《孤勇者》 Piano Cover by Jane"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Jane","孤勇者"]}
+{"args":["「Title」 Cover Me Band"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Cover Me Band","Title"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -865,8 +913,32 @@
 {"args":["「夜に駆ける」 Live"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"YOASOBI"},"out":["YOASOBI","夜に駆ける"]}
 {"args":["「夜に駆ける」 Live"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
 {"args":["KOKIA「ありがとう…」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"KOKIA"},"out":["KOKIA","ありがとう…"]}
+{"args":["KOKIA「ありがとう…」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
 {"args":["Aimer「どうして？」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"Aimer"},"out":["Aimer","どうして？"]}
+{"args":["ヨルシカ「言って。」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"ヨルシカ"},"out":["ヨルシカ","言って。"]}
+{"args":["五月天「倔強！」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"五月天"},"out":["五月天","倔強！"]}
+{"args":["宋冬野「斑马，斑马。」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马，斑马。"]}
+{"args":["KOKIA「さよなら、また明日。」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"KOKIA"},"out":["KOKIA","さよなら、また明日。"]}
 {"args":["「夜に駆ける。」(Official Video)"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"YOASOBI"},"out":["YOASOBI","夜に駆ける。"]}
+{"args":["晴天「为什么？」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫"},"out":["周杰倫","晴天"]}
+{"args":["晴天「为什么？」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["晴天「为什么？」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫 Jay Chou"},"out":["周杰倫 Jay Chou","晴天"]}
+{"args":["晴天「为什么？」 周杰倫"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["晴天「我想你…」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫"},"out":["周杰倫","晴天"]}
+{"args":["晴天「我想你…」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["海阔天空「原谅我这一生不羁放纵爱自由！」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"Beyond"},"out":["Beyond","海阔天空"]}
+{"args":["海阔天空「原谅我这一生不羁放纵爱自由！」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["七里香「雨下整夜…」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫"},"out":["周杰倫","七里香"]}
+{"args":["七里香「雨下整夜…」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["孤勇者「爱你孤身走暗巷！」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["孤勇者「爱你孤身走暗巷！」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["小幸运「原来你是我最想留住的幸运…」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"田馥甄"},"out":["田馥甄","小幸运"]}
+{"args":["小幸运「原来你是我最想留住的幸运…」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["Lemon「夢ならばどれほど…」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["Lemon「夢ならばどれほど…」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["《孤勇者》 Cover by 某某"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["某某","孤勇者"]}
+{"args":["《孤勇者》 Piano Cover by Jane"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Jane","孤勇者"]}
+{"args":["「Title」 Cover Me Band"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Cover Me Band","Title"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -1124,8 +1196,32 @@
 {"args":["「夜に駆ける」 Live"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"YOASOBI"},"out":["YOASOBI","夜に駆ける"]}
 {"args":["「夜に駆ける」 Live"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
 {"args":["KOKIA「ありがとう…」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"KOKIA"},"out":["KOKIA","ありがとう…"]}
+{"args":["KOKIA「ありがとう…」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
 {"args":["Aimer「どうして？」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"Aimer"},"out":["Aimer","どうして？"]}
+{"args":["ヨルシカ「言って。」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"ヨルシカ"},"out":["ヨルシカ","言って。"]}
+{"args":["五月天「倔強！」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"五月天"},"out":["五月天","倔強！"]}
+{"args":["宋冬野「斑马，斑马。」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马，斑马。"]}
+{"args":["KOKIA「さよなら、また明日。」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"KOKIA"},"out":["KOKIA","さよなら、また明日。"]}
 {"args":["「夜に駆ける。」(Official Video)"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"YOASOBI"},"out":["YOASOBI","夜に駆ける。"]}
+{"args":["晴天「为什么？」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫"},"out":["周杰倫","晴天"]}
+{"args":["晴天「为什么？」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["晴天「为什么？」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫 Jay Chou"},"out":["周杰倫 Jay Chou","晴天"]}
+{"args":["晴天「为什么？」 周杰倫"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["晴天「我想你…」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫"},"out":["周杰倫","晴天"]}
+{"args":["晴天「我想你…」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["海阔天空「原谅我这一生不羁放纵爱自由！」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"Beyond"},"out":["Beyond","海阔天空"]}
+{"args":["海阔天空「原谅我这一生不羁放纵爱自由！」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["七里香「雨下整夜…」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫"},"out":["周杰倫","七里香"]}
+{"args":["七里香「雨下整夜…」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["孤勇者「爱你孤身走暗巷！」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["孤勇者「爱你孤身走暗巷！」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["小幸运「原来你是我最想留住的幸运…」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"田馥甄"},"out":["田馥甄","小幸运"]}
+{"args":["小幸运「原来你是我最想留住的幸运…」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["Lemon「夢ならばどれほど…」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["Lemon「夢ならばどれほど…」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["《孤勇者》 Cover by 某某"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["某某","孤勇者"]}
+{"args":["《孤勇者》 Piano Cover by Jane"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Jane","孤勇者"]}
+{"args":["「Title」 Cover Me Band"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Cover Me Band","Title"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -1393,8 +1489,32 @@
 {"args":["「夜に駆ける」 Live"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"YOASOBI"},"out":["YOASOBI","夜に駆ける"]}
 {"args":["「夜に駆ける」 Live"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
 {"args":["KOKIA「ありがとう…」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"KOKIA"},"out":["KOKIA","ありがとう…"]}
+{"args":["KOKIA「ありがとう…」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
 {"args":["Aimer「どうして？」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"Aimer"},"out":["Aimer","どうして？"]}
+{"args":["ヨルシカ「言って。」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"ヨルシカ"},"out":["ヨルシカ","言って。"]}
+{"args":["五月天「倔強！」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"五月天"},"out":["五月天","倔強！"]}
+{"args":["宋冬野「斑马，斑马。」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马，斑马。"]}
+{"args":["KOKIA「さよなら、また明日。」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"KOKIA"},"out":["KOKIA","さよなら、また明日。"]}
 {"args":["「夜に駆ける。」(Official Video)"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"YOASOBI"},"out":["YOASOBI","夜に駆ける。"]}
+{"args":["晴天「为什么？」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫"},"out":["周杰倫","晴天"]}
+{"args":["晴天「为什么？」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["晴天「为什么？」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫 Jay Chou"},"out":["周杰倫 Jay Chou","晴天"]}
+{"args":["晴天「为什么？」 周杰倫"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["晴天「我想你…」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫"},"out":["周杰倫","晴天"]}
+{"args":["晴天「我想你…」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["海阔天空「原谅我这一生不羁放纵爱自由！」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"Beyond"},"out":["Beyond","海阔天空"]}
+{"args":["海阔天空「原谅我这一生不羁放纵爱自由！」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["七里香「雨下整夜…」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫"},"out":["周杰倫","七里香"]}
+{"args":["七里香「雨下整夜…」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["孤勇者「爱你孤身走暗巷！」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["孤勇者「爱你孤身走暗巷！」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["小幸运「原来你是我最想留住的幸运…」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"田馥甄"},"out":["田馥甄","小幸运"]}
+{"args":["小幸运「原来你是我最想留住的幸运…」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["Lemon「夢ならばどれほど…」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["Lemon「夢ならばどれほど…」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["《孤勇者》 Cover by 某某"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["某某","孤勇者"]}
+{"args":["《孤勇者》 Piano Cover by Jane"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Jane","孤勇者"]}
+{"args":["「Title」 Cover Me Band"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Cover Me Band","Title"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -1666,8 +1786,32 @@
 {"args":["「夜に駆ける」 Live"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"YOASOBI"},"out":["YOASOBI","夜に駆ける"]}
 {"args":["「夜に駆ける」 Live"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
 {"args":["KOKIA「ありがとう…」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"KOKIA"},"out":["KOKIA","ありがとう…"]}
+{"args":["KOKIA「ありがとう…」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
 {"args":["Aimer「どうして？」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"Aimer"},"out":["Aimer","どうして？"]}
+{"args":["ヨルシカ「言って。」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"ヨルシカ"},"out":["ヨルシカ","言って。"]}
+{"args":["五月天「倔強！」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"五月天"},"out":["五月天","倔強！"]}
+{"args":["宋冬野「斑马，斑马。」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马，斑马。"]}
+{"args":["KOKIA「さよなら、また明日。」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"KOKIA"},"out":["KOKIA","さよなら、また明日。"]}
 {"args":["「夜に駆ける。」(Official Video)"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"YOASOBI"},"out":["YOASOBI","夜に駆ける。"]}
+{"args":["晴天「为什么？」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫"},"out":["周杰倫","晴天"]}
+{"args":["晴天「为什么？」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["晴天「为什么？」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫 Jay Chou"},"out":["周杰倫 Jay Chou","晴天"]}
+{"args":["晴天「为什么？」 周杰倫"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["晴天「我想你…」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫"},"out":["周杰倫","晴天"]}
+{"args":["晴天「我想你…」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["海阔天空「原谅我这一生不羁放纵爱自由！」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"Beyond"},"out":["Beyond","海阔天空"]}
+{"args":["海阔天空「原谅我这一生不羁放纵爱自由！」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["七里香「雨下整夜…」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫"},"out":["周杰倫","七里香"]}
+{"args":["七里香「雨下整夜…」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["孤勇者「爱你孤身走暗巷！」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["孤勇者「爱你孤身走暗巷！」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["小幸运「原来你是我最想留住的幸运…」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"田馥甄"},"out":["田馥甄","小幸运"]}
+{"args":["小幸运「原来你是我最想留住的幸运…」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["Lemon「夢ならばどれほど…」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["Lemon「夢ならばどれほど…」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["《孤勇者》 Cover by 某某"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["某某","孤勇者"]}
+{"args":["《孤勇者》 Piano Cover by Jane"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Jane","孤勇者"]}
+{"args":["「Title」 Cover Me Band"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Cover Me Band","Title"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -1903,8 +2047,32 @@
 {"args":["「夜に駆ける」 Live"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"YOASOBI"},"out":["YOASOBI","夜に駆ける"]}
 {"args":["「夜に駆ける」 Live"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
 {"args":["KOKIA「ありがとう…」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"KOKIA"},"out":["KOKIA","ありがとう…"]}
+{"args":["KOKIA「ありがとう…」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
 {"args":["Aimer「どうして？」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"Aimer"},"out":["Aimer","どうして？"]}
+{"args":["ヨルシカ「言って。」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"ヨルシカ"},"out":["ヨルシカ","言って。"]}
+{"args":["五月天「倔強！」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"五月天"},"out":["五月天","倔強！"]}
+{"args":["宋冬野「斑马，斑马。」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马，斑马。"]}
+{"args":["KOKIA「さよなら、また明日。」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"KOKIA"},"out":["KOKIA","さよなら、また明日。"]}
 {"args":["「夜に駆ける。」(Official Video)"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"YOASOBI"},"out":["YOASOBI","夜に駆ける。"]}
+{"args":["晴天「为什么？」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫"},"out":["周杰倫","晴天"]}
+{"args":["晴天「为什么？」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["晴天「为什么？」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫 Jay Chou"},"out":["周杰倫 Jay Chou","晴天"]}
+{"args":["晴天「为什么？」 周杰倫"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["晴天「我想你…」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫"},"out":["周杰倫","晴天"]}
+{"args":["晴天「我想你…」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["海阔天空「原谅我这一生不羁放纵爱自由！」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"Beyond"},"out":["Beyond","海阔天空"]}
+{"args":["海阔天空「原谅我这一生不羁放纵爱自由！」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["七里香「雨下整夜…」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫"},"out":["周杰倫","七里香"]}
+{"args":["七里香「雨下整夜…」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["孤勇者「爱你孤身走暗巷！」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["孤勇者「爱你孤身走暗巷！」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["小幸运「原来你是我最想留住的幸运…」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"田馥甄"},"out":["田馥甄","小幸运"]}
+{"args":["小幸运「原来你是我最想留住的幸运…」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["Lemon「夢ならばどれほど…」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["Lemon「夢ならばどれほど…」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["《孤勇者》 Cover by 某某"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["某某","孤勇者"]}
+{"args":["《孤勇者》 Piano Cover by Jane"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Jane","孤勇者"]}
+{"args":["「Title」 Cover Me Band"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Cover Me Band","Title"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -2151,8 +2319,32 @@
 {"args":["「夜に駆ける」 Live"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"YOASOBI"},"out":["YOASOBI","夜に駆ける"]}
 {"args":["「夜に駆ける」 Live"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
 {"args":["KOKIA「ありがとう…」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"KOKIA"},"out":["KOKIA","ありがとう…"]}
+{"args":["KOKIA「ありがとう…」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
 {"args":["Aimer「どうして？」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Aimer"},"out":["Aimer","どうして？"]}
+{"args":["ヨルシカ「言って。」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"ヨルシカ"},"out":["ヨルシカ","言って。"]}
+{"args":["五月天「倔強！」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"五月天"},"out":["五月天","倔強！"]}
+{"args":["宋冬野「斑马，斑马。」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马，斑马。"]}
+{"args":["KOKIA「さよなら、また明日。」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"KOKIA"},"out":["KOKIA","さよなら、また明日。"]}
 {"args":["「夜に駆ける。」(Official Video)"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"YOASOBI"},"out":["YOASOBI","夜に駆ける。"]}
+{"args":["晴天「为什么？」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫"},"out":["周杰倫","晴天"]}
+{"args":["晴天「为什么？」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["晴天「为什么？」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫 Jay Chou"},"out":["周杰倫 Jay Chou","晴天"]}
+{"args":["晴天「为什么？」 周杰倫"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["晴天「我想你…」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫"},"out":["周杰倫","晴天"]}
+{"args":["晴天「我想你…」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["海阔天空「原谅我这一生不羁放纵爱自由！」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Beyond"},"out":["Beyond","海阔天空"]}
+{"args":["海阔天空「原谅我这一生不羁放纵爱自由！」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["七里香「雨下整夜…」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫"},"out":["周杰倫","七里香"]}
+{"args":["七里香「雨下整夜…」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["孤勇者「爱你孤身走暗巷！」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["孤勇者「爱你孤身走暗巷！」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["小幸运「原来你是我最想留住的幸运…」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"田馥甄"},"out":["田馥甄","小幸运"]}
+{"args":["小幸运「原来你是我最想留住的幸运…」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["Lemon「夢ならばどれほど…」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["Lemon「夢ならばどれほど…」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["《孤勇者》 Cover by 某某"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["某某","孤勇者"]}
+{"args":["《孤勇者》 Piano Cover by Jane"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Jane","孤勇者"]}
+{"args":["「Title」 Cover Me Band"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Cover Me Band","Title"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -2384,5 +2576,29 @@
 {"args":["「夜に駆ける」 Live"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"YOASOBI"},"out":["YOASOBI","夜に駆ける"]}
 {"args":["「夜に駆ける」 Live"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
 {"args":["KOKIA「ありがとう…」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"KOKIA"},"out":["KOKIA","ありがとう…"]}
+{"args":["KOKIA「ありがとう…」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
 {"args":["Aimer「どうして？」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"Aimer"},"out":["Aimer","どうして？"]}
+{"args":["ヨルシカ「言って。」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"ヨルシカ"},"out":["ヨルシカ","言って。"]}
+{"args":["五月天「倔強！」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"五月天"},"out":["五月天","倔強！"]}
+{"args":["宋冬野「斑马，斑马。」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马，斑马。"]}
+{"args":["KOKIA「さよなら、また明日。」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"KOKIA"},"out":["KOKIA","さよなら、また明日。"]}
 {"args":["「夜に駆ける。」(Official Video)"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"YOASOBI"},"out":["YOASOBI","夜に駆ける。"]}
+{"args":["晴天「为什么？」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫"},"out":["周杰倫","晴天"]}
+{"args":["晴天「为什么？」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["晴天「为什么？」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫 Jay Chou"},"out":["周杰倫 Jay Chou","晴天"]}
+{"args":["晴天「为什么？」 周杰倫"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["晴天「我想你…」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫"},"out":["周杰倫","晴天"]}
+{"args":["晴天「我想你…」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["海阔天空「原谅我这一生不羁放纵爱自由！」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"Beyond"},"out":["Beyond","海阔天空"]}
+{"args":["海阔天空「原谅我这一生不羁放纵爱自由！」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["七里香「雨下整夜…」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫"},"out":["周杰倫","七里香"]}
+{"args":["七里香「雨下整夜…」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["孤勇者「爱你孤身走暗巷！」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["孤勇者「爱你孤身走暗巷！」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["小幸运「原来你是我最想留住的幸运…」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"田馥甄"},"out":["田馥甄","小幸运"]}
+{"args":["小幸运「原来你是我最想留住的幸运…」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["Lemon「夢ならばどれほど…」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["Lemon「夢ならばどれほど…」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["《孤勇者》 Cover by 某某"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["某某","孤勇者"]}
+{"args":["《孤勇者》 Piano Cover by Jane"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Jane","孤勇者"]}
+{"args":["「Title」 Cover Me Band"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Cover Me Band","Title"]}

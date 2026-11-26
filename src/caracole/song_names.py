@@ -18,12 +18,12 @@ Those paths, each reading names here and nowhere else (no page splits a text its
   "[Videoclip Oficial]", "(Letra)", "(Visualizer)", "(Karaoke Version)", "【MV】", a year beside them too); holding CJK,
   two thirds of its letters (CJK characters, Latin letters and digits) a video's or a lyric channel's (``_CJK_NOISE``:
   "『动态歌词MV』", "【抖音】", "【中文字幕】", "(華納 official 高畫質 HD 官方完整版MV)", 20 of 22; never "(Cover 葛東琪)");
-- a lyric quoted in 「」 or 『』, a sentence (ending in 。！？… with a pause in it, ，、； or a space, or a space between
-  two CJK characters) or longer than ``LYRIC_CHARS``, unless it is the whole text:
-  "野人『不再借世人的手 替我开脱，…也能够耐住寂寞。』" is 野人, and "宋冬野「斑马，斑马」" and "Aimer「どうして？」" stay.
-  A long quote of Latin words alone is a title where the words before it are, whole, an artist ``read_names`` knows
-  (the channel's name among them; ``clean`` alone knows none): "Live「Lightning Crashes」" from Live's channel is
-  Lightning Crashes by Live, "Lemon「I still love you even now」" from 米津玄師's is Lemon.
+- a lyric quoted in 「」 or 『』, a sentence (a space between two CJK characters, ending in 。！？…) or longer than
+  ``LYRIC_CHARS``, unless it is the whole text once the video's groups go: "野人『不再借世人的手 替我开脱，…』" is 野人,
+  "宋冬野「斑马，斑马」" stays, and so does "「夜に駆ける。」(Official Video)"'s quote. One that ends as a sentence, or a
+  long one of Latin words alone, is a title where the words before it are, whole, an artist ``read_names`` knows (the
+  channel's name among them; ``clean`` alone knows none): "Aimer「どうして？」" from Aimer's channel is どうして？ by
+  Aimer, "Live「Lightning Crashes」" from Live's Lightning Crashes; "晴天「为什么？」" from 周杰倫's is 晴天.
 
 Then a last part of a video's words after a mark ("… | Official Video"), then such words loose at its end, two or more
 ("… Official Video", "… Con Letra", "… 官方完整版 MV": a run of a lyric channel's words is one of them) or one of a
@@ -57,7 +57,8 @@ written, as "(Live)" is ("周深 大鱼【Live】" from 周深's channel is 大�
    孤勇者《英雄联盟：双城之战》动画主题曲" from 陈奕迅's channel is 孤勇者); with neither, it can't know where the artist
    ends. With no words before it, the words after it, less their groups and a leading "by" in any case, are the
    artist ("《孤勇者》 by 陈奕迅"; before it, a band's own "By" stays: "By Divine Right「Song」"); a title group alone,
-   or with "by" alone, or a tag's or a video's words alone ("《孤勇者》 Cover", "「Lemon」 Piano ver."), names no one.
+   or with "by" alone, or a tag's or a video's words alone ("《孤勇者》 Cover", "「Lemon」 Piano ver."), names no one;
+   such words before a "by" go with it ("《孤勇者》 Piano Cover by Jane" is Jane's).
 3. **A known artist first, or after " by ".** The longest run of the first words that is a known artist's whole name
    is the artist, the rest the title ("silvana estrada que problema"; never a name that ends with a word names leave
    out, ``identity_key``: "Joaquín Sabina y nos dieron las diez"); or the words after the last " by " are, those before
@@ -147,7 +148,6 @@ _GROUPS = re.compile(r"\([^()\[\]]*\)|\[[^\[\]()]*\]|（[^（）]*）|［[^［�
 _LYRIC_QUOTES = "「『"  # the groups that quote a lyric
 _TITLE_OPENERS = "【《「『〈"  # the groups that name a title: 【】《》「」『』〈〉
 _SENTENCE_END = "。！？…"
-_PAUSES = " \uff0c\u3001\uff1b"  # a space, ，、；: a quote that ends as a sentence and pauses in it is a lyric
 _QUOTES = "\"'“”‘’«»「」『』"
 _TOPIC = re.compile(r"^(.*\S)\s+-\s+topic$", re.IGNORECASE)
 _LABEL = re.compile(r"\s*(?:vevo|official|oficial|officiel)(?:\s+channel)?$", re.IGNORECASE)
@@ -211,31 +211,36 @@ def _noise_group(inner: str) -> bool:
 
 
 def _lyric(inner: str) -> bool:
-    """Whether a 「」 or 『』 group's words are a sentence: ending as one with a pause in it (``_PAUSES``), a space
-    between two CJK characters, or, holding a CJK character, longer than ``LYRIC_CHARS``."""
+    """Whether a 「」 or 『』 group's words are a sentence whoever's words come before it: a space between two CJK
+    characters, or, holding a CJK character, longer than ``LYRIC_CHARS``."""
     inner = inner.strip()
-    ends = bool(inner) and inner[-1] in _SENTENCE_END and any(c in _PAUSES for c in inner)
-    return bool(inner) and (ends or _CJK_GAP.search(inner) is not None
-                            or len(inner) > LYRIC_CHARS and _CJK.search(inner) is not None)
+    return _CJK_GAP.search(inner) is not None or len(inner) > LYRIC_CHARS and _CJK.search(inner) is not None
 
 
-def _long_quote(inner: str) -> bool:
-    """Whether a 「」 or 『』 group of no CJK character is longer than ``LYRIC_CHARS``: a lyric, or a title where the
-    words before it are an artist known (``_decoration``)."""
+def _lyric_unless_named(inner: str) -> bool:
+    """Whether a 「」 or 『』 group's words are a sentence but where the words before it are an artist known
+    (``_decoration``): ending as one (。！？…), or of no CJK character and longer than ``LYRIC_CHARS``."""
     inner = inner.strip()
-    return len(inner) > LYRIC_CHARS and _CJK.search(inner) is None
+    return bool(inner) and (inner[-1] in _SENTENCE_END or len(inner) > LYRIC_CHARS and _CJK.search(inner) is None)
+
+
+def _alone(group: re.Match[str], text: str) -> bool:
+    """Whether ``group`` is the whole of ``text`` once its groups of a video's words go."""
+    others = [g for g in _GROUPS.finditer(text) if g.start() != group.start()]
+    return not _GROUPS.sub("", text).strip() and all(_noise_group(g.group()[1:-1]) for g in others)
 
 
 def _decoration(group: re.Match[str], text: str, known: _Known | None) -> bool:
-    """Whether a group of ``text`` is a video's: its words noise, or a lyric quoted where it isn't the whole text; a
-    long quote of Latin words is one but where the words before it are, whole, an artist ``known`` knows."""
+    """Whether a group of ``text`` is a video's: its words noise, or a lyric quoted where it isn't the whole text once
+    those go (``_alone``); a quote that ends as a sentence, or a long one of Latin words, is one but where the words
+    before it are, whole, an artist ``known`` knows."""
     inner = group.group()[1:-1]
     if _noise_group(inner):
         return True
-    if group.group()[0] not in _LYRIC_QUOTES or group.start() == 0 and group.end() == len(text):
+    if group.group()[0] not in _LYRIC_QUOTES or _alone(group, text):
         return False
     before = text[:group.start()]
-    return _lyric(inner) or _long_quote(inner) and not (known is not None and _whole_artist(before, known))
+    return _lyric(inner) or _lyric_unless_named(inner) and not (known is not None and _whole_artist(before, known))
 
 
 def _whole_artist(text: str, known: _Known) -> bool:
@@ -414,9 +419,13 @@ def _artist_words(text: str) -> str:
 
 
 def _without_by(artist: str) -> str:
-    """``artist`` less a leading "by", in any case, a whole word ("by 陈奕迅" is 陈奕迅)."""
-    first, _, rest = artist.partition(" ")
-    return rest if first.casefold() == "by" else artist
+    """``artist`` less a leading "by", in any case, a whole word, and the words before it where they are a tag's or a
+    video's alone ("by 陈奕迅" is 陈奕迅, "Piano Cover by Jane" Jane; "Stand by Me" stays)."""
+    words = artist.split(" ")
+    at = next((i for i, word in enumerate(words) if word.casefold() == "by"), None)
+    if at is None or at > 0 and _own_words(" ".join(words[:at])):
+        return artist
+    return " ".join(words[at + 1:])
 
 
 def _own(part: str) -> str:

@@ -8781,6 +8781,10 @@
 {"args":["['’‘`´ʼ]","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ꀀ"}
 {"args":["['’‘`´ʼ]","Official Video ힰ"],"fn":"re.findall","out":[]}
 {"args":["['’‘`´ʼ]","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ힰ"}
+{"args":["['’‘`´ʼ]","Song (Official Video [4K])"],"fn":"re.findall","out":[]}
+{"args":["['’‘`´ʼ]","Song (Official Video [4K])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song (Official Video [4K])"}
+{"args":["['’‘`´ʼ]","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","out":[]}
+{"args":["['’‘`´ʼ]","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song [Lyrics (HD)] (Live [HD])"}
 {"args":["[\\W_]+","Hotel California - 2013 Remaster"],"fn":"re.findall","out":[" "," - "," "]}
 {"args":["[\\W_]+","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hotel|California|2013|Remaster"}
 {"args":["[\\W_]+","Creep (Acoustic)"],"fn":"re.findall","out":[" (",")"]}
@@ -8879,6 +8883,10 @@
 {"args":["[\\W_]+","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official|Video|ꀀ"}
 {"args":["[\\W_]+","Official Video ힰ"],"fn":"re.findall","out":[" "," "]}
 {"args":["[\\W_]+","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official|Video|ힰ"}
+{"args":["[\\W_]+","Song (Official Video [4K])"],"fn":"re.findall","out":[" ("," "," [","])"]}
+{"args":["[\\W_]+","Song (Official Video [4K])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song|Official|Video|4K|"}
+{"args":["[\\W_]+","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","out":[" ["," (",")] ("," [","])"]}
+{"args":["[\\W_]+","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song|Lyrics|HD|Live|HD|"}
 {"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hotel California - 2013 Remaster"],"fn":"re.findall","out":[]}
 {"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Creep (Acoustic)"],"fn":"re.findall","out":[]}
@@ -8977,6 +8985,10 @@
 {"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ꀀ"}
 {"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video ힰ"],"fn":"re.findall","out":[]}
 {"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ힰ"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Song (Official Video [4K])"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Song (Official Video [4K])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song (Official Video [4K])"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song [Lyrics (HD)] (Live [HD])"}
 {"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Hotel California - 2013 Remaster"],"fn":"re.findall","out":[]}
 {"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Creep (Acoustic)"],"fn":"re.findall","out":[]}
@@ -9075,6 +9087,10 @@
 {"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ꀀ"}
 {"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Official Video ힰ"],"fn":"re.findall","out":[]}
 {"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ힰ"}
+{"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Song (Official Video [4K])"],"fn":"re.findall","out":[]}
+{"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Song (Official Video [4K])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song (Official Video [4K])"}
+{"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","out":[]}
+{"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song [Lyrics (HD)] (Live [HD])"}
 {"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Hotel California - 2013 Remaster"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[" - 2013 Remaster"]}
 {"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Hotel California|"}
 {"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Creep (Acoustic)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
@@ -9173,6 +9189,10 @@
 {"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Official Video ꀀ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ꀀ"}
 {"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Official Video ힰ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Official Video ힰ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ힰ"}
+{"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Song (Official Video [4K])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Song (Official Video [4K])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song (Official Video [4K])"}
+{"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song [Lyrics (HD)] (Live [HD])"}
 {"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Hotel California - 2013 Remaster"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Creep (Acoustic)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
@@ -9271,6 +9291,10 @@
 {"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Official Video ꀀ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ꀀ"}
 {"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Official Video ힰ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Official Video ힰ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ힰ"}
+{"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Song (Official Video [4K])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Song (Official Video [4K])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song (Official Video [4K])"}
+{"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song [Lyrics (HD)] (Live [HD])"}
 {"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Hotel California - 2013 Remaster"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Creep (Acoustic)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[" (Acoustic)"]}
@@ -9369,6 +9393,10 @@
 {"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Official Video ꀀ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ꀀ"}
 {"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Official Video ힰ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Official Video ힰ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ힰ"}
+{"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Song (Official Video [4K])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Song (Official Video [4K])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song (Official Video [4K])"}
+{"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song [Lyrics (HD)] (Live [HD])"}
 {"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Hotel California - 2013 Remaster"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Creep (Acoustic)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":["Acoustic"]}
@@ -9467,6 +9495,10 @@
 {"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Official Video ꀀ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ꀀ"}
 {"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Official Video ힰ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Official Video ힰ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ힰ"}
+{"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Song (Official Video [4K])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Song (Official Video [4K])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song (Official Video [4K])"}
+{"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song [Lyrics (HD)] (Live [HD])"}
 {"args":["\\b(?:live|vivo|directo)\\b","Hotel California - 2013 Remaster"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\b(?:live|vivo|directo)\\b","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["\\b(?:live|vivo|directo)\\b","Creep (Acoustic)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
@@ -9565,6 +9597,10 @@
 {"args":["\\b(?:live|vivo|directo)\\b","Official Video ꀀ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ꀀ"}
 {"args":["\\b(?:live|vivo|directo)\\b","Official Video ힰ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\b(?:live|vivo|directo)\\b","Official Video ힰ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ힰ"}
+{"args":["\\b(?:live|vivo|directo)\\b","Song (Official Video [4K])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\b(?:live|vivo|directo)\\b","Song (Official Video [4K])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song (Official Video [4K])"}
+{"args":["\\b(?:live|vivo|directo)\\b","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":["Live"]}
+{"args":["\\b(?:live|vivo|directo)\\b","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song [Lyrics (HD)] (| [HD])"}
 {"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Hotel California - 2013 Remaster"],"fn":"re.findall","out":[" - "]}
 {"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hotel California|2013 Remaster"}
 {"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Creep (Acoustic)"],"fn":"re.findall","out":["(",")"]}
@@ -9663,6 +9699,10 @@
 {"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ꀀ"}
 {"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Official Video ힰ"],"fn":"re.findall","out":[]}
 {"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ힰ"}
+{"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Song (Official Video [4K])"],"fn":"re.findall","out":["(","[","]",")"]}
+{"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Song (Official Video [4K])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song |Official Video |4K||"}
+{"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","out":["[","(",")","]","(","[","]",")"]}
+{"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song |Lyrics |HD|| |Live |HD||"}
 {"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Hotel California - 2013 Remaster"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Creep (Acoustic)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
@@ -9761,6 +9801,10 @@
 {"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Official Video ꀀ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ꀀ"}
 {"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Official Video ힰ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Official Video ힰ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ힰ"}
+{"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Song (Official Video [4K])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Song (Official Video [4K])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song (Official Video [4K])"}
+{"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song [Lyrics (HD)] (Live [HD])"}
 {"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Hotel California - 2013 Remaster"],"fn":"re.findall","out":[]}
 {"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Creep (Acoustic)"],"fn":"re.findall","out":["(Acoustic)"]}
@@ -9859,6 +9903,10 @@
 {"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ꀀ"}
 {"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Official Video ힰ"],"fn":"re.findall","out":[]}
 {"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ힰ"}
+{"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Song (Official Video [4K])"],"fn":"re.findall","out":["(Official Video [4K]"]}
+{"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Song (Official Video [4K])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song |)"}
+{"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","out":["[Lyrics (HD)","(Live [HD]"]}
+{"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song |] |)"}
 {"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Hotel California - 2013 Remaster"],"fn":"re.findall","out":["","","","","","","","","",""]}
 {"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"H||l C|l||r|| - 2013 R||s|r"}
 {"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Creep (Acoustic)"],"fn":"re.findall","out":["","","","",""]}
@@ -9957,6 +10005,10 @@
 {"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"O||||l V||| ꀀ"}
 {"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Official Video ힰ"],"fn":"re.findall","out":["f","","","","","",""]}
 {"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"O||||l V||| ힰ"}
+{"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Song (Official Video [4K])"],"fn":"re.findall","out":["","","f","","","","","",""]}
+{"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Song (Official Video [4K])"],"fn":"re.sub","kw":{"repl":"|"},"out":"S||g (O||||l V||| [4K])"}
+{"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","out":["","","","",""]}
+{"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"repl":"|"},"out":"S||g [Ly|cs (HD)] (L|| [HD])"}
 {"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Hotel California - 2013 Remaster"],"fn":"re.findall","out":[" - "]}
 {"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hotel California|2013 Remaster"}
 {"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Creep (Acoustic)"],"fn":"re.findall","out":[]}
@@ -10055,6 +10107,10 @@
 {"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ꀀ"}
 {"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Official Video ힰ"],"fn":"re.findall","out":[]}
 {"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ힰ"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Song (Official Video [4K])"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Song (Official Video [4K])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song (Official Video [4K])"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song [Lyrics (HD)] (Live [HD])"}
 {"args":["\\s+by\\s+","Hotel California - 2013 Remaster"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\s+by\\s+","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["\\s+by\\s+","Creep (Acoustic)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
@@ -10153,6 +10209,10 @@
 {"args":["\\s+by\\s+","Official Video ꀀ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ꀀ"}
 {"args":["\\s+by\\s+","Official Video ힰ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\s+by\\s+","Official Video ힰ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ힰ"}
+{"args":["\\s+by\\s+","Song (Official Video [4K])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s+by\\s+","Song (Official Video [4K])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song (Official Video [4K])"}
+{"args":["\\s+by\\s+","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s+by\\s+","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song [Lyrics (HD)] (Live [HD])"}
 {"args":["(?:19|20)\\d\\d","Hotel California - 2013 Remaster"],"fn":"re.findall","out":["2013"]}
 {"args":["(?:19|20)\\d\\d","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hotel California - | Remaster"}
 {"args":["(?:19|20)\\d\\d","Creep (Acoustic)"],"fn":"re.findall","out":[]}
@@ -10251,6 +10311,10 @@
 {"args":["(?:19|20)\\d\\d","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ꀀ"}
 {"args":["(?:19|20)\\d\\d","Official Video ힰ"],"fn":"re.findall","out":[]}
 {"args":["(?:19|20)\\d\\d","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ힰ"}
+{"args":["(?:19|20)\\d\\d","Song (Official Video [4K])"],"fn":"re.findall","out":[]}
+{"args":["(?:19|20)\\d\\d","Song (Official Video [4K])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song (Official Video [4K])"}
+{"args":["(?:19|20)\\d\\d","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","out":[]}
+{"args":["(?:19|20)\\d\\d","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song [Lyrics (HD)] (Live [HD])"}
 {"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Hotel California - 2013 Remaster"],"fn":"re.findall","out":[]}
 {"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Creep (Acoustic)"],"fn":"re.findall","out":["(Acoustic)"]}
@@ -10349,6 +10413,10 @@
 {"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ꀀ"}
 {"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Official Video ힰ"],"fn":"re.findall","out":[]}
 {"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ힰ"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Song (Official Video [4K])"],"fn":"re.findall","out":["[4K]"]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Song (Official Video [4K])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song (Official Video |)"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","out":["(HD)","[HD]"]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song [Lyrics |] (Live |)"}
 {"args":["^(.*\\S)\\s+-\\s+topic$","Hotel California - 2013 Remaster"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["^(.*\\S)\\s+-\\s+topic$","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["^(.*\\S)\\s+-\\s+topic$","Creep (Acoustic)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
@@ -10447,6 +10515,10 @@
 {"args":["^(.*\\S)\\s+-\\s+topic$","Official Video ꀀ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ꀀ"}
 {"args":["^(.*\\S)\\s+-\\s+topic$","Official Video ힰ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["^(.*\\S)\\s+-\\s+topic$","Official Video ힰ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ힰ"}
+{"args":["^(.*\\S)\\s+-\\s+topic$","Song (Official Video [4K])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["^(.*\\S)\\s+-\\s+topic$","Song (Official Video [4K])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song (Official Video [4K])"}
+{"args":["^(.*\\S)\\s+-\\s+topic$","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["^(.*\\S)\\s+-\\s+topic$","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song [Lyrics (HD)] (Live [HD])"}
 {"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Hotel California - 2013 Remaster"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Creep (Acoustic)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
@@ -10545,6 +10617,10 @@
 {"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Official Video ꀀ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ꀀ"}
 {"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Official Video ힰ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Official Video ힰ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ힰ"}
+{"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Song (Official Video [4K])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Song (Official Video [4K])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song (Official Video [4K])"}
+{"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song [Lyrics (HD)] (Live [HD])"}
 {"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Hotel California - 2013 Remaster"],"fn":"re.findall","out":["Hotel","California","2013","Remaster"]}
 {"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | - | |"}
 {"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Creep (Acoustic)"],"fn":"re.findall","out":["Creep","Acoustic"]}
@@ -10643,6 +10719,10 @@
 {"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | |"}
 {"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Official Video ힰ"],"fn":"re.findall","out":["Official","Video","ힰ"]}
 {"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Song (Official Video [4K])"],"fn":"re.findall","out":["Song","Official","Video","4K"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Song (Official Video [4K])"],"fn":"re.sub","kw":{"repl":"|"},"out":"| (| | [|])"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","out":["Song","Lyrics","HD","Live","HD"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"repl":"|"},"out":"| [| (|)] (| [|])"}
 {"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hotel California - 2013 Remaster"],"fn":"re.findall","out":[]}
 {"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Creep (Acoustic)"],"fn":"re.findall","out":[]}
@@ -10741,6 +10821,10 @@
 {"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ꀀ"}
 {"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video ힰ"],"fn":"re.findall","out":[]}
 {"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ힰ"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Song (Official Video [4K])"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Song (Official Video [4K])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song (Official Video [4K])"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song [Lyrics (HD)] (Live [HD])"}
 {"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Hotel California - 2013 Remaster"],"fn":"re.findall","out":[]}
 {"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Creep (Acoustic)"],"fn":"re.findall","out":[]}
@@ -10839,3 +10923,7 @@
 {"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ꀀ"}
 {"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Official Video ힰ"],"fn":"re.findall","out":[]}
 {"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ힰ"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Song (Official Video [4K])"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Song (Official Video [4K])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song (Official Video [4K])"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song [Lyrics (HD)] (Live [HD])"}

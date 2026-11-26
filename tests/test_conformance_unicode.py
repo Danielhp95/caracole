@@ -725,6 +725,8 @@ NAMES = [
     "《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）", "\U00020000\U0002ebef \U0002ebf0",
     # The edges of CJK's ranges, beside a video's words: U+F8FF, U+F900, U+A000, U+D7B0.
     "Official Video \uf8ff", "Official Video \uf900", "Official Video \ua000", "Official Video \ud7b0",
+    # A Latin group nested in the other Latin kind: song_names' _GROUPS finds the inner one.
+    "Song (Official Video [4K])", "Song [Lyrics (HD)] (Live [HD])",
 ]
 
 
