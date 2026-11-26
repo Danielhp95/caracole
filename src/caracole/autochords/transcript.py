@@ -6,9 +6,11 @@ kept, unused while the song has lyrics, and goes with the song (songs._PER_SONG_
 its ``audio`` and ``audio_mtime`` are the song's own: other audio (another video pasted, a purchase dropped into
 Music/) is no use to it, and the song is offered a transcript again. A song heard to have nothing sung keeps
 ``transcribe:none:<song id>`` instead, for that audio alone, with why and by whom (``by`` "caracole"); one the owner
-said isn't sung (``caracole transcribe --none``, the card's Not sung: chords only) keeps it ``by`` "you", for the song
-whatever its audio (the owner's word is about the song, not a file), until they say it is (``anyway``: Transcribe
-anyway). Neither crosses to another caracole. One whose audio can't be read keeps auto-chords' record of it,
+said isn't sung (``caracole transcribe --none``, the card's Not sung: chords only) keeps it ``by`` "you", for that
+audio alone too: a new file is a new start (often the sung version in place of an instrumental cut), heard again and
+marked again if need be; until then they may say it is (``anyway``: Transcribe anyway). Each is said as whose it is:
+the sheet's note (``SILENT``, ``NOT_SUNG``), the card's offer (``offers``' ``nothing`` and ``unsung``). Neither
+crosses to another caracole. One whose audio can't be read keeps auto-chords' record of it,
 ``autochords:failed:<song id>`` (run.py's), and is offered none until it changes. Audio auto-chords reads and
 Whisper's decoder (the ffmpeg program) refuses keeps ``transcribe:unreadable:<song id>`` (``note_whisper_cant_read``),
 written by every hearing: offered none until it changes, its chords made, but asked for by hand (``anyway``, ``caracole
@@ -33,7 +35,7 @@ from caracole.songs import HUMAN_SHEET, Song, list_songs
 
 TRANSCRIPT = "transcript:"  # + song id: the Transcript kept for the song's audio
 HEARD_NOTHING = "transcribe:none:"  # + song id: when the song's audio was transcribed to nothing
-UNREADABLE = "autochords:failed:"  # + song id: audio auto-chords or a transcription couldn't read (run.py writes it)
+UNREADABLE = "autochords:failed:"  # + song id: audio auto-chords couldn't read (run.py writes it)
 WHISPER_CANT_READ = "transcribe:unreadable:"  # + song id: audio Whisper can't load, which auto-chords reads
 WHISPER_UNREADABLE_WHY = "Whisper can't read its audio"  # why_not_offered's word for it
 # What the owner can do about it, said after it wherever a transcription is refused for it.
@@ -44,6 +46,7 @@ NO_TRANSCRIPT = "it has no transcript"  # why_not_unsung's word for a song with 
 LYRICS_SOURCE = "transcript"  # a version's raw["lyrics_source"] when the sheet's words are the transcript's
 NOTE = "Lyrics transcribed from the audio (Whisper), unverified"
 SILENT = "Instrumental: nothing sung was heard in the audio"  # the sheet's note line over nothing sung
+NOT_SUNG = "Chords only: you said it isn't sung"  # the sheet's note line over the owner's mark (``said_not_sung``)
 ALREADY_TRANSCRIBED = "already transcribed"  # why_not_offered's word for a song whose own audio has a transcript
 MODEL = "whisper-large-v3"
 
@@ -105,30 +108,29 @@ def transcript_of(conn: sqlite3.Connection, song: Song) -> Transcript | None:
 
 def note_heard_nothing(conn: sqlite3.Connection, song: Song, stamp: str, *, why: str, by: str) -> None:
     """The song's current audio noted to have nothing sung, at ``stamp``: ``why`` (words.py's "sung 6.2 s", "5 words
-    in 1:10 sung", or "you said so") and ``by`` whom ("caracole", by those rules; "you", the owner's word, which
-    holds for the song whatever its audio: ``said_not_sung``)."""
+    in 1:10 sung", or "you said so") and ``by`` whom ("caracole", by those rules; "you", the owner's word:
+    ``said_not_sung``)."""
     kv_set_json(conn, f"{HEARD_NOTHING}{song.id}",
                 {"audio": song.audio_path, "audio_mtime": song.audio_mtime, "at": stamp, "why": why, "by": by})
     kv_delete(conn, f"{WHISPER_CANT_READ}{song.id}")
 
 
 def said_not_sung(conn: sqlite3.Connection, song: Song) -> bool:
-    """Whether the owner said the song isn't sung (``by`` "you"): for the song, whatever its audio now."""
+    """Whether the owner said the song's current audio isn't sung (``by`` "you"): a new file is a new start."""
     kept = kv_get_json(conn, f"{HEARD_NOTHING}{song.id}")
-    return isinstance(kept, dict) and kept.get("by") == "you"
+    return (isinstance(kept, dict) and kept.get("by") == "you"
+            and _own_audio(song, kept.get("audio"), kept.get("audio_mtime")))
 
 
 def heard_nothing(conn: sqlite3.Connection, song: Song) -> bool:
-    """Whether the song's current audio was transcribed to nothing, or the owner said the song isn't sung."""
+    """Whether the song's current audio was transcribed to nothing, or the owner said it isn't sung."""
     kept = kv_get_json(conn, f"{HEARD_NOTHING}{song.id}")
-    if not isinstance(kept, dict):
-        return False
-    return kept.get("by") == "you" or _own_audio(song, kept.get("audio"), kept.get("audio_mtime"))
+    return isinstance(kept, dict) and _own_audio(song, kept.get("audio"), kept.get("audio_mtime"))
 
 
 def drop_transcript(conn: sqlite3.Connection, song: Song, stamp: str) -> None:
-    """The owner's "it isn't sung": the song's transcript dropped, and the song noted not sung by their word, so that
-    nothing hears it again (the card's, the nightly pass's, a sheet from a video's) until they say it is."""
+    """The owner's "it isn't sung": the song's transcript dropped, and its audio noted not sung by their word, so that
+    nothing hears that audio again (the card's, the nightly pass's, a sheet from a video's) until they say it is."""
     kv_delete(conn, f"{TRANSCRIPT}{song.id}")
     note_heard_nothing(conn, song, stamp, why="you said so", by="you")
 
@@ -209,10 +211,11 @@ def offered_song_ids(conn: sqlite3.Connection, cfg: Config, overrides: Overrides
 
 
 def offers(conn: sqlite3.Connection, cfg: Config, overrides: Overrides) -> dict[str, list[int]]:
-    """The served card's offers, by song id: ``songs`` a transcription (``why_not_offered``), ``nothing`` Transcribe
-    anyway (heard to have nothing sung, or said not sung, and offered one but for that), ``transcribed`` Not sung:
-    chords only (``why_not_unsung``). No model is asked."""
-    songs, nothing, transcribed = [], [], []
+    """The served card's offers, by song id: ``songs`` a transcription (``why_not_offered``); Transcribe anyway,
+    offered one but for nothing sung, told apart by whose word it is: ``nothing``, heard to have nothing sung, and
+    ``unsung``, said not sung by the owner; ``transcribed`` Not sung: chords only (``why_not_unsung``). No model is
+    asked."""
+    songs, nothing, unsung, transcribed = [], [], [], []
     for s in list_songs(conn):
         why = why_not_offered(conn, cfg, s, overrides)
         if why is None:
@@ -220,5 +223,6 @@ def offers(conn: sqlite3.Connection, cfg: Config, overrides: Overrides) -> dict[
         elif why == ALREADY_TRANSCRIBED:
             transcribed.append(s.id)
         elif heard_nothing(conn, s) and why_not_offered(conn, cfg, s, overrides, anyway=True) is None:
-            nothing.append(s.id)
-    return {"songs": sorted(songs), "nothing": sorted(nothing), "transcribed": sorted(transcribed)}
+            (unsung if said_not_sung(conn, s) else nothing).append(s.id)
+    return {"songs": sorted(songs), "nothing": sorted(nothing), "unsung": sorted(unsung),
+            "transcribed": sorted(transcribed)}

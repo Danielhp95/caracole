@@ -477,13 +477,14 @@
   // is over (``offerAfter``, ``readTranscriptions``: GET /transcribe), so a sheet from a video that found no lyrics
   // offers it at once, a transcription that failed offers it again, and one made meanwhile offers it no more.
   // The owner's word over caracole's, the same way (``overrideOffer``): a song heard to have nothing sung
-  // (``server.transcribe.nothing``) has Transcribe anyway (``force=1``), one with a transcript kept
-  // (``server.transcribe.transcribed``) Not sung: chords only (``none=1``).
+  // (``server.transcribe.nothing``), or said not sung by you (``unsung``, its hint your word), has Transcribe anyway
+  // (``force=1``), one with a transcript kept (``server.transcribe.transcribed``) Not sung: chords only (``none=1``).
   const TRANSCRIBE = server && server.transcribe && typeof server.transcribe === "object" ? server.transcribe : null;
   const TRANSCRIBES = Boolean(TRANSCRIBE && TRANSCRIBE.ok === true);  // only then is the offer read again
   const offeredIn = (body, name) => new Set(body && body.ok === true ? listOf(body[name]).map(Number) : []);
   let transcribable = offeredIn(TRANSCRIBE, "songs");
   let nothingHeard = offeredIn(TRANSCRIBE, "nothing");
+  let saidUnsung = offeredIn(TRANSCRIBE, "unsung");
   let unsung = offeredIn(TRANSCRIBE, "transcribed");
   const transcribeHint = () => "From the audio, " + String(TRANSCRIBE.time || "") + ".";
   // No request of the song waits or runs, and it isn't going.
@@ -493,7 +494,7 @@
   };
   const offersTranscription = (id) => transcribable.has(Number(id)) && freeToAsk(id);
   const transcribing = (id) => transcribable.delete(Number(id));
-  const offeredAny = (id) => transcribable.has(id) || nothingHeard.has(id) || unsung.has(id);
+  const offeredAny = (id) => transcribable.has(id) || nothingHeard.has(id) || saidUnsung.has(id) || unsung.has(id);
   // A song that may be offered one once its job is over: its lyrics missing, and a sheet from YouTube for it (no human
   // sheet, not ignored, no purchase: its card's ``youtubeSheet``), or an auto sheet (a purchase's), as a sheet from a
   // video or a transcription leaves it.
@@ -534,6 +535,7 @@
         };
         transcribable = differ(transcribable, offeredIn(body, "songs"));
         nothingHeard = differ(nothingHeard, offeredIn(body, "nothing"));
+        saidUnsung = differ(saidUnsung, offeredIn(body, "unsung"));
         unsung = differ(unsung, offeredIn(body, "transcribed"));
         for (const id of changed) cardAgain(id);
         if (changed.size) document.dispatchEvent(new CustomEvent("caracole:transcribe"));
@@ -583,25 +585,28 @@
   };
   // The owner's word over caracole's on a song's card, served: Transcribe anyway for a song heard to have nothing
   // sung (caracole transcribe --force: its words heard whatever the singing found), Not sung: chords only for one
-  // with a transcript kept (--none: the transcript dropped, its sheet made again of its chords alone, never heard
-  // again); posted in place as Transcribe the lyrics is, and gone once asked for.
+  // with a transcript kept (--none: the transcript dropped, its sheet made again of its chords alone, that audio never
+  // heard again); a song you said isn't sung says so, with Transcribe anyway; posted in place as Transcribe the
+  // lyrics is, and gone once asked for.
   const overrideOffer = (s) => {
     const id = Number(s.id);
-    const anyway = nothingHeard.has(id);
+    const said = saidUnsung.has(id);  // your word, not what was heard
+    const anyway = said || nothingHeard.has(id);
     if (!(anyway || unsung.has(id)) || !freeToAsk(id)) return null;
     const form = songForm(anyway ? "transcribe-anyway" : "not-sung", "/transcribe", s);
     form.appendChild(hidden(anyway ? "force" : "none", "1"));
-    const said = el("p", "hint", anyway ? "Nothing sung was heard in its audio." :
+    const hint = el("p", "hint", said ? "You said it isn't sung." : anyway ? "Nothing sung was heard in its audio." :
       "Its words were heard from the audio, unverified.");
     const go = el("button", "btn small", anyway ? "Transcribe anyway" : "Not sung: chords only");
     go.type = "submit";
     go.setAttribute("aria-label", (anyway ? "Transcribe the lyrics of " : "Not sung: make the chords alone of ") +
       String(s.title) + " by " + String(s.artist) + (anyway ? " anyway" : ""));
     go.title = anyway ? "Whisper hears it all the same, and the auto sheet is made again over its words." :
-      "Its transcript is dropped, the auto sheet made again of its chords alone, and it is never heard again.";
-    form.append(said, go);
+      "Its transcript is dropped, the auto sheet made again of its chords alone, and this audio is never heard again.";
+    form.append(hint, go);
     postInPlace(form, go, s, (body) => {
       nothingHeard.delete(id);
+      saidUnsung.delete(id);
       unsung.delete(id);
       return body.job;
     });

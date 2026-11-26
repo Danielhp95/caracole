@@ -732,6 +732,15 @@ def test_a_sheet_over_nothing_sung_is_ready_chords_only():
     assert outcome(job, job_line(job, SHEET), SHEET).reason == "Chords only: nothing sung was heard."
 
 
+def test_a_transcription_the_owner_said_isnt_sung_is_ready_in_their_words():
+    # caracole transcribe --none: the Journal's Ready says it is the owner's word, from the chords stage's words;
+    # a sheet caracole heard nothing in keeps its own (above).
+    job = transcribe_job("done", TRANSCRIBED | {"vocals": ("skipped", "you said nothing is sung"),
+                                                "words": ("done", "transcript dropped"),
+                                                "chords": ("done", HOLDS["said"])})
+    assert outcome(job, job_line(job, SHEET), SHEET).reason == "Chords only: you said it isn't sung."
+
+
 # --- a song's lyrics transcribed from its audio ---------------------------------------------------------------
 
 

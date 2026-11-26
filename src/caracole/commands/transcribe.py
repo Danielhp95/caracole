@@ -9,9 +9,9 @@ what a long stage is doing is a live line on a terminal and a line a minute in t
 
 The owner's word over caracole's either way: ``--force`` ("it is sung", the card's Transcribe anyway) hears a song
 heard to have nothing sung, or said not sung, or whose audio Whisper couldn't load (after an ffmpeg or Whisper
-upgrade), with neither rule of nothing sung; ``--none`` ("it isn't sung", Not sung: chords only) drops a song's
-transcript, notes it not sung for good, whatever its audio, until ``--force``, and makes its sheet again of its chords
-alone.
+upgrade), with neither rule of nothing sung (a song offered a transcription anyway is simply transcribed); ``--none``
+("it isn't sung", Not sung: chords only) drops a song's transcript, notes its audio not sung, never heard again until
+``--force`` or a new file (a new file is a new start), and makes its sheet again of its chords alone.
 
 It takes caracole's lock as asked for now, and hands it to a waiting lookup before each long stage. It exits 0 once
 the sheet is made; 2 for both ``--force`` and ``--none``; 1 for a song not offered a transcription (with ``--none``,
@@ -45,10 +45,12 @@ def register(app: typer.Typer) -> None:
         ),
         force: bool = typer.Option(
             False, "--force",
-            help="It is sung: hear it even where nothing sung was heard, you said so, or Whisper couldn't read it.",
+            help="It is sung: hear it even where nothing sung was heard, you said so, or Whisper couldn't read it "
+                 "(a song offered a transcription is simply transcribed).",
         ),
         none: bool = typer.Option(
-            False, "--none", help="It isn't sung: drop its transcript, never hear it again, its sheet the chords alone.",
+            False, "--none",
+            help="It isn't sung: drop its transcript, never hear this audio again, its sheet the chords alone.",
         ),
         progress: bool = typer.Option(False, "--progress", help="A JSON line per stage too, for caracole serve."),
     ) -> None:

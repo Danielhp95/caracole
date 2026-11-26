@@ -1018,7 +1018,7 @@ def test_force_hears_the_whole_song_where_no_singing_was_found(conn, cfg, monkey
 def test_none_drops_the_transcript_and_makes_the_chords_alone(conn, cfg):
     # Whisper's words over a pad passed the rules: the owner says it isn't sung. Its transcript goes, the song noted
     # not sung by their word, and its sheet is made again of its chords alone; neither model runs.
-    from caracole.autochords.transcript import SAID_NOT_SUNG, SILENT
+    from caracole.autochords.transcript import NOT_SUNG, SAID_NOT_SUNG, SILENT
 
     song = offered(conn, cfg)
     assert make(cfg)[0].ok and kept(conn, song) is not None
@@ -1029,7 +1029,7 @@ def test_none_drops_the_transcript_and_makes_the_chords_alone(conn, cfg):
     assert ends["song"] == ("done", "in the book")
     assert ends["vocals"] == ("skipped", "you said nothing is sung")
     assert ends["words"] == ("done", "transcript dropped")
-    assert ends["chords"] == ("done", "chords only: nothing sung was heard")
+    assert ends["chords"] == ("done", "chords only: you said it isn't sung")  # the owner's word, not what was heard
     assert ends["pdf"] == ("done", "made")
     assert separator.calls == transcriber.calls == [] and recognizer.calls
     assert kept(conn, song) is None and not result.transcript_kept
@@ -1037,14 +1037,14 @@ def test_none_drops_the_transcript_and_makes_the_chords_alone(conn, cfg):
     assert (noted["why"], noted["by"]) == ("you said so", "you")
     song = get_song(conn, song.id)
     sheet = auto_sheet(cfg, conn, song).read_text(encoding="utf-8")
-    assert NOTE not in sheet and SILENT in sheet and "Somos" not in sheet
+    assert NOTE not in sheet and NOT_SUNG in sheet and SILENT not in sheet and "Somos" not in sheet
     assert why_not_offered(conn, cfg, song, Overrides()) == SAID_NOT_SUNG
     assert why_not_offered(conn, cfg, song, Overrides(), anyway=True) is None  # until the owner says it is
-    # Their word is about the song, not a file: other audio is not heard either.
+    # Their word is about that audio: a new file is a new start, offered a transcription again.
     other = Path(song.audio_path).with_name("other.wav")
     wav(other, 60.0)
     update_song(conn, song.id, audio_path=str(other), audio_mtime=other.stat().st_mtime)
-    assert why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) == SAID_NOT_SUNG
+    assert why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) is None
 
 
 def test_none_is_refused_for_a_song_with_no_transcript_and_changes_nothing(conn, cfg):

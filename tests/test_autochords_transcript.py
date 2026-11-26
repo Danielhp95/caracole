@@ -178,7 +178,7 @@ def test_a_song_with_lyrics_is_told_so_before_whisper_cant_read_its_audio(conn, 
     assert tr.why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) == "ignored"
 
 
-def test_the_owners_not_sung_holds_for_the_song_whatever_its_audio(conn, cfg, tmp_path):
+def test_the_owners_not_sung_holds_for_that_audio_and_a_new_file_is_heard_again(conn, cfg, tmp_path):
     song = youtube_song(conn, tmp_path)
     tr.keep_transcript(conn, song, made(song))
     assert tr.why_not_unsung(conn, cfg, song, Overrides()) is None
@@ -186,9 +186,11 @@ def test_the_owners_not_sung_holds_for_the_song_whatever_its_audio(conn, cfg, tm
     assert tr.transcript_of(conn, song) is None and tr.said_not_sung(conn, song)
     assert tr.why_not_offered(conn, cfg, song, Overrides()) == tr.SAID_NOT_SUNG
     assert tr.why_not_unsung(conn, cfg, song, Overrides()) == tr.NO_TRANSCRIPT
-    moved = dataclasses.replace(song, audio_mtime=(song.audio_mtime or 0) + 5)  # a new file: still the owner's word
-    assert tr.heard_nothing(conn, moved) and tr.why_not_offered(conn, cfg, moved, Overrides()) == tr.SAID_NOT_SUNG
-    assert tr.offers(conn, cfg, Overrides()) == {"songs": [], "nothing": [song.id], "transcribed": []}
+    assert tr.heard_nothing(conn, song)
+    assert tr.offers(conn, cfg, Overrides()) == {"songs": [], "nothing": [], "unsung": [song.id], "transcribed": []}
+    moved = dataclasses.replace(song, audio_mtime=(song.audio_mtime or 0) + 5)  # a new file: a new start
+    assert not tr.heard_nothing(conn, moved) and not tr.said_not_sung(conn, moved)
+    assert tr.why_not_offered(conn, cfg, moved, Overrides()) is None
     tr.keep_transcript(conn, song, made(song))  # Transcribe anyway heard it: their word is gone with it
     assert not tr.said_not_sung(conn, song)
-    assert tr.offers(conn, cfg, Overrides()) == {"songs": [], "nothing": [], "transcribed": [song.id]}
+    assert tr.offers(conn, cfg, Overrides()) == {"songs": [], "nothing": [], "unsung": [], "transcribed": [song.id]}

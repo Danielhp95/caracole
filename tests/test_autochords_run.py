@@ -1988,6 +1988,8 @@ def test_nothing_sung_is_counted_and_said_on_the_sheet(conn, cfg, tmp_path, loud
         hearing.close()
     assert (stats.heard, stats.silent, stats.generated) == (0, 1, 1)
     assert SILENT in auto_sheet(cfg, conn, s) and auto_raw(conn, s)["heard_nothing"] is True
+    # What caracole heard keeps its own words, never the owner's.
+    assert "you said" not in auto_sheet(cfg, conn, s) and "not_sung_by" not in auto_raw(conn, s)
 
 
 def test_audio_whisper_cant_load_gets_its_chords_and_is_never_heard_every_night(conn, cfg, tmp_path, loud):
@@ -2022,22 +2024,29 @@ def test_audio_whisper_cant_load_gets_its_chords_and_is_never_heard_every_night(
 
 
 def test_a_song_said_not_sung_is_never_heard_at_night(conn, cfg, tmp_path, loud):
-    # The owner's Not sung: chords only (caracole transcribe --none): the nightly pass hears it no more, nor its next
-    # file (their word is about the song, not its audio), its sheet the chords alone, until they say it is sung.
-    from caracole.autochords.transcript import SAID_NOT_SUNG, SILENT, drop_transcript, why_not_offered
+    # The owner's Not sung: chords only (caracole transcribe --none): the nightly pass never hears that audio again,
+    # its sheet the chords alone and said as the owner's word, never as nothing heard. A new file is a new start
+    # (often the sung version in place of an instrumental cut): heard once more.
+    from caracole.autochords.transcript import NOT_SUNG, SAID_NOT_SUNG, SILENT, drop_transcript, why_not_offered
 
     s = offered_song(conn, cfg, tmp_path, "River Road")
     drop_transcript(conn, s, "2026-11-25T00:00:00Z")
+    assert why_not_offered(conn, cfg, s, Overrides()) == SAID_NOT_SUNG
     hearing = hearing_of(cfg)
     try:
         stats = run(conn, cfg, hearing=hearing, transcriptions=3)
         assert hearing.separator.calls == [] and hearing.transcriber.calls == []
         assert (stats.generated, stats.heard, stats.silent) == (1, 0, 0)
-        assert SILENT in auto_sheet(cfg, conn, s) and auto_raw(conn, s)["heard_nothing"] is True
+        text = auto_sheet(cfg, conn, s)
+        assert NOT_SUNG == "Chords only: you said it isn't sung"
+        assert NOT_SUNG in text and SILENT not in text
+        assert auto_raw(conn, s)["heard_nothing"] is True and auto_raw(conn, s)["not_sung_by"] == "you"
+        assert run(conn, cfg, hearing=hearing, transcriptions=3).skipped == 1 and hearing.separator.calls == []
         later = with_audio(conn, tmp_path, s, seconds=60.0, name="River Road (2).wav")  # a new file
-        assert why_not_offered(conn, cfg, later, Overrides()) == SAID_NOT_SUNG
+        assert why_not_offered(conn, cfg, later, Overrides()) is None
         again = run(conn, cfg, hearing=hearing, transcriptions=3)
-        assert hearing.separator.calls == [] and (again.generated, again.heard) == (1, 0)
+        assert len(hearing.separator.calls) == 1 and (again.generated, again.heard) == (1, 1)
+        assert over_words(conn, s)
     finally:
         hearing.close()
 

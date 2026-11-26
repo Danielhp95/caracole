@@ -347,9 +347,12 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     offers the song by `why_not_offered(anyway=True)` (nothing sung, caracole's or the owner's word, and Whisper's
     refusal of the audio passed over) and hears it with hearing.py's `anyway`; `none`, "it isn't sung", only for a
     song with its own audio's transcript kept (`transcript.why_not_unsung`), vocals skipped "you said nothing is
-    sung", words done "transcript dropped" (`drop_transcript`: kv `transcribe:none:` `by` "you", which holds for
-    the song whatever its audio, so neither the nightly pass nor a sheet from a video hears it again, until `force`;
-    no new kv prefix, and it never crosses to the phone), then the chords alone.
+    sung", words done "transcript dropped" (`drop_transcript`: kv `transcribe:none:` `by` "you", for that audio
+    alone, so neither the nightly pass nor a sheet from a video hears it again until `force` or a new file, a new
+    start; no new kv prefix, and it never crosses to the phone), then the chords alone, said as the owner's word,
+    never as nothing heard: the sheet's note `transcript.NOT_SUNG`, raw `not_sung_by` "you" beside `heard_nothing`,
+    the chords stage's `youtube_sheet.HOLDS["said"]` (outcome.py passes the chords' words through), the card's
+    `unsung` (Transcribe anyway, "You said it isn't sung.") apart from `nothing`.
   - Nothing sung, by words.py's rule (no sung span or under `MIN_SUNG_S` of them: Whisper isn't run; too few words
     kept, under `MIN_WORDS` or `MIN_WORDS_A_MINUTE`), is noted with why, and the job fails "no singing heard".
   - The stem in hearing.py's work folder under `cache_dir`, gone with the job.
@@ -1796,22 +1799,23 @@ It is rows.js's, shared by both pages:
   - `force=1` (Transcribe anyway) queues `--force`, refused as `why_not_offered(anyway=True)` says; `none=1` (Not
     sung: chords only) `--none`, titled "Not sung, chords only: Artist - Title", refused as
     `transcript.why_not_unsung` says ("… can't be said not sung: …"); both, 400.
-  - Offered only on the served page, from served-only data: library_page.py `server.transcribe`
-    (`transcribe_member`: `ok`, `why`, `songs`, `nothing` (Transcribe anyway) and `transcribed` (Not sung: chords
-    only), all three `transcript.offers` when `ok`, `time` `transcribe_time` when `ok`, else `[]` and `""`; the
-    phone's LibraryPage.kt the same shape), the cards' own data unchanged (the phone writes the same cards, and its member says it
-    can't); library.js `transcribeOffer` (and `overrideOffer`, Transcribe anyway or Not sung) on a card, and requests.js on the newest request that ended Ready of a song
-    offered one (matched by `display`, the name a song's requests go by, none while a request of it waits or runs),
-    through `caracoleLibrary`'s `offeredSong`, `transcribeHint` and `transcribing`; asked for, neither offers it while
-    its request waits or runs.
-  - Read again live, never left to a reload (library.js `readTranscriptions`, one GET at a time): once a song's job
-    the page follows is over (`offerAfter`) or a request the Journal saw waiting or running is over
-    (`caracoleLibrary.requestOver`), when the song is offered one of the three or may be (`mayBeOffered`: its card's
-    lyrics `missing` and `youtubeSheet` or `auto`), and only where `server.transcribe.ok`; each song whose offer changed has its
-    card made again where it was made (`cardAgain`, `refill`), and requests.js draws its answer again
-    ("caracole:transcribe"). So a sheet from a video that found no lyrics offers it at once (the sheet's lyrics
-    stage asks LRCLIB, Megalobiz and AZLyrics, each noting its miss), a transcription that failed on the GPU offers
-    it again, and one made from a terminal meanwhile no more.
+  - Offered only on the served page, from served-only data: library_page.py `server.transcribe` (`transcribe_member`:
+    `ok`, `why`, `songs`, `nothing` and `unsung` (Transcribe anyway, heard nothing or the owner's mark, its hint "You
+    said it isn't sung.") and `transcribed` (Not sung: chords only), all four `transcript.offers` when `ok`, `time`
+    `transcribe_time` when `ok`, else `[]` and `""`; the phone's LibraryPage.kt the same shape), the cards' own data
+    unchanged (the phone writes the same cards, and its member says it can't); library.js `transcribeOffer` (and
+    `overrideOffer`, Transcribe anyway or Not sung) on a card, and requests.js on the newest request that ended Ready of
+    a song offered one (matched by `display`, the name a song's requests go by, none while a request of it waits or
+    runs), through `caracoleLibrary`'s `offeredSong`, `transcribeHint` and `transcribing`; asked for, neither offers it
+    while its request waits or runs.
+  - Read again live, never left to a reload (library.js `readTranscriptions`, one GET at a time): once a song's job the
+    page follows is over (`offerAfter`) or a request the Journal saw waiting or running is over
+    (`caracoleLibrary.requestOver`), when the song is offered one of the four or may be (`mayBeOffered`: its card's
+    lyrics `missing` and `youtubeSheet` or `auto`), and only where `server.transcribe.ok`; each song whose offer changed
+    has its card made again where it was made (`cardAgain`, `refill`), and requests.js draws its answer again
+    ("caracole:transcribe"). So a sheet from a video that found no lyrics offers it at once (the sheet's lyrics stage
+    asks LRCLIB, Megalobiz and AZLyrics, each noting its miss), a transcription that failed on the GPU offers it again,
+    and one made from a terminal meanwhile no more.
 - **ug_link_routes.py** is a UG link pasted into the library page's box: `GET /api/ug/link` (ug/link.py `known`, no
   request and no lock: its state, the tab's names, its artist's page, `guess`, the library's `song`, `hits` as
   /api/search's `index` items) and `POST /ug/link` (`caracole ug --link --progress` queued under `jobs.UG_LINK`, among

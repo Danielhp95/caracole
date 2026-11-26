@@ -854,5 +854,9 @@ def test_the_ready_line_says_the_lyrics_are_transcribed():
     assert holds({"lyrics": "synced"}) == "chords over the lyrics"
     assert HOLDS["silent"] == "chords only: nothing sung was heard"
     assert holds({"lyrics": "none", "heard_nothing": True}) == "chords only: nothing sung was heard"
+    # The owner's mark is said as theirs, never as nothing heard (Whisper heard words, and the owner overruled them).
+    assert HOLDS["said"] == "chords only: you said it isn't sung"
+    assert holds({"lyrics": "none", "heard_nothing": True, "not_sung_by": "you"}) == (
+        "chords only: you said it isn't sung")
     assert holds({"lyrics": "none"}) == "chords only, no lyrics"
     assert holds({}) == "chords"

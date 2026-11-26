@@ -561,12 +561,12 @@ WORDS_UNHEARD_TITLE = "Lyrics that couldn't be transcribed"
 def _words_unheard(conn: sqlite3.Connection, cfg: Config, songs: list[Song],
                    overrides: Overrides) -> tuple[list[str], str, bool]:
     """The songs whose audio Whisper can't load (transcript.py ``whisper_cant_read``: their chords made, their words
-    never heard until the audio changes), while that is all that keeps their words from being heard
-    (``why_not_offered`` says so: lyrics still missing, not ignored, no human sheet, that audio still theirs), whichever
-    hearing noted it, the nightly pass or a job; and why the last auto-chords run heard no words a song waited for, from kv
+    never heard until the audio changes), while that is all that keeps their words from being heard (``why_not_offered``
+    says so: lyrics still missing, not ignored, no human sheet, that audio still theirs), whichever hearing noted it,
+    the nightly pass or a job; and why the last auto-chords run heard no words a song waited for, from kv
     ``autochords:status``'s ``transcribe_problem`` (``autochords.run.autochords_pending``): its setup failing, or this
-    machine (the GPU build's nightly unit sees no GPU). The songs are the items, the reason the intro: the section
-    shows for either (its third member)."""
+    machine (the GPU build's nightly unit sees no GPU). The songs are the items, the reason the intro: the section shows
+    for either (its third member)."""
     from caracole.autochords.transcript import WHISPER_UNREADABLE_WHY, whisper_cant_read, why_not_offered
 
     items = []

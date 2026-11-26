@@ -96,6 +96,7 @@ HOLDS = {
     "plain": "chords, then the lyrics",
     "none": "chords only, no lyrics",
     "silent": "chords only: nothing sung was heard",  # ``raw["heard_nothing"]``
+    "said": "chords only: you said it isn't sung",  # ``raw["not_sung_by"]``, the owner's word
     "transcript": "chords over the transcribed lyrics",  # synced, over Whisper's words (``raw["lyrics_source"]``)
 }
 
@@ -105,7 +106,7 @@ def holds(raw: dict[str, object]) -> str:
     if raw.get("lyrics_source") == "transcript":
         used = "transcript"
     elif raw.get("heard_nothing") and raw.get("lyrics") == "none":
-        used = "silent"
+        used = "said" if raw.get("not_sung_by") == "you" else "silent"
     else:
         used = str(raw.get("lyrics"))
     return HOLDS.get(used, "chords")

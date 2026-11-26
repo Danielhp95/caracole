@@ -20,12 +20,13 @@ the other, each under caracole's lock. Its view is the song's (/jobs.json's ``ki
 how it goes, its stages as steps (outcome.py ``TRANSCRIBE_STEPS``).
 
 Refused, with nothing queued (``pages.Refused``): a caracole that transcribes nothing
-(``youtube_fetch.transcribe_reason``, 409, in its words: no auto-chords, no Whisper, a model file or demucs-rs
-missing, a CUDA build without its GPU, as the library page then offers it on no card), and a song not offered a transcription (409, in
-``transcript.why_not_offered``'s words: it has no audio, a lyrics site has its lyrics or hasn't been
-asked, it was transcribed already…; with ``force``, as ``why_not_offered(anyway=True)`` says, nothing sung passed
-over; with ``none``, ``transcript.why_not_unsung``'s: a song with no transcript of its audio), as the command refuses
-it again when it runs (the library may change while it waits); both ``force`` and ``none``, 400.
+(``youtube_fetch.transcribe_reason``, 409, in its words: no auto-chords, no Whisper, a model file or demucs-rs missing,
+a CUDA build without its GPU, as the library page then offers it on no card), and a song not offered a transcription
+(409, in ``transcript.why_not_offered``'s words: it has no audio, a lyrics site has its lyrics or hasn't been asked, it
+was transcribed already…; with ``force``, as ``why_not_offered(anyway=True)`` says, nothing sung passed over (a song
+offered a transcription anyway is accepted and simply transcribed: forcing it is harmless); with ``none``,
+``transcript.why_not_unsung``'s: a song with no transcript of its audio), as the command refuses it again when it runs
+(the library may change while it waits); both ``force`` and ``none``, 400.
 """
 
 from __future__ import annotations

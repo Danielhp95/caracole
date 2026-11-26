@@ -44,7 +44,7 @@ transcribe it until the file changes, and the to-do page lists it.
 
 When caracole gets it wrong, the card lets you say otherwise. A song in which nothing sung was heard has **Transcribe
 anyway**; one whose sheet is over its transcript has **Not sung: chords only**, which drops the words and never hears
-the song again.
+that audio again (a new file is heard once more).
 
 ## Install
 

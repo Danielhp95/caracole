@@ -351,7 +351,7 @@ def test_none_drops_the_transcript_and_says_so_then_force_hears_it_again(tmp_pat
     assert result.exit_code == 0, result.output
     lines = result.output.splitlines()
     for said in ("Vocals: skipped: you said nothing is sung.", "Words: transcript dropped.",
-                 "Chords: chords only: nothing sung was heard."):
+                 "Chords: chords only: you said it isn't sung."):
         assert said in lines, result.output
     assert kv_get(conn, f"transcript:{song.id}") is None and not any(m.startswith(("demucs", "whisper"))
                                                                      for m in models)

@@ -1369,7 +1369,8 @@ words too. Its last line says what it heard:
   the run, and the to-do page says so; the chords go on, and it still exits 0.
 - Audio Whisper can't load still gets its chords. Its words aren't heard, nor offered on its card,
   until the file changes; the to-do page lists it under **Lyrics that couldn't be transcribed**.
-- A song you said isn't sung (`caracole transcribe --none`) is never heard, whatever its audio.
+- A song you said isn't sung (`caracole transcribe --none`) is never heard again, until its audio
+  changes: a new file is heard once more.
 - A bug while hearing a song fails the run (exit 1), and the song's chords are made all the same.
 
 ### caracole youtube
@@ -1409,8 +1410,8 @@ that line once a minute. `--progress` writes a JSON line per stage instead, for 
 
 | Option | What it does |
 |---|---|
-| `--force` | It is sung. Hears a song caracole heard nothing sung in, or that you said isn't sung, with no rule of nothing sung: Whisper runs whatever the singing found, over the whole song when none was. Also tries audio Whisper couldn't load again, after an ffmpeg or Whisper upgrade. |
-| `--none` | It isn't sung. For a song with a transcript: drops it, makes the sheet again with the chords alone, and never hears the song again, whatever its audio, until `--force`. |
+| `--force` | It is sung. Hears a song caracole heard nothing sung in, or that you said isn't sung, with no rule of nothing sung: Whisper runs whatever the singing found, over the whole song when none was. Also tries audio Whisper couldn't load again, after an ffmpeg or Whisper upgrade. A song offered a transcription anyway is simply transcribed. |
+| `--none` | It isn't sung. For a song with a transcript: drops it, makes the sheet again with the chords alone (`Chords only: you said it isn't sung`), and never hears that audio again until `--force`. A new file is heard once more. |
 
 ### When the pages are rewritten
 
@@ -2846,8 +2847,9 @@ are found."). Where caracole can't transcribe, no card offers it. The phone neve
 Your word over caracole's goes on the card too. A song in which nothing sung was heard says so, with
 **Transcribe anyway** (`caracole transcribe --force`). One whose sheet is over its transcript has
 **Not sung: chords only** (`caracole transcribe --none`): its transcript is dropped, its sheet made
-again with the chords alone, and it is never heard again. Each is posted in place, as Transcribe
-the lyrics is.
+again with the chords alone, and that audio is never heard again (a new file is). Its card then
+says "You said it isn't sung." with Transcribe anyway. Each is posted in place, as Transcribe the
+lyrics is.
 
 #### A YouTube video for a search
 

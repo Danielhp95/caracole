@@ -95,10 +95,12 @@ from caracole.autochords.merge import (
 )
 from caracole.autochords.transcript import (
     LYRICS_SOURCE,
+    NOT_SUNG,
     NOTE,
     SILENT,
     UNREADABLE,
     Transcript,
+    said_not_sung,
     transcript_of,
     why_not_offered,
 )
@@ -522,14 +524,15 @@ def _generate(conn: sqlite3.Connection, cfg: Config, song: Song, models: tuple[R
     told(STEPS[3])
     try:
         transcript = transcript_of(conn, song)
-        made = _make_sheet(song, heard, source=_from_youtube(video), transcript=transcript,
-                           silent=transcript is None and _heard_nothing(conn, song))
+        silent = transcript is None and _heard_nothing(conn, song)
+        made = _make_sheet(song, heard, source=_from_youtube(video), transcript=transcript, silent=silent,
+                           said=silent and said_not_sung(conn, song))
     except Exception as e:  # noqa: BLE001 - a bug laying it out is caracole's, never the file's: the song stays due
         _error(stats, song, e)
         return
     try:
         _keep(conn, cfg, song, made.text, made.used, made.key, stamp, video=video, shift=made.shift,
-              transcript=made.transcript, silent=made.silent)
+              transcript=made.transcript, silent=made.silent, said=made.said)
     except Exception as e:  # noqa: BLE001 - the library's problem, not the purchase's
         _error(stats, song, e)
         return
@@ -904,10 +907,11 @@ class _Made:
     shift: float | None
     transcript: Transcript | None = None
     silent: bool = False
+    said: bool = False  # silent by the owner's word, not by what was heard
 
 
 def _make_sheet(song: Song, heard: _Heard, *, source: str | None = None,
-                transcript: Transcript | None = None, silent: bool = False) -> _Made:
+                transcript: Transcript | None = None, silent: bool = False, said: bool = False) -> _Made:
     """One song's auto sheet, from its audio file. ``source`` says where that came from, when it wasn't a
     purchase, on the sheet's line after the song's name; the shift has the line after it.
 
@@ -915,7 +919,8 @@ def _make_sheet(song: Song, heard: _Heard, *, source: str | None = None,
     instrumental wins too), else its ``transcript`` (Whisper's words from this
     very audio: timed lyrics whose duration is the audio's, so they fit as they are and no shift is searched,
     with NOTE on the line after the shift's), else none. ``silent`` (the audio noted as having nothing sung)
-    puts SILENT there instead, only where no site has lyrics, none says it is instrumental and no transcript is used.
+    puts SILENT there instead, only where no site has lyrics, none says it is instrumental and no transcript is used;
+    NOT_SUNG where it is the owner's word (``said``, ``transcript.said_not_sung``), not what was heard.
 
     The key is estimated from the chords as recognized, each weighed by how long it sounds,
     before they are snapped to beats and laid out.
@@ -930,8 +935,9 @@ def _make_sheet(song: Song, heard: _Heard, *, source: str | None = None,
     # The shift on a line of its own after the credit: render.py takes that line for the credit, and the viewer of
     # a sheet from YouTube draws the video in its place, so the shift is the first of the sheet's own words
     silent = silent and lyrics is None and over is None and not _instrumental(song)
+    said = said and silent
     notes = (source, timed.note() if timed is not None else None, NOTE if over is not None else None,
-             SILENT if silent else None)
+             (NOT_SUNG if said else SILENT) if silent else None)
     note = "\n".join(part for part in notes if part)
     text = build_sheet(
         segments,
@@ -945,7 +951,7 @@ def _make_sheet(song: Song, heard: _Heard, *, source: str | None = None,
         source=note or None,
     )
     shift = timed.shift if timed is not None else None
-    return _Made(text, "synced" if synced else "plain" if plain else "none", key, shift, over, silent)
+    return _Made(text, "synced" if synced else "plain" if plain else "none", key, shift, over, silent, said)
 
 
 def _keep(
@@ -961,6 +967,7 @@ def _keep(
     shift: float | None = None,
     transcript: Transcript | None = None,
     silent: bool = False,
+    said: bool = False,
 ) -> None:
     """Keep one song's auto sheet, under a version of provider ``auto``; the song becomes found.
 
@@ -985,6 +992,8 @@ def _keep(
         raw["transcript_made_at"] = transcript.made_at
     if silent:
         raw["heard_nothing"] = True
+    if silent and said:
+        raw["not_sung_by"] = "you"  # the owner's word, not what was heard (youtube_sheet.HOLDS["said"])
     synced = _synced_key(song)
     if synced is not None:
         raw["synced_lyrics"] = synced

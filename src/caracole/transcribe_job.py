@@ -15,15 +15,16 @@ its own (staged.py; ``--progress`` writes a JSON line per event, which caracole 
   holds. A song whose own audio has its transcript kept already, but no auto sheet over it (the chords stage failed
   or was cut off after the words kept it: Try again runs the same command), goes straight to the chords: vocals
   skipped and the words the transcript kept (``_sheet_to_make``), neither model run again.
-- ``vocals``: where the singing is (skipped with ``none``, "you said nothing is sung"), autochords/hearing.py's ``Hearing.vocals``: the vocals separated by demucs-rs
-  into a work folder under the cache, and the sung spans from their loudness against the mix's.
+- ``vocals``: where the singing is (skipped with ``none``, "you said nothing is sung"), autochords/hearing.py's
+  ``Hearing.vocals``: the vocals separated by demucs-rs into a work folder under the cache, and the sung spans from
+  their loudness against the mix's.
 - ``words``: ``Hearing.words``: Whisper large-v3 over the full mix, the words outside every sung span dropped, the
   rest kept as the song's transcript (``keep_transcript``), never as its lyrics. Nothing sung, by words.py's rule (no
   sung span or under ``MIN_SUNG_S`` of them, and then Whisper isn't run; too few words kept, under ``MIN_WORDS`` or
   ``MIN_WORDS_A_MINUTE``), is noted with why (``note_heard_nothing``), so the song is offered again only once its
   audio changes, and the job fails "no singing heard". With ``none``, done "transcript dropped": the transcript gone
-  and the song noted not sung by the owner's word (``drop_transcript``), never heard again, at night or by a sheet from
-  a video, whatever its audio, until they ask for it (``force``).
+  and the song's audio noted not sung by the owner's word (``drop_transcript``), never heard again, at night or by a
+  sheet from a video, until they ask for it (``force``) or a new file comes (a new file is a new start).
 - ``chords``: auto-chords for this song alone (``autochords_pending``'s ``only``), which lays the chords over the
   transcript now (with ``none``, the chords alone: a sheet over a transcript gone is due, run.py ``_skip_reason``).
 - ``pdf``: the PDF and the viewer, for this song alone (``render_all``'s ``song_ids``).
