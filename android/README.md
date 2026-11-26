@@ -754,7 +754,8 @@ frame for frame, beat_this's fp32 logits, and the fp16-stored file's beats and d
     android/scripts/device-test.sh --ml --tcpdump /tmp/ml.pcap NoTelemetryTest
 
 `--ml` pushes the four files into the emulator's `/data/local/tmp/caracole-models` (again only when one changed) and
-runs `ModelParityTest` from `:ml`'s own test APK, which reports each model's load, each clip's time and its peak RSS.
+runs `ModelParityTest` from `:ml`'s own test APK, which reports each model's load, each clip's time and its peak RSS,
+then the app's `ChordsBenchTest` (the Chords bench, below) over the same files.
 `--tcpdump FILE` turns the emulator's Wi-Fi off, so that everything goes through the network its console captures,
 keeps the capture in FILE, and fails the run on any packet to or from a host but 10.0.2.2. A control before and after
 the classes (a ping of 10.0.2.2 and a connection to a listener on the host's loopback) must be in the capture too, or
@@ -768,7 +769,60 @@ release is a check to run again:
 
     android/scripts/release-check.sh
 
-It builds the release (unsigned without the release key: the same packaged output) and the debug build, and checks
-that the release's runtime classpath names no `onnxruntime` and no `:ml`, and that its APK holds no
-`libonnxruntime*`, no class under `ai/onnxruntime/` (dexdump), nothing under `caracole/autochords/` and no
-`TelemetryInitializer` in its manifest (aapt2), with the debug APK as the control that holds the first three.
+It builds the release (unsigned without the release key: the same packaged output) and the debug build, reads each
+APK by the name its `output-metadata.json` gives, and checks that the release's runtime classpath names no
+`onnxruntime` and no `:ml`, and that its APK holds no `libonnxruntime*`, no class under `ai/onnxruntime/` or of `:ml`
+(dexdump), no `ChordsBench` or `BenchService` in its dex, nothing under `caracole/autochords/` or
+`assets/autochords/`, no `.onnx` or `.pt` file, and nothing of the runtime's telemetry or the bench in its manifest
+(aapt2). Every probe has a control that shows it can see what it looks for: the debug build's classpath and APK
+(which hold all of it but the provider, and none of the weights' files), the names of the files `.#chord-models`
+makes, and the runtime's own AAR, whose manifest declares the provider.
+
+## The Chords bench (debug build)
+
+Gate B0 asks how fast the two models run on your phone, how hot it gets, how much memory and battery they take, and
+whether their answers are the computer's. The debug build has a screen that measures it, run by hand: no test ever
+runs on your phone. It runs the models over the computer's own features of each song (its CQT and its mel), since the
+phone can't yet decode audio or compute them itself (stage B1). So its speed is the models' alone: the whole hearing
+will add the decoding and the features' time. And its parity is frame for frame against the computer's outputs;
+chord-by-chord scores (WCSR) come with the labels, in B1.
+
+1. **Install the debug build**: `android/scripts/phone-install.sh` (above). The APK is about 98 MB, the runtime's
+   libraries most of it; it holds no model file.
+2. **Make a folder on the computer** with the model files and a few of your songs' references, from the repository's
+   root:
+
+       mkdir -p ~/caracole-bench
+       cp "$(nix build .#chord-models --no-link --print-out-paths)"/*.{pt,onnx} ~/caracole-bench/
+       nix develop .#autochords -c python -m tests.helpers.autochords_reference ~/some-songs ~/caracole-bench
+
+   The second command writes one `.json` a song: what the computer's models made of it. Five songs are enough for
+   B0; a reference keeps the decoded audio too, about 40 MB for four minutes. The model files are 138 MB.
+3. **Copy it to the phone**: `adb push ~/caracole-bench /sdcard/Download/` (add `-s SERIAL` as above).
+4. **Open the bench**: Debug caracole › Settings › Chords bench. Pick the folder (Download › caracole-bench, then Use
+   this folder and Allow). The first Start checks the model files against their pins and copies them into the app's
+   own storage, which takes a minute.
+5. **A short run first**: untick "then the same runs again with the screen off" and the folder's references, set the
+   passes to 1, and press Start: a few minutes over the committed clips, to see parity on your phone.
+6. **The gate's run**: unplug the phone, tick everything again (the defaults: BTC, both beat files, 4 threads, the
+   arena off and on, 5 passes), and press Start. The screen stays on for the first round; when it says so, turn the
+   screen off with the power button and leave the phone alone for the second round. With five songs it takes about an
+   hour and a half; fewer boxes ticked, less. The notification and the screen say what runs, and Stop keeps what was
+   done.
+7. **Bring the report back**: it is `caracole-bench-<UTC time>.json` in the same folder, rewritten after each
+   model's turn: `adb pull /sdcard/Download/caracole-bench/caracole-bench-….json`. It says your phone's model, its
+   SoC, its Android version, the app's version and the files' names, nothing else of yours.
+
+What Gate B0 reads in it:
+
+- `summary`: for each model, thread count, arena setting and screen state, the warm runs' `rtf_median` and `rtf_max`
+  (the model's seconds over the audio's), with `speed_ok` when `rtf_max` is 0.125 or less, and `rss_peak_mb` with
+  `memory_ok` when it is 1 GB or less. A beat_this that can't reach RTF 0.25 stops stage B.
+- `parity.pass`: BTC's chords the computer's frame for frame but where the computer itself was within 0.001 of a tie,
+  beat_this fp32's logits within 0.001, and the fp16 file's beats and downbeats at F ≥ 0.99.
+- `runs`: each run with its `thermal` states, its `headroom_max` and its `battery_uah` change: how hot five songs back
+  to back make the phone, and what they cost.
+
+Which beat file, how many threads and which memory setting ship are yours to choose from it (the design's §11). To
+free the room afterwards, delete the folder; the app's own copy of the models goes with the debug app's data
+(`adb shell pm clear --user 0 io.github.danielhp95.caracole.debug`, its library too).

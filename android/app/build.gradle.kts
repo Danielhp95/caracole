@@ -96,6 +96,10 @@ android {
     // The conformance vectors, as the device tests' assets (conformance/…): CorpusOnDeviceTest reads them through
     // the instrumentation's AssetManager.
     sourceSets.getByName("androidTest").assets.srcDir(layout.buildDirectory.dir("generated/conformanceAssets"))
+    // The Chords bench's committed clips (src/debug's ChordsBenchActivity): the computer's features and model outputs
+    // of them, autochords/models.jsonl and frontend.jsonl (2.7 MB), the debug build's assets alone. No model file:
+    // the owner's folder holds those (android/README.md, "The Chords bench").
+    sourceSets.getByName("debug").assets.srcDir(layout.buildDirectory.dir("generated/benchAssets"))
 }
 
 val copyConformanceVectors by tasks.registering(Sync::class) {
@@ -105,6 +109,16 @@ val copyConformanceVectors by tasks.registering(Sync::class) {
     from("../../tests/fixtures") { into("fixtures") }
 }
 tasks.matching { it.name.endsWith("AndroidTestAssets") }.configureEach { dependsOn(copyConformanceVectors) }
+
+val copyBenchClips by tasks.registering(Sync::class) {
+    into(layout.buildDirectory.dir("generated/benchAssets"))
+    from("../../tests/conformance/vectors/autochords") {
+        include("models.jsonl", "frontend.jsonl")
+        into("autochords")
+    }
+}
+tasks.matching { it.name.matches(Regex("(generate|merge|package)Debug\\w*Assets|lint\\w*Debug\\w*")) }
+    .configureEach { dependsOn(copyBenchClips) }
 
 kotlin {
     compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }

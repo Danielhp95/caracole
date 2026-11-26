@@ -15,13 +15,15 @@ import java.nio.FloatBuffer
  * - [BTC_GRAPH], with [BTC_WEIGHTS] beside it: the graph reads every weight at its offset in its authors' file;
  * - [beatsFile]: [BEATS_FP16], its weights stored as float16 and computed in float32, or [BEATS_FP32].
  *
- * Each session is opened at its first run, on [threads] intra-op threads, and closed by [close]. The runtime's
+ * Each session is opened at its first run, on [threads] intra-op threads, and closed by [close]; [arena] keeps ONNX
+ * Runtime's own CPU arena and memory patterns, off by default (below), so that the Chords bench measures both on the
+ * phone. The runtime's
  * telemetry is off: `ORT_DISABLE_TELEMETRY` is set before the process's first [OrtEnvironment], which nothing but this
  * class makes, and the environment's events are turned off; `:ml`'s manifest removes the AAR's TelemetryInitializer,
  * which would hand the native side an HTTP client at the app's start.
  */
-class OrtModels(private val dir: File, private val threads: Int, private val beatsFile: String = BEATS_FP16) :
-    Closeable {
+class OrtModels(private val dir: File, private val threads: Int, private val beatsFile: String = BEATS_FP16,
+                private val arena: Boolean = false) : Closeable {
     private val env = environment()
     private var btc: OrtSession? = null
     private var beat: OrtSession? = null
@@ -57,10 +59,13 @@ class OrtModels(private val dir: File, private val threads: Int, private val bea
             setIntraOpNumThreads(threads)
             setInterOpNumThreads(1)
             // No arena and no memory pattern: beat_this over a 1500-frame chunk then peaks at about 0.8 GB of the
-            // process's RSS on the emulator, against 1.6 GB with ORT's defaults (ModelParityTest's numbers), at the
-            // same speed; the design's gate is 1 GB.
-            setMemoryPatternOptimization(false)
-            setCPUArenaAllocator(false)
+            // process's RSS on the emulator, against 1.6 GB with ORT's defaults (ModelParityTest's numbers); the
+            // design's gate is 1 GB. The Chords bench's runs on the emulator found it up to twice as slow as the
+            // defaults: the emulator's numbers alone, which the bench measures both ways on the phone.
+            if (!arena) {
+                setMemoryPatternOptimization(false)
+                setCPUArenaAllocator(false)
+            }
         }
         return options.use { env.createSession(file.path, it) }
     }

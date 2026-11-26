@@ -15,10 +15,11 @@
 #   --computer DIR  one computer for every class that names none
 #   --sites S       the fake sites server of scenario S (tests/helpers/fake_sites.py serve S PORT, on the host, a
 #                   free port never 8737) for every class run, named to each as -e sites http://10.0.2.2:PORT
-#   --ml            :ml's ModelParityTest (its own test APK, io.github.danielhp95.caracole.ml.test) over the chord and
-#                   beat models in $CARACOLE_CHORD_MODELS (`nix build .#chord-models`; unset, the ./android#ml
-#                   shell's), pushed into /data/local/tmp/caracole-models, a cache left there for the next run (a
-#                   file pushed again only when its SHA-256 differs)
+#   --ml            :ml's ModelParityTest (its own test APK, io.github.danielhp95.caracole.ml.test), then the app's
+#                   ChordsBenchTest (the debug build's Chords bench), over the chord and beat models in
+#                   $CARACOLE_CHORD_MODELS (`nix build .#chord-models`; unset, the ./android#ml shell's), pushed into
+#                   /data/local/tmp/caracole-models, a cache left there for the next run (a file pushed again only
+#                   when its SHA-256 differs)
 #   --tcpdump FILE  every packet the emulator sends or gets while the classes run, into FILE (pcap), with Wi-Fi off
 #                   so that all of it goes through the one interface the emulator's console captures (its cellular
 #                   network); any packet to or from a host but 10.0.2.2 fails the run (ARP between the emulator and
@@ -292,6 +293,8 @@ if [ "$want_ml" = 1 ]; then
         results+=("FAIL ModelParityTest")
         failed=1
     fi
+    # The debug build's Chords bench over the committed clips, on the same pushed models.
+    run_class ChordsBenchTest -e models "$ml_models"
 fi
 
 if [ "$want_app" = 1 ]; then

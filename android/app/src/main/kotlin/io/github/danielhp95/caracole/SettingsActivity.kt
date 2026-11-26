@@ -122,6 +122,7 @@ class SettingsActivity : Activity() {
         }
 
         findViewById<Button>(R.id.backups).setOnClickListener { startActivity(Intent(this, BackupsActivity::class.java)) }
+        if (BuildConfig.DEBUG) addChordsBench()
         findViewById<Button>(R.id.catalogues_download).setOnClickListener { downloadCatalogues(meteredOk = false) }
         // The first start's Download (MainActivity), which queued the job and opened this screen: asked here, on top.
         if (savedInstanceState == null && intent.getBooleanExtra(ASK_TO_NOTIFY, false)) askToNotify()
@@ -357,6 +358,20 @@ class SettingsActivity : Activity() {
         resetTextSize.isEnabled = zoom != TextZoom.DEFAULT
     }
 
+    /** The debug build's Chords bench (src/debug's ChordsBenchActivity, the chords-on-the-phone design's §9.1), a
+     * button after Backups' row; a release has neither (BuildConfig.DEBUG is false there, and R8 drops this). */
+    private fun addChordsBench() {
+        val backups = findViewById<Button>(R.id.backups)
+        val rows = backups.parent as android.view.ViewGroup
+        val button = Button(this).apply {
+            text = CHORDS_BENCH
+            setOnClickListener {
+                startActivity(Intent().setClassName(this@SettingsActivity, "$PACKAGE.ChordsBenchActivity"))
+            }
+        }
+        rows.addView(button, rows.indexOfChild(backups) + 2)
+    }
+
     private fun fitInsets() {
         val bar = findViewById<View>(R.id.bar)
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.root)) { root, insets ->
@@ -371,6 +386,10 @@ class SettingsActivity : Activity() {
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
     companion object {
+        /** The debug build's Chords bench row's words (ChordsBenchTest finds it by them). */
+        const val CHORDS_BENCH = "Chords bench"
+        private const val PACKAGE = "io.github.danielhp95.caracole"
+
         /** An extra: ask to show notifications as the screen opens (the first start's Download of the catalogues). */
         const val ASK_TO_NOTIFY = "io.github.danielhp95.caracole.ASK_TO_NOTIFY"
 

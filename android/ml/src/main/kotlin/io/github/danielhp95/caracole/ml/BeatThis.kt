@@ -1,16 +1,17 @@
 package io.github.danielhp95.caracole.ml
 
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
 /**
- * What ModelParityTest needs around beat_this's graph to read the computer's records, ported from the Python it ran
- * (beat_this 1.1.0, mir_eval 0.8.2): the piece cut into chunks and the logits put together again ([logits],
- * `inference.split_predict_aggregate` with `avoid_short_end` and `keep_first`, as `Spect2Frames` runs it), the minimal
- * postprocessor ([peaks], `Postprocessor(type="minimal")`) and the beats' F-measure ([fMeasure], `mir_eval.beat`'s,
- * after its `trim_beats`). The design's `autochords.Chunks` and `Peaks` (E8) are their ports for the app, held to the
- * corpus on the JVM; these are the test's alone, and ModelParityTest holds [peaks] to the computer's beats over its
- * own logits before it trusts it.
+ * What ModelParityTest and the debug build's Chords bench ([Bench]) need around beat_this's graph to read the
+ * computer's records, ported from the Python it ran (beat_this 1.1.0, mir_eval 0.8.2): the piece cut into chunks and
+ * the logits put together again ([logits], `inference.split_predict_aggregate` with `avoid_short_end` and
+ * `keep_first`, as `Spect2Frames` runs it), the minimal postprocessor ([peaks], `Postprocessor(type="minimal")`) and
+ * the beats' F-measure ([fMeasure], `mir_eval.beat`'s, after its `trim_beats`). The design's `autochords.Chunks` and
+ * `Peaks` (E8) are their ports for the app, held to the corpus on the JVM; these are B0's measuring tools, and
+ * ModelParityTest holds [peaks] to the computer's beats over its own logits before either trusts it.
  */
 internal object BeatThis {
     /** The beat and downbeat logits of a log-mel of [frames] × [bins], chunk by chunk through [model] (a chunk's
@@ -47,7 +48,7 @@ internal object BeatThis {
     fun peaks(beat: FloatArray, downbeat: FloatArray, fps: Int): Pair<List<Double>, List<Double>> {
         val beats = deduplicated(maxima(beat)).map { it / fps }
         val downbeats = deduplicated(maxima(downbeat)).map { it / fps }
-            .map { d -> if (beats.isEmpty()) d else beats[beats.indices.minBy { kotlin.math.abs(beats[it] - d) }] }
+            .map { d -> if (beats.isEmpty()) d else beats[beats.indices.minBy { abs(beats[it] - d) }] }
         return beats to downbeats.distinct().sorted()
     }
 

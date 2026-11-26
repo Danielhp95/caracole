@@ -2202,15 +2202,34 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   `debugImplementation` alone, so no release carries a runtime; its manifest removes the AAR's
   `ai.onnxruntime.TelemetryInitializer` (a provider that gives the runtime's 1DS telemetry an HTTP client at the app's
   start), `ORT_DISABLE_TELEMETRY` set before the first environment (the app's `NoTelemetryTest`); no arena and no
-  memory pattern (beat_this's peak RSS halved). Its `ModelParityTest` (its own test APK) holds it to
-  vectors/autochords/models.jsonl on the emulator, every threshold the records' `gates`, beat_this's chunking,
-  postprocessor and F-measure ported in the test alone (`BeatThis`, held to the computer's beats over its own logits),
-  the models `.#chord-models` (`./android#ml`'s `CARACOLE_CHORD_MODELS`), pushed by `device-test.sh --ml`; its test
-  APK runs under AndroidJUnitRunner (no HTTP code there, so no `caracole.network=loopback`). `:ml` carries
-  `caracole/autochords/` (BTC's graph, models.json), which `:core` leaves out. `android/scripts/release-check.sh`
-  holds the release to none of it: no onnxruntime or `:ml` on its runtime classpath, no `libonnxruntime*`, class under
-  `ai/onnxruntime/`, `caracole/autochords/` entry or TelemetryInitializer in its APK, the debug APK the control. It
-  handles no text: no ForbiddenApiTest.
+  memory pattern by default (beat_this's peak RSS halved on the emulator), ORT's own with `arena = true`. Its
+  `ModelParityTest` (its own test APK) holds it to vectors/autochords/models.jsonl on the emulator, every threshold the
+  records' `gates`, beat_this's chunking, postprocessor and F-measure B0's tools (`BeatThis`, held to the computer's
+  beats over its own logits; E8's `autochords.Chunks` and `Peaks` are the app's), the models `.#chord-models`
+  (`./android#ml`'s `CARACOLE_CHORD_MODELS`), pushed by `device-test.sh --ml`; its test APK runs under
+  AndroidJUnitRunner (no HTTP code there, so no `caracole.network=loopback`). `:ml` carries `caracole/autochords/`
+  (BTC's graph, models.json), which `:core` leaves out.
+  - **The Chords bench** (§9.1, Gate B0's numbers from the owner's phone, run by hand): `Bench` (each model chosen, on
+    each thread count and arena setting, one session at a time, each file `passes` times back to back; the model's
+    time alone, a look every second at the process's PSS and the phone's `Heat`), `BenchInputs` (the committed clips'
+    records; an `autochords_reference` JSON of the owner's, streamed, its decoded samples dropped), `Heat` (thermal
+    status from API 29, headroom from 30, the battery's charge counter, plugged, Battery Saver: unknown or null where
+    the phone gives none), `BenchReport.of` (`caracole-bench-<UTC>.json`: device, SoC, Android, runtime, app; each
+    run's seconds, RTF, PSS and RSS peaks, thermal states, battery change; a summary a setting with Gate B0's
+    `speed_ok` and `memory_ok`; `Parity` against the computer: BTC's frame agreement but near ties, fp32's logits,
+    fp16's beats F), held by `BenchReportTest` on the JVM. The app's src/debug alone has its screen
+    (`ChordsBenchActivity`, Settings' Chords bench row under `BuildConfig.DEBUG`), its foreground service
+    (`BenchService`, a special use, a partial wake lock, the screen-off round), both in a process of their own,
+    `:bench`, the folder the owner picks (`BenchFolder`, the Storage Access Framework: the model files, checked by
+    models.json's SHA-256 and copied into `no_backup/bench-models/`, `BenchModels`; the references; the report) and the
+    clips as debug assets (`autochords/`, app/build.gradle.kts). `ChordsBenchTest` (`device-test.sh --ml`) runs it
+    over the clips on the emulator.
+  - `android/scripts/release-check.sh` holds the release to none of it: no onnxruntime or `:ml` on its runtime
+    classpath (which names `:core`: read), no `libonnxruntime*`, class under `ai/onnxruntime/` or of `:ml`, bench name
+    in its dex, `caracole/autochords/` or `assets/autochords/` entry, model file (`.onnx`, `.pt`), TelemetryInitializer
+    or bench entry in its manifest; each APK by output-metadata.json's name; the controls: the debug classpath and APK
+    (no weights' file there either), `.#chord-models`' names, the AAR's own manifest. It handles no text: no
+    ForbiddenApiTest.
 - Milestones 1–6 are built (docs/android_port.md's status, "Built: milestones 4 to 6"), each route a module of its
   own:
   - `server/routes/Stubs.kt` keeps YouTube's routes and `GET /lookup` alone, answering "…: not on the phone yet."
@@ -3450,7 +3469,7 @@ nix flake check
   transport that refuses every site unless a test sets another. `PhoneDeps.transport` has no default: every `Phone` a
   test builds names its transport.
 - **The device**: a lane's device tests run only through `android/scripts/device-test.sh` (`--area NAME` for a
-  corpus area, `--app` for the app's classes, `--ml` for `:ml`'s ModelParityTest, `CLASS[=DIR]` for its own;
+  corpus area, `--app` for the app's classes, `--ml` for `:ml`'s ModelParityTest and the app's ChordsBenchTest, `CLASS[=DIR]` for its own;
   `--tcpdump FILE` the emulator's packets while they run, Wi-Fi off, any to or from a host but 10.0.2.2 a failure),
   which builds first, then takes the first free emulator of a pool (`CARACOLE_EMULATORS`, 3 by default, the owner's
   choice of 2026-11-10: emulator-5554, -5556, -5558, each one caller at a time) and holds its lock (emulator-5554's

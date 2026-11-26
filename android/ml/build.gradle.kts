@@ -65,6 +65,12 @@ kotlin {
 
 dependencies {
     implementation("com.microsoft.onnxruntime:onnxruntime-android:$onnxRuntime")
+    // The Chords bench's report (BenchReport), as the rest of the app writes JSON (:core's, the same version).
+    api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
+
+    // BenchReportTest, on the JVM: `gradle :ml:testDebugUnitTest`, in `gradle test`.
+    testImplementation("junit:junit:4.13.2")
+    testImplementation(kotlin("test-junit"))
 
     androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
