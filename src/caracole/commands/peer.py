@@ -6,9 +6,9 @@ unit (peer_sync.py; the design: docs/superpowers/specs/2026-10-31-phone-server-s
   each with the side it would come from, "here" or "there", or a conflict for you to settle. It changes nothing on
   either side and takes no lock, as ``caracole search`` takes none. ``--json`` prints the comparison as data.
 - ``caracole peer pull ADDRESS --unit ID…`` takes those units from the caracole at ADDRESS: under caracole's lock,
-  waiting for the nightly run as a lookup does, after a backup of the database; then renders the songs it took,
-  makes the songbooks and writes the pages, and keeps what the two now agree on. caracole serve's ``POST /peer/pull``
-  queues it.
+  waiting for the nightly run as a lookup does, after a backup of the database; keeps what it took as agreed; then
+  renders the songs it took, makes the songbooks and writes the pages, and keeps what the two now agree on. caracole
+  serve's ``POST /peer/pull`` queues it.
 - ``caracole peer sync ADDRESS`` compares, settles each conflict (``--choose=<here|there|skip>:<unit id>`` for one,
   ``--prefer here`` or ``there`` for the rest, else asked), takes here what comes from there, and gives there what
   goes there: pushed (``--push``, peer_push.py, as the phone pushes), or asked of the other to pull (``--here``, this
@@ -16,7 +16,9 @@ unit (peer_sync.py; the design: docs/superpowers/specs/2026-10-31-phone-server-s
   before any change, a comparison that isn't the one the choices were made on (``peer_sync.compared_hash``: the
   Sync tab's), and applies the one it names: with the answers an import remembered, as ``peer diff`` shows it and
   caracole serve's Sync tab compares (web/sync_routes.py ``_compared``), or, once one was, without them, a comparison
-  made before them, so that a Sync does what was shown. Then it keeps what the two agree on, and the peer's address and name
+  made before them, so that a Sync does what was shown. What it took is kept as agreed as its take ends
+  (``peer_sync.record_taken``, as a pull's is), so that a give that fails after it (exit 1) leaves it agreed, never a
+  conflict once the other side changes it. Then it keeps what the two agree on, and the peer's address and name
   (kv ``sync:peer:<id>``,
   ``peer_push.PEER_KEY``), which caracole serve's Sync tab lists. Then, with the indexes among its parts, each site's
   index goes the way of the later read: one the other side read more recently is taken (``GET /api/peer/index``,
@@ -554,7 +556,8 @@ def _pull(cfg, address: str, unit_ids: list[str], compared: dict[str, str | None
     """``caracole peer pull``'s work: see the module's docstring. ``compared``: each unit's digest there as compared
     (None: it had none), so that one changed there since is left; else as it is there now. ``expected_here``: each
     one's digest here as compared, so that one changed here since is left too. ``on_song``: ``render_all``'s, as it
-    renders the songs taken. ``agree``: keep what the two agree on after (a sync does once it gave there what goes
+    renders the songs taken. What was taken is kept as agreed as the take ends, whatever ``agree`` says
+    (``peer_sync.record_taken``). ``agree``: keep what the two agree on after (a sync does once it gave there what goes
     there). Returns peer_sync's ``Applied``."""
     from caracole import backup
     from caracole import peer_sync as sync
@@ -572,12 +575,24 @@ def _pull(cfg, address: str, unit_ids: list[str], compared: dict[str, str | None
                 wanted = [(u, compared[u] if compared is not None and u in compared
                            else state.units[u].digest if u in state.units else None) for u in unit_ids]
                 now = utcnow()
+                stamp = now.strftime("%Y-%m-%dT%H:%M:%SZ")
                 made = backup.make(conn, cfg.state_dir, now, label=BACKUP_LABEL)
                 if isinstance(made, backup.Skipped):
                     fail(f"Nothing taken: no backup first ({made.reason}).")
-                done = sync.apply_units(conn, cfg, peer, wanted, now.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                                        expected_here=expected_here, on_unit=on_unit)
+                done = sync.apply_units(conn, cfg, peer, wanted, stamp, expected_here=expected_here,
+                                        on_unit=on_unit)
                 overrides = load_ovr(cfg)
+                if state.server is not None and done.taken:
+                    # What was taken is agreed as the take ends, at the peer's clock as the take began, whatever comes
+                    # of the rest: a sync's give, or its agree's read of the peer, that fails (peer_sync.record_taken).
+                    try:
+                        books = load_songbooks(songbooks_file(cfg.library_dir))
+                    except SongbookError:
+                        books = None
+                    if books is not None:
+                        digests = dict(wanted)
+                        sync.record_taken(conn, state.server, sync.library_state(conn, overrides, books),
+                                          {unit_id: digests[unit_id] for unit_id in done.taken}, state.now or stamp)
                 if done.songs:
                     render_all(conn, cfg, overrides, song_ids=done.songs, on_song=on_song)
                 render_songbooks(conn, cfg, overrides)

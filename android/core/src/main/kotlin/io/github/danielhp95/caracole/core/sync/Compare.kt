@@ -284,6 +284,24 @@ object Compare {
         return agreed
     }
 
+    /** peer_sync.record_taken: keep, as agreed with [peer] at [at], each unit a take just made this side's ([taken]:
+     * its digest there as taken, null for a unit it had none of) that this side now holds so ([mine], its whole
+     * state), or lacks as the peer does, dropping its kept answer; every other unit's base and kept answer stay as they
+     * were, and none agreed writes nothing. The base is written as [recordAgreement] writes it. Called inside
+     * Database.write. How many were agreed. */
+    fun recordTaken(db: Db, peer: String, mine: Map<String, SyncUnit>, taken: Map<String, String?>, at: String): Int {
+        val agreed = taken.filter { (id, digest) -> mine[id]?.digest == digest }
+        if (agreed.isEmpty()) return 0
+        val base = LinkedHashMap<String, Pair<String?, String>>(baseOf(db, peer) ?: emptyMap())
+        val kept = LinkedHashMap(keptOf(db, peer))
+        for ((id, digest) in agreed) {
+            base[id] = digest to at
+            kept.remove(id)
+        }
+        writeBase(db, peer, base, kept)
+        return agreed.size
+    }
+
     /** peer_sync._write_base: `{"format": FORMAT, "units": …}` and, when there are any, `"kept": …`, each by unit id
      * in code-point order. */
     internal fun writeBase(db: Db, peer: String, base: Map<String, Pair<String?, String>>, kept: Kept) {

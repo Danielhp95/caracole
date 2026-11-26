@@ -14,9 +14,9 @@ import kotlin.test.assertEquals
 
 /**
  * The remembered answer on the phone (the sync redesign's §3.1) against vectors/sync/kept.jsonl
- * (tests/test_conformance_sync_kept.py): merged_kept, compare with kept answers, record_kept and record_agreement to
- * the kv's byte, kept_of and a state document's kept, each record Python's answer to the same call (SyncReplay's,
- * which the device runs too).
+ * (tests/test_conformance_sync_kept.py): merged_kept, compare with kept answers, record_kept, record_agreement and
+ * record_taken to the kv's byte, kept_of and a state document's kept, each record Python's answer to the same call
+ * (SyncReplay's, which the device runs too).
  */
 class KeptTest {
     @get:Rule val tmp = TemporaryFolder()

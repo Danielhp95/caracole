@@ -14,10 +14,11 @@ tuple as an array). No fixture: the functions that read the database read one kv
   - ``compare``: ``in`` ``{mine, theirs, base, kept}``, each side's units ``{id: {id, label, digest}}``, the merged
     base ``{id: digest or null}`` (or null: never synced) and ``merged_kept``'s answer (or null); ``out`` each
     difference ``[id, proposal, why]``, in order;
-  - ``record_kept`` and ``record_agreement``: ``in`` ``{kv, peer, args}``, ``kv`` the text kv ``sync:base:<peer>``
-    holds before (null: none), ``args`` ``[chosen, at]`` (``chosen`` ``{id: [here, there]}``) or ``[mine, theirs,
-    at]`` (as ``in.mine`` of ``compare``); ``out`` that kv's text after, byte for byte (null: none), and
-    ``returned`` what the function returned;
+  - ``record_kept``, ``record_agreement`` and ``record_taken``: ``in`` ``{kv, peer, args}``, ``kv`` the text kv
+    ``sync:base:<peer>`` holds before (null: none), ``args`` ``[chosen, at]`` (``chosen`` ``{id: [here, there]}``),
+    ``[mine, theirs, at]`` (as ``in.mine`` of ``compare``) or ``[mine, taken, at]`` (``taken`` ``{id: digest there
+    or null}``); ``out`` that kv's text after, byte for byte (null: none), and ``returned`` what the function
+    returned;
   - ``kept_of``: ``in`` ``{kv, peer}``, ``out`` ``{id: [here, there, when]}``;
   - ``read_state_document``: ``in`` ``{doc}``, a state document, ``out`` its ``PeerState.kept``.
 - sync/scope.jsonl:
@@ -279,6 +280,44 @@ def record_agreement_records(conn: sqlite3.Connection) -> list[dict]:
     return out
 
 
+def record_taken_records(conn: sqlite3.Connection) -> list[dict]:
+    from caracole import peer_sync as sync
+
+    kept = {"song/b": ["bh", "bt", T1], "song/c": ["ch", "ct", T1]}
+    cases = [
+        ("no base before: the units taken alone, agreed", None, _units(a="a1", b="b1"), {"song/a": "a1"}),
+        ("a base before: the units taken agreed anew, the others as they were",
+         _stored({"song/a": ["a0", T0], "song/b": ["b0", T0]}), _units(a="a1", b="b9"), {"song/a": "a1"}),
+        ("a unit taken this side holds otherwise now is no agreement, and keeps its base",
+         _stored({"song/a": ["a0", T0]}), _units(a="a2", d="d1"), {"song/a": "a1", "song/d": "d1"}),
+        ("nothing agreed, no base: nothing written", None, _units(a="a2"), {"song/a": "a1"}),
+        ("nothing taken, a base: as it was, byte for byte",
+         '{"format": %d, "units": {"song/b": ["x", "y"]}}' % _format(), _units(b="x"), {}),
+        ("a removal taken, the unit gone here: agreed lacking", _stored({"song/a": ["a0", T0]}), {},
+         {"song/a": None}),
+        ("a removal taken, the unit still here (a tombstone of a song kept): no agreement",
+         _stored({"removed/x/y": [None, T0]}), {"removed/x/y": _u("removed/x/y", "r")}, {"removed/x/y": None}),
+        ("a unit taken drops its kept answer, the others stay", _stored({}, kept), _units(b="bt", c="ch"),
+         {"song/b": "bt"}),
+        ("a unit taken held otherwise keeps its kept answer", _stored({}, kept), _units(b="bh"), {"song/b": "bt"}),
+        ("every kept answer dropped: no kept member", _stored({}, {"song/b": ["bh", "bt", T1]}), _units(b="bt"),
+         {"song/b": "bt"}),
+        ("odd kept answers before are left out", _stored({}, ODD_KEPT), _units(z="1"), {"song/z": "1"}),
+        ("a base of another format before is none", _stored({"song/a": ["a0", T0]}, kept, _format(-1)),
+         _units(c="c1"), {"song/c": "c1"}),
+        ("keys in code-point order: a supplementary letter after U+FF61", None,
+         {WIDE: _u(WIDE, "w"), NARROW: _u(NARROW, "n"), "song/a": _u("song/a", "a")},
+         {WIDE: "w", NARROW: "n", "song/a": "a"}),
+    ]
+    out = []
+    for case, before, mine, taken in cases:
+        returned, after = _with_kv(conn, before, lambda: sync.record_taken(conn, PEER, mine, taken, T2))
+        out.append({"fn": "record_taken", "case": case,
+                    "in": plain({"kv": before, "peer": PEER, "args": [mine, taken, T2]}), "out": after,
+                    "returned": returned})
+    return out
+
+
 def kept_of_records(conn: sqlite3.Connection) -> list[dict]:
     from caracole import peer_sync as sync
 
@@ -322,7 +361,7 @@ def state_records() -> list[dict]:
 
 def kept_records(conn: sqlite3.Connection) -> list[dict]:
     return [*merged_kept_records(), *compare_records(), *record_kept_records(conn), *record_agreement_records(conn),
-            *kept_of_records(conn), *state_records()]
+            *record_taken_records(conn), *kept_of_records(conn), *state_records()]
 
 
 # --- scope.jsonl ---------------------------------------------------------------------------------------------------
@@ -558,6 +597,11 @@ def test_the_vectors_show_what_the_design_says(conn):
         "format": sync.FORMAT, "units": {"song/b": [None, T2], "song/c": [None, T2]}}
     assert kept["merged_kept", "the other side's agreement at the same time as this side's kept answer: the "
                                "agreement"] == {}
+    assert json.loads(kept["record_taken", "a base before: the units taken agreed anew, the others as they were"]) == {
+        "format": sync.FORMAT, "units": {"song/a": ["a1", T2], "song/b": ["b0", T0]}}
+    assert kept["record_taken", "nothing agreed, no base: nothing written"] is None  # never a base out of nothing
+    assert json.loads(kept["record_taken", "a removal taken, the unit still here (a tombstone of a song kept): no "
+                                           "agreement"]) == {"format": sync.FORMAT, "units": {"removed/x/y": [None, T0]}}
     assert kept["compare", "kept with no base, beside units compared as a first sync: only here, only there, never "
                            "synced"] == [["song/a", sync.MINE, sync.KEPT_HERE], ["song/c", sync.MINE, "only in our book"],
                                          ["song/d", sync.THEIRS, "only in theirs"],

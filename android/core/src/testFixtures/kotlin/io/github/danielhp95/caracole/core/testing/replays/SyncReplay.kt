@@ -61,8 +61,8 @@ import java.util.Base64
  *   ([fixturesTaken]) and every take's fixture copied unit by unit into one ([takesCopied]);
  * - [nameKey], songbook.name_key;
  * - the sync redesign's rules (tests/test_conformance_sync_kept.py): the remembered answer ([kept]: merged_kept,
- *   compare with kept answers, record_kept and record_agreement to the kv's byte, kept_of, a state's kept) and a
- *   sync's parts ([scope]: in_scope, listed_songs, change_of, names_of);
+ *   compare with kept answers, record_kept, record_agreement and record_taken to the kv's byte, kept_of, a state's
+ *   kept) and a sync's parts ([scope]: in_scope, listed_songs, change_of, names_of);
  * - the `.caracole` file (tests/test_conformance_sync_file.py, [file]): each fixture exported by the phone as Python
  *   exported it, as data; Python's files read back alike, their units, their refusals and their checks; and each
  *   import's differences, takes and bases.
@@ -430,12 +430,15 @@ object SyncReplay : AreaReplay {
     const val KEPT = "sync/kept.jsonl"
     const val SCOPE = "sync/scope.jsonl"
 
-    /** Every record of kept.jsonl: merged_kept, compare with kept answers, record_kept and record_agreement (the
-     * base's kv text after, byte for byte, and what each returned), kept_of and a state document's kept. */
+    /** Every record of kept.jsonl: merged_kept, compare with kept answers, record_kept, record_agreement and
+     * record_taken (the base's kv text after, byte for byte, and what each returned), kept_of and a state document's
+     * kept. */
     fun kept(misses: Misses) {
         val records = Corpus.records(KEPT)
         misses.check(records.map { it.fn }.toSet() == setOf("merged_kept", "compare", "record_kept", "record_agreement",
-                                                          "kept_of", "read_state_document")) { "$KEPT's functions" }
+                                                          "record_taken", "kept_of", "read_state_document")) {
+            "$KEPT's functions"
+        }
         withDatabase { database ->
             each(records, misses) { r ->
                 val given = r.extra.getValue("in").jsonObject
@@ -451,7 +454,7 @@ object SyncReplay : AreaReplay {
                         differs(r, r.out!!.jsonArray.map { row -> row.jsonArray.map(::text) },
                                 found.map { listOf(it.id, it.proposal, it.why) })
                     }
-                    "record_kept", "record_agreement", "kept_of" -> database.writeBlocking { db ->
+                    "record_kept", "record_agreement", "record_taken", "kept_of" -> database.writeBlocking { db ->
                         val peer = text(given.getValue("peer"))
                         val key = "sync:base:$peer"
                         db.kvDelete(key)
@@ -460,12 +463,13 @@ object SyncReplay : AreaReplay {
                             differs(r, keptOf(r.out), Compare.keptOf(db, peer))
                         } else {
                             val args = given.getValue("args").jsonArray
-                            val returned = if (r.fn == "record_kept") {
-                                Compare.recordKept(db, peer, args[0].jsonObject.mapValues { (_, pair) ->
+                            val returned = when (r.fn) {
+                                "record_kept" -> Compare.recordKept(db, peer, args[0].jsonObject.mapValues { (_, pair) ->
                                     textOrNull(pair.jsonArray[0]) to textOrNull(pair.jsonArray[1])
                                 }, text(args[1]))
-                            } else {
-                                Compare.recordAgreement(db, peer, units(args[0]), units(args[1]), text(args[2]))
+                                "record_taken" -> Compare.recordTaken(db, peer, units(args[0]), args[1].jsonObject
+                                    .mapValues { (_, digest) -> textOrNull(digest) }, text(args[2]))
+                                else -> Compare.recordAgreement(db, peer, units(args[0]), units(args[1]), text(args[2]))
                             }
                             differs(r, textOrNull(r.out), db.kvGet(key))
                                 ?: differs(r, r.extra.getValue("returned").jsonPrimitive.int, returned)

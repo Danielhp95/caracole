@@ -659,6 +659,14 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   - The base is each side's agreements with that peer (kv `sync:base:<peer id>`: a digest or None, and when),
     recorded by `record_agreement` at the end of every pull, and merged with the peer's by the later
     (`merged_base`).
+  - What a pull or a sync took is recorded as agreed as its take ends (`record_taken`: each unit taken that this
+    side now holds at the digest taken, or lacks as the peer does, at the peer's clock as the take began, its kept
+    answer dropped; no other unit touched, none agreed writing nothing), so a sync stopped after its take (its give
+    refused or cut off, the agree's read of the peer failing) leaves it agreed, and a later change on one side alone
+    is that side's, never a conflict; the other side, which took nothing, records nothing, and `merged_base` reads
+    this side's later record from either side. What it meant to give, and what it left, stay as they were; the
+    command still fails (test_commands_peer.py
+    `::test_what_a_sync_took_stays_agreed_when_its_give_fails_so_a_later_change_there_alone_is_theirs`).
   - A unit changed on one side is that side's; on both, differently, a `CONFLICT` (`decide`: as chosen, else
     `--prefer`, else left).
 - **The remembered answer**: an import's "keep mine", kept beside the base (`record_kept`, `kept_of`: its `"kept"`,
@@ -690,9 +698,11 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     `overrides.put_song_entries`.
   - A song gone there is removed as `caracole remove` does.
   - `songbook.put_songbook`, `overrides.put_alias`, `put_artist_url`, `put_block`.
-  - Then the command renders the songs taken, the songbooks and the pages, after a backup (`before-sync`).
+  - Then the command, after a backup (`before-sync`), records what it took as agreed (`record_taken`, above), and
+    renders the songs taken, the songbooks and the pages.
 - **Giving** a side what it takes, two ways: `caracole peer sync --here` asks the other to pull (`POST /peer/pull`),
-  and `--push` pushes (peer_push.py `Pusher`), as the phone, which serves nothing to the network, always does.
+  and `--push` pushes (peer_push.py `Pusher`), as the phone, which serves nothing to the network, always does. Either
+  failing fails the sync (exit 1) before its agree; what its take recorded stays.
 - **A push** (peer_push.py): `POST /peer/push/new` names the files its units keep by their SHA-256, `POST
   /peer/push/file` sends each one this side needs, `POST /peer/push` the document, checked against each unit's digest;
   then `caracole peer take DIR` takes its units from the staging folder as a pull takes a peer's, and deletes it.
@@ -2625,10 +2635,19 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 ##### Syncing on the phone
 
 - **The rules** are peer_sync.py's, replayed (`SyncReplay`, area `sync`): `Compare`'s kept answers (`keptOf`,
-  `recordKept`, `mergedKept`, `compare(kept=)`, `recordAgreement` dropping each agreed unit's, the base written with a
-  `"kept"` only when it holds one; `PeerState.kept`, the state's `kept`) and `Scope`'s parts (`PARTS`, `partOf`,
-  `listedSongs` through `Songbooks.entryKeys`, `inScope`, `changeOf`, `namesOf`): vectors/sync/kept.jsonl and
-  scope.jsonl.
+  `recordKept`, `mergedKept`, `compare(kept=)`, `recordAgreement` and `recordTaken` dropping each agreed unit's, the
+  base written with a `"kept"` only when it holds one; `PeerState.kept`, the state's `kept`) and `Scope`'s parts
+  (`PARTS`, `partOf`, `listedSongs` through `Songbooks.entryKeys`, `inScope`, `changeOf`, `namesOf`):
+  vectors/sync/kept.jsonl and scope.jsonl.
+- **When the phone agrees**: its take stage records what it took as agreed in the take's own write, right after
+  `Take.applyUnits` (`SyncEngine.agreeTaken`, `Compare.recordTaken` at the computer's `now` as compared), and its
+  agree stage records what the two then hold alike; so a sync that stops after its take (the give refused or cut off,
+  the agree's read of the computer failing, the job cancelled) leaves what it took agreed, and a later change on the
+  computer alone is the computer's (SyncEngineTest's "what a sync took stays agreed …"). The computer, which took
+  nothing, records nothing; the sync still fails. A kill between the take's last unit and that record (one library
+  read and one kv write) leaves those units unrecorded, as before: alike on both, they read as no difference, and
+  the next sync's agree records them, unless the computer changes one meanwhile. An import records at its agree
+  stage alone, as peer import does.
 - **The song keys' rules** (peer_sync.py's): `PeerClient.state` refuses a computer whose state names other rules
   (`PeerState.keyVersion`, `Units.otherKeys`: an `OtherKeys`, a PeerError, in `Units.OTHER_KEYS`' words), so
   `compare`, `tested` and `apply`'s compare stage stop before any change (SyncRoutes: 409); Sync on Wi-Fi's probe

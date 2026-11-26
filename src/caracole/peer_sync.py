@@ -44,8 +44,10 @@ the bases left as they are, never re-keyed. A document that says none is an olde
 **Comparing** (``compare``) is three-way once the two have synced: for each unit, its digest when the two last held
 it the same, the **base**. Each side keeps its own (kv ``sync:base:<peer id>``, ``{"format": 3, "units": {unit:
 [digest or None, when]}}``: None for a unit both lacked, ``record_agreement``), written at the end of every sync it
-makes; the other's comes with its state (``GET /api/peer/state?peer=<id>``), and the later of the two counts
-(``merged_base``), so a unit one side pushed to the other is known as synced on both, whichever side took it. A
+makes, and for each unit it took as its take ends (``record_taken``), so that a sync stopped after its take (its give
+refused, the network gone) leaves what it took agreed; the other's comes with its state (``GET
+/api/peer/state?peer=<id>``), and the later of the two counts (``merged_base``), so a unit one side pushed to the
+other is known as synced on both, whichever side took it. A
 unit only one side changed since is that side's; a unit both changed, differently, a ``CONFLICT`` for the owner to
 settle; one both changed the same way, or neither, no difference at all. With no base (the first sync), a unit on
 one side alone is that side's, and one both hold, differently, a conflict. ``compared_hash`` names a comparison, so
@@ -357,6 +359,25 @@ def record_agreement(conn: sqlite3.Connection, peer: str, mine: Mapping[str, Uni
             kept.pop(unit_id, None)
     _write_base(conn, peer, base, kept)
     return agreed
+
+
+def record_taken(conn: sqlite3.Connection, peer: str, mine: Mapping[str, Unit], taken: Mapping[str, str | None],
+                 at: str) -> int:
+    """Keep, as agreed with ``peer`` at ``at``, each unit a take just made this side's (``taken``: its digest there as
+    taken, None for a unit it had none of) that this side now holds so (``mine``, its whole state), or lacks as the
+    peer does, dropping its kept answer. A sync keeps them as its take ends, so that what it took stays agreed
+    whatever comes of the rest (its give, the agree's own read of the peer); every other unit's base and kept answer
+    stay as they were, and none agreed writes nothing. Return how many were agreed."""
+    agreed = {unit_id: digest for unit_id, digest in taken.items()
+              if (mine[unit_id].digest if unit_id in mine else None) == digest}
+    if not agreed:
+        return 0
+    base, kept = base_of(conn, peer) or {}, kept_of(conn, peer)
+    for unit_id, digest in agreed.items():
+        base[unit_id] = (digest, at)
+        kept.pop(unit_id, None)
+    _write_base(conn, peer, base, kept)
+    return len(agreed)
 
 
 # --- a library's units -------------------------------------------------------------------------------------------

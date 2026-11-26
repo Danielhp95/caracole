@@ -732,6 +732,62 @@ class SyncEngineTest {
         assertNull(phone.read { Compare.baseOf(it, computer.id) })
     }
 
+    private fun proposals(found: List<io.github.danielhp95.caracole.core.sync.Difference>) =
+        found.associate { it.id to (it.proposal to it.why) }
+
+    @Test fun `what a sync took stays agreed when its give then fails, so a later change on the computer alone is its`() {
+        onComputer("Radiohead", "Karma Police")
+        apply(engine.compare(computer.address.toString()))  // a first sync, agreed
+        val creep = onComputer("Radiohead", "Creep")
+        val hysteria = onPhone("Muse", "Hysteria")
+        computer.now = "2026-11-03T13:00:00Z"  // the computer's clock as the second sync compares
+        computer.answers["POST /peer/push/new"] = { exchange ->
+            exchange.requestBody.readBytes()
+            FakeComputer.json(exchange, 503, FakeComputer.obj("error" to JsonPrimitive("Busy.")))
+        }
+        stages.clear()
+        val failed = assertFailsWith<SyncFailed> { apply(engine.compare(computer.address.toString())) }
+        assertEquals(listOf(unitOf(creep)), assertNotNull(failed.outcome).taken, "the take stage took Creep")
+        assertEquals("failed", ended()["give"])
+        assertNull(ended()["agree"])
+        computer.answers.remove("POST /peer/push/new")
+        val base = assertNotNull(phone.read { Compare.baseOf(it, computer.id) })
+        assertEquals(computer.state().getValue(unitOf(creep)).digest to "2026-11-03T13:00:00Z", base[unitOf(creep)],
+                     "what was taken is agreed, at its digest, by the computer's clock as compared")
+        assertFalse(unitOf(hysteria) in base, "what wasn't given isn't")
+
+        // The computer changes Creep afterwards (its nightly run); the phone never touched it since it took it.
+        computer.database.writeBlocking { it.execute("UPDATE songs SET album = 'Pablo Honey' WHERE key = ?", creep.key) }
+        assertEquals(mapOf(unitOf(creep) to ("theirs" to "changed there since the last share"),
+                           unitOf(hysteria) to ("mine" to "new here since the last share")),
+                     proposals(engine.compare(computer.address.toString()).differences))
+        // The computer reads it so too, comparing a file of the phone's (peer_file.compare_file: its own base for the
+        // phone, none, merged with the one the file keeps).
+        val computerBase = computer.database.read { Compare.baseOf(it, phoneId) }
+        assertEquals(mapOf(unitOf(creep) to ("mine" to "changed here since the last share"),
+                           unitOf(hysteria) to ("theirs" to "new there since the last share")),
+                     proposals(Compare.compare(computer.state(), phoneState(), Compare.mergedBase(computerBase, base))))
+    }
+
+    @Test fun `what a sync took stays agreed when its agree stage can't read the computer's state`() {
+        val creep = onComputer("Radiohead", "Creep")
+        val c = engine.compare(computer.address.toString())
+        computer.onUnit = {  // caracole serve stops answering as the phone takes: its agree's read fails
+            computer.answers["GET /api/peer/state"] = { exchange ->
+                FakeComputer.json(exchange, 503, FakeComputer.obj("error" to JsonPrimitive("Restarting.")))
+            }
+        }
+        assertFailsWith<SyncFailed> { apply(c) }
+        assertEquals("failed", ended()["agree"])
+        computer.onUnit = null
+        computer.answers.remove("GET /api/peer/state")
+        assertEquals(computer.state().getValue(unitOf(creep)).digest,
+                     phone.read { Compare.baseOf(it, computer.id) }?.get(unitOf(creep))?.first)
+        computer.database.writeBlocking { it.execute("UPDATE songs SET album = 'Pablo Honey' WHERE key = ?", creep.key) }
+        assertEquals(mapOf(unitOf(creep) to ("theirs" to "changed there since the last share")),
+                     proposals(engine.compare(computer.address.toString()).differences))
+    }
+
     @Test fun `a take that outlasts the wait fails the give, and the computer refuses the next while it still runs`() {
         val hysteria = onPhone("Muse", "Hysteria")
         val held = java.util.concurrent.CountDownLatch(1)

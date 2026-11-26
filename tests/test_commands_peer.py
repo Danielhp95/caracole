@@ -459,6 +459,54 @@ def test_a_conflict_neither_chosen_nor_preferred_is_left_and_named(two):
     assert sorted(d["id"] for d in found) == sorted([unit["Radiohead - Creep"], unit["Oasis - Wonderwall"]])
 
 
+def served_by(side) -> httpx.MockTransport:
+    """``side``'s caracole serve, as ``two``'s handler serves there's: for the other side to ask this one."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        answer = WebApp.finish(side.app.handle(Request(request.method, request.url.raw_path.decode(),
+                                                       dict(request.headers), request.content)))
+        return httpx.Response(answer.status, headers=answer.headers, content=answer.body)
+
+    return httpx.MockTransport(handler)
+
+
+def differences(side) -> dict:
+    result = run(side, "peer", "diff", HOST, "--json")
+    assert result.exit_code == 0, result.output
+    return {d["id"]: (d["proposal"], d["why"]) for d in json.loads(result.output)["differences"]}
+
+
+def test_what_a_sync_took_stays_agreed_when_its_give_fails_so_a_later_change_there_alone_is_theirs(two, monkeypatch):
+    from caracole import peer_push
+
+    here, there, _, _ = two
+    creep = here.song(version="key=Am&capo=0")
+    there.song(version="key=Am&capo=0")
+    assert run(here, "peer", "sync", HOST, "--push", "--yes").exit_code == 0  # synced once: Creep alike, agreed
+    unit, hysteria = f"song/{creep.key}", "song/muse/hysteria"
+    add_version(there.cfg.overrides_file, CREEP, "key=Gm&capo=0")  # there changes Creep's chords
+    here.song("Muse", "Hysteria", version=None)  # here gets a song of its own to give
+
+    # There can't take a push now (two wait there already, another caracole's): the give fails, after the take.
+    for _ in range(2):
+        peer_push.new_push(there.cfg.state_dir, sender="0123456789abcdef", files=[], need=[],
+                           own=sync.own_id(there.conn))
+    result = run(here, "peer", "sync", HOST, "--push", "--yes")
+    assert result.exit_code == 1 and "Two pushes wait here already" in result.output, result.output
+    assert here.units()[unit] == there.units()[unit]  # Creep taken all the same: the two hold it alike
+    base = sync.base_of(here.conn, sync.own_id(there.conn))
+    assert base[unit][0] == there.units()[unit].digest  # what was taken is agreed, at its digest
+    assert hysteria not in base  # what wasn't given isn't
+
+    # There changes Creep again: only there changed it since the two last held it alike.
+    add_version(there.cfg.overrides_file, CREEP, "key=Fm&capo=0")
+    assert differences(here) == {unit: ("theirs", "changed there since the last share"),
+                                 hysteria: ("mine", "new here since the last share")}
+    # And there, asking here, reads it so too, by the agreement here's state carries.
+    monkeypatch.setattr("caracole.commands.peer.transport_for_peer", lambda: served_by(here))
+    assert differences(there) == {unit: ("mine", "changed here since the last share"),
+                                  hysteria: ("theirs", "new there since the last share")}
+
+
 def test_choices_that_cant_be_read_or_name_no_difference_are_refused_before_anything(two):
     here, there, asked, _ = two
     unit = two_conflicts(here, there)

@@ -100,13 +100,16 @@ class SameCaracole(message: String) : Exception(message)
  * 2. **take**: each difference decided (a choice, else its proposal, else, for a conflict, [prefer]; a conflict with
  *    neither is refused before any change; skip leaves it, [SKIPPED]); then, inside Database.write, a backup of the
  *    phone's database (Take.backupBeforeSync: none, nothing taken) and Take.applyUnits from the computer, each unit
- *    left that changed on either side since the comparison.
+ *    left that changed on either side since the comparison; then, in the same write, what was taken recorded as
+ *    agreed at the computer's clock as compared (Compare.recordTaken, peer_sync.record_taken: those the phone now
+ *    holds so), so that whatever stops the sync after its take leaves it agreed, never a conflict once the computer
+ *    changes it.
  * 3. **give**: the units the computer takes, as documents of the phone's state after its take, as peer_push.push_units
  *    gives them (`POST /peer/push/new`, each file it needs, `POST /peer/push`): a unit the phone changed since the
  *    comparison is left out ([CHANGED_HERE]), and so is a song whose file the phone can no longer read as kept
  *    ([FILE_CHANGED]). Then the computer's request is followed every second, 10 minutes at most, with no lock held,
  *    and each unit is given or left as its request says it (its `units`). A request that can't be sent or followed
- *    stops the sync there: no agreement is recorded on either side.
+ *    stops the sync there: the computer records nothing, and the phone no more than its take did.
  * 4. **mirror**: the mirror of the computer's pages brought up to date ([mirrorRefresh], told what to say as it goes:
  *    "120 of 640 pages"; skipped without one); its failure stops nothing.
  * 5. **agree**: the computer's state read again; what the two hold alike now recorded as agreed at its clock, inside
@@ -261,7 +264,8 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         }
 
         // 2. take
-        if (toTake.isEmpty()) stage(TAKE, SKIPPED_STATE, "") else take(client, stage, done, toTake)
+        if (toTake.isEmpty()) stage(TAKE, SKIPPED_STATE, "")
+        else take(client, stage, done, toTake, agreeWith = computer to (fresh.peer.now ?: Stamps.of(clock())))
 
         // 3. give
         if (toGive.isEmpty()) stage(GIVE, SKIPPED_STATE, "") else give(client, stage, done, me, fresh, toGive)
@@ -576,9 +580,10 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
                      "Give one a new id: caracole peer new-id.")
 
     /** The take stage: a backup of the phone's database, then each unit of [toTake] taken from [source], each left
-     * that changed on either side since the comparison. */
+     * that changed on either side since the comparison; with [agreeWith] (the computer's id, and its clock as
+     * compared), what was taken then recorded as agreed in the take's own write ([agreeTaken]). */
     private suspend fun take(source: UnitSource, stage: (String, String, String) -> Unit, done: Done,
-                             toTake: List<Difference>): Applied {
+                             toTake: List<Difference>, agreeWith: Pair<String, String>? = null): Applied {
         stage(TAKE, RUNNING, plural(toTake.size, "change"))
         val now = Stamps.of(clock())
         val wanted = toTake.map { it.id to it.theirs?.digest }
@@ -591,17 +596,36 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
                         ?: throw SyncFailed(NO_BACKUP, done.outcome())
                     // Each unit taken is the phone's as it is done (a savepoint of its own): recorded then, so that
                     // a take the database stops says what it took before.
-                    Take.applyUnits(db, store, source, wanted, expectedHere, now, checks) { id, what ->
+                    val took = Take.applyUnits(db, store, source, wanted, expectedHere, now, checks) { id, what ->
                         if (what == "taken") done.taken.add(id)
                         seen++
                         stage(TAKE, RUNNING, "$seen of ${plural(toTake.size, "change")}")
                     }
+                    agreeWith?.let { (computer, at) -> agreeTaken(db, computer, at, took, wanted) }
+                    took
                 }
             }
         }
         done.left.addAll(applied.left)
         stage(TAKE, DONE, "took ${applied.taken.size}" + if (applied.left.isEmpty()) "" else ", left ${applied.left.size}")
         return applied
+    }
+
+    /** What [applied] took (of [wanted]: each unit and its digest there as compared) recorded as agreed with
+     * [computer] at [at] (Compare.recordTaken: those the phone now holds so), as the take ends, so that whatever stops
+     * the sync after it (the give refused or cut off, the agree stage's own read, the job cancelled) leaves it agreed
+     * rather than a conflict once the computer changes it. A library that can't be read records nothing, the agree
+     * stage reading it again; the database's own failure stops the take, as Take.applyUnits' does. */
+    private fun agreeTaken(db: Db, computer: String, at: String, applied: Applied, wanted: List<Pair<String, String?>>) {
+        if (applied.taken.isEmpty()) return
+        val mine = try {
+            Units.libraryState(db)
+        } catch (e: Exception) {
+            if (Take.databaseFailed(e)) throw e
+            return
+        }
+        val digests = wanted.toMap()
+        Compare.recordTaken(db, computer, mine, applied.taken.associateWith { digests[it] }, at)
     }
 
     /** The units the computer takes pushed (peer_push.push_units), and its request followed to its end: each unit
