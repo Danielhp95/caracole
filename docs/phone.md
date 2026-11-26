@@ -54,7 +54,9 @@ notification. Its line says "Up to date" only when nothing was left; otherwise i
 wasn't synced. Conflicts end it with "tap Sync to choose": the sheet shows each one. Anything
 else left ends it with "the Journal says why" ("1 taken · 1 not synced: the Journal says
 why"): open that sync's Output in the Journal to see each one and why, by its name ("Left as it
-was: Radiohead - Creep: changed here since compared").
+was: Radiohead - Creep: changed here since compared"). The same Output names what a sync or a
+file's import took and gave ("Took Oasis - Wonderwall (removed)", "Gave Muse - Hysteria", "Took
+Blur - Song 2: changed on both sides"), the first 20 each way, then how many more.
 
 Both sides must run versions of caracole that name songs by the same rules. When they don't, the
 sync refuses before taking anything: "This caracole and the other name songs by different rules:

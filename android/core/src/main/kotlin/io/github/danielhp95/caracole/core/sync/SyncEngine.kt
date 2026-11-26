@@ -76,12 +76,14 @@ data class Comparison(val id: String, val address: String, val peer: PeerState, 
 /** What a sync did: the units taken here, given there, and left (with why), how many the two agree on after, the
  * sites merged; and [report], the sync's report (the sync redesign's §3.5: with whom, when, its parts, each index
  * taken or given counted before and after), null for a sync that stopped; [labels], each unit left's label as
- * compared ("Radiohead - Creep", "songbook Campfire"), the name its line says it by (SyncRoutes.sayLeft). */
+ * compared ("Radiohead - Creep", "songbook Campfire"), the name its line says it by (SyncRoutes.said); [compared],
+ * the differences as compared of the units taken and given, which its lines of what it took and gave say them by
+ * (SyncSaid: a label, a removal, a conflict). */
 data class SyncOutcome(val taken: List<String>, val given: List<String>, val left: List<Pair<String, String>>,
                        val agreed: Int, val indexed: List<String>, val report: JsonObject? = null,
-                       val labels: Map<String, String> = emptyMap()) {
+                       val labels: Map<String, String> = emptyMap(), val compared: List<Difference> = emptyList()) {
     /** What it left as it was that is a change left ([Take.isChangeLeft]): the job's outcome (SyncJson.outcome) and
-     * its "Left as it was:" lines (SyncRoutes.sayLeft) say these, the sync's own outcome as it ends. */
+     * its "Left as it was:" lines (SyncRoutes.said) say these, the sync's own outcome as it ends. */
     val changesLeft: List<Pair<String, String>> get() = left.filter { Take.isChangeLeft(it.second) }
 }
 
@@ -566,7 +568,8 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
 
     // --- the stages' parts ------------------------------------------------------------------------------------------
 
-    /** What the sync did so far, of the [compared] differences (the labels its leftovers are said by). */
+    /** What the sync did so far, of the [compared] differences (the labels its leftovers, and what it took and gave,
+     * are said by). */
     private class Done(private val compared: List<Difference>) {
         val taken = ArrayList<String>()
         val given = ArrayList<String>()
@@ -578,8 +581,10 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
 
         fun outcome(report: JsonObject? = null): SyncOutcome {
             val ids = left.map { it.first }.toSet()
+            val went = (taken + given).toSet()
             return SyncOutcome(taken.toList(), given.toList(), left.toList(), agreed, indexed.toList(), report,
-                               compared.filter { it.id in ids }.associate { it.id to it.label })
+                               compared.filter { it.id in ids }.associate { it.id to it.label },
+                               compared.filter { it.id in went })
         }
     }
 

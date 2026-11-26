@@ -2666,8 +2666,9 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   took and gave, each conflict left "changed on both sides", every other unit left "not synced", and the index
   stage's words where the computer's database is of another schema (`Outcomes.indexesSkipped`), the line ending with
   what to do, ": tap Sync to choose" for conflicts (the sheet the tap opens compares afresh and shows each) or ": the
-  Journal says why" for the rest (that sync's entry's Output lists each unit left by its name and its why:
-  SyncRoutes.sayLeft, Feed's step of what a request of the phone's own said, `Feed.SAID`; a fresh comparison wouldn't);
+  Journal says why" for the rest (that sync's entry's Output lists each unit taken and given, then each unit left by
+  its name and its why: SyncRoutes.said, Feed's step of what a request of the phone's own said, `Feed.SAID`; a fresh
+  comparison wouldn't);
   a stage that failed, its words); the queue's work, a
   sync among it, in a foreground service (`SyncService`).
   - Its debug build is an app of its own beside F-Droid's release (`io.github.danielhp95.caracole`, the release key):
@@ -3112,10 +3113,21 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     a bug, the request's error;
   - `Feed.feed` takes the outcomes and chips as `Outcome` and `Chip`, and works out one not given from the job, as
     feed.py does (an outcome from its line, the running one's chips with no facts);
-  - a request of the phone's own that said something as it ran (`JobContext.say` with no step: a sync's or a file's
-    import's units left as they were, SyncRoutes.sayLeft, one implementation for both) has one more step in its Output, `Feed.SAID` ("What it said"), its lines those
-    words, the phone's alone: feed.py has none (a command's Output is its step's own), and no vector holds it
-    (SyncRoutesTest). A unit left is said by its label as compared (`SyncOutcome.labels`), else its id, in
+  - a request of the phone's own that said something as it ran (`JobContext.say` with no step: what a sync, pressed
+    or unattended, or a file's import took and gave, then its units left as they were, `SyncRoutes.said`, one
+    implementation for all three) has one more step in its Output, `Feed.SAID` ("What it said"), its lines those
+    words, the phone's alone: feed.py has none (a command's Output is its step's own, the comparison a line a
+    difference, `_report`, `_file_report`, unbounded). A unit taken or given is said by its label as compared
+    (`SyncOutcome.compared`), else its id, in commands/peer.py's words (`DONE`, `ASKED_AGAIN`, `CONFLICT_SETTLED`,
+    `done_line`, `done_lines`: the lines `caracole peer sync`, `pull`, `take` and `import` print without `--progress`,
+    filtered alike, `_Said.flush`), from data/caracole/sync/said.json (core.sync's `SyncSaid`, vectors/sync/said.jsonl,
+    tests/test_conformance_sync_said.py): "Took Radiohead - Creep", "Gave songbook Campfire", a removal named as a
+    tombstone's label names one ("Took Oasis - Wonderwall (removed)", `peer_sync.REMOVED_LABEL`), a tombstone gone
+    there, its song asked for again ("Took Oasis - Wonderwall (asked for again)"), a tombstone going with its song
+    said by the song's line alone, a conflict settled "…: changed on both sides" (the verb says whose side came: Took
+    the other's, Gave this one's); at most `DONE_MOST` (20) a way, then
+    "Took … and 312 more", so a first sync's entry stays small. A unit left is said by its label as compared
+    (`SyncOutcome.labels`), else its id, in
     commands/peer.py's words, which caracole serve's sync prints in its step's Output (`LEFT`, `left_line`,
     `SyncRoutes.leftLine`): "Left as it was: Oasis - Wonderwall: changed here since compared"; a conflict the
     unattended sync left "…: changed on both sides: tap Sync to choose" (`CONFLICT_LEFT`), never as a failure;
@@ -3236,6 +3248,11 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   entry the reader refuses leaving the unit in Python's words; a `[version]` kept by its key and a `[harmonica]`
   reading by the viewer's checks, which core reaches through `OverrideChecks` (the engine's `checks`: Assembly's
   `OVERRIDE_CHECKS`, `Versions.keyVersion` and `HarpTabs.checkSpec`).
+- **What it says it did** (`SyncRoutes.said`, the job's Output's step of what it said, `Feed.SAID`): a sync's, pressed or
+  unattended, and an import's units taken and given, a line each by name, from what it really did
+  (`SyncOutcome.taken` and `given`: a unit left is said as left alone; a file gives none, its "keep mine" taking
+  nothing), then its units left ("The Requests tab on the phone" above; SyncSaidReplayTest, SyncRoutesTest,
+  SyncFileRoutesTest).
 - **A removal beside its song** (peer_sync's rule): `Compare.answeredByItsSong` takes out of the take each
   `removed/` unit whose song is given (a sync) or kept (an import, its answer kept beside the song's); one whose
   song's difference is left is left `Take.SONG_HERE`, never counted taken. A song the take respells is given at its
