@@ -59,7 +59,7 @@ class ChordsBenchActivity : Activity() {
         models[BenchReport.BEATS_FP16] = box("beat_this, fp16-stored (43 MB)", true)
         models[BenchReport.BEATS_FP32] = box("beat_this, fp32 (83 MB)", true)
         label("Threads")
-        for ((n, on) in listOf(1 to false, 2 to false, 4 to true, 8 to false)) threads[n] = box("$n", on)
+        for ((n, on) in listOf(1 to false, 2 to true, 4 to true, 8 to false)) threads[n] = box("$n", on)
         label("ONNX Runtime's memory")
         arenas[false] = box("arena and memory patterns off (the app's)", true)
         arenas[true] = box("arena and memory patterns on (the runtime's default)", true)

@@ -26,22 +26,29 @@ class BenchReportTest {
     private fun run(file: String = "steady", model: String = BenchReport.BTC, pass: Int = 1, cold: Boolean = false,
                     seconds: Double = 2.5, duration: Double = 10.0, screen: String = "on",
                     samples: List<Sample> = listOf(Sample(100_000, "none", 0.2f)),
-                    rss: Long? = 400_000, battery: Pair<Long?, Long?> = 1_000_000L to 990_000L) =
-        Run(file = file, model = model, pass = pass, threads = 4, arena = false, screen = screen, cold = cold,
-            nanos = (seconds * 1e9).toLong(), duration = duration, samples = samples, rssPeakKb = rss,
-            batteryStartUah = battery.first, batteryEndUah = battery.second)
+                    rss: Long? = 400_000, battery: Pair<Long?, Long?> = 1_000_000L to 990_000L,
+                    kind: String = BenchInput.REFERENCE, reset: Boolean = true) =
+        Run(file = file, kind = kind, model = model, pass = pass, threads = 4, arena = false, screen = screen,
+            cold = cold, nanos = (seconds * 1e9).toLong(), duration = duration, samples = samples, reset = reset,
+            rssPeakKb = rss, batteryStartUah = battery.first, batteryEndUah = battery.second)
 
     private val gates = Gates(btcMarginUnder = 1e-3, btcLogitsMaxAbs = 1e-4, fp32LogitsMaxAbs = 1e-3,
         fp16FMin = 0.99, trim = 5.0, window = 0.07)
 
-    private fun report(runs: List<Run>, parity: Parity = Parity(gates, emptyList(), emptyList())) =
-        BenchReport.of(runs, parity, device, made = "2026-11-25T21:00:00Z")
+    private fun report(runs: List<Run>, parity: Parity = Parity(gates, emptyList(), emptyList()),
+                       sessions: List<Session> = emptyList(), battery: Battery? = null) =
+        BenchReport.of(runs, parity, device, made = "2026-11-25T21:00:00Z", sessions = sessions, battery = battery)
+
+    private fun summary(out: JsonObject, kind: String) =
+        out.getValue("summary").jsonObject.getValue(kind).jsonArray.map { it.jsonObject }
 
     @Test fun aRunsRtfIsItsSecondsOverTheAudiosAndItsPeaksTheLargestSamples() {
         val samples = listOf(Sample(100_000, "none", 0.31f), Sample(300_000, "none", 0.52f),
             Sample(null, "light", null), Sample(200_000, "none", 0.47f))
         val out = report(listOf(run(samples = samples))).getValue("runs").jsonArray.single().jsonObject
         assertEquals("steady", out.str("file"))
+        assertEquals(BenchInput.REFERENCE, out.str("kind"))
+        assertTrue(out.getValue("reset").jsonPrimitive.boolean)
         assertEquals(BenchReport.BTC, out.str("model"))
         assertEquals(2.5, out.num("seconds"), 0.0)
         assertEquals(10.0, out.num("duration"), 0.0)
@@ -76,7 +83,7 @@ class BenchReportTest {
             run(model = BenchReport.BEATS_FP16, pass = 4, seconds = 2.0, rss = 1_200_000),
             run(model = BenchReport.BEATS_FP16, pass = 2, seconds = 1.0, screen = "off"),
         )
-        val summary = report(runs).getValue("summary").jsonArray.map { it.jsonObject }
+        val summary = summary(report(runs), "references")
         assertEquals(2, summary.size)
         val on = summary.first { it.str("screen") == "on" }
         assertEquals(BenchReport.BEATS_FP16, on.str("model"))
@@ -89,6 +96,94 @@ class BenchReportTest {
         val off = summary.first { it.str("screen") == "off" }
         assertEquals(1, off.getValue("runs").jsonPrimitive.int)
         assertTrue(off.getValue("speed_ok").jsonPrimitive.boolean)
+    }
+
+    @Test fun gateB0sSummaryIsTheReferencesAloneAndTheClipsAreApart() {
+        val runs = listOf(
+            run(file = "song", model = BenchReport.BEATS_FP16, seconds = 24.0, duration = 240.0),  // RTF 0.1
+            run(file = "song", model = BenchReport.BEATS_FP16, pass = 2, seconds = 26.4, duration = 240.0),
+            // A clip's chunk overhead: RTF 0.4, which must not be the gate's.
+            run(file = "silence", model = BenchReport.BEATS_FP16, seconds = 4.0, duration = 10.0,
+                kind = BenchInput.CLIP),
+        )
+        val out = report(runs)
+        val songs = summary(out, "references").single()
+        assertEquals(2, songs.getValue("runs").jsonPrimitive.int)
+        assertEquals(0.11, songs.num("rtf_max"), 1e-9)
+        assertTrue(songs.getValue("speed_ok").jsonPrimitive.boolean)
+        val clips = summary(out, "clips").single()
+        assertEquals(0.4, clips.num("rtf_max"), 1e-9)
+        assertFalse("the clips' block has no gate", "speed_ok" in clips || "memory_ok" in clips)
+    }
+
+    @Test fun aPeakWhoseResetDidntTakeIsNoNumber() {
+        val runs = listOf(
+            run(model = BenchReport.BEATS_FP16, pass = 2, rss = 1_700_000, reset = false),  // another session's?
+            run(model = BenchReport.BEATS_FP16, pass = 3, rss = 800_000),
+        )
+        val out = report(runs)
+        val first = out.getValue("runs").jsonArray[0].jsonObject
+        assertFalse(first.getValue("reset").jsonPrimitive.boolean)
+        assertEquals(JsonNull, first.getValue("rss_peak_mb"))
+        val songs = summary(out, "references").single()
+        assertEquals("the reset runs' peak alone (781.25, half to even)", 781.2, songs.num("rss_peak_mb"), 0.0)
+        assertTrue(songs.getValue("memory_ok").jsonPrimitive.boolean)
+        // None reset: memory unknown, never a pass.
+        val none = summary(report(listOf(run(model = BenchReport.BEATS_FP16, pass = 2, reset = false))),
+            "references").single()
+        assertEquals(JsonNull, none.getValue("rss_peak_mb"))
+        assertEquals(JsonNull, none.getValue("memory_ok"))
+    }
+
+    @Test fun theSessionsAndTheWholeBatteryAreSaidApart() {
+        val sessions = listOf(
+            Session(model = BenchReport.BEATS_FP16, threads = 4, arena = true, round = "on", loadSeconds = 1.2346,
+                rssPeakKb = 1_640_000, batteryStartUah = 3_000_000, batteryEndUah = 2_950_000, failure = null,
+                stopped = null),
+            Session(model = BenchReport.BEATS_FP32, threads = 2, arena = false, round = "off", loadSeconds = null,
+                rssPeakKb = null, batteryStartUah = null, batteryEndUah = null,
+                failure = "the session's process died", stopped = "the phone's thermal status reached critical"),
+        )
+        val out = report(listOf(run()), sessions = sessions,
+            battery = Battery(startUah = 3_000_000, endUah = 2_800_000, startPercent = 90, endPercent = 82,
+                plugged = false))
+        val (a, b) = out.getValue("sessions").jsonArray.map { it.jsonObject }
+        assertEquals(1.235, a.num("load_seconds"), 0.0)
+        assertEquals(1601.6, a.num("rss_peak_mb"), 0.0)
+        assertEquals(-50_000L, a.getValue("battery_uah").jsonPrimitive.long)
+        assertEquals("on", a.str("round"))
+        assertEquals(JsonNull, a.getValue("failure"))
+        assertEquals("the session's process died", b.str("failure"))
+        assertEquals("the phone's thermal status reached critical", b.str("stopped"))
+        assertEquals(JsonNull, b.getValue("load_seconds"))
+        val battery = out.getValue("battery").jsonObject
+        assertEquals(-200_000L, battery.getValue("change_uah").jsonPrimitive.long)
+        assertEquals(90, battery.getValue("start_percent").jsonPrimitive.int)
+        assertFalse(battery.getValue("plugged").jsonPrimitive.boolean)
+    }
+
+    @Test fun aSessionsResultCrossesFromItsProcessUnchanged() {
+        val r = run(samples = listOf(Sample(100_000, "none", 0.25f), Sample(null, "light", null)), reset = false,
+            battery = null to 5L, kind = BenchInput.CLIP)
+        val btc = BtcParity("steady", 4, true, 130, 0.99, listOf(0.0005f), 1.5e-5f)
+        val beat = BeatParity("long", BenchReport.BEATS_FP16, 4, true, 0.39f, 1.0, null)
+        val session = Session(BenchReport.BEATS_FP16, 4, true, "off", 2.5, 900_000, 1, 2, null, "hot")
+        val back = BenchCodec.decode(BenchCodec.encode(SessionResult(session, listOf(r), listOf(btc), listOf(beat))))
+        assertEquals(session, back.session)
+        assertEquals(listOf(r), back.runs)
+        assertEquals(listOf(btc), back.btc)
+        assertEquals(listOf(beat), back.beats)
+    }
+
+    @Test fun theSessionsReportSaysEachFilesParityOnceUnderEachSetting() {
+        val btc = BtcParity("steady", 4, false, 1, 1.0, emptyList(), 0f)
+        fun result(round: String) = SessionResult(
+            Session(BenchReport.BTC, 4, false, round, 0.3, 200_000, null, null, null, null),
+            listOf(run(screen = round)), listOf(btc), emptyList())
+        val out = BenchReport.ofSessions(listOf(result("on"), result("off")), gates, device, "2026-11-25T21:00:00Z")
+        assertEquals(2, out.getValue("sessions").jsonArray.size)
+        assertEquals(2, out.getValue("runs").jsonArray.size)
+        assertEquals(1, out.getValue("parity").jsonObject.getValue("btc").jsonArray.size)
     }
 
     @Test fun btcParityCountsOnlyTheDisagreementsWhereTheComputerWasSure() {
@@ -158,8 +253,8 @@ class BenchReportTest {
         val parity = Parity(gates, listOf(BtcParity.of("steady", 4, false, want.copyOf(), want,
             BtcParity.margins(want, 1), 1)), emptyList())
         val out = report(listOf(run()), parity)
-        assertEquals(setOf("bench", "made", "device", "soc", "android", "runtime", "app", "runs", "summary", "parity"),
-            out.keys)
+        assertEquals(setOf("bench", "made", "device", "soc", "android", "runtime", "app", "battery", "sessions", "runs",
+            "summary", "parity"), out.keys)
         assertEquals(BenchReport.FORMAT, out.getValue("bench").jsonPrimitive.int)
         assertEquals("2026-11-25T21:00:00Z", out.str("made"))
         assertEquals("Sony XQ-DQ72", out.str("device"))

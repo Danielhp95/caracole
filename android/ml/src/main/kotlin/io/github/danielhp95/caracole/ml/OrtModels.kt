@@ -51,6 +51,12 @@ class OrtModels(private val dir: File, private val threads: Int, private val bea
 
     private fun btc(): OrtSession = btc ?: open(BTC_GRAPH).also { btc = it }
 
+    /** Opens the session [chords] runs on ([btc]) or the one [beats] runs on, before its first run, so that its load
+     * is timed apart from it (the Chords bench). */
+    fun load(btc: Boolean) {
+        if (btc) btc() else if (beat == null) beat = open(beatsFile)
+    }
+
     private fun open(name: String): OrtSession {
         val file = File(dir, name)
         require(file.isFile) { "no $name in $dir" }

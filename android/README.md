@@ -756,11 +756,18 @@ frame for frame, beat_this's fp32 logits, and the fp16-stored file's beats and d
 `--ml` pushes the four files into the emulator's `/data/local/tmp/caracole-models` (again only when one changed) and
 runs `ModelParityTest` from `:ml`'s own test APK, which reports each model's load, each clip's time and its peak RSS,
 then the app's `ChordsBenchTest` (the Chords bench, below) over the same files.
-`--tcpdump FILE` turns the emulator's Wi-Fi off, so that everything goes through the network its console captures,
-keeps the capture in FILE, and fails the run on any packet to or from a host but 10.0.2.2. A control before and after
-the classes (a ping of 10.0.2.2 and a connection to a listener on the host's loopback) must be in the capture too, or
-the run fails: an empty capture proves nothing. A run killed with SIGKILL leaves the emulator's Wi-Fi off:
-`adb -s emulator-NNNN shell svc wifi enable`. `:ml`'s test APK runs under AndroidJUnitRunner, not CaracoleTestRunner:
+`--tcpdump FILE` gates on what caracole's own uids send. Before the classes, on the rooted emulator (`su 0`), it puts
+a chain of iptables and ip6tables rules at the head of OUTPUT that counts the packets of each of caracole's packages
+installed (the debug app, its test APK, `:ml`'s test APK) by `-m owner --uid-owner`. Packets to 10.0.2.2 and to
+loopback are counted apart; any other packet of theirs fails the run. A control proves the rules see the app's
+traffic: a connection to a listener on the host's loopback, sent as the debug app (`run-as`) before and after the
+classes, must be counted twice. The rules come off however the run ends. The whole interface is captured too, as
+evidence, with Wi-Fi off so that everything goes through the network the emulator's console captures. Its own control
+(a ping of 10.0.2.2 and a connection to the listener) must be in FILE, and each packet to or from another host is
+listed with the uid holding its socket as the classes end. It fails the run only when that uid is caracole's: the
+emulator's own Google Play services talk to Google now and then, and are no failure of caracole's. A run killed with
+SIGKILL leaves Wi-Fi off and the rules in: `adb -s emulator-NNNN shell svc wifi enable`, and
+`su 0 iptables -D OUTPUT -j caracole_own` (and `ip6tables`) in `adb shell`. `:ml`'s test APK runs under AndroidJUnitRunner, not CaracoleTestRunner:
 it has no HTTP code, so `caracole.network=loopback` isn't set for it.
 
 BTC's graph and `models.json` (`tests/conformance/data/caracole/autochords/`) are `:ml`'s resources, so the debug
@@ -787,6 +794,13 @@ phone can't yet decode audio or compute them itself (stage B1). So its speed is 
 will add the decoding and the features' time. And its parity is frame for frame against the computer's outputs;
 chord-by-chord scores (WCSR) come with the labels, in B1.
 
+It runs in sessions: one model on one thread count and memory setting, over every file. Each session runs in a fresh
+process, so that its memory is its own; starting one costs a second or two. A session loads its model first and
+times the load apart. Each run's `rss_peak_mb` is its true peak (the process's peak memory, reset as the run begins),
+or null with `"reset": false` where the phone refused the reset. `pss_peak_mb` is sampled once a second: a run of BTC
+lasts about a tenth of that, so its PSS is a reading taken around the call. If the phone's thermal status reaches
+critical, the session stops, keeping what it measured, and the bench stops after it; the report says why.
+
 1. **Install the debug build**: `android/scripts/phone-install.sh` (above). The APK is about 98 MB, the runtime's
    libraries most of it; it holds no model file.
 2. **Make a folder on the computer** with the model files and a few of your songs' references, from the repository's
@@ -804,24 +818,34 @@ chord-by-chord scores (WCSR) come with the labels, in B1.
    own storage, which takes a minute.
 5. **A short run first**: untick "then the same runs again with the screen off" and the folder's references, set the
    passes to 1, and press Start: a few minutes over the committed clips, to see parity on your phone.
-6. **The gate's run**: unplug the phone, tick everything again (the defaults: BTC, both beat files, 4 threads, the
-   arena off and on, 5 passes), and press Start. The screen stays on for the first round; when it says so, turn the
-   screen off with the power button and leave the phone alone for the second round. With five songs it takes about an
-   hour and a half; fewer boxes ticked, less. The notification and the screen say what runs, and Stop keeps what was
-   done.
-7. **Bring the report back**: it is `caracole-bench-<UTC time>.json` in the same folder, rewritten after each
-   model's turn: `adb pull /sdcard/Download/caracole-bench/caracole-bench-….json`. It says your phone's model, its
+6. **The gate's minimum next**: unplug the phone; tick beat_this fp16 alone, 4 threads alone, the arena off alone,
+   the folder's references and the screen-off round, untick the clips; 5 passes. That is two sessions (screen on, then
+   off), each 5 songs × 5 passes. For five songs of 4 minutes, a session is 100 minutes of audio × the RTF: about 10
+   minutes at RTF 0.1, 25 at 0.25. So 20 to 50 minutes in all.
+7. **The whole matrix, as time allows**: the defaults (BTC, both beat files, 2 and 4 threads, the arena off and on,
+   5 passes, the screen-off round, clips and references). The screen stays on for the first round; when it says so,
+   turn the screen off with the power button and leave the phone alone for the second round. It is 16 beat_this
+   sessions (2 files × 2 thread counts × 2 arena settings × 2 rounds) of 100 minutes of audio each, BTC's a few
+   seconds: about 160 minutes at RTF 0.1 and over 6 hours at 0.25, more if 2 threads are slower. Untick what you
+   don't need. The notification and the screen say what runs, and Stop keeps what was done.
+8. **Bring the report back**: it is `caracole-bench-<UTC time>.json` in the same folder, rewritten after each
+   session: `adb pull /sdcard/Download/caracole-bench/caracole-bench-….json`. It says your phone's model, its
    SoC, its Android version, the app's version and the files' names, nothing else of yours.
 
 What Gate B0 reads in it:
 
-- `summary`: for each model, thread count, arena setting and screen state, the warm runs' `rtf_median` and `rtf_max`
-  (the model's seconds over the audio's), with `speed_ok` when `rtf_max` is 0.125 or less, and `rss_peak_mb` with
-  `memory_ok` when it is 1 GB or less. A beat_this that can't reach RTF 0.25 stops stage B.
+- `summary.references`: for each model, thread count, arena setting and screen state, your songs' warm runs'
+  `rtf_median` and `rtf_max` (the model's seconds over the audio's), with `speed_ok` when `rtf_max` is 0.125 or less,
+  and their true `rss_peak_mb` with `memory_ok` when it is 1 GB or less (null when no run's peak could be reset). A
+  beat_this that can't reach RTF 0.25 stops stage B. `summary.clips` gives the same numbers for the committed clips,
+  with no gate: they are parity's, and a short clip's chunk overhead is no measure of a song. Both leave each
+  session's first run out (`cold`: its first inference warms the runtime), so a run of 1 pass has no summary.
 - `parity.pass`: BTC's chords the computer's frame for frame but where the computer itself was within 0.001 of a tie,
   beat_this fp32's logits within 0.001, and the fp16 file's beats and downbeats at F ≥ 0.99.
-- `runs`: each run with its `thermal` states, its `headroom_max` and its `battery_uah` change: how hot five songs back
-  to back make the phone, and what they cost.
+- `runs`: each run with its `thermal` states, its `headroom_max` (read at most every 10 s) and its `battery_uah`
+  change; `sessions`: each session's `load_seconds`, its process's peak, its battery change, and a `failure` or
+  `stopped`; `battery`: the whole bench's. A negative battery change is drain. Together, how hot songs back to back
+  make the phone, and what they cost.
 
 Which beat file, how many threads and which memory setting ship are yours to choose from it (the design's §11). To
 free the room afterwards, delete the folder; the app's own copy of the models goes with the debug app's data

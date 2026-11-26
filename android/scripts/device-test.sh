@@ -20,15 +20,24 @@
 #                   $CARACOLE_CHORD_MODELS (`nix build .#chord-models`; unset, the ./android#ml shell's), pushed into
 #                   /data/local/tmp/caracole-models, a cache left there for the next run (a file pushed again only
 #                   when its SHA-256 differs)
-#   --tcpdump FILE  every packet the emulator sends or gets while the classes run, into FILE (pcap), with Wi-Fi off
-#                   so that all of it goes through the one interface the emulator's console captures (its cellular
-#                   network); any packet to or from a host but 10.0.2.2 fails the run (ARP between the emulator and
-#                   10.0.2.2, and link-local multicast, which reaches no host, are listed and allowed). A control
-#                   before and after the classes, a ping of 10.0.2.2 and a TCP connection to a listener of the
-#                   script's on the host's loopback, must be in the capture, or it fails too: a capture that
-#                   recorded nothing, or a network with no route out, proves nothing. The script turns Wi-Fi back on
-#                   as it ends, an error too; killed with SIGKILL it can't: `adb -s emulator-NNNN shell svc wifi
-#                   enable` then
+#   --tcpdump FILE  the gate that caracole sends nothing to any host but 10.0.2.2 (and loopback) while the classes
+#                   run, by caracole's own uids: on the rooted emulator (`su 0`), a chain of iptables and ip6tables
+#                   rules at the head of OUTPUT (caracole_own) counts, for each of caracole's packages installed (the
+#                   debug app, its test APK, :ml's test APK: `pm list packages -U`), its packets by
+#                   `-m owner --uid-owner`, those to 10.0.2.2 and loopback apart; any other one of theirs fails the
+#                   run. Its control: a TCP connection to a listener of the script's on the host's loopback, sent as
+#                   the debug app's uid (`run-as`) before and after the classes, must be counted twice, or the rules
+#                   prove nothing. The rules come off on every exit.
+#                   Beside it, as evidence, every packet the emulator sends or gets goes into FILE (pcap), with Wi-Fi
+#                   off so that all of it goes through the one interface the emulator's console captures (its
+#                   cellular network). Its own control (a ping of 10.0.2.2 and a connection to the listener from the
+#                   shell, before and after) must be in it, or the run fails: a capture that recorded nothing proves
+#                   nothing. Each packet to or from another host is printed with the uid of the socket holding its
+#                   far end as the classes end (/proc/net/{tcp,udp}{,6}), and fails the run only when that uid is
+#                   caracole's: the emulator's own Google Play services, say, are no failure of caracole's. The
+#                   script turns Wi-Fi back on as it ends, an error too; killed with SIGKILL it can't: then
+#                   `adb -s emulator-NNNN shell svc wifi enable`, and `su 0 iptables -D OUTPUT -j caracole_own` (and
+#                   ip6tables) in its shell
 #
 # It builds assembleDebug and assembleDebugAndroidTest first (the debug build, io.github.danielhp95.caracole.debug, and
 # its tests, io.github.danielhp95.caracole.debug.test), outside the lock, then takes the first free emulator of
@@ -160,8 +169,18 @@ fi
 # The computers this run started, stopped as it ends.
 servers=()
 capturing=0
+owned=0
+# caracole_own's rules taken off, iptables' and ip6tables', whatever state they were left in.
+unown() {
+    local t
+    for t in iptables ip6tables; do
+        adb shell "su 0 sh -c '$t -D OUTPUT -j caracole_own; $t -F caracole_own; $t -X caracole_own'" \
+            >/dev/null 2>&1 || true
+    done
+}
 cleanup() {
     for pid in "${servers[@]:-}"; do [ -n "$pid" ] && kill "$pid" 2>/dev/null || true; done
+    if [ "$owned" = 1 ]; then unown; fi
     # A run cut short while it captured leaves the emulator as it found it: capturing nothing, its Wi-Fi on.
     if [ "$capturing" = 1 ]; then
         adb emu network capture stop >/dev/null 2>&1 || true
@@ -234,6 +253,36 @@ s = socket.create_server(("127.0.0.1", int(sys.argv[1])))
 while True:
     c, _ = s.accept(); c.recv(64); c.sendall(b"ok\n"); c.close()' "$probe_port") &
     servers+=($!)
+    # caracole's uids, each of its packages installed: the debug app, its test APK, :ml's test APK.
+    [ "$(adb shell "su 0 id -u" 2>/dev/null | tr -d '\r')" = 0 ] \
+        || { echo "device-test.sh: --tcpdump needs a rooted emulator (su 0) for its owner rules" >&2; exit 3; }
+    uid_of() {
+        adb shell pm list packages -U "$1" | tr -d '\r' \
+            | awk -v p="package:$1" '$1 == p { sub("uid:", "", $2); print $2 }'
+    }
+    own_uids=()
+    own_names=()
+    for pkg in "$app_id" "$app_id.test" "$ns.ml.test"; do
+        uid="$(uid_of "$pkg")"
+        [ -n "$uid" ] || continue
+        own_uids+=("$uid")
+        own_names+=("$pkg=$uid")
+    done
+    app_uid="$(uid_of "$app_id")"
+    [ -n "$app_uid" ] || { echo "device-test.sh: no uid for $app_id" >&2; exit 3; }
+    owned=1
+    unown
+    rules="iptables -N caracole_own && ip6tables -N caracole_own"
+    for uid in "${own_uids[@]}"; do
+        rules+=" && iptables -A caracole_own -m owner --uid-owner $uid -d 10.0.2.2 -j RETURN"
+        rules+=" && iptables -A caracole_own -m owner --uid-owner $uid -d 127.0.0.0/8 -j RETURN"
+        rules+=" && iptables -A caracole_own -m owner --uid-owner $uid"
+        rules+=" && ip6tables -A caracole_own -m owner --uid-owner $uid -d ::1/128 -j RETURN"
+        rules+=" && ip6tables -A caracole_own -m owner --uid-owner $uid"
+    done
+    rules+=" && iptables -I OUTPUT 1 -j caracole_own && ip6tables -I OUTPUT 1 -j caracole_own"
+    adb shell "su 0 sh -c '$rules'" || { echo "device-test.sh: the owner rules wouldn't go in" >&2; exit 3; }
+    echo "device-test.sh: counting what ${own_names[*]} send" >&2
     capturing=1
     adb shell svc wifi disable
     sleep 15
@@ -245,6 +294,8 @@ control() {
     [ -n "$capture" ] || return 0
     adb shell ping -c 1 -W 2 10.0.2.2 >/dev/null 2>&1 || true
     adb shell "echo caracole-probe | nc -w 2 10.0.2.2 $probe_port" >/dev/null 2>&1 || true
+    # As the debug app's uid: what its owner rule for 10.0.2.2 must count.
+    adb shell "run-as $app_id sh -c 'echo caracole-probe | nc -w 2 10.0.2.2 $probe_port'" >/dev/null 2>&1 || true
 }
 control
 
@@ -312,23 +363,85 @@ for spec in "${classes[@]:-}"; do
     run_with_computer "$name" "$dir"
 done
 
-# The capture read: a packet to or from a host but 10.0.2.2 fails the run, and so does a control missing from it.
+# The gate and its evidence. The gate: caracole's uids sent nothing to a host but 10.0.2.2 or loopback (the owner
+# rules' counters), and the control sent as the debug app was counted. The evidence: the capture, its own control in
+# it, each packet to or from another host printed with the uid holding that host's socket, a failure only for one of
+# caracole's.
 if [ -n "$capture" ]; then
     control
     adb emu network capture stop >/dev/null
+    # Who holds each socket, and the rules' counters, as the classes end, before anything moves on.
+    sockets="$(adb shell "su 0 cat /proc/net/tcp /proc/net/tcp6 /proc/net/udp /proc/net/udp6" | tr -d '\r')"
+    packages="$(adb shell pm list packages -U | tr -d '\r')"
+    counters="$(adb shell \
+        "su 0 sh -c 'iptables -L caracole_own -v -x -n; echo ---; ip6tables -L caracole_own -v -x -n'" | tr -d '\r')"
+    unown
+    owned=0
     adb shell svc wifi enable
     capturing=0
     mv "$capture" "$tcpdump"
+    printf '%s\n' "$sockets" >"$tcpdump.sockets"
+    printf '%s\n' "$packages" >"$tcpdump.packages"
+    printf '%s\n' "$counters" >"$tcpdump.counters"
+
+    own_ok=0
+    python3 - "$tcpdump.counters" "$app_uid" "${own_uids[*]}" <<'EOF' || own_ok=$?
+import sys
+
+v4, v6 = open(sys.argv[1]).read().split("---")
+app, uids = sys.argv[2], sys.argv[3].split()
+control, sent = 0, []
+for family, table in (("IPv4", v4), ("IPv6", v6)):
+    for line in table.splitlines():
+        f = line.split()
+        if not (f and f[0].isdigit() and "UID" in f):
+            continue
+        packets, uid, allowed = int(f[0]), f[-1], f[2] == "RETURN"
+        dest = f[f.index("owner") - 1]  # the column before the match (ip6tables leaves "opt" blank)
+        if allowed and uid == app and dest == "10.0.2.2":
+            control += packets
+        elif not allowed and packets:
+            sent.append(f"{family}: uid {uid} sent {packets} packet(s) to a host but 10.0.2.2 or loopback")
+print(f"owner rules (uids {', '.join(uids)}): {len(sent)} count(s) of packets elsewhere; "
+      f"the control as the app (uid {app}): {control} packet(s) to 10.0.2.2")
+for line in sent:
+    print(f"  {line}")
+if control < 2:
+    print("  the control as the app isn't counted twice: the rules prove nothing")
+sys.exit(1 if sent or control < 2 else 0)
+EOF
+    if [ "$own_ok" = 0 ]; then results+=("PASS owner rules"); else results+=("FAIL owner rules"); failed=1; fi
+
     read_ok=0
-    python3 - "$tcpdump" "$probe_port" <<'EOF' || read_ok=$?
+    python3 - "$tcpdump" "$probe_port" "${own_uids[*]}" "$tcpdump.sockets" "$tcpdump.packages" <<'EOF' || read_ok=$?
 import ipaddress, struct, sys
 
 data = open(sys.argv[1], "rb").read()
 assert data[:4] == bytes.fromhex("d4c3b2a1") and struct.unpack("<I", data[20:24])[0] == 1, "not an Ethernet pcap"
 guest, host = ipaddress.ip_address("10.0.2.15"), ipaddress.ip_address("10.0.2.2")
 probe = int(sys.argv[2])
+own = set(sys.argv[3].split())
+
+
+def address(hexa):
+    """A /proc/net/* address: little-endian 32-bit words of hex; an IPv4-mapped IPv6 one as its IPv4."""
+    ip = ipaddress.ip_address(b"".join(bytes.fromhex(hexa[i:i + 8])[::-1] for i in range(0, len(hexa), 8)))
+    return (ip.ipv4_mapped or ip) if ip.version == 6 else ip
+
+
+holders = {}  # a socket's far end: the uids holding one to it
+for line in open(sys.argv[4]).read().splitlines():
+    f = line.split()
+    if len(f) > 7 and f[0].endswith(":") and f[0][:-1].isdigit():
+        holders.setdefault(address(f[2].split(":")[0]), set()).add(f[7])
+names = {}
+for line in open(sys.argv[5]).read().splitlines():
+    if " uid:" in line:
+        pkg, uid = line.removeprefix("package:").split(" uid:")
+        names.setdefault(uid.strip(), []).append(pkg)
+
 packets, others, allowed = 0, [], []
-# The control's packets: ICMP echo requests and replies, the listener's SYN and SYN-ACK, each way.
+# The capture's control: ICMP echo requests and replies, the listener's SYN and SYN-ACK, each way.
 seen = {"ping": 0, "pong": 0, "syn": 0, "syn-ack": 0}
 at = 24
 while at < len(data):
@@ -339,14 +452,17 @@ while at < len(data):
     kind = frame[12:14].hex()
     if kind == "0806":
         src, dst = ipaddress.ip_address(frame[28:32]), ipaddress.ip_address(frame[38:42])
-        (allowed if {src, dst} <= {guest, host} else others).append(f"ARP {src} -> {dst}")
+        if {src, dst} <= {guest, host}:
+            allowed.append(f"ARP {src} -> {dst}")
+        else:
+            others.append((f"ARP {src} -> {dst}", None))
         continue
     if kind == "0800":
         src, dst = ipaddress.ip_address(frame[26:30]), ipaddress.ip_address(frame[30:34])
     elif kind == "86dd":
         src, dst = ipaddress.ip_address(frame[22:38]), ipaddress.ip_address(frame[38:54])
     else:
-        others.append(f"ethertype {kind}")
+        others.append((f"ethertype {kind}", None))
         continue
     if {src, dst} == {guest, host}:
         if kind == "0800":
@@ -365,16 +481,27 @@ while at < len(data):
     if any(dst in ipaddress.ip_network(net) for net in ("224.0.0.0/24", "ff02::/16")):
         allowed.append(f"link-local multicast {src} -> {dst}")
         continue
-    others.append(f"{src} -> {dst}")
-print(f"tcpdump: {packets} packets, {len(others)} to or from a host but 10.0.2.2")
+    others.append((src, dst))
+print(f"tcpdump (evidence): {packets} packets, {len(others)} to or from a host but 10.0.2.2")
 missing = [name for name, n in seen.items() if n < 2]
 print("  control (before and after the classes): " + ", ".join(f"{name} {n}" for name, n in seen.items())
       + (f"; missing: {', '.join(missing)}: the capture proves nothing" if missing else ""))
 for line in sorted(set(allowed)):
     print(f"  allowed: {line}")
-for line in others:
-    print(f"  {line}")
-sys.exit(1 if others or missing else 0)
+ours = 0
+for endpoint, dst in sorted(set(others), key=str):
+    if dst is None:
+        print(f"  {endpoint}")
+        continue
+    src = endpoint
+    # A socket's remote address is the far host's, whichever way the packet went.
+    uids = holders.get(src, set()) | holders.get(dst, set())
+    said = ", ".join(f"uid {u} ({' '.join(names.get(u, ['the system']))})" for u in sorted(uids)) or "no socket left"
+    print(f"  {src} -> {dst}: {said}")
+    ours += bool(uids & own)
+if ours:
+    print(f"  {ours} of them to or from a socket of caracole's")
+sys.exit(1 if ours or missing else 0)
 EOF
     if [ "$read_ok" = 0 ]; then results+=("PASS tcpdump"); else results+=("FAIL tcpdump"); failed=1; fi
 fi

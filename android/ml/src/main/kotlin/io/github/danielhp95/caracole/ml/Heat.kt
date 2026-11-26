@@ -6,12 +6,13 @@ import android.content.IntentFilter
 import android.os.BatteryManager
 import android.os.Build
 import android.os.PowerManager
+import android.os.SystemClock
 
 /**
  * What the phone says of its heat and its battery (the design's §3.4), each read as far as its Android gives it and
  * none a crash: the thermal status from API 29 ([PowerManager.getCurrentThermalStatus], its names [statusName]), the
- * thermal headroom forecast 10 s ahead from API 30 ([PowerManager.getThermalHeadroom], NaN when unsupported or asked
- * again within a second: null), the battery's charge counter in µAh and its percent ([BatteryManager]'s properties,
+ * thermal headroom forecast 10 s ahead from API 30 ([PowerManager.getThermalHeadroom], asked at most every 10 s, the
+ * last answer between; NaN, unsupported or asked too soon: null), the battery's charge counter in µAh and its percent ([BatteryManager]'s properties,
  * null where the gauge gives none), whether it is plugged in (the sticky battery broadcast) and Battery Saver. An API
  * the phone lacks, or one that throws, is [UNKNOWN] or null.
  */
@@ -30,8 +31,19 @@ class Heat(context: Context) {
     private fun thermal(): String =
         if (Build.VERSION.SDK_INT >= 29) guarded { statusName(power.currentThermalStatus) } ?: UNKNOWN else UNKNOWN
 
-    private fun headroom(): Float? =
-        if (Build.VERSION.SDK_INT >= 30) guarded { power.getThermalHeadroom(10).takeUnless { it.isNaN() } } else null
+    private var headroomAt = Long.MIN_VALUE
+    private var lastHeadroom: Float? = null
+
+    /** Asked at most every [HEADROOM_MS]: Android answers NaN to a call that comes sooner. Between, the last answer. */
+    @Synchronized private fun headroom(): Float? {
+        if (Build.VERSION.SDK_INT < 30) return null
+        val now = SystemClock.elapsedRealtime()
+        if (headroomAt == Long.MIN_VALUE || now - headroomAt >= HEADROOM_MS) {
+            headroomAt = now
+            lastHeadroom = guarded { power.getThermalHeadroom(10).takeUnless { it.isNaN() } }
+        }
+        return lastHeadroom
+    }
 
     private fun charge(): Long? = guarded {
         battery.getLongProperty(BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER).takeIf { it > 0 }
@@ -56,6 +68,10 @@ class Heat(context: Context) {
 
     companion object {
         const val UNKNOWN = "unknown"
+        const val HEADROOM_MS = 10_000L
+
+        /** The statuses at which the bench stops a session (the design's §3.4: critical or worse stops a hearing). */
+        val TOO_HOT = setOf("critical", "emergency", "shutdown")
 
         /** PowerManager's THERMAL_STATUS_* by name. */
         fun statusName(status: Int): String = when (status) {

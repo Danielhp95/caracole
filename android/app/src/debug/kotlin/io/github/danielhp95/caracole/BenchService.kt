@@ -13,11 +13,13 @@ import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import io.github.danielhp95.caracole.ml.AndroidProbe
-import io.github.danielhp95.caracole.ml.Bench
+import io.github.danielhp95.caracole.ml.Battery
 import io.github.danielhp95.caracole.ml.BenchInputs
 import io.github.danielhp95.caracole.ml.BenchReport
 import io.github.danielhp95.caracole.ml.Device
 import io.github.danielhp95.caracole.ml.OrtModels
+import io.github.danielhp95.caracole.ml.Session
+import io.github.danielhp95.caracole.ml.SessionResult
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
@@ -55,10 +57,12 @@ internal object BenchClips {
 }
 
 /**
- * The Chords bench's runs, in the foreground (a special use, the debug build's alone) with a partial wake lock, so
- * that they go on with the screen off: the models chosen over the committed clips and the folder's references, once
- * with the screen kept on, then, if asked, again once the owner has turned it off. The report,
- * `caracole-bench-<UTC>.json`, is written into the folder after each model's session and at the end.
+ * The Chords bench, in the foreground (a special use, the debug build's alone) with a partial wake lock, so that it
+ * goes on with the screen off: a session a model, thread count and arena setting, each in a fresh process
+ * ([BenchSessions]), over the committed clips and the folder's references, once with the screen kept on, then, if
+ * asked, again once the owner has turned it off. A session the heat guard stopped stops the bench. The report,
+ * `caracole-bench-<UTC>.json`, is written into the folder after each session and at the end, with the battery over
+ * the whole bench.
  */
 class BenchService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
@@ -79,7 +83,7 @@ class BenchService : Service() {
             lock.acquire(12 * 60 * 60 * 1000L)
             try {
                 work(intent)
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 BenchSession.say("stopped by a bug: $e")
             } finally {
                 lock.release()
@@ -94,7 +98,8 @@ class BenchService : Service() {
 
     private fun work(intent: Intent) {
         val say = BenchSession::say
-        val folder = BenchFolder(contentResolver, Uri.parse(intent.getStringExtra(FOLDER)))
+        val tree = intent.getStringExtra(FOLDER)!!
+        val folder = BenchFolder(contentResolver, Uri.parse(tree))
         val chosen = intent.getStringArrayExtra(MODELS).orEmpty().toList()
         val needed = buildSet {
             if (BenchReport.BTC in chosen) { add(OrtModels.BTC_GRAPH); add(OrtModels.BTC_WEIGHTS) }
@@ -102,38 +107,27 @@ class BenchService : Service() {
             if (BenchReport.BEATS_FP32 in chosen) add(OrtModels.BEATS_FP32)
         }
         val (models, ready) = BenchModels.prepare(this, folder, needed, say)
-        val plan = Bench.Plan(
-            models = chosen.filter { m ->
-                when (m) {
-                    BenchReport.BTC -> OrtModels.BTC_GRAPH in ready && OrtModels.BTC_WEIGHTS in ready
-                    BenchReport.BEATS_FP16 -> OrtModels.BEATS_FP16 in ready
-                    else -> OrtModels.BEATS_FP32 in ready
-                }
-            },
-            threads = intent.getIntArrayExtra(THREADS)!!.toList(),
-            arenas = intent.getBooleanArrayExtra(ARENAS)!!.toList(),
-            passes = intent.getIntExtra(PASSES, 5),
-        )
-        val clips = BenchClips.read(this)
-        val pins = BenchModels.pins()
-        val beats = pins.getJSONObject("beats")
-        val fps = beats.getInt("fps")
-        val sources = buildList {
-            if (intent.getBooleanExtra(CLIPS, true)) {
-                clips.inputs.forEach { clip -> add(Bench.Source(clip.name) { clip }) }
-            }
-            if (intent.getBooleanExtra(REFERENCES, true)) {
-                for (entry in folder.entries()) {
-                    if (!entry.name.endsWith(".json") || entry.name.startsWith(REPORT_PREFIX)) continue
-                    add(Bench.Source(entry.name) {
-                        folder.open(entry).use { BenchInputs.reference(entry.name, it, fps) }
-                    })
-                }
+        val runnable = chosen.filter { m ->
+            when (m) {
+                BenchReport.BTC -> OrtModels.BTC_GRAPH in ready && OrtModels.BTC_WEIGHTS in ready
+                BenchReport.BEATS_FP16 -> OrtModels.BEATS_FP16 in ready
+                else -> OrtModels.BEATS_FP32 in ready
             }
         }
-        if (plan.models.isEmpty() || sources.isEmpty() || plan.threads.isEmpty() || plan.arenas.isEmpty()) {
+        val threads = intent.getIntArrayExtra(THREADS)!!.toList()
+        val arenas = intent.getBooleanArrayExtra(ARENAS)!!.toList()
+        val passes = intent.getIntExtra(PASSES, 5)
+        val clips = intent.getBooleanExtra(CLIPS, true)
+        val references = intent.getBooleanExtra(REFERENCES, true) &&
+            folder.entries().any { it.name.endsWith(".json") && !it.name.startsWith(REPORT_PREFIX) }
+        if (runnable.isEmpty() || threads.isEmpty() || arenas.isEmpty() || !(clips || references)) {
             say("nothing to run: a model, a thread count, an arena setting and a file are needed")
             return
+        }
+        val rounds = if (intent.getBooleanExtra(SCREEN_OFF, true)) listOf("on", "off") else listOf("on")
+        val sessions = rounds.flatMap { round ->
+            runnable.flatMap { m -> threads.flatMap { t -> arenas.map { a -> SessionSpec(m, t, a, round, passes,
+                models.path, tree, clips, references) } } }
         }
         val made = Instant.now().truncatedTo(ChronoUnit.SECONDS)
         val name = REPORT_PREFIX + DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").withZone(ZoneOffset.UTC)
@@ -141,30 +135,54 @@ class BenchService : Service() {
         val report = folder.create(name, "application/json")
         val device = Device.here(BuildConfig.VERSION_NAME)
         val probe = AndroidProbe(this)
-        val bench = Bench(models, pins.getJSONObject("btc").getDouble("mean").toFloat(), fps, beats.getInt("chunk"),
-            beats.getInt("border"), clips.gates, probe, say)
-        fun save() = folder.write(report, (JSON.encodeToString(JsonObject.serializer(),
-            bench.report(device, made.toString())) + "\n").toByteArray(Charsets.UTF_8))
-
+        val gates = BenchClips.read(this).gates
         val start = probe.heat()
-        say("${sources.size} file(s), ${plan.models.joinToString()}; threads ${plan.threads}; " +
-            "arena ${plan.arenas.map { if (it) "on" else "off" }}; ${plan.passes} pass(es) each")
+        val results = mutableListOf<SessionResult>()
+        fun save() {
+            val now = probe.heat()
+            val battery = Battery(start.chargeUah, now.chargeUah, start.percent, now.percent, start.plugged)
+            val text = JSON.encodeToString(JsonObject.serializer(),
+                BenchReport.ofSessions(results, gates, device, made.toString(), battery)) + "\n"
+            folder.write(report, text.toByteArray(Charsets.UTF_8))
+        }
+
+        say("${sessions.size} session(s), each in a fresh process: ${runnable.joinToString()}; threads $threads; " +
+            "arena ${arenas.map { if (it) "on" else "off" }}; ${passes} pass(es) of each file; " +
+            (if (clips) "the clips" else "") + (if (clips && references) " and " else "") +
+            (if (references) "the folder's references" else ""))
         say("battery ${start.percent ?: "?"} %, " + when (start.plugged) {
             true -> "plugged in: unplug it for the battery's numbers"
             false -> "unplugged"
             null -> "plugged in or not: unknown"
         } + if (start.powerSave == true) ", Battery Saver on" else "")
-        BenchSession.keepScreenOn = true
-        say("— with the screen on")
-        bench.run(plan, sources, { BenchSession.stopAsked }, ::save)
-        if (intent.getBooleanExtra(SCREEN_OFF, true) && !BenchSession.stopAsked) {
-            BenchSession.keepScreenOn = false
-            say("— turn the screen off now (the power button): the same runs again with it off")
-            val asked = System.nanoTime()
-            while (probe.screen() == "on" && !BenchSession.stopAsked && System.nanoTime() - asked < WAIT_NANOS) {
-                Thread.sleep(1000)
+        var round = ""
+        for (spec in sessions) {
+            if (BenchSession.stopAsked) break
+            if (spec.round != round) {
+                round = spec.round
+                if (round == "on") {
+                    BenchSession.keepScreenOn = true
+                    say("— with the screen on")
+                } else {
+                    BenchSession.keepScreenOn = false
+                    say("— turn the screen off now (the power button): the same runs again with it off")
+                    val asked = System.nanoTime()
+                    while (probe.screen() == "on" && !BenchSession.stopAsked &&
+                        System.nanoTime() - asked < WAIT_NANOS) Thread.sleep(1000)
+                }
             }
-            bench.run(plan, sources, { BenchSession.stopAsked }, ::save)
+            val result = try {
+                BenchSessions.run(this, spec, { BenchSession.stopAsked }, say)
+            } catch (e: Throwable) {
+                SessionResult(Session(spec.model, spec.threads, spec.arena, spec.round, null, null, null, null,
+                    "${e.javaClass.simpleName}: ${e.message}", null), emptyList(), emptyList(), emptyList())
+            }
+            results += result
+            save()
+            if (result.session.stopped != null) {
+                say("the bench stops: ${result.session.stopped}; let the phone cool before another")
+                break
+            }
         }
         save()
         say(if (BenchSession.stopAsked) "stopped; the report so far: $name" else "done: $name, in the folder")

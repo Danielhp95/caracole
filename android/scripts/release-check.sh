@@ -11,10 +11,10 @@
 #
 # - its runtime classpath names no onnxruntime and no project :ml (and names project :core: the tree was read);
 # - its APK holds no lib/*/libonnxruntime*, no class under ai/onnxruntime/ or of :ml (io/github/danielhp95/caracole/ml/)
-#   in any classes*.dex (dexdump's descriptors), no "ChordsBench" or "BenchService" in its dex, no entry under
-#   caracole/autochords/ or assets/autochords/, no model file (an entry ending .onnx or .pt), and its manifest
-#   (aapt2's dump) no TelemetryInitializer, no ChordsBenchActivity, no BenchService, no ":bench" process and no
-#   FOREGROUND_SERVICE_SPECIAL_USE;
+#   in any classes*.dex (dexdump's descriptors), no "ChordsBench" or "BenchService" or Settings' row's words
+#   ("Chords bench") in its dex, no entry under caracole/autochords/ or assets/autochords/, no model file (an entry
+#   ending .onnx or .pt), and its manifest (aapt2's dump) no TelemetryInitializer, no ChordsBenchActivity,
+#   BenchService or BenchWorkerService, no ":bench" or ":benchrun" process and no FOREGROUND_SERVICE_SPECIAL_USE;
 #
 # and the controls, so that no probe passes for nothing:
 #
@@ -58,10 +58,10 @@ trap 'rm -rf "$probe"' EXIT
 model_file='\.(onnx|pt)$'
 weights_file='(^|/)(btc_model_large_voca\.pt|beat_this[^/]*\.onnx)$'
 
-# One APK's probes, a count each: "libs ortclasses mlclasses benchdex autochords assets models weights provider
-# benchmanifest providers" (the last, every provider the manifest declares: the dump read is a manifest's).
+# One APK's probes, a count each: "libs ortclasses mlclasses benchdex rowwords autochords assets models weights
+# provider benchmanifest providers" (the last, every provider the manifest declares: the dump read is a manifest's).
 probes() {
-    local apk="$1" dexes=0 ortclasses=0 mlclasses=0 benchdex=0 dex dump
+    local apk="$1" dexes=0 ortclasses=0 mlclasses=0 benchdex=0 rowwords=0 dex dump
     rm -rf "$probe/dex" && mkdir "$probe/dex"
     unzip -q -o "$apk" 'classes*.dex' -d "$probe/dex"
     for dex in "$probe"/dex/classes*.dex; do
@@ -71,20 +71,21 @@ probes() {
         mlclasses=$((mlclasses + $(grep -c "Class descriptor *: 'Lio/github/danielhp95/caracole/ml/" <<<"$dump" \
             || true)))
         benchdex=$((benchdex + $({ grep -a -o -E 'ChordsBench|BenchService' "$dex" || true; } | wc -l)))
+        rowwords=$((rowwords + $({ grep -a -o 'Chords bench' "$dex" || true; } | wc -l)))
     done
     [ "$dexes" -gt 0 ] || { echo "release-check.sh: no classes*.dex in $apk" >&2; exit 2; }
     nix develop ./android -c sh -c '"$ANDROID_HOME"/build-tools/36.0.0/aapt2 dump xmltree --file AndroidManifest.xml \
         "$1"' sh "$apk" >"$probe/manifest"
     unzip -Z1 "$apk" >"$probe/entries"
     echo "$(grep -c '^lib/.*/libonnxruntime' "$probe/entries" || true)" \
-        "$ortclasses" "$mlclasses" "$benchdex" \
+        "$ortclasses" "$mlclasses" "$benchdex" "$rowwords" \
         "$(grep -c '^caracole/autochords/' "$probe/entries" || true)" \
         "$(grep -c '^assets/autochords/' "$probe/entries" || true)" \
         "$(grep -c -E "$model_file" "$probe/entries" || true)" \
         "$(grep -c -E "$weights_file" "$probe/entries" || true)" \
         "$(grep -c 'TelemetryInitializer' "$probe/manifest" || true)" \
-        "$(grep -c -E 'ChordsBenchActivity|BenchService|:bench"|FOREGROUND_SERVICE_SPECIAL_USE' "$probe/manifest" \
-            || true)" \
+        "$(grep -c -E 'ChordsBenchActivity|Bench(Worker)?Service|:bench(run)?"|FOREGROUND_SERVICE_SPECIAL_USE' \
+            "$probe/manifest" || true)" \
         "$(grep -c 'E: provider' "$probe/manifest" || true)"
 }
 
@@ -101,10 +102,12 @@ check "release classpath names no project :ml" "$(yes_if '[ "$(grep -c "project 
 check "the control: the debug classpath names onnxruntime" \
     "$(yes_if '[ "$(grep -ci onnxruntime <<<"$debug_classpath" || true)" -gt 0 ]')"
 
-read -r libs ortclasses mlclasses benchdex autochords assets modelfiles weights provider benchmanifest providers \
+read -r libs ortclasses mlclasses benchdex rowwords autochords assets modelfiles weights provider benchmanifest \
+    providers \
     < <(probes "$release")
 echo "release APK $release: $libs libonnxruntime*, $ortclasses classes under ai/onnxruntime/, $mlclasses of :ml," \
-    "$benchdex bench names in its dex, $autochords entries under caracole/autochords/, $assets under" \
+    "$benchdex bench names and $rowwords of Settings' row's words in its dex, $autochords entries under" \
+    "caracole/autochords/, $assets under" \
     "assets/autochords/, $modelfiles model files, $provider TelemetryInitializer and $benchmanifest bench entries" \
     "of its manifest (of $providers providers)"
 check "release APK's manifest read (it declares providers)" "$(yes_if '[ "$providers" -gt 0 ]')"
@@ -112,22 +115,26 @@ check "release APK holds no libonnxruntime*" "$(yes_if '[ "$libs" = 0 ]')"
 check "release APK holds no class under ai/onnxruntime/" "$(yes_if '[ "$ortclasses" = 0 ]')"
 check "release APK holds no class of :ml" "$(yes_if '[ "$mlclasses" = 0 ]')"
 check "release APK's dex names no ChordsBench or BenchService" "$(yes_if '[ "$benchdex" = 0 ]')"
+check "release APK's dex holds no \"Chords bench\" (Settings' row)" "$(yes_if '[ "$rowwords" = 0 ]')"
 check "release APK holds nothing under caracole/autochords/" "$(yes_if '[ "$autochords" = 0 ]')"
 check "release APK holds nothing under assets/autochords/" "$(yes_if '[ "$assets" = 0 ]')"
 check "release APK holds no model file (.onnx, .pt)" "$(yes_if '[ "$modelfiles" = 0 ]')"
 check "release APK's manifest declares no TelemetryInitializer" "$(yes_if '[ "$provider" = 0 ]')"
 check "release APK's manifest has no trace of the bench" "$(yes_if '[ "$benchmanifest" = 0 ]')"
 
-read -r libs ortclasses mlclasses benchdex autochords assets modelfiles weights provider benchmanifest providers \
+read -r libs ortclasses mlclasses benchdex rowwords autochords assets modelfiles weights provider benchmanifest \
+    providers \
     < <(probes "$debug")
 echo "debug APK (the control) $debug, $(stat -c %s "$debug") bytes: $libs libonnxruntime*, $ortclasses classes" \
-    "under ai/onnxruntime/, $mlclasses of :ml, $benchdex bench names in its dex, $autochords entries under" \
+    "under ai/onnxruntime/, $mlclasses of :ml, $benchdex bench names and $rowwords of Settings' row's words in its" \
+    "dex, $autochords entries under" \
     "caracole/autochords/, $assets under assets/autochords/, $modelfiles model files ($weights the weights')," \
     "$provider TelemetryInitializer and $benchmanifest bench entries of its manifest (of $providers providers)"
 check "the control: the debug APK holds libonnxruntime*" "$(yes_if '[ "$libs" -gt 0 ]')"
 check "the control: the debug APK holds classes under ai/onnxruntime/" "$(yes_if '[ "$ortclasses" -gt 0 ]')"
 check "the control: the debug APK holds classes of :ml" "$(yes_if '[ "$mlclasses" -gt 0 ]')"
 check "the control: the debug APK's dex names the bench" "$(yes_if '[ "$benchdex" -gt 0 ]')"
+check "the control: the debug APK's dex holds \"Chords bench\"" "$(yes_if '[ "$rowwords" -gt 0 ]')"
 check "the control: the debug APK holds caracole/autochords/" "$(yes_if '[ "$autochords" -gt 0 ]')"
 check "the control: the debug APK holds assets/autochords/ (the clips)" "$(yes_if '[ "$assets" -gt 0 ]')"
 check "the control: the debug APK holds a model file (BTC's graph)" "$(yes_if '[ "$modelfiles" -gt 0 ]')"

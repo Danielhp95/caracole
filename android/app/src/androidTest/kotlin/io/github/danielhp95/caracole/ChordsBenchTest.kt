@@ -22,6 +22,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.Base64
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.double
@@ -37,9 +38,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * The debug build's Chords bench on the emulator (the design's §9.1, B0): its engine over the committed clips the
- * debug build carries, on both beat files and both memory settings, writing a report of BenchReport's shape whose
- * parity passes; a reference of the owner's (autochords_reference's JSON, its decoded samples and all) read as the
+ * The debug build's Chords bench on the emulator (the design's §9.1, B0): its sessions over the committed clips the
+ * debug build carries, on both beat files and both memory settings, each in a fresh process of its own, their report
+ * of BenchReport's shape, each run's peak reset, whose parity passes; a reference of the owner's (autochords_reference's JSON, its decoded samples and all) read as the
  * computer wrote it and run; and Settings' Chords bench row opening the bench in its process of its own. The models
  * are those `android/scripts/device-test.sh --ml` pushes (`-e models`): the APK carries none.
  */
@@ -58,33 +59,48 @@ class ChordsBenchTest {
             beats.getInt("chunk"), beats.getInt("border"), clips.gates, AndroidProbe(context)) { lines += it }
     }
 
-    @Test fun theCommittedClipsRunAndTheReportHasItsShape() {
+    @Test fun theCommittedClipsRunSessionBySessionEachInAFreshProcessAndTheReportHasItsShape() {
         val clips = BenchClips.read(context)
         assertEquals(listOf("steady", "tempo-change", "silence", "long"), clips.inputs.map { it.name })
         val lines = mutableListOf<String>()
-        val bench = bench(clips, lines)
-        val plan = Bench.Plan(listOf(BenchReport.BTC, BenchReport.BEATS_FP16, BenchReport.BEATS_FP32), listOf(1),
-            listOf(false, true), passes = 1)
-        val file = File(context.cacheDir, "caracole-bench-test.json")
-        var saves = 0
-        bench.run(plan, clips.inputs.map { clip -> Bench.Source(clip.name) { clip } }, { false }) {
-            saves += 1
-            file.writeText(bench.report(Device.here(BuildConfig.VERSION_NAME), "2026-11-25T21:00:00Z").toString())
+        val pids = mutableListOf<Int>()
+        val results = listOf(BenchReport.BTC, BenchReport.BEATS_FP16, BenchReport.BEATS_FP32).flatMap { model ->
+            listOf(false, true).map { arena ->
+                BenchSessions.run(context, SessionSpec(model, 1, arena, "on", 1, models().path, null, clips = true,
+                    references = false), { false }, { lines += it }) { pids += it }
+            }
         }
         lines.forEach(::println)
-        assertEquals("a save after each model's session", 6, saves)
+        assertEquals("a process of its own for each session: $pids", 6, pids.toSet().size)
+        assertTrue(pids.none { it == Process.myPid() })
+        val file = File(context.cacheDir, "caracole-bench-test.json")
+        file.writeText(BenchReport.ofSessions(results, clips.gates, Device.here(BuildConfig.VERSION_NAME),
+            "2026-11-25T21:00:00Z").toString())
 
         val report = Json.parseToJsonElement(file.readText()).jsonObject
         for (key in listOf("device", "soc", "android", "runtime")) assertTrue(key, report.str(key).isNotBlank())
         assertEquals(OrtModels.RUNTIME, report.str("runtime"))
+        val sessions = report.getValue("sessions").jsonArray.map { it.jsonObject }
+        assertEquals(6, sessions.size)
+        for (session in sessions) {
+            assertEquals(session.toString(), JsonNull, session.getValue("failure"))
+            assertTrue(session.toString(), session.num("load_seconds") > 0)
+            assertTrue(session.toString(), session.num("rss_peak_mb") > 0)
+        }
         val runs = report.getValue("runs").jsonArray.map { it.jsonObject }
         assertEquals(4 * 6, runs.size)
         for (run in runs) {
-            for (key in listOf("file", "model", "seconds", "rtf", "pss_peak_mb", "rss_peak_mb", "thermal",
-                "battery_uah", "threads", "arena", "screen", "pass", "cold")) assertTrue("$key in $run", key in run)
+            for (key in listOf("file", "kind", "model", "seconds", "rtf", "pss_peak_mb", "reset", "rss_peak_mb",
+                "thermal", "battery_uah", "threads", "arena", "screen", "pass", "cold")) {
+                assertTrue("$key in $run", key in run)
+            }
+            assertEquals(BenchInput.CLIP, run.str("kind"))
             assertTrue(run.toString(), run.num("seconds") > 0)
             assertEquals(run.num("seconds") / run.num("duration"), run.num("rtf"), 1e-3)
             assertTrue("the emulator gives a PSS: $run", run.num("pss_peak_mb") > 0)
+            // The emulator's kernel takes the peak's reset: each run's own peak.
+            assertTrue("the reset took: $run", run.getValue("reset").jsonPrimitive.boolean)
+            assertTrue(run.num("rss_peak_mb") > 0)
             assertTrue(run.getValue("thermal").jsonArray.isNotEmpty())
         }
         assertEquals(setOf(false, true), runs.map { it.getValue("arena").jsonPrimitive.boolean }.toSet())
@@ -93,7 +109,9 @@ class ChordsBenchTest {
         assertEquals(4 * 2, parity.getValue("btc").jsonArray.size)
         assertEquals(4 * 2 * 2, parity.getValue("beats").jsonArray.size)
         assertTrue("parity: $parity", parity.getValue("pass").jsonPrimitive.boolean)
-        assertTrue(report.getValue("summary").jsonArray.isNotEmpty())
+        val summary = report.getValue("summary").jsonObject
+        assertTrue("the clips are no song: $summary", summary.getValue("references").jsonArray.isEmpty())
+        assertTrue(summary.getValue("clips").jsonArray.isNotEmpty())
     }
 
     @Test fun aReferenceOfTheOwnersIsReadAsTheComputerWroteItAndRun() {
@@ -119,12 +137,19 @@ class ChordsBenchTest {
 
         val lines = mutableListOf<String>()
         val bench = bench(clips, lines)
-        bench.run(Bench.Plan(listOf(BenchReport.BTC, BenchReport.BEATS_FP16), listOf(1), listOf(false), passes = 2),
-            listOf(Bench.Source("steady.json") {
-                file.inputStream().use { BenchInputs.reference("steady.json", it, 50) }
-            }), { false }) {}
-        val report = bench.report(Device.here(BuildConfig.VERSION_NAME), "2026-11-25T21:00:00Z")
+        val source = Bench.Source("steady.json") {
+            file.inputStream().use { BenchInputs.reference("steady.json", it, 50) }
+        }
+        val results = listOf(BenchReport.BTC, BenchReport.BEATS_FP16).map { model ->
+            bench.session(model, 1, false, "on", 2, listOf(source)) { false }
+        }
+        val report = BenchReport.ofSessions(results, clips.gates, Device.here(BuildConfig.VERSION_NAME),
+            "2026-11-25T21:00:00Z")
         assertEquals(4, report.getValue("runs").jsonArray.size)
+        assertEquals(setOf(BenchInput.REFERENCE),
+            report.getValue("runs").jsonArray.map { it.jsonObject.str("kind") }.toSet())
+        // A reference's runs are Gate B0's.
+        assertEquals(2, report.getValue("summary").jsonObject.getValue("references").jsonArray.size)
         val parity = report.getValue("parity").jsonObject
         assertTrue("parity: $parity", parity.getValue("pass").jsonPrimitive.boolean)
         assertEquals(listOf("steady.json"), parity.getValue("btc").jsonArray.map { it.jsonObject.str("file") })

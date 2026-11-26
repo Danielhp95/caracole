@@ -20,7 +20,7 @@ import org.json.JSONObject
  * audio's length in seconds, which a run's RTF divides by.
  */
 class BenchInput(
-    val name: String, val duration: Double,
+    val name: String, val kind: String, val duration: Double,
     val cqt: FloatArray, val btcFrames: Int, val btcLogits: FloatArray, val margins: FloatArray,
     val mel: FloatArray, val melFrames: Int, val beat: FloatArray, val downbeat: FloatArray,
     val beats: List<Double>, val downbeats: List<Double>,
@@ -31,6 +31,15 @@ class BenchInput(
         require(melFrames > 0 && mel.size == melFrames * OrtModels.MELS) { "$name: ${mel.size} mel values" }
         require(beat.size == melFrames && downbeat.size == melFrames) { "$name: beat_this's logits" }
         require(duration > 0) { "$name: a length of $duration s" }
+        require(kind == CLIP || kind == REFERENCE) { "$name: a kind of $kind" }
+    }
+
+    companion object {
+        /** A committed clip: parity's, its chunks' overhead no measure of a song's. */
+        const val CLIP = "clip"
+
+        /** One of the owner's songs: Gate B0's. */
+        const val REFERENCE = "reference"
     }
 }
 
@@ -60,7 +69,7 @@ object BenchInputs {
             val beats = clip.getJSONObject("beats")
             val mel = halves(front.getJSONObject("mel"))
             BenchInput(
-                name = name, duration = front.getDouble("duration"),
+                name = name, kind = BenchInput.CLIP, duration = front.getDouble("duration"),
                 cqt = floats(front.getJSONObject("cqt")), btcFrames = btc.getInt("frames"),
                 btcLogits = floats(btc.getJSONObject("logits")),
                 margins = btc.getJSONArray("margin").let { a -> FloatArray(a.length()) { a.getDouble(it).toFloat() } },
@@ -124,7 +133,7 @@ object BenchInputs {
         }
         val melFrames = m.rows(OrtModels.MELS, "$name's mel")
         return BenchInput(
-            name = name, duration = duration ?: (melFrames.toDouble() / fps),
+            name = name, kind = BenchInput.REFERENCE, duration = duration ?: (melFrames.toDouble() / fps),
             cqt = f.values, btcFrames = frames, btcLogits = l.values, margins = BtcParity.margins(l.values, frames),
             mel = m.values, melFrames = melFrames,
             beat = need(beat, "beat logits").values, downbeat = need(downbeat, "downbeat logits").values,
