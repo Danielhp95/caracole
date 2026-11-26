@@ -28,6 +28,8 @@
 {"args":["Pomme - Mononoke"],"fn":"caracole.overrides.override_key","out":"pomme/mononoke"}
 {"args":["Pomme - Mononoké"],"fn":"caracole.overrides.override_key","out":"pomme/mononoke"}
 {"args":["RADIOHEAD - CREEP"],"fn":"caracole.overrides.override_key","out":"radiohead/creep"}
+{"args":["Radio Head - Creep"],"fn":"caracole.overrides.override_key","out":"radio-head/creep"}
+{"args":["Radio Head - Creep (Official Video)"],"fn":"caracole.overrides.override_key","out":"radio-head/creep-official-video"}
 {"args":["Radiohead - Creep"],"fn":"caracole.overrides.override_key","out":"radiohead/creep"}
 {"args":["Ritchie Valens - La Bamba"],"fn":"caracole.overrides.override_key","out":"ritchie-valens/la-bamba"}
 {"args":["Soda - Persiana Americana"],"fn":"caracole.overrides.override_key","out":"soda/persiana-americana"}
@@ -316,6 +318,8 @@
 {"args":["Pomme - Mononoke"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'Pomme - Mononoke'"}
 {"args":["Pomme - Mononoké"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'Pomme - Mononoké'"}
 {"args":["RADIOHEAD - CREEP"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'RADIOHEAD - CREEP'"}
+{"args":["Radio Head - Creep"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'Radio Head - Creep'"}
+{"args":["Radio Head - Creep (Official Video)"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'Radio Head - Creep (Official Video)'"}
 {"args":["Radiohead - Creep"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'Radiohead - Creep'"}
 {"args":["Ritchie Valens - La Bamba"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'Ritchie Valens - La Bamba'"}
 {"args":["Soda - Persiana Americana"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'Soda - Persiana Americana'"}
@@ -604,6 +608,8 @@
 {"args":["Pomme - Mononoke"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["Pomme - Mononoké"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["RADIOHEAD - CREEP"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
+{"args":["Radio Head - Creep"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
+{"args":["Radio Head - Creep (Official Video)"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["Radiohead - Creep"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["Ritchie Valens - La Bamba"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["Soda - Persiana Americana"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
@@ -892,6 +898,8 @@
 {"args":["Pomme - Mononoke"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["Pomme - Mononoké"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["RADIOHEAD - CREEP"],"fn":"caracole.overrides.artist_page_address","out":null}
+{"args":["Radio Head - Creep"],"fn":"caracole.overrides.artist_page_address","out":null}
+{"args":["Radio Head - Creep (Official Video)"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["Radiohead - Creep"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["Ritchie Valens - La Bamba"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["Soda - Persiana Americana"],"fn":"caracole.overrides.artist_page_address","out":null}
@@ -1180,6 +1188,8 @@
 {"args":["Pomme - Mononoke"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["Pomme - Mononoké"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["RADIOHEAD - CREEP"],"fn":"caracole.overrides._artist_url_value","out":null}
+{"args":["Radio Head - Creep"],"fn":"caracole.overrides._artist_url_value","out":null}
+{"args":["Radio Head - Creep (Official Video)"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["Radiohead - Creep"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["Ritchie Valens - La Bamba"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["Soda - Persiana Americana"],"fn":"caracole.overrides._artist_url_value","out":null}
@@ -1468,6 +1478,8 @@
 {"args":["Pomme - Mononoke"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["Pomme - Mononoké"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["RADIOHEAD - CREEP"],"fn":"caracole.overrides.pasted_tab_id","out":null}
+{"args":["Radio Head - Creep"],"fn":"caracole.overrides.pasted_tab_id","out":null}
+{"args":["Radio Head - Creep (Official Video)"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["Radiohead - Creep"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["Ritchie Valens - La Bamba"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["Soda - Persiana Americana"],"fn":"caracole.overrides.pasted_tab_id","out":null}
@@ -1756,6 +1768,8 @@
 {"args":["Pomme - Mononoke"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'Pomme - Mononoke'"}
 {"args":["Pomme - Mononoké"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'Pomme - Mononoké'"}
 {"args":["RADIOHEAD - CREEP"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'RADIOHEAD - CREEP'"}
+{"args":["Radio Head - Creep"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'Radio Head - Creep'"}
+{"args":["Radio Head - Creep (Official Video)"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'Radio Head - Creep (Official Video)'"}
 {"args":["Radiohead - Creep"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'Radiohead - Creep'"}
 {"args":["Ritchie Valens - La Bamba"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'Ritchie Valens - La Bamba'"}
 {"args":["Soda - Persiana Americana"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'Soda - Persiana Americana'"}
@@ -2044,6 +2058,8 @@
 {"args":["Pomme - Mononoke"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'Pomme - Mononoke'"}
 {"args":["Pomme - Mononoké"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'Pomme - Mononoké'"}
 {"args":["RADIOHEAD - CREEP"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'RADIOHEAD - CREEP'"}
+{"args":["Radio Head - Creep"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'Radio Head - Creep'"}
+{"args":["Radio Head - Creep (Official Video)"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'Radio Head - Creep (Official Video)'"}
 {"args":["Radiohead - Creep"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'Radiohead - Creep'"}
 {"args":["Ritchie Valens - La Bamba"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'Ritchie Valens - La Bamba'"}
 {"args":["Soda - Persiana Americana"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'Soda - Persiana Americana'"}
@@ -2332,6 +2348,8 @@
 {"args":["Pomme - Mononoke"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'Pomme - Mononoke'"}
 {"args":["Pomme - Mononoké"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'Pomme - Mononoké'"}
 {"args":["RADIOHEAD - CREEP"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'RADIOHEAD - CREEP'"}
+{"args":["Radio Head - Creep"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'Radio Head - Creep'"}
+{"args":["Radio Head - Creep (Official Video)"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'Radio Head - Creep (Official Video)'"}
 {"args":["Radiohead - Creep"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'Radiohead - Creep'"}
 {"args":["Ritchie Valens - La Bamba"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'Ritchie Valens - La Bamba'"}
 {"args":["Soda - Persiana Americana"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'Soda - Persiana Americana'"}
@@ -2620,6 +2638,8 @@
 {"args":["Pomme - Mononoke"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'Pomme - Mononoke'"}
 {"args":["Pomme - Mononoké"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'Pomme - Mononoké'"}
 {"args":["RADIOHEAD - CREEP"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'RADIOHEAD - CREEP'"}
+{"args":["Radio Head - Creep"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'Radio Head - Creep'"}
+{"args":["Radio Head - Creep (Official Video)"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'Radio Head - Creep (Official Video)'"}
 {"args":["Radiohead - Creep"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'Radiohead - Creep'"}
 {"args":["Ritchie Valens - La Bamba"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'Ritchie Valens - La Bamba'"}
 {"args":["Soda - Persiana Americana"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'Soda - Persiana Americana'"}
@@ -2908,6 +2928,8 @@
 {"args":["Pomme - Mononoke"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["Pomme - Mononoké"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["RADIOHEAD - CREEP"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
+{"args":["Radio Head - Creep"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
+{"args":["Radio Head - Creep (Official Video)"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["Radiohead - Creep"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["Ritchie Valens - La Bamba"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["Soda - Persiana Americana"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
@@ -3196,6 +3218,8 @@
 {"args":["Pomme - Mononoke"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["Pomme - Mononoké"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["RADIOHEAD - CREEP"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
+{"args":["Radio Head - Creep"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
+{"args":["Radio Head - Creep (Official Video)"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["Radiohead - Creep"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["Ritchie Valens - La Bamba"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["Soda - Persiana Americana"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}

@@ -323,7 +323,8 @@ def _match(ctx: StepContext) -> StepResult:
 def _lyrics(ctx: StepContext) -> StepResult:
     from caracole.lyrics import fetch_pending_lyrics
 
-    s = fetch_pending_lyrics(ctx.conn, ctx.services.client("lrclib"), ctx.cfg.library_dir, ctx.now)
+    s = fetch_pending_lyrics(ctx.conn, ctx.services.client("lrclib"), ctx.cfg.library_dir, ctx.now,
+                             picks=ctx.overrides.lyrics)
     return _provider_result(
         ctx, "lrclib", errors=s.errors, error=f"{plural(s.errors, 'song')} failed this run", spent=s.budget_exhausted,
         status=f"{s.found} found, {s.missing} missing, {s.instrumental} instrumental, {plural(s.errors, 'error')}",
@@ -337,7 +338,8 @@ def _megalobiz(ctx: StepContext) -> StepResult:
     """Megalobiz's timed lyrics for the songs LRCLIB's step left without (megalobiz_fetch.py)."""
     from caracole.megalobiz_fetch import megalobiz_lyrics
 
-    s = megalobiz_lyrics(ctx.conn, ctx.services.client("megalobiz"), ctx.cfg.library_dir, ctx.now)
+    s = megalobiz_lyrics(ctx.conn, ctx.services.client("megalobiz"), ctx.cfg.library_dir, ctx.now,
+                         picks=ctx.overrides.lyrics)
     return _provider_result(
         ctx, "megalobiz", errors=s.errors, error=f"{plural(s.errors, 'song')} failed this run",
         spent=s.budget_exhausted,
@@ -353,7 +355,7 @@ def _azlyrics(ctx: StepContext) -> StepResult:
     from caracole.azlyrics_fetch import azlyrics_lyrics
 
     s = azlyrics_lyrics(ctx.conn, ctx.services.client("azlyrics"), ctx.cfg.library_dir, ctx.now,
-                        picks=ctx.overrides.azlyrics)
+                        picks=ctx.overrides.azlyrics, lyrics=ctx.overrides.lyrics)
     return _provider_result(
         ctx, "azlyrics", errors=s.errors, error=f"{plural(s.errors, 'song')} failed this run",
         spent=s.budget_exhausted,

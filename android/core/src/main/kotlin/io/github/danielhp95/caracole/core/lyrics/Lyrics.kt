@@ -123,6 +123,28 @@ data class Lyrics(val plain: String, val synced: String?, val instrumental: Bool
             return Triple(song.artists[0], song.title, song.album)
         }
 
+        /** lyrics.asked_name: "Artist - Title", the name [askedAs] gives when it isn't the song's own (`[lyrics]`'
+         * `as`), else null. */
+        fun askedName(song: SongRow, picks: Map<String, LyricsPick>?): String? {
+            val asked = askedAs(song, picks)
+            return if (asked == Triple(song.artists[0], song.title, song.album)) null else "${asked.first} - ${asked.second}"
+        }
+
+        /** lyrics.asked_under: a lyrics site's answer in a lookup's words, with the name it was asked under
+         * ([askedName]) when it isn't the song's own. */
+        fun askedUnder(said: String, name: String?): String = if (name == null) said else "$said under “$name”"
+
+        /** lyrics.picked_said: what a lookup says of the record you picked, its site's pass done: kept, gone, or not
+         * asked now (within 30 days of its miss, or its site off). */
+        fun pickedSaid(record: LyricsRecord, kept: Boolean, gone: Boolean): String {
+            val said = "${record.site} ${record.id}"
+            return when {
+                kept -> "the record you picked: $said"
+                gone -> "the record you picked is gone: $said"
+                else -> "the record you picked isn't asked now: $said"
+            }
+        }
+
         /** lyrics.picked_record: the record you picked for the song (`[lyrics]`' `record`), or null. */
         fun pickedRecord(song: SongRow, picks: Map<String, LyricsPick>?): LyricsRecord? = pick(song, picks)?.record
 

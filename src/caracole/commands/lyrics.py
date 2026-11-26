@@ -234,10 +234,10 @@ def _lyrics(cfg: Config) -> None:
     """Look up every song still waiting for lyrics, and old misses, then print the counts."""
     from caracole.lyrics import fetch_pending_lyrics
 
-    overrides = load_ovr(cfg)  # for the pages
+    overrides = load_ovr(cfg)  # [lyrics], and the pages
 
     def run(conn: sqlite3.Connection, client: Client, now: datetime):
-        return fetch_pending_lyrics(conn, client, cfg.library_dir, now)
+        return fetch_pending_lyrics(conn, client, cfg.library_dir, now, picks=overrides.lyrics)
 
     def ran(s: LyricsStats) -> bool:
         return bool(s.tried or s.budget_exhausted)
@@ -271,11 +271,11 @@ def _megalobiz(cfg: Config, overrides: Overrides) -> None:
     if not cfg.provider("megalobiz").enabled:
         return
     with closing(open_db(cfg)) as conn:
-        if not songs_to_ask(conn, utcnow()):
+        if not songs_to_ask(conn, utcnow(), picks=overrides.lyrics):
             return
 
     def run(conn: sqlite3.Connection, client: Client, now: datetime) -> MegalobizStats:
-        return megalobiz_lyrics(conn, client, cfg.library_dir, now)
+        return megalobiz_lyrics(conn, client, cfg.library_dir, now, picks=overrides.lyrics)
 
     def ran(s: MegalobizStats) -> bool:
         return bool(s.tried or s.budget_exhausted)
@@ -298,11 +298,11 @@ def _azlyrics(cfg: Config, overrides: Overrides) -> None:
     if not cfg.provider("azlyrics").enabled:
         return
     with closing(open_db(cfg)) as conn:
-        if not songs_to_ask(conn, utcnow(), picks=overrides.azlyrics):
+        if not songs_to_ask(conn, utcnow(), picks=overrides.azlyrics, lyrics=overrides.lyrics):
             return
 
     def run(conn: sqlite3.Connection, client: Client, now: datetime) -> AzLyricsStats:
-        return azlyrics_lyrics(conn, client, cfg.library_dir, now, picks=overrides.azlyrics)
+        return azlyrics_lyrics(conn, client, cfg.library_dir, now, picks=overrides.azlyrics, lyrics=overrides.lyrics)
 
     def ran(s: AzLyricsStats) -> bool:
         return bool(s.tried or s.budget_exhausted)

@@ -1470,6 +1470,40 @@ def test_azlyrics_follows_megalobiz_and_gives_a_song_both_missed_plain_lyrics(co
     assert (stored.provider, stored.synced) == ("azlyrics", None)
 
 
+def test_the_nightly_lyrics_steps_keep_to_the_lyrics_table(conn, cfg):
+    # [lyrics]: a song asked under its `as`, and two with a record picked, each asked of its own site alone, for that
+    # record alone; no other site asks about them.
+    from conftest import add_song
+    from helpers.azlyrics_site import SONG, FakeAzLyrics
+    from helpers.megalobiz_site import FakeMegalobiz
+    from test_lyrics_pending import FakeLrclib, record
+
+    from caracole.lyrics import lyrics_from_json
+    from caracole.overrides import set_lyrics_name, set_lyrics_record
+    from caracole.pipeline import default_steps
+    from caracole.songs import get_song
+
+    named = add_song(conn, "Plan B", "Ill Manors (Official Video)")
+    on_az = add_song(conn, "Pomme", "Mononoké (live)")
+    on_mz = add_song(conn, "Los Águilas", "Hotel Californio", duration_ms=391000)
+    set_lyrics_name(cfg.overrides_file, named.display, "Plan B - Ill Manors")
+    set_lyrics_record(cfg.overrides_file, on_az.display, "azlyrics:pomme/mononoke")
+    set_lyrics_record(cfg.overrides_file, on_mz.display, "megalobiz:24519")
+    lrclib = FakeLrclib([record(id=9, artistName="Plan B", trackName="Ill Manors", albumName="", duration=213.0)])
+    megalobiz, az = FakeMegalobiz([None]), FakeAzLyrics()
+    svc = Services(clients={"lrclib": lrclib.client(cfg.cache_dir), "megalobiz": megalobiz.client(cfg.cache_dir, now=NOW),
+                            "azlyrics": az.client(cfg.cache_dir, now=NOW)}, notifier=Outbox().notifier())
+    steps = [s for s in default_steps() if s.name in ("lyrics", "megalobiz", "azlyrics")]
+
+    report = run_pipeline(cfg, conn=conn, services=svc, steps=steps, now=NOW)
+
+    assert report.ok
+    assert lrclib.requests == [("get", {"artist_name": "Plan B", "track_name": "Ill Manors", "duration": "213"})]
+    assert [e for e, _ in megalobiz.requests] == ["lrc"] and az.requests == [SONG]
+    providers = {s.id: lyrics_from_json(get_song(conn, s.id).lyrics_json).provider for s in (named, on_az, on_mz)}
+    assert providers == {named.id: "lrclib", on_az.id: "azlyrics", on_mz.id: "megalobiz"}
+
+
 def test_an_azlyrics_block_cools_it_down_and_marks_no_song(conn, cfg):
     from conftest import add_song
     from helpers.azlyrics_site import ARTIST, FakeAzLyrics

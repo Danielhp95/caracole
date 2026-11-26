@@ -31,6 +31,9 @@ import io.github.danielhp95.caracole.core.lookup.SongbookPages
 import io.github.danielhp95.caracole.core.lookup.StageContext
 import io.github.danielhp95.caracole.core.lookup.StageEnd
 import io.github.danielhp95.caracole.core.lookup.sites.NotYet
+import io.github.danielhp95.caracole.core.lyrics.Lrclib
+import io.github.danielhp95.caracole.core.lyrics.Lyrics
+import io.github.danielhp95.caracole.core.lyrics.Megalobiz
 import io.github.danielhp95.caracole.core.py.PyPath
 import io.github.danielhp95.caracole.core.py.PyRe
 import io.github.danielhp95.caracole.core.py.PyRegex
@@ -371,13 +374,23 @@ internal class LookupRun(private val lookup: Lookup, private val db: Db) {
     /** LRCLIB, then Megalobiz for the timed lyrics LRCLIB left the song without, then AZLyrics for a song still
      * without any. Megalobiz skipped before it was asked (its cooldown) answered no miss: a song LRCLIB missed is put
      * back to pending, as an error or a cut turn puts it (Megalobiz.megalobizLyrics), unless AZLyrics then found its
-     * lyrics (get.py's `lyrics`). */
+     * lyrics (get.py's `lyrics`). A record you picked (`[lyrics]`) is final: its own site alone is asked, for it
+     * alone, and nothing is put back to pending, no other site's cooldown or error concerning it. */
     private fun lyrics(): StageEnd {
+        val record = Lyrics.pickedRecord(song, overrides.lyrics)
+        if (record != null && record.site != Lrclib.PROVIDER) {
+            val own = site(if (record.site == Megalobiz.PROVIDER) lookup.stages.megalobiz else lookup.stages.azlyrics,
+                           nothing = true)
+            if (own != LookupWords.NOTHING_TO_ASK) return own
+            val status = (Songs.byId(db, song.id) ?: song).lyricsStatus
+            return StageEnd("done", if (status == "found" || status == "instrumental") "already there"
+                                    else Lyrics.pickedSaid(record, kept = false, gone = false))
+        }
         var out = site(lookup.stages.lrclib)
         val megalobiz = site(lookup.stages.megalobiz, nothing = true)
         out = then(out, megalobiz)
         out = then(out, site(lookup.stages.azlyrics, nothing = true))
-        if (megalobiz != LookupWords.NOTHING_TO_ASK && megalobiz.state != "done" &&
+        if (record == null && megalobiz != LookupWords.NOTHING_TO_ASK && megalobiz.state != "done" &&
             Songs.byId(db, song.id)?.lyricsStatus == "missing") {
             Versions.updateSong(db, song.id, linkedMapOf("lyrics_status" to "pending", "lyrics_at" to null),
                                 Stamps.of(now))

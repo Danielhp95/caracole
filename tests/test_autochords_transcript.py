@@ -91,6 +91,23 @@ def test_a_song_is_offered_once_every_site_switched_on_missed(conn, cfg, tmp_pat
     assert tr.why_not_offered(conn, off, get_song(conn, song.id), Overrides()) is not None
 
 
+def test_a_song_whose_picked_record_is_gone_is_offered_once_its_site_missed(conn, cfg, tmp_path):
+    # A record you picked is final: no other site is ever asked about the song, so its own site's miss is every
+    # site's, the lyrics sites asked first all the same.
+    from caracole.overrides import LyricsPick, LyricsRecord, override_key
+
+    song = youtube_song(conn, tmp_path)
+    for key in ("megalobiz:checked:", "azlyrics:checked:"):
+        conn.execute("DELETE FROM kv WHERE key = ?", (f"{key}{song.id}",))
+    picked = {site: Overrides(lyrics={override_key(song.display): LyricsPick(None, LyricsRecord(site, "8"))})
+              for site in ("lrclib", "megalobiz", "azlyrics")}
+    assert tr.why_not_offered(conn, cfg, song, picked["lrclib"]) is None
+    assert tr.why_not_offered(conn, cfg, song, picked["megalobiz"]) == "megalobiz hasn't been asked"
+    kv_set(conn, f"megalobiz:checked:{song.id}", "2026-11-01T00:00:00Z")
+    assert tr.why_not_offered(conn, cfg, song, picked["megalobiz"]) is None
+    assert tr.why_not_offered(conn, cfg, song, Overrides()) == "azlyrics hasn't been asked"
+
+
 def _human_sheet(conn, cfg, song):
     vid = upsert_version(conn, provider="ug", tab_id="1", song_id=song.id, slot="sheet", kind="chords", rating=4.5,
                          votes=1, version=1, label=None, url="https://tabs.ultimate-guitar.com/tab/x-1", raw={},

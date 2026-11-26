@@ -50,7 +50,9 @@ writes and Python doesn't, the index pages a store noted for the next push to th
   use), the lyrics put together from LRCLIB's miss, Megalobiz's and AZLyrics' answers, Megalobiz's timed lyrics, a
   song through its artist's page, an error that ends a site's part, LaCuerda's sheet of a song you picked none of,
   gtptabs.com and harptabs.com each keeping a file, gametabs.net a game's tab, a harmonica tab picked while
-  gtptabs.com blocks, and a game's tab picked. Replayed by ``core.testing.replays.LookupScenariosReplay`` (area
+  gtptabs.com blocks, a game's tab picked, and ``[lyrics]``: the sites asked under its name, a Megalobiz record
+  picked and kept, an LRCLIB record picked and gone while Megalobiz cools down (the song left missing), and that
+  record asked again past the cached 404 once its 30 days are over. Replayed by ``core.testing.replays.LookupScenariosReplay`` (area
   lookup-scenarios) through ``Lookup.run``.
 - ``commands_get.jsonl``: ``{fn: "caracole.versions_cmd.choose" | "caracole.versions_cmd.clear", case, fixture, kw:
   {display, tab, providers}, …, out: {result: {result, progress, python, said, address}, …}}``: the same, of a song
@@ -658,6 +660,79 @@ def timed_by_megalobiz(tmp: Path) -> dict[str, Any]:
         w.close()
 
 
+EAGLES_SEARCH = f"{MEGALOBIZ}search?title=Hotel+California&artist=Eagles&duration=391&limit=10"
+EAGLES_LRC = f"{MEGALOBIZ}lrc/24519"
+LRCLIB_PICK = f"{LRCLIB}get/9"  # the LRCLIB record picked under [lyrics], by its id
+GONE = status(404, '{"code":404,"name":"TrackNotFound","message":"Failed to find specified track"}')
+
+
+def lyrics_named(tmp: Path) -> dict[str, Any]:
+    from caracole.overrides import set_lyrics_name
+
+    w = World(tmp, "lyrics-named")
+    try:
+        w.song("Eagles", "Hotel Californio (Video Oficial)", duration_ms=391000)
+        w.overrides(lambda path: set_lyrics_name(path, "Eagles - Hotel Californio (Video Oficial)",
+                                                 "Eagles - Hotel California"))
+        sites = Sites(lrclib_get=ok(lrclib_record("Eagles", "Hotel California", 391.0, synced=False), JSON),
+                      pages={EAGLES_SEARCH: ok(fixture_ref("megalobiz/search_hotel_california.json"), JSON),
+                             EAGLES_LRC: ok(fixture_ref("megalobiz/lrc_24519.json"), JSON)})
+        return w.record("lyrics asked under [lyrics]' name: LRCLIB's plain ones and Megalobiz's timed ones, each "
+                        "said asked under it", _request_of(artist="Eagles", title="Hotel Californio (Video Oficial)",
+                                                           duration_ms=391000), sites)
+    finally:
+        w.close()
+
+
+def lyrics_record_kept(tmp: Path) -> dict[str, Any]:
+    from caracole.health import record_block
+    from caracole.overrides import set_lyrics_record
+
+    w = World(tmp, "lyrics-record-kept")
+    try:
+        w.song("Los Águilas", "Hotel Californio", duration_ms=391000)
+        w.overrides(lambda path: set_lyrics_record(path, "Los Águilas - Hotel Californio", "megalobiz:24519"))
+        record_block(w.conn, "lrclib", NOW, "lrclib: 429")
+        sites = Sites(pages={EAGLES_LRC: ok(fixture_ref("megalobiz/lrc_24519.json"), JSON)})
+        return w.record("a Megalobiz record picked under [lyrics]: that record alone, one request; LRCLIB, cooling "
+                        "down, and AZLyrics passed over, never said",
+                        _request_of(artist="Los Águilas", title="Hotel Californio", duration_ms=391000), sites)
+    finally:
+        w.close()
+
+
+def lyrics_record_gone(tmp: Path) -> dict[str, Any]:
+    from caracole.health import record_block
+    from caracole.overrides import set_lyrics_record
+
+    w = World(tmp, "lyrics-record-gone")
+    try:
+        w.song()
+        w.overrides(lambda path: set_lyrics_record(path, DISPLAY, "lrclib:9"))
+        record_block(w.conn, "megalobiz", NOW, "megalobiz: 429")
+        sites = river_sites(lrclib_get=None, pages={LRCLIB_PICK: GONE})
+        return w.record("an LRCLIB record picked under [lyrics] gone: a miss, the song missing; Megalobiz, cooling "
+                        "down, never concerns it, so nothing puts it back to pending", _request_of(), sites)
+    finally:
+        w.close()
+
+
+def lyrics_record_again(tmp: Path) -> dict[str, Any]:
+    from caracole.overrides import set_lyrics_record
+
+    w = World(tmp, "lyrics-record-again")
+    try:
+        w.song(lyrics_status="missing", lyrics_at="2026-10-01T00:00:00Z")
+        w.overrides(lambda path: set_lyrics_record(path, DISPLAY, "lrclib:9"))
+        cache = {"lrclib": {f"GET {LRCLIB_PICK}": {"status": 404, "fetched_at": "2026-10-01T00:00:00Z",
+                                                   "body": GONE["body"]}}}
+        sites = river_sites(lrclib_get=None, pages={LRCLIB_PICK: ok(lrclib_record(ARTIST, TITLE, 213.0), JSON)})
+        return w.record("an LRCLIB record picked under [lyrics], gone 33 days ago: asked again past the cached 404, "
+                        "one request, kept", _request_of(), sites, cache=cache)
+    finally:
+        w.close()
+
+
 LANTERN = {v.tab_id: v for v in [
     Version(401, "chords", 4.7, 30, 1, sheet_markup("version 401", LINES), f"{TAB}401", song="Paper Lantern"),
     Version(402, "tabs", 4.4, 9, 1, tab_markup("tab 402"), f"{TAB}402", song="Paper Lantern"),
@@ -799,7 +874,8 @@ def scenarios(tmp: Path) -> list[dict[str, Any]]:
     return [new_song(tmp), picked_tab(tmp), picked_lacuerda(tmp), blocked(tmp), failed(tmp), spent_hour(tmp),
             kept_for_sheets(tmp), ignored(tmp), unused_kind(tmp), lyrics_then(tmp), timed_by_megalobiz(tmp),
             artist_page(tmp), lacuerda_unpicked(tmp), gtptabs_and_harptabs(tmp), harptabs_picked(tmp),
-            gametabs_kept(tmp), gametabs_picked(tmp)]
+            gametabs_kept(tmp), gametabs_picked(tmp), lyrics_named(tmp), lyrics_record_kept(tmp),
+            lyrics_record_gone(tmp), lyrics_record_again(tmp)]
 
 
 # --- the versions commands' cases ----------------------------------------------------------------------------
@@ -909,6 +985,22 @@ def test_the_cases_come_to_what_they_say(made):
     assert _ends(cases["lyrics put together"])["lyrics"] == (
         "done", "LRCLIB has none; Megalobiz has no timed ones; lyrics from AZLyrics")
     assert _ends(cases["timed lyrics"])["lyrics"] == ("done", "found; timed lyrics from Megalobiz")
+    named = cases["lyrics asked under [lyrics]' name"]
+    assert _ends(named)["lyrics"] == ("done", "found under “Eagles - Hotel California”; timed lyrics from Megalobiz "
+                                              "under “Eagles - Hotel California”")
+    assert [r for r in named["out"]["requests"] if "lrclib" in r][0].startswith(
+        f"GET {LRCLIB}get?artist_name=Eagles&track_name=Hotel+California&")
+    kept_record = cases["a Megalobiz record picked under [lyrics]"]
+    assert _ends(kept_record)["lyrics"] == ("done", "the record you picked: megalobiz 24519")
+    assert [r for r in kept_record["out"]["requests"] if "lrclib" in r or "megalobiz" in r or "azlyrics" in r] == [
+        f"GET {EAGLES_LRC}"]
+    gone = cases["an LRCLIB record picked under [lyrics] gone"]
+    assert _ends(gone)["lyrics"] == ("done", "the record you picked is gone: lrclib 9")
+    assert gone["out"]["rows"]["songs"][0]["lyrics_status"] == "missing"
+    assert not any("megalobiz" in r or "azlyrics" in r for r in gone["out"]["requests"])
+    again = cases["an LRCLIB record picked under [lyrics], gone 33 days ago"]
+    assert f"GET {LRCLIB_PICK}" in again["out"]["requests"]
+    assert _ends(again)["lyrics"] == ("done", "the record you picked: lrclib 9")
     artist = cases["a song the offline index lacks, through its artist's page on Ultimate Guitar"]
     assert artist["out"]["requests"][0].startswith(f"GET {LAKE_URL}?filter=")
     unpicked = cases["LaCuerda's sheet unpicked"]

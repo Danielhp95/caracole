@@ -502,6 +502,29 @@ def picked_record(song: Song, picks: Mapping[str, LyricsPick] | None) -> LyricsR
     return pick.record if pick is not None else None
 
 
+def asked_name(song: Song, picks: Mapping[str, LyricsPick] | None) -> str | None:
+    """"Artist - Title", the name ``asked_as`` gives when it isn't the song's own (``[lyrics]``' ``as``), else None."""
+    artist, title, album = asked_as(song, picks)
+    return None if (artist, title, album) == (song.artists[0], song.title, song.album) else f"{artist} - {title}"
+
+
+def asked_under(said: str, name: str | None) -> str:
+    """A lyrics site's answer in a lookup's words, with the name it was asked under (``asked_name``) when it isn't
+    the song's own."""
+    return said if name is None else f"{said} under “{name}”"
+
+
+def picked_said(record: LyricsRecord, *, kept: bool, gone: bool) -> str:
+    """What a lookup says of the record you picked, its site's pass done: kept, gone (the pass's log line's words), or
+    not asked now (within 30 days of its miss, or its site off)."""
+    said = f"{record.site} {record.id}"
+    if kept:
+        return f"the record you picked: {said}"
+    if gone:
+        return f"the record you picked is gone: {said}"
+    return f"the record you picked isn't asked now: {said}"
+
+
 def picked_due(song: Song, now: datetime, recheck_after: timedelta = timedelta(days=30)) -> bool:
     """Whether a song with a picked record is asked for it, by its site alone: while it has no lyrics, pending (a
     rebuilt library, an entry written by hand, an error), or missing (the record gone) for ``recheck_after``."""

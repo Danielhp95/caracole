@@ -1531,6 +1531,12 @@ Megalobiz and AZLyrics are asked by the nightly run (its megalobiz and azlyrics 
   song's card, and as `lyrics_from` in `info.json`.
 - `[providers.megalobiz] enabled = false` and `[providers.azlyrics] enabled = false` turn them
   off.
+- `[lyrics]` in overrides.toml (see [overrides.toml](#overridestoml-your-decisions)) is kept by every one of these:
+  the sites are asked under its `as`, and a record you picked is asked of its own site alone. A
+  lookup says so: `found under “Eagles - Hotel California”`, `the record you picked: megalobiz
+  24519`, `the record you picked is gone: lrclib 9`. A record gone is every site asked, since no
+  other is asked about the song: the song is offered a transcription, and a sheet made from a
+  YouTube video hears its words.
 
 **Megalobiz** gets two requests per song at most. Its API allows 1,000 requests a day, and
 caracole stops at 900 (see [Two paces](#configure)). It also allows 30 a minute, which caracole
@@ -3545,9 +3551,12 @@ name. A `[lyrics]` record wins over an `[azlyrics]` page, which wins over the `a
 picked is final: while the song has its lyrics no site is asked about it, nor for timed lyrics in
 place of plain ones. While it has none, only the record's own site is asked, for that record alone,
 one request; a record gone leaves the song without lyrics (the log says so), and it is asked again
-after 30 days. An entry you write by hand takes effect at the next run for a song still pending, at
-its next 30-day re-check for a song whose lyrics are missing, and never in a nightly run for a song
-that already has lyrics (`caracole lyrics --pick` and `--record` fetch at once).
+after 30 days. The nightly run, `caracole lyrics`, a lookup and a sheet made from a YouTube video all
+keep to `[lyrics]`. An entry you write by hand takes effect at the next run for a song still pending,
+and at its next 30-day re-check for a song whose lyrics are missing. A `record` is never applied to a
+song that already has lyrics. An `as` is: a song with plain lyrics is asked of Megalobiz under it for
+timed ones, at the next run when Megalobiz hasn't been asked about it, else once its 30 days are over
+(`caracole lyrics --pick` and `--record` fetch at once).
 
 `[harmonica]` says how each of a song's harmonica tabs is read, by its file's name. The value is a
 notation (`"signs"`, `"brackets"`, `"letters"`, `"signs after"` or `"barrett"`), `"legend"` for

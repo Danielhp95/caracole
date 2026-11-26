@@ -8,6 +8,7 @@ import io.github.danielhp95.caracole.core.lookup.SiteStage
 import io.github.danielhp95.caracole.core.lookup.StageContext
 import io.github.danielhp95.caracole.core.lookup.StageEnd
 import io.github.danielhp95.caracole.core.lyrics.Lrclib
+import io.github.danielhp95.caracole.core.lyrics.Lyrics
 import io.github.danielhp95.caracole.core.lyrics.LyricsStats
 import java.time.Instant
 import java.time.ZoneOffset
@@ -15,7 +16,9 @@ import java.time.format.DateTimeFormatter
 
 /**
  * get.py's `_lrclib`, the lyrics stage's first site: LRCLIB's pass for the song ([Lrclib.fetchPendingLyrics]), "found",
- * "LRCLIB has none", "an instrumental", else "already there" (a song with lyrics, or none asked about); a spent budget
+ * "LRCLIB has none", "an instrumental", each "under “A - T”" when asked under `[lyrics]`' `as` ([Lyrics.askedUnder]),
+ * else "already there" (a song with lyrics, or none asked about); a record you picked said as kept or gone
+ * ([Lyrics.pickedSaid]); a spent budget
  * or an error the pass met said as the envelope says it. The frame (lane lookup's Lookup) puts the three sites' ends
  * together, as `_then` does.
  */
@@ -23,9 +26,18 @@ object LrclibStage : SiteStage {
     override fun run(ctx: StageContext): StageEnd {
         val song = Songs.byId(ctx.db, ctx.song.id) ?: ctx.song
         if (song.lyricsStatus == "found" || song.lyricsStatus == "instrumental") return StageEnd("done", ALREADY)
+        val picks = ctx.overrides.lyrics
+        val record = Lyrics.pickedRecord(song, picks)
+        val name = if (record != null) null else Lyrics.askedName(song, picks)
         val asked = ctx.asking.ask(Lrclib.PROVIDER) { client ->
-            said(LyricsStages.ended(Lrclib.PROVIDER,
-                                    Lrclib.fetchPendingLyrics(ctx.db, client, ctx.library, ctx.now, setOf(song.id))))
+            val s = LyricsStages.ended(Lrclib.PROVIDER, Lrclib.fetchPendingLyrics(ctx.db, client, ctx.library, ctx.now,
+                                                                                setOf(song.id), picks = picks))
+            when {
+                record != null && s.tried > 0 ->
+                    Lyrics.pickedSaid(record, kept = s.found > 0 || s.instrumental > 0, gone = s.missing > 0)
+                s.tried > 0 -> Lyrics.askedUnder(said(s), name)
+                else -> said(s)
+            }
         }
         return LyricsStages.end(ctx, Lrclib.PROVIDER, asked)
     }

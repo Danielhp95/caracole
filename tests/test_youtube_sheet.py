@@ -105,6 +105,9 @@ class Lrclib:
         endpoint = request.url.path.removeprefix("/api/")
         params = dict(request.url.params)
         self.requests.append((endpoint, params))
+        if endpoint.startswith("get/"):  # a record by its id
+            found = [r for r in self.records if str(r["id"]) == endpoint.removeprefix("get/")]
+            return httpx.Response(200, json=found[0]) if found else httpx.Response(404, json={"name": "TrackNotFound"})
         found = [r for r in self.records if r["trackName"] == params["track_name"]
                  and ("duration" not in params or abs(r["duration"] - int(params["duration"])) <= 2)]
         if endpoint == "get":
@@ -558,6 +561,35 @@ def test_without_lyrics_on_lrclib_or_megalobiz_azlyrics_plain_ones_go_on_the_she
     assert "Des mots inventés" in auto_sheet(setup, conn, song)
 
 
+def test_a_sheet_from_youtube_asks_its_lyrics_under_the_lyrics_name(setup, conn, fake, sites, megalobiz, tmp_path):
+    # [lyrics]' `as`: the sites are asked under it, with the audio's length and no album.
+    from caracole.overrides import set_lyrics_name
+
+    lrclib, _ = sites
+    set_lyrics_name(setup.overrides_file, "Nick Cani - Vikingos veganos (Video Oficial)", "Nick Cani - Vikingos veganos")
+    vikingos(fake, tmp_path)
+    result, heard = make(setup, title="Vikingos veganos (Video Oficial)")
+    assert result.ok, result
+    assert lrclib.requests == [("get", {"artist_name": "Nick Cani", "track_name": "Vikingos veganos",
+                                        "duration": "200"})]
+    assert heard.ends()["lyrics"] == ("done", "found, timed under “Nick Cani - Vikingos veganos”")
+    assert megalobiz.requests == []  # timed lyrics already
+
+
+def test_a_sheet_from_youtube_asks_a_picked_record_of_its_site_alone(setup, conn, fake, sites, megalobiz, azlyrics,
+                                                                    tmp_path):
+    from caracole.overrides import set_lyrics_record
+
+    lrclib, _ = sites
+    set_lyrics_record(setup.overrides_file, "Nick Cani - Vikingos veganos", "lrclib:77")
+    vikingos(fake, tmp_path)
+    result, heard = make(setup)
+    assert result.ok, result
+    assert lrclib.requests == [("get/77", {})]
+    assert heard.ends()["lyrics"] == ("done", "the record you picked: lrclib 77")
+    assert megalobiz.requests == [] and azlyrics.requests == []
+
+
 # --- the words heard from the audio, where no site has them ------------------------------------------------------
 
 
@@ -610,6 +642,25 @@ def test_a_video_no_site_has_lyrics_for_gets_its_words_heard_before_its_chords(s
     assert NOTE in lines and "Somos vikingos de prueba" in lines
     assert (song.lyrics_status, song.lyrics_json) == ("missing", None)  # a transcript is no site's lyrics
     assert not list(setup.cache_dir.glob("transcribe-*"))  # the stem went with the job
+
+
+def test_a_picked_record_gone_is_every_site_asked_and_the_words_are_heard(setup, conn, fake, sites, megalobiz,
+                                                                         azlyrics, ears, tmp_path):
+    # The record you picked is final: its own site alone is asked, and once it is gone there no other will be, so the
+    # sites were asked and missed and the words are heard from the audio, the owner's rule kept.
+    from caracole.overrides import set_lyrics_record
+
+    lrclib, _ = sites
+    set_lyrics_record(setup.overrides_file, "Nick Cani - Vikingos veganos", "megalobiz:8")
+    vikingos(fake, tmp_path)
+    result, heard = make(setup, ears=ears, hears=True)
+    assert result.ok, result
+    ends = heard.ends()
+    assert ends["lyrics"] == ("done", "the record you picked is gone: megalobiz 8")
+    assert lrclib.requests == [] and [e for e, _ in megalobiz.requests] == ["lrc"] and azlyrics.requests == []
+    assert ends["vocals"][0] == "done", ends["vocals"]
+    assert ears.log == ["separator", "transcriber"]
+    assert ends["chords"] == ("done", "chords over the transcribed lyrics")
 
 
 @pytest.mark.parametrize("found,said,chords", [

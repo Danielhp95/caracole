@@ -60,12 +60,14 @@ class FakeLrclib:
         self.records = list(records)
         self.status = status
         self.requests: list[str] = []
+        self.asked: list[tuple[str, str | None, str | None]] = []  # each request's path, artist and track
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request.url.path)
+        params = dict(request.url.params)
+        self.asked.append((request.url.path, params.get("artist_name"), params.get("track_name")))
         if self.status is not None:
             return httpx.Response(self.status, text="nope")
-        params = dict(request.url.params)
         if request.url.path == "/api/get":
             wanted = (params["artist_name"], params["track_name"])
             for r in self.records:
@@ -235,6 +237,33 @@ def test_lyrics_asks_megalobiz_for_a_song_lrclib_missed(tmp_path, sites):
     finally:
         conn.close()
     assert logged == len(sites.megalobiz.requests) == 2
+
+
+def test_caracole_lyrics_asks_under_the_lyrics_name(tmp_path, sites):
+    # [lyrics]: LRCLIB and Megalobiz are asked under the song's `as`, with no album; a song whose record was picked
+    # on AZLyrics is asked of AZLyrics alone, for its page alone.
+    from helpers.azlyrics_site import POMME, SONG
+
+    from caracole.config import load_config
+    from caracole.overrides import set_lyrics_name, set_lyrics_record
+
+    sites.megalobiz.records.append(record())
+    sites.azlyrics.pages.update(POMME)
+    named, picked = seed(tmp_path, ("Los Águilas", "Hotel Californio (Video Oficial)"), ("Pomme", "Mononoké (live)"))
+    overrides = load_config(write_config(tmp_path), env={}).overrides_file
+    set_lyrics_name(overrides, song(tmp_path, named).display, "Eagles - Hotel California")
+    set_lyrics_record(overrides, song(tmp_path, picked).display, "azlyrics:pomme/mononoke")
+
+    result = run(tmp_path, "lyrics")
+
+    assert result.exit_code == 0, result.output
+    assert sites.lrclib.asked == [("/api/get", "Eagles", "Hotel California"),
+                                  ("/api/search", "Eagles", "Hotel California")]
+    assert sites.megalobiz.requests[0] == ("search", {"title": "Hotel California", "artist": "Eagles",
+                                                      "duration": "213", "limit": "10"})
+    assert sites.azlyrics.requests == [SONG]
+    assert json.loads(song(tmp_path, named).lyrics_json)["provider"] == "megalobiz"
+    assert json.loads(song(tmp_path, picked).lyrics_json)["provider"] == "azlyrics"
 
 
 def test_lyrics_with_megalobiz_turned_off_asks_it_nothing(tmp_path, sites):

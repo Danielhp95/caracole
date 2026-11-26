@@ -30,7 +30,7 @@ from typing import Any
 from caracole.config import Config
 from caracole.db import kv_delete, kv_get, kv_get_json, kv_set_json
 from caracole.library import kept_files
-from caracole.overrides import Overrides
+from caracole.overrides import Overrides, override_key
 from caracole.songs import HUMAN_SHEET, Song, list_songs
 
 TRANSCRIPT = "transcript:"  # + song id: the Transcript kept for the song's audio
@@ -181,7 +181,11 @@ def why_not_offered(conn: sqlite3.Connection, cfg: Config, song: Song, overrides
         return WHISPER_UNREADABLE_WHY
     if not song.lyrics_at:
         return "LRCLIB hasn't been asked"
+    pick = overrides.lyrics.get(override_key(song.display))
+    picked = pick.record.site if pick is not None and pick.record is not None else None
     for provider, prefix in _SITES:
+        if picked is not None and provider != picked:
+            continue  # a record you picked is final ([lyrics]): its own site alone is ever asked about the song
         if cfg.provider(provider).enabled and kv_get(conn, f"{prefix}{song.id}") is None:
             return f"{provider} hasn't been asked"
     if transcript_of(conn, song) is not None:

@@ -111,6 +111,14 @@ sitemaps list by bare ids alone, and the fetch their page.
     and asked past the cache from then on (Megalobiz's and AZLyrics' kv `checked:`, which an error leaves; LRCLIB's
     `lyrics_at`, an error leaving the song missing). A record wins over an `[azlyrics]` page, which wins over `as`.
     An entry on a song already missing waits for its 30 days. Without it, every request is what it was.
+  - Every caller hands the passes `overrides.lyrics` (pipeline.py's three steps, commands/lyrics.py, get.py,
+    youtube_sheet.py; the phone's three lookup stages `ctx.overrides.lyrics`), a lookup the table read again after a
+    turn. A lookup's and a YouTube sheet's lyrics stage with a record picked on Megalobiz or AZLyrics asks that site
+    alone (the frame's short cut, LookupRun.kt `lyrics` alike), and get.py's put-back to pending (Megalobiz skipped
+    for its cooldown) never touches a song with a record: no other site concerns it. Their words: `asked_under`
+    ("found under “A - T”", a site that asked under `as`), `picked_said` ("the record you picked: lrclib 9", "… is
+    gone: …", "… isn't asked now: …"). A record gone is every site asked: transcript.py `why_not_offered` asks only
+    the record's site's `checked:`.
 
 #### megalobiz
 

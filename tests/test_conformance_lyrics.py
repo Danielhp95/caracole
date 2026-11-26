@@ -29,7 +29,9 @@ once more past the cache, LRCLIB's 503 asked once more after its ``Retry-After``
 missed back to pending, a block (``raises``) and AZLyrics' block page, a 200 never kept in the cache (``out.result``'s
 ``cached``, asked of the client after the pass); lyrics.txt, lyrics.lrc (``out.library``'s digests) and
 ``lyrics_json`` (``out.rows.songs``) byte for byte. ``[azlyrics]`` comes to the phone as its ``phone_overrides`` row,
-which ``Overrides.read`` reads.
+which ``Overrides.read`` reads, and so does ``[lyrics]``: a song asked under its name, and a record picked, kept, gone,
+or gone and asked again past the cached miss after an error at its re-check (a site's ``checked:`` the miss's, the
+song pending; LRCLIB's song left missing with its time).
 
 Stamps: songs.py's clock (``utc_now_iso``) is the record's ``now`` while a world is made and a pass runs.
 ``write_info`` (info.json) is the viewer's, milestone 5's: no pass writes it here, as the phone writes none.
@@ -904,6 +906,11 @@ def lrclib_scenarios(tmp: Path) -> list[dict[str, Any]]:
     case("an error on the picked LRCLIB record: never a miss",
          lambda w: w.song(*yeren, duration_ms=251000), lambda w, sid: {LRCLIB_RECORD: status(502, "Bad Gateway")},
          lyrics='{ record = "lrclib:28399373" }')
+    case("an error at the re-check of the picked LRCLIB record gone 30 days ago: the song stays missing with its "
+         "time, never put back to pending, so the next run asks past the cached 404 again",
+         lambda w: w.song(*yeren, duration_ms=251000, lyrics_status="missing", lyrics_at=LONG_AGO),
+         lambda w, sid: {LRCLIB_RECORD: status(502, "Bad Gateway")},
+         cache=lambda w, sid: {LRCLIB_RECORD: held(MISS)}, lyrics='{ record = "lrclib:28399373" }')
     case("a record picked on another site: LRCLIB asks nothing",
          lambda w: w.song(*yeren, duration_ms=251000), lambda w, sid: {},
          lyrics='{ as = "孟维来 - 野人", record = "megalobiz:24519" }')
@@ -1036,6 +1043,13 @@ def megalobiz_scenarios(tmp: Path) -> list[dict[str, Any]]:
          lambda w: w.song(*eagles, duration_ms=391000),
          lambda w, sid: {megalobiz_lrc(24519): status(404, '{"error": "not_found"}', JSON)},
          lyrics='{ record = "megalobiz:24519" }')
+    case("the picked Megalobiz record gone, then an error at its re-check put it back to pending: the next run asks "
+         "past the cached 404, never reading it again for a new miss",
+         lambda w: (sid := w.song("Los Águilas", "Hotel Californio", duration_ms=391000),
+                    w.kv(f"{CHECKED}{sid}", LONG_AGO))[0],
+         lambda w, sid: {megalobiz_lrc(24519): hit[megalobiz_lrc(24519)]},
+         cache=lambda w, sid: {megalobiz_lrc(24519): held(status(404, '{"error": "not_found"}', JSON))},
+         lyrics='{ record = "megalobiz:24519" }')
     case("a record picked on another site: Megalobiz asks nothing, LRCLIB's failure aside",
          lambda w: (sid := w.song(*eagles, duration_ms=391000), w.kv(f"{FAILED}{sid}", LATELY))[0],
          lambda w, sid: {}, lyrics='{ record = "lrclib:28399373" }')
@@ -1161,6 +1175,11 @@ def azlyrics_scenarios(tmp: Path) -> list[dict[str, Any]]:
     case("a record picked on another site: AZLyrics asks nothing, the page you named aside",
          lambda w: missed(w), lambda w, sid: {}, picks="azlyrics.com/lyrics/pomme/mononoke.html",
          lyrics='{ record = "megalobiz:24519" }')
+    case("the picked AZLyrics record gone, then an error at its re-check put it back to pending: the next run asks "
+         "past the cached 404, never reading it again for a new miss",
+         lambda w: (sid := w.song("Someone Else", "Mononoke"), w.kv(f"{CHECKED}{sid}", LONG_AGO))[0],
+         lambda w, sid: {MONONOKE: AZ_HIT[MONONOKE]}, cache=lambda w, sid: {MONONOKE: held(AZ_404)},
+         lyrics='{ record = "azlyrics:pomme/mononoke" }')
     return out
 
 
