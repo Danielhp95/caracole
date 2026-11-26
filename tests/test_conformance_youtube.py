@@ -1,5 +1,6 @@
 """youtube.py's rules for the phone: tests/conformance/data/caracole/youtube/youtube.json, and the vectors
-tests/conformance/vectors/youtube/argv.jsonl and classify.jsonl.
+tests/conformance/vectors/youtube/argv.jsonl, classify.jsonl, parse.jsonl and choose.jsonl (android's core.youtube
+replays them: YouTubeReplay, area ``youtube``).
 
 youtube.json (no budget, pause or switch: config/config.json holds ``youtube``'s and ``ytimg``'s):
 
@@ -39,6 +40,15 @@ youtube.json (no budget, pause or switch: config/config.json holds ``youtube``'s
     app's gate (or its 407) is read from the gate's log before stderr is;
 - ``reason_chars``, ``search_timeout`` and ``download_timeout`` (seconds), ``search_results``, ``max_filesize``,
   ``audio_suffixes``, ``audio_format`` and ``phone_format``;
+- ``answers``: what parse_search and parse_video read and say: ``provider``, ``live_statuses`` (``LIVE_STATUSES``: a
+  stream), ``shorts_path`` (``SHORTS_PATH``, in a result's url: a short), and the words of an answer that can't be
+  read (``search_not_json``, ``video_not_json``, ``{}`` json's error; ``no_such_video``), a ProviderError's;
+  ``search_query`` (``SEARCH_QUERY``: ``{artist}`` stripped, ``{title}`` clean_title'd, filled in one pass);
+- ``choose``: choose's rules: its ``patterns`` (``_PARTS``, ``_QUOTED``, ``_UNWANTED``, ``_KARAOKE_CHANNEL``,
+  ``_TOPIC``, ``_CHANNEL_SUFFIX``, ``_OFFICIAL_AUDIO``, ``_OFFICIAL_VIDEO``, ``_CJK_LETTER``, ``_SCRIPT_RUN``),
+  ``variant`` (``_VARIANT``, ``{variant}`` title_variant's word), the words (``decoration``, ``cjk_decoration`` as
+  compact(slug_key) makes them, ``own_channel``), ``cjk_width``, the lengths (seconds) and ``exact`` and ``alone``,
+  and ``key``, in words, the order of the videos that fit;
 - ``fetch``: youtube_fetch.py's ``recheck_after_days`` (``RECHECK_AFTER``) and ``give_up_after`` (``GIVE_UP_AFTER``);
 - ``search``: youtube_search.py's ``searches_per_hour``, ``asked_for_days`` (``ASKED_FOR``, the 30 days),
   ``failed_for_seconds`` (``FAILED_FOR``) and ``failures_pause``.
@@ -49,6 +59,16 @@ the same for a value holding a NUL, an empty search and an empty download folder
 and ``{"computer": {what, target, cache_dir, into}, "argv": [...]}``, what the computer's ``YtDlp`` gave the fake
 yt-dlp (``<tmp>`` the test's folder, ``cache_dir`` the folder its runner adds ``yt-dlp`` to), no program name in any.
 
+parse.jsonl: ``{"fn": "parse_search", "text"}`` and ``{"fn": "parse_video", "text", "id"}`` with ``videos`` or
+``video`` (each ``[id, title, channel, duration as Python's repr or null, live, short]``) or ``error``
+(``ProviderError`` with its ``message``, null where Python's json nests deeper than the phone's reads; or
+``OverflowError``, float() of an int too big for one); ``{"fn": "search_query", "artist", "title", "query"}``.
+
+choose.jsonl: ``{"song": [artist, title, artists], "videos": [[id, title, channel, duration, live, short]...],
+"expected", "skip", "chosen", "ranked"}``: ``choose``'s video's id (or null), and ``_ranked``'s videos that fit, each
+``[id, tier, -title, closeness, -official, rank]``: test_youtube.py's cases, CJK, live, short and karaoke titles, and
+seeded draws of their songs and videos.
+
 classify.jsonl: ``{"stderr", "exit", "class", "provisional"}``: ``classify(stderr)`` for a run that exited otherwise
 than 0, ``ok`` for one that exited 0. ``provisional`` is null for the computer's own samples (tests/test_youtube.py)
 and the rules' edges; else it says the text was composed from yt-dlp's source, not taken from a run, and Gate Y0's
@@ -57,6 +77,7 @@ logs confirm or replace it.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import re
 
@@ -86,6 +107,10 @@ ORDER = ("the gate's log first (its step, the runner's), then the exit status (o
 OVER = {"stderr": "every line read", "error_line": "the last line read that begins error_prefix, that word taken off "
         "and the rest str.strip()ped: one line or none", "warning_lines": "every line read that begins warning_prefix, "
         "whole", "gate_log": "the app's gate's log of the run, never stderr"}
+CHOOSE_KEY = ("of the videos that fit, the least of (tier, -title, closeness, -official, rank): tier 1 for a version "
+              "unwanted or not the song's own variant, else 0; title exact or alone; closeness 0 to 3 (3 with no "
+              "length); official 3 the artist's Topic channel, 2 official audio, 1 the artist's own channel or an "
+              "official video, else 0; rank the search's order")
 GATE_STEP = {"class": "gate", "over": "gate_log",
              "note": "the phone's runner's, before stderr is read: a refusal of the app's gate, or its 407, is "
                      "decided from the gate's log; classify never sees it"}
@@ -145,6 +170,27 @@ def youtube_json() -> str:
         "phone_format": youtube.PHONE_FORMAT,
         "fetch": {"recheck_after_days": youtube_fetch.RECHECK_AFTER.days,
                   "give_up_after": youtube_fetch.GIVE_UP_AFTER},
+        "answers": {"provider": youtube.PROVIDER, "live_statuses": list(youtube.LIVE_STATUSES),
+                    "shorts_path": youtube.SHORTS_PATH, "search_not_json": youtube.SEARCH_NOT_JSON,
+                    "video_not_json": youtube.VIDEO_NOT_JSON, "no_such_video": youtube.NO_SUCH_VIDEO},
+        "search_query": youtube.SEARCH_QUERY,
+        "choose": {
+            "patterns": {name: _pattern(p) for name, p in (
+                ("parts", youtube._PARTS), ("quoted", youtube._QUOTED), ("unwanted", youtube._UNWANTED),
+                ("karaoke_channel", youtube._KARAOKE_CHANNEL), ("topic", youtube._TOPIC),
+                ("channel_suffix", youtube._CHANNEL_SUFFIX), ("official_audio", youtube._OFFICIAL_AUDIO),
+                ("official_video", youtube._OFFICIAL_VIDEO), ("cjk_letter", youtube._CJK_LETTER),
+                ("script_run", youtube._SCRIPT_RUN))},
+            "variant": youtube._VARIANT,
+            "decoration": sorted(youtube._DECORATION),
+            "cjk_decoration": sorted(youtube._CJK_DECORATION),
+            "own_channel": list(youtube._OWN_CHANNEL),
+            "cjk_width": youtube.CJK_WIDTH,
+            "tolerance_s": youtube.TOLERANCE_S, "synced_s": youtube.SYNCED_S, "close_s": youtube.CLOSE_S,
+            "shortest_s": youtube.SHORTEST_S, "longest_s": youtube.LONGEST_S,
+            "exact": youtube.EXACT, "alone": youtube.ALONE,
+            "key": CHOOSE_KEY,
+        },
         "search": {"searches_per_hour": youtube_search.SEARCHES_PER_HOUR,
                    "asked_for_days": youtube_search.ASKED_FOR.days,
                    "failed_for_seconds": int(youtube_search.FAILED_FOR.total_seconds()),
@@ -417,3 +463,256 @@ def test_the_classify_corpus():
     assert {r["class"] for r in records} == {*youtube.RUN_CLASSES, "ok"}
     check(VECTORS / "youtube" / "classify.jsonl", jsonl(records, corpus="youtube/classify", made_by=MADE_BY))
 
+
+
+# --- parse.jsonl --------------------------------------------------------------------------------------------------
+
+def _video(v: youtube.Video) -> list:
+    """A video as a record holds it: its duration as Python's repr (``nan``, ``inf`` too), or null."""
+    return [v.id, v.title, v.channel, None if v.duration is None else repr(v.duration), v.live, v.short]
+
+
+DEEPEST = 512  # the phone's json reads no deeper (core.json.PyJson.MAX_DEPTH): past it, its words are its own
+
+
+def _answer(read, text: str) -> dict:
+    """What a parse came to: its videos, or what it raised (a ProviderError's words, but where Python's json went
+    deeper than the phone's reads)."""
+    try:
+        found = read()
+    except youtube.ProviderError as e:
+        deep = isinstance(e.__cause__, RecursionError) or text.count("[") + text.count("{") > DEEPEST
+        return {"error": "ProviderError", "message": None if deep else str(e)}
+    except OverflowError:  # float() of an int too big for one, as Python raises it out of the parse
+        return {"error": "OverflowError"}
+    return {"videos": [_video(v) for v in found]} if isinstance(found, list) else {"video": _video(found)}
+
+
+# test_youtube.py's flat search, then the shapes its readers meet: no dict, entries that aren't a list, values of
+# every JSON type where a text or a number is read, an id of the wrong length or letters, live and short marks.
+SEARCH_TEXTS = [
+    ('{"_type": "playlist", "entries": ['
+     f'{{"id": "{ID}", "title": "Creep", "channel": "Radiohead - Topic", "duration": 239.0, '
+     f'"url": "https://www.youtube.com/watch?v={ID}"}},'
+     '{"id": "AAAAAAAAAAA", "title": "Live now", "channel": "X", "duration": null, "live_status": "is_live",'
+     ' "url": "https://www.youtube.com/watch?v=AAAAAAAAAAA"},'
+     '{"id": "BBBBBBBBBBB", "title": "A short", "channel": "Y", "duration": 30,'
+     ' "url": "https://www.youtube.com/shorts/BBBBBBBBBBB"},'
+     '{"title": "no id"}, {"id": "bad id", "title": "x"}, 7'
+     ']}'),
+    "not json", "", "[" * 3000, '{"entries": [', "[]", "{}", '{"entries": {}}', '{"entries": null}', "7", '"x"',
+    '{"entries": []}  ', '﻿{"entries": []}', '{"entries": [], "entries": [{"id": "CCCCCCCCCCC"}]}',
+    '{"entries": [{"id": "CCCCCCCCCCC", "title": 7, "channel": ["a", 1], "duration": true}]}',
+    '{"entries": [{"id": "CCCCCCCCCCC", "title": 1.5, "channel": {"a": null}, "duration": "239"}]}',
+    '{"entries": [{"id": "CCCCCCCCCCC", "title": false, "channel": "", "uploader": "Up", "duration": 0}]}',
+    '{"entries": [{"id": "CCCCCCCCCCC", "title": "", "channel": 0, "uploader": 0.0, "duration": -1}]}',
+    '{"entries": [{"id": "CCCCCCCCCCC", "title": null, "uploader": "Only", "duration": 1e400}]}',
+    '{"entries": [{"id": "CCCCCCCCCCC", "duration": NaN}, {"id": "DDDDDDDDDDD", "duration": -Infinity}]}',
+    '{"entries": [{"id": "CCCCCCCCCCC", "duration": 1' + "0" * 400 + '}]}',
+    '{"entries": [{"id": "CCCCCCCCCCC", "duration": 12345678901234567890}]}',
+    '{"entries": [{"id": "CCCCCCCCCCC", "duration": 2.5e2, "title": true}]}',
+    '{"entries": [{"id": "CCCCCCCCCC"}, {"id": "CCCCCCCCCCCC"}, {"id": "CCCCCCCCCC!"}, {"id": 12345678901}]}',
+    '{"entries": [{"id": "CCCCCCCCCC\\u00e9"}, {"id": "-_-_-_-_-_-"}, {"id": "CCCCCCCCCCC\\n"}]}',
+    '{"entries": [{"id": "CCCCCCCCCCC", "live_status": "is_upcoming"}, {"id": "DDDDDDDDDDD", "live_status": '
+    '"post_live"}, {"id": "EEEEEEEEEEE", "live_status": true}]}',
+    '{"entries": [{"id": "CCCCCCCCCCC", "url": "https://www.youtube.com/SHORTS/x"}, {"id": "DDDDDDDDDDD", "url": 5},'
+    ' {"id": "EEEEEEEEEEE", "url": ["/shorts/"]}, {"id": "FFFFFFFFFFF", "url": "/shorts/"}]}',
+    '{"entries": [{"id": "CCCCCCCCCCC", "title": "宋冬野《斑马斑马》\\ud83c\\udfb8", "channel": "宋冬野 - Topic"}]}',
+]
+VIDEO_TEXTS = [
+    (json.dumps({"id": ID, "title": "Creep", "channel": "Radiohead - Topic", "duration": 239}), ID),
+    (json.dumps({"id": ID, "title": "Creep", "uploader": "Radiohead", "duration": 238.5, "live_status": "is_live"}),
+     ID),
+    (json.dumps({"id": "AAAAAAAAAAA", "title": "Another"}), ID),
+    (json.dumps([{"id": ID}]), ID), ("not json", ID), ("{", ID), ("[" * 3000, ID), ('{"id": null}', ID),
+    (json.dumps({"id": ID, "title": ["a"], "channel": 3, "duration": False}), ID),
+    (json.dumps({"id": ID, "live_status": "is_upcoming", "url": "https://www.youtube.com/shorts/x"}), ID),
+    ('{"id": "' + ID + '", "duration": 1' + "0" * 400 + '}', ID),
+]
+SEARCH_QUERIES = [
+    ("Radiohead", "Creep - Remastered 2009"), ("Radiohead", "Creep"), ("  Radiohead　", " Creep "),
+    ("The Beatles", "Hey Jude (Remastered 2015)"), ("宋冬野", "斑马，斑马"), ("Oasis", "Live Forever - Live at Knebworth"),
+    ("Daft Punk", "Get Lucky (feat. Pharrell Williams)"), ("", ""), ("A", "   "), ("--exec", "rm -rf ~ {title}"),
+    ("{artist}", "{title}"), ("Céline Dion", "My Heart Will Go On (Love Theme from \"Titanic\")"),
+]
+
+
+def _seeded_searches() -> list[str]:
+    """Flat searches drawn from FakeYtDlp's entries and odd values, the same in every process."""
+    import random
+
+    rng = random.Random(1126)
+    values = ["Creep", "", None, 7, 0, 1.5, True, False, [], ["x"], {}, {"a": 1}, "宋冬野", "Radiohead - Topic"]
+    found = []
+    for _ in range(24):
+        entries = []
+        for i in range(rng.randrange(0, 5)):
+            vid = rng.choice([ID, "AAAAAAAAAAA", "x", f"vid{i:08d}", "bad id here"])
+            e = entry(vid, rng.choice(values), rng.choice(values), rng.choice([None, 239, 239.5, 0, -3, True, "1"]))
+            for key in ("uploader", "live_status", "url"):
+                if rng.random() < 0.3:
+                    e[key] = rng.choice(values + ["is_live", "is_upcoming", "https://www.youtube.com/shorts/x"])
+            if rng.random() < 0.2:
+                e.pop(rng.choice(sorted(e)))
+            entries.append(e)
+        found.append(json.dumps({"_type": "playlist", "entries": entries}, ensure_ascii=rng.random() < 0.5))
+    return found
+
+
+def test_the_parse_corpus():
+    records = []
+    for text in SEARCH_TEXTS + _seeded_searches():
+        records.append({"fn": "parse_search", "text": text, **_answer(lambda: youtube.parse_search(text), text)})
+    for text, vid in VIDEO_TEXTS:
+        records.append({"fn": "parse_video", "text": text, "id": vid,
+                        **_answer(lambda: youtube.parse_video(text, vid), text)})
+    for artist, title in SEARCH_QUERIES + [(s.artist, s.title) for s, *_ in CHOOSE_CASES]:
+        records.append({"fn": "search_query", "artist": artist, "title": title,
+                        "query": youtube.search_query(_S(artist, title, []))})
+    assert {r.get("error") for r in records} == {None, "ProviderError", "OverflowError"}
+    check(VECTORS / "youtube" / "parse.jsonl", jsonl(records, corpus="youtube/parse", made_by=MADE_BY))
+
+
+# --- choose.jsonl -------------------------------------------------------------------------------------------------
+
+@dataclasses.dataclass(frozen=True)
+class _S:
+    artist: str
+    title: str
+    artists: list[str]
+
+
+def _v(vid: str, title: str, channel: str, duration: float | None = 239.0, **marks) -> youtube.Video:
+    return youtube.Video(vid.ljust(11, "x")[:11], title, channel, duration, **marks)
+
+
+CREEP = _S("Radiohead", "Creep", [])
+_SONGS = {
+    "creep": CREEP, "help": _S("The Beach Boys", "Help", []), "live": _S("Radiohead", "Creep - Live", []),
+    "acoustic": _S("Radiohead", "Creep (Acoustic)", []), "lightning": _S("Live", "Lightning Crashes", []),
+    "banma": _S("宋冬野", "斑马，斑马", []), "rain": _S("周杰伦", "雨", []), "sunny": _S("周杰伦", "晴天", []),
+    "music": _S("周杰伦", "我的音乐", []), "k": _S("陈奕迅", "K歌之王", []),
+    "duet": _S("Simon & Garfunkel", "The Boxer", ["Simon & Garfunkel", "Paul Simon"]),
+    "lemon": _S("米津玄師", "Lemon", []), "iu": _S("아이유", "좋은 날", []), "yoasobi": _S("YOASOBI", "夜に駆ける", []),
+    "astral": _S("𠮷田", "𠮷野家の歌", []), "trad": _S("周杰倫", "晴天", ["周杰倫", "Jay Chou"]),
+    "blank": _S("  ", "Creep", ["", "  "]), "dashed": _S("Guns N' Roses", "Sweet Child O' Mine", []),
+}
+# Each of test_youtube.py's cases (song, its videos in the search's order, the length to fit, the skipped ids), and
+# Japanese, Korean, a letter past the BMP, Traditional characters, blank artists and apostrophes.
+_TOPIC = _v("topic", "Creep", "Radiohead - Topic")
+_LYRICS = _v("lyrics", "Radiohead - Creep (Lyrics)", "a lyrics channel")
+CHOOSE_CASES = [
+    (CREEP, [_v("lyrics", "Radiohead - Creep (Lyrics)", "7clouds"), _v("video", "Radiohead - Creep (Official Video)",
+     "Radiohead"), _v("audio", "Radiohead - Creep (Official Audio)", "Radiohead"), _TOPIC], None, []),
+    (CREEP, [_v("lyrics", "Radiohead - Creep (Lyrics)", "7clouds"), _v("video", "Radiohead - Creep (Official Video)",
+     "Radiohead"), _v("audio", "Radiohead - Creep (Official Audio)", "Radiohead")], None, []),
+    (CREEP, [_v("other", "Radiohead - Creep", "Music Channel 24"), _v("vevo", "Radiohead - Creep", "RadioheadVEVO")],
+     None, []),
+    (_SONGS["help"], [_v("rhonda", "The Beach Boys - Help Me Rhonda", "The Beach Boys")], None, []),
+    (_SONGS["help"], [_v("help", "The Beach Boys - Help!", "The Beach Boys")], None, []),
+    (CREEP, [_v("quoted", "Radiohead 'Creep' official video", "Radiohead")], None, []),
+    (CREEP, [_v("plain", "Radiohead Creep Official Music Video HD", "Radiohead")], None, []),
+    (CREEP, [_v("other", "Creep", "Stone Temple Pilots - Topic")], None, []),
+    (CREEP, [_v("anyone", "Creep (Official Audio)", "Someone Else")], None, []),
+    (CREEP, [_v("fan", "Creep - Radiohead | lyrics", "lyricsfan")], None, []),
+    (CREEP, [_v("off", "Creep", "Radiohead - Topic", 270.0)], 239.0, []),
+    (CREEP, [_v("near", "Radiohead - Creep (Lyrics)", "lyricsfan", 243.0), _v("off", "Creep", "Radiohead - Topic",
+     270.0)], 239.0, []),
+    (CREEP, [_v("near", "Radiohead - Creep (Lyrics)", "lyricsfan", 243.0), _v("exact", "Radiohead - Creep [Lyrics]",
+     "other lyrics", 238.5)], 239.0, []),
+    (CREEP, [_v("off", "Creep", "Radiohead - Topic", 270.0)], None, []),
+    (CREEP, [_v("clip", "Radiohead - Creep", "Radiohead", 20.0)], None, []),
+    (CREEP, [_v("hour", "Radiohead - Creep", "Radiohead", 3600.0)], None, []),
+    *[(CREEP, videos, None, []) for title in (
+        "Creep - Radiohead (Acoustic Cover)", "Radiohead - Creep (Live at Glastonbury 1997)",
+        "Radiohead - Creep (Karaoke Version)", "Radiohead - Creep (Instrumental)",
+        "How to play Creep by Radiohead - Guitar Lesson", "Radiohead - Creep guitar tutorial (chords)",
+        "Radiohead - Creep (slowed + reverb)", "Radiohead - Creep (sped up)", "Radiohead - Creep (Nightcore)",
+        "Radiohead - Creep (8D Audio)", "Radiohead - Creep (Remix)", "Reacting to Radiohead - Creep (reaction)")
+      for videos in ([_v("worse", title, "Radiohead"), _LYRICS], [_v("worse", title, "Radiohead")])],
+    *[(CREEP, videos, None, []) for karaoke in (
+        _v("style", "Creep - in the style of Radiohead", "KaraFun"),
+        _v("famous", "Creep (Made Famous by Radiohead)", "Sing King"), _v("channel", "Radiohead - Creep", "Sing King"),
+        _v("karaoke", "Radiohead - Creep", "Zoom Karaoke Official"),
+        _v("nightcore", "Radiohead - Creep", "Nightcore Hits"))
+      for videos in ([karaoke, _LYRICS], [karaoke])],
+    (_SONGS["lightning"], [_v("own", "Live - Lightning Crashes", "LiveVEVO"),
+                           _v("lyrics", "Live - Lightning Crashes (Lyrics)", "lyrics")], None, []),
+    (_SONGS["live"], [_v("concert", "Radiohead - Creep (Live)", "Radiohead"), _TOPIC], None, []),
+    (_SONGS["acoustic"], [_v("acoustic", "Radiohead - Creep (Acoustic)", "Radiohead"), _TOPIC], None, []),
+    (CREEP, [_v("live", "Radiohead - Creep", "Radiohead", None, live=True),
+             _v("short", "Radiohead - Creep", "Radiohead", 239.0, short=True)], None, []),
+    (CREEP, [_v("gone", "Creep", "Radiohead - Topic")], None, ["gonexxxxxxx"]),
+    (CREEP, [_v("gone", "Creep", "Radiohead - Topic"), _v("next", "Radiohead - Creep", "Radiohead")], None,
+     ["gonexxxxxxx", "elsewhere00"]),
+    (_SONGS["banma"], [_v("hanzi", "宋冬野 - 斑马，斑马 (Official Audio)", "宋冬野")], None, []),
+    (_SONGS["banma"], [_v("brackets", "宋冬野《斑马斑马》", "Song Dongye")], None, []),
+    (_SONGS["banma"], [_v("pinyin", "Song Dongye - Banma Banma", "Song Dongye - Topic")], None, []),
+    (_SONGS["banma"], [_v("twice", "Song Dongye 宋冬野 - Banma Banma 斑马斑马", "Modern Sky")], None, []),
+    (_SONGS["banma"], [_v("other", "赵雷 - 成都", "赵雷")], None, []),
+    (_SONGS["rain"], [_v("longer", "周杰伦 - 雨下一整晚", "周杰伦")], None, []),
+    (_SONGS["sunny"], [_v("doll", "周杰伦 晴天娃娃", "someone", 240.0), _v("topic", "晴天", "周杰伦 - Topic", 243.0)],
+     239.0, []),
+    (_SONGS["sunny"], [_v("doll", "周杰伦 晴天娃娃", "someone", 240.0)], 239.0, []),
+    (_SONGS["sunny"], [_v("cover", "林俊杰 晴天", "周杰伦")], None, []),
+    *[(_SONGS["sunny"], [_v("glued", title, "someone")], None, []) for title in (
+        "周杰伦晴天", "周杰伦 晴天 官方MV", "【动态歌词】周杰伦 晴天", "晴天周杰伦完整版", "周杰倫晴天 高清")],
+    (_SONGS["music"], [_v("music", "周杰伦 我的音乐 MV", "someone")], None, []),
+    (_SONGS["k"], [_v("k", "陈奕迅K歌之王官方MV", "someone")], None, []),
+    (_SONGS["banma"], [_v("live", "宋冬野 斑马斑马 现场版", "someone"), _v("studio", "宋冬野 斑马斑马", "someone")], None, []),
+    (_SONGS["banma"], [_v("live", "宋冬野 斑马斑马 现场版", "someone")], None, []),
+    (_SONGS["sunny"], [_v("alone", "周杰伦 Jay Chou 晴天 Sunny Day", "someone", 239.0)], 239.0, []),
+    (_SONGS["sunny"], [_v("alone", "周杰伦 Jay Chou 晴天 Sunny Day", "someone", 239.0),
+                       _v("exact", "周杰伦 - 晴天", "someone", 230.0)], 239.0, []),
+    (_SONGS["sunny"], [_v("alone", "周杰伦 Jay Chou 晴天 Sunny Day", "someone", 239.0),
+                       _v("topic", "晴天", "周杰伦 - Topic", 239.0)], 239.0, []),
+    (_SONGS["duet"], [_v("paul", "Paul Simon - The Boxer (Official Audio)", "Paul Simon")], None, []),
+    (_SONGS["lemon"], [_v("mv", "米津玄師 MV「Lemon」", "米津玄師"), _v("cover", "Lemon / 米津玄師 (Cover)", "someone"),
+                       _v("karaoke", "【カラオケ】Lemon / 米津玄師", "JOYSOUND")], None, []),
+    (_SONGS["lemon"], [_v("karaoke", "【カラオケ】Lemon / 米津玄師", "JOYSOUND"), _v("lemonade", "米津玄師 Lemonade", "x")],
+     None, []),
+    (_SONGS["iu"], [_v("live", "아이유 좋은 날 라이브", "x"), _v("mv", "[MV] IU(아이유) _ Good Day(좋은 날)", "1theK (원더케이)"),
+                    _v("noraebang", "[노래방] 아이유 - 좋은 날", "TJ")], None, []),
+    (_SONGS["yoasobi"], [_v("mv", "YOASOBI「夜に駆ける」 Official Music Video", "Ayase / YOASOBI"),
+                         _v("topic", "夜に駆ける", "YOASOBI - Topic", 261.0)], 261.0, []),
+    (_SONGS["astral"], [_v("glued", "𠮷田𠮷野家の歌", "x"), _v("longer", "𠮷田 𠮷野家の歌ですね", "x")], None, []),
+    (_SONGS["astral"], [_v("longer", "𠮷田 𠮷野家の歌ですね", "x"), _v("topic", "𠮷野家の歌", "𠮷田 - Topic")], None, []),
+    (_SONGS["trad"], [_v("simplified", "周杰伦 晴天", "x"), _v("jay", "Jay Chou - Sunny Day 晴天", "JVR Music")], None, []),
+    (_SONGS["blank"], [_v("creep", "Creep", "  - Topic"), _v("plain", "Creep", "")], None, []),
+    (_SONGS["dashed"], [_v("gnr", "Guns N' Roses - Sweet Child O' Mine (Official Music Video)", "GunsNRosesVEVO"),
+                        _v("gnr2", "Sweet Child O Mine", "Guns N Roses - Topic")], None, []),
+    (CREEP, [_v("nolength", "Radiohead - Creep", "Radiohead", None), _v("close", "Radiohead - Creep", "Radiohead",
+     241.0), _v("far", "Radiohead - Creep", "Radiohead", 258.0), _v("edge", "Radiohead - Creep", "x", 259.0)], 239.0,
+     []),
+    (CREEP, [_v("short45", "Radiohead - Creep", "Radiohead", 45.0), _v("long900", "Radiohead - Creep", "Radiohead",
+     900.0), _v("over", "Radiohead - Creep", "Radiohead", 900.5)], None, []),
+    (CREEP, [], None, []),
+]
+
+
+def _seeded_choices() -> list[tuple]:
+    """Songs and videos of the cases above drawn together, the same in every process."""
+    import random
+
+    rng = random.Random(2611)
+    pool = sorted({v for _, videos, _, _ in CHOOSE_CASES for v in videos}, key=lambda v: (v.id, v.title, v.channel, v.duration or -1.0, v.live, v.short))
+    songs = [_SONGS[k] for k in sorted(_SONGS)]
+    found = []
+    for _ in range(140):
+        videos = rng.sample(pool, rng.randrange(1, 6))
+        skip = [rng.choice(videos).id] if rng.random() < 0.1 else []
+        found.append((rng.choice(songs), videos, rng.choice([None, None, 239.0, 230.0, 243.0, 261.0, 30.0]), skip))
+    return found
+
+
+def test_the_choose_corpus():
+    records = []
+    for song, videos, expected, skip in CHOOSE_CASES + _seeded_choices():
+        chosen = youtube.choose(song, videos, expected, skip=skip)
+        ranked = youtube._ranked(song, videos, expected, skip=skip)
+        records.append({"song": [song.artist, song.title, song.artists],
+                        "videos": [[v.id, v.title, v.channel, v.duration, v.live, v.short] for v in videos],
+                        "expected": expected, "skip": skip, "chosen": chosen.id if chosen else None,
+                        "ranked": [[v.id, *key] for key, v in ranked]})
+    assert len({r["chosen"] for r in records}) > 30 and sum(r["chosen"] is None for r in records) > 10
+    check(VECTORS / "youtube" / "choose.jsonl", jsonl(records, corpus="youtube/choose", made_by=MADE_BY))

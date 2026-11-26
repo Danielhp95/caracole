@@ -100,6 +100,13 @@ class Video:
                    _number(data.get("duration")))
 
 
+LIVE_STATUSES = ("is_live", "is_upcoming")  # a search result's or a video's live_status: a stream, never a song
+SHORTS_PATH = "/shorts/"  # in a search result's url: a short
+SEARCH_NOT_JSON = "yt-dlp's search answer isn't JSON: {}"
+VIDEO_NOT_JSON = "yt-dlp's answer isn't JSON: {}"
+NO_SUCH_VIDEO = "yt-dlp answered for no such video"
+
+
 def _number(value: Any) -> float | None:
     return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
 
@@ -109,7 +116,7 @@ def parse_search(text: str) -> list[Video]:
     try:
         data = json.loads(text)
     except (ValueError, RecursionError) as e:  # or nested deeper than the parser goes
-        raise ProviderError(PROVIDER, None, None, f"yt-dlp's search answer isn't JSON: {e}") from e
+        raise ProviderError(PROVIDER, None, None, SEARCH_NOT_JSON.format(e)) from e
     entries = data.get("entries") if isinstance(data, dict) else None
     videos = []
     for e in entries if isinstance(entries, list) else []:
@@ -118,8 +125,8 @@ def parse_search(text: str) -> list[Video]:
         videos.append(Video(
             e["id"], str(e.get("title") or ""), str(e.get("channel") or e.get("uploader") or ""),
             _number(e.get("duration")),
-            live=e.get("live_status") in ("is_live", "is_upcoming"),
-            short="/shorts/" in str(e.get("url") or ""),
+            live=e.get("live_status") in LIVE_STATUSES,
+            short=SHORTS_PATH in str(e.get("url") or ""),
         ))
     return videos
 
@@ -129,11 +136,11 @@ def parse_video(text: str, video_id: str) -> Video:
     try:
         data = json.loads(text)
     except (ValueError, RecursionError) as e:
-        raise ProviderError(PROVIDER, watch_url(video_id), None, f"yt-dlp's answer isn't JSON: {e}") from e
+        raise ProviderError(PROVIDER, watch_url(video_id), None, VIDEO_NOT_JSON.format(e)) from e
     if not isinstance(data, dict) or data.get("id") != video_id:
-        raise ProviderError(PROVIDER, watch_url(video_id), None, "yt-dlp answered for no such video")
+        raise ProviderError(PROVIDER, watch_url(video_id), None, NO_SUCH_VIDEO)
     return Video(video_id, str(data.get("title") or ""), str(data.get("channel") or data.get("uploader") or ""),
-                 _number(data.get("duration")), live=data.get("live_status") in ("is_live", "is_upcoming"))
+                 _number(data.get("duration")), live=data.get("live_status") in LIVE_STATUSES)
 
 
 # --- choosing the song's video ---------------------------------------------------------------------
@@ -145,9 +152,12 @@ class _Song(Protocol):
     artists: list[str]
 
 
+SEARCH_QUERY = "{artist} {title}"
+
+
 def search_query(song: _Song) -> str:
     """What yt-dlp's search is asked: the artist and the title without its version suffix."""
-    return f"{song.artist.strip()} {clean_title(song.title)}"
+    return SEARCH_QUERY.format(artist=song.artist.strip(), title=clean_title(song.title))
 
 
 TOLERANCE_S = 20.0  # how far a video's length may be from LRCLIB's: an intro, not another cut
@@ -186,6 +196,10 @@ _CHANNEL_SUFFIX = re.compile(r"\s*(?:vevo|official|oficial|officiel)(?:\s+channe
 _OWN_CHANNEL = ("", "vevo", "official", "oficial", "officiel", "music", "tv", "band", "channel", "officialchannel")
 _OFFICIAL_AUDIO = re.compile(r"\bofficial (?:hd )?audio\b")
 _OFFICIAL_VIDEO = re.compile(r"\bofficial (?:hd )?(?:music )?video\b|\(official\)")
+# A song that is itself live or acoustic (normalize.title_variant): a video whose title doesn't say so is another
+# version.
+_VARIANT = r"\b{variant}\b|unplugged"
+CJK_WIDTH = "W"  # unicodedata.east_asian_width of a letter of those scripts (_cjk)
 
 
 # Letters of Chinese, Japanese and Korean (Han, kana, Hangul and the jamo it folds to), and runs of one
@@ -237,7 +251,7 @@ def _parts(text: str) -> list[str]:
 
 
 def _cjk(form: str) -> bool:
-    return any(unicodedata.east_asian_width(c) == "W" for c in form)
+    return any(unicodedata.east_asian_width(c) == CJK_WIDTH for c in form)
 
 
 class _Names:
@@ -414,6 +428,14 @@ def choose(song: _Song, videos: Sequence[Video], expected: float | None, *,
     length (within 2 s the synced lyrics fit); then the artist's Topic channel, official
     audio, the artist's own channel or an official video; then the search's order.
     """
+    ranked = _ranked(song, videos, expected, skip=skip)
+    return min(ranked, key=lambda r: r[0])[1] if ranked else None
+
+
+def _ranked(song: _Song, videos: Sequence[Video], expected: float | None, *,
+            skip: Iterable[str] = ()) -> list[tuple[tuple[int, int, int, int, int], Video]]:
+    """``choose``'s videos that fit, each with its key, the least of which ``choose`` takes: ``(tier, -title,
+    closeness, -official, rank)``."""
     names = _Names(song)
     skipped = set(skip)
     ranked = []
@@ -427,10 +449,10 @@ def choose(song: _Song, videos: Sequence[Video], expected: float | None, *,
         if not (names.channel_is_artist(video.channel) or names.artist_in(video.title)):
             continue
         tier = 1 if names.unwanted(video.title, video.channel) else 0
-        if names.variant and not re.search(rf"\b{names.variant}\b|unplugged", fold(video.title)):
+        if names.variant and not re.search(_VARIANT.format(variant=names.variant), fold(video.title)):
             tier = max(tier, 1)
         ranked.append(((tier, -title, close, -_official(names, video), rank), video))
-    return min(ranked, key=lambda r: r[0])[1] if ranked else None
+    return ranked
 
 
 # --- running yt-dlp -----------------------------------------------------------------------------------

@@ -31,6 +31,7 @@ import io.github.danielhp95.caracole.core.testing.replays.TabFilesReplay
 import io.github.danielhp95.caracole.core.testing.replays.UgFetchReplay
 import io.github.danielhp95.caracole.core.testing.replays.UgPagesReplay
 import io.github.danielhp95.caracole.core.testing.replays.UnicodeReplay
+import io.github.danielhp95.caracole.core.testing.replays.YouTubeReplay
 
 /**
  * One area of the corpus replayed: every record of its vectors answered as Python answered it, each miss told to
@@ -51,7 +52,7 @@ object Replays {
         PyReplay, HtmlReplay, HttpReplay, HealthReplay, PaceReplay, LibraryWritesReplay, OverridesReplay,
         UgPagesReplay, RankReplay, MatchReplay, UgFetchReplay, LyricsReplay, LaCuerdaReplay, HarpTabsReplay,
         GameTabsReplay, TabFilesReplay, LookupReplay, LookupScenariosReplay, SettingsReplay, IndexExportReplay,
-        SongbookReplay, InboxReplay, CataloguesReplay,
+        SongbookReplay, InboxReplay, CataloguesReplay, YouTubeReplay,
     )
 
     /** The areas named (every one when [names] is empty), [IllegalArgumentException] for a name no area has. An area

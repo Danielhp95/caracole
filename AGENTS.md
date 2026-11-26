@@ -3073,6 +3073,17 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     read of that artist page.
   - vectors/index/ (`IndexReplay`, area `index`), vectors/search/index.jsonl (`SearchReplay`) and
     vectors/web/api_search.jsonl (`WebReplay`).
+- YouTube's rules (core.youtube; the phone-YouTube plan's Y1.2), youtube.py's phone half over
+  data/caracole/youtube/youtube.json, no flag, pattern, prefix or word of yt-dlp's typed (NoLiteralsTest, HostGate.kt
+  read too):
+  - `YouTubeData`: `read()`, `argv` (phone_argv: a kind's template, each element filled in one pass, a value never
+    read again; its refusals, `Refused`), `searchTarget`, `watchUrl`, `pattern`;
+  - `Videos`: `parseSearch`, `parseVideo` and `searchQuery` (PyJson.loads, Python's `str()`, truth and `float()`, an
+    `AnswerError` in a ProviderError's words; past PyJson's depth, its own words);
+  - `Choose`: `choose` and `ranked` (`_ranked`'s key: tier, title, closeness, official, rank), in code points, names by
+    core.keys.Normalize, patterns through PyRegex;
+  - `Classify`: `of` (classify), `ofRun` (the exit status first), `OK_EXIT`, `OK`, `GATE` (the runner's, before both);
+  - vectors/youtube/argv, classify, parse and choose.jsonl (`YouTubeReplay`, area `youtube`).
 
 ##### The Requests tab on the phone
 
