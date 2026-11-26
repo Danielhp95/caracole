@@ -113,13 +113,50 @@ def test_in_the_tests_a_config_read_from_the_environment_finds_no_real_yt_dlp(tm
     assert yf.route_problem(load_config(None)).startswith("yt-dlp isn't there")
 
 
-def test_transcribe_problem_starts_with_the_youtube_route(ycfg, tmp_path, monkeypatch):
+def test_transcription_needs_neither_youtube_nor_yt_dlp(ycfg, tmp_path, monkeypatch):
+    import importlib.util
+
+    monkeypatch.delenv("CARACOLE_TORCH_CUDA", raising=False)
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name, *a: None if name == "whisper" else object())
+    off = dataclasses.replace(ycfg, providers={**ycfg.providers, "youtube": ProviderPolicy(6, (3.75, 7.5), False)},
+                              ytdlp_bin=str(tmp_path / "no-yt-dlp"))
+    assert yf.route_problem(off) is not None and yf.autochords_problem(off) is None
+    assert yf.transcribe_problem(off) == "built without Whisper"  # past the audio, whatever YouTube is
+    monkeypatch.setattr(yf, "autochords_missing", lambda: ["torch"])
+    assert yf.autochords_problem(off) == yf.transcribe_problem(off)
+    assert yf.transcribe_reason(off) == "auto-chords isn't installed"
+
+
+def test_the_gpu_build_without_its_gpu_transcribes_nothing(ycfg, tmp_path, monkeypatch):
+    import importlib.util
+
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name, *a: object())
+    whisper, demucs = tmp_path / "w.pt", tmp_path / "d.st"
+    whisper.write_bytes(b"w")
+    demucs.write_bytes(b"d")
+    bin_dir = tmp_path / "demucs-bin"
+    bin_dir.mkdir()
+    (bin_dir / "demucs").write_text("#!/bin/sh\n")
+    (bin_dir / "demucs").chmod(0o755)
+    ready = dataclasses.replace(ycfg, demucs_bin=str(bin_dir / "demucs"), autochords=dataclasses.replace(
+        ycfg.autochords, whisper_model=whisper, separator_model=demucs))
+    monkeypatch.setenv("CARACOLE_TORCH_CUDA", "1")
+    monkeypatch.setattr(yf.Path, "exists", lambda self: False)
+    assert yf.transcribe_problem(ready) == ("the GPU build's separator needs the GPU, which this unit doesn't see "
+                                            "(no /dev/nvidiactl)")
+    assert yf.transcribe_reason(ready) == "the GPU isn't visible here"
+    monkeypatch.setattr(yf.Path, "exists", lambda self: str(self) == "/dev/nvidiactl")
+    assert yf.transcribe_problem(ready) is None
+    monkeypatch.delenv("CARACOLE_TORCH_CUDA")
+    monkeypatch.setattr(yf.Path, "exists", lambda self: False)
+    assert yf.transcribe_problem(ready) is None
+
+
+def test_transcribe_problem_starts_with_the_auto_chords_route(ycfg, tmp_path, monkeypatch):
     import importlib.util
     import sys
 
-    off = dataclasses.replace(ycfg, providers={**ycfg.providers, "youtube": ProviderPolicy(6, (3.75, 7.5), False)})
-    assert yf.transcribe_problem(off) == yf.route_problem(off)
-    assert yf.transcribe_reason(off) == "YouTube is off"
+    monkeypatch.delenv("CARACOLE_TORCH_CUDA", raising=False)
     monkeypatch.setattr(importlib.util, "find_spec", lambda name, *a: None if name == "whisper" else object())
     assert yf.transcribe_problem(ycfg) == "built without Whisper"
     assert yf.transcribe_reason(ycfg) == "Whisper isn't installed"

@@ -487,7 +487,8 @@ YOUTUBE_SHEET = "youtube:"  # a sheet from a YouTube video: its job's key, the s
 
 def youtube_sheet_steps(display: str, url: str) -> list[tuple[str, tuple[str, ...]]]:
     """Make a song's auto sheet from a YouTube video now: ``caracole youtube --sheet --progress``, one process for
-    every stage (youtube_sheet.py's ``STAGES``): the audio with yt-dlp, the lyrics, the chords, the PDF. ``url`` is
+    every stage (youtube_sheet.py's ``STAGES``): the audio with yt-dlp, the lyrics, the words heard where no site has
+    them, the chords, the PDF. ``url`` is
     the video's plain address (youtube_urls.watch_url)."""
     return [("Making the sheet",
              ("youtube", "--sheet", "--progress", f"--url={url}", f"--song={display}"))]
@@ -501,11 +502,15 @@ def _sheets_from_youtube(args: Sequence[str]) -> bool:
 TRANSCRIBE = "transcribe:"  # lyrics transcribed from a song's audio: its job's key, the song's identity key after it
 
 
-def transcribe_steps(display: str) -> list[tuple[str, tuple[str, ...]]]:
+def transcribe_steps(display: str, *, force: bool = False, none: bool = False) -> list[tuple[str, tuple[str, ...]]]:
     """Transcribe a song's lyrics from its audio now, and make its auto sheet again over them: ``caracole transcribe
     --progress``, one process for every stage (transcribe_job.py's ``STAGES``): where the singing is, the words, the
-    chords, the PDF."""
-    return [("Transcribing the lyrics", ("transcribe", "--progress", f"--song={display}"))]
+    chords, the PDF. ``force``, Transcribe anyway (``--force``); ``none``, Not sung: chords only (``--none``), its
+    transcript dropped and its chords made alone."""
+    if none:
+        return [("Making the chords alone", ("transcribe", "--progress", "--none", f"--song={display}"))]
+    flags = ("--force",) if force else ()
+    return [("Transcribing the lyrics", ("transcribe", "--progress", *flags, f"--song={display}"))]
 
 
 def _transcribes(args: Sequence[str]) -> bool:
