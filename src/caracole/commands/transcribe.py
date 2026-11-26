@@ -1,11 +1,12 @@
-"""``caracole transcribe``: a song's lyrics transcribed from its YouTube audio, and its auto sheet made again over them.
+"""``caracole transcribe``: a song's lyrics transcribed from its own audio, and its auto sheet made again over them.
 
-``--song "Artist - Title"`` names a song of the library whose audio came from YouTube and that every lyrics site
-switched on missed (transcript.py ``why_not_offered``): its vocals separated by demucs-rs, its words heard by Whisper
-large-v3 on the full mix, those outside the singing dropped, the rest kept as its transcript (never as its lyrics),
-then its auto sheet made again with the chords over them, its PDF and viewer, and the pages (transcribe_job.py).
-``--progress`` adds a JSON line per stage, which caracole serve reads, as ``caracole get --progress`` does; without it,
-what a long stage is doing is a live line on a terminal and a line a minute in the journal (progress.py ``ticker``).
+``--song "Artist - Title"`` names a song of the library with audio of its own (YouTube's or a purchase's) that every
+lyrics site switched on missed (transcript.py ``why_not_offered``): its vocals separated by demucs-rs, its words heard
+by Whisper large-v3 on the full mix, those outside the singing dropped, the rest kept as its transcript (never as its
+lyrics), then its auto sheet made again with the chords over them, its PDF and viewer, and the pages
+(transcribe_job.py). ``--progress`` adds a JSON line per stage, which caracole serve reads, as ``caracole get
+--progress`` does; without it, what a long stage is doing is a live line on a terminal and a line a minute in the
+journal (progress.py ``ticker``).
 
 The owner's word over caracole's either way: ``--force`` ("it is sung", the card's Transcribe anyway) hears a song
 heard to have nothing sung, or said not sung, or whose audio Whisper couldn't load (after an ffmpeg or Whisper
@@ -41,7 +42,7 @@ def register(app: typer.Typer) -> None:
         ctx: typer.Context,
         song: str = typer.Option(
             ..., "--song", metavar='"ARTIST - TITLE"',
-            help="The song: one whose audio came from YouTube and whose lyrics no lyrics site has.",
+            help="The song: one with audio of its own (YouTube's or a purchase's) whose lyrics no lyrics site has.",
         ),
         force: bool = typer.Option(
             False, "--force",
@@ -54,7 +55,7 @@ def register(app: typer.Typer) -> None:
         ),
         progress: bool = typer.Option(False, "--progress", help="A JSON line per stage too, for caracole serve."),
     ) -> None:
-        """Transcribe a song's lyrics from its YouTube audio (Whisper), and make its auto sheet again over them."""
+        """Transcribe a song's lyrics from its own audio (Whisper), and make its auto sheet again over them."""
         if force and none:
             fail("--force and --none say opposite things: give one.", 2)
         _transcribe(load_cfg(ctx), song, progress=progress, force=force, none=none)

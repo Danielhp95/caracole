@@ -972,6 +972,12 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
         facts=ready)
     add("a transcription, not made", in_state(transcription, "done", heard | {
         "chords": ("skipped", "no transcript")}), facts=ready)
+    unsung = queued_job(f"Not sung, chords only: {V_DISPLAY}", _jobs.TRANSCRIBE + V_KEY,
+                        _jobs.transcribe_steps(V_DISPLAY, none=True), display=V_DISPLAY)
+    add("a transcription the owner said isn't sung, ready", in_state(unsung, "done", {
+        "song": ("done", "in the book"), "vocals": ("skipped", "you said nothing is sung"),
+        "words": ("done", "transcript dropped"), "chords": ("done", _YOUTUBE_HOLDS["said"]), "pdf": ("done", "made"),
+        "pages": ("done", "_todo.md and index.html rewritten")}), facts=ready)
     video = queued_job("Search YouTube for “creep”", _jobs.YOUTUBE_SEARCH + "creep",
                        _jobs.youtube_search_steps("creep"))
     add("a video searched for, done", in_state(video, "done", {"video": ("done", ""), "thumbnail": ("done", "")},

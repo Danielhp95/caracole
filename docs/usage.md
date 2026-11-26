@@ -1366,7 +1366,9 @@ words too. Its last line says what it heard:
   **Lyrics that couldn't be transcribed**. That includes the GPU build's nightly unit,
   which doesn't see the GPU: the words then come from caracole serve's jobs.
 - A setup that fails (the separator, the GPU, Whisper's model) stops the hearing for the rest of
-  the run, and the to-do page says so; the chords go on, and it still exits 0.
+  the run, and the to-do page says so; the chords go on, and it still exits 0. The song it failed
+  on is noted, and the next nights pass over it for 30 days, or until its file changes, so that
+  the others are heard; the to-do page lists it. Its card still offers Transcribe the lyrics.
 - Audio Whisper can't load still gets its chords. Its words aren't heard, nor offered on its card,
   until the file changes; the to-do page lists it under **Lyrics that couldn't be transcribed**.
 - A song you said isn't sung (`caracole transcribe --none`) is never heard again, until its audio

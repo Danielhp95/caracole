@@ -1,7 +1,7 @@
-"""A YouTube song's lyrics transcribed from its audio, then its auto sheet made again over them: ``caracole
+"""A song's lyrics transcribed from its own audio, then its auto sheet made again over them: ``caracole
 transcribe --song``.
 
-For a song whose audio came from YouTube and that every lyrics site switched on missed (transcript.py
+For a song with audio of its own (YouTube's or a purchase's) that every lyrics site switched on missed (transcript.py
 ``why_not_offered``), in one process, under caracole's lock as asked for now, its stages reported as a lookup reports
 its own (staged.py; ``--progress`` writes a JSON line per event, which caracole serve reads into the job's stages):
 

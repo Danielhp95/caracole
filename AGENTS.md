@@ -316,7 +316,7 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   - `autochords_pending(only=)`, once, after the words: run.py `_make_sheet` takes the transcript; before it, the
     audio still the one the vocals separated (`_same_audio`) where they ran.
   - caracole serve's sheet from a YouTube video runs it (web/youtube_routes.py).
-- transcribe_job.py is no step either but `caracole transcribe`: a YouTube song's lyrics transcribed from its audio,
+- transcribe_job.py is no step either but `caracole transcribe`: a song's lyrics transcribed from its own audio,
   then its auto sheet made again over them (`make_transcript`).
   - Its stages song, vocals, words, chords, pdf, pages (`STAGES`), reported as a lookup's (staged.py's `StagedRun`).
   - Only a song `transcript.why_not_offered` offers one, by its identity key, never added to wanted.txt; read again
@@ -1784,7 +1784,7 @@ It is rows.js's, shared by both pages:
     among `INDEX_READS`), and `GET /youtube/thumb/`, its thumbnail.
   - `GET /api/youtube/video` and `POST /youtube/video`: a video pasted into the library page's search box
     (`caracole youtube --video --progress`).
-- **transcribe_routes.py** is `POST /transcribe` (`song`, `identity`): a YouTube song's lyrics transcribed from its
+- **transcribe_routes.py** is `POST /transcribe` (`song`, `identity`): a song's lyrics transcribed from its own
   audio, its auto sheet made again over them; and `GET /transcribe`, read-only, for the page's script alone
   (`script_only`, as /jobs.json): the served `server.transcribe` member as of now, `library_page.transcribe_member`,
   the one function the page is built with too.
@@ -2010,7 +2010,12 @@ It is rows.js's, shared by both pages:
     the song read again and still offered with the audio separated, then its words, a transcript or nothing sung
     making its sheet due (`_skip_reason`). A song past the cap gets its chords now, its words a later run.
   - In bulk: the setup's failure stops the hearing for the run, kept as `AutoStats.transcribe_problem`, the chords
-    going on and the command exiting 0 on its account; audio Whisper can't load (the vocals
+    going on and the command exiting 0 on its account, and is noted against that audio (`note_hearing_failed`, kv
+    `transcribe:failed:`, in `songs._PER_SONG_KV` and SongKv.kt: path, mtime, when, the words), so the next nights
+    pass over the song (`hearing_failed`, `_Listening.first`, `_count_due`; no slot, no separation) until its audio
+    changes or `transcript.RETRY_DAYS` (30) go by, todo.py listing it; by hand it stays offered, and any hearing that
+    comes to something (a transcript, nothing sung, Whisper's refusal) drops the note; after the words a waiting
+    lookup goes first before the chords (`turns.hand_over`), the song read again; audio Whisper can't load (the vocals
     read it with auto-chords' own reader) noted as Whisper's alone, its chords made tonight, never heard again (no
     separation, no slot) until it changes, todo.py listing it under the words not heard, never the files auto-chords
     can't read; a bug one of the run's `errors` (exit 1), logged with its traceback, its chords made all the same
@@ -2033,7 +2038,7 @@ It is rows.js's, shared by both pages:
   - `shifted_lrc` moves line and word stamps alike, so word-timed lines keep their words;
   - the shift said on a line of the sheet's after the song's name, after the video's credit for audio from YouTube,
     and kept as `raw["lyrics_shift"]`.
-- A song's lyrics transcribed from its YouTube audio, which hearing.py composes from, for transcribe_job.py:
+- A song's lyrics transcribed from its own audio, which hearing.py composes from, for transcribe_job.py:
   - words.py, pure Python: where someone sings, from the stem's loudness against the mix's (`sung_spans`); the words
     outside it dropped (`guard`); nothing sung (`too_little_sung`: under `MIN_SUNG_S`, 10 s; `too_few_words`: under
     `MIN_WORDS`, 8, or `MIN_WORDS_A_MINUTE`, 20, each with its why, "sung 6.2 s", "5 words in 1:10 sung"); the lines

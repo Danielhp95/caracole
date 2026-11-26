@@ -33,7 +33,9 @@ still offers Transcribe the lyrics. `[autochords] transcribe = false` in caracol
 The nightly auto-chords run does the same for up to three songs a night, newest first, before their chords
 (`[autochords] transcribe_per_run`, 0 for none). A song past that gets its chords tonight and its words on a later
 night, and its sheet is made again then. On a CPU each song heard takes about 7 times its length, so three 4-minute
-songs are about an hour and a half.
+songs are about an hour and a half. If hearing a song fails (the separator, a stem cut short, Whisper's setup), the
+night stops hearing, and the next nights pass over that song for 30 days, or until its file changes, so that the
+others are heard; the to-do page lists it, and its card still offers Transcribe the lyrics.
 
 With the GPU build (`autochords-cuda`), the nightly unit hears no words: its separator needs the GPU, and the nightly
 unit doesn't see it. The to-do page says so. The words then come from the library page's jobs: a sheet from a video,
