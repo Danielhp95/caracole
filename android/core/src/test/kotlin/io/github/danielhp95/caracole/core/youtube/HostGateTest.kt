@@ -774,4 +774,67 @@ class HostGateTest {
                            "jnn-pa.googleapis.com" to HostGate.HostUse(refused = 1, why = HostGate.WHY_BY_NAME)),
                      gate.log())
     }
+
+    // Fix round 2 (the gate's last re-review).
+
+    @Test
+    fun anIpv4CompatibleAddressWhoseLastByteIsPast127IsReadAsItsIpv4() {
+        fun compatible(last: Int): InetAddress =
+            Inet6Address.getByAddress(null, ByteArray(16) { if (it == 15) last.toByte() else 0 }, -1)
+        for (last in listOf(0x80, 0xc8, 0xff)) {
+            assertFalse(HostGate.isPublic(compatible(last)), "::0.0.0.$last is 0.0.0.$last, not public")
+        }
+        assertFalse(HostGate.isPublic(compatible(0)), "::")
+        assertFalse(HostGate.isPublic(compatible(1)), "::1")
+    }
+
+    @Test
+    fun aTunnelBothOfWhosePumpsAreStuckInWritesIsClosedAtTheIdleTimeout() {
+        val server = ServerSocket().also { servers += it }
+        server.receiveBufferSize = 4096
+        server.bind(InetSocketAddress(loopback, 0))
+        val upstreamEnded = AtomicBoolean(false)
+        val upstreamWriter = thread(isDaemon = true) {
+            server.accept().use { s ->
+                try {
+                    while (true) s.getOutputStream().write(ByteArray(64 * 1024))
+                } catch (_: IOException) {
+                    upstreamEnded.set(true)
+                }
+            }
+        }
+        val (gate, opened) = gate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE, idleTimeoutMs = 300)
+        val client = Socket()
+        client.receiveBufferSize = 4096
+        client.connect(InetSocketAddress(loopback, opened.port))
+        client.soTimeout = 10_000
+        client.getOutputStream().write(connectLine("127.0.0.1:${server.localPort}", auth(opened)).toByteArray())
+        assertEquals(200, status(head(client.getInputStream())))
+        val clientEnded = AtomicBoolean(false)
+        val clientWriter = thread(isDaemon = true) {
+            try {
+                while (true) client.getOutputStream().write(ByteArray(64 * 1024))
+            } catch (_: IOException) {
+                clientEnded.set(true)
+            }
+        }
+        upstreamWriter.join(10_000)
+        clientWriter.join(10_000)
+        assertTrue(upstreamEnded.get(), "the upstream's writes failed once the gate closed the tunnel")
+        assertTrue(clientEnded.get(), "the client's writes failed once the gate closed the tunnel")
+        client.close()
+        gate.close()
+        assertEquals(emptyList(), gateThreads(opened).map { it.name })
+    }
+
+    @Test
+    fun aRelayedAnswerWhoseHeadHasABareCrOrAControlCharacterIs502() {
+        val bad = listOf("HTTP/1.1 200 OK\r\nX-A: a\rb\r\n\r\n", "HTTP/1.1 200 OK\r\nX-A: a\u0001b\r\n\r\n",
+                         "HTTP/1.1 200 OK\r\nX-A: a\u007fb\r\n\r\n", "HTTP/1.1 200 O\u0000K\r\n\r\n")
+        val (port, _) = httpUpstream(*bad.toTypedArray(), "HTTP/1.1 200 OK\r\nX-A: a\tb\r\n\r\n")
+        val (_, opened) = gate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE)
+        val get = "GET http://127.0.0.1:$port/ HTTP/1.1\r\nProxy-Authorization: ${auth(opened)}\r\n\r\n"
+        for (answer in bad) assertEquals(502, status(ask(opened, get)), answer)
+        assertEquals(200, status(ask(opened, get)), "a tab is allowed")
+    }
 }

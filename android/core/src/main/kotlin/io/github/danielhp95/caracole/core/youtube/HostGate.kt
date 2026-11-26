@@ -36,7 +36,9 @@ import java.util.concurrent.atomic.AtomicLong
  *   but a tab: 400. A method but CONNECT and GET: 405. An upstream that won't connect: 502, or 504 past
  *   [connectTimeoutMs]. More than [maxConnections] at once: 503.
  * - Time: a client's whole head by [headTimeoutMs] from its accept (a deadline: closed at it, with no answer); a
- *   tunnel or a relay in which nothing moves either way for [idleTimeoutMs] (a read or a write) is closed.
+ *   tunnel or a relay in which nothing moves either way for [idleTimeoutMs] (a read or a write, both pumps stuck in
+ *   writes too) is closed.
+ * - A relayed answer's head is checked as a request's is: a control character but a tab, or a bare CR, is 502.
  * - The gate reads no property: the main process passes the mode ([Mode.of] `caracole.network`'s value).
  * - The secret is kept as a digest; only [Opened.proxyArg] holds it, and no `toString`, log or message here names it.
  */
@@ -260,9 +262,7 @@ class HostGate(
             } catch (_: SocketTimeoutException) {
                 return
             }
-            if (head.any { (it.code < 0x20 && it != '\t' && it != '\r' && it != '\n') || it.code == 0x7f }) {
-                throw Refusal(400, null)
-            }
+            if (badHead(head)) throw Refusal(400, null)
             val lines = head.split('\n').map { it.removeSuffix("\r") }.dropLast(2)
             if (lines.any { '\r' in it }) throw Refusal(400, null)
             val parts = lines.firstOrNull()?.split(' ') ?: throw Refusal(400, null)
@@ -345,7 +345,9 @@ class HostGate(
             } catch (_: SocketTimeoutException) {
                 throw Refusal(504, null)
             } ?: throw Refusal(502, null)
+            if (badHead(answer)) throw Refusal(502, null)
             val lines = answer.split('\n').map { it.removeSuffix("\r") }.dropLast(2)
+            if (lines.any { '\r' in it }) throw Refusal(502, null)
             val answerHeaders = lines.drop(1).mapNotNull { line ->
                 val colon = line.indexOf(':')
                 if (colon <= 0) null else line.substring(0, colon) to spaced(line.substring(colon + 1))
@@ -368,7 +370,7 @@ class HostGate(
                 } catch (_: IOException) {
                 }
             } ?: throw IOException("closed")
-            awaitOrStop(down, activity, stop)
+            awaitOrStop(listOf(down), activity, stop)
         } finally {
             quietly(upstream)
             sockets -= upstream
@@ -436,7 +438,10 @@ class HostGate(
         throw Refusal(if (timedOut) 504 else 502, null)
     }
 
-    /** Client to upstream here, upstream to client on a thread of its own, until either ends or both are idle. */
+    /**
+     * Client to upstream and upstream to client, each on a thread of its own, watched from here from the start, until
+     * either ends or nothing moves either way: both pumps stuck in writes at once are cut too.
+     */
     private fun pumpBoth(client: Socket, input: InputStream, upstream: Socket, use: Use) {
         val activity = AtomicLong(System.nanoTime())
         val stop = { quietly(client); quietly(upstream) }
@@ -447,24 +452,32 @@ class HostGate(
             }
             stop()
         } ?: throw IOException("closed")
-        try {
-            pump(input, upstream.getOutputStream(), client, use.up, activity, stop)
-            upstream.shutdownOutput()
-        } catch (_: IOException) {
-            stop()
+        val up = spawn("caracole-gate-${server?.localPort}-${serial.incrementAndGet()}-up") {
+            try {
+                pump(input, upstream.getOutputStream(), client, use.up, activity, stop)
+                upstream.shutdownOutput()
+            } catch (_: IOException) {
+                stop()
+            }
         }
-        awaitOrStop(down, activity, stop)
+        if (up == null) {
+            stop()
+            down.join(JOIN_MS)
+            throw IOException("closed")
+        }
+        awaitOrStop(listOf(up, down), activity, stop)
     }
 
     /**
-     * Waits for [pumping] to end, and [stop]s it once nothing moved either way for [idleTimeoutMs]: a pump blocked in a
-     * write (a peer that half-closed and stopped reading) is cut so, as a write has no timeout of its own.
+     * Waits for every one of [pumping] to end, and [stop]s them once nothing moved either way for [idleTimeoutMs]: a
+     * pump blocked in a write (a peer that half-closed and stopped reading) is cut so, as a write has no timeout of
+     * its own.
      */
-    private fun awaitOrStop(pumping: Thread, activity: AtomicLong, stop: () -> Unit) {
+    private fun awaitOrStop(pumping: List<Thread>, activity: AtomicLong, stop: () -> Unit) {
         val tick = minOf(idleTimeoutMs, TICK_MS).toLong()
-        while (pumping.isAlive) {
-            pumping.join(tick)
-            if (pumping.isAlive && System.nanoTime() - activity.get() > idleTimeoutMs * 1_000_000L) stop()
+        while (pumping.any { it.isAlive }) {
+            pumping.first { it.isAlive }.join(tick)
+            if (pumping.any { it.isAlive } && System.nanoTime() - activity.get() > idleTimeoutMs * 1_000_000L) stop()
         }
     }
 
@@ -557,7 +570,7 @@ class HostGate(
             if (b.size == 16) {
                 val v4Tail = (0 until 10).all { b[it] == 0.toByte() } &&
                     ((b[10] == 0xff.toByte() && b[11] == 0xff.toByte()) || (b[10] == 0.toByte() && b[11] == 0.toByte()))
-                if (v4Tail && !(b[10] == 0.toByte() && (12 until 15).all { b[it] == 0.toByte() } && b[15] < 2)) {
+                if (v4Tail && !(b[10] == 0.toByte() && (12 until 15).all { b[it] == 0.toByte() } && (b[15].toInt() and 0xff) < 2)) {
                     return isPublic(InetAddress.getByAddress(b.copyOfRange(12, 16)))
                 }
                 if ((b[0].toInt() and 0xfe) == 0xfc) return false
@@ -607,6 +620,10 @@ class HostGate(
                 .toByteArray(Charsets.US_ASCII))
             output.flush()
         }
+
+        /** Whether a head holds a control character but a tab, a CR and an LF (a bare CR is the line check's). */
+        private fun badHead(head: String): Boolean =
+            head.any { (it.code < 0x20 && it != '\t' && it != '\r' && it != '\n') || it.code == 0x7f }
 
         /** [value] less its leading and trailing spaces and tabs (a header's optional whitespace). */
         private fun spaced(value: String): String {
