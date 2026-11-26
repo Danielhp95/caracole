@@ -35,12 +35,25 @@ wait for new catalogues. Your own songs, sheets and lookups don't depend on them
 ## Sync
 
 The sync button compares the two libraries, and each side takes what the other changed. You
-choose what to include: your songs, your songbooks, and the site catalogues that search needs.
+choose what to include: your songs, your songbooks, and the site indexes that search needs.
 If a song changed on both sides, you pick which one to keep. The phone backs up its library
 before it takes anything.
 
+A sync downloads a site's index only when the computer has read that site since the phone's
+copy, whether that copy came from an earlier sync, a file or the downloaded catalogues; the pages
+your lookups sent it don't count. It then downloads only what the phone doesn't hold: the
+sitemaps read again and the pages read since, a few MB after a night rather than the whole
+index. The **Site indexes** line lists those, and the pages your
+lookups read that go to the computer. When the computer runs a caracole of another database
+version than the app, no index goes either way, and the line says which to update. Once done,
+the sync says how many tabs each index brought that the phone didn't have ("+231 new tabs"),
+or "up to date".
+
 **Sync on Wi-Fi**, in Settings, does this every 6 hours. It leaves conflicts for you and sends a
-notification.
+notification. Its line says "Up to date" only when nothing was left; otherwise it counts what
+wasn't synced. Conflicts end it with "tap Sync to choose": the sheet shows each one. Anything
+else left ends it with "the Journal says why" ("1 taken · 1 not synced: the Journal says
+why"): open that sync's Output in the Journal to see each one and why.
 
 Both sides must run versions of caracole that name songs by the same rules. When they don't, the
 sync refuses before taking anything: "This caracole and the other name songs by different rules:
@@ -54,7 +67,8 @@ If the phone can't reach the computer, **Export** in Settings writes the library
 
 - Reading, offline: sheets with all their tools, kept versions, harmonica tabs, Guitar Pro files
   and songbooks.
-- Search across your songs and the sites, offline, once a sync or a download has brought the catalogues.
+- Search across your songs and the sites, offline, once a sync or the catalogues download has brought
+  the site indexes.
 - **Fetch**: the phone looks a song up itself, over Wi-Fi or mobile data.
 - Making and editing songbooks, and choosing a sheet's version.
 - **Export PDF** opens Android's print dialog, to print or save as PDF.
@@ -65,14 +79,14 @@ If the phone can't reach the computer, **Export** in Settings writes the library
 
 ## What stays on the computer
 
-The nightly run, building the site catalogues, chords from audio, YouTube, PDF files and iReal
+The nightly run, building the site indexes, chords from audio, YouTube, PDF files and iReal
 Pro charts. A song you add on the phone without fetching it is picked up by the computer's next
 nightly run, after a sync.
 
 | | Computer | Phone |
 |---|---|---|
 | Nightly run over your song list | Yes | No |
-| Build the site catalogues | Yes | No, gets them by sync or one tap |
+| Build the site indexes | Yes | No, gets them by sync or one tap |
 | Search, offline | Yes | Yes, once synced or downloaded |
 | Fetch one song now | Yes | Yes |
 | Sheets, songbooks, versions, Guitar Pro | Yes | Yes |

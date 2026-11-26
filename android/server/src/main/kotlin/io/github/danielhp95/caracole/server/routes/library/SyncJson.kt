@@ -27,7 +27,9 @@ internal object SyncJson {
      * never); the parts the other side holds; each difference with its kind, its proposal, why, each side's digest,
      * a song's names (Scope.namesOf; null for another kind), what each side did since the two last agreed
      * (Scope.changeOf), its part (Scope.partOf) and the songbooks that list it; each songbook difference's two
-     * documents; and each site whose newest read differs.
+     * documents; the indexes (IndexWaiting: with the computer, each its Sync takes and gives; with a file, each
+     * site whose newest read differs); and why its Sync takes and gives none (`indexes_skipped`: a computer of
+     * another schema, in the phone's words; null else).
      */
     fun comparison(c: Comparison): JsonObject = JsonObject(linkedMapOf(
         "comparison" to JsonPrimitive(c.id),
@@ -62,6 +64,7 @@ internal object SyncJson {
                 "there" to text(w.there), "newer" to JsonPrimitive(w.newer),
             ))
         }),
+        "indexes_skipped" to text(c.indexesSkipped),
     ))
 
     /** A sync job's outcome: the units taken here, given there, left (with why), how many the two agree on, the

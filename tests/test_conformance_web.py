@@ -1109,6 +1109,49 @@ def peer_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | No
             "agree": ("done", "12 units"), "index": ("running", "Ultimate Guitar · 600,000 of 1,367,059 tabs")}),
          None, 0, None, None),
     ]
+    # A sync whose index stage skipped the indexes for the other's database of another schema: its outcome says why
+    # after what it shared; one skipped for nothing newer, or left out, says nothing of them.
+    from caracole.commands.peer import INDEXES_LEFT_OUT, NO_INDEX
+    from caracole.web.sync_routes import INDEXES_NEWER, INDEXES_OLDER
+
+    shared = {"compare": ("done", "4 differences"), "take": ("done", "took 1"), "give": ("done", "gave 1"),
+              "agree": ("done", "12 units the books agree on")}
+    for note, words, units in (("of a newer caracole", INDEXES_NEWER, took),
+                               ("of an older caracole, one left", INDEXES_OLDER, left),
+                               ("nothing newer", NO_INDEX, took), ("left out", INDEXES_LEFT_OUT, took)):
+        jobs.append((f"sync, done, its indexes skipped: {note}",
+                     peer_job("sync", "done", dict(shared, index=("skipped", words)), units=units), None, 0, None,
+                     None))
+    # A stage after the changes failed (the indexes, the phone's copy of the computer's pages): what was shared said
+    # first, then the failure, on the phone's job done and the computer's failed alike; with nothing shared, the
+    # failure's words alone. (The phone's mirror stage, which caracole serve's sync has none of: JobViewsTest.)
+    index = "Couldn't download the computer's indexes: the connection was reset"
+    for note, state, units in (("the phone's, done", "done", took), ("the computer's, failed", "failed", took),
+                               ("nothing shared, done", "done", []), ("nothing shared, failed", "failed", [])):
+        jobs.append((f"sync, its index stage failed after its changes: {note}",
+                     peer_job("sync", state, dict(shared, index=("failed", index)), units=units), None, 0, None,
+                     None))
+    # Any stage after the changes failed (the give, a push of several, the agreement), or the server stopped it after
+    # some were taken: what was shared said first, then the failure (the Sync sheet's "Synced with" for the same job);
+    # with nothing shared, the give's failure alone.
+    from caracole.commands.peer import TAKEN_STAY
+
+    give = "Couldn't give them 2: No answer from http://192.168.1.20:8737: timed out"
+    pushed = f"Couldn't give them 3: 1 of 3 pushes taken; push 2 of 3: the computer answered 503. {TAKEN_STAY}"
+    agree = "Couldn't note where the books agree: database is locked"
+    taken = {"compare": ("done", "4 differences"), "take": ("done", "took 1")}
+    for note, stages, units, said in (
+            ("taken, then the give failed", dict(taken, give=("failed", give)), took[:1], give),
+            ("taken, then a push of three failed after one", dict(taken, give=("failed", pushed)), took, pushed),
+            ("taken, then the agreement failed",
+             dict(taken, give=("done", "gave 1"), agree=("failed", agree)), took, agree),
+            ("nothing shared, the give failed", dict(taken, give=("failed", give)), [], give)):
+        jobs.append((f"sync, failed after its changes: {note}",
+                     peer_job("sync", "failed", stages, units=units, output=(f"error: {said}",)), None, 0, None,
+                     None))
+    jobs.append(("sync, interrupted after it took a change",
+                 _interrupted(peer_job("sync", "running", dict(taken, give=("running", "1 of 2")), units=took[:1])),
+                 None, 0, None, None))
     # A sync's agree stage counted in another script's digits, as Python's \d and int() read them.
     jobs.append(("sync, done, its count in Arabic-Indic digits", peer_job("sync", "done", {
         "compare": ("done", ""), "agree": ("done", " ١٢ units the books agree on\n")}, units=took),
@@ -1190,7 +1233,7 @@ def tables_record() -> dict:
     """The words status.py and outcome.py look up by a stage's, a step's, a command's or a site's name (a step's site
     in full by its tag, ``SITE_NAMES``), whole: what the records above don't draw (the phone's own sync's mirror and
     index stages among them)."""
-    from caracole.web import songbooks
+    from caracole.web import songbooks, sync_routes
 
     return {"fn": "tables", "args": [], "kw": {}, "out": {
         "STAGE_LINES": _status.STAGE_LINES, "PEER_KINDS": _status.PEER_KINDS, "PEER_DONE": _status._PEER_DONE,
@@ -1202,7 +1245,8 @@ def tables_record() -> dict:
         "AUDIO_STEPS": [[name, list(names)] for name, names in _outcome.AUDIO_STEPS],
         "COMMAND_STEPS": _outcome.COMMAND_STEPS, "PEER_STEPS": _outcome.PEER_STEPS, "ASKS": _outcome._ASKS,
         "WHAT": {name: list(said) for name, said in _outcome._WHAT.items()}, "ELSEWHERE": _outcome._ELSEWHERE,
-        "SITE_NAMES": _outcome.SITE_NAMES}}
+        "SITE_NAMES": _outcome.SITE_NAMES,
+        "INDEXES_SKIPPED": [sync_routes.INDEXES_NEWER, sync_routes.INDEXES_OLDER]}}
 
 
 def outcome_records() -> list[dict]:

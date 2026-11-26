@@ -676,11 +676,42 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 - `caracole index export` and `merge` (commands/index.py).
 - **Export**: every site's index (`SITES`: its tables and the kv records of its progress) into a new SQLite file, in
   one read transaction, with its `caracole_export` table (format, schema, sites).
+- **A partial export** (`export(have=)`, `POST /peer/index/newer`: the phone's take of the computer's indexes alone;
+  a `peer sync` between computers and `.caracole` files keep whole exports): for an asker that says what it holds
+  (`read_have`, data from another device: `Have`, its record of each sitemap it holds but its `checked_at`, and
+  `since`, the computer's own `exported_at` of the last export of its the asker merged, null for none), each site's
+  sitemaps (LaCuerda's listing pages) whose record differs from the asker's or that it lacks, each with all of its
+  rows (`SITEMAPPED`, by `_unchanged` over the site's fields: a site_index.py record's etag, date, rows and keys;
+  UG's etag, date, rows and `indexed_at`, its record having no keys; a listing page's etag, date, rows, pages, total
+  and `gone`), LaCuerda's artist pages' and search's rows whole (no time), the rows of the tables read a row or a page
+  at a time (`_TIMED`: UG's artist pages' tabs and directory, harptabs.com's artist pages, gametabs.net's game pages,
+  each page with all its tabs) read or seen at or after `_bound` (`since` less `SINCE_MARGIN`, an hour, for a read
+  stamped before an export's snapshot and stored after it; and earlier, to the earliest time of their rows, for each
+  merge here since that took rows of those tables, kv `index:arrived`, `ARRIVED_KEY`, this side's own: a phone's
+  pushed pages, another caracole's, a file's, whose times are another clock's; every row with no `since`: a
+  catalogue's stamp is no bound), and the kv records whole; META's `partial` says what it was cut by (`{site:
+  {since, from, same}}`). `merge(arrivals=)` notes the arrivals (kv `index:arrived`, at most `ARRIVALS_KEPT` a site,
+  the oldest two made one); the phone, which makes no export, and the corpus's merges note none. An arrival reaches a
+  phone only once its gate opens (the computer's `newest` for the site later than what the phone holds, the phone's
+  `newerThere`), as before partial exports. A `since` later than this side's clock as it exports is none (every row,
+  once). Times are compared as text, as the merge compares them (`_TIMED`: UTC "Z" stamps; one of another offset by
+  its digits). The risk accepted, for one owner's NTP-synced computer: after its clock steps back by more than
+  `SINCE_MARGIN`, pages stamped between the stepped-back time and the cut less an hour reach the phone only once read
+  again. `read_have`'s count (`HAVE_SITEMAPS`) never refuses a body the route's 1 MiB lets through (a sitemap named
+  in 6 bytes at the least), so its 413 is the one size refusal.
 - **Merge**: such a file into the database under the lock:
-  - refused whole (`TransferError`, status 2) for another schema or other columns;
+  - refused whole (`TransferError`, status 2) for another schema or other columns, its words naming a copy caracole
+    keeps (a sync's download, a staged export or import) as the file it is, never by its path, wherever they reach the
+    Journal or the Sync sheet (`refusal_words`: "The other side's index export", "The file", "The index export");
   - else per site what the file read more recently:
     - a sitemap or LaCuerda listing page by its record's time (UG's rows upserted as a refresh stores them, its new
-      tabs' songs marked);
+      tabs' songs marked); a site_index.py sitemap or a listing page whose record differs only there (a re-check
+      found it unchanged: its etag, date, rows and keys alike, or a listing's etag, date, rows, pages and total,
+      `_unchanged`) its record alone, no row written and no site of a sync's report;
+    - of a partial export, a sitemap its META's `partial` says it left out (`_left`, refused whole when it can't be
+      read) never read as gone: neither its rows nor its record taken unless the database's record says it holds
+      those rows already (`_held`; the phone's Merged.unheld names the others, after which the sync records nothing
+      as held);
     - harptabs.com's artist and gametabs.net's game pages by `read_at`;
     - UG's artist pages' tabs a row at a time;
     - UG's artist directory (`ug_directory`): a row seen later in a listing (`seen_at`) its listing columns, a page
@@ -688,17 +719,20 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
       (`_round`: its last whole read, its round's start, its next page), never back; no row is removed;
     - LaCuerda's artist pages and search rows only where the database has none;
   - progress records move on, never back;
-  - backed up first (backup.py, `before-merge`) only when something changes, so a second merge writes nothing;
+  - backed up first (backup.py, `before-merge`) only when a row changes (one that moves records alone makes no
+    backup, the copy being there to undo rows), so a second merge writes nothing;
   - each index's `ensure_current_keys` after, whole where the file's keys record differs;
   - its progress, `merge(progress=, backing_up=)`, which the phone's merge mirrors: `progress(site, action, done,
     total)` once before it plans (`("", PLANNING, 0, sites)`), and once anything changes, `backing_up()`, then
     `(site, "", i, sites)` before each site, one that changes nothing too, `(site, noun, 0, n)` before each action,
     and `("ug", UG_TABS, rows taken, rows)` after each chunk of UG's sitemap rows, a statement for each `UG_CHUNK`
     (50,000) by `tab_id` range, in one statement's order and savepoint, so its rows come out the same (the index
-    corpus with `UG_CHUNK` 1 unchanged); `MergeWords` the words, commands/index.py `Merging` where they go (`index
-    merge`'s stderr or `--progress` detail; `peer sync`'s and `peer import`'s `index` stage), stderr's by the
-    ticker's rules (`merge_console`: `progress.live_here`, quiet at -q; a live line taken off before a log record,
-    `logs.clears_first`; any write that fails, a broken pipe, a terminal gone, a stream closed, the last it tries).
+    corpus with `UG_CHUNK` 1 unchanged); `MergeWords` the words (`peer sync`'s and `peer import`'s with `held`, the
+    sites this side holds rows of, `held()`, and `there`: "gtptabs.com · 1 sitemap newer in the file", UG's "… tabs
+    checked"), commands/index.py `Merging` where they go (`index merge`'s stderr or `--progress` detail; `peer
+    sync`'s and `peer import`'s `index` stage), stderr's by the ticker's rules (`merge_console`: `progress.live_here`,
+    quiet at -q; a live line taken off before a log record, `logs.clears_first`; any write that fails, a broken pipe,
+    a terminal gone, a stream closed, the last it tries).
 
 #### peer_sync.py
 
@@ -720,6 +754,11 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 - **FORMAT 3** (`FORMAT`) is of every document a side answers (the state, a unit, a push) and of the base each keeps
   (`{"format": 3, "units": …}`): a base of another format reads as none, so the first sync after a format bump
   compares as a first sync (no shim). FORMAT 2's digests hashed UG's ratings and votes.
+- **The state document** (`state_document`) says who its side is with the schema its database is at (`schema`,
+  `db.SCHEMA_VERSION`, after `caracole`; `PeerState.schema`, an integer or none): a sync with a caracole of another
+  asks for no index either way, before any download (`sync_routes.indexes_skipped`: `INDEXES_NEWER`,
+  `INDEXES_OLDER`; the phone's `SyncEngine.indexesSkipped`), since each side's merge refuses the other's export; the
+  units sync as ever. A state that says none is an older caracole's, its indexes asked for as before.
 - **The song keys' rules**: units are named by identity keys, so two caracoles that key songs by different rules (a
   `normalize.KEY_VERSION` bump on one side alone) would read each song the upgraded side re-keyed as removed and a new
   one. The state document, the push document and a `.caracole` file's manifest say their side's (`key_version`), and
@@ -729,6 +768,10 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   (`peer_file.OTHER_KEYS`; the Sync tab's import compare 409, `peer import` exit 2); no base is re-keyed, and FORMAT
   stays 3. A document that says none is an older caracole's, read as before:
   the one gap, which closes only once both sides are updated.
+- **Both** (`schema` and `key_version`, each side's state and a file's manifest): other key rules refuse the whole
+  comparison as the state or the file is read (`Peer.state`, the phone's `PeerClient.state`; `read_file`, the
+  phone's `SyncFiles.read`), so with both differing it is that refusal alone that is said; another schema alone
+  leaves the units to sync and the indexes skipped.
 - **Comparing** (`compare`): three ways, against the base.
   - The base is each side's agreements with that peer (kv `sync:base:<peer id>`: a digest or None, and when),
     recorded by `record_agreement` at the end of every pull, and merged with the peer's by the later
@@ -1319,6 +1362,8 @@ It is rows.js's, shared by both pages:
   ⚠ changed on both, counted in the parts ticked as `peer_sync.in_scope` counts them for `POST /sync/apply` (sync.js
   `inScope`, with `_removes`: a song a songbook lists comes along with Songbooks, but a removal of it is the
   library's), and the chips Compared, Your choice and the parts. A part a file doesn't hold: "Not in this file".
+  With a caracole of another schema, Site indexes says why none goes, in the server's words (the comparison's
+  `indexes_skipped`), there alone: the done view adds nothing of it, and it is no failure.
 - **A card for each conflict** in those parts: its two documents (`GET /api/sync/unit`, once a card; a file's read from
   the file) told apart by sync-words.js's `differ`, this device on the left; a button for each side, named for it
   (Phone and Computer, This computer and the server's name, File: `#sync-keep-here`, `#sync-keep-there`), and Same
@@ -1332,10 +1377,30 @@ It is rows.js's, shared by both pages:
   it. Once `POST /sync/apply` is sent its answer is followed whatever the sheet does meanwhile (`posting`: Escape, as
   Hide, only hides it).
 - **What it did**: "Synced with:" and the other side's name (the summary's one bold text), when, the two sides as
-  icons, and a section a kind of change (`.sync-section[data-kind=taken|given|conflicts|songbooks|indexes|left]`,
+  icons, and a section a kind of change (`.sync-section[data-kind=taken|given|conflicts|songbooks|indexes|pages|left]`,
   `left` the units the sync left as they were, with why), each a button that opens its rows, closed at first; drawn
   from the comparison, the choices and the cards' documents the sheet sent, and the view's `outcome` and its `report`
-  (§3.5), from the outcome alone for a sync the page didn't start. A file's has no given section.
+  (§3.5), from the outcome alone for a sync the page didn't start. A file's has no given section. Its indexes say
+  what each merge added, never a site's whole size as if new (sync-words.js `indexNews`, `newTabs`): "+231 new tabs"
+  and "1,503,236 in all", "up to date", "1,503,236 tabs, all new here" for a side that had none, a fall in red; the
+  headline the sites (each once, one taken and given too) and their new tabs, each side's apart when it took and gave
+  ("+231 new here · +40 on Studio", never one sum), each row then saying which way it went (`went`: "taken from
+  Studio", "given to Studio"); a side whose tabs only fell said too ("−210 tabs here · +40 on Studio"); a site given
+  with nothing new "nothing new for Studio". A conflict is listed as kept only where its side came: chosen there and
+  taken, chosen here and given (a file's here once its job is done), so a sync refused before any change says
+  "Nothing was taken or given.". A stage that failed though the sync went on past it (the phone's indexes or its copy
+  of the computer's pages, its job done; the computer's indexes, its job failed) is said in its words, with no tick,
+  the title "Synced with:" where changes were taken or given ("Not synced with:" only where none was), and a row of
+  its own (`indexes` "Indexes not brought up to date", `pages` "Pages not brought up to date"). The Journal's
+  outcome agrees with that title for any sync that took or gave changes and then failed, whatever stage (the give or
+  one of its pushes, the agreement, the pages, the indexes) or the server stopping it: what was shared first, then the
+  failure ("Failed" where the job failed, "Shared" waiting where it is done but a stage failed, "Interrupted"),
+  never doubling a sentence the failure's words say; with nothing shared the failure alone (outcome.py
+  `_peer_outcome`, `Outcomes.peerOutcome`). Indexes skipped
+  for the other's database of another schema (the report's `indexes_skipped`, commands/peer.py's and SyncEngine's)
+  are its indexes row, "Indexes not synced". The headline's tone is the one its sides share, none when they differ.
+  Sending a file says both numbers in the size's unit (sync-words.js `sizeOf`, "1.5 of
+  2.1 GB", the phone's `Sizes.of`).
 - **Export**: `GET /api/sync/sizes`, the parts with their sizes, Site indexes unticked; `POST /sync/export`, then the
   file's link (`a[download]` to `api/sync/export?export=ID`), clicked once by the page: the browser saves it, the
   phone's `DownloadListener` shares it; clicked again it says the file was sent once (caracole serve answers 404
@@ -2000,9 +2065,9 @@ It is rows.js's, shared by both pages:
 - **offline_routes.py** is `GET /api/offline`, the manifest caracole's Android app copies the library by (read-only:
   each file the written index.html links to, as `WebApp._file` sends it now, its bytes' SHA-256 and its headers;
   test_web_offline.py).
-- **peer_routes.py** is `GET /api/peer/state`, this library's units for another caracole to compare, with what it
-  agreed on with the asker and the answers its imports of the asker's files kept (`kept`), the settings a phone
-  takes (`settings`, politeness.py) and the form token (no wider than a
+- **peer_routes.py** is `GET /api/peer/state`, this library's units for another caracole to compare, with the schema
+  its database is at (`schema`), what it agreed on with the asker and the answers its imports of the asker's files
+  kept (`kept`), the settings a phone takes (`settings`, politeness.py) and the form token (no wider than a
   page's, which any client that reaches the server reads, for a sync's `POST /peer/pull`); `GET /api/peer/unit` and `/api/peer/file` (peer_sync.py, read-only, as
   `/api/offline` is); and `POST /peer/pull`, `caracole peer pull` queued as any change (test_web_peer.py).
   - A push, the phone's (peer_push.py): `POST /peer/push/new`, `/peer/push/file` and `/peer/push`, `json` and `bytes`
@@ -2011,6 +2076,12 @@ It is rows.js's, shared by both pages:
     that opened it, as a send is (`peer_push.drop`: 404 none, 409 once its document was taken, its take queued).
   - `GET /api/peer/index[?sites=]`: this library's site indexes as `caracole index export` writes them, a SQLite file
     streamed from a temporary export (`cache_dir/peer/`), one at a time.
+  - `POST /peer/index/newer`: the part of them the phone doesn't hold (`index_transfer.export(have=)`), a `json`
+    route (the form token, `HAVE_MAX` 1 MiB) that is a read: what the body says is data (`index_transfer.read_have`,
+    400 in its words), compared with this side's records alone, nothing written but the temporary export, no lock;
+    streamed as the whole is, one copy at a time. The phone asks it first (PeerClient.indexNewer, its document
+    core.index.Have) and the whole on a 404 or 405 (an older computer) or a 413 (its document too large) alone,
+    any other refusal (a 400 among them) its index stage's failure.
 - **sync_routes.py** is the library page's Sync tab (its label Share; library_assets/sync.js, sync-tab.html,
   sync-panel.html), the sync redesign's §3.4.1:
   - `GET /api/sync`: this caracole, its `device` (`computer`, the phone's `phone`), its songs and songbooks counted;
@@ -2020,8 +2091,9 @@ It is rows.js's, shared by both pages:
     the other has; compared with the kept answers (`peer_sync.merged_kept`), as `peer sync` compares; each
     difference's `names`, `change`, `part` and `with` (`peer_sync.names_of`, `change_of`, `part_of`,
     `listed_songs` of both sides' songbooks), `songbooks` (both documents of each that differs), `indexes` (the sites
-    newer on either side); kept 10 minutes (`Compared`, its `found` for a Sync's scope: one kept without it has every
-    conflict it proposes chosen first);
+    newer on either side; none with a caracole of another schema, `indexes_skipped` saying why, null else); kept 10
+    minutes (`Compared`, its `found` for a Sync's scope: one kept without it has every conflict it proposes chosen
+    first);
   - `GET /api/sync/unit` (script only): a kept comparison's unit, both documents, the other's asked now, an import's
     read from its staged file (`sync_file_routes.file_unit`, as the phone's `SyncEngine.documents` reads a file's);
   - `GET /api/sync/indexes`: each site's newest read and tabs (`index_transfer.newest`, `tab_counts`), which the
@@ -2404,7 +2476,14 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   (`SheetAddress`, `#sheet=sync`; Settings' Sync, beside Test, opens it at `#sheet=sync`, a blank address said in
   place as Test says it, and Export and Import a file at theirs, the page's file input reaching
   Android's picker, `FileChooser`, its export the share sheet, `Exports`); Sync on Wi-Fi, that sync unattended
-  (`Syncs.run`: `Phone.sync.alone`, a notification on channel `syncs` for the conflicts it left); the queue's work, a
+  (`Syncs.run`: `Phone.sync.alone`, a notification on channel `syncs` for the conflicts it left; its line, Settings'
+  last outcome and the bar's, `Syncs.said`: "Up to date" only with nothing left and no index skipped, else what it
+  took and gave, each conflict left "changed on both sides", every other unit left "not synced", and the index
+  stage's words where the computer's database is of another schema (`Outcomes.indexesSkipped`), the line ending with
+  what to do, ": tap Sync to choose" for conflicts (the sheet the tap opens compares afresh and shows each) or ": the
+  Journal says why" for the rest (that sync's entry's Output lists each unit left and its why: SyncRoutes.sayLeft,
+  `NOT_SYNCED`, Feed's step of what a request of the phone's own said, `Feed.SAID`; a fresh comparison wouldn't);
+  a stage that failed, its words); the queue's work, a
   sync among it, in a foreground service (`SyncService`).
   - Its debug build is an app of its own beside F-Droid's release (`io.github.danielhp95.caracole`, the release key):
     `io.github.danielhp95.caracole.debug` (`applicationIdSuffix`, versionName `…-debug`), "Debug caracole" with an
@@ -2820,8 +2899,11 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     `_ended`), which every route that says a job's line asks, /jobs.json's and the Requests tab's alike;
   - a request queued behind a running job of the phone's own (`JobViews.behind`: a PhoneKinds' kind's, a sync's, an
     index import's, not yielding) says what it waits for, the phone's own, as Python never queues one (`queuedBehind`:
-    "Queued · after the site catalogues (Importing · …)", "Queued · after backing up the book", "Queued · 2 requests
-    ahead, now the sync (Updating the indexes · …)");
+    "Queued · waits for the site catalogues to finish importing (79 %)", "Queued · after backing up the book", "Queued
+    · 2 requests ahead, now the sync (Updating the indexes · …)");
+  - the catalogues' line never carries the import's count of tabs (every row of GitHub's file, none of the request's):
+    its share is the stage's `done` and `total` (`JobContext.progress`, `Stage.done`), data beside the words, left out
+    while there is no total;
   - PhoneKinds' kinds (render, inbox, backup, restore, catalogues) say §5.3's table's words, the ones their run filled in as
     their stage's detail (`context.stage(<its stage>, state, PhoneKinds.fill(…))`, done, running or failed; inbox's
     wait a done detail in `otherwise`'s words: `JobViewsTest.thePhonesOwnKindsSayTheirTablesWordsAsTheirRunFilledThemIn`),
@@ -2903,10 +2985,50 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 - **The engine's comparison** (`SyncEngine.compare`) carries, beside its differences, its `kind` (`"computer"` or
   `"file"`), the parts the other side `holds`, the merged `base` and `kept` answers it compared against, the songs
   either side's songbooks `listed` (each songbook difference's document asked of the computer once,
-  `Scope.listedOn`), each songbook difference's two documents (`songbooks`) and each site whose newest read differs
-  (`indexes`, `IndexWaiting`); its hash is of the differences unscoped. `documents` gives a unit's two documents (a
-  file's none of a unit it left out or of a part it doesn't hold, `FileSource.says`) and `tested` what the computer
-  holds (its state read once, nothing changed).
+  `Scope.listedOn`), each songbook difference's two documents (`songbooks`) and the indexes (`indexes`,
+  `IndexWaiting`: below; a file's, each site whose newest read differs); its hash is of the differences unscoped.
+  `documents` gives a unit's two documents (a file's none of a unit it left out or of a part it doesn't hold,
+  `FileSource.says`) and `tested` what the computer holds (its state read once, nothing changed).
+- **The indexes a sync takes** (`SyncEngine.newerThere`, the index stage's rule and its comparison's): each site whose
+  stamp in the computer's state is later than both kv `sync:index:<computer id>` (what the phone took of that computer
+  last) and kv `index:merged` (core.index's `MergedIndexes`: each site's newest read of the whole exports the phone
+  merged, read over each file as its merge read it, `Merged.newest`, a site dated after the merge's `notAfter` left
+  out; written by a sync's own merge, a file's indexes, the site catalogues and an index import, the later kept), never
+  by the phone's own newest, which its lookups' reads move. So a sync after the catalogues or a file of the computer's
+  downloads only what the computer read since. The comparison lists those (`newer` "there") and each site whose pages
+  Reads noted for the next push ("here"), a site of both twice, so the Sync sheet says what the Sync does: where
+  sync_routes._waiting compares newest reads, the phone answers otherwise (vectors/web/sync_routes.jsonl's scene holds
+  both records, so the two answers agree).
+- **Only the part it doesn't hold** of each site taken (SyncEngine.merge): `POST /peer/index/newer` with core.index's
+  `Have` document (the phone's record of each sitemap but its `checked_at`, and `since`, kv `sync:cut:<computer id>`,
+  `Have.CUT_KEY`: the computer's own `exported_at` of the last partial export of the cut asked that the phone merged,
+  recorded only when that time is within the merge's clock bound (below), kept apart from `sync:index:`, whose stamps the phone's own pushed pages move: a page the computer read meanwhile is
+  later than the cut, so it comes whatever the push did); a computer that answers 404 or 405 (older) or 413 (a
+  document too large) the whole, any other refusal the stage's failure. The document is held to Python's by
+  vectors/index/have.jsonl (`IndexReplay.have`, byte for byte; tests/test_conformance_index.py feeds each to
+  `read_have` and to an export of the same database, which leaves out every sitemap that has validators). Once merged, the file's META `partial` is checked to be the cut asked for
+  (`Have.mismatch`: every site, its `since`, nothing left out the phone lacks) and no sitemap it left out held
+  otherwise (`Merged.unheld`), else the stage fails in "… isn't the part asked for" and nothing is recorded (its merge
+  lost no row); else `sync:index:` and `index:merged` (the file's newest, a part's no later than the whole's) move
+  on, true as after a whole export: the phone holds every row the computer held as of it. `sync:cut:` moves on only
+  for a partial export of the cut asked whose `exported_at` is no later than the merge's `notAfter`: never from a
+  whole export (an older computer notes no arrivals, so rows it merged with old times before its update would fall
+  below that cut; the first part after the update is uncut, once), nor past the bound (a row the merge passed over
+  for being dated after it would fall below the cut).
+- **A computer of another schema** (its state's `schema`, `PeerState.schema`, read as an integer, none else): none
+  taken and none of the pages read here given (`SyncEngine.indexesSkipped`, the index stage skipped in
+  `INDEXES_NEWER`'s or `INDEXES_OLDER`'s words before anything is downloaded or pushed, the notes kept), the
+  comparison listing no index and saying why (`Comparison.indexesSkipped`, `indexes_skipped`, the sheet's Site
+  indexes); a state with none (a computer older than the member) asked as before. A merge's refusal names its file
+  ("The computer's index export", "The file": `namingFileAs`), never its copy's path, and no class name.
+- **The pages the phone's lookups read** (Reads), pushed at the index stage's end (`POST /peer/index`): their notes
+  forgotten only once the computer's request that merges them (its `caracole index merge`) ends done; kept when it ends
+  otherwise (the stage failed, "… didn't merge them: its Journal entry N ended failed.") or still goes at the wait's
+  end (10 minutes), for the next push, which a merge there takes to the same rows. Once done, each site's stamp there
+  (`GET /api/sync/indexes`) that those pages alone explain (`SyncEngine.explained`: a time no later than the newest
+  page pushed of it, the computer's stamp just before the push one the phone held) goes into kv `sync:index:<computer
+  id>`, so the next sync downloads no site's whole index for the phone's own pages; a stamp later than them, or one the
+  phone lacked before the push (its download failed), is the computer's own reading, which the next sync takes.
 - **`apply(c, choices, prefer, parts, conflicts)`**: only the differences of `parts` are taken, given or left
   (`Scope.inScope`: a part left out is never read as a removal, a song a songbook lists comes along with the
   songbooks); Library unticked skips the mirror stage, Site indexes unticked the index stage, each saying so. No stage
@@ -2941,9 +3063,17 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   - Its JSON members are read as `json.loads(bytes)` reads them (`SyncFiles.json`: json.detect_encoding's UTF-8,
     UTF-16 or UTF-32, lone surrogates passed).
 - **The report** (`SyncOutcome.report`, the sync redesign's §3.5): with whom (`with`: name, kind, address), when,
-  its parts, and each index taken or given, its first table's rows (`TabCounts`) before and after: a taken one around
-  its merge here; a given one on the computer (`GET /api/sync/indexes`, `PeerClient.indexes`) before the push and
-  after its merge job, none from a computer that doesn't count them.
+  its parts, and each index taken or given, its first table's rows (`TabCounts`) before and after, `new` (after −
+  before) and `checked` (the rows of the sitemaps and listing pages its merge took, `Merged.checked`, index_transfer's
+  `SiteMerge.checked`, by the statements' own counts: no scan), commands/peer.py's `_taken_entries` and
+  `_give_indexes` alike: a taken one around its merge here; a given one on the computer (`GET /api/sync/indexes`,
+  `PeerClient.indexes`) before the push and after its merge job, its `checked` null (that answer doesn't say it), none
+  from a computer that doesn't count them. `checked` is the rows of the sitemaps taken, read new or not, for UG and
+  the sitemap sites, and for LaCuerda's artist pages and search the rows inserted, new by construction. While it
+  merges the computer's indexes or a file's, a site the phone held rows of says what is newer there and the rows
+  checked (`MergeProgress.Updating(held, there)`, index_transfer.MergeWords' `held` and `there` alike, `peer sync`'s and
+  `peer import`'s: "Ultimate Guitar · 3 sitemaps newer on the computer · 50,000 of 117,701 tabs checked", "… newer in
+  the file …"), "Importing" kept for the catalogues and a site whose table was empty.
 - A phone's own export writes the file `SyncFiles.export` makes (its indexes every site's whole, `IndexFile`, as
   `caracole index export` writes them, which SyncReplay compares with Python's as data; its pages through a
   `PageSource`, server/routes/sync/MirrorPages.kt: the mirror's and its layers' pages of each unit at the digest the
@@ -3450,7 +3580,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     `http:last_request:`, the global records that gate a request (`lacuerda:search:`, `lacuerda:search-failed`,
     `gtptabs:unusable:`, `ug:artist_url:`, `ug:pasted_tab:`, `ug:unreadable:`, `youtube-search:`), `sync:` (so a
     restored library is the phone's change at the next sync: §11 Q11's default), `phone:settings`, `phone:schema`, the
-    index push's notes and every index's progress records, the site catalogues' (`catalogues:`: the file the index
+    index push's notes and every index's progress records, what the whole exports it merged read (`index:merged`,
+    which a sync asks the computer by), the site catalogues' (`catalogues:`: the file the index
     tables took last, GitHub's ask-again time, a download waiting for a go-ahead, the offer made: a restore never
     touches those tables, so a tap after one says Up to date exactly when they hold the newest file), and each song's
     records that gate a request (`SONGS`:
@@ -4491,13 +4622,15 @@ picks one).
 - It also writes, for the phone's sync alone, and nothing else: a push's staging folder (`state_dir/peer/push-<id>/`,
   0700, its files checked by their SHA-256, deleted once `caracole peer take` is over or an hour after, or a push never
   sent at once, dropped by its pusher, `POST /peer/push/drop`, or let go of as its sender opens another); a
-  temporary index export for `GET /api/peer/index` (`cache_dir/peer/`, one read transaction, no lock, deleted once
-  sent); and the index pages a phone's lookups read, `POST /peer/index`'s export of them
+  temporary index export for `GET /api/peer/index` and `POST /peer/index/newer`'s part of it (`cache_dir/peer/`,
+  `index-<16 hex>.sqlite`, one read transaction, no lock, one at a time, deleted once open to be sent; one a killed
+  process left swept an hour after, with `peer_push.sweep_copies`' copies, as the next one is made); and the index
+  pages a phone's lookups read, `POST /peer/index`'s export of them
   (`state_dir/peer/index-<16 hex>.sqlite`, 0600, at most `peer_push.INDEX_OPEN` waiting, read before its 202 as an
   export of pages alone of this caracole's version, `index_transfer.check_pages`, deleted when it isn't, then
-  `caracole index merge --delete --progress` queued, which deletes it once merged or refused, and `--delete` deletes
-  a refused file of that staging alone, never one named by hand; one an hour old no waiting request names is swept,
-  `peer_push.sweep_indexes`).
+  `caracole index merge --delete --progress` queued, which deletes it once merged or refused (the phone forgets those
+  pages only once that request ends done), and `--delete` deletes a refused file of that staging alone, never one
+  named by hand; one an hour old no waiting request names is swept, `peer_push.sweep_indexes`).
 - And for Export and Import a file (sync_file_routes.py), nothing else: an export's file
   (`cache_dir/peer/export-<16 hex>.caracole`, 0600, one made at a time, its units from one read transaction and its
   indexes from one of their own, no lock; one waits to be sent at most, the one before it deleted as the next is made;

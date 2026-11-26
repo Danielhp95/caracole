@@ -157,8 +157,9 @@ class SyncRoutesTest {
     @Test fun `compare answers the comparison the tab draws, and remembers the address`() {
         val creep = onComputer("Radiohead", "Creep")
         val compared = compare()
-        assertEquals(listOf("comparison", "peer", "synced_before", "holds", "differences", "songbooks", "indexes"),
-                     compared.keys.toList())
+        assertEquals(listOf("comparison", "peer", "synced_before", "holds", "differences", "songbooks", "indexes",
+                            "indexes_skipped"), compared.keys.toList())
+        assertEquals(JsonNull, compared["indexes_skipped"])
         assertEquals(JsonObject(linkedMapOf(
             "address" to JsonPrimitive(computer.address.toString()), "server" to JsonPrimitive(computer.id),
             "caracole" to JsonPrimitive("0.1.0"), "name" to JsonPrimitive("Desk"), "kind" to JsonPrimitive("computer"),
@@ -423,6 +424,16 @@ class SyncRoutesTest {
         assertEquals(JsonObject(linkedMapOf("read" to JsonNull, "tabs" to JsonPrimitive(0))), sites["ug"])
     }
 
+    @Test fun `a computer of another schema is compared with no index waiting, and the comparison says why`() {
+        onComputer("Radiohead", "Creep")
+        computer.indexes = mapOf("ug" to "2026-11-03T10:00:00Z")
+        computer.schema = io.github.danielhp95.caracole.core.db.Database.SCHEMA_VERSION + 1
+        val compared = compare()
+        assertEquals(JsonArray(emptyList()), compared["indexes"])
+        assertEquals(JsonPrimitive(SyncEngine.INDEXES_NEWER), compared["indexes_skipped"])
+        assertEquals(1, compared.getValue("differences").jsonArray.size, "its units compared as ever")
+    }
+
     @Test fun `apply sends the parts to the engine`() {
         computer.load(RICH)
         val hysteria = onPhone("Muse", "Hysteria")
@@ -475,6 +486,13 @@ class SyncRoutesTest {
                      outcome["left"])
         assertEquals(before, computer.state().getValue(unit) to app.database.read { Units.libraryState(it) }.getValue(unit),
                      "the conflict as it was on both sides")
+        assertEquals(listOf("${SyncRoutes.NOT_SYNCED}$unit: ${SyncEngine.UNSETTLED}"), ended.said,
+                     "each unit left said, which the Journal's Output shows (Feed's step of what it said), where the " +
+                         "Wi-Fi line sends the owner")
+        val feed = io.github.danielhp95.caracole.server.jobs.Feed.feed(listOf(ended), emptyMap(), opened = setOf(ended.id))
+        val shown = feed.toString()
+        assertTrue(io.github.danielhp95.caracole.server.jobs.Feed.SAID in shown &&
+                       "${SyncRoutes.NOT_SYNCED}$unit" in shown, shown)
         assertEquals(1, synced.get())
         assertTrue(routes.alone(address) != null, "once over, another may be queued")
     }

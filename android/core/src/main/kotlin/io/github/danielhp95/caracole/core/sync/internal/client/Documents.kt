@@ -1,5 +1,6 @@
 package io.github.danielhp95.caracole.core.sync.internal.client
 
+import io.github.danielhp95.caracole.core.py.PyInt
 import io.github.danielhp95.caracole.core.sync.Base
 import io.github.danielhp95.caracole.core.sync.Compare
 import io.github.danielhp95.caracole.core.sync.PeerState
@@ -29,9 +30,18 @@ internal object Documents {
         return content.toBigDecimalOrNull()?.let { it.compareTo(n.toBigDecimal()) == 0 } ?: false
     }
 
-    /** read_state_document, with the form token, the computer's clock, its indexes' stamps, its kept answers for the
-     * asker, its settings (a member that isn't an object is none, as from a computer older than them: the phone's
-     * stay as they were) and its key version as it says it (Units.otherKeys reads it). */
+    /** A JSON number Python's json.loads reads as an int (none: a fraction, an exponent, a boolean, a text), as a Long,
+     * one past a Long's range its end (Python compares it so); null for anything else. */
+    fun integer(e: JsonElement?): Long? {
+        val p = e as? JsonPrimitive ?: return null
+        if (p.isString || p is JsonNull) return null
+        val n = p.contentOrNull?.let(PyInt::parse) ?: return null
+        return n.max(Long.MIN_VALUE.toBigInteger()).min(Long.MAX_VALUE.toBigInteger()).toLong()
+    }
+
+    /** read_state_document, with the form token, the computer's clock, the schema its database is at, its indexes'
+     * stamps, its kept answers for the asker, its settings (a member that isn't an object is none, as from a computer
+     * older than them: the phone's stay as they were) and its key version as it says it (Units.otherKeys reads it). */
     fun state(data: JsonElement): PeerState {
         if (data !is JsonObject || !isNumber(data["format"], Units.FORMAT)) {
             throw Unreadable("not a caracole sync state of format ${Units.FORMAT} (the other caracole may be of " +
@@ -60,7 +70,7 @@ internal object Documents {
             format = Units.FORMAT, server = serverId, caracole = version?.ifEmpty { null } ?: "?", name = name ?: "",
             now = text(data["now"]), units = read, base = base(data["base"]),
             token = text(data["token"]) ?: "", indexes = indexes, settings = data["settings"] as? JsonObject,
-            kept = Compare.readKept(data["kept"]), keyVersion = data["key_version"],
+            kept = Compare.readKept(data["kept"]), schema = integer(data["schema"]), keyVersion = data["key_version"],
         )
     }
 

@@ -47,10 +47,13 @@ import java.util.concurrent.TimeUnit
  * units are those caracole's peer_sync gives a library of the same rows: lane sync-units holds the two to the vectors),
  * answering as Python's routes answer (web/peer_routes.py, peer_push.py; the plan's §5.3), in their words:
  *
- * - `GET /api/peer/state?peer=`: its id, version, [name], the rules its songs are keyed by ([keyVersion]: none while
- *   null, as a caracole older than the member answers), clock ([now]), [indexes], units in peer_sync._order, the base
- *   it agreed on with the phone that asks and the answers its imports of that phone's files kept (`kept`), its [settings] (politeness.settings_document: none while null, as a
- *   caracole older than them answers) and the form token ([token]).
+ * - `GET /api/peer/state?peer=`: its id, version, the [schema] its database is at (none while null, as a caracole
+ *   older than the member answers), [name], the rules its songs are keyed by ([keyVersion]: none while null, as a
+ *   caracole older than the member answers), clock ([now]), its indexes' newest reads (IndexTransfer.newest of
+ *   [database], as web/peer_routes.state answers them; [indexes] in their place while set), units in
+ *   peer_sync._order, the base it agreed on with the phone that asks and the answers its imports of that phone's files
+ *   kept (`kept`), its [settings] (politeness.settings_document: none while null, as a caracole older than them
+ *   answers) and the form token ([token]).
  * - `GET /api/peer/unit?id=` and `GET /api/peer/file?song=&name=`: a unit's document, a kept file's bytes (404 else).
  * - `POST /peer/push/new`, `/peer/push/file`, `/peer/push`: each with the token in its header, else 403 with
  *   `reload`; each checked as peer_push.py checks it (read_new, new_push: at most [OPEN] pushes here, open or sent
@@ -68,6 +71,10 @@ import java.util.concurrent.TimeUnit
  * - `GET /api/jobs/<id>`: the request as Job.as_json gives it; it answers "running" to [runningPolls] polls first,
  *   then (without [holdTakes]) as it is once over.
  * - `GET /api/peer/index?sites=`: [index]'s bytes for the sites asked, recorded in [indexAsked].
+ * - `POST /peer/index/newer`: the part of the indexes the phone lacks, as peer_routes.index_newer answers it: the
+ *   token in its header (403 with `reload` else), its document recorded in [newerAsked], then [newer]'s bytes for it
+ *   (a partial export Python made, a test's fixture), 404 while [newer] is null, as a caracole older than the route
+ *   answers; [newerRefusal], a status it answers instead (a 503, say), `{error}`.
  * - `GET /api/sync/indexes`: each site's newest read (IndexTransfer.newest, [indexes] over it) and its tabs
  *   (TabCounts), as web/sync_routes.py answers it (the sync redesign's §3.4.1); 404 while [countsIndexes] is false,
  *   as a caracole older than the route answers.
@@ -76,6 +83,8 @@ import java.util.concurrent.TimeUnit
  *   at most [INDEX_OPEN] waiting (409); each kept in [indexPushes], then `caracole index merge --delete --progress`
  *   queued, `202 {"job": N}`, whose one stage, merge, IndexTransfer.merge takes the file into [database] with (the
  *   port of the merge the computer runs), the request "failed" with the stage's words when it refuses it.
+ *   [mergeFails]: the merge fails instead, in those words (no room for its backup, say). [holdTakes]: each merge waits
+ *   for it to count down first, as a take does.
  *
  * [answers] replaces what a route answers ("GET /api/peer/state" → a handler), and [refuse] its n-th answer by a
  * status; a push route's body past its limit ([limits]) is answered 413 before it is read, as server.py answers it.
@@ -91,10 +100,14 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
 
     @Volatile var token: String = "computer-token-1"
     @Volatile var now: String = "2026-11-03T12:00:00Z"
-    @Volatile var indexes: Map<String, String> = emptyMap()
+    @Volatile var schema: Int? = Database.SCHEMA_VERSION
+    @Volatile var indexes: Map<String, String>? = null
     @Volatile var settings: JsonObject? = null
     @Volatile var index: (List<String>?) -> ByteArray = { ByteArray(0) }
+    @Volatile var newer: ((JsonObject) -> ByteArray)? = null
+    @Volatile var newerRefusal: Int? = null
     @Volatile var takeFails: String? = null
+    @Volatile var mergeFails: String? = null
     @Volatile var holdTakes: CountDownLatch? = null
     @Volatile var runningPolls: Int = 0
     @Volatile var onUnit: ((String) -> Unit)? = null
@@ -118,6 +131,7 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
     val pushes = CopyOnWriteArrayList<JsonObject>()
     val taken = CopyOnWriteArrayList<Applied>()
     val indexAsked = CopyOnWriteArrayList<List<String>?>()
+    val newerAsked = CopyOnWriteArrayList<JsonObject>()
     val indexPushes = CopyOnWriteArrayList<ByteArray>()
 
     private val random = SecureRandom()
@@ -271,6 +285,8 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
             "POST /peer/push" -> if (tokenOk(exchange)) push(exchange, query["push"].orEmpty())
             "POST /peer/push/drop" -> if (tokenOk(exchange)) pushDrop(exchange)
             "POST /peer/index" -> if (tokenOk(exchange)) pushIndex(exchange)
+            "POST /peer/index/newer" -> if (newer == null) json(exchange, 404, obj("error" to JsonPrimitive("no such route")))
+                                        else if (tokenOk(exchange)) indexNewer(exchange)
             "GET /api/sync/indexes" -> if (countsIndexes) json(exchange, 200, indexCounts())
                                        else json(exchange, 404, obj("error" to JsonPrimitive("no such route")))
             else -> if (method == "GET" && path.startsWith("/api/jobs/")) job(exchange, path.removePrefix("/api/jobs/"))
@@ -280,7 +296,7 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
 
     /** `GET /api/sync/indexes`'s answer: every site of IndexTransfer's, its newest read and its tabs. */
     fun indexCounts(): JsonObject {
-        val (newest, tabs) = database.read { db -> (IndexTransfer.newest(db) + indexes) to TabCounts.of(db) }
+        val (newest, tabs) = database.read { db -> (IndexTransfer.newest(db) + indexes.orEmpty()) to TabCounts.of(db) }
         return obj("indexes" to JsonObject(tabs.mapValues { (site, count) ->
             obj("read" to JsonPrimitive(newest[site]), "tabs" to JsonPrimitive(count))
         }))
@@ -290,10 +306,12 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
     fun stateDocument(peer: String?): JsonObject {
         val (units, base) = database.read { db -> Units.libraryState(db) to peer?.let { Compare.baseOf(db, it) } }
         val kept = peer?.let { asker -> database.read { db -> Compare.keptOf(db, asker) } }
-        return JsonObject(linkedMapOf(
+        val indexes = indexes ?: database.read { IndexTransfer.newest(it) }
+        return JsonObject(linkedMapOf(*listOfNotNull(
             "format" to JsonPrimitive(Units.FORMAT),
             "server" to JsonPrimitive(id),
             "caracole" to JsonPrimitive("0.1.0"),
+            schema?.let { "schema" to JsonPrimitive(it) },
             "name" to JsonPrimitive(name),
             "now" to JsonPrimitive(now),
             "indexes" to JsonObject(indexes.toSortedMap(Py.CODE_POINT_ORDER).mapValues { JsonPrimitive(it.value) }),
@@ -305,7 +323,7 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
                     JsonArray(listOf(entry.first?.let(::JsonPrimitive) ?: JsonNull, JsonPrimitive(entry.second)))
                 })
             } ?: JsonNull),
-        ).also { doc ->
+        ).toTypedArray()).also { doc ->
             kept?.let { k ->
                 doc["kept"] = JsonObject(k.toSortedMap(Py.CODE_POINT_ORDER).mapValues { (_, e) ->
                     JsonArray(listOf(JsonPrimitive(e.here), JsonPrimitive(e.there), JsonPrimitive(e.at)))
@@ -344,6 +362,13 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
         val asked = sites?.split(',')?.map { Py.strip(it) }?.filter { it.isNotEmpty() }
         indexAsked.add(asked)
         send(exchange, 200, index(asked), "application/vnd.sqlite3")
+    }
+
+    private fun indexNewer(exchange: HttpExchange) {
+        val doc = body(exchange) as? JsonObject ?: throw Refusal(400, "the request is no object")
+        newerAsked.add(doc)
+        newerRefusal?.let { throw Refusal(it, "Couldn't copy the indexes: the disk is full") }
+        send(exchange, 200, newer!!(doc), "application/vnd.sqlite3")
     }
 
     private fun tokenOk(exchange: HttpExchange): Boolean {
@@ -523,6 +548,13 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
             holdTakes?.await()
             job.state = "running"
             stage.state = "running"
+            val fails = mergeFails
+            if (fails != null) {
+                stage.state = "failed"
+                stage.detail = fails
+                job.state = "failed"
+                return
+            }
             val merged = database.writeBlocking { db -> IndexTransfer.merge(db, file, now) }
             stage.detail = if (merged.changed) merged.sites.keys.joinToString("; ") else "Nothing newer"
             stage.state = "done"

@@ -17,6 +17,13 @@ internal object IndexStamps {
         return a > b
     }
 
+    /** Whether [stamp] is a time no later than [than], both times. */
+    fun noLater(stamp: String, than: String): Boolean {
+        val a = read(stamp) ?: return false
+        val b = read(than) ?: return false
+        return a <= b
+    }
+
     /** kv's {site: stamp}, its odd entries left out; empty for none. */
     fun sites(value: JsonElement?): Map<String, String> =
         (value as? JsonObject)?.mapNotNull { (site, stamp) -> Documents.text(stamp)?.let { site to it } }?.toMap() ?: emptyMap()

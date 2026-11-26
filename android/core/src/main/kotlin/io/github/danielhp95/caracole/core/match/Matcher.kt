@@ -184,7 +184,7 @@ object Matcher {
         )
         val differs = song.matchDecision != new.decision || song.matchStep != new.step ||
             !sameFloat(song.matchScore, new.score) || song.matchArtistKey != new.artistKey ||
-            song.matchSongKey != new.songKey || !Python.equal(storedCandidates(song), json(rows)) ||
+            song.matchSongKey != new.songKey || !PyJson.equal(storedCandidates(song), json(rows)) ||
             song.review != (new.decision == "review")
         if (differs) {
             if (needsFetch(song, new)) {
@@ -251,34 +251,6 @@ object Matcher {
             val text = p.content
             if (text == "NaN" || text.endsWith("Infinity")) return null
             return if (text.any { it == '.' || it == 'e' || it == 'E' }) BigDecimal(text.toDouble()) else BigDecimal(text)
-        }
-
-        /** Python's `==` of two JSON values: objects by their members, lists in order, a number by its value (True
-         * is 1), a string by its text. */
-        fun equal(a: JsonElement, b: JsonElement): Boolean = when {
-            a is JsonNull || b is JsonNull -> a is JsonNull && b is JsonNull
-            a is JsonObject && b is JsonObject -> a.keys == b.keys && a.all { (k, v) -> equal(v, b.getValue(k)) }
-            a is JsonArray && b is JsonArray -> a.size == b.size && a.indices.all { equal(a[it], b[it]) }
-            a is JsonPrimitive && b is JsonPrimitive -> when {
-                a.isString || b.isString -> a.isString && b.isString && a.content == b.content
-                else -> {
-                    val x = numeric(a)
-                    val y = numeric(b)
-                    if (x is BigDecimal && y is BigDecimal) x.compareTo(y) == 0 else x == y
-                }
-            }
-            else -> false
-        }
-
-        /** A number or a boolean as Python compares it: its exact value, or a double for NaN and the infinities
-         * (NaN equal to nothing). */
-        private fun numeric(p: JsonPrimitive): Any = when (p.content) {
-            "true" -> BigDecimal.ONE
-            "false" -> BigDecimal.ZERO
-            "NaN" -> Any()
-            "Infinity" -> Double.POSITIVE_INFINITY
-            "-Infinity" -> Double.NEGATIVE_INFINITY
-            else -> number(p)!!
         }
     }
 }

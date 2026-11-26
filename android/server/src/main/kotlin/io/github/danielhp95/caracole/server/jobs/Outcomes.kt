@@ -4,6 +4,7 @@ import io.github.danielhp95.caracole.core.py.PyRegex
 import io.github.danielhp95.caracole.core.py.PyText
 import io.github.danielhp95.caracole.core.py.PyUnicode
 import io.github.danielhp95.caracole.core.py.PyUrl
+import io.github.danielhp95.caracole.core.sync.SyncEngine
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -147,6 +148,23 @@ object Outcomes {
     internal val ELSEWHERE = mapOf("lacuerda" to "LaCuerda has a sheet",
                                   "gtptabs" to "gtptabs lists a page for it")
     private val NO_UNITS = setOf(Status.INDEX_MERGE_KIND)
+
+
+    /** Why caracole serve's sync took and gave no index, its index stage skipped for the other's database of another
+     * schema (sync_routes.INDEXES_NEWER and INDEXES_OLDER), as outcome.py's indexes_skipped reads them. */
+    val INDEXES_SKIPPED: List<String> = listOf(
+        "The indexes there are of a newer caracole: update this one to take them",
+        "The indexes there are of an older caracole: update that one to share them",
+    )
+
+    /** Why a sync's index stage took and gave no index, when it skipped them for the other's database of another
+     * schema (outcome.py's indexes_skipped): caracole serve's words, or the phone's own (SyncEngine.INDEXES_NEWER,
+     * INDEXES_OLDER); null for one skipped for nothing newer or left out, and for any other. */
+    fun indexesSkipped(stages: List<Stage>): String? = stages.firstOrNull {
+        it.name == SyncEngine.INDEX && it.state == Job.SKIPPED && (it.detail in INDEXES_SKIPPED ||
+            it.detail == SyncEngine.INDEXES_NEWER || it.detail == SyncEngine.INDEXES_OLDER)
+    }?.detail
+
     val COMPARE_AGAIN = Action("Compare again", href = "/#tab=sync")
 
     // --- the running request's steps --------------------------------------------------------------------------
@@ -359,14 +377,6 @@ object Outcomes {
     /** A sync, a take, a pull or a merge over (outcome.py's _peer_outcome). */
     private fun peerOutcome(job: Shape, kind: String, line: Line): Outcome {
         val action = if (kind == "sync") COMPARE_AGAIN else null
-        if (job.state == Job.INTERRUPTED) {
-            return Outcome("waiting", "Interrupted", if (job.startedAt != null) INTERRUPTED_RAN else INTERRUPTED_WAITED, action)
-        }
-        if (line.tone == "failed") return Outcome("failed", "Failed", sentence(line.text), action)
-        if (kind in NO_UNITS) {
-            val said = job.stages.firstOrNull { it.state == Job.DONE && it.detail.isNotEmpty() }?.detail ?: ""
-            return Outcome(line.tone, line.text, if (said.isNotEmpty()) sentence(said) else "")
-        }
         val taken = job.units.count { it.outcome == "taken" }
         val given = job.units.count { it.outcome == "given" }
         val left = job.units.count { it.outcome == "left" }
@@ -374,11 +384,33 @@ object Outcomes {
         if (taken > 0 || kind != "sync") parts += "${Status.plural(taken, "change")} taken"
         if (given > 0) parts += "${Status.plural(given, "change")} given"
         val said = if (parts.isNotEmpty()) capitalize(parts.joinToString(", ")) + "." else "Nothing changed in either book."
-        if (line.tone == "ready") return Outcome("ready", line.text, said)
+        val kept = if (left > 0) " ${Status.plural(left, "change")} left as ${if (left == 1) "it was" else "they were"}."
+                   else ""
+        // Changes taken or given, then a failure (any stage after them, or the server stopping it): what was shared
+        // said first, as the Sync sheet titles it "Synced with", then the failure, never doubling its words.
+        val shared = taken > 0 || given > 0
+        if (job.state == Job.INTERRUPTED) {
+            val stopped = if (job.startedAt != null) INTERRUPTED_RAN else INTERRUPTED_WAITED
+            return Outcome("waiting", "Interrupted", if (shared) "$said$kept $stopped" else stopped, action)
+        }
+        val after = shared && (line.tone == "failed" || job.stages.any { it.state == Job.FAILED })
+        if (line.tone == "failed" && !after) return Outcome("failed", "Failed", sentence(line.text), action)
+        if (kind in NO_UNITS) {
+            val said = job.stages.firstOrNull { it.state == Job.DONE && it.detail.isNotEmpty() }?.detail ?: ""
+            return Outcome(line.tone, line.text, if (said.isNotEmpty()) sentence(said) else "")
+        }
+        val also = indexesSkipped(job.stages)?.let { " $it." } ?: ""
+        if (after) {
+            val failure = sentence(line.text)
+            val reason = if (said.dropLast(1) in failure) failure else "$said$kept $failure"
+            if (line.tone == "failed") return Outcome("failed", "Failed", reason, action)
+            return Outcome("waiting", Status.PEER_DONE.getValue(kind), reason, action)
+        }
+        if (line.tone == "ready") return Outcome("ready", line.text, said + also)
         val word = if (left > 0) partition(line.text, " · ").first else "Not taken"
         val reason = if (left > 0) "$said ${Status.plural(left, "change")} left as ${if (left == 1) "it was" else "they were"}."
                      else sentence(line.text)
-        return Outcome("waiting", word, reason, action)
+        return Outcome("waiting", word, reason + also, action)
     }
 
     /** Not found (outcome.py's _not_found): Ultimate Guitar has no chords for it once the fetch asked it, else the

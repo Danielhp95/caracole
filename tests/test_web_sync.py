@@ -355,6 +355,22 @@ def test_the_indexes_newer_on_either_side_are_listed_in_the_sites_order(computer
         {"site": "gtptabs", "title": "gtptabs.com", "here": "2026-10-21T03:30:00Z", "there": None, "newer": "here"}]
     db.kv_set(here.conn, ug_index.REFRESHED_KEY, "2026-11-03T03:30:00Z")
     assert compared(here)["indexes"][0]["newer"] == "here"
+    assert compared(here)["indexes_skipped"] is None
+
+
+def test_a_caracole_of_another_schema_lists_no_index_waiting_and_says_why(computers, monkeypatch):
+    from test_commands_peer_indexes import answering_at_schema
+
+    here, there, _ = computers
+    db.kv_set(there.conn, ug_index.REFRESHED_KEY, "2026-11-02T03:30:00Z")  # newer there
+    db.kv_set(here.conn, "lacuerda:index:complete_at", "2026-10-20T03:30:00Z")  # newer here
+    for there_is, words in ((1, sync_routes.INDEXES_NEWER), (-1, sync_routes.INDEXES_OLDER)):
+        answering_at_schema(monkeypatch, db.SCHEMA_VERSION + there_is)
+        found = compared(here)
+        assert (found["indexes"], found["indexes_skipped"]) == ([], words)
+    answering_at_schema(monkeypatch, None)  # a caracole older than the member: its indexes listed as before
+    found = compared(here)
+    assert [s["site"] for s in found["indexes"]] == ["ug", "lacuerda"] and found["indexes_skipped"] is None
 
 
 def test_a_comparison_is_made_with_the_answers_an_import_kept(computers):

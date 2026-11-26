@@ -32,7 +32,8 @@ import java.io.File
  *   listing page of LaCuerda's (`lacuerda:index:pages`) the file read later, or the database never read, replaces its
  *   rows and its record: UG's rows upserted as a refresh stores them (a row the database has keeps its sitemap and
  *   first sighting), the songs its new tabs are for marked to fetch again ([NewTabs]); the others' deleted and
- *   inserted;
+ *   inserted, but for a sitemap the file merely checked again and found unchanged (its record alike but its
+ *   `checked_at`: Merge.unchanged), whose record alone moves on, no row of it written;
  * - a page the file read later by its `read_at` (harptabs.com's artist pages, gametabs.net's game pages), or one the
  *   database never read, replaces its tabs and its row; UG's artist pages' tabs a row at a time, where the file's read
  *   is later, then filed again (ArtistTabs.refile);
@@ -43,8 +44,12 @@ import java.io.File
  *   the file's was, the listing of UG's sitemaps the later refresh's, a directory listing's round where the file's got
  *   further (its last whole read, its start, its next page).
  *
+ * A partial export (META's `partial`) is merged by the same rules, a sitemap it says it left out never read as gone:
+ * neither its rows nor its record taken unless the database's record says it holds those rows already
+ * (index_transfer._held; IndexTransfer's `unheld` else).
+ *
  * When nothing changes, nothing is written and [merge]'s `backup` is never called; else it is called once, before
- * the first change; once UG's sitemaps' rows changed by many (an import: Warmup.optimizes), UG's full-text indexes
+ * the first change of a row (a merge that moves records alone backs nothing up); once UG's sitemaps' rows changed by many (an import: Warmup.optimizes), UG's full-text indexes
  * are made one segment each as the merge ends (Warmup.optimize), for the searches after it. Each site is one savepoint: its actions, its kv records, then its
  * keys made current (ensure_current_keys, whole where the file's keys record differs from the database's, which is let
  * go first). A
@@ -114,24 +119,36 @@ object IndexTransfer {
             val names = mergedSites(export, listed, sites)
             progress?.invoke(MergeProgress("", MergeProgress.PLANNING, 0, names.size.toLong()))
             Merge.checkColumns(db, export, names)
-            val plans = names.map { Merge.plan(db, it, now, notAfter, chunk) }
-            if (plans.none { it.changes }) {
-                return Merged(names.associateWithTo(LinkedHashMap()) { emptyMap<String, Int>() }, false, listed)
+            // What the file read of each site merged, read as the merge reads it: a site it says it read after the
+            // bound left out, its records that late never taken.
+            val read = newest(db, Merge.THEIRS, names).filterValues { stamp ->
+                notAfter == null || Stamps.parse(stamp)!! <= notAfter
             }
-            backup?.invoke()
+            val partial = partial(export, meta)
+            val plans = names.map { Merge.plan(db, it, now, notAfter, chunk, partial?.get(it)?.same.orEmpty().toSet()) }
+            val unheld = plans.filter { it.unheld.isNotEmpty() }.associateTo(LinkedHashMap()) { it.site to it.unheld.toList() }
+            val exported = meta["exported_at"]
+            if (plans.none { it.changes }) {
+                return Merged(names.associateWithTo(LinkedHashMap()) { emptyMap<String, Int>() }, false, listed, read,
+                              partial = partial, exported = exported, unheld = unheld)
+            }
+            // The backup is there to undo rows: a merge that moves records alone makes none (index_transfer.merge).
+            if (plans.any { it.actions.isNotEmpty() }) backup?.invoke()
             val taken = LinkedHashMap<String, Map<String, Int>>()
+            val checked = LinkedHashMap<String, Long>()
             var ugChanges = 0L
             for ((i, plan) in plans.withIndex()) {
                 progress?.invoke(MergeProgress(plan.site, "", i.toLong(), plans.size.toLong()))
                 val before = Warmup.changes(db)
                 taken[plan.site] = Merge.apply(db, plan, progress)
+                checked[plan.site] = plan.checked
                 if (plan.site == "ug") ugChanges = Warmup.changes(db) - before
             }
             if (Warmup.optimizes(taken["ug"], ugChanges, optimizeAfter)) {
                 progress?.invoke(MergeProgress("ug", MergeProgress.OPTIMIZE, 0, 0))
                 Warmup.optimize(db)  // one segment each (prep-db)
             }
-            return Merged(taken, true, listed)
+            return Merged(taken, true, listed, read, checked, partial, exported, unheld)
         } finally {
             db.detach(Merge.THEIRS)
         }
@@ -162,34 +179,40 @@ object IndexTransfer {
      * its sitemaps' or listing pages' records, the read of each page of its that has one, its progress records), as
      * stored ("2026-10-28T03:30:00Z"); a site with none is left out. The state document's `indexes`.
      */
-    fun newest(db: Db): Map<String, String> {
+    fun newest(db: Db): Map<String, String> = newest(db, "main", SITES)
+
+    /** [newest] of the database [schema] names ("main", or a file attached as [Merge.THEIRS]), of [sites] alone (a
+     * file holds the tables of the sites it holds alone). */
+    private fun newest(db: Db, schema: String, sites: Collection<String>): Map<String, String> {
         fun recorded(key: String, stamp: String) =
-            Merge.records(db, "main", key).values.filterIsInstance<JsonObject>().map { it[stamp].text() }
-        fun readAt(table: String) = db.query("SELECT DISTINCT read_at, typeof(read_at) FROM main.$table") {
+            Merge.records(db, schema, key).values.filterIsInstance<JsonObject>().map { it[stamp].text() }
+        fun readAt(table: String) = db.query("SELECT DISTINCT read_at, typeof(read_at) FROM $schema.$table") {
             if (it.text(1) == "text") it.text(0) else null
         }
-        fun kv(key: String) = Merge.kv(db, "main", key)
+        fun kv(key: String) = Merge.kv(db, schema, key)
         // The directory's latest listing seen and page read: SQLite's MAX of each, a text alone (Python's isinstance).
-        val directory = db.one(
-            "SELECT MAX(seen_at), typeof(MAX(seen_at)), MAX(read_at), typeof(MAX(read_at)) FROM main.ug_directory",
+        fun directory() = db.one(
+            "SELECT MAX(seen_at), typeof(MAX(seen_at)), MAX(read_at), typeof(MAX(read_at)) FROM $schema.ug_directory",
         ) { listOf(if (it.text(1) == "text") it.text(0) else null, if (it.text(3) == "text") it.text(2) else null) }
             .orEmpty()
         fun siteIndex(provider: String) =
             recorded(Merge.sitemapsKey(provider), "checked_at") + kv(Merge.completeKey(provider))
 
-        val times: Map<String, List<String?>> = linkedMapOf(
-            "ug" to recorded(Merge.UG_SITEMAPS, "indexed_at") + readAt("ug_artist_tabs") +
-                listOf(kv(Merge.UG_REFRESHED), kv(Merge.UG_BUILT)) + directory +
-                recorded(Merge.UG_DIR_LETTERS, "done") + recorded(Merge.UG_DIR_LETTERS, "started"),
-            "lacuerda" to recorded(Merge.LC_PAGES, "checked_at") + kv(Merge.LC_COMPLETE),
-            "gtptabs" to siteIndex("gtptabs"),
-            "musescore" to siteIndex("musescore"),
-            "harptabs" to siteIndex("harptabs") + readAt("harptabs_artists"),
-            "gametabs" to siteIndex("gametabs") + readAt("gametabs_games"),
-        )
+        fun times(site: String): List<String?> = when (site) {
+            "ug" -> recorded(Merge.UG_SITEMAPS, "indexed_at") + readAt("ug_artist_tabs") +
+                listOf(kv(Merge.UG_REFRESHED), kv(Merge.UG_BUILT)) + directory() +
+                recorded(Merge.UG_DIR_LETTERS, "done") + recorded(Merge.UG_DIR_LETTERS, "started")
+            "lacuerda" -> recorded(Merge.LC_PAGES, "checked_at") + kv(Merge.LC_COMPLETE)
+            "gtptabs" -> siteIndex("gtptabs")
+            "musescore" -> siteIndex("musescore")
+            "harptabs" -> siteIndex("harptabs") + readAt("harptabs_artists")
+            "gametabs" -> siteIndex("gametabs") + readAt("gametabs_games")
+            else -> error("no site $site")
+        }
         val found = LinkedHashMap<String, String>()
         for (site in Sites.ALL) {
-            val latest = times.getValue(site.name).mapNotNull { Stamps.parse(it) }.maxOrNull() ?: continue
+            if (site.name !in sites) continue
+            val latest = times(site.name).mapNotNull { Stamps.parse(it) }.maxOrNull() ?: continue
             found[site.name] = Stamps.stamp(latest)
         }
         return found
@@ -256,6 +279,33 @@ object IndexTransfer {
         return meta
     }
 
+    /** index_transfer._left: a partial export's cut (META's `partial`: by site, the `since` and the bound it was
+     * cut by, and the sitemaps it left out, the asker's alike), none for a whole export; a [TransferError] for one
+     * that can't be read, in Python's words: a file cut that way can't be merged as a whole one, which would read its
+     * sitemaps left out as gone. */
+    private fun partial(export: File, meta: Map<String, String?>): Map<String, PartialSite>? {
+        if (PARTIAL !in meta) return null
+        val said = try {
+            meta[PARTIAL]?.let(Canonical::parse)
+        } catch (_: CanonicalError) {
+            null
+        }
+        val sites = (said as? JsonObject)?.mapValues { (_, cut) ->
+            val o = cut as? JsonObject ?: return@mapValues null
+            val same = (o["same"] as? JsonArray)?.map { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content }
+            if (same == null || same.any { it == null }) null
+            else PartialSite(o["since"].text(), o["from"].text(), same.filterNotNull())
+        }
+        if (sites == null || sites.values.any { it == null }) {
+            throw TransferError("$export is part of the indexes, and doesn't say which part in a form this caracole " +
+                                    "reads: nothing changed")
+        }
+        return sites.mapValuesTo(LinkedHashMap()) { it.value!! }
+    }
+
+    /** index_transfer.PARTIAL: META's key of a partial export. */
+    const val PARTIAL = "partial"
+
     private fun repr(value: String?): String = if (value == null) "None" else "'$value'"
 
     private fun noExport(export: File, e: Exception) =
@@ -299,9 +349,27 @@ object IndexTransfer {
  * `SiteMerge.taken`: "sitemap", "tab of its artist pages", "listing page"…), and whether anything changed (a page
  * taken or a progress record moved on); [listed], the names the file's META `sites` lists, as written and in its
  * order, a site this version doesn't know among them (none where it lists none it can read), read as the merge read
- * the file, never by attaching it again (the catalogues job's sentence on what it doesn't read). */
+ * the file, never by attaching it again (the catalogues job's sentence on what it doesn't read); and [newest], each
+ * site merged's newest read in the file, as [IndexTransfer.newest] reads a database (never the database's after the
+ * merge, which the phone's own reads move), a site the file says it read after the merge's `notAfter` left out, its
+ * records that late never taken: what MergedIndexes records; [checked], each site merged's rows of its first table the
+ * file held in what it took (index_transfer's `SiteMerge.checked`; none for a merge that changed nothing): for UG and the
+ * sitemap sites the rows of the sitemaps taken, read whether new or not; for LaCuerda its listing pages' rows, and the
+ * rows of its artist pages and search the phone lacked, inserted (new by construction); [partial], a partial export's
+ * cut by site (META's `partial`, null for a whole export), which the merge took no sitemap it left out by and the
+ * sync's index stage checks against what it asked ([PartialSite]); [exported], META's `exported_at`, the computer's
+ * clock as it made the file (kv `sync:cut:`); [unheld], by site, the sitemaps a partial export left out that this
+ * side's records say it holds otherwise, neither their rows nor their records taken: a file that isn't the part asked
+ * for, after which nothing may be recorded as held. */
 data class Merged(val sites: Map<String, Map<String, Int>>, val changed: Boolean,
-                  val listed: List<String> = emptyList())
+                  val listed: List<String> = emptyList(), val newest: Map<String, String> = emptyMap(),
+                  val checked: Map<String, Long> = emptyMap(), val partial: Map<String, PartialSite>? = null,
+                  val exported: String? = null, val unheld: Map<String, List<String>> = emptyMap())
+
+/** What a partial export (index_transfer.export(have=)) says it was cut by, of a site: [since], the time of the
+ * computer's export the asker said it last merged (null: none); [from], the earliest read of the tables read a page at
+ * a time it sends (null: every row); [same], the sitemaps (listing pages) it left out, the asker's alike. */
+data class PartialSite(val since: String?, val from: String?, val same: List<String>)
 
 /**
  * How far a merge has got (IndexTransfer.merge's `progress`), index_transfer.merge's `progress(site, action, done,
@@ -337,6 +405,25 @@ data class MergeProgress(val site: String, val action: String, val done: Long, v
     /** The step its words are of, for a Paced: each site's each action, a step of its own (UG's chunks one). */
     val step: Pair<String, String> get() = site to action
 
+    /**
+     * A sync's words for its merge of the computer's indexes or a file's, index_transfer.MergeWords(held=, there=)
+     * alike: of a site the phone held rows of before it ([held]), each action what is newer [there] and UG's rows the
+     * rows checked ("Ultimate Guitar · 3 sitemaps newer on the computer · 50,000 of 117,701 tabs checked", [ON_THE_COMPUTER];
+     * "… newer in the file …", [IN_THE_FILE]), never "Importing" as if every row were new; a site it held none of, and
+     * every other step, as [words] says them (the catalogues' import keeps those).
+     */
+    class Updating(private val held: Set<String>, private val there: String = ON_THE_COMPUTER) {
+        private var doing = ""
+
+        fun words(p: MergeProgress): String {
+            if (p.site !in held || p.action == PLANNING || p.action == OPTIMIZE) return p.words()
+            if (p.action == TAB) return "$doing · ${grouped(p.done)} of ${grouped(p.total)} tabs checked"
+            val title = Sites.named(p.site)?.title ?: p.site
+            doing = if (p.action.isEmpty()) title else "$title · ${counted(p.total, p.action)} newer $there"
+            return doing
+        }
+    }
+
     companion object {
         /** index_transfer.PLANNING and UG_TABS. */
         const val PLANNING = "planning"
@@ -345,10 +432,26 @@ data class MergeProgress(val site: String, val action: String, val done: Long, v
 
         const val COMPARING = "Comparing with the phone's index…"
         const val IMPORTING = "Importing"
+
+        /** Where an [Updating] merge's rows were read: the computer's export, or a `.caracole` file's indexes. */
+        const val ON_THE_COMPUTER = "on the computer"
+        const val IN_THE_FILE = "in the file"
         const val READYING = "Making the search index ready…"
 
         /** What a merge's caller says as it gives the WAL the merge grew back (Database.checkpoint). */
         const val TIDYING = "Tidying the database…"
+
+        /** index_transfer.counted: "1 game page", "2 game pages", "3 tabs of its artist pages". */
+        fun counted(n: Long, noun: String): String =
+            "${grouped(n)} ${if (n == 1L) noun else PLURALS[noun] ?: noun + "s"}"
+
+        /** index_transfer._PLURALS. */
+        private val PLURALS = mapOf(
+            "tab of its artist pages" to "tabs of its artist pages",
+            "row of its search's answers" to "rows of its search's answers",
+            "artist of its directory" to "artists of its directory",
+            "artist page read of its directory" to "artist pages read of its directory",
+        )
 
         /** Python's `f"{n:,}"`: the digits in threes, by commas, ASCII alone (never a locale's). */
         fun grouped(n: Long): String {

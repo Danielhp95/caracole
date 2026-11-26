@@ -14,11 +14,13 @@ import io.github.danielhp95.caracole.core.sync.OtherKeys
 import io.github.danielhp95.caracole.core.sync.PeerClient
 import io.github.danielhp95.caracole.core.sync.PeerError
 import io.github.danielhp95.caracole.core.sync.SyncEngine
+import io.github.danielhp95.caracole.core.sync.Take
 import io.github.danielhp95.caracole.mirror.Http
 import io.github.danielhp95.caracole.mirror.ServerAddress
 import io.github.danielhp95.caracole.mirror.SyncError
 import io.github.danielhp95.caracole.server.http.Refused
 import io.github.danielhp95.caracole.server.jobs.Job
+import io.github.danielhp95.caracole.server.jobs.Outcomes
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
@@ -35,7 +37,8 @@ import java.util.concurrent.TimeUnit
  * Sync on Wi-Fi by itself, and Settings' Test. The unattended sync ([run]) is the bar's sync without its sheet: every
  * 6 hours on an unmetered network ([onWifi]), once a caracole answers at the address Settings keeps (the probe: its
  * state read, nothing changed), the phone's own sync job of the three parts (SyncRoutes.alone: each one-sided change
- * taken or given, each conflict left as it is on both sides), awaited; then a notification only for the conflicts it
+ * taken or given, each conflict left as it is on both sides), awaited, its line what it did ([said]: never "Up to date"
+ * with a unit left, nor where its indexes were of another schema); then a notification only for the conflicts it
  * left ([conflictsLeft], "2 songs changed on both sides: tap to choose"), whose tap opens the sheet, and that
  * notification taken back by a sync that left none. No address, nothing answering there, or something else answering
  * (a Wi-Fi login page): it does nothing and says nothing. A caracole whose songs are keyed by other rules (OtherKeys)
@@ -128,7 +131,8 @@ object Syncs {
                 val (left, songs) = conflictsLeft(done.outcome)
                 if (left > 0) notify(left, songs) else cleared()
                 val failed = done.stages.firstOrNull { it.state == Job.FAILED }
-                if (failed == null) Outcome(System.currentTimeMillis(), true, said(done.outcome))
+                if (failed == null) Outcome(System.currentTimeMillis(), true,
+                                            said(done.outcome, Outcomes.indexesSkipped(done.stages)))
                 else Outcome(System.currentTimeMillis(), false, failedStage(failed.label, failed.detail, done.outcome))
             } else {
                 Outcome(System.currentTimeMillis(), false, failure(done))
@@ -165,17 +169,49 @@ object Syncs {
     }
 
     /**
-     * What a sync did, in the bar's line's words: "Up to date" when nothing changed, "Up to date · 1 taken, 2 given",
-     * or, with conflicts left, "1 taken, 2 changed on both sides: tap Sync to choose" (never "Up to date" then).
+     * What a sync did, in the bar's line's words: "Up to date" when nothing changed, "Up to date · 1 taken, 2 given";
+     * with conflicts left, "1 taken, 2 changed on both sides: tap Sync to choose" (true: the sheet Sync opens compares
+     * afresh and shows a card for each conflict still there); with units left for another reason (a file that won't
+     * come, a unit changed since compared, one the computer's take left), "1 taken · 1 not synced: the Journal says
+     * why" (that sync's entry in the Journal lists each unit left and its why in its Output, SyncRoutes.sayLeft; the
+     * sheet, comparing afresh, wouldn't): never
+     * "Up to date" with anything left but a removal
+     * whose song is here (Take.SONG_HERE, the sync's answer). [indexes], why
+     * the index stage took and gave none (the computer's database of another schema, Outcomes.indexesSkipped), said
+     * after the rest in place of "Up to date", and before what to do: the line ends with that.
      */
-    internal fun said(outcome: JsonObject?): String {
-        val left = conflictsLeft(outcome).first
-        val what = what(outcome)
+    internal fun said(outcome: JsonObject?, indexes: String? = null): String {
+        val what = done(outcome)
+        // What to do last, after what it did and why no index went.
+        val ask = when {
+            conflictsLeft(outcome).first > 0 -> TO_CHOOSE
+            notSynced(outcome) > 0 -> TO_SEE_WHY
+            else -> ""
+        }
+        val said = listOf(what, indexes.orEmpty()).filter { it.isNotEmpty() }.joinToString(" · ")
         return when {
-            left > 0 -> "$what$TO_CHOOSE"
+            ask.isNotEmpty() -> "$said$ask"
+            indexes != null -> said
             what.isEmpty() -> UP_TO_DATE
             else -> "$UP_TO_DATE · $what"
         }
+    }
+
+    /** The units [outcome] left for another reason than a conflict unsettled: every `left` entry but those
+     * [conflictsLeft] counts, and but a removal left because its song is here (Take.SONG_HERE): that is the sync's
+     * answer, the song kept, so a sync that left only those is up to date. */
+    private fun notSynced(outcome: JsonObject?): Int {
+        val kept = (outcome?.get("left") as? JsonArray).orEmpty().count { entry ->
+            ((entry as? JsonArray)?.getOrNull(1) as? JsonPrimitive)?.takeIf { it.isString }?.content == Take.SONG_HERE
+        }
+        return ((outcome?.get("left") as? JsonArray)?.size ?: 0) - conflictsLeft(outcome).first - kept
+    }
+
+    /** "1 taken, 2 given, 2 changed on both sides · 1 not synced", or "" when it did nothing. */
+    private fun done(outcome: JsonObject?): String {
+        val other = notSynced(outcome)
+        return listOf(what(outcome), if (other > 0) "$other not synced" else "").filter { it.isNotEmpty() }
+            .joinToString(" · ")
     }
 
     /** "1 taken, 2 given, 2 changed on both sides", or "" when it did nothing. */
@@ -191,7 +227,7 @@ object Syncs {
 
     /** A sync that went on past a stage that failed: "Copying the computer's pages failed: No answer from … (1 taken)". */
     internal fun failedStage(label: String, detail: String, outcome: JsonObject?): String {
-        val what = what(outcome)
+        val what = done(outcome)
         return "$label failed" + (if (detail.isEmpty()) "" else ": $detail") + (if (what.isEmpty()) "" else " ($what)")
     }
 
@@ -236,6 +272,7 @@ object Syncs {
     private const val SONG = "song/"
     private const val UP_TO_DATE = "Up to date"
     private const val TO_CHOOSE = ": tap Sync to choose"
+    private const val TO_SEE_WHY = ": the Journal says why"
     /** How the phone's queue says what a failed job threw: its last line of output (JobQueue). */
     private const val ERROR_LINE = "error: "
 }

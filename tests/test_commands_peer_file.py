@@ -523,7 +523,7 @@ def test_an_import_with_indexes_merges_them_and_reports_each_site(libraries, tmp
     [report] = [line["report"] for line in events(out.output) if line.get("event") == "report"]
     assert report["parts"] == ["library", "songbooks", "indexes"]
     assert report["indexes"] == [{"site": "gtptabs", "title": "gtptabs.com", "direction": "taken", "before": 0,
-                                  "after": 2, "read": "2026-11-02T08:00:00Z"}]
+                                  "after": 2, "new": 2, "checked": 2, "read": "2026-11-02T08:00:00Z"}]
     said = [e["detail"] for e in events(out.output) if e.get("stage") == "index" and e["state"] == "running"]
     assert said[:4] == ["", "Copying the file's indexes out", "Comparing with this database's indexes",
                         "Backing up the database first"]
@@ -537,6 +537,21 @@ def test_an_import_with_indexes_merges_them_and_reports_each_site(libraries, tmp
     other.conn.close()
 
 
+def test_an_import_over_a_site_this_side_holds_says_what_is_newer_in_the_file(libraries, tmp_path):
+    desk, studio, _ = libraries
+    desk.song()
+    gtptabs_index(desk, datetime(2026, 11, 2, 8, 0, tzinfo=UTC), ["https://gtptabs.com/tabs/2/blur.html",
+                                                                  "https://gtptabs.com/tabs/2/blur/beetlebum.html"])
+    gtptabs_index(studio, datetime(2026, 10, 2, 8, 0, tzinfo=UTC), ["https://gtptabs.com/tabs/2/blur.html"])
+    f = exported(desk, tmp_path / "i.caracole", "--parts", "library,songbooks,indexes")
+    out = run(studio, "peer", "import", "--yes", "--progress", str(f))
+    assert out.exit_code == 0, out.output
+    said = [e["detail"] for e in events(out.output) if e.get("stage") == "index" and e["state"] == "running"]
+    assert "gtptabs.com · 1 sitemap newer in the file" in said and "gtptabs.com · 1 sitemap" not in said
+    [report] = [line["report"] for line in events(out.output) if line.get("event") == "report"]
+    assert [(e["before"], e["after"], e["new"], e["checked"]) for e in report["indexes"]] == [(1, 2, 1, 2)]
+
+
 def test_indexes_that_cant_be_merged_say_so_and_the_import_exits_1(libraries, tmp_path, monkeypatch):
     desk, studio, _ = libraries
     desk.song()
@@ -544,10 +559,11 @@ def test_indexes_that_cant_be_merged_say_so_and_the_import_exits_1(libraries, tm
     f = exported(desk, tmp_path / "i.caracole", "--parts", "library,songbooks,indexes")
 
     def refused(*args, **kw):
-        raise index_transfer.TransferError("the disk is full")
+        raise index_transfer.TransferError("The disk is full")  # a refusal's words begin with a capital, as most do
 
     monkeypatch.setattr(index_transfer, "merge", refused)
     out = run(studio, "peer", "import", "--yes", "--progress", str(f))
+    # Appended mid-sentence, its first letter lower.
     assert out.exit_code == 1 and "The file's indexes weren't merged: the disk is full" in out.output
     assert ("index", "failed") in [(e["stage"], e["state"]) for e in events(out.output) if "stage" in e]
     [report] = [e["report"] for e in events(out.output) if e.get("event") == "report"]

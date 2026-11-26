@@ -11,8 +11,9 @@
     POST /sync/compare    this library and the one at ``address`` compared, as ``caracole peer diff`` compares them:
                           every unit the two hold differently, with what the sync proposes for it, each song's names,
                           each side's change since the two last agreed, its part and the songbooks that list it; each
-                          songbook difference's two documents; the indexes newer on either side; kept 10 minutes
-                          under an id of its own (``comparison``)
+                          songbook difference's two documents; the indexes newer on either side, or why none goes
+                          (``indexes_skipped``: the other's database of another schema); kept 10 minutes under an id
+                          of its own (``comparison``)
     GET  /api/sync/unit?comparison=&id=   a unit of a comparison kept, its two documents: this side's and the other's,
                           asked of it now, or an import's read from its file (``here``, ``there``: null where a side
                           hasn't got it); the page's script alone asks it
@@ -363,6 +364,23 @@ def _compared(app: WebApp, address: str, *, documents: bool = True) -> _Found:
     return _Found(state, found, max(agreed) if agreed else None, base, kept, listed, songbooks, newest)
 
 
+# Why a sync takes and gives no index (``indexes_skipped``): the other caracole's database is of another schema, whose
+# index export a merge here refuses, as its merge refuses this one's, once downloaded whole.
+INDEXES_NEWER = "The indexes there are of a newer caracole: update this one to take them"
+INDEXES_OLDER = "The indexes there are of an older caracole: update that one to share them"
+
+
+def indexes_skipped(schema: int | None) -> str | None:
+    """Why a sync with a caracole whose database is at ``schema`` (its state's, ``PeerState.schema``) takes and gives
+    no index, before any is asked for: ``INDEXES_NEWER`` or ``INDEXES_OLDER``; None at this database's schema, or for
+    a state that says none (an older caracole: asked as before, its merge refusing an export of another schema)."""
+    from caracole import db
+
+    if schema is None or schema == db.SCHEMA_VERSION:
+        return None
+    return INDEXES_NEWER if schema > db.SCHEMA_VERSION else INDEXES_OLDER
+
+
 def _waiting(here: Mapping[str, str], there: Mapping[str, str]) -> list[dict[str, Any]]:
     """Each site whose newest read differs on the two sides, in ``index_transfer.SITES``' order, with which side's is
     newer: the side that has one when the other hasn't, else the later."""
@@ -394,7 +412,8 @@ def compare(app: WebApp, form: dict[str, str]) -> Response:
     the two last agreed (``peer_sync.change_of``), ``part`` its part (``peer_sync.part_of``) and ``with`` the
     songbooks either side has that list it (``peer_sync.listed_songs``); ``songbooks``, ``{unit: {here, there}}``
     each songbook difference's two documents (None for a side that hasn't got it); ``indexes``, each site whose newest
-    read differs (``{site, title, here, there, newer}``)."""
+    read differs (``{site, title, here, there, newer}``), none with a caracole of another schema, whose
+    ``indexes_skipped`` says why (``indexes_skipped``'s words; None else)."""
     from caracole import peer_sync as sync
 
     address = _address(form)
@@ -405,18 +424,21 @@ def compare(app: WebApp, form: dict[str, str]) -> Response:
     comparison = _keep(app, kept)
     peer = {"address": address, "server": state.server, "caracole": state.version, "name": state.name,
             "kind": kept.kind, "made": None}
+    skipped = indexes_skipped(state.schema)
     return json_response(200, comparison_answer(comparison, peer, made.synced, kept.holds, found, made.base,
                                                 made.kept, made.listed, made.songbooks,
-                                                _waiting(made.newest, state.indexes)))
+                                                [] if skipped else _waiting(made.newest, state.indexes), skipped))
 
 
 def comparison_answer(comparison: str, peer: Mapping[str, Any], synced_before: str | None, holds, found: list,
                       base, kept, listed: Mapping[str, list[str]], songbooks: Mapping[str, tuple[Any, Any]],
-                      indexes: list[dict[str, Any]]) -> dict[str, Any]:
+                      indexes: list[dict[str, Any]], skipped: str | None = None) -> dict[str, Any]:
     """A comparison as the page reads it (``POST /sync/compare``'s answer, and ``POST /sync/import/compare``'s of a
     file: web/sync_file_routes.py): its id, the other side (``peer``), when the two last agreed, the parts the other
     holds, each difference with its names, each side's change against ``base`` and ``kept``, its part and the
-    songbooks that list it (``listed``), each songbook difference's two documents, and the indexes newer there."""
+    songbooks that list it (``listed``), each songbook difference's two documents, the indexes newer there, and why
+    the sync takes and gives none (``skipped``, its ``indexes_skipped``: the Sync sheet's Site indexes says it; None
+    for no reason)."""
     from caracole import peer_sync as sync
 
     def names(d) -> dict[str, str] | None:
@@ -435,6 +457,7 @@ def comparison_answer(comparison: str, peer: Mapping[str, Any], synced_before: s
                          "with": listed.get(d.id, [])} for d in found],
         "songbooks": {unit_id: {"here": here, "there": there} for unit_id, (here, there) in songbooks.items()},
         "indexes": indexes,
+        "indexes_skipped": skipped,
     }
 
 

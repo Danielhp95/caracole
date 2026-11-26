@@ -66,7 +66,8 @@ interface SyncSettings {
  *                             (`synced_before`, null: never), the parts it holds, each difference (its kind, proposal,
  *                             why, each side's digest, a song's names, each side's change since the two agreed, its
  *                             part and the songbooks that list it), each songbook difference's two documents, and the
- *                             indexes newer on either side; the comparison kept 10 minutes
+ *                             indexes its Sync will take and give (SyncEngine's index stage's rule, not
+ *                             sync_routes._waiting's); the comparison kept 10 minutes
  *     GET  /api/sync/unit?comparison=&id=   a unit of a comparison kept, its two documents (`here`, the phone's now;
  *                             `there`, the computer's, asked of it now; null where a side hasn't got it): the page's
  *                             script alone asks it
@@ -264,8 +265,15 @@ class SyncRoutes(val engine: SyncEngine, val queue: JobQueue, val settings: Sync
         return if (new) job else null
     }
 
+    /** Each unit [outcome] left as it was, a line of the job's Output ("Not synced: song/a/b: why"): where the
+     * Journal holds the reasons the Wi-Fi line's "the Journal says why" names (Syncs.said), a fresh comparison in the
+     * sheet having none of them. */
+    private fun sayLeft(context: JobContext, outcome: SyncOutcome) {
+        for ((unit, why) in outcome.left) context.say("$NOT_SYNCED$unit: $why")
+    }
+
     /** A sync's job (kind `sync`, under `sync:<address>`, SyncEngine's stages): [sync] run with the stages told to
-     * the job; its outcome the view's, or on a failure what it did until then, the stages after the one that failed
+     * the job, each unit it left said in its Output ([sayLeft]); its outcome the view's, or on a failure what it did until then, the stages after the one that failed
      * skipped, as the computer's queue ends them; [afterSync] whatever came of it. */
     private fun syncJob(shown: String, address: String,
                         sync: suspend (stage: (String, String, String) -> Unit) -> SyncOutcome): JobSpec = JobSpec(
@@ -278,8 +286,9 @@ class SyncRoutes(val engine: SyncEngine, val queue: JobQueue, val settings: Sync
                     context.stage(stage, state, detail)
                 }
                 context.outcome(SyncJson.outcome(outcome))
+                sayLeft(context, outcome)
             } catch (e: SyncFailed) {
-                e.outcome?.let { context.outcome(SyncJson.outcome(it)) }
+                e.outcome?.let { context.outcome(SyncJson.outcome(it)); sayLeft(context, it) }
                 for ((stage, _) in SyncEngine.STAGES) if (stage !in told) context.stage(stage, "skipped")
                 throw e
             } finally {
@@ -337,6 +346,9 @@ class SyncRoutes(val engine: SyncEngine, val queue: JobQueue, val settings: Sync
     }
 
     companion object {
+        /** A line of a sync's Output for each unit it left as it was ([sayLeft]), the unit and its why after it. */
+        const val NOT_SYNCED = "Not synced: "
+
         /** POST /sync/apply's form at most: a line a difference, for a library's every unit. */
         const val APPLY_LIMIT = 1_048_576
 
