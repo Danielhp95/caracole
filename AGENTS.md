@@ -767,8 +767,8 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   - Two parts, each its own words (`_own`: less its CJK title groups, 【】《》「」『』〈〉, else the first one's
     content), then, where no mark parts the text, its first title group the title (`_bracketed`: "米津玄師
     MV「Lemon」", "《孤勇者》陈奕迅"; words before it that begin with the channel or a known artist and go on the title
-    instead; its artist's loose tail cut as `clean`'s, `_loose_at`, less a leading "by"), before a known artist, the
-    channel's song and the suggested video's.
+    instead; its artist's loose tail cut as `clean`'s, `_loose_at`, an artist after it less a leading "by"), before a
+    known artist, the channel's song and the suggested video's.
   - A bracket of a version's or a tag's words alone (`_TAGS`: "【Live】", "【翻唱】") is never a title: leading the text
     or a part it goes (`_untagged`), after the song's words it stays as written.
 - Every path that turns text into a name uses it:

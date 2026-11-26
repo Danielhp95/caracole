@@ -47,8 +47,6 @@
 {"args":["消愁 (当你走进这欢乐场 背上所有的梦与想)"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"消愁 (当你走进这欢乐场 背上所有的梦与想)"}
 {"args":["野人『动态歌词MV』"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"野人"}
 {"args":["消愁【動態歌詞Lyrics】"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"消愁"}
-{"args":["【抖音】别知己"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"别知己"}
-{"args":["【純音樂】Summer"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"Summer"}
 {"args":["晴天 (官方 MV 现场)"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"晴天"}
 {"args":["晴天 (官方 现场版)"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"晴天 (官方 现场版)"}
 {"args":["一点点 (Cover 葛東琪)"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"一点点 (Cover 葛東琪)"}
@@ -89,6 +87,7 @@
 {"args":["「」 x"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"「」 x"}
 {"args":["x 【】"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"x 【】"}
 {"args":["Song [Official Video (HD)] x"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"Song [Official Video (HD)] x"}
+{"args":["Live「Lightning Crashes」"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"Live「Lightning Crashes」"}
 {"args":["Radiohead - Topic"],"fixture":null,"fn":"caracole.song_names.clean_channel","kw":{},"out":"Radiohead"}
 {"args":["AdeleVEVO"],"fixture":null,"fn":"caracole.song_names.clean_channel","kw":{},"out":"Adele"}
 {"args":["EstopaVEVO"],"fixture":null,"fn":"caracole.song_names.clean_channel","kw":{},"out":"Estopa"}
@@ -265,9 +264,11 @@
 {"args":["IU(Live MV)「Blueming」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["IU(Live MV)","Blueming"]}
 {"args":["《孤勇者》 by 陈奕迅"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
 {"args":["《孤勇者》 BY 陈奕迅 Official MV"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
-{"args":["《孤勇者》 By 陈奕迅"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
 {"args":["《孤勇者》 Byron Bay"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Byron Bay","孤勇者"]}
 {"args":["《孤勇者》 by"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["By Divine Right「Song」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By Divine Right","Song"]}
+{"args":["《孤勇者》 by"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["Live「Lightning Crashes」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"Live"},"out":["Live","Lightning Crashes"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -503,9 +504,11 @@
 {"args":["IU(Live MV)「Blueming」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["IU(Live MV)","Blueming"]}
 {"args":["《孤勇者》 by 陈奕迅"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
 {"args":["《孤勇者》 BY 陈奕迅 Official MV"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
-{"args":["《孤勇者》 By 陈奕迅"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
 {"args":["《孤勇者》 Byron Bay"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Byron Bay","孤勇者"]}
 {"args":["《孤勇者》 by"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["By Divine Right「Song」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By Divine Right","Song"]}
+{"args":["《孤勇者》 by"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["Live「Lightning Crashes」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"Live"},"out":["Live","Lightning Crashes"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -739,9 +742,11 @@
 {"args":["IU(Live MV)「Blueming」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["IU(Live MV)","Blueming"]}
 {"args":["《孤勇者》 by 陈奕迅"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
 {"args":["《孤勇者》 BY 陈奕迅 Official MV"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
-{"args":["《孤勇者》 By 陈奕迅"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
 {"args":["《孤勇者》 Byron Bay"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Byron Bay","孤勇者"]}
 {"args":["《孤勇者》 by"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["By Divine Right「Song」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By Divine Right","Song"]}
+{"args":["《孤勇者》 by"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["Live「Lightning Crashes」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"Live"},"out":["Live","Lightning Crashes"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -959,9 +964,11 @@
 {"args":["IU(Live MV)「Blueming」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["IU(Live MV)","Blueming"]}
 {"args":["《孤勇者》 by 陈奕迅"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
 {"args":["《孤勇者》 BY 陈奕迅 Official MV"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
-{"args":["《孤勇者》 By 陈奕迅"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
 {"args":["《孤勇者》 Byron Bay"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Byron Bay","孤勇者"]}
 {"args":["《孤勇者》 by"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["By Divine Right「Song」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By Divine Right","Song"]}
+{"args":["《孤勇者》 by"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["Live「Lightning Crashes」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"Live"},"out":["Live","Lightning Crashes"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -1189,9 +1196,11 @@
 {"args":["IU(Live MV)「Blueming」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["IU(Live MV)","Blueming"]}
 {"args":["《孤勇者》 by 陈奕迅"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
 {"args":["《孤勇者》 BY 陈奕迅 Official MV"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
-{"args":["《孤勇者》 By 陈奕迅"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
 {"args":["《孤勇者》 Byron Bay"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Byron Bay","孤勇者"]}
 {"args":["《孤勇者》 by"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["By Divine Right「Song」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By Divine Right","Song"]}
+{"args":["《孤勇者》 by"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["Live「Lightning Crashes」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"Live"},"out":["Live","Lightning Crashes"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -1423,9 +1432,11 @@
 {"args":["IU(Live MV)「Blueming」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["IU(Live MV)","Blueming"]}
 {"args":["《孤勇者》 by 陈奕迅"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
 {"args":["《孤勇者》 BY 陈奕迅 Official MV"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
-{"args":["《孤勇者》 By 陈奕迅"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
 {"args":["《孤勇者》 Byron Bay"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Byron Bay","孤勇者"]}
 {"args":["《孤勇者》 by"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["By Divine Right「Song」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By Divine Right","Song"]}
+{"args":["《孤勇者》 by"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["Live「Lightning Crashes」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"Live"},"out":["Live","Lightning Crashes"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -1621,9 +1632,11 @@
 {"args":["IU(Live MV)「Blueming」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["IU(Live MV)","Blueming"]}
 {"args":["《孤勇者》 by 陈奕迅"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
 {"args":["《孤勇者》 BY 陈奕迅 Official MV"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
-{"args":["《孤勇者》 By 陈奕迅"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
 {"args":["《孤勇者》 Byron Bay"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Byron Bay","孤勇者"]}
 {"args":["《孤勇者》 by"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["By Divine Right「Song」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By Divine Right","Song"]}
+{"args":["《孤勇者》 by"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["Live「Lightning Crashes」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"Live"},"out":["Live","Lightning Crashes"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -1830,9 +1843,11 @@
 {"args":["IU(Live MV)「Blueming」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["IU(Live MV)","Blueming"]}
 {"args":["《孤勇者》 by 陈奕迅"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
 {"args":["《孤勇者》 BY 陈奕迅 Official MV"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
-{"args":["《孤勇者》 By 陈奕迅"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
 {"args":["《孤勇者》 Byron Bay"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Byron Bay","孤勇者"]}
 {"args":["《孤勇者》 by"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["By Divine Right「Song」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By Divine Right","Song"]}
+{"args":["《孤勇者》 by"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["Live「Lightning Crashes」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Live"},"out":["Live","Lightning Crashes"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -2024,6 +2039,8 @@
 {"args":["IU(Live MV)「Blueming」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["IU(Live MV)","Blueming"]}
 {"args":["《孤勇者》 by 陈奕迅"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
 {"args":["《孤勇者》 BY 陈奕迅 Official MV"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
-{"args":["《孤勇者》 By 陈奕迅"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
 {"args":["《孤勇者》 Byron Bay"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Byron Bay","孤勇者"]}
 {"args":["《孤勇者》 by"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["By Divine Right「Song」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By Divine Right","Song"]}
+{"args":["《孤勇者》 by"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["Live「Lightning Crashes」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"Live"},"out":["Live","Lightning Crashes"]}

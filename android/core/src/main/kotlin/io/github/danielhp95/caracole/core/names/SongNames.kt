@@ -127,7 +127,7 @@ object SongNames {
             "|\u3008[^\u3008\u3009]*\u3009|\u3016[^\u3016\u3017]*\u3017|\u3014[^\u3014\u3015]*\u3015",
     )
 
-    /** A 「」 or 『』 group longer than this quotes a lyric, no title. */
+    /** A 「」 or 『』 group holding CJK longer than this quotes a lyric, no title. */
     const val LYRIC_CHARS = 16
 
     /** The groups that quote a lyric. */
@@ -193,13 +193,14 @@ object SongNames {
         return letters > 0 && 3 * words.sumOf { noiseLetters(it) } >= 2 * letters
     }
 
-    /** Whether a 「」 or 『』 group's words are a sentence: ending as one, a space between two CJK characters, or
-     * longer than [LYRIC_CHARS]. */
+    /** Whether a 「」 or 『』 group's words are a sentence: ending as one, a space between two CJK characters, or,
+     * holding a CJK character, longer than [LYRIC_CHARS] (sixteen Latin letters are a title's). */
     private fun lyric(inner: String): Boolean {
         val s = Py.strip(inner)
         if (s.isEmpty()) return false
         val points = Py.codePoints(s)
-        return points.last() in SENTENCE_END || PyRe.search(CJK_GAP, s) != null || points.size > LYRIC_CHARS
+        return points.last() in SENTENCE_END || PyRe.search(CJK_GAP, s) != null ||
+            points.size > LYRIC_CHARS && PyRe.search(CJK, s) != null
     }
 
     /** Whether a group of [text] is a video's: its words noise, or a lyric quoted where it isn't the whole text. */
@@ -300,11 +301,12 @@ object SongNames {
     /** [text] less every group, its spaces folded. */
     private fun ungrouped(text: String): String = Py.split(PyRe.sub(GROUPS, text) { " " }).joinToString(" ")
 
-    /** Whether [text] has words of its own outside its groups: a video's or a tag's alone ("MV", "Live") are none. */
+    /** Whether [text] has words of its own outside its groups: a video's or a tag's alone ("MV", "Live") are none,
+     * and so is a lone "by" ("《孤勇者》 by"). */
     private fun ownWords(text: String): Boolean {
         val words = ungrouped(text)
         val found = wordsOf(words)
-        return Normalize.nameWords(words).isNotEmpty() &&
+        return Normalize.nameWords(words).isNotEmpty() && PyUnicode.casefold(words) != "by" &&
             !(found.isNotEmpty() && found.all { it in TAGS || isNoise(it) })
     }
 
@@ -359,22 +361,22 @@ object SongNames {
 
     /** Rule 2: a text no mark parts, its first CJK title group the title; the words before it the artist, less a
      * video's words loose at their end, but where they begin with an artist [known] knows and go on, those words the
-     * title; else the words after it, less their groups; less a leading "by"; none for a title group alone. */
+     * title; else the words after it, less their groups and a leading "by" ("By Divine Right" before it stays); none
+     * for a title group alone. */
     private fun bracketed(text: String, known: Known): Pair<String, String>? {
         val titles = titles(text)
         if (PyRe.search(MARK, text) != null || titles.isEmpty()) return null
         val title = inner(titles[0])
         val before = artistWords(text.substring(0, titles[0].range.first))
-        var artist: String
+        val artist: String
         if (ownWords(before)) {
             if (known.artist(before) == null && !known.title(before)) {
                 first(before, known)?.let { return it } // "陈奕迅 孤勇者《英雄联盟：双城之战》" from 陈奕迅's channel
             }
             artist = before
         } else {
-            artist = artistWords(ungrouped(text.substring(titles[0].range.last + 1)))
+            artist = withoutBy(artistWords(ungrouped(text.substring(titles[0].range.last + 1))))
         }
-        artist = withoutBy(artist)
         if (Normalize.nameWords(artist).isEmpty() || Normalize.nameWords(title).isEmpty()) return null
         return artist to title
     }

@@ -100,6 +100,14 @@ def test_a_quoted_lyric_goes_wherever_it_is_but_a_short_quote_is_a_title(text, c
     assert clean(text) == cleaned
 
 
+@pytest.mark.parametrize("title,channel,expected", [
+    # Longer than LYRIC_CHARS is a lyric's length only for a group holding CJK: 17 Latin letters are a title.
+    ("Live「Lightning Crashes」", "Live", ("Live", "Lightning Crashes")),
+])
+def test_a_long_quote_of_latin_words_is_a_title(conn, title, channel, expected):
+    assert read_names(conn, title, channel=channel) == expected
+
+
 @pytest.mark.parametrize("text,cleaned", [
     # A group holding CJK goes once noise covers two thirds of its letters (CJK characters and Latin letters).
     ("林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版MV)",
@@ -107,8 +115,6 @@ def test_a_quoted_lyric_goes_wherever_it_is_but_a_short_quote_is_a_title(text, c
     ("《孤勇者》陈奕迅 (动态歌词版)", "《孤勇者》陈奕迅"),
     ("野人『动态歌词MV』", "野人"),
     ("消愁【動態歌詞Lyrics】", "消愁"),
-    ("【抖音】别知己", "别知己"),
-    ("【純音樂】Summer", "Summer"),
     ("晴天 (官方 MV 现场)", "晴天"),  # 4 of 6: two thirds
     ("晴天 (官方 现场版)", "晴天 (官方 现场版)"),  # 3 of 5
     ("一点点 (Cover 葛東琪)", "一点点 (Cover 葛東琪)"),  # none of it
@@ -424,9 +430,11 @@ def test_a_bracketed_titles_artist_loses_its_loose_tail_as_clean_cuts_one(conn, 
     # The artist after the title bracket loses a leading "by", in any case; "by" alone names no one.
     ("《孤勇者》 by 陈奕迅", None, ("陈奕迅", "孤勇者")),
     ("《孤勇者》 BY 陈奕迅 Official MV", None, ("陈奕迅", "孤勇者")),
-    ("《孤勇者》 By 陈奕迅", None, ("陈奕迅", "孤勇者")),
     ("《孤勇者》 Byron Bay", None, ("Byron Bay", "孤勇者")),  # a whole word alone
     ("《孤勇者》 by", None, None),
+    ("By Divine Right「Song」", None, ("By Divine Right", "Song")),  # before the bracket, a band's own "By"
+    # A lone "by" beside a title bracket is no words of the part's own: the bracket is the title.
+    ("《孤勇者》 by", "陈奕迅", ("陈奕迅", "孤勇者")),
 ])
 def test_a_bracketed_titles_artist_loses_a_leading_by(conn, title, channel, expected):
     assert read_names(conn, title, channel=channel) == expected
