@@ -145,6 +145,14 @@ object Outcomes {
     const val CANCELLED = "Cancelled before it ran."
     const val INTERRUPTED_RAN = "The server stopped mid-way. Try again to finish."
     const val INTERRUPTED_WAITED = "The server stopped before it ran. Try again runs it."
+    /** A sync's, whose next step is Compare again ([COMPARE_AGAIN]), never Try again: the action its entry offers
+     * named (outcome.py's INTERRUPTED_SYNC_RAN and INTERRUPTED_SYNC_WAITED). */
+    const val INTERRUPTED_SYNC_RAN = "The server stopped mid-way. Compare again to finish."
+    const val INTERRUPTED_SYNC_WAITED = "The server stopped before it ran. Compare again to run it."
+    /** A give stopped after some of its pushes, in commands/peer.py's words (SyncEngine's alike): "3 given in the
+     * first 2 pushes of 4; then …", the count of what was given said there, so its outcome says it once
+     * (outcome.py's _GIVEN_SO_FAR). */
+    private val GIVEN_SO_FAR = PyRegex.compile("""\b\d+ given in the first """)
     internal val ELSEWHERE = mapOf("lacuerda" to "LaCuerda has a sheet",
                                   "gtptabs" to "gtptabs lists a page for it")
     private val NO_UNITS = setOf(Status.INDEX_MERGE_KIND)
@@ -382,15 +390,17 @@ object Outcomes {
         val left = Status.changesLeft(job.units).size
         val parts = ArrayList<String>()
         if (taken > 0 || kind != "sync") parts += "${Status.plural(taken, "change")} taken"
-        if (given > 0) parts += "${Status.plural(given, "change")} given"
-        val said = if (parts.isNotEmpty()) capitalize(parts.joinToString(", ")) + "." else "Nothing changed in either book."
+        val gave = if (given > 0) listOf("${Status.plural(given, "change")} given") else emptyList()
+        val said = if (parts.isNotEmpty() || gave.isNotEmpty()) capitalize((parts + gave).joinToString(", ")) + "."
+                   else "Nothing changed in either book."
         val kept = if (left > 0) " ${Status.plural(left, "change")} left as ${if (left == 1) "it was" else "they were"}."
                    else ""
         // Changes taken or given, then a failure (any stage after them, or the server stopping it): what was shared
         // said first, as the Sync sheet titles it "Synced with", then the failure, never doubling its words.
         val shared = taken > 0 || given > 0
         if (job.state == Job.INTERRUPTED) {
-            val stopped = if (job.startedAt != null) INTERRUPTED_RAN else INTERRUPTED_WAITED
+            val stopped = if (action != null) (if (job.startedAt != null) INTERRUPTED_SYNC_RAN else INTERRUPTED_SYNC_WAITED)
+                          else if (job.startedAt != null) INTERRUPTED_RAN else INTERRUPTED_WAITED
             return Outcome("waiting", "Interrupted", if (shared) "$said$kept $stopped" else stopped, action)
         }
         val after = shared && (line.tone == "failed" || job.stages.any { it.state == Job.FAILED })
@@ -402,7 +412,10 @@ object Outcomes {
         val also = indexesSkipped(job.stages)?.let { " $it." } ?: ""
         if (after) {
             val failure = sentence(line.text)
-            val reason = if (said.dropLast(1) in failure) failure else "$said$kept $failure"
+            // The give's failure counts what it gave: said there alone.
+            val lead = if (GIVEN_SO_FAR.find(failure) == null) said
+                       else if (parts.isNotEmpty()) capitalize(parts.joinToString(", ")) + "." else ""
+            val reason = listOf(PyText.strip(lead + kept), failure).filter { it.isNotEmpty() }.joinToString(" ")
             if (line.tone == "failed") return Outcome("failed", "Failed", reason, action)
             return Outcome("waiting", Status.PEER_DONE.getValue(kind), reason, action)
         }

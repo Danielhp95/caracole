@@ -74,7 +74,9 @@ internal object SyncJson {
     fun outcome(o: SyncOutcome): JsonObject = JsonObject(linkedMapOf<String, JsonElement>(
         "taken" to texts(o.taken),
         "given" to texts(o.given),
-        "left" to JsonArray(o.changesLeft.map { (id, why) -> JsonArray(listOf(JsonPrimitive(id), JsonPrimitive(why))) }),
+        "left" to JsonArray(o.changesLeft.map { (id, why) ->
+            JsonArray(listOf(JsonPrimitive(id), JsonPrimitive(why)))
+        }),
         "agreed" to JsonPrimitive(o.agreed),
         "indexed" to texts(o.indexed),
     ).apply { o.report?.let { put("report", it) } })

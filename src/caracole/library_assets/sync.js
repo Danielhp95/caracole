@@ -191,6 +191,10 @@
     const songs = new Set(kept.filter((d) => d.id.startsWith("song/")).map((d) => d.id.slice("song/".length)));
     return take.filter((d) => d.id.startsWith("removed/") && songs.has(d.id.slice("removed/".length)));
   };
+  // The removals of ``found`` to take that its songs given answer, the owner's choices as they are now: what the
+  // counts and each part's line leave out, so the two agree.
+  const answeredIn = (found) => answeredByItsSong(found.filter((d) => d.proposal === "theirs"),
+    found.filter((d) => d.proposal === "mine" || (d.proposal === "conflict" && choices.get(d.id) === "here")));
   const keyOf = (d) => [d.id, d.here || "", d.there || ""].join("\n");
   const nameIn = (d) => {
     const names = objOf(d.names);
@@ -233,10 +237,7 @@
   };
   const drawCounts = () => {
     const found = scoped();
-    const take = found.filter((d) => d.proposal === "theirs");
-    const given = found.filter((d) => d.proposal === "mine"
-      || (d.proposal === "conflict" && choices.get(d.id) === "here"));
-    const n = { take: take.length - answeredByItsSong(take, given).length,
+    const n = { take: found.filter((d) => d.proposal === "theirs").length - answeredIn(found).length,
                 give: found.filter((d) => d.proposal === "mine").length,
                 both: found.filter((d) => d.proposal === "conflict").length };
     for (const key of Object.keys(n)) {
@@ -274,7 +275,8 @@
       }
       return said.join(" · ");
     }
-    const mine = differences().filter((d) => partOf(d) === part);
+    const answered = new Set(answeredIn(differences()));
+    const mine = differences().filter((d) => partOf(d) === part && !answered.has(d));
     const there = mine.filter((d) => listOf(d.change)[1]).length;
     const here = isFile() ? 0 : mine.filter((d) => listOf(d.change)[0]).length;
     return [there ? there + " changed " + lowered(sides.there.on) : "",

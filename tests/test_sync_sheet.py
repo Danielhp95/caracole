@@ -884,6 +884,14 @@ def test_a_removal_there_of_a_song_given_here_is_never_counted_to_take_as_the_sh
             counts = dict(page.js(COUNTS))
             assert counts["take"] == f"{len(take) - len(case['out'])} to take", (case["case"], counts)
             assert counts["give"] == f"{len(kept)} to give", (case["case"], counts)
+            # The Library part's line agrees with the counts: a removal its song's give answers is no change there.
+            library = [d for d in take if not d["id"].startswith("songbook/")]
+            there = len(library) - len(case["out"])
+            here = len([d for d in kept if not d["id"].startswith("songbook/")])
+            said = ", ".join(([f"{there} changed on Studio"] if there else [])
+                             + ([f"{here} changed on this computer"] if here else []))
+            assert page.js(PARTS_SAID)[0][0] == "Library · Your songs, their sheets and pages, both ways" + (
+                f" · {said}" if said else ""), case["case"]
             page.press("Escape")
             assert page.wait(f"!{SHEET}.open")
 
@@ -922,6 +930,59 @@ def test_a_removal_there_of_a_song_changed_on_both_is_counted_to_take_only_once_
             page.click("#sync-cancel")  # queues nothing; opened again, it compares afresh
             assert page.wait(f"!{SHEET}.open")
         assert fake.posted("/sync/apply") == []
+
+
+@in_chromium
+@pytest.mark.parametrize("side", ["here", "there"])
+def test_what_the_sheet_counts_to_take_is_what_the_done_view_says_the_sync_took(served, tmp_path, side):
+    """Wonderwall changed here and removed there, its removal to take, Hotel California changed on both, Let It Be
+    there alone: each conflict kept ``side``, the ↓ the sheet counts as Sync goes, with the conflicts chosen there, is
+    what the sync took (peer_sync.decide and answered_by_its_song over the choices posted), as the done view says."""
+    from types import SimpleNamespace
+
+    from caracole import peer_sync as sync
+
+    differences = [
+        song("song/oasis/wonderwall", "Oasis", "Wonderwall", "conflict", ("changed", "gone")),
+        difference("removed/oasis/wonderwall", "Oasis - Wonderwall (removed)", "theirs",
+                   "removed there since the last share", (None, "new")),
+        song("song/eagles/hotel california", "Eagles", "Hotel California", "conflict", ("changed", "changed")),
+        song("song/the beatles/let it be", "The Beatles", "Let It Be", "theirs", (None, "new")),
+    ]
+    fake = FakeSync(comparison=dict(copy.deepcopy(COMPARISON), indexes=[], songbooks={}, differences=differences))
+    held = fake.hold_on("/sync/apply")
+    with opened(tmp_path, served(fake) + "#sheet=sync") as page:
+        at_view(page, "what")
+        assert page.wait("!document.getElementById('sync-go').disabled")
+        page.click("#sync-go")
+        for _ in range(2):
+            at_card(page)
+            before = page.js("document.getElementById('sync-card-at').textContent")
+            page.click(f"#sync-keep-{side}")
+            assert page.wait(f"document.getElementById('sync-card-at').textContent !== {json.dumps(before)} || "
+                             f"{SHEET}.dataset.view !== 'conflict'")
+        [form] = fake.awaited("/sync/apply")
+        counted = int(page.js("document.querySelector('#sync-counts .take').dataset.n"))
+        chosen = dict(reversed(line.split("\t")) for line in form["choices"][0].splitlines())
+        found = [SimpleNamespace(id=d["id"], proposal=d["proposal"]) for d in differences]
+        take, give = sync.decide(found, None, lambda d: {"here": sync.MINE, "there": sync.THEIRS}[chosen[d.id]])
+        took = [d for d in take if d not in sync.answered_by_its_song(take, give)]
+        over = sync_view("done", {"compare": ("done", "4 differences"), "take": ("done", f"took {len(took)}"),
+                                  "give": ("done", f"gave {len(give)}"), "agree": ("done", "4 units")},
+                         [(d.id, "taken", "") for d in took] + [(d.id, "given", "") for d in give], REPORT)
+        fake.views = [over]
+        held.set()
+        at_view(page, "done", timeout=15)
+        there = [d for d in differences if d["proposal"] == "conflict" and chosen[d["id"]] == "there"]
+        assert counted + len(there) == len(took) and counted == {"here": 1, "there": 2}[side], (counted, took)
+        # The done view says each of them came: a song taken, or a conflict whose version there was kept (a removal
+        # taken with its song on that song's row).
+        summary = {s["kind"]: s for s in page.js(SUMMARY)}
+        came = [r[0] for r in summary["taken"]["rows"]] + [
+            r[0] for r in summary.get("conflicts", {"rows": []})["rows"] if "Studio's version kept" in r[1]]
+        names = {"oasis/wonderwall": "Wonderwall – Oasis", "eagles/hotel california": "Hotel California – Eagles",
+                 "the beatles/let it be": "Let It Be – The Beatles"}
+        assert sorted(came) == sorted({names[d.id.partition("/")[2]] for d in took}), summary
 
 
 # --- following it, and what it did ------------------------------------------------------------------------------

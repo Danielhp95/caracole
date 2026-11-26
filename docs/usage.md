@@ -4104,7 +4104,12 @@ other side's spelling and folder ("Radiohead - Creep" for your "radiohead - cree
 capitals of the artist's name differ, every song here by that artist takes the new spelling. A
 unit the other side doesn't have is removed here, as `caracole remove` would, so name only units
 that `diff` lists. A unit that changed since it was compared is left. `peer pull` then says why
-and exits 1.
+and exits 1:
+
+    Left as it was: Radiohead - Creep: changed there since compared
+
+`peer sync` and `peer import` say each unit they left the same way, by its name. A conflict left
+unanswered says `changed on both sides: choose a side with --choose or --prefer`.
 
 Two caracoles whose databases are copies of each other count as the same caracole, and a sync
 says so. `caracole peer new-id` gives one of them its own id. It also forgets what that one agreed
@@ -4289,7 +4294,7 @@ read 02/11/26"). **Sync** opens the sheet:
 The sync runs as a request in the Journal. Behind it is
 `caracole peer sync ADDRESS --push --parts=… --compared HASH --choose=SIDE:ID …`. If it left
 something or failed, the Journal offers **Compare again**, because your choices belonged to a
-comparison that is past. If the libraries changed after the comparison, Sync is refused and the
+comparison that is past. Its Output names each unit left and why, as the phone's Journal does. If the libraries changed after the comparison, Sync is refused and the
 sheet compares again, keeping your choices.
 
 **Export** shows each part's size. Library and Songbooks are ticked. Site indexes is not, because

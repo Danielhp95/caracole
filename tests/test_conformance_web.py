@@ -1137,12 +1137,16 @@ def peer_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | No
     from caracole.commands.peer import TAKEN_STAY
 
     give = "Couldn't give them 2: No answer from http://192.168.1.20:8737: timed out"
-    pushed = f"Couldn't give them 3: 1 of 3 pushes taken; push 2 of 3: the computer answered 503. {TAKEN_STAY}"
+    # commands/peer.py's words for a give stopped after its first push (``far``), which count what it gave.
+    pushed = (f"Couldn't give them 3: 1 given in the first push of 3; then push 2 of 3: the computer answered 503. "
+              f"{TAKEN_STAY}")
     agree = "Couldn't note where the books agree: database is locked"
     taken = {"compare": ("done", "4 differences"), "take": ("done", "took 1")}
     for note, stages, units, said in (
             ("taken, then the give failed", dict(taken, give=("failed", give)), took[:1], give),
             ("taken, then a push of three failed after one", dict(taken, give=("failed", pushed)), took, pushed),
+            ("nothing taken, a push of three failed after one", dict(taken, give=("failed", pushed)), took[1:],
+             pushed),
             ("taken, then the agreement failed",
              dict(taken, give=("done", "gave 1"), agree=("failed", agree)), took, agree),
             ("nothing shared, the give failed", dict(taken, give=("failed", give)), [], give)):

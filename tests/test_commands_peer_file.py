@@ -16,7 +16,7 @@ import httpx
 import pytest
 
 from caracole import db, index_transfer, peer_file, peer_import, site_index
-from caracole.commands.peer import PEER_IMPORT_STAGES
+from caracole.commands.peer import CONFLICT_LEFT, LEFT, PEER_IMPORT_STAGES
 from caracole import peer_sync as sync
 from caracole.config import load_config
 from caracole.get import read_progress_line
@@ -231,7 +231,7 @@ def test_a_unit_an_import_left_is_taken_from_the_same_file_next_time(libraries, 
 
     monkeypatch.setattr(overrides, "put_song_entries", failing)
     out = run(studio, "peer", "import", "--yes", str(f))
-    assert out.exit_code == 1 and "Left song/oasis/wonderwall" in out.output
+    assert out.exit_code == 1 and f"{LEFT}: Oasis - Wonderwall: " in out.output
     monkeypatch.setattr(overrides, "put_song_entries", real)
     again = run(studio, "peer", "import", "--yes", str(f))
     assert again.exit_code == 0, again.output
@@ -388,7 +388,7 @@ def test_a_conflict_kept_here_is_remembered_and_not_asked_again_at_the_next_impo
     third = exported(desk, tmp_path / "3.caracole")
     out = run(studio, "peer", "import", "--yes", str(third))
     assert out.exit_code == 0, out.output
-    assert "Left song/radiohead/creep: both books changed it: choose one" in out.output
+    assert f"{LEFT}: Radiohead - Creep: {CONFLICT_LEFT}" in out.output
     assert load_overrides(studio.cfg.overrides_file).version == {override_key(CREEP): "key=Gm&capo=0"}
     out = run(studio, "peer", "import", "--yes", f"--choose=there:{unit}", str(third))
     assert out.exit_code == 0, out.output
@@ -445,7 +445,7 @@ def test_a_conflict_neither_chosen_nor_preferred_is_left_and_named(libraries, tm
     studio.song(version="key=Gm&capo=0")
     out = run(studio, "peer", "import", "--yes", str(exported(desk, tmp_path / "d.caracole")))
     assert out.exit_code == 0, out.output
-    assert "Left song/radiohead/creep: both books changed it: choose one" in out.output
+    assert f"{LEFT}: Radiohead - Creep: {CONFLICT_LEFT}" in out.output
     assert sync.kept_of(studio.conn, desk.id()) == {}
     out = run(studio, "peer", "import", "--yes", "--prefer", "there", str(exported(desk, tmp_path / "e.caracole")))
     assert out.exit_code == 0, out.output
@@ -781,7 +781,7 @@ def test_a_song_left_out_of_the_file_is_left_here_saying_why(libraries, tmp_path
     result = run(desk, "peer", "export", str(f))
     assert result.exit_code == 0 and "Left out song/oasis/wonderwall" in result.output
     out = run(studio, "peer", "import", "--yes", str(f))
-    assert out.exit_code == 1 and "Left song/oasis/wonderwall" in "\n".join(
+    assert out.exit_code == 1 and f"{LEFT}: Oasis - Wonderwall: " in "\n".join(
         " ".join(line.split()) for line in out.output.splitlines())
     assert "radiohead/creep" in studio.songs() and "oasis/wonderwall" not in studio.songs()
 

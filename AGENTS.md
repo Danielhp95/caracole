@@ -1383,7 +1383,8 @@ It is rows.js's, shared by both pages:
   and a section a kind of change (`.sync-section[data-kind=taken|given|conflicts|songbooks|indexes|pages|left]`, `left`
   the units the sync left as they were, with why, never a removal whose song is here, `peer_sync.SONG_HERE`: the view's
   outcome leaves it out, `status.changes_left`, as the Journal's line and outcome count none of it, and so do the
-  phone's Status, Outcomes, JobViews and `SyncOutcome.changesLeft`, its "Not synced:" lines too), each a button that
+  phone's Status, Outcomes, JobViews and `SyncOutcome.changesLeft`, its "Left as it was:" lines too, one rule,
+  `Take.isChangeLeft`), each a button that
   opens its rows, closed at first; drawn from the comparison, the choices and the cards' documents the sheet sent, and
   the view's `outcome` and its `report` (§3.5), from the outcome alone for a sync the page didn't start. A file's has no
   given section. Its indexes say what each merge added, never a site's whole size as if new (sync-words.js `indexNews`,
@@ -1399,9 +1400,11 @@ It is rows.js's, shared by both pages:
   of its own (`indexes` "Indexes not brought up to date", `pages` "Pages not brought up to date"). The Journal's outcome
   agrees with that title for any sync that took or gave changes and then failed, whatever stage (the give or one of its
   pushes, the agreement, the pages, the indexes) or the server stopping it: what was shared first, then the failure
-  ("Failed" where the job failed, "Shared" waiting where it is done but a stage failed, "Interrupted"), never doubling a
-  sentence the failure's words say; with nothing shared the failure alone (outcome.py `_peer_outcome`,
-  `Outcomes.peerOutcome`). Indexes skipped for the other's database of another schema (the report's `indexes_skipped`,
+  ("Failed" where the job failed, "Shared" waiting where it is done but a stage failed, "Interrupted", which ends
+  "Compare again to finish.", the action its entry offers, `INTERRUPTED_SYNC_RAN`, never Try again's), the count of
+  what was given said once (a give stopped after a push counts it in its own words, "1 given in the first push of 3",
+  so the lead then says what was taken alone, `_GIVEN_SO_FAR`); with nothing shared the failure alone (outcome.py
+  `_peer_outcome`, `Outcomes.peerOutcome`). Indexes skipped for the other's database of another schema (the report's `indexes_skipped`,
   commands/peer.py's and SyncEngine's) are its indexes row, "Indexes not synced". The headline's tone is the one its
   sides share, none when they differ. Sending a file says both numbers in the size's unit (sync-words.js `sizeOf`, "1.5
   of 2.1 GB", the phone's `Sizes.of`).
@@ -2485,8 +2488,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   took and gave, each conflict left "changed on both sides", every other unit left "not synced", and the index
   stage's words where the computer's database is of another schema (`Outcomes.indexesSkipped`), the line ending with
   what to do, ": tap Sync to choose" for conflicts (the sheet the tap opens compares afresh and shows each) or ": the
-  Journal says why" for the rest (that sync's entry's Output lists each unit left and its why: SyncRoutes.sayLeft,
-  `NOT_SYNCED`, Feed's step of what a request of the phone's own said, `Feed.SAID`; a fresh comparison wouldn't);
+  Journal says why" for the rest (that sync's entry's Output lists each unit left by its name and its why:
+  SyncRoutes.sayLeft, Feed's step of what a request of the phone's own said, `Feed.SAID`; a fresh comparison wouldn't);
   a stage that failed, its words); the queue's work, a
   sync among it, in a foreground service (`SyncService`).
   - Its debug build is an app of its own beside F-Droid's release (`io.github.danielhp95.caracole`, the release key):
@@ -2931,6 +2934,13 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     a bug, the request's error;
   - `Feed.feed` takes the outcomes and chips as `Outcome` and `Chip`, and works out one not given from the job, as
     feed.py does (an outcome from its line, the running one's chips with no facts);
+  - a request of the phone's own that said something as it ran (`JobContext.say` with no step: a sync's units left
+    as they were, SyncRoutes.sayLeft) has one more step in its Output, `Feed.SAID` ("What it said"), its lines those
+    words, the phone's alone: feed.py has none (a command's Output is its step's own), and no vector holds it
+    (SyncRoutesTest). A unit left is said by its label as compared (`SyncOutcome.labels`), else its id, in
+    commands/peer.py's words, which caracole serve's sync prints in its step's Output (`LEFT`, `left_line`,
+    `SyncRoutes.leftLine`): "Left as it was: Oasis - Wonderwall: changed here since compared"; a conflict the
+    unattended sync left "…: changed on both sides: tap Sync to choose" (`CONFLICT_LEFT`), never as a failure;
   - the times are the phone's zone's, named as Python's `%Z` names them, tzdata's abbreviations (CET and CEST), from
     requests.json's `zones` (`ZoneNames`: every zone's labels of letters by offset and since when, else the offset's
     number, `-03`, `+0545`), never java.time's or ICU's "GMT+01:00"; month names the C locale's;

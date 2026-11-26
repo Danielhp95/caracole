@@ -265,11 +265,11 @@ class SyncRoutes(val engine: SyncEngine, val queue: JobQueue, val settings: Sync
         return if (new) job else null
     }
 
-    /** Each unit [outcome] left as it was, a line of the job's Output ("Not synced: song/a/b: why"): where the
-     * Journal holds the reasons the Wi-Fi line's "the Journal says why" names (Syncs.said), a fresh comparison in the
-     * sheet having none of them; none for a removal whose song is here ([SyncOutcome.changesLeft]: no change left). */
+    /** Each unit [outcome] left as it was, a line of the job's Output ([leftLine]): where the Journal holds the
+     * reasons the Wi-Fi line's "the Journal says why" names (Syncs.said), a fresh comparison in the sheet having none
+     * of them; none for a removal whose song is here ([SyncOutcome.changesLeft]: no change left). */
     private fun sayLeft(context: JobContext, outcome: SyncOutcome) {
-        for ((unit, why) in outcome.changesLeft) context.say("$NOT_SYNCED$unit: $why")
+        for ((unit, why) in outcome.changesLeft) context.say(leftLine(outcome.labels[unit] ?: unit, why))
     }
 
     /** A sync's job (kind `sync`, under `sync:<address>`, SyncEngine's stages): [sync] run with the stages told to
@@ -346,8 +346,18 @@ class SyncRoutes(val engine: SyncEngine, val queue: JobQueue, val settings: Sync
     }
 
     companion object {
-        /** A line of a sync's Output for each unit it left as it was ([sayLeft]), the unit and its why after it. */
-        const val NOT_SYNCED = "Not synced: "
+        /** A line of a sync's Output for each unit it left as it was ([sayLeft]), in commands/peer.py's words
+         * (LEFT, left_line): "Left as it was: Radiohead - Creep: changed here since compared", the unit by its label
+         * as compared (else its id); a conflict the unattended sync left said as what it is, [CONFLICT_LEFT]. */
+        const val LEFT = "Left as it was"
+
+        /** A conflict left unsettled ([SyncEngine.UNSETTLED]), as its line says it: what to do, the Wi-Fi line's own
+         * (Syncs' "tap Sync to choose"); the computer's command says its own way to settle one. */
+        const val CONFLICT_LEFT = "changed on both sides: tap Sync to choose"
+
+        /** [name] left as it was, with [why] ([LEFT]). */
+        fun leftLine(name: String, why: String): String =
+            "$LEFT: $name: ${if (why == SyncEngine.UNSETTLED) CONFLICT_LEFT else why}"
 
         /** POST /sync/apply's form at most: a line a difference, for a library's every unit. */
         const val APPLY_LIMIT = 1_048_576

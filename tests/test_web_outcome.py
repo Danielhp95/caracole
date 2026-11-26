@@ -18,7 +18,8 @@ from caracole.web.jobs import (
     remove_steps,
     version_steps,
 )
-from caracole.web.outcome import INTERRUPTED_RAN, SITE_NAMES, Action, Chip, Outcome, elsewhere, outcome, progress, steps
+from caracole.web.outcome import (INTERRUPTED_RAN, INTERRUPTED_SYNC_RAN, INTERRUPTED_SYNC_WAITED, SITE_NAMES, Action,
+                                  Chip, Outcome, elsewhere, outcome, progress, steps)
 from caracole.web.status import SongFacts, job_line
 
 from conftest import add_song
@@ -967,7 +968,9 @@ def test_a_sync_that_failed_at_any_stage_after_its_changes_says_what_it_shared_f
             ("song/blur/song-2", "taken", "")]
     done = {"compare": ("done", "4 differences"), "take": ("done", "took 3")}
     give = "Couldn't give them 2: No answer from http://192.168.1.20:8737: timed out"
-    pushed = (f"Couldn't give them 3: 1 of 3 pushes taken; push 2 of 3: the computer answered 503. {TAKEN_STAY}")
+    # commands/peer.py's own words for a give stopped after its first push (``far``): its count said there alone.
+    pushed = (f"Couldn't give them 3: 1 given in the first push of 3; then push 2 of 3: the computer answered 503. "
+              f"{TAKEN_STAY}")
 
     def said(state, stages, units=took, output=()):
         job = peer_job("sync", state, dict(done, **stages), units=units, output=output)
@@ -978,7 +981,11 @@ def test_a_sync_that_failed_at_any_stage_after_its_changes_says_what_it_shared_f
         "failed", "Failed", f"3 changes taken. {give}.", "Compare again")
     stopped = took[:1] + [("song/abba/sos", "given", "")]
     assert said("failed", {"give": ("failed", pushed)}, stopped, output=(f"error: {pushed}",)) == (
-        "failed", "Failed", "1 change taken, 1 change given. " + pushed.split(f" {TAKEN_STAY}")[0], "Compare again")
+        "failed", "Failed", "1 change taken. " + pushed.split(f" {TAKEN_STAY}")[0], "Compare again")
+    # Nothing taken, the failure's count of what was given the one said.
+    assert said("failed", {"take": ("done", "took 0"), "give": ("failed", pushed)}, stopped[1:],
+                output=(f"error: {pushed}",)) == (
+        "failed", "Failed", pushed.split(f" {TAKEN_STAY}")[0], "Compare again")
     agree = "Couldn't note where the books agree: database is locked"
     assert said("failed", {"give": ("done", "gave 0"), "agree": ("failed", agree)},
                 output=(f"error: {agree}",)) == ("failed", "Failed", f"3 changes taken. {agree}.", "Compare again")
@@ -990,4 +997,12 @@ def test_a_sync_that_failed_at_any_stage_after_its_changes_says_what_it_shared_f
     job.state = INTERRUPTED
     assert job.started_at is not None
     over = outcome(job, job_line(job, None))
-    assert (over.word, over.reason) == ("Interrupted", f"3 changes taken. {INTERRUPTED_RAN}")
+    assert (over.word, over.reason) == ("Interrupted", f"3 changes taken. {INTERRUPTED_SYNC_RAN}")
+    assert INTERRUPTED_SYNC_RAN == "The server stopped mid-way. Compare again to finish." != INTERRUPTED_RAN
+    # Its action is Compare again, never Try again (its choices were made on a comparison that is past): so it says.
+    assert over.action.label == "Compare again"
+    waited = peer_job("sync", "queued", {})
+    waited.state, waited.started_at = INTERRUPTED, None
+    over = outcome(waited, job_line(waited, None))
+    assert (over.word, over.reason, over.action.label) == ("Interrupted", INTERRUPTED_SYNC_WAITED, "Compare again")
+    assert INTERRUPTED_SYNC_WAITED == "The server stopped before it ran. Compare again to run it."

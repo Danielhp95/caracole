@@ -25,6 +25,7 @@ from caracole.web.app import Request, WebApp
 from caracole.web import peer_routes  # noqa: F401  (its limits read before a test sets peer_push's smaller)
 from caracole.web.jobs import JobQueue
 
+from caracole.commands.peer import CONFLICT_LEFT, LEFT
 from test_web_app import ALLOWED, HOST, Recorder
 
 NOW = "2026-10-31T00:00:00Z"
@@ -211,7 +212,7 @@ def test_a_file_that_changed_there_since_it_was_kept_leaves_the_song_as_it_was(t
     theirs = there.song()
     (song_dir(there.cfg.library_dir, theirs) / "sheet.txt").write_bytes(b"edited on a synced device")
     result = run(here, "peer", "pull", HOST, f"--unit=song/{theirs.key}")
-    assert result.exit_code == 1 and f"Left song/{theirs.key}:" in result.output
+    assert result.exit_code == 1 and f"{LEFT}: Radiohead - Creep: " in result.output
     assert find_song(here.conn, theirs.key) is None
 
 
@@ -329,10 +330,10 @@ def test_a_pull_as_compared_leaves_a_unit_changed_on_either_side_since(two):
     unit = f"song/{theirs.key}"
     digest = there.units()[unit].digest
     result = run(here, "peer", "pull", HOST, f"--unit={'0' * 64}:-:{unit}")  # changed there since compared
-    assert result.exit_code == 1 and f"Left {unit}: changed there since compared" in result.output
+    assert result.exit_code == 1 and f"{LEFT}: Radiohead - Creep: changed there since compared" in result.output
     here.song(sheet=b"[C]Creep, mine")  # changed here since compared: none here then
     result = run(here, "peer", "pull", HOST, f"--unit={digest}:-:{unit}")
-    assert result.exit_code == 1 and f"Left {unit}: changed here since compared" in result.output
+    assert result.exit_code == 1 and f"{LEFT}: Radiohead - Creep: changed here since compared" in result.output
     assert here.units()[unit].digest != digest  # the change made here since kept
     mine = here.units()[unit].digest
     result = run(here, "peer", "pull", HOST, f"--unit={digest}:{mine}:{unit}")
@@ -445,6 +446,9 @@ def test_a_syncs_progress_is_its_stages_and_a_line_a_unit(two, monkeypatch):
     assert sorted((e["id"], e["outcome"], e["why"]) for e in events if e.get("event") == "unit") == sorted([
         (unit["Radiohead - Creep"], "left", "skipped, as you chose"), (unit["Oasis - Wonderwall"], "taken", ""),
         (unit["Estopa - Tu Calorro"], "taken", ""), (unit["Muse - Hysteria"], "given", "")])
+    # The Journal's Output: what it left, a plain line beside its event, by the name the owner knows it by.
+    said = [line for line in result.output.splitlines() if read_progress_line(line) is None]
+    assert [line for line in said if line.startswith(LEFT)] == [f"{LEFT}: Radiohead - Creep: skipped, as you chose"]
     found = json.loads(run(here, "peer", "diff", HOST, "--json").output)["differences"]
     assert [(d["id"], d["proposal"]) for d in found] == [(unit["Radiohead - Creep"], "conflict")]
 
@@ -454,8 +458,10 @@ def test_a_conflict_neither_chosen_nor_preferred_is_left_and_named(two):
     unit = two_conflicts(here, there)
     result = run(here, "peer", "sync", HOST, "--push", "--yes")
     assert result.exit_code == 0, result.output
-    assert f"Left {unit['Radiohead - Creep']}: both books changed it: choose one" in result.output
-    assert f"Left {unit['Oasis - Wonderwall']}: both books changed it: choose one" in result.output
+    # Said as what it is, in the words the phone's Journal says them: by its name, never its key.
+    assert f"  {LEFT}: Radiohead - Creep: {CONFLICT_LEFT}" in result.output
+    assert f"  {LEFT}: Oasis - Wonderwall: {CONFLICT_LEFT}" in result.output
+    assert unit["Radiohead - Creep"] not in result.output.partition("left as they are.")[2]
     found = json.loads(run(here, "peer", "diff", HOST, "--json").output)["differences"]
     assert sorted(d["id"] for d in found) == sorted([unit["Radiohead - Creep"], unit["Oasis - Wonderwall"]])
 
@@ -676,7 +682,7 @@ def test_a_song_with_a_kept_file_too_big_to_push_is_left_with_why_and_the_rest_g
     wonderwall = here.song("Oasis", "Wonderwall", sheet=b"[Em]Today", version=None)
     result = run(here, "peer", "sync", HOST, "--push", "--yes")
     assert result.exit_code == 0, result.output
-    assert f"Left song/{creep.key}: {peer_file.TOO_BIG}" in result.output
+    assert f"{LEFT}: Radiohead - Creep: {peer_file.TOO_BIG}" in result.output
     assert "Gave 1 change to" in result.output
     assert find_song(there.conn, wonderwall.key) is not None and find_song(there.conn, creep.key) is None
     assert max(size for _, size in posted) < peer_push.FILE_MAX  # the file was never sent
@@ -779,7 +785,7 @@ def test_a_unit_a_lookup_changed_while_the_give_waited_is_left_changed_here_neve
     result = run(here, "peer", "sync", HOST, "--push", "--yes")
     assert result.exit_code == 0, result.output[-600:]
     assert handed
-    assert f"Left {changed}: {sync.CHANGED_HERE}" in result.output
+    assert f"{LEFT}: Band - Song 9: {sync.CHANGED_HERE}" in result.output
     assert find_song(there.conn, last.key) is None
     assert there.conn.execute("SELECT COUNT(*) FROM songs").fetchone()[0] == 11
     assert "Here takes 0, there takes 1." in run(here, "peer", "sync", HOST, "--push", "--yes").output
@@ -830,10 +836,10 @@ def test_the_units_a_give_left_before_its_first_push_are_said_when_that_push_is_
     transport = refusing_jobs(there, lambda n: n == 1, limits={peer_push.PUSH_PATH: 40_000})
     monkeypatch.setattr("caracole.commands.peer.transport_for_peer", lambda: transport)
     long_songs(here, 12)
-    creep = here.song("Radiohead", "Creep", sheet=b"%PDF" + b"\0" * peer_push.FILE_MAX)  # 64 MiB and 4 bytes
+    here.song("Radiohead", "Creep", sheet=b"%PDF" + b"\0" * peer_push.FILE_MAX)  # 64 MiB and 4 bytes
     result = run(here, "peer", "sync", HOST, "--push", "--yes")
     assert result.exit_code == 1 and "answered 503" in result.output, result.output[-600:]
-    assert f"Left song/{creep.key}: {peer_file.TOO_BIG}" in result.output
+    assert f"{LEFT}: Radiohead - Creep: {peer_file.TOO_BIG}" in result.output
 
 
 def test_a_song_kept_here_against_a_removal_there_answers_its_removal_too(two):
@@ -868,7 +874,7 @@ def test_a_removal_left_beside_its_songs_conflict_is_left_again_never_taken_at_t
     for _ in range(2):  # the song's conflict left each time, unsettled
         result = run(here, "peer", "sync", HOST, "--push", "--yes")
         assert result.exit_code == 0, result.output
-        assert f"Left removed/{creep.key}: {sync.SONG_HERE}" in result.output
+        assert f"{LEFT}: Radiohead - Creep (removed): {sync.SONG_HERE}" in result.output
         assert f"Took removed/{creep.key}" not in result.output
     found = {d["id"]: d["proposal"] for d in json.loads(run(here, "peer", "diff", HOST, "--json").output)["differences"]}
     assert found == {f"song/{creep.key}": "conflict", f"removed/{creep.key}": "theirs"}
@@ -905,7 +911,7 @@ def test_a_song_the_take_respells_and_a_lookup_then_changes_is_left_changed_here
     monkeypatch.setattr(peer_cmd, "_push", after_a_lookup)
     result = run(here, "peer", "sync", HOST, "--push", "--yes")
     assert result.exit_code == 0, result.output
-    assert f"Left song/{desperado.key}: {sync.CHANGED_HERE}" in result.output
+    assert f"{LEFT}: eagles - Desperado: {sync.CHANGED_HERE}"  # as compared in result.output
     assert find_song(there.conn, desperado.key) is None
 
 

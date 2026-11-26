@@ -170,6 +170,12 @@ IN_REVIEW = "Not sure which UG song it is."
 CANCELLED = "Cancelled before it ran."
 INTERRUPTED_RAN = "The server stopped mid-way. Try again to finish."
 INTERRUPTED_WAITED = "The server stopped before it ran. Try again runs it."
+# A sync's, whose next step is Compare again (COMPARE_AGAIN), never Try again: the action its entry offers named.
+INTERRUPTED_SYNC_RAN = "The server stopped mid-way. Compare again to finish."
+INTERRUPTED_SYNC_WAITED = "The server stopped before it ran. Compare again to run it."
+# A give stopped after some of its pushes, in commands/peer.py's words (``_push``'s ``far``): "3 given in the first 2
+# pushes of 4; then …", the count of what was given said there, so its outcome says it once.
+_GIVEN_SO_FAR = re.compile(r"\b\d+ given in the first ")
 _ELSEWHERE = {"lacuerda": "LaCuerda has a sheet", "gtptabs": "gtptabs lists a page for it"}
 # A sync's and a take's steps, by their stages' names (jobs.PEER_SYNC_STAGES, PEER_TAKE_STAGES; the phone's sync adds
 # mirror and index).
@@ -484,15 +490,17 @@ def _peer_outcome(job: Job, kind: str, line: Line) -> Outcome:
     given = sum(1 for _, said, _ in job.units if said == "given")
     left = len(changes_left(job))
     parts = [f"{plural(taken, 'change')} taken"] if taken or kind != "sync" else []
-    parts += [f"{plural(given, 'change')} given"] if given else []
-    said = (", ".join(parts)).capitalize() + "." if parts else "Nothing changed in either book."
+    gave = [f"{plural(given, 'change')} given"] if given else []
+    said = (", ".join(parts + gave)).capitalize() + "." if parts or gave else "Nothing changed in either book."
     kept = f" {plural(left, 'change')} left as {'it was' if left == 1 else 'they were'}." if left else ""
     # Changes taken or given, then a failure (any stage after them: the give, a push of several, the agreement, the
     # phone's copy of the pages, the indexes; or the server stopping it): what was shared said first, as the Sync
     # sheet titles it "Synced with", then the failure, never doubling what its words say already.
     shared = bool(taken or given)
     if job.state == INTERRUPTED:
-        stopped = INTERRUPTED_RAN if job.started_at else INTERRUPTED_WAITED
+        ran, waited = ((INTERRUPTED_SYNC_RAN, INTERRUPTED_SYNC_WAITED) if action
+                       else (INTERRUPTED_RAN, INTERRUPTED_WAITED))
+        stopped = ran if job.started_at else waited
         return Outcome("waiting", "Interrupted", f"{said}{kept} {stopped}" if shared else stopped, action)
     after = shared and (line.tone == "failed" or any(s.state == "failed" for s in job.stages))
     if line.tone == "failed" and not after:
@@ -504,7 +512,9 @@ def _peer_outcome(job: Job, kind: str, line: Line) -> Outcome:
     also = f" {skipped}." if skipped else ""
     if after:
         failure = _sentence(line.text)
-        reason = failure if said[:-1] in failure else f"{said}{kept} {failure}"
+        if _GIVEN_SO_FAR.search(failure):  # the give's failure counts what it gave: said there alone
+            said = (", ".join(parts)).capitalize() + "." if parts else ""
+        reason = " ".join(words for words in ((said + kept).strip(), failure) if words)
         if line.tone == "failed":
             return Outcome("failed", "Failed", reason, action)
         return Outcome("waiting", _PEER_DONE[kind], reason, action)

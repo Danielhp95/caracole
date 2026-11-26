@@ -296,10 +296,12 @@ object Status {
     }
 
     /** The units a sync, a take or a pull left as they were, each with why (status.py's changes_left): but a removal
-     * left because its song is here (Take.SONG_HERE, its song's difference left unsettled), the sync's answer, the
-     * song kept, and no change left. Its line, its outcome and its view (JobViews' peerOutcome) count these. */
+     * left because its song is here ([Take.isChangeLeft]), the sync's answer, the song kept, and no change left. Its
+     * line, its outcome and its view (JobViews' peerOutcome) count these. Over a job's units as its commands said
+     * them (status.py's port, held by job_views*.jsonl), every reason among them; the phone's own sync's outcome is
+     * SyncOutcome.changesLeft already. */
     fun changesLeft(units: List<JobUnit>): List<JobUnit> =
-        units.filter { it.outcome == "left" && it.why != Take.SONG_HERE }
+        units.filter { it.outcome == "left" && Take.isChangeLeft(it.why) }
 
     /** A sync, a take or a pull that is done (status.py's _peer_done). */
     private fun peerDone(job: Shape, kind: String, details: String): Line {

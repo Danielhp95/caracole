@@ -47,6 +47,12 @@ object Take {
      * change nothing, and saying it taken would read as the song gone (peer_sync.SONG_HERE). */
     const val SONG_HERE = "its song is here: its removal there is not taken"
 
+    /** Whether a unit left as it was, for [why], is a change left: every reason but [SONG_HERE], that removal being
+     * the sync's answer, the song kept (status.py's changes_left). The one rule of SyncOutcome.changesLeft (the
+     * sync's own outcome), Status.changesLeft (a job's units, as the computer's commands say them) and Syncs'
+     * notSynced (a `lastOutcome` an older build saved, which still lists them). */
+    fun isChangeLeft(why: String?): Boolean = why != SONG_HERE
+
     /** The order units are taken in: songs first, then tombstones, songbooks and the rest (peer_sync._KINDS). */
     private val KINDS = listOf("song", "removed", "songbook", "alias", "artist_url", "block")
 

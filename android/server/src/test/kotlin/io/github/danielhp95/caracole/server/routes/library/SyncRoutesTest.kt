@@ -486,13 +486,15 @@ class SyncRoutesTest {
                      outcome["left"])
         assertEquals(before, computer.state().getValue(unit) to app.database.read { Units.libraryState(it) }.getValue(unit),
                      "the conflict as it was on both sides")
-        assertEquals(listOf("${SyncRoutes.NOT_SYNCED}$unit: ${SyncEngine.UNSETTLED}"), ended.said,
-                     "each unit left said, which the Journal's Output shows (Feed's step of what it said), where the " +
-                         "Wi-Fi line sends the owner")
+        // Each unit left said by its name, a conflict as what it is, in commands/peer.py's words (LEFT): which the
+        // Journal's Output shows (Feed's step of what it said), where the Wi-Fi line sends the owner.
+        val said = "Left as it was: Oasis - Wonderwall: changed on both sides: tap Sync to choose"
+        assertEquals(listOf(said), ended.said)
+        assertEquals(said, SyncRoutes.leftLine("Oasis - Wonderwall", SyncEngine.UNSETTLED))
         val feed = io.github.danielhp95.caracole.server.jobs.Feed.feed(listOf(ended), emptyMap(), opened = setOf(ended.id))
         val shown = feed.toString()
-        assertTrue(io.github.danielhp95.caracole.server.jobs.Feed.SAID in shown &&
-                       "${SyncRoutes.NOT_SYNCED}$unit" in shown, shown)
+        assertTrue(io.github.danielhp95.caracole.server.jobs.Feed.SAID in shown && said in shown && unit !in shown,
+                   shown)
         assertEquals(1, synced.get())
         assertTrue(routes.alone(address) != null, "once over, another may be queued")
     }
@@ -511,7 +513,7 @@ class SyncRoutesTest {
         // The removal is the song's answer (Take.SONG_HERE): only the song's conflict is left, said and counted.
         assertEquals(JsonArray(listOf(JsonArray(listOf(JsonPrimitive(unit), JsonPrimitive(SyncEngine.UNSETTLED))))),
                      view.getValue("outcome").jsonObject["left"])
-        assertEquals(listOf("${SyncRoutes.NOT_SYNCED}$unit: ${SyncEngine.UNSETTLED}"), ended.said)
+        assertEquals(listOf("Left as it was: Radiohead - Creep: changed on both sides: tap Sync to choose"), ended.said)
         assertEquals("Shared · 1 change left as it was",
                      view.getValue("line").jsonObject.getValue("text").jsonPrimitive.content)
     }
