@@ -2,10 +2,11 @@
 
 `version()` says what the app carries, which YtDlpVersionTest holds to android/youtube/pins.json. `run(argv, out_path,
 err_path)` is one yt-dlp run, as the computer's `yt-dlp ARGV…` is one process: `yt_dlp.main` under `sys.argv`, its
-output into the two files, its exit status returned, never raised. As the computer's process does, anything that goes
-wrong under it (yt-dlp that won't import, a bug out of `main` or out of yt-dlp-ejs) is its traceback in the err file and
-status 1; only a KeyboardInterrupt (or another BaseException that isn't SystemExit) goes through, as it would stop the
-computer's process too. Nothing here asks a site: what yt-dlp asks is its argv's, and the caller's to gate.
+output into the two files, its exit status returned, never raised (opening the two files is the caller's concern: a path
+that can't be written raises). As the computer's process does, anything that goes wrong under it (yt-dlp that won't
+import, a bug out of `main` or out of yt-dlp-ejs) is its traceback in the err file and status 1; only a
+KeyboardInterrupt (or another BaseException that isn't SystemExit) goes through, as it would stop the computer's process
+too. Nothing here asks a site: what yt-dlp asks is its argv's, and the caller's to gate.
 
 What it is not:
 

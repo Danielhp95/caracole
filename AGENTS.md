@@ -2639,23 +2639,22 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   `:ml`. `SoxrArm64Test` runs the NDK's static arm64 build of it (`arm64SoxrDriver`, soxr_driver.c) under
   qemu-aarch64 (the shell's `qemu-user`) over every record: NEON's cr32s the same bits as the vectors, the scalar cr32
   (`SOXR_USE_SIMD=0`) within 6e-7; skipped, saying why, without the NDK or qemu. No arm64 device is a test bed.
-- `:youtube` (Android library, stage Y0 of the phone-youtube design): yt-dlp under Chaquopy's Python, the engine
-  alone, which sends no request yet (no route, service or gate runs it); the app's `debugImplementation` alone until
-  stage Y5, so no release carries Python. Every piece is `youtube/pins.json`'s
-  (Chaquopy 17.2.0, its plugin from Maven Central in settings.gradle.kts; Python 3.13; the yt-dlp and yt-dlp-ejs
-  wheels by URL and SHA-256; QuickJS-NG's source), which android/flake.nix reads: the wheels fetched fixed-output into
-  `CARACOLE_YTDLP_WHEELS`, `python3.13` on PATH as Chaquopy's `buildPython`, a build without either failing, naming
-  it (in `checkEngine`, which each of `:youtube`'s tasks runs first, so another module builds without them); pip
-  `--no-index --no-deps` from that folder alone. `caracole_ytdlp.py`: `version()`, `run(argv, out_path, err_path)`
-  (`yt_dlp.main`, `sys.stdout` and `sys.stderr` line-buffered into the files, never fds 1 and 2; one run a process;
-  `SystemExit` its status, any other Exception its traceback in the err file and 1, never raised). `PinsTest` (JVM)
-  holds the wheels to the pins and yt-dlp-ejs to the version yt-dlp's `METADATA` requires; `GlueTest` (JVM) runs the
-  glue with the shell's python3.13 over the wheels; `YtDlpVersionTest` (its own test
-  APK, `YoutubeTestRunner`: `caracole.network=loopback`; `device-test.sh --youtube`) Python started, `version()` the
-  pins', yt-dlp's `--version` alone, an exception out of `main` its traceback and 1, and none of the standard
-  library's modules the design leaves out (Chaquopy packages none of them). release-check.sh: no `libpython*`,
-  `libchaquopy_java.so`, `lib*_python.so` or `lib*_chaquopy.so`, class under `com/chaquo/` or `assets/chaquopy/`
-  entry in the release, the debug APK the control of each.
+- `:youtube` (Android library, stage Y0 of the phone-youtube design): yt-dlp under Chaquopy's Python, the engine alone,
+  which sends no request yet (no route, service or gate runs it); the app's `debugImplementation` alone until stage Y5,
+  so no release carries Python. Every piece is `youtube/pins.json`'s (Chaquopy 17.2.0, its plugin from Maven Central in
+  settings.gradle.kts; Python 3.13; the yt-dlp and yt-dlp-ejs wheels by URL and SHA-256; QuickJS-NG's source), which
+  android/flake.nix reads: the wheels fetched fixed-output into `CARACOLE_YTDLP_WHEELS`, `python3.13` on PATH as
+  Chaquopy's `buildPython`, a build without either failing, naming it (in `checkEngine`, which `:youtube`'s Chaquopy
+  tasks and tests run first, so another module builds without them); pip `--no-index --no-deps` from that folder alone.
+  `caracole_ytdlp.py`: `version()`, `run(argv, out_path, err_path)` (`yt_dlp.main`, `sys.stdout` and `sys.stderr`
+  line-buffered into the files, never fds 1 and 2; one run a process; `SystemExit` its status, any other Exception its
+  traceback in the err file and 1, never raised). `PinsTest` (JVM) holds the wheels to the pins and yt-dlp-ejs to the
+  version yt-dlp's `METADATA` requires; `GlueTest` (JVM) runs the glue with the shell's python3.13 over the wheels;
+  `YtDlpVersionTest` (its own test APK, `YoutubeTestRunner`: `caracole.network=loopback`; `device-test.sh --youtube`)
+  Python started, `version()` the pins', yt-dlp's `--version` alone, an exception out of `main` its traceback and 1, and
+  none of the standard library's modules the design leaves out (Chaquopy packages none of them). release-check.sh: no
+  `libpython*`, `libchaquopy_java.so`, `lib*_python.so` or `lib*_chaquopy.so`, class under `com/chaquo/` or
+  `assets/chaquopy/` entry in the release, the debug APK the control of each.
 - Milestones 1–6 are built (docs/android_port.md's status, "Built: milestones 4 to 6"), each route a module of its
   own:
   - `server/routes/Stubs.kt` keeps YouTube's routes and `GET /lookup` alone, answering "…: not on the phone yet."

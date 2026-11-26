@@ -18,8 +18,8 @@ val pins = JsonSlurper().parse(pinsFile) as Map<*, *>
 fun pin(name: String): Map<*, *> = pins[name] as Map<*, *>
 
 /** What this module's tasks need from android/flake.nix's shell and is missing, each in words naming it; checked by
- * [checkEngine], which every task of this module runs first, so a build without them fails there, naming them, and
- * a build of another module (`gradle :core:test`) configures and runs without them. */
+ * [checkEngine], which every task of this module that reads them runs first, so a build without them fails there,
+ * naming them, and a build of another module (`gradle :core:test`), or this one's help and clean, runs without them. */
 val missing = mutableListOf<String>()
 
 /** The folder of the two wheels, android/flake.nix's CARACOLE_YTDLP_WHEELS. */
@@ -46,7 +46,8 @@ val checkEngine by tasks.registering {
     val said = missing.toList()
     doLast { if (said.isNotEmpty()) throw GradleException(said.joinToString("\n")) }
 }
-tasks.configureEach { if (name != checkEngine.name) dependsOn(checkEngine) }
+// The tasks that read them, Chaquopy's (`…Python…`) and the JVM's tests; never help or clean.
+tasks.configureEach { if (name.contains("Python") || this is Test) dependsOn(checkEngine) }
 
 android {
     namespace = "io.github.danielhp95.caracole.youtube"
@@ -69,13 +70,26 @@ android {
 
 }
 
-// pins.json, as the device test's asset (youtube/pins.json), so YtDlpVersionTest holds the running Python to it: the
-// task provider as the folder, which carries the dependency.
-val copyPins by tasks.registering(Sync::class) {
-    into(layout.buildDirectory.dir("generated/pinsAssets"))
-    from(pinsFile) { into("youtube") }
+/** pins.json, as the device test's asset (youtube/pins.json), so YtDlpVersionTest holds the running Python to it. */
+abstract class CopyPins : DefaultTask() {
+    @get:InputFile abstract val pins: RegularFileProperty
+    @get:OutputDirectory abstract val out: DirectoryProperty
+
+    @TaskAction
+    fun copy() {
+        val dir = out.get().asFile.apply { deleteRecursively() }.resolve("youtube").apply { mkdirs() }
+        pins.get().asFile.copyTo(dir.resolve("pins.json"))
+    }
 }
-android.sourceSets.getByName("androidTest").assets.srcDir(copyPins)
+val copyPins by tasks.registering(CopyPins::class) {
+    pins.set(pinsFile)
+    out.set(layout.buildDirectory.dir("generated/pinsAssets"))
+}
+// The variant API's generated folder, which carries the task's dependency (the sourceSets' srcDir of the task
+// provider didn't: a clean build's mergeDebugAndroidTestAssets ran without copyPins).
+androidComponents.onVariants { variant ->
+    variant.deviceTests.values.forEach { it.sources.assets?.addGeneratedSourceDirectory(copyPins, CopyPins::out) }
+}
 
 chaquopy {
     defaultConfig {

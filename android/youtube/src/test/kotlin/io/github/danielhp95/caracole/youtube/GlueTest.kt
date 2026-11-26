@@ -21,7 +21,8 @@ class GlueTest {
 
     private class Ran(val status: String, val out: String, val err: String)
 
-    /** `run(argv)` in a fresh python3.13 -I, with [paths] first on sys.path and [before] run after the glue's import. */
+    /** `run(argv)` in a fresh python3.13 -I -B (no `__pycache__` written into the glue's folder, Chaquopy's source set
+     * and this task's input), with [paths] first on sys.path and [before] run after the glue's import. */
     private fun run(paths: List<String>, argv: List<String>, before: String = ""): Ran {
         val dir = Files.createTempDirectory("caracole-glue-").toFile()
         try {
@@ -35,7 +36,7 @@ class GlueTest {
                 |print(caracole_ytdlp.run(sys.argv[4:], sys.argv[2], sys.argv[3]))
             """.trimMargin()
             val process = ProcessBuilder(
-                listOf(python, "-I", "-c", script, paths.joinToString("\n"), out.path, err.path) + argv
+                listOf(python, "-I", "-B", "-c", script, paths.joinToString("\n"), out.path, err.path) + argv
             ).redirectErrorStream(true).start()
             val said = process.inputStream.readBytes().decodeToString()
             assertTrue(process.waitFor(60, TimeUnit.SECONDS), "python3.13 didn't end")
