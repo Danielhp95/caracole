@@ -7,6 +7,7 @@ hears fixed words, the loudness of the stem and the mix fixed frames (``separate
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -205,3 +206,27 @@ def test_sweep_still_spares_a_live_jobs_folder(conn, cfg):
         hearing.close()
     assert not vocals.stem.parents[2].exists()  # the work folder itself, gone once the Hearing is closed
     sweep(cfg.cache_dir / "nowhere")  # a cache not made yet: nothing to sweep
+
+
+def test_words_refuse_vocals_that_are_no_longer_the_songs_current_stem(conn, cfg):
+    # A pass over the library separates one song's vocals at a time, the next song's taking the last one's place:
+    # vocals heard before another song was separated, of another song, or of audio replaced since are a caller's bug,
+    # refused in words of its own before Whisper runs, never blamed on the separator.
+    first, second = offered(conn, cfg), offered(conn, cfg, artist="Otro", title="Canción")
+    transcriber = Transcriber()
+    hearing = Hearing(cfg, separator=Separator(), transcriber=transcriber)
+    try:
+        earlier = hearing.vocals(first, on_doing=lambda said: None)
+        now = hearing.vocals(second, on_doing=lambda said: None)
+        with pytest.raises(ValueError, match=r"^the vocals of Nick Cani - Vikingos veganos are no longer its "
+                                             r"current stem: separate them again$"):
+            hearing.words(conn, first, earlier, STAMP, on_doing=lambda said: None)
+        with pytest.raises(ValueError, match=r"^the vocals given aren't Nick Cani - Vikingos veganos's"):
+            hearing.words(conn, first, now, STAMP, on_doing=lambda said: None)
+        moved = replace(second, audio_mtime=(second.audio_mtime or 0) + 5)
+        with pytest.raises(ValueError, match=r"^the vocals of Otro - Canción were separated from other audio"):
+            hearing.words(conn, moved, now, STAMP, on_doing=lambda said: None)
+        assert transcriber.calls == []
+        assert isinstance(hearing.words(conn, second, now, STAMP, on_doing=lambda said: None), Kept)
+    finally:
+        hearing.close()

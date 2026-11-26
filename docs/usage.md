@@ -153,6 +153,7 @@ device = "cpu"                    # where the models run
 # separator_model = "/path/to/htdemucs.safetensors"  # or $CARACOLE_DEMUCS_MODEL
 transcribe_device = "auto"        # where Whisper runs: "auto" (the GPU when there is one), "cpu" or "cuda"
 transcribe = true                 # a sheet from a video hears the words no lyrics site has; false: the card offers it
+transcribe_per_run = 3            # songs whose words the nightly `caracole autochords` hears, newest first; 0: none
 ```
 
 caracole keeps one sheet and one text tab per song, and beside the sheet the other Ultimate Guitar
@@ -1350,6 +1351,24 @@ over plain lyrics or none, so that each chord can go over its word.
 
 A song takes minutes, so it logs a line before each, `Working out the chords of Artist - Title
 (3 of 12)…`, and one after: `Artist - Title: auto sheet written (synced lyrics)`.
+
+Before the chords, it hears the words of up to `[autochords] transcribe_per_run` songs (3), newest
+first, as `caracole transcribe` does (see [Lyrics transcribed from the
+audio](#lyrics-transcribed-from-the-audio)): songs with audio that every lyrics site missed and that
+weren't heard yet. A song past the cap gets its chords now and its words on a later run, its sheet
+then made again over them. It lets a waiting lookup go first between a song's vocals and its
+words too. Its last line says what it heard:
+
+    auto-chords: 2 generated, 4 skipped, 0 failed; words heard for 1, nothing sung in 1
+
+- `transcribe = false` or `transcribe_per_run = 0` hears nothing.
+- Where this machine can't transcribe, it hears nothing and the to-do page says why, under
+  **Lyrics couldn't be transcribed in the last run**. That includes the GPU build's nightly unit,
+  which doesn't see the GPU: the words then come from caracole serve's jobs.
+- A setup that fails (the separator, the GPU, Whisper's model) stops the hearing for the rest of
+  the run, and the to-do page says so; the chords go on, and it still exits 0.
+- Audio Whisper can't load is listed with the files auto-chords can't read, and tried again once
+  it changes.
 
 ### caracole youtube
 

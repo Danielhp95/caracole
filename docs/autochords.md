@@ -30,6 +30,15 @@ A sheet from a video you paste does this by itself: the lyrics sites first, then
 heard from the audio, then the chords over them. If the transcription fails, you still get the chords, and the card
 still offers Transcribe the lyrics. `[autochords] transcribe = false` in caracole.toml turns this off.
 
+The nightly auto-chords run does the same for up to three songs a night, newest first, before their chords
+(`[autochords] transcribe_per_run`, 0 for none). A song past that gets its chords tonight and its words on a later
+night, and its sheet is made again then. On a CPU each song heard takes about 7 times its length, so three 4-minute
+songs are about an hour and a half.
+
+With the GPU build (`autochords-cuda`), the nightly unit hears no words: its separator needs the GPU, and the nightly
+unit doesn't see it. The to-do page says so. The words then come from the library page's jobs: a sheet from a video,
+or Transcribe the lyrics on the song's card. With the CPU build, the nightly unit hears them on the CPU.
+
 ## Install
 
 ```sh

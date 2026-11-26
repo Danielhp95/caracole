@@ -38,6 +38,10 @@ What fails is ``HearingFailed``, told apart as auto-chords tells it:
   can't read the audio"): Whisper reads the mix through the ffmpeg program, auto-chords through its own reader, the
   one the vocals read the mix with already, which gives its own verdict as the chords are made.
 
+``words`` refuses, before Whisper runs, vocals that aren't the Hearing's current stem of the song's audio as it is
+(``_current``: another song's, of audio replaced since, or a stem the next song's separation removed): a caller's bug,
+a ValueError in words of its own, never read as the separator's failure.
+
 Anything else is a bug, caracole's or deep in Whisper, raised as it is and filing nothing against the song. Beside the
 audio's, only nothing sung is recorded against the song.
 
@@ -181,6 +185,7 @@ class Hearing:
             note_heard_nothing(conn, song, stamp, why=why, by="caracole")
             return Nothing(why)
 
+        self._current(song, vocals)
         if not anyway and (why := too_little_sung(vocals.spans)) is not None:
             return nothing(why)  # the guard would keep too few words to be lyrics: Whisper isn't run
         mix = Path(song.audio_path or "")
@@ -212,6 +217,17 @@ class Hearing:
             words_dropped=len(dropped), made_at=stamp)
         keep_transcript(conn, song, transcript)
         return Kept(transcript, len(kept), len(lines), len(dropped))
+
+    def _current(self, song: Song, vocals: Vocals) -> None:
+        """``vocals`` this Hearing separated for ``song``'s audio as it is, their stem still there, else a caller's
+        bug, refused in its own words (ValueError) before Whisper runs: one song's stem at a time, the next song's
+        separation removing the last one's, a stem gone would read as the separator's failure."""
+        if self._work is None or not vocals.stem.is_relative_to(Path(self._work.name) / str(song.id)):
+            raise ValueError(f"the vocals given aren't {song.display}'s")
+        if vocals.audio != (song.audio_path, song.audio_mtime):
+            raise ValueError(f"the vocals of {song.display} were separated from other audio than its own now")
+        if not vocals.stem.is_file():
+            raise ValueError(f"the vocals of {song.display} are no longer its current stem: separate them again")
 
     def close(self) -> None:
         """The work folder gone, the stems with it, and its owner's lock let go."""

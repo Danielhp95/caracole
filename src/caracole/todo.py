@@ -555,6 +555,27 @@ def _autochords_failures(conn: sqlite3.Connection, cfg: Config) -> tuple[list[st
                    f"Auto-chords tries a changed file again on its next run{last}.{youtube}")
 
 
+WORDS_UNHEARD_TITLE = "Lyrics couldn't be transcribed in the last run"
+
+
+def _words_unheard(conn: sqlite3.Connection) -> tuple[list[str], str]:
+    """Why the last auto-chords run heard no words a song waited for, from kv ``autochords:status``'s
+    ``transcribe_problem`` (``autochords.run.autochords_pending``): its setup failing, or this machine (the GPU
+    build's nightly unit sees no GPU)."""
+    status = kv_get_json(conn, "autochords:status", default=None)
+    problem = status.get("transcribe_problem") if isinstance(status, dict) else None
+    if not isinstance(problem, str) or not problem:
+        return [], ""
+    try:
+        last = f" ({_fmt(datetime.fromisoformat(str(status['at'])))})"
+    except (KeyError, ValueError):
+        last = ""
+    return [f"- {md(problem)}"], (
+        f"The last auto-chords run{last} made the chords alone of the songs no lyrics site has words for, as it "
+        "couldn't hear their words here. caracole serve's own jobs still hear them: a sheet from a video, or "
+        "Transcribe the lyrics on a song's card.")
+
+
 def _gtptabs_files(conn: sqlite3.Connection) -> dict[int, list[sqlite3.Row]]:
     """The files the gtptabs step downloaded, newest first, by song."""
     rows = conn.execute(
@@ -862,6 +883,7 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
                 "", *_near_names_intro(songs), *review]
     artists, n_artists = _artists_to_find(conn, songs, overrides)
     unread, unread_intro = _autochords_failures(conn, cfg)
+    unheard, unheard_intro = _words_unheard(conn)
     ms_pages, ms_intro, n_ms, ms_blocking = _musescore_pages(conn, cfg, songs, overrides, now)
     if route_problem(cfg) is None:  # caracole takes these songs' audio from YouTube
         states = youtube if youtube is not None else song_states(conn, overrides, now)
@@ -881,6 +903,7 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
          "open the artist's page, or any of their tab pages, and copy its address.", n_artists),
         *no_sheet,
         ("Auto-chords couldn't read these purchases", unread, unread_intro, None),
+        (WORDS_UNHEARD_TITLE, unheard, unheard_intro, None),
         ("New Guitar Pro files from gtptabs.com", _new_gtptabs_files(conn, by_id, now),
          "caracole downloaded these in the last 7 days, one for each song that had none. Open each in "
          "Guitar Pro or TuxGuitar: if it isn't the version you want, drop the one you want into `_inbox/`, "

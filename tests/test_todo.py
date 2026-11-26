@@ -1117,6 +1117,26 @@ def test_autochords_section_copes_with_a_bad_timestamp(conn, cfg):
     assert "nonsense" not in text and "B - U" not in text
 
 
+WORDS_UNHEARD = "Lyrics couldn't be transcribed in the last run"
+
+
+def test_the_todo_page_says_why_words_werent_heard(conn, cfg):
+    # The nightly auto-chords unit with the GPU build sees no GPU: it hears no words, and says so here; the page's own
+    # jobs still hear them. A run that heard, or was told to hear nothing, says nothing.
+    assert WORDS_UNHEARD not in todo(conn, cfg)
+    gpu = "the GPU build's separator needs the GPU, which this unit doesn't see (no /dev/nvidiactl)"
+    kv_set_json(conn, "autochords:status", {"at": "2026-11-25T04:12:00Z", "generated": 1, "skipped": 0,
+                                            "failed": [], "heard": 0, "silent": 0, "transcribe_problem": gpu})
+    section = section_of(todo(conn, cfg), WORDS_UNHEARD)
+    assert f"- {gpu}" in section
+    assert "2026-11-25 04:12 UTC" in section and "Transcribe the lyrics" in section
+    for record in ({"at": "2026-11-25T04:12:00Z", "failed": [], "heard": 2, "transcribe_problem": None},
+                   {"at": "2026-11-25T04:12:00Z", "failed": [], "transcribe_problem": ["not", "words"]},
+                   {"at": "2026-11-25T04:12:00Z", "failed": []}):
+        kv_set_json(conn, "autochords:status", record)
+        assert WORDS_UNHEARD not in todo(conn, cfg), record
+
+
 # --- MuseScore: links and the inbox -------------------------------------------------------------
 
 MS = "https://musescore.com"

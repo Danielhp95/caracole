@@ -1985,7 +1985,23 @@ It is rows.js's, shared by both pages:
 - btc.py (with the vendored btc_model.py and LICENSE-BTC) and beats.py need torch, librosa and beat_this; run.py runs
   them over the library (`autochords_pending`), logging each song it works on and its place among those due
   ("Working out the chords of A - T (3 of 12)…", `_count_due`), and telling `on_step` each step (`STEPS`: the models
-  set up, a song's chords, beats and sheet), which a staged job's chords stage says.
+  set up, a song's chords, beats and sheet, then a song's vocals and words), which a staged job's chords stage says.
+  - Before a song's chords, `autochords_pending(hearing=, transcriptions=)` hears its words (hearing.py, `_Listening`):
+    up to `transcriptions` songs a run (`[autochords] transcribe_per_run`, 3; the command passes 0 with `transcribe`
+    off), newest first, each one `why_not_offered` offers (the lyrics sites asked first, in the nightly run's own
+    steps); its vocals, a waiting lookup let go first (`_Turns.hand_over`, the same `between` as between two songs),
+    the song read again and still offered with the audio separated, then its words, a transcript or nothing sung
+    making its sheet due (`_skip_reason`). A song past the cap gets its chords now, its words a later run.
+  - In bulk: the setup's failure stops the hearing for the run, kept as `AutoStats.transcribe_problem`, the chords
+    going on and the command exiting 0 on its account; audio Whisper can't load filed (`file_unreadable` left on: an
+    unattended pass would separate it again every night); a bug `_error`, the song due, exit 1. kv
+    `autochords:status` keeps `heard`, `silent` and `transcribe_problem`, which todo.py says ("Lyrics couldn't be
+    transcribed in the last run").
+  - The command builds no `Hearing` where `youtube_fetch.transcribe_problem` says this machine can't transcribe;
+    the pass then says why once a song waits for its words. The owner's decision of 2026-11-25: the nightly unit
+    gets no GPU (nix/module.nix), so with the CUDA build it hears no words (its wgpu separator has no adapter), the
+    to-do page says so, and the words come from caracole serve's jobs; with the CPU build it hears them on the CPU,
+    about 7 times a song's length each.
 - audio.py, `load_mono`: every model's audio, mono at a rate, through librosa (libsndfile: WAV, FLAC, Ogg, MP3), else
   torchaudio (FFmpeg, through torchcodec) for the AAC of an .m4a, as YouTube's audio always is (youtube.py) and an
   iTunes purchase; btc.py `load_audio` and separate.py `frame_db` both read through it, and `load_librosa` gives numba
@@ -2023,7 +2039,9 @@ It is rows.js's, shared by both pages:
     stamp, on_doing=, anyway=)`, words.py's rule applied (Whisper not run under `MIN_SUNG_S`; nothing kept on too
     few words), the transcript kept (`Kept`) or nothing sung noted with why, by "caracole" (`Nothing`); `anyway`
     skips both rules, Whisper run whatever the spans, its words kept within them, or all of them with no span (the
-    whole song one), only no word at all nothing sung; `close`.
+    whole song one), only no word at all nothing sung; `close`. `words` refuses (ValueError, in its own words,
+    before Whisper runs) vocals that aren't this Hearing's current stem of the song's audio as it is now: another
+    song's, of audio replaced since, or a stem the next song's separation removed (`_current`).
   - It works in a `transcribe-*` folder under the cache (`WORK_PREFIX`), one song's stem at a time, gone with
     `close`; one a killed job left is swept at the next job's start (`sweep`: a folder no live Hearing holds
     (`_held`), its `OWNER`, `.owner`, flocked while it lives, as another transcription asked for now may take the lock
@@ -2091,7 +2109,8 @@ It is rows.js's, shared by both pages:
   - `autochords.cuda` picks `autochords-cuda` as the flake's default `autochords.package`; then caracole-web and
     `caracole-admin` (the units whose children transcribe) get `PrivateDevices = false`, `DevicePolicy = "closed"`,
     `DeviceAllow` (`char-nvidiactl`, `-nvidia-caps`, `-nvidia-frontend`, `-nvidia-uvm` from nixpkgs' ollama module,
-    `char-drm` for Vulkan) and the `video` and `render` groups. The nightly units never get them.
+    `char-drm` for Vulkan) and the `video` and `render` groups. The nightly units never get them (the owner's
+    decision of 2026-11-25), so the nightly auto-chords pass of this build hears no words, and says so (run.py).
     Without `autochords.enable` it does nothing, and the module warns (a `warnings` entry, not an assertion);
     nix/module.nix alone, without the flake, doesn't switch `autochords.package`.
     `whisperModel` and `separatorModel` are `CARACOLE_WHISPER_MODEL` and `CARACOLE_DEMUCS_MODEL`.
