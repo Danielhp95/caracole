@@ -8,6 +8,14 @@ them timed, ``lyrics.lrc``, and stored as JSON in the ``songs`` table.
 The nightly pass (``fetch_pending_lyrics``) looks up every song once, through
 the forever cache, and asks again about a miss after 30 days, past the cache.
 
+``[lyrics]`` (overrides.toml, ``Overrides.lyrics``) changes what is asked, for
+the three lyrics sites alike (megalobiz_fetch.py, azlyrics_fetch.py): its ``as``
+is the name asked under, with no album (``asked_as``); its ``record`` the record
+you picked, final: only its own site asks about the song, only that record, and
+only while the song has no lyrics (``picked_record``, ``picked_due``); LRCLIB's
+by its id, ``/api/get/{id}`` (``fetch_lrclib_record``). The record gone is that
+site's miss, and the song's lyrics are then missing, asked again after 30 days.
+
 Errors are never misses: whatever the client raises, and any body that is not
 the JSON LRCLIB documents, propagates and leaves the song pending. A cached
 answer that is not (a maintenance notice served with HTTP 200, say) is asked
@@ -25,11 +33,12 @@ import logging
 import math
 import re
 import sqlite3
+import unicodedata
 from collections.abc import Callable, Collection, Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Literal, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 from rapidfuzz import fuzz
 
@@ -38,8 +47,12 @@ from caracole.db import kv_delete, kv_set
 from caracole.http import Client, ProviderError, Response, read_once_more
 from caracole.library import song_dir, write_atomic
 from caracole.normalize import clean_title, fold, slug_key
-from caracole.provider_pass import PassStats, as_now, each_song
+from caracole.overrides import override_key
+from caracole.provider_pass import PassStats, Reread, again, as_now, each_song
 from caracole.songs import Song, list_songs, update_song
+
+if TYPE_CHECKING:
+    from caracole.overrides import LyricsPick, LyricsRecord, Overrides
 
 log = logging.getLogger(__name__)
 
@@ -421,28 +434,140 @@ def fetch_lyrics(
     (``read_once_more``) goes past the cache. By default a cached answer is used
     forever; ``cache=False`` asks LRCLIB again.
     """
-    track = clean_title(title)
-    params: dict[str, str | int] = {"artist_name": artist, "track_name": track}
-    if album:
-        params["album_name"] = album
-    if duration_s is not None:
-        params["duration"] = round(duration_s)
-    url = f"{LRCLIB_API}/get"
-    resp = client.get(url, params=params, accept=_GET_ACCEPT, cache=cache)
-    found = read_once_more(client, resp, url, _get_record, LrclibParseError, params=params, accept=_GET_ACCEPT)
+    found = get_match(client, get_params(artist, title, album=album, duration_s=duration_s), cache=cache)
     if found is not None:
         outcome = _outcome(Lyrics.from_record(found))
         if outcome is not None:
             return outcome
 
-    url = f"{LRCLIB_API}/search"
-    query = {"track_name": _search_title(track), "artist_name": artist}
-    resp = client.get(url, params=query, accept=(200,), cache=cache)
-    cands = read_once_more(client, resp, url, lambda r: _json(r, list), LrclibParseError, params=query,
-                           accept=(200,))
+    cands = search_records(client, search_query(artist, title), cache=cache)
     best = pick_candidate(cands, artist=artist, title=title, duration_s=duration_s)
     outcome = _outcome(Lyrics.from_record(best)) if best is not None else None
     return outcome or LyricsResult("missing", None)
+
+
+def _aged(max_age: timedelta | None) -> dict[str, timedelta]:
+    """``max_age`` for a client's ``get`` only when it is given: a client of the tests' that takes none still asks."""
+    return {} if max_age is None else {"max_age": max_age}
+
+
+def get_params(artist: str, title: str, *, album: str | None, duration_s: float | None) -> dict[str, str | int]:
+    """What ``/api/get`` is sent for a song: its cleaned title, its artist as written and, when known, its album and
+    its length in whole seconds."""
+    params: dict[str, str | int] = {"artist_name": artist, "track_name": clean_title(title)}
+    if album:
+        params["album_name"] = album
+    if duration_s is not None:
+        params["duration"] = round(duration_s)
+    return params
+
+
+def search_query(artist: str, title: str) -> dict[str, str]:
+    """What ``/api/search`` is sent for a song: its cleaned title as LRCLIB's search reads it (``_search_title``)
+    and its artist as written."""
+    return {"track_name": _search_title(clean_title(title)), "artist_name": artist}
+
+
+def get_match(client: Client, params: Mapping[str, str | int], *, cache: bool = True,
+              max_age: timedelta | None = None) -> Mapping[str, Any] | None:
+    """``/api/get``'s record for ``params`` (``get_params``), or None for its miss; a cached answer that can't be
+    read asked for once more, past the cache. ``cache`` and ``max_age`` go to the first request."""
+    url = f"{LRCLIB_API}/get"
+    resp = client.get(url, params=params, accept=_GET_ACCEPT, cache=cache, **_aged(max_age))
+    return read_once_more(client, resp, url, _get_record, LrclibParseError, params=params, accept=_GET_ACCEPT)
+
+
+def search_records(client: Client, query: Mapping[str, str], *, cache: bool = True,
+                   max_age: timedelta | None = None) -> list[Any]:
+    """``/api/search``'s records for ``query`` (``search_query``), in its order, as fetch_lyrics' fallback reads
+    them; ``cache`` and ``max_age`` go to the first request."""
+    url = f"{LRCLIB_API}/search"
+    resp = client.get(url, params=query, accept=(200,), cache=cache, **_aged(max_age))
+    return read_once_more(client, resp, url, lambda r: _json(r, list), LrclibParseError, params=query,
+                          accept=(200,))
+
+
+def fetch_lrclib_record(client: Client, lrclib_id: int, *, cache: bool = True) -> Lyrics | None:
+    """A record of LRCLIB's by its id, ``/api/get/{id}``: the record you picked (``[lyrics]``), or None when it is
+    gone (its 404). Its lyrics as ``Lyrics.from_record`` reads them, which may be none (``_outcome`` says what they
+    come to). Errors propagate as ``fetch_lyrics``' do; ``cache`` goes to the first request."""
+    url = f"{LRCLIB_API}/get/{lrclib_id}"
+    resp = client.get(url, accept=_GET_ACCEPT, cache=cache)
+    found = read_once_more(client, resp, url, _get_record, LrclibParseError, accept=_GET_ACCEPT)
+    return Lyrics.from_record(found) if found is not None else None
+
+
+# --- [lyrics]: the name asked under, the record picked ----------------------------------------------------------------
+
+ASKED_MOST = 200  # characters of each part of [lyrics]' ``as`` the sites are asked, as many as its search takes
+_INVISIBLE = "\u200b\u200e\u200f\ufeff"  # wanted.py's: stray zero-width characters at a name's ends
+
+
+def _asked_part(text: str) -> str:
+    """An artist's or a title's name from ``as`` as the sites are asked it, as a wanted.txt line's names are read
+    (NFC, its spaces folded into one, no zero-width character at its ends) and more, since ``as`` is only split and
+    stripped: a newline or a tab one space, any other control character dropped, at most ``ASKED_MOST`` characters;
+    "" for one of none of these."""
+    kept = "".join(c for c in unicodedata.normalize("NFC", text) if c.isspace() or unicodedata.category(c) != "Cc")
+    name = " ".join(kept.split()).strip(_INVISIBLE).strip()
+    return name[:ASKED_MOST].strip()
+
+
+def _pick(song: Song, picks: Mapping[str, LyricsPick] | None) -> LyricsPick | None:
+    return picks.get(override_key(song.display)) if picks else None
+
+
+def asked_as(song: Song, picks: Mapping[str, LyricsPick] | None) -> tuple[str, str, str | None]:
+    """The artist, title and album the lyrics sites are asked under: ``[lyrics]``' ``as`` of the song in ``picks``
+    (``Overrides.lyrics``), cleaned (``_asked_part``), with no album; else, or for an ``as`` that cleans to nothing,
+    the song's own first artist, title and album."""
+    pick = _pick(song, picks)
+    if pick is not None and pick.asked is not None:
+        artist, title = (_asked_part(part) for part in pick.asked)
+        if artist and title:
+            return artist, title, None
+    return song.artists[0], song.title, song.album
+
+
+def picked_record(song: Song, picks: Mapping[str, LyricsPick] | None) -> LyricsRecord | None:
+    """The record you picked for the song (``[lyrics]``' ``record``), or None."""
+    pick = _pick(song, picks)
+    return pick.record if pick is not None else None
+
+
+def asked_name(song: Song, picks: Mapping[str, LyricsPick] | None) -> str | None:
+    """"Artist - Title", the name ``asked_as`` gives when it isn't the song's own (``[lyrics]``' ``as``), else None."""
+    artist, title, album = asked_as(song, picks)
+    return None if (artist, title, album) == (song.artists[0], song.title, song.album) else f"{artist} - {title}"
+
+
+def said_under(said: str, name: str | None) -> str:
+    """A lookup's lyrics stage in its words, the name its sites were asked under said once, first, when it isn't the
+    song's own (``asked_name``) and a site was asked under it: "under “A - T”: LRCLIB has none; …"."""
+    return said if name is None else f"under “{name}”: {said}"
+
+
+PAGE_NAMED = " (the page you named)"  # after AZLyrics' words, for a page [azlyrics] names while a [lyrics] name holds
+
+
+def picked_said(record: LyricsRecord, *, kept: bool, gone: bool) -> str:
+    """What a lookup says of the record you picked, its site's pass done: kept, gone (the pass's log line's words), or
+    not asked now (within 30 days of its miss, or its site off)."""
+    said = f"{record.site} {record.id}"
+    if kept:
+        return f"the record you picked: {said}"
+    if gone:
+        return f"the record you picked is gone: {said}"
+    return f"the record you picked isn't asked now: {said}"
+
+
+def picked_due(song: Song, now: datetime, recheck_after: timedelta = timedelta(days=30)) -> bool:
+    """Whether a song with a picked record is asked for it, by its site alone: while it has no lyrics, pending (a
+    rebuilt library, an entry written by hand, an error), or missing (the record gone) for ``recheck_after``."""
+    if song.status == "ignored":
+        return False
+    return song.lyrics_status == "pending" or (
+        song.lyrics_status == "missing" and stamps.before(song.lyrics_at, stamps.utc(now) - recheck_after))
 
 
 def write_lyrics(song_dir: Path, lyrics: Lyrics) -> list[Path]:
@@ -488,20 +613,25 @@ RECHECK_MISSING_AFTER = timedelta(days=30)
 FAILED = "lyrics:failed:"
 
 
-def _songs_to_look_up(conn: sqlite3.Connection, now: datetime, recheck_after: timedelta) -> list[Song]:
+def _songs_to_look_up(conn: sqlite3.Connection, now: datetime, recheck_after: timedelta,
+                      picks: Mapping[str, LyricsPick] | None = None) -> list[Song]:
     """Songs never looked up, newest first, then misses older than ``recheck_after``: re-checks,
     whose cached answer is the old miss itself."""
     pending: list[Song] = []
     due: list[Song] = []
     for song in list_songs(conn):
-        if _due(song, now, recheck_after):
+        if _due(song, now, recheck_after, picks):
             (pending if song.lyrics_status == "pending" else due).append(song)
     return pending + due
 
 
-def _due(song: Song, now: datetime, recheck_after: timedelta) -> bool:
-    """Whether ``_songs_to_look_up`` lists the song."""
+def _due(song: Song, now: datetime, recheck_after: timedelta,
+         picks: Mapping[str, LyricsPick] | None = None) -> bool:
+    """Whether ``_songs_to_look_up`` lists the song: a song with a record picked on another site never."""
     if song.status == "ignored":
+        return False
+    record = picked_record(song, picks)
+    if record is not None and record.site != PROVIDER:
         return False
     return song.lyrics_status == "pending" or (
         song.lyrics_status == "missing" and stamps.before(song.lyrics_at, stamps.utc(now) - recheck_after))
@@ -516,10 +646,15 @@ def fetch_pending_lyrics(
     recheck_missing_after: timedelta = RECHECK_MISSING_AFTER,
     only: Collection[int] | None = None,
     durations: Mapping[int, float] | None = None,
+    picks: Mapping[str, LyricsPick] | None = None,
+    reload_overrides: Callable[[], Overrides] | None = None,
 ) -> LyricsStats:
     """Look up the lyrics of every song that has none yet, newest first (of ``only``'s ids, when given:
     a lookup's one song). ``durations``: a length in seconds by song id, for a song whose line gives
     none (a sheet from a YouTube video asks with its audio's, so the timed lyrics LRCLIB gives fit it).
+    ``picks``, ``Overrides.lyrics``: a song is asked under its ``as`` (``asked_as``); one whose picked
+    record is LRCLIB's is asked for that record alone (``fetch_lrclib_record``, its 404 a miss), and one
+    whose record is another site's is passed over. Without it, every request is what it was.
 
     Ignored songs are skipped. Songs LRCLIB had no lyrics for are asked again
     once their ``lyrics_at`` is older than ``recheck_missing_after``, after the
@@ -537,18 +672,36 @@ def fetch_pending_lyrics(
     (``ProviderUnavailable``), the pass ends. Every song an error left
     (``failures``) is remembered for the sites after it (kv ``lyrics:failed:``, ``FAILED``)
     until LRCLIB answers about it.
+
+    The client's pauses may hand caracole's lock to the owner's pick, clear or search of a song's lyrics
+    (commands/_common.py ``hand_over``): after one, ``picks`` is read again (``reload_overrides``, provider_pass.py
+    ``Reread``), before each song's turn (``Turns``), and what LRCLIB answered in a turn a hand-over came in is kept
+    only for a song still due, with the pick the turn asked under.
     """
     stats = LyricsStats()
     stamp = stamps.stamp(now)
+    turns = Turns(conn, client, picks, reload_overrides,
+                  lambda song, held: _due(song, now, recheck_missing_after, held))
 
     def turn(song: Song) -> LyricsResult:  # a re-check of a miss goes past the cache
+        held = turns.asking(song)
+        cache = song.lyrics_status != "missing"
+        record = picked_record(song, held)
+        if record is not None:
+            found = fetch_lrclib_record(client, int(record.id), cache=cache)
+            return (_outcome(found) if found is not None else None) or LyricsResult("missing", None)
         duration = song.duration_s if song.duration_s is not None else (durations or {}).get(song.id)
-        return fetch_lyrics(client, artist=song.artists[0], title=song.title, album=song.album,
-                            duration_s=duration, cache=song.lyrics_status != "missing")
+        artist, title, album = asked_as(song, held)
+        return fetch_lyrics(client, artist=artist, title=title, album=album, duration_s=duration, cache=cache)
 
-    listed = (s for s in _songs_to_look_up(conn, now, recheck_missing_after) if only is None or s.id in only)
-    songs = as_now(conn, listed, lambda song: _due(song, now, recheck_missing_after))
-    for song, result in each_song(songs, stats, turn, site="LRCLIB"):
+    listed = (s for s in _songs_to_look_up(conn, now, recheck_missing_after, picks) if only is None or s.id in only)
+    for song, result in each_song(as_now(conn, listed, turns.due), stats, turn, site="LRCLIB"):
+        song = turns.answered(song)
+        if song is None:  # a pick, a clear or a name came in this very turn: its answer isn't the song's now
+            continue
+        record = picked_record(song, turns.picks)
+        if record is not None and result.status == "missing":
+            log.info("%s: the record you picked is gone: lrclib %s", song.display, record.id)
         _record(conn, library_dir, song, result, stamp)
         kv_delete(conn, f"{FAILED}{song.id}")
         if result.status == "found":
@@ -558,8 +711,56 @@ def fetch_pending_lyrics(
         else:
             stats.missing += 1
     for song, _ in stats.failures:
-        kv_set(conn, f"{FAILED}{song.id}", stamp)
+        if turns.still_asked(song):
+            kv_set(conn, f"{FAILED}{song.id}", stamp)
     return stats
+
+
+class Turns:
+    """A lyrics pass's songs and ``[lyrics]`` (``Overrides.lyrics``) as they are at each song's turn, the three
+    passes' one rule (here, megalobiz_fetch.py, azlyrics_fetch.py). Bulk work's client hands caracole's lock over in
+    its pauses, and the job that took it may have picked a song's record, cleared it or typed another name:
+
+    - ``picks``, read again after such a hand-over (``reload``: what a pass reads of overrides.toml, provider_pass.py
+      ``Reread``), before each song's turn (``due``, ``as_now``'s, of the song as it is now and ``picks`` then);
+    - ``asking``: the picks a song's turn asks under, noted;
+    - ``answered``: after the turn, the song as it is now while what its site answered is still its own (no
+      hand-over in the turn; or the song still due, with the same ``[lyrics]`` entry the turn asked under), else None:
+      that answer is left unrecorded (in the HTTP cache), and the song as the owner's job left it;
+    - ``still_asked``: whether a song a turn left with an error is still the song it asked about, as it asked."""
+
+    def __init__(self, conn: sqlite3.Connection, client: Client, picks: Any, reload: Callable[[], Overrides] | None,
+                 due: Callable[[Song, Any], bool], held: Callable[[Overrides], Any] = lambda o: o.lyrics,
+                 pick_of: Callable[[Song, Any], Any] | None = None):
+        self.conn, self._due = conn, due
+        self.held = Reread(client, picks, (lambda: held(reload())) if reload is not None else None)
+        self._pick_of = pick_of or (lambda song, value: _pick(song, value))
+        self._asked: dict[int, Any] = {}
+
+    @property
+    def picks(self) -> Any:
+        return self.held.value
+
+    def due(self, song: Song) -> bool:
+        self.held.look()
+        return self._due(song, self.held.value)
+
+    def asking(self, song: Song) -> Any:
+        self._asked[song.id] = self._pick_of(song, self.held.value)
+        return self.held.value
+
+    def answered(self, song: Song) -> Song | None:
+        if not self.held.look():
+            return song
+        now = again(self.conn, song, lambda fresh: self._due(fresh, self.held.value))
+        return now if now is not None and self.still_asked(now) else None
+
+    def still_asked(self, song: Song) -> bool:
+        self.held.look()
+        if song.id not in self._asked:  # never asked (the pass given up before its turn): as it was listed
+            return True
+        now = again(self.conn, song)
+        return now is not None and self._pick_of(now, self.held.value) == self._asked[song.id]
 
 
 def _record(

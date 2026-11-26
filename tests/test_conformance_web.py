@@ -47,6 +47,7 @@ import pytest
 
 from caracole import download_names, inline, page_icon
 from caracole.get import GTPTABS_KEPT, MATCH_NOT_FOUND, SHEET_FROM
+from caracole.get import NAMES as NAMES_OF_SITES
 from caracole.library_name import SCRATCH_LINK, LibraryName
 from caracole.youtube_sheet import HOLDS as _YOUTUBE_HOLDS
 from caracole.web import app as app_module
@@ -492,7 +493,8 @@ def test_icon_json_is_page_icons_marks():
 # command's progress lines would leave it: a lookup (``caracole get``), a sheet's versions (``caracole versions``), a
 # LaCuerda artist's read and a query of its search, a harptabs.com artist's read, a songbook's change, a review's
 # answer, a harmonica tab's reading, Make this my version, an add and a removal as commands, a pull another caracole
-# asked for, a sheet from YouTube and a video searched for. Each record: ``job`` as the phone holds a job of commands
+# asked for, a sheet from YouTube and a video searched for, a song's lyrics searched under a name and a record of
+# it picked. Each record: ``job`` as the phone holds a job of commands
 # (``commands``: its steps, ``{label, args, state, code, output}``; ``stages`` its stages as it heard them; ``kind`` its
 # JobSpec's, ``JobCommands.kindOf``'s; ``song_id`` the view's song, ``job_song_id`` the job's own, ``started_at``,
 # ``finished_at``, ``fetching``, ``note``, ``units``, ``ahead``), ``facts`` (status.SongFacts as data, or null: no such
@@ -531,7 +533,8 @@ def phone_kind(job: _Job) -> str:
                          (_jobs.LACUERDA_ARTIST, "lacuerda-artist"), (_jobs.HARPTABS_ARTIST, "harptabs-artist"),
                          (_jobs.YOUTUBE_SEARCH, "youtube-search"), (_jobs.YOUTUBE_SHEET, "youtube"),
                          (_jobs.TRANSCRIBE, "transcribe"), (_jobs.UG_LINK, "ug-link"),
-                         (_jobs.INDEX_MERGE, "index-merge"), ("sync:", "sync"), ("import:", "sync")):
+                         (_jobs.LYRICS_SEARCH, "lyrics-search"), (_jobs.INDEX_MERGE, "index-merge"),
+                         ("sync:", "sync"), ("import:", "sync")):
         if key.startswith(prefix):
             return kind
     return {"versions": "versions", "review": "review"}.get(first, "song")
@@ -795,6 +798,14 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
                     _jobs.ug_link_steps("https://www.ultimate-guitar.com/artist/634073"),
                     display="An artist on Ultimate Guitar"),
          ["Read: UG's page of 宋冬野 lists 8 tabs."]),
+        # A song's lyrics searched under a name (caracole lyrics --as): no stages, its last line its line.
+        (queued_job(f"Lyrics under “{V_DISPLAY}”", _jobs.LYRICS_SEARCH + V_KEY,
+                    _jobs.lyrics_search_steps(f"{V_DISPLAY} (Live)", V_DISPLAY), display=f"{V_DISPLAY} (Live)"),
+         [f"Searched: LRCLIB and AZLyrics list 3 records for “{V_DISPLAY}”.",
+          "Searched: LRCLIB lists 3 records for “Eagles - Hotel California (Live; 1994)”.",
+          f"Nothing found: LRCLIB, Megalobiz and AZLyrics list nothing for “{V_DISPLAY}”.",
+          "Not searched: LRCLIB failed (lrclib: 503: https://lrclib.net/api/search: busy); waiting out Megalobiz "
+          "until 2026-11-04 11:30 UTC; try again later."]),
     ]
     for job, endings in reads:
         kind = phone_kind(job)
@@ -1004,6 +1015,68 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
         "song": ("done", "in the book"), "audio": ("failed", "that upload is gone: it was left over an hour, or "
                                                             "another file was chosen since. Choose it again")},
         code=1), facts=_status.SongFacts())
+    # A record of a song's lyrics search picked (caracole lyrics --record: lyrics_pick.STAGES).
+    pick = queued_job(f"Lyrics for {V_DISPLAY} (Live)", _jobs.LYRICS_PICK + V_KEY,
+                      _jobs.lyrics_pick_steps(f"{V_DISPLAY} (Live)", "lrclib:28399373"),
+                      display=f"{V_DISPLAY} (Live)", join=False)
+    taken = {"song": ("done", "in the book; its last search's lrclib:28399373"),
+             "lyrics": ("done", f"timed lyrics from LRCLIB: {V_DISPLAY} (Pablo Honey, 3:58); in place of AZLyrics' "
+                                "plain lyrics"),
+             "chords": ("done", "chords over the lyrics"), "pdf": ("done", "made"),
+             "pages": ("done", "_todo.md and index.html rewritten")}
+    none_new = {"chords": ("skipped", "no new lyrics"), "pdf": ("skipped", "no new lyrics"), "pages": ("done", "")}
+    add("a lyrics pick, its lyrics", in_state(pick, "running", {"song": taken["song"], "lyrics": ("running", "")}),
+        facts=_status.SongFacts())
+    add("a lyrics pick, its chords", in_state(pick, "running", taken | {"chords": ("running", "finding the beats"),
+                                                                        "pdf": ("waiting", ""),
+                                                                        "pages": ("waiting", "")}),
+        facts=_status.SongFacts())
+    add("a lyrics pick, ready", in_state(pick, "done", taken), facts=ready)
+    add("a lyrics pick, ready with no sheet made", in_state(pick, "done", taken | {
+        "chords": ("skipped", "no audio to make an auto sheet from"), "pdf": ("skipped", "no sheet")}),
+        facts=_status.SongFacts())
+    add("a lyrics pick, not kept: a wait", in_state(pick, "done", taken | none_new | {
+        "lyrics": ("skipped", "waiting out LRCLIB until 2026-11-04 11:30 UTC; nothing kept")}), facts=ready)
+    add("a lyrics pick, not kept: an error", in_state(pick, "done", taken | none_new | {
+        "lyrics": ("failed", "LRCLIB failed (lrclib: 503: https://lrclib.net/api/get/28399373: busy); nothing "
+                             "kept")}), facts=ready)
+    add("a lyrics pick, not kept: the record has none now", in_state(pick, "done", taken | none_new | {
+        "lyrics": ("skipped", "LRCLIB's record 28399373 has no lyrics now; nothing kept")}), facts=ready)
+    add("a lyrics pick, refused", in_state(pick, "failed", {
+        "song": ("failed", "its last search is over a week old: search again")},
+        output=["No lyrics kept: its last search is over a week old: search again."], code=1), facts=ready)
+    add("a lyrics pick, kept then its chords failed", in_state(pick, "failed", taken | {
+        "chords": ("failed", "auto-chords can't read the audio"), "pdf": ("skipped", "no new lyrics")},
+        output=["Lyrics kept; the job failed after: auto-chords can't read the audio."], code=1), facts=ready)
+    add("a lyrics pick, kept then info.json failed", in_state(pick, "failed", taken | {
+        "lyrics": ("done", taken["lyrics"][1] + "; info.json couldn't be written ([Errno 28] No space left on "
+                                                "device)")},
+        output=["Lyrics kept; the job failed after: info.json couldn't be written ([Errno 28] No space left on "
+                "device)."], code=1), facts=ready)
+    add("a lyrics pick, kept then its PDF failed", in_state(pick, "failed", taken | {
+        "pdf": ("failed", "chordpro couldn't make the PDF (see the log)")},
+        output=["Lyrics kept; the job failed after: chordpro couldn't make the PDF (see the log)."], code=1),
+        facts=ready)
+    for why in ("auto-chords isn't here (no torch); tonight's run makes it again",
+                "its sheet is a site's: no auto sheet to make again"):
+        add(f"a lyrics pick, ready, its chords skipped: {why[:24]}", in_state(pick, "done", taken | {
+            "chords": ("skipped", why)}), facts=ready)
+    add("a lyrics pick, interrupted after its keep", _interrupted(in_state(pick, "running", taken | {
+        "chords": ("running", "finding the beats"), "pdf": ("waiting", ""), "pages": ("waiting", "")})),
+        facts=ready)
+    add("a lyrics pick, kept then its chords failed, its output lost", in_state(pick, "failed", taken | {
+        "chords": ("failed", "auto-chords failed"), "pdf": ("skipped", "no new lyrics")}, code=1), facts=ready)
+    # That record taken back (caracole lyrics --clear): the song's, no stages, its line its command's one line.
+    clear = queued_job(f"Clear the lyrics record: {V_DISPLAY} (Live)", _jobs.LYRICS_CLEAR + V_KEY,
+                       _jobs.lyrics_clear_steps(f"{V_DISPLAY} (Live)"), display=f"{V_DISPLAY} (Live)", join=False)
+    add("a lyrics clear, done", in_state(clear, "done", output=[
+        f"Cleared the record you picked for {V_DISPLAY} (Live) (lrclib 28399373); its lyrics from it dropped; every "
+        f"lyrics site is asked again under “{V_DISPLAY}”, tonight or at a lookup."]), facts=ready)
+    add("a lyrics clear, nothing to clear", in_state(clear, "failed", output=[
+        f"error: {V_DISPLAY} (Live) has no lyrics record picked under [lyrics]: nothing to clear."], code=1),
+        facts=ready)
+    add("a lyrics clear, failed", in_state(clear, "failed", output=[
+        "error: Can't read overrides.toml: line 3: expected a table."], code=1), facts=ready)
     video = queued_job("Search YouTube for “creep”", _jobs.YOUTUBE_SEARCH + "creep",
                        _jobs.youtube_search_steps("creep"))
     add("a video searched for, done", in_state(video, "done", {"video": ("done", ""), "thumbnail": ("done", "")},
@@ -1027,7 +1100,8 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
             ("an add", plain, V_ID, _status.SongFacts()), ("a fetch of commands", fetch, V_ID, _status.SongFacts()),
             ("a removal of commands", removal, V_ID, None), ("a pull", pull, None, None),
             ("a sheet from YouTube", youtube, V_ID, ready), ("a transcription", transcription, V_ID, ready),
-            ("a sheet from an audio file", from_file, V_ID, ready),
+            ("a sheet from an audio file", from_file, V_ID, ready), ("a lyrics pick", pick, V_ID, ready),
+            ("a lyrics clear", clear, V_ID, ready),
             ("a video searched for", video, None, None)):
         first = {job.stages[0].name: ("running", "")} if job.stages else None
         add(f"{note}, every state: queued", job, song_id, facts=facts)
@@ -1281,9 +1355,10 @@ def tables_record() -> dict:
         "YOUTUBE_STEPS": [[name, list(names)] for name, names in _outcome.YOUTUBE_STEPS],
         "TRANSCRIBE_STEPS": [[name, list(names)] for name, names in _outcome.TRANSCRIBE_STEPS],
         "AUDIO_STEPS": [[name, list(names)] for name, names in _outcome.AUDIO_STEPS],
+        "LYRICS_PICK_STEPS": [[name, list(names)] for name, names in _outcome.LYRICS_PICK_STEPS],
         "COMMAND_STEPS": _outcome.COMMAND_STEPS, "PEER_STEPS": _outcome.PEER_STEPS, "ASKS": _outcome._ASKS,
         "WHAT": {name: list(said) for name, said in _outcome._WHAT.items()}, "ELSEWHERE": _outcome._ELSEWHERE,
-        "SITE_NAMES": _outcome.SITE_NAMES,
+        "SITE_NAMES": _outcome.SITE_NAMES, "NAMES": NAMES_OF_SITES,
         "INDEXES_SKIPPED": [sync_routes.INDEXES_NEWER, sync_routes.INDEXES_OLDER]}}
 
 
@@ -1310,7 +1385,8 @@ def test_job_views_kinds_jsonl_is_what_the_views_say_of_every_kind_caracole_serv
     records = view_kind_records(monkeypatch)
     kinds = {r["job"]["kind"] for r in records}
     assert {"song", "versions", "lacuerda-artist", "lacuerda-search", "harptabs-artist", "songbook", "review",
-            "harmonica", "export", "remove", "youtube", "youtube-search", "transcribe", "ug-link"} <= kinds
+            "harmonica", "export", "remove", "youtube", "youtube-search", "transcribe", "ug-link",
+            "lyrics-search"} <= kinds
     assert {r["out"]["kind"] for r in records} >= {"song", "remove", "export", "songbook", "peer-pull"}
     every = {"queued", "running", "done", "failed", "cancelled", "interrupted"}
     for kind in kinds | {"sync", "peer-push", "index-merge"}:  # every kind in every state

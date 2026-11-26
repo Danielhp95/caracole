@@ -141,6 +141,15 @@ class JobHistoryTest {
         assertEquals("remove", JobCommands.kindOf("remove:a/t", emptyList(), emptyList(), render))
     }
 
+    @Test fun aLyricsSearchIsReadBackAsNoSongsAndAPickAsItsSongs() {
+        // jobs_routes.view's kinds, as the phone's JobSpec names them: a search an index read's own (as LaCuerda's
+        // search is "lacuerda-search"), a pick its song's, as a transcription's is.
+        val search = listOf(listOf("lyrics", "--song=A - T (Live)", "--as=A - T"))
+        assertEquals("lyrics-search", JobCommands.kindOf(JobCommands.LYRICS_SEARCH + "a/t", search, emptyList()))
+        val pick = listOf(listOf("lyrics", "--song=A - T (Live)", "--record=lrclib:1", "--progress"))
+        assertEquals("song", JobCommands.kindOf(JobCommands.LYRICS_PICK + "a/t", pick, emptyList()))
+    }
+
     @Test fun aTimeIsWrittenAsPythonsIsoformatInUtcAndReadAsFromisoformatReadsIt() {
         assertEquals("2026-11-03T09:30:00+00:00", JobHistory.iso(Instant.parse("2026-11-03T09:30:00Z")))
         assertEquals("2026-11-03T09:30:00.000001+00:00", JobHistory.iso(Instant.parse("2026-11-03T09:30:00.000001789Z")))

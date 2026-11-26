@@ -21,7 +21,7 @@ object OverridesStore {
     /** overrides.SONG_TABLES: the tables of entries about one song, in song_entries' order. */
     val SONG_TABLES: List<String> = listOf(
         "match", "pin", "transpose", "reject", "youtube", "lacuerda", "harptabs", "gametabs", "ireal", "azlyrics",
-        "version", "harmonica",
+        "lyrics", "version", "harmonica",
     )
     private const val IGNORE = "ignore"
     private val SONG_TABLES_IN = (SONG_TABLES + IGNORE).joinToString(", ") { "'$it'" }

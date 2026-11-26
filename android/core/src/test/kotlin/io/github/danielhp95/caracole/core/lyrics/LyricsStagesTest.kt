@@ -4,6 +4,8 @@ import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.http.Client
 import io.github.danielhp95.caracole.core.http.HttpAnswer
 import io.github.danielhp95.caracole.core.index.Stamps
+import io.github.danielhp95.caracole.core.library.LyricsPick
+import io.github.danielhp95.caracole.core.library.LyricsRecord
 import io.github.danielhp95.caracole.core.library.OverrideUrls
 import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.SongRow
@@ -40,10 +42,13 @@ class LyricsStagesTest {
 
     private fun stage(w: LyricsWorld, run: (StageContext) -> StageEnd, song: SongRow, provider: String,
                       answers: Map<String, HttpAnswer>, config: PhoneConfig = PhoneConfig.DEFAULTS,
-                      overrides: Overrides = Overrides(), budget: Long = 6): Pair<StageEnd, FakeTransport> {
+                      overrides: Overrides = Overrides(), budget: Long = 6,
+                      askedUnderName: () -> Unit = {}): Pair<StageEnd, FakeTransport> {
         val (client, site) = w.client(provider, answers, budget)
         val asking = FakeAsking(mapOf<String, Client>(provider to client))
-        val end = w.db { db -> run(StageContext(db, song, overrides, config, w.library, asking, w.now)) }
+        val end = w.db { db ->
+            run(StageContext(db, song, overrides, config, w.library, asking, w.now, askedUnderName = askedUnderName))
+        }
         return end to site
     }
 
@@ -133,6 +138,60 @@ class LyricsStagesTest {
             val song = w.song("Pomme", "Grandiose", null, "lyrics_status" to "missing")
             assertEquals(StageEnd("done", "AZLyrics has none"),
                          stage(w, AzLyricsStage::run, song, "azlyrics", mapOf(pomme to fixture("azlyrics/artist_pomme.html"))).first)
+        }
+    }
+
+    /** D4: each stage hands its pass `[lyrics]` (ctx.overrides.lyrics) and says what came of it: a site asked under
+     * the song's `as` tells the frame, which says the name once (Lyrics.saidUnder), a record you picked is said kept,
+     * gone or not asked now, and a site a record picked elsewhere passes over has nothing to ask. */
+    @Test fun theLookupsLyricsStagesKeepToTheLyricsTable() {
+        fun lyrics(song: SongRow, pick: LyricsPick) =
+            Overrides(lyrics = mapOf(OverrideUrls.overrideKey(song.display) to pick))
+        LyricsWorld(tmp.newFolder()).use { w ->
+            val song = w.song("Soda Stereo", "De Música Ligera (En Vivo)", 213_000L)
+            val named = lyrics(song, LyricsPick("Soda Stereo" to "De Música Ligera", null))
+            var told = 0
+            val (end, site) = stage(w, LrclibStage::run, song, "lrclib", mapOf(soda to fixture("lrclib/get_hit.json")),
+                                    overrides = named) { told++ }
+            assertEquals(StageEnd("done", "found"), end)
+            assertEquals(1, told)
+            assertEquals(listOf(soda), site.said)
+            assertEquals("under “Soda Stereo - De Música Ligera”: found; Megalobiz has no timed ones",
+                         Lyrics.saidUnder("found; Megalobiz has no timed ones", Lyrics.askedName(song, named.lyrics)))
+        }
+        LyricsWorld(tmp.newFolder()).use { w ->
+            val song = w.song("Soda Stereo", "De Música Ligera", 213_000L)
+            val picked = lyrics(song, LyricsPick(null, LyricsRecord("lrclib", "9")))
+            val byId = "GET https://lrclib.net/api/get/9"
+            val (end, site) = stage(w, LrclibStage::run, song, "lrclib", mapOf(byId to answer(404, "{}")),
+                                    overrides = picked)
+            assertEquals(StageEnd("done", "the record you picked is gone: lrclib 9"), end)
+            assertEquals(listOf(byId), site.said)
+            val gone = w.db { io.github.danielhp95.caracole.core.library.Songs.byId(it, song.id)!! }
+            assertEquals("missing", gone.lyricsStatus)
+            // Megalobiz and AZLyrics pass over it: the record you picked is final.
+            assertEquals(StageEnd("nothing", ""), stage(w, MegalobizStage::run, gone, "megalobiz", emptyMap(),
+                                                        overrides = picked).first)
+            assertEquals(StageEnd("nothing", ""), stage(w, AzLyricsStage::run, gone, "azlyrics", emptyMap(),
+                                                        overrides = picked).first)
+        }
+        LyricsWorld(tmp.newFolder()).use { w ->
+            val song = w.song("Los Águilas", "Hotel Californio", 391_000L)
+            val picked = lyrics(song, LyricsPick(null, LyricsRecord("megalobiz", "24519")))
+            assertEquals(StageEnd("done", "already there"), stage(w, LrclibStage::run, song, "lrclib", emptyMap(),
+                                                                 overrides = picked).first)
+            val (end, site) = stage(w, MegalobizStage::run, song, "megalobiz",
+                                    mapOf(eaglesLrc to fixture("megalobiz/lrc_24519.json")), overrides = picked)
+            assertEquals(StageEnd("done", "the record you picked: megalobiz 24519"), end)
+            assertEquals(listOf(eaglesLrc), site.said)
+        }
+        LyricsWorld(tmp.newFolder()).use { w ->  // an LRCLIB record missed within its 30 days: not asked, and said so
+            val song = w.song("Soda Stereo", "De Música Ligera", 213_000L, "lyrics_status" to "missing",
+                              "lyrics_at" to Stamps.of(w.now))
+            val picked = lyrics(song, LyricsPick(null, LyricsRecord("lrclib", "9")))
+            val (end, site) = stage(w, LrclibStage::run, song, "lrclib", emptyMap(), overrides = picked)
+            assertEquals(StageEnd("done", "the record you picked isn't asked now: lrclib 9"), end)
+            assertEquals(emptyList(), site.said)
         }
     }
 }

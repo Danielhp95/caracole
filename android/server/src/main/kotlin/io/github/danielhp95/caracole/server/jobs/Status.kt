@@ -71,6 +71,7 @@ internal class Shape(val job: Job) {
     val fromYoutube: Boolean get() = steps.any { JobCommands.sheetsFromYoutube(it.args) }
     val transcribes: Boolean get() = steps.any { JobCommands.transcribes(it.args) }
     val fromAudio: Boolean get() = steps.any { JobCommands.sheetsFromAudio(it.args) }
+    val picksLyrics: Boolean get() = steps.any { JobCommands.picksLyrics(it.args) }
 
     private companion object {
         fun stepState(state: String): String = when (state) {
@@ -225,6 +226,12 @@ object Status {
                 if (song.review) return Line("review", "Needs your pick", reviewLink(song, todo), details)
                 if (song.notFound) return Line("missing", "Not on the sites", todoLink(todo), details)
             }
+            if (job.key.startsWith(JobCommands.LYRICS_PICK) && lyricsKept(job)) {  // kept, then failed: said kept
+                return Line("failed", keptFailed(job), details = details)
+            }
+            if (job.key.startsWith(JobCommands.LYRICS_CLEAR) && nothingToClear(job)) {  // an answer, never a failure
+                return Line("added", NOTHING_PICKED)
+            }
             return Line("failed", stageFailure(job.stages) ?: failure(job.steps), details = details)
         }
         val key = job.key
@@ -249,6 +256,14 @@ object Status {
             val made = job.stages.any { it.name == "chords" && it.state == Job.DONE }
             if (made && song?.sheet != null) return Line("ready", READY, "Open" to song.sheet)
             return Line("waiting", "Not made yet", details = details)
+        }
+        if (key.startsWith(JobCommands.LYRICS_CLEAR)) {  // its command's one line, whatever sheet the song has
+            val said = cleared(job) ?: return Line("added", "Cleared.")
+            return Line("added", short(said.split("; ", limit = 2)[0].trimEnd('.') + "."))
+        }
+        if (key.startsWith(JobCommands.LYRICS_PICK)) {  // Ready once its lyrics are kept, whatever sheet there is
+            if (lyricsKept(job)) return Line("ready", READY, song?.sheet?.let { "Open" to it })
+            return Line(if (recordGone(job)) "missing" else "waiting", "Not kept", details = details)
         }
         if (song?.sheet != null) return Line("ready", READY, "Open" to song.sheet)
         if (song != null && song.ignored) return Line("added", "Ignored · overrides.toml")
@@ -291,8 +306,67 @@ object Status {
             step.output.asReversed().firstOrNull { line -> READ_TONES.keys.any(line::startsWith) }?.let(PyText::strip)
         } ?: return Line("added", "Done", details = details)
         val tone = READ_TONES.entries.first { said.startsWith(it.key) }.value
-        val text = said.split("; ", limit = 2)[0].split(" (", limit = 2)[0].trimEnd('.') + "."
+        val text = cut(said).trimEnd('.') + "."
         return Line(tone, short(text), details = if (tone == "added") null else details)
+    }
+
+    /** [said] up to its first "; " or " (" outside a “quoted” name (status.py's _cut): a lyrics search's name said
+     * whole, "(Live)" and all; a quote opened and not closed runs to the end. */
+    private fun cut(said: String): String {
+        var depth = 0
+        for (i in said.indices) {
+            when (said[i]) {
+                '\u201c' -> depth += 1
+                '\u201d' -> depth = maxOf(depth - 1, 0)
+                else -> if (depth == 0 && (said.startsWith("; ", i) || said.startsWith(" (", i))) {
+                    return said.substring(0, i)
+                }
+            }
+        }
+        return said
+    }
+
+    /** The command's last line for a lyrics pick that failed after its lyrics were kept (lyrics_pick.py's
+     * KEPT_FAILED_AFTER). */
+    const val KEPT_FAILED_AFTER = "Lyrics kept; the job failed after"
+
+    /** lyrics_pick.py's NO_LYRICS_NOW and NOTHING_KEPT: a record gone, its lyrics stage's last words. */
+    const val NO_LYRICS_NOW = " has no lyrics now"
+    const val NOTHING_KEPT = "; nothing kept"
+
+    /** Whether a lyrics pick kept nothing because its record has no lyrics now (status.record_gone): an answer, never
+     * a wait or an error. */
+    internal fun recordGone(job: Shape): Boolean = job.stages.any {
+        it.name == "lyrics" && it.state == Job.SKIPPED && it.detail.endsWith(NO_LYRICS_NOW + NOTHING_KEPT)
+    }
+
+    /** lyrics_pick.py's CLEARED, how `caracole lyrics --clear`'s line begins, and NOTHING_TO_CLEAR, its refusal after
+     * the song's name; status.NOTHING_PICKED, what the line says of that refusal. */
+    const val CLEARED = "Cleared the record you picked"
+    const val NOTHING_TO_CLEAR = "has no lyrics record picked under [lyrics]: nothing to clear."
+    const val NOTHING_PICKED = "Nothing to clear: no lyrics record is picked."
+
+    /** A lyrics clear's line as its command ends (status.cleared); null with no such line. */
+    internal fun cleared(job: Shape): String? = job.steps.asReversed().firstNotNullOfOrNull { step ->
+        step.output.asReversed().firstOrNull { it.startsWith("$CLEARED ") }?.let(PyText::strip)
+    }
+
+    /** Whether a lyrics clear failed for a song with no record picked (status._nothing_to_clear). */
+    private fun nothingToClear(job: Shape): Boolean = job.steps.any { step ->
+        step.output.any { line -> errorOf(line)?.let { PyText.strip(it).endsWith(NOTHING_TO_CLEAR) } == true }
+    }
+
+    /** Whether a lyrics pick's lyrics stage kept the record's lyrics (status.py's _lyrics_kept). */
+    internal fun lyricsKept(job: Shape): Boolean = job.stages.any { it.name == "lyrics" && it.state == Job.DONE }
+
+    /** A lyrics pick that failed after its lyrics were kept (status.py's _kept_failed): the command's last line, its
+     * first sentence; with no such line, the same words over its failed stage's. */
+    private fun keptFailed(job: Shape): String {
+        val said = job.steps.asReversed().firstNotNullOfOrNull { step ->
+            step.output.asReversed().firstOrNull { it.startsWith("$KEPT_FAILED_AFTER: ") }?.let(PyText::strip)
+        } ?: stageFailure(job.stages)?.let { "$KEPT_FAILED_AFTER: $it" } ?: "$KEPT_FAILED_AFTER."
+        val cut = short(firstSentence(said))
+        return if (listOf(".", "!", "?", "…").any(cut::endsWith)) cut else "$cut."
     }
 
     /** The units a sync, a take or a pull left as they were, each with why (status.py's changes_left): but a removal

@@ -63,6 +63,20 @@ data class IRealPick(val slug: String, val thread: Long, val post: Long? = null)
     }
 }
 
+/** overrides.LyricsRecord: a song's lyrics record you picked (`[lyrics]`'s `record`), a lyrics site (`lrclib`,
+ * `megalobiz`, `azlyrics`) and its id there, a number, or AZLyrics' `artist/song`. */
+data class LyricsRecord(val site: String, val id: String) {
+    /** As the entry writes it: `lrclib:28399373`. */
+    val text: String get() = "$site:$id"
+
+    /** AZLyrics' page of it, which caracole asks for; null for the others, whose records are asked by their id. */
+    val page: String? get() = if (site == "azlyrics") "${Addresses.AZLYRICS_BASE}/lyrics/$id.html" else null
+}
+
+/** overrides.LyricsPick: a song's `[lyrics]` entry, [asked] the (artist, title) its lyrics are asked under and
+ * [record] the record you picked; either may be null, never both. */
+data class LyricsPick(val asked: Pair<String, String>?, val record: LyricsRecord?)
+
 /** ug/sitemap.IndexRow: the index row a tab page's address gives (`OverrideUrls.classifyTabUrl`), its keys
  * canonical (`ug_slug_key`) and [path] the address after `/tab/` as it is. */
 data class TabUrlRow(val tabId: Long, val artistKey: String, val songKey: String, val type: String, val path: String)

@@ -38,6 +38,8 @@ import java.nio.file.Files
  * records' shapes), each answered by :viewer's viewer.render as tests/helpers/phone_render.py answered it:
  *
  * - [constants]: RenderNames is render.py's names;
+ * - [lyricsKeys]: PlainLyrics.lyricsKey is sheet_lyrics.lyrics_key, text for text (the key both sides write into an
+ *   auto sheet's version, so into the song's unit);
  * - [facts]: each fixture library's first pass as far as no page is built: the lyrics put on its auto sheets
  *   (PlainLyrics), the own versions as they play now (OwnVersions), then each song's info.json (InfoJson) and unit's
  *   digest as Python had them after that pass;
@@ -58,6 +60,7 @@ object RenderReplay : AreaReplay {
 
     override fun replay(misses: Misses) {
         constants(misses)
+        lyricsKeys(misses)
         facts(misses)
         passes(misses)
     }
@@ -117,6 +120,19 @@ object RenderReplay : AreaReplay {
     /** The song's info.json, by its path in the library. */
     private fun infoOf(library: File, song: SongRow): String =
         LibraryStore(library).folderOf(song).relativeTo(library).invariantSeparatorsPath + "/info.json"
+
+    // --- the words' keys ------------------------------------------------------------------------------------------
+
+    fun lyricsKeys(misses: Misses) {
+        val records = records("lyrics_key")
+        misses.check(records.isNotEmpty()) { "lyrics_key: no records" }
+        for (record in records) {
+            val text = record.args.single().jsonPrimitive.content
+            val got = PlainLyrics.lyricsKey(text)
+            val want = record.out!!.jsonPrimitive.content
+            misses.check(got == want) { "lyrics_key(${JsonPrimitive(text)}) = $got, Python's $want" }
+        }
+    }
 
     // --- every step -----------------------------------------------------------------------------------------------
 
