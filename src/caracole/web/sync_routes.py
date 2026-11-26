@@ -234,12 +234,19 @@ def _not_this_one(address: str, me: str | None, state) -> None:
                                               "a copy of ours. Give one a new id: caracole peer new-id.")
 
 
+def _other_keys(e: Exception) -> Refused:
+    """Refused (409) for a caracole whose songs are keyed by other rules (``peer_sync.OtherKeys``): nothing compared
+    until both are updated to one version."""
+    return Refused(409, "Update both first", str(e))
+
+
 def test(app: WebApp, form: dict[str, str]) -> Response:
     """``POST /sync/test``: the caracole at ``address`` asked for its state, one request, and nothing written:
     ``{peer: {address, server, caracole, name}, songs, songbooks, indexes, synced_at, said}``, its song and songbook
     units counted, ``indexes`` the newest read of its indexes (``newest_read``; None: none), ``synced_at`` when
     this one last synced with it (None: never), and ``said`` all that in words (``tested_words``). Refused as a
-    comparison is: 400 for no address, 502 for nothing answering, 409 for this very caracole."""
+    comparison is: 400 for no address, 502 for nothing answering, 409 for this very caracole and for one whose songs
+    are keyed by other rules (``peer_sync.OTHER_KEYS``)."""
     from caracole import peer_sync as sync
 
     address = _address(form)
@@ -248,6 +255,8 @@ def test(app: WebApp, form: dict[str, str]) -> Response:
     try:
         with sync.Peer(address, transport=transport()) as peer:
             state = peer.state(me)
+    except sync.OtherKeys as e:
+        raise _other_keys(e) from None
     except sync.PeerError as e:
         raise Refused(502, "Not reached", str(e)) from None
     _not_this_one(address, me, state)
@@ -309,7 +318,8 @@ def _compared(app: WebApp, address: str, *, documents: bool = True) -> _Found:
     """The other caracole's state and the comparison, as ``caracole peer sync`` makes it (``_Found``), with, when
     ``documents``, each songbook difference's two documents and the songs both sides' songbooks list (the other's
     songbooks asked for, one request each: none when Sync compares afresh, which needs the hash alone). Refused when
-    it can't be asked, is this very caracole, or this library can't be read."""
+    it can't be asked, is this very caracole, keys its songs by other rules than this one (409, nothing compared), or
+    this library can't be read."""
     from caracole import index_transfer
     from caracole import peer_sync as sync
     from caracole.songbook import name_key
@@ -335,6 +345,8 @@ def _compared(app: WebApp, address: str, *, documents: bool = True) -> _Found:
             songbooks: dict[str, tuple[Any, Any]] = {
                 d.id: (here_docs[d.id]["unit"] if here_docs[d.id] else None, peer.unit(d.id) if d.theirs else None)
                 for d in differing}
+    except sync.OtherKeys as e:
+        raise _other_keys(e) from None
     except sync.PeerError as e:
         raise Refused(502, "Not reached", str(e)) from None
     listed: dict[str, list[str]] = {}

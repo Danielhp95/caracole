@@ -30,7 +30,8 @@ with Creep's and Karma Police's own versions changed, and ``file_indexed``.
 - ``read``: ``{file}`` (a file above; with ``member``, that member of it, an index export, and ``name`` its name) or
   ``{bytes}`` (base64, with ``name`` for an index export; ``cut``: the file above less its last ``cut`` bytes),
   ``out`` ``{id, name, made, holds, index_only, units: {id: digest}, documents: [id]}``, or ``{"error": <the
-  words>}``;
+  words>}``: among them a file of songs keyed by other rules (its manifest's ``key_version``) and an older
+  caracole's, whose manifest names none;
 - ``unit``: ``{file, id}`` (with ``member``: an index export), ``FileSource.unit`` of a file above, ``out``
   ``{"unit": <its value's digest>}``, ``{"unit": null}`` (a unit of a part the file holds that its caracole hasn't
   got), or ``{"error": <the words>}`` (one it names but holds no document of, or of a part it doesn't hold);
@@ -394,6 +395,8 @@ def _refused(corpus: FileCorpus) -> list[tuple[str, bytes]]:
     def with_manifest(**change: Any) -> bytes:
         return _zip([("caracole.json", json.dumps(manifest | change).encode()), *small[1:]])
 
+    older = {k: v for k, v in manifest.items() if k != "key_version"}  # a caracole's before the member
+
     blob = "files/" + "a" * 64
     return [
         ("something else", b"hello, this is no file of caracole's\n"),
@@ -403,6 +406,10 @@ def _refused(corpus: FileCorpus) -> list[tuple[str, bytes]]:
         ("a member twice", _zip([*small, ("state.json", dict(full)["state.json"])])),
         ("another format", with_manifest(format=2)),
         ("another sync's", with_manifest(sync=manifest["sync"] + 1)),
+        ("songs keyed by other rules", with_manifest(key_version=manifest["key_version"] + 1)),
+        ("songs keyed by rules it names otherwise", with_manifest(key_version=str(manifest["key_version"]))),
+        ("an older caracole's, its manifest naming no key version: read as before",
+         _zip([("caracole.json", json.dumps(older).encode()), *small[1:]])),
         ("a manifest that names no caracole", with_manifest(id=None)),
         ("a blob bigger than it may be", _declaring(_zip([*small, (blob, b"x")]), {blob: peer_file.FILE_MAX + 1})),
         ("more than 8 GiB in all", _declaring(_zip([*small, ("indexes.sqlite", b"x"), *((blob_named(i), b"x")
@@ -830,6 +837,9 @@ def test_the_vectors_show_what_each_case_says(made):
     errors = {r["case"]: r["out"].get("error") for r in _records(made) if r["fn"] == "read"}
     assert errors["something else"] == errors["a zip of something else"] == peer_file.NOT_A_FILE
     assert errors["another format"] == peer_file.OTHER_FORMAT.format(format=2)
+    assert errors["songs keyed by other rules"] == errors["songs keyed by rules it names otherwise"] == \
+        peer_file.OTHER_KEYS
+    assert reads["an older caracole's, its manifest naming no key version: read as before"]["id"] == EXPORTER
     assert errors["more than 8 GiB in all"] == peer_file.UNREADABLE.format(why="it holds more than 8 GiB")
     assert all(errors[case].startswith("That file can't be read whole (") for case in (
         "a file cut short", "a member outside its layout", "a member twice", "a blob bigger than it may be",

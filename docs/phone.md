@@ -42,6 +42,10 @@ before it takes anything.
 **Sync on Wi-Fi**, in Settings, does this every 6 hours. It leaves conflicts for you and sends a
 notification.
 
+Both sides must run versions of caracole that name songs by the same rules. When they don't, the
+sync refuses before taking anything: "This caracole and the other name songs by different rules:
+update both to the same version, then sync."
+
 If the phone can't reach the computer, **Export** in Settings writes the library to a
 `.caracole` file and **Import a file** reads one. Two computers sync the same way, with
 [`caracole peer`](usage.md#two-caracoles-the-phones-and-the-computers).
