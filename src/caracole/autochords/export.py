@@ -218,7 +218,9 @@ def _traced(model, example, *, inputs: list[str], outputs: list[str], dynamic: d
 # slice is taken along: its frontend's over time attend once a frequency band (scores [bands, heads, T, T]: the
 # bands, 32, 16 and 8), its transformer blocks' once a chunk (scores [1, 16, T, T]: the heads).
 _ATTENDS_OVER_TIME = (("/partial/attnT/attend/", 0), ("/transformer_blocks/", 1))
-# beat_this's attentions over time: the frontend's three partial ones and the transformer's six.
+# beat_this final0's attentions over time: its frontend's three partial ones and its six transformer blocks'. Another
+# model (small0, of other blocks) is refused on purpose until its own count is stated here: an export that left its
+# attentions unsliced, silently, would bring back the phone's memory peak the slices take away.
 ATTENTIONS = 9
 
 

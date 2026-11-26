@@ -428,11 +428,12 @@ def _fresh_texts(**env: str) -> tuple[str, str]:
     process that ran nothing before them, whatever the tests' order and their workers'. beat_this's logits move in
     their last bits (up to 1.2e-5; its beats, BTC and the frontend never) once the same process has run beat_this
     over real audio first, as test_autochords_run's real-model tests do, and the same sequence gives the same bits.
-    The cause isn't found, only narrowed (2026-11-26, the failing order reproduced in one process): a first run
-    through beats.py's cached ``_tracker`` moves them and ``_tracker.cache_clear()`` before the records puts them
-    back, but a separate File2Beats run first moves them too, kept alive or let go, its first run at 1 thread as at
-    24; a first run of 1500 frames of zeros at 8 threads moves nothing. So it is no cached object nor thread count
-    alone, and a cache_clear in the reference would close one way in of several."""
+    The cause isn't found, only narrowed (2026-11-26, the failing order reproduced in one process): a first run of
+    real audio through beats.py's cached ``_tracker`` moves them, at 1 thread as at 24, and ``_tracker.cache_clear()``
+    after it, before the records, puts them back; but a separate File2Beats run of real audio first moves them too,
+    kept alive or let go (1500 frames of zeros at 8 threads through the cached tracker, then the cache cleared, moved
+    nothing, as real audio then the cache cleared doesn't). So it is no cached object nor thread count alone, and a
+    cache_clear in the reference would close one way in of several."""
     with tempfile.TemporaryDirectory() as tmp:
         done = subprocess.run([sys.executable, "-c", _TEXTS, tmp], cwd=ROOT, capture_output=True, text=True,
                               env={**os.environ, "PYTHONPATH": subprocess_pythonpath(ROOT / "src"), **env})
