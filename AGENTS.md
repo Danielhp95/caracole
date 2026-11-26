@@ -368,7 +368,9 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 
 #### youtube
 
-- youtube.py: running yt-dlp.
+- youtube.py: running yt-dlp; and the phone's half, which the computer never runs: `phone_argv` (`PHONE_DOWNLOAD_ARGS`,
+  m4a by its format alone, QuickJS, the gate as `--proxy`) and `classify` (`_OUTDATED`, `PHONE_PASS_OVER` on the ERROR
+  line), the corpus's youtube/youtube.json (tests/test_conformance_youtube.py).
 - youtube_urls.py: a video's address.
 - youtube_fetch.py: the step.
   - `song_states`: where each song stands for the pages: `todo.write_pages` asks once and hands it to both, a

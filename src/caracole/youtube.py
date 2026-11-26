@@ -31,6 +31,12 @@ systemd's MemoryDenyWriteExecute, which caracole's units keep, so deno gets
 
 A video's address (``video_id_from_url``, ``watch_url``) is youtube_urls.py's, which
 overrides.py reads without this module and its HTTP errors.
+
+The phone's half, which the computer never runs (the conformance corpus's youtube/youtube.json carries it to the
+Android app): ``phone_argv``, the computer's arguments but audio chosen by its format alone (``PHONE_DOWNLOAD_ARGS``:
+no FFmpeg there to extract it), QuickJS as the challenges' runtime and the app's gate as the proxy; and ``classify``,
+which tells a run that failed out of date (``_OUTDATED``: yt-dlp can't read YouTube's page) or passed over
+(``PHONE_PASS_OVER``: the video has no stream of that format) apart from blocked and unavailable.
 """
 
 from __future__ import annotations
@@ -435,11 +441,23 @@ _BASE_ARGS = (
     "--no-remote-components", "--no-playlist", "--no-progress", "--socket-timeout", "30",
     "--retries", "0", "--extractor-retries", "0", "--fragment-retries", "0", "--sleep-requests", "0.5",
 )
+SEARCH_ARGS = ("--flat-playlist", "--dump-single-json")  # a search's, after the base
+VIDEO_ARGS = ("--skip-download", "--flat-playlist", "--dump-single-json")  # a video's metadata, no download
 _DOWNLOAD_ARGS = (
     "--sleep-interval", "2.5", "--max-sleep-interval", "5", "-f", "bestaudio[ext=m4a]/bestaudio/best",
     "-x", "--audio-format", AUDIO_FORMAT, "--max-filesize", MAX_FILESIZE, "--no-mtime",
     "--print", "after_move:%(.{id,title,channel,uploader,duration,filepath})j",
 )
+OUTPUT_NAME = "audio.%(ext)s"  # a download's file in the folder it is given (-o)
+# The phone's download: the computer's, but m4a by its format alone, with no fallback and no -x to m4a (the phone has
+# no FFmpeg): a video with no such stream fails PHONE_PASS_OVER's words, and is passed over.
+PHONE_FORMAT = "bestaudio[ext=m4a]"
+PHONE_DOWNLOAD_ARGS = tuple(
+    PHONE_FORMAT if before == "-f" else arg
+    for before, arg in zip(("", *_DOWNLOAD_ARGS), _DOWNLOAD_ARGS)
+    if arg not in ("-x", "--audio-format") and before != "--audio-format"
+)
+PHONE_KINDS = {"search": SEARCH_ARGS, "video": VIDEO_ARGS, "download": PHONE_DOWNLOAD_ARGS}
 # A block: YouTube's bot check, a refusal, a rate limit or a captcha.
 _BLOCKED = re.compile(r"not a bot|HTTP Error 4(?:03|29)|Too Many Requests|rate[- ]limited|try again later|captcha",
                       re.IGNORECASE)
@@ -452,6 +470,15 @@ _UNAVAILABLE = re.compile(
 )
 _STATUS = re.compile(r"HTTP Error (\d{3})")
 REASON_CHARS = 300
+# The phone's alone, read on a failed run's ERROR line (classify): yt-dlp can't read YouTube's page (its extractor is
+# out of date), and the video has no stream of the format the phone asks.
+_OUTDATED = re.compile(
+    r"Unable to extract|nsig extraction failed|Signature extraction failed|Failed to extract any player response"
+    r"|Precondition check failed|challenge solving failed",
+    re.IGNORECASE,
+)
+PHONE_PASS_OVER = re.compile(r"Requested format is not available", re.IGNORECASE)
+RUN_CLASSES = ("blocked", "unavailable", "pass_over", "outdated", "error")  # what classify answers
 
 
 class VideoUnavailable(ProviderError):
@@ -465,12 +492,57 @@ class Download:
     video: Video
 
 
+def _lines(stderr: str) -> list[str]:
+    return [line.strip() for line in stderr.splitlines() if line.strip()]
+
+
+def _error_line(stderr: str) -> str | None:
+    """yt-dlp's last ``ERROR:`` line, less that word, or None when it wrote none."""
+    errors = [line.removeprefix("ERROR:").strip() for line in _lines(stderr) if line.startswith("ERROR:")]
+    return errors[-1] if errors else None
+
+
 def _reason(stderr: str) -> str:
     """yt-dlp's reason, one line: its last error, else its last word."""
-    lines = [line.strip() for line in stderr.splitlines() if line.strip()]
-    errors = [line.removeprefix("ERROR:").strip() for line in lines if line.startswith("ERROR:")]
-    text = (errors or lines or ["yt-dlp failed and said nothing"])[-1]
+    error = _error_line(stderr)
+    text = error if error is not None else (_lines(stderr) or ["yt-dlp failed and said nothing"])[-1]
     return text if len(text) <= REASON_CHARS else text[: REASON_CHARS - 1] + "…"
+
+
+def classify(stderr: str) -> str:
+    """What a run that failed came to, for the phone (``RUN_CLASSES``): ``blocked`` and ``unavailable`` read over the
+    whole of stderr, as ``YtDlp._run`` reads them; then, on the ERROR line alone (``_error_line``, never a warning or
+    a ``-v`` line), ``pass_over`` (``PHONE_PASS_OVER``) before ``outdated`` (``_OUTDATED``); else ``error``. The
+    computer's runs never ask it: an extraction error there is an error, counted against the video as ever."""
+    if _BLOCKED.search(stderr):
+        return "blocked"
+    if _UNAVAILABLE.search(stderr):
+        return "unavailable"
+    error = _error_line(stderr)
+    if error is not None:
+        if PHONE_PASS_OVER.search(error):
+            return "pass_over"
+        if _OUTDATED.search(error):
+            return "outdated"
+    return "error"
+
+
+def phone_argv(what: str, target: str, *, cache_dir: str, qjs: str, proxy: str,
+               into: str | None = None) -> list[str]:
+    """The phone's yt-dlp arguments for a run (``PHONE_KINDS``: a search, a video's metadata or a download, ``into``
+    the folder a download's audio goes to), with no program name: the computer's (``_BASE_ARGS``, ``--cache-dir``,
+    the kind's, ``--`` and the target), but QuickJS as the one runtime for YouTube's challenges (``qjs`` its program)
+    and ``proxy``, the app's gate, as the proxy, after the cache folder; and a download's audio by its format alone
+    (``PHONE_DOWNLOAD_ARGS``)."""
+    if what not in PHONE_KINDS:
+        raise ValueError(f"no such yt-dlp run: {what!r}")
+    args = list(PHONE_KINDS[what])
+    if (what == "download") != (into is not None):
+        raise ValueError("a download, and it alone, is given the folder its audio goes into")
+    if into is not None:
+        args += ["-o", str(Path(into) / OUTPUT_NAME)]
+    return [*_BASE_ARGS, "--cache-dir", str(cache_dir), "--no-js-runtimes", "--js-runtimes", f"quickjs:{qjs}",
+            "--proxy", proxy, *args, "--", target]
 
 
 class YtDlp:
@@ -512,7 +584,7 @@ class YtDlp:
 
     def search(self, query: str, n: int = SEARCH_RESULTS) -> list[Video]:
         target = f"ytsearch{n}:{query}"
-        out = self._run(["--flat-playlist", "--dump-single-json"], target, "search", self._timeouts[0])
+        out = self._run([*SEARCH_ARGS], target, "search", self._timeouts[0])
         return parse_search(out)
 
     def video(self, video_id: str) -> Video:
@@ -521,7 +593,7 @@ class YtDlp:
         if not VIDEO_ID.fullmatch(video_id):
             raise ValueError(f"not a YouTube video id: {video_id!r}")
         url = watch_url(video_id)
-        out = self._run(["--skip-download", "--flat-playlist", "--dump-single-json"], url, "video", self._timeouts[0])
+        out = self._run([*VIDEO_ARGS], url, "video", self._timeouts[0])
         return parse_video(out, video_id)
 
     def download(self, video_id: str, into: Path) -> Download:
@@ -529,7 +601,7 @@ class YtDlp:
         if not VIDEO_ID.fullmatch(video_id):
             raise ValueError(f"not a YouTube video id: {video_id!r}")
         url = watch_url(video_id)
-        out = self._run([*_DOWNLOAD_ARGS, "-o", str(into / "audio.%(ext)s")], url, "download", self._timeouts[1])
+        out = self._run([*_DOWNLOAD_ARGS, "-o", str(into / OUTPUT_NAME)], url, "download", self._timeouts[1])
         info: dict[str, Any] = {}
         for line in reversed(out.splitlines()):
             try:

@@ -1,0 +1,234 @@
+{
+ "args": {
+  "base": [
+   "--ignore-config",
+   "--no-plugin-dirs",
+   "--no-cookies",
+   "--no-cookies-from-browser",
+   "--no-remote-components",
+   "--no-playlist",
+   "--no-progress",
+   "--socket-timeout",
+   "30",
+   "--retries",
+   "0",
+   "--extractor-retries",
+   "0",
+   "--fragment-retries",
+   "0",
+   "--sleep-requests",
+   "0.5"
+  ],
+  "search": [
+   "--flat-playlist",
+   "--dump-single-json"
+  ],
+  "video": [
+   "--skip-download",
+   "--flat-playlist",
+   "--dump-single-json"
+  ],
+  "download": [
+   "--sleep-interval",
+   "2.5",
+   "--max-sleep-interval",
+   "5",
+   "-f",
+   "bestaudio[ext=m4a]/bestaudio/best",
+   "-x",
+   "--audio-format",
+   "m4a",
+   "--max-filesize",
+   "100M",
+   "--no-mtime",
+   "--print",
+   "after_move:%(.{id,title,channel,uploader,duration,filepath})j"
+  ],
+  "phone_download": [
+   "--sleep-interval",
+   "2.5",
+   "--max-sleep-interval",
+   "5",
+   "-f",
+   "bestaudio[ext=m4a]",
+   "--max-filesize",
+   "100M",
+   "--no-mtime",
+   "--print",
+   "after_move:%(.{id,title,channel,uploader,duration,filepath})j"
+  ]
+ },
+ "output_name": "audio.%(ext)s",
+ "phone_argv": {
+  "search": [
+   "--ignore-config",
+   "--no-plugin-dirs",
+   "--no-cookies",
+   "--no-cookies-from-browser",
+   "--no-remote-components",
+   "--no-playlist",
+   "--no-progress",
+   "--socket-timeout",
+   "30",
+   "--retries",
+   "0",
+   "--extractor-retries",
+   "0",
+   "--fragment-retries",
+   "0",
+   "--sleep-requests",
+   "0.5",
+   "--cache-dir",
+   "<cache_dir>",
+   "--no-js-runtimes",
+   "--js-runtimes",
+   "quickjs:<qjs>",
+   "--proxy",
+   "<proxy>",
+   "--flat-playlist",
+   "--dump-single-json",
+   "--",
+   "<target>"
+  ],
+  "video": [
+   "--ignore-config",
+   "--no-plugin-dirs",
+   "--no-cookies",
+   "--no-cookies-from-browser",
+   "--no-remote-components",
+   "--no-playlist",
+   "--no-progress",
+   "--socket-timeout",
+   "30",
+   "--retries",
+   "0",
+   "--extractor-retries",
+   "0",
+   "--fragment-retries",
+   "0",
+   "--sleep-requests",
+   "0.5",
+   "--cache-dir",
+   "<cache_dir>",
+   "--no-js-runtimes",
+   "--js-runtimes",
+   "quickjs:<qjs>",
+   "--proxy",
+   "<proxy>",
+   "--skip-download",
+   "--flat-playlist",
+   "--dump-single-json",
+   "--",
+   "<target>"
+  ],
+  "download": [
+   "--ignore-config",
+   "--no-plugin-dirs",
+   "--no-cookies",
+   "--no-cookies-from-browser",
+   "--no-remote-components",
+   "--no-playlist",
+   "--no-progress",
+   "--socket-timeout",
+   "30",
+   "--retries",
+   "0",
+   "--extractor-retries",
+   "0",
+   "--fragment-retries",
+   "0",
+   "--sleep-requests",
+   "0.5",
+   "--cache-dir",
+   "<cache_dir>",
+   "--no-js-runtimes",
+   "--js-runtimes",
+   "quickjs:<qjs>",
+   "--proxy",
+   "<proxy>",
+   "--sleep-interval",
+   "2.5",
+   "--max-sleep-interval",
+   "5",
+   "-f",
+   "bestaudio[ext=m4a]",
+   "--max-filesize",
+   "100M",
+   "--no-mtime",
+   "--print",
+   "after_move:%(.{id,title,channel,uploader,duration,filepath})j",
+   "-o",
+   "<into>/audio.%(ext)s",
+   "--",
+   "<target>"
+  ]
+ },
+ "placeholders": {
+  "target": "<target>",
+  "cache_dir": "<cache_dir>",
+  "qjs": "<qjs>",
+  "proxy": "<proxy>",
+  "into": "<into>"
+ },
+ "patterns": {
+  "blocked": {
+   "pattern": "not a bot|HTTP Error 4(?:03|29)|Too Many Requests|rate[- ]limited|try again later|captcha",
+   "ignorecase": true
+  },
+  "unavailable": {
+   "pattern": "Video unavailable|Private video|confirm your age|age[- ]restricted|available in your country|members[- ]only|has been removed|has been terminated|copyright|live event will begin|Premieres in|DRM protected|This video is (?:un|not )available",
+   "ignorecase": true
+  },
+  "status": {
+   "pattern": "HTTP Error (\\d{3})",
+   "ignorecase": false
+  },
+  "outdated": {
+   "pattern": "Unable to extract|nsig extraction failed|Signature extraction failed|Failed to extract any player response|Precondition check failed|challenge solving failed",
+   "ignorecase": true
+  },
+  "pass_over": {
+   "pattern": "Requested format is not available",
+   "ignorecase": true
+  },
+  "network": {
+   "pattern": "\\[Errno|Temporary failure|timed out|Connection (?:reset|refused|aborted)|Network is unreachable|Remote end closed|HTTP Error 5\\d\\d",
+   "ignorecase": true
+  }
+ },
+ "classes": [
+  "blocked",
+  "unavailable",
+  "pass_over",
+  "outdated",
+  "error"
+ ],
+ "reason_chars": 300,
+ "search_timeout": 120.0,
+ "download_timeout": 900.0,
+ "search_results": 8,
+ "max_filesize": "100M",
+ "audio_suffixes": [
+  ".m4a",
+  ".mp4",
+  ".aac",
+  ".opus",
+  ".ogg",
+  ".oga",
+  ".mp3",
+  ".flac",
+  ".wav"
+ ],
+ "audio_format": "m4a",
+ "phone_format": "bestaudio[ext=m4a]",
+ "fetch": {
+  "recheck_after_days": 30,
+  "give_up_after": 3
+ },
+ "search": {
+  "searches_per_hour": 10,
+  "asked_for_days": 30,
+  "failed_for_seconds": 3600,
+  "failures_pause": 3
+ }
+}

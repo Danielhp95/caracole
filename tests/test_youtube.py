@@ -556,3 +556,115 @@ def test_closing_lets_go_once(fake, tmp_path):
     yt.close()
     yt.close()
     assert closed == [1]
+
+
+# --- the phone's half: its arguments and how a run that failed is read ---------------------------------
+
+
+QJS, PROXY = "/data/app/lib/arm64/libqjs.so", "http://127.0.0.1:40123"
+PHONE_EXTRAS = ["--no-js-runtimes", "--js-runtimes", f"quickjs:{QJS}", "--proxy", PROXY]
+
+
+def computers_argvs(fake, tmp_path) -> dict[str, list[str]]:
+    """The computer's yt-dlp argv of a search, a video's metadata and a download, as the fake got them."""
+    fake.search("Radiohead Creep", entry(ID, "Creep", "Radiohead - Topic", 239))
+    fake.video(ID, "Creep", "Radiohead - Topic", 239)
+    into = tmp_path / "into"
+    into.mkdir()
+    yt = runner(fake, tmp_path)
+    yt.search("Radiohead Creep")
+    yt.video(ID)
+    yt.download(ID, into)
+    return dict(zip(("search", "video", "download"), fake.argvs()))
+
+
+@pytest.mark.slow
+def test_phone_argv_is_the_computers_flags_but_extraction_the_runtime_and_the_proxy(fake, tmp_path):
+    from caracole.youtube import PHONE_DOWNLOAD_ARGS, phone_argv
+
+    computers = computers_argvs(fake, tmp_path)
+    cache = str(tmp_path / "cache" / "yt-dlp")
+    into = tmp_path / "into"
+    targets = {"search": "ytsearch8:Radiohead Creep", "video": watch_url(ID), "download": watch_url(ID)}
+    for what, target in targets.items():
+        phones = phone_argv(what, target, cache_dir=cache, qjs=QJS, proxy=PROXY,
+                            into=str(into) if what == "download" else None)
+        at = phones.index("--cache-dir") + 2
+        assert phones[at:at + 5] == PHONE_EXTRAS, what  # the runtime its own, and the gate as its proxy
+        rest = phones[:at] + phones[at + 5:]
+        if what == "download":  # audio by its format alone: no FFmpeg to extract it with
+            assert "-x" in computers[what] and "-x" not in rest and "--audio-format" not in rest
+            assert computers[what][computers[what].index("-f") + 1] == "bestaudio[ext=m4a]/bestaudio/best"
+            assert rest[rest.index("-f") + 1] == "bestaudio[ext=m4a]"
+            mine = [a for a in computers[what] if a not in ("-x", "--audio-format", "m4a")]
+            mine[mine.index("-f") + 1] = "bestaudio[ext=m4a]"
+            assert rest == mine
+        else:
+            assert rest == computers[what], what
+        assert phones[-2:] == ["--", target]
+    assert "-x" not in PHONE_DOWNLOAD_ARGS and "/" not in PHONE_DOWNLOAD_ARGS[PHONE_DOWNLOAD_ARGS.index("-f") + 1]
+    with pytest.raises(ValueError):
+        phone_argv("download", watch_url(ID), cache_dir=cache, qjs=QJS, proxy=PROXY)  # where would it go?
+    with pytest.raises(ValueError):
+        phone_argv("playlist", watch_url(ID), cache_dir=cache, qjs=QJS, proxy=PROXY)
+
+
+VERBOSE = "\n".join([
+    "[debug] Command-line config: ['-v', '--ignore-config', '--', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ']",
+    "[debug] yt-dlp version stable@2026.11.23 from yt-dlp/yt-dlp (pip)",
+    "[debug] JS runtimes: quickjs-2025-04-26",
+    "[debug] Proxy map: {'all': 'http://127.0.0.1:40123'}",
+    "[youtube] dQw4w9WgXcQ: Downloading tv player API JSON",
+    "[debug] [youtube] [jsc:quickjs] Solving JS challenges using quickjs",
+    "[youtube] [jsc:quickjs] Solving JS challenges using quickjs",
+    "[debug] [jsc:quickjs] Using challenge solver lib script from yt_dlp_ejs (version 0.3.1)",
+])
+
+
+@pytest.mark.parametrize("stderr,cls", [
+    ("ERROR: [youtube] dQw4w9WgXcQ: Requested format is not available. Use --list-formats for a list of available "
+     "formats", "pass_over"),
+    ("ERROR: [youtube] dQw4w9WgXcQ: Unable to extract yt initial data; please report this issue on GitHub",
+     "outdated"),
+    ("ERROR: [youtube] dQw4w9WgXcQ: Failed to extract any player response; please report this issue", "outdated"),
+    ("ERROR: [youtube] dQw4w9WgXcQ: Precondition check failed.", "outdated"),
+    ("WARNING: [youtube] dQw4w9WgXcQ: nsig extraction failed: Some formats may be missing\n"
+     "ERROR: [youtube] dQw4w9WgXcQ: Requested format is not available", "pass_over"),  # the error line decides
+    ("WARNING: [youtube] Signature extraction failed: Some formats may be missing\n"
+     "ERROR: Unable to download API page: [Errno -3] Temporary failure in name resolution", "error"),
+    ("Unable to extract yt initial data", "error"),  # no ERROR line: nothing to read it from
+    (VERBOSE, "error"),
+    (VERBOSE + "\nERROR: [youtube] dQw4w9WgXcQ: Unable to extract player version", "outdated"),
+    ("ERROR: [youtube] dQw4w9WgXcQ: Unable to extract yt initial data: HTTP Error 429: Too Many Requests", "blocked"),
+    ("ERROR: [youtube] dQw4w9WgXcQ: Video unavailable\nERROR: Requested format is not available", "unavailable"),
+    ("ERROR: [youtube] dQw4w9WgXcQ: Unable to download API page: <urlopen error Tunnel connection failed: "
+     "403 Forbidden> (caused by TransportError('<urlopen error Tunnel connection failed: 403 Forbidden>'))", "error"),
+    ("ERROR: [youtube] dQw4w9WgXcQ: Unable to download API page: <urlopen error Tunnel connection failed: "
+     "407 Proxy Authentication Required>", "error"),
+])
+def test_classify_reads_outdated_and_pass_over_on_the_error_line_alone(stderr, cls):
+    from caracole.youtube import classify
+
+    assert classify(stderr) == cls
+
+
+@pytest.mark.parametrize("stderr", [
+    "ERROR: [youtube] dQw4w9WgXcQ: Unable to extract yt initial data; please report this issue on GitHub",
+    "ERROR: [youtube] dQw4w9WgXcQ: Requested format is not available. Use --list-formats",
+])
+@pytest.mark.slow
+def test_the_computers_runs_are_unchanged(fake, tmp_path, stderr):
+    # What the phone reads as out of date or passed over is, on the computer, an error as before, which counts
+    # against the video until GIVE_UP_AFTER gives it up.
+    from caracole import youtube_fetch as yf
+
+    fake.video(ID, stderr=stderr, exit=1)
+    events, record, video = [], yf.Record(), Video(ID)
+    for n in range(1, yf.GIVE_UP_AFTER + 1):
+        with pytest.raises(ProviderError) as e:
+            runner(fake, tmp_path, events=events).download(ID, tmp_path)
+        assert type(e.value) is ProviderError
+        given_up = yf._count_failure(record, video, "search", e.value)
+        assert (given_up is not None) == (n == yf.GIVE_UP_AFTER)
+    assert isinstance(given_up, yf.DownloadsFailed) and record.skip == [ID]
+    assert [ev.decision for ev in events] == ["error"] * yf.GIVE_UP_AFTER
