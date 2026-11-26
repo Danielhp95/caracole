@@ -716,6 +716,49 @@ def test_a_sheet_whose_words_failed_is_ready_and_says_why():
         Action("Open", href="/" + SHEET.sheet))
 
 
+# --- a sheet from an audio file you gave ------------------------------------------------------------------------
+
+
+def audio_job(state="running", stages=None):
+    from caracole.audio_sheet import STAGES as AUDIO_STAGES
+    from caracole.web.jobs import AUDIO_SHEET, audio_sheet_steps
+
+    said = stages or {}
+    made = [Step(label, tuple(args)) for label, args in
+            audio_sheet_steps("Nick Cani - Vikingos veganos", "0123456789abcdef")]
+    if state != "running":
+        made[0].state = "done" if state == "done" else "failed"
+    return Job(7, "Sheet from an audio file", AUDIO_SHEET + "nick cani/vikingos veganos", made, state=state,
+               display="Nick Cani - Vikingos veganos", **times(state),
+               stages=[Stage(name, label, *said.get(name, ("waiting", ""))) for name, label in AUDIO_STAGES])
+
+
+def test_an_audio_sheets_audio_step_names_no_site():
+    from caracole.web.outcome import AUDIO_STEPS
+
+    assert AUDIO_STEPS == (("Song", ("song",)), ("Audio", ("audio",)), ("Lyrics", ("lyrics",)),
+                           ("Words", ("vocals", "words")), ("Chords", ("chords",)), ("PDF", ("pdf",)))
+    kept = EVERY | {"audio": ("done", "kept as its audio: MP3, 3:18")}
+    job = audio_job(stages={"song": ("done", ""), "audio": kept["audio"], "lyrics": ("running", "")})
+    assert steps(job) == [Chip("Song", "done"), Chip("Audio", "done", "", "kept as its audio: MP3, 3:18"),
+                          Chip("Lyrics", "running"), Chip("Words", "waiting"), Chip("Chords", "waiting"),
+                          Chip("PDF", "waiting")]
+    assert progress(job, job_line(job, None), None)["count"] == "3 of 6"
+    ready = audio_job("done", kept)
+    assert job_line(ready, SHEET).text == "Ready" and progress(ready, job_line(ready, SHEET), SHEET) == {}
+    assert outcome(ready, job_line(ready, SHEET), SHEET).reason == "Chords over the lyrics."
+    heard = audio_job("done", kept | {"lyrics": ("done", "LRCLIB has none"), "vocals": ("done", "sung from 9.3 s"),
+                                      "words": ("failed", "the GPU failed"), "chords": ("done", HOLDS["none"])})
+    assert outcome(heard, job_line(heard, SHEET), SHEET).reason == (
+        "Chords only, no lyrics: the words couldn't be heard here (the GPU failed).")
+    # A sheet of an earlier source is none of its doing: Ready only once its chords are made.
+    refused = audio_job("failed", {"song": ("failed", "Nick Cani - Vikingos veganos already has a sheet")})
+    assert job_line(refused, SHEET).text != "Ready"
+    gone = audio_job("done", {"song": ("done", ""), "audio": ("failed", "that upload is gone")})
+    assert job_line(gone, SHEET).text == "Not made yet"
+    assert outcome(gone, job_line(gone, SHEET), SHEET).reason == "That upload is gone."
+
+
 def test_a_sheet_whose_vocals_failed_says_why_with_the_stages_own_words():
     why = "the separator can't run here (no GPU adapter)"
     job = youtube_job("done", EVERY | {"vocals": ("failed", why), "words": ("skipped", "no vocals"),

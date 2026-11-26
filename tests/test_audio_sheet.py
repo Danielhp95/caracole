@@ -352,6 +352,36 @@ def test_a_waiting_lookup_goes_first_before_the_vocals_the_words_and_the_chords(
     assert [name for name in went if name in ("vocals", "words", "chords")] == ["vocals", "words", "chords"]
 
 
+def test_a_transcriber_whose_setup_fails_ends_the_words_alone_and_the_chords_are_made(setup, conn, sites, ears,
+                                                                                      tmp_path):
+    # The setup's failure (the GPU's), never the song's: the words stage says it, and the sheet is made chords-only.
+    from caracole.autochords import transcribe as tx
+
+    sites.records.clear()
+    said = "the GPU failed: OutOfMemoryError: CUDA out of memory"
+    ears.transcriber.fail = tx.SetupFailed(said)
+    result, heard = make(setup, AudioRequest(*NICK, file=a_file(tmp_path)), ears=ears, hears=True)
+    assert result.ok and result.failed is None and result.bug is None, result
+    ends = heard.ends()
+    assert ends["vocals"][0] == "done" and ends["words"] == ("failed", said)
+    assert ends["chords"] == ("done", "chords only, no lyrics") and ends["pdf"] == ("done", "made")
+    assert ears.log == ["separator", "transcriber"]
+    assert transcript_of(conn, the_song(conn)) is None
+
+
+def test_lyrics_a_site_answers_with_as_the_job_runs_leave_nothing_to_hear(setup, conn, sites, ears, tmp_path):
+    # The song had no lyrics as the job started; LRCLIB answers its lyrics stage: no voice separated, Whisper never
+    # run, the chords over those lyrics.
+    result, heard = make(setup, AudioRequest(*NICK, file=a_file(tmp_path)), ears=ears, hears=True)
+    assert result.ok, result
+    ends = heard.ends()
+    assert ends["lyrics"] == ("done", "found, timed")
+    assert ends["vocals"] == ("skipped", "not transcribed: its lyrics are found")
+    assert ends["chords"] == ("done", "chords over the lyrics")
+    assert ears.log == [] and ears.separator.calls == []
+    assert [r[0] for r in sites.requests][:1] == ["get"]
+
+
 def test_lyrics_a_site_has_skip_the_hearing(setup, conn, sites, ears, tmp_path):
     song = add_song(conn, *NICK, duration_ms=200000)
     update_song(conn, song.id, lyrics_status="found", lyrics_json=Lyrics.from_record(record(200.0)).to_json())

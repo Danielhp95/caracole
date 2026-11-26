@@ -332,6 +332,7 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   - The command reads the file first (`audio_store.examine`, an upload's staged record) and refuses, before the lock,
     what isn't audio it reads, as it refuses a caracole that makes no chords (`youtube_fetch.autochords_problem`:
     neither YouTube nor yt-dlp needed); a file that names no artist with no `--song` exits 2.
+  - caracole serve's "+" runs it (web/audio_routes.py), `--upload ID`.
 - transcribe_job.py is no step either but `caracole transcribe`: a YouTube song's lyrics transcribed from its audio,
   then its auto sheet made again over them (`make_transcript`).
   - Its stages song, vocals, words, chords, pdf, pages (`STAGES`), reported as a lookup's (staged.py's `StagedRun`).
@@ -1819,6 +1820,22 @@ It is rows.js's, shared by both pages:
     ("caracole:transcribe"). So a sheet from a video that found no lyrics offers it at once (the sheet's lyrics
     stage asks LRCLIB, Megalobiz and AZLyrics, each noting its miss), a transcription that failed on the GPU offers
     it again, and one made from a terminal meanwhile no more.
+- **audio_routes.py** is an audio file uploaded from the library page, made into its song's auto sheet:
+  - `POST /audio/upload?name=` (a `bytes` route, `audio_store.AUDIO_MAX`, 128 MiB, one body: the form token in its
+    header, the cross-origin check, refused unread past it): the bytes staged (`audio_store.stage`, `named` the uploads
+    the waiting and running jobs name, `jobs.uploads_named`, so a new one lets go of every other; `sweep` first), the
+    answer its id, name (a name to show alone), size, format, length, tags, the song they name (`guess`,
+    audio_sheet.py `names_of`) and the library's song of it (`song`: `has_sheet`, `sheet`, and `audio`, "purchase",
+    "youtube", "upload" or null, so the dialog says what the file replaces); each `AudioError` its status and words.
+  - `POST /audio` (`upload`, and `song` with `identity`, or `artist` and `title`, written to wanted.txt first with the
+    file's album and length): `caracole audio --progress --upload=<id> --song=…` queued under `jobs.AUDIO_SHEET` and the
+    song's key (`audio_sheet_steps`, by the id, never a path), "Sheet from an audio file: Artist - Title", the queue's,
+    never joining its lookup nor a lookup it; asked again while one waits or runs, that one is the answer and the
+    second file is dropped; its view the song's, its steps outcome.py `AUDIO_STEPS`, Ready as a YouTube sheet's.
+    Refused 409 ignored or with a human sheet (a purchase or YouTube's audio never: the owner's decision of
+    2026-11-25), 400 or 404 an upload not staged.
+  - `POST /audio/drop` (JSON `{"upload"}`): deleted now, 409 while a job names it.
+  - 409 for each where this caracole makes no chords ("No sheets from audio files here: …", `audio_reason`).
 - **ug_link_routes.py** is a UG link pasted into the library page's box: `GET /api/ug/link` (ug/link.py `known`, no
   request and no lock: its state, the tab's names, its artist's page, `guess`, the library's `song`, `hits` as
   /api/search's `index` items) and `POST /ug/link` (`caracole ug --link --progress` queued under `jobs.UG_LINK`, among
@@ -1927,12 +1944,13 @@ It is rows.js's, shared by both pages:
   library_assets/requests.js, drawn from `/requests.json`: web/feed.py; no page of its own, every link and redirect to
   a request is `/#tab=requests&job=N`, status.py `details_href`.
   - Its finished requests keep their steps (feed.py `_finished`, `"steps"` right after `"reason"`): a lookup's, a
-    sheet from a YouTube video's or a transcription's that started (`outcome.lists_steps`; the phone's
+    sheet from a YouTube video's, a transcription's or a sheet from an audio file's that started (`outcome.lists_steps`; the phone's
     `Outcomes.listsSteps`, whose `RequestsRoutes` hands `Feed.feed` their chips), never one cancelled before it ran
     nor a request of other commands.
-  - The two staged jobs over one song (staged.py: a sheet from a YouTube video, `YOUTUBE_STEPS`; a transcription,
-    `TRANSCRIBE_STEPS`) share outcome.py's rules, each given its own stages (`_staged`: its steps and the stage of its
-    words): `_staged_steps`, `_staged_holds` (Ready: what the chords stage says the sheet holds, or why its words
+  - The three staged jobs over one song (staged.py: a sheet from a YouTube video, `YOUTUBE_STEPS`; a transcription,
+    `TRANSCRIBE_STEPS`; a sheet from an audio file, `AUDIO_STEPS`, the YouTube sheet's, its Audio step naming no site)
+    share outcome.py's rules, each given its own stages (`_staged`: its steps, the stage of its words and the site its
+    Audio step names): `_staged_steps`, `_staged_holds` (Ready: what the chords stage says the sheet holds, or why its words
     wait; a YouTube sheet whose lyrics were done but whose heard words failed: "Chords only, no lyrics: the words
     couldn't be heard here (why)."; a YouTube sheet's one Words step is its vocals and words stages) and `_staged_stopped` (Not made yet: the first stage after the song's that stopped it).
 - The library page's lines read only its steps (`outcome.progress`: while a lookup runs, once it has run a second
@@ -4269,7 +4287,12 @@ picks one).
   0700, its `file.caracole` and `open.json` 0600, one at a time, each part 8 MiB at most and the next one, 8 GiB in
   all), deleted once its import is over, refused at its comparison, dropped (`POST /sync/import/drop`), let go as
   another is opened when no request names it and it is whole or its upload stopped (`peer_import.let_go`,
-  `STOPPED`), or an hour after its last part, unless an import holds it. Everything else stays a queued command's.
+  `STOPPED`), or an hour after its last part, unless an import holds it.
+- And for a sheet from an audio file (audio_routes.py), nothing else: an upload staged in `state_dir/audio/`
+  (audio_store.py: 0700, `.upload-<16 hex><ext>` and its `.upload-<id>.json` 0600, one no job names at a time, 128 MiB
+  at most), which `caracole audio --upload` moves into place as the song's audio, dropped (`POST /audio/drop`), let go
+  as another is staged, or swept an hour after unless a waiting or running job names it; nothing is served back from
+  the folder. Everything else stays a queued command's.
 
 ### wanted.txt is the one source of songs
 

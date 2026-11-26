@@ -2836,6 +2836,29 @@ and remakes the sheet with them.
 One runs at a time per song. Where chords can't be made, the form has no video field and says why
 ("No sheets from YouTube here: auto-chords isn't installed.").
 
+#### A sheet from an audio file
+
+Where caracole can make chords from audio (`packages.autochords` and its model files; no YouTube, no
+yt-dlp), caracole serve takes an audio file of yours for a song's sheet. The file goes up in one
+request, 128 MiB at most (`caracole audio FILE` takes any size), and waits in the state folder's
+`audio/` until its sheet is asked for. caracole reads what it is from its bytes, never its name:
+MP3, M4A, FLAC, WAV, Ogg or AIFF, 30 minutes at most. It answers the song the file's tags or its
+name say, and whether you have it, with the audio the file would replace (bought, YouTube's, or a
+file given before). A file sent and never used is deleted when the next one comes, or after an
+hour.
+
+Asking for the sheet queues `caracole audio --upload ID --song "ARTIST - TITLE" --progress`, a song
+new to the library first going into wanted.txt with the file's album and length. The bar shows Song,
+Audio, Lyrics, Words, Chords and PDF, Audio saying `kept as its audio: MP3, 3:18`, and Ready and
+Not made yet read as for a sheet from a YouTube video. One runs at a time per song; asked again
+meanwhile, the one queued is the answer and the second file is deleted.
+
+- Refused before anything is queued: a song with a human sheet ("… already has a sheet.") or an
+  ignored one. A purchase linked is no refusal: the file replaces it as the song's audio.
+- Refused as it is sent: "Not an audio file caracole reads (MP3, M4A, FLAC, WAV, Ogg or AIFF).",
+  "That file is too big: …", "That file is longer than 30 minutes.", "No room to keep it here.".
+- Where chords can't be made: "No sheets from audio files here: auto-chords isn't installed.".
+
 #### Transcribing the lyrics from a card
 
 Where caracole can transcribe (as for `caracole transcribe`: auto-chords, Whisper, its two model
