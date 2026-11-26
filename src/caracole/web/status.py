@@ -59,7 +59,8 @@ ran. So a job of other commands reads the same way:
   A song's lyrics transcribed from its audio (``jobs.TRANSCRIBE``) says
   the same: Ready once its chords stage made the sheet over them, else
   "Not made yet"; it says why it failed in its failed stage's words ("no
-  singing heard", "the GPU failed: …").
+  singing heard", "the GPU failed: …"). So does a sheet from an audio file
+  you gave (``jobs.AUDIO_SHEET``).
   A sync with another caracole (``caracole peer sync``, the Sync tab's: sync_routes.py) says "Shared", and a push
   another caracole sent taken (``caracole peer take``, peer_routes.py) or a pull of its units "Taken"; with a unit
   left as it was (the owner skipped it, or it changed on a side since the comparison), "Shared · 2 changes left as
@@ -86,6 +87,7 @@ from typing import Any
 from caracole.get import SHEET_FROM
 from caracole.logs import plural
 from caracole.web.jobs import (
+    AUDIO_SHEET,
     EXPORTING,
     INDEX_MERGE_COMMAND,
     INDEX_READS,
@@ -293,7 +295,7 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page:
         return Line("ready", DONE[action], ("Open songbook", opens) if opens else None)
     if job.song_key.startswith(INDEX_READS):  # no song's: its command's last word says what the site answered
         return _artist_read(job.steps, details)
-    if job.song_key.startswith((YOUTUBE_SHEET, TRANSCRIBE)):  # Ready once its chords are made, never an earlier sheet
+    if job.song_key.startswith((YOUTUBE_SHEET, TRANSCRIBE, AUDIO_SHEET)):  # Ready once its chords are made, never an earlier sheet
         made = any(stage.name == "chords" and stage.state == "done" for stage in job.stages)
         if made and song is not None and song.sheet:
             return Line("ready", READY, ("Open", song.sheet))

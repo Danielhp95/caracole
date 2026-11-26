@@ -470,7 +470,7 @@ def _one_song(conn: sqlite3.Connection, cfg: Config, display: str, overrides: Ov
     song = song_named(conn, display, overrides)
     if conn.execute("SELECT 1 FROM files WHERE song_id = ? AND name = 'sheet.txt'", (song.id,)).fetchone():
         fail(f'"{song.display}" has a human sheet: caracole takes no audio from YouTube for it.')
-    if song.audio_path and youtube_audio(conn, song) is None:  # a purchase, linked from Music/
+    if song.audio_path and youtube_audio(conn, song) is None:  # a purchase, or a file you gave it
         audio = Path(song.audio_path)
         where = f"{audio.relative_to(cfg.music_dir)} in Music/" if audio.is_relative_to(cfg.music_dir) else audio
         fail(f'"{song.display}" has its audio already ({where}): caracole takes none from YouTube for it.')

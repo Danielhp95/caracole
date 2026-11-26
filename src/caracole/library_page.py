@@ -209,6 +209,12 @@ no lyrics offers it at once, a failed transcription offers it again, one made me
 more. The card's own data says nothing of it (the phone, which transcribes nothing, writes the same cards); elsewhere no
 card offers it.
 
+A sheet from an audio file of yours (web/audio_routes.py): where this caracole makes chords (``audio_member``, the
+data's ``server.audio``), the search bar has a "+" that chooses a file, or takes one dropped on the library, uploads it
+and shows what it names in a dialog, whose Make sheet posts ``POST /audio`` as the request form posts a request; and a
+song's card, not ignored and with no human sheet, has Sheet from an audio file… for that song (library.js). The file
+on disk and the phone have neither.
+
 Remove stays on the page: one tap and the song's own line says "Removing in 5 s
 · Undo", the focus on Undo, with what goes in one sentence under it (the
 server's answer to the question, ``removal.brief``: caracole's files of the
@@ -460,7 +466,9 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
                                       "off": not cfg.provider("youtube").enabled},
                           # Lyrics transcribed from a song's audio (web/transcribe_routes.py), served alone: the
                           # cards' own data stays the phone's too.
-                          "transcribe": transcribe_member(conn, cfg, overrides)}
+                          "transcribe": transcribe_member(conn, cfg, overrides),
+                          # A sheet from an audio file of yours (web/audio_routes.py): the bar's "+", served alone.
+                          "audio": audio_member(cfg)}
         if controls.timers is not None:
             data["server"]["timers"] = dict(controls.timers)
         for song in songs:
@@ -486,6 +494,22 @@ def transcribe_member(conn: sqlite3.Connection, cfg: Config, overrides: Override
     if why is not None:
         return {"ok": False, "why": why, "songs": [], "nothing": [], "unsung": [], "transcribed": [], "time": ""}
     return {"ok": True, "why": None, **offers(conn, cfg, overrides), "time": transcribe_time(cfg)}
+
+
+def audio_member(cfg: Config) -> dict[str, Any]:
+    """The served page's ``server.audio``: whether this caracole makes a song's sheet from an audio file (``ok``:
+    auto-chords and its model files, ``youtube_fetch.autochords_problem``; neither YouTube nor yt-dlp), why not
+    (``why``, in a few words), and the most an upload takes (``limit``, ``audio_store.AUDIO_MAX``; 0 where none is
+    taken), and the upload route's words for a file past it (``too_big``, ``audio_store.TOO_BIG``, which the page
+    says before sending one). Where it is, the bar has its "+" and a song's card Sheet from an audio file… (library.js ``audioSheet``).
+    The phone's (LibraryPage.kt) is the same shape, saying it can't."""
+    from caracole.audio_store import AUDIO_MAX, TOO_BIG
+    from caracole.youtube_fetch import autochords_problem, autochords_reason
+
+    problem = autochords_problem(cfg)
+    if problem is not None:
+        return {"ok": False, "why": autochords_reason(problem), "limit": 0, "too_big": ""}
+    return {"ok": True, "why": None, "limit": AUDIO_MAX, "too_big": TOO_BIG}
 
 
 def assemble_page(data: Mapping[str, Any], controls: WebControls | None, *, problem: str | None,

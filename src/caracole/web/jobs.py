@@ -35,7 +35,10 @@ version's (``EXPORTING``). A sheet made from a YouTube video is one ``caracole y
 time a song. A song's lyrics transcribed from its YouTube audio, then its auto sheet made again over them, is one
 ``caracole transcribe --progress`` (``transcribe_steps``), its JSON lines its stages (transcribe_job.py's), under a key
 of its own too (``TRANSCRIBE`` and the song's identity key), as a sheet from YouTube's: it never joins the song's
-lookup, nor a lookup it, and one at a time a song; it is the queue's, so two songs' run one after the other. A video
+lookup, nor a lookup it, and one at a time a song; it is the queue's, so two songs' run one after the other. A sheet
+made from an audio file you uploaded is one ``caracole audio --progress`` (``audio_sheet_steps``: the upload by its
+16-hex id, never a path), its JSON lines its stages (audio_sheet.py's), under ``AUDIO_SHEET`` and the song's identity
+key, as a sheet from YouTube's, the queue's. A video
 suggested for a search is ``caracole youtube --search --progress`` (``youtube_search_steps``),
 a job of no song's (``YOUTUBE_SEARCH`` and the query's key, among ``INDEX_READS``), whose stages are
 ``YOUTUBE_SEARCH_STAGES``, as are a pasted video's (``youtube_video_steps``: ``caracole youtube --video``, under
@@ -197,6 +200,12 @@ class Job:
         """Whether it makes its song's sheet from a YouTube video (``caracole youtube --sheet``): its stages are
         youtube_sheet.py's."""
         return any(_sheets_from_youtube(step.args) for step in self.steps)
+
+    @property
+    def from_audio(self) -> bool:
+        """Whether it makes its song's sheet from an audio file you gave (``caracole audio``): its stages are
+        audio_sheet.py's."""
+        return any(_sheets_from_audio(step.args) for step in self.steps)
 
     @property
     def transcribes(self) -> bool:
@@ -365,10 +374,10 @@ def _fetches(steps: Sequence[Step]) -> bool:
 def _reports(args: Sequence[str]) -> bool:
     """Whether a step's command writes ``caracole get --progress`` lines: a lookup, ``caracole versions
     --progress``, ``caracole lacuerda --search --progress``, ``caracole youtube --sheet --progress`` (``--search``,
-    ``--video``), ``caracole ug --link --progress``, ``caracole transcribe --progress``, or ``caracole peer take
+    ``--video``), ``caracole ug --link --progress``, ``caracole transcribe --progress``, ``caracole audio --progress``, or ``caracole peer take
     --progress``, ``peer sync --progress`` or ``index merge --progress``."""
     return args[:1] == (LOOKUP,) or (args[:1] in ((VERSIONS,), ("lacuerda",), ("youtube",), ("ug",), ("transcribe",),
-                                                  (PEER,))
+                                                  ("audio",), (PEER,))
                                      and "--progress" in _options(args)) or (
         args[:2] == INDEX_MERGE_COMMAND and "--progress" in _options(args))
 
@@ -518,10 +527,32 @@ def _transcribes(args: Sequence[str]) -> bool:
     return args[:1] == ("transcribe",)
 
 
+AUDIO_SHEET = "audio:"  # a sheet from an audio file you gave: its job's key, the song's identity key after it
+
+
+def audio_sheet_steps(display: str, upload: str) -> list[tuple[str, tuple[str, ...]]]:
+    """Make a song's auto sheet from an audio file uploaded now: ``caracole audio --progress``, one process for every
+    stage (audio_sheet.py's ``STAGES``): the file kept as the song's audio, the lyrics, the words heard where no site
+    has them, the chords, the PDF. ``upload`` is the staged upload's 16-hex id (audio_store.py), never a path."""
+    return [("Making the sheet", ("audio", "--progress", f"--upload={upload}", f"--song={display}"))]
+
+
+def _sheets_from_audio(args: Sequence[str]) -> bool:
+    """Whether a step's command makes a song's sheet from an audio file (``caracole audio``)."""
+    return args[:1] == ("audio",)
+
+
+def uploads_named(jobs: Sequence[Job]) -> set[str]:
+    """The staged uploads (audio_store.py ids) the waiting and running jobs of ``jobs`` name (``--upload=``)."""
+    return {arg.removeprefix("--upload=") for job in jobs if job.active for step in job.steps
+            if _sheets_from_audio(step.args) for arg in step.args if arg.startswith("--upload=")}
+
+
 def song_key_of(job_key: str) -> str:
-    """The song's identity key in a job's key: a removal's, a sheet from YouTube's and a transcription's have theirs
-    after a prefix."""
-    return job_key.removeprefix(REMOVING).removeprefix(YOUTUBE_SHEET).removeprefix(TRANSCRIBE)
+    """The song's identity key in a job's key: a removal's, a sheet from YouTube's, a transcription's and a sheet from
+    an audio file's have theirs after a prefix."""
+    return (job_key.removeprefix(REMOVING).removeprefix(YOUTUBE_SHEET).removeprefix(TRANSCRIBE)
+            .removeprefix(AUDIO_SHEET))
 
 
 def song_of_job(job_key: str) -> str:
@@ -600,7 +631,8 @@ def _afresh(stages: Sequence[Stage]) -> None:
 def _stages(steps: Sequence[Step]) -> list[Stage]:
     """A job's stages, all waiting: a lookup's (``caracole versions --choose`` and ``--clear`` run one), then Keep
     it's it hasn't, a search of LaCuerda's (``SEARCH_STAGES``), a sheet from a YouTube video's
-    (youtube_sheet.py's ``STAGES``), a transcription's (transcribe_job.py's ``STAGES``), a sync's with another
+    (youtube_sheet.py's ``STAGES``), a transcription's (transcribe_job.py's ``STAGES``), a sheet from an audio
+    file's (audio_sheet.py's ``STAGES``), a sync's with another
     caracole (``PEER_TAKE_STAGES``,
     ``PEER_SYNC_STAGES``, ``INDEX_MERGE_STAGES``), and a UG link's read (``UG_LINK_STAGES``); none for other
     commands."""
@@ -624,6 +656,10 @@ def _stages(steps: Sequence[Step]) -> list[Stage]:
         from caracole.transcribe_job import STAGES as TRANSCRIBE_STAGES
 
         names.update((name, label) for name, label in TRANSCRIBE_STAGES if name not in names)
+    if any(_sheets_from_audio(step.args) for step in steps):
+        from caracole.audio_sheet import STAGES as AUDIO_STAGES
+
+        names.update((name, label) for name, label in AUDIO_STAGES if name not in names)
     for step in steps:
         names.update((name, label) for name, label in _peer_stages(step.args) if name not in names)
         names.update((name, label) for name, label in _ug_link_stages(step.args) if name not in names)

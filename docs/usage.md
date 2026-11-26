@@ -168,9 +168,10 @@ its `library`, `music`, `state` and `cache` folders. One you set yourself still 
 | `state_dir` | `$STATE_DIRECTORY` when systemd sets it, else `$XDG_STATE_HOME/caracole`, else `~/.local/state/caracole` |
 | `cache_dir` | `$CACHE_DIRECTORY`, else `$XDG_CACHE_HOME/caracole`, else `~/.cache/caracole` |
 
-The state folder holds `caracole.sqlite`, `caracole.lock`, the `requests.jsonl` of `caracole serve`
-and, in `backups/`, the last three copies of the database (see
-[Keeping the database](#keeping-the-database)). Back it up, but don't sync it.
+The state folder holds `caracole.sqlite`, `caracole.lock`, the `requests.jsonl` of `caracole serve`,
+in `backups/` the last three copies of the database (see
+[Keeping the database](#keeping-the-database)), and in `audio/` the audio files you give caracole
+(see [caracole audio](#caracole-audio)), which can't be fetched again. Back it up, but don't sync it.
 
 The cache keeps every response caracole has received, so deleting it costs only requests. PDFs are
 made there too, so caracole must be able to write to it. Its `icons` folder holds each site's icon
@@ -613,8 +614,9 @@ what goes and what stays, then asks:
 removed and it exits 1.
 
 It takes every line in wanted.txt that names the song, the files caracole wrote in the song's
-folder, the folder once empty, the song's record in the database, and the audio caracole took from
-YouTube for it. Syncthing then deletes the files on every device. It leaves:
+folder, the folder once empty, the song's record in the database, the audio caracole took from
+YouTube for it, and the audio file you gave it (`caracole audio`). Syncthing then deletes the files
+on every device. It leaves:
 
 - Any file caracole didn't write, such as a `sheet.pdf` or `lyrics.txt` you put where caracole
   made none. The command names each one.
@@ -1407,7 +1409,7 @@ does (see [Audio from YouTube](#audio-from-youtube)). The chords come next, from
 
 | Option | What it does |
 |---|---|
-| `--song "ARTIST - TITLE"` | Takes that song's audio now, even when its search found nothing lately. It refuses a song that has a human sheet, is ignored or has a purchase linked. |
+| `--song "ARTIST - TITLE"` | Takes that song's audio now, even when its search found nothing lately. It refuses a song that has a human sheet, is ignored or has audio of its own (a purchase, or a file you gave it). |
 | `--url URL` | With `--song`. First writes the video under `[youtube]` in overrides.toml, so the song's audio comes from it. |
 | `--none` | With `--song`. Writes `"none"` there and lets go of any audio the song had from YouTube. It asks nothing, so it works with YouTube off, and for a song not in the library yet. |
 | `--sheet` | With `--song`. Does it all now: audio, chords and sheet. See "A sheet from a video, now" under [Audio from YouTube](#audio-from-youtube). |
@@ -1434,6 +1436,51 @@ that line once a minute. `--progress` writes a JSON line per stage instead, for 
 | `--force` | It is sung. Hears a song caracole heard nothing sung in, or that you said isn't sung, with no rule of nothing sung: Whisper runs whatever the singing found, over the whole song when none was. Also tries audio Whisper couldn't load again, after an ffmpeg or Whisper upgrade. A song offered a transcription anyway is simply transcribed. |
 | `--none` | It isn't sung. For a song with a transcript: drops it, makes the sheet again with the chords alone (`Chords only: you said it isn't sung`), and never hears that audio again until `--force`. A new file is heard once more. |
 
+### caracole audio
+
+    caracole audio FILE [--song "ARTIST - TITLE"] [--progress]
+    caracole audio --upload ID [--song "ARTIST - TITLE"] [--progress]
+
+Makes a song's auto sheet from an audio file of yours (MP3, M4A, FLAC, WAV, Ogg or AIFF, 30
+minutes at most), now:
+
+    $ caracole audio "03 - Nick Cani - Vikingos veganos.flac"
+    Read “03 - Nick Cani - Vikingos veganos.flac” as Nick Cani - Vikingos veganos.
+    Song: added to wanted.txt, line 16.
+    Audio: kept as its audio: FLAC, 3:18.
+    Lyrics: found, timed.
+    …
+
+- The song is `--song`, else the file's artist and title tags, else its name, less its track number.
+  A file that names no artist asks for `--song` and exits 2. A song the library doesn't have goes
+  into wanted.txt with the file's album and length, so LRCLIB is asked with that length.
+- A copy of the file is kept in the state folder's `audio/`, as `<song id>-<digest>.<ext>`, private
+  to caracole and never synced. It becomes the song's audio, whatever the song had: a purchase stays
+  in Music/ but is no longer its audio, YouTube's audio is let go of at the next youtube step, and a
+  file given before is deleted. The scan never links a purchase over it. The same file again changes
+  nothing (`Audio: has this file's audio already.`).
+- Then it goes on as [a sheet from a video](#a-sheet-from-a-video-now) does: the lyrics sites first,
+  the words heard from the file only when every one missed, the chords, the PDF, the viewer and the
+  pages. A lookup waiting for the lock goes first before the vocals, the words and the chords.
+- `--upload ID` takes a file caracole serve was sent, moved into place rather than copied. Without
+  `--song`, the song is the one the file's tags or name say, as for a file (the page always names it).
+  Once moved, the upload leaves a small marker beside the file for 30 days (the Journal's history),
+  so the same request again (Try again after the Audio step, or one cut off on the way) goes on:
+  `Audio: has this file's audio already.` while the song's audio is that file. An upload lost before
+  its Audio step (a request interrupted, its file swept after an hour or replaced by another upload),
+  or one a later file of yours has replaced since, says the upload is gone: choose it again.
+  A request cut off while it kept the file and never asked again leaves the file in `audio/` for
+  those 30 days; then it is deleted.
+- No file of yours is deleted while another song's audio is that file too.
+- Two songs merged into one (after an upgrade that spells a song's key anew) keep the file you gave
+  either; of two such files, the one given last, and the next scan deletes the older.
+
+It needs the flake's `packages.autochords` (auto-chords and its model files; no YouTube, no yt-dlp).
+It exits 0 once the sheet is made, and when a site's block, cooldown, spent budget or error makes
+the lyrics wait. It exits 1 for a song that is ignored or has a human sheet (`No sheet made: …
+already has a sheet.`), for a file caracole doesn't read or auto-chords can't read, and, before it
+reads anything, for a caracole that makes no chords. A removal deletes the song's file in `audio/`.
+
 ### When the pages are rewritten
 
 A command that changes what `_todo.md` and `index.html` show rewrites both when it is done.
@@ -1441,7 +1488,7 @@ A command that changes what `_todo.md` and `index.html` show rewrites both when 
 | Commands | Rewrite the pages |
 |---|---|
 | `match` (not `--dry-run`), `render`, `scan`, `todo`, `add`, `search --add`, `sync`, `autochords`, and every `songbook` command but `list` and `show` | Always. |
-| `transcribe` | Once it took the song. |
+| `transcribe`, `audio` | Once it took the song. |
 | `review` | When an answer changed something. |
 | `fetch`, `lyrics`, `lacuerda`, `gtptabs`, `harptabs`, `gametabs`, `musescore`, `youtube` | When they did something or were blocked, so that Provider health shows the cooldown. |
 
@@ -1479,7 +1526,7 @@ one request at a time. While a lookup runs or waits, no other caracole takes the
 
 What you ask for now also waits as a lookup does, not behind the whole run:
 
-- `add`, `remove`, `review`, `fetch --song`, `render --song` and `transcribe`;
+- `add`, `remove`, `review`, `fetch --song`, `render --song`, `transcribe` and `audio`;
 - `youtube --song` (with `--sheet` or `--none` too), `youtube --search` and `youtube --video`;
 - `caracole songbook make`, `add`, `remove`, `move`, `set`, `rename`, `delete` and `render`.
 
@@ -1656,9 +1703,9 @@ model, or `Whisper can't read the audio`) fails its own stage alone and marks no
 the song: the sheet is made with the chords only, and the song's card still offers Transcribe
 the lyrics. It exits 1 when:
 
-- The song has a human sheet, is ignored, has a purchase linked, or has `"none"` under
-  `[youtube]` and you gave no video. A human sheet kept, or the song ignored, while a lookup went
-  first before the chords counts too.
+- The song has a human sheet, is ignored, has audio of its own (bought or given), or has `"none"`
+  under `[youtube]` and you gave no video. A human sheet kept, or the song ignored, while a lookup
+  went first before the chords counts too.
 - YouTube won't give the video, or auto-chords can't read the audio.
 - This caracole can't make chords from audio. It says so before it asks anything.
 - Another caracole removed the song meanwhile (`No sheet made: … left the book while its sheet
@@ -1687,8 +1734,9 @@ or a purchase, makes the sheet again.
 
 ### Lyrics transcribed from the audio
 
-For a song with audio of its own (taken from YouTube, or a purchase) that no lyrics site has words for, caracole can hear
-the words itself, with Whisper large-v3, and make the auto sheet again with the chords over them:
+For a song with audio of its own (taken from YouTube, a purchase, or a file you gave it) that no
+lyrics site has words for, caracole can hear the words itself, with Whisper large-v3, and make the
+auto sheet again with the chords over them:
 
     caracole transcribe --song "Nick Cani - Vikingos veganos"
 
@@ -2842,10 +2890,47 @@ and remakes the sheet with them.
 - **Failed**: YouTube won't give the video ("can't download this video; try another"), or
   auto-chords can't read the audio.
 - Refused before anything is queued: a song with a human sheet ("… already has a sheet."), an
-  ignored one, one with bought audio, or a link that isn't a YouTube video's.
+  ignored one, one with audio of its own (bought or given), or a link that isn't a YouTube
+  video's.
 
 One runs at a time per song. Where chords can't be made, the form has no video field and says why
 ("No sheets from YouTube here: auto-chords isn't installed.").
+
+#### A sheet from an audio file
+
+Where caracole can make chords from audio (`packages.autochords` and its model files; no YouTube, no
+yt-dlp), the search bar has a **+** ("Make a sheet from an audio file"). Press it and choose a file,
+or drop one on the Library. A song you have that isn't ignored and has no human sheet has **Sheet
+from an audio file…** in its card too, beside From a YouTube video, even with a purchase linked.
+
+The dialog shows the upload as it goes ("Uploading “song.mp3” · 3.1 of 8.4 MB"), then the file
+("song.mp3 · MP3 · 3:18"), Artist and Title filled with the song it names, and "In your library: …"
+for a song you have, with what the file will replace. Correct the names if they are wrong (a card's
+song keeps its own) and press **Make sheet**: a line under the bar, or the song's own line, says how
+it goes. **Cancel** or Escape deletes the file sent; a refusal says why, with **Choose another
+file**, and a file dropped on the dialog is a new choice. Of several files only the first is used,
+and the dialog says so. A file dropped anywhere else on the page is never opened in its place. The
+file on disk and the phone have no +.
+
+The file goes up in one
+request, 128 MiB at most (`caracole audio FILE` takes any size), and waits in the state folder's
+`audio/` until its sheet is asked for. caracole reads what it is from its bytes, never its name:
+MP3, M4A, FLAC, WAV, Ogg or AIFF, 30 minutes at most. It answers the song the file's tags or its
+name say, and whether you have it, with the audio the file would replace (bought, YouTube's, or a
+file given before). A file sent and never used is deleted when the next one comes, or after an
+hour.
+
+Asking for the sheet queues `caracole audio --upload ID --song "ARTIST - TITLE" --progress`, a song
+new to the library first going into wanted.txt with the file's album and length. The bar shows Song,
+Audio, Lyrics, Words, Chords and PDF, Audio saying `kept as its audio: MP3, 3:18`, and Ready and
+Not made yet read as for a sheet from a YouTube video. One runs at a time per song; asked again
+meanwhile, the one queued is the answer and the second file is deleted.
+
+- Refused before anything is queued: a song with a human sheet ("… already has a sheet.") or an
+  ignored one. A purchase linked is no refusal: the file replaces it as the song's audio.
+- Refused as it is sent: "Not an audio file caracole reads (MP3, M4A, FLAC, WAV, Ogg or AIFF).",
+  "That file is too big: …", "That file is longer than 30 minutes.", "No room to keep it here.".
+- Where chords can't be made: "No sheets from audio files here: auto-chords isn't installed.".
 
 #### Transcribing the lyrics from a card
 

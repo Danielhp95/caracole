@@ -978,6 +978,32 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
         "song": ("done", "in the book"), "vocals": ("skipped", "you said nothing is sung"),
         "words": ("done", "transcript dropped"), "chords": ("done", _YOUTUBE_HOLDS["said"]), "pdf": ("done", "made"),
         "pages": ("done", "_todo.md and index.html rewritten")}), facts=ready)
+    # A sheet from an audio file you gave (caracole audio: audio_sheet.STAGES), its Audio step naming no site.
+    from_file = queued_job(f"Sheet from an audio file: {V_DISPLAY}", _jobs.AUDIO_SHEET + V_KEY,
+                           _jobs.audio_sheet_steps(V_DISPLAY, "0123456789abcdef"), display=V_DISPLAY)
+    kept = {"song": ("done", "in the book"), "audio": ("done", "kept as its audio: MP3, 3:18")}
+    add("a sheet from an audio file, its audio", in_state(from_file, "running", {
+        "song": ("done", "in the book"), "audio": ("running", "")}), facts=_status.SongFacts())
+    add("a sheet from an audio file, its words running", in_state(from_file, "running", kept | {
+        "lyrics": ("done", "LRCLIB has none"), "vocals": ("running", "2 of ~12 min")}), facts=_status.SongFacts())
+    add("a sheet from an audio file, ready over the lyrics found", in_state(from_file, "done", kept | {
+        "lyrics": ("done", "found, timed"), "vocals": ("skipped", "not transcribed: its lyrics are found"),
+        "words": ("skipped", "no vocals"), "chords": ("done", "chords over the lyrics"), "pdf": ("done", "made"),
+        "pages": ("done", "")}), facts=ready)
+    add("a sheet from an audio file, ready over the words heard", in_state(from_file, "done", kept | {
+        "lyrics": ("done", "LRCLIB has none"), "vocals": ("done", "sung from 9.3 s"),
+        "words": ("done", "212 words in 31 lines (en)"), "chords": ("done", "chords over the transcribed lyrics"),
+        "pdf": ("done", "made"), "pages": ("done", "")}), facts=ready)
+    add("a sheet from an audio file, its words failed", in_state(from_file, "done", kept | {
+        "lyrics": ("done", "LRCLIB has none"), "vocals": ("done", "sung from 9.3 s"),
+        "words": ("failed", "the GPU failed: CUDA out of memory"), "chords": ("done", _YOUTUBE_HOLDS["none"]),
+        "pdf": ("done", "made"), "pages": ("done", "")}), facts=ready)
+    add("a sheet from an audio file, refused: a human sheet", in_state(from_file, "failed", {
+        "song": ("failed", f"{V_DISPLAY} already has a sheet")}, code=1), facts=ready)
+    add("a sheet from an audio file, its upload gone", in_state(from_file, "failed", {
+        "song": ("done", "in the book"), "audio": ("failed", "that upload is gone: it was left over an hour, or "
+                                                            "another file was chosen since. Choose it again")},
+        code=1), facts=_status.SongFacts())
     video = queued_job("Search YouTube for “creep”", _jobs.YOUTUBE_SEARCH + "creep",
                        _jobs.youtube_search_steps("creep"))
     add("a video searched for, done", in_state(video, "done", {"video": ("done", ""), "thumbnail": ("done", "")},
@@ -1001,6 +1027,7 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
             ("an add", plain, V_ID, _status.SongFacts()), ("a fetch of commands", fetch, V_ID, _status.SongFacts()),
             ("a removal of commands", removal, V_ID, None), ("a pull", pull, None, None),
             ("a sheet from YouTube", youtube, V_ID, ready), ("a transcription", transcription, V_ID, ready),
+            ("a sheet from an audio file", from_file, V_ID, ready),
             ("a video searched for", video, None, None)):
         first = {job.stages[0].name: ("running", "")} if job.stages else None
         add(f"{note}, every state: queued", job, song_id, facts=facts)
@@ -1172,6 +1199,7 @@ def tables_record() -> dict:
         "LOOKUP_STEPS": [[name, list(names)] for name, names in _outcome.LOOKUP_STEPS],
         "YOUTUBE_STEPS": [[name, list(names)] for name, names in _outcome.YOUTUBE_STEPS],
         "TRANSCRIBE_STEPS": [[name, list(names)] for name, names in _outcome.TRANSCRIBE_STEPS],
+        "AUDIO_STEPS": [[name, list(names)] for name, names in _outcome.AUDIO_STEPS],
         "COMMAND_STEPS": _outcome.COMMAND_STEPS, "PEER_STEPS": _outcome.PEER_STEPS, "ASKS": _outcome._ASKS,
         "WHAT": {name: list(said) for name, said in _outcome._WHAT.items()}, "ELSEWHERE": _outcome._ELSEWHERE,
         "SITE_NAMES": _outcome.SITE_NAMES}}

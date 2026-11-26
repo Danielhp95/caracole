@@ -285,8 +285,8 @@ object QueueReplay : AreaReplay {
         runBlocking {
             val scope = CoroutineScope(coroutineContext + SupervisorJob(coroutineContext[kotlinx.coroutines.Job]))
             val replay = Queue(misses, note, scope, file)
-            val words = listOf("add", "fetch", "get", "harptabs", "index", "lacuerda", "match", "peer", "remove",
-                               "render", "review", "songbook", "transcribe", "ug", "versions", "youtube")
+            val words = listOf("add", "audio", "fetch", "get", "harptabs", "index", "lacuerda", "match", "peer",
+                               "remove", "render", "review", "songbook", "transcribe", "ug", "versions", "youtube")
             replay.queue = JobQueue(scope, kw.getValue("limit").jsonPrimitive.int, kw.getValue("keep").jsonPrimitive.int,
                                     clock, Commands(words.associateWith { replay.runner }),
                                     file?.let { JobHistory(it, clock = clock) })

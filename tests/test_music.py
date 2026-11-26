@@ -179,6 +179,29 @@ def test_an_empty_music_folder_unlinks_nothing(conn, tmp_path):
     assert get_song(conn, s.id).audio_path == path
 
 
+# --- an audio file you gave caracole ------------------------------------------------------------
+
+
+def test_a_purchase_the_scan_finds_never_takes_an_uploads_place(conn, cfg):
+    # The owner's decision of 2026-11-25: a file you give a song (audio_store.py) is its audio, and stays so.
+    from helpers.audio_files import given
+
+    from caracole.audio_store import folder
+
+    s = add_song(conn, "Radiohead", "Creep", duration_ms=2000)
+    mine = given(conn, cfg.state_dir, s, "FLAC", 2.0)
+    before = get_song(conn, s.id)
+    bought = make_wav(cfg.music_dir / "Radiohead - Creep.wav", 2.0, artist="Radiohead", title="Creep")
+    stats = scan_music(conn, cfg.music_dir, uploads=folder(cfg))
+    after = get_song(conn, s.id)
+    assert (after.audio_path, after.audio_mtime) == (str(mine), before.audio_mtime) and mine.exists()
+    assert stats.unmatched == []  # the purchase is the song's, all the same
+    # An upload that is gone is let go of, as a purchase that is: the purchase is the song's audio then.
+    mine.unlink()
+    scan_music(conn, cfg.music_dir, uploads=folder(cfg))
+    assert get_song(conn, s.id).audio_path == str(bought)
+
+
 # --- which file is the song's -----------------------------------------------------------------
 
 BRICK = "Another Brick in the Wall, Pt. 2"
