@@ -731,3 +731,14 @@ file once however many backups hold it. The indexes aren't backed up: they come 
 
 A backup, its daily one and a restore are requests like a lookup, one at a time in the Journal ("Backed up
 (by-hand)", "Restored the book of 2026-11-10 09:14"), never run beside a lookup.
+
+## YouTube's gate (not in the app yet)
+
+A song's audio from YouTube, on the phone, will come from yt-dlp run inside the app, reaching the network only through
+a proxy of the app's own, `core.youtube.HostGate`: on 127.0.0.1 at a port of its own, with a user and a secret made
+for each run (its `--proxy`). It tunnels a CONNECT on port 443 to `youtube.com`, `www.`, `m.`, `music.` and
+`consent.youtube.com` and any `*.googlevideo.com`, and to nothing else: any other host gets 403, and
+`jnn-pa.googleapis.com` (Google's attestation) is refused by name whatever the rule. It logs each host asked for, its
+connects, its bytes each way and its refusals, `consent.youtube.com` and `redirector.googlevideo.com` apart. Under
+`caracole.network=loopback` (tests and the emulator's) it allows `127.0.0.1` and `10.0.2.2` alone, and looks nothing
+up. It is a check and a measurement: only yt-dlp's argv sends it through the gate.
