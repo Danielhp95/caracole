@@ -18,9 +18,11 @@ Those paths, each reading names here and nowhere else (no page splits a text its
   "[Videoclip Oficial]", "(Letra)", "(Visualizer)", "(Karaoke Version)", "【MV】", a year beside them too); holding CJK,
   two thirds of its letters (CJK characters, Latin letters and digits) a video's or a lyric channel's (``_CJK_NOISE``:
   "『动态歌词MV』", "【抖音】", "【中文字幕】", "(華納 official 高畫質 HD 官方完整版MV)", 20 of 22; never "(Cover 葛東琪)");
-- a lyric quoted in 「」 or 『』, a sentence (ending in 。！？…, a space between two CJK characters, or, holding a CJK
-  character, longer than ``LYRIC_CHARS``), unless it is the whole text: "野人『不再借世人的手 替我开脱，…也能够耐住寂寞。』"
-  is 野人, and "宋冬野「斑马，斑马」" and "Live「Lightning Crashes」" stay.
+- a lyric quoted in 「」 or 『』, a sentence (ending in 。！？…, or a space between two CJK characters) or longer than
+  ``LYRIC_CHARS``, unless it is the whole text: "野人『不再借世人的手 替我开脱，…也能够耐住寂寞。』" is 野人, and
+  "宋冬野「斑马，斑马」" stays. A long quote of Latin words alone is a title where the words before it are, whole, an
+  artist ``read_names`` knows (the channel's name among them; ``clean`` alone knows none): "Live「Lightning Crashes」"
+  from Live's channel is Lightning Crashes by Live, "Lemon「I still love you even now」" from 米津玄師's is Lemon.
 
 Then a last part of a video's words after a mark ("… | Official Video"), then such words loose at its end, two or more
 ("… Official Video", "… Con Letra", "… 官方完整版 MV": a run of a lyric channel's words is one of them) or one of a
@@ -104,7 +106,7 @@ if TYPE_CHECKING:
     from caracole.songs import Song
 
 ONE_WORD_ARTIST = 5  # a one-word name is an index's artist with this many songs there, or a credible one of yours
-LYRIC_CHARS = 16  # a 「」 or 『』 group holding CJK longer than this quotes a lyric, no title
+LYRIC_CHARS = 16  # a 「」 or 『』 group longer than this quotes a lyric, no title (Latin alone: _decoration)
 _MARK = re.compile(r"\s+(?:-|–|—|\||~|//|_)\s+")  # the first splits "Artist - Title"
 _BY = re.compile(r"\s+by\s+", re.IGNORECASE)  # "Title by Artist"
 
@@ -207,17 +209,36 @@ def _noise_group(inner: str) -> bool:
 
 def _lyric(inner: str) -> bool:
     """Whether a 「」 or 『』 group's words are a sentence: ending as one, a space between two CJK characters, or,
-    holding a CJK character, longer than ``LYRIC_CHARS`` (sixteen Latin letters are a title's)."""
+    holding a CJK character, longer than ``LYRIC_CHARS``."""
     inner = inner.strip()
     return bool(inner) and (inner[-1] in _SENTENCE_END or _CJK_GAP.search(inner) is not None
                             or len(inner) > LYRIC_CHARS and _CJK.search(inner) is not None)
 
 
-def _decoration(group: re.Match[str], text: str) -> bool:
-    """Whether a group of ``text`` is a video's: its words noise, or a lyric quoted where it isn't the whole text."""
+def _long_quote(inner: str) -> bool:
+    """Whether a 「」 or 『』 group of no CJK character is longer than ``LYRIC_CHARS``: a lyric, or a title where the
+    words before it are an artist known (``_decoration``)."""
+    inner = inner.strip()
+    return len(inner) > LYRIC_CHARS and _CJK.search(inner) is None
+
+
+def _decoration(group: re.Match[str], text: str, known: _Known | None) -> bool:
+    """Whether a group of ``text`` is a video's: its words noise, or a lyric quoted where it isn't the whole text; a
+    long quote of Latin words is one but where the words before it are, whole, an artist ``known`` knows."""
     inner = group.group()[1:-1]
-    return _noise_group(inner) or group.group()[0] in _LYRIC_QUOTES and _lyric(inner) \
-        and not (group.start() == 0 and group.end() == len(text))
+    if _noise_group(inner):
+        return True
+    if group.group()[0] not in _LYRIC_QUOTES or group.start() == 0 and group.end() == len(text):
+        return False
+    before = text[:group.start()]
+    return _lyric(inner) or _long_quote(inner) and not (known is not None and _whole_artist(before, known))
+
+
+def _whole_artist(text: str, known: _Known) -> bool:
+    """Whether ``text`` is, whole, an artist ``known`` knows: their name's words all of its words, never a part of it
+    in one script ("米津玄師 Lemon" is no 米津玄師)."""
+    found = known.artist(text)
+    return found is not None and name_words(found) == name_words(text)
 
 
 def _tokens(text: str) -> list[tuple[int, str, bool]]:
@@ -237,12 +258,12 @@ def _tokens(text: str) -> list[tuple[int, str, bool]]:
     return out
 
 
-def _undecorated(text: str) -> str:
+def _undecorated(text: str, known: _Known | None) -> str:
     """``text``, whose spaces are folded, without its groups that are a video's, each with the spaces before it."""
     out, at = "", 0
     for group in _GROUPS.finditer(text):
         out += text[at:group.start()]
-        out = out.rstrip(" ") if _decoration(group, text) else out + group.group()
+        out = out.rstrip(" ") if _decoration(group, text, known) else out + group.group()
         at = group.end()
     return out + text[at:]
 
@@ -253,9 +274,10 @@ def _unquoted(text: str) -> str:
     return text
 
 
-def clean(text: str) -> str:
-    """``text`` without what a video's title adds to a song's name (module docstring), its spaces folded."""
-    text = " ".join(_undecorated(" ".join(text.split())).split())
+def clean(text: str, known: _Known | None = None) -> str:
+    """``text`` without what a video's title adds to a song's name (module docstring), its spaces folded; ``known``,
+    ``read_names``' artists, keeps a long quote of Latin words after one of them as a title."""
+    text = " ".join(_undecorated(" ".join(text.split()), known).split())
     while (marks := list(_MARK.finditer(text))) and _noise(text[marks[-1].end():]):
         text = text[:marks[-1].start()]  # "… | Official Video"
     if (at := _loose_at(_tokens(text))) is not None:
@@ -304,7 +326,7 @@ def read_names(conn: sqlite3.Connection | None, text: str, *, songs: Sequence[So
         songs = list_songs(conn) if conn is not None else ()
     hints = [h for h in (clean_channel(c) for c in (channel, video[1] if video else None) if c) if h]
     known = _Known(conn, songs, hints)
-    cleaned = _untagged(clean(text))
+    cleaned = _untagged(clean(text, known))
     named = _two_parts(cleaned, known) or _bracketed(cleaned, known) or _known_artist_in(cleaned, known)
     if named is not None:
         return named

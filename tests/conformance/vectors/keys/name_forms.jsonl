@@ -282,8 +282,6 @@
 {"args":["Bomnal"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["bomnal"],"name_forms":["bomnal"],"original_part":"Bomnal"}}
 {"args":["Bones"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["bones"],"name_forms":["bones"],"original_part":"Bones"}}
 {"args":["Bossa Nova"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["bossa-nova"],"name_forms":["bossa-nova"],"original_part":"Bossa Nova"}}
-{"args":["By Divine Right"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["by-divine-right"],"name_forms":["by-divine-right"],"original_part":"By Divine Right"}}
-{"args":["By Divine Right「Song」"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["by-divine-right-song"],"name_forms":["by-divine-right-song"],"original_part":"By Divine Right「Song」"}}
 {"args":["Byron Bay"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["byron-bay"],"name_forms":["byron-bay"],"original_part":"Byron Bay"}}
 {"args":["Bà"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["ba"],"name_forms":["ba"],"original_part":"Bà"}}
 {"args":["C"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["c"],"name_forms":["c"],"original_part":"C"}}
@@ -510,13 +508,11 @@
 {"args":["Lemon (レモン)"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["lemon-レモン","lemon","レモン"],"name_forms":["lemon-レモン","lemon","レモン"],"original_part":"レモン"}}
 {"args":["Let It Be"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["let-it-be"],"name_forms":["let-it-be"],"original_part":"Let It Be"}}
 {"args":["Let It Be - Remastered 2009"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["let-it-be-remastered-2009"],"name_forms":["let-it-be-remastered-2009"],"original_part":"Let It Be - Remastered 2009"}}
-{"args":["Lightning Crashes"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["lightning-crashes"],"name_forms":["lightning-crashes"],"original_part":"Lightning Crashes"}}
 {"args":["Lilian"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["lilian"],"name_forms":["lilian"],"original_part":"Lilian"}}
 {"args":["Live"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["live"],"name_forms":["live"],"original_part":"Live"}}
 {"args":["Live Forever"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["live-forever"],"name_forms":["live-forever"],"original_part":"Live Forever"}}
 {"args":["Live Version"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["live-version"],"name_forms":["live-version"],"original_part":"Live Version"}}
 {"args":["Live and Let Die"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["live-let-die"],"name_forms":["live-let-die"],"original_part":"Live and Let Die"}}
-{"args":["Live「Lightning Crashes」"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["live-lightning-crashes"],"name_forms":["live-lightning-crashes"],"original_part":"Live「Lightning Crashes」"}}
 {"args":["Local Boy"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["local-boy"],"name_forms":["local-boy"],"original_part":"Local Boy"}}
 {"args":["Los Ecos"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["los-ecos"],"name_forms":["los-ecos"],"original_part":"Los Ecos"}}
 {"args":["Los Enanitos Verdes"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["los-enanitos-verdes"],"name_forms":["los-enanitos-verdes"],"original_part":"Los Enanitos Verdes"}}
@@ -1676,6 +1672,7 @@
 {"args":["tim-hardin"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["tim-hardin"],"name_forms":["tim-hardin"],"original_part":"tim-hardin"}}
 {"args":["tinto"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["tinto"],"name_forms":["tinto"],"original_part":"tinto"}}
 {"args":["title"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["title"],"name_forms":["title"],"original_part":"title"}}
+{"args":["title,artist,expected"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["title-artist-expected"],"name_forms":["title-artist-expected"],"original_part":"title,artist,expected"}}
 {"args":["title,channel,expected"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["title-channel-expected"],"name_forms":["title-channel-expected"],"original_part":"title,channel,expected"}}
 {"args":["title,listed,expected"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["title-listed-expected"],"name_forms":["title-listed-expected"],"original_part":"title,listed,expected"}}
 {"args":["title,other"],"fn":"test_conformance_keys.forms_of","out":{"listing_forms":["title-other"],"name_forms":["title-other"],"original_part":"title,other"}}

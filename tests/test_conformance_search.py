@@ -813,14 +813,15 @@ def names_records(corpus: Corpus) -> list[dict]:
                               tsn.test_a_cjk_lyric_videos_title_loses_its_channels_words_and_its_quoted_lyrics,
                               tsn.test_a_quoted_lyric_goes_wherever_it_is_but_a_short_quote_is_a_title,
                               tsn.test_cjk_noise_goes_by_its_share_of_the_group,
-                              tsn.test_each_bracket_closes_on_its_own_mark, tsn.test_words_glued_to_a_bracket_are_words)
+                              tsn.test_each_bracket_closes_on_its_own_mark, tsn.test_words_glued_to_a_bracket_are_words,
+                              tsn.test_an_uploads_title_is_cleaned)
                for t, _ in _parametrized(test)]
     extra = ["Song (Official Music Video) [HD]", "「MV」 曲", "Artist – Title (Lyric Video) 4K", "''",
              "Song【官方M/V】", "【告白氣球 Official MV】", "Kanpai // Kotaro", "Song[Official Video]Remix", "「」 x", "x 【】",
              # The edges of CJK's ranges (U+F8FF, U+F900, U+A000, U+D7B0), and nested groups.
              "Song (Official Video \uf8ff)", "Song (Official Video \uf900)", "Song (Official Video \ua000)",
              "Song (Official Video \ud7b0)", "Song (Official Video (HD))", "Song [Official Video (HD)] x",
-             "Live「Lightning Crashes」"]  # a quote of 17 Latin letters: a title
+             "Live「Lightning Crashes」"]  # a quote of 17 Latin letters: a lyric to clean, which knows no artist
     for text in dict.fromkeys([*cleaned, *extra]):
         out.append(record("caracole.song_names.clean", None, [text], {}, lambda: clean(text)))
     channels = [c for c, _ in _parametrized(tsn.test_a_channels_name_loses_its_label_words)]
@@ -838,7 +839,7 @@ def names_records(corpus: Corpus) -> list[dict]:
               *_parametrized(tsn.test_a_bracketed_title_yields_to_an_artist_it_can_know),
               *_parametrized(tsn.test_a_bracketed_titles_artist_loses_its_loose_tail_as_clean_cuts_one),
               *_parametrized(tsn.test_a_bracketed_titles_artist_loses_a_leading_by),
-              *_parametrized(tsn.test_a_long_quote_of_latin_words_is_a_title)]
+              *_parametrized(tsn.test_an_uploads_title_names_its_song)]  # helpers/song_name_cases.py's
     videos = list(dict.fromkeys((title, channel) for title, channel, *_ in videos))  # a title of two tests once
     texts = ["Silvana Estrada - Que problema", "Silvana Estrada – Que problema", "Silvana Estrada — Que problema",
              "Silvana Estrada | Que problema", "Muse - Hysteria - Live", "Nick Cani – Vikingos veganos",

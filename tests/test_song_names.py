@@ -14,6 +14,7 @@ from caracole.song_names import clean, clean_channel, read_names
 from caracole.songs import list_songs
 
 from conftest import add_song
+from helpers.song_name_cases import CLEAN, KNOWN, READ
 from test_search import gtptabs_pages, harptabs_index, index, keep_sheet, lacuerda, songs_of
 
 SILVANA = [*songs_of("silvana-estrada", 6, 65000), *songs_of("silvanas", 6, 65100),
@@ -98,14 +99,6 @@ def test_a_cjk_lyric_videos_title_loses_its_channels_words_and_its_quoted_lyrics
 ])
 def test_a_quoted_lyric_goes_wherever_it_is_but_a_short_quote_is_a_title(text, cleaned):
     assert clean(text) == cleaned
-
-
-@pytest.mark.parametrize("title,channel,expected", [
-    # Longer than LYRIC_CHARS is a lyric's length only for a group holding CJK: 17 Latin letters are a title.
-    ("Live「Lightning Crashes」", "Live", ("Live", "Lightning Crashes")),
-])
-def test_a_long_quote_of_latin_words_is_a_title(conn, title, channel, expected):
-    assert read_names(conn, title, channel=channel) == expected
 
 
 @pytest.mark.parametrize("text,cleaned", [
@@ -432,7 +425,6 @@ def test_a_bracketed_titles_artist_loses_its_loose_tail_as_clean_cuts_one(conn, 
     ("《孤勇者》 BY 陈奕迅 Official MV", None, ("陈奕迅", "孤勇者")),
     ("《孤勇者》 Byron Bay", None, ("Byron Bay", "孤勇者")),  # a whole word alone
     ("《孤勇者》 by", None, None),
-    ("By Divine Right「Song」", None, ("By Divine Right", "Song")),  # before the bracket, a band's own "By"
     # A lone "by" beside a title bracket is no words of the part's own: the bracket is the title.
     ("《孤勇者》 by", "陈奕迅", ("陈奕迅", "孤勇者")),
 ])
@@ -617,3 +609,23 @@ def test_a_suggested_video_of_another_song_names_no_artist(conn):
     assert read_names(conn, "vikingos veganos", video=VIKINGOS_VIDEO) is None
     assert read_names(conn, "Somos vikingos veganos", video=VIKINGOS_VIDEO) is None  # the fan's first part: no artist
     assert read_names(conn, "creep") is None
+
+
+# --- cases kept in helpers/song_name_cases.py, which the keys corpus never reads --------------------------------------
+
+@pytest.mark.parametrize("title,channel,expected", READ)
+def test_an_uploads_title_names_its_song(conn, title, channel, expected):
+    assert read_names(conn, title, channel=channel) == expected
+
+
+@pytest.mark.parametrize("title,artist,expected", KNOWN)
+def test_an_uploads_title_names_its_song_by_an_artist_of_yours(conn, title, artist, expected):
+    assert read_names(conn, title) is None  # unknown, the quote is a lyric
+    add_song(conn, artist, "1")
+    add_song(conn, artist, "2")  # two songs: a one-word artist of yours is credible
+    assert read_names(conn, title) == expected
+
+
+@pytest.mark.parametrize("text,cleaned", CLEAN)
+def test_an_uploads_title_is_cleaned(text, cleaned):
+    assert clean(text) == cleaned

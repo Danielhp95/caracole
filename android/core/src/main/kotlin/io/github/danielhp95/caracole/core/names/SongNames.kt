@@ -20,8 +20,11 @@ object SongNames {
     /** [text] without what a video's title adds to a song's name (a group of a video's or a lyric channel's words, a
      * lyric quoted, a last part of a video's words after a mark, such words loose at its end, quotes around it), its
      * spaces folded; its case, accents and marks kept as written. */
-    fun clean(text: String): String {
-        var t = Py.split(undecorated(Py.split(text).joinToString(" "))).joinToString(" ")
+    fun clean(text: String): String = clean(text, null)
+
+    /** [clean], [known] being readNames' artists: a long quote of Latin words after one of them stays, a title. */
+    private fun clean(text: String, known: Known?): String {
+        var t = Py.split(undecorated(Py.split(text).joinToString(" "), known)).joinToString(" ")
         while (true) { // "… | Official Video"
             val last = MARK.findAll(t).lastOrNull() ?: break
             if (!noise(t.substring(last.range.last + 1))) break
@@ -63,7 +66,7 @@ object SongNames {
     fun readNames(db: Db?, text: String, songs: List<SongRow>, channel: String? = null): Pair<String, String>? {
         val hints = listOfNotNull(channel).filter { it.isNotEmpty() }.map { cleanChannel(it) }.filter { it.isNotEmpty() }
         val known = Known(db, songs, hints)
-        val cleaned = untagged(clean(text))
+        val cleaned = untagged(clean(text, known))
         val named = twoParts(cleaned, known) ?: bracketed(cleaned, known) ?: knownArtistIn(cleaned, known)
         if (named != null) return named
         if (channel != null) return cleanChannel(channel) to own(cleaned)
@@ -127,7 +130,7 @@ object SongNames {
             "|\u3008[^\u3008\u3009]*\u3009|\u3016[^\u3016\u3017]*\u3017|\u3014[^\u3014\u3015]*\u3015",
     )
 
-    /** A 「」 or 『』 group holding CJK longer than this quotes a lyric, no title. */
+    /** A 「」 or 『』 group longer than this quotes a lyric, no title (of Latin words alone: [decoration]). */
     const val LYRIC_CHARS = 16
 
     /** The groups that quote a lyric. */
@@ -194,7 +197,7 @@ object SongNames {
     }
 
     /** Whether a 「」 or 『』 group's words are a sentence: ending as one, a space between two CJK characters, or,
-     * holding a CJK character, longer than [LYRIC_CHARS] (sixteen Latin letters are a title's). */
+     * holding a CJK character, longer than [LYRIC_CHARS]. */
     private fun lyric(inner: String): Boolean {
         val s = Py.strip(inner)
         if (s.isEmpty()) return false
@@ -203,20 +206,38 @@ object SongNames {
             points.size > LYRIC_CHARS && PyRe.search(CJK, s) != null
     }
 
-    /** Whether a group of [text] is a video's: its words noise, or a lyric quoted where it isn't the whole text. */
-    private fun decoration(group: MatchResult, text: String): Boolean {
+    /** Whether a 「」 or 『』 group of no CJK character is longer than [LYRIC_CHARS]: a lyric, or a title where the
+     * words before it are an artist known ([decoration]). */
+    private fun longQuote(inner: String): Boolean {
+        val s = Py.strip(inner)
+        return Py.len(s) > LYRIC_CHARS && PyRe.search(CJK, s) == null
+    }
+
+    /** Whether [text] is, whole, an artist [known] knows: their name's words all of its words, never a part of it in
+     * one script ("米津玄師 Lemon" is no 米津玄師). */
+    private fun wholeArtist(text: String, known: Known): Boolean {
+        val found = known.artist(text) ?: return false
+        return Normalize.nameWords(found) == Normalize.nameWords(text)
+    }
+
+    /** Whether a group of [text] is a video's: its words noise, or a lyric quoted where it isn't the whole text; a
+     * long quote of Latin words is one but where the words before it are, whole, an artist [known] knows. */
+    private fun decoration(group: MatchResult, text: String, known: Known?): Boolean {
         val inner = group.value.substring(1, group.value.length - 1)
-        return noiseGroup(inner) || group.value[0] in LYRIC_QUOTES && lyric(inner) &&
-            !(group.range.first == 0 && group.range.last + 1 == text.length)
+        if (noiseGroup(inner)) return true
+        val whole = group.range.first == 0 && group.range.last + 1 == text.length
+        if (group.value[0] !in LYRIC_QUOTES || whole) return false
+        val before = text.substring(0, group.range.first)
+        return lyric(inner) || longQuote(inner) && !(known != null && wholeArtist(before, known))
     }
 
     /** [text], whose spaces are folded, without its groups that are a video's, each with the spaces before it. */
-    private fun undecorated(text: String): String {
+    private fun undecorated(text: String, known: Known?): String {
         val out = StringBuilder()
         var at = 0
         for (group in PyRe.finditer(GROUPS, text)) {
             out.append(text, at, group.range.first)
-            if (decoration(group, text)) {
+            if (decoration(group, text, known)) {
                 while (out.isNotEmpty() && out[out.length - 1] == ' ') out.setLength(out.length - 1)
             } else {
                 out.append(group.value)

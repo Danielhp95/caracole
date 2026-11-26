@@ -76,6 +76,8 @@
 {"args":["Hysteria [Live]HD"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"Hysteria [Live]"}
 {"args":["薛之谦 - 演员 官方完整版 MV"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"薛之谦 - 演员"}
 {"args":["周杰倫 - 晴天 高清 HD"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"周杰倫 - 晴天"}
+{"args":["【抖音】别知己"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"别知己"}
+{"args":["【純音樂】Summer"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"Summer"}
 {"args":["Song (Official Music Video) [HD]"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"Song"}
 {"args":["「MV」 曲"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"曲"}
 {"args":["Artist – Title (Lyric Video) 4K"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"Artist – Title"}
@@ -87,7 +89,7 @@
 {"args":["「」 x"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"「」 x"}
 {"args":["x 【】"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"x 【】"}
 {"args":["Song [Official Video (HD)] x"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"Song [Official Video (HD)] x"}
-{"args":["Live「Lightning Crashes」"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"Live「Lightning Crashes」"}
+{"args":["Live「Lightning Crashes」"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"Live"}
 {"args":["Radiohead - Topic"],"fixture":null,"fn":"caracole.song_names.clean_channel","kw":{},"out":"Radiohead"}
 {"args":["AdeleVEVO"],"fixture":null,"fn":"caracole.song_names.clean_channel","kw":{},"out":"Adele"}
 {"args":["EstopaVEVO"],"fixture":null,"fn":"caracole.song_names.clean_channel","kw":{},"out":"Estopa"}
@@ -266,9 +268,25 @@
 {"args":["《孤勇者》 BY 陈奕迅 Official MV"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
 {"args":["《孤勇者》 Byron Bay"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Byron Bay","孤勇者"]}
 {"args":["《孤勇者》 by"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
-{"args":["By Divine Right「Song」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By Divine Right","Song"]}
 {"args":["《孤勇者》 by"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
 {"args":["Live「Lightning Crashes」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"Live"},"out":["Live","Lightning Crashes"]}
+{"args":["LiSA「Rising Hope and Glory」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"LiSA"},"out":["LiSA","Rising Hope and Glory"]}
+{"args":["LiSA「Rising Hope and Glory」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["Lemon「I still love you even now」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["米津玄師 Lemon「I still love you even now」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["米津玄師 Lemon「I still love you even now」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["Lemon 『English Lyrics Romaji Translation』"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["Artist Song 『Official Lyric Video Full Version』"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"Artist"},"out":["Artist","Artist Song"]}
+{"args":["Artist Song 『Official Lyric Video Full Version』"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["米津玄師 - Lemon「I still love you even now」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["米津玄師","Lemon"]}
+{"args":["LiSA - 紅蓮華「Gurenge English Cover Version」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["LiSA","紅蓮華"]}
+{"args":["Aimer「残響散歌」『I will never forget this night』"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Aimer","残響散歌"]}
+{"args":["YOASOBI「夜に駆ける」Racing into the night"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["YOASOBI","夜に駆ける"]}
+{"args":["By Divine Right「Song」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By Divine Right","Song"]}
+{"args":["By the Tree《Song》"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By the Tree","Song"]}
+{"args":["《孤勇者》 By 陈奕迅"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《Stand by Me》 by"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"Ben E King"},"out":["Ben E King","Stand by Me"]}
+{"args":["Stand by Me《Ben E King》"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Stand by Me","Ben E King"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -506,9 +524,25 @@
 {"args":["《孤勇者》 BY 陈奕迅 Official MV"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
 {"args":["《孤勇者》 Byron Bay"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Byron Bay","孤勇者"]}
 {"args":["《孤勇者》 by"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
-{"args":["By Divine Right「Song」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By Divine Right","Song"]}
 {"args":["《孤勇者》 by"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
 {"args":["Live「Lightning Crashes」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"Live"},"out":["Live","Lightning Crashes"]}
+{"args":["LiSA「Rising Hope and Glory」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"LiSA"},"out":["LiSA","Rising Hope and Glory"]}
+{"args":["LiSA「Rising Hope and Glory」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["Lemon「I still love you even now」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["米津玄師 Lemon「I still love you even now」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["米津玄師 Lemon「I still love you even now」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["Lemon 『English Lyrics Romaji Translation』"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["Artist Song 『Official Lyric Video Full Version』"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"Artist"},"out":["Artist","Artist Song"]}
+{"args":["Artist Song 『Official Lyric Video Full Version』"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["米津玄師 - Lemon「I still love you even now」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["米津玄師","Lemon"]}
+{"args":["LiSA - 紅蓮華「Gurenge English Cover Version」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["LiSA","紅蓮華"]}
+{"args":["Aimer「残響散歌」『I will never forget this night』"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Aimer","残響散歌"]}
+{"args":["YOASOBI「夜に駆ける」Racing into the night"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["YOASOBI","夜に駆ける"]}
+{"args":["By Divine Right「Song」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By Divine Right","Song"]}
+{"args":["By the Tree《Song》"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By the Tree","Song"]}
+{"args":["《孤勇者》 By 陈奕迅"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《Stand by Me》 by"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"Ben E King"},"out":["Ben E King","Stand by Me"]}
+{"args":["Stand by Me《Ben E King》"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Stand by Me","Ben E King"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -744,9 +778,25 @@
 {"args":["《孤勇者》 BY 陈奕迅 Official MV"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
 {"args":["《孤勇者》 Byron Bay"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Byron Bay","孤勇者"]}
 {"args":["《孤勇者》 by"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
-{"args":["By Divine Right「Song」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By Divine Right","Song"]}
 {"args":["《孤勇者》 by"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
 {"args":["Live「Lightning Crashes」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"Live"},"out":["Live","Lightning Crashes"]}
+{"args":["LiSA「Rising Hope and Glory」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"LiSA"},"out":["LiSA","Rising Hope and Glory"]}
+{"args":["LiSA「Rising Hope and Glory」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["Lemon「I still love you even now」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["米津玄師 Lemon「I still love you even now」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["米津玄師 Lemon「I still love you even now」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["Lemon 『English Lyrics Romaji Translation』"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["Artist Song 『Official Lyric Video Full Version』"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"Artist"},"out":["Artist","Artist Song"]}
+{"args":["Artist Song 『Official Lyric Video Full Version』"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["米津玄師 - Lemon「I still love you even now」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["米津玄師","Lemon"]}
+{"args":["LiSA - 紅蓮華「Gurenge English Cover Version」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["LiSA","紅蓮華"]}
+{"args":["Aimer「残響散歌」『I will never forget this night』"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Aimer","残響散歌"]}
+{"args":["YOASOBI「夜に駆ける」Racing into the night"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["YOASOBI","夜に駆ける"]}
+{"args":["By Divine Right「Song」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By Divine Right","Song"]}
+{"args":["By the Tree《Song》"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By the Tree","Song"]}
+{"args":["《孤勇者》 By 陈奕迅"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《Stand by Me》 by"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"Ben E King"},"out":["Ben E King","Stand by Me"]}
+{"args":["Stand by Me《Ben E King》"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Stand by Me","Ben E King"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -966,9 +1016,25 @@
 {"args":["《孤勇者》 BY 陈奕迅 Official MV"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
 {"args":["《孤勇者》 Byron Bay"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Byron Bay","孤勇者"]}
 {"args":["《孤勇者》 by"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
-{"args":["By Divine Right「Song」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By Divine Right","Song"]}
 {"args":["《孤勇者》 by"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
 {"args":["Live「Lightning Crashes」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"Live"},"out":["Live","Lightning Crashes"]}
+{"args":["LiSA「Rising Hope and Glory」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"LiSA"},"out":["LiSA","Rising Hope and Glory"]}
+{"args":["LiSA「Rising Hope and Glory」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["Lemon「I still love you even now」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["米津玄師 Lemon「I still love you even now」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["米津玄師 Lemon「I still love you even now」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["Lemon 『English Lyrics Romaji Translation』"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["Artist Song 『Official Lyric Video Full Version』"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"Artist"},"out":["Artist","Artist Song"]}
+{"args":["Artist Song 『Official Lyric Video Full Version』"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["米津玄師 - Lemon「I still love you even now」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["米津玄師","Lemon"]}
+{"args":["LiSA - 紅蓮華「Gurenge English Cover Version」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["LiSA","紅蓮華"]}
+{"args":["Aimer「残響散歌」『I will never forget this night』"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Aimer","残響散歌"]}
+{"args":["YOASOBI「夜に駆ける」Racing into the night"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["YOASOBI","夜に駆ける"]}
+{"args":["By Divine Right「Song」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By Divine Right","Song"]}
+{"args":["By the Tree《Song》"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By the Tree","Song"]}
+{"args":["《孤勇者》 By 陈奕迅"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《Stand by Me》 by"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"Ben E King"},"out":["Ben E King","Stand by Me"]}
+{"args":["Stand by Me《Ben E King》"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Stand by Me","Ben E King"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -1198,9 +1264,25 @@
 {"args":["《孤勇者》 BY 陈奕迅 Official MV"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
 {"args":["《孤勇者》 Byron Bay"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Byron Bay","孤勇者"]}
 {"args":["《孤勇者》 by"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
-{"args":["By Divine Right「Song」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By Divine Right","Song"]}
 {"args":["《孤勇者》 by"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
 {"args":["Live「Lightning Crashes」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"Live"},"out":["Live","Lightning Crashes"]}
+{"args":["LiSA「Rising Hope and Glory」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"LiSA"},"out":["LiSA","Rising Hope and Glory"]}
+{"args":["LiSA「Rising Hope and Glory」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["Lemon「I still love you even now」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["米津玄師 Lemon「I still love you even now」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["米津玄師 Lemon「I still love you even now」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["Lemon 『English Lyrics Romaji Translation』"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["Artist Song 『Official Lyric Video Full Version』"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"Artist"},"out":["Artist","Artist Song"]}
+{"args":["Artist Song 『Official Lyric Video Full Version』"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["米津玄師 - Lemon「I still love you even now」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["米津玄師","Lemon"]}
+{"args":["LiSA - 紅蓮華「Gurenge English Cover Version」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["LiSA","紅蓮華"]}
+{"args":["Aimer「残響散歌」『I will never forget this night』"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Aimer","残響散歌"]}
+{"args":["YOASOBI「夜に駆ける」Racing into the night"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["YOASOBI","夜に駆ける"]}
+{"args":["By Divine Right「Song」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By Divine Right","Song"]}
+{"args":["By the Tree《Song》"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By the Tree","Song"]}
+{"args":["《孤勇者》 By 陈奕迅"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《Stand by Me》 by"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"Ben E King"},"out":["Ben E King","Stand by Me"]}
+{"args":["Stand by Me《Ben E King》"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Stand by Me","Ben E King"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -1434,9 +1516,25 @@
 {"args":["《孤勇者》 BY 陈奕迅 Official MV"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
 {"args":["《孤勇者》 Byron Bay"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Byron Bay","孤勇者"]}
 {"args":["《孤勇者》 by"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
-{"args":["By Divine Right「Song」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By Divine Right","Song"]}
 {"args":["《孤勇者》 by"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
 {"args":["Live「Lightning Crashes」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"Live"},"out":["Live","Lightning Crashes"]}
+{"args":["LiSA「Rising Hope and Glory」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"LiSA"},"out":["LiSA","Rising Hope and Glory"]}
+{"args":["LiSA「Rising Hope and Glory」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["Lemon「I still love you even now」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["米津玄師 Lemon「I still love you even now」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["米津玄師 Lemon「I still love you even now」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["Lemon 『English Lyrics Romaji Translation』"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["Artist Song 『Official Lyric Video Full Version』"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"Artist"},"out":["Artist","Artist Song"]}
+{"args":["Artist Song 『Official Lyric Video Full Version』"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["米津玄師 - Lemon「I still love you even now」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["米津玄師","Lemon"]}
+{"args":["LiSA - 紅蓮華「Gurenge English Cover Version」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["LiSA","紅蓮華"]}
+{"args":["Aimer「残響散歌」『I will never forget this night』"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Aimer","残響散歌"]}
+{"args":["YOASOBI「夜に駆ける」Racing into the night"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["YOASOBI","夜に駆ける"]}
+{"args":["By Divine Right「Song」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By Divine Right","Song"]}
+{"args":["By the Tree《Song》"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By the Tree","Song"]}
+{"args":["《孤勇者》 By 陈奕迅"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《Stand by Me》 by"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"Ben E King"},"out":["Ben E King","Stand by Me"]}
+{"args":["Stand by Me《Ben E King》"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Stand by Me","Ben E King"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -1634,9 +1732,25 @@
 {"args":["《孤勇者》 BY 陈奕迅 Official MV"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
 {"args":["《孤勇者》 Byron Bay"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Byron Bay","孤勇者"]}
 {"args":["《孤勇者》 by"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
-{"args":["By Divine Right「Song」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By Divine Right","Song"]}
 {"args":["《孤勇者》 by"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
 {"args":["Live「Lightning Crashes」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"Live"},"out":["Live","Lightning Crashes"]}
+{"args":["LiSA「Rising Hope and Glory」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"LiSA"},"out":["LiSA","Rising Hope and Glory"]}
+{"args":["LiSA「Rising Hope and Glory」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["Lemon「I still love you even now」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["米津玄師 Lemon「I still love you even now」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["米津玄師 Lemon「I still love you even now」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["Lemon 『English Lyrics Romaji Translation』"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["Artist Song 『Official Lyric Video Full Version』"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"Artist"},"out":["Artist","Artist Song"]}
+{"args":["Artist Song 『Official Lyric Video Full Version』"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["米津玄師 - Lemon「I still love you even now」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["米津玄師","Lemon"]}
+{"args":["LiSA - 紅蓮華「Gurenge English Cover Version」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["LiSA","紅蓮華"]}
+{"args":["Aimer「残響散歌」『I will never forget this night』"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Aimer","残響散歌"]}
+{"args":["YOASOBI「夜に駆ける」Racing into the night"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["YOASOBI","夜に駆ける"]}
+{"args":["By Divine Right「Song」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By Divine Right","Song"]}
+{"args":["By the Tree《Song》"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By the Tree","Song"]}
+{"args":["《孤勇者》 By 陈奕迅"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《Stand by Me》 by"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"Ben E King"},"out":["《Stand","by Me》 by"]}
+{"args":["Stand by Me《Ben E King》"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Stand by Me","Ben E King"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -1845,9 +1959,25 @@
 {"args":["《孤勇者》 BY 陈奕迅 Official MV"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
 {"args":["《孤勇者》 Byron Bay"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Byron Bay","孤勇者"]}
 {"args":["《孤勇者》 by"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
-{"args":["By Divine Right「Song」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By Divine Right","Song"]}
 {"args":["《孤勇者》 by"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
 {"args":["Live「Lightning Crashes」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Live"},"out":["Live","Lightning Crashes"]}
+{"args":["LiSA「Rising Hope and Glory」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"LiSA"},"out":["LiSA","Rising Hope and Glory"]}
+{"args":["LiSA「Rising Hope and Glory」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["Lemon「I still love you even now」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["米津玄師 Lemon「I still love you even now」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["米津玄師 Lemon「I still love you even now」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["Lemon 『English Lyrics Romaji Translation』"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["Artist Song 『Official Lyric Video Full Version』"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Artist"},"out":["Artist","Artist Song"]}
+{"args":["Artist Song 『Official Lyric Video Full Version』"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["米津玄師 - Lemon「I still love you even now」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["米津玄師","Lemon"]}
+{"args":["LiSA - 紅蓮華「Gurenge English Cover Version」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["LiSA","紅蓮華"]}
+{"args":["Aimer「残響散歌」『I will never forget this night』"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Aimer","残響散歌"]}
+{"args":["YOASOBI「夜に駆ける」Racing into the night"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["YOASOBI","夜に駆ける"]}
+{"args":["By Divine Right「Song」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By Divine Right","Song"]}
+{"args":["By the Tree《Song》"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By the Tree","Song"]}
+{"args":["《孤勇者》 By 陈奕迅"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《Stand by Me》 by"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Ben E King"},"out":["Ben E King","Stand by Me"]}
+{"args":["Stand by Me《Ben E King》"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Stand by Me","Ben E King"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -2041,6 +2171,22 @@
 {"args":["《孤勇者》 BY 陈奕迅 Official MV"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
 {"args":["《孤勇者》 Byron Bay"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Byron Bay","孤勇者"]}
 {"args":["《孤勇者》 by"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
-{"args":["By Divine Right「Song」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By Divine Right","Song"]}
 {"args":["《孤勇者》 by"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
 {"args":["Live「Lightning Crashes」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"Live"},"out":["Live","Lightning Crashes"]}
+{"args":["LiSA「Rising Hope and Glory」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"LiSA"},"out":["LiSA","Rising Hope and Glory"]}
+{"args":["LiSA「Rising Hope and Glory」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["Lemon「I still love you even now」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["米津玄師 Lemon「I still love you even now」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["米津玄師 Lemon「I still love you even now」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["Lemon 『English Lyrics Romaji Translation』"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
+{"args":["Artist Song 『Official Lyric Video Full Version』"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"Artist"},"out":["Artist","Artist Song"]}
+{"args":["Artist Song 『Official Lyric Video Full Version』"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
+{"args":["米津玄師 - Lemon「I still love you even now」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["米津玄師","Lemon"]}
+{"args":["LiSA - 紅蓮華「Gurenge English Cover Version」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["LiSA","紅蓮華"]}
+{"args":["Aimer「残響散歌」『I will never forget this night』"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Aimer","残響散歌"]}
+{"args":["YOASOBI「夜に駆ける」Racing into the night"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["YOASOBI","夜に駆ける"]}
+{"args":["By Divine Right「Song」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By Divine Right","Song"]}
+{"args":["By the Tree《Song》"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["By the Tree","Song"]}
+{"args":["《孤勇者》 By 陈奕迅"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《Stand by Me》 by"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"Ben E King"},"out":["Ben E King","Stand by Me"]}
+{"args":["Stand by Me《Ben E King》"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Stand by Me","Ben E King"]}

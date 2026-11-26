@@ -67,8 +67,16 @@ class SongNamesTest {
         assertEquals(null, SongNames.readNames(null, "周杰倫 七里香【Live】", emptyList()))
     }
 
-    private fun song(id: Long, title: String) = SongRow(
-        id = id, key = Normalize.identityKey("周杰倫", title), artist = "周杰倫", title = title, artists = listOf("周杰倫"),
+    /** A long quote of Latin words after an artist of your library, whole, is the title, else a lyric
+     * (helpers/song_name_cases.py's KNOWN): what song_names.py answers with these two songs, and with none. */
+    @Test fun aLongLatinQuoteAfterAnArtistOfYoursIsTheTitle() {
+        val songs = listOf(song(1, "1", "LiSA"), song(2, "2", "LiSA"))
+        assertEquals("LiSA" to "Rising Hope and Glory", SongNames.readNames(null, "LiSA「Rising Hope and Glory」", songs))
+        assertEquals(null, SongNames.readNames(null, "LiSA「Rising Hope and Glory」", emptyList()))
+    }
+
+    private fun song(id: Long, title: String, artist: String = "周杰倫") = SongRow(
+        id = id, key = Normalize.identityKey(artist, title), artist = artist, title = title, artists = listOf(artist),
         album = null, durationMs = null, isrc = null, sourceIds = "{}", addedAt = "2026-11-25T00:00:00Z",
         variant = null, status = "wanted", review = false, matchDecision = null, matchStep = null, matchScore = null,
         matchArtistKey = null, matchSongKey = null, matchCandidates = "[]", matchedAt = null, ugDirty = false,

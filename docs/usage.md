@@ -433,11 +433,12 @@ First, what a video's title adds is dropped: brackets such as "(Official Video)"
 last part such as "… | Official Video", format words such as "HD" or "4K", and quotes around the
 text. "(feat. …)" and "(En Vivo)" stay. Lyric channels' brackets go too: their own words, as in
 "【動態歌詞Lyrics】", "【中文字幕】" or "(官方完整版MV)", and a line of the lyrics quoted in 「」 or
-『』. A short quote is a title and stays: "宋冬野「斑马，斑马」", and so does one of Latin words:
-"Live「Lightning Crashes」". A bracket of a version's or a tag's words alone, such as "【Live】",
-"【现场版】" or "【翻唱】", is never the title. After the song's name it stays: "周深 大鱼【Live】" is
-"大鱼【Live】". At the start it is the upload's and goes: "【翻唱】大鱼" is "大鱼". Then the first rule
-that fits names the song:
+『』. A short quote is a title and stays: "宋冬野「斑马，斑马」". So is a long quote of Latin words
+right after the channel's name or a known artist: "Live「Lightning Crashes」" from Live's channel,
+never "Lemon「I still love you even now」" from 米津玄師's. A bracket of a version's or a tag's
+words alone, such as "【Live】", "【现场版】" or "【翻唱】", is never the title. After the song's name
+it stays: "周深 大鱼【Live】" is "大鱼【Live】". At the start it is the upload's and goes: "【翻唱】大鱼"
+is "大鱼". Then the first rule that fits names the song:
 
 1. **Artist - Title.** The first dash with a space on each side splits them. An en or em dash, "|",
    "~", "//" and "_" work too. "Muse - Hysteria - Live" is "Hysteria - Live" by Muse. The two are
