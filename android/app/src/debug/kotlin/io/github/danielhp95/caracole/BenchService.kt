@@ -118,8 +118,9 @@ class BenchService : Service() {
         val arenas = intent.getBooleanArrayExtra(ARENAS)!!.toList()
         val passes = intent.getIntExtra(PASSES, 5)
         val clips = intent.getBooleanExtra(CLIPS, true)
-        val references = intent.getBooleanExtra(REFERENCES, true) &&
-            folder.entries().any { it.name.endsWith(".json") && !it.name.startsWith(REPORT_PREFIX) }
+        val referenceCount = if (!intent.getBooleanExtra(REFERENCES, true)) 0
+        else folder.entries().count { it.name.endsWith(".json") && !it.name.startsWith(REPORT_PREFIX) }
+        val references = referenceCount > 0
         if (runnable.isEmpty() || threads.isEmpty() || arenas.isEmpty() || !(clips || references)) {
             say("nothing to run: a model, a thread count, an arena setting and a file are needed")
             return
@@ -135,7 +136,10 @@ class BenchService : Service() {
         val report = folder.create(name, "application/json")
         val device = Device.here(BuildConfig.VERSION_NAME)
         val probe = AndroidProbe(this)
-        val gates = BenchClips.read(this).gates
+        val clipInputs = BenchClips.read(this)
+        val gates = clipInputs.gates
+        val files = referenceCount + if (clips) clipInputs.inputs.size else 0
+        BenchSessions.sweep(this)
         val start = probe.heat()
         val results = mutableListOf<SessionResult>()
         fun save() {
@@ -172,7 +176,7 @@ class BenchService : Service() {
                 }
             }
             val result = try {
-                BenchSessions.run(this, spec, { BenchSession.stopAsked }, say)
+                BenchSessions.run(this, spec, files, { BenchSession.stopAsked }, say)
             } catch (e: Throwable) {
                 SessionResult(Session(spec.model, spec.threads, spec.arena, spec.round, null, null, null, null,
                     "${e.javaClass.simpleName}: ${e.message}", null), emptyList(), emptyList(), emptyList())

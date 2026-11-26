@@ -26,8 +26,14 @@
 #                   debug app, its test APK, :ml's test APK: `pm list packages -U`), its packets by
 #                   `-m owner --uid-owner`, those to 10.0.2.2 and loopback apart; any other one of theirs fails the
 #                   run. Its control: a TCP connection to a listener of the script's on the host's loopback, sent as
-#                   the debug app's uid (`run-as`) before and after the classes, must be counted twice, or the rules
-#                   prove nothing. The rules come off on every exit.
+#                   the debug app's uid (`run-as`) before the classes and again after them, each counted on its own
+#                   (the counters read between: the one after must raise them), and caracole_own still the first
+#                   rule of OUTPUT in both tables as the classes end, or the rules prove nothing. What it proves:
+#                   nothing caracole's own uids sent left for a host but 10.0.2.2 or loopback. Not what another uid
+#                   sends on caracole's behalf, a name lookup among it (Android's resolver sends from its own
+#                   process; whether it charges the asking app was not shown on this image): for that, the
+#                   capture's stray endpoints, each with its socket's uid, are the evidence.
+#                   The rules come off on every exit.
 #                   Beside it, as evidence, every packet the emulator sends or gets goes into FILE (pcap), with Wi-Fi
 #                   off so that all of it goes through the one interface the emulator's console captures (its
 #                   cellular network). Its own control (a ping of 10.0.2.2 and a connection to the listener from the
@@ -297,7 +303,14 @@ control() {
     # As the debug app's uid: what its owner rule for 10.0.2.2 must count.
     adb shell "run-as $app_id sh -c 'echo caracole-probe | nc -w 2 10.0.2.2 $probe_port'" >/dev/null 2>&1 || true
 }
+# The rules' counters, read the same way before and after the classes.
+owner_counters() {
+    adb shell "su 0 sh -c 'iptables -L caracole_own -v -x -n; echo ---; ip6tables -L caracole_own -v -x -n'" \
+        | tr -d '\r'
+}
 control
+# What the control before the classes left counted: the one after them must raise it, on its own.
+[ -z "$capture" ] || counters_before="$(owner_counters)"
 
 # One class run: `am instrument -w`, its args; the app's data cleared, the print spooler and choosers closed after.
 run_class() {
@@ -373,8 +386,9 @@ if [ -n "$capture" ]; then
     # Who holds each socket, and the rules' counters, as the classes end, before anything moves on.
     sockets="$(adb shell "su 0 cat /proc/net/tcp /proc/net/tcp6 /proc/net/udp /proc/net/udp6" | tr -d '\r')"
     packages="$(adb shell pm list packages -U | tr -d '\r')"
-    counters="$(adb shell \
-        "su 0 sh -c 'iptables -L caracole_own -v -x -n; echo ---; ip6tables -L caracole_own -v -x -n'" | tr -d '\r')"
+    counters="$(owner_counters)"
+    # caracole_own must still head OUTPUT in both tables, or what came before it may have seen the app's packets.
+    heads="$(adb shell "su 0 sh -c 'iptables -S OUTPUT | sed -n 2p; ip6tables -S OUTPUT | sed -n 2p'" | tr -d '\r')"
     unown
     owned=0
     adb shell svc wifi enable
@@ -383,32 +397,53 @@ if [ -n "$capture" ]; then
     printf '%s\n' "$sockets" >"$tcpdump.sockets"
     printf '%s\n' "$packages" >"$tcpdump.packages"
     printf '%s\n' "$counters" >"$tcpdump.counters"
+    printf '%s\n' "$counters_before" >"$tcpdump.counters-before"
+    printf '%s\n' "$heads" >"$tcpdump.heads"
 
     own_ok=0
-    python3 - "$tcpdump.counters" "$app_uid" "${own_uids[*]}" <<'EOF' || own_ok=$?
+    python3 - "$tcpdump.counters-before" "$tcpdump.counters" "$tcpdump.heads" "$app_uid" "${own_uids[*]}" \
+        <<'EOF' || own_ok=$?
 import sys
 
-v4, v6 = open(sys.argv[1]).read().split("---")
-app, uids = sys.argv[2], sys.argv[3].split()
-control, sent = 0, []
-for family, table in (("IPv4", v4), ("IPv6", v6)):
-    for line in table.splitlines():
-        f = line.split()
-        if not (f and f[0].isdigit() and "UID" in f):
-            continue
-        packets, uid, allowed = int(f[0]), f[-1], f[2] == "RETURN"
-        dest = f[f.index("owner") - 1]  # the column before the match (ip6tables leaves "opt" blank)
-        if allowed and uid == app and dest == "10.0.2.2":
-            control += packets
-        elif not allowed and packets:
-            sent.append(f"{family}: uid {uid} sent {packets} packet(s) to a host but 10.0.2.2 or loopback")
-print(f"owner rules (uids {', '.join(uids)}): {len(sent)} count(s) of packets elsewhere; "
-      f"the control as the app (uid {app}): {control} packet(s) to 10.0.2.2")
+app, uids = sys.argv[4], sys.argv[5].split()
+
+
+def read(path):
+    """The app's packets to 10.0.2.2, and each count of packets elsewhere."""
+    v4, v6 = open(path).read().split("---")
+    control, sent = 0, []
+    for family, table in (("IPv4", v4), ("IPv6", v6)):
+        for line in table.splitlines():
+            f = line.split()
+            if not (f and f[0].isdigit() and "UID" in f):
+                continue
+            packets, uid, allowed = int(f[0]), f[-1], f[2] == "RETURN"
+            dest = f[f.index("owner") - 1]  # the column before the match (ip6tables leaves "opt" blank)
+            if allowed and uid == app and dest == "10.0.2.2":
+                control += packets
+            elif not allowed and packets:
+                sent.append(f"{family}: uid {uid} sent {packets} packet(s) to a host but 10.0.2.2 or loopback")
+    return control, sent
+
+
+before, _ = read(sys.argv[1])
+after, sent = read(sys.argv[2])
+heads = [line.strip() for line in open(sys.argv[3]).read().splitlines() if line.strip()]
+lost = [table for table, head in zip(("iptables", "ip6tables"), heads + ["", ""])
+        if head != "-A OUTPUT -j caracole_own"]
+print(f"owner rules (uids {', '.join(uids)}): {len(sent)} count(s) of packets elsewhere; the control as the app "
+      f"(uid {app}): {before} packet(s) to 10.0.2.2 before the classes, {after - before} more after them")
 for line in sent:
     print(f"  {line}")
-if control < 2:
-    print("  the control as the app isn't counted twice: the rules prove nothing")
-sys.exit(1 if sent or control < 2 else 0)
+if before < 2:
+    print("  the control before the classes wasn't counted: the rules saw nothing of the app's")
+if after - before < 2:
+    print("  the control after the classes wasn't counted: the rules stopped seeing the app's packets, and prove "
+          "nothing of the classes")
+for table in lost:
+    print(f"  caracole_own no longer heads {table}'s OUTPUT as the classes end: another chain may have seen the "
+          "app's packets first")
+sys.exit(1 if sent or before < 2 or after - before < 2 or lost else 0)
 EOF
     if [ "$own_ok" = 0 ]; then results+=("PASS owner rules"); else results+=("FAIL owner rules"); failed=1; fi
 

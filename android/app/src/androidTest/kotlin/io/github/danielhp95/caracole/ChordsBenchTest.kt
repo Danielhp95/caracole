@@ -67,7 +67,7 @@ class ChordsBenchTest {
         val results = listOf(BenchReport.BTC, BenchReport.BEATS_FP16, BenchReport.BEATS_FP32).flatMap { model ->
             listOf(false, true).map { arena ->
                 BenchSessions.run(context, SessionSpec(model, 1, arena, "on", 1, models().path, null, clips = true,
-                    references = false), { false }, { lines += it }) { pids += it }
+                    references = false), clips.inputs.size, { false }, { lines += it }) { pids += it }
             }
         }
         lines.forEach(::println)
@@ -86,7 +86,9 @@ class ChordsBenchTest {
             assertEquals(session.toString(), JsonNull, session.getValue("failure"))
             assertTrue(session.toString(), session.num("load_seconds") > 0)
             assertTrue(session.toString(), session.num("rss_peak_mb") > 0)
+            assertTrue("each session's process fresh: $session", session.getValue("fresh").jsonPrimitive.boolean)
         }
+        assertEquals(pids, sessions.map { it.getValue("pid").jsonPrimitive.content.toInt() })
         val runs = report.getValue("runs").jsonArray.map { it.jsonObject }
         assertEquals(4 * 6, runs.size)
         for (run in runs) {
@@ -112,6 +114,7 @@ class ChordsBenchTest {
         val summary = report.getValue("summary").jsonObject
         assertTrue("the clips are no song: $summary", summary.getValue("references").jsonArray.isEmpty())
         assertTrue(summary.getValue("clips").jsonArray.isNotEmpty())
+        assertTrue("clips_note" !in summary)
     }
 
     @Test fun aReferenceOfTheOwnersIsReadAsTheComputerWroteItAndRun() {

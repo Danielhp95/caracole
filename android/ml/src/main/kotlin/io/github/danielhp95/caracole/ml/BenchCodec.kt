@@ -33,7 +33,7 @@ object BenchCodec {
             put("model", s.model); put("threads", s.threads); put("arena", s.arena); put("round", s.round)
             put("load_seconds", s.loadSeconds); put("rss_peak_kb", s.rssPeakKb)
             put("battery_start_uah", s.batteryStartUah); put("battery_end_uah", s.batteryEndUah)
-            put("failure", s.failure); put("stopped", s.stopped)
+            put("failure", s.failure); put("stopped", s.stopped); put("pid", s.pid); put("fresh", s.fresh)
         })
         put("runs", JsonArray(r.runs.map { run ->
             buildJsonObject {
@@ -69,7 +69,8 @@ object BenchCodec {
         return SessionResult(
             session = Session(s.str("model"), s.int("threads"), s.bool("arena"), s.str("round"),
                 s.double("load_seconds"), s.long("rss_peak_kb"), s.long("battery_start_uah"),
-                s.long("battery_end_uah"), s.strOrNull("failure"), s.strOrNull("stopped")),
+                s.long("battery_end_uah"), s.strOrNull("failure"), s.strOrNull("stopped"),
+                (s.value("pid") as? JsonPrimitive)?.content?.toIntOrNull(), s.bool("fresh")),
             runs = o.getValue("runs").jsonArray.map { it.jsonObject }.map { r ->
                 Run(file = r.str("file"), kind = r.str("kind"), model = r.str("model"), pass = r.int("pass"),
                     threads = r.int("threads"), arena = r.bool("arena"), screen = r.str("screen"),

@@ -57,13 +57,18 @@ data class Run(
  * model, thread count and arena setting, the screen round it ran in ("on" or "off"), the model's load ([loadSeconds],
  * its session opened before the first run), the process's peak RSS over its whole life (VmHWM as it ends: the
  * session's own, its inputs' reading in it), the battery's charge counter as it began and ended, and why it ended
- * early: [failure] (an error, or its process dead) or [stopped] (the heat guard).
+ * early: [failure] (an error, or its process dead) or [stopped] (the heat guard); its process's [pid], and [fresh],
+ * true only when the bench saw the earlier session's process gone before it began this one.
  */
 data class Session(
     val model: String, val threads: Int, val arena: Boolean, val round: String, val loadSeconds: Double?,
     val rssPeakKb: Long?, val batteryStartUah: Long?, val batteryEndUah: Long?, val failure: String?,
-    val stopped: String?,
-)
+    val stopped: String?, val pid: Int? = null, val fresh: Boolean = false,
+) {
+    /** The whole-life peak where it is this session's alone: its process fresh (no earlier session's still up as it
+     * began), a peak read. Gate B0's memory: a hearing is a load and a first run, and this holds both. */
+    val hearingPeakKb: Long? get() = rssPeakKb.takeIf { fresh }
+}
 
 /** The battery over the whole bench: its charge counter and percent at its start and end, and whether it was
  * plugged in as it began. */
@@ -164,11 +169,20 @@ data class BeatParity(
 }
 
 /** Every file's parity of a bench, under [gates]. */
-data class Parity(val gates: Gates, val btc: List<BtcParity>, val beats: List<BeatParity>) {
-    /** Every entry passes, and there is one at least. */
-    val pass: Boolean get() = (btc.isNotEmpty() || beats.isNotEmpty()) && btc.all { it.pass(gates) } &&
-        beats.all { it.pass(gates) }
+data class Parity(
+    val gates: Gates, val btc: List<BtcParity>, val beats: List<BeatParity>,
+    val laterBtc: List<BtcParity> = emptyList(), val laterBeats: List<BeatParity> = emptyList(),
+    val differs: List<Differs> = emptyList(),
+) {
+    /** Every entry passes, a later session's too, and there is one at least. */
+    val pass: Boolean get() = (btc.isNotEmpty() || beats.isNotEmpty()) &&
+        (btc + laterBtc).all { it.pass(gates) } && (beats + laterBeats).all { it.pass(gates) }
 }
+
+/** A file's parity under one setting that a later session ([session], an index of the report's `sessions`) found
+ * otherwise than the first ([firstSession]): both entries, [first] and [other] ([BtcParity] or [BeatParity]). */
+data class Differs(val file: String, val model: String, val threads: Int, val arena: Boolean, val firstSession: Int,
+                   val session: Int, val first: Any, val other: Any)
 
 /**
  * The Chords bench's report, `caracole-bench-<UTC>.json` (the design's §9.1): the phone ([Device]: model, SoC,
@@ -209,8 +223,15 @@ object BenchReport {
         put("sessions", JsonArray(sessions.map(::session)))
         put("runs", JsonArray(runs.map(::run)))
         put("summary", buildJsonObject {
-            put("references", JsonArray(summary(runs.filter { it.kind == BenchInput.REFERENCE }, gate = true)))
-            put("clips", JsonArray(summary(runs.filter { it.kind == BenchInput.CLIP }, gate = false)))
+            for ((key, kind) in listOf("references" to BenchInput.REFERENCE, "clips" to BenchInput.CLIP)) {
+                val ofKind = runs.filter { it.kind == kind }
+                val block = summary(ofKind, sessions, gate = kind == BenchInput.REFERENCE)
+                put(key, JsonArray(block))
+                if (block.isEmpty() && ofKind.isNotEmpty()) {
+                    put("${key}_note", "every run of these was its session's first run (cold), which the summary " +
+                        "leaves out: run 2 passes or more for one")
+                }
+            }
         })
         put("parity", parity(parity))
     }
@@ -219,10 +240,40 @@ object BenchReport {
      * once (its first session's; the screen-off round runs the same settings again). */
     fun ofSessions(results: List<SessionResult>, gates: Gates, device: Device, made: String,
                    battery: Battery? = null): JsonObject {
-        val btc = results.flatMap { it.btc }.distinctBy { listOf(it.file, it.threads, it.arena) }
-        val beats = results.flatMap { it.beats }.distinctBy { listOf(it.file, it.model, it.threads, it.arena) }
-        return of(results.flatMap { it.runs }, Parity(gates, btc, beats), device, made, results.map { it.session },
-            battery)
+        val btc = mutableListOf<BtcParity>()
+        val beats = mutableListOf<BeatParity>()
+        val laterBtc = mutableListOf<BtcParity>()
+        val laterBeats = mutableListOf<BeatParity>()
+        val differs = mutableListOf<Differs>()
+        val firstOf = mutableMapOf<List<Any>, Pair<Int, Any>>()
+        results.forEachIndexed { i, r ->
+            for (b in r.btc) {
+                val key = listOf(BTC, b.file, b.threads, b.arena)
+                val known = firstOf[key]
+                if (known == null) {
+                    firstOf[key] = i to b
+                    btc += b
+                } else {
+                    laterBtc += b
+                    if (known.second != b) differs += Differs(b.file, BTC, b.threads, b.arena, known.first, i,
+                        known.second, b)
+                }
+            }
+            for (b in r.beats) {
+                val key = listOf(b.model, b.file, b.threads, b.arena)
+                val known = firstOf[key]
+                if (known == null) {
+                    firstOf[key] = i to b
+                    beats += b
+                } else {
+                    laterBeats += b
+                    if (known.second != b) differs += Differs(b.file, b.model, b.threads, b.arena, known.first, i,
+                        known.second, b)
+                }
+            }
+        }
+        return of(results.flatMap { it.runs }, Parity(gates, btc, beats, laterBtc, laterBeats, differs), device,
+            made, results.map { it.session }, battery)
     }
 
     private fun session(s: Session): JsonObject = buildJsonObject {
@@ -236,6 +287,8 @@ object BenchReport {
             s.batteryEndUah - s.batteryStartUah else null)
         put("failure", s.failure)
         put("stopped", s.stopped)
+        put("pid", s.pid)
+        put("fresh", s.fresh)
     }
 
     private fun run(r: Run): JsonObject = buildJsonObject {
@@ -262,13 +315,21 @@ object BenchReport {
 
     /** The warm runs a setting and screen state; with [gate], Gate B0's flags beside (the references': the clips'
      * block is parity's, their chunks' overhead no measure of a song's). */
-    private fun summary(runs: List<Run>, gate: Boolean): List<JsonObject> =
+    private fun summary(runs: List<Run>, sessions: List<Session>, gate: Boolean): List<JsonObject> =
         runs.filter { !it.cold }.groupBy { listOf(it.model, it.threads, it.arena, it.screen) }.map { (_, group) ->
             val first = group.first()
             val rtfs = group.map { it.rtf }.sorted()
             val median = if (rtfs.size % 2 == 1) rtfs[rtfs.size / 2]
             else (rtfs[rtfs.size / 2 - 1] + rtfs[rtfs.size / 2]) / 2
-            val rss = group.mapNotNull { it.truePeakKb }.maxOrNull()
+            val steady = group.mapNotNull { it.truePeakKb }.maxOrNull()
+            // The hearing's: the whole-life peaks of this setting's sessions, each a load, a first run and the rest;
+            // none where a session has none to trust.
+            val theirs = sessions.filter {
+                it.model == first.model && it.threads == first.threads && it.arena == first.arena &&
+                    it.round == first.screen
+            }
+            val hearing = if (theirs.isEmpty() || theirs.any { it.hearingPeakKb == null }) null
+            else theirs.maxOf { it.hearingPeakKb!! }
             buildJsonObject {
                 put("model", first.model)
                 put("threads", first.threads)
@@ -278,10 +339,11 @@ object BenchReport {
                 put("rtf_median", rounded(median, 10_000))
                 put("rtf_max", rounded(rtfs.last(), 10_000))
                 put("pss_peak_mb", mb(group.mapNotNull { it.pssPeakKb }.maxOrNull()))
-                put("rss_peak_mb", mb(rss))
+                put("rss_steady_mb", mb(steady))
+                put("rss_hearing_mb", mb(hearing))
                 if (gate) {
                     put("speed_ok", rtfs.last() <= RTF_GATE)
-                    put("memory_ok", rss?.let { JsonPrimitive(it / 1024.0 <= MEMORY_GATE_MB) } ?: JsonNull)
+                    put("memory_ok", hearing?.let { JsonPrimitive(it / 1024.0 <= MEMORY_GATE_MB) } ?: JsonNull)
                 }
             }
         }
@@ -296,31 +358,49 @@ object BenchReport {
             put("trim", p.gates.trim)
             put("window", p.gates.window)
         })
-        put("btc", JsonArray(p.btc.map { b ->
+        put("btc", JsonArray(p.btc.map { btc(it, p.gates) }))
+        put("beats", JsonArray(p.beats.map { beat(it, p.gates) }))
+        put("differs", JsonArray(p.differs.map { d ->
             buildJsonObject {
-                put("file", b.file)
-                put("threads", b.threads)
-                put("arena", b.arena)
-                put("frames", b.frames)
-                put("agreement", rounded(b.agreement, 1_000_000))
-                put("differ", b.differMargins.size)
-                put("differ_over_margin", b.differOverMargin(p.gates))
-                put("logits_max_abs", b.logitsMaxAbs.toDouble())
-                put("pass", b.pass(p.gates))
+                put("file", d.file)
+                put("model", d.model)
+                put("threads", d.threads)
+                put("arena", d.arena)
+                put("first_session", d.firstSession)
+                put("session", d.session)
+                put("first", entry(d.first, p.gates))
+                put("other", entry(d.other, p.gates))
             }
         }))
-        put("beats", JsonArray(p.beats.map { b ->
-            buildJsonObject {
-                put("file", b.file)
-                put("model", b.model)
-                put("threads", b.threads)
-                put("arena", b.arena)
-                put("logits_max_abs", b.logitsMaxAbs.toDouble())
-                put("beats_f", b.beatsF?.let { JsonPrimitive(rounded(it, 1_000_000)) } ?: JsonNull)
-                put("downbeats_f", b.downbeatsF?.let { JsonPrimitive(rounded(it, 1_000_000)) } ?: JsonNull)
-                put("pass", b.pass(p.gates))
-            }
-        }))
+    }
+
+    private fun entry(e: Any, gates: Gates): JsonObject = when (e) {
+        is BtcParity -> btc(e, gates)
+        is BeatParity -> beat(e, gates)
+        else -> throw IllegalArgumentException("no parity entry: $e")
+    }
+
+    private fun btc(b: BtcParity, gates: Gates): JsonObject = buildJsonObject {
+        put("file", b.file)
+        put("threads", b.threads)
+        put("arena", b.arena)
+        put("frames", b.frames)
+        put("agreement", rounded(b.agreement, 1_000_000))
+        put("differ", b.differMargins.size)
+        put("differ_over_margin", b.differOverMargin(gates))
+        put("logits_max_abs", b.logitsMaxAbs.toDouble())
+        put("pass", b.pass(gates))
+    }
+
+    private fun beat(b: BeatParity, gates: Gates): JsonObject = buildJsonObject {
+        put("file", b.file)
+        put("model", b.model)
+        put("threads", b.threads)
+        put("arena", b.arena)
+        put("logits_max_abs", b.logitsMaxAbs.toDouble())
+        put("beats_f", b.beatsF?.let { JsonPrimitive(rounded(it, 1_000_000)) } ?: JsonNull)
+        put("downbeats_f", b.downbeatsF?.let { JsonPrimitive(rounded(it, 1_000_000)) } ?: JsonNull)
+        put("pass", b.pass(gates))
     }
 
     private fun rounded(x: Double, scale: Int): Double = round(x * scale) / scale

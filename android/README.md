@@ -756,19 +756,24 @@ frame for frame, beat_this's fp32 logits, and the fp16-stored file's beats and d
 `--ml` pushes the four files into the emulator's `/data/local/tmp/caracole-models` (again only when one changed) and
 runs `ModelParityTest` from `:ml`'s own test APK, which reports each model's load, each clip's time and its peak RSS,
 then the app's `ChordsBenchTest` (the Chords bench, below) over the same files.
-`--tcpdump FILE` gates on what caracole's own uids send. Before the classes, on the rooted emulator (`su 0`), it puts
-a chain of iptables and ip6tables rules at the head of OUTPUT that counts the packets of each of caracole's packages
-installed (the debug app, its test APK, `:ml`'s test APK) by `-m owner --uid-owner`. Packets to 10.0.2.2 and to
-loopback are counted apart; any other packet of theirs fails the run. A control proves the rules see the app's
-traffic: a connection to a listener on the host's loopback, sent as the debug app (`run-as`) before and after the
-classes, must be counted twice. The rules come off however the run ends. The whole interface is captured too, as
-evidence, with Wi-Fi off so that everything goes through the network the emulator's console captures. Its own control
-(a ping of 10.0.2.2 and a connection to the listener) must be in FILE, and each packet to or from another host is
-listed with the uid holding its socket as the classes end. It fails the run only when that uid is caracole's: the
-emulator's own Google Play services talk to Google now and then, and are no failure of caracole's. A run killed with
-SIGKILL leaves Wi-Fi off and the rules in: `adb -s emulator-NNNN shell svc wifi enable`, and
-`su 0 iptables -D OUTPUT -j caracole_own` (and `ip6tables`) in `adb shell`. `:ml`'s test APK runs under AndroidJUnitRunner, not CaracoleTestRunner:
-it has no HTTP code, so `caracole.network=loopback` isn't set for it.
+`--tcpdump FILE` gates on what caracole's own uids send. Before the classes, on the rooted emulator (`su 0`), it puts a
+chain of iptables and ip6tables rules at the head of OUTPUT that counts the packets of each of caracole's packages
+installed (the debug app, its test APK, `:ml`'s test APK) by `-m owner --uid-owner`. Packets to 10.0.2.2 and to loopback
+are counted apart; any other packet of theirs fails the run. A control proves the rules see the app's traffic: a
+connection to a listener on the host's loopback, sent as the debug app (`run-as`) before and after the classes, must be
+counted, each on its own: the counters are read between, and the control after the classes must raise them.
+`caracole_own` must also still be the first rule of OUTPUT in both tables as the classes end. The rules come off however
+the run ends. What the gate proves: nothing caracole's own uids sent left for a host other than 10.0.2.2 or loopback.
+What it doesn't: traffic another uid makes on caracole's behalf, a name lookup among it (Android's resolver sends from
+its own process, and whether it charges the asking app wasn't shown on this image: a lookup of an `.invalid` name as the
+app sent no packet at all). For that part, the capture is the evidence. The whole interface is captured too, as
+evidence, with Wi-Fi off so that everything goes through the network the emulator's console captures. Its own control (a
+ping of 10.0.2.2 and a connection to the listener) must be in FILE, and each packet to or from another host is listed
+with the uid holding its socket as the classes end. It fails the run only when that uid is caracole's: the emulator's
+own Google Play services talk to Google now and then, and are no failure of caracole's. A run killed with SIGKILL leaves
+Wi-Fi off and the rules in: `adb -s emulator-NNNN shell svc wifi enable`, and `su 0 iptables -D OUTPUT -j caracole_own`
+(and `ip6tables`) in `adb shell`. `:ml`'s test APK runs under AndroidJUnitRunner, not CaracoleTestRunner: it has no HTTP
+code, so `caracole.network=loopback` isn't set for it.
 
 BTC's graph and `models.json` (`tests/conformance/data/caracole/autochords/`) are `:ml`'s resources, so the debug
 build's alone; `:core`, whose resources are the rest of that folder, leaves them out. That nothing of this reaches the
@@ -795,7 +800,9 @@ will add the decoding and the features' time. And its parity is frame for frame 
 chord-by-chord scores (WCSR) come with the labels, in B1.
 
 It runs in sessions: one model on one thread count and memory setting, over every file. Each session runs in a fresh
-process, so that its memory is its own; starting one costs a second or two. A session loads its model first and
+process, so that its memory is its own; starting one costs a second or two. Each session in the report names its
+process (`pid`) and says whether it was `fresh` (no earlier session's process still up). One that writes no result
+within 15 minutes plus 10 a file a pass, or within a minute of Stop, is recorded as failed, and the bench goes on. A session loads its model first and
 times the load apart. Each run's `rss_peak_mb` is its true peak (the process's peak memory, reset as the run begins),
 or null with `"reset": false` where the phone refused the reset. `pss_peak_mb` is sampled once a second: a run of BTC
 lasts about a tenth of that, so its PSS is a reading taken around the call. If the phone's thermal status reaches
@@ -835,11 +842,15 @@ critical, the session stops, keeping what it measured, and the bench stops after
 What Gate B0 reads in it:
 
 - `summary.references`: for each model, thread count, arena setting and screen state, your songs' warm runs'
-  `rtf_median` and `rtf_max` (the model's seconds over the audio's), with `speed_ok` when `rtf_max` is 0.125 or less,
-  and their true `rss_peak_mb` with `memory_ok` when it is 1 GB or less (null when no run's peak could be reset). A
+  `rtf_median` and `rtf_max` (the model's seconds over the audio's), with `speed_ok` when `rtf_max` is 0.125 or less.
+  `memory_ok` is true when `rss_hearing_mb` is 1 GB or less: the highest whole-life peak of that setting's sessions,
+  each a fresh process holding the model's load, its first inference and every run after, as a hearing on the phone
+  would (its clips included). It is null when any of those sessions has no peak of its own (its process not fresh,
+  `"fresh": false`). Beside it, `rss_steady_mb` is the warm runs' highest true peak, the load left out. A
   beat_this that can't reach RTF 0.25 stops stage B. `summary.clips` gives the same numbers for the committed clips,
   with no gate: they are parity's, and a short clip's chunk overhead is no measure of a song. Both leave each
-  session's first run out (`cold`: its first inference warms the runtime), so a run of 1 pass has no summary.
+  session's first run out (`cold`: its first inference warms the runtime), so a bench of 1 pass over a single file
+  has an empty block, and a `references_note` or `clips_note` beside it says why.
 - `parity.pass`: BTC's chords the computer's frame for frame but where the computer itself was within 0.001 of a tie,
   beat_this fp32's logits within 0.001, and the fp16 file's beats and downbeats at F ≥ 0.99.
 - `runs`: each run with its `thermal` states, its `headroom_max` (read at most every 10 s) and its `battery_uah`

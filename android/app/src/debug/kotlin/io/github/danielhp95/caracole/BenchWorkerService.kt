@@ -48,15 +48,36 @@ internal class SessionSpec(
  * memory is its own: nothing an earlier session's allocator kept, and its peak RSS its life's. [run] binds the
  * service for one session (a new address each time), follows its lines and waits for its result file, then unbinds,
  * which ends that process ([BenchWorkerService.onDestroy]), and waits for it to be gone before the next. A process
- * that dies first (out of memory) is that session's failure. Starting a process costs a second or two a session.
+ * that dies first (out of memory) is that session's failure, and so is one that writes no result within its time
+ * ([allowed]: a floor and a share of its planned work) or within a minute of Stop. Each session's result says its
+ * process's pid and whether it was fresh: no earlier session's process still up as it began. Starting a process
+ * costs a second or two a session.
  */
 internal object BenchSessions {
     const val PROCESS_SUFFIX = ":benchrun"
+    private const val FLOOR_MS = 15 * 60_000L
+    private const val A_FILE_A_PASS_MS = 10 * 60_000L
+    private const val AFTER_STOP_MS = 60_000L
 
-    fun run(context: Context, spec: SessionSpec, stopped: () -> Boolean, say: (String) -> Unit,
+    /** How long a session of [files] files may take before it is given up: 15 minutes, and 10 a file a pass (a
+     * four-minute song's run at an RTF of 1 is four). */
+    fun allowed(spec: SessionSpec, files: Int): Long = FLOOR_MS + A_FILE_A_PASS_MS * files * spec.passes
+
+    /** What a session that crashed or was killed left in `no_backup/bench-sessions/` (a `.json.part`, a log), gone: the
+     * bench's start, while no session runs. */
+    fun sweep(context: Context) {
+        File(context.applicationContext.noBackupFilesDir, "bench-sessions").listFiles()?.forEach { it.delete() }
+    }
+
+    fun run(context: Context, spec: SessionSpec, files: Int, stopped: () -> Boolean, say: (String) -> Unit,
             onProcess: (Int) -> Unit = {}): SessionResult {
         val app = context.applicationContext
         val dir = File(app.noBackupFilesDir, "bench-sessions").apply { mkdirs() }
+        // Fresh only once no earlier session's process is up.
+        val before = System.currentTimeMillis() + 30_000
+        while (pid(app) != null && System.currentTimeMillis() < before) Thread.sleep(200)
+        val fresh = pid(app) == null
+        if (!fresh) say("an earlier session's process is still up: this session's whole-life peak isn't its own")
         val id = UUID.randomUUID().toString()
         val result = File(dir, "$id.json")
         val stop = File(dir, "$id.stop")
@@ -74,26 +95,44 @@ internal object BenchSessions {
         }
         var said = 0L
         var seen: Int? = null
+        val began = System.currentTimeMillis()
+        val deadline = began + allowed(spec, files)
+        var stopAt: Long? = null
+        var givenUp: String? = null
         try {
             while (!result.exists() && !gone.get()) {
                 Thread.sleep(500)
                 if (seen == null) seen = pid(app)?.also(onProcess)
-                if (stopped()) stop.createNewFile()
+                if (stopped() && stopAt == null) {
+                    stop.createNewFile()
+                    stopAt = System.currentTimeMillis()
+                }
                 said = follow(log, said, say)
+                val now = System.currentTimeMillis()
+                if (now > deadline) {
+                    givenUp = "no result within ${allowed(spec, files) / 60_000} minutes: given up"
+                    break
+                }
+                if (stopAt != null && now - stopAt > AFTER_STOP_MS) {
+                    givenUp = "stopped: its run didn't end within a minute, given up"
+                    break
+                }
             }
             follow(log, said, say)
         } finally {
             app.unbindService(connection)
         }
-        val deadline = System.currentTimeMillis() + 30_000
-        while (pid(app) != null && System.currentTimeMillis() < deadline) Thread.sleep(200)
-        val out = if (result.exists()) BenchCodec.decode(result.readText()) else SessionResult(
-            Session(spec.model, spec.threads, spec.arena, spec.round, null, null, null, null,
-                "the session's process died before its end (out of memory?)", null),
-            emptyList(), emptyList(), emptyList())
-        if (out.session.failure != null && !result.exists()) say(out.session.failure!!)
-        for (f in listOf(result, stop, log)) f.delete()
-        return out
+        val gone30 = System.currentTimeMillis() + 30_000
+        while (pid(app) != null && System.currentTimeMillis() < gone30) Thread.sleep(200)
+        seen?.let { if (pid(app) == it) Process.killProcess(it) }  // a worker given up on, ended (one uid)
+        val out = if (givenUp == null && result.exists()) BenchCodec.decode(result.readText()) else {
+            val why = givenUp ?: "the session's process died before its end (out of memory?)"
+            say(why)
+            SessionResult(Session(spec.model, spec.threads, spec.arena, spec.round, null, null, null, null, why,
+                null), emptyList(), emptyList(), emptyList())
+        }
+        for (f in listOf(result, stop, log, File(dir, "$id.json.part"))) f.delete()
+        return out.copy(session = out.session.copy(pid = seen, fresh = fresh))
     }
 
     /** The session process's pid, while it runs. */
