@@ -26,6 +26,9 @@
 #   shell's), are each one the model-file probe matches;
 # - ONNX Runtime's AAR in Gradle's cache declares the TelemetryInitializer the manifest probe looks for.
 #
+# - and native-check.sh on both APKs: the debug one's libcaracole_soxr.so (both ABIs) stored aligned, stripped and
+#   naming no path of the build; the release's libcaracole_*, none today, which passes saying so.
+#
 # It prints each check and exits non-zero on any failure.
 set -euo pipefail
 
@@ -159,5 +162,14 @@ declared=0
 echo "ONNX Runtime's AAR: ${aar:-none in the Gradle cache}"
 check "the control: the AAR's own manifest declares ai.onnxruntime.TelemetryInitializer" \
     "$(yes_if '[ "$declared" -gt 0 ]')"
+
+# Our own native libraries (native-check.sh): the debug APK's libcaracole_soxr.so, both ABIs, stored aligned,
+# stripped and naming no path of the build; the release's, none today, held to the same if one ever comes.
+echo "native-check.sh, the debug APK:"
+if nix develop ./android -c "$here/native-check.sh" "$debug"; then native=1; else native=0; fi
+check "the debug APK's libcaracole_soxr.so: aligned, stripped, no build path (native-check.sh)" "$native"
+echo "native-check.sh, the release APK:"
+if nix develop ./android -c "$here/native-check.sh" --release "$release"; then native=1; else native=0; fi
+check "the release APK's libcaracole_*, if any: aligned, stripped, no build path (native-check.sh)" "$native"
 
 exit "$failed"

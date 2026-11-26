@@ -822,7 +822,9 @@ What the APK carries of it is checked by a script, after `gradle -p android :app
 
     nix develop ./android -c android/scripts/native-check.sh
 
-It checks each ABI's `libcaracole_soxr.so` is stored uncompressed and 16 KB aligned, stripped (no `.debug_*`,
+`android/scripts/release-check.sh` runs it on the debug and the release APKs it builds (the release holds no
+`libcaracole_*` today, which passes, saying so), and fails with it: run it after any change to the native code or the
+packaging. It checks each ABI's `libcaracole_soxr.so` is stored uncompressed and 16 KB aligned, stripped (no `.debug_*`,
 `.symtab`, `.comment` or build-id), and names no path of the build (`/home/`, `/nix/store/`, `.cxx/`, `/tmp/`), and
 prints its SHA-256: two checkouts at different paths build the same bytes (the library carries no debug information,
 `-g0`, its folders mapped away, `-ffile-prefix-map`). Every symbol but the JNI's is hidden.

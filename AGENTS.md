@@ -3897,6 +3897,7 @@ nix develop -c pytest -q
 nix develop .#autochords -c pytest -m autochords   # when auto-chords is touched
 nix develop ./android -c gradle -p android test    # when android/ or the corpus is touched
 CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py   # when sync, android/ or the corpus is
+android/scripts/release-check.sh   # android/'s native code or packaging: the release's exclusions, native-check.sh
 nix flake check
 ```
 
