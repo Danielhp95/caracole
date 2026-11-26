@@ -384,6 +384,55 @@ class JobViewsTest {
                              Outcomes.COMPARE_AGAIN), Outcomes.outcome(nothing, JobViews.line(nothing), null, null))
     }
 
+    @Test fun thePhonesImportOfAFileSaysWhatTheComputersSaysOfTheSameImport() = runTest {
+        // The four imports of vectors/web/outcome.jsonl's "import, …" records (caracole peer import's jobs, a unit
+        // left as it was no failure), run as the phone's own import (SyncFileRoutes' job: its stages, its outcome,
+        // its Output's "Left as it was" line): the same line and outcome, the indexes not merged its job done where
+        // the computer's failed (the record "the phone's, done"), by design.
+        val queue = queue()
+        val wonderwall = "song/oasis/wonderwall"
+        val why = "the file names it but doesn't hold it: it was left out as it was exported (a file it keeps had " +
+                  "changed there, or was too big for it)"
+        val three = """["song/muse/hysteria","song/radiohead/creep","songbook/campfire"]"""
+        val gone = """[["$wonderwall","$why"]]"""
+        val records = Corpus.records("web/outcome.jsonl").associateBy { it.extra["note"]?.jsonPrimitive?.content }
+        for ((note, run) in listOf(
+            "took 3 and left 1" to Triple("4 differences", "took 3, left 1", """{"taken":$three,"left":$gone}"""),
+            "took nothing and left 1" to Triple("1 difference", "took 0, left 1", """{"taken":[],"left":$gone}"""),
+            "left 1, its indexes not merged: the phone's, done" to
+                Triple("4 differences", "took 3, left 1", """{"taken":$three,"left":$gone}"""),
+            "took 3 and left none" to Triple("3 differences", "took 3", """{"taken":$three,"left":[]}"""),
+        )) {
+            val (checked, took, units) = run
+            val failed = "indexes not merged" in note
+            val job = queue.submit(JobSpec("Sync with a file from Desk", "import:$note", "sync", SyncEngine.FILE_STAGES,
+                                           display = "Sync with a file from Desk") { context ->
+                context.stage("check", "done", "$checked with Desk's file")
+                context.stage("take", "done", took)
+                context.stage("mirror", "done", "")
+                context.stage("agree", "done", "3 units the two agree on")
+                context.stage("index", if (failed) "failed" else "skipped", if (failed) "The disk is full" else "")
+                val said = Json.parseToJsonElement(units).jsonObject
+                context.outcome(JsonObject(said + mapOf("given" to JsonArray(emptyList()),
+                                                        "agreed" to JsonPrimitive(3), "indexed" to JsonArray(emptyList()))))
+                for (unit in said.getValue("left").jsonArray) {
+                    context.say("Left as it was: Oasis - Wonderwall: ${unit.jsonArray[1].jsonPrimitive.content}")
+                }
+            }).first
+            runCurrent()
+            val over = queue.job(job.id)!!
+            assertEquals("done", over.state, note)
+            val line = JobViews.line(over)
+            val computer = records.getValue("import, $note").out!!.jsonObject
+            val said = computer.getValue("line").jsonObject
+            assertEquals(said["tone"]!!.jsonPrimitive.content to said["text"]!!.jsonPrimitive.content,
+                         line.tone to line.text, note)
+            assertEquals(computer.getValue("outcome"), Outcomes.outcome(over, line, null, null).asJson(), note)
+            assertEquals(if ("left 1" in note) listOf("Left as it was: Oasis - Wonderwall: $why") else emptyList(),
+                         over.said, note)
+        }
+    }
+
     @Test fun aSongsViewAndARemovalsNameTheSongByItsIdentityItsCardOnceOver() = runTest {
         val queue = queue()
         val add = queue.submit(JobSpec("Add Radiohead - Creep", "radiohead/creep", "add", emptyList(),
