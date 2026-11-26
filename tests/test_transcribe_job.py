@@ -540,17 +540,18 @@ def test_a_song_not_offered_is_refused_with_its_reason_and_nothing_runs(conn, cf
 
 
 @pytest.mark.parametrize("force", [False, True], ids=["asked", "force"])
-def test_a_song_whose_picked_record_has_no_lyrics_is_refused_force_or_not(conn, cfg, force):
+def test_a_record_written_by_hand_on_a_song_missing_under_its_own_name_is_refused_force_or_not(conn, cfg, force):
     # The owner's Transcribe anyway passes over nothing sung and Whisper's refusal, never over the lyrics databases:
-    # with a record picked, the others were never asked.
-    from caracole.autochords.transcript import PICKED_GONE
+    # with a record picked, the others are never asked. A hand edit's state: the song missing under its own name, then
+    # a record written, not read yet.
+    from caracole.autochords.transcript import PICKED_NONE
     from caracole.overrides import set_lyrics_record
 
     song = offered(conn, cfg)
     set_lyrics_record(cfg.overrides_file, song.display, "lrclib:9")
     separator, transcriber, recognizer = Separator(), Transcriber(), Recognizer()
     result, heard = make(cfg, separator=separator, transcriber=transcriber, recognizer=recognizer, force=force)
-    said = (f"{song.display} isn't offered a transcription: " + PICKED_GONE.format(record="lrclib 9"))
+    said = (f"{song.display} isn't offered a transcription: " + PICKED_NONE.format(record="lrclib 9"))
     assert not result.ok and result.refused == said
     assert separator.calls == transcriber.calls == recognizer.calls == []
 
@@ -1061,6 +1062,23 @@ def test_none_drops_the_transcript_and_makes_the_chords_alone(conn, cfg):
     wav(other, 60.0)
     update_song(conn, song.id, audio_path=str(other), audio_mtime=other.stat().st_mtime)
     assert why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) is None
+
+
+def test_none_still_runs_for_a_kept_transcript_once_a_record_is_picked_and_a_transcription_is_refused(conn, cfg):
+    # Not sung, chords only, runs no Whisper: a record picked since the transcript was kept doesn't refuse it.
+    from caracole.overrides import set_lyrics_record
+
+    song = offered(conn, cfg)
+    assert make(cfg)[0].ok and kept(conn, song) is not None
+    set_lyrics_record(cfg.overrides_file, song.display, "megalobiz:8")
+    refused, _ = make(cfg, force=True)
+    assert refused.refused is not None and "the record you picked (megalobiz 8)" in refused.refused
+    separator, transcriber = Separator(), Transcriber()
+    result, heard = make(cfg, separator=separator, transcriber=transcriber, none=True)
+    assert result.ok, result
+    assert heard.ends()["words"] == ("done", "transcript dropped")
+    assert heard.ends()["chords"] == ("done", "chords only: you said it isn't sung")
+    assert separator.calls == transcriber.calls == [] and kept(conn, song) is None
 
 
 def test_none_is_refused_for_a_song_with_no_transcript_and_changes_nothing(conn, cfg):

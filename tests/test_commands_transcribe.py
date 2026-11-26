@@ -184,8 +184,10 @@ def test_transcribe_refuses_a_song_not_offered_and_exits_1(tmp_path, config, con
 
 
 @pytest.mark.parametrize("force", [[], ["--force"]], ids=["asked", "force"])
-def test_transcribe_refuses_a_song_whose_picked_record_has_no_lyrics_force_or_not(tmp_path, config, conn, models,
-                                                                                 monkeypatch, force):
+def test_transcribe_refuses_a_record_written_by_hand_on_a_song_missing_under_its_own_name(tmp_path, config, conn,
+                                                                                         models, monkeypatch, force):
+    # A hand edit's state: the song missing under its own name, then a record written, not read yet. Refused, --force
+    # or not.
     from caracole.overrides import set_lyrics_record
 
     monkeypatch.setattr(yf, "transcribe_problem", lambda cfg: None)
@@ -195,7 +197,7 @@ def test_transcribe_refuses_a_song_whose_picked_record_has_no_lyrics_force_or_no
     result = invoke(config, "--song", "Nick Cani - Vikingos veganos", *force)
     assert result.exit_code == 1, result.output
     assert ("No transcript made: Nick Cani - Vikingos veganos isn't offered a transcription: the record you picked "
-            "has no lyrics (megalobiz 8): pick another, or clear the pick.") in result.output
+            "(megalobiz 8) has given no lyrics: pick another, or clear the pick.") in result.output
     assert models == []
 
 

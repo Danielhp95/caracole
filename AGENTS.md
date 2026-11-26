@@ -2062,9 +2062,11 @@ It is rows.js's, shared by both pages:
     songs are offered one (`why_not_offered`, which also reads run.py's `autochords:failed:<id>`, its key
     `UNREADABLE`; "Whisper can't read its audio" for the second, `anyway` or not; a song with a `[lyrics]` record and
     no lyrics never, `anyway` or not, after a human sheet and before its lyrics' status, by the record alone and no
-    `checked:` kv: `picked_without_lyrics`, `PICKED_GONE` "the record you picked has no lyrics (lrclib 9): pick
-    another, or clear the pick", `PICKED_UNREAD` while it is pending, the owner's rule of the databases first, as one
-    record of one site is all that is asked);
+    `checked:` kv: `picked_without_lyrics`, `PICKED_NONE` "the record you picked (lrclib 9) has given no lyrics: pick
+    another, or clear the pick" while missing, true whether its site answered it a miss or a record written by hand on
+    a song missing under its own name waits its 30 days, `PICKED_UNREAD` while it is pending, the owner's rule of the
+    databases first, as one record of one site is all that is asked; Not sung: chords only, which runs no Whisper, as
+    before it, `why_not_unsung` and `offers`' `transcribed` weighing no record, `without_picks`);
   - separate.py: demucs-rs, a program run as a subprocess (`DemucsSeparator`; `SeparatorFailed` in its own words,
     its output read as UTF-8 with what isn't replaced; a wgpu demucs-rs that dies by a signal after "Done!" with the
     stem written, as it does from Python, has separated it, logged; on success, what it said of its device logged

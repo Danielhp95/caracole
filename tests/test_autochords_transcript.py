@@ -91,36 +91,109 @@ def test_a_song_is_offered_once_every_site_switched_on_missed(conn, cfg, tmp_pat
     assert tr.why_not_offered(conn, off, get_song(conn, song.id), Overrides()) is not None
 
 
-@pytest.mark.parametrize("site,record_id", [("lrclib", "9"), ("megalobiz", "24519"), ("azlyrics", "pomme/mononoke")])
-def test_a_song_with_a_picked_record_and_no_lyrics_is_never_offered_until_the_pick_is_cleared(conn, cfg, tmp_path,
-                                                                                               site, record_id):
-    # The owner's rule: the lyrics databases before Whisper. With a record picked, one record of one site is all that
-    # is ever asked, the other sites never: refused, `anyway` or not, gone or not read yet, whatever any site's
-    # checked: record says (every one is set here). Cleared, the song is as any other: every site missed, offered.
+RECORDS = [("lrclib", "9"), ("megalobiz", "24519"), ("azlyrics", "pomme/mononoke")]
+
+
+@pytest.mark.parametrize("site,record_id", RECORDS)
+def test_a_record_written_by_hand_on_a_song_missing_under_its_own_name_is_never_offered(conn, cfg, tmp_path, site,
+                                                                                        record_id):
+    # The state a hand edit reaches: a song missing under its own name (every site asked), then a record written into
+    # [lyrics]: not read yet (it waits the 30 days of the song's miss), and refused all the same, `anyway` or not, in
+    # words true of a record read or not, whatever any site's checked: record says (every one is set here). The
+    # owner's rule: the lyrics databases before Whisper, and with a record picked only that record is asked.
     from caracole.overrides import LyricsPick, LyricsRecord, override_key
 
     song = youtube_song(conn, tmp_path)
     picked = Overrides(lyrics={override_key(song.display): LyricsPick(None, LyricsRecord(site, record_id))})
-    gone = tr.PICKED_GONE.format(record=f"{site} {record_id}")
-    assert gone == f"the record you picked has no lyrics ({site} {record_id}): pick another, or clear the pick"
+    none = tr.PICKED_NONE.format(record=f"{site} {record_id}")
+    assert none == f"the record you picked ({site} {record_id}) has given no lyrics: pick another, or clear the pick"
     for anyway in (False, True):
-        assert tr.why_not_offered(conn, cfg, song, picked, anyway=anyway) == gone
+        assert tr.why_not_offered(conn, cfg, song, picked, anyway=anyway) == none
     nothing_offered = {"songs": [], "nothing": [], "unsung": [], "transcribed": []}
     assert tr.offers(conn, cfg, picked) == nothing_offered  # the served card's member offers it nothing
     tr.note_heard_nothing(conn, song, "2026-11-20T00:00:00Z", why="sung 6.2 s", by="caracole")
     assert tr.offers(conn, cfg, picked) == nothing_offered  # nor Transcribe anyway
     conn.execute("DELETE FROM kv WHERE key = ?", (f"{tr.HEARD_NOTHING}{song.id}",))
-    assert tr.offers(conn, cfg, Overrides())["songs"] == [song.id]
     update_song(conn, song.id, lyrics_status="pending", lyrics_at=None)
     pending = get_song(conn, song.id)
     unread = tr.PICKED_UNREAD.format(record=f"{site} {record_id}")
     for anyway in (False, True):
         assert tr.why_not_offered(conn, cfg, pending, picked, anyway=anyway) == unread
-    assert tr.why_not_offered(conn, cfg, song, Overrides()) is None  # the pick cleared
-    named = Overrides(lyrics={override_key(song.display): LyricsPick(("A", "T2"), None)})
-    assert tr.why_not_offered(conn, cfg, song, named) is None  # a name alone: as before
     update_song(conn, song.id, lyrics_status="found")
     assert tr.why_not_offered(conn, cfg, get_song(conn, song.id), picked) == "its lyrics are found"
+
+
+def test_a_cleared_pick_on_a_song_whose_own_name_missed_first_is_offered(conn, cfg, tmp_path):
+    # The song's own-name misses came first (every site asked under its name), then a record, then the pick cleared:
+    # offered, as any song every site missed. Not covered here: a record's own miss, then the pick cleared, whose stamps
+    # read as own-name misses until the command that clears a pick resets them (a later task's).
+    from caracole.overrides import LyricsPick, LyricsRecord, override_key
+
+    song = youtube_song(conn, tmp_path)
+    key = override_key(song.display)
+    assert tr.why_not_offered(conn, cfg, song, Overrides(lyrics={key: LyricsPick(None, LyricsRecord("lrclib", "9"))}))
+    assert tr.why_not_offered(conn, cfg, song, Overrides()) is None  # the pick cleared
+    named = Overrides(lyrics={key: LyricsPick(("A", "T2"), None)})
+    assert tr.why_not_offered(conn, cfg, song, named) is None  # a name alone: as before
+
+
+def _record_gone(conn, tmp_path, site: str, record_id: str, picks):
+    """The song's site asked for the record you picked and answered it gone, its pass run as the nightly run's."""
+    from datetime import UTC, datetime
+
+    from helpers.azlyrics_site import FakeAzLyrics
+    from helpers.megalobiz_site import FakeMegalobiz
+    from test_lyrics_pending import FakeLrclib
+
+    from caracole.azlyrics_fetch import azlyrics_lyrics
+    from caracole.lyrics import fetch_pending_lyrics
+    from caracole.megalobiz_fetch import megalobiz_lyrics
+
+    now, cache, library = datetime(2026, 11, 20, tzinfo=UTC), tmp_path / "cache", tmp_path / "library"
+    if site == "lrclib":
+        fake = FakeLrclib()
+        stats = fetch_pending_lyrics(conn, fake.client(cache), library, now, picks=picks)
+        asked = [endpoint for endpoint, _ in fake.requests]
+    elif site == "megalobiz":
+        fake = FakeMegalobiz()
+        stats = megalobiz_lyrics(conn, fake.client(cache, now=now), library, now, picks=picks)
+        asked = [endpoint for endpoint, _ in fake.requests]
+    else:
+        fake = FakeAzLyrics({})
+        stats = azlyrics_lyrics(conn, fake.client(cache, now=now), library, now, lyrics=picks)
+        asked = fake.requests
+    assert stats.missing == 1 and len(asked) == 1, asked
+    return asked
+
+
+@pytest.mark.parametrize("site,record_id", RECORDS)
+def test_a_record_its_site_answered_gone_is_never_offered(conn, cfg, tmp_path, site, record_id):
+    # The record asked for and answered gone by its site's own pass: the song missing, never heard, `anyway` or not.
+    from caracole.overrides import LyricsPick, LyricsRecord, override_key
+
+    song = youtube_song(conn, tmp_path, lyrics_status="pending", lyrics_at=None)
+    for key in ("megalobiz:checked:", "azlyrics:checked:"):  # no site has asked about it yet
+        conn.execute("DELETE FROM kv WHERE key = ?", (f"{key}{song.id}",))
+    picked = Overrides(lyrics={override_key(song.display): LyricsPick(None, LyricsRecord(site, record_id))})
+    _record_gone(conn, tmp_path, site, record_id, picked.lyrics)
+    song = get_song(conn, song.id)
+    assert song.lyrics_status == "missing"
+    for anyway in (False, True):
+        assert tr.why_not_offered(conn, cfg, song, picked, anyway=anyway) == tr.PICKED_NONE.format(
+            record=f"{site} {record_id}")
+
+
+def test_a_kept_transcript_is_still_offered_not_sung_once_a_record_is_picked(conn, cfg, tmp_path):
+    # Not sung, chords only, runs no Whisper and drops a transcript: a record picked since doesn't refuse it, while a
+    # transcription stays refused.
+    from caracole.overrides import LyricsPick, LyricsRecord, override_key
+
+    song = youtube_song(conn, tmp_path)
+    tr.keep_transcript(conn, song, made(song))
+    picked = Overrides(lyrics={override_key(song.display): LyricsPick(None, LyricsRecord("megalobiz", "24519"))})
+    assert tr.why_not_unsung(conn, cfg, song, picked) is None
+    assert tr.offers(conn, cfg, picked)["transcribed"] == [song.id]
+    assert tr.why_not_offered(conn, cfg, song, picked, anyway=True) == tr.PICKED_NONE.format(record="megalobiz 24519")
 
 
 def _human_sheet(conn, cfg, song):

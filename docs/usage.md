@@ -3553,9 +3553,10 @@ name. A `[lyrics]` record wins over an `[azlyrics]` page, which wins over the `a
 picked is final: while the song has its lyrics no site is asked about it, nor for timed lyrics in
 place of plain ones. While it has none, only the record's own site is asked, for that record alone,
 one request; a record gone leaves the song without lyrics (the log says so), and it is asked again
-after 30 days. Until you pick another or clear the pick, such a song is not transcribed ("the record
-you picked has no lyrics (lrclib 9): pick another, or clear the pick"). The nightly run, `caracole lyrics`, a lookup and a sheet made from a YouTube video all
-keep to `[lyrics]`. An entry you write by hand takes effect at the next run for a song still pending,
+after 30 days. Until you pick another or clear the pick, a song whose record gave no lyrics, read or
+not yet, is not transcribed ("the record you picked (lrclib 9) has given no lyrics: pick another, or
+clear the pick"); one with a transcript kept may still be said not sung. The nightly run,
+`caracole lyrics`, a lookup and a sheet made from a YouTube video all keep to `[lyrics]`. An entry you write by hand takes effect at the next run for a song still pending,
 and at its next 30-day re-check for a song whose lyrics are missing. A `record` is never applied to a
 song that already has lyrics. An `as` is: a song with plain lyrics is asked of Megalobiz under it for
 timed ones, at the next run when Megalobiz hasn't been asked about it, else once its 30 days are over

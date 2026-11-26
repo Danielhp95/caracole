@@ -649,7 +649,7 @@ def test_a_picked_record_gone_makes_a_chords_only_sheet_and_its_words_are_never_
                                                                                     tmp_path):
     # The record you picked is final: its own site alone is asked, for it alone, and the other lyrics databases never
     # are, so the owner's rule (the databases before Whisper) keeps the song from Whisper: the stage says what to do.
-    from caracole.autochords.transcript import PICKED_GONE
+    from caracole.autochords.transcript import PICKED_NONE
     from caracole.overrides import set_lyrics_record
 
     lrclib, _ = sites
@@ -660,7 +660,7 @@ def test_a_picked_record_gone_makes_a_chords_only_sheet_and_its_words_are_never_
     ends = heard.ends()
     assert ends["lyrics"] == ("done", "the record you picked is gone: megalobiz 8")
     assert lrclib.requests == [] and [e for e, _ in megalobiz.requests] == ["lrc"] and azlyrics.requests == []
-    assert ends["vocals"] == ("skipped", "not transcribed: " + PICKED_GONE.format(record="megalobiz 8"))
+    assert ends["vocals"] == ("skipped", "not transcribed: " + PICKED_NONE.format(record="megalobiz 8"))
     assert ears.log == []
     assert ends["chords"] == ("done", "chords only, no lyrics")
 
