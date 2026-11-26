@@ -100,6 +100,7 @@ from caracole.autochords.transcript import (
     SILENT,
     UNREADABLE,
     Transcript,
+    hearing_failed,
     said_not_sung,
     transcript_of,
     why_not_offered,
@@ -114,6 +115,7 @@ from caracole.lyrics import Lyrics, song_lyrics
 from caracole.music import read_audio
 from caracole.overrides import Overrides, load_overrides
 from caracole.songs import AUTO_SHEET, HUMAN_SHEET, Song, get_song, list_songs, refresh_status, update_song
+from caracole.stamps import parse as parse_stamp
 from caracole.versions import get_version, upsert_version
 from caracole.youtube import Video
 from caracole.youtube_fetch import transcribe_problem, youtube_audio
@@ -266,7 +268,7 @@ def autochords_pending(
     models = _Models(cfg, recognizer, beats_fn)
     songs = [s for s in list_songs(conn) if only is None or s.id in only]
     hears = transcriptions if hearing is not None else 0
-    due, worked = _count_due(conn, cfg, songs, overrides, hears), 0
+    due, worked = _count_due(conn, cfg, songs, overrides, hears, parse_stamp(stamp)), 0
     turns = _Turns(cfg, conn, overrides, between)
     listening = _Listening(hearing, transcriptions)
     for listed in turns.each(songs):
@@ -353,6 +355,10 @@ class _Listening:
             return song
         if why_not_offered(conn, cfg, song, turns.overrides) is not None:
             return song
+        failed = hearing_failed(conn, song, parse_stamp(stamp) or datetime.now(UTC))
+        if failed is not None:  # its hearing failed lately: passed over, no slot taken, till a new file or 30 days
+            log.info("%s: its words aren't heard tonight (its hearing failed lately: %s)", song.display, failed)
+            return song
         if self.hearing is None:
             self.asked = True
             stats.transcribe_problem = transcribe_problem(cfg)
@@ -370,7 +376,7 @@ class _Listening:
         try:
             vocals = hearing.vocals(song, on_doing=_quiet)
         except HearingFailed as e:  # the setup's alone
-            return self._stop(stats, song, e.words)
+            return self._stop(conn, stats, song, e.words, stamp)
         except Exception as e:  # noqa: BLE001 - a bug: the run fails, the song's chords made all the same
             return _hearing_bug(conn, stats, song, e)
         if turns.hand_over():  # a lookup went first: the song as it left it, and still to hear
@@ -389,7 +395,7 @@ class _Listening:
             heard = hearing.words(conn, song, vocals, stamp, on_doing=_quiet)
         except HearingFailed as e:
             if e.kind == "setup":
-                return self._stop(stats, song, e.words)
+                return self._stop(conn, stats, song, e.words, stamp)
             log.warning("%s: %s; its chords are made without its words", song.display, e.words)
             return _again(conn, song)
         except Exception as e:  # noqa: BLE001 - a bug: the run fails, the song's chords made all the same
@@ -400,11 +406,17 @@ class _Listening:
         else:
             stats.heard += 1
             log.info("%s: words heard, %s", song.display, heard.said)
+        turns.hand_over()  # a waiting lookup goes first before the chords, as the jobs let it; the song read again
         return _again(conn, song)
 
-    def _stop(self, stats: AutoStats, song: Song, words: str) -> Song:
-        """The setup failed: no more words heard this run, why kept for the to-do page, the chords going on."""
+    def _stop(self, conn: sqlite3.Connection, stats: AutoStats, song: Song, words: str, stamp: str) -> Song:
+        """The setup failed: no more words heard this run, why kept for the to-do page, the chords going on; the song's
+        audio noted (``note_hearing_failed``), so that the next nights pass over it for a while and hear the others,
+        should the failure be its file's."""
+        from caracole.autochords.transcript import note_hearing_failed
+
         self.stopped = True
+        note_hearing_failed(conn, song, stamp, words)
         stats.transcribe_problem = words
         log.warning("%s: its words can't be heard here (%s); no song's are heard this run", song.display, words)
         return song
@@ -431,15 +443,17 @@ def _quiet(said: str) -> None:
 
 
 def _count_due(conn: sqlite3.Connection, cfg: Config, songs: Iterable[Song], overrides: Overrides,
-               hears: int = 0) -> int:
+               hears: int = 0, now: datetime | None = None) -> int:
     """How many of ``songs`` are due now, for the "3 of 12" before each, as ``_due`` would find them, counting
     nothing in a run's stats; with the first ``hears`` songs offered their words counted due too, as hearing them
-    makes their sheet due."""
+    makes their sheet due (not one whose hearing failed lately: ``_Listening.first`` passes over it)."""
+    now = now or datetime.now(UTC)
     n = 0
     for song in songs:
         if not song.audio_path or _known_failure(conn, song) is not None:
             continue
-        heard = hears > 0 and why_not_offered(conn, cfg, song, overrides) is None
+        heard = (hears > 0 and why_not_offered(conn, cfg, song, overrides) is None
+                 and hearing_failed(conn, song, now) is None)
         hears -= heard
         try:
             if _skip_reason(conn, song, overrides) is not None and not heard:

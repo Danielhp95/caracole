@@ -460,6 +460,24 @@ def test_search_title_joins_han_split_by_punctuation(title, searched):
     assert client.calls[1].params["track_name"] == searched
 
 
+@pytest.mark.parametrize(
+    "title,searched",
+    [
+        (
+            "野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』",
+            "野人不再借世人的手替我开脱遍野的花骨朵也能够耐住寂寞动态歌词MV",
+        ),
+        ("宋冬野「斑马，斑马」", "宋冬野斑马斑马"),
+        ("野人 (Live)", "野人 (Live)"),
+        ("斑马，斑马", "斑马斑马"),
+    ],
+)
+def test_search_title_drops_cjk_brackets_as_gaps(title, searched):
+    from caracole.lyrics import _search_title
+
+    assert _search_title(title) == searched
+
+
 def test_lookup_reads_the_cache_forever_by_default():
     client = FakeClient(get=NOT_FOUND, search=(200, []))
     fetch(client)

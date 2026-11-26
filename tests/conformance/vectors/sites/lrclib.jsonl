@@ -71,6 +71,9 @@
 {"args":["中!"],"fn":"caracole.lyrics._search_title","out":"中!"}
 {"args":["中　中"],"fn":"caracole.lyrics._search_title","out":"中中"}
 {"args":["A, B"],"fn":"caracole.lyrics._search_title","out":"A, B"}
+{"args":["野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"caracole.lyrics._search_title","out":"野人不再借世人的手替我开脱遍野的花骨朵也能够耐住寂寞动态歌词MV"}
+{"args":["宋冬野「斑马，斑马」"],"fn":"caracole.lyrics._search_title","out":"宋冬野斑马斑马"}
+{"args":["野人 (Live)"],"fn":"caracole.lyrics._search_title","out":"野人 (Live)"}
 {"cands":{"fixture":"lrclib/search_banma.json"},"case":"search_banma, its length known","fn":"caracole.lyrics.pick_candidate","kw":{"artist":"宋冬野","duration_s":"253.0","title":"斑马斑马"},"out":2}
 {"cands":{"fixture":"lrclib/search_banma.json"},"case":"search_banma, its title split","fn":"caracole.lyrics.pick_candidate","kw":{"artist":"宋冬野","duration_s":"253.0","title":"斑马，斑马"},"out":2}
 {"cands":{"fixture":"lrclib/search_banma.json"},"case":"search_banma, no length","fn":"caracole.lyrics.pick_candidate","kw":{"artist":"宋冬野","duration_s":null,"title":"斑马斑马"},"out":0}

@@ -475,6 +475,26 @@ def test_the_owners_word_over_caracoles_is_offered_on_the_card_and_posts_in_plac
     assert browser.js(NO_RELOAD)
 
 
+def test_audio_whisper_cant_read_has_no_offer_on_its_card(able, live, transcriber, browser):
+    # Nothing sung noted, then Transcribe anyway, and Whisper couldn't load the file: the card offers neither
+    # Transcribe anyway nor Transcribe the lyrics over that file, as either could only fail again.
+    from caracole.autochords.transcript import note_whisper_cant_read
+
+    base, _, _ = live
+    song = transcriber.song
+
+    def given(conn, song):
+        note_heard_nothing(conn, song, "2026-11-21T00:00:00Z", why="sung 6.2 s", by="caracole")
+        note_whisper_cant_read(conn, song, "2026-11-21T01:00:00Z", "RuntimeError: Failed to load audio")
+
+    in_the_book(able, song, given)
+    browser.open(base)
+    card = opened(browser, song)
+    assert browser.wait(f"document.querySelector({json.dumps(card)}).querySelector('.card-head') !== null")
+    for form in ("form.transcribe", "form.transcribe-anyway", "form.not-sung"):
+        assert browser.js(f"document.querySelector({json.dumps(card + ' ' + form)})") is None, form
+
+
 def test_where_it_cant_run_no_card_offers_one(cfg, tmp_path, browser, monkeypatch):
     monkeypatch.setattr(yf, "autochords_missing", lambda: ["torch"])
     made = FakeTranscribe()

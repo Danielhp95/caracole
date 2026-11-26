@@ -334,7 +334,7 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     what isn't audio it reads, as it refuses a caracole that makes no chords (`youtube_fetch.autochords_problem`:
     neither YouTube nor yt-dlp needed); a file that names no artist with no `--song` exits 2.
   - caracole serve's "+" runs it (web/audio_routes.py), `--upload ID`.
-- transcribe_job.py is no step either but `caracole transcribe`: a YouTube song's lyrics transcribed from its audio,
+- transcribe_job.py is no step either but `caracole transcribe`: a song's lyrics transcribed from its own audio,
   then its auto sheet made again over them (`make_transcript`).
   - Its stages song, vocals, words, chords, pdf, pages (`STAGES`), reported as a lookup's (staged.py's `StagedRun`).
   - Only a song `transcript.why_not_offered` offers one, by its identity key, never added to wanted.txt; read again
@@ -817,6 +817,17 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 - The artist and the title a free text names, the one parser of it (`read_names`: its rules in order, cleaned first
   by `clean`, a video's channel by `clean_channel`; a known artist, a one-word artist of your library only once
   credible).
+  - Two parts, each its own words (`_own`: less its CJK title groups, 【】《》「」『』〈〉, else the first one's
+    content), then, where no mark parts the text, its first title group the title (`_bracketed`: "米津玄師
+    MV「Lemon」", "《孤勇者》陈奕迅"; words before it that begin with the channel or a known artist and go on the title
+    instead; its artist's loose tail cut as `clean`'s, `_loose_at`, an artist after it less a leading "by"), before a
+    known artist, the channel's song and the suggested video's.
+  - A bracket of a version's or a tag's words alone (`_TAGS`: "【Live】", "【翻唱】") is never a title: leading the text
+    or a part it goes (`_untagged`), after the song's words it stays as written.
+  - A 「」 or 『』 quote is a lyric when it has a space between two CJK characters, is longer than `LYRIC_CHARS`, or
+    ends as a sentence (`_lyric`, `_lyric_unless_named`), unless it is alone once the video's groups go (`_alone`);
+    one that ends so, or a long one of Latin words alone, is a title after an artist known whole (`_decoration`,
+    `_whole_artist`: the channel's name or a known artist; `clean` knows none).
 - Every path that turns text into a name uses it:
   - `/api/search`'s `names` (with the YouTube video suggested for the query), which the library page's request form,
     its Make sheet and the lookup page's form by name fill in, each field until you type into it (no page splits
@@ -1264,6 +1275,11 @@ It is rows.js's, shared by both pages:
   `caracole songbook add`, both or neither: `JobQueue.submit_all`).
 - A change that ends seconds after its tap moves nothing on the screen: what it took away says so where it was until
   the next click or key (test_songbooks_tab.py).
+- A songbook's line on the list says its counts and its day (`5 songs · 3 without a sheet`, `made 26/11/26`) a line
+  each, neither able to wrap (songbooks.js `metaOf`, songbooks.css `.book-meta`; the separator between them visually
+  hidden, so its text reads as one): the font's digits are proportional, so a day or a count a hundredth of a pixel
+  wider wrapped the line, and a lookup that turned "3" into "2" un-wrapped it and moved every line and + New songbook
+  under it. The test pins a wide day (`made_on`), never the clock's.
 
 #### index.html's assets (library_assets/)
 
@@ -1805,7 +1821,7 @@ It is rows.js's, shared by both pages:
     among `INDEX_READS`), and `GET /youtube/thumb/`, its thumbnail.
   - `GET /api/youtube/video` and `POST /youtube/video`: a video pasted into the library page's search box
     (`caracole youtube --video --progress`).
-- **transcribe_routes.py** is `POST /transcribe` (`song`, `identity`): a YouTube song's lyrics transcribed from its
+- **transcribe_routes.py** is `POST /transcribe` (`song`, `identity`): a song's lyrics transcribed from its own
   audio, its auto sheet made again over them; and `GET /transcribe`, read-only, for the page's script alone
   (`script_only`, as /jobs.json): the served `server.transcribe` member as of now, `library_page.transcribe_member`,
   the one function the page is built with too.
@@ -2075,7 +2091,12 @@ It is rows.js's, shared by both pages:
     the song read again and still offered with the audio separated, then its words, a transcript or nothing sung
     making its sheet due (`_skip_reason`). A song past the cap gets its chords now, its words a later run.
   - In bulk: the setup's failure stops the hearing for the run, kept as `AutoStats.transcribe_problem`, the chords
-    going on and the command exiting 0 on its account; audio Whisper can't load (the vocals
+    going on and the command exiting 0 on its account, and is noted against that audio (`note_hearing_failed`, kv
+    `transcribe:failed:`, in `songs._PER_SONG_KV` and SongKv.kt: path, mtime, when, the words), so the next nights
+    pass over the song (`hearing_failed`, `_Listening.first`, `_count_due`; no slot, no separation) until its audio
+    changes or `transcript.RETRY_DAYS` (30) go by, todo.py listing it; by hand it stays offered, and any hearing that
+    comes to something (a transcript, nothing sung, Whisper's refusal) drops the note; after the words a waiting
+    lookup goes first before the chords (`turns.hand_over`), the song read again; audio Whisper can't load (the vocals
     read it with auto-chords' own reader) noted as Whisper's alone, its chords made tonight, never heard again (no
     separation, no slot) until it changes, todo.py listing it under the words not heard, never the files auto-chords
     can't read; a bug one of the run's `errors` (exit 1), logged with its traceback, its chords made all the same
@@ -2098,7 +2119,7 @@ It is rows.js's, shared by both pages:
   - `shifted_lrc` moves line and word stamps alike, so word-timed lines keep their words;
   - the shift said on a line of the sheet's after the song's name, after the video's credit for audio from YouTube,
     and kept as `raw["lyrics_shift"]`.
-- A song's lyrics transcribed from its YouTube audio, which hearing.py composes from, for transcribe_job.py:
+- A song's lyrics transcribed from its own audio, which hearing.py composes from, for transcribe_job.py:
   - words.py, pure Python: where someone sings, from the stem's loudness against the mix's (`sung_spans`); the words
     outside it dropped (`guard`); nothing sung (`too_little_sung`: under `MIN_SUNG_S`, 10 s; `too_few_words`: under
     `MIN_WORDS`, 8, or `MIN_WORDS_A_MINUTE`, 20, each with its why, "sung 6.2 s", "5 words in 1:10 sung"); the lines
@@ -2281,7 +2302,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   `http://127.0.0.1:8738`, the debug build's 8739 (`Caracole.PORT`, BuildConfig's `SERVER_PORT`), else a free port;
   the launch's secret a cookie, `caracole-launch`, set in the WebView, which loads that exact origin alone,
   `mirror.Links`); the bar's sync button, the library page's sync sheet
-  (`SheetAddress`, `#sheet=sync`; Settings' Export and Import a file open it at theirs, the page's file input reaching
+  (`SheetAddress`, `#sheet=sync`; Settings' Sync, beside Test, opens it at `#sheet=sync`, a blank address said in
+  place as Test says it, and Export and Import a file at theirs, the page's file input reaching
   Android's picker, `FileChooser`, its export the share sheet, `Exports`); Sync on Wi-Fi, that sync unattended
   (`Syncs.run`: `Phone.sync.alone`, a notification on channel `syncs` for the conflicts it left); the queue's work, a
   sync among it, in a foreground service (`SyncService`).

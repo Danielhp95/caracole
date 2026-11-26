@@ -972,6 +972,12 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
         facts=ready)
     add("a transcription, not made", in_state(transcription, "done", heard | {
         "chords": ("skipped", "no transcript")}), facts=ready)
+    unsung = queued_job(f"Not sung, chords only: {V_DISPLAY}", _jobs.TRANSCRIBE + V_KEY,
+                        _jobs.transcribe_steps(V_DISPLAY, none=True), display=V_DISPLAY)
+    add("a transcription the owner said isn't sung, ready", in_state(unsung, "done", {
+        "song": ("done", "in the book"), "vocals": ("skipped", "you said nothing is sung"),
+        "words": ("done", "transcript dropped"), "chords": ("done", _YOUTUBE_HOLDS["said"]), "pdf": ("done", "made"),
+        "pages": ("done", "_todo.md and index.html rewritten")}), facts=ready)
     # A sheet from an audio file you gave (caracole audio: audio_sheet.STAGES), its Audio step naming no site.
     from_file = queued_job(f"Sheet from an audio file: {V_DISPLAY}", _jobs.AUDIO_SHEET + V_KEY,
                            _jobs.audio_sheet_steps(V_DISPLAY, "0123456789abcdef"), display=V_DISPLAY)
