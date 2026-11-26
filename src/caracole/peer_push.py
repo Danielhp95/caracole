@@ -663,6 +663,7 @@ PUSH_PATH = "/peer/push"
 DROP_PATH = "/peer/push/drop"
 JOBS_PATH = "/api/jobs/"
 WAIT = 600.0  # seconds a push's take is waited for, at most
+DROP_TIMEOUT = 5.0  # seconds a push's drop is waited for, at most: a live server answers it at once
 POLL = 1.0  # seconds between two asks of how it goes
 
 
@@ -729,12 +730,18 @@ class Pusher(sync.Peer):
 
     def push_drop(self, push: str, sender: str) -> bool:
         """``POST /peer/push/drop``: the push ``push`` there, never sent, let go of; whether it was (an error, or its
-        refusal, is no more than that: the sender's next push lets go of it, or it is swept within the hour)."""
+        refusal, is no more than that: the sender's next push lets go of it, or it is swept within the hour). Asked
+        once, with the token held, within ``DROP_TIMEOUT``: a drop is what a failure or a Ctrl-C does last, and a
+        server that doesn't answer it at once is let be, never waited on for the client's minute nor its state read
+        again for a token."""
         try:
-            self._post(DROP_PATH, _json({"push": push, "from": sender}), "application/json")
+            response = self._client.post(self.address + DROP_PATH, content=_json({"push": push, "from": sender}),
+                                         timeout=DROP_TIMEOUT, headers={
+                                             "Content-Type": "application/json", "Accept": "application/json",
+                                             "X-Caracole-Form-Token": self.token or ""})
         except Exception:  # whatever went wrong, the push's own failure is the one said
             return False
-        return True
+        return response.status_code == 200
 
     def job(self, job_id: int) -> dict[str, Any]:
         """``GET /api/jobs/<id>``: how a job there goes."""
@@ -770,12 +777,14 @@ class Pushed:
     job: int
     given: tuple[str, ...]
     left: tuple[tuple[str, str], ...]
+    push: int = 1  # which of the give's pushes it is, from 1
+    pushes: int = 1  # of how many
 
 
 class PushStopped(sync.PeerError):
     """A give stopped at one of its pushes (``push_units``): why, and how far it got: ``sent`` of its ``pushes``
-    pushes taken there before it (each handed to ``between``), and, when none was, the units it had left out by then,
-    each with why (``left``)."""
+    pushes taken there before it (each handed to ``between``), and the units left out of the give that no
+    ``between`` was handed, each with why (``left``)."""
 
     def __init__(self, message: str, *, sent: int, pushes: int, left: Sequence[tuple[str, str]] = ()):
         super().__init__(message)
@@ -790,7 +799,8 @@ _NAMED = 67  # a SHA-256 in push/new's "files", as _json writes it: 64 hex, its 
 def push_units(pusher: Pusher, conn: sqlite3.Connection, cfg, overrides, books, give: Mapping[str, str | None],
                *, own: str, at: str, name: str, version: str,
                compared_here: Mapping[str, str | None] | None = None,
-               between: Callable[[Pushed], Any] | None = None) -> Pushed:
+               between: Callable[[Pushed], Any] | None = None,
+               again: Callable[[], Mapping[str, sync.Unit] | None] | None = None) -> Pushed:
     """Give the other side the units of ``give`` (each unit's id, and the other side's digest of it as compared,
     None for one it hadn't), as the phone gives them: their files, then the push document, this side's whole state
     with it, ``at`` the other side's time in the state compared. A unit whose digest here differs from
@@ -798,13 +808,16 @@ def push_units(pusher: Pusher, conn: sqlite3.Connection, cfg, overrides, books, 
     read as kept, one with a kept file past ``FILE_MAX`` (peer_file's ``TOO_BIG``, the export's words for it), and a
     unit that alone passes what a push carries (``TOO_LONG``, ``TOO_HEAVY``).
 
-    The units go in as many pushes as the other side's limits ask (``_pushes``: each document within
+    The units go in as many pushes as the other side's limits ask (``_cut``: each document within
     ``DOCUMENT_MAX``, each ``push/new`` within ``NEW_MAX``, each push's files within ``PUSH_MAX``, a song and its
     tombstone in one), one at a time: each but the last is handed to ``between`` once sent, which returns once its
     take is over there (``wait_for``, its default), the take agreeing on what it took as it ends and its push's slot
     let go of, and only then is the next opened. The last is returned, for the caller to wait for. A push that fails
     is let go of there (``Pusher.push_drop``) and the give stops there, ``PushStopped`` saying how far it got; an
-    interrupt (Ctrl-C) lets go of it too, then goes on. The caller holds caracole's lock."""
+    interrupt (Ctrl-C) lets go of it too, then goes on. The caller holds caracole's lock, which ``between`` may hand
+    to a lookup as it waits: after each wait ``again`` gives this side's state anew when it may have moved meanwhile
+    (None: it didn't), and each unit still to push whose digest moved since is left out (``CHANGED_HERE``), the
+    pushes after it sent with that state."""
     from caracole.peer_file import TOO_BIG
 
     units = sync.library_state(conn, overrides, books)
@@ -836,21 +849,34 @@ def push_units(pusher: Pusher, conn: sqlite3.Connection, cfg, overrides, books, 
     if not pushes:
         return Pushed(0, (), tuple(left))
     wait = between if between is not None else (lambda sent: wait_for(pusher, sent.job))
-    for n, batch in enumerate(pushes):
+    n = 0
+    while n < len(pushes):
         which = "" if len(pushes) == 1 else f"push {n + 1} of {len(pushes)}: "
         try:
-            pushed = _push_one(pusher, conn, cfg, own, header, batch, files_of)
+            pushed = _push_one(pusher, conn, cfg, own, header, pushes[n], files_of)
         except sync.PeerError as e:
             raise PushStopped(which + str(e), sent=n, pushes=len(pushes), left=left) from None
-        pushed = Pushed(pushed.job, pushed.given, tuple(left) + pushed.left)
+        pushed = Pushed(pushed.job, pushed.given, tuple(left) + pushed.left, n + 1, len(pushes))
         left = []
-        if n == len(pushes) - 1:
+        if not any(pushes[n + 1:]):
             return pushed
         try:
             wait(pushed)
         except sync.PeerError as e:
-            raise PushStopped(which + str(e), sent=n, pushes=len(pushes)) from None
-    raise AssertionError("unreachable")
+            raise PushStopped(which + str(e), sent=n, pushes=len(pushes), left=pushed.left) from None
+        fresh = again() if again is not None else None
+        if fresh is not None:  # the lock was handed to a lookup meanwhile: what it changed stays here
+            header = {**header, "units": {u.id: {"label": u.label, "digest": u.digest} for u in fresh.values()}}
+            for later in pushes[n + 1:]:
+                for entry in list(later):
+                    now = fresh.get(entry["id"])
+                    if (now.digest if now is not None else None) != entry["digest"]:
+                        later.remove(entry)
+                        left.append((entry["id"], sync.CHANGED_HERE))
+        n += 1
+        while n < len(pushes) and not pushes[n]:
+            n += 1
+    return Pushed(0, (), tuple(left), len(pushes), len(pushes))  # every unit after a wait left
 
 
 def _kept_sizes(conn: sqlite3.Connection, library_dir: Path, key: str, unit: Mapping[str, Any]) -> dict[str, int]:
@@ -871,12 +897,16 @@ def _kept_sizes(conn: sqlite3.Connection, library_dir: Path, key: str, unit: Map
 
 
 def _cut(header: Mapping[str, Any], take: Sequence[dict[str, Any]], files_of: Mapping[str, set[str]],
-            sizes: Mapping[str, int], own: str) -> tuple[list[list[dict[str, Any]]], list[tuple[str, str]]]:
+         sizes: Mapping[str, int], own: str, *, document_max: int | None = None, new_max: int | None = None,
+         files_max: int | None = None) -> tuple[list[list[dict[str, Any]]], list[tuple[str, str]]]:
     """``take`` cut into pushes within the other side's limits, in order: each push's document (``header`` with its
     entries as ``take``) within ``DOCUMENT_MAX``, its ``push/new`` within ``NEW_MAX`` and its files' bytes within
     ``PUSH_MAX``, a song and its tombstone (``song/K``, ``removed/K``) in the same push, where the first of the two
-    came; and the units that alone
-    pass one of them, each with why (``TOO_LONG``, ``TOO_HEAVY``). Lengths are those of the bytes ``_json`` sends."""
+    came; and the units that alone pass one of them, each with why (``TOO_LONG``, ``TOO_HEAVY``). Lengths are those
+    of the bytes ``_json`` sends. The limits are those three constants as they are now, unless given."""
+    most_document = DOCUMENT_MAX if document_max is None else document_max
+    most_new = NEW_MAX if new_max is None else new_max
+    most_files = PUSH_MAX if files_max is None else files_max
     base = len(_json(header))  # its "take": [] counted
     new_base = len(_json({"format": sync.FORMAT, "from": own, "files": []}))
     groups: dict[str, list[dict[str, Any]]] = {}
@@ -890,16 +920,16 @@ def _cut(header: Mapping[str, Any], take: Sequence[dict[str, Any]], files_of: Ma
     for group in groups.values():
         more = sum(len(_json(e)) + 1 for e in group)  # each entry and its comma
         files = set().union(*(files_of.get(e["id"], set()) for e in group))
-        if base + more - 1 > DOCUMENT_MAX:
+        if base + more - 1 > most_document:
             too_much += [(e["id"], TOO_LONG) for e in group]
             continue
-        if new_base + _NAMED * len(files) - 1 > NEW_MAX or sum(sizes.get(f, 0) for f in files) > PUSH_MAX:
+        if new_base + _NAMED * len(files) - 1 > most_new or sum(sizes.get(f, 0) for f in files) > most_files:
             too_much += [(e["id"], TOO_HEAVY) for e in group]
             continue
         new = files - named
-        if batch and (base + length + more - 1 > DOCUMENT_MAX
-                      or new_base + _NAMED * (len(named) + len(new)) - 1 > NEW_MAX
-                      or weight + sum(sizes.get(f, 0) for f in new) > PUSH_MAX):
+        if batch and (base + length + more - 1 > most_document
+                      or new_base + _NAMED * (len(named) + len(new)) - 1 > most_new
+                      or weight + sum(sizes.get(f, 0) for f in new) > most_files):
             pushes.append(batch)
             batch, length, named, weight = [], 0, set(), 0
             new = files

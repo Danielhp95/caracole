@@ -75,9 +75,11 @@ from __future__ import annotations
 import json
 from contextlib import closing
 from dataclasses import dataclass, replace
+from typing import NoReturn
 
 import typer
 
+from caracole.commands import _common
 from caracole.commands._common import exclusive, fail, load_cfg, load_ovr, open_db, utcnow, write_pages
 
 # How a difference's proposal reads, in the list.
@@ -649,6 +651,15 @@ def _push(cfg, address: str, state, give: list, said: _Said) -> tuple[int, int]:
                 left(unit_id, why or (f"their Journal entry {pushed.job}: {job['state']}" if job["state"] != "done"
                                       else "not taken there"))
 
+    def far(sent: int, pushes: int) -> str:
+        """How far a give that stopped got, before why: the pushes taken before it."""
+        return f"{counted['given']} given in the first {_pushes(sent)} of {pushes}; then " if sent else ""
+
+    def stopped(sent: int, pushes: int, why: str) -> NoReturn:
+        rest = f" {TAKEN_STAY}" if sent else ""
+        said.stage("give", "failed", far(sent, pushes) + why + rest)
+        fail(f"Couldn't give them {len(give)}: {far(sent, pushes)}{why}{rest}")
+
     try:
         with peer_push.Pusher(address, transport=transport_for_peer()) as pusher:
             with exclusive(cfg, "peer sync", interactive=True), closing(open_db(cfg)) as conn:
@@ -659,26 +670,63 @@ def _push(cfg, address: str, state, give: list, said: _Said) -> tuple[int, int]:
                     books = load_songbooks(songbooks_file(cfg.library_dir))
                 except SongbookError as e:
                     fail(f"Nothing given: our songbooks.toml can't be read: {e}")
+                handed = [_common.handoffs()]
+
+                def again():
+                    """This side's state anew once the lock went to a lookup in the wait (None: it didn't), its
+                    overrides.toml and songbooks.toml read again, as a caller holding state across a handoff does."""
+                    if _common.handoffs() == handed[0]:
+                        return None
+                    now = _common.overrides_since(cfg, overrides, handed[0])
+                    handed[0] = _common.handoffs()
+                    try:
+                        books_now = load_songbooks(songbooks_file(cfg.library_dir))
+                    except SongbookError:
+                        books_now = books
+                    return sync.library_state(conn, now, books_now)
+
                 pushed = peer_push.push_units(
                     pusher, conn, cfg, overrides, books, {d.id: d.theirs.digest if d.theirs else None for d in give},
                     own=me, at=state.now or utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"), name=cfg.library_name,
                     version=__version__, compared_here={d.id: d.mine.digest if d.mine else None for d in give},
-                    between=lambda sent: ended(sent, peer_push.wait_for(pusher, sent.job, sleep=_sleep)))
+                    between=lambda sent: ended(sent, peer_push.wait_for(pusher, sent.job,
+                                                                        sleep=_handing_over(cfg, conn))),
+                    again=again)
             if pushed.job:
-                ended(pushed, peer_push.wait_for(pusher, pushed.job, sleep=_sleep))
+                try:
+                    job = peer_push.wait_for(pusher, pushed.job, sleep=_sleep)
+                except sync.PeerError as e:
+                    for unit_id, why in pushed.left:
+                        left(unit_id, why)
+                    which = f"push {pushed.push} of {pushed.pushes}: " if pushed.pushes > 1 else ""
+                    stopped(pushed.push - 1, pushed.pushes, which + str(e))
+                ended(pushed, job)
             else:
                 for unit_id, why in pushed.left:
                     left(unit_id, why)
     except peer_push.PushStopped as e:
         for unit_id, why in e.left:
             left(unit_id, why)
-        far = (f"{counted['given']} given in the first {_pushes(e.sent)} of {e.pushes}; then " if e.sent else "")
-        said.stage("give", "failed", far + str(e))
-        fail(f"Couldn't give them {len(give)}: {far}{e}")
+        stopped(e.sent, e.pushes, str(e))
     except sync.PeerError as e:
         said.stage("give", "failed", str(e))
         fail(f"Couldn't give them {len(give)}: {e}")
     return counted["given"], counted["left"]
+
+
+# A give that stopped after some of its pushes were taken: what the owner may count on.
+TAKEN_STAY = "The pushes taken there stay taken; the next sync gives the rest."
+
+
+def _handing_over(cfg, conn):
+    """The pause between two asks of how a push's take goes there while this side holds caracole's lock (each push
+    of a give but the last): a hand-over point, the lock let a waiting lookup have it (``_common.hand_over``, the
+    connection in no transaction) in place of the pause, else the pause."""
+    def pause(seconds: float) -> None:
+        if not _common.hand_over(cfg, conn):
+            _sleep(seconds)
+
+    return pause
 
 
 def _pushes(n: int) -> str:

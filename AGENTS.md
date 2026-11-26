@@ -720,21 +720,34 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   the pusher (`push_units`, the phone's SyncEngine give) posts `POST /peer/push/drop`, its own failure never hiding
   why the push failed; and a sender's next `push/new` lets go of its push never sent (`new_push`): one open push a
   sender, so no failed push holds one of the `OPEN` (2) slots for the hour; an interrupt (Ctrl-C, the phone's job
-  cancelled) drops it too (`BaseException`, `NonCancellable`), then goes on.
+  cancelled) drops it too (`BaseException`, `NonCancellable`), then goes on; a drop is asked once, within
+  `DROP_TIMEOUT` (5 s; the phone's `DROP_TIMEOUT_MS`), never after reading the state again for a token.
   - A give goes in as many pushes as the other side's limits ask (`push_units`, `_cut`; the phone's `Give.cut`), one
     at a time, each followed to its take's end (`between`, `wait_for`) before the next is opened: each document within
     `DOCUMENT_MAX` (16 MiB), each `push/new` within `NEW_MAX` (1 MiB), each push's files within `PUSH_MAX` (2 GiB), a
     song and its tombstone in one push; each take agrees on what it took as it ends. A push that fails stops the give
     there (`PushStopped`): the pushes before it stay taken and agreed, the rest isn't given, and the error says how
-    far it got ("Couldn't give them 700: 350 given in the first push of 2; then push 2 of 2: …").
+    far it got ("Couldn't give them 700: 350 given in the first push of 2; then push 2 of 2: … The pushes taken there
+    stay taken; the next sync gives the rest."), the last push's wait too; the units left before the push it stopped
+    at are said all the same (`PushStopped.left`).
+  - `peer sync --push` holds caracole's lock through each wait but the last's (the last's lock let go of, as ever),
+    so no nightly run starts between two pushes of one give; each of those waits is a hand-over point (`between`'s
+    `wait_for` sleeps through `_handing_over`: `_common.hand_over` between two polls, its connection in no
+    transaction). After a wait in which the lock went to a lookup (`handoffs()` moved), this side's state is read
+    again (`again`: overrides.toml by `overrides_since`, songbooks.toml) and each unit still to push whose digest moved
+    since it was compared is left (`CHANGED_HERE`), for the next sync, the pushes after it carrying that state
+    (`test_commands_peer.py::test_a_lookup_waiting_for_the_lock_gets_it_while_the_give_waits_between_two_pushes`,
+    `::test_a_unit_a_lookup_changed_while_the_give_waited_is_left_changed_here_never_pushed_stale`). The phone, with
+    no lock, waits as before.
   - Left out of a give, with why, never sent to be refused: a song with a kept file past `FILE_MAX` (64 MiB) in the
     export's words (peer_file's `TOO_BIG`, the phone's FileError's), a unit that alone passes a document
     (`TOO_LONG`) or a push's files (`TOO_HEAVY`). Left, not failed, and not agreed.
   - The phone's limits are PeerClient's constants (`PUSH_NEW_MAX`, `PUSH_DOCUMENT_MAX`, `MAX_FILE`, `PUSH_MAX`), held to
     the routes' by `vectors/sync/push.jsonl` (tests/test_conformance_sync_push.py: the limits, the words, `_cut`'s
     cases; GiveTest). On its take the phone takes no kept file past `MAX_FILE`: refused by its Content-Length before a
-    byte is read, or once its bytes pass it, the song left "score-1.pdf is over 64 MiB: the phone takes no file that
-    big" (PeerClient.file).
+    byte is read, or, an answer with no length, once its bytes pass it, the song left "score-1.pdf is over 64 MiB: the
+    phone takes no file that big" (PeerClient.file); a Content-Length lower than what is sent is read no further than
+    it says, whose bytes then aren't the file's ("… changed since compared").
 
 #### peer_file.py
 
@@ -4186,7 +4199,8 @@ picks one).
   - A process holding the lock as asked for now hands it to the lane's lookups alone (`hand_over`), at its hand-over
     points (a yt-dlp pause, a YouTube sheet before its models, a transcription before each of vocals, words and chords
     (`test_transcribe_job.py::test_the_lock_goes_to_a_waiting_lookup_before_each_long_stage`), `fetch --song`'s
-    pauses), taking the gate only if it is free (held, it is the bulk work that let it in), and waits with a ticket
+    pauses, `peer sync --push`'s wait for each push's take but the last: `commands/peer.py` `_handing_over`, a poll
+    a second, so the lock goes a second at most without a hand-over point there), taking the gate only if it is free (held, it is the bulk work that let it in), and waits with a ticket
     of its own, written before it lets go, to
     take it back once the lane is empty; so bulk work that let it in gives it back at its next pause
     (`test_commands_lane.py::test_a_queue_job_lets_a_lookup_go_first_in_its_pause_and_gets_the_lock_back`,

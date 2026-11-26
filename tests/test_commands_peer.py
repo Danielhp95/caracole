@@ -22,6 +22,7 @@ from caracole.songs import find_song, removed_song, update_song
 from caracole.versions import upsert_version
 from caracole.wanted import append_wanted, find_wanted
 from caracole.web.app import Request, WebApp
+from caracole.web import peer_routes  # noqa: F401  (its limits read before a test sets peer_push's smaller)
 from caracole.web.jobs import JobQueue
 
 from test_web_app import ALLOWED, HOST, Recorder
@@ -680,3 +681,156 @@ def test_a_song_with_a_kept_file_too_big_to_push_is_left_with_why_and_the_rest_g
     assert find_song(there.conn, wonderwall.key) is not None and find_song(there.conn, creep.key) is None
     assert max(size for _, size in posted) < peer_push.FILE_MAX  # the file was never sent
     assert sync.base_of(here.conn, sync.own_id(there.conn)).get(f"song/{creep.key}") is None  # nor agreed
+
+
+def waiting_first(there, *, then=None, posted=None, limits=None):
+    """``limited`` there, whose push's take is still queued at the first poll of each job (so the give pauses
+    between two polls), ``then()`` run as that first poll comes, before it is answered."""
+    polled: set[str] = set()
+    inner = limited(there, limits=limits, posted=posted)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.startswith("/api/jobs/") and path not in polled:
+            polled.add(path)
+            if then is not None:
+                then()
+            answer = WebApp.finish(there.app.handle(Request(request.method, request.url.raw_path.decode(),
+                                                            dict(request.headers), request.content)))
+            return httpx.Response(answer.status, headers=answer.headers, content=answer.body)
+        return inner.handle_request(request)
+
+    return httpx.MockTransport(handler)
+
+
+@pytest.mark.slow
+def test_a_lookup_waiting_for_the_lock_gets_it_while_the_give_waits_between_two_pushes(two, monkeypatch, tmp_path):
+    """The wait for a push's take there (minutes, for hundreds of songs) is a hand-over point: a lookup in the lane
+    waiting for caracole's lock meanwhile takes it then, and the give goes on once it is done."""
+    import time
+
+    from helpers.lanes import TURNS, config_file, records, start, wait_for
+
+    from caracole import peer_push
+    from caracole.commands import _common
+
+    here, there, asked, _ = two
+    monkeypatch.setattr(peer_push, "DOCUMENT_MAX", 40_000)
+    (tmp_path / "lookup").mkdir()
+    log, go = tmp_path / "lanes.log", tmp_path / "go-lookup"
+    lookup = start(TURNS, config_file(here.cfg, tmp_path / "lookup"), log, "lookup", 1, go=go)
+    times: list[tuple[str, float]] = []
+
+    def lookup_waits():  # as push 1's take is first asked about: a lookup now waits in the lane
+        if go.exists():
+            return
+        wait_for(log, "ready", "lookup")
+        go.touch()
+        deadline = time.monotonic() + 20
+        while not _common.lane_tickets(here.cfg) and time.monotonic() < deadline:
+            time.sleep(0.01)
+
+    class Timed(list):
+        def append(self, item):
+            times.append((item[0], time.time()))
+            super().append(item)
+
+    transport = waiting_first(there, then=lookup_waits, posted=Timed(), limits={peer_push.PUSH_PATH: 40_000})
+    monkeypatch.setattr("caracole.commands.peer.transport_for_peer", lambda: transport)
+    units = long_songs(here, 12)
+    try:
+        result = run(here, "peer", "sync", HOST, "--push", "--yes")
+        assert lookup.wait(30) == 0
+    finally:
+        lookup.kill()
+    assert result.exit_code == 0, result.output[-600:]
+    assert there.conn.execute("SELECT COUNT(*) FROM songs").fetchone()[0] == len(units)
+    turn = next(r.t for r in records(log) if r.word == "turn")
+    pushed = [t for p, t in times if p == peer_push.PUSH_PATH]
+    opened = [t for p, t in times if p == peer_push.NEW_PATH]
+    assert len(pushed) >= 2 and pushed[0] < turn < opened[1], (pushed, opened, turn)  # between push 1 and push 2
+
+
+def test_a_unit_a_lookup_changed_while_the_give_waited_is_left_changed_here_never_pushed_stale(two, monkeypatch):
+    """After a wait in which the lock went to a lookup, the pushes still to send are checked again: a song the lookup
+    changed meanwhile is left (changed here since the comparison), for the next sync, and the rest go on."""
+    from caracole import peer_push
+    from caracole.commands import _common
+
+    here, there, asked, _ = two
+    monkeypatch.setattr(peer_push, "DOCUMENT_MAX", 40_000)
+    units = long_songs(here, 12)
+    changed = units[9]  # "Band - Song 9", the last by its label: in the last push
+    last = find_song(here.conn, changed.partition("/")[2])
+    handed = []
+
+    def hand_over(cfg, conn=None):  # a lookup took the lock in the wait, and changed Song 9
+        if handed:
+            return False
+        assert conn is not None and not conn.in_transaction
+        handed.append(True)
+        add_version(here.cfg.overrides_file, "Band - Song 9", "key=Em&capo=2")  # its chords, as a pin is
+        monkeypatch.setattr(_common, "_handoffs", _common._handoffs + 1)
+        return True
+
+    monkeypatch.setattr(_common, "hand_over", hand_over)
+    transport = waiting_first(there, limits={peer_push.PUSH_PATH: 40_000})
+    monkeypatch.setattr("caracole.commands.peer.transport_for_peer", lambda: transport)
+    result = run(here, "peer", "sync", HOST, "--push", "--yes")
+    assert result.exit_code == 0, result.output[-600:]
+    assert handed
+    assert f"Left {changed}: {sync.CHANGED_HERE}" in result.output
+    assert find_song(there.conn, last.key) is None
+    assert there.conn.execute("SELECT COUNT(*) FROM songs").fetchone()[0] == 11
+    assert "Here takes 0, there takes 1." in run(here, "peer", "sync", HOST, "--push", "--yes").output
+
+
+def refusing_jobs(there, refuse, *, limits=None, posted=None):
+    """``limited`` there, but for ``GET /api/jobs/<id>`` of the ``refuse(n)``-th job asked about (from 1), answered
+    503 as a server that went away."""
+    seen: list[str] = []
+    inner = limited(there, limits=limits, posted=posted)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.startswith("/api/jobs/"):
+            if path not in seen:
+                seen.append(path)
+            if refuse(seen.index(path) + 1):
+                return httpx.Response(503, json={"error": "Restarting."})
+        return inner.handle_request(request)
+
+    return httpx.MockTransport(handler)
+
+
+def test_a_wait_for_the_last_push_that_fails_says_how_far_the_give_got(two, monkeypatch):
+    from caracole import peer_push
+
+    here, there, asked, _ = two
+    monkeypatch.setattr(peer_push, "DOCUMENT_MAX", 80_000)  # 12 songs in two pushes
+    posted = []
+    transport = refusing_jobs(there, lambda n: n == 2, limits={peer_push.PUSH_PATH: 80_000}, posted=posted)
+    monkeypatch.setattr("caracole.commands.peer.transport_for_peer", lambda: transport)
+    long_songs(here, 12)
+    result = run(here, "peer", "sync", HOST, "--push", "--yes")
+    assert result.exit_code == 1, result.output[-600:]
+    assert [p for p, _ in posted].count(peer_push.PUSH_PATH) == 2, result.output[-400:]  # the last sent
+    given = result.output.count("  Gave song/")
+    said = " ".join(result.output.split())
+    assert 0 < given < 12 and f"Couldn't give them 12: {given} given in the first push of 2; then push 2 of 2: " \
+        "http://localhost:8737 answered 503: Restarting. The pushes taken there stay taken; the next sync gives " \
+        "the rest." in said, said[-600:]
+
+
+def test_the_units_a_give_left_before_its_first_push_are_said_when_that_push_is_never_seen_taken(two, monkeypatch):
+    from caracole import peer_file, peer_push
+
+    here, there, asked, _ = two
+    monkeypatch.setattr(peer_push, "DOCUMENT_MAX", 40_000)
+    transport = refusing_jobs(there, lambda n: n == 1, limits={peer_push.PUSH_PATH: 40_000})
+    monkeypatch.setattr("caracole.commands.peer.transport_for_peer", lambda: transport)
+    long_songs(here, 12)
+    creep = here.song("Radiohead", "Creep", sheet=b"%PDF" + b"\0" * peer_push.FILE_MAX)  # 64 MiB and 4 bytes
+    result = run(here, "peer", "sync", HOST, "--push", "--yes")
+    assert result.exit_code == 1 and "answered 503" in result.output, result.output[-600:]
+    assert f"Left song/{creep.key}: {peer_file.TOO_BIG}" in result.output

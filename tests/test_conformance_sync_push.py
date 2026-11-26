@@ -20,7 +20,6 @@ Regenerate with ``CARACOLE_CORPUS=write`` (tests/conformance/README.md).
 from __future__ import annotations
 
 import hashlib
-from unittest import mock
 
 from helpers.corpus import VECTORS, check, jsonl
 
@@ -49,10 +48,8 @@ def _case(case: str, take: list, limits: dict, sizes: dict | None = None) -> dic
     files_of = {e["id"]: sorted({f["sha256"] for v in e["unit"]["versions"] for f in v["files"]})
                 for e in take if e["unit"] is not None and e["id"].startswith("song/")}
     sizes = sizes or {}
-    with mock.patch.object(peer_push, "NEW_MAX", limits["new"]), \
-            mock.patch.object(peer_push, "DOCUMENT_MAX", limits["document"]), \
-            mock.patch.object(peer_push, "PUSH_MAX", limits["files"]):
-        pushes, left = peer_push._cut(HEADER, take, {k: set(v) for k, v in files_of.items()}, sizes, FROM)
+    pushes, left = peer_push._cut(HEADER, take, {k: set(v) for k, v in files_of.items()}, sizes, FROM,
+                                  document_max=limits["document"], new_max=limits["new"], files_max=limits["files"])
     return {"fn": "cut", "case": case,
             "kw": {"header": HEADER, "take": take, "files_of": files_of, "sizes": sizes, "from": FROM,
                    "limits": limits},

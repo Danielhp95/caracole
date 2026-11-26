@@ -858,6 +858,16 @@ class SyncEngineTest {
             assertEquals(emptyList(), outcome.taken)
             assertEquals(listOf(unitOf(song) to why), outcome.left)
         }
+        // Answered with no length at all, it is stopped at the cap as it streams: the same words, nothing kept.
+        computer.answers["GET /api/peer/file"] = { exchange ->
+            exchange.responseHeaders.add("Content-Type", "application/octet-stream")
+            exchange.sendResponseHeaders(200, 0)
+            runCatching { File(computer.libraryDir, path).inputStream().use { it.copyTo(exchange.responseBody) } }
+        }
+        val streamed = apply(engine.compare(computer.address.toString()))
+        assertEquals(listOf(unitOf(song) to why), streamed.left)
+        assertEquals(emptyList(), phoneLibrary.walk().filter { it.isFile && it.name == name }.toList(), "nothing kept")
+        assertEquals(null, phone.read { db -> db.one("SELECT key FROM songs WHERE key = ?", song.key) { it.text(0) } })
     }
 
     @Test fun `a push of songs keyed by other rules, refused, lets go of what it opened`() {

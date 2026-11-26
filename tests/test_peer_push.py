@@ -947,11 +947,10 @@ def test_a_unit_that_alone_passes_what_a_push_carries_is_left_with_why():
     assert [[e["id"] for e in batch] for batch in pushes] == [["song/c/one"], ["song/d/two"], ["song/e/three"]]
 
 
-def test_a_push_new_naming_more_files_than_it_takes_is_cut_too(monkeypatch):
-    monkeypatch.setattr(peer_push, "NEW_MAX", 1000)  # some 13 files named a push/new
+def test_a_push_new_naming_more_files_than_it_takes_is_cut_too():
     take = [entry(f"song/a/s-{n}", 10, [sha(f"{n}-{k}".encode()) for k in range(5)]) for n in range(6)]
     files_of = {e["id"]: {f["sha256"] for v in e["unit"]["versions"] for f in v["files"]} for e in take}
-    pushes, left = peer_push._cut(HEADER, take, files_of, {}, PHONE)
+    pushes, left = peer_push._cut(HEADER, take, files_of, {}, PHONE, new_max=1000)  # some 13 files named a push/new
     assert left == [] and [len(batch) for batch in pushes] == [2, 2, 2]
     for batch in pushes:
         named = sorted(set().union(*(files_of[e["id"]] for e in batch)))
@@ -970,3 +969,20 @@ def test_an_interrupt_after_a_push_is_opened_lets_go_of_it_there_then_goes_on(pa
     with pytest.raises(KeyboardInterrupt):
         push_all(phone, pusher, state, found)
     assert len(dropped) == 1 and pushes(computer.cfg) == []
+
+
+def test_a_drop_is_asked_once_within_a_few_seconds_never_after_reading_the_state_again(monkeypatch):
+    import httpx
+
+    asked = []
+
+    def handler(request):
+        asked.append((request.method, request.url.path, request.extensions.get("timeout")))
+        return httpx.Response(403, json={"error": "Older than the server.", "reload": True})
+
+    with peer_push.Pusher("http://127.0.0.1:8737", transport=httpx.MockTransport(handler)) as pusher:
+        pusher.token = "tok"
+        assert pusher.push_drop("0123456789abcdef", PHONE) is False
+    ((method, path, timeout),) = asked  # no state read for a fresh token, no second ask
+    assert (method, path) == ("POST", peer_push.DROP_PATH)
+    assert set(timeout.values()) == {peer_push.DROP_TIMEOUT} and peer_push.DROP_TIMEOUT <= 5

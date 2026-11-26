@@ -133,8 +133,15 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
      * ([from]); whether it was (peer_push.Pusher.push_drop). An error, or its refusal (409 once its document was
      * taken), is no more than that: the phone's next push lets go of it there, or it is swept within the hour. */
     fun pushDrop(token: String, push: String, from: String): Boolean = try {
+        // Asked once, within [DROP_TIMEOUT_MS] of a read and with the token held (no state read again on a 403): a
+        // drop is the last thing a failure or a cancelled job does, and a server that doesn't answer it at once is
+        // let be (peer_push.Pusher.push_drop).
         val doc = JsonObject(linkedMapOf("push" to JsonPrimitive(push), "from" to JsonPrimitive(from)))
-        posting(token) { use -> postJson(PUSH_DROP_PATH, use, doc) }.status == 200
+        val body = PyJson.dumps(doc, compact = true).toByteArray(Charsets.UTF_8)
+        http.post(address, address.resolve(PUSH_DROP_PATH), JSON,
+                  mapOf(TOKEN_HEADER to (renewed[token] ?: token), "Accept" to JSON), body, DROP_TIMEOUT_MS) {
+            it.status
+        } == 200
     } catch (e: Exception) {
         false
     }
@@ -256,7 +263,9 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
 
     /** GET /api/peer/file: a kept file of its song of [songKey], checked against [sha256]. One past [MAX_FILE] is
      * never taken, a [PeerError] in [TOO_BIG]'s words: refused by its Content-Length before a byte of it is read, or,
-     * an answer that gives none or gives one under its bytes, once its bytes pass it. */
+     * an answer that gives none, once its bytes pass it. An answer whose Content-Length says less than it sends is read
+     * no further than it says (HttpURLConnection's), so those bytes aren't the file of that SHA-256: "sent … changed
+     * since compared", the song left as it was here. */
     override fun file(songKey: String, name: String, sha256: String): ByteArray {
         val path = FILE_PATH + "?song=" + Documents.quote(songKey) + "&name=" + Documents.quote(name)
         val answer = http.get(address, address.resolve(path)) {
@@ -347,6 +356,9 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
 
         /** peer_sync.PEER_TIMEOUT: a caracole reads every song of its library to answer its state. */
         const val STATE_TIMEOUT_MS = 60_000
+
+        /** peer_push.DROP_TIMEOUT: a push's drop waited for at most, in ms. */
+        const val DROP_TIMEOUT_MS = 5_000
 
         /** The index's export, at most between two reads: the computer makes it whole before it sends a byte. */
         const val INDEX_TIMEOUT_MS = 10 * 60_000
