@@ -958,13 +958,14 @@ def test_a_sync_whose_indexes_or_pages_failed_after_its_changes_says_what_it_sha
     assert said("failed", {"index": ("failed", index)}, []) == ("failed", "Failed", f"{index}.", "Compare again")
 
 
-def test_an_interrupted_take_or_pull_names_what_the_owner_can_do_never_a_try_again_it_has_not():
-    """A take (the phone's push) or a pull (asked by the other caracole) the server stopped offers no action: its
-    words send the owner to the other device, where the next share or sync gives it again."""
+def test_an_interrupted_take_pull_or_merge_names_what_the_owner_can_do_never_a_try_again_it_has_not():
+    """A take (the phone's push), a pull (asked by the other caracole) or a merge of the phone's index pages the server
+    stopped offers no action: its words send the owner to the other device, where the next share or sync gives it
+    again; the phone sends its pages again by itself (it forgets its notes of them once their merge ends done)."""
     import dataclasses
 
-    from caracole.web.outcome import (INTERRUPTED_PULL_RAN, INTERRUPTED_PULL_WAITED, INTERRUPTED_TAKE_RAN,
-                                      INTERRUPTED_TAKE_WAITED)
+    from caracole.web.outcome import (INTERRUPTED_MERGE_RAN, INTERRUPTED_MERGE_WAITED, INTERRUPTED_PULL_RAN,
+                                      INTERRUPTED_PULL_WAITED, INTERRUPTED_TAKE_RAN, INTERRUPTED_TAKE_WAITED)
 
     from test_web_sync import peer_job
 
@@ -975,8 +976,12 @@ def test_an_interrupted_take_or_pull_names_what_the_owner_can_do_never_a_try_aga
     take = peer_job("peer-push", "running", {"check": ("running", "")})
     pull = dataclasses.replace(take, steps=[dataclasses.replace(take.steps[0], args=(
         "peer", "pull", "--unit=song/a/b", "--", "http://192.168.1.10:8737"))])
+    assert INTERRUPTED_MERGE_RAN == "The server stopped mid-way. The phone's next sync sends them again."
+    assert INTERRUPTED_MERGE_WAITED == "The server stopped before it ran. The phone's next sync sends them again."
+    merge = peer_job("index-merge", "running", {"merge": ("running", "")})
     for job, ran, waited in ((take, INTERRUPTED_TAKE_RAN, INTERRUPTED_TAKE_WAITED),
-                             (pull, INTERRUPTED_PULL_RAN, INTERRUPTED_PULL_WAITED)):
+                             (pull, INTERRUPTED_PULL_RAN, INTERRUPTED_PULL_WAITED),
+                             (merge, INTERRUPTED_MERGE_RAN, INTERRUPTED_MERGE_WAITED)):
         job.state = INTERRUPTED
         over = outcome(job, job_line(job, None))
         assert (over.word, over.reason, over.action) == ("Interrupted", ran, None)

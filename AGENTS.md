@@ -1402,13 +1402,14 @@ It is rows.js's, shared by both pages:
   pushes, the agreement, the pages, the indexes) or the server stopping it: what was shared first, then the failure
   ("Failed" where the job failed, "Shared" waiting where it is done but a stage failed, "Interrupted", which ends
   "Compare again to finish.", the action its entry offers, `INTERRUPTED_SYNC_RAN`, never Try again's; a take's and a
-  pull's, which offer none, send the owner to the other side, `INTERRUPTED_TAKE_*`, `INTERRUPTED_PULL_*`), the count of
-  what was given said once (a give stopped after a push counts it in its own words, "1 given in the first push of 3",
-  so the lead then says what was taken alone, `_GIVEN_SO_FAR`, reading commands/peer.py's `given_so_far`); with nothing shared the failure alone (outcome.py
-  `_peer_outcome`, `Outcomes.peerOutcome`). Indexes skipped for the other's database of another schema (the report's `indexes_skipped`,
-  commands/peer.py's and SyncEngine's) are its indexes row, "Indexes not synced". The headline's tone is the one its
-  sides share, none when they differ. Sending a file says both numbers in the size's unit (sync-words.js `sizeOf`, "1.5
-  of 2.1 GB", the phone's `Sizes.of`).
+  pull's and a merge of the phone's index pages, which offer none, send the owner to the other side,
+  `INTERRUPTED_TAKE_*`, `INTERRUPTED_PULL_*`, `INTERRUPTED_MERGE_*`), the count of what was given said once (a give
+  stopped after a push counts it in its own words, "1 given in the first push of 3", so the lead then says what was
+  taken alone, `_GIVEN_SO_FAR`, reading commands/peer.py's `given_so_far`); with nothing shared the failure alone
+  (outcome.py `_peer_outcome`, `Outcomes.peerOutcome`). Indexes skipped for the other's database of another schema
+  (the report's `indexes_skipped`, commands/peer.py's and SyncEngine's) are its indexes row, "Indexes not synced". The
+  headline's tone is the one its sides share, none when they differ. Sending a file says both numbers in the size's
+  unit (sync-words.js `sizeOf`, "1.5 of 2.1 GB", the phone's `Sizes.of`).
 - **Export**: `GET /api/sync/sizes`, the parts with their sizes, Site indexes unticked; `POST /sync/export`, then the
   file's link (`a[download]` to `api/sync/export?export=ID`), clicked once by the page: the browser saves it, the
   phone's `DownloadListener` shares it; clicked again it says the file was sent once (caracole serve answers 404
@@ -2935,8 +2936,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     a bug, the request's error;
   - `Feed.feed` takes the outcomes and chips as `Outcome` and `Chip`, and works out one not given from the job, as
     feed.py does (an outcome from its line, the running one's chips with no facts);
-  - a request of the phone's own that said something as it ran (`JobContext.say` with no step: a sync's units left
-    as they were, SyncRoutes.sayLeft) has one more step in its Output, `Feed.SAID` ("What it said"), its lines those
+  - a request of the phone's own that said something as it ran (`JobContext.say` with no step: a sync's or a file's
+    import's units left as they were, SyncRoutes.sayLeft, one implementation for both) has one more step in its Output, `Feed.SAID` ("What it said"), its lines those
     words, the phone's alone: feed.py has none (a command's Output is its step's own), and no vector holds it
     (SyncRoutesTest). A unit left is said by its label as compared (`SyncOutcome.labels`), else its id, in
     commands/peer.py's words, which caracole serve's sync prints in its step's Output (`LEFT`, `left_line`,

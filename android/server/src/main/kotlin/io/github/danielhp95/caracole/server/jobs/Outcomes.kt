@@ -155,9 +155,15 @@ object Outcomes {
     const val INTERRUPTED_TAKE_WAITED = "The server stopped before it ran. Share again from the other device to run it."
     const val INTERRUPTED_PULL_RAN = "The server stopped mid-way. Sync again from the other caracole to finish."
     const val INTERRUPTED_PULL_WAITED = "The server stopped before it ran. Sync again from the other caracole to run it."
+    /** A merge of the phone's index pages (`POST /peer/index`), which offers none either: the phone forgets its notes
+     * of those pages only once their merge ends done (SyncEngine's index stage), so its next sync sends them again
+     * (outcome.py's INTERRUPTED_MERGE_*). */
+    const val INTERRUPTED_MERGE_RAN = "The server stopped mid-way. The phone's next sync sends them again."
+    const val INTERRUPTED_MERGE_WAITED = "The server stopped before it ran. The phone's next sync sends them again."
     private val INTERRUPTED = mapOf("sync" to (INTERRUPTED_SYNC_RAN to INTERRUPTED_SYNC_WAITED),
                                     "peer-push" to (INTERRUPTED_TAKE_RAN to INTERRUPTED_TAKE_WAITED),
-                                    "peer-pull" to (INTERRUPTED_PULL_RAN to INTERRUPTED_PULL_WAITED))
+                                    "peer-pull" to (INTERRUPTED_PULL_RAN to INTERRUPTED_PULL_WAITED),
+                                    Status.INDEX_MERGE_KIND to (INTERRUPTED_MERGE_RAN to INTERRUPTED_MERGE_WAITED))
     /** A give stopped after some of its pushes, in commands/peer.py's words: its `given_so_far` ("3 given in the
      * first 2 pushes of 4; then …"), which SyncEngine's give writes alike; the count of what was given said there, so
      * its outcome says it once (outcome.py's _GIVEN_SO_FAR, test_web_outcome.py feeding it given_so_far's own

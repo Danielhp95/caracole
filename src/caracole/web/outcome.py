@@ -179,9 +179,14 @@ INTERRUPTED_TAKE_RAN = "The server stopped mid-way. Share again from the other d
 INTERRUPTED_TAKE_WAITED = "The server stopped before it ran. Share again from the other device to run it."
 INTERRUPTED_PULL_RAN = "The server stopped mid-way. Sync again from the other caracole to finish."
 INTERRUPTED_PULL_WAITED = "The server stopped before it ran. Sync again from the other caracole to run it."
+# A merge of the phone's index pages (``POST /peer/index``), which offers none either: the phone forgets its notes of
+# those pages only once their merge ends done, so its next sync sends them again by itself.
+INTERRUPTED_MERGE_RAN = "The server stopped mid-way. The phone's next sync sends them again."
+INTERRUPTED_MERGE_WAITED = "The server stopped before it ran. The phone's next sync sends them again."
 _INTERRUPTED = {"sync": (INTERRUPTED_SYNC_RAN, INTERRUPTED_SYNC_WAITED),
                 "peer-push": (INTERRUPTED_TAKE_RAN, INTERRUPTED_TAKE_WAITED),
-                "peer-pull": (INTERRUPTED_PULL_RAN, INTERRUPTED_PULL_WAITED)}
+                "peer-pull": (INTERRUPTED_PULL_RAN, INTERRUPTED_PULL_WAITED),
+                "index-merge": (INTERRUPTED_MERGE_RAN, INTERRUPTED_MERGE_WAITED)}
 # A give stopped after some of its pushes, in commands/peer.py's words (``given_so_far``): "3 given in the first 2
 # pushes of 4; then …", the count of what was given said there, so its outcome says it once (test_web_outcome.py feeds
 # it given_so_far's own words).
