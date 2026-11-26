@@ -919,3 +919,38 @@ What Gate B0 reads in it:
 Which beat file, how many threads and which memory setting ship are yours to choose from it (the design's §11). To
 free the room afterwards, delete the folder; the app's own copy of the models goes with the debug app's data
 (`adb shell pm clear --user 0 io.github.danielhp95.caracole.debug`, its library too).
+
+## YouTube on the phone: the engine (debug build)
+
+A song's audio from YouTube on the phone runs yt-dlp itself, in Python, inside the app: `:youtube`, Chaquopy's
+Python 3.13 with yt-dlp and yt-dlp-ejs, linked into the debug build alone (`debugImplementation`) until the owner's
+gate (the phone-youtube design's stage Y5). The release carries no Python.
+
+Every piece is pinned in `youtube/pins.json`: Chaquopy's version (its Gradle plugin and its Python runtime, from Maven
+Central), the Python minor version, the two pure wheels by URL and SHA-256, and QuickJS-NG's source for the
+JavaScript challenges (built by a later task). `flake.nix` reads it: it fetches the wheels into one folder,
+`CARACOLE_YTDLP_WHEELS`, and puts `python3.13`, Chaquopy's `buildPython`, on PATH. pip installs the two wheels from
+that folder alone, `--no-index --no-deps`: none of `yt-dlp[default]`'s native packages, no FFmpeg. A build without
+either fails, naming it. The flake reads only files git tracks: `git add` a changed `pins.json` before building. To
+move yt-dlp, change its pin and the yt-dlp-ejs version its wheel's `METADATA` requires (`PinsTest` checks both).
+
+`caracole_ytdlp.py` is the glue: `version()` says the Python, yt-dlp and yt-dlp-ejs it runs, and `run(argv, out, err)`
+is one yt-dlp run, `yt_dlp.main` with its output line-buffered into two files and its exit status returned. Its own
+code ships as source, the wheels and the standard library compiled. Chaquopy already leaves out the standard library's
+`tkinter`, `idlelib`, `test`, `ensurepip` and `pydoc_data` (3.13 has no `lib2to3`), and has no setting to leave out
+more. On the emulator alone, with no network:
+
+    android/scripts/device-test.sh --youtube
+
+runs `YtDlpVersionTest` from `:youtube`'s own test APK (under `YoutubeTestRunner`, `caracole.network=loopback`):
+Python starts, `version()` is `pins.json`'s, yt-dlp's own `--version` prints the pinned one, and none of those
+modules is there. `release-check.sh` checks the release holds no `libpython*`, no class under `com/chaquo/` and nothing
+under `assets/chaquopy/`, with the debug build as the control.
+
+It costs the debug APK 45.0 MB, both ABIs (26.3 MB of an arm64-only APK): Python's native libraries 12.3 MB an ABI,
+the standard library and Chaquopy's bootstrap, the CA bundle and yt-dlp 10.8 MB for both. What ships with it, and
+whose licence texts the APK doesn't carry yet (Y5.1's, the design's §3.6): CPython (PSF-2.0) with its OpenSSL
+(Apache-2.0), SQLite (public domain), libffi, bzip2, xz and zlib; Chaquopy (MIT, its POMs'); its CA bundle (certifi,
+MPL-2.0); setuptools (MIT) and pyelftools (public domain) in its bootstrap, whose texts are there; yt-dlp and
+yt-dlp-ejs (Unlicense, their texts there); and yt-dlp-ejs's bundled meriyah (ISC) and astring (MIT), whose texts its
+wheel doesn't carry.

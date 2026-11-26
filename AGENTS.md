@@ -2639,6 +2639,18 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   `:ml`. `SoxrArm64Test` runs the NDK's static arm64 build of it (`arm64SoxrDriver`, soxr_driver.c) under
   qemu-aarch64 (the shell's `qemu-user`) over every record: NEON's cr32s the same bits as the vectors, the scalar cr32
   (`SOXR_USE_SIMD=0`) within 6e-7; skipped, saying why, without the NDK or qemu. No arm64 device is a test bed.
+- `:youtube` (Android library, stage Y0 of the phone-youtube design): yt-dlp under Chaquopy's Python, the app's
+  `debugImplementation` alone until stage Y5, so no release carries Python. Every piece is `youtube/pins.json`'s
+  (Chaquopy 17.2.0, its plugin from Maven Central in settings.gradle.kts; Python 3.13; the yt-dlp and yt-dlp-ejs
+  wheels by URL and SHA-256; QuickJS-NG's source), which android/flake.nix reads: the wheels fetched fixed-output into
+  `CARACOLE_YTDLP_WHEELS`, `python3.13` on PATH as Chaquopy's `buildPython`, a build without either failing, naming
+  it; pip `--no-index --no-deps` from that folder alone. `caracole_ytdlp.py`: `version()`, `run(argv, out_path,
+  err_path)` (`yt_dlp.main`, its streams line-buffered into the files, `SystemExit` its status). `PinsTest` (JVM) holds
+  the wheels to the pins and yt-dlp-ejs to the version yt-dlp's `METADATA` requires; `YtDlpVersionTest` (its own test
+  APK, `YoutubeTestRunner`: `caracole.network=loopback`; `device-test.sh --youtube`) Python started, `version()` the
+  pins', yt-dlp's `--version` alone, and none of the standard library's modules the design leaves out (Chaquopy packages
+  none of them). release-check.sh: no `libpython*`, class under `com/chaquo/` or `assets/chaquopy/` entry in the
+  release, the debug APK the control.
 - Milestones 1–6 are built (docs/android_port.md's status, "Built: milestones 4 to 6"), each route a module of its
   own:
   - `server/routes/Stubs.kt` keeps YouTube's routes and `GET /lookup` alone, answering "…: not on the phone yet."
@@ -3959,7 +3971,8 @@ nix flake check
   transport that refuses every site unless a test sets another. `PhoneDeps.transport` has no default: every `Phone` a
   test builds names its transport.
 - **The device**: a lane's device tests run only through `android/scripts/device-test.sh` (`--area NAME` for a
-  corpus area, `--app` for the app's classes, `--ml` for `:ml`'s ModelParityTest and the app's ChordsBenchTest, `CLASS[=DIR]` for its own;
+  corpus area, `--app` for the app's classes, `--ml` for `:ml`'s ModelParityTest and the app's ChordsBenchTest, `--youtube` for `:youtube`'s
+  YtDlpVersionTest, `CLASS[=DIR]` for its own;
   `--tcpdump FILE` the gate on caracole's own uids, iptables and ip6tables owner rules counting what the debug app and
   the test APKs send to any host but 10.0.2.2 or loopback, a control sent as the app before and after the classes each counted on its own (the counters read just before each), the chain still first in OUTPUT; it proves nothing those uids sent left, not what another
   uid sends for them (a name lookup through Android's resolver among it); the emulator's whole capture beside it as

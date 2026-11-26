@@ -137,6 +137,9 @@ dependencies {
     // The chord and beat models on ONNX Runtime, the debug build's alone until the owner chooses the runtime that
     // ships (the design's stage S): no release carries it.
     debugImplementation(project(":ml"))
+    // yt-dlp under Chaquopy's Python (a song's audio from YouTube), the debug build's alone until the owner's gate
+    // (the phone-youtube design's stage Y5): no release carries Python.
+    debugImplementation(project(":youtube"))
 
     // The app's own logic that needs no device (the text size, Settings over its preferences, a file read from the
     // phone's server and copied for another app, an index fetched): `gradle :app:test`.

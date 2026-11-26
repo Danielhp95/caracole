@@ -48,6 +48,16 @@
       # `.#chord-models`), which :ml's ModelParityTest runs on the emulator (scripts/device-test.sh --ml): in the ml
       # shell alone, so the other shells never build them (torch exports them).
       chordModels = pkgs.callPackage ../nix/autochords-onnx.nix { };
+      # yt-dlp and yt-dlp-ejs, the two pure wheels of youtube/pins.json (the one place they are pinned), each fetched
+      # by its URL and SHA-256 (fixed-output) into one folder, CARACOLE_YTDLP_WHEELS, from which :youtube's pip
+      # installs them, `--no-index --no-deps` (youtube/build.gradle.kts).
+      pins = builtins.fromJSON (builtins.readFile ./youtube/pins.json);
+      ytdlpAndroid = pkgs.linkFarm "caracole-ytdlp-wheels" (map (pin: {
+        name = baseNameOf pin.url;
+        path = pkgs.fetchurl { inherit (pin) url sha256; };
+      }) [ pins.ytdlp pins.ejs ]);
+      # Chaquopy's buildPython (:youtube's pyc and pip) must be the app's Python's minor version, pins.json's.
+      python = pkgs."python${lib.replaceStrings [ "." ] [ "" ] pins.python}";
 
       # Headless: the full jdk17 links gtk3, which brings nixpkgs' libsqlite3, whose sqlite3_* symbols then
       # silently take the place of the bundled SQLite's (core's DatabaseTest asserts sqlite_source_id()).
@@ -63,9 +73,10 @@
           # The host's CMake and gcc build the same libsoxr for the JVM's tests (autochords/build.gradle.kts's
           # hostSoxr task); qemu's user-mode emulators run the NDK's static arm64 build of it there
           # (SoxrArm64Test), so the phone's engine is measured on this machine, never on a phone.
-          packages = [ jdk gradle sdk pkgs.cmake pkgs.gcc pkgs.qemu-user ];
+          packages = [ jdk gradle sdk pkgs.cmake pkgs.gcc pkgs.qemu-user python ];
           JAVA_HOME = jdk.home;
           CARACOLE_ALPHATAB_DIR = "${alphatab}";
+          CARACOLE_YTDLP_WHEELS = "${ytdlpAndroid}";
           ANDROID_HOME = home;
           ANDROID_SDK_ROOT = home;
           # The Android Gradle plugin fetches aapt2 from Maven, a binary NixOS can't run:

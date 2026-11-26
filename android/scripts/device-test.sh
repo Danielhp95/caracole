@@ -3,7 +3,7 @@
 # here"):
 #
 #   android/scripts/device-test.sh [--computer DIR] [--sites SCENARIO] [--area NAME[,NAME...]] [--app] [--ml]
-#                                  [--tcpdump FILE] [CLASS[=DIR]]...
+#                                  [--youtube] [--tcpdump FILE] [CLASS[=DIR]]...
 #
 #   --area NAMES    CorpusOnDeviceTest's areas (core, server and viewer.testing's Replays); "all" or an empty
 #                   list: every one
@@ -20,10 +20,12 @@
 #                   $CARACOLE_CHORD_MODELS (`nix build .#chord-models`; unset, the ./android#ml shell's), pushed into
 #                   /data/local/tmp/caracole-models, a cache left there for the next run (a file pushed again only
 #                   when its SHA-256 differs)
+#   --youtube       :youtube's YtDlpVersionTest (its own test APK, io.github.danielhp95.caracole.youtube.test, under
+#                   YoutubeTestRunner): Chaquopy's Python and the yt-dlp pinned, `--version` alone, no network
 #   --tcpdump FILE  the gate that caracole sends nothing to any host but 10.0.2.2 (and loopback) while the classes
 #                   run, by caracole's own uids: on the rooted emulator (`su 0`), a chain of iptables and ip6tables
 #                   rules at the head of OUTPUT (caracole_own) counts, for each of caracole's packages installed (the
-#                   debug app, its test APK, :ml's test APK: `pm list packages -U`), its packets by
+#                   debug app, its test APK, :ml's and :youtube's test APKs: `pm list packages -U`), its packets by
 #                   `-m owner --uid-owner`, those to 10.0.2.2 and loopback apart; any other one of theirs fails the
 #                   run. Its control: a TCP connection to a listener of the script's on the host's loopback, sent as
 #                   the debug app's uid (`run-as`) before the classes and again after them, each counted on its own
@@ -71,6 +73,7 @@ areas=""
 want_areas=0
 want_app=0
 want_ml=0
+want_youtube=0
 tcpdump=""
 computer=""
 sites=""
@@ -84,6 +87,7 @@ while [ $# -gt 0 ]; do
         --area=*) want_areas=1; areas="${1#--area=}"; shift ;;
         --app) want_app=1; shift ;;
         --ml) want_ml=1; shift ;;
+        --youtube) want_youtube=1; shift ;;
         --tcpdump) tcpdump="${2-}"; [ -n "$tcpdump" ] || usage; shift 2 ;;
         --computer) computer="${2-}"; [ -n "$computer" ] || usage; shift 2 ;;
         --sites) sites="${2-}"; [ -n "$sites" ] || usage; shift 2 ;;
@@ -92,18 +96,21 @@ while [ $# -gt 0 ]; do
         *) classes+=("$1"); shift ;;
     esac
 done
-[ "$want_areas" = 1 ] || [ "$want_app" = 1 ] || [ "$want_ml" = 1 ] || [ ${#classes[@]} -gt 0 ] || usage
+[ "$want_areas" = 1 ] || [ "$want_app" = 1 ] || [ "$want_ml" = 1 ] || [ "$want_youtube" = 1 ] \
+    || [ ${#classes[@]} -gt 0 ] || usage
 [ "$areas" = all ] && areas=""
 [ -z "$tcpdump" ] || tcpdump="$(realpath -m "$tcpdump")"
 
 # 1. The build, outside the lock, so a lane that builds never holds the emulator.
 tasks=(assembleDebug assembleDebugAndroidTest)
 [ "$want_ml" = 1 ] && tasks+=(:ml:assembleDebugAndroidTest)
+[ "$want_youtube" = 1 ] && tasks+=(:youtube:assembleDebugAndroidTest)
 (cd "$repo" && nix develop ./android -c gradle -p android "${tasks[@]}" --console=plain -q)
 apk="$android/app/build/outputs/apk/debug/app-debug.apk"
 test_apk="$android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
 ml_apk="$android/ml/build/outputs/apk/androidTest/debug/ml-debug-androidTest.apk"
 ml_models=/data/local/tmp/caracole-models
+youtube_apk="$android/youtube/build/outputs/apk/androidTest/debug/youtube-debug-androidTest.apk"
 if [ "$want_ml" = 1 ]; then
     models="${CARACOLE_CHORD_MODELS:-$(cd "$repo" && nix develop ./android#ml -c printenv CARACOLE_CHORD_MODELS)}"
     [ -f "$models/btc-graph.onnx" ] || { echo "device-test.sh: no chord models in '$models'" >&2; exit 2; }
@@ -173,6 +180,7 @@ if [ "$want_ml" = 1 ]; then
         [ "$there" = "$(sha256sum "$file" | awk '{ print $1 }')" ] || adb push "$file" "$ml_models/$name" >/dev/null
     done
 fi
+[ "$want_youtube" = 1 ] && adb install -r -t "$youtube_apk" >/dev/null
 
 # The computers this run started, stopped as it ends.
 servers=()
@@ -270,7 +278,7 @@ while True:
     }
     own_uids=()
     own_names=()
-    for pkg in "$app_id" "$app_id.test" "$ns.ml.test"; do
+    for pkg in "$app_id" "$app_id.test" "$ns.ml.test" "$ns.youtube.test"; do
         uid="$(uid_of "$pkg")"
         [ -n "$uid" ] || continue
         own_uids+=("$uid")
@@ -361,6 +369,18 @@ if [ "$want_ml" = 1 ]; then
     fi
     # The debug build's Chords bench over the committed clips, on the same pushed models.
     run_class ChordsBenchTest -e models "$ml_models"
+fi
+
+if [ "$want_youtube" = 1 ]; then
+    out="$(adb shell am instrument -w -e class "$ns.youtube.YtDlpVersionTest" \
+        "$ns.youtube.test/$ns.youtube.YoutubeTestRunner" 2>&1 | tr -d '\r')" || true
+    echo "$out"
+    if grep -q '^OK (' <<<"$out" && ! grep -qE 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed' <<<"$out"; then
+        results+=("PASS YtDlpVersionTest")
+    else
+        results+=("FAIL YtDlpVersionTest")
+        failed=1
+    fi
 fi
 
 if [ "$want_app" = 1 ]; then
