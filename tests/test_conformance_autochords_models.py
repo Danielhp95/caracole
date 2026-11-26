@@ -52,6 +52,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -264,7 +265,7 @@ def test_frontend_and_models_vectors(_models):
     if os.environ.get("CARACOLE_CORPUS") != "write" and committed and committed.get("cpu_capability") != here:
         pytest.skip(f"the records were made on a {committed.get('cpu_capability')} CPU's kernels, this one's are "
                     f"{here}: a byte mismatch is expected here; the within-gates comparison is the check that counts")
-    frontend, models = _texts()
+    frontend, models = _fresh_texts()
     check(AREA / "frontend.jsonl", frontend)
     check(AREA / "models.jsonl", models)
 
@@ -410,20 +411,35 @@ def test_onnx_runtime_meets_the_gates_on_the_stored_inputs(exports):
                 assert mir_eval.beat.f_measure(ref, est, half["window"]) >= half["f_measure_min"], (clip, name)
 
 
-_DIGESTS = """
-import hashlib, sys
+_TEXTS = """
+import pathlib, sys
 sys.path[:0] = ["tests"]
 import test_conformance_autochords_models as m
-for text in m._texts():
-    print(hashlib.sha256(text.encode()).hexdigest())
+out = pathlib.Path(sys.argv[1])
+for name, text in zip(("frontend.jsonl", "models.jsonl"), m._texts()):
+    (out / name).write_text(text, encoding="utf-8")
 """
+
+
+def _fresh_texts(**env: str) -> tuple[str, str]:
+    """frontend.jsonl's and models.jsonl's texts as a fresh process writes them, under [env] besides this one's.
+
+    Never this process's: torch's beat_this answers in its last bits by what the process ran before (the same
+    process gives the same bits for the same sequence; a test that ran the real models first, test_autochords_run's,
+    gave other ones), so the records are made where nothing ran before them, whatever the tests' order and their
+    workers'."""
+    with tempfile.TemporaryDirectory() as tmp:
+        subprocess.run([sys.executable, "-c", _TEXTS, tmp], cwd=ROOT, check=True, capture_output=True, text=True,
+                       env={**os.environ, "PYTHONPATH": subprocess_pythonpath(ROOT / "src"), **env})
+        return tuple((Path(tmp) / name).read_text(encoding="utf-8") for name in ("frontend.jsonl", "models.jsonl"))
 
 
 @pytest.mark.autochords
 def test_two_processes_of_other_hash_seeds_write_the_same_records(_models):
-    want = [hashlib.sha256(text.encode()).hexdigest() for text in _texts()]
+    if _committed_meta() and _committed_meta().get("cpu_capability") != cpu_capability():
+        pytest.skip("the records were made on another CPU's kernels: test_frontend_and_models_vectors says why")
+    want = [(AREA / name).read_text(encoding="utf-8") for name in ("frontend.jsonl", "models.jsonl")]
     for seed in ("0", "4242"):
-        env = {**os.environ, "PYTHONHASHSEED": seed, "PYTHONPATH": subprocess_pythonpath(ROOT / "src")}
-        done = subprocess.run([sys.executable, "-c", _DIGESTS], cwd=ROOT, env=env, capture_output=True, text=True,
-                              check=True)
-        assert done.stdout.split() == want, f"PYTHONHASHSEED={seed}"
+        got = _fresh_texts(PYTHONHASHSEED=seed)
+        assert [hashlib.sha256(t.encode()).digest() for t in got] == \
+            [hashlib.sha256(t.encode()).digest() for t in want], f"PYTHONHASHSEED={seed}"
