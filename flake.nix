@@ -15,7 +15,7 @@
       autochordsTestDeps = ps: [
         ps.onnxruntime
         # Its matplotlib image baselines fail against this nixpkgs' matplotlib; the tests use mir_eval.beat and .chord.
-        (ps.mir-eval.overridePythonAttrs (old: { disabledTestPaths = [ "test_display.py" ]; }))
+        (ps.mir-eval.overridePythonAttrs (old: { disabledTestPaths = (old.disabledTestPaths or [ ]) ++ [ "test_display.py" ]; }))
       ];
       # A second nixpkgs, whose python takes its torch from torch-bin (prebuilt CUDA; plain torch is
       # CPU-only), package-wide: one dependency on the CPU torch and buildEnv meets two torch builds.

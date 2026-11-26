@@ -2021,12 +2021,18 @@ It is rows.js's, shared by both pages:
     normalized inside in float32 as btc.py does (a window's frames past the audio's end are the checkpoint's mean),
     its layer norms' unbiased std written out, nothing folded; every tensor of the state dict an external initializer
     at its offset in the authors' `btc_model_large_voca.pt`, copied beside it unchanged, its bytes checked there:
-    BTC's weights are never re-hosted;
+    BTC's weights are never re-hosted; its `metadata_props` the float32 `mean` and `std` it normalizes with (a
+    window's frames past the audio's end are padded with that mean, never 0) and the file's `weights_sha256`, the one
+    thing that says which `.pt` belongs beside it;
   - `export_beats`: beat_this's final0, `spect` ([1, T, 128]) to `beat` and `downbeat`, and with `fp16` its weights
     stored as float16, cast to float32 as it loads;
   - `pt_offsets`: each tensor's offset and length in a checkpoint in torch's legacy format (pickles, then each
-    storage's raw float32 bytes), read by a strict standard-library unpickler (`_Strict`: only the six globals that
-    format needs, anything else a ValueError) that imports no torch, since the phone will fetch such a file;
+    storage's raw float32 bytes), since the phone will fetch such a file read by `_Strict`, the standard library's
+    pure-Python unpickler guarded opcode by opcode (its notes): protocol 2's opcodes alone, the six globals of
+    `_ALLOWED`, stand-ins that run nothing, BUILD only on a numpy dtype and a state dict's `_metadata`, no dictionary
+    key but a text or a number (a deep tuple's hash overflows CPython's C stack), no read past the file's end
+    (`_Bounded`); each record checked again where it is used, every failure a ValueError; it imports no torch.
+    tests/helpers/legacy_pt.py writes such files with the standard library, so its tests run in any shell;
   - tests/test_autochords_export.py holds them to torch's answers in `.#autochords` (ONNX Runtime and mir_eval, its
     test-only packages): BTC's max abs 1e-4 and every argmax, beat_this's 1e-4 in fp32, the fp16 one 1e-2 on seeded
     frames and beats F ≥ 0.99 on music, the same bytes twice.

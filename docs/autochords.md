@@ -66,3 +66,9 @@ models to ONNX, the format the phone will run them in.
 
 caracole never republishes BTC's weights; the graph only points into its authors' file. Two builds
 give the same bytes.
+
+BTC's graph takes the raw features and normalizes them itself. Its metadata gives the mean and
+standard deviation it uses (`mean`, `std`) and the SHA-256 of the weights file it expects
+(`weights_sha256`). Check the file against that hash before running the graph. Pad the frames
+after the end of the audio with that mean, never with 0, or the chords of the last 10 seconds
+come out wrong.

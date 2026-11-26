@@ -9,7 +9,7 @@ from __future__ import annotations
 import functools
 import hashlib
 import os
-import pickle
+import struct
 import subprocess
 import sys
 from pathlib import Path
@@ -19,6 +19,7 @@ import pytest
 from caracole.autochords.export import BEATS_FP16_GRAPH, BEATS_GRAPH, BTC_GRAPH, BTC_WEIGHTS_NAME, pt_offsets
 
 from conftest import subprocess_pythonpath
+from helpers import legacy_pt
 from test_autochords_models import BEAT_CHECKPOINT, BTC_WEIGHTS, _drums, _imports, _installed
 
 LIBS = ("numpy", "soundfile", "torch", "librosa", "beat_this", "onnx", "onnxruntime", "mir_eval")
@@ -83,11 +84,12 @@ def test_btc_onnx_gives_torchs_logits(btc_export, tmp_path):
     assert (gives.name, gives.type, gives.shape) == ("logits", "tensor(float)", ["N", TIMESTEP, 170])
 
     recognizer = BTCRecognizer(BTC_WEIGHTS)
-    mean = np.float32(recognizer.mean)
+    mean = np.float32(session.get_modelmeta().custom_metadata_map["mean"])  # as the phone reads it
+    assert mean == np.float32(recognizer.mean)
 
     def windows(raw: np.ndarray) -> np.ndarray:
-        """Raw log-CQT frames in model windows, the last one filled out with the checkpoint's mean: what btc.py's
-        zeros are once normalized."""
+        """Raw log-CQT frames in model windows, the last one filled out with the graph's mean: what btc.py's zeros
+        are once normalized."""
         return np.pad(raw, ((0, -len(raw) % TIMESTEP), (0, 0)), constant_values=mean).reshape(-1, TIMESTEP, N_BINS)
 
     def torchs(raw: np.ndarray) -> np.ndarray:
@@ -106,6 +108,28 @@ def test_btc_onnx_gives_torchs_logits(btc_export, tmp_path):
         assert logits.shape == expected.shape
         assert np.abs(logits - expected).max() <= 1e-4
         assert (logits.argmax(-1) == expected.argmax(-1)).all()
+
+
+@pytest.mark.autochords
+def test_btc_graph_says_what_it_normalizes_with_and_whose_weights_it_reads(btc_export):
+    import numpy as np
+    import onnx
+
+    from caracole.autochords.btc import _load_checkpoint
+
+    out, _ = btc_export
+    graph = onnx.load(str(out / BTC_GRAPH), load_external_data=False)
+    checkpoint = _load_checkpoint(BTC_WEIGHTS)
+    mean, std = np.float32(float(checkpoint["mean"])), np.float32(float(checkpoint["std"]))
+    said = {entry.key: entry.value for entry in graph.metadata_props}
+    assert said == {"mean": str(mean), "std": str(std), "weights_sha256": _sha256(BTC_WEIGHTS)}
+    # Each reads back as the very float32 the graph normalizes with.
+    assert (np.float32(said["mean"]), np.float32(said["std"])) == (mean, std)
+    constants = [
+        onnx.numpy_helper.to_array(node.attribute[0].t) for node in graph.graph.node if node.op_type == "Constant"
+    ]
+    assert any(c.dtype == np.float32 and c.shape == () and c == mean for c in constants)
+    assert any(c.dtype == np.float32 and c.shape == () and c == std for c in constants)
 
 
 @pytest.mark.autochords
@@ -138,10 +162,63 @@ def test_every_external_initializer_is_the_authors_bytes_at_its_offset(btc_expor
     assert exported.sha256[BTC_GRAPH] == _sha256(out / BTC_GRAPH)
 
 
-def _legacy_header() -> bytes:
-    """The first three pickles of a checkpoint in torch's legacy format."""
-    info = {"protocol_version": 1001, "little_endian": True, "type_sizes": {"short": 2, "int": 4, "long": 4}}
-    return b"".join(pickle.dumps(value, protocol=2) for value in (0x1950A86A20F9469CFC6C, 1001, info))
+# --- pt_offsets, on files written here ---------------------------------------------------------------------
+
+
+def _write(tmp_path: Path, data: bytes) -> Path:
+    path = tmp_path / "checkpoint.pt"
+    path.write_bytes(data)
+    return path
+
+
+def test_pt_offsets_finds_each_tensors_bytes(tmp_path):
+    good = legacy_pt.checkpoint()
+    offsets = pt_offsets(_write(tmp_path, good.data))
+    assert offsets == good.offsets
+    assert [length for _, length in offsets.values()] == [24, 16, 8]
+    assert offsets["c"][0] == offsets["a.weight"][0] + 16  # four elements into the storage it shares
+    for name, (offset, length) in offsets.items():
+        assert struct.unpack(f"<{length // 4}f", good.data[offset : offset + length]) == good.elements[name]
+
+
+@pytest.mark.parametrize(
+    "broken, why",
+    [
+        (dict(magic=1), "magic number"),
+        (dict(protocol=1000), "magic number"),
+        (dict(little_endian=False), "little-endian"),
+        (dict(keys=["0"]), "storages aren't the ones its tensors name"),
+        (dict(keys=["0", "1", "2"]), "storages aren't the ones its tensors name"),
+        (dict(keys=["0", "0", "1"]), "storages aren't the ones its tensors name"),
+        (dict(counts={"0": 5}), "isn't the size its tensors say"),
+        (dict(after=b"\0"), "don't end where the file does"),
+        (dict(tensors={"a": legacy_pt.Tensor("0", (2, 3), stride=(1, 2))}, storages={"0": 6}), "isn't contiguous"),
+        (dict(tensors={"a": legacy_pt.Tensor("1", (4,), offset=2)}, storages={"1": 4}), "past its storage's end"),
+        (dict(claimed={"1": 2**62}), "past the file's end"),
+    ],
+    ids=["magic", "protocol", "big-endian", "a key missing", "a key more", "a key twice", "a count", "a byte more",
+         "strided", "outside its storage", "a storage of 2**62"],
+)
+def test_pt_offsets_refuses_a_checkpoint_that_isnt_as_its_format_says(tmp_path, broken, why):
+    with pytest.raises(ValueError, match=f"legacy format: .*{why}"):
+        pt_offsets(_write(tmp_path, legacy_pt.checkpoint(**broken).data))
+
+
+@pytest.mark.parametrize(
+    "end, why",
+    [(-1, "past the file's end"), (-20, "past the file's end"), (300, ""), (30, "")],
+    ids=["in its last storage", "in a storage's count", "in its pickles", "in its header"],
+)
+def test_pt_offsets_refuses_a_file_cut_short(tmp_path, end, why):
+    with pytest.raises(ValueError, match=f"legacy format: .*({why})"):
+        pt_offsets(_write(tmp_path, legacy_pt.checkpoint().data[:end]))
+
+
+def test_pt_offsets_refuses_a_file_in_another_format(tmp_path):
+    zipped = tmp_path / "zipped.pt"
+    zipped.write_bytes(b"PK\x03\x04" + bytes(60))  # torch's default format since 1.6 is a zip
+    with pytest.raises(ValueError, match="legacy format"):
+        pt_offsets(zipped)
 
 
 @pytest.mark.parametrize(
@@ -150,18 +227,68 @@ def _legacy_header() -> bytes:
 def test_pt_offsets_refuses_a_class_its_format_doesnt_need(tmp_path, module, name):
     # The phone will read a file fetched from the network: nothing in it but what BTC's checkpoint holds is unpickled.
     ran = tmp_path / "ran"
-    path = tmp_path / "evil.pt"
-    path.write_bytes(_legacy_header() + f"c{module}\n{name}\n(S'touch {ran}'\ntR.".encode())
+    evil = legacy_pt.HEADER + f"c{module}\n{name}\n(S'touch {ran}'\ntR.".encode()
     with pytest.raises(ValueError, match=f"{module}.{name}"):
-        pt_offsets(path)
+        pt_offsets(_write(tmp_path, evil))
     assert not ran.exists()
 
 
-def test_pt_offsets_refuses_a_file_in_another_format(tmp_path):
-    zipped = tmp_path / "zipped.pt"
-    zipped.write_bytes(b"PK\x03\x04" + bytes(60))  # torch's default format since 1.6 is a zip
+def _stand_ins() -> list:
+    """What pt_offsets' unpickler hands a file, and what each holds, to see that a file refused changed none."""
+    from caracole.autochords import export
+
+    return [(obj, dict(vars(obj)), getattr(obj, "__defaults__", None)) for obj in export._ALLOWED.values()]
+
+
+SETTING = legacy_pt.text("offset") + legacy_pt.integer(-5)
+BUILDS = {
+    # A tensor's record changed after it was checked: its offset 20 bytes before its storage's data.
+    "after a tensor": dict(tensor_build=b"}" + SETTING + b"sb"),
+    "after a tensor, by slots": dict(tensor_build=b"(N}" + SETTING + b"stb"),
+    "on a storage": dict(storage_build=b"}" + legacy_pt.text("key") + legacy_pt.text("1") + b"sb"),
+    # A state dict takes its `_metadata` alone.
+    "on a state dict": dict(tensor_build=legacy_pt.glob("collections", "OrderedDict") + b")R}" + SETTING + b"sb0"),
+}
+
+
+@pytest.mark.parametrize("build", BUILDS.values(), ids=BUILDS.keys())
+def test_pt_offsets_refuses_state_set_on_a_record(tmp_path, build):
+    before = _stand_ins()
+    with pytest.raises(ValueError, match="legacy format: .*BUILD"):
+        pt_offsets(_write(tmp_path, legacy_pt.checkpoint(**build).data))
+    assert _stand_ins() == before
+
+
+@pytest.mark.parametrize("state", [b"}" + SETTING + b"s", b"(N}" + SETTING + b"st"], ids=["dict", "slots"])
+def test_pt_offsets_refuses_state_set_on_a_class_or_function_it_hands_out(tmp_path, state):
+    # A refused file changes nothing the next file is read with.
+    from caracole.autochords import export
+
+    before = _stand_ins()
+    for module, name in export._ALLOWED:
+        evil = legacy_pt.HEADER + b"\x80\x02" + legacy_pt.glob(module, name) + state + b"b."
+        with pytest.raises(ValueError, match="legacy format: .*BUILD"):
+            pt_offsets(_write(tmp_path, evil))
+    assert _stand_ins() == before
+    good = legacy_pt.checkpoint()
+    assert pt_offsets(_write(tmp_path, good.data)) == good.offsets
+
+
+TOO_MUCH = {
+    # A length claimed past the file's end is refused before anything that long is made.
+    "a string of 2 GB": legacy_pt.HEADER + b"\x80\x02X" + struct.pack("<I", 2**31 - 1) + b"x" * 16,
+    "bytes of 2**62": legacy_pt.HEADER + b"\x80\x03\x8e" + struct.pack("<Q", 2**62) + b"x" * 16,
+    # Nested 200,000 deep: named by its type, never written out.
+    "a deep persistent id": legacy_pt.HEADER + b"\x80\x02)" + b"\x85" * 200_000 + b"Q.",
+    # Hashing a tuple nested that deep overflows CPython's C stack: no key but a text or a number.
+    "a deep key": legacy_pt.HEADER + b"\x80\x02})" + b"\x85" * 200_000 + b"K\x01s.",
+}
+
+
+@pytest.mark.parametrize("data", TOO_MUCH.values(), ids=TOO_MUCH.keys())
+def test_pt_offsets_refuses_what_would_exhaust_it_with_a_value_error(tmp_path, data):
     with pytest.raises(ValueError, match="legacy format"):
-        pt_offsets(zipped)
+        pt_offsets(_write(tmp_path, data))
 
 
 # --- beat_this ---------------------------------------------------------------------------------
