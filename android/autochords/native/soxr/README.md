@@ -16,5 +16,7 @@ and headers of the 32-bit constant-rate engines under `src/`, as the tarball has
 
 - `arm64-check.patch`, nixpkgs' own (pkgs/by-name/so/soxr/), which its build applies: NEON where `__arm64__`;
 - `aarch64.patch`, caracole's, after it: NEON where `__aarch64__` too (Android's arm64-v8a defines neither `__arm__`
-  nor `__arm64__`), and SIMD taken for granted there as on x86_64 (`cpu_has_simd32`), so the phone runs the HQ engine
-  python-soxr runs, cr32s over PFFFT, not the scalar fallback.
+  nor `__arm64__`), and SIMD taken for granted there as on x86_64 (`cpu_has_simd32`). Upstream's aarch64 build (and so
+  python-soxr's on aarch64) runs the scalar engine, cr32; with the patch the phone runs cr32s over PFFFT, the SIMD
+  engine the vectors are made with on x86_64: the same bits on every record of soxr.jsonl under qemu-aarch64, where
+  cr32 is within 6e-7 (SoxrArm64Test).

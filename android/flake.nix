@@ -61,8 +61,9 @@
           home = "${sdk}/libexec/android-sdk";
         in pkgs.mkShell {
           # The host's CMake and gcc build the same libsoxr for the JVM's tests (autochords/build.gradle.kts's
-          # hostSoxr task).
-          packages = [ jdk gradle sdk pkgs.cmake pkgs.gcc ];
+          # hostSoxr task); qemu's user-mode emulators run the NDK's static arm64 build of it there
+          # (SoxrArm64Test), so the phone's engine is measured on this machine, never on a phone.
+          packages = [ jdk gradle sdk pkgs.cmake pkgs.gcc pkgs.qemu-user ];
           JAVA_HOME = jdk.home;
           CARACOLE_ALPHATAB_DIR = "${alphatab}";
           ANDROID_HOME = home;

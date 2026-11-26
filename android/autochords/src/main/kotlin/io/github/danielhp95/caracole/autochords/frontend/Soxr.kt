@@ -12,9 +12,12 @@ object Soxr {
         System.loadLibrary("caracole_soxr")
     }
 
-    /** [x], sampled at [from] Hz, resampled to [to] Hz: about `x.size * to / from` samples, as python-soxr gives. */
+    /** [x], sampled at [from] Hz, resampled to [to] Hz: about `x.size * to / from` samples, as python-soxr gives.
+     * Rates must be finite and over 0 (python-soxr refuses those not over 0; libsoxr's answer to an infinite one is
+     * none to rely on). */
     fun resample(x: FloatArray, from: Double, to: Double): FloatArray {
         require(from > 0 && to > 0) { "Sample rate should be over 0" }
+        require(from.isFinite() && to.isFinite()) { "Sample rate should be finite" }
         return resampleHq(x, from, to)
     }
 

@@ -2624,15 +2624,21 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     debug classpath and APK (no weights' file there either), `.#chord-models`' names, the AAR's own manifest. It handles
     no text: no ForbiddenApiTest.
   - Its native build (stage B1): `externalNativeBuild` of autochords/native/CMakeLists.txt for arm64-v8a and x86_64,
-    NDK r28c (`ndkVersion`, android/flake.nix's `ndkVersion` and `cmakeVersion` 3.31.6): `libcaracole_soxr.so`, 16 KB
-    aligned, its reproducibility flags the CMakeLists' (§7: `-ffile-prefix-map`, `--build-id=none`,
-    `--hash-style=gnu`, `.comment` removed), `-ffp-contract=off`.
+    NDK r28c (`ndkVersion`, the app's too, whose strip needs it; android/flake.nix's `ndkVersion` and `cmakeVersion`
+    3.31.6): `libcaracole_soxr.so`, 16 KB aligned, stripped, no debug information (`-g0`), its reproducibility flags
+    the CMakeLists' (§7: `-ffile-prefix-map` of the source and the binary folders, `--build-id=none`,
+    `--hash-style=gnu`, `.comment` removed), `-ffp-contract=off`, every symbol but the JNI's hidden;
+    `android/scripts/native-check.sh` checks the debug APK's (aligned, stripped, no build path, its SHA-256).
 - `:autochords` (plain JVM, stage B1): the front ends of the chords from audio; for now `frontend.Soxr`, libsoxr 0.1.3
-  over JNI (`resample(x, from, to)`, python-soxr's `soxr.resample` at HQ, call for call: soxr_jni.c), held by
-  `SoxrTest` to vectors/autochords/soxr.jsonl within 1e-6, its lengths equal. libsoxr is vendored in
-  autochords/native/soxr/ (LGPL-2.1+; nixpkgs' source, its `arm64-check.patch` and caracole's `aarch64.patch`
-  applied: NEON on arm64, the HQ engine python-soxr runs, cr32s over PFFFT), built by the host's cmake and gcc
-  (`hostSoxr`, its folder the tests' `java.library.path`) with the CMakeLists the NDK builds in `:ml`.
+  over JNI (`resample(x, from, to)`, rates finite and over 0: caracole_soxr.c, python-soxr's `soxr.resample` of a
+  contiguous 1-D float32 array at HQ, its `csoxr_split_ch` path), held by `SoxrTest` to vectors/autochords/soxr.jsonl
+  within 1e-6, its lengths equal. libsoxr is vendored in autochords/native/soxr/ (LGPL-2.1+; nixpkgs' source, its
+  `arm64-check.patch` and caracole's `aarch64.patch` applied: NEON on arm64, so the phone runs cr32s, the SIMD engine
+  the vectors are made with on x86_64, where upstream's aarch64 build, python-soxr's there too, is scalar), built by the
+  host's cmake and gcc (`hostSoxr`, its folder the tests' `java.library.path`) with the CMakeLists the NDK builds in
+  `:ml`. `SoxrArm64Test` runs the NDK's static arm64 build of it (`arm64SoxrDriver`, soxr_driver.c) under
+  qemu-aarch64 (the shell's `qemu-user`) over every record: NEON's cr32s the same bits as the vectors, the scalar cr32
+  (`SOXR_USE_SIMD=0`) within 6e-7; skipped, saying why, without the NDK or qemu. No arm64 device is a test bed.
 - Milestones 1–6 are built (docs/android_port.md's status, "Built: milestones 4 to 6"), each route a module of its
   own:
   - `server/routes/Stubs.kt` keeps YouTube's routes and `GET /lookup` alone, answering "…: not on the phone yet."
@@ -3767,7 +3773,7 @@ helpers/corpus.py.
   `Database.SCHEMA_VERSION` and `Normalize.KEY_VERSION` bumped, `LibraryStore.ensureCurrentKeys` re-keying as
   `songs.ensure_current_keys` does, and `phone_overrides` from each entry's written name, as overrides.py keys it
   at a load.
-- `:core`, `:viewer` and `:server` never call a JDK or ICU text API (case, normalization, `Character` classes,
+- `:core`, `:viewer`, `:server` and `:autochords` never call a JDK or ICU text API (case, normalization, `Character` classes,
   `java.util.regex`'s own `\w` or `\s`, `Collator`): their Unicode is not Python's, and on Android it varies by
   device. They use `core.py` and its tables, held by the shared check `core.testing.ForbiddenApis` (each module's
   `ForbiddenApiTest`; an M1–3 file a later lane ports may be allowed by name, with that lane, until it does: none

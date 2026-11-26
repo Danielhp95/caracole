@@ -23,7 +23,9 @@ From the repository's root, with Nix:
 
 The APK is `android/app/build/outputs/apk/debug/app-debug.apk`. `android/flake.nix` provides JDK 17, Gradle and
 the Android SDK (platform 36, build tools 36.0.0, NDK r28c and CMake 3.31.6) from caracole's own nixpkgs, and the
-host's CMake and gcc, which build libsoxr for the JVM's tests (below). The build uses that pinned Gradle
+host's CMake and gcc, which build libsoxr for the JVM's tests (below), and qemu's user-mode emulators. The NDK, about
+2 GB, comes even for JVM-only work: `gradle test` builds libsoxr's static arm64 program with it (SoxrArm64Test), and
+`:ml` and the app build and strip its native library with it. The build uses that pinned Gradle
 rather than a Gradle wrapper, which would download a second copy. The flake also points the Android Gradle
 plugin at the SDK's aapt2, because NixOS can't run the copy the plugin fetches from Maven. The first build
 downloads the plugin and the libraries from Google's Maven and Maven Central.
@@ -797,14 +799,33 @@ makes, and the runtime's own AAR, whose manifest declares the provider.
 
 The computer resamples audio for its models with python-soxr, librosa's resampler, which runs libsoxr 0.1.3; the phone
 runs the same C. It is vendored in `autochords/native/soxr/` (LGPL-2.1+, its README names its source, its hash and its
-two patches) and built with caracole's JNI to it (`soxr_jni.c`, python-soxr's `resample` call for call) into one
-shared library, `libcaracole_soxr.so`, by `autochords/native/CMakeLists.txt`: by the NDK for arm64-v8a and x86_64 in
-`:ml` (its `externalNativeBuild`, so the debug build's alone, 16 KB aligned), and by the host's gcc for the JVM's tests
-(`:autochords`'s `hostSoxr` task, its folder on the tests' `java.library.path`). `:autochords`, plain JVM, holds the
-front ends of the chords from audio; for now `Soxr.resample(x, from, to)`, which `SoxrTest` holds to python-soxr's
-answers (`tests/conformance/vectors/autochords/soxr.jsonl`) within 1e-6:
+two patches) and built with caracole's resample over it (`caracole_soxr.c`: python-soxr's `soxr.resample` of a
+contiguous 1-D float32 array, the path that takes, `csoxr_split_ch`, one channel of split I/O) and the JNI to that
+(`soxr_jni.c`) into one shared library, `libcaracole_soxr.so`, by `autochords/native/CMakeLists.txt`: by the NDK for
+arm64-v8a and x86_64 in `:ml` (its `externalNativeBuild`, so the debug build's alone), and by the host's gcc for the
+JVM's tests (`:autochords`'s `hostSoxr` task, its folder on the tests' `java.library.path`). `:autochords`, plain JVM,
+holds the front ends of the chords from audio; for now `Soxr.resample(x, from, to)` (rates finite and over 0: libsoxr
+never returns from an infinite one), which `SoxrTest` holds to python-soxr's answers
+(`tests/conformance/vectors/autochords/soxr.jsonl`, made on x86_64 by libsoxr's SIMD engine, cr32s) within 1e-6:
 
     nix develop ./android -c gradle -p android :autochords:test
+
+The phone's arm64 code is measured on this machine, never on a phone: `SoxrArm64Test` runs a static arm64 program of
+the same sources and flags (`soxr_driver.c` over `caracole_soxr.c`, `arm64SoxrDriver`, by the NDK) under
+`qemu-aarch64` over every record, and holds both of libsoxr's engines there to them within 1e-6: the SIMD one, cr32s
+on NEON, which `soxr/aarch64.patch` turns on (upstream libsoxr, and so python-soxr, on aarch64 is scalar), the same
+bits as x86_64's cr32s on every record (2026-11-26); and the scalar one, cr32 (`SOXR_USE_SIMD=0`), within 6e-7. So
+the patch buys parity with the engine the vectors are made with, to the bit. It skips, saying why, without the NDK or
+qemu.
+
+What the APK carries of it is checked by a script, after `gradle -p android :app:assembleDebug`:
+
+    nix develop ./android -c android/scripts/native-check.sh
+
+It checks each ABI's `libcaracole_soxr.so` is stored uncompressed and 16 KB aligned, stripped (no `.debug_*`,
+`.symtab`, `.comment` or build-id), and names no path of the build (`/home/`, `/nix/store/`, `.cxx/`, `/tmp/`), and
+prints its SHA-256: two checkouts at different paths build the same bytes (the library carries no debug information,
+`-g0`, its folders mapped away, `-ffile-prefix-map`). Every symbol but the JNI's is hidden.
 
 ## The Chords bench (debug build)
 

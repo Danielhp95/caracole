@@ -505,9 +505,9 @@ def _fresh_texts(**env: str) -> tuple[str, ...]:
     The cause isn't found, only narrowed (2026-11-26, the failing order reproduced in one process): a first run of
     real audio through beats.py's cached ``_tracker`` moves them, at 1 thread as at 24, and ``_tracker.cache_clear()``
     after it, before the records, puts them back; but a separate File2Beats run of real audio first moves them too,
-    kept alive or let go (1500 frames of zeros at 8 threads through the cached tracker, then the cache cleared, moved
-    nothing, as real audio then the cache cleared doesn't). So it is no cached object nor thread count alone, and a
-    cache_clear in the reference would close one way in of several."""
+    kept alive or let go. (1500 frames of zeros at 8 threads through the cached tracker, then the cache cleared, moved
+    nothing, as real audio does once the cache is cleared: so it shows nothing of zeros.) So it is no cached object
+    nor thread count alone, and a cache_clear in the reference would close one way in of several."""
     return _child_texts(_TEXTS, ("frontend.jsonl", "models.jsonl"), **env)
 
 

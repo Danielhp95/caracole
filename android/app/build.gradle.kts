@@ -22,6 +22,10 @@ android {
     // flake.nix's platformVersion and buildToolsVersion: the SDK the shell provides.
     compileSdk = 36
     buildToolsVersion = "36.0.0"
+    // r28c, flake.nix's ndkVersion: the NDK whose llvm-strip strips the native libraries the app packages (:ml's
+    // libcaracole_soxr.so among them); without it the plugin looks for its own default, finds none, and packages
+    // them unstripped.
+    ndkVersion = "28.2.13676358"
 
     defaultConfig {
         applicationId = "io.github.danielhp95.caracole"
