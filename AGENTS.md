@@ -719,7 +719,22 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   A push that fails after `push/new` (a file or its document refused, a network that drops) is let go of there at once:
   the pusher (`push_units`, the phone's SyncEngine give) posts `POST /peer/push/drop`, its own failure never hiding
   why the push failed; and a sender's next `push/new` lets go of its push never sent (`new_push`): one open push a
-  sender, so no failed push holds one of the `OPEN` (2) slots for the hour.
+  sender, so no failed push holds one of the `OPEN` (2) slots for the hour; an interrupt (Ctrl-C, the phone's job
+  cancelled) drops it too (`BaseException`, `NonCancellable`), then goes on.
+  - A give goes in as many pushes as the other side's limits ask (`push_units`, `_cut`; the phone's `Give.cut`), one
+    at a time, each followed to its take's end (`between`, `wait_for`) before the next is opened: each document within
+    `DOCUMENT_MAX` (16 MiB), each `push/new` within `NEW_MAX` (1 MiB), each push's files within `PUSH_MAX` (2 GiB), a
+    song and its tombstone in one push; each take agrees on what it took as it ends. A push that fails stops the give
+    there (`PushStopped`): the pushes before it stay taken and agreed, the rest isn't given, and the error says how
+    far it got ("Couldn't give them 700: 350 given in the first push of 2; then push 2 of 2: …").
+  - Left out of a give, with why, never sent to be refused: a song with a kept file past `FILE_MAX` (64 MiB) in the
+    export's words (peer_file's `TOO_BIG`, the phone's FileError's), a unit that alone passes a document
+    (`TOO_LONG`) or a push's files (`TOO_HEAVY`). Left, not failed, and not agreed.
+  - The phone's limits are PeerClient's constants (`PUSH_NEW_MAX`, `PUSH_DOCUMENT_MAX`, `MAX_FILE`, `PUSH_MAX`), held to
+    the routes' by `vectors/sync/push.jsonl` (tests/test_conformance_sync_push.py: the limits, the words, `_cut`'s
+    cases; GiveTest). On its take the phone takes no kept file past `MAX_FILE`: refused by its Content-Length before a
+    byte is read, or once its bytes pass it, the song left "score-1.pdf is over 64 MiB: the phone takes no file that
+    big" (PeerClient.file).
 
 #### peer_file.py
 

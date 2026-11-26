@@ -27,6 +27,7 @@ import io.github.danielhp95.caracole.core.sync.Units
 import io.github.danielhp95.caracole.core.testing.TestDb
 import io.github.danielhp95.caracole.core.testing.sync.FakeComputer
 import io.github.danielhp95.caracole.mirror.ServerAddress
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -745,6 +746,118 @@ class SyncEngineTest {
         assertEquals(listOf(unitOf(song)), outcome.given)
         assertEquals(drops, computer.asked("POST", "/peer/push/drop").size, "a push that goes through drops nothing")
         assertEquals(0, computer.pushesHere)
+    }
+
+    /** Push documents of a few songs each: the phone's limit and the computer's, alike. */
+    private fun smallPushes(document: Long = 6_000) {
+        engine.pushLimits = io.github.danielhp95.caracole.core.sync.internal.client.Give.Limits(document = document)
+        computer.limits = computer.limits + ("POST /peer/push" to document)
+    }
+
+    private fun songs(n: Int): List<SongRow> = (0 until n).map { onPhone("Band", "Song $it", album = "An album ".repeat(40)) }
+
+    @Test fun `a give past what one push carries goes in several, each within the computer's limits, each taken`() {
+        smallPushes()
+        val given = songs(12)
+        val outcome = apply(engine.compare(computer.address.toString()))
+        assertEquals(given.map(::unitOf).sorted(), outcome.given.sorted())
+        assertEquals(emptyList(), outcome.left)
+        val sizes = computer.pushes.map { PyJson.dumps(it, compact = true).toByteArray(Charsets.UTF_8).size }
+        assertTrue(sizes.size >= 3 && sizes.all { it <= 6_000 }, "the pushes sent: $sizes")
+        assertEquals(sizes.size, computer.asked("POST", "/peer/push/new").size)
+        assertEquals(computer.state(), phoneState())
+        assertEquals(0, computer.pushesHere)
+        assertEquals("gave 12", stages.last { it.first == "give" }.third)
+        assertEquals(emptyList(), engine.compare(computer.address.toString()).differences)
+    }
+
+    @Test fun `a give that stops at its second push keeps the first taken and agreed, and says how far it got`() {
+        smallPushes()
+        songs(12)
+        computer.refuse = { route, n -> if (route == "POST /peer/push" && n == 2) 503 else null }
+        val failed = assertFailsWith<SyncFailed> { apply(engine.compare(computer.address.toString())) }
+        val first = computer.taken.single().taken.size
+        assertTrue(first in 1 until 12, "push 1 took $first")
+        val pushes = computer.asked("POST", "/peer/push/new").size
+        assertTrue(pushes == 2, "push 3 never opened: $pushes")
+        assertTrue(failed.message!!.startsWith("Couldn't give them 12: $first given in the first push of "), failed.message)
+        assertTrue("; then push 2 of " in failed.message!! && "answered 503: Not now." in failed.message!!, failed.message)
+        assertEquals("failed", ended()["give"])
+        assertEquals(first, failed.outcome!!.given.size)
+        assertEquals(0, computer.pushesHere, "push 2 let go of there")
+
+        computer.refuse = null
+        val again = engine.compare(computer.address.toString())
+        assertEquals(12 - first, again.differences.size, "push 1's were agreed as its take ended")
+        assertEquals(12 - first, apply(again).given.size)
+    }
+
+    @Test fun `a give cancelled after its push is opened lets go of the push there, then is cancelled`() {
+        withFile("Estopa", "Tu Calorro", "a Guitar Pro file".toByteArray())
+        val sending = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        computer.answers["POST /peer/push/file"] = { exchange ->
+            exchange.requestBody.readBytes()
+            sending.countDown()
+            release.await(10, java.util.concurrent.TimeUnit.SECONDS)
+            FakeComputer.json(exchange, 200, FakeComputer.obj("ok" to JsonPrimitive(true)))
+        }
+        val c = engine.compare(computer.address.toString())
+        runBlocking {
+            val job = launch(kotlinx.coroutines.Dispatchers.Default) {
+                engine.apply(c, emptyMap(), null) { name, state, detail -> stages.add(Triple(name, state, detail)) }
+            }
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { sending.await(10, java.util.concurrent.TimeUnit.SECONDS) }
+            job.cancel()
+            release.countDown()
+            job.join()
+            assertTrue(job.isCancelled)
+        }
+        assertEquals(1, computer.asked("POST", "/peer/push/drop").size)
+        assertEquals(0, computer.pushesHere, "the push it opened let go of there")
+        assertEquals(emptyList(), computer.asked("POST", "/peer/push"))
+    }
+
+    @Test fun `a song with a kept file past 64 MiB is left out of the give in the export's words, the rest given`() {
+        val big = onPhone("Bach", "Mass in B minor")
+        val path = phoneStore.folderOf(big).relativeTo(phoneLibrary).path + "/score-1.pdf"
+        RandomAccessFile(File(phoneLibrary, path).apply { parentFile.mkdirs() }, "rw").use { it.setLength(64L * 1024 * 1024 + 1) }
+        phone.writeBlocking { db ->
+            db.execute("INSERT INTO versions (provider, tab_id, song_id, slot, kind, url, fetched_at) " +
+                       "VALUES ('inbox', 'score-1', ?, 'guitar', 'score', '', ?)", big.id, NOW)
+            db.execute("INSERT INTO files (version_id, song_id, name, path, sha256, kept_rank, created_at) " +
+                       "VALUES (?, ?, 'score-1.pdf', ?, ?, 0, ?)", db.lastRowid(), big.id, path, "ab".repeat(32), NOW)
+        }
+        val hysteria = onPhone("Muse", "Hysteria")
+        val outcome = apply(engine.compare(computer.address.toString()))
+        assertEquals(listOf(unitOf(hysteria)), outcome.given)
+        assertEquals(listOf(unitOf(big) to io.github.danielhp95.caracole.core.sync.file.FileError.TOO_BIG), outcome.left)
+        assertEquals(emptyList(), computer.asked("POST", "/peer/push/file"))
+        assertNull(phone.read { Compare.baseOf(it, computer.id) }!![unitOf(big)], "never agreed")
+    }
+
+    @Test fun `F4 a song with a kept file past 64 MiB on the computer is left with why, never as changed there`() {
+        val song = onComputer("Bach", "Mass in B minor")
+        val name = "score-1.pdf"
+        val path = computer.store.folderOf(song).relativeTo(computer.libraryDir).path + "/" + name
+        RandomAccessFile(File(computer.libraryDir, path).apply { parentFile.mkdirs() }, "rw").use { it.setLength(64L * 1024 * 1024 + 1) }
+        computer.answers["GET /api/peer/file"] = { exchange ->  // the file's length, as caracole serve answers it
+            exchange.responseHeaders.add("Content-Type", "application/octet-stream")
+            exchange.sendResponseHeaders(200, 64L * 1024 * 1024 + 1)
+            runCatching { File(computer.libraryDir, path).inputStream().use { it.copyTo(exchange.responseBody) } }
+        }
+        computer.database.writeBlocking { db ->
+            db.execute("INSERT INTO versions (provider, tab_id, song_id, slot, kind, url, fetched_at) " +
+                       "VALUES ('inbox', 'score-1', ?, 'guitar', 'score', '', ?)", song.id, NOW)
+            db.execute("INSERT INTO files (version_id, song_id, name, path, sha256, kept_rank, created_at) " +
+                       "VALUES (?, ?, ?, ?, ?, 0, ?)", db.lastRowid(), song.id, name, path, "cd".repeat(32), NOW)
+        }
+        val why = "$name is over 64 MiB: the phone takes no file that big. The song stays as it was here."
+        repeat(2) {
+            val outcome = apply(engine.compare(computer.address.toString()))
+            assertEquals(emptyList(), outcome.taken)
+            assertEquals(listOf(unitOf(song) to why), outcome.left)
+        }
     }
 
     @Test fun `a push of songs keyed by other rules, refused, lets go of what it opened`() {

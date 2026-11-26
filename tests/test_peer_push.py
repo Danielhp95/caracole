@@ -906,3 +906,67 @@ def test_a_takes_progress_is_its_jobs_stages_and_units(cfg):
     assert done["units"] == [["song/a/b", "taken", ""], ["song/c/d", "left", "changed here since"]]
     assert done["commands"][0]["state"] == "done"
     assert queue.job(job.id).steps[0].output == ["From Phone: Took 1 change."]
+
+
+def entry(unit_id, words=0, files=()):
+    """A unit a push gives, as push_units makes one, its document ``words`` characters long."""
+    return {"id": unit_id, "expected": None, "digest": sha(unit_id.encode()),
+            "unit": None if words is None else {"words": "x" * words, "versions": [{"files": [
+                {"name": f"f-{n}", "sha256": f, "kept_rank": 0} for n, f in enumerate(files)]}]}}
+
+
+HEADER = {"format": sync.FORMAT, "from": PHONE, "name": "Phone", "caracole": "0.1.0", "key_version": 1, "at": NOW,
+          "units": {}, "take": []}
+
+
+def test_a_give_is_cut_into_pushes_each_within_the_other_sides_limits_a_song_with_its_tombstone():
+    # 700 songs of some 24 KB of document each: 16 MiB passed, as a first sync of a whole library passes it.
+    take = [entry(f"song/band/song-{n}", 24_000) for n in range(700)]
+    take.insert(350, entry("removed/band/song-349", None))  # its tombstone beside a song of that key
+    pushes, left = peer_push._cut(HEADER, take, {}, {}, PHONE)
+    assert left == [] and len(pushes) == 2
+    assert [e["id"] for batch in pushes for e in batch] == [e["id"] for e in take]  # in order, each once
+    for batch in pushes:
+        assert len(peer_push._json({**HEADER, "take": batch})) <= peer_push.DOCUMENT_MAX
+        assert ("song/band/song-349" in {e["id"] for e in batch}) == ("removed/band/song-349" in
+                                                                       {e["id"] for e in batch})
+    # a push is as full as it can be: one more entry and its document would pass the limit
+    first = pushes[0]
+    more = pushes[1][0]
+    assert len(peer_push._json({**HEADER, "take": [*first, more]})) > peer_push.DOCUMENT_MAX
+
+
+def test_a_unit_that_alone_passes_what_a_push_carries_is_left_with_why():
+    big, many = sha(b"big"), [sha(str(n).encode()) for n in range(3)]
+    take = [entry("song/a/too-long", peer_push.DOCUMENT_MAX), entry("song/b/heavy", 10, [big]),
+            entry("song/c/one", 10, many[:1]), entry("song/d/two", 10, many[1:2]), entry("song/e/three", 10, many[2:])]
+    sizes = {big: peer_push.PUSH_MAX + 1} | {f: peer_push.PUSH_MAX // 2 + 1 for f in many}
+    files_of = {e["id"]: {f["sha256"] for v in e["unit"]["versions"] for f in v["files"]} for e in take}
+    pushes, left = peer_push._cut(HEADER, take, files_of, sizes, PHONE)
+    assert left == [("song/a/too-long", peer_push.TOO_LONG), ("song/b/heavy", peer_push.TOO_HEAVY)]
+    assert [[e["id"] for e in batch] for batch in pushes] == [["song/c/one"], ["song/d/two"], ["song/e/three"]]
+
+
+def test_a_push_new_naming_more_files_than_it_takes_is_cut_too(monkeypatch):
+    monkeypatch.setattr(peer_push, "NEW_MAX", 1000)  # some 13 files named a push/new
+    take = [entry(f"song/a/s-{n}", 10, [sha(f"{n}-{k}".encode()) for k in range(5)]) for n in range(6)]
+    files_of = {e["id"]: {f["sha256"] for v in e["unit"]["versions"] for f in v["files"]} for e in take}
+    pushes, left = peer_push._cut(HEADER, take, files_of, {}, PHONE)
+    assert left == [] and [len(batch) for batch in pushes] == [2, 2, 2]
+    for batch in pushes:
+        named = sorted(set().union(*(files_of[e["id"]] for e in batch)))
+        assert len(peer_push._json({"format": sync.FORMAT, "from": PHONE, "files": named})) <= 1000
+
+
+def test_an_interrupt_after_a_push_is_opened_lets_go_of_it_there_then_goes_on(pair, monkeypatch):
+    # Ctrl-C while a push's files go: the push is dropped there at once, and the interrupt is never swallowed.
+    computer, phone, pusher, _ = pair
+    phone.song(sheet=b"[Am]Creep, from the phone")
+    state, found = comparison(phone, pusher)
+    dropped = []
+    drop = pusher.push_drop
+    monkeypatch.setattr(pusher, "push_file", lambda *a: (_ for _ in ()).throw(KeyboardInterrupt()))
+    monkeypatch.setattr(pusher, "push_drop", lambda push, sender: dropped.append(push) or drop(push, sender))
+    with pytest.raises(KeyboardInterrupt):
+        push_all(phone, pusher, state, found)
+    assert len(dropped) == 1 and pushes(computer.cfg) == []

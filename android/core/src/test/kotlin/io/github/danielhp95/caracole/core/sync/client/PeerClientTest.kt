@@ -169,6 +169,41 @@ class PeerClientTest {
         assertTrue("404" in assertFailsWith<PeerError> { client.file("a/b", "x", sha) }.message!!)
     }
 
+    /** GET /api/peer/file answered with [length] (0: none, chunked) and [total] bytes of zeros, a MiB at a time,
+     * until the phone stops reading; how many it wrote. */
+    private fun bigFile(length: Long, total: Long): java.util.concurrent.atomic.AtomicLong {
+        val written = java.util.concurrent.atomic.AtomicLong()
+        computer.answers["GET /api/peer/file"] = { exchange ->
+            exchange.responseHeaders.add("Content-Type", "application/octet-stream")
+            exchange.sendResponseHeaders(200, length)
+            val chunk = ByteArray(1 shl 20)
+            try {
+                while (written.get() < total) {
+                    val n = minOf(chunk.size.toLong(), total - written.get()).toInt()
+                    exchange.responseBody.write(chunk, 0, n)
+                    written.addAndGet(n.toLong())
+                }
+            } catch (e: java.io.IOException) {
+                // the phone hung up: what it would never take
+            }
+        }
+        return written
+    }
+
+    @Test fun `a file past 64 MiB is never taken, said so, and refused by its length before it is read`() {
+        val past = PeerClient.MAX_FILE + 1L
+        val written = bigFile(past, past)
+        val refused = assertFailsWith<PeerError> { client.file("bach/mass-in-b-minor", "score-1.pdf", sha) }
+        assertEquals("score-1.pdf is over 64 MiB: the phone takes no file that big. The song stays as it was here.",
+                     refused.message)
+        assertTrue(written.get() < PeerClient.MAX_FILE / 2, "the phone read ${written.get()} bytes of it")
+
+        // An answer that says no length (or a false one) is stopped at the cap as it streams, in the same words.
+        bigFile(0, past)
+        val streamed = assertFailsWith<PeerError> { client.file("bach/mass-in-b-minor", "score-1.pdf", sha) }
+        assertEquals(refused.message, streamed.message)
+    }
+
     @Test fun `a push is opened, its files sent and its document posted, each with the form token in its header`() {
         val opened = mutableListOf<Got>()
         val sent = mutableListOf<Got>()

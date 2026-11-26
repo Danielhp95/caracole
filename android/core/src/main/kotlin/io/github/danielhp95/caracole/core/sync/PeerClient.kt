@@ -254,13 +254,18 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
         return unit
     }
 
-    /** GET /api/peer/file: a kept file of its song of [songKey], checked against [sha256]. */
+    /** GET /api/peer/file: a kept file of its song of [songKey], checked against [sha256]. One past [MAX_FILE] is
+     * never taken, a [PeerError] in [TOO_BIG]'s words: refused by its Content-Length before a byte of it is read, or,
+     * an answer that gives none or gives one under its bytes, once its bytes pass it. */
     override fun file(songKey: String, name: String, sha256: String): ByteArray {
         val path = FILE_PATH + "?song=" + Documents.quote(songKey) + "&name=" + Documents.quote(name)
-        val answer = http.get(address, address.resolve(path)) { Answered(it.status, readAtMost(it.body, MAX_FILE)) }
+        val answer = http.get(address, address.resolve(path)) {
+            if (it.status == 200 && it.contentLength > MAX_FILE) Answered(it.status, null)
+            else Answered(it.status, readAtMost(it.body, MAX_FILE))
+        }
         if (answer.status != 200) throw refused(answer)
-        val bytes = answer.bytes
-        if (bytes == null || Canonical.sha256Hex(bytes) != sha256) {
+        val bytes = answer.bytes ?: throw PeerError("$name $TOO_BIG. The song stays as it was here.", 200)
+        if (Canonical.sha256Hex(bytes) != sha256) {
             throw PeerError("$address sent $name changed since compared. The song stays as it was here.", 200)
         }
         return bytes
@@ -349,8 +354,21 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
         /** A JSON answer read at most (a state of every unit is a few megabytes). */
         const val MAX_JSON = 64 * 1024 * 1024
 
-        /** A kept file read at most: peer_push.FILE_MAX, what a push may send of one. */
+        /** A kept file read at most: peer_push.FILE_MAX, what a push may send of one (`POST /peer/push/file`'s
+         * limit); the phone takes no file past it ([TOO_BIG]) and gives none (FileError.TOO_BIG). */
         const val MAX_FILE = 64 * 1024 * 1024
+
+        /** Why a file past [MAX_FILE] is never taken, after its name. */
+        const val TOO_BIG = "is over 64 MiB: the phone takes no file that big"
+
+        /** peer_push.NEW_MAX: `POST /peer/push/new`'s document at most. */
+        const val PUSH_NEW_MAX = 1024L * 1024
+
+        /** peer_push.DOCUMENT_MAX: `POST /peer/push`'s document at most. */
+        const val PUSH_DOCUMENT_MAX = 16L * 1024 * 1024
+
+        /** peer_push.PUSH_MAX: a push's files' bytes at most. */
+        const val PUSH_MAX = 2L * 1024 * 1024 * 1024
 
         /** An index export sent at most: peer_push.INDEX_MAX, POST /peer/index's limit. */
         const val INDEX_MAX = 64L * 1024 * 1024

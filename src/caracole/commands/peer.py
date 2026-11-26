@@ -245,13 +245,9 @@ def register(app: typer.Typer) -> None:
             said.stage("give", "skipped")
         elif push:
             said.stage("give", "running", _count(len(give)))
-            given, left_there = _push(cfg, address, state, give)
-            for unit_id in given:
-                said.unit(unit_id, "given")
-            for unit_id, why in left_there:
-                said.unit(unit_id, "left", why)
-            said.stage("give", "done", f"gave {len(given)}" + (f", left {len(left_there)}" if left_there else ""))
-            typer.echo(f"Gave {_count(len(given))} to {address}.")
+            given, left_there = _push(cfg, address, state, give, said)
+            said.stage("give", "done", f"gave {given}" + (f", left {left_there}" if left_there else ""))
+            typer.echo(f"Gave {_count(given)} to {address}.")
         else:
             ids = [d.id for d in give]
             if here is None:
@@ -623,13 +619,35 @@ def _taken(done, wanted: list[tuple[str, str | None]]) -> dict[str, str | None]:
     return {unit_id: digests[unit_id] for unit_id in done.taken}
 
 
-def _push(cfg, address: str, state, give: list) -> tuple[list[str], list[tuple[str, str]]]:
+def _push(cfg, address: str, state, give: list, said: _Said) -> tuple[int, int]:
     """Give the caracole at ``address`` the differences of ``give`` by pushing them (``peer_push.push_units``: what
-    it compared there, ``state``, and here), under caracole's lock, then wait for it to take them, the lock let go:
-    (the units it took, those left with why)."""
+    it compared there, ``state``, and here), under caracole's lock, in as many pushes as its limits ask, each followed
+    to its take's end before the next, the last with the lock let go of; each unit said given or left (with why) as
+    the take of its push ends: (how many it took, how many were left). A push that fails stops the give there, saying
+    how far it got: the pushes taken before it stay taken, and agreed there."""
     from caracole import __version__, peer_push
     from caracole import peer_sync as sync
     from caracole.songbook import SongbookError, load_songbooks, songbooks_file
+
+    counted = {"given": 0, "left": 0}
+
+    def left(unit_id: str, why: str) -> None:
+        said.unit(unit_id, "left", why)
+        counted["left"] += 1
+
+    def ended(pushed, job) -> None:
+        """A push's take over there: each of its units given or left as the take says it."""
+        units = {unit_id: (outcome, why) for unit_id, outcome, why in job.get("units") or ()}
+        for unit_id, why in pushed.left:
+            left(unit_id, why)
+        for unit_id in pushed.given:
+            outcome, why = units.get(unit_id, (None, ""))
+            if outcome == "taken":
+                said.unit(unit_id, "given")
+                counted["given"] += 1
+            else:
+                left(unit_id, why or (f"their Journal entry {pushed.job}: {job['state']}" if job["state"] != "done"
+                                      else "not taken there"))
 
     try:
         with peer_push.Pusher(address, transport=transport_for_peer()) as pusher:
@@ -644,23 +662,28 @@ def _push(cfg, address: str, state, give: list) -> tuple[list[str], list[tuple[s
                 pushed = peer_push.push_units(
                     pusher, conn, cfg, overrides, books, {d.id: d.theirs.digest if d.theirs else None for d in give},
                     own=me, at=state.now or utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"), name=cfg.library_name,
-                    version=__version__, compared_here={d.id: d.mine.digest if d.mine else None for d in give})
-            left = list(pushed.left)
-            if not pushed.job:
-                return [], left
-            job = peer_push.wait_for(pusher, pushed.job, sleep=_sleep)
+                    version=__version__, compared_here={d.id: d.mine.digest if d.mine else None for d in give},
+                    between=lambda sent: ended(sent, peer_push.wait_for(pusher, sent.job, sleep=_sleep)))
+            if pushed.job:
+                ended(pushed, peer_push.wait_for(pusher, pushed.job, sleep=_sleep))
+            else:
+                for unit_id, why in pushed.left:
+                    left(unit_id, why)
+    except peer_push.PushStopped as e:
+        for unit_id, why in e.left:
+            left(unit_id, why)
+        far = (f"{counted['given']} given in the first {_pushes(e.sent)} of {e.pushes}; then " if e.sent else "")
+        said.stage("give", "failed", far + str(e))
+        fail(f"Couldn't give them {len(give)}: {far}{e}")
     except sync.PeerError as e:
+        said.stage("give", "failed", str(e))
         fail(f"Couldn't give them {len(give)}: {e}")
-    said = {unit_id: (outcome, why) for unit_id, outcome, why in job.get("units") or ()}
-    given = []
-    for unit_id in pushed.given:
-        outcome, why = said.get(unit_id, (None, ""))
-        if outcome == "taken":
-            given.append(unit_id)
-        else:
-            left.append((unit_id, why or (f"their Journal entry {pushed.job}: {job['state']}" if job["state"] != "done"
-                                          else "not taken there")))
-    return given, left
+    return counted["given"], counted["left"]
+
+
+def _pushes(n: int) -> str:
+    """"push" or "2 pushes": the pushes a give sent before it stopped."""
+    return "push" if n == 1 else f"{n} pushes"
 
 
 def _sleep(seconds: float) -> None:

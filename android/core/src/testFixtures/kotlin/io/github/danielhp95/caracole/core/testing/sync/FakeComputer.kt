@@ -14,6 +14,7 @@ import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.py.PyUnicode
 import io.github.danielhp95.caracole.core.sync.Applied
 import io.github.danielhp95.caracole.core.sync.Compare
+import io.github.danielhp95.caracole.core.sync.PeerClient
 import io.github.danielhp95.caracole.core.sync.PeerError
 import io.github.danielhp95.caracole.core.sync.SyncUnit
 import io.github.danielhp95.caracole.core.sync.Take
@@ -59,7 +60,7 @@ import java.util.concurrent.TimeUnit
  *   sender). `POST /peer/push/drop` (`{"push", "from"}`, the token in its header) lets go of a push never sent, as
  *   peer_push.drop: 404 for none, 400 for another's, 409 once its document was taken. The push's take is queued as
  *   `caracole peer take` is, under `peer-push:<from>` (a take of that caracole's that waits or runs refuses the push,
- *   409 "Taking already", which leaves it open), and runs after the answer on the fake's one worker: its stages check,
+ *   409 "Taking already", never sent: its pusher drops it, or its next `push/new` lets go of it), and runs after the answer on the fake's one worker: its stages check,
  *   take, render, agree (jobs.PEER_TAKE_STAGES), each unit taken or left said as its `units` (Job.as_json), the take
  *   Take.applyUnits from what was staged (a unit changed here since the comparison left), then the agreement at the
  *   push's `at`; the push gone once its take is over. [takeFails]: the take fails instead, its stage saying so, the
@@ -76,9 +77,11 @@ import java.util.concurrent.TimeUnit
  *   queued, `202 {"job": N}`, whose one stage, merge, IndexTransfer.merge takes the file into [database] with (the
  *   port of the merge the computer runs), the request "failed" with the stage's words when it refuses it.
  *
- * [answers] replaces what a route answers ("GET /api/peer/state" → a handler); [requests] records each request as
- * "METHOD path?query"; [onUnit] and [onPoll] run before a unit or a poll is answered (a test changes the library
- * there, or looks at the phone's lock). A failure in a route is a 500, kept in [errors].
+ * [answers] replaces what a route answers ("GET /api/peer/state" → a handler), and [refuse] its n-th answer by a
+ * status; a push route's body past its limit ([limits]) is answered 413 before it is read, as server.py answers it.
+ * [requests] records each request as "METHOD path?query"; [onUnit] and [onPoll] run before a unit or a poll is
+ * answered (a test changes the library there, or looks at the phone's lock). A failure in a route is a 500, kept in
+ * [errors].
  */
 class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
     val database: Database = Database(File(dir, "caracole.sqlite"))
@@ -97,6 +100,16 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
     @Volatile var onUnit: ((String) -> Unit)? = null
     @Volatile var onPoll: ((Int) -> Unit)? = null
     @Volatile var countsIndexes: Boolean = true
+    /** The status to answer the [n]-th request (from 1) of a route ("POST /peer/push") with, `{error}`, in place
+     * of the route's answer; null: answered as ever. */
+    @Volatile var refuse: ((route: String, n: Int) -> Int?)? = null
+    private val counts = HashMap<String, Int>()
+
+    /** Each push route's body limit, as web/peer_routes.py declares it (peer_push.py's constants): a body past it
+     * answered 413 before it is read, as server.py does. A test's own, smaller. */
+    @Volatile var limits: Map<String, Long> = mapOf(
+        "POST /peer/push/new" to PeerClient.PUSH_NEW_MAX, "POST /peer/push/file" to PeerClient.MAX_FILE.toLong(),
+        "POST /peer/push" to PeerClient.PUSH_DOCUMENT_MAX, "POST /peer/push/drop" to 16L * 1024)
     @Volatile var keyVersion: JsonElement? = JsonPrimitive(Normalize.KEY_VERSION)  // null: says none, as an older one
 
     val requests = CopyOnWriteArrayList<String>()
@@ -175,6 +188,20 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
                 val path = exchange.requestURI.rawPath
                 val raw = path + (exchange.requestURI.rawQuery?.let { "?$it" } ?: "")
                 requests.add("${exchange.requestMethod} $raw")
+                val limit = limits["${exchange.requestMethod} $path"]
+                val length = exchange.requestHeaders.getFirst("Content-Length")?.toLongOrNull() ?: -1
+                if (limit != null && length > limit) {  // server.py: the route's limit, before the body is read
+                    send(exchange, 413, "That is too long to send here.\n".toByteArray(), "text/plain; charset=utf-8")
+                    return@createContext
+                }
+                val asked = "${exchange.requestMethod} $path"
+                val n = synchronized(counts) { (counts[asked] ?: 0).plus(1).also { counts[asked] = it } }
+                val refused = refuse?.invoke(asked, n)
+                if (refused != null) {
+                    exchange.requestBody.readBytes()
+                    json(exchange, refused, obj("error" to JsonPrimitive("Not now.")))
+                    return@createContext
+                }
                 val replaced = answers["${exchange.requestMethod} $path"]
                 if (replaced != null) replaced(exchange) else route(exchange, exchange.requestMethod, path)
             } catch (e: Refusal) {
@@ -410,7 +437,7 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
             val shown = "Changes from ${Py.slice(Py.strip(sent.name).ifEmpty { "another caracole" }, null, 120)}"
             val key = PEER_PUSH + sent.from
             val busy = jobs.values.firstOrNull { it.active && it.key == key }
-            if (busy != null) {  // the push stays open, to send again once that is over
+            if (busy != null) {  // the push is refused, never sent: its pusher drops it, or its next push lets go of it
                 throw Refusal(409, "$shown are being taken already (request ${busy.id}): send them again once that is over.")
             }
             push.sent = doc

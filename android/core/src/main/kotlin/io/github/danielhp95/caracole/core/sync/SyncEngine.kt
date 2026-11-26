@@ -29,6 +29,7 @@ import io.github.danielhp95.caracole.core.sync.internal.client.IndexStamps
 import io.github.danielhp95.caracole.mirror.SyncError
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonArray
@@ -105,14 +106,16 @@ class SameCaracole(message: String) : Exception(message)
  *    holds so), so that whatever stops the sync after its take leaves it agreed, never a conflict once the computer
  *    changes it.
  * 3. **give**: the units the computer takes, as documents of the phone's state after its take, as peer_push.push_units
- *    gives them (`POST /peer/push/new`, each file it needs, `POST /peer/push`): a unit the phone changed since the
- *    comparison is left out ([CHANGED_HERE]), and so is a song whose file the phone can no longer read as kept
- *    ([FILE_CHANGED]). Then the computer's request is followed every second, 10 minutes at most, with no lock held,
- *    and each unit is given or left as its request says it (its `units`). A request that can't be sent or followed
- *    stops the sync there: the computer records nothing, and the phone no more than its take did; a push that fails
- *    before its document is taken is let go of there at once (`POST /peer/push/drop`, PeerClient.pushDrop), so that
- *    it holds none of the computer's two slots for the hour (a drop that fails is said nowhere: the phone's next push
- *    lets go of it there).
+ *    gives them (`POST /peer/push/new`, each file it needs, `POST /peer/push`), in as many pushes as the computer's
+ *    limits ask ([pushLimits], Give.cut), one at a time: a unit the phone changed since the comparison is left out
+ *    ([CHANGED_HERE]), and so is a song whose file the phone can no longer read as kept ([FILE_CHANGED]), one with a
+ *    kept file past 64 MiB (FileError.TOO_BIG) and a unit that alone passes what a push carries (Give.TOO_LONG,
+ *    Give.TOO_HEAVY). Each push's request is followed every second, 10 minutes at most, with no lock held, before the
+ *    next is opened, and each unit is given or left as its request says it (its `units`). A request that can't be
+ *    sent or followed stops the sync there, saying how far the give got: the pushes before it taken and agreed there,
+ *    the phone no more than its take did; a push that fails, or is cancelled, before its document is taken is let go
+ *    of there at once (`POST /peer/push/drop`, PeerClient.pushDrop), so that it holds none of the computer's two slots
+ *    for the hour (a drop that fails is said nowhere: the phone's next push lets go of it there).
  * 4. **mirror**: the mirror of the computer's pages brought up to date ([mirrorRefresh], told what to say as it goes:
  *    "120 of 640 pages"; skipped without one); its failure stops nothing.
  * 5. **agree**: the computer's state read again; what the two hold alike now recorded as agreed at its clock, inside
@@ -171,6 +174,9 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
     /** How often give asks the computer how its request goes, and how many times at most (10 minutes). */
     internal var pollEveryMs: Long = POLL_EVERY_MS
     internal var polls: Int = POLLS
+
+    /** What the computer takes of a push at most (its routes' limits, Give.Limits'); a test's own, smaller. */
+    internal var pushLimits: Give.Limits = Give.Limits()
 
     private val kept = KeptById<Comparison>(KEPT_SECONDS)
 
@@ -644,8 +650,12 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         agree(db, mine, applied.taken.associateWith { digests[it] })
     }
 
-    /** The units the computer takes pushed (peer_push.push_units), and its request followed to its end: each unit
-     * given, or left with why. */
+    /** The units the computer takes pushed (peer_push.push_units), in as many pushes as its limits ask
+     * ([pushLimits], Give.cut), one at a time, each followed to its take's end before the next is opened: each unit
+     * given, or left with why. A song with a kept file past 64 MiB is left out ([FileError.TOO_BIG], the export's
+     * words for it), and so is a unit that alone passes what a push carries (Give.TOO_LONG, Give.TOO_HEAVY). A push
+     * that fails stops the give there, its pushes before it taken (and agreed there as their takes ended), saying how
+     * far it got; one that fails, or is cancelled, before its document is taken is let go of there first. */
     private suspend fun give(client: PeerClient, stage: (String, String, String) -> Unit, done: Done, me: String,
                              fresh: Compared, toGive: List<Difference>) {
         stage(GIVE, RUNNING, plural(toGive.size, "change"))
@@ -653,60 +663,79 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             Units.libraryState(db) to toGive.associate { d -> d.id to Units.document(db, store.libraryDir, d.id) }
         }
         val before = done.left.size
+        val givenBefore = done.given.size
         val entries = ArrayList<Give.Entry>()
+        val sizes = HashMap<String, Long>()
         for (d in toGive) {
             val now = state[d.id]?.digest
-            if (now != d.mine?.digest) done.left.add(d.id to CHANGED_HERE)
-            else entries.add(Give.Entry(d.id, expected = d.theirs?.digest, digest = now, unit = documents[d.id]))
-        }
-        if (entries.isEmpty()) {
-            stage(GIVE, DONE, "gave 0, left ${toGive.size}")
-            return
+            if (now != d.mine?.digest) {
+                done.left.add(d.id to CHANGED_HERE)
+                continue
+            }
+            val entry = Give.Entry(d.id, expected = d.theirs?.digest, digest = now, unit = documents[d.id])
+            val kept = Give.files(listOf(entry)).associateWith { sha -> io { Give.size(database, store.libraryDir, sha) } }
+            if (kept.values.any { it > SyncFiles.FILE_MAX }) {
+                done.left.add(d.id to FileError.TOO_BIG)
+                continue
+            }
+            sizes.putAll(kept)
+            entries.add(entry)
         }
         val at = fresh.peer.now ?: Stamps.of(clock())
         val token = fresh.peer.token
-        val sent: List<Give.Entry>
-        val ended: JsonObject
-        var job: Int? = null
-        var opened: String? = null  // the push opened there, until its document is taken
-        try {
-            val (push, need) = io { client.pushNew(token, me, Give.files(entries)) }
-            opened = push
-            val unreadable = HashSet<String>()
-            need.forEachIndexed { i, sha ->
-                stage(GIVE, RUNNING, "${i + 1} of ${plural(need.size, "file")}")  // a count the bar fills by
-                val bytes = io { Give.read(database, store.libraryDir, sha) }
-                if (bytes == null) unreadable.add(sha) else io { client.pushFile(token, push, sha, bytes) }
+        val (pushes, tooMuch) = Give.cut(entries, sizes, pushLimits, me) { Give.document(me, name, version, at, state, it) }
+        done.left.addAll(tooMuch)
+        pushes.forEachIndexed { n, batch ->
+            val which = if (pushes.size == 1) "" else "push ${n + 1} of ${pushes.size}: "
+            val sent: List<Give.Entry>
+            val ended: JsonObject
+            var job: Int? = null
+            var opened: String? = null  // the push opened there, until its document is taken
+            try {
+                val (push, need) = io { client.pushNew(token, me, Give.files(batch)) }
+                opened = push
+                val unreadable = HashSet<String>()
+                need.forEachIndexed { i, sha ->
+                    stage(GIVE, RUNNING, "$which${i + 1} of ${plural(need.size, "file")}")  // a count the bar fills by
+                    val bytes = io { Give.read(database, store.libraryDir, sha) }
+                    if (bytes == null) unreadable.add(sha) else io { client.pushFile(token, push, sha, bytes) }
+                }
+                sent = batch.filter { entry -> Give.files(listOf(entry)).none { it in unreadable } }
+                for (entry in batch) if (entry !in sent) done.left.add(entry.id to FILE_CHANGED)
+                job = io { client.push(token, push, Give.document(me, name, version, at, state, sent)) }
+                stage(GIVE, RUNNING, "${which}the computer's Journal entry $job takes ${plural(sent.size, "change")}")
+                ended = awaitJob(client, job)
+            } catch (e: CancellationException) {
+                // A push cancelled before its document was taken lets go of its slot there all the same.
+                val dropping = opened
+                if (dropping != null && job == null) withContext(NonCancellable) { io { client.pushDrop(token, dropping, me) } }
+                throw e
+            } catch (e: Exception) {
+                // A push that failed before its document was taken lets go of its slot there at once
+                // (peer_push.push_units); a drop that fails too says nothing over why the push failed.
+                val dropping = opened
+                if (dropping != null && job == null) io { client.pushDrop(token, dropping, me) }
+                val far = if (n == 0) "" else "${done.given.size - givenBefore} given in the first " +
+                    (if (n == 1) "push" else "$n pushes") + " of ${pushes.size}; then "
+                val why = far + which + said(e)
+                stage(GIVE, FAILED, why)
+                throw SyncFailed("Couldn't give them ${entries.size}: $why", done.outcome(), e)
             }
-            sent = entries.filter { entry -> Give.files(listOf(entry)).none { it in unreadable } }
-            for (entry in entries) if (entry !in sent) done.left.add(entry.id to FILE_CHANGED)
-            job = io { client.push(token, push, Give.document(me, name, version, at, state, sent)) }
-            stage(GIVE, RUNNING, "the computer's Journal entry $job takes ${plural(sent.size, "change")}")
-            ended = awaitJob(client, job)
-        } catch (e: Exception) {
-            if (e is CancellationException) throw e
-            // A push that failed before its document was taken lets go of its slot there at once
-            // (peer_push.push_units); a drop that fails too says nothing over why the push failed.
-            val dropping = opened
-            if (dropping != null && job == null) io { client.pushDrop(token, dropping, me) }
-            val why = said(e)
-            stage(GIVE, FAILED, why)
-            throw SyncFailed("Couldn't give them ${entries.size}: $why", done.outcome(), e)
-        }
-        val units = Give.units(ended)
-        val jobState = Give.text(ended["state"])
-        for (entry in sent) {
-            val (outcome, why) = units[entry.id] ?: (null to "")
-            if (outcome == "taken") {
-                done.given.add(entry.id)
-            } else {
-                done.left.add(entry.id to why.ifEmpty {
-                    if (jobState != "done") "their Journal entry $job: $jobState" else "not taken there"
-                })
+            val units = Give.units(ended)
+            val jobState = Give.text(ended["state"])
+            for (entry in sent) {
+                val (outcome, why) = units[entry.id] ?: (null to "")
+                if (outcome == "taken") {
+                    done.given.add(entry.id)
+                } else {
+                    done.left.add(entry.id to why.ifEmpty {
+                        if (jobState != "done") "their Journal entry $job: $jobState" else "not taken there"
+                    })
+                }
             }
         }
         val left = done.left.size - before
-        stage(GIVE, DONE, "gave ${done.given.size}" + if (left == 0) "" else ", left $left")
+        stage(GIVE, DONE, "gave ${done.given.size - givenBefore}" + if (left == 0) "" else ", left $left")
     }
 
     /** The computer's request [id] followed, every [pollEveryMs], until it is over (peer_push.wait_for): how it ended.

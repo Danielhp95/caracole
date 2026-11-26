@@ -3963,6 +3963,12 @@ a whole push 2 GiB. A push left for an hour is deleted. A push that fails before
 taken is deleted at once: its sender drops it (`POST /peer/push/drop`), and a caracole's next push
 replaces its push never sent, so a failed sync never blocks the next one.
 
+A big give (a first sync of a whole library) goes in several pushes, each within those limits (a
+push document is 16 MiB at most), one after the other, each taken before the next is sent. If one
+fails, the pushes before it stay taken and the sync says how far it got. A song with a kept file
+over 64 MiB is left out with the reason, as an export leaves it; the phone takes no such file
+either.
+
 `GET /api/peer/index` serves the site indexes as `caracole index export` writes them
 (`?sites=ug,lacuerda` for some). It serves one copy at a time and answers 503 meanwhile.
 

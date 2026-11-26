@@ -539,32 +539,144 @@ def test_choices_that_cant_be_read_or_name_no_difference_are_refused_before_anyt
     assert there.app.queue.snapshot() == [] and not (here.cfg.state_dir / "backups").exists()
 
 
-def test_a_push_that_fails_halfway_lets_go_of_its_slot_there_at_once(two, monkeypatch):
-    """A push that stops after POST /peer/push/new (here its file refused, 413: past a push file's limit) is dropped
-    there as it fails, so two failed syncs never leave the other side refusing every push for an hour, the phone's
-    included; and the sync says why it failed."""
-    from caracole import peer_push
+def limited(there, *, limits=None, refuse=None, posted=None):
+    """There's caracole serve as server.py serves it: a body past its route's limit (or ``limits``' for its path)
+    refused 413 before it is read; ``refuse(path, n)``, the n-th POST to a path from 1, a status to answer instead
+    (None: answered); each POST's path and length kept in ``posted``."""
+    counts: dict[str, int] = {}
 
-    here, there, asked, _ = two
-
-    def handler(request: httpx.Request) -> httpx.Response:  # as server.py reads a body: its route's limit first
-        if request.url.path.startswith("/api/jobs/"):
+    def handler(request: httpx.Request) -> httpx.Response:
+        path, target = request.url.path, request.url.raw_path.decode()
+        if path.startswith("/api/jobs/"):
             there.app.queue.run_pending()
-        target = request.url.raw_path.decode()
-        if request.method == "POST" and len(request.content) > there.app.body_limit("POST", target):
-            return httpx.Response(413, content=b"That is too long to send here.\n")
+        if request.method == "POST":
+            counts[path] = counts.get(path, 0) + 1
+            if posted is not None:
+                posted.append((path, len(request.content)))
+            limit = (limits or {}).get(path, there.app.body_limit("POST", target))
+            if len(request.content) > limit:
+                return httpx.Response(413, content=b"That is too long to send here.\n")
+            status = refuse(path, counts[path]) if refuse is not None else None
+            if status is not None:
+                return httpx.Response(status, json={"error": "Not now."})
         answer = WebApp.finish(there.app.handle(Request(request.method, target, dict(request.headers),
                                                         request.content)))
         return httpx.Response(answer.status, headers=answer.headers, content=answer.body)
 
-    monkeypatch.setattr("caracole.commands.peer.transport_for_peer", lambda: httpx.MockTransport(handler))
-    here.song("Radiohead", "Creep", sheet=b"%PDF" + b"\0" * peer_push.FILE_MAX)  # 64 MiB and 4 bytes
+    return httpx.MockTransport(handler)
+
+
+def test_a_push_that_fails_halfway_lets_go_of_its_slot_there_at_once(two, monkeypatch):
+    """A push that stops after POST /peer/push/new (here its file refused, 503) is dropped there as it fails, so two
+    failed syncs never leave the other side refusing every push for an hour, the phone's included; and the sync says
+    why it failed."""
+    from caracole import peer_push
+
+    here, there, asked, _ = two
+    transport = limited(there, refuse=lambda path, n: 503 if path == peer_push.FILE_PATH else None)
+    monkeypatch.setattr("caracole.commands.peer.transport_for_peer", lambda: transport)
+    here.song("Radiohead", "Creep", sheet=b"%PDF a scanned score")
     for _ in range(2):
         result = run(here, "peer", "sync", HOST, "--push", "--yes")
-        assert result.exit_code == 1 and "answered 413" in result.output, result.output
+        assert result.exit_code == 1 and "answered 503" in result.output, result.output
     assert not (there.cfg.state_dir / "peer").exists() or not [
         p for p in (there.cfg.state_dir / "peer").iterdir() if p.name.startswith(peer_push.PREFIX)]
     # another caracole's push (the phone's) is taken now
     opened = peer_push.new_push(there.cfg.state_dir, sender="fedcba9876543210", files=[], need=[],
                                 own=sync.own_id(there.conn))
     assert opened.push
+
+
+VERSE = "Line of a verse that goes on for a while, as songs' lines do\n"
+
+
+def long_songs(side, n):
+    """``n`` songs of ``side`` with long lyrics (some 9 KB of push document each), their unit ids in order."""
+    plain = VERSE * 40
+    synced = "".join(f"[{k // 60:02d}:{k % 60:02d}.00] {VERSE}" for k in range(40))
+    record = {"id": 1, "trackName": "T", "artistName": "A", "duration": 240.0, "instrumental": False,
+              "plainLyrics": plain, "syncedLyrics": synced}
+    units = []
+    for k in range(n):
+        song = side.song("Band", f"Song {k}", version=None, sheet=f"[Am]Song {k}".encode())
+        update_song(side.conn, song.id, lyrics_json=Lyrics.from_record(record).to_json())
+        units.append(f"song/{song.key}")
+    return units
+
+
+def test_a_give_past_what_one_push_carries_goes_in_several_each_within_the_other_sides_limits(two, monkeypatch):
+    """A give whose one push document would pass the other side's limit (a first sync of a whole library: 1,500
+    songs pass 16 MiB) goes in as many pushes as its limits ask, each followed to its take's end before the next:
+    every song taken there, never the 413 that gave nothing at every sync."""
+    from caracole import peer_push
+
+    here, there, asked, _ = two
+    monkeypatch.setattr(peer_push, "DOCUMENT_MAX", 40_000)  # a few songs a push, so 12 make several
+    posted = []
+    transport = limited(there, limits={peer_push.PUSH_PATH: 40_000}, posted=posted)
+    monkeypatch.setattr("caracole.commands.peer.transport_for_peer", lambda: transport)
+    units = long_songs(here, 12)
+    result = run(here, "peer", "sync", HOST, "--push", "--yes", "--progress")
+    assert result.exit_code == 0, result.output[-600:]
+    documents = [size for path, size in posted if path == peer_push.PUSH_PATH]
+    assert len(documents) >= 3 and max(documents) <= 40_000, documents
+    assert [path for path, _ in posted if path.startswith("/peer/push")].count(peer_push.NEW_PATH) == len(documents)
+    assert there.conn.execute("SELECT COUNT(*) FROM songs").fetchone()[0] == 12
+    assert '"stage":"give","state":"done","detail":"gave 12"' in result.output
+    from caracole.get import read_progress_line
+
+    events = [e for e in map(read_progress_line, result.output.splitlines()) if e is not None]
+    assert sorted(e["id"] for e in events if e.get("outcome") == "given") == sorted(units)
+    assert run(here, "peer", "diff", HOST).output.count("only in our book") == 0  # the two agree on each
+    assert not [p for p in (there.cfg.state_dir / "peer").iterdir() if p.name.startswith(peer_push.PREFIX)]
+
+
+def test_a_give_that_stops_at_its_second_push_keeps_the_first_taken_and_says_how_far_it_got(two, monkeypatch):
+    """Push 2 of 3 refused: push 1's songs are taken there and agreed (the next sync gives only the rest), push 2 is
+    dropped there, push 3 never sent, and the error says how far the give got."""
+    from caracole import peer_push
+
+    here, there, asked, _ = two
+    monkeypatch.setattr(peer_push, "DOCUMENT_MAX", 40_000)
+    posted = []
+    transport = limited(there, limits={peer_push.PUSH_PATH: 40_000}, posted=posted,
+                        refuse=lambda path, n: 503 if path == peer_push.PUSH_PATH and n == 2 else None)
+    monkeypatch.setattr("caracole.commands.peer.transport_for_peer", lambda: transport)
+    long_songs(here, 12)
+    result = run(here, "peer", "sync", HOST, "--push", "--yes", "--progress")
+    assert result.exit_code == 1, result.output[-600:]
+    first = there.conn.execute("SELECT COUNT(*) FROM songs").fetchone()[0]
+    pushes = [p for p, _ in posted if p == peer_push.PUSH_PATH]
+    assert 0 < first < 12 and len(pushes) == 2  # push 1 taken, push 2 refused, none after it
+    assert f"Couldn't give them 12: {first} given in the first push of " in result.output
+    assert "; then push 2 of " in result.output and "answered 503" in result.output
+    assert sum('"outcome":"given"' in line for line in result.output.splitlines()) == first
+    assert '"stage":"give","state":"failed"' in result.output
+    assert not [p for p in (there.cfg.state_dir / "peer").iterdir() if p.name.startswith(peer_push.PREFIX)]
+
+    posted.clear()
+    transport = limited(there, limits={peer_push.PUSH_PATH: 40_000}, posted=posted)
+    result = run(here, "peer", "sync", HOST, "--push", "--yes")
+    assert result.exit_code == 0, result.output[-600:]
+    assert f"Here takes 0, there takes {12 - first}." in result.output  # push 1's were agreed as its take ended
+    assert there.conn.execute("SELECT COUNT(*) FROM songs").fetchone()[0] == 12
+
+
+def test_a_song_with_a_kept_file_too_big_to_push_is_left_with_why_and_the_rest_given(two, monkeypatch):
+    """A song whose kept file passes what a push carries (64 MiB: a scanned score dropped into _inbox/) is left out of
+    the give in the export's words for it, never sent to be refused; the other songs are given."""
+    from caracole import peer_file, peer_push
+
+    here, there, asked, _ = two
+    posted = []
+    transport = limited(there, posted=posted)
+    monkeypatch.setattr("caracole.commands.peer.transport_for_peer", lambda: transport)
+    creep = here.song("Radiohead", "Creep", sheet=b"%PDF" + b"\0" * peer_push.FILE_MAX)  # 64 MiB and 4 bytes
+    wonderwall = here.song("Oasis", "Wonderwall", sheet=b"[Em]Today", version=None)
+    result = run(here, "peer", "sync", HOST, "--push", "--yes")
+    assert result.exit_code == 0, result.output
+    assert f"Left song/{creep.key}: {peer_file.TOO_BIG}" in result.output
+    assert "Gave 1 change to" in result.output
+    assert find_song(there.conn, wonderwall.key) is not None and find_song(there.conn, creep.key) is None
+    assert max(size for _, size in posted) < peer_push.FILE_MAX  # the file was never sent
+    assert sync.base_of(here.conn, sync.own_id(there.conn)).get(f"song/{creep.key}") is None  # nor agreed

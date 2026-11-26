@@ -251,7 +251,7 @@ def push(app: WebApp, params: dict[str, str], doc: Any) -> Response:
     except Refused:
         peer_push.unsend(state_dir, push_id)
         raise
-    if not new:  # a take of this caracole's waits or runs: this push stays open, to send again once it is over
+    if not new:  # a take of this caracole's waits or runs: this push is open again, never sent, for its pusher to drop
         peer_push.unsend(state_dir, push_id)
         raise Refused(409, "Taking already", f"{shown}: being taken already (request {job.id}). Send again once "
                                              "that's done.")
