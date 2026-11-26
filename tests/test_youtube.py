@@ -629,7 +629,7 @@ VERBOSE = "\n".join([
     ("ERROR: [youtube] dQw4w9WgXcQ: Failed to extract any player response; please report this issue", "outdated"),
     ("ERROR: [youtube] dQw4w9WgXcQ: Precondition check failed.", "outdated"),
     ("WARNING: [youtube] dQw4w9WgXcQ: nsig extraction failed: Some formats may be missing\n"
-     "ERROR: [youtube] dQw4w9WgXcQ: Requested format is not available", "pass_over"),  # the error line decides
+     "ERROR: [youtube] dQw4w9WgXcQ: Requested format is not available", "outdated"),  # the solver broke, not the video
     ("WARNING: [youtube] Signature extraction failed: Some formats may be missing\n"
      "ERROR: Unable to download API page: [Errno -3] Temporary failure in name resolution", "error"),
     ("Unable to extract yt initial data", "error"),  # no ERROR line: nothing to read it from
@@ -641,6 +641,9 @@ VERBOSE = "\n".join([
      "403 Forbidden> (caused by TransportError('<urlopen error Tunnel connection failed: 403 Forbidden>'))", "error"),
     ("ERROR: [youtube] dQw4w9WgXcQ: Unable to download API page: <urlopen error Tunnel connection failed: "
      "407 Proxy Authentication Required>", "error"),
+    # -v echoes the command line, the target in it: no [debug] line is read.
+    ("[debug] Command-line config: ['-v', '--', 'ytsearch1:captcha not a bot Video unavailable']\n"
+     "ERROR: Unable to download API page: [Errno -3] Temporary failure in name resolution", "error"),
 ])
 def test_classify_reads_outdated_and_pass_over_on_the_error_line_alone(stderr, cls):
     from caracole.youtube import classify
@@ -659,12 +662,65 @@ def test_the_computers_runs_are_unchanged(fake, tmp_path, stderr):
     from caracole import youtube_fetch as yf
 
     fake.video(ID, stderr=stderr, exit=1)
-    events, record, video = [], yf.Record(), Video(ID)
-    for n in range(1, yf.GIVE_UP_AFTER + 1):
-        with pytest.raises(ProviderError) as e:
-            runner(fake, tmp_path, events=events).download(ID, tmp_path)
-        assert type(e.value) is ProviderError
-        given_up = yf._count_failure(record, video, "search", e.value)
-        assert (given_up is not None) == (n == yf.GIVE_UP_AFTER)
-    assert isinstance(given_up, yf.DownloadsFailed) and record.skip == [ID]
-    assert [ev.decision for ev in events] == ["error"] * yf.GIVE_UP_AFTER
+    events = []
+    for source in ("search", "pasted"):  # the record's source: a searched video, or one pasted under [youtube]
+        record, video = yf.Record(), Video(ID)
+        for n in range(1, yf.GIVE_UP_AFTER + 1):
+            with pytest.raises(ProviderError) as e:
+                runner(fake, tmp_path, events=events).download(ID, tmp_path)
+            assert type(e.value) is ProviderError
+            given_up = yf._count_failure(record, video, source, e.value)
+            assert (given_up is not None) == (n == yf.GIVE_UP_AFTER)
+        assert isinstance(given_up, yf.DownloadsFailed)
+        assert record.skip == [ID] if source == "search" else record.unusable == ID
+    assert [ev.decision for ev in events] == ["error"] * 2 * yf.GIVE_UP_AFTER
+
+
+# yt-dlp 2026.08.19's own words (extractor/youtube/_video.py, jsc/_director.py) when its challenge solver fails: it
+# warns, leaves the formats that needed it out, and with m4a alone there is then no format to give.
+SOLVER_BROKE = [
+    "WARNING: [youtube] dQw4w9WgXcQ: n challenge solving failed: Some formats may be missing. Ensure you have a "
+    "supported JavaScript runtime and challenge solver script distribution installed.",
+    "WARNING: [youtube] dQw4w9WgXcQ: Signature solving failed: Some formats may be missing. Ensure you have a "
+    "supported JavaScript runtime and challenge solver script distribution installed.",
+    "WARNING: [youtube] [jsc] Error solving n challenge request using \"quickjs\" provider: the script failed.",
+    "WARNING: [youtube] No supported JavaScript runtime could be found. Only deno is enabled by default; to use "
+    "another runtime add  --js-runtimes RUNTIME[:PATH]  to your command/config.",
+]
+
+
+@pytest.mark.parametrize("warning", SOLVER_BROKE)
+def test_a_broken_challenge_solver_is_out_of_date_never_a_video_with_no_m4a(warning):
+    from caracole.youtube import classify
+
+    error = "ERROR: [youtube] dQw4w9WgXcQ: Requested format is not available. Use --list-formats"
+    assert classify(f"{warning}\n{error}") == "outdated"
+    assert classify(error) == "pass_over"  # no warning: this video has no m4a stream
+    assert classify(f"[debug] {warning}\n{error}") == "pass_over"  # a -v line says nothing
+    assert classify(f"{warning}\nERROR: Unable to download API page: [Errno 104] Connection reset") == "error"
+
+
+def test_the_target_is_given_as_it_is_and_a_download_folder_as_one_name():
+    from caracole.youtube import phone_argv
+
+    tricky = "ytsearch1:<proxy> <into> <qjs> <cache_dir> <target>"
+    argv = phone_argv("search", tricky, cache_dir="/c", qjs="/q", proxy="http://u:secret@127.0.0.1:1")
+    assert argv[-2:] == ["--", tricky] and argv.count("http://u:secret@127.0.0.1:1") == 1
+    url = watch_url(ID)
+    plain = phone_argv("download", url, cache_dir="/c", qjs="/q", proxy="http://p", into="/a/b")
+    assert phone_argv("download", url, cache_dir="/c", qjs="/q", proxy="http://p", into="/a/b/") == plain
+    assert plain[plain.index("-o") + 1] == "/a/b/audio.%(ext)s"
+
+
+@pytest.mark.parametrize("what,target", [
+    ("video", "https://www.youtube.com/watch?v=short"),
+    ("download", "https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PL1"),
+    ("download", "dQw4w9WgXcQ"),
+    ("video", "https://youtu.be/dQw4w9WgXcQ"),
+])
+def test_a_video_or_a_download_of_no_video_is_refused(what, target):
+    from caracole.youtube import phone_argv
+
+    into = "/a" if what == "download" else None
+    with pytest.raises(ValueError, match="not a YouTube video"):
+        phone_argv(what, target, cache_dir="/c", qjs="/q", proxy="http://p", into=into)

@@ -441,6 +441,7 @@ _BASE_ARGS = (
     "--no-remote-components", "--no-playlist", "--no-progress", "--socket-timeout", "30",
     "--retries", "0", "--extractor-retries", "0", "--fragment-retries", "0", "--sleep-requests", "0.5",
 )
+SEARCH_PREFIX = "ytsearch{n}:"  # a search's target: this, n its results, then the query
 SEARCH_ARGS = ("--flat-playlist", "--dump-single-json")  # a search's, after the base
 VIDEO_ARGS = ("--skip-download", "--flat-playlist", "--dump-single-json")  # a video's metadata, no download
 _DOWNLOAD_ARGS = (
@@ -478,7 +479,34 @@ _OUTDATED = re.compile(
     re.IGNORECASE,
 )
 PHONE_PASS_OVER = re.compile(r"Requested format is not available", re.IGNORECASE)
+# A challenge solver that failed, on a WARNING line: yt-dlp then leaves out the formats that needed it, and with m4a
+# alone a pass-over's words follow for every video. yt-dlp 2026.08.19's words (extractor/youtube/_video.py: "n
+# challenge solving failed", "Signature solving failed", "No supported JavaScript runtime could be found";
+# jsc/_director.py: "Error solving <type> challenge request(s) using"; jsc/_builtin/ejs.py, its solver script:
+# "Challenge solver <type> script version … is not supported", "Hash mismatch on challenge solver", "Failed to load
+# challenge solver", "Failed to read builtin challenge solver"), and earlier yt-dlp's "nsig extraction failed" and
+# "Signature extraction failed".
+_DEGRADED = re.compile(
+    r"n challenge solving failed|Signature solving failed|Error solving .{0,40}challenge request"
+    r"|No supported JavaScript runtime could be found|Challenge solver \S+ script version"
+    r"|Hash mismatch on challenge solver|Failed to (?:load|read builtin) challenge solver"
+    r"|nsig extraction failed|Signature extraction failed",
+    re.IGNORECASE,
+)
+DEBUG_PREFIX, ERROR_PREFIX, WARNING_PREFIX = "[debug]", "ERROR:", "WARNING:"
 RUN_CLASSES = ("blocked", "unavailable", "pass_over", "outdated", "error")  # what classify answers
+# classify's steps in order: (the class, the lines it reads, the pattern, and, for a step that needs one, a second
+# (lines, pattern) that must match too). "stderr" is every line read; "error_line" the last ERROR line, less that word;
+# "warning_lines" each WARNING line. A broken solver turns a pass-over out of date.
+_PATTERNS = {"blocked": _BLOCKED, "unavailable": _UNAVAILABLE, "pass_over": PHONE_PASS_OVER, "outdated": _OUTDATED,
+             "degraded": _DEGRADED}
+CLASSIFY_STEPS = (
+    ("blocked", "stderr", "blocked", None),
+    ("unavailable", "stderr", "unavailable", None),
+    ("outdated", "error_line", "pass_over", ("warning_lines", "degraded")),
+    ("pass_over", "error_line", "pass_over", None),
+    ("outdated", "error_line", "outdated", None),
+)
 
 
 class VideoUnavailable(ProviderError):
@@ -510,20 +538,23 @@ def _reason(stderr: str) -> str:
 
 
 def classify(stderr: str) -> str:
-    """What a run that failed came to, for the phone (``RUN_CLASSES``): ``blocked`` and ``unavailable`` read over the
-    whole of stderr, as ``YtDlp._run`` reads them; then, on the ERROR line alone (``_error_line``, never a warning or
-    a ``-v`` line), ``pass_over`` (``PHONE_PASS_OVER``) before ``outdated`` (``_OUTDATED``); else ``error``. The
-    computer's runs never ask it: an extraction error there is an error, counted against the video as ever."""
-    if _BLOCKED.search(stderr):
-        return "blocked"
-    if _UNAVAILABLE.search(stderr):
-        return "unavailable"
-    error = _error_line(stderr)
-    if error is not None:
-        if PHONE_PASS_OVER.search(error):
-            return "pass_over"
-        if _OUTDATED.search(error):
-            return "outdated"
+    """What a run that failed came to, for the phone (``RUN_CLASSES``), by ``CLASSIFY_STEPS``: its lines as
+    ``_lines`` reads them less the ``[debug]`` ones (under ``-v`` they echo the target); ``blocked`` and
+    ``unavailable`` over every one, as ``YtDlp._run`` reads stderr; then on the last ERROR line alone a pass-over's
+    words are ``outdated`` where a WARNING line says the challenge solver failed (``_DEGRADED``), else ``pass_over``;
+    then ``outdated`` (``_OUTDATED``); else ``error``. The computer's runs never ask it: an extraction error there is
+    an error, counted against the video as ever."""
+    lines = [line for line in _lines(stderr) if not line.startswith(DEBUG_PREFIX)]
+    errors = [line.removeprefix(ERROR_PREFIX).strip() for line in lines if line.startswith(ERROR_PREFIX)]
+    read = {"stderr": lines, "error_line": errors[-1:],
+            "warning_lines": [line for line in lines if line.startswith(WARNING_PREFIX)]}
+
+    def found(over: str, pattern: str) -> bool:
+        return any(_PATTERNS[pattern].search(line) for line in read[over])
+
+    for cls, over, pattern, also in CLASSIFY_STEPS:
+        if found(over, pattern) and (also is None or found(*also)):
+            return cls
     return "error"
 
 
@@ -533,14 +564,26 @@ def phone_argv(what: str, target: str, *, cache_dir: str, qjs: str, proxy: str,
     the folder a download's audio goes to), with no program name: the computer's (``_BASE_ARGS``, ``--cache-dir``,
     the kind's, ``--`` and the target), but QuickJS as the one runtime for YouTube's challenges (``qjs`` its program)
     and ``proxy``, the app's gate, as the proxy, after the cache folder; and a download's audio by its format alone
-    (``PHONE_DOWNLOAD_ARGS``)."""
+    (``PHONE_DOWNLOAD_ARGS``). ``cache_dir`` is given to ``--cache-dir`` as it is (the computer's runner adds
+    ``yt-dlp`` to its own); ``into`` loses its trailing slashes before ``/`` and ``OUTPUT_NAME``. A video's or a
+    download's target is a video's plain address (``watch_url``), as the computer's ``video`` and ``download`` give it,
+    else a ValueError."""
+    if what in PHONE_KINDS and what != "search":
+        video_id = target.removeprefix(watch_url(""))
+        if not VIDEO_ID.fullmatch(video_id) or target != watch_url(video_id):
+            raise ValueError(f"not a YouTube video's address: {target!r}")
+    return _phone_args(what, target, cache_dir=cache_dir, qjs=qjs, proxy=proxy, into=into)
+
+
+def _phone_args(what: str, target: str, *, cache_dir: str, qjs: str, proxy: str, into: str | None) -> list[str]:
+    """``phone_argv``'s arguments, its target not checked: the corpus's templates are made of it."""
     if what not in PHONE_KINDS:
         raise ValueError(f"no such yt-dlp run: {what!r}")
     args = list(PHONE_KINDS[what])
     if (what == "download") != (into is not None):
         raise ValueError("a download, and it alone, is given the folder its audio goes into")
     if into is not None:
-        args += ["-o", str(Path(into) / OUTPUT_NAME)]
+        args += ["-o", f"{into.rstrip('/')}/{OUTPUT_NAME}"]
     return [*_BASE_ARGS, "--cache-dir", str(cache_dir), "--no-js-runtimes", "--js-runtimes", f"quickjs:{qjs}",
             "--proxy", proxy, *args, "--", target]
 
@@ -583,7 +626,7 @@ class YtDlp:
         self._budget_reported = False
 
     def search(self, query: str, n: int = SEARCH_RESULTS) -> list[Video]:
-        target = f"ytsearch{n}:{query}"
+        target = SEARCH_PREFIX.format(n=n) + query
         out = self._run([*SEARCH_ARGS], target, "search", self._timeouts[0])
         return parse_search(out)
 

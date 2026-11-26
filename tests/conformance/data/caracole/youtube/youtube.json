@@ -170,6 +170,15 @@
   "proxy": "<proxy>",
   "into": "<into>"
  },
+ "fill": "each element holds at most one placeholder, alone, after a fixed prefix or before a fixed suffix; it is filled in one pass (before + value + after) and a value is never read again; into loses its trailing '/' first; cache_dir is given as it is",
+ "targets": {
+  "search_prefix": "ytsearch{n}:",
+  "watch_url": "https://www.youtube.com/watch?v={id}",
+  "video_id": {
+   "pattern": "[A-Za-z0-9_-]{11}",
+   "ignorecase": false
+  }
+ },
  "patterns": {
   "blocked": {
    "pattern": "not a bot|HTTP Error 4(?:03|29)|Too Many Requests|rate[- ]limited|try again later|captcha",
@@ -191,6 +200,10 @@
    "pattern": "Requested format is not available",
    "ignorecase": true
   },
+  "degraded": {
+   "pattern": "n challenge solving failed|Signature solving failed|Error solving .{0,40}challenge request|No supported JavaScript runtime could be found|Challenge solver \\S+ script version|Hash mismatch on challenge solver|Failed to (?:load|read builtin) challenge solver|nsig extraction failed|Signature extraction failed",
+   "ignorecase": true
+  },
   "network": {
    "pattern": "\\[Errno|Temporary failure|timed out|Connection (?:reset|refused|aborted)|Network is unreachable|Remote end closed|HTTP Error 5\\d\\d",
    "ignorecase": true
@@ -203,6 +216,50 @@
   "outdated",
   "error"
  ],
+ "classify": {
+  "ok_exit": 0,
+  "lines": "str.splitlines, each str.strip()ped; empty lines and those beginning skip_prefix dropped",
+  "skip_prefix": "[debug]",
+  "error_prefix": "ERROR:",
+  "warning_prefix": "WARNING:",
+  "steps": [
+   {
+    "class": "gate",
+    "over": "gate_log",
+    "note": "the phone's runner's, before stderr is read: a refusal of the app's gate, or its 407, is decided from the gate's log; classify never sees it"
+   },
+   {
+    "class": "blocked",
+    "over": "stderr",
+    "pattern": "blocked"
+   },
+   {
+    "class": "unavailable",
+    "over": "stderr",
+    "pattern": "unavailable"
+   },
+   {
+    "class": "outdated",
+    "over": "error_line",
+    "pattern": "pass_over",
+    "and": {
+     "over": "warning_lines",
+     "pattern": "degraded"
+    }
+   },
+   {
+    "class": "pass_over",
+    "over": "error_line",
+    "pattern": "pass_over"
+   },
+   {
+    "class": "outdated",
+    "over": "error_line",
+    "pattern": "outdated"
+   }
+  ],
+  "otherwise": "error"
+ },
  "reason_chars": 300,
  "search_timeout": 120.0,
  "download_timeout": 900.0,
