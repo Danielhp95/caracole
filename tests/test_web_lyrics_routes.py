@@ -205,14 +205,15 @@ def test_get_api_lyrics_search_reads_the_kept_search_and_the_lyrics_entry_with_n
     song = song_of(conn, duration_ms=225000)
     app = app_for(cfg, queue)
     empty = answer(get(app, f"/api/lyrics/search?song={song.id}"))
-    assert empty == {"song": song.id, "identity": song.key, "as": None, "picked": None, "picked_why": None,
-                     "picked_note": None, "length": 225.0, "search": None}
+    assert empty == {"song": song.id, "identity": song.key, "lyrics": "pending", "lyrics_note": None, "as": None,
+                     "picked": None, "picked_why": None, "picked_note": None, "length": 225.0, "search": None}
     search = keep_search(conn, song)
     set_lyrics_name(cfg.overrides_file, song.display, "孟维来 - 野人")
     set_lyrics_record(cfg.overrides_file, song.display, "lrclib:28399373")
     read = answer(get(app, f"/api/lyrics/search?song={song.id}&identity={song.key}"))
     assert read == {
-        "song": song.id, "identity": song.key, "as": {"artist": "孟维来", "title": "野人"},
+        "song": song.id, "identity": song.key, "lyrics": "pending", "lyrics_note": None,  # a record: asked for it
+        "as": {"artist": "孟维来", "title": "野人"},
         "picked": "lrclib:28399373", "length": 225.0,
         # transcript.picked_without_lyrics' words: a song still pending, its record not asked yet
         "picked_why": "the record you picked isn't read yet (lrclib 28399373): tonight's run or a lookup reads it",
@@ -258,13 +259,29 @@ def test_a_search_over_a_week_old_is_read_unpickable_and_a_picked_record_with_no
     set_lyrics_record(cfg.overrides_file, song.display, "megalobiz:8")
     update_song(conn, song.id, lyrics_status="missing")
     read = answer(get(app_for(cfg, queue), f"/api/lyrics/search?song={song.id}"))
-    assert read["search"]["pickable"] is False and len(read["search"]["rows"]) == 3
+    # Past its week its rows aren't given (the nightly run drops them): the name it asked under and when alone.
+    assert read["search"]["pickable"] is False and read["search"]["rows"] == [] and read["search"]["notes"] == []
+    assert read["search"]["line"] is None and read["search"]["said"] == {} and read["search"]["state"] == {}
     at = read["search"]["at"]
     assert read["search"]["asked"] == (f"Asked as “孟维来 - 野人” on {at[8:10]}/{at[5:7]}/{at[2:4]}: over a week ago. "
                                        "Search again to pick one.")
     assert read["picked"] == "megalobiz:8"
     assert read["picked_why"] == ("the record you picked (megalobiz 8) has given no lyrics: pick another, or clear "
                                   "the pick")
+
+
+def test_a_song_asked_anew_under_its_name_says_so_and_card_1_gives_its_card_as_it_is_now(cfg, conn, queue):
+    song = song_of(conn)
+    set_lyrics_name(cfg.overrides_file, song.display, "孟维来 - 野人")
+    app = app_for(cfg, queue)
+    read = answer(get(app, f"/api/lyrics/search?song={song.id}"))
+    assert read["lyrics"] == "pending" and "card" not in read
+    assert read["lyrics_note"] == "Its lyrics are asked for again under “孟维来 - 野人”, tonight or at a lookup."
+    carded = answer(get(app, f"/api/lyrics/search?song={song.id}&card=1"))
+    assert carded["card"]["id"] == song.id and carded["card"]["lyrics"] == "pending"
+    update_song(conn, song.id, lyrics_status="missing")
+    gone = answer(get(app, f"/api/lyrics/search?song={song.id}&card=1"))
+    assert gone["lyrics_note"] is None and gone["card"]["lyrics"] == "missing"
 
 
 def test_get_api_lyrics_search_refuses_no_song_another_songs_identity_and_no_id(cfg, conn, queue):

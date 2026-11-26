@@ -12,7 +12,10 @@ client giving up cut short (a pass whose miss would stand for the site's answer 
 
 A pass lists its songs at its start, and bulk work hands caracole's lock to a lookup or a sync in its pauses
 (commands/_common.py ``hand_over``), which may give a song on the list what the pass is for, or remove it: each
-song is read again just before its turn (``as_now``), and passed over once it is gone or no longer due.
+song is read again just before its turn (``as_now``), and passed over once it is gone or no longer due. What a pass
+holds of overrides.toml is read again once such a hand-over came (``Reread``): before a song's turn, and after it, so
+that what the site answered in a turn a hand-over came in is kept only while the song still is one to ask, as it was
+asked.
 """
 
 from __future__ import annotations
@@ -21,7 +24,7 @@ import logging
 import sqlite3
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
-from typing import TypeVar
+from typing import Generic, TypeVar
 
 from caracole.http import BudgetExhausted, ProviderBlocked, ProviderError, ProviderUnavailable
 from caracole.songs import Song, get_song
@@ -29,6 +32,7 @@ from caracole.songs import Song, get_song
 log = logging.getLogger(__name__)
 
 T = TypeVar("T")
+V = TypeVar("V")
 
 
 @dataclass
@@ -44,17 +48,55 @@ class PassStats:
     failures: list[tuple[Song, ProviderError]] = field(default_factory=list, compare=False, repr=False)
 
 
+def again(conn: sqlite3.Connection, song: Song, due: Callable[[Song], bool] = lambda song: True) -> Song | None:
+    """``song`` as the database has it now, while it is still due (``due``, read of the song as it is now); None once
+    it is removed (or its id is another song's now) or no longer due."""
+    try:
+        now = get_song(conn, song.id)
+    except KeyError:
+        return None
+    return now if now.key == song.key and due(now) else None
+
+
 def as_now(conn: sqlite3.Connection, songs: Iterable[Song],
            due: Callable[[Song], bool] = lambda song: True) -> Iterator[Song]:
-    """Each of ``songs`` as the database has it now, read lazily, just before its turn: one removed since (or whose
-    id another song has now) left out, and one ``due`` no longer says is due (read of the song as it is now)."""
+    """Each of ``songs`` as the database has it now, read lazily, just before its turn (``again``): one removed since
+    (or whose id another song has now) left out, and one ``due`` no longer says is due."""
     for song in songs:
-        try:
-            now = get_song(conn, song.id)
-        except KeyError:
-            continue
-        if now.key == song.key and due(now):
+        now = again(conn, song, due)
+        if now is not None:
             yield now
+
+
+def handed_over(client: object) -> int:
+    """How many times the client's process has handed caracole's lock over (commands/_common.py's clients'
+    ``handoffs``; any other client, none)."""
+    return int(getattr(client, "handoffs", 0) or 0)
+
+
+class Reread(Generic[V]):
+    """What a pass holds of overrides.toml, ``value``, as the jobs its client let go first left it: bulk work hands
+    caracole's lock over in its client's pauses (commands/_common.py ``hand_over``), and the job that took it may have
+    picked a record, cleared one or typed a name. ``look`` says whether a hand-over came since the last look, and reads
+    ``value`` again when one did (``reload``; the copy read before when the file can't be read now)."""
+
+    def __init__(self, client: object, value: V, reload: Callable[[], V] | None):
+        self.client, self.value, self.reload = client, value, reload
+        self.seen = handed_over(client)
+
+    def look(self) -> bool:
+        count = handed_over(self.client)
+        if count == self.seen:
+            return False
+        self.seen = count
+        if self.reload is not None:
+            from caracole.overrides import OverridesError
+
+            try:
+                self.value = self.reload()
+            except OverridesError as e:
+                log.info("overrides.toml couldn't be read again (%s); going on with what was read before.", e)
+        return True
 
 
 def each_song(

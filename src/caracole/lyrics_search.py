@@ -23,14 +23,17 @@ its ``Search.state``), never a miss; a block cools it down, with no alert, as a 
 lyrics.
 
 The rows are kept in kv ``lyrics-search:<song id>`` (``KV``), replaced by the song's next search, for a pick within
-``PICKABLE_FOR`` (``kept_search``, ``row_of``; ``last_search`` reads it however old, ``pickable`` says whether it
-still is). The name typed is read by ``typed_name``, the command's and caracole serve's route's alike. A row names
-its record only by an id the site answered, of the shape ``[lyrics]`` takes (``overrides.LYRICS_RECORD_IDS``): one of
-any other shape is dropped as it is read, from the site or from kv.
+``PICKABLE_FOR`` (``kept_search``, ``row_of``; ``pickable`` says whether it still is). Past it they die with their use:
+``last_search`` gives only the name asked and when (no row, no site's words), and the nightly lyrics step keeps only
+those of the record (``sweep_searches``, no request), which the card's line says ("Asked as “…” on DATE: over a week
+ago. Search again to pick one."). The name typed is read by ``typed_name``, the command's and caracole serve's route's
+alike. A row names its record only by an id the site answered, of the shape ``[lyrics]`` takes
+(``overrides.LYRICS_RECORD_IDS``): one of any other shape is dropped as it is read, from the site or from kv.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import sqlite3
@@ -42,7 +45,7 @@ from typing import Any
 
 from caracole import stamps
 from caracole.config import Config
-from caracole.db import kv_get_json, kv_set_json
+from caracole.db import kv_delete, kv_get_json, kv_set_json, savepoint
 from caracole.logs import plural, provider_name
 from caracole.overrides import LYRICS_RECORD_IDS
 from caracole.songs import Song
@@ -146,7 +149,10 @@ def is_own_name(song: Song, name: tuple[str, str]) -> bool:
 
 
 def audio_length(conn: sqlite3.Connection, song: Song) -> float | None:
-    """The song's length: its line's, else its YouTube video's, else its audio file's, else None (a hint only)."""
+    """The song's length: its line's, else its YouTube video's, else its audio file's, else None (a hint only). The one
+    rule for it, a search's and a pick's (staged.py ``_audio_length``): the line's first, as every lyrics pass asks
+    with the line's length (the record a site lists matches the track the line names), so the search's ``far`` and
+    the pick's "the audio is N s longer" agree."""
     if song.duration_s is not None:
         return song.duration_s
     from caracole.youtube_fetch import youtube_audio
@@ -370,15 +376,12 @@ class _Asking:
 
     def __call__(self, site: str, work: Callable[[Any], _Found]) -> _Found:
         from caracole.commands._common import lookup_run_id, make_client
-        from caracole.health import get_state, is_cooling, record_ok
+        from caracole.health import record_ok
         from caracole.http import BudgetExhausted, ProviderBlocked, ProviderError
 
-        name, p = provider_name(site), self.cfg.provider(site)
-        if not p.enabled:
-            return _Found(said=f"{name} is off (caracole.toml)", state=OFF)
-        if is_cooling(self.conn, site, self.now):
-            until = stamps.shown(get_state(self.conn, site).cooldown_until)
-            return _Found(said=f"waiting out {name} until {until}", state=COOLING)
+        passed = not_now(self.cfg, self.conn, self.now, site)
+        if passed is not None:
+            return _Found(said=passed[1], state=passed[0])
         client = make_client(self.cfg, self.conn, site, lookup_run_id(self.now), interactive=True)
         try:
             found = work(client)
@@ -403,6 +406,19 @@ class _Asking:
 
     def _stopped(self, site: str, client: Any, e: Exception) -> tuple[str, str]:
         return stopped(self.cfg, self.conn, self.now, site, client, e)
+
+
+def not_now(cfg: Config, conn: sqlite3.Connection, now: datetime, site: str) -> tuple[str, str] | None:
+    """Why a lookup asks the site nothing now, as a state of ``STATES`` and words: turned off, or cooling down; None
+    to ask it. A search's and a pick's alike."""
+    from caracole.health import get_state, is_cooling
+
+    name = provider_name(site)
+    if not cfg.provider(site).enabled:
+        return OFF, f"{name} is off (caracole.toml)"
+    if is_cooling(conn, site, now):
+        return COOLING, f"waiting out {name} until {stamps.shown(get_state(conn, site).cooldown_until)}"
+    return None
 
 
 def stopped(cfg: Config, conn: sqlite3.Connection, now: datetime, site: str, client: Any, e: Exception, *,
@@ -533,20 +549,43 @@ def _row(value: Any) -> Row | None:
 
 def kept_search(conn: sqlite3.Connection, song_id: int, now: datetime) -> Search | None:
     """The song's last search, while it may be picked from (``PICKABLE_FOR`` after it was made); else None."""
-    search = last_search(conn, song_id)
+    search = last_search(conn, song_id, now)
     return search if search is not None and pickable(search, now) else None
 
 
 def pickable(search: Search, now: datetime) -> bool:
     """Whether ``search`` may still be picked from: made ``PICKABLE_FOR`` ago at most."""
-    when = stamps.parse(search.at)
+    return _in_its_week(search.at, now)
+
+
+def _in_its_week(at: str, now: datetime) -> bool:
+    when = stamps.parse(at)
     return when is not None and stamps.utc(now) - when <= PICKABLE_FOR
 
 
-def last_search(conn: sqlite3.Connection, song_id: int) -> Search | None:
-    """The song's last search as kept, however old (caracole serve's card says when, and that an old one is past
-    picking from); None for none, or one that won't read."""
-    kept = kv_get_json(conn, f"{KV}{song_id}")
+def sweep_searches(conn: sqlite3.Connection, now: datetime) -> int:
+    """The kept searches past ``PICKABLE_FOR`` reduced to the name each asked under and when, and those that don't
+    read deleted, in one scan of kv with no request (the nightly lyrics step's, pipeline.py); how many it changed."""
+    changed = 0
+    rows = conn.execute("SELECT key, value FROM kv WHERE key LIKE ?", (f"{KV}%",)).fetchall()
+    with savepoint(conn, "sweep_searches"):
+        for key, value in rows:
+            try:
+                kept = json.loads(value)
+            except (ValueError, RecursionError):
+                kept = None
+            read = _asked(kept)
+            if read is None:
+                kv_delete(conn, key)
+                changed += 1
+            elif not _in_its_week(read[0], now) and set(kept) != {"at", "as"}:
+                kv_set_json(conn, key, {"at": read[0], "as": list(read[1])})
+                changed += 1
+    return changed
+
+
+def _asked(kept: Any) -> tuple[str, tuple[str, str]] | None:
+    """A kept search's time and the name it asked under, or None for a record that doesn't read."""
     if not isinstance(kept, Mapping):
         return None
     at, asked = kept.get("at"), kept.get("as")
@@ -554,13 +593,27 @@ def last_search(conn: sqlite3.Connection, song_id: int) -> Search | None:
         return None
     if not (isinstance(asked, list) and len(asked) == 2 and all(isinstance(part, str) for part in asked)):
         return None
+    return at, (asked[0], asked[1])
+
+
+def last_search(conn: sqlite3.Connection, song_id: int, now: datetime) -> Search | None:
+    """The song's last search as kept; past ``PICKABLE_FOR`` (as of ``now``) only the name it asked under and when,
+    with no row and no site's words, however much the record still holds (caracole serve's card says when, and that
+    it is past picking from); None for none, or one that won't read."""
+    kept = kv_get_json(conn, f"{KV}{song_id}")
+    read = _asked(kept)
+    if read is None:
+        return None
+    at, asked = read
+    if not _in_its_week(at, now):
+        return Search(at=at, asked=asked, length=None, lrclib={}, rows=(), said={}, state={})
     length, query, said, state = kept.get("length"), kept.get("lrclib"), kept.get("said"), kept.get("state")
     if not isinstance(state, Mapping) or any(state.get(site) not in STATES for site in SITES):
         return None  # a search kept before each site's state was: none to pick from
     rows = tuple(row for row in map(_row, kept.get("rows") if isinstance(kept.get("rows"), list) else []) if row)
     count = kept.get("instrumental")
     return Search(
-        at=at, asked=(asked[0], asked[1]),
+        at=at, asked=asked,
         length=float(length) if isinstance(length, (int, float)) and not isinstance(length, bool) else None,
         lrclib={k: v for k, v in query.items() if isinstance(v, str)} if isinstance(query, Mapping) else {},
         rows=rows, said={k: v for k, v in said.items() if isinstance(v, str)} if isinstance(said, Mapping) else {},

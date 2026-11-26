@@ -304,6 +304,48 @@ def test_the_search_is_kept_in_kv_and_replaced_by_the_next(cfg, conn, song, site
     assert kept_search(conn, song.id, NOW + timedelta(hours=1) + PICKABLE_FOR + timedelta(seconds=1)) is None
 
 
+def test_a_search_past_its_week_is_read_with_no_rows_before_any_sweep(cfg, conn, song, sites):
+    from caracole.lyrics_search import last_search, pickable
+
+    sites.lrclib.search = [lrc(77)]
+    search(cfg, conn, song)
+    assert len(last_search(conn, song.id, NOW + PICKABLE_FOR).rows) == 1
+    old = last_search(conn, song.id, NOW + PICKABLE_FOR + timedelta(seconds=1))
+    assert (old.at, old.asked, old.rows, old.said, old.state) == ("2026-11-25T13:00:00Z", NAME, (), {}, {})
+    assert not pickable(old, NOW + PICKABLE_FOR + timedelta(seconds=1))
+    assert len(db.kv_get_json(conn, f"{KV}{song.id}")["rows"]) == 1  # a read writes nothing
+
+
+def test_the_nightly_sweep_keeps_only_the_name_and_the_day_of_a_search_past_its_week(cfg, conn, song, sites):
+    from caracole.lyrics_search import last_search, sweep_searches
+
+    sites.lrclib.search = [lrc(77)]
+    search(cfg, conn, song)
+    other = add_song(conn, "Otro", "Otra", added_at="2026-11-02T00:00:00Z")
+    search(cfg, conn, other, ("Otro", "Otra"), now=NOW + timedelta(days=5))
+    db.kv_set(conn, f"{KV}999", "not json")
+    later = NOW + PICKABLE_FOR + timedelta(hours=1)
+    assert sweep_searches(conn, later) == 2
+    assert db.kv_get_json(conn, f"{KV}{song.id}") == {"at": "2026-11-25T13:00:00Z", "as": list(NAME)}
+    assert last_search(conn, song.id, later).asked == NAME
+    assert len(db.kv_get_json(conn, f"{KV}{other.id}")["said"]) == 3  # still pickable: kept whole
+    assert db.kv_get(conn, f"{KV}999") is None  # one that won't read goes
+    assert sweep_searches(conn, later) == 0  # a second sweep writes nothing
+
+
+def test_the_nightly_lyrics_step_sweeps_the_searches_past_their_week(cfg, conn, song, sites):
+    from caracole.notify import Notifier
+    from caracole.pipeline import Services, default_steps, run_pipeline
+
+    sites.lrclib.search = [lrc(77)]
+    search(cfg, conn, song)
+    update_song(conn, song.id, lyrics_status="found")  # nothing for LRCLIB to ask tonight
+    steps = [s for s in default_steps() if s.name == "lyrics"]
+    run_pipeline(cfg, conn=conn, services=Services(clients={"lrclib": object()}, notifier=Notifier(None)), steps=steps,
+                 now=NOW + timedelta(days=8))
+    assert db.kv_get_json(conn, f"{KV}{song.id}") == {"at": "2026-11-25T13:00:00Z", "as": list(NAME)}
+
+
 def test_a_kept_row_of_another_shape_is_never_given(cfg, conn, song, sites):
     db.kv_set_json(conn, f"{KV}{song.id}", {
         "at": "2026-11-25T13:00:00Z", "as": list(NAME), "length": None, "lrclib": {}, "instrumental": 0, "said": {},

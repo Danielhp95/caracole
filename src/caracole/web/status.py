@@ -353,7 +353,8 @@ def song_line(line: Line) -> Line:
 def _artist_read(steps: list[Step], details: str) -> Line:
     """A LaCuerda artist page's read, or a query of its search, or a harptabs.com artist page's read, or a UG link's,
     over: the sentence ``caracole lacuerda --artist`` (or ``--search``, ``caracole harptabs --artist``, ``caracole ug
-    --link``) ends with (commands/lyrics.py, commands/ug.py), up to its first "; " or bracket. "Read: …", "Searched: …" and
+    --link``) ends with (commands/lyrics.py, commands/ug.py), up to its first "; " or bracket outside a “quoted” name
+    (``_cut``: a lyrics search's name is said whole, "(Live)" and all). "Read: …", "Searched: …" and
     "Found already: …" are done, "Not found: …" and "Nothing found: …" LaCuerda's answer that it has no such page or
     song, and "Not read: …" and "Not searched: …" a cooldown, a block, a spent budget or an error, each a wait; any
     other ending, "Done"."""
@@ -362,8 +363,21 @@ def _artist_read(steps: list[Step], details: str) -> Line:
     if said is None:
         return Line("added", "Done", details=details)
     tone = next(t for prefix, t in _READ_TONES.items() if said.startswith(prefix))
-    text = said.split("; ", 1)[0].split(" (", 1)[0].rstrip(".") + "."
+    text = _cut(said).rstrip(".") + "."
     return Line(tone, _short(text), details=None if tone == "added" else details)
+
+
+def _cut(said: str) -> str:
+    """``said`` up to its first "; " or " (" outside a “quoted” name (a quote opened and not closed runs to the end)."""
+    depth = 0
+    for i, c in enumerate(said):
+        if c == "“":
+            depth += 1
+        elif c == "”":
+            depth = max(depth - 1, 0)
+        elif depth == 0 and said.startswith(("; ", " ("), i):
+            return said[:i]
+    return said
 
 
 def _lyrics_kept(job: Job) -> bool:

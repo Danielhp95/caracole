@@ -28,7 +28,8 @@ record is another site's is never asked, nor timed lyrics for one with plain one
 is asked for that record alone, ``/lrc/{id}`` (``fetch_record``), one request, while it has no lyrics
 (``lyrics.picked_due``), and that record gone (or with no timed line) is a miss that makes its lyrics missing, as the
 one site asked answered one (logged), asked again after 30 days, past the cache, as is every ask after that miss, an
-error between them aside (kv ``megalobiz:checked:``, which an error leaves).
+error between them aside (kv ``megalobiz:checked:``, which an error leaves). A pick, a clear or a search the client's
+pauses let in is kept to at once (lyrics.py ``Turns``): ``picks`` read again, before each song's turn and after it.
 """
 
 from __future__ import annotations
@@ -48,6 +49,7 @@ from caracole.library import song_dir, write_info
 from caracole.lyrics import (
     FAILED,
     Lyrics,
+    Turns,
     asked_as,
     picked_due,
     picked_record,
@@ -70,7 +72,9 @@ from caracole.provider_pass import PassStats, as_now, each_song
 from caracole.songs import Song, get_song, list_songs, update_song
 
 if TYPE_CHECKING:
-    from caracole.overrides import LyricsPick
+    from collections.abc import Callable
+
+    from caracole.overrides import LyricsPick, Overrides
 
 log = logging.getLogger(__name__)
 
@@ -176,13 +180,17 @@ def megalobiz_lyrics(
     durations: Mapping[int, float] | None = None,
     recheck_after: timedelta = RECHECK_AFTER,
     picks: Mapping[str, LyricsPick] | None = None,
+    reload_overrides: Callable[[], Overrides] | None = None,
 ) -> MegalobizStats:
     """Ask Megalobiz about the songs LRCLIB left (``songs_to_ask``; of ``only``'s ids when given, a lookup's one
     song); see the module docstring. ``durations``: a length by song id for a song whose line gives none (a sheet
     from a YouTube video's audio), else LRCLIB's plain lyrics' length. ``picks``: ``Overrides.lyrics``, the name a
-    song is asked under and the record picked; without it, every request is what it was."""
+    song is asked under and the record picked; without it, every request is what it was. ``reload_overrides``: after
+    the client handed caracole's lock over, ``picks`` read again, as lyrics.py's ``Turns`` says."""
     stats = MegalobizStats()
     stamp = stamps.stamp(now)
+    turns = Turns(conn, client, picks, reload_overrides,
+                  lambda song, held: _due(conn, song, now, recheck_after=recheck_after, only=only, picks=held))
 
     def length(song: Song) -> float | None:
         if song.duration_s is not None:
@@ -194,25 +202,30 @@ def megalobiz_lyrics(
         return lyrics.duration if lyrics is not None and lyrics.duration else None
 
     def turn(song: Song) -> Lyrics | None:  # a miss asked again goes past the cache
-        record = picked_record(song, picks)
+        held = turns.asking(song)
+        record = picked_record(song, held)
         if record is not None:
             # past the cache once Megalobiz answered it a miss: an error since never makes its cached 404 a new one
             return fetch_record(client, int(record.id), cache=kv_get(conn, f"{CHECKED}{song.id}") is None)
         cache = kv_get(conn, f"{CHECKED}{song.id}") is None
-        artist, title, _ = asked_as(song, picks)
+        artist, title, _ = asked_as(song, held)
         return fetch_megalobiz(client, artist=artist, title=title, duration_s=length(song), cache=cache)
 
     def back_to_pending(song: Song, error: Exception) -> None:
-        if song.lyrics_status == "missing":  # a song is missing only once every site asked answered a miss
+        # a song is missing only once every site asked answered a miss; as it is now, since a pick or a clear in the
+        # turn's pauses asked its question anew
+        if turns.still_asked(song) and get_song(conn, song.id).lyrics_status == "missing":
             update_song(conn, song.id, lyrics_status="pending", lyrics_at=None)
 
-    songs = as_now(conn, songs_to_ask(conn, now, recheck_after=recheck_after, only=only, picks=picks),
-                   lambda song: _due(conn, song, now, recheck_after=recheck_after, only=only, picks=picks))
-    for song, lyrics in each_song(songs, stats, turn, site="Megalobiz", on_error=back_to_pending,
-                                  on_cut=back_to_pending):
+    songs = songs_to_ask(conn, now, recheck_after=recheck_after, only=only, picks=picks)
+    for song, lyrics in each_song(as_now(conn, songs, turns.due), stats, turn, site="Megalobiz",
+                                  on_error=back_to_pending, on_cut=back_to_pending):
+        song = turns.answered(song)
+        if song is None:  # a pick, a clear or a name came in this very turn: its answer isn't the song's now
+            continue
         if lyrics is None:
             kv_set(conn, f"{CHECKED}{song.id}", stamp)
-            record = picked_record(song, picks)
+            record = picked_record(song, turns.picks)
             if record is not None:  # the one site asked missed: the song's lyrics are missing
                 log.info("%s: the record you picked is gone: %s", song.display, record.text.replace(":", " ", 1))
                 update_song(conn, song.id, lyrics_status="missing", lyrics_at=stamp)

@@ -283,11 +283,13 @@ def register(app: typer.Typer) -> None:
 def _lyrics(cfg: Config) -> None:
     """Look up every song still waiting for lyrics, and old misses, then print the counts."""
     from caracole.lyrics import fetch_pending_lyrics
+    from caracole.overrides import load_overrides
 
     overrides = load_ovr(cfg)  # [lyrics], and the pages
 
     def run(conn: sqlite3.Connection, client: Client, now: datetime):
-        return fetch_pending_lyrics(conn, client, cfg.library_dir, now, picks=overrides.lyrics)
+        return fetch_pending_lyrics(conn, client, cfg.library_dir, now, picks=overrides.lyrics,
+                                    reload_overrides=lambda: load_overrides(cfg.overrides_file))
 
     def ran(s: LyricsStats) -> bool:
         return bool(s.tried or s.budget_exhausted)
@@ -334,12 +336,6 @@ def _typed_name(cfg: Config, text: str) -> tuple[str, str]:
     return name
 
 
-def _clock(seconds: float) -> str:
-    from caracole.lyrics_search import clock
-
-    return clock(seconds)
-
-
 def _lyrics_as(cfg: Config, display: str, typed: str) -> None:
     """List what the lyrics sites have under a name you type for a song (lyrics_search.py): the name noted under
     ``[lyrics]`` first, then each site asked once, in the lookups' lane, the rows numbered. A site that fails, waits
@@ -349,14 +345,14 @@ def _lyrics_as(cfg: Config, display: str, typed: str) -> None:
     "Nothing found: " (every site asked answered none) or "Not searched: " (no rows, a site failed or waited)."""
     import shlex
 
-    from caracole.lyrics_search import is_own_name, last_line, notes, row_facts, search_lyrics
+    from caracole.lyrics_search import clock, is_own_name, last_line, notes, row_facts, search_lyrics
 
     name = _typed_name(cfg, typed)
     overrides = load_ovr(cfg)
     with exclusive(cfg, f"lyrics --as {display}", lane=True), closing(open_db(cfg)) as conn:
         song = _common.song_named(conn, display, overrides)
         found = search_lyrics(cfg, conn, song, name, now=utcnow())
-    audio = f" (its audio is {_clock(found.length)})" if found.length else ""
+    audio = f" (its audio is {clock(found.length)})" if found.length else ""
     noted = ("; the song's own name, so none is kept under [lyrics]" if is_own_name(song, name)
              else "; noted under [lyrics]")
     typer.echo(f"Asked as {found.name}{audio}{noted}.")
@@ -422,6 +418,7 @@ def _megalobiz(cfg: Config, overrides: Overrides) -> None:
     """Megalobiz's pass after LRCLIB's, as the nightly run's step follows LRCLIB's: the songs LRCLIB left without
     timed lyrics. Nothing, not a word, when it is turned off or has no song to ask about."""
     from caracole.megalobiz_fetch import MegalobizStats, megalobiz_lyrics, songs_to_ask
+    from caracole.overrides import load_overrides
 
     if not cfg.provider("megalobiz").enabled:
         return
@@ -430,7 +427,8 @@ def _megalobiz(cfg: Config, overrides: Overrides) -> None:
             return
 
     def run(conn: sqlite3.Connection, client: Client, now: datetime) -> MegalobizStats:
-        return megalobiz_lyrics(conn, client, cfg.library_dir, now, picks=overrides.lyrics)
+        return megalobiz_lyrics(conn, client, cfg.library_dir, now, picks=overrides.lyrics,
+                                reload_overrides=lambda: load_overrides(cfg.overrides_file))
 
     def ran(s: MegalobizStats) -> bool:
         return bool(s.tried or s.budget_exhausted)
@@ -449,6 +447,7 @@ def _azlyrics(cfg: Config, overrides: Overrides) -> None:
     """AZLyrics' pass after Megalobiz's, as the nightly run's step follows it: the songs still without lyrics. Nothing,
     not a word, when it is turned off or has no song to ask about."""
     from caracole.azlyrics_fetch import AzLyricsStats, azlyrics_lyrics, songs_to_ask
+    from caracole.overrides import load_overrides
 
     if not cfg.provider("azlyrics").enabled:
         return
@@ -457,7 +456,8 @@ def _azlyrics(cfg: Config, overrides: Overrides) -> None:
             return
 
     def run(conn: sqlite3.Connection, client: Client, now: datetime) -> AzLyricsStats:
-        return azlyrics_lyrics(conn, client, cfg.library_dir, now, picks=overrides.azlyrics, lyrics=overrides.lyrics)
+        return azlyrics_lyrics(conn, client, cfg.library_dir, now, picks=overrides.azlyrics, lyrics=overrides.lyrics,
+                               reload_overrides=lambda: load_overrides(cfg.overrides_file))
 
     def ran(s: AzLyricsStats) -> bool:
         return bool(s.tried or s.budget_exhausted)

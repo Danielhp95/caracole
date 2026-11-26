@@ -48,11 +48,11 @@ from caracole.http import Client, ProviderError, Response, read_once_more
 from caracole.library import song_dir, write_atomic
 from caracole.normalize import clean_title, fold, slug_key
 from caracole.overrides import override_key
-from caracole.provider_pass import PassStats, as_now, each_song
+from caracole.provider_pass import PassStats, Reread, again, as_now, each_song
 from caracole.songs import Song, list_songs, update_song
 
 if TYPE_CHECKING:
-    from caracole.overrides import LyricsPick, LyricsRecord
+    from caracole.overrides import LyricsPick, LyricsRecord, Overrides
 
 log = logging.getLogger(__name__)
 
@@ -647,6 +647,7 @@ def fetch_pending_lyrics(
     only: Collection[int] | None = None,
     durations: Mapping[int, float] | None = None,
     picks: Mapping[str, LyricsPick] | None = None,
+    reload_overrides: Callable[[], Overrides] | None = None,
 ) -> LyricsStats:
     """Look up the lyrics of every song that has none yet, newest first (of ``only``'s ids, when given:
     a lookup's one song). ``durations``: a length in seconds by song id, for a song whose line gives
@@ -671,24 +672,34 @@ def fetch_pending_lyrics(
     (``ProviderUnavailable``), the pass ends. Every song an error left
     (``failures``) is remembered for the sites after it (kv ``lyrics:failed:``, ``FAILED``)
     until LRCLIB answers about it.
+
+    The client's pauses may hand caracole's lock to the owner's pick, clear or search of a song's lyrics
+    (commands/_common.py ``hand_over``): after one, ``picks`` is read again (``reload_overrides``, provider_pass.py
+    ``Reread``), before each song's turn (``Turns``), and what LRCLIB answered in a turn a hand-over came in is kept
+    only for a song still due, with the pick the turn asked under.
     """
     stats = LyricsStats()
     stamp = stamps.stamp(now)
+    turns = Turns(conn, client, picks, reload_overrides,
+                  lambda song, held: _due(song, now, recheck_missing_after, held))
 
     def turn(song: Song) -> LyricsResult:  # a re-check of a miss goes past the cache
+        held = turns.asking(song)
         cache = song.lyrics_status != "missing"
-        record = picked_record(song, picks)
+        record = picked_record(song, held)
         if record is not None:
             found = fetch_lrclib_record(client, int(record.id), cache=cache)
             return (_outcome(found) if found is not None else None) or LyricsResult("missing", None)
         duration = song.duration_s if song.duration_s is not None else (durations or {}).get(song.id)
-        artist, title, album = asked_as(song, picks)
+        artist, title, album = asked_as(song, held)
         return fetch_lyrics(client, artist=artist, title=title, album=album, duration_s=duration, cache=cache)
 
     listed = (s for s in _songs_to_look_up(conn, now, recheck_missing_after, picks) if only is None or s.id in only)
-    songs = as_now(conn, listed, lambda song: _due(song, now, recheck_missing_after, picks))
-    for song, result in each_song(songs, stats, turn, site="LRCLIB"):
-        record = picked_record(song, picks)
+    for song, result in each_song(as_now(conn, listed, turns.due), stats, turn, site="LRCLIB"):
+        song = turns.answered(song)
+        if song is None:  # a pick, a clear or a name came in this very turn: its answer isn't the song's now
+            continue
+        record = picked_record(song, turns.picks)
         if record is not None and result.status == "missing":
             log.info("%s: the record you picked is gone: lrclib %s", song.display, record.id)
         _record(conn, library_dir, song, result, stamp)
@@ -700,8 +711,56 @@ def fetch_pending_lyrics(
         else:
             stats.missing += 1
     for song, _ in stats.failures:
-        kv_set(conn, f"{FAILED}{song.id}", stamp)
+        if turns.still_asked(song):
+            kv_set(conn, f"{FAILED}{song.id}", stamp)
     return stats
+
+
+class Turns:
+    """A lyrics pass's songs and ``[lyrics]`` (``Overrides.lyrics``) as they are at each song's turn, the three
+    passes' one rule (here, megalobiz_fetch.py, azlyrics_fetch.py). Bulk work's client hands caracole's lock over in
+    its pauses, and the job that took it may have picked a song's record, cleared it or typed another name:
+
+    - ``picks``, read again after such a hand-over (``reload``: what a pass reads of overrides.toml, provider_pass.py
+      ``Reread``), before each song's turn (``due``, ``as_now``'s, of the song as it is now and ``picks`` then);
+    - ``asking``: the picks a song's turn asks under, noted;
+    - ``answered``: after the turn, the song as it is now while what its site answered is still its own (no
+      hand-over in the turn; or the song still due, with the same ``[lyrics]`` entry the turn asked under), else None:
+      that answer is left unrecorded (in the HTTP cache), and the song as the owner's job left it;
+    - ``still_asked``: whether a song a turn left with an error is still the song it asked about, as it asked."""
+
+    def __init__(self, conn: sqlite3.Connection, client: Client, picks: Any, reload: Callable[[], Overrides] | None,
+                 due: Callable[[Song, Any], bool], held: Callable[[Overrides], Any] = lambda o: o.lyrics,
+                 pick_of: Callable[[Song, Any], Any] | None = None):
+        self.conn, self._due = conn, due
+        self.held = Reread(client, picks, (lambda: held(reload())) if reload is not None else None)
+        self._pick_of = pick_of or (lambda song, value: _pick(song, value))
+        self._asked: dict[int, Any] = {}
+
+    @property
+    def picks(self) -> Any:
+        return self.held.value
+
+    def due(self, song: Song) -> bool:
+        self.held.look()
+        return self._due(song, self.held.value)
+
+    def asking(self, song: Song) -> Any:
+        self._asked[song.id] = self._pick_of(song, self.held.value)
+        return self.held.value
+
+    def answered(self, song: Song) -> Song | None:
+        if not self.held.look():
+            return song
+        now = again(self.conn, song, lambda fresh: self._due(fresh, self.held.value))
+        return now if now is not None and self.still_asked(now) else None
+
+    def still_asked(self, song: Song) -> bool:
+        self.held.look()
+        if song.id not in self._asked:  # never asked (the pass given up before its turn): as it was listed
+            return True
+        now = again(self.conn, song)
+        return now is not None and self._pick_of(now, self.held.value) == self._asked[song.id]
 
 
 def _record(

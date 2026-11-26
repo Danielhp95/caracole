@@ -326,6 +326,13 @@ class _Lookup:
                 raise self._left() from None
         self.handed = handoffs()
 
+    def _overrides_now(self) -> Any:
+        """overrides.toml as it is now: what a lyrics pass reads again once its client handed the lock over (lyrics.py
+        ``Turns``)."""
+        from caracole.overrides import load_overrides
+
+        return load_overrides(self.cfg.overrides_file)
+
     def _gone(self) -> bool:
         """Whether the lookup's song left the book after it was found (``_left``); False when the database can't
         say."""
@@ -765,7 +772,7 @@ class _Lookup:
 
         def ask(client) -> tuple[str, str] | str:
             s = fetch_pending_lyrics(self.conn, client, self.cfg.library_dir, self.now, only={self.song.id},
-                                     picks=picks)
+                                     picks=picks, reload_overrides=self._overrides_now)
             self.asked_under_name |= named and bool(s.tried)
             if s.budget_exhausted:
                 raise BudgetExhausted("lrclib")
@@ -815,7 +822,8 @@ class _Lookup:
         named = record is None and asked_name(self.song, picks) is not None
 
         def ask(client) -> str:
-            s = megalobiz_lyrics(self.conn, client, self.cfg.library_dir, self.now, only={self.song.id}, picks=picks)
+            s = megalobiz_lyrics(self.conn, client, self.cfg.library_dir, self.now, only={self.song.id}, picks=picks,
+                                 reload_overrides=self._overrides_now)
             self.asked_under_name |= named and bool(s.tried)
             if s.budget_exhausted:
                 raise BudgetExhausted("megalobiz")
@@ -845,7 +853,7 @@ class _Lookup:
 
         def ask(client) -> str:
             s = azlyrics_lyrics(self.conn, client, self.cfg.library_dir, self.now, picks=picks, only={self.song.id},
-                                lyrics=lyrics)
+                                lyrics=lyrics, reload_overrides=self._overrides_now)
             self.asked_under_name |= has_name and not paged and bool(s.tried)
             if s.budget_exhausted:
                 raise BudgetExhausted("azlyrics")

@@ -967,7 +967,9 @@
   // of a search still pickable has Use these lyrics (POST /lyrics/pick with its record), the record in use Clear the
   // pick (POST /lyrics/clear), as has a record picked that gave no lyrics (``picked_why``); both posted in place, the
   // panel then gone and the song's line following the job, a refusal said in the panel; once that job is over the card
-  // is drawn again from the song, and the transcription offers read again.
+  // is drawn again from the song, and the transcription offers read again. A search it followed over, the GET is read
+  // with the song's card (``card=1``): a song the search asked anew (missing, pending now under the name, said in the
+  // route's ``lyrics_note``) has its card drawn again, the focus where it was in the panel, and the offers read again.
   const LYRICS_SEARCH = Boolean(server && server.lyricsSearch === true);
   const lyricsSite = (site) => String(own.call(ICONS, site) && ICONS[site] && ICONS[site].name || site);
   const whose = (name) => name + (/s$/.test(name) ? "'" : "'s");
@@ -1018,6 +1020,8 @@
       missing ? "No lyrics found. Look them up under another name" : "Lyrics under another name…");
     const why = el("div", "actions");
     why.hidden = true;
+    const again = el("p", "hint lyrics-note");  // the route's words for a song asked anew under the name
+    again.hidden = true;
     const form = songForm("link-form", "/lyrics/search", s);
     let typed = false;  // a field you typed in keeps what you typed, whatever the GET answers
     const field = (name, label, value) => {
@@ -1051,7 +1055,7 @@
     list.hidden = true;
     const notes = el("div");  // the search's own lines of the sites that listed none, each a muted line
     notes.hidden = true;
-    panel.append(summary, why, form, said, asked, list, notes);
+    panel.append(summary, why, form, said, asked, again, list, notes);
     const say = (text) => {
       if (said.textContent !== text) said.textContent = text;
     };
@@ -1158,6 +1162,8 @@
       notes.hidden = !notes.childNodes.length;
       asked.textContent = search && typeof search.asked === "string" ? search.asked : "";
       asked.hidden = !asked.textContent;
+      again.textContent = typeof body.lyrics_note === "string" ? body.lyrics_note : "";
+      again.hidden = !again.textContent;
       if (ended !== undefined) {
         say(ended === "done" && search && typeof search.line === "string" ? String(search.line) :
           "The search didn't run to its end: the Journal says why.");
@@ -1165,12 +1171,23 @@
         say(String(search.line));
       }
       panel.dataset.read = "1";
+      // A search over may have asked the song anew (its lyrics missing, now pending under the name): the card drawn
+      // again from the song as it is now, the focus where it was in the panel, and the offers read again.
+      if (ended !== undefined && body.card && typeof body.card === "object") {
+        if (String(body.card.lyrics) !== String(s.lyrics)) {
+          songAgain(body.card);
+          summarize();
+          tallyChips();
+        }
+        readTranscriptions();
+      }
     };
     let read = false;
     const readIt = (ended) => {
       read = true;
       const q = new URLSearchParams({ song: String(id) });
       if (s.identity) q.set("identity", String(s.identity));
+      if (ended !== undefined) q.set("card", "1");
       fetch("api/lyrics/search?" + q.toString(), { cache: "no-store", headers: { Accept: "application/json" } })
         .then((r) => r.json().catch(() => null).then((body) => ({ ok: r.ok, status: r.status, body })))
         .then(({ ok, status, body }) => {
@@ -5258,6 +5275,15 @@
     if (view.kind === "songbook") return;
     const data = view.card && typeof view.card === "object" ? view.card : null;
     if (!data) return;
+    songAgain(data);
+    const spot = spots.get(Number(view.id));  // a result's row, or a line under the bar: the song's line, now
+    if (spot) spots.set(Number(view.id), refill(spot, lineFor(data)));
+    summarize();
+    tallyChips();  // the list itself stays as it is: a line the filter now hides goes at the next search
+  };
+  // A song's card data as it is now (a job's view's, or the lyrics panel's after a search): kept, its line drawn
+  // again where it is (refill: an open card made again, the focus on its same control).
+  const songAgain = (data) => {
     lostTo(Number(data.id), data.identity);
     const i = byIndex.get(Number(data.id));
     if (i !== undefined) {
@@ -5268,10 +5294,6 @@
     } else {
       arrived.set(Number(data.id), data);  // counted, and shown under the form until the next load
     }
-    const spot = spots.get(Number(view.id));  // a result's row, or a line under the bar: the song's line, now
-    if (spot) spots.set(Number(view.id), refill(spot, lineFor(data)));
-    summarize();
-    tallyChips();  // the list itself stays as it is: a line the filter now hides goes at the next search
   };
   const songOf = (view) => (view.songId === null || view.songId === undefined ? null : Number(view.songId));
   // Whether a job that is over brings what the page draws again: its song's line (none for a song the library

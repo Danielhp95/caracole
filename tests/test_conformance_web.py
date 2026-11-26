@@ -802,6 +802,7 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
         (queued_job(f"Lyrics under “{V_DISPLAY}”", _jobs.LYRICS_SEARCH + V_KEY,
                     _jobs.lyrics_search_steps(f"{V_DISPLAY} (Live)", V_DISPLAY), display=f"{V_DISPLAY} (Live)"),
          [f"Searched: LRCLIB and AZLyrics list 3 records for “{V_DISPLAY}”.",
+          "Searched: LRCLIB lists 3 records for “Eagles - Hotel California (Live; 1994)”.",
           f"Nothing found: LRCLIB, Megalobiz and AZLyrics list nothing for “{V_DISPLAY}”.",
           "Not searched: LRCLIB failed (lrclib: 503: https://lrclib.net/api/search: busy); waiting out Megalobiz "
           "until 2026-11-04 11:30 UTC; try again later."]),

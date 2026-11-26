@@ -390,3 +390,55 @@ def test_a_picked_record_gone_says_so(conn, tmp_path, caplog):
         run(FakeAzLyrics({}), conn, tmp_path, lyrics=lyrics_table(tmp_path, song.display,
                                                                    '{ record = "azlyrics:pomme/gone" }'))
     assert f"{song.display}: the record you picked is gone: azlyrics pomme/gone" in caplog.messages
+
+
+# --- a pick or a clear in the pass's pause: [lyrics] read again -------------------------------------------------------
+
+
+def handing_over(site, tmp_path, when, then):
+    from helpers.handing_over import HandingOver
+
+    return HandingOver(site.client(tmp_path / "cache"), when, then)
+
+
+def fresh_run(conn, cfg, client, tmp_path):
+    from caracole.overrides import load_overrides
+
+    held = load_overrides(cfg.overrides_file)
+    return azlyrics_lyrics(conn, client, tmp_path / "lib", NOW, picks=held.azlyrics, lyrics=held.lyrics,
+                           reload_overrides=lambda: load_overrides(cfg.overrides_file))
+
+
+def test_a_record_cleared_in_the_passs_pause_is_asked_for_no_more(conn, cfg, tmp_path):
+    # Hotel California waits for its picked AZLyrics page, gone; the owner clears it while the pass reads pomme's page:
+    # the page is never asked, nor the song made missing by its 404.
+    from helpers.handing_over import cleared
+
+    from caracole.overrides import set_lyrics_record
+
+    mononoke(conn)
+    song = add_song(conn, "Eagles", "Hotel California", added_at="2026-09-01T00:00:00Z")
+    set_lyrics_record(cfg.overrides_file, song.display, "azlyrics:eagles/hotelcalifornia")
+    site = FakeAzLyrics()
+    client = handing_over(site, tmp_path, lambda url, params: url.endswith(ARTIST), lambda: cleared(cfg, conn, song))
+    fresh_run(conn, cfg, client, tmp_path)
+    assert site.requests == [ARTIST, SONG]
+    assert get_song(conn, song.id).lyrics_status == "pending"
+
+
+def test_a_record_picked_during_the_songs_own_turn_is_never_replaced_by_what_azlyrics_answers(conn, cfg, tmp_path):
+    # Between pomme's page and mononoke's, the owner picks Megalobiz's timed lyrics of it: AZLyrics' plain ones,
+    # answered then, are left unrecorded.
+    from helpers.handing_over import picked
+
+    song = mononoke(conn)
+    mine = Lyrics(plain="Mes mots", synced="[00:01.00]Mes mots", instrumental=False, duration=200.0, lrclib_id=None,
+                  raw={"id": 777}, provider="megalobiz", url="https://megalobiz.com/lrc/777/mononoke")
+    site = FakeAzLyrics()
+    client = handing_over(site, tmp_path, lambda url, params: url.endswith(SONG),
+                          lambda: picked(cfg, conn, song, "megalobiz:777", mine))
+    assert fresh_run(conn, cfg, client, tmp_path).found == 0
+    assert site.requests == [ARTIST, SONG]
+    stored = get_song(conn, song.id)
+    assert stored.lyrics_status == "found" and lyrics_from_json(stored.lyrics_json).provider == "megalobiz"
+    assert kv_get(conn, f"{CHECKED}{song.id}") is None

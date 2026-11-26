@@ -388,7 +388,8 @@ class _Sheet(HearsWords, StagedRun):
             return None
         stats = self._asked("megalobiz", "Megalobiz", lambda client: megalobiz_lyrics(
             self.conn, client, self.cfg.library_dir, self.now, only={self.song.id},
-            durations={self.song.id: length} if length else None, picks=picks), gap="timed lyrics")
+            durations={self.song.id: length} if length else None, picks=picks,
+            reload_overrides=self._overrides_now), gap="timed lyrics")
         if isinstance(stats, tuple):
             return stats
         record = picked_record(self.song, picks)
@@ -417,7 +418,8 @@ class _Sheet(HearsWords, StagedRun):
                 or not songs_to_ask(self.conn, self.now, picks=picks, only={self.song.id}, lyrics=lyrics)):
             return None
         stats = self._asked("azlyrics", "AZLyrics", lambda client: azlyrics_lyrics(
-            self.conn, client, self.cfg.library_dir, self.now, picks=picks, only={self.song.id}, lyrics=lyrics),
+            self.conn, client, self.cfg.library_dir, self.now, picks=picks, only={self.song.id}, lyrics=lyrics,
+            reload_overrides=self._overrides_now),
             gap="lyrics")
         if isinstance(stats, tuple):
             return stats
@@ -444,7 +446,8 @@ class _Sheet(HearsWords, StagedRun):
         client = make_client(self.cfg, self.conn, "lrclib", self.run_id)
         try:
             stats = fetch_pending_lyrics(self.conn, client, self.cfg.library_dir, self.now, only={self.song.id},
-                                         durations={self.song.id: length} if length else None, picks=picks)
+                                         durations={self.song.id: length} if length else None, picks=picks,
+                                         reload_overrides=self._overrides_now)
         except ProviderBlocked as e:
             state = record_block(self.conn, "lrclib", self.now, str(e))
             until = state.cooldown_until.strftime("%Y-%m-%d %H:%M UTC") if state.cooldown_until else "later"

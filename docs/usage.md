@@ -996,7 +996,9 @@ the rest, 40 at most; a record more than 10 s off the audio says its gap ("4:31,
 Instrumental records are counted, never listed. A site cooling down, out of its asks, blocking or
 failing is said and the others are listed; with no rows the last line is then `Not searched: …`,
 never `Nothing found`. A site turned off is said and left out: the others answering none is
-`Nothing found`. The list is kept for 7 days to pick from, until the song's next search.
+`Nothing found`. The list is kept for 7 days to pick from, until the song's next search. After
+that only the name asked and the day are kept (the nightly run drops the rows), so the card says
+`Asked as “…” on DD/MM/YY: over a week ago. Search again to pick one.`
 `--song` and `--as` go together (exit 2); a song not in the book or ignored exits 1. A name that
 changes the one kept is a new question for a song with no answer yet: a song pending or missing has
 the sites' earlier misses forgotten and is pending again, so no transcription is offered until every
@@ -1025,7 +1027,8 @@ week old, a record it didn't list) exits 1, and so does a failure here: override
 written or lyrics that can't be (nothing is then changed, though lyric files that couldn't be put
 back are said to hold the new words), an info.json, a chords failure or a PDF that can't be made (the
 lyrics stay kept: `Lyrics kept; the job failed after: …`). `--progress` adds a JSON line per stage, for
-caracole serve.
+caracole serve. A pick cut off between noting the record and storing its lyrics (the machine stopped)
+leaves the record noted and the old lyrics stored: pick it again.
 
     caracole lyrics --song "ARTIST - TITLE" --clear
 
@@ -1673,7 +1676,11 @@ Megalobiz and AZLyrics are asked by the nightly run (its megalobiz and azlyrics 
   now: lrclib 9` (within its 30 days).
 - A song whose record you picked and that has no lyrics is never transcribed, not even with
   Transcribe anyway: only that one record was asked, never the other sites. Pick another record,
-  or clear the pick to have every site asked under the song's own name.
+  or clear the pick to have every site asked again, under the name you typed (`as`, which the clear
+  keeps), else the song's own.
+- A pick, a clear or a search the nightly run lets in at one of its pauses counts at once: the
+  passes read `[lyrics]` again after it, and what a site answered about the song meanwhile is kept
+  only if the song is still to be asked, as it was asked.
 
 **Megalobiz** gets two requests per song at most. Its API allows 1,000 requests a day, and
 caracole stops at 900 (see [Two paces](#configure)). It also allows 30 a minute, which caracole

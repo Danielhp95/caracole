@@ -259,6 +259,20 @@ def test_the_picked_lyrics_replace_better_ones_and_say_what_they_replaced(cfg, c
     assert (lyrics.plain, lyrics.synced, lyrics.lrclib_id) == ("Otras palabras", None, 77)
 
 
+def test_the_pick_and_the_search_say_the_audio_by_one_length(cfg, conn, song, sites):
+    # Its line gives the song 36 s, its own file 10: the search lists the 36 s record with no gap (the length the
+    # sites are asked with, the line's), and the pick says none either (lyrics_search.audio_length, the one rule).
+    from caracole.lyrics_search import far
+
+    conn.execute("UPDATE songs SET duration_ms = 36000 WHERE id = ?", (song.id,))
+    sites.lrclib.search = [lrc(77, duration=36.0)]
+    found = searched(cfg, conn, song, sites)
+    assert found.length == 36.0 and not far(found.rows[0], found.length)
+    result, heard = pick(cfg, n=1)
+    assert result.ok, result
+    assert "the audio is" not in heard.ends()["lyrics"][1]
+
+
 def test_the_record_is_noted_under_lyrics_with_the_name_kept(cfg, conn, song, sites):
     sites.lrclib.search = [lrc(77)]
     searched(cfg, conn, song, sites)

@@ -31,7 +31,6 @@ from collections.abc import Callable
 from contextlib import closing
 from dataclasses import dataclass, field
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 from caracole.config import Config
@@ -153,6 +152,13 @@ class StagedRun:
         self.overrides = overrides_since(self.cfg, self.overrides, handed)
         self._song_again()
 
+    def _overrides_now(self) -> Any:
+        """overrides.toml as it is now: what a lyrics pass reads again once its client handed the lock over (lyrics.py
+        ``Turns``)."""
+        from caracole.overrides import load_overrides
+
+        return load_overrides(self.cfg.overrides_file)
+
     def _song_again(self) -> None:
         """The song read again; gone (another caracole removed it, or merged it into a song of the same name, while
         this one let a lookup have the lock), the job ends there, a refusal (``_Stop``), before anything more is
@@ -166,19 +172,12 @@ class StagedRun:
                         "of the same name)") from None
 
     def _audio_length(self) -> float | None:
-        """The song's audio's length in seconds: as yt-dlp reported it, else as its file says; None when neither
-        tells (a length is a hint: the lyrics sites are asked without one)."""
-        from caracole.music import read_audio
-        from caracole.youtube_fetch import youtube_audio
+        """The song's length in seconds, by lyrics_search.py's one rule (``audio_length``: its line's, else as yt-dlp
+        reported its video, else as its file says), the length the lyrics sites are asked with; None when none tells (a
+        length is a hint: the sites are asked without one)."""
+        from caracole.lyrics_search import audio_length
 
-        video = youtube_audio(self.conn, self.song)
-        if video is not None and video.duration:
-            return video.duration
-        try:
-            return read_audio(Path(self.song.audio_path or "")).duration_s
-        except Exception as e:  # noqa: BLE001 - a length is a hint: LRCLIB is asked without one
-            log.info("The length of %s can't be read: %s", self.song.audio_path, e)
-            return None
+        return audio_length(self.conn, self.song)
 
     # --- the stages both jobs end with -------------------------------------------------------------------
 

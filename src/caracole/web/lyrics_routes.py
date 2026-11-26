@@ -12,7 +12,10 @@ their records taken as the song's lyrics, and that pick taken back.
                           the song's audio length, and its kept search (its rows, each site's words and state, how
                           many instrumental records were left out, the name it asked under and the length its rows
                           were scored against, each row far from it or not, each site with no rows in the command's
-                          words, whether it is still pickable, and its last line's words)
+                          words, whether it is still pickable, and its last line's words; past its week, the name
+                          and the day alone), the song's lyrics state (``lyrics``) and, for a song asked again under
+                          its ``as``, that in words (``lyrics_note``); with ``card=1``, the song's card as the page
+                          draws it now (``card``), which the panel asks once a search it followed is over
     POST /lyrics/pick     one of those rows taken as the song's lyrics (``song``, ``identity``, ``record``): ``caracole
                           lyrics --song --record --progress`` queued under ``jobs.LYRICS_PICK``, the queue's
     POST /lyrics/clear    the record you picked taken back (``song``, ``identity``): ``caracole lyrics --song --clear``
@@ -153,29 +156,42 @@ def api_search(app: WebApp, asked: dict[str, list[str]], *, now: datetime | None
     """``GET /api/lyrics/search?song=ID``: what the card's panel shows of the song's lyrics search, read with no
     request and no lock, as of ``now`` (this moment by default)."""
     from caracole.autochords.transcript import picked_without_lyrics
+    from caracole.library_page import song_cards
     from caracole.lyrics_search import audio_length, last_search
     from caracole.overrides import override_key
     from caracole.songs import get_song
+    from caracole.web.review_routes import review_first
 
-    overrides = app.overrides()
+    overrides, now = app.overrides(), now or datetime.now(UTC)
     wanted = song_id((asked.get("song") or [""])[0], where="address")
     with no_such_song(), app.db() as conn:
         song = get_song(conn, wanted)
         same_song(song, {"identity": (asked.get("identity") or [""])[0]})
-        kept = last_search(conn, song.id)
+        kept = last_search(conn, song.id, now)
         length = audio_length(conn, song)
+        card = None
+        if (asked.get("card") or [""])[0] == "1":  # a search over may have asked the song anew: its card as it is now
+            card = song_cards(conn, app.cfg, overrides, now.replace(microsecond=0), [song])[0]
+            card["fetchable"] = not review_first(song, overrides)
     entry = overrides.lyrics.get(override_key(song.display))
     record = entry.record if entry is not None else None
     why = picked_without_lyrics(song, overrides)
-    return json_response(200, {
-        "song": song.id, "identity": song.key,
+    # asked anew under its ``as`` (a search's new name, a clear): the sites ask it under that name next
+    again = entry.asked if entry is not None and record is None and song.lyrics_status == "pending" else None
+    answer = {
+        "song": song.id, "identity": song.key, "lyrics": song.lyrics_status,
+        "lyrics_note": (f"Its lyrics are asked for again under “{again[0]} - {again[1]}”, tonight or at a lookup."
+                        if again is not None else None),
         "as": _as_json(entry.asked if entry is not None else None),
         "picked": record.text if record is not None else None,
         "picked_why": why,
         "picked_note": _picked_note(why, record, kept),
         "length": length,
-        "search": _search_json(kept, now or datetime.now(UTC)) if kept is not None else None,
-    })
+        "search": _search_json(kept, now) if kept is not None else None,
+    }
+    if card is not None:
+        answer["card"] = card
+    return json_response(200, answer)
 
 
 def _picked_note(why: str | None, record: Any, kept: Search | None) -> str | None:
@@ -195,6 +211,10 @@ def _search_json(kept: Search, now: datetime) -> dict[str, Any]:
     last line."""
     from caracole.lyrics_search import asked_line, far, last_line, notes, pickable, row_facts
 
+    if not pickable(kept, now):  # past its week: the name it asked under and when alone (last_search)
+        return {"at": kept.at, "as": _as_json(kept.asked), "length": None, "rows": [], "said": {},
+                "asked": asked_line(kept, now), "state": {}, "instrumental": 0, "pickable": False, "notes": [],
+                "line": None}
     return {"at": kept.at, "as": _as_json(kept.asked), "length": kept.length,
             "rows": [row.as_json() | {"far": far(row, kept.length), "facts": row_facts(row, kept.length)}
                      for row in kept.rows],

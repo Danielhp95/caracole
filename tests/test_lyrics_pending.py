@@ -735,3 +735,62 @@ def test_a_picked_record_gone_says_so(conn, tmp_path, caplog):
     with caplog.at_level("INFO", logger="caracole.lyrics"):
         run(FakeLrclib(), conn, tmp_path, picks=lyrics_table(tmp_path, YEREN, '{ record = "lrclib:28399373" }'))
     assert f"{YEREN}: the record you picked is gone: lrclib 28399373" in caplog.messages
+
+
+# --- a pick or a clear in the pass's pause: [lyrics] read again -------------------------------------------------------
+
+
+def handed(lrclib: FakeLrclib, tmp_path: Path, when, then):
+    from helpers.handing_over import HandingOver
+
+    return HandingOver(lrclib.client(tmp_path / "cache"), when, then)
+
+
+def soda(conn):
+    """Soda Stereo – De Música Ligera, pending, newer than the other songs: asked first."""
+    return add_song(conn, added_at="2026-10-17T00:00:00Z")
+
+
+def test_a_record_cleared_in_the_passs_pause_is_asked_for_no_more(conn, cfg, tmp_path):
+    # 野人's picked record is gone from LRCLIB; while the pass asks about another song the owner clears it: the pass
+    # reads [lyrics] again and asks LRCLIB under the name, never the cleared record, whose 404 would leave it missing
+    # with LRCLIB never asked under the name (and the night's hearing offering it to Whisper).
+    from helpers.handing_over import cleared
+
+    from caracole.overrides import set_lyrics_name, set_lyrics_record
+
+    song = yeren(conn)
+    soda(conn)
+    set_lyrics_name(cfg.overrides_file, YEREN, "孟维来 - 野人")
+    set_lyrics_record(cfg.overrides_file, YEREN, "lrclib:1")
+    lrclib = FakeLrclib([record(), load("get_by_id.json")])
+    client = handed(lrclib, tmp_path, lambda url, params: params.get("artist_name") == "Soda Stereo",
+                    lambda: cleared(cfg, conn, song))
+    stats = fetch_pending_lyrics(conn, client, tmp_path / "lib", NOW, picks=load_overrides(cfg.overrides_file).lyrics,
+                                 reload_overrides=lambda: load_overrides(cfg.overrides_file))
+    assert stats == LyricsStats(tried=2, found=2)
+    assert "get/1" not in lrclib.endpoints()
+    assert ("get", {"artist_name": "孟维来", "track_name": "野人", "duration": "251"}) in lrclib.requests
+    assert lyrics_from_json(get_song(conn, song.id).lyrics_json).lrclib_id == 28399373
+
+
+def test_a_record_picked_during_the_songs_own_turn_is_never_replaced_by_what_lrclib_answers(conn, cfg, tmp_path):
+    # While LRCLIB is asked about 野人 the owner picks Megalobiz's record of it: what LRCLIB answers then is left
+    # unrecorded (in the HTTP cache), and the picked lyrics stay the song's.
+    from helpers.handing_over import picked
+
+    from caracole.lyrics import Lyrics
+
+    song = yeren(conn)
+    mine = Lyrics(plain="我的", synced="[00:01.00]我的", instrumental=False, duration=251.0, lrclib_id=None,
+                  raw={"id": 777}, provider="megalobiz", url="https://megalobiz.com/lrc/777/x")
+    lrclib = FakeLrclib([load("get_by_id.json")])
+    client = handed(lrclib, tmp_path, lambda url, params: params.get("artist_name") == "孟维来",
+                    lambda: picked(cfg, conn, song, "megalobiz:777", mine))
+    stats = fetch_pending_lyrics(conn, client, tmp_path / "lib", NOW,
+                                 picks=load_overrides(cfg.overrides_file).lyrics,
+                                 reload_overrides=lambda: load_overrides(cfg.overrides_file))
+    assert lrclib.endpoints()[0] == "get" and stats.found == stats.missing == 0
+    stored = get_song(conn, song.id)
+    assert stored.lyrics_status == "found" and lyrics_from_json(stored.lyrics_json).provider == "megalobiz"
+    assert kv_get(conn, f"{FAILED}{song.id}") is None

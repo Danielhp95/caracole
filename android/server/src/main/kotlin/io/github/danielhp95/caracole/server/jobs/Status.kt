@@ -306,8 +306,24 @@ object Status {
             step.output.asReversed().firstOrNull { line -> READ_TONES.keys.any(line::startsWith) }?.let(PyText::strip)
         } ?: return Line("added", "Done", details = details)
         val tone = READ_TONES.entries.first { said.startsWith(it.key) }.value
-        val text = said.split("; ", limit = 2)[0].split(" (", limit = 2)[0].trimEnd('.') + "."
+        val text = cut(said).trimEnd('.') + "."
         return Line(tone, short(text), details = if (tone == "added") null else details)
+    }
+
+    /** [said] up to its first "; " or " (" outside a “quoted” name (status.py's _cut): a lyrics search's name said
+     * whole, "(Live)" and all; a quote opened and not closed runs to the end. */
+    private fun cut(said: String): String {
+        var depth = 0
+        for (i in said.indices) {
+            when (said[i]) {
+                '\u201c' -> depth += 1
+                '\u201d' -> depth = maxOf(depth - 1, 0)
+                else -> if (depth == 0 && (said.startsWith("; ", i) || said.startsWith(" (", i))) {
+                    return said.substring(0, i)
+                }
+            }
+        }
+        return said
     }
 
     /** The command's last line for a lyrics pick that failed after its lyrics were kept (lyrics_pick.py's

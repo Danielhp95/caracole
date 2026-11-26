@@ -65,7 +65,6 @@ KEPT_FAILED_AFTER = "Lyrics kept; the job failed after"  # the command's last li
 CLEARED = "Cleared the record you picked"  # how ``clear_pick``'s line begins, which caracole serve's request line reads
 # ``--clear``'s refusal, after the song's name
 NOTHING_TO_CLEAR = "has no lyrics record picked under [lyrics]: nothing to clear."
-FAR = 10.0  # seconds between the record's length and the audio's past which the lyrics stage says so
 
 
 @dataclass(frozen=True)
@@ -85,11 +84,6 @@ class PickRequest:
 
 def _possessive(name: str) -> str:
     return f"{name}'" if name.endswith("s") else f"{name}'s"
-
-
-def _clock(seconds: float) -> str:
-    whole = round(seconds)
-    return f"{whole // 60}:{whole % 60:02d}"
 
 
 def _readable(song: Song) -> Any:
@@ -122,9 +116,7 @@ class _Pick(StagedRun):
     # --- song ---------------------------------------------------------------------------------------------------
 
     def find_song(self) -> str:
-        from caracole.db import kv_get_json
-        from caracole import stamps
-        from caracole.lyrics_search import KV, PICKABLE_FOR, kept_search, row_of
+        from caracole.lyrics_search import last_search, pickable, row_of
         from caracole.normalize import identity_key
         from caracole.songs import find_song
 
@@ -135,13 +127,11 @@ class _Pick(StagedRun):
             raise _Stop(f"{req.display} isn't in the book")
         if song.status == "ignored" or key in self.overrides.ignore:
             raise _Stop(f"{song.display} is ignored (overrides.toml)")
-        search = kept_search(self.conn, song.id, self.now)
+        search = last_search(self.conn, song.id, self.now)
         if search is None:
-            kept = kv_get_json(self.conn, f"{KV}{song.id}")
-            at = stamps.parse(kept["at"]) if isinstance(kept, dict) and isinstance(kept.get("at"), str) else None
-            if at is not None and stamps.utc(self.now) - at > PICKABLE_FOR:
-                raise _Stop("its last search is over a week old: search again")
             raise _Stop(f"search {song.display}'s lyrics first (caracole lyrics --song … --as …)")
+        if not pickable(search, self.now):
+            raise _Stop("its last search is over a week old: search again")
         if req.pick is not None:
             if not 1 <= req.pick <= len(search.rows):
                 raise _Stop(f"its last search listed {len(search.rows)} records: there is no row {req.pick}")
@@ -186,23 +176,20 @@ class _Pick(StagedRun):
         """The record's lyrics (None for none now), or the stage's end when its site couldn't be asked."""
         from caracole.azlyrics_fetch import fetch_azlyrics
         from caracole.commands._common import lookup_run_id, make_client
-        from caracole.health import get_state, is_cooling, record_ok
+        from caracole.health import record_ok
         from caracole.http import BudgetExhausted, ProviderError
         from caracole.lyrics import fetch_lrclib_record
-        from caracole.lyrics_search import BLOCKED, FAILED, stopped
+        from caracole.lyrics_search import BLOCKED, FAILED, not_now, stopped
         from caracole.megalobiz_fetch import fetch_record
-        from caracole.stamps import shown
 
-        site, name = record.site, provider_name(record.site)
+        site = record.site
         if site == "lrclib":
             cached = self._cached_lrclib(int(record.id))
             if cached is not None:
                 return cached, None
-        if not self.cfg.provider(site).enabled:
-            return None, ("skipped", f"{name} is off (caracole.toml){NOTHING_KEPT}")
-        if is_cooling(self.conn, site, self.now):
-            until = shown(get_state(self.conn, site).cooldown_until)
-            return None, ("skipped", f"waiting out {name} until {until}{NOTHING_KEPT}")
+        passed = not_now(self.cfg, self.conn, self.now, site)
+        if passed is not None:
+            return None, ("skipped", f"{passed[1]}{NOTHING_KEPT}")
         client = make_client(self.cfg, self.conn, site, lookup_run_id(self.now), interactive=True)
         try:
             if site == "lrclib":
@@ -260,6 +247,11 @@ class _Pick(StagedRun):
             write_lyrics(folder, lyrics)
         except (OSError, SharedFolder) as e:
             return self._fail(f"couldn't write its lyrics ({e}){self._put_back(folder, before)}")
+        # The record noted before the database's savepoint: overrides.toml can't be rolled back with the database,
+        # so it is written first, where a failure to write it keeps nothing (the files put back). A kill between the
+        # two leaves the record noted and the old lyrics stored; no pass repairs that for a found song, as the passes
+        # ask a picked record only while the song has no lyrics (lyrics.picked_due, which the phone's passes port), so
+        # the owner picks it again (docs/usage.md says so). The window is one savepoint.
         try:
             set_lyrics_record(self.cfg.overrides_file, song.display, record.text)
             self.overrides = load_overrides(self.cfg.overrides_file)
@@ -294,9 +286,11 @@ class _Pick(StagedRun):
         return NOTHING_KEPT
 
     def _kept_said(self, lyrics: Any, before: Any) -> str:
+        from caracole.lyrics_search import FAR, clock
+
         row = self.row
         name = provider_name(row.site)
-        facts = [part for part in (row.album, _clock(lyrics.duration or row.duration or 0)
+        facts = [part for part in (row.album, clock(lyrics.duration or row.duration or 0)
                                    if (lyrics.duration or row.duration) else "") if part]
         said = (f"{'timed' if lyrics.synced else 'plain'} lyrics from {name}: {row.artist or '(no artist)'} - "
                 f"{row.title}" + (f" ({', '.join(facts)})" if facts else ""))

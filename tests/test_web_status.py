@@ -481,6 +481,15 @@ def test_a_lyrics_search_ends_in_its_last_lines_words():
     assert job_line(failed, None) == Line("failed", "The library's database can't be read.", details=details)
 
 
+def test_a_lyrics_searchs_line_is_never_cut_inside_the_quoted_name():
+    # A name of its own with a bracket or a semicolon (the owner's "(Live)"): the quote is said whole; what follows
+    # its closing quote is cut as ever.
+    live = "Searched: LRCLIB lists 3 records for “Eagles - Hotel California (Live; 1994)”."
+    assert job_line(lyrics_search_job("done", live), None) == Line("added", live)
+    cut = "Nothing found: LRCLIB lists nothing for “A (B)” (its audio is 3:46); try again."
+    assert job_line(lyrics_search_job("done", cut), None).text == "Nothing found: LRCLIB lists nothing for “A (B)”."
+
+
 def lyrics_pick_job(state="running", stages=None, *, output=()):
     from caracole.lyrics_pick import STAGES
     from caracole.web.jobs import LYRICS_PICK, Stage, lyrics_pick_steps

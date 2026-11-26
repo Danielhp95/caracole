@@ -6,7 +6,7 @@ the name last asked (``[lyrics]``' ``as``), else the song's own; only its Search
 /lyrics/search`` (opening the card and typing send nothing). Its line says the sites are asked while the search runs,
 then the panel reads ``GET /api/lyrics/search`` again and lists a row a record, the best fit first, each with Use
 these lyrics (``POST /lyrics/pick`` in place, the song's line then following the pick); a site that failed is said,
-never "nothing found"; a search over a week old lists its rows with no Use; a record picked that gave no lyrics says
+never "nothing found"; a search over a week old lists no rows, its name and day alone; a record picked that gave no lyrics says
 so, with Clear the pick (``POST /lyrics/clear``). The file on disk and the phone's page have none of it. A real
 ``caracole serve`` serves the page; its queue runs ``FakeLyrics``, which keeps a search as the command does.
 """
@@ -76,6 +76,7 @@ class FakeLyrics:
         self.pick_hold = threading.Event()  # a pick waits for it once it has begun
         self.pick_hold.set()
         self.search = lambda asked: a_search(asked)
+        self.renames = False  # the name noted and the question asked anew, as search_lyrics does
         self.cfg = None
         self.song = None
 
@@ -106,6 +107,11 @@ class FakeLyrics:
         if asked is not None:
             self.hold.wait(30)
             search = self.search(tuple(asked.split(" - ", 1)))
+            if self.renames:
+                from caracole.lyrics_search import ask_anew
+
+                set_lyrics_name(self.cfg.overrides_file, self.song.display, asked)
+                self._in_the_book(lambda conn, song: ask_anew(conn, song, renamed=True))
             self._in_the_book(lambda conn, song: kv_set_json(conn, f"{KV}{song.id}", search.as_json()))
             emit(last_line(search))
             return 0
@@ -340,6 +346,40 @@ def test_nothing_found_says_where_it_looked(able, live, lyrics, browser):
     assert browser.js(fields_of(card)) == [ARTIST, "野人"]  # left for another name
 
 
+def test_a_search_that_asks_a_missing_song_anew_draws_its_card_again_with_no_transcription(able, live, lyrics,
+                                                                                          browser):
+    # 野人 has no lyrics found, so Transcribe the lyrics is offered; a search under 孟维来 - 野人 finds nothing, and
+    # asks the song anew under that name (pending: no transcription until every site has answered it). Once it is
+    # over, with no reload, the offer is gone and the card says what is true, the focus where it was in the panel.
+    base, posted, _ = live
+    lyrics.renames = True
+    lyrics.search = lambda asked: a_search(asked, rows=(), state={s: "none" for s in ("lrclib", "megalobiz",
+                                                                                       "azlyrics")},
+                                           said={"lrclib": "nothing listed", "megalobiz": "nothing listed",
+                                                 "azlyrics": "no artist page for 孟维来"})
+    song = lyrics.song
+    browser.open(base)
+    browser.js("window.notReloaded = true")
+    card = opened(browser, song)
+    drawn(browser, card)
+    assert browser.js(f"document.querySelector({json.dumps(card + ' form.transcribe')}) !== null")
+    type_into(browser, card, "title", "野人")
+    browser.press("Enter")
+    posted.next(0)
+    again = cards.card_js(line(song))
+    assert browser.wait(f"{again} !== null && {again}.querySelector('.facts .lyrics') !== null && "
+                        f"{again}.querySelector('.facts .lyrics').textContent === 'Lyrics pending'"), \
+        browser.js(f"{again} && {again}.querySelector('.facts').textContent")
+    read_again(posted)
+    assert browser.wait(f"{again}.querySelector('form.transcribe') === null")
+    shown = "#" + browser.js(f"{again}.id")
+    assert browser.wait(f"{text_of(shown, 'p.lyrics-note')} === 'Its lyrics are asked for again under "
+                        "“孟维来 - 野人”, tonight or at a lookup.'"), browser.js(text_of(shown, "p.lyrics-note"))
+    assert browser.js(FOCUSED) == "INPUT.title"
+    assert browser.js(f"document.activeElement.closest({json.dumps(shown)}) !== null")
+    assert browser.js("window.notReloaded === true")
+
+
 def test_a_failed_site_is_said_never_nothing_found(able, live, lyrics, browser):
     base, posted, _ = live
     lyrics.search = lambda asked: a_search(asked, rows=(), state={"lrclib": "failed", "megalobiz": "none",
@@ -409,7 +449,7 @@ def test_a_refused_pick_says_why_in_the_panel(able, live, lyrics, browser):
     assert browser.js(f"document.querySelector({panel_of(card)}).hidden") is False
 
 
-def test_a_stale_search_offers_no_use_button(able, live, lyrics, browser):
+def test_a_stale_search_lists_no_rows_and_says_to_search_again(able, live, lyrics, browser):
     base, posted, _ = live
     song = lyrics.song
     old = datetime.now(UTC) - timedelta(days=8)
@@ -417,8 +457,8 @@ def test_a_stale_search_offers_no_use_button(able, live, lyrics, browser):
     browser.open(base)
     card = opened(browser, song)
     drawn(browser, card)
-    assert browser.wait(f"{rows_of(card)}.length === 4")
-    assert [row[3] for row in browser.js(rows_of(card))] == [None] * 4
+    assert browser.wait(f"{text_of(card, '> p.hint')} !== ''")
+    assert browser.js(f"{rows_of(card)}.length") == 0
     asked = browser.js(text_of(card, "> p.hint"))
     assert asked == f"Asked as “孟维来 - 野人” on {old:%d/%m/%y}: over a week ago. Search again to pick one."
     assert posted == []

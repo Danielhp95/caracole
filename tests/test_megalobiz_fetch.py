@@ -463,3 +463,93 @@ def test_a_picked_record_gone_says_so(conn, tmp_path, caplog):
         run(FakeMegalobiz([]), conn, tmp_path, picks=lyrics_table(tmp_path, song.display,
                                                                    '{ record = "megalobiz:777" }'))
     assert f"{song.display}: the record you picked is gone: megalobiz 777" in caplog.messages
+
+
+# --- a pick or a clear in the pass's pause: [lyrics] read again -------------------------------------------------------
+
+
+def creep(conn):
+    """Radiohead – Creep, missing, newer than Hotel California: asked first."""
+    song = add_song(conn, "Radiohead", "Creep", added_at="2026-10-20T00:00:00Z", duration_ms=239000)
+    update_song(conn, song.id, lyrics_status="missing", lyrics_at=EARLIER)
+    return get_song(conn, song.id)
+
+
+def handing_over(site, tmp_path, when, then):
+    from helpers.handing_over import HandingOver
+
+    return HandingOver(site.client(tmp_path / "cache"), when, then)
+
+
+def fresh_run(conn, cfg, client, tmp_path):
+    from caracole.overrides import load_overrides
+
+    return megalobiz_lyrics(conn, client, tmp_path / "lib", NOW, picks=load_overrides(cfg.overrides_file).lyrics,
+                            reload_overrides=lambda: load_overrides(cfg.overrides_file))
+
+
+AZ_PLAIN = Lyrics(plain="Mis palabras", synced=None, instrumental=False, duration=None, lrclib_id=None,
+                  raw={"url": "https://www.azlyrics.com/lyrics/eagles/hotelcalifornia.html"}, provider="azlyrics",
+                  url="https://www.azlyrics.com/lyrics/eagles/hotelcalifornia.html")
+
+
+def test_plain_lyrics_picked_in_the_passs_pause_are_never_timed_over(conn, cfg, tmp_path):
+    # Hotel California is missing, so in Megalobiz's list; while the pass asks about Creep the owner picks AZLyrics'
+    # plain lyrics of it: a record you picked is final, and Megalobiz's timed ones never replace them.
+    from helpers.handing_over import picked
+
+    song = eagles(conn)
+    creep(conn)
+    site = FakeMegalobiz([None, record(lrc_id=7, title="Creep", artist="Radiohead", duration=239.0)])
+    client = handing_over(site, tmp_path, lambda url, params: params.get("title") == "Creep",
+                          lambda: picked(cfg, conn, song, "azlyrics:eagles/hotelcalifornia", AZ_PLAIN))
+    assert fresh_run(conn, cfg, client, tmp_path) == MegalobizStats(tried=1, found=1)
+    assert [p.get("title") for _, p in site.requests if p] == ["Creep"]
+    assert lyrics_from_json(get_song(conn, song.id).lyrics_json).provider == "azlyrics"
+
+
+def test_a_record_cleared_in_the_passs_pause_is_asked_for_no_more(conn, cfg, tmp_path):
+    # Hotel California waits for its picked record, gone from Megalobiz; the owner clears it while the pass asks about
+    # Creep: the record is never asked, nor the song made missing by its 404.
+    from helpers.handing_over import cleared
+
+    from caracole.overrides import set_lyrics_record
+
+    song = eagles(conn, status="pending")
+    creep(conn)
+    set_lyrics_record(cfg.overrides_file, song.display, "megalobiz:777")
+    site = FakeMegalobiz([record(lrc_id=7, title="Creep", artist="Radiohead", duration=239.0)])
+    client = handing_over(site, tmp_path, lambda url, params: params.get("title") == "Creep",
+                          lambda: cleared(cfg, conn, song))
+    fresh_run(conn, cfg, client, tmp_path)
+    assert site.endpoints() == ["search", "lrc"]  # Creep's search and its record: the cleared record never asked
+    assert get_song(conn, song.id).lyrics_status == "pending"
+
+
+def test_a_record_picked_during_the_songs_own_turn_is_never_replaced_by_what_megalobiz_answers(conn, cfg, tmp_path):
+    # Between Megalobiz's search for Hotel California and its record, the owner picks AZLyrics' plain lyrics of it: the
+    # timed lyrics Megalobiz then answers are left unrecorded.
+    from helpers.handing_over import picked
+
+    song = eagles(conn)
+    site = FakeMegalobiz([None])
+    client = handing_over(site, tmp_path, lambda url, params: "/lrc/" in url,
+                          lambda: picked(cfg, conn, song, "azlyrics:eagles/hotelcalifornia", AZ_PLAIN))
+    assert fresh_run(conn, cfg, client, tmp_path).found == 0
+    assert site.endpoints() == ["search", "lrc"]
+    stored = get_song(conn, song.id)
+    assert stored.lyrics_status == "found" and lyrics_from_json(stored.lyrics_json).provider == "azlyrics"
+    assert kv_get(conn, f"{CHECKED}{song.id}") is None
+
+
+def test_an_error_after_a_pick_during_the_songs_own_turn_leaves_the_pick(conn, cfg, tmp_path):
+    # The same pick, then Megalobiz fails on the record: the song LRCLIB had missed is no longer missing, and the error
+    # never puts the picked lyrics' song back to pending.
+    from helpers.handing_over import picked
+
+    song = eagles(conn)
+    site = FakeMegalobiz([None], failing={"lrc": 502})
+    client = handing_over(site, tmp_path, lambda url, params: "/lrc/" in url,
+                          lambda: picked(cfg, conn, song, "azlyrics:eagles/hotelcalifornia", AZ_PLAIN))
+    assert fresh_run(conn, cfg, client, tmp_path).errors == 1
+    assert get_song(conn, song.id).lyrics_status == "found"
