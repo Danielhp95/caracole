@@ -150,6 +150,11 @@ def test_each_change_and_number_reads_as_the_owner_reads_it(words):
     assert said["tabs"] == ["+12,130", "−210", "1,503,236", "0", "999", "1,000"]
     assert said["counted"] == ["1 song", "12 songs", "1,204 indexes"]
     assert said["size"] == ["34 MB", "207 MB", "3.4 MB", "0.1 MB", "1.5 GB", ""]
+    # What is sent of a size, both in the size's unit and precision (the phone's Sizes.of alike): never MB of GB.
+    assert words("""[W.sizeOf(0, 2.1e9), W.sizeOf(1.5e9, 2.1e9), W.sizeOf(9.99e6, 1.2e9), W.sizeOf(120e6, 274e6),
+                     W.sizeOf(1.2e6, 3.4e6), W.sizeOf(3.4e6, 3.4e6), W.sizeOf(5000, 12000)]""") == [
+        "0.0 of 2.1 GB", "1.5 of 2.1 GB", "0.0 of 1.2 GB", "120 of 274 MB", "1.2 of 3.4 MB", "3.4 of 3.4 MB",
+        "0.0 of 0.1 MB"]
     assert said["day"] == "03/11/26, 19:42" and said["date"] == "03/11/26" and said["none"] == ""
     assert said["read"] == ["today", "yesterday", "30/10/26"]
 
@@ -195,6 +200,19 @@ def test_what_an_indexs_merge_added_is_said_as_new_tabs_up_to_date_or_all_new_ne
         # Taken and given: each side's new tabs apart, never one sum new to neither.
         {"said": "+231 new here · +40 on Studio", "tone": "up"}, {"said": "+231 new here", "tone": "up"},
         {"said": "up to date", "tone": ""}]
+    # Taken and given, a side whose tabs only fell is said too, never left out of the headline (its red row says
+    # why); a side with nothing new and none fallen is left out.
+    assert words(f"""[
+      W.newTabs([{{direction: "taken", before: 23105, after: 22895, new: -210}},
+                 {{direction: "given", before: 3, after: 43, new: 40}}], {places}),
+      W.newTabs([{{direction: "taken", before: 1, after: 232, new: 231}},
+                 {{direction: "given", before: 45, after: 40, new: -5}}], {places}),
+      W.newTabs([{{direction: "taken", before: 23105, after: 22895, new: -210}},
+                 {{direction: "given", before: 3, after: 3, new: 0}}], {places}),
+    ]""") == [
+        {"said": "−210 tabs here · +40 on Studio", "tone": ""}, {"said": "+231 new here · −5 tabs on Studio",
+                                                                  "tone": ""},
+        {"said": "−210 tabs here", "tone": "down"}]
     # Which way a row went, for a sync that took and gave.
     assert words('[W.went("taken", "Studio"), W.went("given", "the computer"), W.went("", "x")]') == [
         "taken from Studio", "given to the computer", ""]

@@ -1314,6 +1314,8 @@ class SyncEngineTest {
             assertEquals(Triple("index", "skipped", SyncEngine.INDEXES_NEWER), stages.last { it.first == "index" })
             assertEquals(1, outcome.agreed, "the units sync as ever")
             assertEquals(JsonArray(emptyList()), outcome.report!!["indexes"])
+            assertEquals(JsonPrimitive(SyncEngine.INDEXES_NEWER), outcome.report!!["indexes_skipped"],
+                         "the report says why, for the sheet's summary once it is over")
         }
         assertEquals(emptyList(), computer.indexAsked, "no index downloaded, at any sync")
         assertEquals(emptyList(), computer.indexPushes, "nor the pages read here given: its merge refuses them")
@@ -1339,7 +1341,8 @@ class SyncEngineTest {
         val c = engine.compare(computer.address.toString())
         assertNull(c.indexesSkipped)
         assertEquals(listOf("there", "here"), c.indexes.map { it.newer }, "listed as before")
-        apply(c)
+        val outcome = apply(c)
+        assertNull(outcome.report!!["indexes_skipped"], "no why where none was skipped")
         assertEquals(listOf<List<String>?>(listOf("harptabs")), computer.indexAsked, "downloaded as before")
         val (_, state, detail) = stages.last { it.first == "index" }
         assertEquals("failed", state)

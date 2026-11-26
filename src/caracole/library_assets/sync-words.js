@@ -12,11 +12,12 @@
 // slugs or UG page, a blocked tab, by their values. ``changed(change, side)``: "added on the phone".
 // ``sides(device, peer)``: this device's and the other side's names, as headings, as places and in sentences, and
 // their icons. ``tabs(n, signed)``: 1,503,236 and +12,130 (a minus sign for a fall), digits grouped by hand, no locale.
-// ``day(stamp)`` and ``when(stamp)``: dd/mm/yy and dd/mm/yy, HH:MM, in this device's time. ``indexNews(entry,
-// where)``: what a sync's merge of a site's index added (a report's ``indexes`` entry), "+231 new tabs" and "1,503,236
-// in all", "up to date", "1,503,236 tabs, all new here", never its whole size as if it were new; ``newTabs(entries,
-// places)``, the headline's "+1,434 new tabs", or "+231 new here · +40 on Studio" taken and given; ``went(direction,
-// there)``, "taken from Studio", "given to Studio".
+// ``sizeOf(have, size)``: "1.5 of 2.1 GB", what has come of a size, in its unit. ``day(stamp)`` and ``when(stamp)``:
+// dd/mm/yy and dd/mm/yy, HH:MM, in this device's time. ``indexNews(entry, where)``: what a sync's merge of a site's
+// index added (a report's ``indexes`` entry), "+231 new tabs" and "1,503,236 in all", "up to date", "1,503,236 tabs,
+// all new here", never its whole size as if it were new; ``newTabs(entries, places)``, the headline's "+1,434 new
+// tabs", or "+231 new here · +40 on Studio" taken and given; ``went(direction, there)``, "taken from Studio", "given to
+// Studio".
 (() => {
   "use strict";
   const NONE = "–";
@@ -70,21 +71,31 @@
   // A sync's headline: every site's new tabs, "+1,434 new tabs" (a site's fall never takes from them); with none, a
   // fall, "−210 tabs"; else "up to date". Taken and given in one sync, each side's apart, in ``places``' words (each
   // direction's, the rows' ``where``: ``{taken: "here", given: "on Studio"}``): "+231 new here · +40 on Studio", a
-  // side with nothing new left out; never one sum, new to neither side.
+  // side whose tabs only fell by them, "−210 tabs here · +40 on Studio" (no tone, the two told apart by their rows),
+  // a side with nothing new and none fallen left out; never one sum, new to neither side.
   const added = (news) => news.filter((n) => n > 0).reduce((a, n) => a + n, 0);
+  const fallen = (news) => news.filter((n) => n < 0).reduce((a, n) => a + n, 0);
   const newTabs = (entries, places) => {
     const all = listOf(entries).filter((e) => objOf(e));
     const ways = ["taken", "given"].filter((way) => all.some((e) => e.direction === way));
     if (ways.length > 1) {
       const where = objOf(places) || {};
-      const parts = ways.map((way) => [way, added(all.filter((e) => e.direction === way).map(newOf))])
-        .filter(([, n]) => n > 0).map(([way, n]) => "+" + grouped(n) + (way === "taken" ? " new " : " ")
-                                                     + text(where[way]));
-      if (parts.length) return Object.freeze({ said: parts.join(" · "), tone: "up" });
+      const parts = ways.map((way) => {
+        const news = all.filter((e) => e.direction === way).map(newOf);
+        const up = added(news);
+        const fell = fallen(news);
+        if (up) return ["up", "+" + grouped(up) + (way === "taken" ? " new " : " ") + text(where[way])];
+        return fell ? ["down", counted(fell, "tab") + " " + text(where[way])] : null;
+      }).filter(Boolean);
+      const tones = new Set(parts.map(([tone]) => tone));
+      if (parts.length > 1 || tones.has("up")) {
+        return Object.freeze({ said: parts.map(([, said]) => said).join(" · "), tone: tones.size > 1 ? "" : "up" });
+      }
+      if (parts.length) return Object.freeze({ said: parts[0][1], tone: "down" });
     }
     const news = all.map(newOf);
     const up = added(news);
-    const fell = news.filter((n) => n < 0).reduce((a, n) => a + n, 0);
+    const fell = fallen(news);
     if (up) return Object.freeze({ said: "+" + counted(up, "new tab"), tone: "up" });
     if (fell) return Object.freeze({ said: counted(fell, "tab"), tone: "down" });
     return Object.freeze({ said: "up to date", tone: "" });
@@ -100,6 +111,17 @@
     if (mb >= 999.5) return (mb / 1000).toFixed(1) + " GB";
     if (mb >= 9.95) return grouped(mb) + " MB";
     return Math.max(mb, 0.1).toFixed(1) + " MB";
+  };
+
+  // What has come of a size, "1.5 of 2.1 GB", "120 of 274 MB": both in the unit and the precision ``size`` says the
+  // size in (the phone's Sizes.of alike), never megabytes of gigabytes.
+  const sizeOf = (have, bytes) => {
+    const total = size(bytes);
+    const h = typeof have === "number" && Number.isFinite(have) ? Math.max(have, 0) : 0;
+    if (!total) return "";
+    if (total.endsWith(" GB")) return (h / 1e9).toFixed(1) + " of " + total;
+    if (bytes >= 9.95e6) return grouped(h / 1e6) + " of " + total;
+    return (h / 1e6).toFixed(1) + " of " + total;
   };
 
   // --- dates, in this device's time -----------------------------------------------------------------------------
@@ -366,6 +388,6 @@
   };
 
   window.caracoleSyncWords = Object.freeze({
-    NONE, differ, changed, sides, tabs, counted, size, day, when, readOn, bookChange, ownKey, indexNews, newTabs, went,
+    NONE, differ, changed, sides, tabs, counted, size, sizeOf, day, when, readOn, bookChange, ownKey, indexNews, newTabs, went,
   });
 })();

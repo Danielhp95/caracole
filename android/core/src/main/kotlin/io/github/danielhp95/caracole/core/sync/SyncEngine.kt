@@ -329,7 +329,8 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             skipped != null -> stage(INDEX, SKIPPED_STATE, skipped)  // nothing asked either way: a merge refuses both
             else -> index(client, stage, done, computer, after.indexes, after.token)
         }
-        return done.outcome(report(after.name, COMPUTER, c.address, done.at ?: Stamps.of(clock()), asked, done.reported))
+        return done.outcome(report(after.name, COMPUTER, c.address, done.at ?: Stamps.of(clock()), asked, done.reported,
+                                   skipped.takeIf { Scope.INDEXES in asked }))
     }
 
     // --- an import: a sync with a file ---------------------------------------------------------------------------
@@ -947,15 +948,17 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         }
 
         /** The report of a sync (the sync redesign's §3.5): with whom, of which kind and at which address (null for a
-         * file), when, its parts, each index taken or given. */
+         * file), when, its parts, each index taken or given; and [skipped], why none went either way (the computer's
+         * database of another schema, [indexesSkipped]'s words), `indexes_skipped`, only where it says one, as
+         * commands/peer.py's report does. */
         fun report(name: String, kind: String, address: String?, at: String, parts: List<String>,
-                   indexes: List<JsonObject>): JsonObject = JsonObject(linkedMapOf(
+                   indexes: List<JsonObject>, skipped: String? = null): JsonObject = JsonObject(linkedMapOf(
             "with" to JsonObject(linkedMapOf("name" to JsonPrimitive(name), "kind" to JsonPrimitive(kind),
                                              "address" to JsonPrimitive(address))),
             "at" to JsonPrimitive(at),
             "parts" to JsonArray(parts.map(::JsonPrimitive)),
             "indexes" to JsonArray(indexes),
-        ))
+        ).apply { if (skipped != null) put("indexes_skipped", JsonPrimitive(skipped)) })
 
         /** One index of a report, commands/peer.py's alike: its site, its title, taken or given, its first table's rows
          * before and after, `new` the rows that side hadn't (after − before: a UG merge never deletes one; a site

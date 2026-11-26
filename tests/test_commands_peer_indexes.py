@@ -332,6 +332,8 @@ def test_a_caracole_of_another_schema_is_asked_for_no_index_either_way_and_the_s
         assert stage(events, "index") == [("skipped", words)]
         assert f"{words}." in result.output
         assert reports(events)[0]["indexes"] == []
+        # The report says why, for the sheet's summary once it is over (its indexes row).
+        assert reports(events)[0]["indexes_skipped"] == words
     assert ("GET", "/api/peer/index") not in asked and ("POST", "/sync/import/open") not in asked
     assert index_transfer.tab_counts(here.conn)["gtptabs"] == 0
     assert index_transfer.tab_counts(there.conn)["musescore"] == 0 and leftovers(here) == []

@@ -74,9 +74,10 @@ class SyncsTest {
     }
 
     /** A queue whose sync job ends with [outcome] (null: it fails, as a compare that couldn't ask fails it), its
-     * [failed] stage said failed and the job going on past it, as the engine goes on past its mirror stage. */
+     * [failed] stage said failed and the job going on past it, as the engine goes on past its mirror stage; its
+     * [index] stage ended so (its state and words), done else. */
     private fun phone(outcome: JsonObject?, queued: MutableList<String> = mutableListOf(),
-                      failed: Pair<String, String>? = null): Syncs.Unattended {
+                      failed: Pair<String, String>? = null, index: Pair<String, String>? = null): Syncs.Unattended {
         val queue = JobQueue(scope)
         return Syncs.Unattended(
             alone = { address ->
@@ -88,7 +89,8 @@ class SyncsTest {
                         throw IllegalStateException("No answer from $address (refused).")
                     }
                     for ((stage, _) in SyncEngine.STAGES) {
-                        job.stage(stage, if (stage == failed?.first) "failed" else "done", failed?.second.orEmpty())
+                        if (stage == SyncEngine.INDEX && index != null) job.stage(stage, index.first, index.second)
+                        else job.stage(stage, if (stage == failed?.first) "failed" else "done", failed?.second.orEmpty())
                     }
                     job.outcome(outcome)
                 })).first
@@ -179,6 +181,45 @@ class SyncsTest {
         assertTrue(done.ok)
         assertEquals("2 changed on both sides: tap Sync to choose", done.text, "never \"Up to date\" then")
         assertEquals(listOf(2 to true), notified)
+    }
+
+    @Test
+    fun `a sync that left a unit for another reason than a conflict is no sync up to date`() = runBlocking {
+        // A song it couldn't take (its file changed since compared, one the computer's take left, a [version] the
+        // phone's checks refuse): counted, and the sheet's "left" section says why.
+        val why = "http://192.168.1.20:8737 sent score-1.pdf changed since compared. The song stays as it was here."
+        val alone = outcome("""{"taken": [], "given": [], "left": [["song/bach/mass in b minor", "$why"]],
+            "agreed": 9, "indexed": []}""")
+        assertEquals("1 not synced: tap Sync to see why", Syncs.said(alone))
+        val done = Syncs.run(settings("http://192.168.1.20:8737"), probe = true, http = Http(), ask = {},
+                             cleared = { cleared++ },
+                             phone = { phone(outcome("""{"taken": ["song/a/b"], "given": [],
+                                 "left": [["song/bach/mass in b minor", "$why"]], "agreed": 9}""")) }) { n, songs ->
+            notified.add(n to songs)
+        }!!
+        assertEquals("1 taken · 1 not synced: tap Sync to see why", done.text)
+        assertEquals(emptyList(), notified, "no conflict to choose: no notification")
+        val both = outcome("""{"taken": [], "given": [], "left": [["song/a/b", "${SyncEngine.UNSETTLED}"],
+            ["song/c/d", "${SyncEngine.UNSETTLED}"], ["song/e/f", "$why"]]}""")
+        assertEquals("2 changed on both sides · 1 not synced: tap Sync to choose", Syncs.said(both))
+    }
+
+    @Test
+    fun `a sync whose indexes were of another schema says so in place of up to date`() = runBlocking {
+        val skipped = Syncs.run(settings("http://192.168.1.20:8737"), probe = true, http = Http(), ask = {},
+                                phone = { phone(outcome("""{"taken": ["song/a/b"], "given": [], "left": []}"""),
+                                                index = "skipped" to SyncEngine.INDEXES_NEWER) }) { _, _ -> }!!
+        assertTrue(skipped.ok, "the units synced as ever")
+        assertEquals("1 taken · ${SyncEngine.INDEXES_NEWER}", skipped.text)
+        val nothing = Syncs.run(settings("http://192.168.1.20:8737"), probe = true, http = Http(), ask = {},
+                                phone = { phone(outcome("""{"taken": [], "given": [], "left": []}"""),
+                                                index = "skipped" to SyncEngine.INDEXES_OLDER) }) { _, _ -> }!!
+        assertEquals(SyncEngine.INDEXES_OLDER, nothing.text)
+        // Skipped for nothing newer: up to date, as ever.
+        val ordinary = Syncs.run(settings("http://192.168.1.20:8737"), probe = true, http = Http(), ask = {},
+                                 phone = { phone(outcome("""{"taken": ["song/a/b"], "given": [], "left": []}"""),
+                                                 index = "skipped" to SyncEngine.NOTHING_TO_INDEX) }) { _, _ -> }!!
+        assertEquals("Up to date · 1 taken", ordinary.text)
     }
 
     @Test

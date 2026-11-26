@@ -1055,6 +1055,19 @@ def peer_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | No
             "agree": ("done", "12 units"), "index": ("running", "Ultimate Guitar · 600,000 of 1,367,059 tabs")}),
          None, 0, None, None),
     ]
+    # A sync whose index stage skipped the indexes for the other's database of another schema: its outcome says why
+    # after what it shared; one skipped for nothing newer, or left out, says nothing of them.
+    from caracole.commands.peer import INDEXES_LEFT_OUT, NO_INDEX
+    from caracole.web.sync_routes import INDEXES_NEWER, INDEXES_OLDER
+
+    shared = {"compare": ("done", "4 differences"), "take": ("done", "took 1"), "give": ("done", "gave 1"),
+              "agree": ("done", "12 units the books agree on")}
+    for note, words, units in (("of a newer caracole", INDEXES_NEWER, took),
+                               ("of an older caracole, one left", INDEXES_OLDER, left),
+                               ("nothing newer", NO_INDEX, took), ("left out", INDEXES_LEFT_OUT, took)):
+        jobs.append((f"sync, done, its indexes skipped: {note}",
+                     peer_job("sync", "done", dict(shared, index=("skipped", words)), units=units), None, 0, None,
+                     None))
     # A sync's agree stage counted in another script's digits, as Python's \d and int() read them.
     jobs.append(("sync, done, its count in Arabic-Indic digits", peer_job("sync", "done", {
         "compare": ("done", ""), "agree": ("done", " ١٢ units the books agree on\n")}, units=took),
@@ -1136,7 +1149,7 @@ def tables_record() -> dict:
     """The words status.py and outcome.py look up by a stage's, a step's, a command's or a site's name (a step's site
     in full by its tag, ``SITE_NAMES``), whole: what the records above don't draw (the phone's own sync's mirror and
     index stages among them)."""
-    from caracole.web import songbooks
+    from caracole.web import songbooks, sync_routes
 
     return {"fn": "tables", "args": [], "kw": {}, "out": {
         "STAGE_LINES": _status.STAGE_LINES, "PEER_KINDS": _status.PEER_KINDS, "PEER_DONE": _status._PEER_DONE,
@@ -1147,7 +1160,8 @@ def tables_record() -> dict:
         "TRANSCRIBE_STEPS": [[name, list(names)] for name, names in _outcome.TRANSCRIBE_STEPS],
         "COMMAND_STEPS": _outcome.COMMAND_STEPS, "PEER_STEPS": _outcome.PEER_STEPS, "ASKS": _outcome._ASKS,
         "WHAT": {name: list(said) for name, said in _outcome._WHAT.items()}, "ELSEWHERE": _outcome._ELSEWHERE,
-        "SITE_NAMES": _outcome.SITE_NAMES}}
+        "SITE_NAMES": _outcome.SITE_NAMES,
+        "INDEXES_SKIPPED": [sync_routes.INDEXES_NEWER, sync_routes.INDEXES_OLDER]}}
 
 
 def outcome_records() -> list[dict]:

@@ -1056,7 +1056,8 @@ def test_indexes_of_another_schema_say_why_none_goes_once_and_never_as_a_failure
              else "The computer's indexes are of a newer caracole: update the app to take them")
     over = sync_view("done", {"compare": ("done", "9 differences"), "take": ("done", "took 6"),
                               "give": ("done", "gave 3"), "agree": ("done", "312 units the two agree on"),
-                              "index": ("skipped", words)}, TAKEN_GIVEN, dict(REPORT, indexes=[]))
+                              "index": ("skipped", words)}, TAKEN_GIVEN,
+                     dict(REPORT, indexes=[], indexes_skipped=words))
     fake = FakeSync(state=PHONE_STATE if device == "phone" else STATE, views=VIEWS[:-1] + [over],
                     comparison=dict(COMPARISON, indexes=[], indexes_skipped=words))
     url = served(fake, sync="sheet" if device == "phone" else "tab") + "#sheet=sync"
@@ -1068,8 +1069,10 @@ def test_indexes_of_another_schema_say_why_none_goes_once_and_never_as_a_failure
         sync_through(page, fake)
         assert page.js("document.getElementById('sync-title').textContent") == "Synced with: Studio"
         assert page.js("document.getElementById('sync-check').hidden") is False and page.js(STATUS) == ""
-        assert [s["kind"] for s in page.js(SUMMARY)] == ["taken", "given", "conflicts", "songbooks"]  # no indexes
-        assert words not in page.js(f"{SHEET}.innerText"), "said once, where the parts are chosen"
+        # Once over, its summary says it too, as its indexes row (the report's indexes_skipped): never silent.
+        summary = page.js(SUMMARY)
+        assert [s["kind"] for s in summary] == ["taken", "given", "conflicts", "songbooks", "indexes"]
+        assert (summary[4]["said"], summary[4]["rows"]) == ("Indexes not synced", [["Site indexes", words]])
 
 
 @in_chromium
@@ -1402,3 +1405,84 @@ def test_a_sync_queued_behind_the_catalogues_import_says_its_share_never_the_imp
         assert "tabs" not in said[1]
         assert page.js(CHIPS) == [["Compared", "done"], ["Your choice", "done"], ["Library", ""], ["Songbooks", ""],
                                   ["Indexes", ""]]
+
+
+INDEX_FAILED = "Couldn't download the computer's indexes: the connection was reset"
+MIRROR_FAILED = "No answer from http://192.168.1.20:8737: timed out"
+
+
+@in_chromium
+@pytest.mark.parametrize("failed", ["phone index", "phone mirror", "computer index"])
+def test_a_sync_whose_indexes_or_pages_failed_says_so_with_no_tick_and_a_row_of_its_own(served, tmp_path, failed):
+    # The phone's sync goes on past a failed index or mirror stage (SyncEngine: either's failure "stops nothing"), its
+    # job done, its line the stage's words in a waiting tone; the computer's exits 1, its job failed. Both say it.
+    phone = failed.startswith("phone")
+    done = {"compare": ("done", "9 differences"), "take": ("done", "took 6"), "give": ("done", "gave 3"),
+            "agree": ("done", "312 units the two agree on")}
+    mirror = failed.endswith("mirror")
+    if not mirror:
+        done["index"] = ("failed", INDEX_FAILED)
+    over = sync_view("done" if phone else "failed", done, TAKEN_GIVEN, dict(PHONE_REPORT if phone else REPORT,
+                                                                            indexes=[]))
+    if mirror:  # the phone's own stage, which caracole serve's sync has none of
+        over["steps"].insert(3, {"name": "mirror", "label": "Copy", "state": "failed", "detail": MIRROR_FAILED})
+        over["line"] = dict(over["line"], tone="waiting", text=MIRROR_FAILED + ".")
+    words = MIRROR_FAILED if mirror else INDEX_FAILED
+    assert over["line"]["tone"] == ("waiting" if phone else "failed")
+    fake = FakeSync(state=PHONE_STATE if phone else STATE, views=(PHONE_VIEWS if phone else VIEWS)[:-1] + [over])
+    url = served(fake, sync="sheet" if phone else "tab") + "#sheet=sync"
+    with opened(tmp_path, url, width=390 if phone else 1280, height=844, mobile=phone) as page:
+        sync_through(page, fake)
+        assert page.js("document.getElementById('sync-check').hidden") is True, "no tick over a failure"
+        assert page.js(STATUS) == words + "."
+        assert page.js("document.getElementById('sync-status').dataset.tone") == "failed"
+        summary = page.js(SUMMARY)
+        assert [s["kind"] for s in summary] == ["taken", "given", "conflicts", "songbooks",
+                                                "pages" if mirror else "indexes"]
+        assert (summary[4]["said"], summary[4]["rows"]) == (
+            ("Pages not brought up to date", [["Copy", words]]) if mirror
+            else ("Indexes not brought up to date", [["Indexes", words]]))
+
+
+@in_chromium
+def test_a_sync_refused_before_any_change_lists_no_conflict_as_kept(served, tmp_path):
+    # POST /sync/apply queued it; by the time it ran the two had changed: its compare stage refuses it before any
+    # change (commands/peer.py STALE). Nothing was taken or given, so no chosen version was kept.
+    stale = "Both books changed since that comparison. Compare again, then choose again."
+    over = sync_view("failed", {"compare": ("failed", stale)})
+    fake = FakeSync(views=[sync_view("queued", {}), over])
+    with opened(tmp_path, served(fake) + "#sheet=sync") as page:
+        sync_through(page, fake)
+        assert page.js("document.getElementById('sync-title').textContent") == "Not synced with: Studio"
+        assert page.js(SUMMARY) == []
+        assert page.js("document.querySelector('#sync-done .sync-note').textContent") == "Nothing was taken or given."
+
+
+@in_chromium
+def test_a_conflict_is_kept_only_where_its_side_was_taken_or_given(served, tmp_path):
+    # A give that failed after the take: the conflict chosen there (taken) was kept, the one chosen here (never given)
+    # wasn't, and is no "version kept".
+    units = [u for u in TAKEN_GIVEN if u[1] == "taken"]
+    over = sync_view("failed", {"compare": ("done", "9 differences"), "take": ("done", "took 6"),
+                                "give": ("failed", "Couldn't give them 3: timed out")}, units)
+    fake = FakeSync(views=VIEWS[:-1] + [over])
+    with opened(tmp_path, served(fake) + "#sheet=sync") as page:
+        sync_through(page, fake)
+        conflicts = [s for s in page.js(SUMMARY) if s["kind"] == "conflicts"]
+        chosen = {d["id"]: side for d, side in zip([d for d in DIFFERENCES if d["proposal"] == "conflict"],
+                                                   ("here", "there"))}
+        kept = [u for u, side in chosen.items() if side == "there" and u in {t[0] for t in units}]
+        assert len(conflicts) == 1 and len(conflicts[0]["rows"]) == len(kept) == 1
+        assert conflicts[0]["said"] == "1 conflict · Studio's kept"
+
+
+@in_chromium
+def test_indexes_given_with_nothing_new_say_so_plainly(served, tmp_path):
+    report = dict(REPORT, indexes=[
+        {"site": "ug", "title": "Ultimate Guitar", "direction": "given", "before": 1515000, "after": 1515000,
+         "new": 0, "checked": None, "read": "2026-11-03T09:00:00Z"}])
+    fake = indexes_done(report)
+    with opened(tmp_path, served(fake) + "#sheet=sync") as page:
+        sync_through(page, fake)
+        indexes = next(s for s in page.js(SUMMARY) if s["kind"] == "indexes")
+        assert indexes["said"] == "1 index given · nothing new for Studio"

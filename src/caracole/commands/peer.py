@@ -175,6 +175,7 @@ def register(app: typer.Typer) -> None:
     ) -> None:
         """Compare, settle each conflict, take here what comes from there, and give there what goes there."""
         from caracole import peer_sync as sync
+        from caracole.web import sync_routes
 
         if prefer is not None and prefer not in PREFER:
             fail("--prefer is here or there", 2)
@@ -268,9 +269,11 @@ def register(app: typer.Typer) -> None:
         agreed = _agree(cfg, address)
         said.stage("agree", "done", f"{agreed} {'unit' if agreed == 1 else 'units'} the books agree on")
         indexed, failed = _sync_indexes(cfg, address, state, wanted_parts, said)
+        # Why no index went either way (another schema there), for the sheet's summary once it is over.
+        skipped = sync_routes.indexes_skipped(state.schema) if "indexes" in wanted_parts else None
         said.report({"with": {"name": state.name, "kind": "server", "address": address},
                      "at": utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"), "parts": list(wanted_parts),
-                     "indexes": indexed})
+                     "indexes": indexed, **({"indexes_skipped": skipped} if skipped else {})})
         if failed:
             raise typer.Exit(1)
 

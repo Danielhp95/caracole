@@ -4056,8 +4056,9 @@ stage). Whichever side read a site more recently gives that index to the other:
 If neither side is newer, nothing is sent ("no index is newer on either side"). If the other
 side's database is of another schema, no index goes either way, since its merge would refuse the
 file once downloaded: the stage says which side to update ("The indexes there are of a newer
-caracole: update this one to take them"), and so does the Sync sheet's **Site indexes** line.
-The units still sync. If the stage fails, the sync says why and exits 1, and the units stay
+caracole: update this one to take them"), and so do the Sync sheet's **Site indexes** line, its
+summary once the sync is over, the Journal's outcome after what it shared, and the phone's Sync on
+Wi-Fi line. The units still sync. If the stage fails, the sync says why and exits 1, and the units stay
 synced.
 
 ### The Share tab

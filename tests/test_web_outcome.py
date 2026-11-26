@@ -765,3 +765,31 @@ def test_a_transcription_shows_its_steps_and_says_what_it_holds_or_what_stopped_
     # A sheet from YouTube says the same of its own stages, as before.
     assert outcome(youtube_job("done", EVERY), job_line(youtube_job("done", EVERY), SHEET), SHEET).reason == (
         "Chords over the lyrics.")
+
+
+def test_a_sync_whose_indexes_were_of_another_schema_says_so_after_what_it_shared():
+    """A sync between databases of different schemas skips its index stage before any download (I4): its outcome
+    says why in one sentence after what it did, as the stage said it; an index stage skipped for nothing newer, or
+    left out by the owner, says nothing."""
+    from caracole.commands.peer import INDEXES_LEFT_OUT, NO_INDEX
+    from caracole.web.sync_routes import INDEXES_NEWER, INDEXES_OLDER
+
+    from test_web_sync import peer_job
+
+    took = [("song/oasis/wonderwall", "taken", ""), ("song/muse/hysteria", "given", "")]
+    left = took + [("song/radiohead/creep", "left", "skipped, as chosen")]
+    done = {"compare": ("done", "4 differences"), "take": ("done", "took 1"), "give": ("done", "gave 1"),
+            "agree": ("done", "12 units the books agree on")}
+
+    def said(index, units=took):
+        job = peer_job("sync", "done", dict(done, index=index), units=units)
+        over = outcome(job, job_line(job, None))
+        return over.tone, over.word, over.reason
+
+    assert said(("skipped", INDEXES_NEWER)) == (
+        "ready", "Shared", f"1 change taken, 1 change given. {INDEXES_NEWER}.")
+    assert said(("skipped", INDEXES_OLDER), left) == (
+        "waiting", "Shared", f"1 change taken, 1 change given. 1 change left as it was. {INDEXES_OLDER}.")
+    assert said(("skipped", INDEXES_NEWER), [])[2] == f"Nothing changed in either book. {INDEXES_NEWER}."
+    for ordinary in (NO_INDEX, INDEXES_LEFT_OUT):
+        assert said(("skipped", ordinary)) == ("ready", "Shared", "1 change taken, 1 change given.")

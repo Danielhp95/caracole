@@ -48,7 +48,8 @@ the sync says how many tabs each index brought that the phone didn't have ("+231
 or "up to date".
 
 **Sync on Wi-Fi**, in Settings, does this every 6 hours. It leaves conflicts for you and sends a
-notification.
+notification. Its line says "Up to date" only when nothing was left; otherwise it counts what
+wasn't synced ("1 taken · 1 not synced: tap Sync to see why").
 
 If the phone can't reach the computer, **Export** in Settings writes the library to a
 `.caracole` file and **Import a file** reads one. Two computers sync the same way, with

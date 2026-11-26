@@ -1184,7 +1184,7 @@ It is rows.js's, shared by both pages:
   it. Once `POST /sync/apply` is sent its answer is followed whatever the sheet does meanwhile (`posting`: Escape, as
   Hide, only hides it).
 - **What it did**: "Synced with:" and the other side's name (the summary's one bold text), when, the two sides as
-  icons, and a section a kind of change (`.sync-section[data-kind=taken|given|conflicts|songbooks|indexes|left]`,
+  icons, and a section a kind of change (`.sync-section[data-kind=taken|given|conflicts|songbooks|indexes|pages|left]`,
   `left` the units the sync left as they were, with why), each a button that opens its rows, closed at first; drawn
   from the comparison, the choices and the cards' documents the sheet sent, and the view's `outcome` and its `report`
   (§3.5), from the outcome alone for a sync the page didn't start. A file's has no given section. Its indexes say
@@ -1192,7 +1192,15 @@ It is rows.js's, shared by both pages:
   and "1,503,236 in all", "up to date", "1,503,236 tabs, all new here" for a side that had none, a fall in red; the
   headline the sites (each once, one taken and given too) and their new tabs, each side's apart when it took and gave
   ("+231 new here · +40 on Studio", never one sum), each row then saying which way it went (`went`: "taken from
-  Studio", "given to Studio"); a site given no date.
+  Studio", "given to Studio"); a side whose tabs only fell said too ("−210 tabs here · +40 on Studio"); a site given
+  with nothing new "nothing new for Studio". A conflict is listed as kept only where its side came: chosen there and
+  taken, chosen here and given (a file's here once its job is done), so a sync refused before any change says
+  "Nothing was taken or given.". A stage that failed though the sync went on past it (the phone's indexes or its copy
+  of the computer's pages, its job done) is said in its words, with no tick, and a row of its own (`indexes`
+  "Indexes not brought up to date", `pages` "Pages not brought up to date"); indexes skipped for the other's
+  database of another schema (the report's `indexes_skipped`, commands/peer.py's and SyncEngine's) are its indexes
+  row, "Indexes not synced". Sending a file says both numbers in the size's unit (sync-words.js `sizeOf`, "1.5 of
+  2.1 GB", the phone's `Sizes.of`).
 - **Export**: `GET /api/sync/sizes`, the parts with their sizes, Site indexes unticked; `POST /sync/export`, then the
   file's link (`a[download]` to `api/sync/export?export=ID`), clicked once by the page: the browser saves it, the
   phone's `DownloadListener` shares it; clicked again it says the file was sent once (caracole serve answers 404

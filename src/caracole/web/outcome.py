@@ -66,8 +66,10 @@ the job and what the library knows of its song:
 - **A sync with another caracole** (``caracole peer sync``, the Sync tab's), a push another sent taken (``caracole peer
   take``) and a pull it asked for (``peer pull``; ``status.peer_kind``): their stages as steps (``PEER_STEPS``: Compare,
   Take, Give, Agree; Check, Take, Render, Agree), each skipped one not drawn; over, Shared or Taken, what it took
-  and gave in a sentence, how many changes it left, and for a sync, the next step Compare again (the Sync tab), never
-  Try again: a sync is made of the choices of one comparison, and a push is the other caracole's to send again.
+  and gave in a sentence, how many changes it left, and why no index went either way when its index stage skipped
+  them for the other's database of another schema (``indexes_skipped``), and for a sync, the next step Compare again
+  (the Sync tab), never Try again: a sync is made of the choices of one comparison, and a push is the other
+  caracole's to send again.
   Another caracole's index pages merged (``caracole index merge --progress``, Merge): Merged, and what its stage
   said it did.
 
@@ -480,12 +482,24 @@ def _peer_outcome(job: Job, kind: str, line: Line) -> Outcome:
     parts = [f"{plural(taken, 'change')} taken"] if taken or kind != "sync" else []
     parts += [f"{plural(given, 'change')} given"] if given else []
     said = (", ".join(parts)).capitalize() + "." if parts else "Nothing changed in either book."
+    skipped = indexes_skipped(job.stages)
+    also = f" {skipped}." if skipped else ""
     if line.tone == "ready":
-        return Outcome("ready", line.text, said)
+        return Outcome("ready", line.text, said + also)
     word = line.text.partition(" · ")[0] if left else "Not taken"
     reason = f"{said} {plural(left, 'change')} left as {'it was' if left == 1 else 'they were'}." if left else (
         _sentence(line.text))
-    return Outcome("waiting", word, reason, action)
+    return Outcome("waiting", word, reason + also, action)
+
+
+def indexes_skipped(stages: list[Stage]) -> str | None:
+    """Why a sync's index stage took and gave no index, when it skipped them for the other's database of another
+    schema (its detail ``sync_routes.INDEXES_NEWER`` or ``INDEXES_OLDER``, as ``caracole peer sync`` said it); None
+    for one skipped for nothing newer or left out, and for any other."""
+    from caracole.web.sync_routes import INDEXES_NEWER, INDEXES_OLDER
+
+    return next((s.detail for s in stages if s.name == "index" and s.state == "skipped"
+                 and s.detail in (INDEXES_NEWER, INDEXES_OLDER)), None)
 
 
 def _not_found(job: Job, facts: SongFacts | None, song_id: int | None) -> Outcome:
