@@ -13,7 +13,9 @@
   },
   "quickjs": {
     "tag": "v0.18.0",
-    "url": "https://github.com/quickjs-ng/quickjs/archive/refs/tags/v0.18.0.tar.gz",
-    "sha256": "28bcd89aa3683fd2a946537e5ce3f11cc46b5cbf3383c7561aaef3df5ff9f1dd"
+    "owner": "quickjs-ng",
+    "repo": "quickjs",
+    "rev": "d7215b0ad3fc2c562e8317fd9bca058fd4863804",
+    "hash": "sha256-QRXB2TueNulfb451iCyumAdmewYRBdQwTlmIzETdPZY="
   }
 }

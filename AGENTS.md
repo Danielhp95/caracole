@@ -2628,7 +2628,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     3.31.6): `libcaracole_soxr.so`, 16 KB aligned, stripped, no debug information (`-g0`), its reproducibility flags
     the CMakeLists' (§7: `-ffile-prefix-map` of the source and the binary folders, `--build-id=none`,
     `--hash-style=gnu`, `.comment` removed), `-ffp-contract=off`, every symbol but the JNI's hidden;
-    `android/scripts/native-check.sh` checks the debug APK's (aligned, stripped, no build path, its SHA-256).
+    `android/scripts/native-check.sh` checks the debug APK's, and `:youtube`'s `libqjs.so` (stored and aligned or, the
+    debug build extracting its libraries, compressed; segments 16 KB aligned, stripped, no build path, its SHA-256).
 - `:autochords` (plain JVM, stage B1): the front ends of the chords from audio; for now `frontend.Soxr`, libsoxr 0.1.3
   over JNI (`resample(x, from, to)`, rates finite and over 0: caracole_soxr.c, python-soxr's `soxr.resample` of a
   contiguous 1-D float32 array at HQ, its `csoxr_split_ch` path), held by `SoxrTest` to vectors/autochords/soxr.jsonl
@@ -2642,19 +2643,29 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 - `:youtube` (Android library, stage Y0 of the phone-youtube design): yt-dlp under Chaquopy's Python, the engine alone,
   which sends no request yet (no route, service or gate runs it); the app's `debugImplementation` alone until stage Y5,
   so no release carries Python. Every piece is `youtube/pins.json`'s (Chaquopy 17.2.0, its plugin from Maven Central in
-  settings.gradle.kts; Python 3.13; the yt-dlp and yt-dlp-ejs wheels by URL and SHA-256; QuickJS-NG's source), which
-  android/flake.nix reads: the wheels fetched fixed-output into `CARACOLE_YTDLP_WHEELS`, `python3.13` on PATH as
-  Chaquopy's `buildPython`, a build without either failing, naming it (in `checkEngine`, which `:youtube`'s Chaquopy
-  tasks and tests run first, so another module builds without them); pip `--no-index --no-deps` from that folder alone.
-  `caracole_ytdlp.py`: `version()`, `run(argv, out_path, err_path)` (`yt_dlp.main`, `sys.stdout` and `sys.stderr`
-  line-buffered into the files, never fds 1 and 2; one run a process; `SystemExit` its status, any other Exception its
-  traceback in the err file and 1, never raised). `PinsTest` (JVM) holds the wheels to the pins and yt-dlp-ejs to the
-  version yt-dlp's `METADATA` requires; `GlueTest` (JVM) runs the glue with the shell's python3.13 over the wheels;
+  settings.gradle.kts; Python 3.13; the yt-dlp and yt-dlp-ejs wheels by URL and SHA-256; QuickJS-NG's source by its
+  tag's commit and the NAR hash of its tree, never GitHub's generated archive), which android/flake.nix reads: the
+  wheels fetched fixed-output into `CARACOLE_YTDLP_WHEELS`, QuickJS-NG's tree (`fetchFromGitHub`) into
+  `CARACOLE_QUICKJS_SRC`, `python3.13` on PATH as Chaquopy's `buildPython`, a build without any of them failing, naming
+  it (in `checkEngine`, which `:youtube`'s Chaquopy, CMake and test tasks run first, so another module builds without
+  them); pip `--no-index --no-deps` from that folder alone. `caracole_ytdlp.py`: `version()`, `run(argv, out_path,
+  err_path)` (`yt_dlp.main`, `sys.stdout` and `sys.stderr` line-buffered into the files, never fds 1 and 2; one run a
+  process; `SystemExit` its status, any other Exception its traceback in the err file and 1, never raised). `qjs`,
+  QuickJS-NG's command (MIT), is youtube/native/CMakeLists.txt's: upstream's `qjs_exe` sources (`gen/`'s committed
+  bytecode, no host `qjsc` step) by the NDK for both ABIs, libsoxr's reproducibility flags, 16 KB pages, a PIE
+  executable named `libqjs.so`, run from the app's native library folder (`Qjs.path(context)`), which needs
+  `useLegacyPackaging`, the debug variants' alone (app/build.gradle.kts, and the module's test APK): every native
+  library then compressed in the APK and extracted at install (21.0 MB more installed on arm64); yt-dlp is told of it
+  alone (`--no-js-runtimes --js-runtimes quickjs:<path>`), runs it with `--script FILE` and `--help` (its version), each
+  piped. `PinsTest` (JVM) holds the wheels to the pins, yt-dlp-ejs to the version yt-dlp's `METADATA` requires and
+  `CARACOLE_QUICKJS_SRC` to the tag; `GlueTest` (JVM) runs the glue with the shell's python3.13 over the wheels;
   `YtDlpVersionTest` (its own test APK, `YoutubeTestRunner`: `caracole.network=loopback`; `device-test.sh --youtube`)
   Python started, `version()` the pins', yt-dlp's `--version` alone, an exception out of `main` its traceback and 1, and
-  none of the standard library's modules the design leaves out (Chaquopy packages none of them). release-check.sh: no
-  `libpython*`, `libchaquopy_java.so`, `lib*_python.so` or `lib*_chaquopy.so`, class under `com/chaquo/` or
-  `assets/chaquopy/` entry in the release, the debug APK the control of each.
+  none of the standard library's modules the design leaves out (Chaquopy packages none of them). `QjsTest` (the same
+  APK): qjs executable there, its `--version` the tag, a script run, and yt-dlp's `-v` (no URL: its header, exit 2)
+  naming `quickjs-ng-<version>` among its runtimes. release-check.sh: no `libpython*`, `libchaquopy_java.so`,
+  `lib*_python.so` or `lib*_chaquopy.so`, class under `com/chaquo/` or `assets/chaquopy/` entry, no `libqjs.so`, its
+  native libraries stored and aligned with no `extractNativeLibs`, in the release, the debug APK the control of each.
 - Milestones 1–6 are built (docs/android_port.md's status, "Built: milestones 4 to 6"), each route a module of its
   own:
   - `server/routes/Stubs.kt` keeps YouTube's routes and `GET /lookup` alone, answering "…: not on the phone yet."

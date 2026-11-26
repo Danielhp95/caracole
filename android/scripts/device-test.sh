@@ -20,8 +20,10 @@
 #                   $CARACOLE_CHORD_MODELS (`nix build .#chord-models`; unset, the ./android#ml shell's), pushed into
 #                   /data/local/tmp/caracole-models, a cache left there for the next run (a file pushed again only
 #                   when its SHA-256 differs)
-#   --youtube       :youtube's YtDlpVersionTest (its own test APK, io.github.danielhp95.caracole.youtube.test, under
-#                   YoutubeTestRunner): Chaquopy's Python and the yt-dlp pinned, `--version` alone, no network
+#   --youtube       :youtube's YtDlpVersionTest and QjsTest (its own test APK,
+#                   io.github.danielhp95.caracole.youtube.test, under YoutubeTestRunner): Chaquopy's Python and the
+#                   yt-dlp pinned, `--version` alone; qjs from the native library folder, and yt-dlp's `-v` naming it
+#                   among its runtimes; no network
 #   --tcpdump FILE  the gate that caracole sends nothing to any host but 10.0.2.2 (and loopback) while the classes
 #                   run, by caracole's own uids: on the rooted emulator (`su 0`), a chain of iptables and ip6tables
 #                   rules at the head of OUTPUT (caracole_own) counts, for each of caracole's packages installed (the
@@ -372,15 +374,17 @@ if [ "$want_ml" = 1 ]; then
 fi
 
 if [ "$want_youtube" = 1 ]; then
-    out="$(adb shell am instrument -w -e class "$ns.youtube.YtDlpVersionTest" \
-        "$ns.youtube.test/$ns.youtube.YoutubeTestRunner" 2>&1 | tr -d '\r')" || true
-    echo "$out"
-    if grep -q '^OK (' <<<"$out" && ! grep -qE 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed' <<<"$out"; then
-        results+=("PASS YtDlpVersionTest")
-    else
-        results+=("FAIL YtDlpVersionTest")
-        failed=1
-    fi
+    for name in YtDlpVersionTest QjsTest; do
+        out="$(adb shell am instrument -w -e class "$ns.youtube.$name" \
+            "$ns.youtube.test/$ns.youtube.YoutubeTestRunner" 2>&1 | tr -d '\r')" || true
+        echo "$out"
+        if grep -q '^OK (' <<<"$out" && ! grep -qE 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed' <<<"$out"; then
+            results+=("PASS $name")
+        else
+            results+=("FAIL $name")
+            failed=1
+        fi
+    done
 fi
 
 if [ "$want_app" = 1 ]; then

@@ -20,6 +20,9 @@
 # - and of Python: no lib/*/libpython*, no libchaquopy_java.so, none of the libraries Chaquopy's Python links
 #   (lib<name>_python.so, lib<name>_chaquopy.so: OpenSSL's, SQLite's), no class under com/chaquo/ (Chaquopy's) in its
 #   dex and no entry under assets/chaquopy/ (the standard library, yt-dlp, the glue);
+# - and of QuickJS-NG: no lib/*/libqjs.so; and its native libraries packaged as before the debug build's
+#   useLegacyPackaging (app/build.gradle.kts): each lib/*/*.so stored uncompressed and 16 KB aligned (zipalign -c -P
+#   16), none compressed, and no android:extractNativeLibs="true" in its manifest;
 #
 # and the controls, so that no probe passes for nothing:
 #
@@ -27,7 +30,8 @@
 # - the debug APK holds every one of them but the provider (which :ml's manifest removes from it too) and the model
 #   files: it carries BTC's graph (an .onnx) and never the weights' files, btc_model_large_voca.pt and beat_this's,
 #   which no APK holds (the owner's folder does: android/README.md, "The Chords bench"), and each of Python's
-#   native-library probes, Chaquopy's classes and assets/chaquopy/;
+#   native-library probes, Chaquopy's classes and assets/chaquopy/, libqjs.so, and its native libraries compressed
+#   under android:extractNativeLibs="true";
 # - the model files' names, those `nix build .#chord-models` makes ($CARACOLE_CHORD_MODELS, else the ./android#ml
 #   shell's), are each one the model-file probe matches;
 # - ONNX Runtime's AAR in Gradle's cache declares the TelemetryInitializer the manifest probe looks for.
@@ -102,6 +106,18 @@ probes() {
         "$(grep -c '^assets/chaquopy/' "$probe/entries" || true)"
 }
 
+# One APK's native libraries: "qjs stored compressed extracted" (libqjs.so entries; lib/*/*.so stored uncompressed and
+# 16 KB aligned, and compressed; 1 when its manifest says android:extractNativeLibs="true"), after probes of the same
+# APK, whose entries and manifest it reads.
+natives() {
+    local aligned
+    aligned="$(nix develop ./android -c sh -c '"$ANDROID_HOME"/build-tools/36.0.0/zipalign -c -P 16 -v 4 "$1"' sh "$1")"
+    echo "$(grep -c '^lib/[^/]*/libqjs\.so$' "$probe/entries" || true)" \
+        "$(grep -c -E '^ *[0-9]+ lib/[^/]+/[^/]+\.so \(OK\)$' <<<"$aligned" || true)" \
+        "$(grep -c -E '^ *[0-9]+ lib/[^/]+/[^/]+\.so \(OK - compressed\)$' <<<"$aligned" || true)" \
+        "$(grep -c -F 'android:extractNativeLibs(0x010104ea)=true' "$probe/manifest" || true)"
+}
+
 failed=0
 check() {  # check WHAT OK: OK is 1 when it holds
     if [ "$2" = 1 ]; then echo "ok    $1"; else echo "FAIL  $1"; failed=1; fi
@@ -146,6 +162,13 @@ check "release APK holds no libchaquopy_java.so" "$(yes_if '[ "$chaquojni" = 0 ]
 check "release APK holds no lib*_python.so or lib*_chaquopy.so" "$(yes_if '[ "$chaquolinked" = 0 ]')"
 check "release APK holds no class under com/chaquo/" "$(yes_if '[ "$chaquoclasses" = 0 ]')"
 check "release APK holds nothing under assets/chaquopy/" "$(yes_if '[ "$chaquoassets" = 0 ]')"
+read -r qjs stored compressed extracted < <(natives "$release")
+echo "release APK: $qjs libqjs.so, native libraries $stored stored and aligned, $compressed compressed," \
+    "extractNativeLibs=true $extracted"
+check "release APK holds no libqjs.so" "$(yes_if '[ "$qjs" = 0 ]')"
+check "release APK's native libraries are stored uncompressed and 16 KB aligned, none compressed" \
+    "$(yes_if '[ "$stored" -gt 0 ] && [ "$compressed" = 0 ]')"
+check "release APK's manifest says no extractNativeLibs=true" "$(yes_if '[ "$extracted" = 0 ]')"
 
 read -r libs ortclasses mlclasses benchdex rowwords autochords assets modelfiles weights provider benchmanifest \
     providers pylibs chaquojni chaquolinked chaquoclasses chaquoassets \
@@ -175,6 +198,12 @@ check "the control: the debug APK holds lib*_python.so and lib*_chaquopy.so" \
     "$(yes_if '[ "$chaquolinked" -gt 0 ]')"
 check "the control: the debug APK holds classes under com/chaquo/" "$(yes_if '[ "$chaquoclasses" -gt 0 ]')"
 check "the control: the debug APK holds assets/chaquopy/" "$(yes_if '[ "$chaquoassets" -gt 0 ]')"
+read -r qjs stored compressed extracted < <(natives "$debug")
+echo "debug APK (the control): $qjs libqjs.so, native libraries $stored stored and aligned, $compressed compressed," \
+    "extractNativeLibs=true $extracted"
+check "the control: the debug APK holds libqjs.so" "$(yes_if '[ "$qjs" -gt 0 ]')"
+check "the control: the debug APK's native libraries are compressed, extracted at install" \
+    "$(yes_if '[ "$compressed" -gt 0 ] && [ "$extracted" = 1 ]')"
 
 # The model-file probe matches every file the models' build makes, and the weights' probe all but BTC's graph.
 names="$(ls "$models")"

@@ -56,6 +56,10 @@
         name = baseNameOf pin.url;
         path = pkgs.fetchurl { inherit (pin) url sha256; };
       }) [ pins.ytdlp pins.ejs ]);
+      # QuickJS-NG, yt-dlp's JavaScript runtime on the phone, pins.json's tag by its commit and the NAR hash of its tree
+      # (never GitHub's generated archive's bytes): CARACOLE_QUICKJS_SRC, which youtube/native/CMakeLists.txt builds by
+      # the NDK into `libqjs.so`.
+      quickjsSrc = pkgs.fetchFromGitHub { inherit (pins.quickjs) owner repo rev hash; };
       # Chaquopy's buildPython (:youtube's pyc and pip) must be the app's Python's minor version, pins.json's.
       python = pkgs."python${lib.replaceStrings [ "." ] [ "" ] pins.python}";
 
@@ -77,6 +81,7 @@
           JAVA_HOME = jdk.home;
           CARACOLE_ALPHATAB_DIR = "${alphatab}";
           CARACOLE_YTDLP_WHEELS = "${ytdlpAndroid}";
+          CARACOLE_QUICKJS_SRC = "${quickjsSrc}";
           ANDROID_HOME = home;
           ANDROID_SDK_ROOT = home;
           # The Android Gradle plugin fetches aapt2 from Maven, a binary NixOS can't run:

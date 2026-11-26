@@ -106,6 +106,19 @@ android {
     sourceSets.getByName("debug").assets.srcDir(layout.buildDirectory.dir("generated/benchAssets"))
 }
 
+// The debug build's native libraries extracted at install into the app's native library folder (android:
+// extractNativeLibs), the one place Android runs a program of the app's own: :youtube's libqjs.so, QuickJS-NG's qjs,
+// which yt-dlp runs for YouTube's player challenges (the phone-youtube design's §3.4). It applies to every library of
+// the APK, not qjs alone: ONNX Runtime's, SQLite's, Python's and libsoxr are then compressed in the APK and installed
+// a second time, uncompressed, in that folder: the compressed copies the APK keeps are what it costs installed, 21.0 MB
+// of arm64-v8a's 51.2 MB of libraries (24.7 of x86_64's 60.0), the design's "15–25 MB". This two-ABI debug APK shrinks
+// from 140.0 to 74.8 MB, the other ABI's libraries compressed too, so it installs smaller (126.0 MB on arm64, 134.8 on
+// the x86_64 emulator, from 140.0), qjs's 1.2 MB included. The release keeps them stored, page-aligned and mapped from
+// the APK (release-check.sh) until stage Y5.1 moves this to it, with its size measured again against E33's.
+androidComponents.onVariants(androidComponents.selector().withBuildType("debug")) {
+    it.packaging.jniLibs.useLegacyPackaging.set(true)
+}
+
 val copyConformanceVectors by tasks.registering(Sync::class) {
     // The vectors, and the fixtures a record names (Corpus.fixture: `fixtures/`).
     into(layout.buildDirectory.dir("generated/conformanceAssets"))

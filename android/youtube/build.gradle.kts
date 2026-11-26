@@ -31,6 +31,14 @@ val wheels: File = System.getenv("CARACOLE_YTDLP_WHEELS")?.takeIf { it.isNotBlan
 /** A pinned wheel's file in [wheels], by its URL's name. */
 fun wheel(name: String): File = File(wheels, (pin(name)["url"] as String).substringAfterLast('/'))
 
+/** QuickJS-NG's source, android/flake.nix's CARACOLE_QUICKJS_SRC: pins.json's tag's tree, which native/CMakeLists.txt
+ * builds into `libqjs.so`. */
+val quickjsSrc: File = System.getenv("CARACOLE_QUICKJS_SRC")?.takeIf { it.isNotBlank() }?.let(::File)
+    ?: File("CARACOLE_QUICKJS_SRC-unset").also {
+        missing += "CARACOLE_QUICKJS_SRC is unset: run Gradle in android/flake.nix's shell " +
+            "(`nix develop ./android -c gradle …`), which fetches youtube/pins.json's QuickJS-NG source into it"
+    }
+
 /** Chaquopy's buildPython, which must be the app's Python's minor version (pins.json's `python`): `python3.13` on PATH,
  * android/flake.nix's, never another Python found by chance. */
 val pythonVersion = pins["python"] as String
@@ -42,12 +50,14 @@ val buildPythonPath: String = System.getenv("PATH").orEmpty().split(File.pathSep
     }
 
 val checkEngine by tasks.registering {
-    description = "Fails, naming it, when android/flake.nix's shell's wheels or python3.13 are missing."
+    description = "Fails, naming it, when android/flake.nix's shell's wheels, QuickJS-NG or python3.13 are missing."
     val said = missing.toList()
     doLast { if (said.isNotEmpty()) throw GradleException(said.joinToString("\n")) }
 }
-// The tasks that read them, Chaquopy's (`…Python…`) and the JVM's tests; never help or clean.
-tasks.configureEach { if (name.contains("Python") || this is Test) dependsOn(checkEngine) }
+// The tasks that read them, Chaquopy's (`…Python…`), CMake's and the JVM's tests; never help or clean.
+tasks.configureEach {
+    if (name.contains("Python") || name.contains("CMake") || this is Test) dependsOn(checkEngine)
+}
 
 android {
     namespace = "io.github.danielhp95.caracole.youtube"
@@ -61,6 +71,19 @@ android {
         testInstrumentationRunner = "io.github.danielhp95.caracole.youtube.YoutubeTestRunner"
         // The app's two ABIs (app/build.gradle.kts): Chaquopy's Python 3.12 and later is 64-bit alone.
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
+    }
+
+    // QuickJS-NG's qjs as `libqjs.so`, for the two ABIs, by android/flake.nix's CMake (native/CMakeLists.txt, its
+    // reproducibility flags autochords/native/'s), from CARACOLE_QUICKJS_SRC.
+    defaultConfig.externalNativeBuild.cmake {
+        arguments += "-DQUICKJS_SRC=${quickjsSrc.absolutePath}"
+        targets += "qjs"
+    }
+    externalNativeBuild {
+        cmake {
+            path = file("native/CMakeLists.txt")
+            version = "3.31.6"
+        }
     }
 
     compileOptions {
@@ -88,7 +111,12 @@ val copyPins by tasks.registering(CopyPins::class) {
 // The variant API's generated folder, which carries the task's dependency (the sourceSets' srcDir of the task
 // provider didn't: a clean build's mergeDebugAndroidTestAssets ran without copyPins).
 androidComponents.onVariants { variant ->
-    variant.deviceTests.values.forEach { it.sources.assets?.addGeneratedSourceDirectory(copyPins, CopyPins::out) }
+    variant.deviceTests.values.forEach {
+        it.sources.assets?.addGeneratedSourceDirectory(copyPins, CopyPins::out)
+        // The test APK's libqjs.so extracted to its native library folder, where QjsTest runs it, as the debug app's
+        // (app/build.gradle.kts).
+        it.packaging.jniLibs.useLegacyPackaging.set(true)
+    }
 }
 
 chaquopy {
@@ -122,6 +150,8 @@ tasks.withType<Test>().configureEach {
     systemProperty("caracole.youtube.wheels", wheels.absolutePath)
     systemProperty("caracole.youtube.python", buildPythonPath)
     systemProperty("caracole.youtube.glue", glue.absolutePath)
+    inputs.dir(quickjsSrc).withPropertyName("quickjs").optional()
+    systemProperty("caracole.youtube.quickjs", quickjsSrc.absolutePath)
 }
 
 kotlin {

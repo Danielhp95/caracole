@@ -822,10 +822,12 @@ What the APK carries of it is checked by a script, after `gradle -p android :app
 
     nix develop ./android -c android/scripts/native-check.sh
 
-It checks each ABI's `libcaracole_soxr.so` is stored uncompressed and 16 KB aligned, stripped (no `.debug_*`,
-`.symtab`, `.comment` or build-id), and names no path of the build (`/home/`, `/nix/store/`, `.cxx/`, `/tmp/`), and
-prints its SHA-256: two checkouts at different paths build the same bytes (the library carries no debug information,
-`-g0`, its folders mapped away, `-ffile-prefix-map`). Every symbol but the JNI's is hidden.
+It checks each ABI's `libcaracole_soxr.so`, and `:youtube`'s `libqjs.so` (below), is packaged as the APK installs it
+(stored uncompressed and 16 KB aligned, or compressed in a debug APK that extracts its libraries at install), its
+segments 16 KB aligned, stripped (no `.debug_*`, `.symtab`, `.comment` or build-id), and names no path of the build
+(`/home/`, `/nix/store/`, `.cxx/`, `/tmp/`), and prints its SHA-256: two checkouts at different paths build the same
+bytes (the library carries no debug information, `-g0`, its folders mapped away, `-ffile-prefix-map`). Every symbol but
+the JNI's is hidden.
 
 ## The Chords bench (debug build)
 
@@ -928,10 +930,12 @@ phone-youtube design's stage Y5). The release carries no Python.
 
 Every piece is pinned in `youtube/pins.json`: Chaquopy's version (its Gradle plugin and its Python runtime, from Maven
 Central), the Python minor version, the two pure wheels by URL and SHA-256, and QuickJS-NG's source for the JavaScript
-challenges (built by a later task). `flake.nix` reads it: it fetches the wheels into one folder,
-`CARACOLE_YTDLP_WHEELS`, and puts `python3.13`, Chaquopy's `buildPython`, on PATH. pip installs the two wheels from that
-folder alone, `--no-index --no-deps`: none of `yt-dlp[default]`'s native packages, no FFmpeg. A build of `:youtube`
-without either fails, naming it (its `checkEngine` task); the other modules build without them. The flake reads only
+challenges, by its tag's commit and the NAR hash of its tree (`fetchFromGitHub`'s; never GitHub's generated archive,
+whose bytes have changed before). `flake.nix` reads it: it fetches the wheels into one folder, `CARACOLE_YTDLP_WHEELS`,
+QuickJS-NG's tree into `CARACOLE_QUICKJS_SRC`, and puts `python3.13`, Chaquopy's `buildPython`, on PATH. pip installs
+the two wheels from that folder alone, `--no-index --no-deps`: none of `yt-dlp[default]`'s native packages, no FFmpeg.
+A build of `:youtube` without any of them fails, naming it (its `checkEngine` task); the other modules build without
+them. The flake reads only
 files git tracks: `git add` a changed `pins.json` before building. To move yt-dlp, change its pin and the yt-dlp-ejs
 version its wheel's `METADATA` requires (`PinsTest` checks both).
 
@@ -945,11 +949,30 @@ setting to leave out more. On the emulator alone, with no network:
 
     android/scripts/device-test.sh --youtube
 
-runs `YtDlpVersionTest` from `:youtube`'s own test APK (under `YoutubeTestRunner`, `caracole.network=loopback`): Python
-starts, `version()` is `pins.json`'s, yt-dlp's own `--version` prints the pinned one, and none of those modules is
-there. `release-check.sh` checks the release holds no `libpython*`, `libchaquopy_java.so`, `lib*_python.so` or
-`lib*_chaquopy.so`, no class under `com/chaquo/` and nothing under `assets/chaquopy/`, with the debug build as the
-control. The module sends no request yet: no route or service runs it.
+runs `YtDlpVersionTest` and `QjsTest` from `:youtube`'s own test APK (under `YoutubeTestRunner`,
+`caracole.network=loopback`): Python starts, `version()` is `pins.json`'s, yt-dlp's own `--version` prints the pinned
+one, and none of those modules is there; qjs is executable in the native library folder, says the pinned version and
+runs a script, and yt-dlp, told of it alone (`--no-js-runtimes --js-runtimes quickjs:<path>`), names it among its
+runtimes (its `-v` with no URL: the header, then its usage error, no request). `release-check.sh` checks the release
+holds no `libpython*`, `libchaquopy_java.so`, `lib*_python.so` or `lib*_chaquopy.so`, no class under `com/chaquo/` and
+nothing under `assets/chaquopy/`, with the debug build as the control. The module sends no request yet: no route or
+service runs it.
+
+yt-dlp solves YouTube's player challenges in JavaScript, with QuickJS-NG's `qjs` (v0.18.0, MIT): no prebuilt Android
+binary exists, so `youtube/native/CMakeLists.txt` builds it by the NDK for both ABIs (upstream's `qjs` command: the
+engine, its libc and `qjs.c`, with the REPL's and standalone's bytecode upstream commits in `gen/`, so no host `qjsc`
+step), with libsoxr's reproducibility flags and 16 KB pages, as a position-independent executable named `libqjs.so`.
+Android runs no program an app writes, only one from its native library folder, where the package manager extracts the
+APK's `lib*.so` when the build asks for it: `useLegacyPackaging`, the debug build's alone (`app/build.gradle.kts`, and
+`:youtube`'s test APK). That applies to every native library, not qjs alone: ONNX Runtime's, SQLite's, Python's and
+libsoxr are then compressed in the APK and extracted again at install, which costs the compressed copies, 21.0 MB on
+arm64 (24.7 MB on x86_64). The two-ABI debug APK goes from 140.0 to 74.8 MB and installs smaller (126.0 MB on arm64,
+134.8 MB on the x86_64 emulator, from 140.0), `libqjs.so` 1.2 MB of it an ABI. `Qjs.path(context)` is where it is;
+yt-dlp runs it with `--script FILE` for each challenge and `--help` to read its version, each with its output piped
+back, never onto the app's own descriptors. `release-check.sh` checks the release holds no `libqjs.so` and stores its
+native libraries uncompressed and aligned as before, with no `extractNativeLibs`. QuickJS-NG's `LICENSE` (MIT, Fabrice
+Bellard, Charlie Gordon, Ben Noordhuis, Saúl Ibarra Corretgé), which its `libregexp`, `libunicode` and `dtoa` sources
+repeat, isn't in the APK yet (Y5.1's, with the others').
 
 It costs the debug APK 45.0 MB, both ABIs (26.3 MB of an arm64-only APK): Python's native libraries 12.3 MB an ABI, the
 standard library and Chaquopy's bootstrap, the CA bundle and yt-dlp 10.8 MB for both. What ships with it, and whose
