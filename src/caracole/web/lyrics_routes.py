@@ -189,13 +189,16 @@ def _picked_note(why: str | None, record: Any, kept: Search | None) -> str | Non
 
 
 def _search_json(kept: Search, now: datetime) -> dict[str, Any]:
-    """The kept search as the card draws it, every word the command's: each row with whether it is far from the
-    audio's length (``far``), each site with no rows in its words and the instrumental records counted (``notes``),
-    and its last line."""
-    from caracole.lyrics_search import far, last_line, notes, pickable
+    """The kept search as the card draws it, every word the server's (the command's where it says them too): each row
+    with whether it is far from the audio's length (``far``) and its line (``facts``), the name it asked under and
+    when (``asked``), each site with no rows in its words and the instrumental records counted (``notes``), and its
+    last line."""
+    from caracole.lyrics_search import asked_line, far, last_line, notes, pickable, row_facts
 
     return {"at": kept.at, "as": _as_json(kept.asked), "length": kept.length,
-            "rows": [row.as_json() | {"far": far(row, kept.length)} for row in kept.rows], "said": dict(kept.said),
+            "rows": [row.as_json() | {"far": far(row, kept.length), "facts": row_facts(row, kept.length)}
+                     for row in kept.rows],
+            "said": dict(kept.said), "asked": asked_line(kept, now),
             "state": dict(kept.state), "instrumental": kept.instrumental, "pickable": pickable(kept, now),
             "notes": [{"site": n.site, "state": n.state, "line": n.line} for n in notes(kept)],
             "line": last_line(kept)}

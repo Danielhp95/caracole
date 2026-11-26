@@ -481,6 +481,32 @@ def far(row: Row, length: float | None) -> bool:
     return row.duration is not None and length is not None and abs(row.duration - length) > FAR
 
 
+def clock(seconds: float) -> str:
+    """A length as m:ss."""
+    whole = round(seconds)
+    return f"{whole // 60}:{whole % 60:02d}"
+
+
+def row_facts(row: Row, length: float | None) -> str:
+    """A row as ``caracole lyrics --as`` lists it, its Best fit aside: "Artist - Title · album · 4:31, audio 3:45 ·
+    timed" ("(no artist)" for none; the audio's length only where it is ``far``), the card's line of it too."""
+    parts = [f"{row.artist or '(no artist)'} - {row.title}"]
+    if row.album:
+        parts.append(row.album)
+    if row.duration:
+        parts.append(clock(row.duration) + (f", audio {clock(length)}" if far(row, length) and length else ""))
+    return " · ".join(parts + ["timed"] * row.timed)
+
+
+def asked_line(search: Search, now: datetime) -> str:
+    """The card's line of the name a search asked under, and when: "Asked as “A - T” on 26/11/26.", and while it can't
+    be picked from any more, what to do."""
+    day = search.at[:10]
+    when = f"{day[8:10]}/{day[5:7]}/{day[2:4]}" if len(day) == 10 else search.at
+    stale = "" if pickable(search, now) else ": over a week ago. Search again to pick one"
+    return f"Asked as “{search.name}” on {when}{stale}."
+
+
 def _joined(sites: Any) -> str:
     names = [provider_name(site) for site in sites]
     return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"

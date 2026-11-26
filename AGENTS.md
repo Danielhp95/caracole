@@ -2054,7 +2054,8 @@ It is rows.js's, shared by both pages:
     Make sheet through `sendRequest`, the request form's own path (the line under the bar, `track`); Cancel or
     Escape `POST /audio/drop`. A card's Sheet from an audio file… (not ignored, no human sheet by its `files`, a
     purchase or YouTube's audio no matter: the cards' data unchanged) opens it for that song, its names not to edit,
-    and posts its `songForm` in place (`song`, `identity`, `upload`), its upload sent with the song so the dialog says
+    and posts its `songForm` in place (`song`, `identity`, `upload`; `form.audio-sheet`, a class the dialog shares,
+    whose box filter.css gives `dialog.audio-sheet` alone), its upload sent with the song so the dialog says
     what that song's audio is; its transcription offers read again as after a YouTube sheet (`offerAfter`). The served
     page never lets a drop load another page (library.js `keepDrops`): a file dropped where nothing takes it, or a
     link or text outside a field, is taken and nothing done; into a field a drop is the browser's.
@@ -2071,7 +2072,8 @@ It is rows.js's, shared by both pages:
   pressed again, the search on its way, its `as` that one and `said` naming it when another was typed), `GET
   /api/lyrics/search?song=` (no request, no lock, no write: `[lyrics]`' `as` and `picked`, `picked_why`
   (`transcript.picked_without_lyrics`), the audio's `length`, the kept search however old, `lyrics_search.last_search`,
-  its `as`, the `length` its rows were scored against, rows each with `far` (`lyrics_search.far`), `said`, `state`,
+  its `as`, the `length` its rows were scored against, rows each with `far` (`lyrics_search.far`) and `facts` (its
+  line as the command lists it, `row_facts`), `asked` (`asked_line`: the name it asked under and when), `said`, `state`,
   `instrumental`, `pickable`, `notes` (`lyrics_search.notes`, the command's lines of each site with no rows) and
   `line`, its last line's words, `lyrics_search.last_line`; and `picked_note`, the card's sentence of the record
   picked), `POST /lyrics/pick` (`record`, a row of the kept
@@ -2089,12 +2091,14 @@ It is rows.js's, shared by both pages:
     typing or a timer. The search, a job of no song's, is followed on `/api/jobs/N` (`followSearch`, kept by song id
     in `lyricsSearches`, so a card drawn again meanwhile follows it), its live line (`p.lyrics-said`, a status
     region kept in the accessibility tree while empty) "Asking LRCLIB, Megalobiz and AZLyrics under “…”…", then the
-    GET read again and drawn with its words as given, none composed on the page: `search.line`, `picked_note`,
-    `search.notes` (lyrics_search.py `notes`, the command's own lines) and each row's `far`. Its form is the pasted
+    GET read again and drawn with its words as given, none composed on the page but its controls' and the search's
+    progress: `search.line`, `search.asked`, `picked_note`, `search.notes` (lyrics_search.py `notes`, the command's
+    own lines) and each row's `facts`. Its form is the pasted
     link's (`.link-form`, `.f`), its rows the drawer's version rows (`ol.vrows`, `.vrow`, `.ver`, `.stars`, `.note`,
     `.vbtns`, `.inuse`, `.cur`), its notes `.hint` lines; a long list grows the card (from 1200 px the pane scrolls).
     A busy button is `aria-disabled` (`busyWith`), never `disabled`, so the focus a key gave it stays; a card drawn
-    again while its panel held the focus gives it to the same control (`lyricsFocus`, `lyricsRefocus` in `refill`).
+    again while its panel held the focus gives it to the same control (`lyricsFocus`, `lyricsRefocus` in `refill`,
+    for the line being drawn again alone: another song's touches no focus).
     Use these lyrics and Clear the pick post in place (`postHere`: the focus to the song's line, the panel hidden,
     the line following the job, a refusal said in the panel's line), and once that job is over the offers are read
     again (`lyricsJobs`, `readTranscriptions`). A search over 7 days old lists its rows with no button

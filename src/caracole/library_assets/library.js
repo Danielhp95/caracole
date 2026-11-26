@@ -961,7 +961,8 @@
   // search is listed, a row a record. Only its Search, pressed (or Enter in its fields), sends POST /lyrics/search:
   // never as the card opens, as you type, or by a timer. While the search waits and runs (a job of no song's, followed
   // on /api/jobs) its line says the sites are asked, the button waits, and once it is over the panel reads the GET
-  // again and draws its answer: the search's last line, its rows (the best fit first, "Best fit"; the record you picked
+  // again and draws its answer, its words the route's (the page's own are its controls' and the search's progress):
+  // the search's last line, the name it asked under (``asked``), its rows (the best fit first, "Best fit"; the record you picked
   // "In use"), what each site that listed nothing said (a site that failed or waited, never "nothing found"). Each row
   // of a search still pickable has Use these lyrics (POST /lyrics/pick with its record), the record in use Clear the
   // pick (POST /lyrics/clear), as has a record picked that gave no lyrics (``picked_why``); both posted in place, the
@@ -970,10 +971,6 @@
   const LYRICS_SEARCH = Boolean(server && server.lyricsSearch === true);
   const lyricsSite = (site) => String(own.call(ICONS, site) && ICONS[site] && ICONS[site].name || site);
   const whose = (name) => name + (/s$/.test(name) ? "'" : "'s");
-  const clockOf = (seconds) => {
-    const t = Math.round(Number(seconds));
-    return Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0");
-  };
   const lyricsSearches = new Map();  // song id -> the search this page asked for, until it is over: {url, named, said}
   const lyricsPanels = new Map();  // song id -> its panel drawn last (each card made again draws another)
   const lyricsJobs = new Set();  // the picks and clears the panels queued: the offers read again once one is over
@@ -1097,8 +1094,8 @@
       postHere(one, b);
       return one;
     };
-    // A record as the drawer's version rows show a version (card.css .vrow): its site, Best fit or In use, then
-    // "Artist - Title · album · length · timed", then its button.
+    // A record as the drawer's version rows show a version (card.css .vrow): its site, Best fit or In use, then its
+    // line as the route words it (``facts``: "Artist - Title · album · 4:31, audio 3:45 · timed"), then its button.
     const rowOf = (row, search, picked) => {
       const inUse = picked !== null && String(row.record) === picked;
       const li = el("li", "vrow" + (inUse ? " cur" : ""));
@@ -1115,14 +1112,7 @@
         used.append(glyph("check"), document.createTextNode("In use"));
       }
       const by = String(row.artist || "");
-      const facts = [(by || "(no artist)") + " - " + String(row.title || "")];
-      if (row.album) facts.push(String(row.album));
-      if (typeof row.duration === "number") {
-        facts.push(clockOf(row.duration) + (row.far === true && typeof search.length === "number" ?
-          " (audio " + clockOf(search.length) + ")" : ""));
-      }
-      facts.push(row.timed ? "timed" : "plain");
-      li.appendChild(el("span", "note", facts.join(" · ")));
+      li.appendChild(el("span", "note", String(row.facts || "")));  // the route's words, the command's line
       const acts = li.appendChild(el("span", "vbtns"));
       const of = String(row.title || "") + (by ? " by " + by : "");
       if (inUse) {
@@ -1166,13 +1156,8 @@
           return line;
         }));
       notes.hidden = !notes.childNodes.length;
-      if (search) {
-        const name = search.as && typeof search.as === "object" ?
-          String(search.as.artist || "") + " - " + String(search.as.title || "") : "";
-        asked.textContent = "Asked as “" + name + "” on " + shortDate(search.at) + (search.pickable === true ? "." :
-          ": over a week ago. Search again to pick one.");
-      }
-      asked.hidden = !search;
+      asked.textContent = search && typeof search.asked === "string" ? search.asked : "";
+      asked.hidden = !asked.textContent;
       if (ended !== undefined) {
         say(ended === "done" && search && typeof search.line === "string" ? String(search.line) :
           "The search didn't run to its end: the Journal says why.");
@@ -1792,9 +1777,12 @@
   // a drawer of its card closed; closed, its card waits to be made until it opens. Its card in the pane (old selected),
   // fresh's takes its place there, opened; a line with no card (a song gone) leaves the pane empty (placeAgain).
   const refill = (old, fresh) => {
-    const back = lyricsFocus(document.activeElement);  // a lyrics panel's control: the redrawn card's same one
+    // A control of this song's lyrics panel holding the focus: the redrawn card's same one. Another song's line
+    // drawn again touches no focus.
+    const at = document.activeElement;
+    const back = partsOf(old).some((part) => part.contains(at)) ? lyricsFocus(at) : null;
     const done = refilled(old, fresh);
-    lyricsRefocus(done, back);
+    if (back) lyricsRefocus(done, back);
     return done;
   };
   const refilled = (old, fresh) => {

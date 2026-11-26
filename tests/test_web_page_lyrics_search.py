@@ -88,6 +88,19 @@ class FakeLyrics:
 
     def __call__(self, args, emit):
         self.ran.append(tuple(args))
+        named = next((a.removeprefix("--song=") for a in args if a.startswith("--song=")), None)
+        if named is not None and named != self.song.display:  # another song's: only a clear of it is asked here
+            from caracole.lyrics_pick import clear_pick
+            from caracole.overrides import load_overrides
+            from caracole.songs import list_songs
+
+            conn = db.connect(self.cfg.db_path)
+            try:
+                [other] = [song for song in list_songs(conn) if song.display == named]
+                emit(str(clear_pick(self.cfg, conn, other, load_overrides(self.cfg.overrides_file))))
+            finally:
+                conn.close()
+            return 0
         asked = next((a.removeprefix("--as=") for a in args if a.startswith("--as=")), None)
         record = next((a.removeprefix("--record=") for a in args if a.startswith("--record=")), None)
         if asked is not None:
@@ -295,11 +308,11 @@ def test_searching_says_it_asks_then_lists_one_row_a_record_best_fit_first(able,
     assert browser.js(rows_of(card)) == [
         ["LRCLIB", "孟维来 - 野人 · 野人 · 3:46 · timed", ["Best fit"],
          ["Use these lyrics", "Use LRCLIB's timed lyrics of 野人 by 孟维来"]],
-        ["LRCLIB", "孟维来 - 野人 (Live) · 野人 Live · 4:31 (audio 3:45) · timed", [],
+        ["LRCLIB", "孟维来 - 野人 (Live) · 野人 Live · 4:31, audio 3:45 · timed", [],
          ["Use these lyrics", "Use LRCLIB's timed lyrics of 野人 (Live) by 孟维来"]],
         ["Megalobiz", "(no artist) - 野人 · 3:44 · timed", [],
          ["Use these lyrics", "Use Megalobiz's timed lyrics of 野人"]],
-        ["AZLyrics", "孟维来 - 野人 · plain", [],
+        ["AZLyrics", "孟维来 - 野人", [],
          ["Use these lyrics", "Use AZLyrics' plain lyrics of 野人 by 孟维来"]]]
     assert browser.js(text_of(card, "> p.hint")).startswith("Asked as “孟维来 - 野人”")
     assert browser.js(notes_of(card)) == ["2 records marked instrumental aren't listed."]
@@ -513,8 +526,11 @@ def test_the_search_and_a_pick_from_the_keyboard_alone_never_leave_the_focus_on_
     browser.press("Enter")
     path, fields = posted.next(1)
     assert (path, fields["record"]) == ("/lyrics/pick", "lrclib:28399373")
+    progress = json.dumps(line(song) + " .progress")
+    # Once the server answered, the line following it (before, the pressed button, waiting, keeps it).
+    assert browser.wait(f"document.activeElement === document.querySelector({progress})"), browser.js(FOCUSED)
     assert browser.wait(f"{tone(song)} === 'ready'")
-    assert browser.js(FOCUSED) is not None  # the song's line had it, then whatever the card drawn again gives
+    assert browser.js(f"document.activeElement === document.querySelector({progress})")  # and still, once Ready
 
 
 def test_a_card_drawn_again_while_its_panel_holds_the_focus_gives_it_to_the_same_control(able, live, lyrics, browser):
@@ -605,5 +621,85 @@ def test_a_long_list_and_long_titles_stay_in_the_card_and_every_button_is_reache
                       "const r = b.getBoundingClientRect(); const at = document.elementFromPoint(r.x + r.width / 2, "
                       "r.y + r.height / 2); return !!at && b.contains(at); })()")
         assert hit is True
+    finally:
+        page.close()
+
+
+def post_from_the_page(page, path: str, song, **fields) -> None:
+    """``path`` posted as another place would ask it (the Journal, another tab), its job followed by the page."""
+    body = {"csrf": "tok", "song": str(song.id), "identity": song.key, **fields}
+    page.js(f"fetch({json.dumps(path)}, {{method: 'POST', headers: {{Accept: 'application/json'}}, "
+            f"body: new URLSearchParams({json.dumps(body)})}}).then((r) => r.json())"
+            ".then((b) => window.caracoleLibrary.track(b.job))")
+
+
+def test_another_songs_card_drawn_again_never_takes_the_focus_from_a_panel(able, live, lyrics, browser):
+    base, posted, queue = live
+    song = lyrics.song
+    other = in_book(able, lambda conn: add_song(conn, "Nick Cani", "Vikingos veganos"))
+    set_lyrics_record(able.overrides_file, other.display, "lrclib:5")
+    browser.open(base)
+    card = opened(browser, song)
+    drawn(browser, card)
+    type_into(browser, card, "title", "野人 (Liv")
+    # Another song's job ends meanwhile, its line drawn again: the focus and the half-typed name stay where they are.
+    post_from_the_page(browser, "lyrics/clear", other)
+    over(queue, queued(queue, "Clear the lyrics record").id)
+    assert browser.wait(f"!document.querySelector({json.dumps(line(other) + ' .progress')}) || "
+                        f"document.querySelector({json.dumps(line(other) + ' .progress')}).dataset.tone !== 'queued'")
+    # A negative needs a window: a second, ten of the page's polls, for the other line to be drawn again.
+    assert not browser.wait("false", timeout=1.0)
+    title = f"document.querySelector({panel_of(card)} + ' input[name=title]')"
+    assert browser.js(f"document.activeElement === {title}") and browser.js(f"{title}.value") == "野人 (Liv"
+
+
+def test_a_double_press_of_use_these_or_clear_the_pick_sends_one_post(able, live, lyrics, browser):
+    base, posted, queue = live
+    song = lyrics.song
+    in_book(able, lambda conn: kv_set_json(conn, f"{KV}{song.id}", a_search().as_json()))
+    set_lyrics_record(able.overrides_file, song.display, "megalobiz:8")
+    lyrics.pick_hold.clear()
+    browser.open(base)
+    card = opened(browser, song)
+    drawn(browser, card)
+    assert browser.wait(f"{rows_of(card)}.length === 4")
+    use = json.dumps(f"{card} {PANEL} > ol.vrows > li:first-child button[type=submit]")
+    browser.js(f"(() => {{ const b = document.querySelector({use}); b.click(); b.click(); }})()")
+    # A negative needs a window: half a second, five of the page's polls, for a second POST to arrive.
+    assert not browser.wait("false", timeout=0.5)
+    assert [p[0] for p in posted] == ["/lyrics/pick"]
+    lyrics.pick_hold.set()
+    assert browser.wait(f"{tone(song)} === 'ready'")
+    again = "#" + browser.js(f"{cards.card_js(line(song))}.id")
+    browser.js(f"document.querySelector({panel_of(again)}).open = true")
+    drawn(browser, again)
+    clear = json.dumps(f"{again} {PANEL} form.lyrics-clear button")
+    assert browser.wait(f"document.querySelector({clear}) !== null")
+    browser.js(f"(() => {{ const b = document.querySelector({clear}); b.click(); b.click(); }})()")
+    assert not browser.wait("false", timeout=0.5)  # the same window, for a second clear
+    assert [p[0] for p in posted] == ["/lyrics/pick", "/lyrics/clear"]
+
+
+@pytest.mark.parametrize("width", [390, 1280])
+def test_nothing_in_an_open_card_sticks_out_of_it_its_sheet_forms_included(able, live, lyrics, tmp_path, width):
+    # The card of a song with no human sheet shows Sheet from a YouTube video's form and Sheet from an audio file…'s,
+    # whose class the "+"'s dialog shares: none of the dialog's box may land on it. (The card's head is left out: in
+    # place it is hidden, and its name is cut short with an ellipsis, its text wider than the box that clips it.)
+    base, _, _ = live
+    song = lyrics.song
+    page = driven(tmp_path, width)
+    try:
+        page.open(base)
+        card = opened(page, song)
+        drawn(page, card)
+        for form in ("form.youtube-sheet", "form.audio-sheet"):
+            assert page.js(f"document.querySelector({json.dumps(card + ' ' + form)}) !== null"), form
+        out = page.js(f"(() => {{ const c = document.querySelector({json.dumps(card)}); const r = "
+                      "c.getBoundingClientRect(); return [[...c.querySelectorAll('*')].filter((n) => { "
+                      "const b = n.getBoundingClientRect(); return b.width && !n.closest('.card-head') && "
+                      "(b.right > r.right + 0.5 || b.left < r.left - 0.5); }).map((n) => n.tagName + '.' + "
+                      "n.className), c.scrollWidth <= c.clientWidth + 0.5, "
+                      "document.documentElement.scrollWidth <= window.innerWidth]; })()")
+        assert out == [[], True, True]
     finally:
         page.close()

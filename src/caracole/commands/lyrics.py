@@ -335,8 +335,9 @@ def _typed_name(cfg: Config, text: str) -> tuple[str, str]:
 
 
 def _clock(seconds: float) -> str:
-    whole = round(seconds)
-    return f"{whole // 60}:{whole % 60:02d}"
+    from caracole.lyrics_search import clock
+
+    return clock(seconds)
 
 
 def _lyrics_as(cfg: Config, display: str, typed: str) -> None:
@@ -348,7 +349,7 @@ def _lyrics_as(cfg: Config, display: str, typed: str) -> None:
     "Nothing found: " (every site asked answered none) or "Not searched: " (no rows, a site failed or waited)."""
     import shlex
 
-    from caracole.lyrics_search import far, is_own_name, last_line, notes, search_lyrics
+    from caracole.lyrics_search import is_own_name, last_line, notes, row_facts, search_lyrics
 
     name = _typed_name(cfg, typed)
     overrides = load_ovr(cfg)
@@ -359,14 +360,9 @@ def _lyrics_as(cfg: Config, display: str, typed: str) -> None:
     noted = ("; the song's own name, so none is kept under [lyrics]" if is_own_name(song, name)
              else "; noted under [lyrics]")
     typer.echo(f"Asked as {found.name}{audio}{noted}.")
-    for n, row in enumerate(found.rows, 1):
-        parts = [f"{row.artist or '(no artist)'} - {row.title}"]
-        if row.album:
-            parts.append(row.album)
-        if row.duration:
-            parts.append(_clock(row.duration) + (f", audio {_clock(found.length)}" if far(row, found.length) else ""))
-        parts += ["timed"] * row.timed + ["best fit"] * row.best
-        typer.echo(f"{n:>2}. {provider_name(row.site):<10} {' · '.join(parts)}")
+    for n, row in enumerate(found.rows, 1):  # each row as the card lists it too (row_facts), its best fit said
+        typer.echo(f"{n:>2}. {provider_name(row.site):<10} {row_facts(row, found.length)}"
+                   + " · best fit" * row.best)
     for note in notes(found):  # each site that listed none in its words, then the instrumental records counted
         typer.echo(note.line)
     if found.rows:

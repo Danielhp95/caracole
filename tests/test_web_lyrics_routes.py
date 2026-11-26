@@ -221,7 +221,11 @@ def test_get_api_lyrics_search_reads_the_kept_search_and_the_lyrics_entry_with_n
         # Each row with whether it is far from the audio (lyrics_search.far), the notes the command prints of the
         # sites with no rows (lyrics_search.notes), and its last line's words: the page composes none.
         "search": {"at": search.at, "as": {"artist": "孟维来", "title": "野人"}, "length": 225.0,
-                   "rows": [row.as_json() | {"far": False} for row in rows()], "said": search.said,
+                   "rows": [row.as_json() | {"far": False, "facts": facts}
+                            for row, facts in zip(rows(), ("孟维来 - 野人 · 野人 · 3:46 · timed",
+                                                           "(no artist) - 野人 · 3:51 · timed", "孟维来 - 野人"))],
+                   "said": search.said, "asked": f"Asked as “孟维来 - 野人” on {search.at[8:10]}/{search.at[5:7]}/"
+                                                  f"{search.at[2:4]}.",
                    "state": search.state, "instrumental": 2, "pickable": True,
                    "notes": [{"site": "", "state": "instrumental",
                               "line": "2 records marked instrumental aren't listed."}],
@@ -243,6 +247,9 @@ def test_a_row_far_from_the_audio_says_so(cfg, conn, queue):
                                    Row("lrclib:32", "lrclib", "孟维来", "野人", "", 230.0, True)))
     read = answer(get(app_for(cfg, queue), f"/api/lyrics/search?song={song.id}"))
     assert [row["far"] for row in read["search"]["rows"]] == [True, False]
+    # The row's facts as `caracole lyrics --as` prints them: its gap to the audio in the command's words.
+    assert [row["facts"] for row in read["search"]["rows"]] == ["孟维来 - 野人 (Live) · 4:31, audio 3:45 · timed",
+                                                                "孟维来 - 野人 · 3:50 · timed"]
 
 
 def test_a_search_over_a_week_old_is_read_unpickable_and_a_picked_record_with_no_lyrics_says_why(cfg, conn, queue):
@@ -252,6 +259,9 @@ def test_a_search_over_a_week_old_is_read_unpickable_and_a_picked_record_with_no
     update_song(conn, song.id, lyrics_status="missing")
     read = answer(get(app_for(cfg, queue), f"/api/lyrics/search?song={song.id}"))
     assert read["search"]["pickable"] is False and len(read["search"]["rows"]) == 3
+    at = read["search"]["at"]
+    assert read["search"]["asked"] == (f"Asked as “孟维来 - 野人” on {at[8:10]}/{at[5:7]}/{at[2:4]}: over a week ago. "
+                                       "Search again to pick one.")
     assert read["picked"] == "megalobiz:8"
     assert read["picked_why"] == ("the record you picked (megalobiz 8) has given no lyrics: pick another, or clear "
                                   "the pick")
