@@ -70,6 +70,10 @@ ran. So a job of other commands reads the same way:
   a wait; or the record has no lyrics now, missing; each exits 0); failed after the keep (its
   chords, its PDF or info.json), it says so as the command's last line does
   ("Lyrics kept; the job failed after: …"), else in its failed stage's words.
+  That record taken back (``jobs.LYRICS_CLEAR``), the song's, says while it runs
+  its step's label, then its command's one line ("Cleared the record you picked
+  for …"), and for a song with no record picked "Nothing to clear: …", an answer,
+  never a failure.
   A sync with another caracole (``caracole peer sync``, the Sync tab's: sync_routes.py) says "Shared", and a push
   another caracole sent taken (``caracole peer take``, peer_routes.py) or a pull of its units "Taken"; with a unit
   left as it was (the owner skipped it, or it changed on a side since the comparison), "Shared · 2 changes left as
@@ -95,13 +99,14 @@ from typing import Any
 
 from caracole.get import SHEET_FROM
 from caracole.logs import plural
-from caracole.lyrics_pick import KEPT_FAILED_AFTER, NO_LYRICS_NOW, NOTHING_KEPT
+from caracole.lyrics_pick import CLEARED, KEPT_FAILED_AFTER, NO_LYRICS_NOW, NOTHING_KEPT, NOTHING_TO_CLEAR
 from caracole.web.jobs import (
     AUDIO_SHEET,
     EXPORTING,
     INDEX_MERGE_COMMAND,
     INDEX_READS,
     INTERRUPTED,
+    LYRICS_CLEAR,
     LYRICS_PICK,
     PEER,
     READING,
@@ -117,6 +122,7 @@ from caracole.web.songbooks import DONE, OPENS, songbook_of
 TODO = "_todo.md"
 REQUESTS = "#tab=requests"  # the library page's Requests tab
 READY = "Ready"  # a song's request that ended with its sheet there
+NOTHING_PICKED = "Nothing to clear: no lyrics record is picked."  # a lyrics clear refused for a song with none
 MAX_TEXT = 160  # characters of an error's sentence
 _ERROR = re.compile(r"^(?:<\d>)?error: (.+)$")
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s")
@@ -287,6 +293,8 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page:
                 return Line("missing", "Not on the sites", _todo_link(todo), details)
         if job.song_key.startswith(LYRICS_PICK) and _lyrics_kept(job):  # kept, then failed: said kept
             return Line("failed", _kept_failed(job), details=details)
+        if job.song_key.startswith(LYRICS_CLEAR) and _nothing_to_clear(job):  # an answer, never a failure
+            return Line("added", NOTHING_PICKED)
         return Line("failed", _stage_failure(job.stages) or _failure(job.steps), details=details)
     kind = peer_kind(job)
     if kind is not None:  # no song's: what it took, gave and left
@@ -313,6 +321,9 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page:
         if made and song is not None and song.sheet:
             return Line("ready", READY, ("Open", song.sheet))
         return Line("waiting", "Not made yet", details=details)
+    if job.song_key.startswith(LYRICS_CLEAR):  # its command's one line, whatever sheet the song has
+        said = cleared(job)
+        return Line("added", _short(said.split("; ", 1)[0].rstrip(".") + ".") if said else "Cleared.")
     if job.song_key.startswith(LYRICS_PICK):  # Ready once its lyrics are kept, whatever sheet there is to open
         if _lyrics_kept(job):
             return Line("ready", READY, ("Open", song.sheet) if song and song.sheet else None)
@@ -365,6 +376,19 @@ def record_gone(job: Job) -> bool:
     answer, which asking the same record again answers alike, never a wait or an error."""
     return any(stage.name == "lyrics" and stage.state == "skipped"
                and stage.detail.endswith(NO_LYRICS_NOW + NOTHING_KEPT) for stage in job.stages)
+
+
+def cleared(job: Job) -> str | None:
+    """A lyrics clear's line, as ``caracole lyrics --clear`` ends ("Cleared the record you picked for …",
+    lyrics_pick.py ``CLEARED``); None with no such line (its output lost)."""
+    return next((line.strip() for step in reversed(job.steps) for line in reversed(step.output)
+                 if line.startswith(CLEARED + " ")), None)
+
+
+def _nothing_to_clear(job: Job) -> bool:
+    """Whether a lyrics clear failed for a song with no record picked (lyrics_pick.py ``NOTHING_TO_CLEAR``)."""
+    return any((m := _ERROR.match(line)) is not None and m.group(1).strip().endswith(NOTHING_TO_CLEAR)
+               for step in job.steps for line in step.output)
 
 
 def _kept_failed(job: Job) -> str:

@@ -314,29 +314,24 @@ def _lyrics(cfg: Config) -> None:
 
 
 def _typed_name(cfg: Config, text: str) -> tuple[str, str]:
-    """The artist and the title a name typed for ``--as`` says: read by song_names.py's one parser of free text, each
-    part then cleaned and capped as ``[lyrics]``' ``as`` is (``lyrics._asked_part``); exit 2 for a text that doesn't
-    say who its artist is, or a part that cleans to nothing."""
-    import unicodedata
-
+    """The artist and the title a name typed for ``--as`` says (lyrics_search.py ``typed_name``, with the library's
+    known artists where its database opens); exit 2 for a text that doesn't say who its artist is, or a part that
+    cleans to nothing."""
     from caracole import db
-    from caracole.lyrics import _asked_part
-    from caracole.song_names import read_names
+    from caracole.lyrics_search import typed_name
 
-    kept = "".join(c for c in text if c.isspace() or unicodedata.category(c) != "Cc")
     try:
         conn: sqlite3.Connection | None = db.connect(cfg.db_path)
     except (OSError, sqlite3.Error):
         conn = None
     try:
-        named = read_names(conn, kept)
+        name = typed_name(conn, text)
     finally:
         if conn is not None:
             conn.close()
-    artist, title = (_asked_part(part) for part in named) if named is not None else ("", "")
-    if not artist or not title:
+    if name is None:
         _common.fail(f"--as: expected \"Artist - Title\", got {text!r}", 2)
-    return artist, title
+    return name
 
 
 def _clock(seconds: float) -> str:
@@ -414,7 +409,7 @@ def _lyrics_pick(cfg: Config, display: str, *, pick: int | None, record: str | N
 def _lyrics_clear(cfg: Config, display: str) -> None:
     """The record you picked for the song taken out of ``[lyrics]`` (lyrics_pick.py ``clear_pick``), with no request,
     under caracole's lock as asked for now; then its PDF and the pages. Exit 1 for a song with no record picked."""
-    from caracole.lyrics_pick import clear_pick
+    from caracole.lyrics_pick import NOTHING_TO_CLEAR, clear_pick
     from caracole.overrides import OverridesError, override_key
     from caracole.render import render_all
 
@@ -427,7 +422,7 @@ def _lyrics_clear(cfg: Config, display: str) -> None:
         song = _common.song_named(conn, display, overrides)
         said = clear_pick(cfg, conn, song, overrides)
         if said is None:
-            _common.fail(f"{song.display} has no lyrics record picked under [lyrics]: nothing to clear.")
+            _common.fail(f"{song.display} {NOTHING_TO_CLEAR}")
         overrides = load_ovr(cfg)
         now = utcnow()
         render_all(conn, cfg, overrides, now=now, song_ids={song.id})

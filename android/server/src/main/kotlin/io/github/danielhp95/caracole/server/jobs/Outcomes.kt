@@ -371,6 +371,13 @@ object Outcomes {
             return Outcome("review", "Needs your pick", IN_REVIEW,
                            if (picker != null) Action("Pick", href = href(picker)) else inLibrary(songId))
         }
+        if (job.key.startsWith(JobCommands.LYRICS_CLEAR) && tone == "added") {  // "Cleared", "Nothing to clear"
+            Status.cleared(job)?.let { said ->
+                return Outcome(tone, "Cleared", sentence(capitalFirst(said.removePrefix("Cleared "))))
+            }
+            val (word, rest) = partition(text, ": ")
+            return Outcome(tone, word.trimEnd('.'), if (rest.isNotEmpty()) sentence(capitalFirst(rest)) else "")
+        }
         if (JobCommands.INDEX_READS.any(job.key::startsWith)) {
             val (word, rest) = partition(text, ": ")  // "Read: …", "Not read: …"
             return Outcome(tone, word, if (rest.isNotEmpty()) sentence(rest) else "", if (tone == "waiting") again else null)

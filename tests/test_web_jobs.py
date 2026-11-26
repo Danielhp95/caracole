@@ -865,6 +865,25 @@ def test_a_lyrics_pick_is_the_queues_and_its_songs():
     assert done.steps[0].output == ["kept"]  # its progress is data, not output
 
 
+def test_a_lyrics_clear_is_the_queues_and_its_songs_with_no_stages():
+    from caracole.web.jobs import LYRICS_CLEAR, LYRICS_PICK, _reports, lyrics_clear_steps, lyrics_pick_steps
+    from caracole.web.jobs import song_key_of, song_of_job
+
+    steps = lyrics_clear_steps("Nick Cani - Vikingos veganos (Video Oficial)")
+    assert steps == [("Clearing the lyrics record you picked",
+                      ("lyrics", "--song=Nick Cani - Vikingos veganos (Video Oficial)", "--clear"))]
+    assert not _reports(steps[0][1]) and not lane_of(steps)
+    key = LYRICS_CLEAR + VIKINGOS
+    assert song_key_of(key) == song_of_job(key) == VIKINGOS  # its view is the song's
+    queue = JobQueue(FakeRunner(), lane=LANE)
+    pick, _ = queue.submit("Lyrics for …", LYRICS_PICK + VIKINGOS, lyrics_pick_steps("Nick Cani - Vikingos veganos",
+                                                                                    "lrclib:1"), join=False)
+    clear, new = queue.submit("Clear the lyrics record: …", key, steps, join=False)
+    assert new and not clear.lane and clear.stages == [] and clear.id != pick.id  # after the pick, in the queue
+    again, new = queue.submit("Clear the lyrics record: …", key, steps, join=False)
+    assert not new and again.id == clear.id
+
+
 def test_neither_joins_the_songs_lookup():
     from caracole.web.jobs import LYRICS_PICK, LYRICS_SEARCH, lyrics_pick_steps, lyrics_search_steps
 

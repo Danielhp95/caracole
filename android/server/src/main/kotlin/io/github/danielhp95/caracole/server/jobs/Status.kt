@@ -228,6 +228,9 @@ object Status {
             if (job.key.startsWith(JobCommands.LYRICS_PICK) && lyricsKept(job)) {  // kept, then failed: said kept
                 return Line("failed", keptFailed(job), details = details)
             }
+            if (job.key.startsWith(JobCommands.LYRICS_CLEAR) && nothingToClear(job)) {  // an answer, never a failure
+                return Line("added", NOTHING_PICKED)
+            }
             return Line("failed", stageFailure(job.stages) ?: failure(job.steps), details = details)
         }
         val key = job.key
@@ -252,6 +255,10 @@ object Status {
             val made = job.stages.any { it.name == "chords" && it.state == Job.DONE }
             if (made && song?.sheet != null) return Line("ready", READY, "Open" to song.sheet)
             return Line("waiting", "Not made yet", details = details)
+        }
+        if (key.startsWith(JobCommands.LYRICS_CLEAR)) {  // its command's one line, whatever sheet the song has
+            val said = cleared(job) ?: return Line("added", "Cleared.")
+            return Line("added", short(said.split("; ", limit = 2)[0].trimEnd('.') + "."))
         }
         if (key.startsWith(JobCommands.LYRICS_PICK)) {  // Ready once its lyrics are kept, whatever sheet there is
             if (lyricsKept(job)) return Line("ready", READY, song?.sheet?.let { "Open" to it })
@@ -314,6 +321,22 @@ object Status {
      * a wait or an error. */
     internal fun recordGone(job: Shape): Boolean = job.stages.any {
         it.name == "lyrics" && it.state == Job.SKIPPED && it.detail.endsWith(NO_LYRICS_NOW + NOTHING_KEPT)
+    }
+
+    /** lyrics_pick.py's CLEARED, how `caracole lyrics --clear`'s line begins, and NOTHING_TO_CLEAR, its refusal after
+     * the song's name; status.NOTHING_PICKED, what the line says of that refusal. */
+    const val CLEARED = "Cleared the record you picked"
+    const val NOTHING_TO_CLEAR = "has no lyrics record picked under [lyrics]: nothing to clear."
+    const val NOTHING_PICKED = "Nothing to clear: no lyrics record is picked."
+
+    /** A lyrics clear's line as its command ends (status.cleared); null with no such line. */
+    internal fun cleared(job: Shape): String? = job.steps.asReversed().firstNotNullOfOrNull { step ->
+        step.output.asReversed().firstOrNull { it.startsWith("$CLEARED ") }?.let(PyText::strip)
+    }
+
+    /** Whether a lyrics clear failed for a song with no record picked (status._nothing_to_clear). */
+    private fun nothingToClear(job: Shape): Boolean = job.steps.any { step ->
+        step.output.any { line -> errorOf(line)?.let { PyText.strip(it).endsWith(NOTHING_TO_CLEAR) } == true }
     }
 
     /** Whether a lyrics pick's lyrics stage kept the record's lyrics (status.py's _lyrics_kept). */

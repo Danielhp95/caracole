@@ -42,6 +42,9 @@ the job and what the library knows of its song:
   where the others' is their chords, then, its chords skipped but for no new lyrics, what became of the sheet ("No
   audio to make an auto sheet from."); Not kept the lyrics stage's words, with Try again for a wait or an error, none
   for a record gone (missing: the same record answers alike); interrupted after the keep, "Lyrics kept." first.
+- **That record taken back** (``jobs.LYRICS_CLEAR``): Cleared, then its command's line after its first word ("The
+  record you picked for … (lrclib 28399373); every lyrics site is asked again …"); for a song with no record picked,
+  Nothing to clear, with no Try again.
 - **Progress** (``progress``), for the library page: a lookup's steps, a bar on the song's line (or a search
   result's row) while it runs, with the step in hand (``_in_hand``: the one that runs, else the first that
   waits, between two steps, else the last), its place ``at`` and ``count``, "3 of 7", its place among every
@@ -100,8 +103,8 @@ from caracole.get import GTPTABS_KEPT, MATCH_NOT_FOUND, NAMES, SHEET_FROM
 from caracole.icons import AUTO, INBOX, tag
 from caracole.logs import plural
 from caracole.lyrics_pick import NO_NEW
-from caracole.web.jobs import INDEX_READS, INTERRUPTED, LOOKUP, REMOVING, Job, Stage, song_key_of
-from caracole.web.status import READY, _WAITING, Line, SongFacts, doing, peer_kind
+from caracole.web.jobs import INDEX_READS, INTERRUPTED, LOOKUP, LYRICS_CLEAR, REMOVING, Job, Stage, song_key_of
+from caracole.web.status import READY, _WAITING, Line, SongFacts, cleared, doing, peer_kind
 
 if TYPE_CHECKING:
     from caracole.config import Config
@@ -499,6 +502,13 @@ def outcome(job: Job, line: Line, facts: SongFacts | None = None, *, song_id: in
         picker = facts.picker if facts is not None else None
         action = Action("Pick", href=_href(picker)) if picker else _in_library(song_id)
         return Outcome("review", "Needs your pick", IN_REVIEW, action)
+    if job.song_key.startswith(LYRICS_CLEAR) and tone == "added":  # "Cleared", "Nothing to clear"
+        said = cleared(job)
+        if said is not None:
+            rest = said.removeprefix("Cleared ")
+            return Outcome(tone, "Cleared", _sentence(rest[:1].upper() + rest[1:]))
+        word, _, rest = text.partition(": ")
+        return Outcome(tone, word.rstrip("."), _sentence(rest[:1].upper() + rest[1:]) if rest else "")
     if job.song_key.startswith(INDEX_READS):  # "Read: …", "Not read: …"
         word, _, rest = text.partition(": ")
         return Outcome(tone, word, _sentence(rest) if rest else "", again if tone == "waiting" else None)

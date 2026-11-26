@@ -62,6 +62,9 @@ NO_NEW = "no new lyrics"
 NOTHING_KEPT = "; nothing kept"
 NO_LYRICS_NOW = " has no lyrics now"  # a record gone, its lyrics stage's words before NOTHING_KEPT: an answer, no wait
 KEPT_FAILED_AFTER = "Lyrics kept; the job failed after"  # the command's last line for a failure after the keep
+CLEARED = "Cleared the record you picked"  # how ``clear_pick``'s line begins, which caracole serve's request line reads
+# ``--clear``'s refusal, after the song's name
+NOTHING_TO_CLEAR = "has no lyrics record picked under [lyrics]: nothing to clear."
 FAR = 10.0  # seconds between the record's length and the audio's past which the lyrics stage says so
 
 
@@ -428,5 +431,5 @@ def clear_pick(cfg: Config, conn: sqlite3.Connection, song: Song, overrides: Ove
     named = asked_name(song, load_overrides(cfg.overrides_file).lyrics)
     under = f"under “{named}”" if named else "under its own name"
     dropped = "; its lyrics from it dropped" if gave else ""
-    return (f"Cleared the record you picked for {song.display} ({record.site} {record.id}){dropped}{stuck}; every "
+    return (f"{CLEARED} for {song.display} ({record.site} {record.id}){dropped}{stuck}; every "
             f"lyrics site is asked again {under}, tonight or at a lookup.")

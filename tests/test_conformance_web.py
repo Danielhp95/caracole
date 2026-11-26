@@ -1065,6 +1065,17 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
         facts=ready)
     add("a lyrics pick, kept then its chords failed, its output lost", in_state(pick, "failed", taken | {
         "chords": ("failed", "auto-chords failed"), "pdf": ("skipped", "no new lyrics")}, code=1), facts=ready)
+    # That record taken back (caracole lyrics --clear): the song's, no stages, its line its command's one line.
+    clear = queued_job(f"Clear the lyrics record: {V_DISPLAY} (Live)", _jobs.LYRICS_CLEAR + V_KEY,
+                       _jobs.lyrics_clear_steps(f"{V_DISPLAY} (Live)"), display=f"{V_DISPLAY} (Live)", join=False)
+    add("a lyrics clear, done", in_state(clear, "done", output=[
+        f"Cleared the record you picked for {V_DISPLAY} (Live) (lrclib 28399373); its lyrics from it dropped; every "
+        f"lyrics site is asked again under “{V_DISPLAY}”, tonight or at a lookup."]), facts=ready)
+    add("a lyrics clear, nothing to clear", in_state(clear, "failed", output=[
+        f"error: {V_DISPLAY} (Live) has no lyrics record picked under [lyrics]: nothing to clear."], code=1),
+        facts=ready)
+    add("a lyrics clear, failed", in_state(clear, "failed", output=[
+        "error: Can't read overrides.toml: line 3: expected a table."], code=1), facts=ready)
     video = queued_job("Search YouTube for “creep”", _jobs.YOUTUBE_SEARCH + "creep",
                        _jobs.youtube_search_steps("creep"))
     add("a video searched for, done", in_state(video, "done", {"video": ("done", ""), "thumbnail": ("done", "")},
@@ -1089,6 +1100,7 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
             ("a removal of commands", removal, V_ID, None), ("a pull", pull, None, None),
             ("a sheet from YouTube", youtube, V_ID, ready), ("a transcription", transcription, V_ID, ready),
             ("a sheet from an audio file", from_file, V_ID, ready), ("a lyrics pick", pick, V_ID, ready),
+            ("a lyrics clear", clear, V_ID, ready),
             ("a video searched for", video, None, None)):
         first = {job.stages[0].name: ("running", "")} if job.stages else None
         add(f"{note}, every state: queued", job, song_id, facts=facts)

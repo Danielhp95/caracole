@@ -16,6 +16,7 @@ class JobCommandsTest {
         assertTrue(JobCommands.INDEX_READS.any { (JobCommands.LYRICS_SEARCH + "a/t").startsWith(it) })
         assertEquals(JobCommands.LYRICS_SEARCH + "a/t", JobCommands.songKeyOf(JobCommands.LYRICS_SEARCH + "a/t"))
         assertEquals("a/t", JobCommands.songKeyOf(JobCommands.LYRICS_PICK + "a/t"))
+        assertEquals("a/t", JobCommands.songKeyOf(JobCommands.LYRICS_CLEAR + "a/t"))  // a clear's view is the song's
         assertTrue(JobCommands.isLookup(search))
         assertFalse(JobCommands.isLookup(pick))
         assertFalse(JobCommands.isLookup(listOf("lyrics", "--song=A - T", "--clear")))

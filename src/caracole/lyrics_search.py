@@ -23,7 +23,8 @@ its ``Search.state``), never a miss; a block cools it down, with no alert, as a 
 lyrics.
 
 The rows are kept in kv ``lyrics-search:<song id>`` (``KV``), replaced by the song's next search, for a pick within
-``PICKABLE_FOR`` (``kept_search``, ``row_of``). A row names its record only by an id the site answered, of the shape
+``PICKABLE_FOR`` (``kept_search``, ``row_of``; ``last_search`` reads it however old, ``pickable`` says whether it
+still is). The name typed is read by ``typed_name``, the command's and caracole serve's route's alike. A row names its record only by an id the site answered, of the shape
 ``[lyrics]`` takes (``overrides.LYRICS_RECORD_IDS``): one of any other shape is dropped as it is read, from the site
 or from kv.
 """
@@ -118,6 +119,23 @@ def _record(site: str, record_id: Any) -> str | None:
         return None
     text = str(record_id)
     return f"{site}:{text}" if LYRICS_RECORD_IDS[site].fullmatch(text) else None
+
+
+def typed_name(conn: sqlite3.Connection | None, text: str) -> tuple[str, str] | None:
+    """The artist and the title a name typed ("Artist - Title") says, as a search asks the sites under it: read by
+    song_names.py's one parser of free text (``conn``, the library's known artists, or None), each part then cleaned
+    and capped as ``[lyrics]``' ``as`` is (``lyrics._asked_part``); None for a text that doesn't say who its artist
+    is, or a part that cleans to nothing. ``caracole lyrics --as`` reads its name so, and caracole serve's route says
+    the name it queues so."""
+    import unicodedata
+
+    from caracole.lyrics import _asked_part
+    from caracole.song_names import read_names
+
+    kept = "".join(c for c in text if c.isspace() or unicodedata.category(c) != "Cc")
+    named = read_names(conn, kept)
+    artist, title = (_asked_part(part) for part in named) if named is not None else ("", "")
+    return (artist, title) if artist and title else None
 
 
 def is_own_name(song: Song, name: tuple[str, str]) -> bool:
@@ -457,12 +475,24 @@ def _row(value: Any) -> Row | None:
 
 def kept_search(conn: sqlite3.Connection, song_id: int, now: datetime) -> Search | None:
     """The song's last search, while it may be picked from (``PICKABLE_FOR`` after it was made); else None."""
+    search = last_search(conn, song_id)
+    return search if search is not None and pickable(search, now) else None
+
+
+def pickable(search: Search, now: datetime) -> bool:
+    """Whether ``search`` may still be picked from: made ``PICKABLE_FOR`` ago at most."""
+    when = stamps.parse(search.at)
+    return when is not None and stamps.utc(now) - when <= PICKABLE_FOR
+
+
+def last_search(conn: sqlite3.Connection, song_id: int) -> Search | None:
+    """The song's last search as kept, however old (caracole serve's card says when, and that an old one is past
+    picking from); None for none, or one that won't read."""
     kept = kv_get_json(conn, f"{KV}{song_id}")
     if not isinstance(kept, Mapping):
         return None
     at, asked = kept.get("at"), kept.get("as")
-    when = stamps.parse(at) if isinstance(at, str) else None
-    if when is None or stamps.utc(now) - when > PICKABLE_FOR:
+    if not isinstance(at, str) or stamps.parse(at) is None:
         return None
     if not (isinstance(asked, list) and len(asked) == 2 and all(isinstance(part, str) for part in asked)):
         return None

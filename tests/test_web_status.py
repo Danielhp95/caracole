@@ -546,3 +546,34 @@ def test_a_lyrics_pick_that_kept_none_is_not_kept():
     refused = lyrics_pick_job("failed", {"song": ("failed", "its last search is over a week old: search again")})
     assert job_line(refused, OPEN) == Line("failed", "its last search is over a week old: search again.",
                                            details=details)
+
+
+# --- a record picked for a song's lyrics taken back ---------------------------------------------------------------
+
+CLEARED = ("Cleared the record you picked for 孟维来 - 野人 (官方MV) (lrclib 28399373); its lyrics from it dropped; every "
+           "lyrics site is asked again under “孟维来 - 野人”, tonight or at a lookup.")
+
+
+def lyrics_clear_job(state="running", output=()):
+    from caracole.web.jobs import LYRICS_CLEAR, lyrics_clear_steps
+
+    made = [Step(label, tuple(args)) for label, args in lyrics_clear_steps(f"{YEREN} (官方MV)")]
+    made[0].state = {"running": "running", "done": "done", "failed": "failed"}.get(state, "waiting")
+    made[0].output = list(output)
+    return Job(8, f"Clear the lyrics record: {YEREN} (官方MV)", LYRICS_CLEAR + "孟维来/野人", made, state=state,
+               display=f"{YEREN} (官方MV)")
+
+
+def test_a_lyrics_clear_says_the_commands_one_line_and_a_refusal_has_nothing_to_clear():
+    # No stages: while it runs its step's label; done, its command's one line, to its first "; " (whatever sheet the
+    # song has: a clear makes no sheet); refused for a song with no record picked, nothing to clear, no failure.
+    assert job_line(lyrics_clear_job(), OPEN) == Line("running", "Clearing the lyrics record you picked…")
+    done = lyrics_clear_job("done", ["Wrote index.html", CLEARED])
+    assert job_line(done, OPEN) == Line("added", "Cleared the record you picked for 孟维来 - 野人 (官方MV) (lrclib "
+                                                 "28399373).")
+    assert job_line(lyrics_clear_job("done"), OPEN) == Line("added", "Cleared.")  # its output lost
+    refused = lyrics_clear_job("failed", [f"error: {YEREN} (官方MV) has no lyrics record picked under [lyrics]: "
+                                          "nothing to clear."])
+    assert job_line(refused, OPEN) == Line("added", "Nothing to clear: no lyrics record is picked.")
+    broken = lyrics_clear_job("failed", ["error: Can't read overrides.toml: line 3."])
+    assert job_line(broken, OPEN) == Line("failed", "Can't read overrides.toml: line 3.", details=details_href(8))

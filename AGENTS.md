@@ -2062,6 +2062,19 @@ It is rows.js's, shared by both pages:
   request and no lock: its state, the tab's names, its artist's page, `guess`, the library's `song`, `hits` as
   /api/search's `index` items) and `POST /ug/link` (`caracole ug --link --progress` queued under `jobs.UG_LINK`, among
   `INDEX_READS`, its stages `UG_LINK_STAGES`, when the state is `auto`; 409 known, other or gone, 429 not now).
+- **lyrics_routes.py** is a song's lyrics looked up under a name the owner types, for the card's panel (D10's):
+  `POST /lyrics/search` (`song`, `identity`, `artist`, `title`: `caracole lyrics --song --as` queued under
+  `jobs.LYRICS_SEARCH`, the lane's, a lookup the owner presses, never sent by the page by itself; 202 `{job, url, as}`,
+  `as` the name the command reads from the fields joined, lyrics_search.py `typed_name`, never the fields as typed;
+  pressed again, the search on its way, its `as` that one and `said` naming it when another was typed), `GET
+  /api/lyrics/search?song=` (no request, no lock, no write: `[lyrics]`' `as` and `picked`, `picked_why`
+  (`transcript.picked_without_lyrics`), the audio's `length`, the kept search however old, `lyrics_search.last_search`,
+  its `as`, rows, `said`, `state`, `instrumental` and `pickable`), `POST /lyrics/pick` (`record`, a row of the kept
+  search within its week, 409 "Search again: …" else; its site on; `caracole lyrics --record --progress` under
+  `jobs.LYRICS_PICK`; another record while a pick waits or runs refused 409 in words, never dropped) and `POST
+  /lyrics/clear` (`caracole lyrics --clear` under `jobs.LYRICS_CLEAR`; 409 nothing to clear); each 404 no song, 409
+  `same_song`, 409 ignored. The phone has none of them (lyrics are searched on the computer, for now): its page offers
+  no control for them, as for Transcribe (test_web_lyrics_routes.py).
 - **offline_routes.py** is `GET /api/offline`, the manifest caracole's Android app copies the library by (read-only:
   each file the written index.html links to, as `WebApp._file` sends it now, its bytes' SHA-256 and its headers;
   test_web_offline.py).
@@ -2158,7 +2171,8 @@ It is rows.js's, shared by both pages:
   running (`JobQueue._take`, which `_next` wraps; `jobs.song_of_job`, Make this my version's and a harmonica reading's
   jobs the song's too, and a lyrics search's, `LYRICS_SEARCH`, no song's everywhere else, among `INDEX_READS`): a song
   never has two jobs running, a lyrics search, its pick (`LYRICS_PICK`, `lyrics --record --progress`, the queue's and
-  the song's, `song_key_of`, joining no lookup) and its transcription never at once
+  the song's, `song_key_of`, joining no lookup), the pick taken back (`LYRICS_CLEAR`, `lyrics --clear`, the queue's and
+  the song's, no stages) and its transcription never at once
   (`test_web_jobs.py::test_a_lyrics_search_and_a_pick_or_transcription_of_one_song_never_run_at_once`), and its own
   job keeps its order (`test_web_jobs.py::test_a_songs_own_job_keeps_its_order`,
   `::test_a_lookup_asked_while_the_songs_own_change_waits_or_runs_goes_into_the_queue_behind_it`). A queued one's
@@ -2192,7 +2206,11 @@ It is rows.js's, shared by both pages:
     it took ("… No audio to make an auto sheet from."), else Not kept: a wait or an error with Try again, a record
     gone (`lyrics_pick.NO_LYRICS_NOW`, status.py `record_gone`) missing with none; failed after the keep it says so in
     the command's last line ("Lyrics kept; the job failed after: …", `lyrics_pick.KEPT_FAILED_AFTER`, status.py
-    `_kept_failed`), and interrupted after it "Lyrics kept." before the stop.
+    `_kept_failed`), and interrupted after it "Lyrics kept." before the stop; that pick taken back (`LYRICS_CLEAR`, no
+    stages) says its step's label while it runs, then its command's one line ("Cleared the record you picked for …",
+    `lyrics_pick.CLEARED`, status.py `cleared`; outcome Cleared and the rest of it), and for a song with no record
+    picked "Nothing to clear: …" (`lyrics_pick.NOTHING_TO_CLEAR`), an answer, never a failure; Status.kt and
+    Outcomes.kt alike.
 - The library page's lines read only its steps (`outcome.progress`: while a lookup runs, once it has run a second
   (`BAR_AFTER`), its line, a song's or a result's row, is a bar of them, library.js `showLine`'s `barred`: a segment
   a step, `segsOf`, then the step in hand, its site and `count`, `stepWords`, "Sheet · Ultimate Guitar · 3 of 7",

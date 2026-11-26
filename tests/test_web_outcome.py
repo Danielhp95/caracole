@@ -987,3 +987,24 @@ def test_a_lyrics_search_says_its_last_lines_words_as_a_site_reads():
         "waiting", "Not searched", "waiting out LRCLIB until 27 Nov 03:00.",  # its words, as LaCuerda's search's
         Action("Try again", post="/jobs/again", fields=(("job", "11"),)))
     assert steps(found) == [Chip("Looking for lyrics under “孟维来 - 野人”", "done")]  # no stages: its command
+
+
+def test_a_lyrics_clear_is_cleared_or_nothing_to_clear_in_the_commands_words():
+    from caracole.web.jobs import LYRICS_CLEAR, lyrics_clear_steps
+
+    def clear(state, said):
+        made = [Step(label, tuple(args), state=state, output=[said])
+                for label, args in lyrics_clear_steps(f"{YEREN} (官方MV)")]
+        return Job(12, f"Clear the lyrics record: {YEREN} (官方MV)", LYRICS_CLEAR + "孟维来/野人", made, state=state,
+                   **times(state))
+
+    done = clear("done", f"Cleared the record you picked for {YEREN} (官方MV) (lrclib 28399373); every lyrics site "
+                         "is asked again under its own name, tonight or at a lookup.")
+    assert outcome(done, job_line(done, None), None) == Outcome(
+        "added", "Cleared", f"The record you picked for {YEREN} (官方MV) (lrclib 28399373); every lyrics site is "
+                            "asked again under its own name, tonight or at a lookup.")
+    refused = clear("failed", f"error: {YEREN} (官方MV) has no lyrics record picked under [lyrics]: nothing to "
+                              "clear.")
+    assert outcome(refused, job_line(refused, None), None) == Outcome(
+        "added", "Nothing to clear", "No lyrics record is picked.")
+    assert steps(done) == [Chip("Clearing the lyrics record you picked", "done")]

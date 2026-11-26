@@ -43,7 +43,9 @@ key, as a sheet from YouTube's, the queue's. A song's lyrics looked up under a n
 key, among ``INDEX_READS``) with no stages, its line its last line, though the lane sees its song (``song_of_job``),
 so it never runs beside the song's pick or transcription; a record of that search picked is ``caracole lyrics --song
 --record --progress`` (``lyrics_pick_steps``), its JSON lines its stages (lyrics_pick.py's), under ``LYRICS_PICK``
-and the song's identity key, the queue's and the song's, joining no lookup, nor a lookup it. A video
+and the song's identity key, the queue's and the song's, joining no lookup, nor a lookup it; and that record taken
+back is ``caracole lyrics --song --clear`` (``lyrics_clear_steps``), under ``LYRICS_CLEAR`` and the song's identity
+key, the queue's and the song's, with no stages, its line its last line. A video
 suggested for a search is ``caracole youtube --search --progress`` (``youtube_search_steps``),
 a job of no song's (``YOUTUBE_SEARCH`` and the query's key, among ``INDEX_READS``), whose stages are
 ``YOUTUBE_SEARCH_STAGES``, as are a pasted video's (``youtube_video_steps``: ``caracole youtube --video``, under
@@ -557,6 +559,16 @@ def lyrics_pick_steps(display: str, record: str) -> list[tuple[str, tuple[str, .
     return [("Taking the lyrics", ("lyrics", f"--song={display}", f"--record={record}", "--progress"))]
 
 
+LYRICS_CLEAR = "lyrics-clear:"  # a song's picked lyrics record taken back: its job's key, the song's key after it
+
+
+def lyrics_clear_steps(display: str) -> list[tuple[str, tuple[str, ...]]]:
+    """Take the record you picked for a song's lyrics back now: ``caracole lyrics --song --clear``, no request
+    (lyrics_pick.py ``clear_pick``), then its PDF and the pages; no ``--progress`` and no stages: its line is its last
+    line."""
+    return [("Clearing the lyrics record you picked", ("lyrics", f"--song={display}", "--clear"))]
+
+
 def _picks_lyrics(args: Sequence[str]) -> bool:
     """Whether a step's command makes a record of a song's kept lyrics search its lyrics (``caracole lyrics --pick``
     or ``--record``)."""
@@ -586,11 +598,11 @@ def uploads_named(jobs: Sequence[Job]) -> set[str]:
 
 def song_key_of(job_key: str) -> str:
     """The song's identity key in a job's key: a removal's, a sheet from YouTube's, a transcription's, a sheet from
-    an audio file's and a lyrics pick's have theirs after a prefix. A lyrics search's (``LYRICS_SEARCH``) is
-    deliberately kept whole: a job of no song's, as every ``INDEX_READS`` job is, which the page follows by its id and
-    which never joins the song's jobs; only ``song_of_job``, the lane's, sees its song."""
+    an audio file's, a lyrics pick's and a lyrics clear's have theirs after a prefix. A lyrics search's
+    (``LYRICS_SEARCH``) is deliberately kept whole: a job of no song's, as every ``INDEX_READS`` job is, which the page
+    follows by its id and which never joins the song's jobs; only ``song_of_job``, the lane's, sees its song."""
     return (job_key.removeprefix(REMOVING).removeprefix(YOUTUBE_SHEET).removeprefix(TRANSCRIBE)
-            .removeprefix(AUDIO_SHEET).removeprefix(LYRICS_PICK))
+            .removeprefix(AUDIO_SHEET).removeprefix(LYRICS_PICK).removeprefix(LYRICS_CLEAR))
 
 
 def song_of_job(job_key: str) -> str:
