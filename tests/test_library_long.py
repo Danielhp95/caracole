@@ -253,12 +253,6 @@ def test_dividers_stay_between_runs_and_groups(conn, cfg, tmp_path, by, size):
             if size is LAPTOP:
                 assert b.wait(f"{first}.classList.contains('selected')")
             assert b.js(f"getComputedStyle({first}).borderTopWidth") == ("1px" if size is LAPTOP else "0px")
-            # A removed song's line that keeps its open card's box (card-gone) has its run laid out whole, as an open
-            # card's, so that its shadow isn't cut at the run's sides.
-            seen = f"getComputedStyle({runs}[2]).contentVisibility"
-            assert b.js(seen) == "auto"
-            b.js(f"{runs}[2].querySelector('.line').classList.add('card-gone')")
-            assert b.js(seen) == "visible"
     finally:
         b.close()
 

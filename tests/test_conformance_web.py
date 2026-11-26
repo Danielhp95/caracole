@@ -1165,6 +1165,31 @@ def peer_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | No
                         ("one left beside it", left + [answered])):
         jobs.append((f"sync, done, a removal whose song is here: {note}", peer_job("sync", "done", shared, units=units),
                      None, 0, None, None))
+    # The four imports of a file as the Sync tab's comparison queues them (tests/test_commands_peer_file.py's
+    # test_an_import_that_left_a_unit_is_no_failure_…): a unit left as it was is no failure, the job done on both
+    # devices; its indexes not merged after it, the computer's job failed and the phone's done (by design), the same
+    # words. JobViewsTest runs the phone's own import of each and holds its line and outcome to these.
+    three = [("song/muse/hysteria", "taken", ""), ("song/radiohead/creep", "taken", ""),
+             ("songbook/campfire", "taken", "")]
+    gone = [("song/oasis/wonderwall", "left", "the file names it but doesn't hold it: it was left out as it was "
+                                              "exported (a file it keeps had changed there, or was too big for it)")]
+    checked = {"check": ("done", "4 differences with Desk's file")}
+    after = {"render": ("done", ""), "agree": ("done", "3 units the books agree on")}
+    merged = "The disk is full"
+    for note, state, stages, units in (
+            ("took 3 and left 1", "done", dict(checked, take=("done", "took 3, left 1"), **after,
+                                               index=("skipped", "")), three + gone),
+            ("took nothing and left 1", "done", {"check": ("done", "1 difference with Desk's file"),
+                                                 "take": ("done", "took 0, left 1"), "render": ("done", ""),
+                                                 "agree": ("done", "0 units the books agree on"),
+                                                 "index": ("skipped", "")}, gone),
+            ("left 1, its indexes not merged: the computer's, failed", "failed",
+             dict(checked, take=("done", "took 3, left 1"), **after, index=("failed", merged)), three + gone),
+            ("left 1, its indexes not merged: the phone's, done", "done",
+             dict(checked, take=("done", "took 3, left 1"), **after, index=("failed", merged)), three + gone),
+            ("took 3 and left none", "done", {"check": ("done", "3 differences with Desk's file"),
+                                              "take": ("done", "took 3"), **after, "index": ("skipped", "")}, three)):
+        jobs.append((f"import, {note}", peer_job("import", state, stages, units=units), None, 0, None, None))
     # A sync's agree stage counted in another script's digits, as Python's \d and int() read them.
     jobs.append(("sync, done, its count in Arabic-Indic digits", peer_job("sync", "done", {
         "compare": ("done", ""), "agree": ("done", " ١٢ units the books agree on\n")}, units=took),
