@@ -530,9 +530,13 @@ def test_a_lyrics_pick_is_ready_once_its_lyrics_are_kept():
 
 def test_a_lyrics_pick_that_kept_none_is_not_kept():
     details = details_href(6)
+    gone = TAKEN | {"lyrics": ("skipped", "LRCLIB's record 28399373 has no lyrics now; nothing kept"),
+                    "chords": ("skipped", "no new lyrics"), "pdf": ("skipped", "no new lyrics")}
+    # The record gone is an answer, never a wait: missing, as a search's Nothing found.
+    assert job_line(lyrics_pick_job("done", gone), OPEN) == Line("missing", "Not kept", details=details)
     for said in ("waiting out LRCLIB until 27 Nov 03:00; nothing kept",
-                 "LRCLIB failed (lrclib: 503: https://lrclib.net/api/get/28399373: busy); nothing kept",
-                 "LRCLIB's record 28399373 has no lyrics now; nothing kept"):
+                 "LRCLIB turned us back (lrclib: 429: x); no asks until 27 Nov 03:00, nothing kept",
+                 "LRCLIB failed (lrclib: 503: https://lrclib.net/api/get/28399373: busy); nothing kept"):
         state = "failed" if " failed (" in said else "skipped"
         kept_none = TAKEN | {"lyrics": (state, said), "chords": ("skipped", "no new lyrics"),
                              "pdf": ("skipped", "no new lyrics")}

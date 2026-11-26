@@ -60,6 +60,7 @@ STAGES = (
 )
 NO_NEW = "no new lyrics"
 NOTHING_KEPT = "; nothing kept"
+NO_LYRICS_NOW = " has no lyrics now"  # a record gone, its lyrics stage's words before NOTHING_KEPT: an answer, no wait
 KEPT_FAILED_AFTER = "Lyrics kept; the job failed after"  # the command's last line for a failure after the keep
 FAR = 10.0  # seconds between the record's length and the audio's past which the lyrics stage says so
 
@@ -228,7 +229,7 @@ class _Pick(StagedRun):
         if stopped is not None:
             return stopped
         if lyrics is None or not lyrics.has_lyrics or lyrics.instrumental:
-            return "skipped", f"{_possessive(provider_name(site))} record {record_id} has no lyrics now{NOTHING_KEPT}"
+            return "skipped", f"{_possessive(provider_name(site))} record {record_id}{NO_LYRICS_NOW}{NOTHING_KEPT}"
         self._song_again()
         before = _readable(self.song)
         kept = self._keep(record, lyrics, before)

@@ -2188,9 +2188,11 @@ It is rows.js's, shared by both pages:
     stopped it).
   - A lyrics search (`LYRICS_SEARCH`, no stages) says its step's label while it runs, then its last line's words as
     LaCuerda's search's (`_artist_read`: Searched, Nothing found, Not searched with Try again); a lyrics pick
-    (`LYRICS_PICK`) is Ready once its lyrics stage kept them, else Not kept, and failed after the keep says so in the
-    command's last line ("Lyrics kept; the job failed after: …", `lyrics_pick.KEPT_FAILED_AFTER`, status.py
-    `_kept_failed`).
+    (`LYRICS_PICK`) is Ready once its lyrics stage kept them, its chords skipped but for no new lyrics said after what
+    it took ("… No audio to make an auto sheet from."), else Not kept: a wait or an error with Try again, a record
+    gone (`lyrics_pick.NO_LYRICS_NOW`, status.py `record_gone`) missing with none; failed after the keep it says so in
+    the command's last line ("Lyrics kept; the job failed after: …", `lyrics_pick.KEPT_FAILED_AFTER`, status.py
+    `_kept_failed`), and interrupted after it "Lyrics kept." before the stop.
 - The library page's lines read only its steps (`outcome.progress`: while a lookup runs, once it has run a second
   (`BAR_AFTER`), its line, a song's or a result's row, is a bar of them, library.js `showLine`'s `barred`: a segment
   a step, `segsOf`, then the step in hand, its site and `count`, `stepWords`, "Sheet · Ultimate Guitar · 3 of 7",

@@ -169,6 +169,8 @@ object Outcomes {
     const val CANCELLED = "Cancelled before it ran."
     const val INTERRUPTED_RAN = "The server stopped mid-way. Try again to finish."
     const val INTERRUPTED_WAITED = "The server stopped before it ran. Try again runs it."
+    const val LYRICS_KEPT = "Lyrics kept."  // an interrupted lyrics pick's, its lyrics kept before the stop
+    private const val NO_NEW = "no new lyrics"  // lyrics_pick.py's: a pick's chords skipped as it kept nothing
     internal val ELSEWHERE = mapOf("lacuerda" to "LaCuerda has a sheet",
                                   "gtptabs" to "gtptabs lists a page for it")
     private val NO_UNITS = setOf(Status.INDEX_MERGE_KIND)
@@ -348,8 +350,10 @@ object Outcomes {
         }
         val peer = job.peer
         if (peer != null && job.state != Job.CANCELLED) return peerOutcome(job, peer, line)
-        if (job.state == Job.INTERRUPTED) {
-            return Outcome("waiting", "Interrupted", if (job.startedAt != null) INTERRUPTED_RAN else INTERRUPTED_WAITED, again)
+        if (job.state == Job.INTERRUPTED) {  // a pick's lyrics kept before the stop, said so
+            val said = if (job.startedAt != null) INTERRUPTED_RAN else INTERRUPTED_WAITED
+            val kept = job.picksLyrics && Status.lyricsKept(job)
+            return Outcome("waiting", "Interrupted", if (kept) "$LYRICS_KEPT $said" else said, again)
         }
         if (tone == "failed") return Outcome("failed", "Failed", sentence(text), again)
         if (tone == "removed") return Outcome("removed", text)
@@ -371,6 +375,8 @@ object Outcomes {
             val (word, rest) = partition(text, ": ")  // "Read: …", "Not read: …"
             return Outcome(tone, word, if (rest.isNotEmpty()) sentence(rest) else "", if (tone == "waiting") again else null)
         }
+        // a pick's record gone: asking it again answers alike
+        staged(job)?.let { if (tone == "missing") return Outcome("missing", text, stagedStopped(job.stages, it.table)) }
         if (tone == "missing") return notFound(job, facts, songId)
         staged(job)?.let { if (tone == "waiting") return Outcome("waiting", text, stagedStopped(job.stages, it.table), again) }
         if (tone == "waiting") {
@@ -456,7 +462,14 @@ object Outcomes {
             waited.detail.isNotEmpty()) {
             return capital(waited.detail)
         }
-        return if (held != null && held.detail.isNotEmpty()) capital(held.detail.removePrefix("up to date: ")) else ""
+        val said = if (held != null && held.detail.isNotEmpty()) capital(held.detail.removePrefix("up to date: "))
+                   else ""
+        val chords = byName["chords"]
+        if (staged.holds != "chords" && chords != null && chords.state == Job.SKIPPED && chords.detail.isNotEmpty() &&
+            chords.detail != NO_NEW) {  // what became of the sheet: its own sentence after what was kept
+            return PyText.strip("$said ${capital(chords.detail)}")
+        }
+        return said
     }
 
     private fun stagedStopped(stages: List<Stage>, table: List<Pair<String, List<String>>>): String {

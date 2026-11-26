@@ -67,7 +67,7 @@ ran. So a job of other commands reads the same way:
   "Searched: …", "Nothing found: …" or "Not searched: …" (a site failed or waited).
   A record of it picked (``jobs.LYRICS_PICK``) says Ready once its lyrics stage
   kept them, a sheet or none to open, else "Not kept" (a site waited or failed,
-  or the record has no lyrics now, which exit 0); failed after the keep (its
+  a wait; or the record has no lyrics now, missing; each exits 0); failed after the keep (its
   chords, its PDF or info.json), it says so as the command's last line does
   ("Lyrics kept; the job failed after: …"), else in its failed stage's words.
   A sync with another caracole (``caracole peer sync``, the Sync tab's: sync_routes.py) says "Shared", and a push
@@ -95,7 +95,7 @@ from typing import Any
 
 from caracole.get import SHEET_FROM
 from caracole.logs import plural
-from caracole.lyrics_pick import KEPT_FAILED_AFTER
+from caracole.lyrics_pick import KEPT_FAILED_AFTER, NO_LYRICS_NOW, NOTHING_KEPT
 from caracole.web.jobs import (
     AUDIO_SHEET,
     EXPORTING,
@@ -316,7 +316,7 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page:
     if job.song_key.startswith(LYRICS_PICK):  # Ready once its lyrics are kept, whatever sheet there is to open
         if _lyrics_kept(job):
             return Line("ready", READY, ("Open", song.sheet) if song and song.sheet else None)
-        return Line("waiting", "Not kept", details=details)
+        return Line("missing" if record_gone(job) else "waiting", "Not kept", details=details)
     if song is not None and song.sheet:
         return Line("ready", READY, ("Open", song.sheet))
     if song is not None and song.ignored:
@@ -358,6 +358,13 @@ def _artist_read(steps: list[Step], details: str) -> Line:
 def _lyrics_kept(job: Job) -> bool:
     """Whether a lyrics pick's lyrics stage kept the record's lyrics."""
     return any(stage.name == "lyrics" and stage.state == "done" for stage in job.stages)
+
+
+def record_gone(job: Job) -> bool:
+    """Whether a lyrics pick kept nothing because its record has no lyrics now (lyrics_pick.py ``NO_LYRICS_NOW``): an
+    answer, which asking the same record again answers alike, never a wait or an error."""
+    return any(stage.name == "lyrics" and stage.state == "skipped"
+               and stage.detail.endswith(NO_LYRICS_NOW + NOTHING_KEPT) for stage in job.stages)
 
 
 def _kept_failed(job: Job) -> str:

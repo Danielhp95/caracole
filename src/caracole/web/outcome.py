@@ -39,7 +39,9 @@ the job and what the library knows of its song:
 - **A record of a song's lyrics search picked** (``LYRICS_PICK_STEPS``): Song, Lyrics (the picked record's site, from
   its ``--record=``: "LRCLIB"), Chords and PDF; Ready says what its lyrics stage took and what it replaced ("Timed
   lyrics from LRCLIB: …; in place of AZLyrics' plain lyrics."), the stage whose words its Ready says being its lyrics,
-  where the others' is their chords; Not kept the lyrics stage's words, with Try again.
+  where the others' is their chords, then, its chords skipped but for no new lyrics, what became of the sheet ("No
+  audio to make an auto sheet from."); Not kept the lyrics stage's words, with Try again for a wait or an error, none
+  for a record gone (missing: the same record answers alike); interrupted after the keep, "Lyrics kept." first.
 - **Progress** (``progress``), for the library page: a lookup's steps, a bar on the song's line (or a search
   result's row) while it runs, with the step in hand (``_in_hand``: the one that runs, else the first that
   waits, between two steps, else the last), its place ``at`` and ``count``, "3 of 7", its place among every
@@ -97,6 +99,7 @@ from urllib.parse import urlencode
 from caracole.get import GTPTABS_KEPT, MATCH_NOT_FOUND, NAMES, SHEET_FROM
 from caracole.icons import AUTO, INBOX, tag
 from caracole.logs import plural
+from caracole.lyrics_pick import NO_NEW
 from caracole.web.jobs import INDEX_READS, INTERRUPTED, LOOKUP, REMOVING, Job, Stage, song_key_of
 from caracole.web.status import READY, _WAITING, Line, SongFacts, doing, peer_kind
 
@@ -180,6 +183,7 @@ IN_REVIEW = "Not sure which UG song it is."
 CANCELLED = "Cancelled before it ran."
 INTERRUPTED_RAN = "The server stopped mid-way. Try again to finish."
 INTERRUPTED_WAITED = "The server stopped before it ran. Try again runs it."
+LYRICS_KEPT = "Lyrics kept."  # an interrupted lyrics pick's, its lyrics kept before the stop
 _ELSEWHERE = {"lacuerda": "LaCuerda has a sheet", "gtptabs": "gtptabs lists a page for it"}
 # A sync's and a take's steps, by their stages' names (jobs.PEER_SYNC_STAGES, PEER_TAKE_STAGES; the phone's sync adds
 # mirror and index).
@@ -258,8 +262,8 @@ def steps(job: Job, facts: SongFacts | None = None) -> list[Chip]:
 
 def lists_steps(job: Job) -> bool:
     """Whether the Requests tab lists the steps of ``job`` once it is over: a lookup's, a sheet from a YouTube
-    video's or a transcription's, that started, as it left them; never one cancelled before it ran, nor a request of
-    other commands."""
+    video's, a transcription's, a sheet from an audio file's or a lyrics pick's, that started, as it left them; never
+    one cancelled before it ran, nor a request of other commands."""
     return not job.active and job.started_at is not None and (job.looks_up or _staged(job) is not None)
 
 
@@ -474,8 +478,10 @@ def outcome(job: Job, line: Line, facts: SongFacts | None = None, *, song_id: in
     peer = peer_kind(job)
     if peer is not None and job.state != "cancelled":
         return _peer_outcome(job, peer, line)
-    if job.state == INTERRUPTED:  # the server stopped before it was over
-        return Outcome("waiting", "Interrupted", INTERRUPTED_RAN if job.started_at else INTERRUPTED_WAITED, again)
+    if job.state == INTERRUPTED:  # the server stopped before it was over; a pick's lyrics kept before it, said so
+        said = INTERRUPTED_RAN if job.started_at else INTERRUPTED_WAITED
+        kept = job.picks_lyrics and any(s.name == "lyrics" and s.state == "done" for s in job.stages)
+        return Outcome("waiting", "Interrupted", f"{LYRICS_KEPT} {said}" if kept else said, again)
     if tone == "failed":
         return Outcome("failed", "Failed", _sentence(text), again)
     if tone == "removed":
@@ -496,6 +502,8 @@ def outcome(job: Job, line: Line, facts: SongFacts | None = None, *, song_id: in
     if job.song_key.startswith(INDEX_READS):  # "Read: …", "Not read: …"
         word, _, rest = text.partition(": ")
         return Outcome(tone, word, _sentence(rest) if rest else "", again if tone == "waiting" else None)
+    if tone == "missing" and staged is not None:  # a pick's record gone: asking it again answers alike
+        return Outcome("missing", text, _staged_stopped(job.stages, staged.table))
     if tone == "missing":
         return _not_found(job, facts, song_id)
     if tone == "waiting" and staged is not None:
@@ -587,7 +595,12 @@ def _staged_holds(stages: list[Stage], staged: Staged) -> str:
         return f"{_capital(held.detail).rstrip('.')}: the words couldn't be heard here ({heard.detail})."
     if waited is not None and waited.state in ("skipped", "failed") and waited.detail:
         return _capital(waited.detail)
-    return _capital(held.detail.removeprefix("up to date: ")) if held is not None and held.detail else ""
+    said = _capital(held.detail.removeprefix("up to date: ")) if held is not None and held.detail else ""
+    chords = by_name.get("chords")
+    if (staged.holds != "chords" and chords is not None and chords.state == "skipped" and chords.detail
+            and chords.detail != NO_NEW):  # what became of the sheet: its own sentence after what was kept
+        return f"{said} {_capital(chords.detail)}".strip()
+    return said
 
 
 def _staged_stopped(stages: list[Stage], table: StepTable) -> str:

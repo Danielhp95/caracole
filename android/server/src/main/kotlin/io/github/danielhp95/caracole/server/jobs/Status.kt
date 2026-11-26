@@ -255,7 +255,7 @@ object Status {
         }
         if (key.startsWith(JobCommands.LYRICS_PICK)) {  // Ready once its lyrics are kept, whatever sheet there is
             if (lyricsKept(job)) return Line("ready", READY, song?.sheet?.let { "Open" to it })
-            return Line("waiting", "Not kept", details = details)
+            return Line(if (recordGone(job)) "missing" else "waiting", "Not kept", details = details)
         }
         if (song?.sheet != null) return Line("ready", READY, "Open" to song.sheet)
         if (song != null && song.ignored) return Line("added", "Ignored · overrides.toml")
@@ -306,8 +306,18 @@ object Status {
      * KEPT_FAILED_AFTER). */
     const val KEPT_FAILED_AFTER = "Lyrics kept; the job failed after"
 
+    /** lyrics_pick.py's NO_LYRICS_NOW and NOTHING_KEPT: a record gone, its lyrics stage's last words. */
+    const val NO_LYRICS_NOW = " has no lyrics now"
+    const val NOTHING_KEPT = "; nothing kept"
+
+    /** Whether a lyrics pick kept nothing because its record has no lyrics now (status.record_gone): an answer, never
+     * a wait or an error. */
+    internal fun recordGone(job: Shape): Boolean = job.stages.any {
+        it.name == "lyrics" && it.state == Job.SKIPPED && it.detail.endsWith(NO_LYRICS_NOW + NOTHING_KEPT)
+    }
+
     /** Whether a lyrics pick's lyrics stage kept the record's lyrics (status.py's _lyrics_kept). */
-    private fun lyricsKept(job: Shape): Boolean = job.stages.any { it.name == "lyrics" && it.state == Job.DONE }
+    internal fun lyricsKept(job: Shape): Boolean = job.stages.any { it.name == "lyrics" && it.state == Job.DONE }
 
     /** A lyrics pick that failed after its lyrics were kept (status.py's _kept_failed): the command's last line, its
      * first sentence; with no such line, the same words over its failed stage's. */

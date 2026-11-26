@@ -533,7 +533,8 @@ def phone_kind(job: _Job) -> str:
                          (_jobs.LACUERDA_ARTIST, "lacuerda-artist"), (_jobs.HARPTABS_ARTIST, "harptabs-artist"),
                          (_jobs.YOUTUBE_SEARCH, "youtube-search"), (_jobs.YOUTUBE_SHEET, "youtube"),
                          (_jobs.TRANSCRIBE, "transcribe"), (_jobs.UG_LINK, "ug-link"),
-                         (_jobs.LYRICS_SEARCH, "lyrics-search"), (_jobs.INDEX_MERGE, "index-merge"), ("sync:", "sync"), ("import:", "sync")):
+                         (_jobs.LYRICS_SEARCH, "lyrics-search"), (_jobs.INDEX_MERGE, "index-merge"),
+                         ("sync:", "sync"), ("import:", "sync")):
         if key.startswith(prefix):
             return kind
     return {"versions": "versions", "review": "review"}.get(first, "song")
@@ -1051,6 +1052,17 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
                                                 "device)")},
         output=["Lyrics kept; the job failed after: info.json couldn't be written ([Errno 28] No space left on "
                 "device)."], code=1), facts=ready)
+    add("a lyrics pick, kept then its PDF failed", in_state(pick, "failed", taken | {
+        "pdf": ("failed", "chordpro couldn't make the PDF (see the log)")},
+        output=["Lyrics kept; the job failed after: chordpro couldn't make the PDF (see the log)."], code=1),
+        facts=ready)
+    for why in ("auto-chords isn't here (no torch); tonight's run makes it again",
+                "its sheet is a site's: no auto sheet to make again"):
+        add(f"a lyrics pick, ready, its chords skipped: {why[:24]}", in_state(pick, "done", taken | {
+            "chords": ("skipped", why)}), facts=ready)
+    add("a lyrics pick, interrupted after its keep", _interrupted(in_state(pick, "running", taken | {
+        "chords": ("running", "finding the beats"), "pdf": ("waiting", ""), "pages": ("waiting", "")})),
+        facts=ready)
     add("a lyrics pick, kept then its chords failed, its output lost", in_state(pick, "failed", taken | {
         "chords": ("failed", "auto-chords failed"), "pdf": ("skipped", "no new lyrics")}, code=1), facts=ready)
     video = queued_job("Search YouTube for “creep”", _jobs.YOUTUBE_SEARCH + "creep",

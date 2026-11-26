@@ -915,11 +915,30 @@ def test_its_ready_says_what_it_took_and_what_it_replaced():
     assert outcome(ready, job_line(ready, SHEET), SHEET) == Outcome(
         "ready", "Ready", f"Timed lyrics from LRCLIB: {YEREN} (野人, 3:46); in place of AZLyrics' plain lyrics.",
         Action("Open", href="/" + SHEET.sheet))
-    # Kept with no sheet made: Ready, nothing to open, and still what it took.
+    took = f"Timed lyrics from LRCLIB: {YEREN} (野人, 3:46); in place of AZLyrics' plain lyrics."
+    # Its chords skipped: what became of the sheet follows what it took, a sentence of its own.
     alone = lyrics_pick_job("done", TAKEN | {"chords": ("skipped", "no audio to make an auto sheet from"),
                                              "pdf": ("skipped", "no sheet")})
     assert outcome(alone, job_line(alone, SongFacts()), SongFacts()) == Outcome(
-        "ready", "Ready", f"Timed lyrics from LRCLIB: {YEREN} (野人, 3:46); in place of AZLyrics' plain lyrics.")
+        "ready", "Ready", f"{took} No audio to make an auto sheet from.")
+    absent = lyrics_pick_job("done", TAKEN | {"chords": ("skipped", "auto-chords isn't here (no torch); tonight's run "
+                                                                   "makes it again")})
+    assert outcome(absent, job_line(absent, SHEET), SHEET) == Outcome(
+        "ready", "Ready", f"{took} Auto-chords isn't here (no torch); tonight's run makes it again.",
+        Action("Open", href="/" + SHEET.sheet))
+    human = lyrics_pick_job("done", TAKEN | {
+        "chords": ("skipped", "its sheet is a site's: no auto sheet to make again")})
+    assert outcome(human, job_line(human, SHEET), SHEET).reason == (
+        f"{took} Its sheet is a site's: no auto sheet to make again.")
+    # Chords that ran are their step's to say; "no new lyrics" is never said after lyrics kept.
+    assert outcome(ready, job_line(ready, SHEET), SHEET).reason == took
+    # Kept, then the server stopped: the lyrics said kept before the stop.
+    cut = lyrics_pick_job(INTERRUPTED, TAKEN | {"chords": (INTERRUPTED, "finding the beats"),
+                                                "pdf": ("skipped", ""), "pages": ("skipped", "")})
+    assert outcome(cut, job_line(cut, SHEET), SHEET) == Outcome(
+        "waiting", "Interrupted", "Lyrics kept. The server stopped mid-way. Try again to finish.", AGAIN)
+    early = lyrics_pick_job(INTERRUPTED, {"song": ("done", ""), "lyrics": (INTERRUPTED, "")})
+    assert outcome(early, job_line(early, SHEET), SHEET).reason == "The server stopped mid-way. Try again to finish."
     # Kept, then failed after: Failed, the lyrics said kept, Try again.
     after = lyrics_pick_job("failed", TAKEN | {"chords": ("failed", "auto-chords can't read the audio"),
                                                "pdf": ("skipped", "no new lyrics")},
@@ -934,10 +953,15 @@ def test_a_lyrics_pick_that_kept_none_says_why_and_tries_again():
             ("skipped", "waiting out LRCLIB until 27 Nov 03:00; nothing kept",
              "Waiting out LRCLIB until 27 Nov 03:00; nothing kept."),
             ("failed", "LRCLIB failed (lrclib: 503: x); nothing kept", "LRCLIB failed (lrclib: 503: x); nothing kept."),
-            ("skipped", "LRCLIB's record 28399373 has no lyrics now; nothing kept",
-             "LRCLIB's record 28399373 has no lyrics now; nothing kept.")):
+            ("skipped", "no more asks of LRCLIB this hour (60 spent); nothing kept",
+             "No more asks of LRCLIB this hour (60 spent); nothing kept.")):
         job = lyrics_pick_job("done", TAKEN | {"lyrics": (state, said)} | none)
         assert outcome(job, job_line(job, SHEET), SHEET) == Outcome("waiting", "Not kept", reason, AGAIN)
+    # A record gone answers the same when asked again: missing, and no Try again (the card's pick another is next).
+    gone = lyrics_pick_job("done", TAKEN | {"lyrics": ("skipped", "LRCLIB's record 28399373 has no lyrics now; "
+                                                                  "nothing kept")} | none)
+    assert outcome(gone, job_line(gone, SHEET), SHEET) == Outcome(
+        "missing", "Not kept", "LRCLIB's record 28399373 has no lyrics now; nothing kept.")
     refused = lyrics_pick_job("failed", {"song": ("failed", "“lrclib:1” isn't among the records its last search "
                                                             "listed")})
     assert outcome(refused, job_line(refused, SHEET), SHEET) == Outcome(
