@@ -138,8 +138,8 @@ def youtube_problem(app: WebApp) -> str | None:
 
 
 def youtube_is_for(conn: sqlite3.Connection, song: Song, overrides: Overrides) -> None:
-    """Refused (409) for a song a sheet from YouTube isn't for: ignored, with a human sheet, or with a purchase
-    linked, in the words ``caracole youtube --sheet`` refuses it in."""
+    """Refused (409) for a song a sheet from YouTube isn't for: ignored, with a human sheet, or with audio of its own
+    (a purchase linked, or a file you gave it), in the words ``caracole youtube --sheet`` refuses it in."""
     from caracole.songs import HUMAN_SHEET
     from caracole.youtube_fetch import youtube_audio
 
@@ -147,7 +147,8 @@ def youtube_is_for(conn: sqlite3.Connection, song: Song, overrides: Overrides) -
     if conn.execute("SELECT 1 FROM files WHERE song_id = ? AND name = ?", (song.id, HUMAN_SHEET)).fetchone():
         raise Refused(409, "Has a sheet", f"{song.display} already has a sheet.")
     if song.audio_path and youtube_audio(conn, song) is None:
-        raise Refused(409, "Has its audio", f"{song.display} has bought audio in Music/; auto-chords uses that.")
+        raise Refused(409, "Has its audio",
+                      f"{song.display} has its own audio (bought or given); auto-chords uses that.")
 
 
 # --- a video suggested for a search ---------------------------------------------------------------------

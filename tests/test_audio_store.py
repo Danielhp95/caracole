@@ -140,6 +140,25 @@ def test_each_format_is_read_with_its_length_and_tags(fmt, cfg, tmp_path):
     assert up.tags == {"artist": "Radiohead", "title": "Creep", "album": "Pablo Honey"}
 
 
+@pytest.mark.parametrize("fmt", MADE)
+def test_a_file_of_your_own_is_read_as_an_upload_is(fmt, tmp_path):
+    path = write(tmp_path / f"song{FORMATS[fmt]}", fmt, 2.0, artist="Radiohead", title="Creep", album="Pablo Honey")
+    found = audio_store.examine(path)
+    assert found.format == fmt and abs(found.duration - 2.0) < 0.05
+    assert found.tags == {"artist": "Radiohead", "title": "Creep", "album": "Pablo Honey"}
+
+
+def test_a_file_of_your_own_that_isnt_audio_is_refused(tmp_path):
+    fake = tmp_path / "creep.mp3"
+    fake.write_bytes(b"not really audio" * 10)
+    assert str(refused(415, audio_store.examine, fake)) == NOT_AUDIO
+    refused(415, audio_store.examine, tmp_path)  # a folder
+    long = write(tmp_path / "long.flac", "FLAC", MAX_SECONDS + 1)
+    assert str(refused(422, audio_store.examine, long)) == TOO_LONG
+    with pytest.raises(FileNotFoundError):  # the disk's: no refusal
+        audio_store.examine(tmp_path / "gone.mp3")
+
+
 @pytest.mark.parametrize("major, compatible", [(b"dash", (b"iso6", b"mp41")), (b"isom", (b"iso2", b"mp41")),
                                                (b"iso5", (b"iso6", b"mp41")), (b"mp42", (b"isom", b"mp42"))])
 def test_an_mp4_of_any_audio_brand_is_an_m4a(cfg, major, compatible):
@@ -323,6 +342,17 @@ def test_keep_names_it_by_song_and_digest_and_links_it(conn, cfg, tmp_path):
     refused(404, staged, cfg, up.id)
     assert names(cfg) == sorted([kept.name, moved.name])  # nothing left over
     assert uploaded(cfg, get_song(conn, other.id)) == moved
+
+
+def test_keep_refuses_a_song_no_longer_in_the_book(conn, cfg, tmp_path):
+    song = add_song(conn, "Radiohead", "Creep")
+    conn.execute("DELETE FROM songs WHERE id = ?", (song.id,))
+    said = refused(404, keep, cfg, conn, song, write(tmp_path / "creep.mp3", "MP3"), move=False)
+    assert str(said) == "Radiohead - Creep isn't in the book any more."
+    up = stage(cfg, audio("MP3"), "creep.mp3", named=())
+    refused(404, keep, cfg, conn, song, up.path, move=True)
+    assert staged(cfg, up.id) == up  # the upload left where it was
+    assert names(cfg) == sorted([up.path.name, f".upload-{up.id}.json"])
 
 
 def test_a_songs_audio_is_an_upload_only_when_it_is_a_kept_file_of_the_store(conn, cfg, tmp_path):

@@ -20,7 +20,8 @@ promise is that losing it costs only requests: a file you gave can't be fetched 
 - **What a file is** is read from its bytes alone (``sniff``: MP3, M4A, FLAC, WAV, Ogg or AIFF, ``FORMATS``), never
   its name or the Content-Type, then mutagen must read it as that format, with a length over 0 and at most
   ``MAX_SECONDS``. The extension is caracole's, from the format. An upload is ``AUDIO_MAX`` at most (a file of your own,
-  ``keep(move=False)``, any size); either is refused when the disk would keep less than ``ROOM`` beside twice it.
+  ``keep(move=False)``, any size, read first as ``examine`` reads it); either is refused when the disk would keep less
+  than ``ROOM`` beside twice it.
 - **The client never chooses a path**: the name an upload is sent under is a name to show (its last part, control
   characters out, 255 characters at most); a staged upload is named by its 16-hex id, checked whole, and resolved to
   exactly one regular file of the folder, never through a symbolic link; every file is made with ``O_CREAT | O_EXCL |
@@ -229,6 +230,18 @@ def _read(reader: Any, f: IO[bytes], fmt: str) -> Audio:
     named = {key: _first(tags, keys) if tags is not None else None
              for key, keys in (("artist", _ARTIST_KEYS), ("title", _TITLE_KEYS), ("album", _ALBUM_KEYS))}
     return Audio(fmt, float(length), named)
+
+
+def examine(path: Path) -> Audio:
+    """What the audio file at ``path`` (a file of your own) is, read as an upload's bytes are (``_examine``):
+    AudioError for one caracole doesn't read, a folder or a device among them (415), or one longer than
+    ``MAX_SECONDS`` (422); an OSError opening or reading it is the disk's."""
+    fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+    if not stat.S_ISREG(os.fstat(fd).st_mode):
+        os.close(fd)
+        raise AudioError(NOT_AUDIO, 415)
+    with open(fd, "rb") as f:
+        return _examine(f)
 
 
 def _display_name(name: object) -> str:
@@ -497,10 +510,13 @@ def keep(cfg: Config, conn: sqlite3.Connection, song: Song, source: Path, *, mov
     the file it had there before goes (a purchase's in Music/ never: only an upload). The same file again is the
     song's audio already: the path it has, nothing changed.
 
-    AudioError: with ``move``, a ``source`` that isn't a staged upload's regular file (404); a file caracole doesn't
-    read (415), longer than ``MAX_SECONDS`` (422), or, copied, for which the disk has no room (507). Run under
-    caracole's lock, as ``tidy`` is."""
-    current = get_song(conn, song.id)
+    AudioError: a song no longer in the book (404), nothing read or moved; with ``move``, a ``source`` that isn't a
+    staged upload's regular file (404); a file caracole doesn't read (415), longer than ``MAX_SECONDS`` (422), or,
+    copied, for which the disk has no room (507). Run under caracole's lock, as ``tidy`` is."""
+    try:
+        current = get_song(conn, song.id)
+    except KeyError:
+        raise AudioError(f"{song.display} isn't in the book any more.", 404) from None
     source = Path(source)
     root = folder(cfg)
     staged_audio = _STAGED_AUDIO.fullmatch(source.name)

@@ -19,7 +19,9 @@ For a song nobody has charted, `caracole autochords` writes a sheet from audio w
 - a purchase;
 - or audio the nightly run takes from YouTube with yt-dlp (youtube.py, youtube_fetch.py), a few songs a night, only
   where auto-chords is;
-- or that of a video the owner pastes on the library page, made into the song's sheet at once (youtube_sheet.py).
+- or that of a video the owner pastes on the library page, made into the song's sheet at once (youtube_sheet.py);
+- or an audio file the owner gives it, `caracole audio FILE`, kept in `state_dir/audio/` (audio_store.py) and made
+  into the song's sheet at once (audio_sheet.py).
 
 The design lives in three files:
 
@@ -306,15 +308,30 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     (`SITES_ANSWERED`) said first, whatever this caracole can do, the controller's ruling of 2026-11-25 (on a
     caracole that can't transcribe, a sheet whose lyrics were found would read as a fault); `make_sheet(hears=)` True
     passes over the setting and the machine (tests), False is off. After each hand-over the song still one for YouTube
-    (`_still_for_youtube`, else a refusal) and still offered (else that stage skipped, the chords over the lyrics a
-    lookup found). `WORDS_FAIL_THE_JOB` false: a failure to hear fails its own stage alone, the chords made
-    chords-only, the command exiting 0, the song still offered Transcribe the lyrics; audio Whisper can't load filed
-    nothing ("Whisper can't read the audio", hearing.py's `file_unreadable`: auto-chords' own reader, the one the
-    vocals read the mix with, gives its verdict as the chords are made); nothing sung is the words' done "nothing sung
-    was heard (why)".
+    (`_still_ours`: `_unsheeted`, not ignored and no human sheet, and no audio of its own, bought or given, else a
+    refusal) and still offered (else that stage skipped, the chords over the lyrics a lookup found).
+    `WORDS_FAIL_THE_JOB` false: a failure to hear fails its own stage alone, the chords made chords-only, the command
+    exiting 0, the song still offered Transcribe the lyrics; audio Whisper can't load filed nothing ("Whisper can't
+    read the audio", hearing.py's `file_unreadable`: auto-chords' own reader, the one the vocals read the mix with,
+    gives its verdict as the chords are made); nothing sung is the words' done "nothing sung was heard (why)".
   - `autochords_pending(only=)`, once, after the words: run.py `_make_sheet` takes the transcript; before it, the
     audio still the one the vocals separated (`_same_audio`) where they ran.
   - caracole serve's sheet from a YouTube video runs it (web/youtube_routes.py).
+- audio_sheet.py is no step either but `caracole audio FILE` (commands/audio.py): one song's auto sheet from an audio
+  file the owner gives it now, the YouTube sheet's `_Sheet` with its download swapped for keeping the file
+  (`_AudioSheet`, `make_audio_sheet`, `AudioRequest`).
+  - Its stages song, audio ("Your audio file"), lyrics, vocals, words, chords, pdf, pages (`STAGES`): the song found or
+    added as the YouTube sheet's (`_Sheet._the_song`, a new line with the file's album and length, so LRCLIB is asked
+    with it), refused ignored or with a human sheet alone (`_still_ours` is `_unsheeted`: an upload always wins, the
+    owner's decision of 2026-11-25, so a purchase or YouTube's audio is no refusal); the audio stage
+    `audio_store.keep` (a file of your own copied, `--upload ID` a staged upload moved), saying which audio it replaces
+    as the song's source, "has this file's audio already" for the same file; lyrics, vocals, words and chords the
+    YouTube sheet's, the lyrics sites first, the words heard only once every one missed.
+  - `names_of`: a file's song, its artist and title tags (the title `song_names.clean`ed), else its name less its
+    extension and track number (music.py `_TRACK_PREFIX`) through `read_names`, else that name as the title alone.
+  - The command reads the file first (`audio_store.examine`, an upload's staged record) and refuses, before the lock,
+    what isn't audio it reads, as it refuses a caracole that makes no chords (`youtube_fetch.autochords_problem`:
+    neither YouTube nor yt-dlp needed); a file that names no artist with no `--song` exits 2.
 - transcribe_job.py is no step either but `caracole transcribe`: a YouTube song's lyrics transcribed from its audio,
   then its auto sheet made again over them (`make_transcript`).
   - Its stages song, vocals, words, chords, pdf, pages (`STAGES`), reported as a lookup's (staged.py's `StagedRun`).
@@ -614,10 +631,10 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 | provider_pass.py | one song at a time through a provider (`each_song`, `PassStats`): the lyrics, LaCuerda, gtptabs.com and YouTube passes share its ladder of errors that are never misses, and name the songs an error left (`failures`) |
 | keys.py | a song's musical key and where it came from (below) |
 | removal.py | `caracole remove` and the web page's Remove; the tombstones it leaves are songs.py's |
-| audio_store.py | the audio files you give caracole for a song, in `state_dir/audio/` (0700, each file 0600): an upload staged by its 16-hex id (`stage`, `staged`, `drop`, `sweep`, one no job names at a time), a song's own `<song id>-<sha256 16 hex><ext>` (`keep`, `uploaded`), what no song names deleted (`tidy`, the scan step's); the format from the bytes (`sniff`, `FORMATS`), then mutagen's read, imported inside; an upload always wins, the owner's decision of 2026-11-25: `keep` replaces a purchase (its file in Music/ stays) or YouTube's audio, and `music.scan_music(uploads=)` links no purchase over it |
+| audio_store.py | the audio files you give caracole for a song, in `state_dir/audio/` (0700, each file 0600): an upload staged by its 16-hex id (`stage`, `staged`, `drop`, `sweep`, one no job names at a time), a song's own `<song id>-<sha256 16 hex><ext>` (`keep`, `uploaded`), what no song names deleted (`tidy`, the scan step's); the format from the bytes (`sniff`, `FORMATS`), then mutagen's read, imported inside (a file of your own's too, `examine`), a song gone a refusal of `keep`'s; an upload always wins, the owner's decision of 2026-11-25: `keep` replaces a purchase (its file in Music/ stays) or YouTube's audio, and `music.scan_music(uploads=)` links no purchase over it |
 | sites.py | the library page's Sites tab's data (below) |
 | progress.py | a command's output: a live line on a terminal, plain lines elsewhere, fitted in display columns of the stream's own width; `Ticker` (`ticker()`), what long work is doing as it goes: a live line on stderr on a terminal at the default verbosity alone, off for good once a write fails, a `caracole.progress` line a minute, the unit's status line (`systemd_status`, sd_notify `STATUS=`, where `$NOTIFY_SOCKET` is set); `Requests`, a client's requests against its budget (`make_client(ticker=)`, `make_youtube(ticker=)`, its runs with no time left); `Counted`, work of a known size (`directory_pass(progress=)`, `render.rendering`); a staged job by hand (`caracole transcribe`, `youtube --sheet`) its long stages' running details on one (commands/get.py `_Lines(ticker=)`, none with `--progress`, nor for `caracole get`); they only count, never pace |
-| staged.py | a job of stages over one song, each reported as a lookup's stages are, run in order under the lock as asked for now (`StagedRun`: `_run`, `stage`, `_fail`, `_after_a_lookup`, `_song_again`, `_refuse`; the stages both jobs end with, `_autochords_sheet`, `pdf`, `pages`; `StagedResult`; the command's last lines, `_common.staged_end`): youtube_sheet.py's and transcribe_job.py's |
+| staged.py | a job of stages over one song, each reported as a lookup's stages are, run in order under the lock as asked for now (`StagedRun`: `_run`, `stage`, `_fail`, `_after_a_lookup`, `_song_again`, `_refuse`; the stages both jobs end with, `_autochords_sheet`, `pdf`, `pages`; `StagedResult`; the command's last lines, `_common.staged_end`): youtube_sheet.py's (and audio_sheet.py's, a subclass of its) and transcribe_job.py's |
 | progressions.py | each song's progressions (below) |
 
 #### index_transfer.py
@@ -1692,6 +1709,8 @@ It is rows.js's, shared by both pages:
     is `caracole ug --directory`: UG's artist directory, bulk work at the pace the owner chose for it.
   - youtube_sheet.py is `caracole youtube --sheet`: a song's auto sheet from a YouTube video now, at the bulk pace: a
     command, never a lookup.
+  - audio_sheet.py is `caracole audio` (commands/audio.py): a song's auto sheet from an audio file the owner gives it,
+    now; asked for now, never a lookup.
   - transcribe_job.py is `caracole transcribe` (commands/transcribe.py): a song's lyrics transcribed from its YouTube
     audio, its sheet made again; asked for now, never a lookup, and asking no site.
   - review.py, search.py, removal.py and songbook.py are `caracole review`, `search`, `remove` and `songbook`.
@@ -4147,12 +4166,13 @@ picks one).
   `--choose` through get.
 - So does everything else caracole serve queues that the owner asked for just now, so a lookup queued behind it in
   serve's one-at-a-time queue never waits behind the whole run either: `add`, `remove`, `review`, `fetch --song`,
-  `render --song`, `youtube --song` (`--sheet`, `--none`), `youtube --search` and `--video`, and `transcribe`
+  `render --song`, `youtube --song` (`--sheet`, `--none`), `youtube --search` and `--video`, `transcribe` and `audio`
   (`test_commands_lock.py::test_lookups_take_the_lock_in_the_lane_what_the_owner_asked_for_now_as_a_lookup_and_bulk_work_neither`,
+  `test_commands_audio.py::test_it_takes_the_lock_as_asked_for_now`,
   `test_web_jobs.py::test_a_lookup_queued_behind_an_add_never_waits_behind_the_whole_nightly_run`).
   - A process holding the lock as asked for now hands it to the lane's lookups alone (`hand_over`), at its hand-over
-    points (a yt-dlp pause, a YouTube sheet and a transcription before each of vocals, words and chords
-    (`test_transcribe_job.py::test_the_lock_goes_to_a_waiting_lookup_before_each_long_stage`,
+    points (a yt-dlp pause, a YouTube sheet, an audio file's sheet and a transcription before each of vocals, words
+    and chords (`test_transcribe_job.py::test_the_lock_goes_to_a_waiting_lookup_before_each_long_stage`,
     `test_youtube_sheet.py::test_the_lock_goes_to_a_waiting_lookup_before_vocals_words_and_chords`), `fetch --song`'s
     pauses), taking the gate only if it is free (held, it is the bulk work that let it in), and waits with a ticket
     of its own, written before it lets go, to

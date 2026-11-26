@@ -7,7 +7,8 @@ you chose the video of, in one process, under caracole's lock, its stages report
 serve reads into the job's stages; staged.py's ``StagedRun`` is that reporting half):
 
 - ``song``: the song, found in the library or added to wanted.txt as ``caracole add`` adds it, then synced;
-  refused when it is ignored, has a human sheet or has a purchase linked, and, without a video given, when
+  refused when it is ignored, has a human sheet or has audio of its own (a purchase linked, or a file you gave it:
+  audio_store.py, which audio_sheet.py keeps), and, without a video given, when
   ``[youtube]`` says "none" for it. The video given is written under ``[youtube]`` in overrides.toml, as
   ``caracole youtube --url`` writes it.
 - ``audio``: the song's audio from YouTube, as the youtube step takes it (youtube_fetch.py), for this song
@@ -35,7 +36,7 @@ serve reads into the job's stages; staged.py's ``StagedRun`` is that reporting h
   over the timed lyrics when their length fits the audio, else above the lyrics as a chart (merge.py), over the
   transcript where the words were heard, else alone. A song
   that left the book meanwhile (another caracole removed it, or merged it into a song of the same name), or is no
-  longer one for YouTube (a human sheet kept, ignored, bought audio), or whose audio changed after its vocals were
+  longer one for YouTube (a human sheet kept, ignored, audio of its own), or whose audio changed after its vocals were
   separated, ends the sheet there, before the models write anything: a refusal its song stage says, the stages left
   skipped.
 - ``pdf``: the PDF and the viewer, ``sheet (auto).html``, for this song alone (``render_all``'s
@@ -127,7 +128,8 @@ class SheetRequest:
 
 @dataclass
 class SheetResult(StagedResult):
-    """What came of a sheet from a YouTube video: its stages' ends, its files once readable, the requests it sent."""
+    """What came of a sheet from a YouTube video (or from an audio file, audio_sheet.py): its stages' ends, its files
+    once readable, the requests it sent."""
 
 
 class _Sheet(HearsWords, StagedRun):
@@ -164,10 +166,10 @@ class _Sheet(HearsWords, StagedRun):
         return self._not_offered()
 
     def _still_to_hear(self) -> str | None:
-        """After a lookup went first: the song still one for YouTube, else the sheet ends there (``_Stop``); and
+        """After a lookup went first: the song still this job's (``_still_ours``), else the sheet ends there; and
         still offered a transcription (a lookup may have found its lyrics meanwhile, which the chords then go over),
         else why not."""
-        self._still_for_youtube(self.song)
+        self._still_ours(self.song)
         return self._not_offered()
 
     def _not_offered(self) -> str | None:
@@ -178,33 +180,42 @@ class _Sheet(HearsWords, StagedRun):
 
     # --- the stages -------------------------------------------------------------------------------
 
-    def find_song(self) -> str:
+    def _the_song(self, *, album: str | None = None, duration_ms: int | None = None) -> tuple[Any, str]:
+        """The request's song, found in the book or added to wanted.txt as ``caracole add`` adds it (a new line with
+        ``album`` and ``duration_ms``), then synced; and what the song stage says of it. Refused (``_Stop``) when it is
+        ignored, or a song wanted.txt can't hold. The stems a killed job left under the cache are swept first, as a
+        transcription sweeps them."""
         from caracole.normalize import identity_key
-        from caracole.overrides import OverridesError, add_youtube, load_overrides
         from caracole.songs import find_song
         from caracole.wanted import append_wanted, sync_wanted
-        from caracole.youtube_urls import watch_url
 
-        sweep(self.cfg.cache_dir)  # the stems a killed job left under the cache, as a transcription sweeps them
+        sweep(self.cfg.cache_dir)
         req = self.request
         key = identity_key(req.artist, req.title)
         if key in self.overrides.ignore:
             raise _Stop(f"{req.display} is ignored (overrides.toml)")
         song = find_song(self.conn, key)
-        said = "in the book"
+        if song is not None:
+            return song, "in the book"
+        try:
+            line = append_wanted(self.cfg.wanted_file, req.artist, req.title, album, duration_ms)
+        except ValueError as e:  # a song the file can't hold, such as an artist with " - " in it
+            raise _Stop(f"Can't add this song: {e}") from e
+        except OSError as e:
+            raise _Stop(f"Couldn't write wanted.txt: {e.strerror or e}") from e
+        sync_wanted(self.conn, self.cfg.wanted_file, self.now)
+        song = find_song(self.conn, line.identity)
         if song is None:
-            try:
-                line = append_wanted(self.cfg.wanted_file, req.artist, req.title)
-            except ValueError as e:  # a song the file can't hold, such as an artist with " - " in it
-                raise _Stop(f"Can't add this song: {e}") from e
-            except OSError as e:
-                raise _Stop(f"Couldn't write wanted.txt: {e.strerror or e}") from e
-            sync_wanted(self.conn, self.cfg.wanted_file, self.now)
-            song = find_song(self.conn, line.identity)
-            if song is None:
-                raise _Stop(f"{req.display} is in wanted.txt, line {line.line_no}, but didn't reach the book")
-            said = f"added to wanted.txt, line {line.line_no}"
-        self._still_for_youtube(song)
+            raise _Stop(f"{req.display} is in wanted.txt, line {line.line_no}, but didn't reach the book")
+        return song, f"added to wanted.txt, line {line.line_no}"
+
+    def find_song(self) -> str:
+        from caracole.overrides import OverridesError, add_youtube, load_overrides
+        from caracole.youtube_urls import watch_url
+
+        req = self.request
+        song, said = self._the_song()
+        self._still_ours(song)
         if req.url is None and song.key in self.overrides.youtube and self.overrides.youtube[song.key] is None:
             raise _Stop(f'[youtube] says "none" for {song.display}: give it a video')
         if req.url is not None:
@@ -219,19 +230,25 @@ class _Sheet(HearsWords, StagedRun):
         self.progress.song(song.id, song.display)
         return said
 
-    def _still_for_youtube(self, song: Any) -> None:
-        """The song still one whose auto sheet comes from YouTube, else the sheet ends there (``_Stop``): not ignored,
-        with no human sheet and no bought audio; as it is found, and again before its models, as a lookup that went
-        first may have kept UG's chords meanwhile (auto-chords would skip it: no failure of the sheet's)."""
-        from caracole.songs import HUMAN_SHEET
+    def _still_ours(self, song: Any) -> None:
+        """The song still one whose auto sheet this job makes, else the sheet ends there (``_Stop``); as it is found,
+        and again after each lookup that went first, which may have kept UG's chords meanwhile (auto-chords would skip
+        it: no failure of the sheet's). From YouTube: not ignored, with no human sheet (``_unsheeted``), and no audio of
+        its own, a purchase's or a file you gave it, which auto-chords uses."""
         from caracole.youtube_fetch import youtube_audio
+
+        self._unsheeted(song)
+        if song.audio_path and youtube_audio(self.conn, song) is None:
+            raise _Stop(f"{song.display} has its own audio (bought or given); auto-chords uses that")
+
+    def _unsheeted(self, song: Any) -> None:
+        """The song not ignored and with no human sheet, else the sheet ends there (``_Stop``)."""
+        from caracole.songs import HUMAN_SHEET
 
         if song.status == "ignored" or song.key in self.overrides.ignore:
             raise _Stop(f"{song.display} is ignored (overrides.toml)")
         if self.conn.execute("SELECT 1 FROM files WHERE song_id = ? AND name = ?", (song.id, HUMAN_SHEET)).fetchone():
             raise _Stop(f"{song.display} already has a sheet")
-        if song.audio_path and youtube_audio(self.conn, song) is None:
-            raise _Stop(f"{song.display} has bought audio in Music/; auto-chords uses that")
 
     def audio(self) -> tuple[str, str] | str:
         from caracole.commands._common import alert_block, make_youtube
@@ -435,7 +452,7 @@ class _Sheet(HearsWords, StagedRun):
         if self.result.states.get("audio") != "done":
             return "skipped", NO_AUDIO
         self._after_a_lookup()  # the models take minutes: a waiting lookup goes first
-        self._still_for_youtube(self.song)
+        self._still_ours(self.song)
         if self.voiced is not None:  # its words were heard of this audio
             self._same_audio()
         return self._autochords_sheet()

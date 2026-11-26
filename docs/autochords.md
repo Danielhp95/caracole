@@ -11,6 +11,8 @@ proper sheet later, caracole uses that one.
 - A file you bought. Put it in `~/Music` and caracole matches it by its tags.
 - YouTube. The nightly run takes the audio of a few songs that have no sheet.
 - A video you choose. Paste its link on the library page and the sheet is made right away.
+- A file from your computer: `caracole audio FILE`. caracole keeps a copy as the song's audio, in place
+  of anything it had, and makes the sheet right away.
 
 Taking audio from YouTube goes against its robots.txt and its terms of service. That is your
 call. `[providers.youtube] enabled = false` in caracole.toml turns it off, and the add-on then
@@ -22,13 +24,14 @@ More on this: [the sites caracole reads](sources.md).
 When a site has the lyrics, the chords go over the words. If the lyrics were timed for a
 recording of another length, caracole shifts them to fit and says so on the sheet.
 
-When no site has them and the song has audio of its own (YouTube's or a purchase's), **Transcribe the
-lyrics** on the song's card (or `caracole transcribe`) writes them down from the audio with Whisper. The sheet is marked
-as transcribed, and lyrics from a site replace them later.
+When no site has them and the song has audio of its own (YouTube's, a purchase's or a file you gave it),
+**Transcribe the lyrics** on the song's card (or `caracole transcribe`) writes them down from the audio with Whisper.
+The sheet is marked as transcribed, and lyrics from a site replace them later.
 
-A sheet from a video you paste does this by itself: the lyrics sites first, then, if every one missed, the words
-heard from the audio, then the chords over them. If the transcription fails, you still get the chords, and the card
-still offers Transcribe the lyrics. `[autochords] transcribe = false` in caracole.toml turns this off.
+A sheet from a video you paste, or from a file you give, does this by itself: the lyrics sites first, then, if every
+one missed, the words heard from the audio, then the chords over them. If the transcription fails, you still get the
+chords, and the card still offers Transcribe the lyrics. `[autochords] transcribe = false` in caracole.toml turns this
+off.
 
 ## Install
 
@@ -53,5 +56,6 @@ to half an hour on a CPU and a couple of minutes on a GPU.
 | `caracole youtube --song "Artist - Title" [--url URL] --sheet` | Makes that song's sheet from a video, now |
 | `caracole youtube --song "Artist - Title" --none` | Never uses YouTube for that song |
 | `caracole transcribe --song "Artist - Title"` | Transcribes the lyrics, then remakes the sheet |
+| `caracole audio FILE [--song "Artist - Title"]` | Makes that song's sheet from an audio file of yours, now |
 
 None of this runs on the phone. Details: [Audio from YouTube](usage.md#audio-from-youtube).

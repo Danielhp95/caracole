@@ -349,16 +349,21 @@ def keep_human_sheet(conn, cfg, song):
 @pytest.mark.parametrize("case,said", [
     ("human", "already has a sheet"),
     ("ignored", "is ignored (overrides.toml)"),
-    ("purchase", "has bought audio in Music/"),
+    ("purchase", "has its own audio (bought or given); auto-chords uses that"),
+    ("given", "has its own audio (bought or given); auto-chords uses that"),
 ])
 def test_a_song_youtube_isnt_for_is_refused_and_youtube_is_asked_nothing(setup, conn, fake, sites, tmp_path,
                                                                           case, said):
+    from helpers.audio_files import given
+
     song = add_song(conn, "Nick Cani", "Vikingos veganos")
     if case == "human":
         keep_human_sheet(conn, setup, song)
     elif case == "ignored":
         setup.overrides_file.parent.mkdir(parents=True, exist_ok=True)
         setup.overrides_file.write_text('[ignore]\nsongs = ["Nick Cani - Vikingos veganos"]\n', encoding="utf-8")
+    elif case == "given":  # an audio file you gave it (audio_store.py)
+        given(conn, setup.state_dir, song)
     else:
         bought = wav(setup.music_dir / "Nick Cani - Vikingos veganos.wav", 3.0)
         update_song(conn, song.id, audio_path=str(bought), audio_mtime=bought.stat().st_mtime)
