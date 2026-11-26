@@ -295,13 +295,14 @@ def register(app: typer.Typer) -> None:
     @app.command("scan")
     def scan_cmd(ctx: typer.Context) -> None:
         """Link purchased audio in Music/ to songs, and file Guitar Pro downloads from _inbox/."""
+        from caracole.audio_store import folder
         from caracole.inbox import file_inbox
         from caracole.music import scan_music
 
         cfg = load_cfg(ctx)
         conn = open_db(cfg)
         with exclusive(cfg, "scan"):
-            music = scan_music(conn, cfg.music_dir)
+            music = scan_music(conn, cfg.music_dir, uploads=folder(cfg))
             inbox = file_inbox(conn, cfg.library_dir)
             typer.echo(_music_line(cfg, music))
             refused = len(inbox.refused)  # links, never read: the to-do page names them

@@ -299,3 +299,43 @@ def test_the_owners_not_sung_holds_for_that_audio_and_a_new_file_is_heard_again(
     tr.keep_transcript(conn, song, made(song))  # Transcribe anyway heard it: their word is gone with it
     assert not tr.said_not_sung(conn, song)
     assert tr.offers(conn, cfg, Overrides()) == {"songs": [], "nothing": [], "unsung": [], "transcribed": [song.id]}
+
+
+def test_whisper_cant_read_drops_nothing_sung_and_the_card_offers_nothing_over_that_file(conn, cfg, tmp_path):
+    # caracole noted nothing sung on too little singing (Whisper never ran); the owner asked anyway; Whisper can't load
+    # the file. Its verdict of nothing sung goes: the card offers no Transcribe anyway that can only fail again.
+    song = youtube_song(conn, tmp_path)
+    tr.note_heard_nothing(conn, song, "2026-11-25T00:00:00Z", why="sung 6.2 s", by="caracole")
+    assert tr.offers(conn, cfg, Overrides())["nothing"] == [song.id]
+    tr.note_whisper_cant_read(conn, song, "2026-11-25T01:00:00Z", "RuntimeError: Failed to load audio")
+    assert not tr.heard_nothing(conn, song)
+    assert tr.offers(conn, cfg, Overrides()) == {"songs": [], "nothing": [], "unsung": [], "transcribed": []}
+    assert tr.why_not_offered(conn, cfg, song, Overrides()) == tr.WHISPER_UNREADABLE_WHY
+
+
+@pytest.mark.parametrize("came", ["transcript", "nothing sung", "whisper can't read"])
+def test_a_hearing_that_comes_to_something_drops_the_failed_hearings_note(conn, cfg, tmp_path, came):
+    from datetime import UTC, datetime
+
+    song = youtube_song(conn, tmp_path)
+    now = datetime(2026, 11, 25, 3, 0, tzinfo=UTC)
+    tr.note_hearing_failed(conn, song, "2026-11-25T03:00:00Z", "the separator can't run here (x)")
+    assert tr.hearing_failed(conn, song, now) == "the separator can't run here (x)"
+    assert tr.why_not_offered(conn, cfg, song, Overrides()) is None  # by hand, offered as ever
+    if came == "transcript":
+        tr.keep_transcript(conn, song, made(song))
+    elif came == "nothing sung":
+        tr.note_heard_nothing(conn, song, "2026-11-25T04:00:00Z", why="sung 6.2 s", by="caracole")
+    else:
+        tr.note_whisper_cant_read(conn, song, "2026-11-25T04:00:00Z", "RuntimeError: Failed to load audio")
+    assert kv_get(conn, f"{tr.HEARING_FAILED}{song.id}") is None and tr.hearing_failed(conn, song, now) is None
+
+
+def test_a_removal_takes_the_failed_hearings_note_with_the_song(conn, cfg, tmp_path):
+    from caracole.songs import _PER_SONG_KV, delete_song_kv
+
+    song = youtube_song(conn, tmp_path)
+    tr.note_hearing_failed(conn, song, "2026-11-25T03:00:00Z", "the GPU failed: CUDA out of memory")
+    assert tr.HEARING_FAILED in _PER_SONG_KV
+    delete_song_kv(conn, song.id)
+    assert kv_get(conn, f"{tr.HEARING_FAILED}{song.id}") is None

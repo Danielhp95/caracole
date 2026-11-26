@@ -17,7 +17,7 @@ off. It syncs with the computer when you ask, or by itself on Wi-Fi.
    on a network you trust.
 3. In the app's Settings, type the computer's address, for example `http://192.168.1.20:8737`,
    and tap **Test**.
-4. Tap the sync button in the top bar.
+4. Tap **Sync**, right beside Test, or the sync button in the top bar.
 
 ## Without a computer
 
@@ -41,6 +41,10 @@ before it takes anything.
 
 **Sync on Wi-Fi**, in Settings, does this every 6 hours. It leaves conflicts for you and sends a
 notification.
+
+Both sides must run versions of caracole that name songs by the same rules. When they don't, the
+sync refuses before taking anything: "This caracole and the other name songs by different rules:
+update both to the same version, then sync."
 
 If the phone can't reach the computer, **Export** in Settings writes the library to a
 `.caracole` file and **Import a file** reads one. Two computers sync the same way, with

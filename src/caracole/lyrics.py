@@ -69,6 +69,7 @@ _TEXT_MATCH_S = 10.0  # a text match is accepted this far off; beyond it, keys m
 
 _HAN = "[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\U00020000-\U0002ebef]"
 _HAN_GAP = re.compile(rf"(?<={_HAN})[\W_]+(?={_HAN})")
+_CJK_MARKS = re.compile("[「」『』【】《》〈〉〖〗〔〕]")
 
 _APOSTROPHES = re.compile(r"['’‘`´ʼ]")
 _NON_WORD = re.compile(r"[\W_]+")
@@ -401,7 +402,10 @@ def pick_candidate(
 
 def _search_title(track: str) -> str:
     # A wanted.txt line may write 斑马，斑马 where LRCLIB lists 斑马斑马, the query the spike found it
-    # with. /api/search gets the joined form; /api/get keeps the title as written.
+    # with. /api/search gets the joined form; /api/get keeps the title as written. A CJK bracket is
+    # punctuation to LRCLIB's search: each becomes a gap first, so a gap never takes one mark and leaves its pair.
+    if _CJK_MARKS.search(track):
+        track = " ".join(_CJK_MARKS.sub(" ", track).split())
     return _HAN_GAP.sub("", track)
 
 

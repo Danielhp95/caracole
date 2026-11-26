@@ -1478,3 +1478,22 @@ def test_an_artist_the_directory_names_is_looked_for_on_their_page(conn, cfg):
     text = todo(conn, cfg)
     assert "## Artists to find" not in text
     assert "caracole looks for it on Maná's UG page in the next run" in review_item(text, "Maná - Rayando el Sol")
+
+
+def test_the_todo_page_lists_the_songs_whose_hearing_failed_at_night(conn, cfg, tmp_path):
+    # The nightly run passes over them for 30 days, or until their file changes, so that the others are heard.
+    from test_autochords_transcript import youtube_song
+
+    from caracole.autochords.transcript import note_hearing_failed
+    from caracole.stamps import stamp
+
+    s = youtube_song(conn, tmp_path, "Nick Cani", "Vikingos veganos")
+    note_hearing_failed(conn, s, stamp(NOW), "the separator can't run here (its vocals are 3.5 s shorter)")
+    text = todo(conn, cfg)
+    assert f"## {WORDS_UNHEARD} (1)\n" in text
+    section = section_of(text, WORDS_UNHEARD)
+    assert ("- **Nick Cani - Vikingos veganos**: its hearing failed · the separator can't run here (its vocals are "
+            "3.5 s shorter)") in section
+    assert "30 days or until their file changes" in section
+    update_song(conn, s.id, audio_mtime=(s.audio_mtime or 0) + 5)  # a new file: tried again, so not listed
+    assert WORDS_UNHEARD not in todo(conn, cfg)

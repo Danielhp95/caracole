@@ -30,8 +30,8 @@ internal object Documents {
     }
 
     /** read_state_document, with the form token, the computer's clock, its indexes' stamps, its kept answers for the
-     * asker and its settings (a member that isn't an object is none, as from a computer older than them: the phone's
-     * stay as they were). */
+     * asker, its settings (a member that isn't an object is none, as from a computer older than them: the phone's
+     * stay as they were) and its key version as it says it (Units.otherKeys reads it). */
     fun state(data: JsonElement): PeerState {
         if (data !is JsonObject || !isNumber(data["format"], Units.FORMAT)) {
             throw Unreadable("not a caracole sync state of format ${Units.FORMAT} (the other caracole may be of " +
@@ -60,7 +60,7 @@ internal object Documents {
             format = Units.FORMAT, server = serverId, caracole = version?.ifEmpty { null } ?: "?", name = name ?: "",
             now = text(data["now"]), units = read, base = base(data["base"]),
             token = text(data["token"]) ?: "", indexes = indexes, settings = data["settings"] as? JsonObject,
-            kept = Compare.readKept(data["kept"]),
+            kept = Compare.readKept(data["kept"]), keyVersion = data["key_version"],
         )
     }
 

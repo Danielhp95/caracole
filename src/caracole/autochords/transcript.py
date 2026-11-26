@@ -14,7 +14,12 @@ crosses to another caracole. One whose audio can't be read keeps auto-chords' re
 ``autochords:failed:<song id>`` (run.py's), and is offered none until it changes. Audio auto-chords reads and
 Whisper's decoder (the ffmpeg program) refuses keeps ``transcribe:unreadable:<song id>`` (``note_whisper_cant_read``),
 written by every hearing: offered none until it changes, its chords made, but asked for by hand (``anyway``, ``caracole
-transcribe --force``: after an ffmpeg or Whisper upgrade, the one case where trying again is right).
+transcribe --force``: after an ffmpeg or Whisper upgrade, the one case where trying again is right). A hearing that
+failed for a setup-type reason (the separator, a stem cut short or unreadable, Whisper's setup: hearing.py's
+``"setup"``) keeps ``transcribe:failed:<song id>`` (``note_hearing_failed``), for that audio alone, with when and the
+words: the nightly pass passes over such a song (``hearing_failed``) until its audio changes or ``RETRY_DAYS`` (30)
+go by, so one song that fails can't stop every night's hearing; by hand it stays offered as ever, and any hearing
+that comes to something (a transcript, nothing sung, Whisper's refusal of the audio) drops it.
 
 This module imports nothing third-party: the transcribing itself is elsewhere, and ``why_not_offered`` runs on
 every page build.
@@ -25,6 +30,7 @@ from __future__ import annotations
 import dataclasses
 import sqlite3
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -33,11 +39,14 @@ from caracole.db import kv_delete, kv_get, kv_get_json, kv_set_json
 from caracole.library import kept_files
 from caracole.overrides import Overrides, override_key
 from caracole.songs import HUMAN_SHEET, Song, list_songs
+from caracole.stamps import before
 
 TRANSCRIPT = "transcript:"  # + song id: the Transcript kept for the song's audio
 HEARD_NOTHING = "transcribe:none:"  # + song id: when the song's audio was transcribed to nothing
 UNREADABLE = "autochords:failed:"  # + song id: audio auto-chords couldn't read (run.py writes it)
 WHISPER_CANT_READ = "transcribe:unreadable:"  # + song id: audio Whisper can't load, which auto-chords reads
+HEARING_FAILED = "transcribe:failed:"  # + song id: a hearing of its audio that failed for a setup-type reason
+RETRY_DAYS = 30  # the nightly pass tries a song whose hearing failed again after this long, as the sites are asked
 WHISPER_UNREADABLE_WHY = "Whisper can't read its audio"  # why_not_offered's word for it
 # What the owner can do about it, said after it wherever a transcription is refused for it.
 WHISPER_UNREADABLE_DO = ("a new file, or another video under [youtube], gets its words heard; after an ffmpeg or "
@@ -100,6 +109,7 @@ def keep_transcript(conn: sqlite3.Connection, song: Song, transcript: Transcript
     kv_set_json(conn, f"{TRANSCRIPT}{song.id}", transcript.as_json())
     kv_delete(conn, f"{HEARD_NOTHING}{song.id}")
     kv_delete(conn, f"{WHISPER_CANT_READ}{song.id}")
+    kv_delete(conn, f"{HEARING_FAILED}{song.id}")
 
 
 def transcript_of(conn: sqlite3.Connection, song: Song) -> Transcript | None:
@@ -117,6 +127,7 @@ def note_heard_nothing(conn: sqlite3.Connection, song: Song, stamp: str, *, why:
     kv_set_json(conn, f"{HEARD_NOTHING}{song.id}",
                 {"audio": song.audio_path, "audio_mtime": song.audio_mtime, "at": stamp, "why": why, "by": by})
     kv_delete(conn, f"{WHISPER_CANT_READ}{song.id}")
+    kv_delete(conn, f"{HEARING_FAILED}{song.id}")
 
 
 def said_not_sung(conn: sqlite3.Connection, song: Song) -> bool:
@@ -140,9 +151,31 @@ def drop_transcript(conn: sqlite3.Connection, song: Song, stamp: str) -> None:
 
 
 def note_whisper_cant_read(conn: sqlite3.Connection, song: Song, stamp: str, error: str) -> None:
-    """The song's current audio noted as audio Whisper can't load, at ``stamp``, with its ``error`` in one line."""
+    """The song's current audio noted as audio Whisper can't load, at ``stamp``, with its ``error`` in one line: its
+    words were never heard, so no verdict of nothing sung on it stands either, nor a failed hearing."""
     kv_set_json(conn, f"{WHISPER_CANT_READ}{song.id}",
                 {"audio": song.audio_path, "audio_mtime": song.audio_mtime, "at": stamp, "error": error})
+    kv_delete(conn, f"{HEARD_NOTHING}{song.id}")
+    kv_delete(conn, f"{HEARING_FAILED}{song.id}")
+
+
+def note_hearing_failed(conn: sqlite3.Connection, song: Song, stamp: str, words: str) -> None:
+    """The song's current audio noted as one whose hearing failed for a setup-type reason, at ``stamp``, in
+    ``words``: the nightly pass passes over it for ``RETRY_DAYS``, or until the audio changes."""
+    kv_set_json(conn, f"{HEARING_FAILED}{song.id}",
+                {"audio": song.audio_path, "audio_mtime": song.audio_mtime, "at": stamp, "words": words})
+
+
+def hearing_failed(conn: sqlite3.Connection, song: Song, now: datetime) -> str | None:
+    """Why the song's current audio failed to be heard within ``RETRY_DAYS`` of ``now`` (its words, "" for none
+    said), or None: no such note, one of other audio, or one older than that."""
+    kept = kv_get_json(conn, f"{HEARING_FAILED}{song.id}")
+    if not isinstance(kept, dict) or not _own_audio(song, kept.get("audio"), kept.get("audio_mtime")):
+        return None
+    if before(kept.get("at") if isinstance(kept.get("at"), str) else None, now - timedelta(days=RETRY_DAYS)):
+        return None
+    words = kept.get("words")
+    return words if isinstance(words, str) else ""
 
 
 def whisper_cant_read(conn: sqlite3.Connection, song: Song) -> str | None:
@@ -253,7 +286,8 @@ def offers(conn: sqlite3.Connection, cfg: Config, overrides: Overrides) -> dict[
         elif why == ALREADY_TRANSCRIBED or (picked_without_lyrics(s, overrides) is not None
                                             and why_not_unsung(conn, cfg, s, overrides) is None):
             transcribed.append(s.id)  # Not sung: chords only, which a record picked since doesn't refuse
-        elif heard_nothing(conn, s) and why_not_offered(conn, cfg, s, overrides, anyway=True) is None:
+        elif (heard_nothing(conn, s) and whisper_cant_read(conn, s) is None
+              and why_not_offered(conn, cfg, s, overrides, anyway=True) is None):
             (unsung if said_not_sung(conn, s) else nothing).append(s.id)
     return {"songs": sorted(songs), "nothing": sorted(nothing), "unsung": sorted(unsung),
             "transcribed": sorted(transcribed)}

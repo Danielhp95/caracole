@@ -65,16 +65,26 @@ class SyncSettingsTest {
     }
 
     @Test
-    fun `settings keep the address and Test, and gain Export and Import a file`() {
+    fun `settings keep the address and Test, with Sync right after it, and Export and Import a file`() {
         val layout = File(res, "layout/activity_settings.xml")
         val rows = ids(layout)
-        for (kept in listOf("address", "test", "test_result", "wifi", "export", "import_file", "backups")) {
+        for (kept in listOf("address", "test", "open_sync", "test_result", "wifi", "export", "import_file", "backups")) {
             assertTrue(kept in rows, "Settings has $kept")
         }
         for (gone in listOf("sync", "last_sync", "import_computer", "last_import")) {
             assertTrue(gone !in rows, "Settings' $gone is gone")
         }
         val texts = texts(layout, "text")
+        assertTrue("Sync" in texts, "$texts")
+        val all = parse(layout).getElementsByTagName("Button")
+        val buttons = (0 until all.length).map { all.item(it) as Element }
+        val test = buttons.single { it.getAttributeNS(android, "id").endsWith("/test") }
+        val sync = buttons.single { it.getAttributeNS(android, "id").endsWith("/open_sync") }
+        val row = test.parentNode as Element
+        assertTrue(row === sync.parentNode, "Test and Sync share a row")
+        assertEquals("horizontal", row.getAttributeNS(android, "orientation"))
+        val children = (0 until row.childNodes.length).map { row.childNodes.item(it) }.filterIsInstance<Element>()
+        assertEquals(listOf(test, sync), children, "Test first, Sync right after")
         assertTrue("Export" in texts && "Import a file" in texts, "$texts")
         assertTrue("Sync on Wi-Fi" in texts)
         for (gone in listOf("sync_now", "sync_with_computer", "import_label", "import_computer", "never_imported",

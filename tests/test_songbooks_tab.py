@@ -1060,6 +1060,73 @@ def test_get_the_missing_songs_looks_each_up_then_makes_the_songbook_again(serve
         assert page.js(MOVED) == [], page.js("window.shifts")
 
 
+def made_on(monkeypatch, day):
+    """The songbooks' "made" day, as the page reads it (the files' mtime), pinned to noon UTC of ``day``: in Adwaita
+    Sans the 26th and the 30th are the widest the format gives, so a songbook's meta that may wrap, wraps."""
+    from caracole import songbook_section
+
+    real = songbook_section._made
+    stamp = datetime.fromisoformat(day + "T12:00:00").replace(tzinfo=UTC).timestamp()
+    monkeypatch.setattr(songbook_section, "_made",
+                        lambda folder, files=songbook_section.FILES: {name: stamp for name in real(folder, files)})
+
+
+WIDE_DAYS = pytest.mark.parametrize("day", ["2026-11-26", "2026-11-30"])
+
+
+# Each songbook line's meta: its height, and what two of its lines are.
+META_HEIGHTS = """Array.from(document.querySelectorAll('#songbooks .book-line .book-meta')).map((m) =>
+  [m.getBoundingClientRect().height, parseFloat(getComputedStyle(m).lineHeight) * 2])"""
+@WIDE_DAYS
+@SIZES
+def test_a_songbooks_line_is_as_tall_whatever_its_counts_and_day_say(serve, cfg, conn, library, tmp_path,
+                                                                     monkeypatch, day, size):
+    # A count that ends seconds after its tap (a lookup turns "3 without a sheet" into "2") must move nothing under
+    # the list: the meta's counts and its day are a line each, neither able to wrap, so the line is never taller
+    # for a wider digit. A phone shows the list only with no songbook open: there the line is as tall once back.
+    made_on(monkeypatch, day)
+    add_song(conn, "Muse", "Uprising")
+    add_to_songbook(songbooks_file(cfg.library_dir), "Campfire", ["Pixies - Debaser", "Muse - Uprising"])
+    conn.commit()
+    url, _ = serve(Fake(cfg))
+    phone = size[0] < 900
+    made = f"made {day[8:10]}/{day[5:7]}/{day[2:4]}"
+    with opened(tmp_path, *size) as page:
+        page.open(url + ("#tab=songbooks" if phone else CAMPFIRE))
+        assert page.js(BOOKS)[0] == ["Campfire", f"5 songs · 3 without a sheet · {made}"]
+        heights = page.js(META_HEIGHTS)
+        assert heights and all(abs(h - two) < 0.5 for h, two in heights), heights
+        if phone:
+            page.click('#songbooks .book-line[data-book="Campfire"]')
+        assert page.js(SHIFTS)
+        page.click("#songbooks .book form.get-missing button")
+        assert page.wait(f"{STATUS}.startsWith('Made')", timeout=30), page.js(STATUS)
+        page.js(STILL)
+        if phone:
+            page.click("#songbooks .book-back")
+            assert page.wait(f"{SHOWN}('#songbooks .book-list')"), page.js(BOOKS)
+        else:
+            assert page.js(MOVED) == [], page.js("window.shifts")
+        assert page.js(BOOKS)[0] == ["Campfire", f"5 songs · 1 without a sheet · {made}"]
+        assert page.js(META_HEIGHTS) == heights
+
+
+@SIZES
+def test_a_songbooks_meta_reads_as_one_text_but_draws_its_counts_and_day_apart(serve, cfg, conn, library, tmp_path,
+                                                                                monkeypatch, size):
+    made_on(monkeypatch, "2026-11-26")
+    url, _ = serve(Fake(cfg))
+    with opened(tmp_path, *size) as page:
+        page.open(url + "#tab=songbooks")
+        assert page.js(BOOKS) == [["Campfire", "3 songs · 1 without a sheet · made 26/11/26"],
+                                  ["Road trip", "1 song · made 26/11/26"]]
+        parts = page.js("Array.from(document.querySelectorAll('#songbooks .book-line')).map((b) =>"
+                        " Array.from(b.querySelectorAll('.book-meta > span:not(.visually-hidden)')).map((s) =>"
+                        " [s.textContent, getComputedStyle(s).display, getComputedStyle(s).whiteSpace]))")
+        assert parts == [[["3 songs · 1 without a sheet", "block", "nowrap"], ["made 26/11/26", "block", "nowrap"]],
+                         [["1 song", "block", "nowrap"], ["made 26/11/26", "block", "nowrap"]]]
+
+
 def test_a_song_fetched_from_the_library_shows_with_its_sheet_in_its_songbooks(serve, cfg, library, tmp_path):
     # Fetch now on the library's line: a lookup alone, no songbook's change. Once it is over the set list it is in
     # draws again, so it offers no Get it the server would refuse ("has a sheet already").

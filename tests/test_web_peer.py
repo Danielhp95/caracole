@@ -7,8 +7,8 @@ import json
 import pytest
 from conftest import add_song
 
+from caracole import normalize, stamps
 from caracole import peer_sync as sync
-from caracole import stamps
 from caracole.db import kv_set, kv_set_json
 from caracole.library import keep_file
 from caracole.overrides import add_version
@@ -52,6 +52,7 @@ def test_the_state_lists_each_unit_with_this_sides_id_and_its_base_with_the_peer
     assert stamps.parse(doc["now"]) is not None and stamps.stamp(stamps.parse(doc["now"])) == doc["now"]
     assert isinstance(doc["indexes"], dict)
     assert sync.read_state_document(doc).now == doc["now"]
+    assert doc["key_version"] == sync.read_state_document(doc).key_version == normalize.KEY_VERSION  # its keys' rules
     assert set(doc["units"]) == {f"song/{song.key}", "songbook/campfire"}
     assert doc["units"][f"song/{song.key}"]["label"] == "Radiohead - Creep"
     assert answer(app, "/api/peer/state?peer=phone")[1]["base"] == {f"song/{song.key}": ["d", NOW]}
@@ -112,7 +113,8 @@ def test_nothing_of_this_sides_politeness_is_in_the_state_or_a_unit(cfg, conn):
 
     state = get(app, "/api/peer/state")
     doc = json.loads(state.body)
-    assert set(doc) == {"format", "server", "caracole", "name", "now", "indexes", "units", "base", "settings", "token"}
+    assert set(doc) == {"format", "server", "caracole", "name", "key_version", "now", "indexes", "units", "base",
+                        "settings", "token"}
     assert doc["format"] == sync.FORMAT and doc["units"] == before
     unit = get(app, f"/api/peer/unit?id=song/{song.key}")
     assert json.loads(unit.body) == unit_before
@@ -237,6 +239,28 @@ def phone_side(cfg):
     serving.runner = runner
     yield serving
     serving.close()
+
+
+def test_a_push_is_dropped_by_its_sender_until_its_document_is_taken_and_its_take_queued(phone_side, cfg):
+    from test_peer_push import PHONE, a_push_document, pushes
+
+    from caracole import peer_push
+
+    push = phone_side.new([])[1]["push"]
+    assert phone_side.drop(push) == (200, {"dropped": push}) and pushes(cfg) == []
+
+    push = phone_side.new([])[1]["push"]
+    status, _, body = phone_side.ask("POST", f"/peer/push?push={push}", json.dumps(a_push_document({}, [])).encode(),
+                                     kind="application/json")
+    assert status == 200, body
+    [job] = phone_side.app.queue.snapshot()
+    assert job.song_key == f"peer-push:{PHONE}" and job.state == "queued"
+    status, answer = phone_side.drop(push)
+    assert status == 409 and answer["error"] == "That push is sent: its take waits or runs here."
+    assert pushes(cfg) == [f"push-{push}"]
+    # and the sender's next push leaves it as it is, its take's
+    assert phone_side.new([])[0] == 200 and f"push-{push}" in pushes(cfg)
+    assert (cfg.state_dir / "peer" / f"push-{push}" / peer_push.DOCUMENT).exists()
 
 
 def _staged(cfg):

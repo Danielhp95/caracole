@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The bar's ⋮: the library page and Settings. Syncing is the bar's own button (MainActivity's sync sheet). -->
+<!-- The bar's ⋮: the library page and Settings. The bar's own sync button opens MainActivity's sync sheet, as Settings' Sync does. -->
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:id="@+id/library" android:title="@string/library" />
     <item android:id="@+id/settings" android:title="@string/settings" />

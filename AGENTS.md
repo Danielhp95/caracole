@@ -19,7 +19,9 @@ For a song nobody has charted, `caracole autochords` writes a sheet from audio w
 - a purchase;
 - or audio the nightly run takes from YouTube with yt-dlp (youtube.py, youtube_fetch.py), a few songs a night, only
   where auto-chords is;
-- or that of a video the owner pastes on the library page, made into the song's sheet at once (youtube_sheet.py).
+- or that of a video the owner pastes on the library page, made into the song's sheet at once (youtube_sheet.py);
+- or an audio file the owner gives it, `caracole audio FILE`, kept in `state_dir/audio/` (audio_store.py) and made
+  into the song's sheet at once (audio_sheet.py).
 
 The design lives in three files:
 
@@ -57,7 +59,7 @@ Below the table, a section for each step whose modules have more to say.
 | fetch | ug/fetch.py, ug/page.py, ug/artist.py, ug/artist_tabs.py, rank.py, coverage.py, versions.py, sheet_versions.py |
 | lacuerda | lacuerda.py, lacuerda_fetch.py, lacuerda_index.py, lacuerda_search.py |
 | ireal | ireal.py, ireal_fetch.py, ireal_index.py |
-| scan | music.py (Music/), inbox.py (`_inbox/`), musicxml.py |
+| scan | music.py (Music/), inbox.py (`_inbox/`), musicxml.py, audio_store.py (`tidy`) |
 | gtptabs | gtptabs.py (URLs, parsing), gtptabs_fetch.py (the step) |
 | harptabs | harptabs.py, harptabs_fetch.py, harptabs_index.py |
 | gametabs | gametabs.py, gametabs_fetch.py, gametabs_index.py |
@@ -324,17 +326,54 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     (`SITES_ANSWERED`) said first, whatever this caracole can do, the controller's ruling of 2026-11-25 (on a
     caracole that can't transcribe, a sheet whose lyrics were found would read as a fault); `make_sheet(hears=)` True
     passes over the setting and the machine (tests), False is off. After each hand-over the song still one for YouTube
-    (`_still_for_youtube`, else a refusal) and still offered (else that stage skipped, the chords over the lyrics a
-    lookup found). `WORDS_FAIL_THE_JOB` false: a failure to hear fails its own stage alone, the chords made
-    chords-only, the command exiting 0, the song still offered Transcribe the lyrics; audio Whisper can't load filed
-    nothing against the chords ("Whisper can't read the audio": auto-chords' own
-    reader, the one the vocals read the mix with, gives its verdict as the chords are made), noted as Whisper's alone
-    (`transcribe:unreadable:`), offered no transcription until it changes; nothing sung is the words' done "nothing
-    sung was heard (why)".
+    (`_still_ours`: `_unsheeted`, not ignored and no human sheet, and no audio of its own, bought or given, else a
+    refusal) and still offered (else that stage skipped, the chords over the lyrics a lookup found).
+    `WORDS_FAIL_THE_JOB` false: a failure to hear fails its own stage alone, the chords made chords-only, the command
+    exiting 0, the song still offered Transcribe the lyrics; audio Whisper can't load filed nothing against the chords
+    ("Whisper can't read the audio": auto-chords' own reader, the one the vocals read the mix with, gives its verdict as
+    the chords are made), noted as Whisper's alone (`transcribe:unreadable:`), offered no transcription until it
+    changes; nothing sung is the words' done "nothing sung was heard (why)".
   - `autochords_pending(only=)`, once, after the words: run.py `_make_sheet` takes the transcript; before it, the
     audio still the one the vocals separated (`_same_audio`) where they ran.
   - caracole serve's sheet from a YouTube video runs it (web/youtube_routes.py).
-- transcribe_job.py is no step either but `caracole transcribe`: a YouTube song's lyrics transcribed from its audio,
+- audio_sheet.py is no step either but `caracole audio FILE` (commands/audio.py): one song's auto sheet from an audio
+  file the owner gives it now, the YouTube sheet's `_Sheet` with its download swapped for keeping the file
+  (`_AudioSheet`, `make_audio_sheet`, `AudioRequest`).
+  - Its stages song, audio ("Your audio file"), lyrics, vocals, words, chords, pdf, pages (`STAGES`): the song found or
+    added as the YouTube sheet's (`_Sheet._the_song`, a new line with the file's album and length, so LRCLIB is asked
+    with it), refused ignored or with a human sheet alone (`_still_ours` is `_unsheeted`: an upload always wins, the
+    owner's decision of 2026-11-25, so a purchase or YouTube's audio is no refusal); the audio stage
+    `audio_store.keep` (a file of your own copied, `--upload ID` a staged upload moved), saying which audio it replaces
+    as the song's source, "has this file's audio already" for the same file; lyrics, vocals, words and chords the
+    YouTube sheet's, the lyrics sites first, the words heard only once every one missed.
+  - `names_of`: a file's song, its artist and title tags (the title `song_names.clean`ed), else its name less its
+    extension and track number (music.py `_TRACK_PREFIX`) through `read_names`, else that name as the title alone.
+  - The command reads the file first (`audio_store.examine`, an upload's staged record) and refuses, before the lock,
+    what isn't audio it reads, as it refuses a caracole that makes no chords (`youtube_fetch.autochords_problem`:
+    neither YouTube nor yt-dlp needed); a file that names no artist with no `--song` exits 2.
+  - caracole serve's "+" runs it (web/audio_routes.py), `--upload ID`.
+  - A moved upload leaves its marker, `.upload-<id>.kept` (0600, the kept file's name and the song's id), written
+    before the data's move; the staged record goes only once the song's row names the kept file. So the same job
+    again (Try again after the Audio stage: a lyrics site's wait, the chords failing, Interrupted; or a run cut off)
+    goes on by its marker (`audio_store.marked`): the staged data still there, the move done; moved and the row not
+    written, `adopt` (that exact name, for that song, else "gone"); all done, "has this file's audio already" while
+    the song's `audio_path` is the file the marker names. An upload gone with no marker (lost before its keep: a
+    waiting job Interrupted, its staged file swept or let go by another upload), or whose file is no longer the song's
+    (a later upload kept since), is refused "That upload is gone…" (commands/audio.py `_given_already`, audio_sheet.py
+    `audio`). `stage` and `sweep` never take a marked id for a staged upload no job names; `sweep` lets a marker go,
+    with what is left of its upload, `MARKED` (the Journal's 30 days, web/history.py `DAYS`: Try again can't come
+    later) after its keep, and before that only once the kept file it names and its staged data are both gone and no
+    waiting or running job names its id (a marker is written before the move: one with its data still staged is a keep
+    under way or cut off), so a cut-off keep can be finished for 30 days; `tidy` spares the file a
+    marker of an unfinished keep names (`_live_kept`).
+  - No kept file is deleted while another song's row names it (`audio_store._named_by_another`, one query): not by
+    `keep` replacing a song's file, nor by a removal, whose plan then names no audio of yours to delete.
+  - A song merged into another (songs.py `_merge`, `_given_audio`) keeps a file given: the merged song's audio is
+    `other`'s when it is one and `keep`'s isn't (over a purchase's link, YouTube's audio or none), and of two the one
+    given last (the later `audio_mtime`), the older deleted by the next `tidy`. The file keeps its name, the other
+    song's id in it: `kept_in`, `uploaded`, `tidy` and removal's `uploaded_audio` go by `audio_path`, never by that id
+    (`audio_store.given_file` tells a given file with no config: a kept file's name in a folder named `audio`).
+- transcribe_job.py is no step either but `caracole transcribe`: a song's lyrics transcribed from its own audio,
   then its auto sheet made again over them (`make_transcript`).
   - Its stages song, vocals, words, chords, pdf, pages (`STAGES`), reported as a lookup's (staged.py's `StagedRun`).
   - Only a song `transcript.why_not_offered` offers one, by its identity key, never added to wanted.txt; read again
@@ -644,9 +683,10 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 | provider_pass.py | one song at a time through a provider (`each_song`, `PassStats`): the lyrics, LaCuerda, gtptabs.com and YouTube passes share its ladder of errors that are never misses, and name the songs an error left (`failures`) |
 | keys.py | a song's musical key and where it came from (below) |
 | removal.py | `caracole remove` and the web page's Remove; the tombstones it leaves are songs.py's |
+| audio_store.py | the audio files you give caracole for a song, in `state_dir/audio/` (0700, each file 0600): an upload staged by its 16-hex id (`stage`, `staged`, `drop`, `sweep`, one no job names at a time), a song's own `<song id>-<sha256 16 hex><ext>` (`keep`, `uploaded`), what no song names deleted (`tidy`, the scan step's); the format from the bytes (`sniff`, `FORMATS`), then mutagen's read, imported inside (a file of your own's too, `examine`), a song gone a refusal of `keep`'s; an upload always wins, the owner's decision of 2026-11-25: `keep` replaces a purchase (its file in Music/ stays) or YouTube's audio, and `music.scan_music(uploads=)` links no purchase over it |
 | sites.py | the library page's Sites tab's data (below) |
 | progress.py | a command's output: a live line on a terminal, plain lines elsewhere, fitted in display columns of the stream's own width; `Ticker` (`ticker()`), what long work is doing as it goes: a live line on stderr on a terminal at the default verbosity alone, off for good once a write fails, a `caracole.progress` line a minute, the unit's status line (`systemd_status`, sd_notify `STATUS=`, where `$NOTIFY_SOCKET` is set); `Requests`, a client's requests against its budget (`make_client(ticker=)`, `make_youtube(ticker=)`, its runs with no time left); `Counted`, work of a known size (`directory_pass(progress=)`, `render.rendering`); a staged job by hand (`caracole transcribe`, `youtube --sheet`) its long stages' running details on one (commands/get.py `_Lines(ticker=)`, none with `--progress`, nor for `caracole get`); they only count, never pace |
-| staged.py | a job of stages over one song, each reported as a lookup's stages are, run in order under the lock as asked for now (`StagedRun`: `_run`, `stage`, `_fail`, `_after_a_lookup`, `_song_again`, `_refuse`; the stages both jobs end with, `_autochords_sheet`, `pdf`, `pages`; `StagedResult`; the command's last lines, `_common.staged_end`): youtube_sheet.py's and transcribe_job.py's |
+| staged.py | a job of stages over one song, each reported as a lookup's stages are, run in order under the lock as asked for now (`StagedRun`: `_run`, `stage`, `_fail`, `_after_a_lookup`, `_song_again`, `_refuse`; the stages both jobs end with, `_autochords_sheet`, `pdf`, `pages`; `StagedResult`; the command's last lines, `_common.staged_end`): youtube_sheet.py's (and audio_sheet.py's, a subclass of its) and transcribe_job.py's |
 | progressions.py | each song's progressions (below) |
 
 #### index_transfer.py
@@ -698,10 +738,36 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 - **FORMAT 3** (`FORMAT`) is of every document a side answers (the state, a unit, a push) and of the base each keeps
   (`{"format": 3, "units": …}`): a base of another format reads as none, so the first sync after a format bump
   compares as a first sync (no shim). FORMAT 2's digests hashed UG's ratings and votes.
+- **The song keys' rules**: units are named by identity keys, so two caracoles that key songs by different rules (a
+  `normalize.KEY_VERSION` bump on one side alone) would read each song the upgraded side re-keyed as removed and a new
+  one. The state document, the push document and a `.caracole` file's manifest say their side's (`key_version`), and
+  one of other rules (`other_keys`, as `!=` compares it) is refused before anything changes, in `OTHER_KEYS`' words:
+  `Peer.state` raises `OtherKeys` (`peer diff`, `sync`, `pull`: exit 1; the Sync tab's Test and compare: 409), a push
+  is refused at `POST /peer/push` (409) and by `caracole peer take` (exit 1), a file at `read_file`
+  (`peer_file.OTHER_KEYS`; the Sync tab's import compare 409, `peer import` exit 2); no base is re-keyed, and FORMAT
+  stays 3. A document that says none is an older caracole's, read as before:
+  the one gap, which closes only once both sides are updated.
 - **Comparing** (`compare`): three ways, against the base.
   - The base is each side's agreements with that peer (kv `sync:base:<peer id>`: a digest or None, and when),
     recorded by `record_agreement` at the end of every pull, and merged with the peer's by the later
     (`merged_base`).
+  - Whatever took it, what a take made this side's is recorded as agreed as that take ends (`record_taken`: each
+    unit taken that this side now holds at the digest taken, or lacks as the other does, its kept answer dropped; no
+    other unit touched, none agreed writing nothing), before anything after it: a pull or a sync with the peer at its
+    clock as the take began, `peer take` with the pusher at the push's `at`, an import with the file's caracole at its
+    `made` (`peer_file.record_taken`, of the units the file speaks for; none for an index export). So one stopped
+    after its take (a give refused or cut off, the agree's read of the peer failing, a render that raises or is
+    killed) leaves what it took agreed, and a later change on one side alone is that side's, never a conflict; the
+    other side, which took nothing, records nothing, and `merged_base` reads this side's later record from either
+    side. What a sync meant to give, and what any of them left, stay as they were; the command still fails
+    (test_commands_peer.py
+    `::test_what_a_sync_took_stays_agreed_when_its_give_fails_so_a_later_change_there_alone_is_theirs`,
+    `::test_a_take_of_a_push_whose_render_fails_keeps_what_it_took_agreed_with_its_sender`). The same file imported
+    again after an import killed so leaves its taken units out (`newer_than`: agreed at its `made`) and is refused as
+    no newer only when nothing else is left to take; a "keep mine" the kill lost (kept at the agree) is a conflict
+    again, so the file is still offered (test_commands_peer_file.py
+    `::test_an_import_killed_after_its_take_keeps_what_it_took_agreed_and_its_file_still_offers_the_rest`,
+    `::test_a_file_an_import_killed_after_its_take_took_whole_is_no_newer_the_next_time`).
   - A unit changed on one side is that side's; on both, differently, a `CONFLICT` (`decide`: as chosen, else
     `--prefer`, else left).
 - **The remembered answer**: an import's "keep mine", kept beside the base (`record_kept`, `kept_of`: its `"kept"`,
@@ -710,7 +776,9 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     which `GET /api/peer/state` serves from sync-exchange on; `merged_kept` takes, a unit at a time, the latest of
     each side's agreement and kept answer, an agreement on a tie, the other's swapped.
   - `compare(..., kept=)`: a unit changed on neither side since is the chooser's (`KEPT_HERE`, `KEPT_THERE`), never
-    a conflict asked again; a change after it is compared as usual.
+    a conflict asked again; changed on the chooser's side alone, the chooser's still, in the usual words; changed on
+    the other side, whose version still lacks the one kept, a `CONFLICT` (`_since_kept`), never taken unasked: left
+    by a sync with no `--prefer` and by the phone's unattended one (`Conflicts.LEAVE`).
   - An agreement (`record_agreement`, given each side's whole state) drops the answer of each unit it agrees on,
     both sides' alike or both lacking it, and a base with none is written as before.
 - **Parts** (`PARTS`: library, songbooks, indexes; `part_of`, by a unit's kind; no unit is of the indexes):
@@ -730,13 +798,58 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     `SONG_COLUMNS`, versions, kept files checked by SHA-256 (`song_file`), `CARRIED_KV`, lyrics files and
     `overrides.put_song_entries`.
   - A song gone there is removed as `caracole remove` does.
+  - A tombstone there whose song the owner settled here (given in a sync, kept at an import) is part of that answer
+    (`answered_by_its_song`, on `decide`'s lists): neither taken nor left; in a sync the song given clears the other
+    side's tombstone and the agree records both lacking it, and an import remembers its answer with the song's
+    (`kept_answers`), so the same file is then no newer. Only while its song's difference is left unsettled (the
+    unattended sync, no `--prefer`, a skip) is it left, `SONG_HERE` ("its song is here: its removal there is not
+    taken"), never said taken, nothing agreed of it, and shown again at the next sync.
+  - The songs the take respells as it writes a song's artist (`Applied.respelled`) come with their digest as it ended
+    (`respelled_digests`, the phone's `respelledDigests`): `peer sync` gives one in its give at that digest (its push's
+    `compared_here`, `--here`'s pull line), the change being the sync's own; any change after the take (a lookup's,
+    once the lock is let go of, or in a hand-over between two pushes) still leaves it `CHANGED_HERE`.
   - `songbook.put_songbook`, `overrides.put_alias`, `put_artist_url`, `put_block`.
-  - Then the command renders the songs taken, the songbooks and the pages, after a backup (`before-sync`).
+  - Then each command that takes (`peer pull`, `sync`, `take`, `import`), after a backup (`before-sync`), records what
+    it took as agreed (`record_taken`, above), and renders the songs taken, the songbooks and the pages, songbooks.toml
+    read once for the record and its agree (`_songbooks`).
 - **Giving** a side what it takes, two ways: `caracole peer sync --here` asks the other to pull (`POST /peer/pull`),
-  and `--push` pushes (peer_push.py `Pusher`), as the phone, which serves nothing to the network, always does.
+  and `--push` pushes (peer_push.py `Pusher`), as the phone, which serves nothing to the network, always does. Either
+  failing fails the sync (exit 1) before its agree; what its take recorded stays.
 - **A push** (peer_push.py): `POST /peer/push/new` names the files its units keep by their SHA-256, `POST
   /peer/push/file` sends each one this side needs, `POST /peer/push` the document, checked against each unit's digest;
   then `caracole peer take DIR` takes its units from the staging folder as a pull takes a peer's, and deletes it.
+  A push that fails after `push/new` (a file or its document refused, a network that drops) is let go of there at once:
+  the pusher (`push_units`, the phone's SyncEngine give) posts `POST /peer/push/drop`, its own failure never hiding
+  why the push failed; and a sender's next `push/new` lets go of its push never sent (`new_push`): one open push a
+  sender, so no failed push holds one of the `OPEN` (2) slots for the hour; an interrupt (Ctrl-C, the phone's job
+  cancelled) drops it too (`BaseException`, `NonCancellable`), then goes on; a drop is asked once, within
+  `DROP_TIMEOUT` (5 s; the phone's `DROP_TIMEOUT_MS`), never after reading the state again for a token.
+  - A give goes in as many pushes as the other side's limits ask (`push_units`, `_cut`; the phone's `Give.cut`), one
+    at a time, each followed to its take's end (`between`, `wait_for`) before the next is opened: each document within
+    `DOCUMENT_MAX` (16 MiB), each `push/new` within `NEW_MAX` (1 MiB), each push's files within `PUSH_MAX` (2 GiB), a
+    song and its tombstone in one push; each take agrees on what it took as it ends. A push that fails stops the give
+    there (`PushStopped`): the pushes before it stay taken and agreed, the rest isn't given, and the error says how
+    far it got ("Couldn't give them 700: 350 given in the first push of 2; then push 2 of 2: … The pushes taken there
+    stay taken; the next sync gives the rest."), the last push's wait too; the units left before the push it stopped
+    at are said all the same (`PushStopped.left`).
+  - `peer sync --push` holds caracole's lock through each wait but the last's (the last's lock let go of, as ever),
+    so no nightly run starts between two pushes of one give; each of those waits is a hand-over point (`between`'s
+    `wait_for` sleeps through `_handing_over`: `_common.hand_over` between two polls, its connection in no
+    transaction). After a wait in which the lock went to a lookup (`handoffs()` moved), this side's state is read
+    again (`again`: overrides.toml by `overrides_since`, songbooks.toml) and each unit still to push whose digest moved
+    since it was compared is left (`CHANGED_HERE`), for the next sync, the pushes after it carrying that state
+    (`test_commands_peer.py::test_a_lookup_waiting_for_the_lock_gets_it_while_the_give_waits_between_two_pushes`,
+    `::test_a_unit_a_lookup_changed_while_the_give_waited_is_left_changed_here_never_pushed_stale`). The phone, with
+    no lock, waits as before.
+  - Left out of a give, with why, never sent to be refused: a song with a kept file past `FILE_MAX` (64 MiB) in the
+    export's words (peer_file's `TOO_BIG`, the phone's FileError's), a unit that alone passes a document
+    (`TOO_LONG`) or a push's files (`TOO_HEAVY`). Left, not failed, and not agreed.
+  - The phone's limits are PeerClient's constants (`PUSH_NEW_MAX`, `PUSH_DOCUMENT_MAX`, `MAX_FILE`, `PUSH_MAX`), held to
+    the routes' by `vectors/sync/push.jsonl` (tests/test_conformance_sync_push.py: the limits, the words, `_cut`'s
+    cases; GiveTest). On its take the phone takes no kept file past `MAX_FILE`: refused by its Content-Length before a
+    byte is read, or, an answer with no length, once its bytes pass it, the song left "score-1.pdf is over 64 MiB: the
+    phone takes no file that big" (PeerClient.file); a Content-Length lower than what is sent is read no further than
+    it says, whose bytes then aren't the file's ("… changed since compared").
 
 #### peer_file.py
 
@@ -745,8 +858,8 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   docs/superpowers/specs/2026-11-03-sync-redesign-design.md, the layout docs/superpowers/plans/2026-11-03-sync-redesign.md
   §3.3.
 - **The file** (`FORMAT` 1): a zip of what a sync reads from the other side, its members in order:
-  - `caracole.json`, the manifest (the caracole, schema and sync format that made it, the library's id and name,
-    `made`, its parts, its counts, its indexes' sites);
+  - `caracole.json`, the manifest (the caracole, schema and sync format that made it, the rules its songs are keyed
+    by, `key_version`, the library's id and name, `made`, its parts, its counts, its indexes' sites);
   - `state.json` (`peer_sync.state_document` of its units), `bases.json` (every base it keeps), `units.jsonl` (each
     unit's document), `files/<sha256>` (each kept file once);
   - with the library, `pages.json` and `pages/<sha256>`, the pages made of its units (`offline_routes.library_pages`:
@@ -769,11 +882,12 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     document its state's digest, each kept file a song names and each page pages.json lists held): a file that can't
     be read whole is refused whole.
 - **Refusals**, in the owner's words and the phone's alike, the whys caracole's own (`NOT_A_FILE`, `OTHER_FORMAT`,
-  `OWN_EXPORT`, `OLDER`, `UNREADABLE`): `check_importable` refuses a library's own export; `newer_than` (in
-  `compare_file`) leaves out each unit agreed on or answered with the file's caracole at or after its `made`, and
-  refuses a file with nothing left to take (no difference this side would take, no index read more recently) and no
-  newer than this side's last sync with its caracole (its base's latest time, the kept answers' included), so an
-  import of some parts, or one that left a unit, leaves the rest of the same file to take.
+  `OTHER_KEYS`, `OWN_EXPORT`, `OLDER`, `UNREADABLE`): `read_file` refuses a manifest of songs keyed by other rules
+  (`peer_sync.other_keys`; one naming none read as before); `check_importable` refuses a library's own export;
+  `newer_than` (in `compare_file`) leaves out each unit agreed on or answered with the file's caracole at or after its
+  `made`, and refuses a file with nothing left to take (no difference this side would take, no index read more
+  recently) and no newer than this side's last sync with its caracole (its base's latest time, the kept answers'
+  included), so an import of some parts, or one that left a unit, leaves the rest of the same file to take.
 - **An import is a sync with the file**:
   - `compare_file`: this side's base for the file's caracole merged with the one the file keeps for this side, and the
     answers both remembered (`peer_sync.merged_kept`), within the parts the file holds (`in_scope(holds=)`);
@@ -788,7 +902,9 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     exits 1 for a unit left or its indexes not merged; with `--progress` its report comes whatever it took.
 - **peer_import.py**: an upload staged part by part, `state_dir/peer/import-<16 hex>/` (0700: `file.caracole` and
   `open.json`, 0600), one at a time, each part 8 MiB at most and the next one, 8 GiB in all; one untouched an hour is
-  swept unless `held`; `staged_folder` checks the folder `peer import` is given, which it deletes once it is over.
+  swept unless `held`; `staged_folder` checks the folder `peer import` is given, which it deletes once the file is
+  refused or taken with nothing left, and keeps for a comparison again else (`STALE`, a unit left), its hour from
+  then (`kept`).
 - `peer sync --parts` and `peer import --parts`: the parts of a sync, a difference outside them neither taken, given
   nor said; a sync compares with the kept answers, so a unit kept here at an import is given there at the next one.
   - `peer sync --compared HASH` applies the comparison its hash names: with the kept answers (`peer diff`'s, and
@@ -816,6 +932,17 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 - The artist and the title a free text names, the one parser of it (`read_names`: its rules in order, cleaned first
   by `clean`, a video's channel by `clean_channel`; a known artist, a one-word artist of your library only once
   credible).
+  - Two parts, each its own words (`_own`: less its CJK title groups, 【】《》「」『』〈〉, else the first one's
+    content), then, where no mark parts the text, its first title group the title (`_bracketed`: "米津玄師
+    MV「Lemon」", "《孤勇者》陈奕迅"; words before it that begin with the channel or a known artist and go on the title
+    instead; its artist's loose tail cut as `clean`'s, `_loose_at`, an artist after it less a leading "by"), before a
+    known artist, the channel's song and the suggested video's.
+  - A bracket of a version's or a tag's words alone (`_TAGS`: "【Live】", "【翻唱】") is never a title: leading the text
+    or a part it goes (`_untagged`), after the song's words it stays as written.
+  - A 「」 or 『』 quote is a lyric when it has a space between two CJK characters, is longer than `LYRIC_CHARS`, or
+    ends as a sentence (`_lyric`, `_lyric_unless_named`), unless it is alone once the video's groups go (`_alone`);
+    one that ends so, or a long one of Latin words alone, is a title after an artist known whole (`_decoration`,
+    `_whole_artist`: the channel's name or a known artist; `clean` knows none).
 - Every path that turns text into a name uses it:
   - `/api/search`'s `names` (with the YouTube video suggested for the query), which the library page's request form,
     its Make sheet and the lookup page's form by name fill in, each field until you type into it (no page splits
@@ -1263,6 +1390,11 @@ It is rows.js's, shared by both pages:
   `caracole songbook add`, both or neither: `JobQueue.submit_all`).
 - A change that ends seconds after its tap moves nothing on the screen: what it took away says so where it was until
   the next click or key (test_songbooks_tab.py).
+- A songbook's line on the list says its counts and its day (`5 songs · 3 without a sheet`, `made 26/11/26`) a line
+  each, neither able to wrap (songbooks.js `metaOf`, songbooks.css `.book-meta`; the separator between them visually
+  hidden, so its text reads as one): the font's digits are proportional, so a day or a count a hundredth of a pixel
+  wider wrapped the line, and a lookup that turned "3" into "2" un-wrapped it and moved every line and + New songbook
+  under it. The test pins a wide day (`made_on`), never the clock's.
 
 #### index.html's assets (library_assets/)
 
@@ -1721,6 +1853,8 @@ It is rows.js's, shared by both pages:
     is `caracole ug --directory`: UG's artist directory, bulk work at the pace the owner chose for it.
   - youtube_sheet.py is `caracole youtube --sheet`: a song's auto sheet from a YouTube video now, at the bulk pace: a
     command, never a lookup.
+  - audio_sheet.py is `caracole audio` (commands/audio.py): a song's auto sheet from an audio file the owner gives it,
+    now; asked for now, never a lookup.
   - transcribe_job.py is `caracole transcribe` (commands/transcribe.py): a song's lyrics transcribed from its YouTube
     audio, its sheet made again; asked for now, never a lookup, and asking no site.
   - review.py, search.py, removal.py and songbook.py are `caracole review`, `search`, `remove` and `songbook`.
@@ -1802,7 +1936,7 @@ It is rows.js's, shared by both pages:
     among `INDEX_READS`), and `GET /youtube/thumb/`, its thumbnail.
   - `GET /api/youtube/video` and `POST /youtube/video`: a video pasted into the library page's search box
     (`caracole youtube --video --progress`).
-- **transcribe_routes.py** is `POST /transcribe` (`song`, `identity`): a YouTube song's lyrics transcribed from its
+- **transcribe_routes.py** is `POST /transcribe` (`song`, `identity`): a song's lyrics transcribed from its own
   audio, its auto sheet made again over them; and `GET /transcribe`, read-only, for the page's script alone
   (`script_only`, as /jobs.json): the served `server.transcribe` member as of now, `library_page.transcribe_member`,
   the one function the page is built with too.
@@ -1834,6 +1968,49 @@ It is rows.js's, shared by both pages:
     ("caracole:transcribe"). So a sheet from a video that found no lyrics offers it at once (the sheet's lyrics stage
     asks LRCLIB, Megalobiz and AZLyrics, each noting its miss), a transcription that failed on the GPU offers it again,
     and one made from a terminal meanwhile no more.
+- **audio_routes.py** is an audio file uploaded from the library page, made into its song's auto sheet:
+  - `POST /audio/upload?name=` (a `bytes` route, `audio_store.AUDIO_MAX`, 128 MiB, one body: the form token in its
+    header, the cross-origin check, refused unread past it): the bytes staged (`audio_store.stage`, `named` the uploads
+    the waiting and running jobs name, `jobs.uploads_named`, so a new one lets go of every other; `sweep` first), the
+    answer its id, name (a name to show alone), size, format, length, tags, the song they name (`guess`,
+    audio_sheet.py `names_of`) and the library's song of it (`song`: `has_sheet`, `sheet`, and `audio`, "purchase",
+    "youtube", "upload" or null, so the dialog says what the file replaces; sent from a card with `song` and
+    `identity`, that song, whatever the file names: 404 none, 409 another's identity, before anything is staged); each
+    `AudioError` its status and words. A file staged and then not used (a refused Make sheet, a Cancel whose upload had
+    already arrived, the page left) is let go by the next upload or the hour's sweep.
+  - `POST /audio` (`upload`, and `song` with `identity`, or `artist` and `title`, written to wanted.txt first with the
+    file's album and length): `caracole audio --progress --upload=<id> --song=…` queued under `jobs.AUDIO_SHEET` and the
+    song's key (`audio_sheet_steps`, by the id, never a path), "Sheet from an audio file: Artist - Title", the queue's,
+    never joining its lookup nor a lookup it; asked again while one waits or runs, that one is the answer and the
+    second file is dropped; its view the song's, its steps outcome.py `AUDIO_STEPS`, Ready as a YouTube sheet's.
+    Refused 409 ignored or with a human sheet (a purchase or YouTube's audio never: the owner's decision of
+    2026-11-25), 400 or 404 an upload not staged.
+  - `POST /audio/drop` (JSON `{"upload"}`): deleted now, 409 while a job names it.
+  - 409 for the upload and Make sheet where this caracole makes no chords ("No sheets from audio files here: …",
+    `audio_reason`).
+  - Make sheet and a drop hold the store's lock (`audio_store.held`, an RLock) from what they read of the queue to what
+    they change; an upload reads the file first and then the jobs' uploads under it (`stage`'s and `sweep`'s `named`, a
+    function called under the lock), so an upload from another tab never lets go of a file Make sheet is queueing, and
+    no route waits for another's file to be read
+    (`test_web_audio.py::test_an_upload_from_another_tab_while_make_sheet_queues_never_lets_go_of_its_file`,
+    `::test_an_upload_holds_the_store_only_to_read_the_jobs_uploads_and_let_go_of_the_others`).
+  - The page's side (library.js `audioDialog`, `audioSheet`; filter.css): where library_page.py's `server.audio`
+    (`audio_member`: `ok`, `why`, `limit`, `too_big` the route's words for a file past it; the phone's LibraryPage.kt
+    `AUDIO_PROBLEM`, `ok` false) says so, the bar's
+    "+" (`#add-audio`, before Filter, and its hidden `#audio-file`, made by the script alone: none on the file or the
+    phone) and a file dropped on the Library while it shows open `dialog#audio-sheet` (a sheet from the bottom under
+    720 px, sliding up there alone): XHR's upload, sent as `application/octet-stream` (a File's own type is refused
+    415), its count `aria-hidden` beside the live region, which says only its start and its outcome; a file past
+    `limit` refused unsent in `too_big`'s words; of several files the first, the dialog saying so; a file dropped on
+    the open dialog a new choice; the guess in Artist and Title, the library's song and what the file replaces;
+    Make sheet through `sendRequest`, the request form's own path (the line under the bar, `track`); Cancel or
+    Escape `POST /audio/drop`. A card's Sheet from an audio file… (not ignored, no human sheet by its `files`, a
+    purchase or YouTube's audio no matter: the cards' data unchanged) opens it for that song, its names not to edit,
+    and posts its `songForm` in place (`song`, `identity`, `upload`), its upload sent with the song so the dialog says
+    what that song's audio is; its transcription offers read again as after a YouTube sheet (`offerAfter`). The served
+    page never lets a drop load another page (library.js `keepDrops`): a file dropped where nothing takes it, or a
+    link or text outside a field, is taken and nothing done; into a field a drop is the browser's.
+    test_web_page_audio.py.
 - **ug_link_routes.py** is a UG link pasted into the library page's box: `GET /api/ug/link` (ug/link.py `known`, no
   request and no lock: its state, the tab's names, its artist's page, `guess`, the library's `song`, `hits` as
   /api/search's `index` items) and `POST /ug/link` (`caracole ug --link --progress` queued under `jobs.UG_LINK`, among
@@ -1847,7 +2024,9 @@ It is rows.js's, shared by both pages:
   page's, which any client that reaches the server reads, for a sync's `POST /peer/pull`); `GET /api/peer/unit` and `/api/peer/file` (peer_sync.py, read-only, as
   `/api/offline` is); and `POST /peer/pull`, `caracole peer pull` queued as any change (test_web_peer.py).
   - A push, the phone's (peer_push.py): `POST /peer/push/new`, `/peer/push/file` and `/peer/push`, `json` and `bytes`
-    routes with the form token in their header, then `caracole peer take --progress DIR` queued.
+    routes with the form token in their header, then `caracole peer take --progress DIR` queued; `POST
+    /peer/push/drop` (`{"push", "from"}`, the token in its header) deletes a push never sent, asked by the caracole
+    that opened it, as a send is (`peer_push.drop`: 404 none, 409 once its document was taken, its take queued).
   - `GET /api/peer/index[?sites=]`: this library's site indexes as `caracole index export` writes them, a SQLite file
     streamed from a temporary export (`cache_dir/peer/`), one at a time.
 - **sync_routes.py** is the library page's Sync tab (its label Share; library_assets/sync.js, sync-tab.html,
@@ -1942,12 +2121,13 @@ It is rows.js's, shared by both pages:
   library_assets/requests.js, drawn from `/requests.json`: web/feed.py; no page of its own, every link and redirect to
   a request is `/#tab=requests&job=N`, status.py `details_href`.
   - Its finished requests keep their steps (feed.py `_finished`, `"steps"` right after `"reason"`): a lookup's, a
-    sheet from a YouTube video's or a transcription's that started (`outcome.lists_steps`; the phone's
+    sheet from a YouTube video's, a transcription's or a sheet from an audio file's that started (`outcome.lists_steps`; the phone's
     `Outcomes.listsSteps`, whose `RequestsRoutes` hands `Feed.feed` their chips), never one cancelled before it ran
     nor a request of other commands.
-  - The two staged jobs over one song (staged.py: a sheet from a YouTube video, `YOUTUBE_STEPS`; a transcription,
-    `TRANSCRIBE_STEPS`) share outcome.py's rules, each given its own stages (`_staged`: its steps and the stage of its
-    words): `_staged_steps`, `_staged_holds` (Ready: what the chords stage says the sheet holds, or why its words
+  - The three staged jobs over one song (staged.py: a sheet from a YouTube video, `YOUTUBE_STEPS`; a transcription,
+    `TRANSCRIBE_STEPS`; a sheet from an audio file, `AUDIO_STEPS`, the YouTube sheet's, its Audio step naming no site)
+    share outcome.py's rules, each given its own stages (`_staged`: its steps, the stage of its words and the site its
+    Audio step names): `_staged_steps`, `_staged_holds` (Ready: what the chords stage says the sheet holds, or why its words
     wait; a YouTube sheet whose lyrics were done but whose heard words failed: "Chords only, no lyrics: the words
     couldn't be heard here (why)."; a YouTube sheet's one Words step is its vocals and words stages) and `_staged_stopped` (Not made yet: the first stage after the song's that stopped it).
 - The library page's lines read only its steps (`outcome.progress`: while a lookup runs, once it has run a second
@@ -2028,7 +2208,12 @@ It is rows.js's, shared by both pages:
     the song read again and still offered with the audio separated, then its words, a transcript or nothing sung
     making its sheet due (`_skip_reason`). A song past the cap gets its chords now, its words a later run.
   - In bulk: the setup's failure stops the hearing for the run, kept as `AutoStats.transcribe_problem`, the chords
-    going on and the command exiting 0 on its account; audio Whisper can't load (the vocals
+    going on and the command exiting 0 on its account, and is noted against that audio (`note_hearing_failed`, kv
+    `transcribe:failed:`, in `songs._PER_SONG_KV` and SongKv.kt: path, mtime, when, the words), so the next nights
+    pass over the song (`hearing_failed`, `_Listening.first`, `_count_due`; no slot, no separation) until its audio
+    changes or `transcript.RETRY_DAYS` (30) go by, todo.py listing it; by hand it stays offered, and any hearing that
+    comes to something (a transcript, nothing sung, Whisper's refusal) drops the note; after the words a waiting
+    lookup goes first before the chords (`turns.hand_over`), the song read again; audio Whisper can't load (the vocals
     read it with auto-chords' own reader) noted as Whisper's alone, its chords made tonight, never heard again (no
     separation, no slot) until it changes, todo.py listing it under the words not heard, never the files auto-chords
     can't read; a bug one of the run's `errors` (exit 1), logged with its traceback, its chords made all the same
@@ -2051,7 +2236,7 @@ It is rows.js's, shared by both pages:
   - `shifted_lrc` moves line and word stamps alike, so word-timed lines keep their words;
   - the shift said on a line of the sheet's after the song's name, after the video's credit for audio from YouTube,
     and kept as `raw["lyrics_shift"]`.
-- A song's lyrics transcribed from its YouTube audio, which hearing.py composes from, for transcribe_job.py:
+- A song's lyrics transcribed from its own audio, which hearing.py composes from, for transcribe_job.py:
   - words.py, pure Python: where someone sings, from the stem's loudness against the mix's (`sung_spans`); the words
     outside it dropped (`guard`); nothing sung (`too_little_sung`: under `MIN_SUNG_S`, 10 s; `too_few_words`: under
     `MIN_WORDS`, 8, or `MIN_WORDS_A_MINUTE`, 20, each with its why, "sung 6.2 s", "5 words in 1:10 sung"); the lines
@@ -2244,7 +2429,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   `http://127.0.0.1:8738`, the debug build's 8739 (`Caracole.PORT`, BuildConfig's `SERVER_PORT`), else a free port;
   the launch's secret a cookie, `caracole-launch`, set in the WebView, which loads that exact origin alone,
   `mirror.Links`); the bar's sync button, the library page's sync sheet
-  (`SheetAddress`, `#sheet=sync`; Settings' Export and Import a file open it at theirs, the page's file input reaching
+  (`SheetAddress`, `#sheet=sync`; Settings' Sync, beside Test, opens it at `#sheet=sync`, a blank address said in
+  place as Test says it, and Export and Import a file at theirs, the page's file input reaching
   Android's picker, `FileChooser`, its export the share sheet, `Exports`); Sync on Wi-Fi, that sync unattended
   (`Syncs.run`: `Phone.sync.alone`, a notification on channel `syncs` for the conflicts it left); the queue's work, a
   sync among it, in a foreground service (`SyncService`).
@@ -2720,10 +2906,28 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 ##### Syncing on the phone
 
 - **The rules** are peer_sync.py's, replayed (`SyncReplay`, area `sync`): `Compare`'s kept answers (`keptOf`,
-  `recordKept`, `mergedKept`, `compare(kept=)`, `recordAgreement` dropping each agreed unit's, the base written with a
-  `"kept"` only when it holds one; `PeerState.kept`, the state's `kept`) and `Scope`'s parts (`PARTS`, `partOf`,
-  `listedSongs` through `Songbooks.entryKeys`, `inScope`, `changeOf`, `namesOf`): vectors/sync/kept.jsonl and
-  scope.jsonl.
+  `recordKept`, `mergedKept`, `compare(kept=)`, `recordAgreement` and `recordTaken` dropping each agreed unit's, the
+  base written with a `"kept"` only when it holds one; `PeerState.kept`, the state's `kept`) and `Scope`'s parts
+  (`PARTS`, `partOf`, `listedSongs` through `Songbooks.entryKeys`, `inScope`, `changeOf`, `namesOf`):
+  vectors/sync/kept.jsonl and scope.jsonl.
+- **When the phone agrees**: its take stage records what it took as agreed in the take's own write, right after
+  `Take.applyUnits` (`SyncEngine.agreeTaken`, `Compare.recordTaken` at the computer's `now` as compared), and its
+  agree stage records what the two then hold alike; so a sync that stops after its take (the give refused or cut off,
+  the agree's read of the computer failing, the job cancelled) leaves what it took agreed, and a later change on the
+  computer alone is the computer's (SyncEngineTest's "what a sync took stays agreed …"). The computer, which took
+  nothing, records nothing; the sync still fails. A kill between the take's last unit and that record (one library
+  read and one kv write) leaves those units unrecorded, as before: alike on both, they read as no difference, and
+  the next sync's agree records them, unless the computer changes one meanwhile. An import records the same way in
+  its take's write (`SyncFiles.recordTaken`, with the file's caracole at its `made`, of the units the file speaks for;
+  none for an index export), so one cancelled or killed in its mirror stage leaves what it took agreed, and the same
+  file compared again offers the rest (ImportTest's "an import cancelled in its mirror stage …").
+- **The song keys' rules** (peer_sync.py's): `PeerClient.state` refuses a computer whose state names other rules
+  (`PeerState.keyVersion`, `Units.otherKeys`: an `OtherKeys`, a PeerError, in `Units.OTHER_KEYS`' words), so
+  `compare`, `tested` and `apply`'s compare stage stop before any change (SyncRoutes: 409); Sync on Wi-Fi's probe
+  (`Syncs.run`, the unattended sync's first read) ends as a failed outcome in those words on the bar, never the
+  silence of no caracole answering (any other PeerError or SyncError there); `Give.document` and `SyncFiles.export`
+  say the phone's (`key_version`, Normalize.KEY_VERSION), and `SyncFiles.read` refuses a file of other rules
+  (`FileError.OTHER_KEYS`, SyncFileRoutes: 409). A computer or a file that names none is read as before.
 - **The engine's comparison** (`SyncEngine.compare`) carries, beside its differences, its `kind` (`"computer"` or
   `"file"`), the parts the other side `holds`, the merged `base` and `kept` answers it compared against, the songs
   either side's songbooks `listed` (each songbook difference's document asked of the computer once,
@@ -2746,11 +2950,15 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   entry the reader refuses leaving the unit in Python's words; a `[version]` kept by its key and a `[harmonica]`
   reading by the viewer's checks, which core reaches through `OverrideChecks` (the engine's `checks`: Assembly's
   `OVERRIDE_CHECKS`, `Versions.keyVersion` and `HarpTabs.checkSpec`).
+- **A removal beside its song** (peer_sync's rule): `Compare.answeredByItsSong` takes out of the take each
+  `removed/` unit whose song is given (a sync) or kept (an import, its answer kept beside the song's); one whose
+  song's difference is left is left `Take.SONG_HERE`, never counted taken. A song the take respells is given at its
+  digest as the take ended (`Applied.respelledDigests`, measured in the take's write).
 - **An import** (`compareFile`, then `apply` of its comparison) is a sync with a `.caracole` file (core.sync.file,
   peer_file.py's port: `SyncFiles`, `SyncFile`, `FileSource`, `FileError` in its words, vectors/sync/file.jsonl), in
   `FILE_STAGES` (check, take, mirror, agree, index): the file read and refused whole before anything changes (another
-  format, this library's own export, one no newer than the last sync with its caracole, one that can't be read
-  whole), compared within the parts it holds
+  format, songs keyed by other rules, this library's own export, one no newer than the last sync with its caracole,
+  one that can't be read whole), compared within the parts it holds
   (a part it lacks is never read as a removal), taken from as from the computer, the units taken handed to the
   `pagesFromFile` hook, the agreement kept with the file's caracole at its `made` for the units it speaks for, each
   "keep mine" remembered (`SyncFiles.recordImport`), its indexes merged; it gives nothing back.
@@ -3514,7 +3722,10 @@ nix flake check
     `caracole.cli` and reading a `[youtube]` entry (youtube_urls.py) loads httpx, rich, `caracole.http` or
     `caracole.youtube`.
   - music.py imports mutagen in `read_audio` alone, and lyrics.py (`expected_seconds`) in `_matches`: inbox.py, which
-    the pages import, scores names with its `Names` (`test_music.py::test_the_pages_load_no_tag_reader`,
+    the pages import, scores names with its `Names`, and audio_store.py and commands/audio.py read a file's tags
+    inside the functions that read one (`test_audio_store.py::test_the_store_imports_no_tag_reader`,
+    `test_commands_audio.py::test_registering_the_command_imports_no_tag_reader_or_model`,
+    `test_music.py::test_the_pages_load_no_tag_reader`,
     `::test_the_inbox_loads_no_http_client`).
   - viewer/pinyin.py imports pypinyin in `_read` alone, and viewer/hanzi.py OpenCC in `_converter`: a page of a sheet
     with no Chinese loads neither (`test_viewer_pinyin.py::test_pypinyin_is_loaded_only_for_a_sheet_with_chinese`,
@@ -4139,14 +4350,16 @@ picks one).
 - Write one with `library.write_atomic`: a random temporary name opened exclusively, then a rename. Never `mkstemp`,
   whose mode 0600 hides files from Syncthing.
 - Nothing private or bulky goes there: the database, the lock, caracole serve's request history (`requests.jsonl`,
-  0600), the HTTP cache and the audio taken from YouTube (`cache_dir/youtube/`, youtube_fetch.py) stay in `state_dir`
-  and `cache_dir`, and chordpro works on a copy in a 0700 folder under the cache (render.py).
+  0600), the HTTP cache, the audio taken from YouTube (`cache_dir/youtube/`, youtube_fetch.py) and the audio files you
+  give caracole (`state_dir/audio/`, audio_store.py) stay in `state_dir` and `cache_dir`, and chordpro works on a copy
+  in a 0700 folder under the cache (render.py).
   tests/test_library_safety.py.
 - A removal deletes only what caracole wrote in the song's folder, by name, through descriptors opened with
   `O_NOFOLLOW` from the library down, and names everything it leaves:
   - `removal._caracoles`: kept files, the outputs of a kept sheet (its Traditional PDF among them) or of a render
     record, its exports, a version's or a harmonica tab's page `render:files:` records, LRCLIB's lyrics, info.json;
-  - it never touches Music/, and deletes the song's audio taken from YouTube from the cache (tests/test_removal.py).
+  - it never touches Music/, and deletes the song's audio taken from YouTube from the cache and the audio file you
+    gave it from `state_dir/audio/` (tests/test_removal.py).
 
 ### One caracole at a time
 
@@ -4216,14 +4429,17 @@ picks one).
   `--choose` through get.
 - So does everything else caracole serve queues that the owner asked for just now, so a lookup queued behind it in
   serve's one-at-a-time queue never waits behind the whole run either: `add`, `remove`, `review`, `fetch --song`,
-  `render --song`, `youtube --song` (`--sheet`, `--none`), `youtube --search` and `--video`, and `transcribe`
+  `render --song`, `youtube --song` (`--sheet`, `--none`), `youtube --search` and `--video`, `transcribe` and `audio`
   (`test_commands_lock.py::test_lookups_take_the_lock_in_the_lane_what_the_owner_asked_for_now_as_a_lookup_and_bulk_work_neither`,
+  `test_commands_audio.py::test_it_takes_the_lock_as_asked_for_now`,
   `test_web_jobs.py::test_a_lookup_queued_behind_an_add_never_waits_behind_the_whole_nightly_run`).
   - A process holding the lock as asked for now hands it to the lane's lookups alone (`hand_over`), at its hand-over
-    points (a yt-dlp pause, a YouTube sheet and a transcription before each of vocals, words and chords
-    (`test_transcribe_job.py::test_the_lock_goes_to_a_waiting_lookup_before_each_long_stage`,
+    points (a yt-dlp pause, a YouTube sheet, an audio file's sheet and a transcription before each of vocals, words
+    and chords (`test_transcribe_job.py::test_the_lock_goes_to_a_waiting_lookup_before_each_long_stage`,
     `test_youtube_sheet.py::test_the_lock_goes_to_a_waiting_lookup_before_vocals_words_and_chords`), `fetch --song`'s
-    pauses), taking the gate only if it is free (held, it is the bulk work that let it in), and waits with a ticket
+    pauses, `peer sync --push`'s wait for each push's take but the last: `commands/peer.py` `_handing_over`, a poll
+    a second, so the lock goes a second at most without a hand-over point there), taking the gate only if it is free
+    (held, it is the bulk work that let it in), and waits with a ticket
     of its own, written before it lets go, to
     take it back once the lane is empty; so bulk work that let it in gives it back at its next pause
     (`test_commands_lane.py::test_a_queue_job_lets_a_lookup_go_first_in_its_pause_and_gets_the_lock_back`,
@@ -4301,7 +4517,8 @@ picks one).
     then `INTERRUPTED`, as is one the server ends as it stops (`JobQueue.stop`): over, Try again queues it
     (test_web_history.py).
 - It also writes, for the phone's sync alone, and nothing else: a push's staging folder (`state_dir/peer/push-<id>/`,
-  0700, its files checked by their SHA-256, deleted once `caracole peer take` is over or an hour after); a
+  0700, its files checked by their SHA-256, deleted once `caracole peer take` is over or an hour after, or a push never
+  sent at once, dropped by its pusher, `POST /peer/push/drop`, or let go of as its sender opens another); a
   temporary index export for `GET /api/peer/index` (`cache_dir/peer/`, one read transaction, no lock, deleted once
   sent); and the index pages a phone's lookups read, `POST /peer/index`'s export of them
   (`state_dir/peer/index-<16 hex>.sqlite`, 0600, at most `peer_push.INDEX_OPEN` waiting, read before its 202 as an
@@ -4315,9 +4532,25 @@ picks one).
   deleted once it is open to be sent, or an hour after if never asked, a part a killed process left swept only while
   no export is made); and a file to import's staging folder (`state_dir/peer/import-<16 hex>/`, peer_import.py:
   0700, its `file.caracole` and `open.json` 0600, one at a time, each part 8 MiB at most and the next one, 8 GiB in
-  all), deleted once its import is over, refused at its comparison, dropped (`POST /sync/import/drop`), let go as
-  another is opened when no request names it and it is whole or its upload stopped (`peer_import.let_go`,
-  `STOPPED`), or an hour after its last part, unless an import holds it. Everything else stays a queued command's.
+  all), deleted once its import has taken it with nothing left, refused at its comparison or its import (it can't be
+  read whole, another format, this library's own export, its songs keyed by other rules, a document of it unreadable,
+  nothing newer in it), dropped (`POST /sync/import/drop`), let go as another is opened when no request names it and
+  it is whole or its upload stopped (`peer_import.let_go`, `STOPPED`), or an hour after its last part, unless an
+  import holds it; every other end of an import keeps it, its hold let go and its hour run from that end
+  (`peer_import.kept`), for the page's Compare again: `STALE`, a `--choose` of no difference, a unit left, its indexes
+  not merged, this library unreadable, a "Go on?" answered no, a bug.
+- And for a sheet from an audio file (audio_routes.py), nothing else: an upload staged in `state_dir/audio/`
+  (audio_store.py: 0700, `.upload-<16 hex><ext>` and its `.upload-<id>.json` 0600, one no job names at a time, 128 MiB
+  at most), which `caracole audio --upload` moves into place as the song's audio, dropped (`POST /audio/drop`), let go
+  as another is staged, or swept an hour after unless a waiting or running job names it; nothing is served back from
+  the folder. Everything else stays a queued command's.
+- The copies of the indexes the queued `peer sync` and `peer import` work on are theirs, in `cache_dir/peer/`
+  (`sync-indexes-`, `give-indexes-`, `import-indexes-<12 hex>.sqlite`, an export's `.part` and SQLite's `-journal`,
+  `-wal` and `-shm` beside them): deleted once merged or given, and, one a killed command left, swept an hour after
+  its last write (`peer_push.sweep_copies`: those names alone, regular files, no link followed) as either command
+  starts and as `GET /api/peer/index` comes, never while its command holds it (`peer_push.holding_copy`, an flock
+  from the end of its download, its export or its copy out of the file until its merge or upload is over, gone
+  with a killed process).
 
 ### wanted.txt is the one source of songs
 

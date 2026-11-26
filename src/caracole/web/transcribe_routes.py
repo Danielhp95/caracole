@@ -7,7 +7,7 @@ from the audio now, and its auto sheet made again over them.
                           its Not sung: chords only (``--none``)
     GET  /transcribe      what the library page offers, for its script alone (as /jobs.json is asked): the served
                           page's ``server.transcribe`` as it would be built now (library_page.py
-                          ``transcribe_member``: ``ok``, ``why``, ``songs``, ``nothing``, ``transcribed``,
+                          ``transcribe_member``: ``ok``, ``why``, ``songs``, ``nothing``, ``unsung``, ``transcribed``,
                           ``time``), which the page reads again
                           once a song's job ends, so a song a sheet from a video left without lyrics is offered at
                           once, with no reload

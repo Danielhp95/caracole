@@ -15,6 +15,11 @@ class FileError(message: String) : Exception(message) {
         const val CHANGED = "a file it keeps changed, or is gone, since caracole kept it"
         const val TOO_BIG = "a file it keeps is bigger than a file carries (64 MiB)"
 
+        /** peer_file.OTHER_KEYS: a file of a caracole whose songs are keyed by other rules (its manifest's
+         * `key_version`, Units.otherKeys). */
+        const val OTHER_KEYS = "That file's caracole and this one name songs by different rules: update both to " +
+            "the same version, then export it again."
+
         fun otherFormat(format: String) =
             "That file was made by another version of caracole (format $format): export it again with this one."
 

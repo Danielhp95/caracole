@@ -12,7 +12,8 @@ A removal takes, in this order:
 3. the files caracole wrote out of its folder (``plan_removal`` says which), then
    the folder, and its artist's, once empty;
 4. the audio caracole took from YouTube for it (youtube_fetch.py), from caracole's
-   cache, where nothing else would ever use it.
+   cache, where nothing else would ever use it, and the audio file you gave it
+   (audio_store.py), from caracole's own folder.
 
 The library is synced, so every device lets go of the files too. Files caracole
 didn't write stay where they are, and the removal names each: nothing of yours
@@ -32,6 +33,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 
+from caracole.audio_store import named_by_another, uploaded
 from caracole.config import Config
 from caracole.db import kv_delete, kv_get_json, savepoint
 from caracole.logs import plural
@@ -62,8 +64,9 @@ class RemovalPlan:
     its place). ``elsewhere`` holds kept files the database places in another
     folder, which stay. ``wanted_lines`` are the song's lines in wanted.txt, and
     ``wanted_problem`` why the file can't be read. ``audio`` is the purchase the
-    song lets go of, and ``youtube_audio`` the files of audio caracole took from
-    YouTube for it, in its cache, which go.
+    song lets go of, ``youtube_audio`` the files of audio caracole took from
+    YouTube for it, in its cache, and ``uploaded_audio`` the audio file you gave
+    it, in ``state_dir/audio/`` (audio_store.py), which go.
     """
 
     song: Song
@@ -77,6 +80,7 @@ class RemovalPlan:
     audio: str | None = None
     versions: int = 0
     youtube_audio: tuple[str, ...] = ()
+    uploaded_audio: str | None = None
 
 
 @dataclass
@@ -117,9 +121,13 @@ def plan_removal(conn: sqlite3.Connection, cfg: Config, song: Song) -> RemovalPl
     lines, wanted_problem = _wanted_lines(cfg, song)
     versions = conn.execute("SELECT COUNT(*) FROM versions WHERE song_id = ?", (song.id,)).fetchone()[0]
     youtube = _youtube_audio(conn, cfg, song)
-    bought = song.audio_path if song.audio_path and song.audio_path not in youtube else None
+    given = uploaded(cfg, song)
+    shared = given is not None and named_by_another(conn, given, song.id)  # another song's audio too: it stays
+    bought = (song.audio_path if song.audio_path and song.audio_path not in youtube and given is None else None)
+    if shared:
+        given = None
     return RemovalPlan(song, folder, tuple(sorted(delete)), tuple(sorted(keep)), problem, tuple(elsewhere),
-                       lines, wanted_problem, bought, versions, youtube)
+                       lines, wanted_problem, bought, versions, youtube, str(given) if given else None)
 
 
 def remove_song(conn: sqlite3.Connection, cfg: Config, plan: RemovalPlan, *, now: datetime | None = None
@@ -160,6 +168,13 @@ def remove_song(conn: sqlite3.Connection, cfg: Config, plan: RemovalPlan, *, now
             pass
         except OSError as e:  # the next youtube step's tidy deletes it: no song names it now
             result.errors.append(f"can't delete {path}: {e.strerror or e}")
+    if plan.uploaded_audio:
+        try:
+            Path(plan.uploaded_audio).unlink()
+        except FileNotFoundError:
+            pass
+        except OSError as e:  # the next scan step's tidy deletes it (audio_store.py): no song names it now
+            result.errors.append(f"can't delete {plan.uploaded_audio}: {e.strerror or e}")
     return result
 
 
@@ -180,6 +195,8 @@ def describe(plan: RemovalPlan, cfg: Config) -> tuple[list[str], list[str], list
     goes.append(record + (f" and {plural(plan.versions, 'version')} seen of it" if plan.versions else ""))
     if plan.youtube_audio:
         goes.append("the audio caracole took from YouTube for it, from caracole's cache")
+    if plan.uploaded_audio:
+        goes.append("the audio file you gave it, from caracole's own folder")
     stays = [f"{folder}{name}: {why}" for name, why in plan.keep]
     if plan.folder_problem:
         stays.append(f"{folder}: {plan.folder_problem}, so nothing in it is deleted")
@@ -192,8 +209,9 @@ def describe(plan: RemovalPlan, cfg: Config) -> tuple[list[str], list[str], list
 
 def brief(plan: RemovalPlan) -> str:
     """What removing the song takes and leaves, in one sentence, as the web page's card says it while it counts
-    down to the removal: caracole's files of the song, its record, its wanted.txt lines and the audio caracole
-    took from YouTube; what stays in its folder; never Music/. ``describe`` says it whole."""
+    down to the removal: caracole's files of the song, its record, its wanted.txt lines, the audio caracole
+    took from YouTube and the audio file you gave it; what stays in its folder; never Music/. ``describe`` says
+    it whole."""
     goes = []
     if plan.delete:
         goes.append(f"our {plural(len(plan.delete), 'file')} for it")
@@ -203,6 +221,8 @@ def brief(plan: RemovalPlan) -> str:
         goes.append("its wanted.txt line" if n == 1 else f"its {n} wanted.txt lines")
     if plan.youtube_audio:
         goes.append("its YouTube audio")
+    if plan.uploaded_audio:
+        goes.append("the audio file you gave it")
     said = "Deletes " + (", ".join(goes[:-1]) + " and " + goes[-1] if len(goes) > 1 else goes[0])
     left = len(plan.keep) + len(plan.elsewhere)
     if plan.folder_problem:

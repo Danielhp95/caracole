@@ -1090,3 +1090,25 @@ def test_none_is_refused_for_a_song_with_no_transcript_and_changes_nothing(conn,
     assert separator.calls == transcriber.calls == recognizer.calls == []
     assert kv_get(conn, f"{HEARD_NOTHING}{song.id}") is None
     assert why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) is None
+
+
+def test_transcribe_anyway_over_audio_whisper_cant_read_leaves_no_offer_over_that_file(conn, cfg, monkeypatch):
+    # Too little singing: caracole noted nothing sung, Whisper never run. Transcribe anyway: Whisper can't load the
+    # file. Its verdict of nothing sung goes with it, so the card offers no Transcribe anyway that can only fail
+    # again; asked again, the refusal says what to do.
+    from caracole.autochords.transcript import offers
+
+    monkeypatch.setattr(separate, "frame_db", lambda path, **kwargs: [-80.0] * 1200 if Path(path).name == "vocals.wav"
+                        else list(MIX))
+    song = offered(conn, cfg)
+    assert make(cfg)[0].failed == "no singing heard" and offers(conn, cfg, Overrides())["nothing"] == [song.id]
+    fail = RuntimeError("Failed to load audio: [mov,mp4] moov atom not found")
+    result, _ = make(cfg, transcriber=Transcriber(fail=fail), force=True)
+    assert result.failed.startswith("Whisper can't read the audio: a new file")
+    song = get_song(conn, song.id)
+    assert not heard_nothing(conn, song)
+    assert offers(conn, cfg, Overrides()) == {"songs": [], "nothing": [], "unsung": [], "transcribed": []}
+    refused, _ = make(cfg)
+    assert refused.refused.endswith("Whisper can't read its audio (a new file, or another video under [youtube], gets "
+                                    "its words heard; after an ffmpeg or Whisper upgrade, caracole transcribe --force "
+                                    "tries it again)")

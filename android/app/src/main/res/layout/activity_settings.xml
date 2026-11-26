@@ -49,13 +49,26 @@
                 android:maxLines="1"
                 android:minHeight="48dp" />
 
-            <!-- Test: the computer at that address asked what it holds, nothing changed (SyncRoutes.tested). Syncing
-                 itself is the bar's sync button's, on the library screen. -->
-            <Button
-                android:id="@+id/test"
-                android:layout_width="wrap_content"
+            <!-- Test: the computer at that address asked what it holds, nothing changed (SyncRoutes.tested). Sync, right
+                 after it: the library page's sync sheet for that address, as the bar's sync button opens it. -->
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/test" />
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/test"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/test" />
+
+                <Button
+                    android:id="@+id/open_sync"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="@string/sync" />
+            </LinearLayout>
 
             <TextView
                 android:id="@+id/test_result"

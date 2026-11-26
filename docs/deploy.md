@@ -28,7 +28,7 @@ It also gets a data folder, `/var/lib/caracole` unless you choose another. Don't
 |---|---|
 | `library` | sheets, lyrics, guitar parts, `_todo.md`, `index.html`, `wanted.txt`, `overrides.toml`, `songbooks.toml`, `_inbox/`: synced to your devices |
 | `music` | audio you bought, read-only, for auto-chords |
-| `state` | the database, its last three copies (`backups/`, made at the end of each nightly run) and caracole's lock, `caracole`'s alone: back it up, never sync it |
+| `state` | the database, its last three copies (`backups/`, made at the end of each nightly run), the audio files you give caracole (`audio/`) and caracole's lock, `caracole`'s alone: back it up, never sync it |
 | `cache` | every raw HTTP response, kept forever: losing it costs only requests |
 
 caracole keeps no credentials. ntfy is only a topic URL, readable by anyone who knows it and by

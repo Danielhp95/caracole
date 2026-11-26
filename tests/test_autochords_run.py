@@ -1885,6 +1885,23 @@ def test_a_chords_only_sheet_is_made_again_once_when_nothing_sung_is_noted(conn,
     assert (run(conn, cfg, rec).skipped, rec.calls) == (1, [])
 
 
+def test_a_transcript_after_a_nothing_sung_sheet_makes_it_due_and_remade_over_its_words(conn, cfg, tmp_path):
+    # Transcribe anyway after caracole heard nothing: the transcript comes after a sheet that says nothing sung was
+    # heard; the sheet is due, and made again over the words, the note gone.
+    from caracole.autochords.transcript import NOTE, SILENT
+
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"), seconds=10.0)
+    silent(conn, s)
+    run(conn, cfg)
+    assert SILENT in auto_sheet(cfg, conn, s) and auto_raw(conn, s)["heard_nothing"] is True
+    transcribed(conn, get_song(conn, s.id))
+    rec = FakeRecognizer()
+    assert (run(conn, cfg, rec).generated, rec.calls) == (1, [Path(s.audio_path)])
+    text = auto_sheet(cfg, conn, s)
+    assert NOTE in text and SILENT not in text and "Walking down the river road" in text
+    assert "heard_nothing" not in auto_raw(conn, s) and auto_raw(conn, s)["lyrics_source"] == "transcript"
+
+
 def test_a_sites_lyrics_later_replace_a_nothing_sung_sheet(conn, cfg, tmp_path):
     from caracole.autochords.transcript import SILENT
 
@@ -2224,10 +2241,80 @@ def test_a_lookup_goes_first_between_the_vocals_and_the_words(conn, cfg, tmp_pat
     finally:
         hearing.close()
     if lookup == "does nothing":
-        assert order == ["separator", "lookup", "transcriber"] and stats.heard == 1 and over_words(conn, s)
+        assert order == ["separator", "lookup", "transcriber", "lookup"] and stats.heard == 1 and over_words(conn, s)
     else:  # the words aren't heard over vocals of other audio, nor for a song no longer offered them
         assert order == ["separator", "lookup"] and stats.heard == 0
         assert stats.generated == (1 if lookup == "replaces the audio" else 0)
+
+
+def test_a_lookup_goes_first_between_the_words_and_the_chords(conn, cfg, tmp_path, loud):
+    # As the jobs let one go first before each long stage: after the words, before the chords, the song read again;
+    # a human sheet a lookup kept meanwhile gets no auto sheet, its transcript kept unused.
+    from caracole.autochords.transcript import transcript_of
+
+    s = offered_song(conn, cfg, tmp_path, "River Road")
+    order: list[str] = []
+
+    def between() -> bool:
+        order.append("lookup")
+        if order.count("lookup") == 2:  # the one after the words
+            keep_human_sheet(conn, cfg, s)
+        return True
+
+    hearing = hearing_of(cfg, log=order)
+    try:
+        stats = run(conn, cfg, hearing=hearing, transcriptions=3, between=between)
+    finally:
+        hearing.close()
+    assert order == ["separator", "lookup", "transcriber", "lookup"]
+    assert (stats.heard, stats.generated) == (1, 0)
+    assert transcript_of(conn, get_song(conn, s.id)) is not None
+
+
+def test_a_hearing_that_failed_one_night_is_passed_over_the_next_so_another_song_is_heard(conn, cfg, tmp_path, loud):
+    # One song's file failing the separator must not stop every night's hearing: noted for that audio, the next
+    # nights pass over it without a slot or a separation, and hear the next song offered; after 30 days, or with a
+    # new file, it is tried again. By hand it stays offered as ever.
+    from datetime import timedelta
+
+    from test_transcribe_job import Separator
+
+    from caracole.autochords.transcript import HEARING_FAILED, hearing_failed, why_not_offered
+
+    older = offered_song(conn, cfg, tmp_path, "Older", added_at="2026-10-01T00:00:00Z")
+    newer = offered_song(conn, cfg, tmp_path, "Newer", added_at="2026-10-02T00:00:00Z")
+    night = datetime(2026, 11, 25, 3, 0, tzinfo=UTC)
+    first = hearing_of(cfg, separator=Separator(fail="its vocals are 3.5 s shorter than the song"))
+    try:
+        stats = run(conn, cfg, hearing=first, transcriptions=3, now=night)
+    finally:
+        first.close()
+    assert len(first.separator.calls) == 1 and first.transcriber.calls == []  # the newest, then no more this run
+    assert stats.transcribe_problem == "the separator can't run here (its vocals are 3.5 s shorter than the song)"
+    record = kv_get_json(conn, f"{HEARING_FAILED}{newer.id}")
+    assert (record["audio"], record["audio_mtime"], record["at"], record["words"]) == (
+        newer.audio_path, newer.audio_mtime, "2026-11-25T03:00:00Z", stats.transcribe_problem)
+    assert kv_get(conn, f"{HEARING_FAILED}{older.id}") is None
+    newer = get_song(conn, newer.id)
+    assert why_not_offered(conn, cfg, newer, Overrides()) is None  # by hand, offered as ever
+    second = hearing_of(cfg)
+    try:
+        stats = run(conn, cfg, hearing=second, transcriptions=1, now=night + timedelta(days=1))
+    finally:
+        second.close()
+    assert [mix.name for mix, _ in second.separator.calls] == ["Older.wav"]  # no slot, no separation for the newer
+    assert stats.heard == 1 and over_words(conn, older) and not over_words(conn, newer)
+    assert hearing_failed(conn, newer, night + timedelta(days=29)) is not None
+    assert hearing_failed(conn, newer, night + timedelta(days=31)) is None  # the 30 days gone by
+    moved = with_audio(conn, tmp_path, newer, seconds=60.0, name="Newer (2).wav")  # a new file: a new start
+    assert hearing_failed(conn, moved, night + timedelta(days=2)) is None
+    third = hearing_of(cfg)
+    try:
+        stats = run(conn, cfg, hearing=third, transcriptions=1, now=night + timedelta(days=2))
+    finally:
+        third.close()
+    assert [mix.name for mix, _ in third.separator.calls] == ["Newer (2).wav"] and stats.heard == 1
+    assert kv_get(conn, f"{HEARING_FAILED}{newer.id}") is None  # a hearing that came to something drops it
 
 
 def test_a_run_for_one_song_leaves_the_nights_hearing_record_alone(conn, cfg, tmp_path, monkeypatch):

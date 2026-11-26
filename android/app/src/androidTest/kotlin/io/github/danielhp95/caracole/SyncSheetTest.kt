@@ -11,6 +11,12 @@ import android.webkit.WebView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.action.ViewActions.click
+import androidx.test.espresso.action.ViewActions.replaceText
+import androidx.test.espresso.action.ViewActions.scrollTo
+import androidx.test.espresso.assertion.ViewAssertions.matches
+import androidx.test.espresso.matcher.RootMatchers.isPlatformPopup
+import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
+import androidx.test.espresso.matcher.ViewMatchers.withText
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -114,6 +120,49 @@ class SyncSheetTest {
         }
         Log.i(TAG, "RESULT $found")
     }
+
+    @Test
+    fun settingsSyncBesideTestOpensTheSheetForTheAddressAndSaysABlankOneInPlace() {
+        Settings(context).server = server!!
+        // No `use`: the sheet's start of MainActivity (single-task) finishes Settings, and the scenario's own
+        // activity may have gone with the hand-over, so the screens are finished by hand.
+        val main = ActivityScenario.launch(MainActivity::class.java)
+        try {
+            val sheet = SyncSheet { script -> Pages.evaluate(main, script) }
+            sheet.libraryLoaded()
+
+            // Settings from the bar's ⋮, its field emptied: Sync opens nothing and says what Test says.
+            onView(withId(R.id.more)).perform(click())
+            onView(withText(R.string.settings)).inRoot(isPlatformPopup()).perform(click())
+            onView(withId(R.id.address)).perform(scrollTo(), replaceText(""))
+            onView(withId(R.id.open_sync)).perform(scrollTo(), click())
+            onView(withId(R.id.test_result)).check(matches(isDisplayed()))
+            var said = ""
+            instrumentation.runOnMainSync {
+                said = resumedSettings().findViewById<android.widget.TextView>(R.id.test_result).text.toString()
+            }
+            record("blank", said)
+            assertTrue(said, said.isNotBlank() && said != context.getString(R.string.testing))
+            assertFalse("the sheet stays shut", sheet.state().getBoolean("open"))
+
+            // The address typed: the library screen comes back with the sheet, which compares.
+            onView(withId(R.id.address)).perform(replaceText(server!!))
+            onView(withId(R.id.open_sync)).perform(scrollTo(), click())
+            val compared = sheet.compared()
+            record("compared", compared)
+            assertTrue(compared.toString(), compared.getString("title").startsWith("Sync with "))
+            sheet.click("sync-cancel")
+        } finally {
+            instrumentation.runOnMainSync {
+                ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED).forEach { it.finish() }
+            }
+        }
+        Log.i(TAG, "RESULT $found")
+    }
+
+    private fun resumedSettings(): SettingsActivity =
+        ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED)
+            .filterIsInstance<SettingsActivity>().first()
 
     @Test
     fun theNotificationOfASyncThatLeftAConflictOpensTheSheetAtItsCard() {

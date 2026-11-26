@@ -2,6 +2,7 @@ package io.github.danielhp95.caracole.core.sync.file
 
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.json.Canonical
+import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.sync.Compare
 import io.github.danielhp95.caracole.core.sync.PeerError
 import io.github.danielhp95.caracole.core.sync.Units
@@ -112,6 +113,8 @@ class SyncFilesTest {
         assertEquals(state.mapValues { it.value.digest }, read.state!!.units.mapValues { it.value.digest })
         val manifest = read.manifest
         assertEquals(JsonPrimitive(Units.FORMAT), manifest["sync"])
+        assertEquals(JsonPrimitive(Normalize.KEY_VERSION), manifest["key_version"])  // the rules its songs are keyed by
+        assertEquals(JsonPrimitive(Normalize.KEY_VERSION), read.state!!.keyVersion)
         assertEquals(JsonPrimitive(state.keys.count { it.startsWith("song/") }), manifest["songs"])
         assertEquals(JsonArray(emptyList()), manifest["indexes"])
         FileSource(read, null, library).use { source ->
@@ -170,6 +173,26 @@ class SyncFilesTest {
                      refused(zip(listOf("caracole.json" to manifest.replace("\"format\":1", "\"format\":2").toByteArray()) + members.drop(1))))
         assertEquals(FileError.otherFormat("1, its sync's 2"),
                      refused(zip(listOf("caracole.json" to manifest.replace("\"sync\":${Units.FORMAT}", "\"sync\":2").toByteArray()) + members.drop(1))))
+    }
+
+    @Test fun aFileWhoseSongsAreKeyedByOtherRulesIsRefusedAndOneThatSaysNoneIsReadAsBefore() {
+        val (database, library) = library("sync/fixtures/rich.jsonl")
+        val members = members(export(database, library)).map { it.first.name to it.second }
+        val manifest = members[0].second.toString(Charsets.UTF_8)
+        val ours = Normalize.KEY_VERSION
+        val said = "\"key_version\":$ours"
+        assertTrue(said in manifest, manifest)
+        fun saying(keys: String?) = zip(listOf("caracole.json" to
+            (if (keys == null) manifest.replace("$said,", "") else manifest.replace(said, "\"key_version\":$keys"))
+                .toByteArray()) + members.drop(1))
+        for (other in listOf("${ours + 1}", "${ours - 1}", "\"$ours\"")) {
+            assertEquals(FileError.OTHER_KEYS, refused(saying(other)), other)
+        }
+        // An older caracole's file names none: read as before, as peer_file reads it.
+        for (same in listOf(null, "null", "$ours.0")) {
+            val file = tmp.newFile().apply { writeBytes(saying(same)) }
+            SyncFiles.checkWhole(SyncFiles.read(file))
+        }
     }
 
     /** The zip [data] with its central directory declaring the member [name] [size] bytes (the corpus's _declaring). */

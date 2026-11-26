@@ -74,6 +74,7 @@ object Lrclib {
     private const val TEXT_MATCH_S = 10.0 // a text match is accepted this far off; beyond it, keys must be equal
 
     private const val HAN = "[\\u3400-\\u4dbf\\u4e00-\\u9fff\\uf900-\\ufaff\\U00020000-\\U0002ebef]"
+    private val CJK_MARKS by lazy { PyRegex.compile("[「」『』【】《》〈〉〖〗〔〕]") }
     private val HAN_GAP by lazy { PyRegex.compile("(?<=$HAN)[\\W_]+(?=$HAN)") }
 
     /** lyrics._OTHER_VERSION: words of a title that make it another kind of version than the song's. */
@@ -159,7 +160,12 @@ object Lrclib {
 
     /** lyrics._search_title: the title `/api/search` is given, its Han text split by punctuation joined (a wanted line
      * may write 斑马，斑马 where LRCLIB lists 斑马斑马). */
-    fun searchTitle(track: String): String = PyRe.sub(HAN_GAP, track) { "" }
+    fun searchTitle(track: String): String {
+        var title = track
+        // A CJK bracket is punctuation to the search: each becomes a gap first, never half a pair left behind.
+        if (PyRe.search(CJK_MARKS, title) != null) title = Py.split(PyRe.sub(CJK_MARKS, title) { " " }).joinToString(" ")
+        return PyRe.sub(HAN_GAP, title) { "" }
+    }
 
     // --- reading LRCLIB's answers -----------------------------------------------------------------------------------
 

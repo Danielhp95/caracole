@@ -1,6 +1,9 @@
 package io.github.danielhp95.caracole
 
+import io.github.danielhp95.caracole.core.sync.OtherKeys
+import io.github.danielhp95.caracole.core.sync.PeerError
 import io.github.danielhp95.caracole.core.sync.SyncEngine
+import io.github.danielhp95.caracole.core.sync.Units
 import io.github.danielhp95.caracole.mirror.Http
 import io.github.danielhp95.caracole.server.jobs.JobQueue
 import io.github.danielhp95.caracole.server.jobs.JobSpec
@@ -134,6 +137,30 @@ class SyncsTest {
         assertEquals(emptyList(), notified, "nothing said")
         assertEquals(0, cleared, "no notification taken back either")
     }
+
+    @Test
+    fun `the probe finding a caracole whose songs are keyed by other rules says so as a failed sync, asking no more`() =
+        runBlocking {
+            // A caracole answers, but one side's key bump makes the two name songs by different rules: never "no
+            // caracole here" (the last outcome, "Up to date", kept up for good), but the refusal, in its words.
+            val earlier = Outcome(1_000L, true, "Up to date")
+            val settings = settings("192.168.1.20:8737").also { it.lastOutcome = earlier }
+            Caracole.status.value = SyncState.Ended(earlier)
+            val outcome = Syncs.run(settings, probe = true, http = Http(), ask = { throw OtherKeys(Units.OTHER_KEYS) },
+                                    phone = { error("the phone's caracole was asked") }, cleared = { cleared++ }) { n, songs ->
+                notified.add(n to songs)
+            }!!
+            assertFalse(outcome.ok)
+            assertEquals(Units.OTHER_KEYS, outcome.text)
+            assertEquals(outcome, settings.lastOutcome)
+            assertEquals(SyncState.Ended(outcome), Caracole.status.value)
+            assertEquals(emptyList(), notified)
+            assertEquals(0, cleared)
+            // Any other PeerError, as SyncError, is still no caracole answering: nothing done, nothing said.
+            assertNull(Syncs.run(settings, probe = true, http = Http(), ask = { throw PeerError("not a caracole") },
+                                 phone = { error("asked") }) { _, _ -> error("notified") })
+            assertEquals(outcome, settings.lastOutcome)
+        }
 
     @Test
     fun `asked by hand, nothing answering is said`() = runBlocking {

@@ -3091,8 +3091,8 @@ def test_the_router_answers_the_routes_of_each_route_module_and_each_lists_its_o
     from caracole.web.app import route_for, routes
 
     names = sorted(m.name for m in pkgutil.iter_modules(web.__path__) if m.name.endswith("_routes"))
-    assert names == ["export_routes", "guitar_routes", "harmonica_routes", "jobs_routes", "library_routes",
-                     "offline_routes", "peer_routes", "remove_routes", "review_routes", "search_routes",
+    assert names == ["audio_routes", "export_routes", "guitar_routes", "harmonica_routes", "jobs_routes",
+                     "library_routes", "offline_routes", "peer_routes", "remove_routes", "review_routes", "search_routes",
                      "songbook_routes", "sync_file_routes", "sync_routes", "transcribe_routes", "ug_link_routes",
                      "versions_routes", "youtube_routes"]
     gathered = []
@@ -3152,6 +3152,7 @@ def test_the_body_limit_is_the_routes_else_16_kib(app):
     assert app.body_limit("POST", "/peer/push/new") == 1024 * 1024
     assert app.body_limit("POST", "/peer/push/file?push=0123456789abcdef&sha256=00") == 64 * 1024 * 1024
     assert app.body_limit("POST", "/peer/push?push=0123456789abcdef") == 16 * 1024 * 1024
+    assert app.body_limit("POST", "/peer/push/drop") == 16 * 1024
     for target in ("/nowhere", "/%ff", "/api/peer/state", "/peer/pull/x", "/peer/push/new/x"):
         assert app.body_limit("POST", target) == 16 * 1024, target
 
