@@ -12,7 +12,8 @@ import android.os.SystemClock
  * What the phone says of its heat and its battery (the design's §3.4), each read as far as its Android gives it and
  * none a crash: the thermal status from API 29 ([PowerManager.getCurrentThermalStatus], its names [statusName]), the
  * thermal headroom forecast 10 s ahead from API 30 ([PowerManager.getThermalHeadroom], asked at most every 10 s, the
- * last answer between; NaN, unsupported or asked too soon: null), the battery's charge counter in µAh and its percent ([BatteryManager]'s properties,
+ * last answer between; NaN, unsupported or asked too soon: null), the battery's charge counter in µAh and its
+ * percent ([BatteryManager]'s properties,
  * null where the gauge gives none), whether it is plugged in (the sticky battery broadcast) and Battery Saver. An API
  * the phone lacks, or one that throws, is [UNKNOWN] or null.
  */

@@ -257,7 +257,8 @@ class BenchReportTest {
         val beat = BeatParity("long", BenchReport.BEATS_FP16, 4, true, 0.39f, 1.0, null)
         val session = Session(BenchReport.BEATS_FP16, 4, true, "off", 2.5, 900_000, 1, 2, null, "hot", pid = 99,
             fresh = true, complete = true, outOfMemory = true)
-        val sent = SessionResult(session, listOf(r), listOf(btc), listOf(beat), ended = false, nextSeconds = 240.5)
+        val sent = SessionResult(session, listOf(r), listOf(btc), listOf(beat), ended = false, nextSeconds = 240.5,
+            seq = 7)
         val back = BenchCodec.decode(BenchCodec.encode(sent))
         assertEquals(sent, back)
         assertEquals(session, back.session)
@@ -275,6 +276,51 @@ class BenchReportTest {
         assertEquals(2, out.getValue("sessions").jsonArray.size)
         assertEquals(2, out.getValue("runs").jsonArray.size)
         assertEquals(1, out.getValue("parity").jsonObject.getValue("btc").jsonArray.size)
+    }
+
+    private fun ended(stopped: String? = null, failure: String? = null) = SessionResult(
+        Session(BenchReport.BEATS_FP16, 4, false, "on", 0.7, 800_000, null, null, failure, stopped),
+        emptyList(), emptyList(), emptyList())
+
+    @Test fun onlyStopAndHeatEndTheBenchAHungOrDeadSessionIsFollowedByTheNext() {
+        val endings = mapOf(
+            "hang" to ended(failure = "no word from the session for 5 minutes: given up, its run in flight left out"),
+            "died" to ended(failure = "the session's process died before its end: Android killed it for memory"),
+            "error" to ended(failure = "OrtException: some error"),
+            "heat" to ended(stopped = "the phone's thermal status reached critical"),
+            "stop" to ended(stopped = Bench.STOPPED),
+            "stop given up" to ended(stopped = "${Bench.STOPPED}: its run in flight didn't end within a minute"),
+        )
+        for ((name, first) in endings) {
+            val ran = mutableListOf<Int>()
+            val results = Bench.runSessions(listOf(1, 2, 3), stopAsked = { false }) { n ->
+                ran += n
+                if (n == 1) first else ended()
+            }
+            val goesOn = name in setOf("hang", "died", "error")
+            assertEquals(name, if (goesOn) listOf(1, 2, 3) else listOf(1), ran)
+            assertEquals(name, ran.size, results.size)
+        }
+        // The owner's Stop, asked between two sessions, starts no other.
+        var asked = false
+        val ran = mutableListOf<Int>()
+        Bench.runSessions(listOf(1, 2, 3), stopAsked = { asked }) { n -> ran += n; asked = true; ended() }
+        assertEquals(listOf(1), ran)
+    }
+
+    @Test fun aSessionsWritesAreTakenByTheirNumberNeverTheirTime() {
+        val writes = SessionWrites()
+        fun text(seq: Int, next: Double?) =
+            BenchCodec.encode(ended().copy(seq = seq, ended = false, nextSeconds = next))
+        // Two writes of one run boundary, as the file system may stamp them in the same millisecond.
+        assertTrue(writes.take(text(1, null)))
+        assertTrue("the next write, whatever its time", writes.take(text(2, 240.0)))
+        assertEquals(240.0, writes.last!!.nextSeconds!!, 0.0)
+        assertFalse("the same write read again is nothing new", writes.take(text(2, 240.0)))
+        assertFalse("an older one is never taken over a newer", writes.take(text(1, null)))
+        assertFalse("a write half done is passed over", writes.take("{\"seq\": 3"))
+        assertFalse(writes.take(null))
+        assertEquals(2, writes.last!!.seq)
     }
 
     @Test fun btcParityCountsOnlyTheDisagreementsWhereTheComputerWasSure() {

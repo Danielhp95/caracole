@@ -342,7 +342,8 @@ object BenchReport {
             else theirs.maxOf { it.hearingPeakKb!! }
             val memoryNote = when {
                 theirs.isEmpty() -> "no session of this setting measured its hearing's peak"
-                theirs.any { it.outOfMemory } -> "a session of this setting ran out of memory: see sessions[].failure"
+                theirs.any { it.outOfMemory } -> "a session of this setting could not finish for memory on this " +
+                    "phone (it ran out of memory): see sessions[].failure"
                 theirs.any { it.failure != null || it.stopped != null || !it.complete } ->
                     "a session of this setting didn't finish its runs, so its peak is no hearing's: see " +
                         "sessions[].failure and sessions[].stopped"

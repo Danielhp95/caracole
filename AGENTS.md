@@ -2230,7 +2230,9 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     each session), in process `:bench`; each session in a fresh process, `:benchrun` (`BenchSessions.run` binds
     `BenchWorkerService` a session, its result a file, unbound and gone before the next; given up after no write for
     four times the run in flight's audio (5 minutes at least), or a minute after Stop, its last write kept and why it
-    ended said; Android's exit reason read for memory; what a crashed one left swept as the bench starts); the folder
+    ended said (a hang or a dead process its failure, the bench going on; only Stop and the heat guard end the bench,
+    `Bench.endsTheBench`, `runSessions`); its writes numbered, read by their number (`SessionWrites`), a failed rename
+    its failure; Android's exit reason read for memory; what a crashed one left swept as the bench starts); the folder
     the owner picks (`BenchFolder`, the Storage Access Framework: the model files, checked by models.json's SHA-256 and
     copied into `no_backup/bench-models/`, `BenchModels`; the references; the report) and the clips as debug assets
     (`autochords/`, app/build.gradle.kts). `ChordsBenchTest` (`device-test.sh --ml`) runs its sessions over the clips on

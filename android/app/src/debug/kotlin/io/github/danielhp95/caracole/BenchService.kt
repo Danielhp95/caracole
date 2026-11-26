@@ -14,6 +14,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import io.github.danielhp95.caracole.ml.AndroidProbe
 import io.github.danielhp95.caracole.ml.Battery
+import io.github.danielhp95.caracole.ml.Bench
 import io.github.danielhp95.caracole.ml.BenchInputs
 import io.github.danielhp95.caracole.ml.BenchReport
 import io.github.danielhp95.caracole.ml.Device
@@ -60,7 +61,8 @@ internal object BenchClips {
  * The Chords bench, in the foreground (a special use, the debug build's alone) with a partial wake lock, so that it
  * goes on with the screen off: a session a model, thread count and arena setting, each in a fresh process
  * ([BenchSessions]), over the committed clips and the folder's references, once with the screen kept on, then, if
- * asked, again once the owner has turned it off. A session the heat guard stopped stops the bench. The report,
+ * asked, again once the owner has turned it off. Only the owner's Stop and a session the heat guard stopped end the
+ * bench; a session given up for a hang, or whose process died, is its failure, and the next one runs. The report,
  * `caracole-bench-<UTC>.json`, is written into the folder after each session and at the end, with the battery over
  * the whole bench.
  */
@@ -159,8 +161,9 @@ class BenchService : Service() {
             null -> "plugged in or not: unknown"
         } + if (start.powerSave == true) ", Battery Saver on" else "")
         var round = ""
-        for (spec in sessions) {
-            if (BenchSession.stopAsked) break
+        // Only the owner's Stop and the heat guard end the bench (Bench.endsTheBench); a session given up for a hang,
+        // or whose process died, is that session's failure, and the next one runs.
+        Bench.runSessions(sessions, stopAsked = { BenchSession.stopAsked }) { spec ->
             if (spec.round != round) {
                 round = spec.round
                 if (round == "on") {
@@ -182,10 +185,10 @@ class BenchService : Service() {
             }
             results += result
             save()
-            if (result.session.stopped != null) {
+            if (result.session.stopped?.startsWith(Bench.TOO_HOT) == true) {
                 say("the bench stops: ${result.session.stopped}; let the phone cool before another")
-                break
             }
+            result
         }
         save()
         say(if (BenchSession.stopAsked) "stopped; the report so far: $name" else "done: $name, in the folder")

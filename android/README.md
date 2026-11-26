@@ -806,12 +806,23 @@ process, so that its memory is its own; starting one costs a second or two. Each
 (`pid`) and says whether it was `fresh` (no earlier session's process still up). A session writes what it measured after
 every run, so whatever ends it (Stop, a crash, Android killing it, a hang) loses only the run in flight. One that writes
 nothing for longer than a run of its could take (four times the audio of the run in flight, 5 minutes at least), or
-whose run in flight doesn't end within a minute of Stop, is given up, its finished runs kept, and the bench goes on; the
-session says why it ended (`failure`, or `stopped`). A session loads its model first and times the load apart. Each
-run's `rss_peak_mb` is its true peak (the process's peak memory, reset as the run begins), or null with `"reset": false`
-where the phone refused the reset. `pss_peak_mb` is sampled once a second: a run of BTC lasts about a tenth of that, so
-its PSS is a reading taken around the call. If the phone's thermal status reaches critical, the session stops, keeping
-what it measured, and the bench stops after it; the report says why.
+whose run in flight doesn't end within a minute of Stop, is given up, its finished runs kept. What you see for each
+ending: A session loads its model first and times the load apart. Each run's `rss_peak_mb` is its true peak (the
+process's peak memory, reset as the run begins), or null with `"reset": false` where the phone refused the reset.
+`pss_peak_mb` is sampled once a second: a run of BTC lasts about a tenth of that, so its PSS is a reading taken around
+the call.
+
+- **Stop**: the session ends after its run in flight (given up after a minute, that run left out), with `stopped`
+  "stopped by the owner (Stop)", and no other session starts.
+- **Too hot**: when the phone's thermal status reaches critical, the session stops before its next run, with `stopped`
+  "the phone's thermal status reached critical", and the bench stops after it: let the phone cool.
+- **A hang**: a session given up for writing nothing has `failure` "no word from the session for N minutes: given
+  up…", and the bench goes on to the next session.
+- **A process that died**: `failure` "the session's process died before its end" (with ": Android killed it for
+  memory" when Android's own record says so), and the bench goes on to the next session.
+
+In each case the session's finished runs are kept, and it has no trusted hearing peak (`complete: false`), so its
+setting's `memory_ok` is null, or false when it ran out of memory.
 
 1. **Install the debug build**: `android/scripts/phone-install.sh` (above). The APK is about 98 MB, the runtime's
    libraries most of it; it holds no model file.

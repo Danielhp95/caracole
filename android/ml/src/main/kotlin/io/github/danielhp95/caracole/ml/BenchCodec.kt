@@ -20,9 +20,11 @@ import kotlinx.serialization.json.put
 
 /** What one session's process measured, whole: its [Session], its runs and its parity entries; [ended] once the
  * session is over (false in the writes it makes after each run as it goes), [nextSeconds] the audio's length of the
- * run it is about to make, which bounds how long the bench waits for its next write. */
+ * run it is about to make, which bounds how long the bench waits for its next write; [seq] numbers its writes from 1,
+ * which is how the bench tells a new one ([SessionWrites]), never by a file's time. */
 data class SessionResult(val session: Session, val runs: List<Run>, val btc: List<BtcParity>,
-                         val beats: List<BeatParity>, val ended: Boolean = true, val nextSeconds: Double? = null)
+                         val beats: List<BeatParity>, val ended: Boolean = true, val nextSeconds: Double? = null,
+                         val seq: Int = 0)
 
 /**
  * A [SessionResult] as the text that crosses from the session's process to the bench's (a file the session writes as
@@ -30,6 +32,7 @@ data class SessionResult(val session: Session, val runs: List<Run>, val btc: Lis
  */
 object BenchCodec {
     fun encode(r: SessionResult): String = buildJsonObject {
+        put("seq", r.seq)
         put("ended", r.ended)
         put("next_seconds", r.nextSeconds)
         put("session", buildJsonObject {
@@ -97,6 +100,7 @@ object BenchCodec {
                     b.getValue("logits_max_abs").jsonPrimitive.float, b.double("beats_f"), b.double("downbeats_f"))
             },
             ended = o.bool("ended"),
+            seq = o.int("seq"),
             nextSeconds = o.double("next_seconds"),
         )
     }
@@ -108,4 +112,25 @@ object BenchCodec {
     private fun JsonObject.bool(key: String) = getValue(key).jsonPrimitive.boolean
     private fun JsonObject.long(key: String): Long? = value(key).jsonPrimitive.longOrNull
     private fun JsonObject.double(key: String): Double? = value(key).jsonPrimitive.doubleOrNull
+}
+
+/** A session's writes as the bench reads them: the text of its result file at each look, a write taken only when its
+ * number is higher than the last one taken (two writes of one millisecond are two), one half written or older passed
+ * over. */
+class SessionWrites {
+    var last: SessionResult? = null
+        private set
+
+    /** Whether [text] is a newer write than [last], which it then is. */
+    fun take(text: String?): Boolean {
+        if (text == null) return false
+        val write = try {
+            BenchCodec.decode(text)
+        } catch (e: Exception) {
+            return false
+        }
+        if (write.seq <= (last?.seq ?: 0)) return false
+        last = write
+        return true
+    }
 }

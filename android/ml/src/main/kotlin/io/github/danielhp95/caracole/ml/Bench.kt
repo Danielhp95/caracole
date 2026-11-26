@@ -145,7 +145,7 @@ class Bench(
                         }
                         val thermal = probe.heat().thermal
                         if (thermal in Heat.TOO_HOT) {
-                            cut = "the phone's thermal status reached $thermal"
+                            cut = "$TOO_HOT $thermal"
                             break@sources
                         }
                         progress(now(ended = false, next = input.duration))
@@ -241,6 +241,27 @@ class Bench(
     companion object {
         /** A session's [Session.stopped] when the owner's Stop ended it. */
         const val STOPPED = "stopped by the owner (Stop)"
+
+        /** A session's [Session.stopped] when the heat guard ended it, then the status it saw. */
+        const val TOO_HOT = "the phone's thermal status reached"
+
+        /** Whether [session]'s ending ends the bench too: the owner's Stop, or the heat guard. A session given up for
+         * a hang, one whose process died, one that failed, is that session's ending alone: the bench goes on. */
+        fun endsTheBench(session: Session): Boolean =
+            session.stopped?.let { it.startsWith(STOPPED) || it.startsWith(TOO_HOT) } == true
+
+        /** Each of [specs] by [run] in turn, until the owner asks to stop ([stopAsked], before each) or a session's
+         * ending ends the bench ([endsTheBench]); the results so far. */
+        fun <S> runSessions(specs: List<S>, stopAsked: () -> Boolean, run: (S) -> SessionResult): List<SessionResult> {
+            val results = mutableListOf<SessionResult>()
+            for (spec in specs) {
+                if (stopAsked()) break
+                val result = run(spec)
+                results += result
+                if (endsTheBench(result.session)) break
+            }
+            return results
+        }
 
         /** Whether [e] is running out of memory, as the JVM says it ([OutOfMemoryError]) or ONNX Runtime does (its
          * allocators' "Failed to allocate memory"); anything else is not known to be. */

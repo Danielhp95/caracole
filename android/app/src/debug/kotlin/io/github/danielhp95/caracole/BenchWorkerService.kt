@@ -18,6 +18,7 @@ import io.github.danielhp95.caracole.ml.BenchCodec
 import io.github.danielhp95.caracole.ml.BenchInputs
 import io.github.danielhp95.caracole.ml.Session
 import io.github.danielhp95.caracole.ml.SessionResult
+import io.github.danielhp95.caracole.ml.SessionWrites
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
@@ -51,10 +52,10 @@ internal class SessionSpec(
  * service for one session (a new address each time), follows its lines and waits for its result file, then unbinds,
  * which ends that process ([BenchWorkerService.onDestroy]), and waits for it to be gone before the next. A process
  * that dies first is that session's failure (Android's own word on why, for memory, kept); one that writes nothing
- * for longer than a run of its could take ([quiet]) is given up, and so is one whose run in flight doesn't end within
- * a minute of Stop: either way its last write, every run it finished, is kept, and the session says why it ended. Each session's result says its
- * process's pid and whether it was fresh: no earlier session's process still up as it began. Starting a process
- * costs a second or two a session.
+ * for longer than a run of its could take ([quiet]) is given up, its failure too, and one whose run in flight doesn't
+ * end within a minute of Stop is stopped: either way its last write, every run it finished, is kept, and the session
+ * says why it ended. Each session's result says its process's pid and whether it was fresh: no earlier session's
+ * process still up as it began. Starting a process costs a second or two a session.
  */
 internal object BenchSessions {
     const val PROCESS_SUFFIX = ":benchrun"
@@ -99,22 +100,22 @@ internal object BenchSessions {
         }
         var said = 0L
         var seen: Int? = null
-        var last: SessionResult? = null
-        var lastStamp = -1L
+        val writes = SessionWrites()
         var lastWrite = System.currentTimeMillis()
         var stopAt: Long? = null
-        var cut: String? = null  // why the bench ended the session itself
+        var hung: String? = null  // the session given up for a hang: its failure
+        var cut: String? = null  // Stop's run in flight given up on: its stop
+        // Every look reads the file again; a write is new by its number, never by the file's time.
         fun read() {
-            val stamp = result.lastModified()
-            if (stamp == 0L || stamp == lastStamp) return
-            last = try {
-                BenchCodec.decode(result.readText()).also { lastStamp = stamp; lastWrite = System.currentTimeMillis() }
+            val text = try {
+                result.readText()
             } catch (e: Exception) {
-                last  // mid-rename: the next poll reads it
+                null
             }
+            if (writes.take(text)) lastWrite = System.currentTimeMillis()
         }
         try {
-            while (last?.ended != true && !gone.get()) {
+            while (writes.last?.ended != true && !gone.get()) {
                 Thread.sleep(500)
                 if (seen == null) seen = pid(app)?.also(onProcess)
                 if (stopped() && stopAt == null) {
@@ -124,9 +125,10 @@ internal object BenchSessions {
                 said = follow(log, said, say)
                 read()
                 val now = System.currentTimeMillis()
-                val bound = quiet(last?.nextSeconds)
+                val bound = quiet(writes.last?.nextSeconds)
                 if (now - lastWrite > bound) {
-                    cut = "no word from the session for ${bound / 60_000} minutes: given up, its run in flight left out"
+                    hung = "no word from the session for ${bound / 60_000} minutes: given up, its run in flight " +
+                        "left out"
                     break
                 }
                 if (stopAt != null && now - stopAt > AFTER_STOP_MS) {
@@ -142,21 +144,22 @@ internal object BenchSessions {
         val gone30 = System.currentTimeMillis() + 30_000
         while (pid(app) != null && System.currentTimeMillis() < gone30) Thread.sleep(200)
         seen?.let { if (pid(app) == it) Process.killProcess(it) }  // a worker given up on, ended (one uid)
-        val got = last
+        val got = writes.last
         val out = when {
             got != null && got.ended -> got
             else -> {
-                // What it last wrote, every run it finished; why it ended, the bench's word.
-                val died = cut == null
+                // What it last wrote, every run it finished; why it ended, the bench's word: a hang or a dead
+                // process the session's failure (the bench goes on), Stop's run given up on its stop.
+                val died = cut == null && hung == null
                 val oom = died && seen?.let { killedForMemory(app, it) } == true
-                val why = cut ?: ("the session's process died before its end" +
-                    if (oom) ": Android killed it for memory" else "")
-                say(why)
+                val failure = hung ?: if (died) "the session's process died before its end" +
+                    (if (oom) ": Android killed it for memory" else "") else null
+                say(failure ?: cut!!)
                 val partial = got?.session ?: Session(spec.model, spec.threads, spec.arena, spec.round, null, null,
                     null, null, null, null)
                 SessionResult(partial.copy(
-                    failure = if (died) why else partial.failure,
-                    stopped = if (died) partial.stopped else why,
+                    failure = failure ?: partial.failure,
+                    stopped = cut ?: partial.stopped,
                     complete = false, outOfMemory = partial.outOfMemory || oom,
                 ), got?.runs.orEmpty(), got?.btc.orEmpty(), got?.beats.orEmpty())
             }
@@ -208,20 +211,42 @@ class BenchWorkerService : Service() {
         thread(name = "caracole-bench-session") {
             val say: (String) -> Unit = { line -> synchronized(log) { log.appendText(line + "\n") } }
             // The session whole after each run, and as it ends: a Stop, a crash, a kill or a hang loses the run in
-            // flight alone.
+            // flight alone. Each write numbered (the bench reads them by it), and kept only by a rename that took.
+            var seq = 0
+            var good: SessionResult? = null
             val write: (SessionResult) -> Unit = { now ->
+                val numbered = now.copy(seq = seq + 1)
                 val part = File(dir, "$id.json.part")
-                part.writeText(BenchCodec.encode(now))
-                part.renameTo(File(dir, "$id.json"))
+                part.writeText(BenchCodec.encode(numbered))
+                if (!part.renameTo(File(dir, "$id.json"))) {
+                    throw java.io.IOException("the session's result couldn't be kept (its rename failed)")
+                }
+                seq += 1
+                good = numbered
+            }
+            // A failure past the session's own catch keeps what was last written well, never an empty result.
+            fun failed(e: Throwable, what: String): SessionResult {
+                val base = good ?: SessionResult(Session(spec.model, spec.threads, spec.arena, spec.round, null, null,
+                    null, null, null, null), emptyList(), emptyList(), emptyList())
+                return base.copy(ended = true, nextSeconds = null, session = base.session.copy(
+                    failure = "$what${e.javaClass.simpleName}: ${e.message}", complete = false,
+                    outOfMemory = base.session.outOfMemory || Bench.outOfMemory(e)))
             }
             val out = try {
                 session(spec, say, { File(dir, "$id.stop").exists() }, write)
             } catch (e: Throwable) {
-                SessionResult(Session(spec.model, spec.threads, spec.arena, spec.round, null, null, null, null,
-                    "${e.javaClass.simpleName}: ${e.message}", null, outOfMemory = Bench.outOfMemory(e)),
-                    emptyList(), emptyList(), emptyList())
+                failed(e, "")
             }
-            write(out)
+            try {
+                write(out)
+            } catch (e: Throwable) {
+                say("the session's last write failed: ${e.message}")
+                try {
+                    write(failed(e, "its last write failed: "))
+                } catch (again: Throwable) {
+                    // The last good write stays; the bench reads it, and its process's end says the rest.
+                }
+            }
         }
         return Binder()
     }
