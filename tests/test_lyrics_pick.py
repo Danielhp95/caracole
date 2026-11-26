@@ -605,7 +605,62 @@ def test_a_broken_overrides_file_fails_the_job_and_keeps_nothing(cfg, conn, song
     after = get_song(conn, song.id)
     assert (after.lyrics_status, after.lyrics_json, after.lyrics_at) == (
         before.lyrics_status, before.lyrics_json, before.lyrics_at)
-    assert not (song_dir(cfg.library_dir, song) / "lyrics.lrc").exists()
+    folder = song_dir(cfg.library_dir, song)
+    assert not (folder / "lyrics.lrc").exists() and not (folder / "lyrics.txt").exists()
+
+
+def test_lyric_files_that_cant_be_put_back_are_said_to_hold_the_new_words(cfg, conn, song, sites, monkeypatch):
+    import caracole.lyrics as lyrics_module
+    import caracole.overrides as ov
+
+    sites.lrclib.search = [lrc(77)]
+    searched(cfg, conn, song, sites)
+    before = get_song(conn, song.id)
+    real, calls = lyrics_module.write_lyrics, []
+
+    def once(folder, lyrics):  # the new words written, then the folder refuses them back
+        calls.append(lyrics)
+        if len(calls) > 1:
+            raise OSError(30, "Read-only file system")
+        return real(folder, lyrics)
+
+    def broken(*args, **kwargs):
+        raise ov.OverridesError("overrides.toml: line 3: not TOML")
+
+    monkeypatch.setattr(lyrics_module, "write_lyrics", once)
+    monkeypatch.setattr(ov, "set_lyrics_record", broken)
+    result, heard = pick(cfg, n=1)
+    assert not result.ok
+    state, said = heard.ends()["lyrics"]
+    assert state == "failed" and said.startswith("couldn't note the record in overrides.toml")
+    assert "its lyric files may hold the new words" in said and "Read-only file system" in said
+    assert not said.endswith("; nothing kept")
+    after = get_song(conn, song.id)
+    assert (after.lyrics_status, after.lyrics_json) == (before.lyrics_status, before.lyrics_json)
+
+
+def test_an_info_json_that_cant_be_written_fails_the_job_after_the_lyrics_are_kept(cfg, conn, song, sites,
+                                                                                     monkeypatch):
+    import caracole.library as library
+
+    sites.lrclib.search = [lrc(77)]
+    searched(cfg, conn, song, sites)
+    real, calls = library.write_info, []
+
+    def once(*args, **kwargs):
+        calls.append(args)
+        if len(calls) == 1:
+            raise OSError(28, "No space left on device")
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(library, "write_info", once)
+    result, heard = pick(cfg, n=1)
+    assert not result.ok and result.bug is None
+    state, said = heard.ends()["lyrics"]
+    assert state == "done" and said.startswith("timed lyrics from LRCLIB")
+    assert "info.json couldn't be written (" in said
+    assert "its lyrics are kept" in result.failed
+    assert get_song(conn, song.id).lyrics_status == "found" and entry(cfg).record.text == "lrclib:77"
 
 
 def test_lyrics_that_cant_be_written_fail_the_job_and_leave_the_entry_and_the_song_as_they_were(

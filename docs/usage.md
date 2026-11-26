@@ -1020,9 +1020,10 @@ A record with no lyrics now keeps nothing. A site cooling down, out of its asks,
 keeps nothing and changes nothing: the song, its `[lyrics]` and its records stay as they were, and it
 exits 0 (`No lyrics kept: …`). A refusal (the song not in the book or ignored, no search, one over a
 week old, a record it didn't list) exits 1, and so does a failure here: overrides.toml that can't be
-written or lyrics that can't be (nothing is then changed), a chords failure or a PDF that can't be
-made (the lyrics stay kept: `Lyrics kept; the job failed after: …`). `--progress` adds a JSON line per
-stage, for caracole serve.
+written or lyrics that can't be (nothing is then changed, though lyric files that couldn't be put
+back are said to hold the new words), an info.json, a chords failure or a PDF that can't be made (the
+lyrics stay kept: `Lyrics kept; the job failed after: …`). `--progress` adds a JSON line per stage, for
+caracole serve.
 
     caracole lyrics --song "ARTIST - TITLE" --clear
 

@@ -12,19 +12,23 @@ asked for now (as ``versions --keep`` holds it), its client a lookup's, at a loo
   the name and the audio's length), no request, else ``/api/get/{id}``, one; Megalobiz's ``/lrc/{id}``, AZLyrics' lyrics
   page, one each, through the cache. A record with no lyrics now (instrumental, empty, no timed line, its 404) keeps
   nothing, skipped; a site off, cooling down, out of its asks or blocking is a wait, skipped; its error fails the stage;
-  none of them changes the song, its ``[lyrics]`` or its records: errors are never misses. Kept: the record noted under
-  ``[lyrics]`` (its ``as`` kept), the question asked anew (lyrics_search.py ``ask_anew``), ``lyrics.txt`` and
-  ``lyrics.lrc`` written, the song's lyrics found, its auto sheet made due where the words changed (its
-  ``autochords_mtime`` cleared, as new audio clears it: a sheet made before it kept its words' key is remade too), and
-  info.json. It replaces whatever the song had.
-- ``chords``: the auto sheet made again over them now (``_autochords_sheet``, after a waiting lookup went first) where
-  the song keeps one, has its audio and no human sheet, and auto-chords is here; otherwise skipped, saying why: no new
-  lyrics, a site's sheet, no audio, no auto sheet yet (tonight's run makes one), or auto-chords not here (tonight's run
-  makes it again; a chart takes the words as plain lyrics at the PDF's render meanwhile, sheet_lyrics.py, no model).
+  none of them changes the song, its ``[lyrics]`` or its records: errors are never misses. Kept, in this order: the
+  lyric files (``lyrics.txt``, ``lyrics.lrc``) written first; then the record noted under ``[lyrics]`` (its ``as``
+  kept); then, in one savepoint, the question asked anew (lyrics_search.py ``ask_anew``), the song's lyrics found and
+  its auto sheet made due where the words changed (its ``autochords_mtime`` cleared, as new audio clears it: a sheet
+  made before it kept its words' key is remade too); then info.json. It replaces whatever the song had. Files or
+  overrides.toml that can't be written put the lyric files back and keep nothing else, failing the job (its words say
+  when the files couldn't be put back and may hold the new words); an info.json that can't be written after the keep
+  leaves the lyrics kept, said so, and fails the job.
+- ``chords``: the auto sheet made again over them now, or made for the first time (``_autochords_sheet``, after a
+  waiting lookup went first); otherwise skipped, saying why: no new lyrics, a site's sheet, no audio, or auto-chords
+  not here (tonight's run makes it again; a chart takes the words as plain lyrics at the PDF's render meanwhile,
+  sheet_lyrics.py, no model).
 - ``pdf``: ``render_all`` for the song whenever it keeps any sheet, so a human sheet's sung line lights too.
 - ``pages``: _todo.md and index.html.
 
-The command exits 0 once lyrics were kept or a site waited or failed; 1 for a refusal, a chords failure or a bug.
+The command exits 0 once lyrics were kept or a site waited or failed; 1 for a refusal, a local failure (the lyric
+files, overrides.toml or info.json unwritable), a chords or a PDF failure, or a bug.
 """
 
 from __future__ import annotations
@@ -108,6 +112,7 @@ class _Pick(StagedRun):
         self.request = request
         self.search: Any = None
         self.row: Any = None
+        self.info_failed = ""  # the lyrics stage's last words when info.json couldn't be written after the keep
 
     # --- song ---------------------------------------------------------------------------------------------------
 
@@ -228,13 +233,14 @@ class _Pick(StagedRun):
         kept = self._keep(record, lyrics, before)
         if kept is not None:
             return kept
-        return "done", self._kept_said(lyrics, before)
+        return "done", self._kept_said(lyrics, before) + self.info_failed
 
     def _keep(self, record: LyricsRecord, lyrics: Any, before: Any) -> tuple[str, str] | None:
         """The lyrics written first; only then the record noted under ``[lyrics]``, and, in one savepoint, the question
         asked anew, the lyrics found and the auto sheet made due where the words changed (``before``, the song's lyrics
         till now). A local failure (the files, overrides.toml) puts the files back and changes nothing else, and fails
-        the job (``_fail``: exit 1). None once kept, else the stage's end."""
+        the job (``_fail``: exit 1); info.json, written last, fails the job after the keep (``info_failed``). None once
+        kept, else the stage's end."""
         from caracole import stamps
         from caracole.db import savepoint
         from caracole.library import SharedFolder, song_dir, write_info
@@ -248,14 +254,12 @@ class _Pick(StagedRun):
         try:  # the lyrics on disk first: until they are, nothing else is written
             write_lyrics(folder, lyrics)
         except (OSError, SharedFolder) as e:
-            self._put_back(folder, before)
-            return self._fail(f"couldn't write its lyrics ({e}){NOTHING_KEPT}")
+            return self._fail(f"couldn't write its lyrics ({e}){self._put_back(folder, before)}")
         try:
             set_lyrics_record(self.cfg.overrides_file, song.display, record.text)
             self.overrides = load_overrides(self.cfg.overrides_file)
         except OverridesError as e:  # the files written are taken back: the song stays as it was
-            self._put_back(folder, before)
-            return self._fail(f"couldn't note the record in overrides.toml: {e}{NOTHING_KEPT}")
+            return self._fail(f"couldn't note the record in overrides.toml: {e}{self._put_back(folder, before)}")
         other_words = before is None or (before.plain, before.synced) != (lyrics.plain, lyrics.synced)
         due = {"autochords_mtime": None} if other_words and _has_auto_sheet(self.conn, song) else {}
         with savepoint(self.conn, "lyrics_pick"):
@@ -263,11 +267,16 @@ class _Pick(StagedRun):
             update_song(self.conn, song.id, lyrics_status="found", lyrics_json=lyrics.to_json(),
                         lyrics_at=stamps.stamp(self.now), **due)
         self.song = get_song(self.conn, song.id)
-        write_info(self.conn, self.cfg.library_dir, self.song)  # its "lyrics_from": the link back to their page
+        try:  # its "lyrics_from": the link back to their page
+            write_info(self.conn, self.cfg.library_dir, self.song)
+        except (OSError, SharedFolder) as e:  # the lyrics are kept by now: the stage says so, the job fails after
+            self.info_failed = f"; info.json couldn't be written ({e})"
+            self.result.failed = self.result.failed or f"its lyrics are kept, but info.json couldn't be written ({e})"
         return None
 
-    def _put_back(self, folder: Any, before: Any) -> None:
-        """The song's lyric files as its stored lyrics had them (none for none), after a keep that couldn't finish."""
+    def _put_back(self, folder: Any, before: Any) -> str:
+        """The song's lyric files as its stored lyrics had them (none for none), after a keep that couldn't finish;
+        the stage's last words: nothing kept, or, when they couldn't be put back, that they may hold the new words."""
         from caracole.library import SharedFolder
         from caracole.lyrics import Lyrics, write_lyrics
 
@@ -276,6 +285,8 @@ class _Pick(StagedRun):
                                                   lrclib_id=None))
         except (OSError, SharedFolder) as e:
             log.warning("%s's lyric files couldn't be put back: %s", self.song.display, e)
+            return f"; nothing else kept, but its lyric files may hold the new words (putting them back failed: {e})"
+        return NOTHING_KEPT
 
     def _kept_said(self, lyrics: Any, before: Any) -> str:
         row = self.row
