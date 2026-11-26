@@ -414,9 +414,10 @@ object Outcomes {
         val byName = stages.associateBy { it.name }
         val lyrics = byName[words]
         val chords = byName["chords"]
-        val heard = byName["words"]
+        val heard = listOf("vocals", "words").mapNotNull { byName[it] }
+            .firstOrNull { it.state == Job.FAILED && it.detail.isNotEmpty() }  // whichever stage of Words failed
         if (words == "lyrics" && lyrics != null && lyrics.state == Job.DONE && heard != null &&
-            heard.state == Job.FAILED && heard.detail.isNotEmpty() && chords != null && chords.detail.isNotEmpty()) {
+            chords != null && chords.detail.isNotEmpty()) {
             return "${capital(chords.detail).trimEnd('.')}: the words couldn't be heard here (${heard.detail})."
         }
         if (lyrics != null && (lyrics.state == Job.SKIPPED || lyrics.state == Job.FAILED) && lyrics.detail.isNotEmpty()) {

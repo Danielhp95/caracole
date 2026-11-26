@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 
 from caracole.get import GTPTABS_KEPT, MATCH_NOT_FOUND, NOT_IN_INDEX, SHEET_FROM, STAGES
 from caracole.songs import get_song, update_song
+from caracole.youtube_sheet import HOLDS
 from caracole.web.jobs import (
     INTERRUPTED,
     KEEP_STAGES,
@@ -701,23 +702,33 @@ def test_a_youtube_sheets_steps_are_song_audio_lyrics_words_chords_pdf():
     assert steps(youtube_job(stages=EVERY))[3].state == "skipped"
     running = youtube_job(stages={"song": ("done", ""), "audio": ("done", ""), "lyrics": ("done", "none"),
                                   "vocals": ("running", "2 of ~12 min")})
-    assert progress(running, job_line(running, None), None)["at"] == 3
+    shown = progress(running, job_line(running, None), None)
+    assert shown["at"] == 3 and shown["count"] == "4 of 6" and shown["steps"][3]["state"] == "running"
 
 
 def test_a_sheet_whose_words_failed_is_ready_and_says_why():
     job = youtube_job("done", EVERY | {"vocals": ("done", "sung from 9.3 s"),
                                        "words": ("failed", "Whisper can't read the audio"),
-                                       "chords": ("done", "chords only, no lyrics")})
+                                       "chords": ("done", HOLDS["none"])})
     assert steps(job)[3].state == "failed"
     assert outcome(job, job_line(job, SHEET), SHEET) == Outcome(
         "ready", "Ready", "Chords only, no lyrics: the words couldn't be heard here (Whisper can't read the audio).",
         Action("Open", href="/" + SHEET.sheet))
 
 
+def test_a_sheet_whose_vocals_failed_says_why_with_the_stages_own_words():
+    why = "the separator can't run here (no GPU adapter)"
+    job = youtube_job("done", EVERY | {"vocals": ("failed", why), "words": ("skipped", "no vocals"),
+                                       "chords": ("done", HOLDS["none"])})
+    assert steps(job)[3] == Chip("Words", "failed", "", why)
+    assert outcome(job, job_line(job, SHEET), SHEET).reason == (
+        f"Chords only, no lyrics: the words couldn't be heard here ({why}).")
+
+
 def test_a_sheet_over_nothing_sung_is_ready_chords_only():
     job = youtube_job("done", EVERY | {"vocals": ("done", "sung 6.2 s"),
                                        "words": ("done", "nothing sung was heard (6.2 s sung)"),
-                                       "chords": ("done", "chords only: nothing sung was heard")})
+                                       "chords": ("done", HOLDS["silent"])})
     assert outcome(job, job_line(job, SHEET), SHEET).reason == "Chords only: nothing sung was heard."
 
 

@@ -243,6 +243,33 @@ def test_a_songs_card_makes_its_sheet_from_the_video_pasted_and_its_line_follows
                           "--song=Nick Cani - Vikingos veganos")]
 
 
+SITES_FIRST = "Chords from its audio; lyrics from the lyrics sites, else heard from the audio. A few minutes."
+SLOW = " (up to half an hour when they're heard)"
+
+
+@pytest.mark.parametrize("member, title", [
+    ({"ok": True, "why": None, "songs": [], "time": "up to half an hour"}, SITES_FIRST + SLOW),
+    ({"ok": True, "why": None, "songs": [], "time": "a couple of minutes"}, SITES_FIRST),
+    ({"ok": False, "why": "no GPU", "songs": [], "time": ""}, SITES_FIRST),
+    (None, SITES_FIRST),
+], ids=["cpu", "gpu", "cannot", "no-member"])
+def test_the_form_titles_its_button_by_where_the_words_are_heard(able, live, sheet, browser, monkeypatch, member,
+                                                                 title):
+    # ``server.transcribe`` (library_page.transcribe_member) says whether and how long a transcription takes here;
+    # only a CPU's "up to half an hour" is added to the button's title, never where it can't or the member is absent.
+    import caracole.library_page as library_page
+
+    monkeypatch.setattr(library_page, "transcribe_member", lambda conn, cfg, overrides: member)
+    base, posted = live
+    song = wanted(able)
+    browser.open(base)
+    opened(browser, song)
+    card = cards.open_card(browser, line(song))
+    button = json.dumps(card + ' form.youtube-sheet button[type="submit"]')
+    assert browser.wait(f"document.querySelector({button}) !== null")
+    assert browser.js(f"document.querySelector({button}).title") == title
+
+
 def test_the_request_form_sends_its_youtube_video(able, live, sheet, browser):
     # The song searched for and not found: Request opens the form, filled in from the query; the video pasted.
     from test_web_page_search import answer_to, search, sites

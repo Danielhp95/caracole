@@ -536,9 +536,10 @@ def _staged_holds(stages: list[Stage], words: str) -> str:
     after the lyrics) failed, its chords' words then why they couldn't be heard."""
     by_name = {stage.name: stage for stage in stages}
     waited, chords = by_name.get(words), by_name.get("chords")
-    heard = by_name.get("words")
+    heard = next((by_name[n] for n in ("vocals", "words") if n in by_name and by_name[n].state == "failed"
+                  and by_name[n].detail), None)  # whichever stage of the Words step failed
     if (words == "lyrics" and waited is not None and waited.state == "done" and heard is not None
-            and heard.state == "failed" and heard.detail and chords is not None and chords.detail):
+            and chords is not None and chords.detail):
         return f"{_capital(chords.detail).rstrip('.')}: the words couldn't be heard here ({heard.detail})."
     if waited is not None and waited.state in ("skipped", "failed") and waited.detail:
         return _capital(waited.detail)
