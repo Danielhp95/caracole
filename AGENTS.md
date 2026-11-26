@@ -2415,10 +2415,17 @@ It is rows.js's, shared by both pages:
   `reference(path)`: the computer's every step, BTC's and beat_this's own code; `python -m
   tests.helpers.autochords_reference IN OUT` the same for the owner's songs, never committed):
   - `vectors/autochords/frontend.jsonl`: each clip's log-CQT (float32) and log-mel (stored as float16), their frames'
-    norms, its samples' SHA-256 and mutagen's length;
+    norms, its samples' SHA-256 and mutagen's length; three excerpts' log-CQT (long.wav's 2048, 2049 and 4095 samples
+    from its second chunk on, btc.py's last chunk alone); its meta's `gates`, the design's B1 feature gate
+    (`FRONTEND_GATES`: equal frames, each frame's cosine median ≥ 0.9999 and least ≥ 0.999 over the frames not
+    silent, a silent one within 1e-3 of its floor and the phone's silent too);
   - `models.jsonl`: BTC's logits of that log-CQT (the last window padded with the mean), each frame's top two and
     margin, the chords; beat_this's logits of that log-mel as stored, its beats and downbeats; the chords and beats
     as played;
+  - `data/caracole/autochords/frontend.json` (`frontend_json`, 67 KB): librosa 1.0's CQT of one chunk as it ran,
+    watched step by step (each `audio.resample` and each `__cqt_response`: its STFT and its sparse complex64 basis),
+    the lengths its scale divides by, btc.py's settings (`LOG_FLOOR` among them), and beat_this's mel window, norm and
+    slaney filterbank (sparse): never recomputed on the phone, `:autochords`' resource;
   - `data/caracole/autochords/btc-graph.onnx` and `models.json` (the pins: each file's bytes and SHA-256, BTC's git
     blob, repository and commit, its mean and std, each model's name for `raw["models"]`), exported in the test from
     the shell's model files, the same bytes as `.#chord-models`; on the phone `:ml`'s resources, the debug build's
@@ -2629,7 +2636,15 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     the CMakeLists' (§7: `-ffile-prefix-map` of the source and the binary folders, `--build-id=none`,
     `--hash-style=gnu`, `.comment` removed), `-ffp-contract=off`, every symbol but the JNI's hidden;
     `android/scripts/native-check.sh` checks the debug APK's (aligned, stripped, no build path, its SHA-256).
-- `:autochords` (plain JVM, stage B1): the front ends of the chords from audio; for now `frontend.Soxr`, libsoxr 0.1.3
+- `:autochords` (plain JVM, stage B1): the front ends of the chords from audio, `frontend.Soxr`, `Cqt` and `Mel`.
+  `Cqt.logFeatures(y)` is btc.py's `cqt_features` (`[frames, 144]`, its 10 s chunks and tail rule), each chunk
+  frontend.json's steps replayed: a resample by `Soxr` (librosa's length fix to `ceil(n · ratio)` and its √ratio
+  scale on top, the samples kept float32), an octave's STFT in librosa 1.0's centred framing (`Stft.librosa`: only
+  the slices its first and last frames read padded, numpy's reflection) times its sparse basis; `Mel.logMel(y)` is
+  beat_this's `LogMelSpect` (`[1 + n / 441, 128]`, `Stft.torch`'s framing). `Fft`, radix 2 on doubles; the STFTs,
+  sums and logs are float64, rounded to float32 once. `CqtTest` and `MelTest` hold them to frontend.jsonl by its
+  gate; the area `autochords` (testFixtures' `AutochordsReplays`: soxr.jsonl and frontend.jsonl, the WAVs read as
+  soundfile reads them) runs on the device too (`device-test.sh --area autochords`, :ml's libsoxr). `Soxr`, libsoxr 0.1.3
   over JNI (`resample(x, from, to)`, rates finite and over 0: caracole_soxr.c, python-soxr's `soxr.resample` of a
   contiguous 1-D float32 array at HQ, its `csoxr_split_ch` path), held by `SoxrTest` to vectors/autochords/soxr.jsonl
   within 1e-6, its lengths equal. libsoxr is vendored in autochords/native/soxr/ (LGPL-2.1+; nixpkgs' source, its

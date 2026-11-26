@@ -33,5 +33,9 @@ the check that counts is the gates', which `vectors/autochords/models.jsonl`'s m
 argmax and logits, beat_this's fp32 logits, the fp16-stored file's beats and downbeats by F, with no logit bound).
 `vectors/autochords/soxr.jsonl` (python-soxr's HQ resampling, which the phone's libsoxr is held to within 1e-6) needs
 only python-soxr, on any CPU: it is never skipped there.
-`data/caracole/autochords/` ships in the debug build alone, as android/ml's resources: `:core`, whose resource root
-is `data/`, leaves it out, so the release carries none of it until the stage that ships the models.
+`vectors/autochords/frontend.jsonl`'s meta holds the gate the phone's front ends are held to (`gates`: equal frames, a
+cosine per frame), and `data/caracole/autochords/frontend.json` what those front ends apply: librosa's CQT as it ran,
+its sparse bases, and beat_this's mel filterbank, never recomputed on the phone.
+`data/caracole/autochords/` ships in the debug build alone, as android/ml's resources (frontend.json as
+android/autochords'): `:core`, whose resource root is `data/`, leaves it out, so the release carries none of it until
+the stage that ships the models.

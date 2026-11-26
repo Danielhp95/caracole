@@ -36,6 +36,7 @@ BINS_PER_OCTAVE = 24
 HOP_LENGTH = 2048
 TIMESTEP = 108  # frames per model window: one 10 s chunk
 FRAME_SECONDS = CHUNK_SECONDS / TIMESTEP
+LOG_FLOOR = 1e-6  # upstream's: log(|CQT| + LOG_FLOOR)
 
 ROOTS = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
 _QUALITIES = (
@@ -146,7 +147,7 @@ def cqt_features(y: np.ndarray) -> np.ndarray:
         start += chunk
     if len(y) - start >= HOP_LENGTH or not parts:
         parts.append(_cqt(y[start:]))
-    return np.log(np.abs(np.concatenate(parts, axis=1)) + 1e-6).T
+    return np.log(np.abs(np.concatenate(parts, axis=1)) + LOG_FLOOR).T
 
 
 def _cqt(y: np.ndarray) -> np.ndarray:

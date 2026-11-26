@@ -804,8 +804,8 @@ contiguous 1-D float32 array, the path that takes, `csoxr_split_ch`, one channel
 (`soxr_jni.c`) into one shared library, `libcaracole_soxr.so`, by `autochords/native/CMakeLists.txt`: by the NDK for
 arm64-v8a and x86_64 in `:ml` (its `externalNativeBuild`, so the debug build's alone), and by the host's gcc for the
 JVM's tests (`:autochords`'s `hostSoxr` task, its folder on the tests' `java.library.path`). `:autochords`, plain JVM,
-holds the front ends of the chords from audio; for now `Soxr.resample(x, from, to)` (rates finite and over 0: libsoxr
-never returns from an infinite one), which `SoxrTest` holds to python-soxr's answers
+holds the front ends of the chords from audio (below); its resampler is `Soxr.resample(x, from, to)` (rates finite
+and over 0: libsoxr never returns from an infinite one), which `SoxrTest` holds to python-soxr's answers
 (`tests/conformance/vectors/autochords/soxr.jsonl`, made on x86_64 by libsoxr's SIMD engine, cr32s) within 1e-6:
 
     nix develop ./android -c gradle -p android :autochords:test
@@ -828,6 +828,20 @@ packaging. It checks each ABI's `libcaracole_soxr.so` is stored uncompressed and
 `.symtab`, `.comment` or build-id), and names no path of the build (`/home/`, `/nix/store/`, `.cxx/`, `/tmp/`), and
 prints its SHA-256: two checkouts at different paths build the same bytes (the library carries no debug information,
 `-g0`, its folders mapped away, `-ffile-prefix-map`). Every symbol but the JNI's is hidden.
+
+## Chords from audio: the front ends
+
+`:autochords` makes the models' inputs from 22,050 Hz samples as the computer does: `Cqt.logFeatures(y)`, BTC's
+log-CQT (btc.py's `cqt_features`: librosa 1.0's CQT in 10 s chunks, `[frames, 144]`), and `Mel.logMel(y)`,
+beat_this's log-mel (torchaudio's `MelSpectrogram`, `[frames, 128]`). What they apply comes from Python, never
+recomputed: `tests/conformance/data/caracole/autochords/frontend.json` holds librosa's CQT as it ran over a chunk,
+step by step (its resamples, by `Soxr`, and each octave's STFT and sparse basis) and beat_this's window and
+filterbank. `CqtTest` and `MelTest` hold them to the computer's features of the committed clips
+(`vectors/autochords/frontend.jsonl`) by the design's gate, a cosine per frame (median ≥ 0.9999, least ≥ 0.999), and
+print how close each came; the area runs on the emulator too:
+
+    nix develop ./android -c gradle -p android :autochords:test
+    android/scripts/device-test.sh --area autochords
 
 ## The Chords bench (debug build)
 

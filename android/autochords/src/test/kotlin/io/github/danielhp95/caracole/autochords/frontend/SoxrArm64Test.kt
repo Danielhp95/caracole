@@ -1,6 +1,7 @@
 package io.github.danielhp95.caracole.autochords.frontend
 
-import io.github.danielhp95.caracole.autochords.frontend.SoxrRecords.TOLERANCE
+import io.github.danielhp95.caracole.autochords.testing.SoxrRecords
+import io.github.danielhp95.caracole.autochords.testing.SoxrRecords.TOLERANCE
 import org.junit.Assume.assumeTrue
 import java.io.File
 import java.nio.ByteBuffer

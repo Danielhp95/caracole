@@ -1,7 +1,8 @@
 package io.github.danielhp95.caracole.autochords.frontend
 
-import io.github.danielhp95.caracole.autochords.frontend.SoxrRecords.TOLERANCE
-import io.github.danielhp95.caracole.autochords.frontend.SoxrRecords.str
+import io.github.danielhp95.caracole.autochords.testing.SoxrRecords
+import io.github.danielhp95.caracole.autochords.testing.SoxrRecords.TOLERANCE
+import io.github.danielhp95.caracole.autochords.testing.SoxrRecords.str
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive

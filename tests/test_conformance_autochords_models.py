@@ -15,12 +15,15 @@ What it writes (every array a corpus ``array``: ``{"dtype", "shape", "base64"}``
 row-major; every number in a record a float32's value or an int, written as JSON writes a Python float):
 
 - ``vectors/autochords/frontend.jsonl``: a ``meta`` record (the libraries, the threads, torch's kernels, the
-  encoding), then a record a clip: its WAV (a fixture reference), its samples' count and the SHA-256 of the float32
+  encoding, and the ``gates`` the phone's front ends are held to, ``FRONTEND_GATES``, the design's B1 feature gate),
+  then a record a clip: its WAV (a fixture reference), its samples' count and the SHA-256 of the float32
   samples BTC reads; its length by mutagen (run.py's); BTC's raw log-CQT (``cqt``, float32 ``[frames, 144]``, btc.py
   ``cqt_features``) and beat_this's log-mel (``mel``, stored as float16 ``[T, 128]``), each with its frames' L2 norms
-  (``math.fsum`` of the stored values' squares, its square root).
-- ``vectors/autochords/models.jsonl``: a ``meta`` record, which adds to frontend.jsonl's the ``gates`` the phone's
-  runtime is held to (``GATES``, the design's §4.2) and, a clip at a time, how far float16's mel moves beat_this's
+  (``math.fsum`` of the stored values' squares, its square root); then an ``excerpt`` record for each of
+  ``CQT_EXCERPTS``, the log-CQT of that many of long.wav's samples from its second chunk on, as if they were the
+  whole audio (btc.py's last chunk, the lowest octaves' STFTs padded past their few samples).
+- ``vectors/autochords/models.jsonl``: a ``meta`` record, frontend.jsonl's with its own ``gates``, those the phone's
+  runtime is held to (``GATES``, the design's §4.2), and, a clip at a time, how far float16's mel moves beat_this's
   logits from the full-precision mel's (``mel_float16_logits_max_abs``), then a record a clip, of PyTorch's answers
   on one thread, each checked to be what ``BTCRecognizer.recognize`` and ``detect_beats`` give for the clip:
   - ``btc``: the logits (float32 ``[frames, 170]``) of that very ``cqt``, its windows of 108 frames, the last one
@@ -38,6 +41,8 @@ row-major; every number in a record a float32's value or an int, written as JSON
   python-soxr's chunk of 96,000 inputs. Needs only numpy, soundfile and soxr, and no CPU's kernels: never skipped
   for them.
 - ``data/caracole/autochords/btc-graph.onnx``: export.py's BTC graph, the APK's.
+- ``data/caracole/autochords/frontend.json``: what the phone's front ends apply (``frontend_json``): librosa's CQT as it
+  ran over a chunk, step by step, its sparse bases and lengths, and beat_this's mel window, norm and filterbank.
 - ``data/caracole/autochords/models.json``: the pins: the contract; each file's name, bytes and SHA-256 (BTC's
   authors' file with its git blob id, repository, commit and path, from nix/autochords.nix's pin); BTC's mean and std
   (the graph's metadata), its window, bins and classes (its output's); beat_this's chunk, border, frame rate and
@@ -145,6 +150,16 @@ GATES = {
 }
 
 
+# The design's B1 feature gate for the phone's front ends against frontend.jsonl's ``cqt`` and ``mel``, which its meta
+# carries and AutochordsReplays reads back: the same frames, and each frame's cosine with the stored one at a median of
+# ``cosine_median_min`` and a least of ``cosine_min``, over the frames that aren't silent. A frame is silent when every
+# stored value lies within ``silent_within`` of its feature's floor (``floors``, which _records adds: the log-CQT's
+# log(btc.LOG_FLOOR) as float32 makes it, the log-mel's log1p(0)); there the phone's frame must be silent too.
+FRONTEND_GATES = {"frames": "equal", "cosine_median_min": 0.9999, "cosine_min": 0.999, "silent_within": 1e-3}
+# frontend.jsonl's excerpts: long.wav's samples from its second chunk on, this many, each btc.py's whole audio.
+CQT_EXCERPTS = (2048, 2049, 4095)
+
+
 def cpu_capability() -> str:
     """The kernels torch dispatches to on this CPU ("AVX512", "AVX2", "DEFAULT"…): its last bits are theirs."""
     import torch
@@ -197,13 +212,16 @@ def _records() -> tuple[list[dict], list[dict]]:
     import numpy as np
 
     from caracole.autochords.beats import detect_beats
-    from caracole.autochords.btc import TIMESTEP, BTCRecognizer
+    from caracole.autochords.btc import CHUNK_SECONDS, LOG_FLOOR, SAMPLE_RATE, TIMESTEP, BTCRecognizer, cqt_features
+    from caracole.autochords.btc import load_audio as btc_load
     from helpers.autochords_reference import array, logits_of, peaks_of, reference, torch_threads
     from helpers.corpus import fixture_ref
 
     meta = _meta()
     float16_moves: dict[str, float] = {}
-    frontend, models = [meta], [{**meta, "gates": GATES, "mel_float16_logits_max_abs": float16_moves}]
+    floors = {"cqt": float(np.log(np.float32(LOG_FLOOR))), "mel": 0.0}
+    frontend = [{**meta, "gates": {**FRONTEND_GATES, "floors": floors}}]
+    models = [{**meta, "gates": GATES, "mel_float16_logits_max_abs": float16_moves}]
     recognizer = BTCRecognizer(BTC_WEIGHTS)
     for clip in synth_music.CLIPS:
         wav = CLIPS / f"{clip.name}.wav"
@@ -244,6 +262,14 @@ def _records() -> tuple[list[dict], list[dict]]:
                       "downbeats": downbeats},
             "known": {"chords": chords, "beats": known_beats, "downbeats": known_downbeats},
         })
+    # btc.py's last chunk when it is all there is of it: long.wav's samples from its second chunk on, a hop's, a
+    # sample more and a sample under two hops' (the lowest octaves' STFTs then pad past their few samples).
+    long = btc_load(CLIPS / "long.wav")
+    start = int(SAMPLE_RATE * CHUNK_SECONDS)
+    for count in CQT_EXCERPTS:
+        features = cqt_features(long[start:start + count]).astype(np.float32)
+        frontend.append({"kind": "excerpt", "wav": fixture_ref(CLIPS / "long.wav"), "offset": start, "count": count,
+                         "cqt": array(features), "cqt_norms": _norms(features)})
     return frontend, models
 
 
@@ -332,6 +358,133 @@ def test_models_json_and_btc_graph(exports):
 
     check(MODELS_DATA / BTC_GRAPH, (exports / BTC_GRAPH).read_bytes())
     check(MODELS_DATA / "models.json", models_json(exports))
+
+
+def _sparse(rows) -> dict:
+    """A sparse matrix of rows, CSR, as frontend.json writes it: its shape, each row's start in ``indices`` (``indptr``)
+    and each stored value's column, and the values, float32 ``[nnz]``, or for a complex one ``[nnz, 2]``, (re, im)."""
+    import numpy as np
+
+    from helpers.autochords_reference import array
+
+    rows = rows.tocsr()
+    rows.sort_indices()
+    data = rows.data
+    values = (array(np.stack([data.real, data.imag], axis=-1).astype(np.float32)) if np.iscomplexobj(data)
+              else array(data.astype(np.float32)))
+    return {"shape": list(rows.shape), "indptr": rows.indptr.tolist(), "indices": rows.indices.tolist(),
+            "values": values}
+
+
+def frontend_json() -> str:
+    """data/caracole/autochords/frontend.json: what the phone's front ends apply, each number Python's own object.
+
+    ``cqt``: btc.py's settings (``rate``, ``hop``, ``bins``, ``chunk`` in samples, ``min_tail``: the least audio and
+    the least tail it keeps, its ``HOP_LENGTH``; the log's ``floor``), and librosa 1.0's ``cqt`` of one chunk at those
+    settings, as it ran (``_cqt``, watched): its ``steps`` in order (``samples``: how many each was given, for a whole
+    chunk), each either a ``resample`` (librosa's ``audio.resample``: its rates, ``res_type``, ``fix`` and
+    ``scale``; the early downsample, then a halving between octaves) or an ``octave`` (its ``__cqt_response``: the
+    STFT's ``n_fft``, ``hop``, ``window`` and ``pad_mode``, and the sparse FFT basis it applied, ``basis``, complex64,
+    each octave's rescaling in it), then the ``lengths`` its ``scale`` divides each bin by the root of (float64, the
+    last ``wavelet_lengths`` it asked for, at ``lengths_rate``). The octaves fill the bins from the top, as
+    ``__trim_stack`` does, every one its frames cut to the fewest.
+    ``mel``: beat_this's ``LogMelSpect`` (torchaudio's ``MelSpectrogram``): its rate, ``n_fft``, ``hop``, its
+    periodic Hann ``window`` (float32), centred with ``pad_mode`` padding, its spectrum's ``norm`` (torch.stft's
+    ``normalized``, frame_length**-0.5), power 1, the slaney ``filterbank`` (float32, ``[mels, n_fft // 2 + 1]``, its
+    zeros left out) and ``log1p(log_multiplier * x)``."""
+    import inspect
+
+    import librosa
+    import librosa.core.constantq as constantq
+    import numpy as np
+    import torchaudio
+    from beat_this.preprocessing import LogMelSpect
+    from scipy.sparse import csr_array
+
+    from caracole.autochords import btc
+    from helpers.autochords_reference import array
+
+    steps: list[dict] = []
+    lengths: list[tuple[float, object]] = []
+    response = getattr(constantq, "__cqt_response")
+    resample = constantq.audio.resample
+    wavelet_lengths = constantq.filters.wavelet_lengths
+    resample_defaults = inspect.signature(resample).parameters
+    response_defaults = inspect.signature(response).parameters
+
+    def watched_response(y, n_fft, hop_length, fft_basis, mode, **kw):
+        assert set(kw) <= {"dtype"}, kw
+        steps.append({"octave": {"samples": len(y), "n_fft": n_fft, "hop": hop_length,
+                                 "window": response_defaults["window"].default, "pad_mode": mode,
+                                 "basis": _sparse(fft_basis)}})
+        return response(y, n_fft, hop_length, fft_basis, mode, **kw)
+
+    def watched_resample(y, *, orig_sr, target_sr, res_type=resample_defaults["res_type"].default,
+                         fix=resample_defaults["fix"].default, scale=resample_defaults["scale"].default, **kw):
+        assert not kw, kw
+        steps.append({"resample": {"samples": len(y), "from": orig_sr, "to": target_sr, "res_type": res_type,
+                                   "fix": fix, "scale": scale}})
+        return resample(y, orig_sr=orig_sr, target_sr=target_sr, res_type=res_type, fix=fix, scale=scale)
+
+    def watched_lengths(**kw):
+        out = wavelet_lengths(**kw)
+        lengths.append((kw["sr"], out[0]))
+        return out
+
+    chunk = int(btc.SAMPLE_RATE * btc.CHUNK_SECONDS)
+    setattr(constantq, "__cqt_response", watched_response)
+    constantq.audio.resample, constantq.filters.wavelet_lengths = watched_resample, watched_lengths
+    try:
+        out = btc._cqt(np.zeros(chunk, np.float32))
+    finally:
+        setattr(constantq, "__cqt_response", response)
+        constantq.audio.resample, constantq.filters.wavelet_lengths = resample, wavelet_lengths
+    assert out.shape[0] == btc.N_BINS
+    lengths_rate, last_lengths = lengths[-1]
+
+    spect = LogMelSpect()
+    mel = spect.spect_class
+    stft = mel.spectrogram
+    assert (stft.normalized, stft.center, stft.power, stft.onesided, stft.pad) == ("frame_length", True, 1.0, True, 0)
+    assert stft.win_length == stft.n_fft
+
+    doc = {
+        "libraries": {"librosa": librosa.__version__, "torchaudio": torchaudio.__version__, "numpy": np.__version__},
+        "cqt": {
+            "rate": btc.SAMPLE_RATE, "hop": btc.HOP_LENGTH, "bins": btc.N_BINS, "chunk": chunk,
+            "min_tail": btc.HOP_LENGTH, "floor": btc.LOG_FLOOR,
+            "steps": steps,
+            "lengths_rate": float(lengths_rate),
+            "lengths": array(np.asarray(last_lengths, np.float64), "float64"),
+        },
+        "mel": {
+            "rate": mel.sample_rate, "n_fft": stft.n_fft, "hop": stft.hop_length, "pad_mode": stft.pad_mode,
+            "window": array(stft.window.numpy()), "norm": stft.n_fft ** -0.5,
+            "filterbank": _sparse(csr_array(mel.mel_scale.fb.numpy().T)),
+            "log_multiplier": spect.log_multiplier,
+        },
+    }
+    return json.dumps(doc, ensure_ascii=False, indent=1) + "\n"
+
+
+_FRONTEND_JSON = """
+import pathlib, sys
+sys.path[:0] = ["tests"]
+import test_conformance_autochords_models as m
+pathlib.Path(sys.argv[1], "frontend.json").write_text(m.frontend_json(), encoding="utf-8")
+"""
+
+
+@pytest.mark.autochords
+def test_frontend_json(_models):
+    """frontend.json, made in a fresh process as the records are; its bytes held on a CPU of the committed records'
+    kernels, as theirs are (test_frontend_and_models_vectors says why)."""
+    committed = _committed_meta()
+    elsewhere = committed and committed.get("cpu_capability") != cpu_capability()
+    if os.environ.get("CARACOLE_CORPUS") != "write" and elsewhere:
+        pytest.skip("the records were made on another CPU's kernels: test_frontend_and_models_vectors says why")
+    (text,) = _child_texts(_FRONTEND_JSON, ("frontend.json",))
+    check(MODELS_DATA / "frontend.json", text)
 
 
 def _unarray(a):

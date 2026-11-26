@@ -5,8 +5,8 @@
 #   android/scripts/device-test.sh [--computer DIR] [--sites SCENARIO] [--area NAME[,NAME...]] [--app] [--ml]
 #                                  [--tcpdump FILE] [CLASS[=DIR]]...
 #
-#   --area NAMES    CorpusOnDeviceTest's areas (core, server and viewer.testing's Replays); "all" or an empty
-#                   list: every one
+#   --area NAMES    CorpusOnDeviceTest's areas (core, server, viewer and autochords.testing's Replays); "all" or an
+#                   empty list: every one
 #   --app           the app's classes: EndToEndTest, PinchTest, SyncSheetTest, ExportImportTest and
 #                   PhoneEndToEndTest, each against a computer of its own (tests.helpers.e2e_library in a fresh
 #                   folder)

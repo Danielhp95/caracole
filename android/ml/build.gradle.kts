@@ -65,7 +65,11 @@ tasks.matching { it.name.endsWith("AndroidTestAssets") }.configureEach { depends
 
 val copyModelData by tasks.registering(Sync::class) {
     into(layout.buildDirectory.dir("generated/modelData"))
-    from("../../tests/conformance/data/caracole/autochords") { into("caracole/autochords") }
+    // frontend.json is :autochords' own resource.
+    from("../../tests/conformance/data/caracole/autochords") {
+        include("btc-graph.onnx", "models.json")
+        into("caracole/autochords")
+    }
 }
 tasks.matching { it.name.contains("JavaRes") || it.name.contains("JavaResource") || it.name.startsWith("lint") }
     .configureEach { dependsOn(copyModelData) }

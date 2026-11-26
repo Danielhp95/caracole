@@ -146,6 +146,9 @@ dependencies {
     androidTestImplementation(testFixtures(project(":core")))
     androidTestImplementation(testFixtures(project(":viewer")))
     androidTestImplementation(testFixtures(project(":server")))
+    // The corpus's autochords area (its front ends over the committed clips), whose libsoxr is :ml's, the debug
+    // build's.
+    androidTestImplementation(testFixtures(project(":autochords")))
     androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation("androidx.test:core-ktx:1.7.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
