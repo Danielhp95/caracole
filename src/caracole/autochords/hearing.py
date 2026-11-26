@@ -34,9 +34,11 @@ What fails is ``HearingFailed``, told apart as auto-chords tells it:
 - ``"audio"``: Whisper's own "Failed to load audio" on the mix (``transcribe.is_audio_error``, "can't read the
   audio"), alone filed as auto-chords files a file it can't read (run.py ``_unreadable``: kv
   ``autochords:failed:<song id>``), so the song is offered no transcription, nor auto-chords tried on it, until its
-  audio changes. Not filed for a caller that makes the chords all the same (``file_unreadable=False``, "Whisper
+  audio changes. Not filed so for a caller that makes the chords all the same (``file_unreadable=False``, "Whisper
   can't read the audio"): Whisper reads the mix through the ffmpeg program, auto-chords through its own reader, the
-  one the vocals read the mix with already, which gives its own verdict as the chords are made.
+  one the vocals read the mix with already, which gives its own verdict as the chords are made. Noted instead as
+  Whisper's alone (transcript.py ``note_whisper_cant_read``, kv ``transcribe:unreadable:<song id>``), so that no
+  transcription is offered over that audio again, the card's nor the nightly pass's, until it changes.
 
 ``words`` refuses, before Whisper runs, vocals that aren't the Hearing's current stem of the song's audio as it is
 (``_current``: another song's, of audio replaced since, or a stem the next song's separation removed): a caller's bug,
@@ -200,6 +202,10 @@ class Hearing:
             if not is_audio_error(e):
                 raise  # a bug, deep in Whisper or in caracole: said as one, and nothing filed against the song
             if not file_unreadable:  # auto-chords' own reader says, as the chords are made
+                from caracole.autochords.run import _short
+                from caracole.autochords.transcript import note_whisper_cant_read
+
+                note_whisper_cant_read(conn, song, stamp, _short(e, song.audio_path or ""))
                 raise HearingFailed("audio", WHISPER_UNREADABLE) from e
             from caracole.autochords.run import _unreadable
 

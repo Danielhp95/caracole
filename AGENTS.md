@@ -309,9 +309,10 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     (`_still_for_youtube`, else a refusal) and still offered (else that stage skipped, the chords over the lyrics a
     lookup found). `WORDS_FAIL_THE_JOB` false: a failure to hear fails its own stage alone, the chords made
     chords-only, the command exiting 0, the song still offered Transcribe the lyrics; audio Whisper can't load filed
-    nothing ("Whisper can't read the audio", hearing.py's `file_unreadable`: auto-chords' own reader, the one the
-    vocals read the mix with, gives its verdict as the chords are made); nothing sung is the words' done "nothing sung
-    was heard (why)".
+    nothing against the chords ("Whisper can't read the audio", hearing.py's `file_unreadable`: auto-chords' own
+    reader, the one the vocals read the mix with, gives its verdict as the chords are made), noted as Whisper's alone
+    (`transcribe:unreadable:`), offered no transcription until it changes; nothing sung is the words' done "nothing
+    sung was heard (why)".
   - `autochords_pending(only=)`, once, after the words: run.py `_make_sheet` takes the transcript; before it, the
     audio still the one the vocals separated (`_same_audio`) where they ran.
   - caracole serve's sheet from a YouTube video runs it (web/youtube_routes.py).
@@ -1993,8 +1994,12 @@ It is rows.js's, shared by both pages:
     the song read again and still offered with the audio separated, then its words, a transcript or nothing sung
     making its sheet due (`_skip_reason`). A song past the cap gets its chords now, its words a later run.
   - In bulk: the setup's failure stops the hearing for the run, kept as `AutoStats.transcribe_problem`, the chords
-    going on and the command exiting 0 on its account; audio Whisper can't load filed (`file_unreadable` left on: an
-    unattended pass would separate it again every night); a bug `_error`, the song due, exit 1. kv
+    going on and the command exiting 0 on its account; audio Whisper can't load (`file_unreadable=False`: the vocals
+    read it with auto-chords' own reader) noted as Whisper's alone, its chords made tonight, never heard again (no
+    separation, no slot) until it changes, todo.py listing it under the words not heard, never the files auto-chords
+    can't read; a bug one of the run's `errors` (exit 1), logged with its traceback, its chords made all the same
+    (`_hearing_bug`). The cap counts the songs whose hearing started; `_count_due` counts as due the first
+    `transcriptions` songs offered their words. kv
     `autochords:status` keeps `heard`, `silent` and `transcribe_problem`, which todo.py says ("Lyrics couldn't be
     transcribed in the last run").
   - The command builds no `Hearing` where `youtube_fetch.transcribe_problem` says this machine can't transcribe;
@@ -2018,8 +2023,10 @@ It is rows.js's, shared by both pages:
     `MIN_WORDS`, 8, or `MIN_WORDS_A_MINUTE`, 20, each with its why, "sung 6.2 s", "5 words in 1:10 sung"); the lines
     (`lines_of`) and the enhanced LRC (`to_lrc`);
   - transcript.py, no third-party import (every page build asks it): kv `transcript:<id>` and `transcribe:none:<id>`
-    (`keep_transcript`, `note_heard_nothing`, its `why` and `by`), and which songs are offered one (`why_not_offered`,
-    which also reads run.py's `autochords:failed:<id>`, its key `UNREADABLE`);
+    (`keep_transcript`, `note_heard_nothing`, its `why` and `by`), `transcribe:unreadable:<id>` (`WHISPER_CANT_READ`,
+    `note_whisper_cant_read`: audio Whisper can't load, which auto-chords reads; of the current audio alone), and which
+    songs are offered one (`why_not_offered`, which also reads run.py's `autochords:failed:<id>`, its key
+    `UNREADABLE`; "Whisper can't read its audio" for the second, `anyway` or not);
   - separate.py: demucs-rs, a program run as a subprocess (`DemucsSeparator`; `SeparatorFailed` in its own words,
     its output read as UTF-8 with what isn't replaced; a wgpu demucs-rs that dies by a signal after "Done!" with the
     stem written, as it does from Python, has separated it, logged; on success, what it said of its device logged
@@ -2056,8 +2063,9 @@ It is rows.js's, shared by both pages:
     Whisper's own "Failed to load audio" on the mix alone (transcribe.py `is_audio_error`), filed as run.py files
     audio it can't read (`_unreadable`, kv `autochords:failed:`, transcript.py's `UNREADABLE`), which
     `why_not_offered` reads ("its audio can't be read") until the audio changes, unless the caller makes the chords
-    all the same (`Hearing.words(file_unreadable=False)`, a sheet from a video's: "Whisper can't read the audio",
-    nothing filed, as Whisper reads through the ffmpeg program and auto-chords through its own reader, which says);
+    all the same (`Hearing.words(file_unreadable=False)`, a sheet from a video's and the nightly pass's: "Whisper can't
+    read the audio", noted as Whisper's alone, `note_whisper_cant_read`, never filed against the chords, as Whisper
+    reads through the ffmpeg program and auto-chords through its own reader, which says);
     anything else Whisper raises is a bug, raised as it is, filing nothing; and nothing sung is noted.
 - Which words go under the chords (run.py `_make_sheet`): a site's lyrics whenever the song has any (a site's
   verdict that it is instrumental wins too: a chart alone, the transcript kept unused), else the

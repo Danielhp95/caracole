@@ -148,14 +148,25 @@ def test_a_failure_says_whose_it_is_and_only_the_audios_is_filed(conn, cfg, sepa
 
 def test_audio_whisper_cant_read_is_filed_only_where_the_caller_says(conn, cfg):
     # Whisper reads the mix through the ffmpeg program, auto-chords through its own reader, which the vocals read it
-    # with already: a job that makes the chords all the same files nothing, and auto-chords gives its own verdict.
+    # with already: a caller that makes the chords all the same files nothing against the chords, and auto-chords
+    # gives its own verdict. Whisper's is noted for that audio alone: no transcription is offered over it again, nor
+    # by hand (``anyway``: it would fail the same way), until the audio changes.
+    from caracole.autochords.transcript import WHISPER_CANT_READ
+
     song = offered(conn, cfg)
     with pytest.raises(HearingFailed) as failed:
         hear(cfg, conn, song, transcriber=Transcriber(fail=RuntimeError("Failed to load audio: moov atom not found")),
              file_unreadable=False)
     assert (failed.value.kind, failed.value.words) == ("audio", "Whisper can't read the audio")
     assert kv_get(conn, f"autochords:failed:{song.id}") is None
-    assert why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) is None
+    assert kv_get_json(conn, f"{WHISPER_CANT_READ}{song.id}") == {
+        "audio": song.audio_path, "audio_mtime": song.audio_mtime, "at": STAMP,
+        "error": "RuntimeError: Failed to load audio: moov atom not found"}
+    song = get_song(conn, song.id)
+    assert why_not_offered(conn, cfg, song, Overrides()) == "Whisper can't read its audio"
+    assert why_not_offered(conn, cfg, song, Overrides(), anyway=True) == "Whisper can't read its audio"
+    changed = replace(song, audio_mtime=(song.audio_mtime or 0) + 5)
+    assert why_not_offered(conn, cfg, changed, Overrides()) is None
 
 
 def test_hearing_builds_each_model_once_a_run(conn, cfg, tmp_path, monkeypatch):

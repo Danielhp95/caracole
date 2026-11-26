@@ -249,10 +249,12 @@ def autochords_pending(
     kept as its transcript or nothing sung noted, either making its sheet due (``_skip_reason``). A song past the cap
     gets its chords now and its words on a later run, its sheet then made again. The setup's failure (the separator,
     the GPU, Whisper's model) stops the hearing for the run, kept as ``transcribe_problem``, the chords going on;
-    audio Whisper can't load is filed as a file the chords can't read (``_unreadable``: an unattended pass would
-    otherwise separate it again every night, its slot taken); a bug is ``_error``. With no ``hearing`` and a cap, a
-    song offered its words says why this machine hears none (``youtube_fetch.transcribe_problem``: the nightly unit
-    of the GPU build sees no GPU).
+    audio Whisper can't load (which the vocals read with auto-chords' own reader) is noted as Whisper's alone
+    (transcript.py ``note_whisper_cant_read``), offered no words again until it changes, its chords made; a bug is
+    one of the run's ``errors`` (exit 1), its chords made all the same. The cap counts the songs whose hearing
+    started, one passed over after a lookup went first or stopped by a bug too: the separation's time was spent.
+    With no ``hearing`` and a cap, a song offered its words says why this machine hears none
+    (``youtube_fetch.transcribe_problem``: the nightly unit of the GPU build sees no GPU).
     """
     stamp = (now or datetime.now(UTC)).astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     if overrides is None:
@@ -261,7 +263,8 @@ def autochords_pending(
     told = on_step or (lambda said: None)
     models = _Models(cfg, recognizer, beats_fn)
     songs = [s for s in list_songs(conn) if only is None or s.id in only]
-    due, worked = _count_due(conn, cfg, songs, overrides), 0
+    hears = transcriptions if hearing is not None else 0
+    due, worked = _count_due(conn, cfg, songs, overrides, hears), 0
     turns = _Turns(cfg, conn, overrides, between)
     listening = _Listening(hearing, transcriptions)
     for listed in turns.each(songs):
@@ -341,15 +344,16 @@ class _Listening:
     def first(self, conn: sqlite3.Connection, cfg: Config, song: Song, turns: _Turns, stats: AutoStats, stamp: str,
               told: Callable[[str], None]) -> Song | None:
         """The song after its words were heard where they are to be (``autochords_pending``), read again; None for a
-        song that left the book meanwhile or whose hearing met a bug (``_error``)."""
+        song that left the book meanwhile."""
         if not self.cap or self.stopped or self.tried >= self.cap or not song.audio_path:
+            return song
+        if self.hearing is None and self.asked:  # said already: nothing more to hear or say this run
             return song
         if why_not_offered(conn, cfg, song, turns.overrides) is not None:
             return song
         if self.hearing is None:
-            if not self.asked:
-                self.asked = True
-                stats.transcribe_problem = transcribe_problem(cfg)
+            self.asked = True
+            stats.transcribe_problem = transcribe_problem(cfg)
             return song
         return self._hear_words(conn, cfg, self.hearing, song, turns, stats, stamp, told)
 
@@ -365,9 +369,8 @@ class _Listening:
             vocals = hearing.vocals(song, on_doing=_quiet)
         except HearingFailed as e:  # the setup's alone
             return self._stop(stats, song, e.words)
-        except Exception as e:  # noqa: BLE001 - a bug: the song stays due, and the run fails
-            _error(stats, song, e)
-            return None
+        except Exception as e:  # noqa: BLE001 - a bug: the run fails, the song's chords made all the same
+            return _hearing_bug(conn, stats, song, e)
         if turns.hand_over():  # a lookup went first: the song as it left it, and still to hear
             try:
                 song = get_song(conn, song.id)
@@ -380,22 +383,22 @@ class _Listening:
                 log.info("%s: its words aren't heard now (%s)", song.display, why)
                 return song
         told(STEPS[5])
-        try:
-            heard = hearing.words(conn, song, vocals, stamp, on_doing=_quiet)
+        try:  # audio Whisper can't load noted as Whisper's alone: the vocals read it as the chords do
+            heard = hearing.words(conn, song, vocals, stamp, on_doing=_quiet, file_unreadable=False)
         except HearingFailed as e:
             if e.kind == "setup":
                 return self._stop(stats, song, e.words)
-            return get_song(conn, song.id)  # filed (``_unreadable``): the chords pass it over until it changes
-        except Exception as e:  # noqa: BLE001 - a bug: the song stays due, and the run fails
-            _error(stats, song, e)
-            return None
+            log.warning("%s: %s; its chords are made without its words", song.display, e.words)
+            return _again(conn, song)
+        except Exception as e:  # noqa: BLE001 - a bug: the run fails, the song's chords made all the same
+            return _hearing_bug(conn, stats, song, e)
         if isinstance(heard, Nothing):
             stats.silent += 1
             log.info("%s: nothing sung was heard (%s)", song.display, heard.why)
         else:
             stats.heard += 1
             log.info("%s: words heard, %s", song.display, heard.said)
-        return get_song(conn, song.id)
+        return _again(conn, song)
 
     def _stop(self, stats: AutoStats, song: Song, words: str) -> Song:
         """The setup failed: no more words heard this run, why kept for the to-do page, the chords going on."""
@@ -405,19 +408,39 @@ class _Listening:
         return song
 
 
+def _again(conn: sqlite3.Connection, song: Song) -> Song | None:
+    """The song read again after its hearing; None for one gone meanwhile."""
+    try:
+        return get_song(conn, song.id)
+    except KeyError:
+        return None
+
+
+def _hearing_bug(conn: sqlite3.Connection, stats: AutoStats, song: Song, e: Exception) -> Song | None:
+    """A bug hearing the song, caracole's or deep in Whisper: one of the run's errors (the command exits 1), logged
+    with its traceback whatever it raised; the song read again, its chords made as ever, counted by them."""
+    stats.errors.append(f"{song.display}: {type(e).__name__}: {e}")
+    log.error("%s: hearing its words failed: %s: %s", song.display, type(e).__name__, e, exc_info=True)
+    return _again(conn, song)
+
+
 def _quiet(said: str) -> None:
     """What a long step of hearing is at, which a pass over the library says nowhere: a line a song is its log."""
 
 
-def _count_due(conn: sqlite3.Connection, cfg: Config, songs: Iterable[Song], overrides: Overrides) -> int:
+def _count_due(conn: sqlite3.Connection, cfg: Config, songs: Iterable[Song], overrides: Overrides,
+               hears: int = 0) -> int:
     """How many of ``songs`` are due now, for the "3 of 12" before each, as ``_due`` would find them, counting
-    nothing in a run's stats."""
+    nothing in a run's stats; with the first ``hears`` songs offered their words counted due too, as hearing them
+    makes their sheet due."""
     n = 0
     for song in songs:
         if not song.audio_path or _known_failure(conn, song) is not None:
             continue
+        heard = hears > 0 and why_not_offered(conn, cfg, song, overrides) is None
+        hears -= heard
         try:
-            if _skip_reason(conn, song, overrides) is not None:
+            if _skip_reason(conn, song, overrides) is not None and not heard:
                 continue
         except Exception:  # noqa: BLE001 - a song's bad data: ``_due`` says so as its turn comes
             continue

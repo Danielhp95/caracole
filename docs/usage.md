@@ -1367,8 +1367,10 @@ words too. Its last line says what it heard:
   which doesn't see the GPU: the words then come from caracole serve's jobs.
 - A setup that fails (the separator, the GPU, Whisper's model) stops the hearing for the rest of
   the run, and the to-do page says so; the chords go on, and it still exits 0.
-- Audio Whisper can't load is listed with the files auto-chords can't read, and tried again once
-  it changes.
+- Audio Whisper can't load still gets its chords. Its words aren't heard, nor offered on its card,
+  until the file changes; the to-do page lists it under **Lyrics couldn't be transcribed in the
+  last run**.
+- A bug while hearing a song fails the run (exit 1), and the song's chords are made all the same.
 
 ### caracole youtube
 

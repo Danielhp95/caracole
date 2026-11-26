@@ -7,7 +7,9 @@ its ``audio`` and ``audio_mtime`` are the song's own: other audio (another video
 Music/) is no use to it, and the song is offered a transcript again. A song heard to have nothing sung keeps
 ``transcribe:none:<song id>`` instead, for that audio alone, with why and by whom; one whose audio can't be read,
 auto-chords' record of it, ``autochords:failed:<song id>`` (run.py's, which the transcription files too), and is
-offered none until it changes.
+offered none until it changes. Audio auto-chords reads and Whisper's decoder (the ffmpeg program) refuses keeps
+``transcribe:unreadable:<song id>`` (``note_whisper_cant_read``), written by a hearing that makes the chords all the
+same: offered none, by hand neither (``anyway``: it would fail the same way), until it changes; its chords are made.
 
 This module imports nothing third-party: the transcribing itself is elsewhere, and ``why_not_offered`` runs on
 every page build.
@@ -29,6 +31,8 @@ from caracole.songs import HUMAN_SHEET, Song, list_songs
 TRANSCRIPT = "transcript:"  # + song id: the Transcript kept for the song's audio
 HEARD_NOTHING = "transcribe:none:"  # + song id: when the song's audio was transcribed to nothing
 UNREADABLE = "autochords:failed:"  # + song id: audio auto-chords or a transcription couldn't read (run.py writes it)
+WHISPER_CANT_READ = "transcribe:unreadable:"  # + song id: audio Whisper can't load, which auto-chords reads
+WHISPER_UNREADABLE_WHY = "Whisper can't read its audio"  # why_not_offered's word for it
 LYRICS_SOURCE = "transcript"  # a version's raw["lyrics_source"] when the sheet's words are the transcript's
 NOTE = "Lyrics transcribed from the audio (Whisper), unverified"
 SILENT = "Instrumental: nothing sung was heard in the audio"  # the sheet's note line over nothing sung
@@ -102,6 +106,22 @@ def heard_nothing(conn: sqlite3.Connection, song: Song) -> bool:
     return isinstance(kept, dict) and _own_audio(song, kept.get("audio"), kept.get("audio_mtime"))
 
 
+def note_whisper_cant_read(conn: sqlite3.Connection, song: Song, stamp: str, error: str) -> None:
+    """The song's current audio noted as audio Whisper can't load, at ``stamp``, with its ``error`` in one line."""
+    kv_set_json(conn, f"{WHISPER_CANT_READ}{song.id}",
+                {"audio": song.audio_path, "audio_mtime": song.audio_mtime, "at": stamp, "error": error})
+
+
+def whisper_cant_read(conn: sqlite3.Connection, song: Song) -> str | None:
+    """Why Whisper couldn't load the song's current audio (its error, "" for none said), or None when it isn't
+    noted so: a note of other audio is none."""
+    kept = kv_get_json(conn, f"{WHISPER_CANT_READ}{song.id}")
+    if not isinstance(kept, dict) or not _own_audio(song, kept.get("audio"), kept.get("audio_mtime")):
+        return None
+    error = kept.get("error")
+    return error if isinstance(error, str) else ""
+
+
 def unreadable(conn: sqlite3.Connection, song: Song) -> bool:
     """Whether the song's current audio is filed as audio that can't be read (run.py ``_unreadable``)."""
     kept = kv_get_json(conn, f"{UNREADABLE}{song.id}")
@@ -112,13 +132,15 @@ def why_not_offered(conn: sqlite3.Connection, cfg: Config, song: Song, overrides
                     anyway: bool = False) -> str | None:
     """None when the song is due for an offer of a transcript, else one short reason. Any audio of the song's own
     counts, a purchase's as well as YouTube's; the lyrics sites always come first. ``anyway`` passes over a song
-    noted as heard to have nothing sung, and nothing else."""
+    noted as heard to have nothing sung, and nothing else: audio Whisper can't load would fail by hand alike."""
     if not song.audio_path:
         return "it has no audio"
     if not Path(song.audio_path or "").is_file():
         return "its audio file is missing"
     if unreadable(conn, song):
         return "its audio can't be read"
+    if whisper_cant_read(conn, song) is not None:
+        return WHISPER_UNREADABLE_WHY
     if song.status == "ignored" or song.key in overrides.ignore:
         return "ignored"
     if any(f.name == HUMAN_SHEET for f in kept_files(conn, song.id)):

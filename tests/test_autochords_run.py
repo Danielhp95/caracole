@@ -1990,7 +1990,10 @@ def test_nothing_sung_is_counted_and_said_on_the_sheet(conn, cfg, tmp_path, loud
     assert SILENT in auto_sheet(cfg, conn, s) and auto_raw(conn, s)["heard_nothing"] is True
 
 
-def test_audio_whisper_cant_load_is_filed_once_and_never_heard_every_night(conn, cfg, tmp_path, loud):
+def test_audio_whisper_cant_load_gets_its_chords_and_is_never_heard_every_night(conn, cfg, tmp_path, loud):
+    # The vocals read the mix with auto-chords' own reader, which the chords read it with: Whisper's decoder refusing
+    # it is no proof the chords can't be made. They are, tonight, chords-only; the song isn't listed as a file auto-
+    # chords can't read, nor heard again (a separation, a slot) until its audio changes.
     from test_transcribe_job import Transcriber
 
     from caracole.autochords.transcript import why_not_offered
@@ -2002,23 +2005,37 @@ def test_audio_whisper_cant_load_is_filed_once_and_never_heard_every_night(conn,
         stats = run(conn, cfg, rec, hearing=hearing, transcriptions=3)
     finally:
         hearing.close()
-    assert (stats.generated, stats.failed, stats.errors, stats.transcribe_problem) == (0, 1, [], None)
-    assert rec.calls == [] and [f.song for f in stats.failures] == ["Nobody - River Road"]
-    assert why_not_offered(conn, cfg, get_song(conn, s.id), Overrides()) == "its audio can't be read"
+    assert (stats.generated, stats.failed, stats.errors, stats.failures) == (1, 0, [], [])
+    assert (stats.heard, stats.silent, stats.transcribe_problem) == (0, 0, None)
+    assert rec.calls == [Path(s.audio_path)] and auto_raw(conn, s)["lyrics"] == "none"
+    assert kv_get(conn, failed_key(s)) is None
+    assert why_not_offered(conn, cfg, get_song(conn, s.id), Overrides()) == "Whisper can't read its audio"
+    again = hearing_of(cfg)
+    try:
+        assert run(conn, cfg, hearing=again, transcriptions=3).skipped == 1
+        assert again.separator.calls == []  # no separation, no slot spent
+        later = with_audio(conn, tmp_path, s, seconds=60.0, name="River Road.wav")  # a new file
+        assert why_not_offered(conn, cfg, later, Overrides()) is None
+        assert run(conn, cfg, hearing=again, transcriptions=3).heard == 1
+    finally:
+        again.close()
 
 
-def test_a_bug_hearing_a_song_fails_the_run_and_the_song_stays_due(conn, cfg, tmp_path, loud):
+def test_a_bug_hearing_a_song_fails_the_run_and_its_chords_are_made_all_the_same(conn, cfg, tmp_path, loud,
+                                                                                     caplog):
     from test_transcribe_job import Transcriber
 
-    offered_song(conn, cfg, tmp_path, "River Road")
+    s = offered_song(conn, cfg, tmp_path, "River Road")
     hearing = hearing_of(cfg, transcriber=Transcriber(fail=RuntimeError("deep in Whisper")))
     try:
-        stats = run(conn, cfg, hearing=hearing, transcriptions=3)
+        with caplog.at_level(logging.ERROR, logger="caracole.autochords.run"):
+            stats = run(conn, cfg, hearing=hearing, transcriptions=3)
     finally:
         hearing.close()
-    assert (stats.generated, stats.failed, stats.errors) == (0, 1, ["Nobody - River Road: RuntimeError: deep in "
-                                                                      "Whisper"])
-    assert run(conn, cfg).generated == 1  # still due
+    assert stats.errors == ["Nobody - River Road: RuntimeError: deep in Whisper"]  # the command exits 1
+    assert (stats.generated, stats.failed) == (1, 0) and auto_raw(conn, s)["lyrics"] == "none"
+    [bug] = [r for r in caplog.records if r.levelno == logging.ERROR]
+    assert bug.exc_info is not None  # a bug is logged with its traceback, whatever it raised
 
 
 @pytest.mark.parametrize("given", [True, False], ids=["cap zero", "transcribe off"])
@@ -2110,3 +2127,34 @@ def test_a_lookup_goes_first_between_the_vocals_and_the_words(conn, cfg, tmp_pat
     else:  # the words aren't heard over vocals of other audio, nor for a song no longer offered them
         assert order == ["separator", "lookup"] and stats.heard == 0
         assert stats.generated == (1 if lookup == "replaces the audio" else 0)
+
+
+def test_a_run_for_one_song_leaves_the_nights_hearing_record_alone(conn, cfg, tmp_path, monkeypatch):
+    import caracole.autochords.run as ac_run
+
+    gpu = "the GPU build's separator needs the GPU, which this unit doesn't see (no /dev/nvidiactl)"
+    monkeypatch.setattr(ac_run, "transcribe_problem", lambda cfg: gpu)
+    offered_song(conn, cfg, tmp_path, "River Road")
+    one = with_audio(conn, tmp_path, add_song(conn, "Nobody", "Found"))
+    run(conn, cfg, transcriptions=3)
+    assert kv_get_json(conn, STATUS)["transcribe_problem"] == gpu
+    update_song(conn, one.id, audio_mtime=(one.audio_mtime or 0) + 5)  # its sheet due again
+    assert run(conn, cfg, transcriptions=3, only={one.id}).generated == 1
+    record = kv_get_json(conn, STATUS)
+    assert (record["heard"], record["silent"], record["transcribe_problem"]) == (0, 0, gpu)
+
+
+def test_the_count_of_songs_due_counts_those_the_words_make_due(conn, cfg, tmp_path, loud, caplog):
+    # Two chords-only sheets up to date, offered their words: the hearing makes both due, and the log says "of 2".
+    songs = [offered_song(conn, cfg, tmp_path, t, added_at=f"2026-10-0{n}T00:00:00Z")
+             for n, t in enumerate(("One", "Two"), 1)]
+    run(conn, cfg)
+    hearing = hearing_of(cfg)
+    try:
+        with caplog.at_level(logging.INFO, logger="caracole.autochords.run"):
+            assert run(conn, cfg, hearing=hearing, transcriptions=3).generated == 2
+    finally:
+        hearing.close()
+    said = [r.getMessage() for r in caplog.records if r.getMessage().startswith("Working out the chords")]
+    assert said == ["Working out the chords of Nobody - Two (1 of 2)…", "Working out the chords of Nobody - One (2 of 2)…"]
+    assert all(over_words(conn, s) for s in songs)

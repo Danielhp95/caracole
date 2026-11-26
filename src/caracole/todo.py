@@ -558,22 +558,34 @@ def _autochords_failures(conn: sqlite3.Connection, cfg: Config) -> tuple[list[st
 WORDS_UNHEARD_TITLE = "Lyrics couldn't be transcribed in the last run"
 
 
-def _words_unheard(conn: sqlite3.Connection) -> tuple[list[str], str]:
-    """Why the last auto-chords run heard no words a song waited for, from kv ``autochords:status``'s
-    ``transcribe_problem`` (``autochords.run.autochords_pending``): its setup failing, or this machine (the GPU
-    build's nightly unit sees no GPU)."""
+def _words_unheard(conn: sqlite3.Connection, songs: list[Song]) -> tuple[list[str], str, bool]:
+    """The songs whose audio Whisper can't load (transcript.py ``whisper_cant_read``: their chords made, their words
+    never heard until the audio changes), and why the last auto-chords run heard no words a song waited for, from kv
+    ``autochords:status``'s ``transcribe_problem`` (``autochords.run.autochords_pending``): its setup failing, or this
+    machine (the GPU build's nightly unit sees no GPU). The songs are the items, the reason the intro: the section
+    shows for either (its third member)."""
+    from caracole.autochords.transcript import whisper_cant_read
+
+    items = []
+    for song in songs:
+        error = whisper_cant_read(conn, song)
+        if error is not None:
+            items.append(f"- **{md(song.display)}**: Whisper can't read its audio" + (f" · {md(error)}" if error else ""))
+    intro = []
     status = kv_get_json(conn, "autochords:status", default=None)
     problem = status.get("transcribe_problem") if isinstance(status, dict) else None
-    if not isinstance(problem, str) or not problem:
-        return [], ""
-    try:
-        last = f" ({_fmt(datetime.fromisoformat(str(status['at'])))})"
-    except (KeyError, ValueError):
-        last = ""
-    return [f"- {md(problem)}"], (
-        f"The last auto-chords run{last} made the chords alone of the songs no lyrics site has words for, as it "
-        "couldn't hear their words here. caracole serve's own jobs still hear them: a sheet from a video, or "
-        "Transcribe the lyrics on a song's card.")
+    if isinstance(problem, str) and problem:
+        try:
+            last = f" ({_fmt(datetime.fromisoformat(str(status['at'])))})"
+        except (KeyError, ValueError):
+            last = ""
+        intro.append(f"The last auto-chords run{last} couldn't hear words here: {md(problem)}. The songs no lyrics "
+                     "site has words for got their chords alone. caracole serve's own jobs still hear them: a sheet "
+                     "from a video, or Transcribe the lyrics on a song's card.")
+    if items:
+        intro.append("Whisper can't load the audio of these songs, so their sheets have the chords alone. A new file "
+                     "or another video under `[youtube]` gets their words heard.")
+    return items, "\n\n".join(intro), bool(intro)
 
 
 def _gtptabs_files(conn: sqlite3.Connection) -> dict[int, list[sqlite3.Row]]:
@@ -883,7 +895,7 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
                 "", *_near_names_intro(songs), *review]
     artists, n_artists = _artists_to_find(conn, songs, overrides)
     unread, unread_intro = _autochords_failures(conn, cfg)
-    unheard, unheard_intro = _words_unheard(conn)
+    unheard, unheard_intro, unheard_said = _words_unheard(conn, songs)
     ms_pages, ms_intro, n_ms, ms_blocking = _musescore_pages(conn, cfg, songs, overrides, now)
     if route_problem(cfg) is None:  # caracole takes these songs' audio from YouTube
         states = youtube if youtube is not None else song_states(conn, overrides, now)
@@ -920,7 +932,8 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
                             if s.lyrics_status == "missing" and s.status != "ignored"],
          "LRCLIB has no lyrics for these yet.", None),
     ):
-        if items or (title == SCORES_TITLE and ms_blocking):  # a block is said, even with nothing to list
+        if items or (title == SCORES_TITLE and ms_blocking) or (title == WORDS_UNHEARD_TITLE and unheard_said):
+            # a block is said, even with nothing to list, and so is why no words were heard
             out += _section(title, items, intro, count)
     out += _render_status(conn)
     out += _sources(conn, cfg)

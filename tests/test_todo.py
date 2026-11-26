@@ -1127,14 +1127,36 @@ def test_the_todo_page_says_why_words_werent_heard(conn, cfg):
     gpu = "the GPU build's separator needs the GPU, which this unit doesn't see (no /dev/nvidiactl)"
     kv_set_json(conn, "autochords:status", {"at": "2026-11-25T04:12:00Z", "generated": 1, "skipped": 0,
                                             "failed": [], "heard": 0, "silent": 0, "transcribe_problem": gpu})
-    section = section_of(todo(conn, cfg), WORDS_UNHEARD)
-    assert f"- {gpu}" in section
+    text = todo(conn, cfg)
+    assert f"## {WORDS_UNHEARD}\n" in text  # one reason, no count: the section counts songs
+    section = section_of(text, WORDS_UNHEARD)
+    assert gpu in section
     assert "2026-11-25 04:12 UTC" in section and "Transcribe the lyrics" in section
     for record in ({"at": "2026-11-25T04:12:00Z", "failed": [], "heard": 2, "transcribe_problem": None},
                    {"at": "2026-11-25T04:12:00Z", "failed": [], "transcribe_problem": ["not", "words"]},
                    {"at": "2026-11-25T04:12:00Z", "failed": []}):
         kv_set_json(conn, "autochords:status", record)
         assert WORDS_UNHEARD not in todo(conn, cfg), record
+
+
+def test_the_todo_page_lists_the_songs_whisper_cant_read(conn, cfg, tmp_path):
+    # Their chords are made: they aren't under the files auto-chords can't read, but here, why their sheets have no
+    # words, until their audio changes.
+    from caracole.autochords.transcript import note_whisper_cant_read
+
+    s = add_song(conn, "Nick Cani", "Vikingos veganos")
+    audio = tmp_path / "a.m4a"
+    audio.write_bytes(b"audio")
+    update_song(conn, s.id, audio_path=str(audio), audio_mtime=os.stat(audio).st_mtime)
+    s = get_song(conn, s.id)
+    note_whisper_cant_read(conn, s, "2026-11-25T04:12:00Z", "RuntimeError: Failed to load audio: moov atom")
+    text = todo(conn, cfg)
+    assert f"## {WORDS_UNHEARD} (1)\n" in text and AUTOCHORDS not in text
+    section = section_of(text, WORDS_UNHEARD)
+    assert "- **Nick Cani - Vikingos veganos**: Whisper can't read its audio · RuntimeError: Failed to load audio: " \
+           "moov atom" in section
+    update_song(conn, s.id, audio_mtime=(s.audio_mtime or 0) + 5)
+    assert WORDS_UNHEARD not in todo(conn, cfg)
 
 
 # --- MuseScore: links and the inbox -------------------------------------------------------------

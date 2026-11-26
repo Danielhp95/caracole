@@ -39,6 +39,9 @@ With the GPU build (`autochords-cuda`), the nightly unit hears no words: its sep
 unit doesn't see it. The to-do page says so. The words then come from the library page's jobs: a sheet from a video,
 or Transcribe the lyrics on the song's card. With the CPU build, the nightly unit hears them on the CPU.
 
+Audio Whisper can't read still gets its chords, wherever its words were to be heard. caracole then stops offering to
+transcribe it until the file changes, and the to-do page lists it.
+
 ## Install
 
 ```sh

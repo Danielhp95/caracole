@@ -718,7 +718,10 @@ def test_a_transcription_that_fails_here_still_makes_the_chords_and_exits_0(setu
     assert recognizer.calls == [Path(song.audio_path)]
     assert transcript_of(conn, song) is None and not heard_nothing(conn, song)
     assert kv_get(conn, f"autochords:failed:{song.id}") is None
-    assert why_not_offered(conn, setup, song, load_overrides(setup.overrides_file)) is None
+    # Offered again after the setup's failure; audio Whisper can't load is noted for its own audio, and offered no
+    # more until it changes (a transcription would fail on it the same way).
+    expected = "Whisper can't read its audio" if fails == "audio" else None
+    assert why_not_offered(conn, setup, song, load_overrides(setup.overrides_file)) == expected
 
 
 @pytest.mark.parametrize("before,ran", [("vocals", []), ("words", ["separator"])])
