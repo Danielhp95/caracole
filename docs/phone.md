@@ -53,7 +53,8 @@ or "up to date".
 notification. Its line says "Up to date" only when nothing was left; otherwise it counts what
 wasn't synced. Conflicts end it with "tap Sync to choose": the sheet shows each one. Anything
 else left ends it with "the Journal says why" ("1 taken · 1 not synced: the Journal says
-why"): open that sync's Output in the Journal to see each one and why.
+why"): open that sync's Output in the Journal to see each one and why, by its name ("Left as it
+was: Radiohead - Creep: changed here since compared").
 
 Both sides must run versions of caracole that name songs by the same rules. When they don't, the
 sync refuses before taking anything: "This caracole and the other name songs by different rules:

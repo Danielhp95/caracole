@@ -506,7 +506,7 @@ def test_peer_import_and_peer_sync_sweep_the_copies_left_as_they_start(libraries
     folder.mkdir(parents=True, exist_ok=True)
     # The import takes Desk's Creep, then the sync with Desk's caracole serve (the fixture's) finds nothing to do.
     for command, said in ((["peer", "import", "--yes", str(exported(desk, tmp_path / "d.caracole"))],
-                           "Took song/radiohead/creep"),
+                           "Took Radiohead - Creep"),  # by its name
                           (["peer", "sync", HOST, "--yes"], "Nothing differs.")):
         left = folder / "give-indexes-0123456789ab.sqlite"
         left.write_bytes(b"x")

@@ -64,7 +64,7 @@ from caracole.web.jobs import (
 )
 from caracole.web.pages import Refused
 from caracole.web.review_routes import picks_waiting, review_first
-from caracole.web.status import REQUESTS, SongFacts, details_href, job_line, peer_kind, song_line
+from caracole.web.status import REQUESTS, SongFacts, changes_left, details_href, job_line, peer_kind, song_line
 
 if TYPE_CHECKING:
     from caracole.overrides import Overrides
@@ -286,7 +286,8 @@ def view(job: Job, jobs: list[Job], song_id: int | None, facts: SongFacts | None
 
 def peer_outcome(job: Job) -> dict[str, Any] | None:
     """What a sync or a take did, once it is over (None while it waits or runs): the units it took here (``taken``),
-    gave there (``given``) and left as they were, each with why (``left``), as its command said them (``Job.units``);
+    gave there (``given``) and left as they were, each with why (``left``, ``status.changes_left``: a removal whose
+    song is here is none), as its command said them (``Job.units``);
     how many units the two agree on now (``agreed``, its agree stage's count; None when it didn't agree), and the sites
     whose indexes it brought up to date (``indexed``: none on a computer, the phone's sync's); and, when its command
     said one at its end, its ``report`` (``Job.report``: whom it synced with, when, the parts and each index taken
@@ -297,7 +298,7 @@ def peer_outcome(job: Job) -> dict[str, Any] | None:
     count = _AGREED.match(agree.detail.strip()) if agree is not None else None
     outcome = {"taken": [u for u, said, _ in job.units if said == "taken"],
                "given": [u for u, said, _ in job.units if said == "given"],
-               "left": [[u, why] for u, said, why in job.units if said == "left"],
+               "left": [[u, why] for u, why in changes_left(job)],
                "agreed": int(count[1]) if count else None, "indexed": []}
     if job.report is not None:
         outcome["report"] = job.report

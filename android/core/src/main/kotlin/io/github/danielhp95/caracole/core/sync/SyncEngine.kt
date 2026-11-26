@@ -75,9 +75,15 @@ data class Comparison(val id: String, val address: String, val peer: PeerState, 
 
 /** What a sync did: the units taken here, given there, and left (with why), how many the two agree on after, the
  * sites merged; and [report], the sync's report (the sync redesign's §3.5: with whom, when, its parts, each index
- * taken or given counted before and after), null for a sync that stopped. */
+ * taken or given counted before and after), null for a sync that stopped; [labels], each unit left's label as
+ * compared ("Radiohead - Creep", "songbook Campfire"), the name its line says it by (SyncRoutes.sayLeft). */
 data class SyncOutcome(val taken: List<String>, val given: List<String>, val left: List<Pair<String, String>>,
-                       val agreed: Int, val indexed: List<String>, val report: JsonObject? = null)
+                       val agreed: Int, val indexed: List<String>, val report: JsonObject? = null,
+                       val labels: Map<String, String> = emptyMap()) {
+    /** What it left as it was that is a change left ([Take.isChangeLeft]): the job's outcome (SyncJson.outcome) and
+     * its "Left as it was:" lines (SyncRoutes.sayLeft) say these, the sync's own outcome as it ends. */
+    val changesLeft: List<Pair<String, String>> get() = left.filter { Take.isChangeLeft(it.second) }
+}
 
 /** What `POST /sync/test` says of the computer at [address] ([SyncEngine.tested]): its state, how many songs and
  * songbooks it holds, its indexes' newest read (null: none), and when the phone last synced with it (null: never). */
@@ -268,7 +274,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         val unsettled = scoped.count { it.proposal == CONFLICT && choices[it.id] == null && prefer == null }
         if (unsettled > 0 && conflicts == Conflicts.ASK) throw SyncFailed(unsettled(unsettled))
         val client = client(c.address)
-        val done = Done()
+        val done = Done(c.differences)
 
         // 1. compare
         stage(COMPARE, RUNNING, "")
@@ -420,7 +426,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
      */
     private suspend fun applyFile(c: Comparison, choices: Map<String, Side>, prefer: Side?, parts: List<String>,
                                   conflicts: Conflicts, stage: (String, String, String) -> Unit): SyncOutcome {
-        val done = Done()
+        val done = Done(c.differences)
         val now = Stamps.of(clock())
 
         // 1. check
@@ -560,8 +566,8 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
 
     // --- the stages' parts ------------------------------------------------------------------------------------------
 
-    /** What the sync did so far. */
-    private class Done {
+    /** What the sync did so far, of the [compared] differences (the labels its leftovers are said by). */
+    private class Done(private val compared: List<Difference>) {
         val taken = ArrayList<String>()
         val given = ArrayList<String>()
         val left = ArrayList<Pair<String, String>>()
@@ -570,8 +576,11 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         val reported = ArrayList<JsonObject>()  // the report's indexes, each taken or given
         var at: String? = null
 
-        fun outcome(report: JsonObject? = null) =
-            SyncOutcome(taken.toList(), given.toList(), left.toList(), agreed, indexed.toList(), report)
+        fun outcome(report: JsonObject? = null): SyncOutcome {
+            val ids = left.map { it.first }.toSet()
+            return SyncOutcome(taken.toList(), given.toList(), left.toList(), agreed, indexed.toList(), report,
+                               compared.filter { it.id in ids }.associate { it.id to it.label })
+        }
     }
 
     private class Compared(val peer: PeerState, val differences: List<Difference>, val syncedBefore: String?,
@@ -779,7 +788,8 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
                 if (dropping != null && job == null) io { client.pushDrop(token, dropping, me) }
                 val far = if (n == 0) "" else "${done.given.size - givenBefore} given in the first " +
                     (if (n == 1) "push" else "$n pushes") + " of ${pushes.size}; then "
-                // commands/peer.py's words: the whole give counted, and once a push was taken, that it stays so.
+                // commands/peer.py's words (given_so_far, which Outcomes.GIVEN_SO_FAR reads to say the count once):
+                // the whole give counted, and once a push was taken, that it stays so.
                 val why = far + which + said(e) + (if (n == 0) "" else " $TAKEN_STAY")
                 stage(GIVE, FAILED, why)
                 throw SyncFailed("Couldn't give them ${toGive.size}: $why", done.outcome(), e)

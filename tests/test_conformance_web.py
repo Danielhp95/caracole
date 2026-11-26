@@ -1137,12 +1137,16 @@ def peer_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | No
     from caracole.commands.peer import TAKEN_STAY
 
     give = "Couldn't give them 2: No answer from http://192.168.1.20:8737: timed out"
-    pushed = f"Couldn't give them 3: 1 of 3 pushes taken; push 2 of 3: the computer answered 503. {TAKEN_STAY}"
+    # commands/peer.py's words for a give stopped after its first push (``far``), which count what it gave.
+    pushed = (f"Couldn't give them 3: 1 given in the first push of 3; then push 2 of 3: the computer answered 503. "
+              f"{TAKEN_STAY}")
     agree = "Couldn't note where the books agree: database is locked"
     taken = {"compare": ("done", "4 differences"), "take": ("done", "took 1")}
     for note, stages, units, said in (
             ("taken, then the give failed", dict(taken, give=("failed", give)), took[:1], give),
             ("taken, then a push of three failed after one", dict(taken, give=("failed", pushed)), took, pushed),
+            ("nothing taken, a push of three failed after one", dict(taken, give=("failed", pushed)), took[1:],
+             pushed),
             ("taken, then the agreement failed",
              dict(taken, give=("done", "gave 1"), agree=("failed", agree)), took, agree),
             ("nothing shared, the give failed", dict(taken, give=("failed", give)), [], give)):
@@ -1152,6 +1156,15 @@ def peer_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | No
     jobs.append(("sync, interrupted after it took a change",
                  _interrupted(peer_job("sync", "running", dict(taken, give=("running", "1 of 2")), units=took[:1])),
                  None, 0, None, None))
+    # A removal there of a song kept here, left as the sync's answer (peer_sync.SONG_HERE, its song's difference left
+    # unsettled): no change left, the sync read as without it; a real leftover beside it counted alone.
+    from caracole.peer_sync import SONG_HERE
+
+    answered = ("removed/oasis/live forever", "left", SONG_HERE)
+    for note, units in (("nothing else", [answered]), ("its changes", took + [answered]),
+                        ("one left beside it", left + [answered])):
+        jobs.append((f"sync, done, a removal whose song is here: {note}", peer_job("sync", "done", shared, units=units),
+                     None, 0, None, None))
     # A sync's agree stage counted in another script's digits, as Python's \d and int() read them.
     jobs.append(("sync, done, its count in Arabic-Indic digits", peer_job("sync", "done", {
         "compare": ("done", ""), "agree": ("done", " ١٢ units the books agree on\n")}, units=took),

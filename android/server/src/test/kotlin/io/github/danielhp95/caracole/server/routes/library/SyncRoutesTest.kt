@@ -486,15 +486,42 @@ class SyncRoutesTest {
                      outcome["left"])
         assertEquals(before, computer.state().getValue(unit) to app.database.read { Units.libraryState(it) }.getValue(unit),
                      "the conflict as it was on both sides")
-        assertEquals(listOf("${SyncRoutes.NOT_SYNCED}$unit: ${SyncEngine.UNSETTLED}"), ended.said,
-                     "each unit left said, which the Journal's Output shows (Feed's step of what it said), where the " +
-                         "Wi-Fi line sends the owner")
+        // Each unit left said by its name, a conflict as what it is, in commands/peer.py's words (LEFT): which the
+        // Journal's Output shows (Feed's step of what it said), where the Wi-Fi line sends the owner.
+        val said = "Left as it was: Oasis - Wonderwall: changed on both sides: tap Sync to choose"
+        assertEquals(listOf(said), ended.said)
+        assertEquals(said, SyncRoutes.leftLine("Oasis - Wonderwall", SyncEngine.UNSETTLED))
         val feed = io.github.danielhp95.caracole.server.jobs.Feed.feed(listOf(ended), emptyMap(), opened = setOf(ended.id))
         val shown = feed.toString()
-        assertTrue(io.github.danielhp95.caracole.server.jobs.Feed.SAID in shown &&
-                       "${SyncRoutes.NOT_SYNCED}$unit" in shown, shown)
+        assertTrue(io.github.danielhp95.caracole.server.jobs.Feed.SAID in shown && said in shown && unit !in shown,
+                   shown)
         assertEquals(1, synced.get())
         assertTrue(routes.alone(address) != null, "once over, another may be queued")
+    }
+
+    @Test fun `a name holding a newline is said on one line, as commands-peer's left_line says it`() {
+        assertEquals("Left as it was: songbook Wedding set: changed here since compared",
+                     SyncRoutes.leftLine("songbook Wedding\n set", "changed here since compared"))
+        assertTrue("\n" !in SyncRoutes.leftLine("Radiohead -\tCreep\r\n", SyncEngine.UNSETTLED))
+    }
+
+    @Test fun `a removal on the computer of a song left in conflict is no unit not synced, in the outcome or the Output`() {
+        val creep = onComputer("Radiohead", "Creep")
+        val address = computer.address.toString()
+        runBlocking { withTimeout(20_000) { queue.await(routes.alone(address)!!.id) } }  // the phone takes Creep
+        computer.database.writeBlocking { computer.store.remove(it, creep.key, "2026-11-03T11:00:00Z") }
+        app.database.writeBlocking { it.execute("UPDATE songs SET album = 'Pablo Honey' WHERE key = ?", creep.key) }
+        val unit = "song/${creep.key}"
+
+        val ended = runBlocking { withTimeout(20_000) { queue.await(routes.alone(address)!!.id) } }
+        assertEquals("done", ended.state)
+        val view = JobViews.view(ended, queue)
+        // The removal is the song's answer (Take.SONG_HERE): only the song's conflict is left, said and counted.
+        assertEquals(JsonArray(listOf(JsonArray(listOf(JsonPrimitive(unit), JsonPrimitive(SyncEngine.UNSETTLED))))),
+                     view.getValue("outcome").jsonObject["left"])
+        assertEquals(listOf("Left as it was: Radiohead - Creep: changed on both sides: tap Sync to choose"), ended.said)
+        assertEquals("Shared · 1 change left as it was",
+                     view.getValue("line").jsonObject.getValue("text").jsonPrimitive.content)
     }
 
     @Test fun `alone with nothing answering fails its compare stage in its words and skips the rest`() {

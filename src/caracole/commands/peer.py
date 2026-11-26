@@ -98,6 +98,12 @@ DONE = {"taken": "Took", "given": "Gave", "left": "Left"}
 STALE = "Both books changed since that comparison. Compare again, then choose again."
 UNSETTLED = "both books changed it: choose one"
 SKIPPED = "skipped, as you chose"
+# What a sync, a take or an import left as it was, a line a unit, by the name the owner knows it by (its label: "Artist
+# - Title", "songbook Campfire", "Artist - Title (removed)"), in the words the phone's Journal says it
+# (SyncRoutes.sayLeft): "Left as it was: Radiohead - Creep: changed here since compared"; a conflict left unsettled
+# said as what it is (CONFLICT_LEFT, here the command's own way to settle it: the phone's says "tap Sync to choose").
+LEFT = "Left as it was"
+CONFLICT_LEFT = "changed on both sides: choose a side with --choose or --prefer"
 NOT_A_PART = "parts are library, songbooks or indexes, by commas."
 # ``caracole peer import --progress``'s stages, which caracole serve's jobs name (§3.5 of the sync redesign's plan).
 PEER_IMPORT_STAGES = (("check", "Reading the file"), ("take", "Taking what they wrote"),
@@ -159,9 +165,10 @@ def register(app: typer.Typer) -> None:
             fail(f"--unit {bad!r} is neither a unit (song/<key>, …) nor THERE:HERE:UNIT", 2)
         named = {unit: (there, here) for unit, there, here in read if there is not None or here is not None}
         ids = list(dict.fromkeys(unit for unit, _, _ in read))
+        names: dict[str, str] = {}
         done = _pull(cfg, address, ids, {u: t for u, (t, _) in named.items()} if named else None,
-                     expected_here={u: h for u, (_, h) in named.items()} if named else None)
-        typer.echo(_pulled(done))
+                     expected_here={u: h for u, (_, h) in named.items()} if named else None, names=names)
+        typer.echo(_pulled(done, names=names))
         if done.left:
             raise typer.Exit(1)
 
@@ -221,6 +228,7 @@ def register(app: typer.Typer) -> None:
                  "them again.", 2)
         # The differences of the parts asked for alone are taken, given or said (the hash is of every one).
         found = sync.in_scope(every, wanted_parts, listed=c.listed)
+        said.names = {d.id: d.label for d in every}
         said.stage("compare", "done", f"{len(found)} {'difference' if len(found) == 1 else 'differences'}")
         typer.echo(_report(address, state, c.synced_before, len(c.mine), found))
 
@@ -421,12 +429,21 @@ def _interactive() -> bool:
     return sys.stdin.isatty()
 
 
+def left_line(name: str, why: str) -> str:
+    """A unit left as it was, said by ``name`` (its label, else its id), with why (``LEFT``): on one line, the name's
+    whitespace collapsed (a songbook named over two lines)."""
+    return f"{LEFT}: {' '.join(name.split()) or name}: {CONFLICT_LEFT if why == UNSETTLED else why}"
+
+
 class _Said:
     """What a sync or a take says as it goes: with ``progress``, get.py's JSON lines (a stage's, a unit's event),
-    which caracole serve reads (web/jobs.py); else a plain line a unit."""
+    which caracole serve reads (web/jobs.py), and each change left a plain line beside its event, the Journal's
+    Output (``left_line``; none for a removal left because its song is here, ``status.changes_left``'s no change
+    left), as the phone's says it; else a plain line a unit. ``names``: each unit's label, as the owner knows it."""
 
     def __init__(self, progress: bool):
         self.progress = progress
+        self.names: dict[str, str] = {}
 
     def stage(self, name: str, state: str, detail: str = "") -> None:
         if self.progress:
@@ -446,8 +463,14 @@ class _Said:
             from caracole.get import progress_line
 
             typer.echo(progress_line({"event": "unit", "id": unit_id, "outcome": outcome, "why": why}))
+            from caracole.peer_sync import SONG_HERE
+
+            if outcome == "left" and why != SONG_HERE:
+                typer.echo(left_line(self.names.get(unit_id) or unit_id, why))
+        elif outcome == "left":
+            typer.echo("  " + left_line(self.names.get(unit_id) or unit_id, why))
         else:
-            typer.echo(f"  {DONE[outcome]} {unit_id}" + (f": {why}" if why else ""))
+            typer.echo(f"  {DONE[outcome]} {self.names.get(unit_id) or unit_id}" + (f": {why}" if why else ""))
 
 
 def _count(n: int) -> str:
@@ -572,13 +595,16 @@ def _compare(cfg, address: str, parts: tuple[str, ...] | None = None) -> _Compar
 
 
 def _pull(cfg, address: str, unit_ids: list[str], compared: dict[str, str | None] | None = None, *,
-          expected_here: dict[str, str | None] | None = None, on_unit=None, on_song=None, agree: bool = True):
+          expected_here: dict[str, str | None] | None = None, on_unit=None, on_song=None, agree: bool = True,
+          names: dict[str, str] | None = None):
     """``caracole peer pull``'s work: see the module's docstring. ``compared``: each unit's digest there as compared
     (None: it had none), so that one changed there since is left; else as it is there now. ``expected_here``: each
     one's digest here as compared, so that one changed here since is left too. ``on_song``: ``render_all``'s, as it
     renders the songs taken. What was taken is kept as agreed as the take ends, whatever ``agree`` says
     (``peer_sync.record_taken``). ``agree``: keep what the two agree on after (a sync does once it gave there what goes
-    there). Returns peer_sync's ``Applied``."""
+    there). ``names``, when given, gets each unit's label there (one gone there, this side's), by its id, for what is
+    said of it. Returns
+    peer_sync's ``Applied``."""
     from caracole import backup
     from caracole import peer_sync as sync
     from caracole.render import render_all
@@ -589,6 +615,13 @@ def _pull(cfg, address: str, unit_ids: list[str], compared: dict[str, str | None
         try:
             with sync.Peer(address, transport=transport_for_peer()) as peer:
                 state = peer.state(me)
+                if names is not None:  # there's label, else (a unit gone there) this side's, as compared
+                    gone = [u for u in unit_ids if u not in state.units]
+                    if gone:
+                        books_here, _ = _songbooks(cfg)
+                        mine = sync.library_state(conn, load_ovr(cfg), books_here or [])
+                        names.update({u: mine[u].label for u in gone if u in mine})
+                    names.update({u: state.units[u].label for u in unit_ids if u in state.units})
                 if state.server == me:
                     fail(f"The scribe at {address} is this one: nothing to take. caracole peer new-id gives one a new "
                          "id.")
@@ -674,7 +707,7 @@ def _push(cfg, address: str, state, give: list, here_now: dict[str, str | None],
 
     def far(sent: int, pushes: int) -> str:
         """How far a give that stopped got, before why: the pushes taken before it."""
-        return f"{counted['given']} given in the first {_pushes(sent)} of {pushes}; then " if sent else ""
+        return given_so_far(counted["given"], sent, pushes) if sent else ""
 
     def stopped(sent: int, pushes: int, why: str) -> NoReturn:
         rest = f" {TAKEN_STAY}" if sent else ""
@@ -748,6 +781,13 @@ def _handing_over(cfg, conn):
             _sleep(seconds)
 
     return pause
+
+
+def given_so_far(given: int, sent: int, pushes: int) -> str:
+    """How far a give that stopped after ``sent`` of its ``pushes`` got, before why: "350 given in the first 2 pushes
+    of 4; then ". The Journal's outcome reads these words to say the count once (outcome.py ``_GIVEN_SO_FAR``, the
+    phone's SyncEngine and Outcomes alike)."""
+    return f"{given} given in the first {_pushes(sent)} of {pushes}; then "
 
 
 def _pushes(n: int) -> str:
@@ -995,6 +1035,7 @@ def _take(cfg, folder, said: _Said) -> None:
 
     said.stage("check", "running")
     push = peer_push.read_sent(folder)
+    said.names = {unit_id: unit.label for unit_id, unit in push.units.items()}
     shown = push.name.strip() or "another caracole"
     with exclusive(cfg, "peer take", interactive=True), closing(open_db(cfg)) as conn:
         if push.sender == sync.make_id(conn):
@@ -1140,6 +1181,7 @@ def _import(cfg, path, *, name: str | None, said: _Said, parts: tuple[str, ...],
             fail(f"--choose names {', '.join(unknown[:3])}, which this library and the file don't hold differently "
                  "now: compare them again.", 2)
         scoped = peer_file.in_parts(found, parts)
+        said.names = {d.id: d.label for d in found.found}
         shown = file.name.strip() or "a file"
         said.stage("check", "done", f"{len(scoped)} {'difference' if len(scoped) == 1 else 'differences'} with "
                                     f"{shown}'s file")
@@ -1338,12 +1380,14 @@ def _taken_detail(done) -> str:
     return f"took {len(done.taken)}" + (f", left {len(done.left)}" if done.left else "")
 
 
-def _pulled(done, *, units: bool = True) -> str:
-    """What a take did: how many units it took and songs it rendered, then (``units``) each unit it left."""
+def _pulled(done, *, units: bool = True, names: dict[str, str] | None = None) -> str:
+    """What a take did: how many units it took and songs it rendered, then (``units``) each unit it left, by its
+    name (``names``, else its id: ``left_line``)."""
     lines = [f"Took {len(done.taken)} {'change' if len(done.taken) == 1 else 'changes'}"
              + (f"; {len(done.songs)} {'song' if len(done.songs) == 1 else 'songs'} rendered again." if done.songs
                 else ".")]
-    lines += [f"  Left {unit_id}: {why}" for unit_id, why in done.left] if units else []
+    named = names or {}
+    lines += [f"  {left_line(named.get(unit_id) or unit_id, why)}" for unit_id, why in done.left] if units else []
     return "\n".join(lines)
 
 

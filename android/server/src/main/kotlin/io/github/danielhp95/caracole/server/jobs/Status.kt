@@ -4,6 +4,7 @@ import io.github.danielhp95.caracole.core.keys.SafeName
 import io.github.danielhp95.caracole.core.py.PyRegex
 import io.github.danielhp95.caracole.core.py.PyText
 import io.github.danielhp95.caracole.core.py.PyUrl
+import io.github.danielhp95.caracole.core.sync.Take
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -294,10 +295,18 @@ object Status {
         return Line(tone, short(text), details = if (tone == "added") null else details)
     }
 
+    /** The units a sync, a take or a pull left as they were, each with why (status.py's changes_left): but a removal
+     * left because its song is here ([Take.isChangeLeft]), the sync's answer, the song kept, and no change left. Its
+     * line, its outcome and its view (JobViews' peerOutcome) count these. Over a job's units as its commands said
+     * them (status.py's port, held by job_views*.jsonl), every reason among them; the phone's own sync's outcome is
+     * SyncOutcome.changesLeft already. */
+    fun changesLeft(units: List<JobUnit>): List<JobUnit> =
+        units.filter { it.outcome == "left" && Take.isChangeLeft(it.why) }
+
     /** A sync, a take or a pull that is done (status.py's _peer_done). */
     private fun peerDone(job: Shape, kind: String, details: String): Line {
         stageFailure(job.stages)?.let { return Line("waiting", it, details = details) }
-        val left = job.units.count { it.outcome == "left" }
+        val left = changesLeft(job.units).size
         if (left > 0) {
             return Line("waiting", "${PEER_DONE.getValue(kind)} · ${plural(left, "change")} left as " +
                                    (if (left == 1) "it was" else "they were"), details = details)

@@ -198,11 +198,13 @@ object Syncs {
     }
 
     /** The units [outcome] left for another reason than a conflict unsettled: every `left` entry but those
-     * [conflictsLeft] counts, and but a removal left because its song is here (Take.SONG_HERE): that is the sync's
-     * answer, the song kept, so a sync that left only those is up to date. */
+     * [conflictsLeft] counts, and but a removal left because its song is here ([Take.isChangeLeft]): that is the
+     * sync's answer, the song kept, so a sync that left only those is up to date. A new sync's outcome lists none
+     * (SyncJson.outcome, SyncOutcome.changesLeft); a `lastOutcome` an older build saved still may. */
     private fun notSynced(outcome: JsonObject?): Int {
         val kept = (outcome?.get("left") as? JsonArray).orEmpty().count { entry ->
-            ((entry as? JsonArray)?.getOrNull(1) as? JsonPrimitive)?.takeIf { it.isString }?.content == Take.SONG_HERE
+            val why = ((entry as? JsonArray)?.getOrNull(1) as? JsonPrimitive)?.takeIf { it.isString }?.content
+            why != null && !Take.isChangeLeft(why)
         }
         return ((outcome?.get("left") as? JsonArray)?.size ?: 0) - conflictsLeft(outcome).first - kept
     }

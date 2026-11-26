@@ -96,7 +96,7 @@ from caracole.get import GTPTABS_KEPT, MATCH_NOT_FOUND, NAMES, SHEET_FROM
 from caracole.icons import AUTO, INBOX, tag
 from caracole.logs import plural
 from caracole.web.jobs import INDEX_READS, INTERRUPTED, LOOKUP, REMOVING, Job, Stage, song_key_of
-from caracole.web.status import _PEER_DONE, READY, _WAITING, Line, SongFacts, doing, peer_kind
+from caracole.web.status import _PEER_DONE, READY, _WAITING, Line, SongFacts, changes_left, doing, peer_kind
 
 if TYPE_CHECKING:
     from caracole.config import Config
@@ -170,6 +170,27 @@ IN_REVIEW = "Not sure which UG song it is."
 CANCELLED = "Cancelled before it ran."
 INTERRUPTED_RAN = "The server stopped mid-way. Try again to finish."
 INTERRUPTED_WAITED = "The server stopped before it ran. Try again runs it."
+# A sync's, whose next step is Compare again (COMPARE_AGAIN), never Try again: the action its entry offers named.
+INTERRUPTED_SYNC_RAN = "The server stopped mid-way. Compare again to finish."
+INTERRUPTED_SYNC_WAITED = "The server stopped before it ran. Compare again to run it."
+# A take's (the other device pushed) and a pull's (the other caracole asked), whose entry offers no action: what the
+# owner can do, from the other side.
+INTERRUPTED_TAKE_RAN = "The server stopped mid-way. Share again from the other device to finish."
+INTERRUPTED_TAKE_WAITED = "The server stopped before it ran. Share again from the other device to run it."
+INTERRUPTED_PULL_RAN = "The server stopped mid-way. Sync again from the other caracole to finish."
+INTERRUPTED_PULL_WAITED = "The server stopped before it ran. Sync again from the other caracole to run it."
+# A merge of the phone's index pages (``POST /peer/index``), which offers none either: the phone forgets its notes of
+# those pages only once their merge ends done, so its next sync sends them again by itself.
+INTERRUPTED_MERGE_RAN = "The server stopped mid-way. The phone's next sync sends them again."
+INTERRUPTED_MERGE_WAITED = "The server stopped before it ran. The phone's next sync sends them again."
+_INTERRUPTED = {"sync": (INTERRUPTED_SYNC_RAN, INTERRUPTED_SYNC_WAITED),
+                "peer-push": (INTERRUPTED_TAKE_RAN, INTERRUPTED_TAKE_WAITED),
+                "peer-pull": (INTERRUPTED_PULL_RAN, INTERRUPTED_PULL_WAITED),
+                "index-merge": (INTERRUPTED_MERGE_RAN, INTERRUPTED_MERGE_WAITED)}
+# A give stopped after some of its pushes, in commands/peer.py's words (``given_so_far``): "3 given in the first 2
+# pushes of 4; then …", the count of what was given said there, so its outcome says it once (test_web_outcome.py feeds
+# it given_so_far's own words).
+_GIVEN_SO_FAR = re.compile(r"\b\d+ given in the first ")
 _ELSEWHERE = {"lacuerda": "LaCuerda has a sheet", "gtptabs": "gtptabs lists a page for it"}
 # A sync's and a take's steps, by their stages' names (jobs.PEER_SYNC_STAGES, PEER_TAKE_STAGES; the phone's sync adds
 # mirror and index).
@@ -482,17 +503,18 @@ def _peer_outcome(job: Job, kind: str, line: Line) -> Outcome:
     action = COMPARE_AGAIN if kind == "sync" else None
     taken = sum(1 for _, said, _ in job.units if said == "taken")
     given = sum(1 for _, said, _ in job.units if said == "given")
-    left = sum(1 for _, said, _ in job.units if said == "left")
+    left = len(changes_left(job))
     parts = [f"{plural(taken, 'change')} taken"] if taken or kind != "sync" else []
-    parts += [f"{plural(given, 'change')} given"] if given else []
-    said = (", ".join(parts)).capitalize() + "." if parts else "Nothing changed in either book."
+    gave = [f"{plural(given, 'change')} given"] if given else []
+    said = (", ".join(parts + gave)).capitalize() + "." if parts or gave else "Nothing changed in either book."
     kept = f" {plural(left, 'change')} left as {'it was' if left == 1 else 'they were'}." if left else ""
     # Changes taken or given, then a failure (any stage after them: the give, a push of several, the agreement, the
     # phone's copy of the pages, the indexes; or the server stopping it): what was shared said first, as the Sync
     # sheet titles it "Synced with", then the failure, never doubling what its words say already.
     shared = bool(taken or given)
     if job.state == INTERRUPTED:
-        stopped = INTERRUPTED_RAN if job.started_at else INTERRUPTED_WAITED
+        ran, waited = _INTERRUPTED.get(kind, (INTERRUPTED_RAN, INTERRUPTED_WAITED))
+        stopped = ran if job.started_at else waited
         return Outcome("waiting", "Interrupted", f"{said}{kept} {stopped}" if shared else stopped, action)
     after = shared and (line.tone == "failed" or any(s.state == "failed" for s in job.stages))
     if line.tone == "failed" and not after:
@@ -504,7 +526,9 @@ def _peer_outcome(job: Job, kind: str, line: Line) -> Outcome:
     also = f" {skipped}." if skipped else ""
     if after:
         failure = _sentence(line.text)
-        reason = failure if said[:-1] in failure else f"{said}{kept} {failure}"
+        if _GIVEN_SO_FAR.search(failure):  # the give's failure counts what it gave: said there alone
+            said = (", ".join(parts)).capitalize() + "." if parts else ""
+        reason = " ".join(words for words in ((said + kept).strip(), failure) if words)
         if line.tone == "failed":
             return Outcome("failed", "Failed", reason, action)
         return Outcome("waiting", _PEER_DONE[kind], reason, action)

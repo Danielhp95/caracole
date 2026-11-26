@@ -594,10 +594,17 @@ def fresh(fake: FakeSync) -> FakeSync:
     return fake
 
 
-def start_on_the_laptop(page: Browser) -> None:
-    """The Sync tab, its address the one it synced with last, then Sync: the sheet, compared."""
+def tab_drawn(page: Browser) -> None:
+    """The Sync tab as GET /api/sync's answer draws it: its address the one it synced with last, and its last-sync
+    line, which takes room only once drawn (sync.css ``.sync-last:empty``) and so moves the panels' buttons down.
+    A click on one of them waits for it, else it may land where the button was (escape-flake.md)."""
     assert page.wait(f"document.getElementById('sync-address').value === '{ADDRESS}'")
     assert page.wait("document.getElementById('sync-last').textContent.startsWith('Last synced with Studio ')")
+
+
+def start_on_the_laptop(page: Browser) -> None:
+    """The Sync tab, drawn (``tab_drawn``), then Sync: the sheet, compared."""
+    tab_drawn(page)
     page.click("#sync-start")
     at_view(page, "what")
     assert page.wait("!document.getElementById('sync-counts').hidden")
@@ -848,6 +855,144 @@ def test_a_refusal_says_the_servers_words_and_compares_again(served, tmp_path):
         assert page.wait("!document.getElementById('sync-counts').hidden")
         assert page.js("document.getElementById('sync-go').textContent") == "Sync"
 
+# A removal there of a song kept here (peer_sync.answered_by_its_song): the sheet counts it as the sync takes it.
+
+def answered_by_its_song_cases() -> list[dict]:
+    """vectors/sync/kept.jsonl's answered_by_its_song records, which peer_sync and the phone's Compare answer."""
+    from helpers.corpus import VECTORS
+
+    with open(VECTORS / "sync" / "kept.jsonl", encoding="utf-8") as lines:
+        found = [json.loads(line) for line in lines if line.strip()]
+    return [r for r in found if r.get("fn") == "answered_by_its_song"]
+
+
+def unit_difference(d: dict, proposal: str) -> dict:
+    """A vector's difference (decide's lists') as POST /sync/compare answers it, its proposal ``proposal``."""
+    change = {"theirs": (None, "new"), "mine": ("changed", None), "conflict": ("changed", "gone")}[proposal]
+    return difference(d["id"], d["label"], proposal, "", change)
+
+
+@in_chromium
+def test_a_removal_there_of_a_song_given_here_is_never_counted_to_take_as_the_shared_vectors_say(served, tmp_path):
+    """Each answered_by_its_song case of kept.jsonl, its ``kept`` a proposed give (``decide``'s second list) and its
+    ``take`` to take: the sheet's ↓ counts the take less the removals its song's give answers, as the sync takes
+    them."""
+    cases = answered_by_its_song_cases()
+    assert len(cases) >= 12, len(cases)
+    fake = FakeSync()
+    with opened(tmp_path, served(fake)) as page:
+        for case in cases:
+            take, kept = case["in"]["take"], case["in"]["kept"]
+            fake.comparison = dict(copy.deepcopy(COMPARISON), indexes=[], songbooks={}, differences=[
+                *(unit_difference(d, "mine") for d in kept), *(unit_difference(d, "theirs") for d in take)])
+            page.js("location.hash = '#sheet=sync'")
+            at_view(page, "what")
+            assert page.wait("!document.getElementById('sync-counts').hidden")
+            counts = dict(page.js(COUNTS))
+            assert counts["take"] == f"{len(take) - len(case['out'])} to take", (case["case"], counts)
+            assert counts["give"] == f"{len(kept)} to give", (case["case"], counts)
+            # The Library part's line agrees with the counts: a removal its song's give answers is no change there.
+            library = [d for d in take if not d["id"].startswith("songbook/")]
+            there = len(library) - len(case["out"])
+            here = len([d for d in kept if not d["id"].startswith("songbook/")])
+            said = ", ".join(([f"{there} changed on Studio"] if there else [])
+                             + ([f"{here} changed on this computer"] if here else []))
+            assert page.js(PARTS_SAID)[0][0] == "Library · Your songs, their sheets and pages, both ways" + (
+                f" · {said}" if said else ""), case["case"]
+            page.press("Escape")
+            assert page.wait(f"!{SHEET}.open")
+
+
+@in_chromium
+@pytest.mark.parametrize("device", ["computer", "phone"])
+def test_a_removal_there_of_a_song_changed_on_both_is_counted_to_take_only_once_there_is_chosen(served, tmp_path,
+                                                                                               device):
+    """Wonderwall changed here and removed there: a conflict, and its removal to take. Before any choice the removal
+    counts to take; its song kept here, it is that answer, no take (the next card's counts say so); taken from there,
+    it is taken with the song."""
+    differences = [
+        song("song/oasis/wonderwall", "Oasis", "Wonderwall", "conflict", ("changed", "gone")),
+        difference("removed/oasis/wonderwall", "removed Oasis - Wonderwall", "theirs",
+                   "removed there since the last share", (None, "new")),
+        song("song/eagles/hotel california", "Eagles", "Hotel California", "conflict", ("changed", "changed")),
+        song("song/the beatles/let it be", "The Beatles", "Let It Be", "theirs", (None, "new")),
+    ]
+    fake = FakeSync(state=PHONE_STATE if device == "phone" else STATE,
+                    comparison=dict(copy.deepcopy(COMPARISON), indexes=[], songbooks={}, differences=differences))
+    size = {"width": 390, "height": 844, "mobile": True} if device == "phone" else {}
+    url = served(fake, sync="sheet" if device == "phone" else "tab")
+    with opened(tmp_path, url, **size) as page:
+        for side, then in (("here", "1 to take"), ("there", "2 to take")):
+            page.js("location.hash = '#sheet=sync'")
+            at_view(page, "what")
+            assert page.wait("!document.getElementById('sync-go').disabled")
+            assert page.js(COUNTS) == [["take", "2 to take"], ["give", "0 to give"], ["both", "2 changed on both"]]
+            page.click("#sync-go")
+            at_card(page)
+            assert page.js(CARD)["name"] == "Oasis · Wonderwall"
+            page.click(f"#sync-keep-{side}")
+            assert page.wait("document.getElementById('sync-card-at').textContent === '2 of 2'")
+            assert page.js(COUNTS)[0] == ["take", then], side
+            at_card(page)
+            page.click("#sync-cancel")  # queues nothing; opened again, it compares afresh
+            assert page.wait(f"!{SHEET}.open")
+        assert fake.posted("/sync/apply") == []
+
+
+@in_chromium
+@pytest.mark.parametrize("side", ["here", "there"])
+def test_what_the_sheet_counts_to_take_is_what_the_done_view_says_the_sync_took(served, tmp_path, side):
+    """Wonderwall changed here and removed there, its removal to take, Hotel California changed on both, Let It Be
+    there alone: each conflict kept ``side``, the ↓ the sheet counts as Sync goes, with the conflicts chosen there, is
+    what peer_sync.decide and answered_by_its_song take over the choices posted. The done view is fed that take
+    itself (no server takes anything here): this guards the sheet's count against those rules, and that the done
+    view shows each unit of it, never the server's own take."""
+    from types import SimpleNamespace
+
+    from caracole import peer_sync as sync
+
+    differences = [
+        song("song/oasis/wonderwall", "Oasis", "Wonderwall", "conflict", ("changed", "gone")),
+        difference("removed/oasis/wonderwall", "Oasis - Wonderwall (removed)", "theirs",
+                   "removed there since the last share", (None, "new")),
+        song("song/eagles/hotel california", "Eagles", "Hotel California", "conflict", ("changed", "changed")),
+        song("song/the beatles/let it be", "The Beatles", "Let It Be", "theirs", (None, "new")),
+    ]
+    fake = FakeSync(comparison=dict(copy.deepcopy(COMPARISON), indexes=[], songbooks={}, differences=differences))
+    held = fake.hold_on("/sync/apply")
+    with opened(tmp_path, served(fake) + "#sheet=sync") as page:
+        at_view(page, "what")
+        assert page.wait("!document.getElementById('sync-go').disabled")
+        page.click("#sync-go")
+        for _ in range(2):
+            at_card(page)
+            before = page.js("document.getElementById('sync-card-at').textContent")
+            page.click(f"#sync-keep-{side}")
+            assert page.wait(f"document.getElementById('sync-card-at').textContent !== {json.dumps(before)} || "
+                             f"{SHEET}.dataset.view !== 'conflict'")
+        [form] = fake.awaited("/sync/apply")
+        counted = int(page.js("document.querySelector('#sync-counts .take').dataset.n"))
+        chosen = dict(reversed(line.split("\t")) for line in form["choices"][0].splitlines())
+        found = [SimpleNamespace(id=d["id"], proposal=d["proposal"]) for d in differences]
+        take, give = sync.decide(found, None, lambda d: {"here": sync.MINE, "there": sync.THEIRS}[chosen[d.id]])
+        took = [d for d in take if d not in sync.answered_by_its_song(take, give)]
+        over = sync_view("done", {"compare": ("done", "4 differences"), "take": ("done", f"took {len(took)}"),
+                                  "give": ("done", f"gave {len(give)}"), "agree": ("done", "4 units")},
+                         [(d.id, "taken", "") for d in took] + [(d.id, "given", "") for d in give], REPORT)
+        fake.views = [over]
+        held.set()
+        at_view(page, "done", timeout=15)
+        there = [d for d in differences if d["proposal"] == "conflict" and chosen[d["id"]] == "there"]
+        assert counted + len(there) == len(took) and counted == {"here": 1, "there": 2}[side], (counted, took)
+        # The done view says each of them came: a song taken, or a conflict whose version there was kept (a removal
+        # taken with its song on that song's row).
+        summary = {s["kind"]: s for s in page.js(SUMMARY)}
+        came = [r[0] for r in summary["taken"]["rows"]] + [
+            r[0] for r in summary.get("conflicts", {"rows": []})["rows"] if "Studio's version kept" in r[1]]
+        names = {"oasis/wonderwall": "Wonderwall – Oasis", "eagles/hotel california": "Hotel California – Eagles",
+                 "the beatles/let it be": "Let It Be – The Beatles"}
+        assert sorted(came) == sorted({names[d.id.partition("/")[2]] for d in took}), summary
+
 
 # --- following it, and what it did ------------------------------------------------------------------------------
 
@@ -919,6 +1064,23 @@ def test_a_songbook_left_as_it_was_is_named_by_its_name(served, tmp_path):
         sync_through(page, fake)
         left = next(s for s in page.js(SUMMARY) if s["kind"] == "left")
         assert left["rows"][0][0] == "Wedding set", left["rows"]
+
+
+@in_chromium
+def test_a_removal_left_because_its_song_is_here_is_never_listed_as_left(served, tmp_path):
+    """The unattended sync's answer to a removal there of a song kept here (peer_sync.SONG_HERE): no change left, so
+    the summary of the same sync reads as without it (jobs_routes.peer_outcome, status.changes_left)."""
+    from caracole.peer_sync import SONG_HERE
+
+    units = TAKEN_GIVEN + [("removed/oasis/live forever", "left", SONG_HERE)]
+    over = sync_view("done", {"compare": ("done", "10 differences"), "take": ("done", "took 6"),
+                              "give": ("done", "gave 3"), "agree": ("done", "312 units the books agree on")},
+                     units, REPORT)
+    assert over["outcome"]["left"] == [] and over["line"]["text"] == "Shared"
+    fake = FakeSync(views=VIEWS[:-1] + [over])
+    with opened(tmp_path, served(fake) + "#sheet=sync") as page:
+        sync_through(page, fake)
+        assert "left" not in [s["kind"] for s in page.js(SUMMARY)]
 
 
 def indexes_done(report: dict) -> FakeSync:
@@ -1148,6 +1310,7 @@ def test_export_offers_the_parts_with_their_sizes_indexes_unticked_and_downloads
     downloads.mkdir()
     with opened(tmp_path, served(fake) + "#tab=sync") as page:
         page._send("Browser.setDownloadBehavior", behavior="allow", downloadPath=str(downloads))
+        tab_drawn(page)
         page.click("#sync-export")
         at_view(page, "what")
         assert page.wait("!document.getElementById('sync-go').disabled")
@@ -1367,6 +1530,7 @@ def test_escape_in_the_sheet_is_its_cancel_and_leaves_the_librarys_search_alone(
         assert page.js(results)
         page.click("#tab-sync")
         assert page.wait("!document.getElementById('sync').hidden")
+        tab_drawn(page)
         page.click("#sync-export")
         at_view(page, "what")
         page.press("Escape")
