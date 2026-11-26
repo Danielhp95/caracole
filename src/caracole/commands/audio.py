@@ -81,7 +81,11 @@ def _audio(cfg: Config, file: Path | None, upload: str | None, display: str | No
         hint = f"; {NOT_BUILT}" if "built without" in problem else ""
         fail(f"caracole makes no sheet from an audio file here: {problem}{hint}")
     try:
-        if upload is not None:
+        given = _given_already(cfg, upload, display)
+        if given is not None:  # Try again past the Audio stage: the upload is the song's audio now
+            found = audio_store.examine(given)
+            name, duration, tags = given.name, found.duration, found.tags
+        elif upload is not None:
             up = audio_store.staged(cfg, upload)
             name, duration, tags = up.name, up.duration, up.tags
         else:  # FILE, the one of the two given
@@ -102,6 +106,30 @@ def _audio(cfg: Config, file: Path | None, upload: str | None, display: str | No
         sent = ", ".join(plural(n, f"{provider_name(p)} request") for p, n in result.requests.items() if n)
         staged_end(reporter, result, progress=progress, refused="No sheet made",
                    done=f"Done in {result.seconds:.1f} s" + (f": {sent}." if sent else ", asking nothing."))
+
+
+def _given_already(cfg: Config, upload: str | None, display: str | None) -> Path | None:
+    """The file given the song ``display`` names, when ``upload`` is gone (``audio_store.gone``) and the song's audio
+    is one (``audio_store.uploaded``): the upload a first run of the same job moved into place. None otherwise, and
+    for a database caracole can't open now."""
+    import sqlite3
+
+    from caracole import audio_store, db
+    from caracole.normalize import identity_key
+    from caracole.songs import find_song
+
+    if upload is None or display is None or not audio_store.gone(cfg, upload):
+        return None
+    artist, _, title = display.partition(" - ")
+    try:
+        conn = db.connect(cfg.db_path)
+    except (OSError, sqlite3.Error):
+        return None
+    try:
+        song = find_song(conn, identity_key(artist.strip(), title.strip()))
+    finally:
+        conn.close()
+    return audio_store.uploaded(cfg, song) if song is not None else None
 
 
 def _named(cfg: Config, name: str, tags: dict[str, str | None]) -> tuple[str, str]:

@@ -1439,7 +1439,7 @@ that line once a minute. `--progress` writes a JSON line per stage instead, for 
 ### caracole audio
 
     caracole audio FILE [--song "ARTIST - TITLE"] [--progress]
-    caracole audio --upload ID --song "ARTIST - TITLE" [--progress]
+    caracole audio --upload ID [--song "ARTIST - TITLE"] [--progress]
 
 Makes a song's auto sheet from an audio file of yours (MP3, M4A, FLAC, WAV, Ogg or AIFF, 30
 minutes at most), now:
@@ -1462,7 +1462,13 @@ minutes at most), now:
 - Then it goes on as [a sheet from a video](#a-sheet-from-a-video-now) does: the lyrics sites first,
   the words heard from the file only when every one missed, the chords, the PDF, the viewer and the
   pages. A lookup waiting for the lock goes first before the vocals, the words and the chords.
-- `--upload ID` takes a file caracole serve was sent, moved into place rather than copied.
+- `--upload ID` takes a file caracole serve was sent, moved into place rather than copied. Without
+  `--song`, the song is the one the file's tags or name say, as for a file (the page always names it).
+  Asked again once the file is the song's audio (Try again after the Audio step), it goes on with that
+  file (`Audio: has this file's audio already.`); for a song with no file of yours it says the upload
+  is gone.
+- Two songs merged into one (after an upgrade that spells a song's key anew) keep the file you gave
+  either; of two such files, the one given last.
 
 It needs the flake's `packages.autochords` (auto-chords and its model files; no YouTube, no yt-dlp).
 It exits 0 once the sheet is made, and when a site's block, cooldown, spent budget or error makes

@@ -306,3 +306,17 @@ def test_registering_the_command_imports_no_tag_reader_or_model(tmp_path):
                          check=False)
     assert out.returncode == 0, out.stderr[-2000:]
     assert out.stdout.strip() == "[]"
+
+
+@pytest.mark.slow
+def test_the_same_upload_again_once_it_is_the_songs_audio_goes_on_with_it(tmp_path, config, conn, lrclib, models):
+    # Try again of a job past its Audio stage: the upload's id is gone, the song's audio is the file it became.
+    cfg = load_config(config, env={})
+    up = audio_store.stage(cfg, audio("MP3", 200.0), "vikingos.mp3", named=())
+    args = ("--upload", up.id, "--song", "Nick Cani - Vikingos veganos")
+    assert invoke(config, *args).exit_code == 0
+    result = invoke(config, *args)
+    assert result.exit_code == 0, result.output
+    assert "Audio: has this file's audio already." in result.output.splitlines()
+    song = find_song(conn, identity_key("Nick Cani", "Vikingos veganos"))
+    assert kept_files(tmp_path) == [Path(song.audio_path).name]

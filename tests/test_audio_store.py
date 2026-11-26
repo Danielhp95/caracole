@@ -472,3 +472,96 @@ def test_the_store_imports_no_tag_reader():
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True,
                          env={"PYTHONPATH": subprocess_pythonpath(src)})
     assert out.stdout.strip() == "[]"
+
+
+# --- a song merged into another keeps the file given (songs._merge) --------------------------------------------------
+
+
+def _two_spellings(conn):
+    """Two records an older normalizer kept apart, which today's merges into the older one (test_songs.py's)."""
+    from test_songs import older_song
+
+    older = older_song(conn, "Los Enanitos Verdes", "Lamento Boliviano", "los-enanitos-verdes/lamento-boliviano",
+                       source="wanted", source_id="los-enanitos-verdes/lamento-boliviano")
+    newer = older_song(conn, "Enanitos Verdes", "Lamento Boliviano", "enanitos-verdes/lamento-boliviano",
+                       source="wanted", source_id="enanitos-verdes/lamento-boliviano",
+                       added_at="2026-09-05T00:00:00Z")
+    return get_song(conn, older), get_song(conn, newer)
+
+
+@pytest.mark.parametrize("on", ["newer", "older", "newer over a purchase on the older"])
+def test_a_merge_keeps_the_file_given_and_tidy_lets_it_be(conn, cfg, tmp_path, on):
+    # An upload always wins: whichever record held it, the merged song's audio is that file, under its own name (the
+    # other song's id in it: every reader goes by the song's audio_path), so tidy keeps it, an auto sheet is due from
+    # it, and removing the merged song deletes it.
+    from helpers.audio_files import given
+
+    from caracole.autochords.run import _skip_reason
+    from caracole.overrides import Overrides
+    from caracole.removal import plan_removal, remove_song
+    from caracole.songs import ensure_current_keys, list_songs
+
+    older, newer = _two_spellings(conn)
+    if on == "newer over a purchase on the older":
+        bought = tmp_path / "Music" / "lamento.flac"
+        bought.parent.mkdir()
+        bought.write_bytes(audio("FLAC"))
+        update_song(conn, older.id, audio_path=str(bought), audio_mtime=bought.stat().st_mtime)
+    file = given(conn, cfg.state_dir, older if on == "older" else newer, "MP3")
+    ensure_current_keys(conn)
+    (song,) = list_songs(conn)
+    assert song.id == older.id and song.audio_path == str(file) and song.audio_mtime == file.stat().st_mtime
+    assert tidy(conn, cfg) == 0 and file.exists()
+    assert uploaded(cfg, song) == file
+    assert _skip_reason(conn, song, Overrides()) is None  # its auto sheet is due, from the file
+    remove_song(conn, cfg, plan_removal(conn, cfg, song))
+    assert not file.exists()
+
+
+@pytest.mark.parametrize("last_on", ["older", "newer"])
+def test_a_merge_of_two_uploads_keeps_the_newer_and_lets_the_other_go(conn, cfg, last_on):
+    # The file given last (its audio_mtime, the upload's time) is the owner's latest word, as a new upload replaces
+    # the one before: the other file is no song's audio now, and the next tidy lets it go.
+    from helpers.audio_files import given
+
+    from caracole.songs import ensure_current_keys, list_songs
+
+    older, newer = _two_spellings(conn)
+    first_on, last_song = (newer, older) if last_on == "older" else (older, newer)
+    first = given(conn, cfg.state_dir, first_on, "MP3")
+    os.utime(first, (1_000_000, 1_000_000))
+    update_song(conn, first_on.id, audio_mtime=first.stat().st_mtime)
+    last = given(conn, cfg.state_dir, last_song, "WAV")
+    ensure_current_keys(conn)
+    (song,) = list_songs(conn)
+    assert song.audio_path == str(last)
+    assert tidy(conn, cfg) == 1 and last.exists() and not first.exists()
+
+
+# --- a keep killed between the move and the song's row ---------------------------------------------------------------
+
+
+def test_a_keep_cut_off_after_the_move_loses_nothing_and_the_same_upload_is_kept_again(conn, cfg, monkeypatch):
+    # The staged record goes only once the song's row names the kept file: cut off between the two, the record still
+    # names the upload, tidy leaves the moved file alone, and the same upload asked again adopts it by its digest.
+    song = add_song(conn, "Radiohead", "Creep")
+    up = stage(cfg, audio("MP3"), "creep.mp3", named=())
+    real = audio_store.update_song
+
+    def killed(*args, **kwargs):
+        raise KeyboardInterrupt  # the job stopped, a kill's place
+
+    monkeypatch.setattr(audio_store, "update_song", killed)
+    with pytest.raises(KeyboardInterrupt):
+        keep(cfg, conn, song, staged(cfg, up.id).path, move=True)
+    monkeypatch.setattr(audio_store, "update_song", real)
+    moved = store(cfg) / f"{song.id}-{up.sha256[:16]}.mp3"
+    assert moved.exists() and get_song(conn, song.id).audio_path is None
+    assert tidy(conn, cfg) == 0 and moved.exists()  # a staged record still names it
+    again = staged(cfg, up.id)
+    assert again.path == moved and again.sha256 == up.sha256
+    kept = keep(cfg, conn, song, again.path, move=True, upload_id=up.id)
+    assert kept == moved and get_song(conn, song.id).audio_path == str(moved)
+    with pytest.raises(AudioError):
+        staged(cfg, up.id)  # its record gone now the row names the file
+    assert sorted(p.name for p in store(cfg).iterdir()) == [moved.name]

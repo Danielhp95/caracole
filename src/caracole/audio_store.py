@@ -446,9 +446,14 @@ def staged(cfg: Config, upload_id: str) -> Staged:
         raise AudioError(GONE, 404)
     there = [ext for ext in FORMATS.values() if os.path.lexists(root / f"{_STAGED}{upload_id}{ext}")]
     record = _read_record(root / f"{_STAGED}{upload_id}.json")
-    if len(there) != 1 or record is None or FORMATS[record["format"]] != there[0]:
+    if record is not None and not there:  # moved, and the keep cut off before the song's row named it: adopted
+        path = _moved(root, record)
+        if path is None:
+            raise AudioError(GONE, 404)
+    elif len(there) != 1 or record is None or FORMATS[record["format"]] != there[0]:
         raise AudioError(GONE, 404)
-    path = root / f"{_STAGED}{upload_id}{there[0]}"
+    else:
+        path = root / f"{_STAGED}{upload_id}{there[0]}"
     try:
         entry = os.lstat(path)
     except OSError:
@@ -457,6 +462,38 @@ def staged(cfg: Config, upload_id: str) -> Staged:
         raise AudioError(GONE, 404)
     return Staged(upload_id, path, record["name"], record["size"], record["sha256"], record["format"],
                   float(record["duration"]), record["tags"], float(record["at"]))
+
+
+def gone(cfg: Config, upload_id: str | None) -> bool:
+    """Whether ``upload_id`` is a well-formed id that names no staged upload (``staged``'s 404), never one that isn't
+    an id (400)."""
+    if upload_id is None or not ID.fullmatch(upload_id):
+        return False
+    try:
+        staged(cfg, upload_id)
+    except AudioError as e:
+        return e.status == 404
+    return False
+
+
+def _moved(root: Path, record: dict[str, Any]) -> Path | None:
+    """The kept file a staged ``record``'s upload was moved to (``<song id>-<its digest>``), for a keep cut off between
+    the move and the song's row; None for none."""
+    ending = f"-{record['sha256'][:16]}{FORMATS[record['format']]}"
+    for name in sorted(os.listdir(root)):
+        if KEPT.fullmatch(name) and name.endswith(ending) and _regular(root / name):
+            return root / name
+    return None
+
+
+def _staged_digests(root: Path) -> set[str]:
+    """The kept files' endings (``-<digest 16 hex><ext>``) the staged records name: a keep cut off after its move."""
+    endings = set()
+    for upload_id in _staged_ids(root):
+        record = _read_record(root / f"{_STAGED}{upload_id}.json")
+        if record is not None:
+            endings.add(f"-{record['sha256'][:16]}{FORMATS[record['format']]}")
+    return endings
 
 
 def drop(cfg: Config, upload_id: str) -> None:
@@ -505,6 +542,16 @@ def kept_in(store: Path, audio_path: str | None) -> Path | None:
     return store / path.name if same else None
 
 
+def given_file(audio_path: str | None) -> bool:
+    """Whether ``audio_path`` names a file you gave a song, with no config at hand (songs.py's ``_merge``, under a
+    re-keying any command may run): a regular file by a kept file's name in a folder named as the store is. A
+    purchase in Music/ is never named so."""
+    if not audio_path:
+        return False
+    path = Path(audio_path)
+    return bool(KEPT.fullmatch(path.name)) and path.parent.name == FOLDER and _regular(path)
+
+
 def uploaded(cfg: Config, song: Song) -> Path | None:
     """The file you gave the song, when its audio is one (a kept file of the folder), else None: a purchase,
     YouTube's audio, or none."""
@@ -521,12 +568,17 @@ def _hash(f: IO[bytes], into: IO[bytes] | None = None) -> str:
     return digest.hexdigest()
 
 
-def keep(cfg: Config, conn: sqlite3.Connection, song: Song, source: Path, *, move: bool) -> Path:
+def keep(cfg: Config, conn: sqlite3.Connection, song: Song, source: Path, *, move: bool,
+         upload_id: str | None = None) -> Path:
     """The file at ``source`` kept as the song's audio, whatever it had (an upload always wins), and its path in the
     folder, ``<song id>-<sha256 16 hex><ext>``: a staged upload moved there (``move``: its record goes too), or a file
     of your own copied there, read as an upload is read. The song's ``audio_path`` and ``audio_mtime`` name it, and
     the file it had there before goes (a purchase's in Music/ never: only an upload). The same file again is the
     song's audio already: the path it has, nothing changed.
+
+    Moved, the upload's record goes only once the song's row names the kept file: a keep cut off between the move and
+    the row leaves the record, which ``staged`` then answers with the kept file (found by its digest) and ``tidy``
+    leaves alone, and the same upload asked again (``source`` that kept file, ``upload_id`` its id) adopts it.
 
     AudioError: a song no longer in the book (404), nothing read or moved; with ``move``, a ``source`` that isn't a
     staged upload's regular file (404); a file caracole doesn't read (415), longer than ``MAX_SECONDS`` (422), or,
@@ -538,7 +590,10 @@ def keep(cfg: Config, conn: sqlite3.Connection, song: Song, source: Path, *, mov
     source = Path(source)
     root = folder(cfg)
     staged_audio = _STAGED_AUDIO.fullmatch(source.name)
-    if move and (source.parent != root or staged_audio is None or not _is_store(root)):
+    if staged_audio is not None:
+        upload_id = staged_audio.group("id")
+    adopting = move and staged_audio is None and upload_id is not None and KEPT.fullmatch(source.name) is not None
+    if move and (source.parent != root or not (staged_audio or adopting) or not _is_store(root)):
         raise AudioError(GONE, 404)
     try:
         fd = os.open(source, os.O_RDONLY | os.O_NONBLOCK | (os.O_NOFOLLOW if move else 0))
@@ -552,13 +607,14 @@ def keep(cfg: Config, conn: sqlite3.Connection, song: Song, source: Path, *, mov
     with open(fd, "rb") as f:
         found = _examine(f)
         ext = FORMATS[found.format]
-        if move:
+        if adopting:
+            kept = source  # moved before, under the id of the song it was kept for
+        elif move:
             kept = root / f"{current.id}-{_hash(f)[:16]}{ext}"
             if _regular(kept):
                 _unlink(source)  # the song's audio already
             else:
                 os.rename(source, kept)
-            _unlink(root / f"{_STAGED}{staged_audio.group('id')}.json")
         else:
             root = _store(cfg)
             _room(root, os.fstat(f.fileno()).st_size)
@@ -580,6 +636,8 @@ def keep(cfg: Config, conn: sqlite3.Connection, song: Song, source: Path, *, mov
     mtime = os.lstat(kept).st_mtime
     if (current.audio_path, current.audio_mtime) != (str(kept), mtime):
         update_song(conn, current.id, audio_path=str(kept), audio_mtime=mtime)
+    if move:
+        _unlink(root / f"{_STAGED}{upload_id}.json")  # the row names the kept file now
     earlier = kept_in(root, current.audio_path)
     if earlier is not None and earlier != kept:
         _unlink(earlier)
@@ -587,8 +645,11 @@ def keep(cfg: Config, conn: sqlite3.Connection, song: Song, source: Path, *, mov
 
 
 def tidy(conn: sqlite3.Connection, cfg: Config) -> int:
-    """Delete the kept files no song's ``audio_path`` names (an upload a newer one replaced, a song merged into
-    another or removed), and the copies a stopped ``keep`` left; how many files went. The staged uploads are caracole
+    """Delete the kept files no song's ``audio_path`` names (an upload a newer one replaced, a song removed, the older
+    of two uploads a merge met: songs.py ``_merge`` gives the merged song the one given last), and the copies a
+    stopped ``keep`` left; how many files went. A kept file a staged upload's record still names (a keep cut off
+    between its move and the song's row) stays for that upload's retry. A kept file's name holds the id of the song it was kept for, which a
+    merge leaves as it is: every reader goes by a song's ``audio_path``, never by that id. The staged uploads are caracole
     serve's (``sweep``), and any other file stays. Run under caracole's lock, as ``keep`` is."""
     root = folder(cfg)
     if not _is_store(root):
@@ -596,10 +657,12 @@ def tidy(conn: sqlite3.Connection, cfg: Config) -> int:
     # By the files' names alone, however a path spells the folder (a kept file's name is unique in it): a name a song
     # names elsewhere keeps a file, never deletes one.
     named = {Path(path).name for (path,) in conn.execute("SELECT audio_path FROM songs WHERE audio_path IS NOT NULL")}
+    pending = _staged_digests(root)  # moved by a keep cut off before the song's row named it: the upload's still
     deleted = 0
     with os.scandir(root) as entries:
         for entry in list(entries):
-            mine = (KEPT.fullmatch(entry.name) and entry.name not in named) or _PART.fullmatch(entry.name)
+            mine = (KEPT.fullmatch(entry.name) and entry.name not in named
+                    and not any(entry.name.endswith(ending) for ending in pending)) or _PART.fullmatch(entry.name)
             if not mine or entry.is_dir(follow_symlinks=False):
                 continue
             try:

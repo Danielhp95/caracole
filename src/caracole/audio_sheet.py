@@ -12,7 +12,11 @@ process, under caracole's lock as asked for now, its stages reported as a lookup
   file of your own copied, each read as an upload is), "kept as its audio: MP3, 3:18", saying which audio it replaces
   as the song's source (the bought audio, whose file stays in Music/; YouTube's, whose file the next youtube ``tidy``
   lets go of; the file given before, deleted); "has this file's audio already" for the same file again. A file
-  caracole doesn't read, or an upload gone, fails it, and the command exits 1.
+  caracole doesn't read, or an upload gone, fails it, and the command exits 1; but an upload gone for a song whose
+  audio is a file given is taken as the one it became (Try again of a job past this stage, whose first run moved it
+  into place: "has this file's audio already"). The smallest rule: nothing remembers which upload a kept file was, so
+  a later upload for the same song, then Try again of the older job, makes the sheet from the later file, the song's
+  audio then.
 - ``lyrics``, ``vocals``, ``words``, ``chords``, ``pdf`` and ``pages``: the YouTube sheet's. The lyrics sites first,
   the words heard from the file only once every one missed, where this caracole can transcribe and ``[autochords]
   transcribe`` is on; a failure to hear ends its stage alone, never the sheet. Before vocals, words and chords a waiting
@@ -120,9 +124,12 @@ class _AudioSheet(_Sheet):
         else:
             replaced = None
         move = req.upload is not None
+        if move and before is not None and audio_store.gone(self.cfg, req.upload):
+            # Moved into place by this job's first run (Try again after its Audio stage): the song's file given.
+            return "done", SAME_FILE
         try:
             source = audio_store.staged(self.cfg, req.upload).path if move else req.file
-            kept = audio_store.keep(self.cfg, self.conn, song, source, move=move)
+            kept = audio_store.keep(self.cfg, self.conn, song, source, move=move, upload_id=req.upload)
             found = audio_store.examine(kept)
         except audio_store.AudioError as e:  # in its words, as a stage's: "not an audio file caracole reads (…)"
             said = str(e).rstrip(".")

@@ -334,6 +334,21 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     what isn't audio it reads, as it refuses a caracole that makes no chords (`youtube_fetch.autochords_problem`:
     neither YouTube nor yt-dlp needed); a file that names no artist with no `--song` exits 2.
   - caracole serve's "+" runs it (web/audio_routes.py), `--upload ID`.
+  - Try again of a job past its Audio stage (a lyrics site's wait, the chords failing, Interrupted) runs the same
+    `--upload ID`, which the first run moved into place: an upload gone (`audio_store.gone`, a 404, never a 400)
+    for a `--song` whose audio is a file given (`audio_store.uploaded`) goes on with that file, its Audio stage done
+    "has this file's audio already" (commands/audio.py `_given_already`, audio_sheet.py's `audio`); for a song with
+    none it stays "That upload is gone…". The smallest rule: nothing remembers which upload a kept file was, so a later
+    upload for the same song, then Try again of the older job, makes the sheet from the later file, the song's audio
+    then (test_audio_sheet.py `test_the_same_job_again_after_its_audio_stage_makes_the_sheet_from_the_file_kept`).
+  - A keep that moves an upload deletes its staged record only once the song's row names the kept file: cut off
+    between the two, `staged` answers the record with the kept file it was moved to (by its digest, `_moved`), `tidy`
+    leaves that file alone (`_staged_digests`), and the same upload asked again adopts it (`keep(upload_id=)`).
+  - A song merged into another (songs.py `_merge`, `_given_audio`) keeps a file given: the merged song's audio is
+    `other`'s when it is one and `keep`'s isn't (over a purchase's link, YouTube's audio or none), and of two the one
+    given last (the later `audio_mtime`), the other let go by the next `tidy`. The file keeps its name, the other
+    song's id in it: `kept_in`, `uploaded`, `tidy` and removal's `uploaded_audio` go by `audio_path`, never by that id
+    (`audio_store.given_file` tells a given file with no config: a kept file's name in a folder named `audio`).
 - transcribe_job.py is no step either but `caracole transcribe`: a song's lyrics transcribed from its own audio,
   then its auto sheet made again over them (`make_transcript`).
   - Its stages song, vocals, words, chords, pdf, pages (`STAGES`), reported as a lookup's (staged.py's `StagedRun`).
@@ -3573,7 +3588,10 @@ nix flake check
     `caracole.cli` and reading a `[youtube]` entry (youtube_urls.py) loads httpx, rich, `caracole.http` or
     `caracole.youtube`.
   - music.py imports mutagen in `read_audio` alone, and lyrics.py (`expected_seconds`) in `_matches`: inbox.py, which
-    the pages import, scores names with its `Names` (`test_music.py::test_the_pages_load_no_tag_reader`,
+    the pages import, scores names with its `Names`, and audio_store.py and commands/audio.py read a file's tags
+    inside the functions that read one (`test_audio_store.py::test_the_store_imports_no_tag_reader`,
+    `test_commands_audio.py::test_registering_the_command_imports_no_tag_reader_or_model`,
+    `test_music.py::test_the_pages_load_no_tag_reader`,
     `::test_the_inbox_loads_no_http_client`).
   - viewer/pinyin.py imports pypinyin in `_read` alone, and viewer/hanzi.py OpenCC in `_converter`: a page of a sheet
     with no Chinese loads neither (`test_viewer_pinyin.py::test_pypinyin_is_loaded_only_for_a_sheet_with_chinese`,

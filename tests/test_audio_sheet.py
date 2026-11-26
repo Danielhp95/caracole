@@ -403,3 +403,46 @@ def test_lyrics_a_site_has_skip_the_hearing(setup, conn, sites, ears, tmp_path):
 ], ids=["tags", "its name", "a title alone"])
 def test_a_files_names_come_from_its_tags_then_its_name(conn, name, tags, named):
     assert names_of(conn, name, tags) == named
+
+
+# --- Try again after the Audio stage ------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("stopped", ["failed", "interrupted"])
+def test_the_same_job_again_after_its_audio_stage_makes_the_sheet_from_the_file_kept(setup, conn, sites, tmp_path,
+                                                                                     monkeypatch, stopped):
+    # The Audio stage moved the upload into place, so its id is gone; asked again (Try again, the same steps), the
+    # song's audio is a file given: the job goes on with it, the Audio stage saying so, and makes the sheet.
+    from caracole.youtube_sheet import _Sheet
+
+    up = audio_store.stage(setup, audio("MP3", 200.0), "Vikingos.mp3", named=())
+    real = _Sheet._autochords_sheet
+
+    def stops(self):
+        if stopped == "interrupted":
+            raise KeyboardInterrupt  # serve stopped: the request Interrupted
+        raise RuntimeError("CUDA error: an illegal memory access was encountered")
+
+    monkeypatch.setattr(_Sheet, "_autochords_sheet", stops)
+    if stopped == "interrupted":
+        with pytest.raises(KeyboardInterrupt):
+            make(setup, AudioRequest(*NICK, upload=up.id))
+    else:
+        first, _ = make(setup, AudioRequest(*NICK, upload=up.id))
+        assert not first.ok
+    kept = audio_store.uploaded(setup, the_song(conn))
+    assert kept is not None and kept_files(setup) == [kept.name]
+    monkeypatch.setattr(_Sheet, "_autochords_sheet", real)
+    recognizer = Recognizer()
+    result, heard = make(setup, AudioRequest(*NICK, upload=up.id), recognizer=recognizer)
+    assert result.ok, result
+    assert heard.ends()["audio"] == ("done", "has this file's audio already")
+    assert kept.name in [p.name for p in recognizer.calls] and auto_sheet(setup, conn)  # made from the file kept
+    assert kept_files(setup) == [kept.name]  # nothing staged, the one file
+
+
+def test_an_upload_gone_is_still_refused_for_a_song_whose_audio_is_no_file_given(setup, conn, sites, tmp_path):
+    song = add_song(conn, *NICK)
+    update_song(conn, song.id, audio_path=str(a_file(tmp_path)), audio_mtime=1.0)  # a purchase
+    result, heard = make(setup, AudioRequest(*NICK, upload="0123456789abcdef"))
+    assert not result.ok and result.failed.startswith("that upload is gone")

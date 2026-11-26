@@ -482,8 +482,14 @@ def _merge(conn: sqlite3.Connection, keep: Song, other: Song) -> None:
     move over unpicked, so ``keep``'s picks stand; kept files under names
     ``keep`` hasn't used move with them and stay where they are on disk. The
     rest goes with ``other``. The fetch step then picks again from all of it.
+
+    A file you gave ``other`` (audio_store.py: it can't be fetched again) becomes ``keep``'s audio, as an upload
+    always wins: over a purchase's link, YouTube's audio or none (``_given_audio``); of two given files, the one given
+    last (the later ``audio_mtime``), the other then let go by the next scan's ``tidy``. The file keeps its name, the
+    other song's id in it: every reader goes by ``audio_path``.
     """
     _add_ids(keep.source_ids, other.source_ids)
+    _given_audio(conn, keep, other)
     conn.execute(
         "UPDATE songs SET source_ids = ?, added_at = MAX(added_at, ?), album = COALESCE(album, ?), "
         "duration_ms = COALESCE(duration_ms, ?), isrc = COALESCE(isrc, ?), "
@@ -510,6 +516,20 @@ def _merge(conn: sqlite3.Connection, keep: Song, other: Song) -> None:
     conn.execute("DELETE FROM songs WHERE id = ?", (other.id,))
     delete_song_kv(conn, other.id)
     refresh_status(conn, keep.id, ignored=keep.status == "ignored")
+
+
+def _given_audio(conn: sqlite3.Connection, keep: Song, other: Song) -> None:
+    """``other``'s audio taken by ``keep`` when it is a file you gave and ``keep``'s isn't, or is one given before
+    (``_merge``)."""
+    from caracole.audio_store import given_file  # audio_store imports this module at its top
+
+    if not given_file(other.audio_path):
+        return
+    if given_file(keep.audio_path) and (keep.audio_mtime or 0) >= (other.audio_mtime or 0):
+        return
+    conn.execute("UPDATE songs SET audio_path = ?, audio_mtime = ? WHERE id = ?",
+                 (other.audio_path, other.audio_mtime, keep.id))
+    keep.audio_path, keep.audio_mtime = other.audio_path, other.audio_mtime
 
 
 def _follow_wanted(conn: sqlite3.Connection, song_id: int, old_keys: set[str], key: str) -> None:
