@@ -241,5 +241,30 @@ class SyncFileRoutesTest {
         val shown = io.github.danielhp95.caracole.server.jobs.Feed.feed(listOf(job), emptyMap(), opened = setOf(job.id))
             .toString()
         assertTrue(io.github.danielhp95.caracole.server.jobs.Feed.SAID in shown && said in shown, shown)
+        // What the Journal says of this real import, through the functions /requests.json uses (RequestsRoutes):
+        // done, never failed; the line, its tone, the reason and Compare again in the words vectors/web/outcome.jsonl
+        // gives the computer's import that took some and left one ("import, took 3 and left 1").
+        assertEquals("done", job.state)
+        // What the file gives here (a file takes nothing back: a difference kept here is none), less the one skipped.
+        val gives = answer.getValue("differences").jsonArray.map { it.jsonObject }
+            .filter { it.getValue("id").jsonPrimitive.content != unit }
+            .count { it.getValue("proposal").jsonPrimitive.content == "theirs" }
+        val taken = job.outcome!!.getValue("taken").jsonArray.size  // the units a job of the phone's own said
+        assertEquals(gives, taken, "${job.outcome}")
+        assertTrue(taken > 0, "the file gives more than the one skipped: $answer")
+        val line = io.github.danielhp95.caracole.server.jobs.JobViews.line(job)
+        assertEquals("waiting" to "Shared · 1 change left as it was", line.tone to line.text)
+        val outcome = io.github.danielhp95.caracole.server.jobs.Outcomes.outcome(job, line, null, null)
+        val changes = if (taken == 1) "1 change" else "$taken changes"
+        assertEquals(io.github.danielhp95.caracole.server.jobs.Outcome(
+            "waiting", "Shared", "$changes taken. 1 change left as it was.",
+            io.github.danielhp95.caracole.server.jobs.Outcomes.COMPARE_AGAIN), outcome)
+        // The record's sentence shape, the computer's for its import of 3 taken and 1 left.
+        val record = Corpus.records("web/outcome.jsonl").single {
+            it.extra["note"]?.jsonPrimitive?.content == "import, took 3 and left 1"
+        }.out!!.jsonObject
+        assertEquals("3 changes taken. 1 change left as it was.",
+                     record.getValue("outcome").jsonObject.getValue("reason").jsonPrimitive.content)
+        assertEquals(line.text, record.getValue("line").jsonObject.getValue("text").jsonPrimitive.content)
     }
 }
