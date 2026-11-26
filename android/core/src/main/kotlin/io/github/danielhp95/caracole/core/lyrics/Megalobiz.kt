@@ -283,7 +283,8 @@ object Megalobiz {
         val asked = Passes.eachSong(songs, stats, "Megalobiz", onError = backToPending, onCut = backToPending) { song ->
             val record = Lyrics.pickedRecord(song, picks)
             if (record != null) {
-                fetchRecord(client, BigInteger(record.id), cache = song.lyricsStatus != "missing")
+                // past the cache once Megalobiz answered it a miss: an error since never makes its cached 404 a new one
+                fetchRecord(client, BigInteger(record.id), cache = db.kvGet("$CHECKED${song.id}") == null)
             } else {
                 val cache = db.kvGet("$CHECKED${song.id}") == null // a miss asked again goes past the cache
                 val (artist, title, _) = Lyrics.askedAs(song, picks)

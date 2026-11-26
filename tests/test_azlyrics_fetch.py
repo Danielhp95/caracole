@@ -368,3 +368,25 @@ def test_a_picked_azlyrics_record_gone_is_a_miss_and_an_error_is_none(conn, tmp_
     assert (stored.lyrics_status, stored.lyrics_at) == ("missing", STAMP)
     assert kv_get(conn, f"{CHECKED}{song.id}") == STAMP
     assert run(site, conn, tmp_path, NOW + timedelta(days=29), lyrics=picks).tried == 0
+
+
+def test_a_picked_record_asked_again_after_an_error_is_asked_past_the_cache(conn, tmp_path):
+    song = mononoke(conn, status="pending")
+    picks = lyrics_table(tmp_path, song.display, '{ record = "azlyrics:pomme/gone" }')
+    gone = "/lyrics/pomme/gone.html"
+    assert run(FakeAzLyrics({}), conn, tmp_path, lyrics=picks).missing == 1
+    assert run(FakeAzLyrics({}, failing={gone: 502}), conn, tmp_path, NOW + timedelta(days=31),
+               lyrics=picks).errors == 1
+    assert get_song(conn, song.id).lyrics_status == "pending"
+    back = FakeAzLyrics({gone: lyrics_page()})
+    assert run(back, conn, tmp_path, NOW + timedelta(days=32), lyrics=picks).found == 1
+    assert back.requests == [gone]
+    assert get_song(conn, song.id).lyrics_status == "found"
+
+
+def test_a_picked_record_gone_says_so(conn, tmp_path, caplog):
+    song = mononoke(conn, status="pending")
+    with caplog.at_level("INFO", logger="caracole.azlyrics_fetch"):
+        run(FakeAzLyrics({}), conn, tmp_path, lyrics=lyrics_table(tmp_path, song.display,
+                                                                   '{ record = "azlyrics:pomme/gone" }'))
+    assert f"{song.display}: the record you picked is gone: azlyrics pomme/gone" in caplog.messages

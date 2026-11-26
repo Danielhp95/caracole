@@ -629,6 +629,9 @@ def fetch_pending_lyrics(
     listed = (s for s in _songs_to_look_up(conn, now, recheck_missing_after, picks) if only is None or s.id in only)
     songs = as_now(conn, listed, lambda song: _due(song, now, recheck_missing_after, picks))
     for song, result in each_song(songs, stats, turn, site="LRCLIB"):
+        record = picked_record(song, picks)
+        if record is not None and result.status == "missing":
+            log.info("%s: the record you picked is gone: lrclib %s", song.display, record.id)
         _record(conn, library_dir, song, result, stamp)
         kv_delete(conn, f"{FAILED}{song.id}")
         if result.status == "found":

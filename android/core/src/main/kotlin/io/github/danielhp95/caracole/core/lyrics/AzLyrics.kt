@@ -197,7 +197,8 @@ object AzLyrics {
         val asked = Passes.eachSong(songs, stats, "AZLyrics", onError = backToPending, onCut = backToPending) { song ->
             val record = Lyrics.pickedRecord(song, chosen)
             if (record != null) {
-                fetchAzLyrics(client, "", "", record.page, cache = song.lyricsStatus != "missing")
+                // past the cache once AZLyrics answered it a miss: an error since never makes its cached 404 a new one
+                fetchAzLyrics(client, "", "", record.page, cache = db.kvGet("$CHECKED${song.id}") == null)
             } else {
                 val page = picks[OverrideUrls.overrideKey(song.display)]
                 // a miss asked again goes past the cache

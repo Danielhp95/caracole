@@ -714,3 +714,24 @@ def test_a_picked_record_gone_is_a_miss_and_an_error_is_none(conn, tmp_path):
     gone.records.append(load("get_by_id.json"))  # asked again after 30 days, past the cache
     assert run(gone, conn, tmp_path, NOW + timedelta(days=31), picks=picks) == LyricsStats(tried=1, found=1)
     assert gone.requests == [("get/28399373", {})] * 2
+
+
+def test_an_error_on_a_picked_records_re_check_leaves_it_missing_and_the_next_run_asks_lrclib(conn, tmp_path):
+    # LRCLIB's pass puts no song back to pending: after an error the song is missing with its old time, so the next
+    # run re-checks it past the cache as before, never reading the cached 404 for a new miss.
+    song = yeren(conn)
+    picks = lyrics_table(tmp_path, YEREN, '{ record = "lrclib:28399373" }')
+    assert run(FakeLrclib(), conn, tmp_path, picks=picks).missing == 1
+    broken = FakeLrclib(failing={"get/28399373": 502})
+    assert run(broken, conn, tmp_path, NOW + timedelta(days=31), picks=picks).errors == 1
+    assert (get_song(conn, song.id).lyrics_status, get_song(conn, song.id).lyrics_at) == ("missing", STAMP)
+    back = FakeLrclib([load("get_by_id.json")])
+    assert run(back, conn, tmp_path, NOW + timedelta(days=32), picks=picks) == LyricsStats(tried=1, found=1)
+    assert back.requests == [("get/28399373", {})]
+
+
+def test_a_picked_record_gone_says_so(conn, tmp_path, caplog):
+    yeren(conn)
+    with caplog.at_level("INFO", logger="caracole.lyrics"):
+        run(FakeLrclib(), conn, tmp_path, picks=lyrics_table(tmp_path, YEREN, '{ record = "lrclib:28399373" }'))
+    assert f"{YEREN}: the record you picked is gone: lrclib 28399373" in caplog.messages

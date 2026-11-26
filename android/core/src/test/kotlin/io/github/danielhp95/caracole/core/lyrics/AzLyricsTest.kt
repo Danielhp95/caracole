@@ -99,4 +99,25 @@ class AzLyricsTest {
             assertEquals(listOf(lyrics, artist).sorted(), site.said.sorted())
         }
     }
+
+    @Test fun aPickedRecordAskedAgainAfterAnErrorIsAskedPastTheCache() {
+        LyricsWorld(tmp.newFolder()).use { w ->
+            val song = w.song("Someone Else", "Mononoke")
+            val overrides = Overrides(lyrics = mapOf(
+                OverrideUrls.overrideKey(song.display) to LyricsPick(null, LyricsRecord("azlyrics", "pomme/mononoke"))))
+            val page = "GET https://www.azlyrics.com/lyrics/pomme/mononoke.html"
+            fun pass(answer: io.github.danielhp95.caracole.core.http.HttpAnswer, days: Long): Pair<AzLyricsStats, List<String>> {
+                val (client, site) = w.client("azlyrics", mapOf(page to answer))
+                val stats = w.db {
+                    AzLyrics.azlyricsLyrics(it, client, w.library, w.now.plusSeconds(days * 86400), overrides, setOf(song.id))
+                }
+                return stats to site.said
+            }
+            assertEquals(1, pass(answer(404, LyricsWorld.fixture("azlyrics/not_found.html")), 0).first.missing)
+            assertEquals(1, pass(answer(502, "Bad Gateway"), 31).first.errors)
+            val (stats, said) = pass(answer(200, LyricsWorld.fixture("azlyrics/lyrics_mononoke.html")), 32)
+            assertEquals(1, stats.found)
+            assertEquals(listOf(page), said)
+        }
+    }
 }

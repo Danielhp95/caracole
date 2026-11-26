@@ -27,7 +27,8 @@ requests at most, one when nothing fits. What each answer does:
 record is another site's is never asked, nor timed lyrics for one with plain ones; a song whose record is Megalobiz's
 is asked for that record alone, ``/lrc/{id}`` (``fetch_record``), one request, while it has no lyrics
 (``lyrics.picked_due``), and that record gone (or with no timed line) is a miss that makes its lyrics missing, as the
-one site asked answered one, asked again after 30 days, past the cache.
+one site asked answered one (logged), asked again after 30 days, past the cache, as is every ask after that miss, an
+error between them aside (kv ``megalobiz:checked:``, which an error leaves).
 """
 
 from __future__ import annotations
@@ -195,7 +196,8 @@ def megalobiz_lyrics(
     def turn(song: Song) -> Lyrics | None:  # a miss asked again goes past the cache
         record = picked_record(song, picks)
         if record is not None:
-            return fetch_record(client, int(record.id), cache=song.lyrics_status != "missing")
+            # past the cache once Megalobiz answered it a miss: an error since never makes its cached 404 a new one
+            return fetch_record(client, int(record.id), cache=kv_get(conn, f"{CHECKED}{song.id}") is None)
         cache = kv_get(conn, f"{CHECKED}{song.id}") is None
         artist, title, _ = asked_as(song, picks)
         return fetch_megalobiz(client, artist=artist, title=title, duration_s=length(song), cache=cache)
@@ -210,7 +212,9 @@ def megalobiz_lyrics(
                                   on_cut=back_to_pending):
         if lyrics is None:
             kv_set(conn, f"{CHECKED}{song.id}", stamp)
-            if picked_record(song, picks) is not None:  # the one site asked missed: the song's lyrics are missing
+            record = picked_record(song, picks)
+            if record is not None:  # the one site asked missed: the song's lyrics are missing
+                log.info("%s: the record you picked is gone: %s", song.display, record.text.replace(":", " ", 1))
                 update_song(conn, song.id, lyrics_status="missing", lyrics_at=stamp)
             stats.missing += 1
             continue

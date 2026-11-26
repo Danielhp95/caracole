@@ -440,3 +440,26 @@ def test_a_picked_megalobiz_record_gone_is_a_miss_and_an_error_is_none(conn, tmp
     assert kv_get(conn, f"{CHECKED}{song.id}") == STAMP
     assert run(gone, conn, tmp_path, NOW + timedelta(days=29), picks=picks) == MegalobizStats()
     assert gone.requests == [("lrc", {})]
+
+
+def test_a_picked_record_asked_again_after_an_error_is_asked_past_the_cache(conn, tmp_path):
+    # Its 404 is cached forever: the re-check 30 days on meets an error (back to pending), and the next run must still
+    # ask Megalobiz itself, never read the old 404 for a new miss.
+    song = eagles(conn, status="pending")
+    picks = lyrics_table(tmp_path, song.display, '{ record = "megalobiz:777" }')
+    assert run(FakeMegalobiz([]), conn, tmp_path, picks=picks).missing == 1
+    assert run(FakeMegalobiz([], failing={"lrc": 502}), conn, tmp_path, NOW + timedelta(days=31),
+               picks=picks).errors == 1
+    assert get_song(conn, song.id).lyrics_status == "pending"
+    back = FakeMegalobiz([record(lrc_id=777)])
+    assert run(back, conn, tmp_path, NOW + timedelta(days=32), picks=picks) == MegalobizStats(tried=1, found=1)
+    assert back.requests == [("lrc", {})]
+    assert get_song(conn, song.id).lyrics_status == "found"
+
+
+def test_a_picked_record_gone_says_so(conn, tmp_path, caplog):
+    song = eagles(conn, status="pending")
+    with caplog.at_level("INFO", logger="caracole.megalobiz_fetch"):
+        run(FakeMegalobiz([]), conn, tmp_path, picks=lyrics_table(tmp_path, song.display,
+                                                                   '{ record = "megalobiz:777" }'))
+    assert f"{song.display}: the record you picked is gone: megalobiz 777" in caplog.messages

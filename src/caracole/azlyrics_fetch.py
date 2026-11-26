@@ -25,7 +25,8 @@ failure. What each answer does:
 an ``[azlyrics]`` page wins over it. A record you picked is final, and wins over an ``[azlyrics]`` page: a song whose
 record is another site's is never asked; one whose record is AZLyrics' is asked for that page alone
 (``LyricsRecord.page``), one request, while it has no lyrics (``lyrics.picked_due``), and that page gone is a miss that
-makes its lyrics missing, as the one site asked answered one, asked again after 30 days, past the cache.
+makes its lyrics missing, as the one site asked answered one (logged), asked again after 30 days, past the cache, as
+is every ask after that miss, an error between them aside (kv ``azlyrics:checked:``, which an error leaves).
 """
 
 from __future__ import annotations
@@ -144,7 +145,9 @@ def azlyrics_lyrics(
     def turn(song: Song) -> Lyrics | None:  # a miss asked again goes past the cache
         record = picked_record(song, lyrics)
         if record is not None:
-            return fetch_azlyrics(client, artist="", title="", page=record.page, cache=song.lyrics_status != "missing")
+            # past the cache once AZLyrics answered it a miss: an error since never makes its cached 404 a new one
+            return fetch_azlyrics(client, artist="", title="", page=record.page,
+                                  cache=kv_get(conn, f"{CHECKED}{song.id}") is None)
         page = (picks or {}).get(override_key(song.display))
         cache = page is not None or kv_get(conn, f"{CHECKED}{song.id}") is None
         artist, title, _ = asked_as(song, lyrics)
@@ -161,7 +164,9 @@ def azlyrics_lyrics(
                                  on_cut=back_to_pending):
         if found is None:
             kv_set(conn, f"{CHECKED}{song.id}", stamp)
-            if picked_record(song, lyrics) is not None:  # the one site asked missed: the song's lyrics are missing
+            record = picked_record(song, lyrics)
+            if record is not None:  # the one site asked missed: the song's lyrics are missing
+                log.info("%s: the record you picked is gone: %s", song.display, record.text.replace(":", " ", 1))
                 update_song(conn, song.id, lyrics_status="missing", lyrics_at=stamp)
             stats.missing += 1
             continue

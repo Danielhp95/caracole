@@ -107,7 +107,10 @@ sitemaps list by bare ids alone, and the fetch their page.
     name asked under (its `as`, cleaned: NFC, control characters out, `ASKED_MOST` characters, with no album; one that
     cleans to nothing no name); `picked_record` and `picked_due`, a record picked final: only its site asks, for it
     alone (`fetch_lrclib_record`, `/api/get/{id}`; Megalobiz's `fetch_record`; AZLyrics' page), while the song is
-    pending, or missing for 30 days; that record gone its lyrics missing. Without it, every request is what it was.
+    pending, or missing for 30 days; that record gone its lyrics missing, logged ("the record you picked is gone"),
+    and asked past the cache from then on (Megalobiz's and AZLyrics' kv `checked:`, which an error leaves; LRCLIB's
+    `lyrics_at`, an error leaving the song missing). A record wins over an `[azlyrics]` page, which wins over `as`.
+    An entry on a song already missing waits for its 30 days. Without it, every request is what it was.
 
 #### megalobiz
 
