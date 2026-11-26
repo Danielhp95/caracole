@@ -93,7 +93,8 @@ models to ONNX, the format the phone will run them in.
 | `beat_this-final0-fp16.onnx` | 42.7 MB | the same, its weights stored at half precision |
 
 caracole never republishes BTC's weights; the graph only points into its authors' file. Two builds
-give the same bytes.
+give the same bytes. beat_this's graph works out its attentions one slice at a time: the same answers, to
+the bit, in about half the memory (a phone's limit is 1 GB).
 
 BTC's graph takes the raw features and normalizes them itself. Its metadata gives the mean and
 standard deviation it uses (`mean`, `std`) and the SHA-256 of the weights file it expects

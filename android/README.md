@@ -834,7 +834,10 @@ setting's `memory_ok` is null, or false when it ran out of memory.
        nix develop .#autochords -c python -m tests.helpers.autochords_reference ~/some-songs ~/caracole-bench
 
    The second command writes one `.json` a song: what the computer's models made of it. Five songs are enough for
-   B0; a reference keeps the decoded audio too, about 40 MB for four minutes. The model files are 138 MB.
+   B0; a reference keeps the decoded audio too, about 40 MB for four minutes. The model files are 138 MB. A
+   reference is named after its audio, with each character the phone's shared storage refuses (a colon, and
+   `*?"<>|\`) made a hyphen: `adb push` can't copy a file whose name holds one ("remote couldn't create file"), so
+   a file you rename yourself must keep them out too.
 3. **Copy it to the phone**: `adb push ~/caracole-bench /sdcard/Download/` (add `-s SERIAL` as above).
 4. **Open the bench**: Debug caracole › Settings › Chords bench. Pick the folder (Download › caracole-bench, then Use
    this folder and Allow). The first Start checks the model files against their pins and copies them into the app's

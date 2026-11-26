@@ -2369,7 +2369,11 @@ It is rows.js's, shared by both pages:
     window's frames past the audio's end are padded with that mean, never 0) and the file's `weights_sha256`, the one
     thing that says which `.pt` belongs beside it;
   - `export_beats`: beat_this's final0, `spect` ([1, T, 128]) to `beat` and `downbeat`, and with `fp16` its weights
-    stored as float16, cast to float32 as it loads;
+    stored as float16, cast to float32 as it loads; its nine attentions over time (`_ATTENDS_OVER_TIME`: the
+    frontend's three a frequency band, the transformer's six a head) each one Scan of MatMul, Softmax and MatMul over
+    a slice at a time (`_attention_by_slices`), the whole attention's answers to the bit in a fraction of the memory
+    (a 1500-frame chunk's scores and softmax were two [32, 1, 1500, 1500] float32s at once, 576 MB of the phone's
+    peak; android/README.md's bench);
   - `pt_offsets`: each tensor's offset and length in a checkpoint in torch's legacy format (pickles, then each
     storage's raw float32 bytes), since the phone will fetch such a file read by `_Strict`, the standard library's
     pure-Python unpickler guarded opcode by opcode (its notes): protocol 2's opcodes alone, the six globals of
@@ -2379,7 +2383,9 @@ It is rows.js's, shared by both pages:
     tests/helpers/legacy_pt.py writes such files with the standard library, so its tests run in any shell;
   - tests/test_autochords_export.py holds them to torch's answers in `.#autochords` (ONNX Runtime and mir_eval, its
     test-only packages): BTC's max abs 1e-4 and every argmax, beat_this's 1e-4 in fp32, the fp16 one 1e-2 on seeded
-    frames and beats F ≥ 0.99 on music, the same bytes twice.
+    frames and beats F ≥ 0.99 on music, the same bytes twice, and the sliced attention's answers bit for bit the
+    whole one's (`sliced=False`) at 300 MB less peak over a chunk (a fresh process's VmHWM: `ru_maxrss` a child keeps
+    from the process it was forked from).
 - What the phone's port is held to, the conformance corpus's `autochords` area (tests/test_conformance_autochords_models.py,
   in `.#autochords`): the committed clips, tests/fixtures/autochords/*.wav (CC0, made by tests/helpers/synth_music.py,
   `render(spec, seed)`, pure Python, their README's table each one's spec), and PyTorch's answers on them, on one
