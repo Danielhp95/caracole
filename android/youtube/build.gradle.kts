@@ -17,24 +17,36 @@ val pinsFile: File = file("pins.json")
 val pins = JsonSlurper().parse(pinsFile) as Map<*, *>
 fun pin(name: String): Map<*, *> = pins[name] as Map<*, *>
 
-/** The folder of the two wheels, android/flake.nix's: a build without it fails, naming it. */
+/** What this module's tasks need from android/flake.nix's shell and is missing, each in words naming it; checked by
+ * [checkEngine], which every task of this module runs first, so a build without them fails there, naming them, and
+ * a build of another module (`gradle :core:test`) configures and runs without them. */
+val missing = mutableListOf<String>()
+
+/** The folder of the two wheels, android/flake.nix's CARACOLE_YTDLP_WHEELS. */
 val wheels: File = System.getenv("CARACOLE_YTDLP_WHEELS")?.takeIf { it.isNotBlank() }?.let(::File)
-    ?: throw GradleException(
-        "CARACOLE_YTDLP_WHEELS is unset: run Gradle in android/flake.nix's shell " +
+    ?: File("CARACOLE_YTDLP_WHEELS-unset").also {
+        missing += "CARACOLE_YTDLP_WHEELS is unset: run Gradle in android/flake.nix's shell " +
             "(`nix develop ./android -c gradle …`), which fetches youtube/pins.json's wheels into it"
-    )
+    }
 /** A pinned wheel's file in [wheels], by its URL's name. */
 fun wheel(name: String): File = File(wheels, (pin(name)["url"] as String).substringAfterLast('/'))
 
 /** Chaquopy's buildPython, which must be the app's Python's minor version (pins.json's `python`): `python3.13` on PATH,
- * android/flake.nix's, never another Python found by chance; a build without it fails, naming it. */
+ * android/flake.nix's, never another Python found by chance. */
 val pythonVersion = pins["python"] as String
 val buildPythonPath: String = System.getenv("PATH").orEmpty().split(File.pathSeparator)
     .map { File(it, "python$pythonVersion") }.firstOrNull { it.canExecute() }?.absolutePath
-    ?: throw GradleException(
-        "python$pythonVersion is not on PATH: Chaquopy's buildPython must be Python $pythonVersion, " +
+    ?: "python$pythonVersion".also {
+        missing += "python$pythonVersion is not on PATH: Chaquopy's buildPython must be Python $pythonVersion, " +
             "android/flake.nix's shell's (`nix develop ./android -c gradle …`)"
-    )
+    }
+
+val checkEngine by tasks.registering {
+    description = "Fails, naming it, when android/flake.nix's shell's wheels or python3.13 are missing."
+    val said = missing.toList()
+    doLast { if (said.isNotEmpty()) throw GradleException(said.joinToString("\n")) }
+}
+tasks.configureEach { if (name != checkEngine.name) dependsOn(checkEngine) }
 
 android {
     namespace = "io.github.danielhp95.caracole.youtube"
@@ -55,9 +67,15 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    // pins.json, as the device test's asset (youtube/pins.json), so YtDlpVersionTest holds the running Python to it.
-    sourceSets.getByName("androidTest").assets.srcDir(layout.buildDirectory.dir("generated/pinsAssets"))
 }
+
+// pins.json, as the device test's asset (youtube/pins.json), so YtDlpVersionTest holds the running Python to it: the
+// task provider as the folder, which carries the dependency.
+val copyPins by tasks.registering(Sync::class) {
+    into(layout.buildDirectory.dir("generated/pinsAssets"))
+    from(pinsFile) { into("youtube") }
+}
+android.sourceSets.getByName("androidTest").assets.srcDir(copyPins)
 
 chaquopy {
     defaultConfig {
@@ -80,18 +98,16 @@ chaquopy {
     }
 }
 
-val copyPins by tasks.registering(Sync::class) {
-    into(layout.buildDirectory.dir("generated/pinsAssets"))
-    from(pinsFile) { into("youtube") }
-}
-tasks.matching { it.name.endsWith("AndroidTestAssets") }.configureEach { dependsOn(copyPins) }
-
-// PinsTest reads pins.json and the wheels' folder.
+// PinsTest reads pins.json and the wheels' folder; GlueTest runs the glue with buildPython over the wheels.
+val glue: File = file("src/main/python")
 tasks.withType<Test>().configureEach {
     inputs.file(pinsFile).withPropertyName("pins")
-    inputs.dir(wheels).withPropertyName("wheels")
+    inputs.files(wheels).withPropertyName("wheels")
+    inputs.dir(glue).withPropertyName("glue")
     systemProperty("caracole.youtube.pins", pinsFile.absolutePath)
     systemProperty("caracole.youtube.wheels", wheels.absolutePath)
+    systemProperty("caracole.youtube.python", buildPythonPath)
+    systemProperty("caracole.youtube.glue", glue.absolutePath)
 }
 
 kotlin {

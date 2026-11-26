@@ -8,6 +8,7 @@ import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -16,7 +17,8 @@ import java.io.File
 /**
  * Chaquopy's Python starts in the app's process and runs the yt-dlp and yt-dlp-ejs that android/youtube/pins.json pins
  * (its asset copy, youtube/pins.json): `caracole_ytdlp.version()`, and yt-dlp's own `--version`, the one run with no
- * network to it (no URL, no search: yt-dlp prints its version and exits). Run by
+ * network to it (no URL, no search: yt-dlp prints its version and exits). Its runs share one process, which the glue
+ * supports for a test alone: `--version` and a `main` that raises keep no state of a run. Run by
  * `android/scripts/device-test.sh --youtube`, on the emulator alone.
  */
 @RunWith(AndroidJUnit4::class)
@@ -50,6 +52,30 @@ class YtDlpVersionTest {
             assertNull(name, util.callAttr("find_spec", name))
         }
         assertNotNull(util.callAttr("find_spec", "json"))
+    }
+
+    /** `run` never raises: an exception out of yt-dlp's `main` (replaced here by one that raises, then put back) is its
+     * traceback in the err file and status 1, as the computer's yt-dlp process says it. */
+    @Test
+    fun anExceptionOutOfMainIsATracebackAndStatusOne() {
+        val py = Python.getInstance()
+        val exec = { code: String -> py.builtins.callAttr("exec", code, py.builtins.callAttr("dict")) }
+        val dir = File(context.cacheDir, "youtube-raise-test").apply { deleteRecursively(); mkdirs() }
+        val err = File(dir, "stderr")
+        exec(
+            "import yt_dlp\ndef boom(argv):\n    raise RuntimeError('boom')\n" +
+                "yt_dlp.kept_main = yt_dlp.main\nyt_dlp.main = boom"
+        )
+        val status = try {
+            py.getModule("caracole_ytdlp").callAttr("run", arrayOf("--version"), File(dir, "stdout").path, err.path)
+                .toInt()
+        } finally {
+            exec("import yt_dlp\nyt_dlp.main = yt_dlp.kept_main\ndel yt_dlp.kept_main")
+        }
+        assertEquals(1, status)
+        val said = err.readText()
+        assertTrue(said, said.startsWith("Traceback (most recent call last):"))
+        assertTrue(said, said.trimEnd().endsWith("RuntimeError: boom"))
     }
 
     @Test

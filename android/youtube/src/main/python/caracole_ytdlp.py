@@ -2,12 +2,24 @@
 
 `version()` says what the app carries, which YtDlpVersionTest holds to android/youtube/pins.json. `run(argv, out_path,
 err_path)` is one yt-dlp run, as the computer's `yt-dlp ARGV…` is one process: `yt_dlp.main` under `sys.argv`, its
-standard output and error line-buffered into the two files (so a reader follows them as yt-dlp writes), its exit
-status returned, never raised. Nothing here asks a site: what yt-dlp asks is its argv's, and the caller's to gate.
+output into the two files, its exit status returned, never raised. As the computer's process does, anything that goes
+wrong under it (yt-dlp that won't import, a bug out of `main` or out of yt-dlp-ejs) is its traceback in the err file and
+status 1; only a KeyboardInterrupt (or another BaseException that isn't SystemExit) goes through, as it would stop the
+computer's process too. Nothing here asks a site: what yt-dlp asks is its argv's, and the caller's to gate.
+
+What it is not:
+
+- Only Python's `sys.stdout` and `sys.stderr` are redirected, never file descriptors 1 and 2: a child process yt-dlp
+  starts inherits the process's real ones unless yt-dlp pipes it.
+- One run a process: yt-dlp keeps state in module globals, so a second `run` in the same process is unsupported (the
+  service runs each in a fresh process, the design's §3.2).
+- The files are line-buffered, which flushes at each newline alone: yt-dlp's progress lines, ended by `\\r`, wait;
+  the product's argv has `--no-progress`.
 """
 
 import platform
 import sys
+import traceback
 
 
 def version():
@@ -20,7 +32,7 @@ def version():
 
 def run(argv, out_path, err_path):
     """yt-dlp run once over `argv` (its arguments, no program name), its output into `out_path` and `err_path`; its
-    exit status."""
+    exit status, never an exception but a BaseException that isn't SystemExit."""
     argv = [str(arg) for arg in argv]
     saved = sys.argv, sys.stdout, sys.stderr
     with open(out_path, "w", encoding="utf-8", errors="replace", buffering=1) as out, \
@@ -33,6 +45,10 @@ def run(argv, out_path, err_path):
             return 0
         except SystemExit as stop:
             return _status(stop.code, err)
+        except Exception:
+            traceback.print_exc(file=err)
+            err.flush()
+            return 1
         finally:
             sys.argv, sys.stdout, sys.stderr = saved
 
