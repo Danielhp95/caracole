@@ -798,6 +798,17 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 - The artist and the title a free text names, the one parser of it (`read_names`: its rules in order, cleaned first
   by `clean`, a video's channel by `clean_channel`; a known artist, a one-word artist of your library only once
   credible).
+  - Two parts, each its own words (`_own`: less its CJK title groups, 【】《》「」『』〈〉, else the first one's
+    content), then, where no mark parts the text, its first title group the title (`_bracketed`: "米津玄師
+    MV「Lemon」", "《孤勇者》陈奕迅"; words before it that begin with the channel or a known artist and go on the title
+    instead; its artist's loose tail cut as `clean`'s, `_loose_at`, an artist after it less a leading "by"), before a
+    known artist, the channel's song and the suggested video's.
+  - A bracket of a version's or a tag's words alone (`_TAGS`: "【Live】", "【翻唱】") is never a title: leading the text
+    or a part it goes (`_untagged`), after the song's words it stays as written.
+  - A 「」 or 『』 quote is a lyric when it has a space between two CJK characters, is longer than `LYRIC_CHARS`, or
+    ends as a sentence (`_lyric`, `_lyric_unless_named`), unless it is alone once the video's groups go (`_alone`);
+    one that ends so, or a long one of Latin words alone, is a title after an artist known whole (`_decoration`,
+    `_whole_artist`: the channel's name or a known artist; `clean` knows none).
 - Every path that turns text into a name uses it:
   - `/api/search`'s `names` (with the YouTube video suggested for the query), which the library page's request form,
     its Make sheet and the lookup page's form by name fill in, each field until you type into it (no page splits

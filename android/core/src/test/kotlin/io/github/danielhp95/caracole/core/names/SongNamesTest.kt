@@ -1,5 +1,7 @@
 package io.github.danielhp95.caracole.core.names
 
+import io.github.danielhp95.caracole.core.keys.Normalize
+import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.replays.SearchReplay
@@ -52,6 +54,35 @@ class SongNamesTest {
         assertEquals("Silvana Estrada" to "Que problema",
                      SongNames.readNames(null, "Que problema bY Silvana Estrada", emptyList(), channel = "Silvana Estrada"))
     }
+
+    /** A known artist of your library before a tag bracket or a title bracket, which names.jsonl can't hold (no fixture
+     * knows 周杰倫): what song_names.py answered on Python 3.14.7, with no database and these two songs (credible: two
+     * of theirs). */
+    @Test fun aKnownArtistOfYoursBeforeABracketIsTheArtist() {
+        val songs = listOf(song(1, "晴天"), song(2, "稻香"))
+        assertEquals("周杰倫" to "七里香【Live】", SongNames.readNames(null, "周杰倫 七里香【Live】", songs))
+        assertEquals("周杰倫" to "七里香", SongNames.readNames(null, "周杰倫 七里香《周杰倫的床邊故事》", songs))
+        assertEquals("周杰倫 Jay Chou" to "告白氣球 Love Confession",
+                     SongNames.readNames(null, "周杰倫 Jay Chou【告白氣球 Love Confession】Official MV", songs))
+        assertEquals(null, SongNames.readNames(null, "周杰倫 七里香【Live】", emptyList()))
+    }
+
+    /** A long quote of Latin words after an artist of your library, whole, is the title, else a lyric
+     * (helpers/song_name_cases.py's KNOWN): what song_names.py answers with these two songs, and with none. */
+    @Test fun aLongLatinQuoteAfterAnArtistOfYoursIsTheTitle() {
+        val songs = listOf(song(1, "1", "LiSA"), song(2, "2", "LiSA"))
+        assertEquals("LiSA" to "Rising Hope and Glory", SongNames.readNames(null, "LiSA「Rising Hope and Glory」", songs))
+        assertEquals(null, SongNames.readNames(null, "LiSA「Rising Hope and Glory」", emptyList()))
+    }
+
+    private fun song(id: Long, title: String, artist: String = "周杰倫") = SongRow(
+        id = id, key = Normalize.identityKey(artist, title), artist = artist, title = title, artists = listOf(artist),
+        album = null, durationMs = null, isrc = null, sourceIds = "{}", addedAt = "2026-11-25T00:00:00Z",
+        variant = null, status = "wanted", review = false, matchDecision = null, matchStep = null, matchScore = null,
+        matchArtistKey = null, matchSongKey = null, matchCandidates = "[]", matchedAt = null, ugDirty = false,
+        ugCheckedAt = null, lyricsStatus = "pending", lyricsJson = null, lyricsAt = null, lacuerdaCheckedAt = null,
+        createdAt = "2026-11-25T00:00:00Z",
+    )
 
     companion object {
         const val VECTOR = SearchReplay.NAMES

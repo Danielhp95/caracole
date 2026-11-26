@@ -433,17 +433,36 @@ never read.
 
 First, what a video's title adds is dropped: brackets such as "(Official Video)" or "(Letra)", a
 last part such as "… | Official Video", format words such as "HD" or "4K", and quotes around the
-text. "(feat. …)" and "(En Vivo)" stay. Then the first rule that fits names the song:
+text. "(feat. …)" and "(En Vivo)" stay. Lyric channels' brackets go too: their own words, as in
+"【動態歌詞Lyrics】", "【中文字幕】" or "(官方完整版MV)", and a line of the lyrics quoted in 「」 or
+『』: one that ends as a sentence, or a long one. A short quote is a title and stays:
+"宋冬野「斑马，斑马」". So is one that ends as a sentence, or a long one of Latin words, right
+after the channel's name or a known artist: "Aimer「どうして？」" and "Live「Lightning Crashes」"
+from their channels, never "晴天「为什么？」" from 周杰倫's. A quote left alone once the video's
+brackets go is the title: "「夜に駆ける。」(Official Video)". A bracket of a version's or a tag's
+words alone, such as "【Live】", "【现场版】" or "【翻唱】", is never the title. After the song's name
+it stays: "周深 大鱼【Live】" is "大鱼【Live】". At the start it is the upload's and goes: "【翻唱】大鱼"
+is "大鱼". Then the first rule that fits names the song:
 
 1. **Artist - Title.** The first dash with a space on each side splits them. An en or em dash, "|",
-   "~" and "//" work too. "Muse - Hysteria - Live" is "Hysteria - Live" by Muse. The two are
-   swapped when only the second part is a known artist, as in a fan's upload.
-2. **A known artist first, or after "by".** "silvana estrada que problema" or "Que problema by
+   "~", "//" and "_" work too. "Muse - Hysteria - Live" is "Hysteria - Live" by Muse. The two are
+   swapped when only the second part is a known artist, as in a fan's upload. A part's brackets
+   of 【】《》「」『』〈〉 are left out of it: "【翻唱】周深" is 周深. A part that is only brackets is
+   the first one's words: "《消愁》" is 消愁, and so are "《消愁》 Live" and "《消愁》 by".
+2. **A title in brackets.** With no mark, the first of those brackets is the title. The words
+   before it are the artist, and what follows it is left out: "米津玄師 MV「Lemon」" is "Lemon" by
+   米津玄師. When those words begin with the channel's name or a known artist and go on, they are
+   the title: "陈奕迅 孤勇者《英雄联盟：双城之战》" from 陈奕迅's channel is "孤勇者". With no words
+   before it, the words after it are the artist: "《孤勇者》陈奕迅", or "《孤勇者》 by 陈奕迅", unless
+   they are only tags or a video's words: "《孤勇者》 Cover" names no artist, and "《孤勇者》 Piano
+   Cover by Jane" names Jane. A band named "By …"
+   before the bracket keeps it: "By Divine Right「Song」".
+3. **A known artist first, or after "by".** "silvana estrada que problema" or "Que problema by
    Silvana Estrada", once caracole knows her. A known song title is left whole: "Love Me Tender" is
    not "Me Tender" by Love.
-3. **A video's channel.** A pasted video's title that names no artist is its channel's song:
+4. **A video's channel.** A pasted video's title that names no artist is its channel's song:
    "Creep" from "Radiohead - Topic" is Radiohead's.
-4. **The video suggested for a search.** When YouTube's first video for a query is that very song,
+5. **The video suggested for a search.** When YouTube's first video for a query is that very song,
    its artist is used: "creep" is Radiohead's "Creep".
 
 If no rule fits, the text doesn't say who its artist is, and it is never cut at its first space. A
