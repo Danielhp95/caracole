@@ -29,7 +29,8 @@ here: …", ``youtube_fetch.autochords_problem``; neither YouTube nor yt-dlp is 
 no room (507); an upload that isn't staged (400 not an id, 404 gone); a song an audio file's sheet isn't for (409:
 ignored, or with a human sheet; a purchase linked or YouTube's audio is no refusal, as the file replaces it, the
 owner's decision of 2026-11-25), as the command refuses it again when it runs; and a drop while a job names the
-upload (409).
+upload (409). Each route holds the store's lock (``audio_store.held``) from what it reads of the queue to what it
+changes, so that an upload from another tab never lets go of a file Make sheet is queueing.
 """
 
 from __future__ import annotations
@@ -98,10 +99,11 @@ def upload(app: WebApp, params: dict[str, list[str]], data: bytes) -> Response:
     from caracole.songs import find_song
 
     _can_make(app)
-    named = uploads_named(app.queue.snapshot())
     try:
-        audio_store.sweep(app.cfg, named)
-        up = audio_store.stage(app.cfg, data, (params.get("name") or [""])[0], named=named)
+        with audio_store.held():  # the uploads jobs name, as they are while this one is staged
+            named = uploads_named(app.queue.snapshot())
+            audio_store.sweep(app.cfg, named)
+            up = audio_store.stage(app.cfg, data, (params.get("name") or [""])[0], named=named)
     except audio_store.AudioError as e:
         raise _refused(e, "Not taken") from None
     except OSError as e:
@@ -158,16 +160,25 @@ def sheet_from_audio(app: WebApp, form: dict[str, str]) -> Response:
     song by its id (``song``), else by name, written to wanted.txt first with the file's album and length unless the
     form gives its own."""
     from caracole import audio_store
+
+    _can_make(app)
+    # Held from the check to the job queued: an upload from another tab meanwhile would let go of this one.
+    with audio_store.held():
+        try:
+            up = audio_store.staged(app.cfg, form.get("upload", "").strip())
+        except audio_store.AudioError as e:
+            raise _refused(e, "Not made") from None
+        return _queue_sheet(app, form, up)
+
+
+def _queue_sheet(app: WebApp, form: dict[str, str], up: Any) -> Response:
+    """``POST /audio``'s song, refused or written to wanted.txt, and its job queued, for the staged upload ``up``."""
+    from caracole import audio_store
     from caracole.normalize import identity_key
     from caracole.songs import find_song, get_song
     from caracole.wanted import format_duration
     from caracole.web.library_routes import wanted_line
 
-    _can_make(app)
-    try:
-        up = audio_store.staged(app.cfg, form.get("upload", "").strip())
-    except audio_store.AudioError as e:
-        raise _refused(e, "Not made") from None
     overrides = app.overrides()
     note = ""
     if form.get("song", "").strip():
@@ -210,10 +221,11 @@ def drop(app: WebApp, doc: Any) -> Response:
     upload_id = doc.get("upload") if isinstance(doc, dict) else None
     if not isinstance(upload_id, str):
         raise Refused(400, "Not dropped", NOT_NAMED)
-    if upload_id in uploads_named(app.queue.snapshot()):
-        raise Refused(409, "Not dropped", WAITS)
-    try:
-        audio_store.drop(app.cfg, upload_id)
-    except audio_store.AudioError as e:
-        raise _refused(e, "Not dropped") from None
+    with audio_store.held():  # no job queued for it between the check and the drop
+        if upload_id in uploads_named(app.queue.snapshot()):
+            raise Refused(409, "Not dropped", WAITS)
+        try:
+            audio_store.drop(app.cfg, upload_id)
+        except audio_store.AudioError as e:
+            raise _refused(e, "Not dropped") from None
     return json_response(200, {"dropped": upload_id})

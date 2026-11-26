@@ -11,7 +11,8 @@ proper sheet later, caracole uses that one.
 - A file you bought. Put it in `~/Music` and caracole matches it by its tags.
 - YouTube. The nightly run takes the audio of a few songs that have no sheet.
 - A video you choose. Paste its link on the library page and the sheet is made right away.
-- A file from your computer: `caracole audio FILE`. caracole keeps a copy as the song's audio, in place
+- A file from your computer: the **+** on the library page (or drop the file on it, or a song's
+  Sheet from an audio file…), or `caracole audio FILE`. caracole keeps a copy as the song's audio, in place
   of anything it had, and makes the sheet right away.
 
 Taking audio from YouTube goes against its robots.txt and its terms of service. That is your

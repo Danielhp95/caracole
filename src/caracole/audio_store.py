@@ -96,7 +96,16 @@ NO_NAME = "What is the file called? Its name is text."
 WHICH = "Which upload? Its id is 16 hex."
 GONE = "That upload is gone: it was left over an hour, or another file was chosen since. Choose it again."
 
-_lock = threading.Lock()  # one change at a time to the staged uploads, of caracole serve's threads
+# One change at a time to the staged uploads, of caracole serve's threads; re-entrant, so that a route may hold it
+# (``held``) across what it reads of the queue and what it changes here.
+_lock = threading.RLock()
+
+
+def held() -> threading.RLock:
+    """The staged uploads' lock, for a route to hold across a check and what it does after it: an upload's ``named``
+    (the jobs' uploads) read and its ``stage``, Make sheet's ``staged`` and its job queued, a drop's check and its
+    ``drop``, so that no upload lets go of a file a job is being queued for."""
+    return _lock
 
 
 class AudioError(ValueError):

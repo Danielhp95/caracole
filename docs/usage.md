@@ -2867,7 +2867,18 @@ One runs at a time per song. Where chords can't be made, the form has no video f
 #### A sheet from an audio file
 
 Where caracole can make chords from audio (`packages.autochords` and its model files; no YouTube, no
-yt-dlp), caracole serve takes an audio file of yours for a song's sheet. The file goes up in one
+yt-dlp), the search bar has a **+** ("Make a sheet from an audio file"). Press it and choose a file,
+or drop one on the Library. A song you have that isn't ignored and has no human sheet has **Sheet
+from an audio file…** in its card too, beside From a YouTube video, even with a purchase linked.
+
+The dialog shows the upload as it goes ("Uploading “song.mp3” · 3.1 of 8.4 MB"), then the file
+("song.mp3 · MP3 · 3:18"), Artist and Title filled with the song it names, and "In your library: …"
+for a song you have, with what the file will replace. Correct the names if they are wrong (a card's
+song keeps its own) and press **Make sheet**: a line under the bar, or the song's own line, says how
+it goes. **Cancel** or Escape deletes the file sent; a refusal says why, with **Choose another
+file**. The file on disk and the phone have no +.
+
+The file goes up in one
 request, 128 MiB at most (`caracole audio FILE` takes any size), and waits in the state folder's
 `audio/` until its sheet is asked for. caracole reads what it is from its bytes, never its name:
 MP3, M4A, FLAC, WAV, Ogg or AIFF, 30 minutes at most. It answers the song the file's tags or its

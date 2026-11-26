@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 
 import pytest
 from helpers import cards
+from helpers.audio_files import audio
 from helpers.browser import CHROMIUM_MARKS
 from helpers.targets import odd_radii
 from test_web_lookup_page import index_songs
@@ -68,7 +69,12 @@ def odd_in(page, where: str, selector: str, floor: int) -> None:
 
 @pytest.mark.parametrize("size", [(390, 844), (1280, 900)], ids=["phone", "laptop"])
 @pytest.mark.parametrize("scheme", ["light", "dark"])
-def test_the_library_page_has_four_corner_radii(library, live, tmp_path, size, scheme):  # noqa: F811
+def test_the_library_page_has_four_corner_radii(library, live, tmp_path, size, scheme, monkeypatch):  # noqa: F811
+    import caracole.library_page as library_page
+    from caracole.audio_store import AUDIO_MAX
+
+    # The bar's "+" drawn (a sheet from an audio file: its dialog measured too, refused, as this caracole makes none).
+    monkeypatch.setattr(library_page, "audio_member", lambda cfg: {"ok": True, "why": None, "limit": AUDIO_MAX})
     base, runner = live
     from test_web_page_steps import FROM_UG
 
@@ -94,6 +100,16 @@ def test_the_library_page_has_four_corner_radii(library, live, tmp_path, size, s
         odd_in(page, "the filter panel", "#filter-panel[open] .seg", 1)
         page.press("Escape")
         assert page.wait("!document.getElementById('filter-panel').open")
+        # The "+" and its dialog, a file chosen and refused.
+        odd_in(page, "the + tool", "#add-audio", 1)
+        picked = tmp_path / "song.mp3"
+        picked.write_bytes(audio("MP3", 2.0))
+        root = page.send("DOM.getDocument")["root"]["nodeId"]
+        node = page.send("DOM.querySelector", nodeId=root, selector="#audio-file")["nodeId"]
+        page.send("DOM.setFileInputFiles", files=[str(picked)], nodeId=node)
+        odd_in(page, "the audio dialog", "#audio-sheet[open] .audio-acts .btn", 2)
+        page.press("Escape")
+        assert page.wait("!document.getElementById('audio-sheet').open")
         # A song's card (under its line on a phone, in the pane on a laptop): its tiles, a tile's drawer, the ⋯ menu.
         wonderwall = page.js("Array.from(document.querySelectorAll('#list article.line')).find((l) => "
                              "l.querySelector('h3').textContent.includes('Wonderwall')).dataset.id")

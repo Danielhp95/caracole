@@ -286,3 +286,29 @@ def test_no_auto_chords_is_409(cfg, queue, monkeypatch):
     assert staged_ids(cfg) == set()
     response = post(app, {"upload": "0123456789abcdef", "artist": NICK[0], "title": NICK[1]})
     assert response.status == 409 and queue.snapshot() == []
+
+
+def test_an_upload_from_another_tab_while_make_sheet_queues_never_lets_go_of_its_file(able, queue, monkeypatch):
+    # Make sheet checks the upload is staged, then queues it: a second upload arriving between the two (another tab)
+    # waits for the queueing, so the job it lets go of nothing that names the first file.
+    import threading
+
+    app = app_for(able, queue)
+    first = answer(upload(app, audio("MP3")))["upload"]
+    other: list = []
+    sent = threading.Thread(target=lambda: other.append(upload(app, audio("WAV"), "other.wav")))
+    submit = app.submit
+
+    def submit_while_another_uploads(*args, **kwargs):
+        sent.start()
+        sent.join(timeout=1.0)  # without the store held, it is staged by now, the first file let go
+        return submit(*args, **kwargs)
+
+    monkeypatch.setattr(app, "submit", submit_while_another_uploads)
+    response = post(app, {"upload": first, "artist": NICK[0], "title": NICK[1]})
+    assert response.status == 200, response.body
+    sent.join(timeout=10)
+    assert other, "the other upload never ended"
+    second = answer(other[0])["upload"]
+    assert staged_ids(able) == {first, second}  # the queued job's file stays
+    assert queue.snapshot()[0].steps[0].args[2] == f"--upload={first}"

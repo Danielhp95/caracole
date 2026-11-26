@@ -92,6 +92,7 @@ CARDS = VECTORS / "web" / "cards.jsonl"
 # What the phone's page says where caracole serve's says why this caracole makes no sheet from a YouTube video
 # (youtube_fetch.route_reason): the request form's line, "No sheets from YouTube here: YouTube isn't on the phone."
 YOUTUBE_PROBLEM = "YouTube isn't on the phone"
+AUDIO_PROBLEM = "auto-chords isn't on the phone"  # LibraryPage.kt AUDIO_PROBLEM: no sheet from an audio file
 LIBRARY_NAME = "Phone"
 # A form token with every character html.escape writes otherwise, so the request form's escape is checked too.
 CSRF = "tok-&\"<'>-0123456789"
@@ -145,13 +146,14 @@ SERVER_CONTROLS = WebControls(CSRF, busy=frozenset({3, 1}), active=2, held=froze
 
 def server_member(controls: WebControls) -> dict[str, Any]:
     """``build_library_page``'s ``server`` for ``controls`` on the phone: no Guitar Pro page, no sheet from YouTube
-    (``YOUTUBE_PROBLEM``), YouTube off, and no lyrics transcribed (for the same reason: no song offered one, no time
-    said) (checked against build_library_page itself: ``test_the_server_member_is_build_library_pages``)."""
+    (``YOUTUBE_PROBLEM``), YouTube off, no lyrics transcribed (for the same reason: no song offered one, no time
+    said), and no sheet from an audio file (``AUDIO_PROBLEM``: no "+") (checked against build_library_page itself: ``test_the_server_member_is_build_library_pages``)."""
     return {"csrf": controls.csrf, "busy": sorted(controls.busy), "active": controls.active,
             "removing": sorted(controls.removing), "jobs": list(controls.jobs), "guitar": False,
             "youtube": {"ok": False, "why": YOUTUBE_PROBLEM, "off": True},
             "transcribe": {"ok": False, "why": YOUTUBE_PROBLEM, "songs": [], "nothing": [], "unsung": [],
-                           "transcribed": [], "time": ""}}
+                           "transcribed": [], "time": ""},
+            "audio": {"ok": False, "why": AUDIO_PROBLEM, "limit": 0}}
 
 
 def data_objects() -> dict[str, dict[str, Any]]:
@@ -476,7 +478,9 @@ def test_the_server_member_is_build_library_pages(conn, cfg):
     off = mock.patch.object(type(cfg), "provider", lambda self, name: (
         type(youtube)(**{**youtube.__dict__, "enabled": False}) if name == "youtube" else youtube))
     with (off, mock.patch.object(library_page, "route_reason", lambda cfg: YOUTUBE_PROBLEM),
-          mock.patch.object(library_page, "transcribe_reason", lambda cfg: YOUTUBE_PROBLEM)):
+          mock.patch.object(library_page, "transcribe_reason", lambda cfg: YOUTUBE_PROBLEM),
+          mock.patch.object(library_page, "audio_member",
+                            lambda cfg: {"ok": False, "why": AUDIO_PROBLEM, "limit": 0})):
         html = build_library_page(conn, cfg, Overrides(), NOW, controls=SERVER_CONTROLS)
     data = json.loads(re.search(r'<script type="application/json" id="songs">(.*?)</script>', html, re.S).group(1))
     assert data["server"] == server_member(SERVER_CONTROLS)

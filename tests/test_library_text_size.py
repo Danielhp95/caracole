@@ -247,3 +247,28 @@ def test_from_720_px_a_bands_line_keeps_its_title_whatever_its_buttons_take(conn
     assert [m for m in drawn if m["title"] < m["least"] - 0.5 or not m["fits"]] == [], said
     assert [m for m in drawn if m["plays"] > 1 and m["rows"] >= m["plays"]] == [], said  # never one a row
     assert [m for m in drawn if not m["under"] and m["rows"] > 1] == [], said  # wrapped: under the title instead
+
+
+@pytest.mark.parametrize("lh", ["16px", "32px"], ids=["100 %", "200 %"])
+def test_on_a_phone_the_bars_plus_holds_one_row_beside_filter_and_sort(conn, cfg, tmp_path, monkeypatch, lh):
+    # Served where a sheet can be made from an audio file, the bar has a third tool, the "+", sized as Filter is: the
+    # field and the three tools one row at 390 px, at the pages' own text size and at twice it, nothing past the screen.
+    import caracole.library_page as library_page
+    from caracole.audio_store import AUDIO_MAX
+
+    monkeypatch.setattr(library_page, "audio_member", lambda cfg: {"ok": True, "why": None, "limit": AUDIO_MAX})
+    songs(conn, cfg)
+    script = r"""
+    document.documentElement.style.setProperty("line-height", %s);
+    const r = (id) => document.getElementById(id).getBoundingClientRect();
+    const row = document.querySelector(".bar-row").getBoundingClientRect();
+    const parts = [r("q"), r("add-audio"), r("filter"), r("sort")];
+    note("bar", { plus: [Math.round(r("add-audio").width), Math.round(r("add-audio").height)],
+      filter: [Math.round(r("filter").width), Math.round(r("filter").height)],
+      text: document.getElementById("add-audio").textContent, glyph: getComputedStyle(document.getElementById("add-audio")).fontSize !== "0px",
+      oneRow: parts.every((p) => p.top >= row.top - 0.5 && p.bottom <= row.bottom + 0.5 && p.top < parts[0].bottom),
+      within: parts.every((p) => p.right <= innerWidth + 0.5), wide: document.documentElement.scrollWidth <= innerWidth });
+    """ % json.dumps(lh)
+    bar = attribute_of(run(conn, cfg, tmp_path, script, controls=SERVED, size="390,800", touch=True), "data-bar")
+    assert bar["plus"] == bar["filter"] and bar["text"] == "+" and bar["glyph"], bar
+    assert bar["oneRow"] and bar["within"] and bar["wide"], bar

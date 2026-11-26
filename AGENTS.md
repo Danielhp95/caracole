@@ -1852,7 +1852,22 @@ It is rows.js's, shared by both pages:
     Refused 409 ignored or with a human sheet (a purchase or YouTube's audio never: the owner's decision of
     2026-11-25), 400 or 404 an upload not staged.
   - `POST /audio/drop` (JSON `{"upload"}`): deleted now, 409 while a job names it.
-  - 409 for each where this caracole makes no chords ("No sheets from audio files here: …", `audio_reason`).
+  - 409 for the upload and Make sheet where this caracole makes no chords ("No sheets from audio files here: …",
+    `audio_reason`).
+  - Each holds the store's lock (`audio_store.held`, an RLock) from what it reads of the queue to what it changes, so
+    an upload from another tab never lets go of a file Make sheet is queueing
+    (`test_web_audio.py::test_an_upload_from_another_tab_while_make_sheet_queues_never_lets_go_of_its_file`).
+  - The page's side (library.js `audioDialog`, `audioSheet`; filter.css): where library_page.py's `server.audio`
+    (`audio_member`: `ok`, `why`, `limit`; the phone's LibraryPage.kt `AUDIO_PROBLEM`, `ok` false) says so, the bar's
+    "+" (`#add-audio`, before Filter, and its hidden `#audio-file`, made by the script alone: none on the file or the
+    phone) and a file dropped on the Library while it shows open `dialog#audio-sheet` (a sheet from the bottom under
+    720 px): XHR's upload with its progress, sent as `application/octet-stream` (a File's own type is refused 415), a
+    file past `limit` refused unsent; the guess in Artist and Title, the library's song and what the file replaces;
+    Make sheet through `sendRequest`, the request form's own path (the line under the bar, `track`); Cancel or
+    Escape `POST /audio/drop`. A card's Sheet from an audio file… (not ignored, no human sheet by its `files`, a
+    purchase or YouTube's audio no matter: the cards' data unchanged) opens it for that song, its names not to edit,
+    and posts its `songForm` in place (`song`, `identity`, `upload`); its transcription offers read again as after a
+    YouTube sheet (`offerAfter`). test_web_page_audio.py.
 - **ug_link_routes.py** is a UG link pasted into the library page's box: `GET /api/ug/link` (ug/link.py `known`, no
   request and no lock: its state, the tab's names, its artist's page, `guess`, the library's `song`, `hits` as
   /api/search's `index` items) and `POST /ug/link` (`caracole ug --link --progress` queued under `jobs.UG_LINK`, among
