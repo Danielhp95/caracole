@@ -55,7 +55,9 @@ import java.util.concurrent.TimeUnit
  *   `reload`; each checked as peer_push.py checks it (read_new, new_push: at most [OPEN] pushes here, open or sent
  *   and not taken yet, 409 else; stage_file; read_push_document, 409 for a push of songs keyed by other rules,
  *   check_digests and send: each file a song document keeps staged or kept here, 400 else), each refusal `{error}`
- *   with its status. The push's take is queued as
+ *   with its status; a phone's `push/new` lets go of the push it opened before and never sent (one open push a
+ *   sender). `POST /peer/push/drop` (`{"push", "from"}`, the token in its header) lets go of a push never sent, as
+ *   peer_push.drop: 404 for none, 400 for another's, 409 once its document was taken. The push's take is queued as
  *   `caracole peer take` is, under `peer-push:<from>` (a take of that caracole's that waits or runs refuses the push,
  *   409 "Taking already", which leaves it open), and runs after the answer on the fake's one worker: its stages check,
  *   take, render, agree (jobs.PEER_TAKE_STAGES), each unit taken or left said as its `units` (Job.as_json), the take
@@ -240,6 +242,7 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
             "POST /peer/push/new" -> if (tokenOk(exchange)) pushNew(exchange)
             "POST /peer/push/file" -> if (tokenOk(exchange)) pushFile(exchange, query["push"].orEmpty(), query["sha256"].orEmpty())
             "POST /peer/push" -> if (tokenOk(exchange)) push(exchange, query["push"].orEmpty())
+            "POST /peer/push/drop" -> if (tokenOk(exchange)) pushDrop(exchange)
             "POST /peer/index" -> if (tokenOk(exchange)) pushIndex(exchange)
             "GET /api/sync/indexes" -> if (countsIndexes) json(exchange, 200, indexCounts())
                                        else json(exchange, 404, obj("error" to JsonPrimitive("no such route")))
@@ -343,12 +346,29 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
         notFromHere(from)
         val need = files.filter { kept(it) == null }
         val push = synchronized(lock) {
+            open.entries.removeIf { (_, p) -> p.from == from && p.sent == null }  // its push never sent goes
             if (open.size >= OPEN) {
                 throw Refusal(409, "Two pushes are here already, waiting to be taken: try again once one is, or in an hour.")
             }
             generateSequence { hex(8) }.first { it !in open }.also { open[it] = Push(from, need) }
         }
         json(exchange, 200, obj("push" to JsonPrimitive(push), "need" to JsonArray(need.map(::JsonPrimitive))))
+    }
+
+    /** peer_push.drop: a push never sent let go of, asked by whoever opened it. */
+    private fun pushDrop(exchange: HttpExchange) {
+        val doc = body(exchange) as? JsonObject
+        val pushId = text(doc?.get("push")).orEmpty()
+        checkId(pushId)
+        val from = text(doc?.get("from"))
+        if (from == null || !ID.matches(from)) throw Refusal(400, "Who pushes? Its caracole's id is 16 hex.")
+        synchronized(lock) {
+            val push = open[pushId] ?: throw Refusal(404, "No such push is open here.")
+            if (push.from != from) throw Refusal(400, "That push was opened by another caracole.")
+            if (push.sent != null) throw Refusal(409, "That push is sent: its take waits or runs here.")
+            open.remove(pushId)
+        }
+        json(exchange, 200, obj("dropped" to JsonPrimitive(pushId)))
     }
 
     /** peer_push.stage_file. */

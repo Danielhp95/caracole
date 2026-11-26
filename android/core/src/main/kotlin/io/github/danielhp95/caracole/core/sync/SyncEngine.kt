@@ -109,7 +109,10 @@ class SameCaracole(message: String) : Exception(message)
  *    comparison is left out ([CHANGED_HERE]), and so is a song whose file the phone can no longer read as kept
  *    ([FILE_CHANGED]). Then the computer's request is followed every second, 10 minutes at most, with no lock held,
  *    and each unit is given or left as its request says it (its `units`). A request that can't be sent or followed
- *    stops the sync there: the computer records nothing, and the phone no more than its take did.
+ *    stops the sync there: the computer records nothing, and the phone no more than its take did; a push that fails
+ *    before its document is taken is let go of there at once (`POST /peer/push/drop`, PeerClient.pushDrop), so that
+ *    it holds none of the computer's two slots for the hour (a drop that fails is said nowhere: the phone's next push
+ *    lets go of it there).
  * 4. **mirror**: the mirror of the computer's pages brought up to date ([mirrorRefresh], told what to say as it goes:
  *    "120 of 640 pages"; skipped without one); its failure stops nothing.
  * 5. **agree**: the computer's state read again; what the two hold alike now recorded as agreed at its clock, inside
@@ -664,9 +667,11 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         val token = fresh.peer.token
         val sent: List<Give.Entry>
         val ended: JsonObject
-        val job: Int
+        var job: Int? = null
+        var opened: String? = null  // the push opened there, until its document is taken
         try {
             val (push, need) = io { client.pushNew(token, me, Give.files(entries)) }
+            opened = push
             val unreadable = HashSet<String>()
             need.forEachIndexed { i, sha ->
                 stage(GIVE, RUNNING, "${i + 1} of ${plural(need.size, "file")}")  // a count the bar fills by
@@ -680,6 +685,10 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             ended = awaitJob(client, job)
         } catch (e: Exception) {
             if (e is CancellationException) throw e
+            // A push that failed before its document was taken lets go of its slot there at once
+            // (peer_push.push_units); a drop that fails too says nothing over why the push failed.
+            val dropping = opened
+            if (dropping != null && job == null) io { client.pushDrop(token, dropping, me) }
             val why = said(e)
             stage(GIVE, FAILED, why)
             throw SyncFailed("Couldn't give them ${entries.size}: $why", done.outcome(), e)

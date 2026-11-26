@@ -711,8 +711,8 @@ class SyncEngineTest {
         assertEquals(400, refused.status)
     }
 
-    @Test fun `two pushes left open make the computer refuse a third, and the give says why`() {
-        withFile("Estopa", "Tu Calorro", "a Guitar Pro file".toByteArray())
+    @Test fun `a push that fails after it is opened lets go of its slot there at once, and the give says why`() {
+        val song = withFile("Estopa", "Tu Calorro", "a Guitar Pro file".toByteArray())
         computer.answers["POST /peer/push/file"] = { exchange ->
             FakeComputer.json(exchange, 503, FakeComputer.obj("error" to JsonPrimitive("The file couldn't be kept: disk full.")))
         }
@@ -722,14 +722,41 @@ class SyncEngineTest {
                          "couldn't be kept: disk full.", failed.message)
             assertEquals("failed", ended()["give"])
             assertNull(ended()["agree"], "no agreement recorded")
+            assertEquals(0, computer.pushesHere, "the push it opened let go of there")
             stages.clear()
         }
-        assertEquals(2, computer.pushesHere)
-        val third = assertFailsWith<SyncFailed> { apply(engine.compare(computer.address.toString())) }
-        assertEquals("Couldn't give them 1: ${computer.address} answered 409: Two pushes are " +
-                     "here already, waiting to be taken: try again once one is, or in an hour.", third.message)
-        assertEquals(emptyList(), assertNotNull(third.outcome).given, "as peer sync --push fails, nothing given")
+        assertEquals(2, computer.asked("POST", "/peer/push/drop").size)
         assertNull(phone.read { Compare.baseOf(it, computer.id) })
+
+        // A drop that fails too (the computer gone) never hides why the push failed; the push is left open there,
+        // and the phone's next push lets go of it.
+        computer.answers["POST /peer/push/drop"] = { exchange ->
+            exchange.requestBody.readBytes()
+            FakeComputer.json(exchange, 503, FakeComputer.obj("error" to JsonPrimitive("Restarting.")))
+        }
+        val failed = assertFailsWith<SyncFailed> { apply(engine.compare(computer.address.toString())) }
+        assertEquals("Couldn't give them 1: ${computer.address} answered 503: The file couldn't be kept: disk full.",
+                     failed.message)
+        assertEquals(1, computer.pushesHere)
+        computer.answers.remove("POST /peer/push/drop")
+        computer.answers.remove("POST /peer/push/file")
+        val drops = computer.asked("POST", "/peer/push/drop").size
+        val outcome = apply(engine.compare(computer.address.toString()))
+        assertEquals(listOf(unitOf(song)), outcome.given)
+        assertEquals(drops, computer.asked("POST", "/peer/push/drop").size, "a push that goes through drops nothing")
+        assertEquals(0, computer.pushesHere)
+    }
+
+    @Test fun `a push of songs keyed by other rules, refused, lets go of what it opened`() {
+        onPhone("Muse", "Hysteria")
+        computer.answers["POST /peer/push"] = { exchange ->
+            exchange.requestBody.readBytes()
+            FakeComputer.json(exchange, 409, FakeComputer.obj("error" to JsonPrimitive(Units.OTHER_KEYS)))
+        }
+        val failed = assertFailsWith<SyncFailed> { apply(engine.compare(computer.address.toString())) }
+        assertEquals("Couldn't give them 1: ${computer.address} answered 409: ${Units.OTHER_KEYS}", failed.message)
+        assertEquals(1, computer.asked("POST", "/peer/push/drop").size)
+        assertEquals(0, computer.pushesHere)
     }
 
     private fun proposals(found: List<io.github.danielhp95.caracole.core.sync.Difference>) =
@@ -801,7 +828,7 @@ class SyncEngineTest {
         val refused = assertFailsWith<SyncFailed> { apply(waiting.compare(computer.address.toString()), on = waiting) }
         assertEquals("Couldn't give them 1: ${computer.address} answered 409: Changes from " +
                      "Phone are being taken already (request 1): send them again once that is over.", refused.message)
-        assertEquals(2, computer.pushesHere, "the push refused stays open, to send again")
+        assertEquals(1, computer.pushesHere, "the push refused let go of there: the first, whose take runs, stays")
 
         held.countDown()
         computer.holdTakes = null

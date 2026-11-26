@@ -241,6 +241,28 @@ def phone_side(cfg):
     serving.close()
 
 
+def test_a_push_is_dropped_by_its_sender_until_its_document_is_taken_and_its_take_queued(phone_side, cfg):
+    from test_peer_push import PHONE, a_push_document, pushes
+
+    from caracole import peer_push
+
+    push = phone_side.new([])[1]["push"]
+    assert phone_side.drop(push) == (200, {"dropped": push}) and pushes(cfg) == []
+
+    push = phone_side.new([])[1]["push"]
+    status, _, body = phone_side.ask("POST", f"/peer/push?push={push}", json.dumps(a_push_document({}, [])).encode(),
+                                     kind="application/json")
+    assert status == 200, body
+    [job] = phone_side.app.queue.snapshot()
+    assert job.song_key == f"peer-push:{PHONE}" and job.state == "queued"
+    status, answer = phone_side.drop(push)
+    assert status == 409 and answer["error"] == "That push is sent: its take waits or runs here."
+    assert pushes(cfg) == [f"push-{push}"]
+    # and the sender's next push leaves it as it is, its take's
+    assert phone_side.new([])[0] == 200 and f"push-{push}" in pushes(cfg)
+    assert (cfg.state_dir / "peer" / f"push-{push}" / peer_push.DOCUMENT).exists()
+
+
 def _staged(cfg):
     from caracole import peer_push
 

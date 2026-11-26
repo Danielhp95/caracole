@@ -716,6 +716,10 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 - **A push** (peer_push.py): `POST /peer/push/new` names the files its units keep by their SHA-256, `POST
   /peer/push/file` sends each one this side needs, `POST /peer/push` the document, checked against each unit's digest;
   then `caracole peer take DIR` takes its units from the staging folder as a pull takes a peer's, and deletes it.
+  A push that fails after `push/new` (a file or its document refused, a network that drops) is let go of there at once:
+  the pusher (`push_units`, the phone's SyncEngine give) posts `POST /peer/push/drop`, its own failure never hiding
+  why the push failed; and a sender's next `push/new` lets go of its push never sent (`new_push`): one open push a
+  sender, so no failed push holds one of the `OPEN` (2) slots for the hour.
 
 #### peer_file.py
 
@@ -1822,7 +1826,9 @@ It is rows.js's, shared by both pages:
   page's, which any client that reaches the server reads, for a sync's `POST /peer/pull`); `GET /api/peer/unit` and `/api/peer/file` (peer_sync.py, read-only, as
   `/api/offline` is); and `POST /peer/pull`, `caracole peer pull` queued as any change (test_web_peer.py).
   - A push, the phone's (peer_push.py): `POST /peer/push/new`, `/peer/push/file` and `/peer/push`, `json` and `bytes`
-    routes with the form token in their header, then `caracole peer take --progress DIR` queued.
+    routes with the form token in their header, then `caracole peer take --progress DIR` queued; `POST
+    /peer/push/drop` (`{"push", "from"}`, the token in its header) deletes a push never sent, asked by the caracole
+    that opened it, as a send is (`peer_push.drop`: 404 none, 409 once its document was taken, its take queued).
   - `GET /api/peer/index[?sites=]`: this library's site indexes as `caracole index export` writes them, a SQLite file
     streamed from a temporary export (`cache_dir/peer/`), one at a time.
 - **sync_routes.py** is the library page's Sync tab (its label Share; library_assets/sync.js, sync-tab.html,
@@ -4243,7 +4249,8 @@ picks one).
     then `INTERRUPTED`, as is one the server ends as it stops (`JobQueue.stop`): over, Try again queues it
     (test_web_history.py).
 - It also writes, for the phone's sync alone, and nothing else: a push's staging folder (`state_dir/peer/push-<id>/`,
-  0700, its files checked by their SHA-256, deleted once `caracole peer take` is over or an hour after); a
+  0700, its files checked by their SHA-256, deleted once `caracole peer take` is over or an hour after, or a push never
+  sent at once, dropped by its pusher, `POST /peer/push/drop`, or let go of as its sender opens another); a
   temporary index export for `GET /api/peer/index` (`cache_dir/peer/`, one read transaction, no lock, deleted once
   sent); and the index pages a phone's lookups read, `POST /peer/index`'s export of them
   (`state_dir/peer/index-<16 hex>.sqlite`, 0600, at most `peer_push.INDEX_OPEN` waiting, read before its 202 as an

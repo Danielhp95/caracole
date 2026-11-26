@@ -486,10 +486,9 @@ def test_what_a_sync_took_stays_agreed_when_its_give_fails_so_a_later_change_the
     add_version(there.cfg.overrides_file, CREEP, "key=Gm&capo=0")  # there changes Creep's chords
     here.song("Muse", "Hysteria", version=None)  # here gets a song of its own to give
 
-    # There can't take a push now (two wait there already, another caracole's): the give fails, after the take.
-    for _ in range(2):
-        peer_push.new_push(there.cfg.state_dir, sender="0123456789abcdef", files=[], need=[],
-                           own=sync.own_id(there.conn))
+    # There can't take a push now (two wait there already, two other caracoles'): the give fails, after the take.
+    for sender in ("0123456789abcdef", "fedcba9876543210"):
+        peer_push.new_push(there.cfg.state_dir, sender=sender, files=[], need=[], own=sync.own_id(there.conn))
     result = run(here, "peer", "sync", HOST, "--push", "--yes")
     assert result.exit_code == 1 and "Two pushes wait here already" in result.output, result.output
     assert here.units()[unit] == there.units()[unit]  # Creep taken all the same: the two hold it alike
@@ -538,3 +537,34 @@ def test_choices_that_cant_be_read_or_name_no_difference_are_refused_before_anyt
     result = run(here, "peer", "sync", HOST, "--yes", "--choose=here:song/nobody/nothing")
     assert result.exit_code == 2 and "don't hold differently" in result.output
     assert there.app.queue.snapshot() == [] and not (here.cfg.state_dir / "backups").exists()
+
+
+def test_a_push_that_fails_halfway_lets_go_of_its_slot_there_at_once(two, monkeypatch):
+    """A push that stops after POST /peer/push/new (here its file refused, 413: past a push file's limit) is dropped
+    there as it fails, so two failed syncs never leave the other side refusing every push for an hour, the phone's
+    included; and the sync says why it failed."""
+    from caracole import peer_push
+
+    here, there, asked, _ = two
+
+    def handler(request: httpx.Request) -> httpx.Response:  # as server.py reads a body: its route's limit first
+        if request.url.path.startswith("/api/jobs/"):
+            there.app.queue.run_pending()
+        target = request.url.raw_path.decode()
+        if request.method == "POST" and len(request.content) > there.app.body_limit("POST", target):
+            return httpx.Response(413, content=b"That is too long to send here.\n")
+        answer = WebApp.finish(there.app.handle(Request(request.method, target, dict(request.headers),
+                                                        request.content)))
+        return httpx.Response(answer.status, headers=answer.headers, content=answer.body)
+
+    monkeypatch.setattr("caracole.commands.peer.transport_for_peer", lambda: httpx.MockTransport(handler))
+    here.song("Radiohead", "Creep", sheet=b"%PDF" + b"\0" * peer_push.FILE_MAX)  # 64 MiB and 4 bytes
+    for _ in range(2):
+        result = run(here, "peer", "sync", HOST, "--push", "--yes")
+        assert result.exit_code == 1 and "answered 413" in result.output, result.output
+    assert not (there.cfg.state_dir / "peer").exists() or not [
+        p for p in (there.cfg.state_dir / "peer").iterdir() if p.name.startswith(peer_push.PREFIX)]
+    # another caracole's push (the phone's) is taken now
+    opened = peer_push.new_push(there.cfg.state_dir, sender="fedcba9876543210", files=[], need=[],
+                                own=sync.own_id(there.conn))
+    assert opened.push

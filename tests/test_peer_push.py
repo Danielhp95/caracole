@@ -32,6 +32,7 @@ from test_web_server import Recorder, running
 
 NOW = "2026-11-03T00:00:00Z"
 PHONE = "0123456789abcdef"  # the phone's sync id
+OTHER = "fedcba9876543210"  # another caracole's
 JSON = "application/json"
 BYTES = "application/octet-stream"
 
@@ -66,6 +67,11 @@ class Served:
     def new(self, files: list[str], *, sender: str = PHONE, **fields) -> tuple[int, dict]:
         doc = {"format": sync.FORMAT, "from": sender, "files": files} | fields
         status, _, body = self.ask("POST", "/peer/push/new", json.dumps(doc).encode(), kind=JSON)
+        return status, json.loads(body)
+
+    def drop(self, push, *, sender=PHONE, **options) -> tuple[int, dict]:
+        status, _, body = self.ask("POST", "/peer/push/drop", json.dumps({"push": push, "from": sender}).encode(),
+                                   kind=JSON, **options)
         return status, json.loads(body)
 
     def file(self, push: str, sha256: str, data: bytes, **options) -> tuple[int, dict]:
@@ -145,8 +151,8 @@ def test_a_push_is_written_with_the_form_token_in_its_header_from_no_other_site(
 
 
 def test_at_most_two_pushes_are_here_at_once_and_one_left_an_hour_is_deleted(served, cfg):
-    first, second = served.new([])[1]["push"], served.new([])[1]["push"]
-    status, answer = served.new([])
+    first, second = served.new([])[1]["push"], served.new([], sender=OTHER)[1]["push"]
+    status, answer = served.new([], sender="00000000000000ff")
     assert status == 409 and "two" in answer["error"].lower()
     folder = cfg.state_dir / "peer" / f"push-{first}"
     hours_ago = time.time() - 2 * 3600
@@ -171,7 +177,7 @@ def test_a_push_left_an_hour_goes_as_another_push_sends_a_file_and_as_the_server
     from caracole.web import server
 
     data = b"a file"
-    left, going = served.new([])[1]["push"], served.new([sha(data)])[1]["push"]
+    left, going = served.new([], sender=OTHER)[1]["push"], served.new([sha(data)])[1]["push"]
     hours_ago = time.time() - 2 * 3600
 
     def leave(push):
@@ -202,6 +208,55 @@ def test_a_push_left_an_hour_goes_as_another_push_sends_a_file_and_as_the_server
     thread.start()
     thread.join(10)
     assert pushes(cfg) == []
+
+
+def test_a_push_never_sent_is_dropped_at_once_by_whoever_opened_it_and_one_sent_never(served, cfg):
+    push = served.new([sha(b"x")])[1]["push"]
+    folder = cfg.state_dir / "peer" / f"push-{push}"
+    doc = json.dumps({"push": push, "from": PHONE}).encode()
+    assert served.ask("POST", "/peer/push/drop", doc, kind=JSON, token="old")[0] == 403
+    assert served.ask("POST", "/peer/push/drop", doc, kind=JSON, **{"Sec-Fetch-Site": "cross-site"})[0] == 403
+    assert served.ask("POST", "/peer/push/drop", b"x" * (64 * 1024), kind=JSON)[0] == 413
+    status, answer = served.drop(push, sender=OTHER)
+    assert status == 400 and answer["error"] == "That push was opened by another caracole."
+    for bad in ("../../../etc", push.upper(), push[:-1], "", None, 7):
+        status, answer = served.drop(bad)
+        assert status == 400 and "16 hex" in answer["error"], bad
+    assert served.drop(push, sender="phone")[0] == 400
+    assert folder.is_dir()
+
+    assert served.drop(push) == (200, {"dropped": push})
+    assert not folder.exists() and pushes(cfg) == []
+    assert served.drop(push) == (404, {"error": "No such push is open here."})
+
+    # one whose document was taken (its take waits or runs) is no push never sent
+    sent = served.new([])[1]["push"]
+    (cfg.state_dir / "peer" / f"push-{sent}" / peer_push.DOCUMENT).write_text("{}", encoding="utf-8")
+    status, answer = served.drop(sent)
+    assert status == 409 and "sent" in answer["error"] and pushes(cfg) == [f"push-{sent}"]
+
+    # a link named as a push is none: never followed, nothing deleted through it
+    elsewhere = cfg.state_dir / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / peer_push.NEW).write_text(json.dumps({"from": PHONE, "files": [], "need": []}), encoding="utf-8")
+    (cfg.state_dir / "peer" / "push-00000000000000aa").symlink_to(elsewhere)
+    assert served.drop("00000000000000aa")[0] == 404
+    assert (elsewhere / peer_push.NEW).exists()
+
+
+def test_a_senders_new_push_lets_go_of_its_push_never_sent_never_one_sent_nor_another_senders(served, cfg):
+    first = served.new([])[1]["push"]
+    others = served.new([], sender=OTHER)[1]["push"]
+    again = served.new([])[1]["push"]  # the phone's retry: its first push, never sent, goes
+    assert pushes(cfg) == sorted([f"push-{others}", f"push-{again}"])
+    assert first not in {others, again}
+
+    (cfg.state_dir / "peer" / f"push-{again}" / peer_push.DOCUMENT).write_text("{}", encoding="utf-8")
+    status, answer = served.new([])  # its push sent waits for its take: kept, and two are here
+    assert status == 409 and pushes(cfg) == sorted([f"push-{others}", f"push-{again}"])
+    assert served.drop(others, sender=OTHER)[0] == 200
+    status, answer = served.new([])
+    assert status == 200 and pushes(cfg) == sorted([f"push-{again}", f"push-{answer['push']}"])
 
 
 def test_a_push_that_cant_be_staged_says_so_never_that_the_database_cant_be_read(served, cfg, conn):
@@ -722,6 +777,66 @@ def test_a_push_whose_songs_are_keyed_by_other_rules_is_refused_before_its_take_
     assert document["key_version"] == normalize.KEY_VERSION
 
 
+class Failing:
+    """A transport to the computer's caracole serve that answers as it does but for the paths of ``fails``, each a
+    network that drops (``httpx.ConnectError``) or a status."""
+
+    def __init__(self, app, **fails):
+        self.app, self.fails, self.asked = app, fails, []
+
+    def __call__(self, request):
+        import httpx
+
+        from caracole.web.app import Request
+
+        path = request.url.path
+        self.asked.append((request.method, path))
+        failing = self.fails.get(path)
+        if failing == "drops":
+            raise httpx.ConnectError("the Wi-Fi dropped", request=request)
+        if isinstance(failing, int):
+            return httpx.Response(failing, json={"error": "Not now."})
+        answer = WebApp.finish(self.app.handle(Request(request.method, request.url.raw_path.decode(),
+                                                       dict(request.headers), request.content)))
+        return httpx.Response(answer.status, headers=answer.headers, content=answer.body)
+
+
+def test_a_push_that_fails_after_it_is_opened_is_dropped_there_and_its_error_is_the_one_said(pair):
+    import httpx
+
+    computer, phone, _, _ = pair
+    phone.song(sheet=b"[Am]Creep, from the phone")
+    failing = Failing(computer.app, **{peer_push.FILE_PATH: 503})
+    with peer_push.Pusher("http://127.0.0.1:8737", transport=httpx.MockTransport(failing)) as pusher:
+        state, found = comparison(phone, pusher)
+        for _ in range(3):  # each push it opens goes as it fails: none holds a slot there
+            with pytest.raises(sync.PeerError, match="answered 503"):
+                push_all(phone, pusher, state, found)
+            assert pushes(computer.cfg) == []
+        assert ("POST", peer_push.DROP_PATH) in failing.asked
+
+        # a drop that fails too (the server gone) never hides why the push failed
+        failing.fails = {peer_push.FILE_PATH: "drops", peer_push.DROP_PATH: "drops"}
+        with pytest.raises(sync.PeerError, match="stopped answering: the Wi-Fi dropped"):
+            push_all(phone, pusher, state, found)
+        (left,) = pushes(computer.cfg)  # left open: the next push of the phone's lets go of it
+        failing.fails = {}
+        pushed = push_all(phone, pusher, state, found)
+        assert pushed.job and pushes(computer.cfg) != [left] and len(pushes(computer.cfg)) == 1
+
+
+def test_a_push_of_songs_keyed_by_other_rules_refused_lets_go_of_what_it_opened(pair, monkeypatch):
+    import types
+
+    computer, phone, pusher, _ = pair
+    phone.song()
+    state, found = comparison(phone, pusher)
+    monkeypatch.setattr(peer_push, "normalize", types.SimpleNamespace(KEY_VERSION=10 ** 6))  # the pusher's alone
+    with pytest.raises(sync.PeerError, match=f"answered 409: {sync.OTHER_KEYS}"):
+        push_all(phone, pusher, state, found)
+    assert pushes(computer.cfg) == [] and computer.app.queue.snapshot() == []
+
+
 def find_job(side):
     (job,) = side.app.queue.snapshot()
     return job
@@ -735,9 +850,12 @@ def test_a_second_push_while_the_first_waits_to_be_taken_is_refused_and_stays_op
     with pytest.raises(sync.PeerError, match="being taken already"):
         push_all(phone, pusher, state, found)
     assert [job.id for job in computer.app.queue.snapshot()] == [first.job]
-    (waiting,) = [p for p in pushes(computer.cfg)
-                  if not (computer.cfg.state_dir / "peer" / p / peer_push.DOCUMENT).exists()]
-    assert waiting  # open again: the phone sends it again once the first is taken
+    (waiting,) = pushes(computer.cfg)  # the first, whose take waits: the second, refused, was dropped
+    assert (computer.cfg.state_dir / "peer" / waiting / peer_push.DOCUMENT).exists()
+
+    # nor can its sender drop the first, whose take is queued
+    assert not pusher.push_drop(waiting.removeprefix("push-"), sync.own_id(phone.conn))
+    assert pushes(computer.cfg) == [waiting]
 
 
 def test_a_take_is_given_a_push_of_this_state_folder_alone_and_deletes_no_other(pair, tmp_path):

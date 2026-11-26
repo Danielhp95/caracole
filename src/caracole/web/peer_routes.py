@@ -21,6 +21,9 @@ and this library's site indexes.
                                  of songs keyed by other rules), checked and kept (``peer_push.send``), then
                                  ``caracole peer take --progress DIR`` queued, as Changes from <its library>:
                                  ``{"job": view}``
+    POST /peer/push/drop         A push never sent let go of now (JSON ``{"push", "from"}``: its pusher failed after
+                                 it opened it; ``from`` the caracole that opened it, as a send's): ``{"dropped"}``;
+                                 404 for none, 409 for one whose take waits or runs (``peer_push.drop``)
     GET  /api/peer/index[?sites=]   this library's site indexes (``sites``: those named, by commas; every one with
                                  none), as ``caracole index export`` writes them, a SQLite file streamed, one at a
                                  time
@@ -39,8 +42,10 @@ A push is the phone's, which can't be asked to pull: it sends this side the unit
 request a write with the form token in its header (a ``json`` or ``bytes`` route, web/app.py). Its files are staged
 in ``state_dir/peer/``, never in the library, and checked by their SHA-256; its take is a command, queued under
 ``peer-push:<its id>`` as a job of its own, and one from the same caracole while another is waiting or running is
-refused (409), that push left open. The index is read in one transaction into a file of ``cache_dir/peer/``, taking
-no lock, and that file is gone once it is open to be sent. The index pages another caracole posts are staged in
+refused (409), that push left open for its pusher to drop (``POST /peer/push/drop``), as it drops any push it fails
+to send; a caracole's next push lets go of its push never sent, so one sender holds one open push at a time. The
+index is read in one transaction into a file of ``cache_dir/peer/``, taking no lock, and that file is gone once it is
+open to be sent. The index pages another caracole posts are staged in
 ``state_dir/peer/`` (at most two waiting) until their merge, a command under caracole's lock, deletes them: caracole
 serve writes nothing else for a sync (AGENTS.md).
 """
@@ -77,6 +82,8 @@ ROUTES = (
           body="bytes", limit=peer_push.FILE_MAX),
     Route("POST", "/peer/push", lambda app, asked, doc: push(app, _params(asked.target), doc), body="json",
           limit=peer_push.DOCUMENT_MAX),
+    Route("POST", "/peer/push/drop", lambda app, asked, doc: push_drop(app, doc), body="json",
+          limit=peer_push.DROP_MAX),
     Route("GET", "/api/peer/index", lambda app, asked: index(app, asked, _params(asked.target))),
     Route("POST", "/peer/index", lambda app, asked, data: push_index(app, data), body="bytes",
           limit=peer_push.INDEX_MAX),
@@ -249,6 +256,18 @@ def push(app: WebApp, params: dict[str, str], doc: Any) -> Response:
         raise Refused(409, "Taking already", f"{shown}: being taken already (request {job.id}). Send again once "
                                              "that's done.")
     return app.queued(job)
+
+
+def push_drop(app: WebApp, doc: Any) -> Response:
+    """``POST /peer/push/drop``: the push ``push`` names, never sent, deleted now, asked by the caracole that opened
+    it (``from``); 409 once its take is queued (its document taken), 404 for none."""
+    doc = doc if isinstance(doc, dict) else {}
+    push_id = doc.get("push")
+    try:
+        peer_push.drop(app.cfg.state_dir, push_id, doc.get("from"))
+    except peer_push.PushError as e:
+        raise Refused(e.status, "Not dropped", str(e)) from None
+    return json_response(200, {"dropped": push_id})
 
 
 class _Streamed(io.BufferedReader):

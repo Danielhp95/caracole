@@ -11,6 +11,7 @@ import io.github.danielhp95.caracole.core.sync.SyncUnit
 import io.github.danielhp95.caracole.core.sync.Units
 import io.github.danielhp95.caracole.core.testing.sync.FakeComputer
 import io.github.danielhp95.caracole.mirror.Http
+import io.github.danielhp95.caracole.mirror.ServerAddress
 import io.github.danielhp95.caracole.mirror.SyncError
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -24,6 +25,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -197,6 +199,20 @@ class PeerClientTest {
             assertNull(got.headers["origin"])
             assertNull(got.headers["sec-fetch-site"])
         }
+    }
+
+    @Test fun `a push is dropped with the form token in its header, and a drop that fails is no more than false`() {
+        val dropped = mutableListOf<Got>()
+        answer("POST /peer/push/drop", 200, """{"dropped":"0123456789abcdef"}""", dropped)
+        assertTrue(client.pushDrop("tok-1", "0123456789abcdef", "a1b2c3d4e5f60718"))
+        val got = dropped.single()
+        assertEquals("""{"push":"0123456789abcdef","from":"a1b2c3d4e5f60718"}""", got.body.toString(Charsets.UTF_8))
+        assertEquals("tok-1", got.headers["x-caracole-form-token"])
+        assertEquals("application/json", got.headers["content-type"])
+        answer("POST /peer/push/drop", 409, """{"error":"That push is sent: its take waits or runs here."}""")
+        assertFalse(client.pushDrop("tok-1", "0123456789abcdef", "a1b2c3d4e5f60718"))
+        val gone = PeerClient(ServerAddress.parse("http://127.0.0.1:1"))  // nothing answers there
+        assertFalse(gone.pushDrop("tok-1", "0123456789abcdef", "a1b2c3d4e5f60718"))
     }
 
     @Test fun `a 403 that says reload reads the state again once, and its fresh token goes on being sent`() {

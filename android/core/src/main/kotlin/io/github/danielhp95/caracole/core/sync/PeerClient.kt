@@ -54,11 +54,11 @@ class OtherKeys(message: String) : PeerError(message, 200)
  * - **Reads** (`Accept: application/json`): [state], with a 60 s read timeout (a library's every song is read to
  *   answer); [unit], its document checked to be of [Units.FORMAT] and of the id asked; [file], its bytes checked against
  *   the SHA-256 the unit gives; [job], the computer's request as `GET /api/jobs/<id>` gives it.
- * - **The push**: [pushNew], [pushFile] and [push], each with the form token in the header `X-Caracole-Form-Token`
- *   (caracole serve's `json` and `bytes` routes) and no Origin or Sec-Fetch-Site, which a non-browser never sends. A
- *   403 whose JSON says `reload` (a token older than the server: it restarted since the state was read) reads the
- *   state again, once, for its fresh token, and sends the call again with it; the calls after it that give the old
- *   token send the fresh one.
+ * - **The push**: [pushNew], [pushFile] and [push] ([pushDrop] once it fails after it is opened), each with the form
+ *   token in the header `X-Caracole-Form-Token` (caracole serve's `json` and `bytes` routes) and no Origin or
+ *   Sec-Fetch-Site, which a non-browser never sends. A 403 whose JSON says `reload` (a token older than the server:
+ *   it restarted since the state was read) reads the state again, once, for its fresh token, and sends the call again
+ *   with it; the calls after it that give the old token send the fresh one.
  * - **The index**: [index] streams `GET /api/peer/index` to a file, with a read timeout of [INDEX_TIMEOUT_MS]
  *   between two reads (the file is as large as the computer's indexes, and made before its first byte comes: a
  *   connection that goes quiet for longer is a lost one, so a sync job never waits on it for ever); [pushIndex]
@@ -127,6 +127,16 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
         }
         return id ?: throw PeerError("$address took the push but named no Journal entry for it.",
                                      answer.status)
+    }
+
+    /** POST /peer/push/drop: the push [push] there, never sent, let go of, asked as the caracole that opened it
+     * ([from]); whether it was (peer_push.Pusher.push_drop). An error, or its refusal (409 once its document was
+     * taken), is no more than that: the phone's next push lets go of it there, or it is swept within the hour. */
+    fun pushDrop(token: String, push: String, from: String): Boolean = try {
+        val doc = JsonObject(linkedMapOf("push" to JsonPrimitive(push), "from" to JsonPrimitive(from)))
+        posting(token) { use -> postJson(PUSH_DROP_PATH, use, doc) }.status == 200
+    } catch (e: Exception) {
+        false
     }
 
     /** GET /api/jobs/<id>: the computer's request, as its Job.as_json gives it, its `state` a text
@@ -324,6 +334,7 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
         const val PUSH_NEW_PATH = "/peer/push/new"
         const val PUSH_FILE_PATH = "/peer/push/file"
         const val PUSH_PATH = "/peer/push"
+        const val PUSH_DROP_PATH = "/peer/push/drop"
         const val INDEX_PUSH_PATH = "/peer/index"
         const val JOBS_PATH = "/api/jobs/"
         const val SYNC_INDEXES_PATH = "/api/sync/indexes"

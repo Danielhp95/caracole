@@ -3959,7 +3959,9 @@ hits a bug. `--progress` prints JSON lines for the Journal; while it renders the
 step says which it is at ("12 of 20 songs").
 
 Two pushes can be staged at once, one per caracole (a second gets a 409). A file can be 64 MiB and
-a whole push 2 GiB. A push left for an hour is deleted.
+a whole push 2 GiB. A push left for an hour is deleted. A push that fails before its document is
+taken is deleted at once: its sender drops it (`POST /peer/push/drop`), and a caracole's next push
+replaces its push never sent, so a failed sync never blocks the next one.
 
 `GET /api/peer/index` serves the site indexes as `caracole index export` writes them
 (`?sites=ug,lacuerda` for some). It serves one copy at a time and answers 503 meanwhile.
