@@ -184,11 +184,11 @@ class MergeWords:
     "Ultimate Guitar" (a site), "Ultimate Guitar · 41 sitemaps" (an action), "Ultimate Guitar · 41 sitemaps ·
     600,000 of 1,367,059 tabs" (UG's sitemap rows, a chunk at a time).
 
-    A sync's merge of the other side's indexes passes ``held``, the sites this database held rows of before it
-    (``held``), and ``there``, where they were read: of those, each action says what is newer there and UG's rows
-    the rows checked, "Ultimate Guitar · 3 sitemaps newer on the other side · 50,000 of 117,701 tabs checked"
-    (the phone's MergeProgress.Updating alike, "on the computer"), never as if every row were new; a site it held
-    none of as any merge says it."""
+    A sync's merge of the other side's indexes, or of a file's, passes ``held``, the sites this database held rows of
+    before it (``held()``), and ``there``, where the rows were read ("on the other side", "in the file"): of those
+    sites, each action says what is newer there and UG's rows the rows checked, "Ultimate Guitar · 3 sitemaps newer on
+    the other side · 50,000 of 117,701 tabs checked" (the phone's MergeProgress.Updating alike, "on the computer",
+    "in the file"), never as if every row were new; a site it held none of as any merge says it."""
 
     COMPARING = "Comparing with this database's indexes"
     BACKING_UP = "Backing up the database first"
@@ -234,8 +234,10 @@ class Exported:
 class SiteMerge:
     """What a merge took of a site: ``taken``, (noun, count) for each kind of page; ``records``, its progress
     records moved on; ``rows``, each table's rows (before, after); ``checked``, the file's rows of its first table
-    (``Site.tables[0]``: UG's ``ug_index``…) in the sitemaps and listing pages it took, which it read: counted as it
-    takes them, by the statements' own counts (UG's the count its chunks are cut by), no table scanned for it."""
+    (``Site.tables[0]``: UG's ``ug_index``…) in what it took: for UG and the sitemap sites the rows of the sitemaps
+    taken, read whether new or not; for LaCuerda its listing pages' rows, and its artist pages' and search's rows the
+    database lacked, inserted (new by construction). Counted as it takes them, by the statements' own counts (UG's the
+    count its chunks are cut by), no table scanned for it."""
 
     site: str
     taken: list[tuple[str, int]] = field(default_factory=list)

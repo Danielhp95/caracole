@@ -504,9 +504,11 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             val sites = (sf.manifest["indexes"] as? JsonArray)?.mapNotNull { Documents.text(it) } ?: emptyList()
             val counted = database.writeBlocking { db ->
                 val before = TabCounts.of(db)
+                // A site the phone holds rows of is updated: what is newer in the file, and the rows checked.
+                val words = MergeProgress.Updating(before.filterValues { it > 0 }.keys, MergeProgress.IN_THE_FILE)
                 val merged = namingFileAs(from, THE_FILE) {
                     IndexTransfer.merge(db, from, Stamps.of(clock()), notAfter = notAfter(),
-                                        progress = { pacer.say(it.words(), it.step) })
+                                        progress = { pacer.say(words.words(it), it.step) })
                 }
                 MergedIndexes.record(db, merged)
                 val newest = IndexTransfer.newest(db)

@@ -316,8 +316,9 @@ object IndexTransfer {
  * site merged's newest read in the file, as [IndexTransfer.newest] reads a database (never the database's after the
  * merge, which the phone's own reads move), a site the file says it read after the merge's `notAfter` left out, its
  * records that late never taken: what MergedIndexes records; [checked], each site merged's rows of its first table the
- * file held in the sitemaps and listing pages it took, which the merge read (index_transfer's `SiteMerge.checked`;
- * none for a merge that changed nothing). */
+ * file held in what it took (index_transfer's `SiteMerge.checked`; none for a merge that changed nothing): for UG and the
+ * sitemap sites the rows of the sitemaps taken, read whether new or not; for LaCuerda its listing pages' rows, and the
+ * rows of its artist pages and search the phone lacked, inserted (new by construction). */
 data class Merged(val sites: Map<String, Map<String, Int>>, val changed: Boolean,
                   val listed: List<String> = emptyList(), val newest: Map<String, String> = emptyMap(),
                   val checked: Map<String, Long> = emptyMap())
@@ -357,19 +358,20 @@ data class MergeProgress(val site: String, val action: String, val done: Long, v
     val step: Pair<String, String> get() = site to action
 
     /**
-     * A sync's words for its merge of the computer's indexes, index_transfer.MergeWords(held=, there=) alike: of a site
-     * the phone held rows of before it ([held]), each action what is newer on the computer and UG's rows the rows
-     * checked ("Ultimate Guitar · 3 sitemaps newer on the computer · 50,000 of 117,701 tabs checked"), never
-     * "Importing" as if every row were new; a site it held none of, and every other step, as [words] says them.
+     * A sync's words for its merge of the computer's indexes or a file's, index_transfer.MergeWords(held=, there=)
+     * alike: of a site the phone held rows of before it ([held]), each action what is newer [there] and UG's rows the
+     * rows checked ("Ultimate Guitar · 3 sitemaps newer on the computer · 50,000 of 117,701 tabs checked", [ON_THE_COMPUTER];
+     * "… newer in the file …", [IN_THE_FILE]), never "Importing" as if every row were new; a site it held none of, and
+     * every other step, as [words] says them (the catalogues' import keeps those).
      */
-    class Updating(private val held: Set<String>) {
+    class Updating(private val held: Set<String>, private val there: String = ON_THE_COMPUTER) {
         private var doing = ""
 
         fun words(p: MergeProgress): String {
             if (p.site !in held || p.action == PLANNING || p.action == OPTIMIZE) return p.words()
             if (p.action == TAB) return "$doing · ${grouped(p.done)} of ${grouped(p.total)} tabs checked"
             val title = Sites.named(p.site)?.title ?: p.site
-            doing = if (p.action.isEmpty()) title else "$title · ${counted(p.total, p.action)} newer on the computer"
+            doing = if (p.action.isEmpty()) title else "$title · ${counted(p.total, p.action)} newer $there"
             return doing
         }
     }
@@ -382,6 +384,10 @@ data class MergeProgress(val site: String, val action: String, val done: Long, v
 
         const val COMPARING = "Comparing with the phone's index…"
         const val IMPORTING = "Importing"
+
+        /** Where an [Updating] merge's rows were read: the computer's export, or a `.caracole` file's indexes. */
+        const val ON_THE_COMPUTER = "on the computer"
+        const val IN_THE_FILE = "in the file"
         const val READYING = "Making the search index ready…"
 
         /** What a merge's caller says as it gives the WAL the merge grew back (Database.checkpoint). */

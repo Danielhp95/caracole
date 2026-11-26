@@ -623,10 +623,12 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     `(site, "", i, sites)` before each site, one that changes nothing too, `(site, noun, 0, n)` before each action,
     and `("ug", UG_TABS, rows taken, rows)` after each chunk of UG's sitemap rows, a statement for each `UG_CHUNK`
     (50,000) by `tab_id` range, in one statement's order and savepoint, so its rows come out the same (the index
-    corpus with `UG_CHUNK` 1 unchanged); `MergeWords` the words, commands/index.py `Merging` where they go (`index
-    merge`'s stderr or `--progress` detail; `peer sync`'s and `peer import`'s `index` stage), stderr's by the
-    ticker's rules (`merge_console`: `progress.live_here`, quiet at -q; a live line taken off before a log record,
-    `logs.clears_first`; any write that fails, a broken pipe, a terminal gone, a stream closed, the last it tries).
+    corpus with `UG_CHUNK` 1 unchanged); `MergeWords` the words (`peer sync`'s and `peer import`'s with `held`, the
+    sites this side holds rows of, `held()`, and `there`: "gtptabs.com · 1 sitemap newer in the file", UG's "… tabs
+    checked"), commands/index.py `Merging` where they go (`index merge`'s stderr or `--progress` detail; `peer
+    sync`'s and `peer import`'s `index` stage), stderr's by the ticker's rules (`merge_console`: `progress.live_here`,
+    quiet at -q; a live line taken off before a log record, `logs.clears_first`; any write that fails, a broken pipe,
+    a terminal gone, a stream closed, the last it tries).
 
 #### peer_sync.py
 
@@ -1186,7 +1188,9 @@ It is rows.js's, shared by both pages:
   (§3.5), from the outcome alone for a sync the page didn't start. A file's has no given section. Its indexes say
   what each merge added, never a site's whole size as if new (sync-words.js `indexNews`, `newTabs`): "+231 new tabs"
   and "1,503,236 in all", "up to date", "1,503,236 tabs, all new here" for a side that had none, a fall in red; the
-  headline the sites (each once, one taken and given too) and their new tabs; a site given no date.
+  headline the sites (each once, one taken and given too) and their new tabs, each side's apart when it took and gave
+  ("+231 new here · +40 on Studio", never one sum), each row then saying which way it went (`went`: "taken from
+  Studio", "given to Studio"); a site given no date.
 - **Export**: `GET /api/sync/sizes`, the parts with their sizes, Site indexes unticked; `POST /sync/export`, then the
   file's link (`a[download]` to `api/sync/export?export=ID`), clicked once by the page: the browser saves it, the
   phone's `DownloadListener` shares it; clicked again it says the file was sent once (caracole serve answers 404
@@ -2699,10 +2703,12 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   `SiteMerge.checked`, by the statements' own counts: no scan), commands/peer.py's `_taken_entries` and
   `_give_indexes` alike: a taken one around its merge here; a given one on the computer (`GET /api/sync/indexes`,
   `PeerClient.indexes`) before the push and after its merge job, its `checked` null (that answer doesn't say it), none
-  from a computer that doesn't count them. While it merges, a site the phone held rows of says what is newer there and
-  the rows checked (`MergeProgress.Updating`, index_transfer.MergeWords' `held` and `there` alike: "Ultimate Guitar ·
-  3 sitemaps newer on the computer · 50,000 of 117,701 tabs checked"), "Importing" kept for the catalogues and a site
-  whose table was empty.
+  from a computer that doesn't count them. `checked` is the rows of the sitemaps taken, read new or not, for UG and
+  the sitemap sites, and for LaCuerda's artist pages and search the rows inserted, new by construction. While it
+  merges the computer's indexes or a file's, a site the phone held rows of says what is newer there and the rows
+  checked (`MergeProgress.Updating(held, there)`, index_transfer.MergeWords' `held` and `there` alike, `peer sync`'s and
+  `peer import`'s: "Ultimate Guitar · 3 sitemaps newer on the computer · 50,000 of 117,701 tabs checked", "… newer in
+  the file …"), "Importing" kept for the catalogues and a site whose table was empty.
 - A phone's own export writes the file `SyncFiles.export` makes (its indexes every site's whole, `IndexFile`, as
   `caracole index export` writes them, which SyncReplay compares with Python's as data; its pages through a
   `PageSource`, server/routes/sync/MirrorPages.kt: the mirror's and its layers' pages of each unit at the digest the

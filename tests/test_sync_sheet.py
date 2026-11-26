@@ -941,18 +941,25 @@ def test_each_index_says_what_its_merge_really_added_and_the_headline_counts_new
          "checked": 812, "read": "2026-11-02T03:00:00Z"},
         {"site": "gtptabs", "title": "gtptabs.com", "direction": "taken", "before": 0, "after": 1203, "new": 1203,
          "checked": 1203, "read": "2026-11-01T03:00:00Z"},
-        {"site": "ug", "title": "Ultimate Guitar", "direction": "given", "before": 1515000, "after": 1515003,
-         "new": 3, "checked": None, "read": "2026-11-03T09:00:00Z"}])
+        {"site": "ug", "title": "Ultimate Guitar", "direction": "given", "before": 1515000, "after": 1515000,
+         "new": 0, "checked": None, "read": "2026-11-03T09:00:00Z"},
+        {"site": "musescore", "title": "MuseScore", "direction": "given", "before": 300, "after": 340, "new": 40,
+         "checked": None, "read": "2026-11-03T09:00:00Z"}])
     fake = indexes_done(report)
     with opened(tmp_path, served(fake) + "#sheet=sync") as page:
         sync_through(page, fake)
         indexes = next(s for s in page.js(SUMMARY) if s["kind"] == "indexes")
-        assert (indexes["said"], indexes["way"]) == ("3 indexes taken or given · +1,437 new tabs", "left right")
+        # Taken and given: each side's new tabs apart; each row says which way it went.
+        assert (indexes["said"], indexes["way"]) == ("4 indexes taken or given · +1,434 new here · +40 on Studio",
+                                                     "left right")
         assert indexes["rows"] == [
-            ["Ultimate Guitar · ", "+231 new tabs", "1,503,236 in all · read by Studio on 03/11/26"],
-            ["LaCuerda · ", "up to date", "read by Studio on 02/11/26"],
-            ["gtptabs.com · ", "1,203 tabs, all new here", "read by Studio on 01/11/26"],
-            ["Ultimate Guitar · ", "+3 new tabs", "1,515,003 in all on Studio"]]
+            ["Ultimate Guitar · ", "+231 new tabs", "taken from Studio · 1,503,236 in all · read by Studio on 03/11/26"],
+            ["LaCuerda · ", "up to date", "taken from Studio · read by Studio on 02/11/26"],
+            ["gtptabs.com · ", "1,203 tabs, all new here", "taken from Studio · read by Studio on 01/11/26"],
+            ["Ultimate Guitar · ", "up to date", "given to Studio"],
+            ["MuseScore · ", "+40 new tabs", "given to Studio · 340 in all on Studio"]]
+        ug = [r for r in indexes["rows"] if r[0] == "Ultimate Guitar · "]
+        assert len(ug) == 2 and ug[0] != ug[1]
 
 
 @in_chromium

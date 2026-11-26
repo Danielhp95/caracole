@@ -1113,7 +1113,8 @@ def _merge_indexes(cfg, conn, file, source, said: _Said, parts: tuple[str, ...],
         said.stage("index", "skipped")
         return []
     said.stage("index", "running")
-    told = _merging(said)
+    # A site this side holds rows of is updated, its words what is newer in the file and the rows checked.
+    told = _merging(said, index_transfer.MergeWords(held=index_transfer.held(conn), there="in the file"))
     copy = merged_from = None
     try:
         if file.index_only:

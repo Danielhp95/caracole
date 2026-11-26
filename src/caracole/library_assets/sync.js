@@ -882,13 +882,16 @@
       const way = directions.size > 1 ? "left right" : directions.has("given") ? "right" : "left";
       const many = sites.length ? new Set(sites.map((s) => String(s.site))).size : indexed.length;
       const said = [W.counted(many, "index", "indexes") + " " + how];
-      if (sites.length) said.push(" · ", toned(W.newTabs(sites)));
+      const places = { taken: "here", given: "on " + sides.there.the };
+      if (sites.length) said.push(" · ", toned(W.newTabs(sites, places)));
       if (how === "given") said.push(" for " + sides.there.the);
       const rows = sites.map((s) => {
-        // A site given: its tabs on the other side, and no date (what the other side read of it is its own).
+        // A site given: its tabs on the other side, and no date (what the other side read of it is its own). Taken
+        // and given in one sync, each row says which way it went, so a site's two rows differ at a glance.
         const given = s.direction === "given";
-        const news = W.indexNews(s, given ? "on " + sides.there.the : "here");
-        const words = [news.all && news.all + (given ? " on " + sides.there.the : ""),
+        const news = W.indexNews(s, given ? places.given : places.taken);
+        const words = [directions.size > 1 ? W.went(s.direction, sides.there.the) : "",
+                       news.all && news.all + (given ? " " + places.given : ""),
                        news.tone === "down" ? "its listings no longer name them, so they would not have opened" : "",
                        !given && s.read ? "read by " + sides.there.the + " on " + W.day(s.read) : ""]
           .filter(Boolean).join(" · ");

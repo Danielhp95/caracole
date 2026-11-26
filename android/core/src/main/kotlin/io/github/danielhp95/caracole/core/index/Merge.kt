@@ -58,7 +58,8 @@ internal object Merge {
         val kv = LinkedHashMap<String, String?>()
 
         /** _Plan.checked: the file's rows of the site's first table its actions took (Merged.checked), by the
-         * statements' own counts, no table scanned for it. */
+         * statements' own counts, no table scanned for it: the rows of the sitemaps and listing pages taken, read new
+         * or not; LaCuerda's artist pages' and search's rows, inserted where the phone had none (new by construction). */
         var checked = 0L
 
         val changes: Boolean get() = actions.isNotEmpty() || kv.isNotEmpty()

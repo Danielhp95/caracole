@@ -58,8 +58,8 @@ If the phone can't reach the computer, **Export** in Settings writes the library
 
 - Reading, offline: sheets with all their tools, kept versions, harmonica tabs, Guitar Pro files
   and songbooks.
-- Search across your songs and the sites, offline, once a sync has brought the site indexes or a
-  download the catalogues.
+- Search across your songs and the sites, offline, once a sync or the catalogues download has brought
+  the site indexes.
 - **Fetch**: the phone looks a song up itself, over Wi-Fi or mobile data.
 - Making and editing songbooks, and choosing a sheet's version.
 - **Export PDF** opens Android's print dialog, to print or save as PDF.

@@ -174,15 +174,30 @@ def test_what_an_indexs_merge_added_is_said_as_new_tabs_up_to_date_or_all_new_ne
         {"said": "+5 new tabs", "tone": "up", "all": "15 in all"},  # a report made before `new`
     ]
     # The headline: every site's new tabs, never its total; with none, a fall, else up to date.
-    assert words("""[
-      W.newTabs([{before: 1503005, after: 1503236, new: 231}, {before: 23105, after: 22895, new: -210},
-                 {before: 0, after: 1203, new: 1203}]),
-      W.newTabs([{before: 23105, after: 22895, new: -210}]),
-      W.newTabs([{before: 5, after: 5, new: 0}]),
-      W.newTabs([{before: 0, after: 1, new: 1}]),
+    places = '{taken: "here", given: "on Studio"}'
+    assert words(f"""[
+      W.newTabs([{{before: 1503005, after: 1503236, new: 231}}, {{before: 23105, after: 22895, new: -210}},
+                 {{before: 0, after: 1203, new: 1203}}], {places}),
+      W.newTabs([{{before: 23105, after: 22895, new: -210}}], {places}),
+      W.newTabs([{{before: 5, after: 5, new: 0}}], {places}),
+      W.newTabs([{{before: 0, after: 1, new: 1}}], {places}),
+      W.newTabs([{{direction: "given", before: 3, after: 43, new: 40}}], {places}),
+      W.newTabs([{{direction: "taken", before: 1, after: 232, new: 231}},
+                 {{direction: "given", before: 3, after: 43, new: 40}}], {places}),
+      W.newTabs([{{direction: "taken", before: 1, after: 232, new: 231}},
+                 {{direction: "given", before: 3, after: 3, new: 0}}], {places}),
+      W.newTabs([{{direction: "taken", before: 1, after: 1, new: 0}},
+                 {{direction: "given", before: 3, after: 3, new: 0}}], {places}),
     ]""") == [
         {"said": "+1,434 new tabs", "tone": "up"}, {"said": "−210 tabs", "tone": "down"},
-        {"said": "up to date", "tone": ""}, {"said": "+1 new tab", "tone": "up"}]
+        {"said": "up to date", "tone": ""}, {"said": "+1 new tab", "tone": "up"},
+        {"said": "+40 new tabs", "tone": "up"},  # one direction alone: as for a take
+        # Taken and given: each side's new tabs apart, never one sum new to neither.
+        {"said": "+231 new here · +40 on Studio", "tone": "up"}, {"said": "+231 new here", "tone": "up"},
+        {"said": "up to date", "tone": ""}]
+    # Which way a row went, for a sync that took and gave.
+    assert words('[W.went("taken", "Studio"), W.went("given", "the computer"), W.went("", "x")]') == [
+        "taken from Studio", "given to the computer", ""]
 
 
 def test_each_side_is_named_for_its_device_and_the_other_for_its_kind(words):

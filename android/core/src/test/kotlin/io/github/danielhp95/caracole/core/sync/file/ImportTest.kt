@@ -15,6 +15,7 @@ import io.github.danielhp95.caracole.core.sync.SyncFailed
 import io.github.danielhp95.caracole.core.sync.SyncOutcome
 import io.github.danielhp95.caracole.core.sync.Units
 import io.github.danielhp95.caracole.core.index.IndexTransfer
+import io.github.danielhp95.caracole.core.index.MergeProgress
 import io.github.danielhp95.caracole.core.testing.Fixtures
 import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.TestDb
@@ -238,6 +239,29 @@ class ImportTest {
         var at = 0
         for (line in said) if (at < steps.size && line == steps[at]) at++
         assertEquals(steps.size, at, said.joinToString("\n"))
+        assertEquals("done", ended()["index"])
+    }
+
+    @Test fun anImportOverASiteThePhoneHoldsSaysWhatIsNewerInTheFileNeverImporting() {
+        // A phone that holds UG's index (the catalogues) imports a computer's file with its indexes: the file's
+        // sitemaps update it, said so; LaCuerda, which the phone holds none of, is imported.
+        val there = Caracole()
+        val full = File(tmp.newFolder(), "export.sqlite").also { Fixtures.loadRaw(it, "index/fixtures/full-export.jsonl") }
+        there.database.writeBlocking { db -> IndexTransfer.merge(db, full, "2026-11-01T10:00:00Z") }
+        val here = Caracole()
+        here.database.writeBlocking { db ->
+            db.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) " +
+                           "VALUES (999999, 'blur', 'song-2', 'chords', 'old', '2026-10-01T00:00:00Z', " +
+                           "'blur/song-2-chords-999999')")
+        }
+        here.engine.ticks = { 0L }
+        here.apply(here.engine.compareFile(there.export(listOf(Scope.LIBRARY, Scope.INDEXES))))
+        val said = stages.filter { it.first == "index" && it.second == "running" }.map { it.third }
+        assertTrue(said.none { it.startsWith("${MergeProgress.IMPORTING} · Ultimate Guitar") }, said.joinToString("\n"))
+        val ug = said.filter { it.startsWith("Ultimate Guitar · ") }
+        assertTrue(ug.any { it.endsWith(" newer in the file") }, said.joinToString("\n"))
+        assertTrue(ug.any { " newer in the file · " in it && it.endsWith(" tabs checked") }, said.joinToString("\n"))
+        assertTrue("${MergeProgress.IMPORTING} · LaCuerda" in said, said.joinToString("\n"))
         assertEquals("done", ended()["index"])
     }
 

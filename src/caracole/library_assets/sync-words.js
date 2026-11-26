@@ -14,8 +14,9 @@
 // their icons. ``tabs(n, signed)``: 1,503,236 and +12,130 (a minus sign for a fall), digits grouped by hand, no locale.
 // ``day(stamp)`` and ``when(stamp)``: dd/mm/yy and dd/mm/yy, HH:MM, in this device's time. ``indexNews(entry,
 // where)``: what a sync's merge of a site's index added (a report's ``indexes`` entry), "+231 new tabs" and "1,503,236
-// in all", "up to date", "1,503,236 tabs, all new here", never its whole size as if it were new; ``newTabs(entries)``,
-// the headline's "+1,434 new tabs".
+// in all", "up to date", "1,503,236 tabs, all new here", never its whole size as if it were new; ``newTabs(entries,
+// places)``, the headline's "+1,434 new tabs", or "+231 new here · +40 on Studio" taken and given; ``went(direction,
+// there)``, "taken from Studio", "given to Studio".
 (() => {
   "use strict";
   const NONE = "–";
@@ -67,15 +68,30 @@
                            all: tabs(after) + " in all" });
   };
   // A sync's headline: every site's new tabs, "+1,434 new tabs" (a site's fall never takes from them); with none, a
-  // fall, "−210 tabs"; else "up to date".
-  const newTabs = (entries) => {
-    const news = listOf(entries).map(newOf);
-    const added = news.filter((n) => n > 0).reduce((a, n) => a + n, 0);
+  // fall, "−210 tabs"; else "up to date". Taken and given in one sync, each side's apart, in ``places``' words (each
+  // direction's, the rows' ``where``: ``{taken: "here", given: "on Studio"}``): "+231 new here · +40 on Studio", a
+  // side with nothing new left out; never one sum, new to neither side.
+  const added = (news) => news.filter((n) => n > 0).reduce((a, n) => a + n, 0);
+  const newTabs = (entries, places) => {
+    const all = listOf(entries).filter((e) => objOf(e));
+    const ways = ["taken", "given"].filter((way) => all.some((e) => e.direction === way));
+    if (ways.length > 1) {
+      const where = objOf(places) || {};
+      const parts = ways.map((way) => [way, added(all.filter((e) => e.direction === way).map(newOf))])
+        .filter(([, n]) => n > 0).map(([way, n]) => "+" + grouped(n) + (way === "taken" ? " new " : " ")
+                                                     + text(where[way]));
+      if (parts.length) return Object.freeze({ said: parts.join(" · "), tone: "up" });
+    }
+    const news = all.map(newOf);
+    const up = added(news);
     const fell = news.filter((n) => n < 0).reduce((a, n) => a + n, 0);
-    if (added) return Object.freeze({ said: "+" + counted(added, "new tab"), tone: "up" });
+    if (up) return Object.freeze({ said: "+" + counted(up, "new tab"), tone: "up" });
     if (fell) return Object.freeze({ said: counted(fell, "tab"), tone: "down" });
     return Object.freeze({ said: "up to date", tone: "" });
   };
+  // Which way an index went in a sync that took and gave: "taken from Studio", "given to the computer".
+  const went = (direction, there) => direction === "taken" ? "taken from " + text(there)
+    : direction === "given" ? "given to " + text(there) : "";
   // A size in bytes, as a person reads it: 0.4 MB, 3.4 MB, 207 MB, 1.2 GB (a megabyte a million bytes).
   const size = (bytes) => {
     const b = typeof bytes === "number" ? bytes : NaN;
@@ -350,6 +366,6 @@
   };
 
   window.caracoleSyncWords = Object.freeze({
-    NONE, differ, changed, sides, tabs, counted, size, day, when, readOn, bookChange, ownKey, indexNews, newTabs,
+    NONE, differ, changed, sides, tabs, counted, size, day, when, readOn, bookChange, ownKey, indexNews, newTabs, went,
   });
 })();

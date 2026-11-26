@@ -173,6 +173,14 @@ class MergeProgressTest {
         ).map(words::words))
     }
 
+    @Test fun anImportsWordsSayWhatIsNewerInTheFile() {
+        val words = MergeProgress.Updating(setOf("ug"), MergeProgress.IN_THE_FILE)
+        assertEquals(listOf("Ultimate Guitar · 3 sitemaps newer in the file",
+                            "Ultimate Guitar · 3 sitemaps newer in the file · 50,000 of 117,701 tabs checked"),
+                     listOf(MergeProgress("ug", "sitemap", 0, 3), MergeProgress("ug", MergeProgress.TAB, 50_000, 117_701))
+                         .map(words::words))
+    }
+
     @Test fun aMergeCountsTheRowsOfTheSitemapsItTookAsPythonsDoes() {
         // checked, index_transfer's SiteMerge.checked: the file's rows of each site's first table it took.
         val export = export("full-export")
