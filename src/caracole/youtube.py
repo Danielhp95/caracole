@@ -459,6 +459,7 @@ PHONE_DOWNLOAD_ARGS = tuple(
     if arg not in ("-x", "--audio-format") and before != "--audio-format"
 )
 PHONE_KINDS = {"search": SEARCH_ARGS, "video": VIDEO_ARGS, "download": PHONE_DOWNLOAD_ARGS}
+NO_NUL = ("target", "cache_dir", "qjs", "proxy", "into")  # phone_argv's values, none of which may hold a NUL
 # A block: YouTube's bot check, a refusal, a rate limit or a captcha.
 _BLOCKED = re.compile(r"not a bot|HTTP Error 4(?:03|29)|Too Many Requests|rate[- ]limited|try again later|captcha",
                       re.IGNORECASE)
@@ -540,7 +541,8 @@ def _reason(stderr: str) -> str:
 def classify(stderr: str) -> str:
     """What a run that failed came to, for the phone (``RUN_CLASSES``), by ``CLASSIFY_STEPS``: its lines as
     ``_lines`` reads them less the ``[debug]`` ones (under ``-v`` they echo the target); ``blocked`` and
-    ``unavailable`` over every one, as ``YtDlp._run`` reads stderr; then on the last ERROR line alone a pass-over's
+    ``unavailable`` over every one, the patterns ``YtDlp._run`` reads over the whole of stderr (the computer's, its
+    ``[debug]`` lines and all, ``-v`` never being given there); then on the last ERROR line alone a pass-over's
     words are ``outdated`` where a WARNING line says the challenge solver failed (``_DEGRADED``), else ``pass_over``;
     then ``outdated`` (``_OUTDATED``); else ``error``. The computer's runs never ask it: an extraction error there is
     an error, counted against the video as ever."""
@@ -566,8 +568,18 @@ def phone_argv(what: str, target: str, *, cache_dir: str, qjs: str, proxy: str,
     and ``proxy``, the app's gate, as the proxy, after the cache folder; and a download's audio by its format alone
     (``PHONE_DOWNLOAD_ARGS``). ``cache_dir`` is given to ``--cache-dir`` as it is (the computer's runner adds
     ``yt-dlp`` to its own); ``into`` loses its trailing slashes before ``/`` and ``OUTPUT_NAME``. A video's or a
-    download's target is a video's plain address (``watch_url``), as the computer's ``video`` and ``download`` give it,
-    else a ValueError."""
+    download's target is a video's plain address (``watch_url``) of an id ``VIDEO_ID`` matches whole, as the
+    computer's ``video`` and ``download`` give it, else a ValueError; so is a value that holds a NUL (``NO_NUL``: no
+    program's argument can), an empty search and a download's folder that is empty or ``/`` alone (its audio would go
+    to the root)."""
+    given = {"target": target, "cache_dir": cache_dir, "qjs": qjs, "proxy": proxy, "into": into}
+    for name in NO_NUL:
+        if given[name] is not None and "\0" in given[name]:
+            raise ValueError(f"{name} holds a NUL")  # never the value: the proxy's holds the gate's secret
+    if what == "search" and not target:
+        raise ValueError("an empty search")
+    if what == "download" and into is not None and not into.rstrip("/"):
+        raise ValueError(f"an empty folder to download into: {into!r}")
     if what in PHONE_KINDS and what != "search":
         video_id = target.removeprefix(watch_url(""))
         if not VIDEO_ID.fullmatch(video_id) or target != watch_url(video_id):

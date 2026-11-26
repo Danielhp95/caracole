@@ -369,7 +369,8 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 #### youtube
 
 - youtube.py: running yt-dlp; and the phone's half, which the computer never runs: `phone_argv` (`PHONE_DOWNLOAD_ARGS`,
-  m4a by its format alone, QuickJS, the gate as `--proxy`) and `classify` (`CLASSIFY_STEPS`: `_OUTDATED`,
+  m4a by its format alone, QuickJS, the gate as `--proxy`; no run of a target but a video's plain address, a value
+  holding a NUL, an empty search or download folder) and `classify` (`CLASSIFY_STEPS`: `_OUTDATED`,
   `PHONE_PASS_OVER` on the ERROR line, out of date after a broken solver's warning, `_DEGRADED`), the corpus's
   youtube/youtube.json (tests/test_conformance_youtube.py).
 - youtube_urls.py: a video's address.

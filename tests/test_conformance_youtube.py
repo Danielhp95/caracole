@@ -14,18 +14,24 @@ youtube.json (no budget, pause or switch: config/config.json holds ``youtube``'s
   that says ``<proxy>`` goes to YouTube as it is, never the gate's address and secret). ``into`` loses its trailing
   ``/`` first; ``cache_dir`` is given as it is (the computer's runner adds ``yt-dlp`` to its own);
 - ``targets``: ``search_prefix`` (``SEARCH_PREFIX``, ``{n}`` the results), ``watch_url`` (youtube_urls' ``watch_url``,
-  ``{id}`` the video), and ``video_id``'s pattern (youtube_urls' ``VIDEO_ID``, matched whole): a video's or a
-  download's target is that address of such an id, else no run;
+  ``{id}`` the video), and ``video_id``'s pattern (youtube_urls' ``VIDEO_ID``, with no anchors: ``video_id_matched``
+  ``whole``, re.fullmatch); ``rule``: a video's or a download's target is exactly that address of such an id, else no
+  run;
+- ``refuse``: what else no run is made of (``rule``): a value of ``no_nul`` (youtube.py's ``NO_NUL``) that holds
+  ``nul``, an empty search target (``empty_search``), a download whose ``into`` is empty once its trailing ``/`` go
+  (``empty_into``);
 - ``patterns``: ``blocked`` (``_BLOCKED``), ``unavailable`` (``_UNAVAILABLE``), ``status`` (``_STATUS``), ``outdated``
   (``_OUTDATED``), ``pass_over`` (``PHONE_PASS_OVER``), ``degraded`` (``_DEGRADED``: the challenge solver's warnings,
   yt-dlp 2026.08.19's words) and ``network`` (youtube_fetch.py's ``_NETWORK``), each ``{"pattern", "ignorecase"}`` as
   core.py.PyRegex reads it; ``classes``, ``RUN_CLASSES``;
 - ``classify``: how a run that failed is read (classify.jsonl replays it):
-  - ``ok_exit``: a run that exits 0 is ``ok`` whatever its stderr says, and classify isn't asked;
+  - ``order``: the gate's log first, then the exit status, then the steps;
+  - ``ok_exit`` and ``ok_class``: a run that exits 0 is ``ok`` whatever its stderr says, and classify isn't asked;
   - ``lines``: stderr's lines by ``str.splitlines``, each ``str.strip``ped, the empty ones and those that begin
     ``skip_prefix`` (``[debug]``: under ``-v`` they echo the target) dropped;
   - ``error_prefix`` and ``warning_prefix``: the ERROR line is the last line that begins ``ERROR:``, that word taken
     off and stripped; the warning lines are those that begin ``WARNING:``, whole;
+  - ``over``: what each step's ``over`` reads, in words;
   - ``steps`` in order, the first that matches deciding: ``{"class", "over", "pattern"}`` (``over``: ``stderr``,
     any line read; ``error_line``; ``warning_lines``, any of them), with ``and``, a second ``{"over", "pattern"}``
     that must match too (a pass-over's words after a broken solver's warning: out of date); none matching,
@@ -39,6 +45,7 @@ youtube.json (no budget, pause or switch: config/config.json holds ``youtube``'s
 
 argv.jsonl: ``{"phone": {what, target, cache_dir, qjs, proxy, into}, "argv": [...]}``, ``phone_argv``'s answer (each
 also the template filled by ``fill``'s rule); ``{"phone": {...}, "refused": true}`` for a target no run is made of;
+the same for a value holding a NUL, an empty search and an empty download folder;
 and ``{"computer": {what, target, cache_dir, into}, "argv": [...]}``, what the computer's ``YtDlp`` gave the fake
 yt-dlp (``<tmp>`` the test's folder, ``cache_dir`` the folder its runner adds ``yt-dlp`` to), no program name in any.
 
@@ -70,6 +77,15 @@ PROVISIONAL = "composed from yt-dlp's source, not from a run; Gate Y0's logs con
 FILL = ("each element holds at most one placeholder, alone, after a fixed prefix or before a fixed suffix; it is "
         "filled in one pass (before + value + after) and a value is never read again; into loses its trailing '/' "
         "first; cache_dir is given as it is")
+TARGET_RULE = ("a video's or a download's target is exactly watch_url of an id video_id matches whole (re.fullmatch, "
+               "the pattern having no anchors), else no run is made")
+REFUSE_RULE = ("no run is made of a value in no_nul that holds a NUL, of an empty search target, or of a download whose "
+               "into is empty once its trailing '/' are taken off")
+ORDER = ("the gate's log first (its step, the runner's), then the exit status (ok_exit is ok_class whatever stderr "
+         "says), then the steps over stderr")
+OVER = {"stderr": "every line read", "error_line": "the last line read that begins error_prefix, that word taken off "
+        "and the rest str.strip()ped: one line or none", "warning_lines": "every line read that begins warning_prefix, "
+        "whole", "gate_log": "the app's gate's log of the run, never stderr"}
 GATE_STEP = {"class": "gate", "over": "gate_log",
              "note": "the phone's runner's, before stderr is read: a refusal of the app's gate, or its 407, is "
                      "decided from the gate's log; classify never sees it"}
@@ -96,7 +112,10 @@ def youtube_json() -> str:
         "placeholders": PLACEHOLDERS,
         "fill": FILL,
         "targets": {"search_prefix": youtube.SEARCH_PREFIX, "watch_url": watch_url("{id}"),
-                    "video_id": _pattern(VIDEO_ID)},
+                    "video_id": _pattern(VIDEO_ID), "video_id_matched": "whole",
+                    "rule": TARGET_RULE},
+        "refuse": {"no_nul": list(youtube.NO_NUL), "nul": "\0", "empty_search": True, "empty_into": True,
+                   "rule": REFUSE_RULE},
         "patterns": {"blocked": _pattern(youtube._BLOCKED), "unavailable": _pattern(youtube._UNAVAILABLE),
                      "status": _pattern(youtube._STATUS), "outdated": _pattern(youtube._OUTDATED),
                      "pass_over": _pattern(youtube.PHONE_PASS_OVER), "degraded": _pattern(youtube._DEGRADED),
@@ -104,10 +123,13 @@ def youtube_json() -> str:
         "classes": list(youtube.RUN_CLASSES),
         "classify": {
             "ok_exit": 0,
+            "ok_class": "ok",
+            "order": ORDER,
             "lines": "str.splitlines, each str.strip()ped; empty lines and those beginning skip_prefix dropped",
             "skip_prefix": youtube.DEBUG_PREFIX,
             "error_prefix": youtube.ERROR_PREFIX,
             "warning_prefix": youtube.WARNING_PREFIX,
+            "over": OVER,
             "steps": [GATE_STEP, *({"class": cls, "over": over, "pattern": pattern,
                                     **({"and": {"over": also[0], "pattern": also[1]}} if also else {})}
                                    for cls, over, pattern, also in youtube.CLASSIFY_STEPS)],
@@ -182,6 +204,25 @@ REFUSED = [
     ("download", "dQw4w9WgXcQ", "/a"),
     ("download", "https://www.youtube.com/watch?v=dQw4w9WgXc!", "/a"),
 ]
+def _refused_values() -> list[dict]:
+    """A NUL in each value phone_argv takes, an empty search, and a download into an empty folder or the root."""
+    found = []
+    for name in youtube.NO_NUL:
+        for what in ("search", "video", "download"):
+            given = {"what": what, "target": "ytsearch8:Radiohead Creep" if what == "search" else watch_url(ID),
+                     "cache_dir": CACHE, "qjs": QJS, "proxy": PROXIES[1],
+                     "into": "/a/b" if what == "download" else None}
+            if given[name] is None:
+                continue
+            given[name] = given[name][:3] + "\0" + given[name][3:]
+            found.append(given)
+    found.append({"what": "search", "target": "", "cache_dir": CACHE, "qjs": QJS, "proxy": PROXIES[0], "into": None})
+    for into in ("", "/", "///"):
+        found.append({"what": "download", "target": watch_url(ID), "cache_dir": CACHE, "qjs": QJS,
+                      "proxy": PROXIES[0], "into": into})
+    return found
+
+
 QJS = "/data/app/~~x==/io.github.danielhp95.caracole-y==/lib/arm64/libqjs.so"
 # The gate's address, as the phone gives it: its user and secret in it.
 PROXIES = ["http://127.0.0.1:40123", "http://caracole:Zm9v-YmFy_<qjs>@127.0.0.1:40123"]
@@ -203,6 +244,11 @@ def test_the_argv_corpus(tmp_path):
         with pytest.raises(ValueError, match="not a YouTube video"):
             youtube.phone_argv(what, target, cache_dir=CACHE, qjs=QJS, proxy=PROXIES[0], into=into)
         given = {"what": what, "target": target, "cache_dir": CACHE, "qjs": QJS, "proxy": PROXIES[0], "into": into}
+        records.append({"phone": given, "refused": True})
+    for given in _refused_values():
+        with pytest.raises(ValueError, match="NUL|empty"):
+            youtube.phone_argv(given["what"], given["target"], cache_dir=given["cache_dir"], qjs=given["qjs"],
+                               proxy=given["proxy"], into=given["into"])
         records.append({"phone": given, "refused": True})
     fake = FakeYtDlp(tmp_path / "bin")
     fake.search("Radiohead Creep", entry(ID, "Creep", "Radiohead - Topic", 239))

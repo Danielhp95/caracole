@@ -177,7 +177,22 @@
   "video_id": {
    "pattern": "[A-Za-z0-9_-]{11}",
    "ignorecase": false
-  }
+  },
+  "video_id_matched": "whole",
+  "rule": "a video's or a download's target is exactly watch_url of an id video_id matches whole (re.fullmatch, the pattern having no anchors), else no run is made"
+ },
+ "refuse": {
+  "no_nul": [
+   "target",
+   "cache_dir",
+   "qjs",
+   "proxy",
+   "into"
+  ],
+  "nul": "\u0000",
+  "empty_search": true,
+  "empty_into": true,
+  "rule": "no run is made of a value in no_nul that holds a NUL, of an empty search target, or of a download whose into is empty once its trailing '/' are taken off"
  },
  "patterns": {
   "blocked": {
@@ -218,10 +233,18 @@
  ],
  "classify": {
   "ok_exit": 0,
+  "ok_class": "ok",
+  "order": "the gate's log first (its step, the runner's), then the exit status (ok_exit is ok_class whatever stderr says), then the steps over stderr",
   "lines": "str.splitlines, each str.strip()ped; empty lines and those beginning skip_prefix dropped",
   "skip_prefix": "[debug]",
   "error_prefix": "ERROR:",
   "warning_prefix": "WARNING:",
+  "over": {
+   "stderr": "every line read",
+   "error_line": "the last line read that begins error_prefix, that word taken off and the rest str.strip()ped: one line or none",
+   "warning_lines": "every line read that begins warning_prefix, whole",
+   "gate_log": "the app's gate's log of the run, never stderr"
+  },
   "steps": [
    {
     "class": "gate",

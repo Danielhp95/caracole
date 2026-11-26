@@ -724,3 +724,24 @@ def test_a_video_or_a_download_of_no_video_is_refused(what, target):
     into = "/a" if what == "download" else None
     with pytest.raises(ValueError, match="not a YouTube video"):
         phone_argv(what, target, cache_dir="/c", qjs="/q", proxy="http://p", into=into)
+
+
+@pytest.mark.parametrize("field", ["target", "cache_dir", "qjs", "proxy", "into"])
+def test_a_value_holding_a_nul_is_refused(field):
+    from caracole.youtube import phone_argv
+
+    given = {"target": watch_url(ID), "cache_dir": "/c", "qjs": "/q", "proxy": "http://p", "into": "/a"}
+    given[field] = given[field] + "\0x" if field != "target" else "ytsearch1:Creep\0--exec"
+    what = "search" if field == "target" else "download"
+    with pytest.raises(ValueError, match="NUL"):
+        phone_argv(what, given["target"], cache_dir=given["cache_dir"], qjs=given["qjs"], proxy=given["proxy"],
+                   into=given["into"] if what == "download" else None)
+
+
+@pytest.mark.parametrize("what,target,into", [("search", "", None), ("download", watch_url(ID), ""),
+                                              ("download", watch_url(ID), "/"), ("download", watch_url(ID), "//")])
+def test_an_empty_search_or_download_folder_is_refused(what, target, into):
+    from caracole.youtube import phone_argv
+
+    with pytest.raises(ValueError, match="empty"):
+        phone_argv(what, target, cache_dir="/c", qjs="/q", proxy="http://p", into=into)
