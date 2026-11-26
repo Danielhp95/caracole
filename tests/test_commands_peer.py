@@ -965,9 +965,9 @@ def test_a_sync_without_progress_says_each_unit_it_took_and_gave_as_the_phones_j
     assert result.exit_code == 0, result.output
     took, gave = words["done"]["taken"], words["done"]["given"]
     lines = [line.strip() for line in result.output.splitlines()]
-    assert f"{took} Oasis - Wonderwall: {words['conflict_came']['taken']}" in lines, result.output
+    assert f"{took} Oasis - Wonderwall: {words['conflict']}" in lines, result.output
     assert f"{took} Estopa - Tu Calorro" in lines
-    assert f"{gave} Radiohead - Creep: {words['conflict_came']['given']}" in lines
+    assert f"{gave} Radiohead - Creep: {words['conflict']}" in lines
     assert f"{gave} Muse - Hysteria" in lines
 
     remove_song(there.conn, there.cfg, plan_removal(there.conn, there.cfg, find_song(there.conn, "muse/hysteria")))
@@ -975,3 +975,33 @@ def test_a_sync_without_progress_says_each_unit_it_took_and_gave_as_the_phones_j
     assert result.exit_code == 0, result.output
     removed = f"{took} {words['removed_label'].format('Muse - Hysteria')}"
     assert [line.strip() for line in result.output.splitlines()].count(removed) == 1, result.output
+
+
+def test_a_song_asked_for_again_there_is_said_taken_once_as_the_phones_journal_says_it(two):
+    """There removed Creep, then asked for it again: the sync takes the song and its tombstone's clearing, said by
+    the song's line alone (done_lines' rule, the phone's), never as a removal nor twice."""
+    from caracole.removal import plan_removal, remove_song
+
+    here, there, _, _ = two
+    creep = there.song()
+    assert run(here, "peer", "sync", HOST, "--push", "--yes").exit_code == 0
+    remove_song(there.conn, there.cfg, plan_removal(there.conn, there.cfg, find_song(there.conn, creep.key)))
+    assert run(here, "peer", "sync", HOST, "--push", "--yes").exit_code == 0  # removed on both
+    there.song()  # asked for again there
+    result = run(here, "peer", "sync", HOST, "--push", "--yes")
+    assert result.exit_code == 0, result.output
+    said = [line.strip() for line in result.output.splitlines() if line.startswith(("  Took ", "  Gave "))]
+    assert said == ["Took Radiohead - Creep"], result.output
+
+
+def test_a_pull_says_each_unit_it_took_a_removal_once_as_one(two):
+    here, there, _, _ = two
+    theirs = there.song()
+    assert run(here, "peer", "pull", HOST, f"--unit=song/{theirs.key}").exit_code == 0
+    from caracole.removal import plan_removal, remove_song
+
+    remove_song(there.conn, there.cfg, plan_removal(there.conn, there.cfg, find_song(there.conn, theirs.key)))
+    result = run(here, "peer", "pull", HOST, f"--unit=song/{theirs.key}", f"--unit=removed/{theirs.key}")
+    assert result.exit_code == 0, result.output
+    said = [line.strip() for line in result.output.splitlines() if line.strip().startswith("Took")]
+    assert said == ["Took 2 changes.", "Took Radiohead - Creep (removed)"], result.output

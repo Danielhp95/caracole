@@ -12,9 +12,10 @@ import kotlinx.serialization.json.jsonPrimitive
  * What a sync or an import took and gave, a line a unit, as commands/peer.py's `done_line` and `done_lines` say it
  * (its words: data/caracole/sync/said.json, written by tests/test_conformance_sync_said.py, never retyped here):
  * "Took Radiohead - Creep", "Gave songbook Campfire"; a unit the side it came from holds none of a removal, named as a
- * tombstone's label names one ("Took Oasis - Wonderwall (removed)"); a conflict with the side that came ("Took Blur -
- * Song 2: changed on both sides, theirs kept"); a tombstone that goes with its song said by the song's line alone; at
- * most `most` a way, then "Took … and 312 more". The phone's Journal says them before its "Left as it was" lines
+ * tombstone's label names one ("Took Oasis - Wonderwall (removed)"), but a tombstone so, its song asked for again
+ * ("Took Oasis - Wonderwall (asked for again)"); a conflict settled, "…: changed on both sides" (the verb says whose
+ * side came); a tombstone that goes with its song said by the song's line alone; at most `most` a way, then "Took …
+ * and 312 more". The phone's Journal says them before its "Left as it was" lines
  * (SyncRoutes.said), held by vectors/sync/said.jsonl (SyncReplay.said).
  */
 object SyncSaid {
@@ -28,15 +29,24 @@ object SyncSaid {
     val MOST: Int by lazy { data.getValue("most").jsonPrimitive.int }
 
     /** A unit taken or given ([way], [TAKEN] or [GIVEN]) by [name] on one line, whitespace collapsed as Python's
-     * split() and join collapse it; [d], its difference as compared, says a removal and a conflict (`done_line`). */
+     * split() and join collapse it; [d], its difference as compared, says a removal, a tombstone's song asked for
+     * again (its label's removed mark taken off) and a conflict (`done_line`). */
     fun line(way: String, name: String, d: Difference? = null): String {
         var shown = Py.split(name).joinToString(" ").ifEmpty { name }
-        if (d != null && !d.id.startsWith("removed/") && (if (way == TAKEN) d.theirs else d.mine) == null) {
-            shown = data.getValue("removed_label").jsonPrimitive.content.replace("{}", shown)
+        val removed = text("removed_label")
+        if (d != null && (if (way == TAKEN) d.theirs else d.mine) == null) {
+            shown = if (d.id.startsWith("removed/")) {
+                val mark = removed.replace("{}", "")
+                text("asked_again").replace("{}", if (shown.endsWith(mark)) shown.dropLast(mark.length) else shown)
+            } else {
+                removed.replace("{}", shown)
+            }
         }
-        val conflict = if (d != null && d.proposal == Compare.CONFLICT) ": " + word("conflict_came", way) else ""
+        val conflict = if (d != null && d.proposal == Compare.CONFLICT) ": " + text("conflict") else ""
         return "${word("done", way)} $shown$conflict"
     }
+
+    private fun text(name: String): String = data.getValue(name).jsonPrimitive.content
 
     /** What a sync took ([taken], in the order taken) and gave ([given]), a [line] a unit by its label as compared
      * ([compared]; else its id), at most [MOST] a way, then how many more (`done_lines`). */
@@ -51,8 +61,7 @@ object SyncSaid {
                 out.add(line(way, d?.label ?: unit, d))
             }
             if (said.size > MOST) {
-                out.add("${word("done", way)} " + data.getValue("more").jsonPrimitive.content
-                    .replace("{}", (said.size - MOST).toString()))
+                out.add("${word("done", way)} " + text("more").replace("{}", (said.size - MOST).toString()))
             }
         }
         return out

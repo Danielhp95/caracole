@@ -2964,12 +2964,14 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     implementation for all three) has one more step in its Output, `Feed.SAID` ("What it said"), its lines those
     words, the phone's alone: feed.py has none (a command's Output is its step's own, the comparison a line a
     difference, `_report`, `_file_report`, unbounded). A unit taken or given is said by its label as compared
-    (`SyncOutcome.compared`), else its id, in commands/peer.py's words (`DONE`, `CONFLICT_CAME`, `done_line`,
-    `done_lines`: the lines `caracole peer sync` and `import` print without `--progress`), from
-    data/caracole/sync/said.json (core.sync's `SyncSaid`, vectors/sync/said.jsonl, tests/test_conformance_sync_said.py):
-    "Took Radiohead - Creep", "Gave songbook Campfire", a removal named as a tombstone's label names one ("Took Oasis -
-    Wonderwall (removed)", `peer_sync.REMOVED_LABEL`; its tombstone, going with it, said by its line alone), a
-    conflict with the side that came ("…: changed on both sides, theirs kept"); at most `DONE_MOST` (20) a way, then
+    (`SyncOutcome.compared`), else its id, in commands/peer.py's words (`DONE`, `ASKED_AGAIN`, `CONFLICT_SETTLED`,
+    `done_line`, `done_lines`: the lines `caracole peer sync`, `pull`, `take` and `import` print without `--progress`,
+    filtered alike, `_Said.flush`), from data/caracole/sync/said.json (core.sync's `SyncSaid`, vectors/sync/said.jsonl,
+    tests/test_conformance_sync_said.py): "Took Radiohead - Creep", "Gave songbook Campfire", a removal named as a
+    tombstone's label names one ("Took Oasis - Wonderwall (removed)", `peer_sync.REMOVED_LABEL`), a tombstone gone
+    there, its song asked for again ("Took Oasis - Wonderwall (asked for again)"), a tombstone going with its song
+    said by the song's line alone, a conflict settled "…: changed on both sides" (the verb says whose side came: Took
+    the other's, Gave this one's); at most `DONE_MOST` (20) a way, then
     "Took … and 312 more", so a first sync's entry stays small. A unit left is said by its label as compared
     (`SyncOutcome.labels`), else its id, in
     commands/peer.py's words, which caracole serve's sync prints in its step's Output (`LEFT`, `left_line`,

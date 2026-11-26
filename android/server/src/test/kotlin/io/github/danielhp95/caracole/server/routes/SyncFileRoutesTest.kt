@@ -208,8 +208,11 @@ class SyncFileRoutesTest {
         assertTrue(kept.groupValues[1].toInt() <= kept.groupValues[2].toInt() && kept.groupValues[2].toInt() > 0, said)
         assertEquals(emptyList(), phone.staged(), "its staging deleted once the job is over")
         // Each unit it took by its name (SyncSaid, commands/peer.py's done_lines), nothing left: no line of it.
-        assertEquals(job.outcome!!.getValue("taken").jsonArray.size, job.said.size, job.said.toString())
-        assertTrue(job.said.all { it.startsWith("Took ") } && "Took Radiohead - Creep" in job.said, job.said.toString())
+        // The file's units (vectors/sync/files/full.caracole) this fresh phone lacks or holds otherwise; its
+        // tombstone of Oasis - Wonderwall the phone holds already.
+        assertEquals(listOf("Took Bad \uD83C\uDFB8 Band - Riff \uD834\uDD1E", "Took Radiohead - Creep",
+                            "Took Radiohead - Karma Police", "Took 宋冬野 - 斑马，斑马", "Took songbook Campfire",
+                            "Took alias of soda", "Took UG page of 宋冬野", "Took blocked tab 4242"), job.said)
 
         val layer = phone.mirror.layers().single()
         assertEquals("a1b2c3d4e5f60718", layer.id, "the layer of the file's caracole")
@@ -238,12 +241,11 @@ class SyncFileRoutesTest {
         val jobId = queued.json.jsonObject.getValue("job").jsonObject.getValue("id").jsonPrimitive.int
         val job = runBlocking { withTimeout(60_000) { phone.queue.await(jobId) } }
         val said = "Left as it was: $label: ${SyncEngine.SKIPPED}"
-        // What it took first, each by its label as compared (SyncSaid, commands/peer.py's done_lines), then what it
-        // left; the unit left never among what it took.
-        val labels = answer.getValue("differences").jsonArray.map { it.jsonObject }
-            .associate { it.getValue("id").jsonPrimitive.content to it.getValue("label").jsonPrimitive.content }
-        val took = job.outcome!!.getValue("taken").jsonArray.map { it.jsonPrimitive.content }
-        assertEquals(took.map { "Took ${labels.getValue(it)}" } + said, job.said, job.output.joinToString("\n"))
+        // What it took first, each by its name (SyncSaid, commands/peer.py's done_lines), then what it left; the unit
+        // left ($label) never among what it took.
+        assertEquals(listOf("Took Radiohead - Creep", "Took Radiohead - Karma Police", "Took 宋冬野 - 斑马，斑马",
+                            "Took songbook Campfire", "Took alias of soda", "Took UG page of 宋冬野", "Took blocked tab 4242",
+                            said), job.said, job.output.joinToString("\n"))
         assertEquals(said, SyncRoutes.leftLine(label, SyncEngine.SKIPPED), "the sync's own words")
         val shown = io.github.danielhp95.caracole.server.jobs.Feed.feed(listOf(job), emptyMap(), opened = setOf(job.id))
             .toString()

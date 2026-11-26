@@ -4,7 +4,8 @@ SyncSaid, the server's SyncRoutes.said).
 
 **Runtime data** (tests/conformance/data/caracole/sync/said.json): ``done``, the word of a unit ``taken`` and
 ``given`` (peer.DONE's); ``removed_label``, a removal's name around the unit's (peer_sync.REMOVED_LABEL, ``{}`` the
-name); ``conflict_came``, what a conflict settled says after it, by the way it went (peer.CONFLICT_CAME); ``most``,
+name), which a tombstone's label ends with; ``asked_again``, a tombstone gone on the side it came from, around its
+song's name (peer.ASKED_AGAIN); ``conflict``, what a conflict settled says after it (peer.CONFLICT_SETTLED); ``most``,
 the units said by name a way (peer.DONE_MOST); ``more``, the line after them (peer.DONE_MORE, ``{}`` how many more).
 
 **Vector** (tests/conformance/vectors/sync/said.jsonl): ``helpers.corpus.jsonl``'s, a header, then a record a line,
@@ -31,7 +32,8 @@ def said_json() -> str:
     from caracole.commands import peer
 
     data = {"done": {way: peer.DONE[way] for way in ("taken", "given")}, "removed_label": sync.REMOVED_LABEL,
-            "conflict_came": dict(peer.CONFLICT_CAME), "most": peer.DONE_MOST, "more": peer.DONE_MORE}
+            "asked_again": peer.ASKED_AGAIN, "conflict": peer.CONFLICT_SETTLED, "most": peer.DONE_MOST,
+            "more": peer.DONE_MORE}
     return json.dumps(data, ensure_ascii=False, indent=1) + "\n"
 
 
@@ -59,6 +61,12 @@ def said_records() -> list[dict[str, Any]]:
               "new there since the last share")
     alone = _d("removed/blur/song-2", "Blur - Song 2 (removed)", None, "t", sync.THEIRS,
                "new there since the last share")
+    back = _d("song/pulp/common-people", "Pulp - Common People", None, "t", sync.THEIRS,
+              "new there since the last share")
+    cleared = _d("removed/pulp/common-people", "Pulp - Common People (removed)", "m", None, sync.THEIRS,
+                 "gone there since the last share")
+    cleared_here = _d("removed/blur/beetlebum", "Blur - Beetlebum (removed)", None, "t", sync.MINE,
+                      "gone here since the last share")
     given_gone = _d("song/estopa/tu-calorro", "Estopa - Tu Calorro", None, "t", sync.MINE,
                     "gone here since the last share")
     book = _d("songbook/campfire", "songbook Campfire", "m", "t", sync.THEIRS, "changed there since the last share")
@@ -67,39 +75,44 @@ def said_records() -> list[dict[str, Any]]:
     other = _d("song/pulp/disco-2000", "Pulp - Disco 2000", "m", "t", sync.CONFLICT,
                "both books changed it since the last share")
     spaced = _d("songbook/wedding-set", "songbook Wedding\n set", "m", "t", sync.THEIRS)
-    many = [_d(f"song/band/song-{n:02d}", f"Band - Song {n:02d}", None, "t", sync.THEIRS) for n in range(1, 26)]
-    many_given = [_d(f"song/group/tune-{n:02d}", f"Group - Tune {n:02d}", "m", None, sync.MINE) for n in range(1, 22)]
+    over = peer.DONE_MOST + 1
+    many = [_d(f"song/band/song-{n:02d}", f"Band - Song {n:02d}", None, "t", sync.THEIRS) for n in range(1, over + 1)]
+    many_given = [_d(f"song/group/tune-{n:02d}", f"Group - Tune {n:02d}", "m", None, sync.MINE)
+                  for n in range(1, peer.DONE_MOST + 1)]
     ids = lambda ds: [d.id for d in ds]  # noqa: E731
+    # (case, taken, given, left, found): the ids taken and given, in order; [id, why] left; the differences compared.
     cases = [
-        ("took only", [creep], [], [], [creep]),
-        ("gave only", [], [hysteria], [], [hysteria]),
-        ("took and gave", [creep], [hysteria], [], [creep, hysteria]),
-        ("a removal taken: the song's line alone, its tombstone going with it", [tomb, gone], [], [], [tomb, gone]),
-        ("a tombstone taken alone: by its label, which names the removal", [alone], [], [], [alone]),
-        ("a removal given", [], [given_gone], [], [given_gone]),
-        ("a songbook taken, and one removed", [book, book_gone], [], [], [book, book_gone]),
-        ("a conflict settled each way: the side that came", [both], [other], [], [both, other]),
-        ("one left: said as left alone, never as taken", [creep], [], [(hysteria.id, sync.CHANGED_HERE)],
+        ("took only", ids([creep]), [], [], [creep]),
+        ("gave only", [], ids([hysteria]), [], [hysteria]),
+        ("took and gave", ids([creep]), ids([hysteria]), [], [creep, hysteria]),
+        ("a removal taken: the song's line alone, its tombstone going with it", ids([tomb, gone]), [], [],
+         [tomb, gone]),
+        ("a tombstone taken alone: by its label, which names the removal", ids([alone]), [], [], [alone]),
+        ("a removal given", [], ids([given_gone]), [], [given_gone]),
+        ("a song asked for again there, taken with its tombstone's clearing: the song's line alone",
+         ids([cleared, back]), [], [], [cleared, back]),
+        ("a tombstone cleared there taken alone, its song left: asked for again, never a removal", ids([cleared]),
+         [], [(back.id, sync.CHANGED_HERE)], [cleared, back]),
+        ("a tombstone cleared here given alone: asked for again", [], ids([cleared_here]), [], [cleared_here]),
+        ("a songbook taken, and one removed", ids([book, book_gone]), [], [], [book, book_gone]),
+        ("a conflict settled each way: the verb says whose side came", ids([both]), ids([other]), [], [both, other]),
+        ("one left: said as left alone, never as taken", ids([creep]), [], [(hysteria.id, sync.CHANGED_HERE)],
          [creep, hysteria]),
-        ("a tombstone left because its song is here: no line", [creep], [], [(tomb.id, sync.SONG_HERE)],
+        ("a tombstone left because its song is here: no line", ids([creep]), [], [(tomb.id, sync.SONG_HERE)],
          [creep, tomb]),
         ("nothing taken or given: nothing said", [], [], [], [creep]),
-        ("a unit not among the differences: by its id", [], [], [], []),
-        ("a name over two lines: on one", [spaced], [], [(book.id, peer.SKIPPED)], [spaced, book]),
-        (f"more than {peer.DONE_MOST} a way: the first by name, then how many more", many, many_given, [],
-         many + many_given),
-        (f"{peer.DONE_MOST} exactly: every one by name", many[:peer.DONE_MOST], [], [], many),
+        ("a unit not among the differences: by its id", ["alias/Oasis"], ["block/4242"], [], []),
+        ("a name over two lines: on one", ids([spaced]), [], [(book.id, peer.SKIPPED)], [spaced, book]),
+        (f"{over} taken: the first {peer.DONE_MOST} by name, then how many more; {peer.DONE_MOST} given exactly: "
+         "every one by name", ids(many), ids(many_given), [], many + many_given),
     ]
     records = []
     for case, taken, given, left, found in cases:
-        taken_ids, given_ids = ids(taken), ids(given)
-        if case.startswith("a unit not among"):
-            taken_ids, given_ids = ["alias/Oasis"], ["block/4242"]
-        done = peer.done_lines(taken_ids, given_ids, found)
+        done = peer.done_lines(taken, given, found)
         labels = {d.id: d.label for d in found}
         said = done + [peer.left_line(labels.get(u) or u, why) for u, why in left if why != sync.SONG_HERE]
         records.append({"fn": "done_lines", "case": case,
-                        "in": plain({"taken": taken_ids, "given": given_ids, "left": [list(e) for e in left],
+                        "in": plain({"taken": taken, "given": given, "left": [list(e) for e in left],
                                      "found": found}),
                         "out": {"done": done, "said": said}})
     return records
@@ -122,10 +135,18 @@ def test_the_vector_shows_what_the_words_say():
     assert records["took and gave"]["done"] == ["Took Radiohead - Creep", "Gave Muse - Hysteria"]
     assert records["a removal taken: the song's line alone, its tombstone going with it"]["done"] == [
         "Took Oasis - Wonderwall (removed)"]
-    assert records["a conflict settled each way: the side that came"]["done"] == [
-        "Took Blur - Song 2: changed on both sides, theirs kept", "Gave Pulp - Disco 2000: changed on both sides, ours kept"]
+    assert records["a song asked for again there, taken with its tombstone's clearing: the song's line alone"][
+        "done"] == ["Took Pulp - Common People"]
+    assert records["a tombstone cleared there taken alone, its song left: asked for again, never a removal"][
+        "said"] == ["Took Pulp - Common People (asked for again)",
+                    "Left as it was: Pulp - Common People: changed here since compared"]
+    assert records["a tombstone cleared here given alone: asked for again"]["done"] == [
+        "Gave Blur - Beetlebum (asked for again)"]
+    assert records["a conflict settled each way: the verb says whose side came"]["done"] == [
+        "Took Blur - Song 2: changed on both sides", "Gave Pulp - Disco 2000: changed on both sides"]
     assert records["one left: said as left alone, never as taken"]["said"] == [
         "Took Radiohead - Creep", "Left as it was: Muse - Hysteria: changed here since compared"]
     assert records["nothing taken or given: nothing said"] == {"done": [], "said": []}
-    bounded = records["more than 20 a way: the first by name, then how many more"]["done"]
-    assert len(bounded) == 42 and bounded[20] == "Took … and 5 more" and bounded[-1] == "Gave … and 1 more"
+    bounded = records["21 taken: the first 20 by name, then how many more; 20 given exactly: every one by name"][
+        "done"]
+    assert len(bounded) == 41 and bounded[20] == "Took … and 1 more" and bounded[-1] == "Gave Group - Tune 20"

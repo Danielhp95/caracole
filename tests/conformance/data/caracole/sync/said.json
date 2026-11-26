@@ -4,10 +4,8 @@
   "given": "Gave"
  },
  "removed_label": "{} (removed)",
- "conflict_came": {
-  "taken": "changed on both sides, theirs kept",
-  "given": "changed on both sides, ours kept"
- },
+ "asked_again": "{} (asked for again)",
+ "conflict": "changed on both sides",
  "most": 20,
  "more": "… and {} more"
 }
