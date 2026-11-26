@@ -507,6 +507,25 @@ def test_what_a_sync_took_stays_agreed_when_its_give_fails_so_a_later_change_the
                                   hysteria: ("theirs", "new there since the last share")}
 
 
+def test_a_take_of_a_push_whose_render_fails_keeps_what_it_took_agreed_with_its_sender(two, monkeypatch):
+    # The push's take there dies as it renders (a bug, caracole serve stopped): its agree never runs, and the
+    # pusher's own may not either (its next ask of the take finds no server), so the take keeps what it took itself.
+    here, there, _, _ = two
+    here.song("Muse", "Hysteria", version=None)
+    unit = "song/muse/hysteria"
+
+    def render_all(conn, cfg, overrides, **kw):
+        if cfg.state_dir == there.cfg.state_dir:
+            raise RuntimeError("killed while rendering")
+
+    monkeypatch.setattr("caracole.render.render_all", render_all)
+    run(here, "peer", "sync", HOST, "--push", "--yes")
+    (job,) = there.app.queue.snapshot()
+    assert job.state == "failed" and there.units()[unit] == here.units()[unit]  # taken before its render died
+    base = sync.base_of(there.conn, sync.own_id(here.conn)) or {}
+    assert base.get(unit, (None,))[0] == here.units()[unit].digest
+
+
 def test_choices_that_cant_be_read_or_name_no_difference_are_refused_before_anything(two):
     here, there, asked, _ = two
     unit = two_conflicts(here, there)

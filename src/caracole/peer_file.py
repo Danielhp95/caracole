@@ -1031,6 +1031,20 @@ def speaks_for(file: SyncFile, unit_id: str) -> bool:
     return (file.state is not None and unit_id in file.state.units) or sync.part_of(unit_id) in file.holds
 
 
+def record_taken(conn: sqlite3.Connection, file: SyncFile, mine: Mapping[str, sync.Unit],
+                 taken: Mapping[str, str | None]) -> int:
+    """As an import's take of ``file`` ends, keep as agreed with its caracole at its ``made`` each unit taken
+    (``taken``: its digest in the file, None for one it lacks) that this library (``mine``, its whole state now) holds
+    so, of those the file speaks for (``peer_sync.record_taken``), so that an import stopped before its agree (a
+    render that fails, the process killed) leaves what it took agreed; ``record_import`` then records the rest at the
+    same time. An index export, or a file that names no caracole or time, records nothing. Return how many were
+    agreed."""
+    if file.index_only or file.state is None or file.id is None or file.made is None:
+        return 0
+    return sync.record_taken(conn, file.id, mine, {unit_id: digest for unit_id, digest in taken.items()
+                                                   if speaks_for(file, unit_id)}, file.made)
+
+
 def record_import(conn: sqlite3.Connection, file: SyncFile, mine: Mapping[str, sync.Unit],
                   kept_here: Mapping[str, tuple[str | None, str | None]]) -> int:
     """After an import of ``file``, keep, as agreed with its caracole at its ``made``, each unit the file speaks for

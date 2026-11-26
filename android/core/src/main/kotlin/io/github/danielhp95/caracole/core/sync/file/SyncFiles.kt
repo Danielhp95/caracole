@@ -866,6 +866,19 @@ object SyncFiles {
     fun speaksFor(file: SyncFile, unitId: String): Boolean =
         (file.state != null && unitId in file.state.units) || Scope.partOf(unitId) in file.holds
 
+    /** peer_file.record_taken: as an import's take of [file] ends, keep as agreed with its caracole at its `made` each
+     * unit taken ([taken]: its digest in the file, null for one it lacks) that this library ([mine], its whole state
+     * now) holds so, of those the file speaks for (Compare.recordTaken), so that an import stopped before its agree
+     * stage (its mirror stage cancelled, the app killed) leaves what it took agreed; [recordImport] then records the
+     * rest at the same time. An index export, or a file that names no caracole or time, records nothing. Called inside
+     * Database.write. How many were agreed. */
+    fun recordTaken(db: Db, file: SyncFile, mine: Map<String, SyncUnit>, taken: Map<String, String?>): Int {
+        if (file.indexOnly || file.state == null) return 0
+        val peer = file.id ?: return 0
+        val made = file.made ?: return 0
+        return Compare.recordTaken(db, peer, mine, taken.filterKeys { speaksFor(file, it) }, made)
+    }
+
     /**
      * peer_file.record_import: after an import of [file], keep, as agreed with its caracole at its `made`, each unit
      * the file speaks for that this library ([mine], its whole state now) and the file hold the same, or both lack;

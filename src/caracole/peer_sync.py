@@ -41,17 +41,17 @@ one: the state document says its side's (``key_version``), as do the push docume
 other rules (``other_keys``) is refused before anything changes (``Peer.state``'s ``OtherKeys``, ``OTHER_KEYS``),
 the bases left as they are, never re-keyed. A document that says none is an older caracole's, read as before.
 
-**Comparing** (``compare``) is three-way once the two have synced: for each unit, its digest when the two last held
-it the same, the **base**. Each side keeps its own (kv ``sync:base:<peer id>``, ``{"format": 3, "units": {unit:
-[digest or None, when]}}``: None for a unit both lacked, ``record_agreement``), written at the end of every sync it
-makes, and for each unit it took as its take ends (``record_taken``), so that a sync stopped after its take (its give
-refused, the network gone) leaves what it took agreed; the other's comes with its state (``GET
-/api/peer/state?peer=<id>``), and the later of the two counts (``merged_base``), so a unit one side pushed to the
-other is known as synced on both, whichever side took it. A
-unit only one side changed since is that side's; a unit both changed, differently, a ``CONFLICT`` for the owner to
-settle; one both changed the same way, or neither, no difference at all. With no base (the first sync), a unit on
-one side alone is that side's, and one both hold, differently, a conflict. ``compared_hash`` names a comparison, so
-that a change made on what was compared is refused once either side moved on.
+**Comparing** (``compare``) is three-way once the two have synced: for each unit, its digest when the two last held it
+the same, the **base**. Each side keeps its own (kv ``sync:base:<peer id>``, ``{"format": 3, "units": {unit: [digest or
+None, when]}}``: None for a unit both lacked, ``record_agreement``), written at the end of every sync it makes, and for
+each unit a take made this side's as that take ends (``record_taken``), whichever took it: a pull, a sync, a push's
+take, an import, so that one stopped after its take (its give refused, the network gone, its render failing or killed)
+leaves what it took agreed; the other's comes with its state (``GET /api/peer/state?peer=<id>``), and the later of the
+two counts (``merged_base``), so a unit one side pushed to the other is known as synced on both, whichever side took it.
+A unit only one side changed since is that side's; a unit both changed, differently, a ``CONFLICT`` for the owner to
+settle; one both changed the same way, or neither, no difference at all. With no base (the first sync), a unit on one
+side alone is that side's, and one both hold, differently, a conflict. ``compared_hash`` names a comparison, so that a
+change made on what was compared is refused once either side moved on.
 
 **The remembered answer.** A file of the other's imported can't take this side's version back, so a conflict the
 owner answers "keep mine" in an import is remembered beside the base (``record_kept``: its ``"kept"`` member,

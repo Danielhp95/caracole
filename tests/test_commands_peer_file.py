@@ -396,6 +396,49 @@ def test_a_conflict_kept_here_is_remembered_and_not_asked_again_at_the_next_impo
     assert sync.kept_of(studio.conn, desk.id()) == {}
 
 
+def killed_rendering(conn, cfg, overrides, **kw):
+    """``render_all`` raising, as a render's bug does, or as caracole serve's stop kills its child mid-render."""
+    raise RuntimeError("killed while rendering")
+
+
+def test_an_import_killed_after_its_take_keeps_what_it_took_agreed_and_its_file_still_offers_the_rest(
+        libraries, tmp_path, monkeypatch):
+    desk, studio, _ = libraries
+    desk.song(version="key=Am&capo=0")  # Creep, chorded otherwise on each side: kept here as chosen
+    studio.song(version="key=Gm&capo=0")
+    desk.song("Oasis", "Wonderwall", sheet=b"[Em]Today", version=None)  # in the file alone: taken
+    creep, wonderwall = "song/radiohead/creep", "song/oasis/wonderwall"
+    f = exported(desk, tmp_path / "d.caracole")
+    made = peer_file.read_file(f).made
+    monkeypatch.setattr("caracole.render.render_all", killed_rendering)
+    out = run(studio, "peer", "import", "--yes", f"--choose=here:{creep}", str(f))
+    assert out.exit_code == 1 and isinstance(out.exception, RuntimeError)
+    # What it took is agreed at the file's made; the answer "keep mine", remembered at the agree, died with it.
+    assert sync.base_of(studio.conn, desk.id()) == {wonderwall: (desk.units()[wonderwall].digest, made)}
+    assert sync.kept_of(studio.conn, desk.id()) == {}
+
+    monkeypatch.setattr("caracole.render.render_all", lambda conn, cfg, overrides, **kw: None)
+    again = run(studio, "peer", "import", "--yes", "--progress", f"--choose=here:{creep}", str(f))
+    assert again.exit_code == 0, again.output  # still offered: its Creep is a conflict again, never no newer
+    assert [e for e in events(again.output) if e.get("event") == "unit"] == []  # Wonderwall isn't taken again
+    assert sync.kept_of(studio.conn, desk.id()) == {creep: (studio.units()[creep].digest, desk.units()[creep].digest,
+                                                            made)}
+
+
+def test_a_file_an_import_killed_after_its_take_took_whole_is_no_newer_the_next_time(libraries, tmp_path, in_utc,
+                                                                                      monkeypatch):
+    desk, studio, _ = libraries
+    desk_with_a_songbook(desk)
+    f = exported(desk, tmp_path / "d.caracole")
+    monkeypatch.setattr("caracole.render.render_all", killed_rendering)
+    out = run(studio, "peer", "import", "--yes", str(f))
+    assert out.exit_code == 1 and studio.units() == desk.units()
+    monkeypatch.setattr("caracole.render.render_all", lambda conn, cfg, overrides, **kw: None)
+    again = run(studio, "peer", "import", "--yes", str(f))
+    day = datetime.now(UTC).strftime("%d/%m/%y")
+    assert again.exit_code == 2 and f"Nothing in this file is newer than your sync with Desk on {day}." in again.output
+
+
 def test_a_conflict_neither_chosen_nor_preferred_is_left_and_named(libraries, tmp_path):
     desk, studio, _ = libraries
     desk.song(version="key=Am&capo=0")

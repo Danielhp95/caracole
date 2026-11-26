@@ -57,10 +57,12 @@ class ImportTest {
         val library = File(dir, "library").apply { mkdirs() }
         val store = LibraryStore(library)
         val pagesHanded = CopyOnWriteArrayList<Pair<SyncFile, List<String>>>()
+        @Volatile var pagesFail: Exception? = null  // what the pages hook throws, as it ends
         val engine = SyncEngine(database, store, File(dir, "state"), client = { PeerClient(ServerAddress.parse(it)) },
                                 mirrorRefresh = null, pagesFromFile = { f, taken, say ->
                                     pagesHanded.add(f to taken)
                                     say("1 of 2 pages kept")
+                                    pagesFail?.let { throw it }
                                 })
             .also { it.zone = ZoneOffset.UTC }
 
@@ -205,6 +207,27 @@ class ImportTest {
         val left = other.apply(other.engine.compareFile(there.export(made = "2026-11-03T22:00:00Z")), conflicts = Conflicts.LEAVE)
         assertEquals(listOf(unit to SyncEngine.UNSETTLED), left.left)
         assertEquals(emptyMap(), other.database.read { Compare.keptOf(it, there.id) })
+    }
+
+    @Test fun anImportCancelledInItsMirrorStageKeepsWhatItTookAgreedAndTheFileStillOffersTheRest() {
+        val there = Caracole()
+        val hysteria = "song/${there.add("Muse", "Hysteria").key}"  // in the file alone: taken
+        val wonderwall = "song/${there.add("Oasis", "Wonderwall", "(What's the Story) Morning Glory?").key}"
+        val here = Caracole()
+        here.add("Oasis", "Wonderwall", "Morning Glory")  // otherwise here: kept here as chosen
+        val file = there.export()
+        here.pagesFail = kotlinx.coroutines.CancellationException("the sync's job is cancelled")
+        assertFailsWith<kotlinx.coroutines.CancellationException> {
+            here.apply(here.engine.compareFile(file), mapOf(wonderwall to Side.HERE))
+        }
+        assertNull(ended()["agree"], "stopped before its agree stage")
+        // What it took is agreed at the file's made; the answer "keep mine", remembered at the agree, went with it.
+        assertEquals(mapOf(hysteria to (there.state().getValue(hysteria).digest to MADE)),
+                     here.database.read { Compare.baseOf(it, there.id) })
+        assertEquals(emptyMap(), here.database.read { Compare.keptOf(it, there.id) })
+        here.pagesFail = null
+        val again = here.engine.compareFile(file)  // never no newer: its Wonderwall is a conflict again
+        assertEquals(listOf(wonderwall to Compare.CONFLICT), again.differences.map { it.id to it.proposal })
     }
 
     @Test fun anIndexFileMergesItsIndexesAndRecordsNoAgreement() {

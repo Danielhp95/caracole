@@ -265,7 +265,10 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
 
         // 2. take
         if (toTake.isEmpty()) stage(TAKE, SKIPPED_STATE, "")
-        else take(client, stage, done, toTake, agreeWith = computer to (fresh.peer.now ?: Stamps.of(clock())))
+        else {
+            val at = fresh.peer.now ?: Stamps.of(clock())
+            take(client, stage, done, toTake) { db, mine, taken -> Compare.recordTaken(db, computer, mine, taken, at) }
+        }
 
         // 3. give
         if (toGive.isEmpty()) stage(GIVE, SKIPPED_STATE, "") else give(client, stage, done, me, fresh, toGive)
@@ -363,7 +366,9 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
      * 1. **check**: the file read and compared again; a hash other than the comparison's refuses it before any
      *    change ([STALE]), as does a refusal of the file's (its words); then each difference within [parts] decided.
      * 2. **take**: a backup first (none: nothing taken), then each unit the file gives, from it (FileSource), as a
-     *    pull takes one.
+     *    pull takes one; then, in the same write, what was taken recorded as agreed with the file's caracole at its
+     *    `made` (SyncFiles.recordTaken), so that an import stopped before its agree (the mirror stage cancelled, the
+     *    app killed) leaves it agreed.
      * 3. **mirror**: the units taken handed to the pages hook ([pagesFromFile]), which keeps the file's pages of them,
      *    told what to say as it goes ("12 of 40 pages kept"); skipped with no hook or nothing taken; its failure stops
      *    nothing.
@@ -420,7 +425,11 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             stage(TAKE, SKIPPED_STATE, "")
             emptyList()
         } else {
-            FileSource(sf, database, store.libraryDir).use { source -> take(source, stage, done, toTake).taken }
+            FileSource(sf, database, store.libraryDir).use { source ->
+                take(source, stage, done, toTake) { db, mine, taken ->
+                    SyncFiles.recordTaken(db, sf, mine, taken)
+                }.taken
+            }
         }
 
         // 3. mirror
@@ -580,10 +589,12 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
                      "Give one a new id: caracole peer new-id.")
 
     /** The take stage: a backup of the phone's database, then each unit of [toTake] taken from [source], each left
-     * that changed on either side since the comparison; with [agreeWith] (the computer's id, and its clock as
-     * compared), what was taken then recorded as agreed in the take's own write ([agreeTaken]). */
+     * that changed on either side since the comparison; then, in the take's own write, what was taken recorded as
+     * agreed by [agree] (the phone's units now, and each unit taken with its digest there: Compare.recordTaken with the
+     * computer, SyncFiles.recordTaken with a file's caracole), [agreeTaken]. */
     private suspend fun take(source: UnitSource, stage: (String, String, String) -> Unit, done: Done,
-                             toTake: List<Difference>, agreeWith: Pair<String, String>? = null): Applied {
+                             toTake: List<Difference>,
+                             agree: (Db, Map<String, SyncUnit>, Map<String, String?>) -> Unit): Applied {
         stage(TAKE, RUNNING, plural(toTake.size, "change"))
         val now = Stamps.of(clock())
         val wanted = toTake.map { it.id to it.theirs?.digest }
@@ -601,7 +612,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
                         seen++
                         stage(TAKE, RUNNING, "$seen of ${plural(toTake.size, "change")}")
                     }
-                    agreeWith?.let { (computer, at) -> agreeTaken(db, computer, at, took, wanted) }
+                    agreeTaken(db, took, wanted, agree)
                     took
                 }
             }
@@ -611,12 +622,14 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         return applied
     }
 
-    /** What [applied] took (of [wanted]: each unit and its digest there as compared) recorded as agreed with
-     * [computer] at [at] (Compare.recordTaken: those the phone now holds so), as the take ends, so that whatever stops
-     * the sync after it (the give refused or cut off, the agree stage's own read, the job cancelled) leaves it agreed
-     * rather than a conflict once the computer changes it. A library that can't be read records nothing, the agree
-     * stage reading it again; the database's own failure stops the take, as Take.applyUnits' does. */
-    private fun agreeTaken(db: Db, computer: String, at: String, applied: Applied, wanted: List<Pair<String, String?>>) {
+    /** What [applied] took (of [wanted]: each unit and its digest there as compared) recorded as agreed by [agree]
+     * (of those the phone now holds so), as the take ends, so that whatever stops the sync or the import after it (the
+     * give refused or cut off, the mirror stage or the job cancelled, the agree stage's own read) leaves it agreed
+     * rather than a conflict once the other side changes it. A library that can't be read records nothing here, and
+     * says nothing: the agree stage reads it again, and its failure is said there, failing the stage; the database's
+     * own failure stops the take, as Take.applyUnits' does. */
+    private fun agreeTaken(db: Db, applied: Applied, wanted: List<Pair<String, String?>>,
+                           agree: (Db, Map<String, SyncUnit>, Map<String, String?>) -> Unit) {
         if (applied.taken.isEmpty()) return
         val mine = try {
             Units.libraryState(db)
@@ -625,7 +638,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             return
         }
         val digests = wanted.toMap()
-        Compare.recordTaken(db, computer, mine, applied.taken.associateWith { digests[it] }, at)
+        agree(db, mine, applied.taken.associateWith { digests[it] })
     }
 
     /** The units the computer takes pushed (peer_push.push_units), and its request followed to its end: each unit

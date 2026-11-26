@@ -3893,9 +3893,9 @@ After a first sync, each side remembers what the two agreed on. A unit changed o
 comes from that side, so a song added or removed on one side is added or removed on the other. A
 unit changed on both sides, to different things, is a conflict, and you choose which to keep.
 Before the first sync there is no history: a unit only one side has comes from that side, and a
-unit both have that differs is a conflict. What a sync takes counts as agreed once it is taken,
-even if giving the other side its share then fails and the sync fails with it: a later change
-there alone still comes here, with no conflict.
+unit both have that differs is a conflict. What a sync or an import takes counts as agreed once
+it is taken, even if what follows then fails (giving the other side its share, making the pages)
+and the sync fails with it: a later change there alone still comes here, with no conflict.
 
 Both sides must use the same sync format, format 3 today. Another format is refused. After an
 upgrade from an older format, the first sync compares with no history. A song one side removed in
