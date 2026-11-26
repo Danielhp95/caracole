@@ -27,4 +27,7 @@ command above skips,
     CARACOLE_CORPUS=write nix develop .#autochords -c pytest -q -n 0 -m autochords tests/test_conformance_autochords_models.py
 
 Its arrays are base64 of little-endian float32 (the mel float16); its model outputs are PyTorch's on one thread,
-the same bits on every run here, and on another machine or runtime within the design's gates, not bit for bit.
+the same bits on every run on a CPU of the kernels its meta names (`cpu_capability`). On another CPU a byte
+mismatch is expected, and the generator skips its byte check there, saying so; there, as for the phone's runtime,
+the check that counts is the gates', which `vectors/autochords/models.jsonl`'s meta record holds (`gates`: BTC's
+argmax and logits, beat_this's fp32 logits, the fp16-stored file's beats and downbeats by F, with no logit bound).

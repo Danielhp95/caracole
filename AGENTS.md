@@ -2050,8 +2050,14 @@ It is rows.js's, shared by both pages:
   - `data/caracole/autochords/btc-graph.onnx` and `models.json` (the pins: each file's bytes and SHA-256, BTC's git
     blob, repository and commit, its mean and std, each model's name for `raw["models"]`), exported in the test from
     the shell's model files, the same bytes as `.#chord-models`;
-  - `test_onnx_runtime_meets_the_gates_on_the_stored_inputs`: ONNX Runtime over the records' inputs within the B0
-    gates on this machine (BTC's every argmax and 1e-4, beat_this's fp32 1e-3, its fp16 file's beats at F 1.0).
+  - every record checked against `BTCRecognizer.recognize` and `detect_beats` on the clip, exactly;
+  - the gates the phone's runtime is held to, in models.jsonl's meta record (`gates`, the test's `GATES`, the
+    design's §4.2): BTC's argmax equal on every frame but where the stored top-two margin is under 1e-3, its logits
+    within 1e-4; beat_this's fp32 logits within 1e-3; the fp16-stored file's beats and downbeats at F ≥ 0.99
+    (±0.07 s, mir_eval's 5 s trim), no logit bound. `test_onnx_runtime_meets_the_gates_on_the_stored_inputs` reads
+    them there and holds this machine's ONNX Runtime to them;
+  - the bytes hold on a CPU of the meta's `cpu_capability` (torch's kernels); on another the byte check is skipped,
+    saying so, and the gates are the check.
 
 #### `tests/`
 
@@ -3251,7 +3257,8 @@ helpers/corpus.py.
 - The `autochords` area is the one whose generator needs another shell: its models' half runs, checks and is
   regenerated in `.#autochords` alone (`CARACOLE_CORPUS=write nix develop .#autochords -c pytest -q -n 0 -m
   autochords tests/test_conformance_autochords_models.py`); the default shell checks its clips and skips the rest.
-  Its model outputs are this machine's to the bit, and another's within the design's gates.
+  Its model outputs are bit for bit on a CPU of its meta's `cpu_capability`, and elsewhere within the gates its
+  models.jsonl's meta holds.
 - What the JVM can't show, the device does: `CorpusOnDeviceTest` answers every record of the `unicode`, `keys`,
   `pinyin`, `fuzz` and `canonical` vectors under Android's runtime and ICU-backed regex (it found ICU reading a `\G`
   inside a lookaround otherwise than the JDK: py/PyRe.kt's guard after an empty match uses no `\G`).

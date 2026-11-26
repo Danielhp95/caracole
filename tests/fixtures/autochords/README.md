@@ -21,5 +21,7 @@ the computer's models make of them into tests/conformance/vectors/autochords/.
 - `silence`: 1.5 s of silence, then a bar of silence between chords; 10.05 s, a tail shorter than a CQT hop.
 - `long`: sevenths in 4, then triads in 3, its last bar cut; 40 s, four whole windows of BTC's, two chunks of beat_this's.
 
-Regenerate them (never by hand) with
-`CARACOLE_CORPUS=write nix develop -c pytest -q -n 0 tests/test_conformance_autochords_models.py`.
+Regenerate them (never by hand) in two halves: the clips and this README in the default shell,
+`CARACOLE_CORPUS=write nix develop -c pytest -q -n 0 tests/test_conformance_autochords_models.py`; then, after any
+clip changes, the models' outputs over them in the auto-chords shell,
+`CARACOLE_CORPUS=write nix develop .#autochords -c pytest -q -n 0 -m autochords tests/test_conformance_autochords_models.py`.

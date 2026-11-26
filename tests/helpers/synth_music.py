@@ -228,8 +228,10 @@ the computer's models make of them into tests/conformance/vectors/autochords/.
 
 {abouts}
 
-Regenerate them (never by hand) with
-`CARACOLE_CORPUS=write nix develop -c pytest -q -n 0 tests/test_conformance_autochords_models.py`.
+Regenerate them (never by hand) in two halves: the clips and this README in the default shell,
+`CARACOLE_CORPUS=write nix develop -c pytest -q -n 0 tests/test_conformance_autochords_models.py`; then, after any
+clip changes, the models' outputs over them in the auto-chords shell,
+`CARACOLE_CORPUS=write nix develop .#autochords -c pytest -q -n 0 -m autochords tests/test_conformance_autochords_models.py`.
 """
 
 
