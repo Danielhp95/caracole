@@ -1913,7 +1913,8 @@ It is rows.js's, shared by both pages:
   - The two staged jobs over one song (staged.py: a sheet from a YouTube video, `YOUTUBE_STEPS`; a transcription,
     `TRANSCRIBE_STEPS`) share outcome.py's rules, each given its own stages (`_staged`: its steps and the stage of its
     words): `_staged_steps`, `_staged_holds` (Ready: what the chords stage says the sheet holds, or why its words
-    wait) and `_staged_stopped` (Not made yet: the first stage after the song's that stopped it).
+    wait; a YouTube sheet whose lyrics were done but whose heard words failed: "Chords only, no lyrics: the words
+    couldn't be heard here (why)."; a YouTube sheet's one Words step is its vocals and words stages) and `_staged_stopped` (Not made yet: the first stage after the song's that stopped it).
 - The library page's lines read only its steps (`outcome.progress`: while a lookup runs, once it has run a second
   (`BAR_AFTER`), its line, a song's or a result's row, is a bar of them, library.js `showLine`'s `barred`: a segment
   a step, `segsOf`, then the step in hand, its site and `count`, `stepWords`, "Sheet · Ultimate Guitar · 3 of 7",

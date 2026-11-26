@@ -157,7 +157,7 @@ class FeedTest {
             finishedAt = now
         }
         assertEquals(listOf(false, true), listOf(cancelled, made).map(Outcomes::listsSteps))
-        assertEquals(listOf("Song", "Audio", "Lyrics", "Chords", "PDF"),
+        assertEquals(listOf("Song", "Audio", "Lyrics", "Words", "Chords", "PDF"),
                      requests(Feed.feed(listOf(made, cancelled), emptyMap(), now = now, zone = zone)).let { fed ->
                          assertNull(fed.getValue(30)["steps"])
                          fed.getValue(31).getValue("steps").jsonArray.map {

@@ -25,11 +25,11 @@ the job and what the library knows of its song:
   Guitar"), one that failed as the outcome words it where it can ("Ultimate Guitar answered 502. The sheet waits
   until tonight."), joined by " · "; nothing for a plain step, a skipped one or one that waits, nor from a stage
   the server cut off, whose words are what it said while it ran.
-- **A sheet from a YouTube video** (``YOUTUBE_STEPS``): Song, Audio (YouTube, the site it names), Lyrics, Chords
-  and PDF, fixed as a lookup's are, a step with nothing to do skipped in its place, its audio skipped for a block,
+- **A sheet from a YouTube video** (``YOUTUBE_STEPS``): Song, Audio (YouTube, the site it names), Lyrics, Words (the
+  lyrics heard from the audio: its vocals and words stages), Chords and PDF, fixed as a lookup's are, a step with nothing to do skipped in its place, its audio skipped for a block,
   a cooldown or a spent budget drawn failed, as a lookup's sheet is; Ready
   says what the sheet holds (its chords stage's words: chords over the timed lyrics, a chart then the lyrics, or
-  chords alone), or why its lyrics wait, and Not made yet the stage that stopped it, in its words.
+  chords alone, or, its words failed, why they couldn't be heard), or why its lyrics wait, and Not made yet the stage that stopped it, in its words.
 - **A song's lyrics transcribed from its audio** (``TRANSCRIBE_STEPS``): Song, Vocals, Words, Chords and PDF, as a sheet
   from a YouTube video's are, none naming a site; Ready says what the sheet holds ("chords over the transcribed
   lyrics"), and Not made yet the stage that stopped it, in its words (``_staged_holds``, ``_staged_stopped``: the
@@ -109,11 +109,13 @@ LOOKUP_STEPS = (
     ("Extras", ("ug", "lacuerda", "gtptabs", "harptabs", "gametabs")),
     ("Songbooks", ("songbooks",)),
 )
-# A sheet from a YouTube video's steps (youtube_sheet.STAGES): the audio, the lyrics, the chords, the PDF.
+# A sheet from a YouTube video's steps (youtube_sheet.STAGES): the audio, the lyrics, the words heard from it (the
+# vocals and words stages, one step), the chords, the PDF.
 YOUTUBE_STEPS = (
     ("Song", ("song",)),
     ("Audio", ("audio",)),
     ("Lyrics", ("lyrics",)),
+    ("Words", ("vocals", "words")),
     ("Chords", ("chords",)),
     ("PDF", ("pdf",)),
 )
@@ -530,9 +532,14 @@ def _waits(stages: list[Stage], *, after_sheet: bool = False) -> str:
 def _staged_holds(stages: list[Stage], words: str) -> str:
     """A staged job that is ready (a sheet from a YouTube video, a transcription): what its sheet holds (its chords
     stage's words), or, when the stage of its words (``words``: the sheet's lyrics, the transcription's words) waits,
-    why."""
+    why; and a sheet whose lyrics were done but whose words (``words``'s stage in a YouTube sheet, which hears them
+    after the lyrics) failed, its chords' words then why they couldn't be heard."""
     by_name = {stage.name: stage for stage in stages}
     waited, chords = by_name.get(words), by_name.get("chords")
+    heard = by_name.get("words")
+    if (words == "lyrics" and waited is not None and waited.state == "done" and heard is not None
+            and heard.state == "failed" and heard.detail and chords is not None and chords.detail):
+        return f"{_capital(chords.detail).rstrip('.')}: the words couldn't be heard here ({heard.detail})."
     if waited is not None and waited.state in ("skipped", "failed") and waited.detail:
         return _capital(waited.detail)
     return _capital(chords.detail.removeprefix("up to date: ")) if chords is not None and chords.detail else ""

@@ -904,6 +904,23 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
     add("a sheet from YouTube, not made", in_state(youtube, "done", {
         "song": ("done", ""), "audio": ("skipped", "waiting out YouTube until 2026-11-04 11:30 UTC")}),
         facts=_status.SongFacts())
+    sheet_stages = {"song": ("done", ""), "audio": ("done", "downloaded"), "lyrics": ("done", "LRCLIB has none")}
+    add("a sheet from YouTube, its words running", in_state(youtube, "running", sheet_stages | {
+        "vocals": ("running", "2 of ~12 min")}), facts=ready)
+    add("a sheet from YouTube, its words heard", in_state(youtube, "done", sheet_stages | {
+        "vocals": ("done", "sung from 9.3 s"), "words": ("done", "212 words in 31 lines (en)"),
+        "chords": ("done", "chords over the transcribed lyrics"), "pdf": ("done", ""), "pages": ("done", "")}),
+        facts=ready)
+    add("a sheet from YouTube, its words skipped", in_state(youtube, "done", sheet_stages | {
+        "vocals": ("skipped", "not transcribed here: demucs-rs is missing"), "words": ("skipped", "no vocals"),
+        "chords": ("done", "chords only, no lyrics"), "pdf": ("done", ""), "pages": ("done", "")}), facts=ready)
+    add("a sheet from YouTube, its words failed", in_state(youtube, "done", sheet_stages | {
+        "vocals": ("done", "sung from 9.3 s"), "words": ("failed", "Whisper can't read the audio"),
+        "chords": ("done", "chords only, no lyrics"), "pdf": ("done", ""), "pages": ("done", "")}), facts=ready)
+    add("a sheet from YouTube, nothing sung", in_state(youtube, "done", sheet_stages | {
+        "vocals": ("done", "sung 6.2 s"), "words": ("done", "nothing sung was heard (6.2 s sung)"),
+        "chords": ("done", "chords only: nothing sung was heard"), "pdf": ("done", ""), "pages": ("done", "")}),
+        facts=ready)
     # A song's lyrics transcribed from its audio (caracole transcribe: transcribe_job.STAGES).
     transcription = queued_job(f"Lyrics from the audio: {V_DISPLAY}", _jobs.TRANSCRIBE + V_KEY,
                                _jobs.transcribe_steps(V_DISPLAY), display=V_DISPLAY)

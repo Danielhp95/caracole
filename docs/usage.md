@@ -2780,10 +2780,13 @@ Request. caracole then makes the sheet from the video instead of a lookup:
 with no purchase linked has the same in its card, **From a YouTube video**, whose Make the sheet
 replaces any YouTube audio it had.
 
-The line shows a bar of steps: Song, Audio (YouTube), Lyrics, Chords and PDF. The audio and the
+The line shows a bar of steps: Song, Audio (YouTube), Lyrics, Words, Chords and PDF. Words is the lyrics
+heard from the audio, only when no lyrics site has them. The audio and the
 chords say what they are doing ("Chords · 4 of 5 · finding the beats"). When it is Ready,
 the title opens `sheet (auto).html` and the Journal says what the sheet holds ("Chords over the
-lyrics.", "Chords only, no lyrics."), or why the lyrics wait. The nightly run asks LRCLIB again
+lyrics.", "Chords only, no lyrics."), or why the lyrics wait. If the words couldn't be heard here
+it says why ("Chords only, no lyrics: the words couldn't be heard here (…).") and over a song with
+nothing sung, "Chords only: nothing sung was heard." The nightly run asks LRCLIB again
 and remakes the sheet with them.
 
 - **Not made yet**: a block, a cooldown, a spent budget or a network error. Try again.

@@ -63,7 +63,7 @@ object Outcomes {
     /** A sheet from a YouTube video's steps (youtube_sheet.STAGES). */
     val YOUTUBE_STEPS: List<Pair<String, List<String>>> = listOf(
         "Song" to listOf("song"), "Audio" to listOf("audio"), "Lyrics" to listOf("lyrics"),
-        "Chords" to listOf("chords"), "PDF" to listOf("pdf"),
+        "Words" to listOf("vocals", "words"), "Chords" to listOf("chords"), "PDF" to listOf("pdf"),
     )
     private const val YOUTUBE_SOURCE = "YouTube"
 
@@ -414,6 +414,11 @@ object Outcomes {
         val byName = stages.associateBy { it.name }
         val lyrics = byName[words]
         val chords = byName["chords"]
+        val heard = byName["words"]
+        if (words == "lyrics" && lyrics != null && lyrics.state == Job.DONE && heard != null &&
+            heard.state == Job.FAILED && heard.detail.isNotEmpty() && chords != null && chords.detail.isNotEmpty()) {
+            return "${capital(chords.detail).trimEnd('.')}: the words couldn't be heard here (${heard.detail})."
+        }
         if (lyrics != null && (lyrics.state == Job.SKIPPED || lyrics.state == Job.FAILED) && lyrics.detail.isNotEmpty()) {
             return capital(lyrics.detail)
         }

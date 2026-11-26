@@ -123,6 +123,8 @@ class FakeSheet:
         for name in ("song", "audio", "lyrics"):
             stage(name, "running")
             stage(name, "done")
+        stage("vocals", "skipped", "not transcribed: its lyrics are found")
+        stage("words", "skipped", "no vocals")
         stage("chords", "running")
         self.hold.wait(30)
         stage("chords", "done", "chords over LRCLIB's timed lyrics")
@@ -233,9 +235,9 @@ def test_a_songs_card_makes_its_sheet_from_the_video_pasted_and_its_line_follows
     path, fields = posted.next(0)
     assert (path, fields) == ("/youtube", {"csrf": "tok", "song": str(song.id), "identity": song.key,
                                        "youtube": PASTED})
-    # The line is a bar of the job's steps while it runs (Song, Audio, Lyrics, Chords, PDF), the form gone.
-    wait_for(browser, bar_of(line(song)), ["done", "done", "done", "running", "waiting"])
-    wait_for(browser, words_of(line(song)), ["Chords", " · 4 of 5"])
+    # The line is a bar of the job's steps while it runs (Song, Audio, Lyrics, Words, Chords, PDF), the form gone.
+    wait_for(browser, bar_of(line(song)), ["done", "done", "done", "skipped", "running", "waiting"])
+    wait_for(browser, words_of(line(song)), ["Chords", " · 5 of 6"])
     assert browser.js(f"document.querySelector({form})") is None
     assert sheet.ran == [("youtube", "--sheet", "--progress", f"--url=https://www.youtube.com/watch?v={VIKINGOS}",
                           "--song=Nick Cani - Vikingos veganos")]
