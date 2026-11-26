@@ -1,0 +1,13 @@
+{
+ "done": {
+  "taken": "Took",
+  "given": "Gave"
+ },
+ "removed_label": "{} (removed)",
+ "conflict_came": {
+  "taken": "changed on both sides, theirs kept",
+  "given": "changed on both sides, ours kept"
+ },
+ "most": 20,
+ "more": "… and {} more"
+}

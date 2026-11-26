@@ -4112,6 +4112,11 @@ and exits 1:
 `peer sync` and `peer import` say each unit they left the same way, by its name. A conflict left
 unanswered says `changed on both sides: choose a side with --choose or --prefer`.
 
+Without `--progress`, they also say each unit they took and gave, by its name: `Took Estopa - Tu
+Calorro`, `Took Radiohead - Creep (removed)` for a removal, `Gave Blur - Song 2: changed on both
+sides, ours kept` for a conflict settled. The phone's Journal says the same lines, the first 20
+each way, then `Took … and 312 more`.
+
 Two caracoles whose databases are copies of each other count as the same caracole, and a sync
 says so. `caracole peer new-id` gives one of them its own id. It also forgets what that one agreed
 on with every other caracole.

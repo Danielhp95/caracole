@@ -207,7 +207,9 @@ class SyncFileRoutesTest {
         assertNotNull(kept, said)
         assertTrue(kept.groupValues[1].toInt() <= kept.groupValues[2].toInt() && kept.groupValues[2].toInt() > 0, said)
         assertEquals(emptyList(), phone.staged(), "its staging deleted once the job is over")
-        assertEquals(emptyList(), job.said, "nothing left, nothing said")
+        // Each unit it took by its name (SyncSaid, commands/peer.py's done_lines), nothing left: no line of it.
+        assertEquals(job.outcome!!.getValue("taken").jsonArray.size, job.said.size, job.said.toString())
+        assertTrue(job.said.all { it.startsWith("Took ") } && "Took Radiohead - Creep" in job.said, job.said.toString())
 
         val layer = phone.mirror.layers().single()
         assertEquals("a1b2c3d4e5f60718", layer.id, "the layer of the file's caracole")
@@ -236,11 +238,16 @@ class SyncFileRoutesTest {
         val jobId = queued.json.jsonObject.getValue("job").jsonObject.getValue("id").jsonPrimitive.int
         val job = runBlocking { withTimeout(60_000) { phone.queue.await(jobId) } }
         val said = "Left as it was: $label: ${SyncEngine.SKIPPED}"
-        assertEquals(listOf(said), job.said, job.output.joinToString("\n"))
+        // What it took first, each by its label as compared (SyncSaid, commands/peer.py's done_lines), then what it
+        // left; the unit left never among what it took.
+        val labels = answer.getValue("differences").jsonArray.map { it.jsonObject }
+            .associate { it.getValue("id").jsonPrimitive.content to it.getValue("label").jsonPrimitive.content }
+        val took = job.outcome!!.getValue("taken").jsonArray.map { it.jsonPrimitive.content }
+        assertEquals(took.map { "Took ${labels.getValue(it)}" } + said, job.said, job.output.joinToString("\n"))
         assertEquals(said, SyncRoutes.leftLine(label, SyncEngine.SKIPPED), "the sync's own words")
         val shown = io.github.danielhp95.caracole.server.jobs.Feed.feed(listOf(job), emptyMap(), opened = setOf(job.id))
             .toString()
-        assertTrue(io.github.danielhp95.caracole.server.jobs.Feed.SAID in shown && said in shown, shown)
+        assertTrue(io.github.danielhp95.caracole.server.jobs.Feed.SAID in shown && job.said.all { it in shown }, shown)
         // What the Journal says of this real import, through the functions /requests.json uses (RequestsRoutes):
         // done, never failed; the line, its tone, the reason and Compare again in the words vectors/web/outcome.jsonl
         // gives the computer's import that took some and left one ("import, took 3 and left 1").

@@ -151,6 +151,9 @@ SONG_HERE = "its song is here: its removal there is not taken"
 # Why a unit is one side's though both hold it otherwise than the base: an import's "keep mine", remembered.
 KEPT_HERE = "ours kept, as you chose when reading their file"
 KEPT_THERE = "theirs kept, as you chose when they read our file"
+# A tombstone's label, of its song's: "Oasis - Wonderwall (removed)"; and how a sync's lines name a unit taken or given
+# as a removal (commands/peer.py ``done_line``).
+REMOVED_LABEL = "{} (removed)"
 
 
 @dataclass(frozen=True)
@@ -402,7 +405,7 @@ def library_state(conn: sqlite3.Connection, overrides, books: Iterable) -> dict[
     for song in list_songs(conn):
         add(f"song/{song.key}", f"{song.artist} - {song.title}", song_value(conn, song, overrides))
     for key, artist, title in conn.execute("SELECT key, artist, title FROM removed"):
-        add(f"removed/{key}", f"{artist} - {title} (removed)", removed_value(artist, title))
+        add(f"removed/{key}", REMOVED_LABEL.format(f"{artist} - {title}"), removed_value(artist, title))
     for book in books:
         add(f"songbook/{name_key(book.name)}", f"songbook {book.name}", songbook_value(book))
     for artist, slugs in overrides.alias.items():

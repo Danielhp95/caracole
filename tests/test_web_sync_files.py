@@ -727,3 +727,28 @@ def test_a_file_is_dropped_at_once_as_the_page_cancels(pair, tmp_path):
     status, said = script(studio.app, "/sync/import/drop", {"import": import_id})
     assert (status, said["error"]) == (404, peer_import.NO_SUCH)
     assert script(studio.app, "/sync/import/drop", {"import": "../x"})[0] == 400
+
+
+def test_an_import_that_took_3_and_left_1_names_each_in_the_journals_output(pair, tmp_path):
+    """The computer's Journal for an import that took three and left one: its Output is the command's, the file's
+    comparison a line a difference, the one left by its name, then what it took in all (the reference the phone's
+    entry says its own way, tests/test_conformance_sync_said.py)."""
+    from test_web_app import get_json
+
+    desk, studio = pair
+    desk.song("Radiohead", "Creep")
+    desk.song("Muse", "Hysteria", version=None)
+    desk.song("Estopa", "Tu Calorro", version=None)
+    song = desk.song("Oasis", "Wonderwall", sheet=b"[Em]Today", version=None)
+    (song_dir(desk.cfg.library_dir, song) / "sheet.txt").write_bytes(b"edited")
+    _, found = file_compared(studio.app, sent(studio.app, desk_file(desk, tmp_path)))
+    assert applied(studio.app, found["comparison"])[0] == 200
+    studio.app.queue.run_pending()
+    (job,) = studio.app.queue.snapshot()
+    journal = json.loads(get_json(studio.app, f"/requests.json?open={job.id}").body)
+    (shown,) = [r for g in journal["groups"] for r in g["requests"] if r["id"] == job.id]
+    output = [" ".join(line.split()) for step in shown["output"]["steps"] for line in step.get("lines", ())]
+    for name in ("Radiohead - Creep", "Muse - Hysteria", "Estopa - Tu Calorro", "Oasis - Wonderwall"):
+        assert any(line.startswith(f"take the file's {name} (") for line in output), output
+    assert any(line.startswith("Left as it was: Oasis - Wonderwall: ") for line in output), output
+    assert any(line.startswith("From Desk's file: Took 3 changes") for line in output), output

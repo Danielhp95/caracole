@@ -947,3 +947,31 @@ def test_a_song_the_take_respells_is_asked_there_at_its_digest_as_the_take_left_
     job = there.app.queue.snapshot()[0]
     assert [list(s.args) for s in job.steps] == [["peer", "pull", f"--unit={here.units()[unit].digest}:-:{unit}",
                                                   "--", "http://192.168.1.10:8737"]]
+
+
+def test_a_sync_without_progress_says_each_unit_it_took_and_gave_as_the_phones_journal_says_it(two):
+    """Each unit taken and given a line, in the words data/caracole/sync/said.json gives the phone's Journal (one
+    statement, peer.py's: tests/test_conformance_sync_said.py): a conflict with the side that came, a removal as one,
+    and a tombstone that goes with its song said once."""
+    from caracole.removal import plan_removal, remove_song
+
+    from helpers.corpus import DATA
+
+    words = json.loads((DATA / "sync" / "said.json").read_text(encoding="utf-8"))
+    here, there, _, _ = two
+    unit = two_conflicts(here, there)
+    result = run(here, "peer", "sync", HOST, "--push", "--yes", f"--choose=here:{unit['Radiohead - Creep']}",
+                 f"--choose=there:{unit['Oasis - Wonderwall']}")
+    assert result.exit_code == 0, result.output
+    took, gave = words["done"]["taken"], words["done"]["given"]
+    lines = [line.strip() for line in result.output.splitlines()]
+    assert f"{took} Oasis - Wonderwall: {words['conflict_came']['taken']}" in lines, result.output
+    assert f"{took} Estopa - Tu Calorro" in lines
+    assert f"{gave} Radiohead - Creep: {words['conflict_came']['given']}" in lines
+    assert f"{gave} Muse - Hysteria" in lines
+
+    remove_song(there.conn, there.cfg, plan_removal(there.conn, there.cfg, find_song(there.conn, "muse/hysteria")))
+    result = run(here, "peer", "sync", HOST, "--push", "--yes")
+    assert result.exit_code == 0, result.output
+    removed = f"{took} {words['removed_label'].format('Muse - Hysteria')}"
+    assert [line.strip() for line in result.output.splitlines()].count(removed) == 1, result.output

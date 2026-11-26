@@ -103,10 +103,20 @@ UNSETTLED = "both books changed it: choose one"
 SKIPPED = "skipped, as you chose"
 # What a sync, a take or an import left as it was, a line a unit, by the name the owner knows it by (its label: "Artist
 # - Title", "songbook Campfire", "Artist - Title (removed)"), in the words the phone's Journal says it
-# (SyncRoutes.sayLeft): "Left as it was: Radiohead - Creep: changed here since compared"; a conflict left unsettled
+# (SyncRoutes.said): "Left as it was: Radiohead - Creep: changed here since compared"; a conflict left unsettled
 # said as what it is (CONFLICT_LEFT, here the command's own way to settle it: the phone's says "tap Sync to choose").
 LEFT = "Left as it was"
 CONFLICT_LEFT = "changed on both sides: choose a side with --choose or --prefer"
+# What a sync or an import took and gave, a line a unit (``done_line``), in this command's own words without
+# --progress (DONE's word, then the unit by its name as a left line says it): "Took Radiohead - Creep", "Gave songbook
+# Campfire"; a unit the side it came from holds none of, a removal, named as a tombstone's label names one ("Took
+# Oasis - Wonderwall (removed)", peer_sync.REMOVED_LABEL); a conflict, with the side that came ("Took Blur - Song 2:
+# changed on both sides, theirs kept"). The phone's Journal says them before its "Left as it was" lines
+# (SyncRoutes.said, ``done_lines``: at most DONE_MOST a way, then "Took … and 312 more"), from
+# data/caracole/sync/said.json (tests/test_conformance_sync_said.py).
+CONFLICT_CAME = {"taken": "changed on both sides, theirs kept", "given": "changed on both sides, ours kept"}
+DONE_MOST = 20
+DONE_MORE = "… and {} more"
 NOT_A_PART = "parts are library, songbooks or indexes, by commas."
 # ``caracole peer import --progress``'s stages, which caracole serve's jobs name (§3.5 of the sync redesign's plan).
 PEER_IMPORT_STAGES = (("check", "Reading the file"), ("take", "Taking what they wrote"),
@@ -232,6 +242,7 @@ def register(app: typer.Typer) -> None:
         # The differences of the parts asked for alone are taken, given or said (the hash is of every one).
         found = sync.in_scope(every, wanted_parts, listed=c.listed)
         said.names = {d.id: d.label for d in every}
+        said.found = {d.id: d for d in every}
         said.stage("compare", "done", f"{len(found)} {'difference' if len(found) == 1 else 'differences'}")
         typer.echo(_report(address, state, c.synced_before, len(c.mine), found))
 
@@ -438,15 +449,49 @@ def left_line(name: str, why: str) -> str:
     return f"{LEFT}: {' '.join(name.split()) or name}: {CONFLICT_LEFT if why == UNSETTLED else why}"
 
 
+def done_line(way: str, name: str, d=None) -> str:
+    """A unit taken or given (``way``, DONE's ``"taken"`` or ``"given"``), said by ``name`` on one line as
+    ``left_line`` says one; ``d``, its difference as compared, says whether it went as a removal (no document on the
+    side it came from: a tombstone's label names its removal already) and was a conflict (the side that came,
+    CONFLICT_CAME)."""
+    from caracole.peer_sync import CONFLICT, REMOVED_LABEL
+
+    shown = " ".join(name.split()) or name
+    if d is not None and not d.id.startswith("removed/") and (d.theirs if way == "taken" else d.mine) is None:
+        shown = REMOVED_LABEL.format(shown)
+    return f"{DONE[way]} {shown}" + (f": {CONFLICT_CAME[way]}" if d is not None and d.proposal == CONFLICT else "")
+
+
+def done_lines(taken: list[str], given: list[str], found) -> list[str]:
+    """What a sync or an import took (``taken``, unit ids in the order taken) and gave (``given``), a ``done_line``
+    a unit by its label as compared (``found``, the differences; else its id), at most DONE_MOST a way, then how many
+    more (DONE_MORE). A tombstone that goes with its song is said by the song's line alone: one removal, one line."""
+    compared = {d.id: d for d in found}
+    lines = []
+    for way, units in (("taken", taken), ("given", given)):
+        songs = {u for u in units if u.startswith("song/")}
+        said = [u for u in units if not (u.startswith("removed/") and "song/" + u[len("removed/"):] in songs)]
+        for unit_id in said[:DONE_MOST]:
+            d = compared.get(unit_id)
+            lines.append(done_line(way, d.label if d is not None else unit_id, d))
+        if len(said) > DONE_MOST:
+            lines.append(f"{DONE[way]} {DONE_MORE.format(len(said) - DONE_MOST)}")
+    return lines
+
+
 class _Said:
     """What a sync or a take says as it goes: with ``progress``, get.py's JSON lines (a stage's, a unit's event),
     which caracole serve reads (web/jobs.py), and each change left a plain line beside its event, the Journal's
     Output (``left_line``; none for a removal left because its song is here, ``status.changes_left``'s no change
-    left), as the phone's says it; else a plain line a unit. ``names``: each unit's label, as the owner knows it."""
+    left), as the phone's says it; else a plain line a unit (``done_line``, ``left_line``), none twice (a tombstone
+    taken with its song). ``names``: each unit's label, as the owner knows it; ``found``, the differences as compared
+    (a unit taken as a removal, a conflict)."""
 
     def __init__(self, progress: bool):
         self.progress = progress
         self.names: dict[str, str] = {}
+        self.found: dict = {}
+        self._said: set[str] = set()
 
     def stage(self, name: str, state: str, detail: str = "") -> None:
         if self.progress:
@@ -473,7 +518,10 @@ class _Said:
         elif outcome == "left":
             typer.echo("  " + left_line(self.names.get(unit_id) or unit_id, why))
         else:
-            typer.echo(f"  {DONE[outcome]} {self.names.get(unit_id) or unit_id}" + (f": {why}" if why else ""))
+            line = done_line(outcome, self.names.get(unit_id) or unit_id, self.found.get(unit_id))
+            if line not in self._said:
+                self._said.add(line)
+                typer.echo(f"  {line}")
 
 
 def _count(n: int) -> str:
@@ -1185,6 +1233,7 @@ def _import(cfg, path, *, name: str | None, said: _Said, parts: tuple[str, ...],
                  "now: compare them again.", 2)
         scoped = peer_file.in_parts(found, parts)
         said.names = {d.id: d.label for d in found.found}
+        said.found = {d.id: d for d in found.found}
         shown = file.name.strip() or "a file"
         said.stage("check", "done", f"{len(scoped)} {'difference' if len(scoped) == 1 else 'differences'} with "
                                     f"{shown}'s file")

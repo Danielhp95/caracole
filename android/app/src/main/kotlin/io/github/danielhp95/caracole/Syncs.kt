@@ -173,7 +173,7 @@ object Syncs {
      * with conflicts left, "1 taken, 2 changed on both sides: tap Sync to choose" (true: the sheet Sync opens compares
      * afresh and shows a card for each conflict still there); with units left for another reason (a file that won't
      * come, a unit changed since compared, one the computer's take left), "1 taken · 1 not synced: the Journal says
-     * why" (that sync's entry in the Journal lists each unit left and its why in its Output, SyncRoutes.sayLeft; the
+     * why" (that sync's entry in the Journal lists each unit left and its why in its Output, SyncRoutes.said; the
      * sheet, comparing afresh, wouldn't): never
      * "Up to date" with anything left but a removal
      * whose song is here (Take.SONG_HERE, the sync's answer). [indexes], why

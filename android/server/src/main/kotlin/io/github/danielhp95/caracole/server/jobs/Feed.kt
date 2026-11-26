@@ -209,8 +209,8 @@ object Feed {
         ))
     }
 
-    /** What a request of the phone's own said as it ran (JobContext.say with no step: a sync's units left as they
-     * were, each with its why, SyncRoutes.sayLeft), as one more step of its Output, [SAID] its label: where the
+    /** What a request of the phone's own said as it ran (JobContext.say with no step: what a sync or an import took
+     * and gave, and its units left as they were, each with its why, SyncRoutes.said), as one more step of its Output, [SAID] its label: where the
      * Journal holds what the Wi-Fi line's "the Journal says why" names. None for a request that said nothing, or of
      * commands (caracole serve's alike: feed.py has no such step). */
     private fun said(job: Job, opened: Boolean): JsonObject? {
