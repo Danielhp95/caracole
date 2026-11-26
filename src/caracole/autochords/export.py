@@ -13,7 +13,8 @@ a change to either is a new contract.
   ``btc_model_large_voca.pt``, which is copied beside it unchanged. BTC's weights are never re-hosted.
 - ``export_beats`` writes beat_this's final0 checkpoint over its log-mel frames, ``spect: float32[1, T, 128]``,
   giving the ``beat`` and ``downbeat`` logits, ``float32[1, T]``. With ``fp16``, its weights are stored as float16
-  and cast to float32 as the graph loads, so it computes in float32.
+  and cast to float32 as the graph loads, so it computes in float32. Its attentions over time run one slice at a
+  time (``_attention_by_slices``), the same answers to the bit in a fraction of the memory.
 - ``pt_offsets`` finds where each tensor of a checkpoint in torch's legacy format lies in the file, which is a
   pickle and then each storage's raw bytes. It reads the pickle with a strict unpickler of the standard library,
   which builds nothing but the few classes that format needs and imports no torch: the phone will fetch such a file.
@@ -116,9 +117,10 @@ def export_btc(weights: Path, out: Path) -> Exported:
     return _exported((path, copy), len(graph.graph.initializer))
 
 
-def export_beats(checkpoint: Path, out: Path, *, fp16: bool) -> Exported:
+def export_beats(checkpoint: Path, out: Path, *, fp16: bool, sliced: bool = True) -> Exported:
     """beat_this's final0 checkpoint as ``beat_this-final0.onnx`` in ``out``, or with ``fp16`` as
-    ``beat_this-final0-fp16.onnx``, its weights stored as float16."""
+    ``beat_this-final0-fp16.onnx``, its weights stored as float16; its attentions one slice at a time
+    (``_attention_by_slices``), unless not ``sliced`` (the tests' whole attention, to hold it to)."""
     import torch
     from beat_this.inference import load_model
 
@@ -147,6 +149,8 @@ def export_beats(checkpoint: Path, out: Path, *, fp16: bool) -> Exported:
     )
     for output in graph.graph.output:  # one piece at a time, as the input says: the exporter can't tell
         output.type.tensor_type.shape.dim[0].dim_value = 1
+    if sliced:
+        _attention_by_slices(graph)
     if fp16:
         _store_as_float16(graph)
     out.mkdir(parents=True, exist_ok=True)
@@ -208,6 +212,60 @@ def _traced(model, example, *, inputs: list[str], outputs: list[str], dynamic: d
             dynamic_axes=dynamic,
         )
     return onnx.load_from_string(buffer.getvalue())
+
+
+# beat_this's attentions over a chunk's frames, as the exporter names them, and the axis of their scores that a
+# slice is taken along: its frontend's over time attend once a frequency band (scores [bands, heads, T, T]: the
+# bands, 32, 16 and 8), its transformer blocks' once a chunk (scores [1, 16, T, T]: the heads).
+_ATTENDS_OVER_TIME = (("/partial/attnT/attend/", 0), ("/transformer_blocks/", 1))
+
+
+def _attention_by_slices(graph: onnx.ModelProto) -> int:
+    """Each of beat_this's attentions over time, its scores' MatMul, their Softmax and the MatMul by the values, as one
+    Scan over the axis ``_ATTENDS_OVER_TIME`` gives it: the same three ops over each slice in turn, the outputs put
+    together where they were. Each slice's answers are the whole's to the bit (each is its own matrix product and
+    its own rows' softmax either way), and a 1500-frame chunk's scores and softmax are no longer two [32, 1, 1500,
+    1500] float32s at once, 576 MB, but one slice's at a time (36 MB at most): the phone's peak memory (the
+    chords-on-the-phone design's B0 memory gate, 1 GB) is that pair's. The count of attentions rewritten."""
+    from onnx import TensorProto, helper
+
+    nodes = list(graph.graph.node)
+    producer = {o: n for n in nodes for o in n.output}
+    readers: dict[str, list] = collections.defaultdict(list)
+    for n in nodes:
+        for i in n.input:
+            readers[i].append(n)
+    rewritten: dict[str, object] = {}
+    dropped: set[str] = set()
+    for softmax in (n for n in nodes if n.op_type == "Softmax"):
+        axis = next((a for name, a in _ATTENDS_OVER_TIME if name in softmax.name), None)
+        scores = producer.get(softmax.input[0])
+        after = readers[softmax.output[0]]
+        if axis is None or scores is None or scores.op_type != "MatMul" or len(after) != 1:
+            continue
+        by_values = after[0]
+        if by_values.op_type != "MatMul" or by_values.input[0] != softmax.output[0]:
+            continue
+        last = next((a.i for a in softmax.attribute if a.name == "axis"), -1)
+        if last not in (-1, 3):
+            raise ValueError(f"{softmax.name}: a softmax over axis {last}, not its scores' last")
+        body = helper.make_graph(
+            [helper.make_node("MatMul", ["q", "k"], ["scores"]),
+             helper.make_node("Softmax", ["scores"], ["weights"], axis=-1),
+             helper.make_node("MatMul", ["weights", "v"], ["out"])],
+            f"{softmax.name}/by_slices",
+            [helper.make_tensor_value_info(name, TensorProto.FLOAT, None) for name in ("q", "k", "v")],
+            [helper.make_tensor_value_info("out", TensorProto.FLOAT, None)],
+        )
+        rewritten[by_values.name] = helper.make_node(
+            "Scan", [scores.input[0], scores.input[1], by_values.input[1]], [by_values.output[0]],
+            name=f"{softmax.name}/by_slices", num_scan_inputs=3, body=body, scan_input_axes=[axis] * 3,
+            scan_output_axes=[axis])
+        dropped |= {scores.name, softmax.name}
+    kept = [rewritten.get(n.name, n) for n in nodes if n.name not in dropped]
+    del graph.graph.node[:]
+    graph.graph.node.extend(kept)
+    return len(rewritten)
 
 
 def _store_as_float16(graph: onnx.ModelProto) -> None:

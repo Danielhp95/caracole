@@ -32,15 +32,15 @@
   },
   "fp32": {
    "name": "beat_this-final0.onnx",
-   "bytes": 83162614,
-   "sha256": "a70ff77c2b7e858c54390abbd2770bcf4e9ccd04636256952bd358630636245b",
+   "bytes": 83161696,
+   "sha256": "c61f7e36b7391146b8a8a75a64ebe6c26e5f3815cab7c4baa03bfdd25ca8d576",
    "asset": "beat_this-final0.onnx",
    "model": "beat_this final0@8c328b45f59d8dd3"
   },
   "fp16": {
    "name": "beat_this-final0-fp16.onnx",
-   "bytes": 42678063,
-   "sha256": "d378d82a7371c6ae2c52f122335d47386c7b7cb09f4c5c52730175c422d81add",
+   "bytes": 42677145,
+   "sha256": "d9eedbbecffc91c82791d73e4acdb93651bbefcf45d11b2ed7dc6ec3dcbc1257",
    "asset": "beat_this-final0-fp16.onnx",
    "model": "beat_this final0@8c328b45f59d8dd3 fp16"
   },

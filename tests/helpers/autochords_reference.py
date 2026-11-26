@@ -16,7 +16,8 @@
 - ``logits_of(mel, beats=None, threads=1)``: beat_this's logits of a log-mel given, as ``spect2frames`` gives them,
   and ``peaks_of(beat, downbeat)``, its minimal postprocessor's beats and downbeats.
 - ``python -m tests.helpers.autochords_reference IN OUT``: the reference of every audio file in the folder ``IN`` (or
-  of the one file ``IN``), each as ``OUT/<name>.json`` (the arrays base64 of little-endian float32, as the corpus
+  of the one file ``IN``), each as ``OUT/<name>.json`` (``reference_name``: the audio's stem, what a phone's shared
+  storage refuses in a name, a colon among them, made a hyphen) (the arrays base64 of little-endian float32, as the corpus
   writes them, ``encoded``), for songs that are never committed: the owner's own, kept outside the repository.
 
 torch, librosa, numpy and beat_this are imported inside the functions: only the auto-chords environment has them.
@@ -28,12 +29,22 @@ import base64
 import contextlib
 import json
 import os
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 AUDIO = (".wav", ".flac", ".mp3", ".ogg", ".opus", ".m4a", ".aac", ".aiff", ".aif")
+
+# What a phone's shared storage refuses in a file's name (adb push: "remote couldn't create file"), and control
+# characters: each a hyphen in a reference's name.
+_REFUSED = re.compile(r'[:*?"<>|\\\x00-\x1f]')
+
+
+def reference_name(audio: Path | str) -> str:
+    """The name of ``audio``'s reference: its stem, each character a phone's shared storage refuses a hyphen."""
+    return _REFUSED.sub("-", Path(audio).stem) + ".json"
 
 
 @dataclass(frozen=True)
@@ -182,7 +193,7 @@ def main(argv: list[str]) -> int:
     out.mkdir(parents=True, exist_ok=True)
     for f in files:
         doc = {"file": f.name, **encoded(reference(f, threads=os.cpu_count() or 1))}
-        (out / f"{f.stem}.json").write_text(json.dumps(doc, sort_keys=True) + "\n", encoding="utf-8")
+        (out / reference_name(f)).write_text(json.dumps(doc, sort_keys=True) + "\n", encoding="utf-8")
         print(f"{f.name}: {len(doc['segments'])} chords, {len(doc['beats'])} beats", file=sys.stderr)
     return 0
 

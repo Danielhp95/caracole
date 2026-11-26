@@ -342,6 +342,54 @@ def test_beats_onnx_gives_torchs_logits(beats_exports, tmp_path):
         assert mir_eval.beat.f_measure(expected, got) >= 0.99
 
 
+_PEAK = """
+import sys
+import numpy as np, onnxruntime as ort
+options = ort.SessionOptions()
+options.intra_op_num_threads = 4
+options.enable_mem_pattern = False  # the app's settings (android/ml's OrtModels)
+options.enable_cpu_mem_arena = False
+session = ort.InferenceSession(sys.argv[1], options, providers=["CPUExecutionProvider"])
+session.run(None, {"spect": np.random.default_rng(3).standard_normal((1, 1500, 128)).astype(np.float32)})
+print(next(int(line.split()[1]) for line in open("/proc/self/status") if line.startswith("VmHWM:")) // 1024)
+"""
+
+
+def _peak_mb(path: Path) -> int:
+    """A fresh process's peak RSS, in MB, as it runs a whole 1500-frame chunk through the graph at ``path``: its own
+    memory's high-water mark (VmHWM), never ``ru_maxrss``, which a child keeps from the process it was forked from."""
+    done = subprocess.run([sys.executable, "-c", _PEAK, str(path)], capture_output=True, text=True, check=True)
+    return int(done.stdout.split()[-1])
+
+
+@pytest.mark.autochords
+def test_beat_this_attends_one_slice_at_a_time_and_answers_to_the_bit_as_the_whole_attention_does(
+        beats_exports, tmp_path):
+    import numpy as np
+    import onnx
+    from caracole.autochords.export import export_beats
+
+    out, _ = beats_exports
+    whole = tmp_path / "whole"
+    for fp16, name in ((False, BEATS_GRAPH), (True, BEATS_FP16_GRAPH)):
+        export_beats(BEAT_CHECKPOINT, whole, fp16=fp16, sliced=False)
+        graph = onnx.load(str(out / name))
+        scans = [n for n in graph.graph.node if n.op_type == "Scan"]
+        # The frontend's three attentions over time (a slice a frequency band) and the six transformer blocks'
+        # (a slice a head): every softmax over a [T, T] of scores.
+        assert len(scans) == 9, name
+        attending = {n.name for n in graph.graph.node if n.op_type == "Softmax"}
+        assert not any("attnT" in n or "transformer_blocks" in n for n in attending), name
+        sliced, entire = _session(out / name), _session(whole / name)
+        rng = np.random.default_rng(11)
+        for frames in (1500, 437, 6):
+            spect = (rng.standard_normal((1, frames, 128)) * 1.5 + 2.0).astype(np.float32)
+            for got, want in zip(sliced.run(None, {"spect": spect}), entire.run(None, {"spect": spect}), strict=True):
+                assert np.array_equal(got, want), (name, frames)
+        # A whole chunk's scores and their softmax, two [32, 1, 1500, 1500] float32s at once: 576 MB of the peak.
+        assert _peak_mb(out / name) <= _peak_mb(whole / name) - 300, name
+
+
 # --- both --------------------------------------------------------------------------------------
 
 
