@@ -18,3 +18,13 @@ Never edit one by hand; regenerate:
 
 then run the Kotlin side against it, `nix develop ./android -c gradle -p android test`, before merging (the drift
 protocol, in the spec).
+
+The `autochords` area (`vectors/autochords/`, `data/caracole/autochords/`) is what the computer's models make of the
+committed clips (tests/fixtures/autochords/), and its generator, tests/test_conformance_autochords_models.py, needs
+torch and the model files: its models' half is checked and regenerated in the auto-chords shell alone, which the
+command above skips,
+
+    CARACOLE_CORPUS=write nix develop .#autochords -c pytest -q -n 0 -m autochords tests/test_conformance_autochords_models.py
+
+Its arrays are base64 of little-endian float32 (the mel float16); its model outputs are PyTorch's on one thread,
+the same bits on every run here, and on another machine or runtime within the design's gates, not bit for bit.

@@ -2036,6 +2036,22 @@ It is rows.js's, shared by both pages:
   - tests/test_autochords_export.py holds them to torch's answers in `.#autochords` (ONNX Runtime and mir_eval, its
     test-only packages): BTC's max abs 1e-4 and every argmax, beat_this's 1e-4 in fp32, the fp16 one 1e-2 on seeded
     frames and beats F ≥ 0.99 on music, the same bytes twice.
+- What the phone's port is held to, the conformance corpus's `autochords` area (tests/test_conformance_autochords_models.py,
+  in `.#autochords`): the committed clips, tests/fixtures/autochords/*.wav (CC0, made by tests/helpers/synth_music.py,
+  `render(spec, seed)`, pure Python, their README's table each one's spec), and PyTorch's answers on them, on one
+  thread, as its sums' order moves the last bits with the threads (tests/helpers/autochords_reference.py,
+  `reference(path)`: the computer's every step, BTC's and beat_this's own code; `python -m
+  tests.helpers.autochords_reference IN OUT` the same for the owner's songs, never committed):
+  - `vectors/autochords/frontend.jsonl`: each clip's log-CQT (float32) and log-mel (stored as float16), their frames'
+    norms, its samples' SHA-256 and mutagen's length;
+  - `models.jsonl`: BTC's logits of that log-CQT (the last window padded with the mean), each frame's top two and
+    margin, the chords; beat_this's logits of that log-mel as stored, its beats and downbeats; the chords and beats
+    as played;
+  - `data/caracole/autochords/btc-graph.onnx` and `models.json` (the pins: each file's bytes and SHA-256, BTC's git
+    blob, repository and commit, its mean and std, each model's name for `raw["models"]`), exported in the test from
+    the shell's model files, the same bytes as `.#chord-models`;
+  - `test_onnx_runtime_meets_the_gates_on_the_stored_inputs`: ONNX Runtime over the records' inputs within the B0
+    gates on this machine (BTC's every argmax and 1e-4, beat_this's fp32 1e-3, its fp16 file's beats at F 1.0).
 
 #### `tests/`
 
@@ -3232,6 +3248,10 @@ helpers/corpus.py.
   device. They use `core.py` and its tables, held by the shared check `core.testing.ForbiddenApis` (each module's
   `ForbiddenApiTest`; an M1–3 file a later lane ports may be allowed by name, with that lane, until it does: none
   is today).
+- The `autochords` area is the one whose generator needs another shell: its models' half runs, checks and is
+  regenerated in `.#autochords` alone (`CARACOLE_CORPUS=write nix develop .#autochords -c pytest -q -n 0 -m
+  autochords tests/test_conformance_autochords_models.py`); the default shell checks its clips and skips the rest.
+  Its model outputs are this machine's to the bit, and another's within the design's gates.
 - What the JVM can't show, the device does: `CorpusOnDeviceTest` answers every record of the `unicode`, `keys`,
   `pinyin`, `fuzz` and `canonical` vectors under Android's runtime and ICU-backed regex (it found ICU reading a `\G`
   inside a lookaround otherwise than the JDK: py/PyRe.kt's guard after an empty match uses no `\G`).
@@ -3334,7 +3354,7 @@ CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py  
 | `CARACOLE_ALPHATAB_DIR`: alphaTab's three files (`helpers.guitar.alphatab_dir`) | test_web_guitar_browser.py: the Guitar Pro page in Chromium | both shells |
 | `pdftotext` on PATH, or `CARACOLE_PDFTOTEXT` | the PDFs' text in test_render_all.py (fewer checks without it, no skip) | neither: `nix shell --inputs-from . nixpkgs#poppler-utils` |
 | torch, librosa, beat_this, and `CARACOLE_BTC_WEIGHTS` with `CARACOLE_BEAT_CHECKPOINT`, or `CARACOLE_MODELS_DIR` (searched for `btc_model_large_voca.pt` and `final0.ckpt`) | the tests marked `autochords` | `.#autochords` |
-| those and onnx, onnxruntime and mir_eval | test_autochords_export.py's tests marked `autochords` | `.#autochords` |
+| those and onnx, onnxruntime and mir_eval | test_autochords_export.py's and test_conformance_autochords_models.py's tests marked `autochords` | `.#autochords` |
 | `CARACOLE_BTC_MAJMIN_WEIGHTS`, or `btc_model.pt` under `CARACOLE_MODELS_DIR` | `test_the_major_minor_model_loads_too` | neither |
 | `ffmpeg` on PATH | `test_btc_reads_aac_from_the_itunes_store` | neither |
 | `chromium` on PATH | the tests marked `@in_chromium` (Browser tests, above): the pages caracole writes and serves, in a real browser | neither |
