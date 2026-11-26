@@ -45,7 +45,8 @@ unit (peer_sync.py; the design: docs/superpowers/specs/2026-10-31-phone-server-s
   changed since caracole kept it, or one bigger than a file carries).
 - ``caracole peer import SOURCE`` syncs this library with a file another caracole exported, as if that caracole
   were here (SOURCE a ``.caracole`` file, an index export, or the folder caracole serve staged one in,
-  ``state_dir/peer/import-<id>``, deleted once it is over): its stages check (the file read whole, then refused, in
+  ``state_dir/peer/import-<id>``, deleted once the file is refused or taken with nothing left, kept for a comparison
+  again when one may settle what stopped it: ``STALE``, a unit left): its stages check (the file read whole, then refused, in
   your words, when it is this library's own export, ``peer_file.check_importable``, or holds nothing left to take
   since the last sync with its caracole, ``peer_file.newer_than``), take (a backup first, then each unit the file gives, as a pull takes one, what
   it took kept as agreed with the file's caracole at its ``made`` as the take ends, ``peer_file.record_taken``, so
@@ -56,6 +57,9 @@ unit (peer_sync.py; the design: docs/superpowers/specs/2026-10-31-phone-server-s
   ``--compared``, ``--progress`` and ``--yes`` as ``peer sync``'s; at the end, with ``--progress``, ``{"event":
   "report", "report": …}``, what it did for the Sync tab's summary, also when it took nothing. It exits 2 for a file
   refused, 1 for a unit left or its indexes not merged, else 0.
+- ``peer sync`` and ``peer import`` work on copies of the indexes in ``cache_dir/peer`` (``sync-indexes-``,
+  ``give-indexes-``, ``import-indexes-…``), each held while its merge or upload reads it (``peer_push.holding_copy``)
+  and deleted after; as either starts, those a killed one left an hour ago are swept (``peer_push.sweep_copies``).
 - ``caracole peer new-id`` gives this caracole another id, for a database copied from another's.
 
 ``peer sync`` and ``peer import`` take ``--parts``, the parts of the sync (``peer_sync.PARTS``: library, songbooks,
@@ -193,6 +197,7 @@ def register(app: typer.Typer) -> None:
         choices = _choices(choose)
         wanted_parts = _parts(parts) if parts is not None else sync.PARTS
         cfg = load_cfg(ctx)
+        _sweep_copies(cfg)
         if here is not None:
             try:
                 here = sync.peer_address(here)
@@ -360,6 +365,7 @@ def register(app: typer.Typer) -> None:
         choices = _choices(choose)
         wanted_parts = _parts(parts) if parts is not None else sync.PARTS
         cfg = load_cfg(ctx)
+        _sweep_copies(cfg)
         said = _Said(progress)
         given = Path(source)
         options = {"said": said, "parts": wanted_parts, "choices": choices, "prefer": prefer, "compared": compared,
@@ -376,10 +382,10 @@ def register(app: typer.Typer) -> None:
                 with peer_import.held(folder):
                     # Not whole yet: refused, and left for the rest to come (a sweep deletes it after an hour).
                     path = peer_import.whole(cfg.state_dir, folder.name[len(peer_import.PREFIX):])
-                    try:
-                        _import(cfg, path, name=peer_import.opened_name(folder), **options)
-                    finally:
-                        peer_import.remove(folder)
+                    # Deleted once the file is refused or taken whole; kept for a comparison again else (STALE, a
+                    # unit left), let go as another file is opened or an hour on.
+                    _import(cfg, path, name=peer_import.opened_name(folder), spent=lambda: peer_import.remove(folder),
+                            **options)
             finally:
                 peer_import.sweep(cfg.state_dir)
         except peer_import.StagingError as e:
@@ -828,6 +834,14 @@ def _indexes(n: int) -> str:
     return f"{n} {'index' if n == 1 else 'indexes'}"
 
 
+def _sweep_copies(cfg) -> None:
+    """The copies of the indexes a ``peer sync`` or ``peer import`` killed an hour ago or more left in
+    ``cache_dir/peer`` deleted (``peer_push.sweep_copies``), as either starts."""
+    from caracole import peer_push
+
+    peer_push.sweep_copies(cfg.cache_dir / "peer")
+
+
 def _private_folder(cfg):
     """``cache_dir/peer``, 0700: where an index taken or given is copied while it moves, then deleted."""
     import os
@@ -884,14 +898,15 @@ def _take_indexes(cfg, address: str, sites: list[str], said: _Said) -> list[dict
     deleted; the report's entries."""
     import secrets
 
-    from caracole import index_transfer
+    from caracole import index_transfer, peer_push
     from caracole import peer_sync as sync
 
     path = _private_folder(cfg) / f"sync-indexes-{secrets.token_hex(6)}.sqlite"
     try:
         with sync.Peer(address, transport=transport_for_peer()) as peer:
             peer.index(path, sites)
-        with exclusive(cfg, "peer sync", interactive=True), closing(open_db(cfg)) as conn:
+        with peer_push.holding_copy(path), exclusive(cfg, "peer sync", interactive=True), \
+                closing(open_db(cfg)) as conn:
             merged = _merge_told(conn, cfg, path, sites, utcnow(), _merging(said))
             return _taken_entries(merged, index_transfer.newest(conn))
     finally:
@@ -918,7 +933,7 @@ def _give_indexes(cfg, address: str, state, sites: list[str], said: _Said) -> li
         me = sync.own_id(conn)
         index_transfer.export(conn, path, sites, now=now)
     try:
-        with peer_import.Uploader(address, transport=transport_for_peer(), token=state.token, asking=me) as there:
+        with peer_push.holding_copy(path), peer_import.Uploader(address, transport=transport_for_peer(), token=state.token, asking=me) as there:
             before = there.indexes()
             said.stage("index", "running", f"Sending {given} to the other side")
             import_id = there.upload(path, name=name)
@@ -1060,8 +1075,11 @@ def _counted(n: int, noun: str) -> str:
 
 
 def _import(cfg, path, *, name: str | None, said: _Said, parts: tuple[str, ...], choices: dict[str, str],
-            prefer: str | None, compared: str | None, yes: bool) -> None:
-    """``caracole peer import``'s work, the file at ``path``: see the module's docstring."""
+            prefer: str | None, compared: str | None, yes: bool, spent=lambda: None) -> None:
+    """``caracole peer import``'s work, the file at ``path``: see the module's docstring. ``spent()`` once the file is
+    of no more use: refused (it can't be read whole, it is of another format, this library's own export, or holds
+    nothing newer), or taken with nothing left; never when a comparison again may settle what stopped it (``STALE``,
+    a ``--choose`` of no difference, a unit left, its indexes not merged) or this library can't be read."""
     from caracole import peer_file
     from caracole import peer_sync as sync
 
@@ -1070,6 +1088,7 @@ def _import(cfg, path, *, name: str | None, said: _Said, parts: tuple[str, ...],
         file = peer_file.read_file(path, name=name)
     except peer_file.FileError as e:
         said.stage("check", "failed", str(e))
+        spent()
         fail(str(e), 2)
     overrides, books = _library(cfg)
     with closing(open_db(cfg)) as conn, peer_file.FileSource(file, conn, cfg.library_dir) as source:
@@ -1079,6 +1098,7 @@ def _import(cfg, path, *, name: str | None, said: _Said, parts: tuple[str, ...],
             found = peer_file.compare_file(conn, overrides, books, file, source)
         except (peer_file.FileError, sync.PeerError) as e:
             said.stage("check", "failed", str(e))
+            spent()
             fail(str(e), 2)
         if compared is not None and sync.compared_hash(found.found) != compared.strip().lower():
             said.stage("check", "failed", STALE)
@@ -1121,6 +1141,7 @@ def _import(cfg, path, *, name: str | None, said: _Said, parts: tuple[str, ...],
         typer.echo("Respelled as it writes their artist: " + ", ".join(done.respelled))
     if done.left or not indexed:
         raise typer.Exit(1)
+    spent()
 
 
 def _import_under_lock(cfg, conn, file, source, said: _Said, parts: tuple[str, ...], take: list,
@@ -1206,7 +1227,9 @@ def _merge_indexes(cfg, conn, file, source, said: _Said, parts: tuple[str, ...],
     import os
     import secrets
 
-    from caracole import backup, index_transfer
+    from contextlib import nullcontext
+
+    from caracole import backup, index_transfer, peer_push
     from caracole import peer_sync as sync
 
     if "indexes" not in parts or "indexes" not in file.holds:
@@ -1225,7 +1248,8 @@ def _merge_indexes(cfg, conn, file, source, said: _Said, parts: tuple[str, ...],
             copy = merged_from = folder / f"import-indexes-{secrets.token_hex(6)}.sqlite"
             told.say("Copying the file's indexes out")
             source.indexes(copy)
-        merged = _merge_told(conn, cfg, merged_from, None, now, told)
+        with peer_push.holding_copy(copy) if copy is not None else nullcontext():
+            merged = _merge_told(conn, cfg, merged_from, None, now, told)
     except (index_transfer.TransferError, backup.BackupError, sync.PeerError, OSError) as e:
         told.close()
         said.stage("index", "failed", str(e))

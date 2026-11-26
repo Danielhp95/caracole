@@ -20,7 +20,9 @@ tuple as an array). No fixture: the functions that read the database read one kv
     or null}``); ``out`` that kv's text after, byte for byte (null: none), and ``returned`` what the function
     returned;
   - ``kept_of``: ``in`` ``{kv, peer}``, ``out`` ``{id: [here, there, when]}``;
-  - ``read_state_document``: ``in`` ``{doc}``, a state document, ``out`` its ``PeerState.kept``.
+  - ``read_state_document``: ``in`` ``{doc}``, a state document, ``out`` its ``PeerState.kept``;
+  - ``answered_by_its_song``: ``in`` ``{take, kept}``, ``decide``'s two lists, differences as scope.jsonl's
+    ``found``; ``out`` the ids of the removals of ``take`` its song settled this side's answers, in order.
 - sync/scope.jsonl:
   - ``in_scope``: ``in`` ``{found, parts, listed, holds}``, ``found`` differences ``{id, label, mine, theirs,
     proposal, why}`` (each side ``{id, label, digest}`` or null), ``listed`` ``{song unit: [songbook units]}``,
@@ -359,9 +361,39 @@ def state_records() -> list[dict]:
     return out
 
 
+def answered_by_its_song_records() -> list[dict]:
+    from caracole import peer_sync as sync
+
+    song, removal = "song/oasis/wonderwall", "removed/oasis/wonderwall"
+    gone = _d(removal, mine=None, proposal="theirs", why="removed there since the last share")
+    cases = [
+        ("the song settled here, its removal in the take: answered with it", [gone], [_d(song)]),
+        ("the song not settled here: the removal stays in the take", [gone], []),
+        ("another song settled here: the removal stays", [gone], [_d("song/oasis/live forever")]),
+        ("a removal with no song settled: nothing", [gone, _d("song/blur/song 2", proposal="theirs")], []),
+        ("the song taken, not kept: the removal stays", [gone, _d(song, proposal="theirs")], []),
+        ("several pairs, each by its own song, in the take's order",
+         [_d("removed/b/two", mine=None), _d("song/c/three"), _d("removed/a/one", mine=None),
+          _d("removed/c/three", mine=None)], [_d("song/a/one"), _d("song/b/two"), _d("songbook/campfire")]),
+        ("a removal kept, not a song: nothing", [gone], [_d(removal)]),
+        ("a song's key with a slash, the whole of it after the kind", [_d("removed/ac/dc/tnt", mine=None)],
+         [_d("song/ac/dc/tnt")]),
+        ("a key that only begins as the song's: not its removal", [_d("removed/oasis/wonder", mine=None)],
+         [_d(song)]),
+        ("names in other scripts, a supplementary letter among them",
+         [_d(f"removed/{WIDE[5:]}", mine=None), _d(f"removed/{NARROW[5:]}", mine=None)], [_d(WIDE)]),
+        ("a songbook or an entry of the same name is no song", [_d("removed/campfire", mine=None)],
+         [_d("songbook/campfire"), _d("alias/campfire")]),
+        ("nothing to take: nothing", [], [_d(song)]),
+    ]
+    return [_record("answered_by_its_song", case, {"take": take, "kept": kept},
+                    lambda: [d.id for d in sync.answered_by_its_song(take, kept)])
+            for case, take, kept in cases]
+
+
 def kept_records(conn: sqlite3.Connection) -> list[dict]:
     return [*merged_kept_records(), *compare_records(), *record_kept_records(conn), *record_agreement_records(conn),
-            *record_taken_records(conn), *kept_of_records(conn), *state_records()]
+            *record_taken_records(conn), *kept_of_records(conn), *state_records(), *answered_by_its_song_records()]
 
 
 # --- scope.jsonl ---------------------------------------------------------------------------------------------------
@@ -581,6 +613,9 @@ def test_the_vectors_show_what_the_design_says(conn):
         ["song/a", sync.CONFLICT, "both books changed it since the last share"]]
     assert kept["compare", "kept here, changed here since: this side's, as usual"] == [
         ["song/a", sync.MINE, "changed here since the last share"]]
+    assert kept["answered_by_its_song", "the song settled here, its removal in the take: answered with it"] == [
+        "removed/oasis/wonderwall"]
+    assert kept["answered_by_its_song", "the song not settled here: the removal stays in the take"] == []
     assert kept["merged_kept", "the other side's alone: read with its two digests swapped"] == {
         "song/a": ["h", "t", "theirs"]}
     assert kept["merged_kept", "stamps compared as text, by code point: a supplementary letter after U+FF61"] == {

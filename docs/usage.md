@@ -3129,7 +3129,7 @@ kept file while it is as kept. These reads take no lock and ask no site. `POST /
 | `POST /sync/import/open` | JSON `{"size", "name"}`, 8 GiB at most, one at a time. Answers an id and the part size (8 MiB). |
 | `POST /sync/import/part?import=ID&at=N` | Sends each part, in order, into `state_dir/peer/import-<id>/`. |
 | `POST /sync/import/compare` | Form field `import`. Reads the file whole and compares it as `POST /sync/compare` does, or refuses it in `caracole peer import`'s words and deletes it: 400 for a file caracole didn't export, of another version or cut short; 409 for this library's own export, one with nothing new since your last sync with its caracole, or one whose caracole names songs by different rules. |
-| `POST /sync/apply` | On that comparison, queues `caracole peer import` ("Sync with a file from <its library>"), which deletes the folder when done. |
+| `POST /sync/apply` | On that comparison, queues `caracole peer import` ("Sync with a file from <its library>"), which deletes the folder when done, unless it stopped where comparing again can settle it (the library changed since, a unit left). |
 | `POST /sync/import/drop` | JSON `{"import"}`. Deletes it now, as Cancel does (409 while its import waits or runs). |
 
 An import never taken is deleted an hour after its last part, or when the next file is opened if
@@ -4050,7 +4050,9 @@ the rest. `--parts indexes` alone records no agreement.
 SOURCE can also be an index export, whose indexes are merged and nothing else. Or it is the folder
 of an upload that caracole serve staged (`state_dir/peer/import-<id>/`, one at a time, 8 GiB at
 most). That folder is refused until every part has arrived ("That file isn't whole yet: send the
-rest of it."), and deleted after the import or an hour after its last part.
+rest of it."), and deleted after the import or an hour after its last part. An import that stops
+where comparing again can settle it (the library changed since the comparison, a unit left)
+keeps the folder for an hour, so the Sync tab's Compare again needs no new upload.
 
 `--choose`, `--prefer`, `--compared`, `--progress` and `--yes` work as for `peer sync`. Import
 exits 2 for a file refused, 1 for a unit left or indexes not merged, and 0 otherwise.
@@ -4074,6 +4076,10 @@ stage). Whichever side read a site more recently gives that index to the other:
 
 If neither side is newer, nothing is sent ("no index is newer on either side"). If the stage
 fails, the sync says why and exits 1, and the units stay synced.
+
+The copies of an index being taken, given or merged live in `cache_dir/peer/` and are deleted once
+done. A copy left by a sync or import that was killed is deleted an hour later, when the next
+`peer sync` or `peer import` starts.
 
 ### The Share tab
 

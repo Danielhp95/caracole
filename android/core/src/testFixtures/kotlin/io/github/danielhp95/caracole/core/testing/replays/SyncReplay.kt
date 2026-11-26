@@ -431,12 +431,13 @@ object SyncReplay : AreaReplay {
     const val SCOPE = "sync/scope.jsonl"
 
     /** Every record of kept.jsonl: merged_kept, compare with kept answers, record_kept, record_agreement and
-     * record_taken (the base's kv text after, byte for byte, and what each returned), kept_of and a state document's
-     * kept. */
+     * record_taken (the base's kv text after, byte for byte, and what each returned), kept_of, a state document's
+     * kept, and answered_by_its_song ([Compare.answeredByItsSong]). */
     fun kept(misses: Misses) {
         val records = Corpus.records(KEPT)
         misses.check(records.map { it.fn }.toSet() == setOf("merged_kept", "compare", "record_kept", "record_agreement",
-                                                          "record_taken", "kept_of", "read_state_document")) {
+                                                          "record_taken", "kept_of", "read_state_document",
+                                                          "answered_by_its_song")) {
             "$KEPT's functions"
         }
         withDatabase { database ->
@@ -477,6 +478,9 @@ object SyncReplay : AreaReplay {
                     }
                     "read_state_document" ->
                         differs(r, keptOf(r.out), PeerState.read(given.getValue("doc")).kept)
+                    "answered_by_its_song" -> differs(r, r.out!!.jsonArray.map(::text), Compare.answeredByItsSong(
+                        given.getValue("take").jsonArray.map(::difference),
+                        given.getValue("kept").jsonArray.map(::difference)).map { it.id })
                     else -> "an unknown function ${r.fn}"
                 }
             }

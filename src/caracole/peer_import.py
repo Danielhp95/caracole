@@ -7,7 +7,9 @@ A page sends a file in parts, since a file holds a library's kept files and page
 peer_push.py), with ``open.json`` (the size the page said, its name, when it was opened) and ``file.caracole``, the
 file as it comes (0600); ``add_part`` writes each part where the last one ended, at most ``PART_MAX`` (8 MiB) a part,
 refusing a part that isn't the next one or would pass the size; ``whole`` is the file once every part has come. Then
-``caracole peer import <folder>`` holds it (``held``), takes it as it takes any file, and deletes it (``remove``).
+``caracole peer import <folder>`` holds it (``held``), takes it as it takes any file, and deletes it (``remove``)
+once the file is refused or taken with nothing left; an import a comparison again may settle (stale, a unit left)
+lets go of it, kept for that comparison.
 
 Nothing of it goes into the library. An import's id is 16 hex, checked before any path is built of it, and
 ``staged_folder`` checks the one an import is given, so that a take, which deletes its folder, deletes no other. At

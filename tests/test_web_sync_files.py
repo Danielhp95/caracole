@@ -579,6 +579,29 @@ def test_sync_on_an_import_refuses_a_comparison_this_library_moved_from(pair, tm
     assert applied(studio.app, found["comparison"], prefer="there")[0] == 409  # that comparison is gone
 
 
+def test_a_sync_on_an_import_gone_stale_before_its_job_ran_keeps_the_file_to_compare_again(pair, tmp_path):
+    from caracole.commands.peer import STALE
+
+    desk, studio = pair
+    two_differences(desk, studio)
+    import_id = sent(studio.app, desk_file(desk, tmp_path))
+    _, found = file_compared(studio.app, import_id)
+    assert applied(studio.app, found["comparison"], prefer="there")[0] == 200
+    studio.song("Muse", "Hysteria", version=None)  # a request ahead of it in the queue moved the library on
+    studio.app.queue.run_pending()
+    (job,) = studio.app.queue.snapshot()
+    assert job.state == "failed" and f"error: {STALE}" in job.steps[0].output, [s.output for s in job.steps]
+    assert [f.name for f in staged_imports(studio)] == [f"import-{import_id}"]  # Compare again: the file is here
+    status, found = file_compared(studio.app, import_id)
+    assert status == 200, found
+    status, answer = applied(studio.app, found["comparison"], prefer="there")
+    assert status == 200, answer
+    studio.app.queue.run_pending()
+    (job,) = [j for j in studio.app.queue.snapshot() if j.id == answer["job"]["id"]]
+    assert job.state == "done", [s.output for s in job.steps]
+    assert WONDERWALL_UNIT in studio.units() and staged_imports(studio) == []  # taken, then deleted
+
+
 def test_two_computers_one_imports_the_others_export_through_the_routes(pair):
     desk, studio = pair
     two_differences(desk, studio)

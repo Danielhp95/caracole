@@ -18,6 +18,7 @@ from caracole.web import sync_file_routes
 from caracole.web.app import Request, WebApp
 
 from test_commands_peer import HOST, InProcess, Side, run
+from test_commands_peer_file import exported, gtptabs_index, libraries  # noqa: F401  (the fixture)
 
 THERE = f"http://{HOST}"
 # Its routes' limits are read as it is imported: before any test here makes the parts smaller (PART_MAX).
@@ -322,3 +323,169 @@ def test_after_an_import_keeps_a_conflict_there_a_sync_from_its_files_caracole_t
     assert result.exit_code == 0, result.output
     assert here.units() == there.units() and sync.kept_of(here.conn, sync.own_id(there.conn)) == {}
     assert "Nothing differs." in run(here, "peer", "diff", THERE).output
+
+
+# --- the copies a sync or an import works on, swept once a killed one left them ---------------------------------
+
+KILLED = """
+import os, signal, sys
+import caracole.commands.peer as peer
+def killed(*args, **kw):  # the service restarts as the merge runs: SIGTERM, Python's default, no finally run
+    os.kill(os.getpid(), signal.SIGTERM)
+peer._merge_told = killed
+from caracole.cli import main
+sys.argv = ["caracole", *sys.argv[1:]]
+main()
+"""
+COPIES = ["sync-indexes-0123456789ab.sqlite", "give-indexes-0123456789ab.sqlite", "import-indexes-0123456789ab.sqlite",
+          "sync-indexes-0123456789ab.sqlite-journal", "import-indexes-0123456789ab.sqlite-wal",
+          "give-indexes-0123456789ab.sqlite-shm", "give-indexes-abcdef012345.sqlite.0123456789ab.part",
+          "give-indexes-abcdef012345.sqlite.0123456789ab.part-journal"]
+NOT_COPIES = ["sync-indexes-0123456789ab.sqlite.bak", "sync-indexes-XYZ.sqlite", "import-indexes-01234.sqlite",
+              "mine.sqlite", "export-0123456789abcdef.caracole"]
+
+
+def aged(path, seconds=2 * 3600):
+    import os
+    import time
+
+    then = time.time() - seconds
+    os.utime(path, (then, then), follow_symlinks=False)
+
+
+def test_the_sweep_deletes_a_syncs_copies_and_their_side_files_alone_once_an_hour_old(tmp_path):
+    from caracole import peer_push
+
+    folder = tmp_path / "peer"
+    folder.mkdir()
+    for name in COPIES + NOT_COPIES:
+        (folder / name).write_bytes(b"x")
+        aged(folder / name)
+    (folder / "sync-indexes-ba9876543210.sqlite").write_bytes(b"fresh")  # being downloaded: its time moves
+    (tmp_path / "outside.sqlite").write_bytes(b"x")
+    (folder / "import-indexes-aaaaaaaaaaaa.sqlite").symlink_to(tmp_path / "outside.sqlite")
+    aged(folder / "import-indexes-aaaaaaaaaaaa.sqlite")
+    (folder / "sync-indexes-bbbbbbbbbbbb.sqlite").mkdir()
+    aged(folder / "sync-indexes-bbbbbbbbbbbb.sqlite")
+    assert sorted(peer_push.sweep_copies(folder)) == sorted(COPIES)
+    assert sorted(p.name for p in folder.iterdir()) == sorted(
+        NOT_COPIES + ["sync-indexes-ba9876543210.sqlite", "import-indexes-aaaaaaaaaaaa.sqlite",
+                      "sync-indexes-bbbbbbbbbbbb.sqlite"])
+    assert (tmp_path / "outside.sqlite").exists()
+    assert peer_push.sweep_copies(tmp_path / "none") == []
+
+
+def test_a_copy_its_command_holds_is_never_swept_however_old(tmp_path):
+    from caracole import peer_push
+
+    folder = tmp_path / "peer"
+    folder.mkdir()
+    copy, journal = folder / "import-indexes-0123456789ab.sqlite", folder / "import-indexes-0123456789ab.sqlite-journal"
+    copy.write_bytes(b"x")
+    with peer_push.holding_copy(copy):  # a merge reading it for over an hour: its time doesn't move
+        journal.write_bytes(b"j")
+        aged(copy)
+        aged(journal)
+        assert peer_push.sweep_copies(folder) == [] and copy.exists() and journal.exists()
+    assert sorted(peer_push.sweep_copies(folder)) == [copy.name, journal.name]
+
+
+def test_an_index_copy_a_killed_import_left_is_swept_an_hour_after(libraries, tmp_path):  # noqa: F811
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    from conftest import subprocess_pythonpath
+
+    from caracole.web import peer_routes
+
+    desk, studio, _ = libraries
+    desk.song()
+    gtptabs_index(desk, READ, ["https://gtptabs.com/tabs/2/blur.html"])
+    f = exported(desk, tmp_path / "i.caracole", "--parts", "library,songbooks,indexes")
+    src = Path(__file__).resolve().parents[1] / "src"
+    config = str(studio.root / "caracole.toml")
+    done = subprocess.run([sys.executable, "-c", KILLED, "--config", config, "peer", "import", "--yes", "--parts",
+                           "indexes", str(f)], env={**os.environ, "PYTHONPATH": subprocess_pythonpath(src)},
+                          capture_output=True, text=True, timeout=120)
+    assert done.returncode == -15, done.stdout + done.stderr
+    folder = studio.cfg.cache_dir / "peer"
+    (left,) = [p for p in folder.iterdir() if p.name.startswith("import-indexes-")]
+    peer_routes._leftovers(folder)
+    assert left.exists()  # an hour not passed yet: it may still be another's, working
+    aged(left)
+    peer_routes._leftovers(folder)  # caracole serve's sweep of cache_dir/peer, as GET /api/peer/index comes
+    assert list(folder.iterdir()) == []
+
+
+def test_peer_import_and_peer_sync_sweep_the_copies_left_as_they_start(libraries, tmp_path):  # noqa: F811
+    desk, studio, _ = libraries
+    desk.song()
+    folder = studio.cfg.cache_dir / "peer"
+    folder.mkdir(parents=True, exist_ok=True)
+    for command in (["peer", "import", "--yes", str(exported(desk, tmp_path / "d.caracole"))],
+                    ["peer", "sync", HOST, "--yes"]):
+        left = folder / "give-indexes-0123456789ab.sqlite"
+        left.write_bytes(b"x")
+        aged(left)
+        run(studio, *command)
+        assert not left.exists(), command
+
+
+def merges_seeing_their_copy_swept(monkeypatch) -> list:
+    """Each merge of a copy, as another caracole starting meanwhile sweeps it an hour on (its time doesn't move as
+    the merge reads it): ``(its kind, whether it is still there)``."""
+    from caracole import peer_push
+    import caracole.commands.peer as peer
+
+    merge, seen = peer._merge_told, []
+
+    def slow(conn, cfg, path, *args, **kw):
+        aged(path)
+        peer_push.sweep_copies(path.parent)
+        seen.append((path.name.partition("-indexes-")[0], path.exists()))
+        return merge(conn, cfg, path, *args, **kw)
+
+    monkeypatch.setattr(peer, "_merge_told", slow)
+    return seen
+
+
+def test_the_copy_an_imports_merge_reads_for_over_an_hour_is_never_swept_meanwhile(libraries, tmp_path,  # noqa: F811
+                                                                                     monkeypatch):
+    seen = merges_seeing_their_copy_swept(monkeypatch)
+    desk, studio, _ = libraries
+    desk.song()
+    gtptabs_index(desk, READ, ["https://gtptabs.com/tabs/2/blur.html"])
+    f = exported(desk, tmp_path / "i.caracole", "--parts", "library,songbooks,indexes")
+    out = run(studio, "peer", "import", "--yes", "--parts", "indexes", str(f))
+    assert out.exit_code == 0, out.output
+    assert seen == [("import", True)] and list((studio.cfg.cache_dir / "peer").iterdir()) == []
+
+
+def test_the_copy_a_syncs_merge_reads_for_over_an_hour_is_never_swept_meanwhile(syncing, monkeypatch):
+    seen = merges_seeing_their_copy_swept(monkeypatch)
+    here, there, _ = syncing
+    gtptabs_rows(there, BLUR)
+    result, _ = synced(here)
+    assert result.exit_code == 0, result.output
+    assert seen == [("sync", True)] and leftovers(here) == []
+
+
+def test_the_copy_a_give_sends_and_waits_on_is_never_swept_meanwhile(syncing, monkeypatch):
+    from caracole import peer_push
+
+    here, there, _ = syncing
+    gtptabs_rows(here, BLUR)
+    upload, seen = peer_import.Uploader.upload, []
+
+    def slow(self, path, **kw):
+        aged(path)
+        peer_push.sweep_copies(path.parent)
+        seen.append(path.exists())
+        return upload(self, path, **kw)
+
+    monkeypatch.setattr(peer_import.Uploader, "upload", slow)
+    result, _ = synced(here)
+    assert result.exit_code == 0, result.output
+    assert seen == [True] and leftovers(here) == []

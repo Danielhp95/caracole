@@ -640,6 +640,61 @@ def test_a_staged_index_export_goes_by_the_name_it_was_sent_under_and_is_deleted
     assert report["with"]["name"] == "phone-indexes.sqlite" and not folder.exists()
 
 
+def compared_in_the_tab(lib: Lib, folder: Path) -> str:
+    """The hash the Sync tab's comparison of the file staged in ``folder`` names (POST /sync/import/compare's)."""
+    from caracole.commands.peer import _library
+
+    file = peer_file.read_file(folder / peer_import.FILE)
+    overrides, books = _library(lib.cfg)
+    with peer_file.FileSource(file, lib.conn, lib.cfg.library_dir) as source:
+        return sync.compared_hash(peer_file.compare_file(lib.conn, overrides, books, file, source).found)
+
+
+def test_a_stale_import_keeps_its_staged_file_to_compare_again_and_takes_it_then(libraries, tmp_path):
+    from caracole.commands.peer import STALE
+
+    desk, studio, _ = libraries
+    desk_with_a_songbook(desk)
+    folder = stage(studio, exported(desk, tmp_path / "d.caracole").read_bytes())
+    shown = compared_in_the_tab(studio, folder)
+    studio.song("Muse", "Hysteria", version=None)  # the library moves on before the job runs (a lookup, the night)
+    out = run(studio, "peer", "import", "--yes", "--progress", f"--compared={shown}", str(folder))
+    assert out.exit_code == 1 and STALE in out.output, out.output
+    assert folder.exists() and studio.songs() == {"muse/hysteria"}  # kept, nothing taken
+    out = run(studio, "peer", "import", "--yes", "--progress", f"--compared={compared_in_the_tab(studio, folder)}",
+              str(folder))
+    assert out.exit_code == 0, out.output
+    assert "oasis/wonderwall" in studio.songs() and not folder.exists()
+
+
+def test_an_import_a_new_comparison_can_settle_keeps_its_staged_file_and_lets_go_of_it(libraries, tmp_path):
+    desk, studio, _ = libraries
+    f = a_file_that_removed_a_song_changed_here(desk, studio, tmp_path)
+    folder = stage(studio, f.read_bytes())
+    out = run(studio, "peer", "import", "--yes", "--progress", "--choose=here:song/oasis/nothing", str(folder))
+    assert out.exit_code == 2 and "no longer a difference" in out.output and folder.exists()
+    out = run(studio, "peer", "import", "--yes", "--progress", str(folder))  # its conflict left with no side
+    assert out.exit_code == 1 and folder.exists(), out.output
+    # The import over, its hold is gone: another file opened lets it go, as an hour does.
+    assert peer_import.let_go(studio.cfg.state_dir, set()) == [folder.name[len(peer_import.PREFIX):]]
+
+
+def test_a_file_an_import_refuses_or_takes_whole_is_deleted(libraries, tmp_path):
+    desk, studio, _ = libraries
+    desk_with_a_songbook(desk)
+    data = exported(desk, tmp_path / "d.caracole").read_bytes()
+    folder = stage(studio, data)
+    assert run(studio, "peer", "import", "--yes", str(folder)).exit_code == 0 and not folder.exists()
+    again = stage(studio, data)  # the same file: nothing newer in it
+    out = run(studio, "peer", "import", "--yes", str(again))
+    assert out.exit_code == 2 and "Nothing in this file is newer" in out.output and not again.exists()
+    own = stage(studio, exported(studio, tmp_path / "own.caracole").read_bytes())
+    out = run(studio, "peer", "import", "--yes", str(own))
+    assert out.exit_code == 2 and peer_file.OWN_EXPORT in out.output and not own.exists()
+    garbage = stage(studio, b"not a file at all")
+    assert run(studio, "peer", "import", "--yes", str(garbage)).exit_code == 2 and not garbage.exists()
+
+
 def test_a_staged_file_not_whole_yet_is_refused_and_left_for_the_rest_to_come(libraries, tmp_path):
     desk, studio, _ = libraries
     desk_with_a_songbook(desk)
@@ -787,6 +842,8 @@ def test_a_removal_beside_its_songs_conflict_left_unsettled_is_left_saying_so(li
     desk, studio, _ = libraries
     f = a_file_that_removed_a_song_changed_here(desk, studio, tmp_path)
     out = run(studio, "peer", "import", "--yes", "--progress", str(f))
+    assert out.exit_code == 1, out.output  # units left
     units = sorted((e["id"], e["outcome"], e["why"]) for e in events(out.output) if e.get("event") == "unit")
     assert ("removed/oasis/wonderwall", "left", sync.SONG_HERE) in units, units
     assert find_song(studio.conn, "oasis/wonderwall") is not None
+    assert "removed/oasis/wonderwall" not in sync.kept_of(studio.conn, desk.id())  # nothing kept for the removal

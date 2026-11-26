@@ -41,8 +41,8 @@ spend the file's one GET, is refused (405).
 A file to import is the browser's (a phone's export, another server's; or a ``caracole peer sync`` giving its
 indexes, peer_import.py ``Uploader``): sent in parts, since it holds a library's files and pages and maybe its
 indexes, each a write with the form token in its header, into its staging folder (``state_dir/peer/import-<id>/``,
-peer_import.py), one at a time; deleted once its import is over, or an hour after its last part unless an import holds
-it, or sooner: dropped (the page's Cancel), or let go as another is opened when no request names it and it is whole
+peer_import.py), one at a time; deleted once its import is over (but one a comparison again may settle: ``STALE``, a
+unit left), or an hour after its last part unless an import holds it, or sooner: dropped (the page's Cancel), or let go as another is opened when no request names it and it is whole
 (compared, never synced) or its upload stopped (``peer_import.let_go``). Its comparison reads it whole first
 (``peer_file.check_whole``), and a file refused is deleted; a unit's two documents on its comparison (``GET
 /api/sync/unit``, a conflict's card) are this library's and the file's, read from it (``file_unit``). Nothing of it

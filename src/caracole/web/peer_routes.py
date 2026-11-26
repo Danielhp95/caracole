@@ -288,8 +288,11 @@ class _Streamed(io.BufferedReader):
 
 
 def _leftovers(folder) -> None:
-    """Delete the copies of the indexes a process killed while it made one left in ``folder``, an hour after."""
+    """Delete the copies of the indexes a process killed while it made one left in ``folder``, an hour after: this
+    route's (``index-…``), and those of a ``peer sync`` or ``peer import`` killed (``peer_push.sweep_copies``)."""
     import time
+
+    peer_push.sweep_copies(folder)
 
     try:
         entries = list(os.scandir(folder))

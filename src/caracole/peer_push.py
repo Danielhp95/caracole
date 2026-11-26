@@ -39,6 +39,10 @@ the other side its units with no need for it to reach this one: in as many pushe
 as ``state_dir/peer/index-<16 hex>.sqlite`` (0600, ``stage_index``) for ``caracole index merge --delete --progress``,
 which deletes it once it is merged or refused. At most ``INDEX_OPEN`` (2) wait at once (409 for another); one an
 hour old that no queued or running request names is deleted as the next comes (``sweep_indexes``).
+
+**A sync's copies of the indexes** (``cache_dir/peer``): those ``caracole peer sync`` and ``peer import`` download,
+export or copy out of a file, held while they are read (``holding_copy``), and those a killed command left swept an
+hour on (``sweep_copies``).
 """
 
 from __future__ import annotations
@@ -329,6 +333,71 @@ def sweep_indexes(state_dir: Path, named: set[str], now: float | None = None) ->
             if old and str(path) not in named:
                 path.unlink(missing_ok=True)
                 gone.append(path.name)
+    return gone
+
+
+# --- the copies of the indexes a sync or an import works on (cache_dir/peer) ---------------------------------------
+
+# commands/peer.py's: the indexes taken (sync-), given (give-, index_transfer.export's .part while it is made) or copied
+# out of a .caracole file (import-), and SQLite's files beside each
+COPY = re.compile(r"((?:sync|give|import)-indexes-[0-9a-f]{12}\.sqlite)(?:\.[0-9a-f]{12}\.part)?"
+                  r"(?:-journal|-wal|-shm)?")
+
+
+@contextmanager
+def holding_copy(path: Path) -> Iterator[None]:
+    """The copy at ``path`` held by the command working on it (an flock of it, gone with the process however it
+    ends), so that no ``sweep_copies`` deletes it, nor its side files, while a merge or an upload reads it for more
+    than an hour, its time standing still. Closed only once SQLite is done with it: closing a descriptor of a file
+    lets go of the POSIX locks this process's connections hold on it."""
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_SH)
+        yield
+    finally:
+        os.close(fd)
+
+
+def _copy_held(path: Path) -> bool:
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return True  # not a file to read (a link): kept
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return False
+    except BlockingIOError:
+        return True
+    finally:
+        os.close(fd)
+
+
+def sweep_copies(folder: Path, now: float | None = None) -> list[str]:
+    """Delete each copy of the indexes in ``folder`` (``cache_dir/peer``) a killed ``peer sync`` or ``peer import``
+    left (``COPY``: its own names alone, regular files, no link followed), untouched for ``EXPIRES``, unless a command
+    holds it (``holding_copy``: a side file goes by its copy's hold); the names deleted. A copy downloaded or written
+    has its time moving: an export's ``.part`` is held by nothing else. Called in a process that holds none of them
+    open in SQLite (as a command starts, and by caracole serve)."""
+    now = time.time() if now is None else now
+    try:
+        entries = list(os.scandir(folder))
+    except OSError:
+        return []
+    gone = []
+    for entry in entries:
+        named = COPY.fullmatch(entry.name)
+        try:
+            if not (named and entry.is_file(follow_symlinks=False)
+                    and now - entry.stat(follow_symlinks=False).st_mtime > EXPIRES):
+                continue
+            if _copy_held(Path(folder) / named.group(1)):
+                continue
+            os.unlink(entry.path)
+            gone.append(entry.name)
+        except OSError:
+            continue
     return gone
 
 

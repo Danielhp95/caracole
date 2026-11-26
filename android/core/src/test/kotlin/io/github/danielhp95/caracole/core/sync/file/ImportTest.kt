@@ -255,6 +255,8 @@ class ImportTest {
         assertEquals(setOf("song/$key" to SyncEngine.UNSETTLED, "removed/$key" to io.github.danielhp95.caracole.core.sync.Take.SONG_HERE),
                      outcome.left.toSet())
         assertEquals(emptyList(), outcome.taken)
+        val kept = here.database.read { Compare.keptOf(it, there.id) }
+        assertTrue("removed/$key" !in kept, "nothing kept for the removal: $kept")
     }
 
     @Test fun anImportCancelledInItsMirrorStageKeepsWhatItTookAgreedAndTheFileStillOffersTheRest() {
