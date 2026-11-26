@@ -924,9 +924,10 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     remembered (`peer_sync.record_kept`), a file taking nothing back; none for an import of the indexes alone, so the
     same file's library may still be imported after.
   - commands/peer.py's `peer import` takes a staged folder only once its file is whole (`peer_import.whole`), and
-    exits 1 for nothing taken for want of a backup or its indexes not merged, never for a unit left (no failure, as a
-    sync's: the Journal's "Shared · 1 change left as it was", the phone's words, its staged file still kept); with
-    `--progress` its report comes whatever it took.
+    exits 2 for a file refused or an option it can't take (a `--choose` of no difference), 1 for `STALE`, a "Go on?"
+    answered no, overrides.toml or songbooks.toml unreadable, nothing taken for want of a backup, its indexes not
+    merged or a bug, else 0, never 1 for a unit left (no failure, as a sync's: the Journal's "Shared · 1 change left as
+    it was", the phone's words, its staged file still kept); with `--progress` its report comes whatever it took.
 - **peer_import.py**: an upload staged part by part, `state_dir/peer/import-<16 hex>/` (0700: `file.caracole` and
   `open.json`, 0600), one at a time, each part 8 MiB at most and the next one, 8 GiB in all; one untouched an hour is
   swept unless `held`; `staged_folder` checks the folder `peer import` is given, which it deletes once the file is

@@ -57,8 +57,10 @@ unit (peer_sync.py; the design: docs/superpowers/specs/2026-10-31-phone-server-s
   whole (``peer_import.whole``: else refused and left, to be sent on). ``--parts``, ``--choose``, ``--prefer``,
   ``--compared``, ``--progress`` and ``--yes`` as ``peer sync``'s; at the end, with ``--progress``, ``{"event":
   "report", "report": …}``, what it did for the Sync tab's summary, also when it took nothing. It exits 2 for a file
-  refused, 1 for nothing taken for want of a backup or its indexes not merged, else 0: a unit left as it was is no
-  failure, as it is none of ``peer sync``'s (its staged file kept all the same).
+  refused or options it can't take (a ``--choose`` of no difference among them); 1 for ``STALE``, a "Go on?"
+  answered no, this library's overrides.toml or songbooks.toml unreadable, nothing taken for want of a backup, its
+  indexes not merged, or a bug; else 0: a unit left as it was is no failure, as it is none of ``peer sync``'s (its
+  staged file kept all the same).
 - ``peer sync`` and ``peer import`` work on copies of the indexes in ``cache_dir/peer`` (``sync-indexes-``,
   ``give-indexes-``, ``import-indexes-…``), each held while its merge or upload reads it (``peer_push.holding_copy``)
   and deleted after; as either starts, those a killed one left an hour ago are swept (``peer_push.sweep_copies``).

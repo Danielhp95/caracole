@@ -386,9 +386,9 @@ class JobViewsTest {
 
     @Test fun thePhonesImportOfAFileSaysWhatTheComputersSaysOfTheSameImport() = runTest {
         // The four imports of vectors/web/outcome.jsonl's "import, …" records (caracole peer import's jobs, a unit
-        // left as it was no failure), run as the phone's own import (SyncFileRoutes' job: its stages, its outcome,
-        // its Output's "Left as it was" line): the same line and outcome, the indexes not merged its job done where
-        // the computer's failed (the record "the phone's, done"), by design.
+        // left as it was no failure), as a job of the phone's own shaped as SyncFileRoutes' import job (its stages and
+        // its outcome, set here by hand; SyncFileRoutesTest runs the real import): the same line and outcome, the
+        // indexes not merged its job done where the computer's failed (the record "the phone's, done"), by design.
         val queue = queue()
         val wonderwall = "song/oasis/wonderwall"
         val why = "the file names it but doesn't hold it: it was left out as it was exported (a file it keeps had " +
@@ -415,9 +415,6 @@ class JobViewsTest {
                 val said = Json.parseToJsonElement(units).jsonObject
                 context.outcome(JsonObject(said + mapOf("given" to JsonArray(emptyList()),
                                                         "agreed" to JsonPrimitive(3), "indexed" to JsonArray(emptyList()))))
-                for (unit in said.getValue("left").jsonArray) {
-                    context.say("Left as it was: Oasis - Wonderwall: ${unit.jsonArray[1].jsonPrimitive.content}")
-                }
             }).first
             runCurrent()
             val over = queue.job(job.id)!!
@@ -428,8 +425,6 @@ class JobViewsTest {
             assertEquals(said["tone"]!!.jsonPrimitive.content to said["text"]!!.jsonPrimitive.content,
                          line.tone to line.text, note)
             assertEquals(computer.getValue("outcome"), Outcomes.outcome(over, line, null, null).asJson(), note)
-            assertEquals(if ("left 1" in note) listOf("Left as it was: Oasis - Wonderwall: $why") else emptyList(),
-                         over.said, note)
         }
     }
 
