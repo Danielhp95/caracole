@@ -165,10 +165,10 @@
     if (named) return named.name;
     return wide.matches && books().length ? String(books()[0].name) : "";
   };
-  const metaOf = (b) => [plural(Number(b.songs) || 0, "song"),
-    Number(b.missing) ? b.missing + " without a sheet" : "",
-    b.changed ? "made " + dayOf(b.changed) : b.failed ? "not made" : b.pending ? "on its way" : "not made yet"]
-    .filter(Boolean).join(" · ");
+  // A songbook's counts, then its day (made, or not): the list draws them a line each.
+  const metaOf = (b) => [[plural(Number(b.songs) || 0, "song"),
+    Number(b.missing) ? b.missing + " without a sheet" : ""].filter(Boolean).join(" · "),
+  b.changed ? "made " + dayOf(b.changed) : b.failed ? "not made" : b.pending ? "on its way" : "not made yet"];
   const gone = new Set();  // what a change left on the page, until your next click or key: nothing moves meanwhile
   const sweep = () => {
     if (!gone.size) return;
@@ -191,7 +191,11 @@
       li.style.minHeight = "";
       const go = button(null, "book-line", () => openBook(name, true));
       go.dataset.book = name;
-      go.append(el("span", "book-name", name), el("span", "book-meta", metaOf(b)));
+      // Its counts, then its day, a line each, read as one text: the separator is a screen reader's alone.
+      const [counts, day] = metaOf(b);
+      const meta = el("span", "book-meta");
+      meta.append(el("span", "", counts), el("span", "visually-hidden", " · "), el("span", "", day));
+      go.append(el("span", "book-name", name), meta);
       if (name === open) go.setAttribute("aria-current", "true");
       const focused = li.contains(document.activeElement);
       li.replaceChildren(go);
@@ -604,8 +608,7 @@
     bookName = b.name;
     book.dataset.songbook = b.name;
     showTitle(b.name);
-    book.querySelector(".book-meta").textContent = metaOf(b)
-      .replace(/ · made .*| · not made yet| · on its way| · not made/, "");
+    book.querySelector(".book-meta").textContent = metaOf(b)[0];  // its counts: the day is the list's
     drawFiles(b, readOnly);
     if (!moving) drawSet(b, readOnly);
     const adder = book.querySelector(".add-song");

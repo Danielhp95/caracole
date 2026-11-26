@@ -55,7 +55,7 @@ their own ([below](#your-phone-f-droid-and-a-debug-build-side-by-side)).
      - or copy the APK to the phone and open it there. Android asks you to allow installs from that app (Files,
        say) once.
 2. **Open it**: caracole, in the launcher. The first start opens Settings: type the computer's address there, tap
-   **Test**, then the bar's sync button ([below](#point-it-at-caracole-serve)). Until then the library page is empty, and its
+   **Test**, then **Sync** beside it or the bar's sync button ([below](#point-it-at-caracole-serve)). Until then the library page is empty, and its
    pages say caracole, with a Phone badge beside it; the sync brings the computer's settings, among them the
    library's name when its caracole.toml gives one (`name`), which the pages then show after caracole's.
 3. **The indexes**, so that its search finds the sites' songs with the computer off, come with a sync (its Site
@@ -147,7 +147,8 @@ signed with another key. Keep a copy of both outside the repository.
    `http://192.168.1.20:8737`. Without a scheme, `http://` is assumed. An IPv6 address goes in brackets when it
    has a port (`[fd7a:115c::1]:8737`); typed without them, the app adds them.
 3. Tap **Test**. It answers "studio answered: 96 songs, 3 songbooks, its indexes read 02/11/26", or says what went
-   wrong. Then tap the bar's sync button ([below](#sync-from-the-phone)).
+   wrong. Then tap **Sync**, right beside Test (it opens the same sheet as the bar's sync button; with no address it
+   says so in place), or the bar's sync button ([below](#sync-from-the-phone)).
 
 **Sync on Wi-Fi** syncs every 6 hours on an unmetered network, leaving what changed on both sides for you
 to choose ([below](#sync-from-the-phone)). First it checks that caracole answers at the address. When nothing
@@ -272,7 +273,7 @@ phone's library page has no Share tab.
 A sync already on its way when the page loads (a reload, a notification's tap) is followed to its summary, never
 started again.
 
-**Export and Import a file**, in Settings, open the sheet at the export or the import.
+**Sync**, beside Test, and **Export and Import a file**, in Settings, open the sheet at the sync, the export or the import.
 
 - **Export**: "Export this library", its name, songs and date; Library and Songbooks ticked, Site indexes not, each
   with its size. The file, `<library name>-dd-mm-yy.caracole`, goes to Android's share sheet: send it, or save it

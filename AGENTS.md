@@ -1245,6 +1245,11 @@ It is rows.js's, shared by both pages:
   `caracole songbook add`, both or neither: `JobQueue.submit_all`).
 - A change that ends seconds after its tap moves nothing on the screen: what it took away says so where it was until
   the next click or key (test_songbooks_tab.py).
+- A songbook's line on the list says its counts and its day (`5 songs · 3 without a sheet`, `made 26/11/26`) a line
+  each, neither able to wrap (songbooks.js `metaOf`, songbooks.css `.book-meta`; the separator between them visually
+  hidden, so its text reads as one): the font's digits are proportional, so a day or a count a hundredth of a pixel
+  wider wrapped the line, and a lookup that turned "3" into "2" un-wrapped it and moved every line and + New songbook
+  under it. The test pins a wide day (`made_on`), never the clock's.
 
 #### index.html's assets (library_assets/)
 
@@ -2221,7 +2226,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   `http://127.0.0.1:8738`, the debug build's 8739 (`Caracole.PORT`, BuildConfig's `SERVER_PORT`), else a free port;
   the launch's secret a cookie, `caracole-launch`, set in the WebView, which loads that exact origin alone,
   `mirror.Links`); the bar's sync button, the library page's sync sheet
-  (`SheetAddress`, `#sheet=sync`; Settings' Export and Import a file open it at theirs, the page's file input reaching
+  (`SheetAddress`, `#sheet=sync`; Settings' Sync, beside Test, opens it at `#sheet=sync`, a blank address said in
+  place as Test says it, and Export and Import a file at theirs, the page's file input reaching
   Android's picker, `FileChooser`, its export the share sheet, `Exports`); Sync on Wi-Fi, that sync unattended
   (`Syncs.run`: `Phone.sync.alone`, a notification on channel `syncs` for the conflicts it left); the queue's work, a
   sync among it, in a foreground service (`SyncService`).
