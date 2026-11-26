@@ -224,7 +224,9 @@ def register(app: typer.Typer) -> None:
             return PREFER.get(answer.strip().lower())
 
         take, give = sync.decide(_as_chosen(found, choices), PREFER.get(prefer or ""), asked)
-        settled = {d.id for d in (*take, *give)}
+        answered = sync.answered_by_its_song(take, give)  # the song given: its removal there answered with it
+        take = [d for d in take if d not in answered]
+        settled = {d.id for d in (*take, *give, *answered)}
         left = [(d.id, SKIPPED if choices.get(d.id) == "skip" else UNSETTLED) for d in found if d.id not in settled]
         if found:
             typer.echo(f"Here takes {len(take)}, there takes {len(give)}"
@@ -1099,6 +1101,9 @@ def _import(cfg, path, *, name: str | None, said: _Said, parts: tuple[str, ...],
             return PREFER.get(answer.strip().lower())
 
         take, keep = sync.decide(_as_chosen(scoped, choices), PREFER.get(prefer or ""), asked)
+        # A song kept here: the file's removal of it answered with it, remembered beside it.
+        answered = sync.answered_by_its_song(take, keep)
+        take, keep = [d for d in take if d not in answered], [*keep, *answered]
         # A "keep mine" answered for what the file would give: remembered, as the file can't take this side's.
         kept_here = peer_file.kept_answers(scoped, keep)
         settled = {d.id for d in (*take, *keep)}

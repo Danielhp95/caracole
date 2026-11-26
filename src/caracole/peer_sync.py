@@ -818,6 +818,15 @@ def decide(found: Sequence[Difference], prefer: str | None = None,
     return here, there
 
 
+def answered_by_its_song(take: Sequence[Difference], kept: Iterable[Difference]) -> list[Difference]:
+    """The removals of ``take`` (``removed/<key>``) whose song the owner settled this side's (``kept``: ``decide``'s
+    second list, its ``song/<key>`` given in a sync, kept at an import): part of that same answer, so never taken nor
+    left. In a sync the song given clears the other side's tombstone; an import remembers the removal's answer with
+    the song's. A removal whose song's difference is left unsettled stays in the take, left ``SONG_HERE``."""
+    songs = {d.id.partition("/")[2] for d in kept if d.id.startswith("song/")}
+    return [d for d in take if d.id.startswith("removed/") and d.id.partition("/")[2] in songs]
+
+
 def compared_hash(found: Iterable[Difference]) -> str:
     """What a comparison found, named: the SHA-256 of the canonical JSON of ``[[id, proposal, here, there], …]`` in
     ``_order`` (``here`` and ``there``, each side's digest, or None), so that the owner's choices, made on one

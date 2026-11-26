@@ -1080,6 +1080,21 @@ class SyncEngineTest {
             assertEquals(setOf(unitOf(creep) to SyncEngine.UNSETTLED, removal to Take.SONG_HERE), outcome.left.toSet())
             assertTrue(phone.read { Songs.byKey(it, creep.key) } != null, "the song still here")
         }
+        assertTrue(removal !in phone.read { Compare.baseOf(it, computer.id) }.orEmpty(), "nothing agreed of it")
+    }
+
+    @Test fun `a song kept on the phone against its removal on the computer is given, its removal answered with it`() {
+        val creep = onComputer("Radiohead", "Creep")
+        apply(engine.compare(computer.address.toString()))
+        computer.database.writeBlocking { computer.store.remove(it, creep.key, "2026-11-03T11:00:00Z") }
+        phone.writeBlocking { it.execute("UPDATE songs SET album = 'Pablo Honey' WHERE key = ?", creep.key) }
+
+        val outcome = apply(engine.compare(computer.address.toString()), mapOf(unitOf(creep) to Side.HERE))
+        assertEquals(emptyList(), outcome.taken)
+        assertEquals(listOf(unitOf(creep)), outcome.given)
+        assertEquals(emptyList(), outcome.left, "nothing about its removal")
+        assertTrue("removed/${creep.key}" !in computer.state(), "the song given clears the computer's tombstone")
+        assertEquals(emptyList(), engine.compare(computer.address.toString()).differences)
     }
 
     @Test fun `a song the take respells as the computer writes its artist is given as the take left it`() {

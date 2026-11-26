@@ -239,6 +239,15 @@ object Compare {
         return here to there
     }
 
+    /** peer_sync.answered_by_its_song: the removals of [take] (`removed/<key>`) whose song the owner settled this
+     * side's ([kept]: its `song/<key>` given in a sync, kept at an import): part of that same answer, so never taken
+     * nor left. In a sync the song given clears the computer's tombstone; an import remembers the removal's answer
+     * with the song's. A removal whose song's difference is left unsettled stays in the take, left Take.SONG_HERE. */
+    fun answeredByItsSong(take: List<Difference>, kept: List<Difference>): List<Difference> {
+        val songs = kept.filter { it.id.startsWith("song/") }.map { it.id.substringAfter('/') }.toSet()
+        return take.filter { it.id.startsWith("removed/") && it.id.substringAfter('/') in songs }
+    }
+
     /** peer_sync._order: by kind (song, removed, songbook, alias, artist_url, block, then any other), then by label in
      * any case (casefold, code points), then by id. */
     fun order(found: List<Difference>): List<Difference> = found

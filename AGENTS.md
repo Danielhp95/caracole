@@ -706,9 +706,12 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     `SONG_COLUMNS`, versions, kept files checked by SHA-256 (`song_file`), `CARRIED_KV`, lyrics files and
     `overrides.put_song_entries`.
   - A song gone there is removed as `caracole remove` does.
-  - A tombstone there whose song stays here (kept here, or its song's own difference left) is left, `SONG_HERE`
-    ("its song is here: its removal there is not taken"), never said taken, so nothing agrees it and the next sync
-    shows it again (the phone's `Take.SONG_HERE`, its unattended sync's too).
+  - A tombstone there whose song the owner settled here (given in a sync, kept at an import) is part of that answer
+    (`answered_by_its_song`, on `decide`'s lists): neither taken nor left; in a sync the song given clears the other
+    side's tombstone and the agree records both lacking it, and an import remembers its answer with the song's
+    (`kept_answers`), so the same file is then no newer. Only while its song's difference is left unsettled (the
+    unattended sync, no `--prefer`, a skip) is it left, `SONG_HERE` ("its song is here: its removal there is not
+    taken"), never said taken, nothing agreed of it, and shown again at the next sync.
   - The songs the take respells as it writes a song's artist (`Applied.respelled`) come with their digest as it ended
     (`respelled_digests`, the phone's `respelledDigests`): `peer sync` gives one in its give at that digest (its push's
     `compared_here`, `--here`'s pull line), the change being the sync's own; any change after the take (a lookup's,
@@ -2730,6 +2733,10 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   entry the reader refuses leaving the unit in Python's words; a `[version]` kept by its key and a `[harmonica]`
   reading by the viewer's checks, which core reaches through `OverrideChecks` (the engine's `checks`: Assembly's
   `OVERRIDE_CHECKS`, `Versions.keyVersion` and `HarpTabs.checkSpec`).
+- **A removal beside its song** (peer_sync's rule): `Compare.answeredByItsSong` takes out of the take each
+  `removed/` unit whose song is given (a sync) or kept (an import, its answer kept beside the song's); one whose
+  song's difference is left is left `Take.SONG_HERE`, never counted taken. A song the take respells is given at its
+  digest as the take ended (`Applied.respelledDigests`, measured in the take's write).
 - **An import** (`compareFile`, then `apply` of its comparison) is a sync with a `.caracole` file (core.sync.file,
   peer_file.py's port: `SyncFiles`, `SyncFile`, `FileSource`, `FileError` in its words, vectors/sync/file.jsonl), in
   `FILE_STAGES` (check, take, mirror, agree, index): the file read and refused whole before anything changes (another

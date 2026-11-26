@@ -551,6 +551,17 @@ def test_a_song_the_take_respells_says_its_digest_as_the_take_ended(libraries):
     assert done.respelled_digests[f"song/{desperado.key}"] != before
 
 
+def test_a_song_the_take_respells_leaves_the_songbook_that_lists_it_as_it_was(libraries):
+    here, there = libraries("here"), libraries("there")
+    here.song("eagles", "Desperado")
+    here.songbook("Campfire", ["eagles - Desperado"])
+    hotel = there.song("Eagles", "Hotel California")
+    before = here.digests()["songbook/campfire"]
+    done = here.take(there, [f"song/{hotel.key}"])
+    assert done.respelled == ["song/eagles/desperado"] and not done.songbooks
+    assert here.digests()["songbook/campfire"] == before
+
+
 def test_a_kept_file_whose_name_no_folder_holds_is_refused(libraries):
     here, there = libraries("here"), libraries("there")
     creep = there.song("Radiohead", "Creep")

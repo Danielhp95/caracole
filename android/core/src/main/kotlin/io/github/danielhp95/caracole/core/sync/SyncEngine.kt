@@ -271,6 +271,8 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
                 null -> done.left.add(d.id to UNSETTLED)
             }
         }
+        // The song given: its removal on the computer answered with it, neither taken nor left.
+        toTake.removeAll(Compare.answeredByItsSong(toTake, toGive).toSet())
 
         // 2. take
         var took: Applied? = null
@@ -428,6 +430,10 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
                 null -> done.left.add(d.id to UNSETTLED)
             }
         }
+        // A song kept here: the file's removal of it answered with it, remembered beside it.
+        val answered = Compare.answeredByItsSong(toTake, toKeep)
+        toTake.removeAll(answered.toSet())
+        toKeep.addAll(answered)
         val keptHere = SyncFiles.keptAnswers(scoped, toKeep)
         stage(CHECK, DONE, "${plural(scoped.size, "difference")} with ${Py.strip(sf.name).ifEmpty { "a file" }}'s file")
 

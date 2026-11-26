@@ -739,3 +739,54 @@ def test_a_sync_from_the_tab_after_an_import_kept_a_unit_gives_it_there(librarie
     # a hash that names neither comparison is refused all the same
     stale = run(studio, "peer", "sync", HOST, "--push", "--yes", "--compared", "0" * 64)
     assert stale.exit_code == 1 and "changed since that comparison" in stale.output
+
+
+def a_file_that_removed_a_song_changed_here(desk: Lib, studio: Lib, tmp_path: Path) -> Path:
+    """Studio took Wonderwall from Desk's file, then changed it; Desk removed it since: its next file."""
+    from caracole.removal import plan_removal, remove_song
+
+    desk_with_a_songbook(desk)
+    assert run(studio, "peer", "import", "--yes", str(exported(desk, tmp_path / "a.caracole"))).exit_code == 0
+    add_version(studio.cfg.overrides_file, "Oasis - Wonderwall", "key=Em&capo=2")  # changed here
+    remove_song(desk.conn, desk.cfg, plan_removal(desk.conn, desk.cfg, find_song(desk.conn, "oasis/wonderwall")))
+    return exported(desk, tmp_path / "b.caracole")
+
+
+def test_a_song_kept_here_against_the_files_removal_answers_its_removal_too(libraries, tmp_path, in_utc):
+    """"Keep mine" for a song the file removed is the removal's answer too: nothing taken nor left, the import done,
+    both answers remembered, so the same file is then refused as no newer."""
+    desk, studio, _ = libraries
+    f = a_file_that_removed_a_song_changed_here(desk, studio, tmp_path)
+    song, removal = "song/oasis/wonderwall", "removed/oasis/wonderwall"
+    out = run(studio, "peer", "import", "--yes", "--progress", f"--choose=here:{song}", str(f))
+    assert out.exit_code == 0, out.output
+    assert [e for e in events(out.output) if e.get("event") == "unit"] == []
+    assert find_song(studio.conn, "oasis/wonderwall") is not None and removed_song(studio.conn, "oasis/wonderwall") is None
+    made = peer_file.read_file(f).made
+    removed_there = peer_file.read_file(f).state.units[removal].digest
+    assert sync.kept_of(studio.conn, desk.id()) == {song: (studio.units()[song].digest, None, made),
+                                                    removal: (None, removed_there, made)}
+    again = run(studio, "peer", "import", "--yes", str(f))
+    day = datetime.now(UTC).strftime("%d/%m/%y")
+    assert again.exit_code == 2 and f"Nothing in this file is newer than your sync with Desk on {day}." in again.output
+    assert find_song(studio.conn, "oasis/wonderwall") is not None
+
+
+def test_a_song_taken_as_the_file_removed_it_takes_its_removal_too(libraries, tmp_path):
+    desk, studio, _ = libraries
+    f = a_file_that_removed_a_song_changed_here(desk, studio, tmp_path)
+    out = run(studio, "peer", "import", "--yes", "--progress", "--choose=there:song/oasis/wonderwall", str(f))
+    assert out.exit_code == 0, out.output
+    assert sorted((e["id"], e["outcome"]) for e in events(out.output) if e.get("event") == "unit") == [
+        ("removed/oasis/wonderwall", "taken"), ("song/oasis/wonderwall", "taken")]
+    assert find_song(studio.conn, "oasis/wonderwall") is None
+    assert removed_song(studio.conn, "oasis/wonderwall") is not None
+
+
+def test_a_removal_beside_its_songs_conflict_left_unsettled_is_left_saying_so(libraries, tmp_path):
+    desk, studio, _ = libraries
+    f = a_file_that_removed_a_song_changed_here(desk, studio, tmp_path)
+    out = run(studio, "peer", "import", "--yes", "--progress", str(f))
+    units = sorted((e["id"], e["outcome"], e["why"]) for e in events(out.output) if e.get("event") == "unit")
+    assert ("removed/oasis/wonderwall", "left", sync.SONG_HERE) in units, units
+    assert find_song(studio.conn, "oasis/wonderwall") is not None

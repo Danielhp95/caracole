@@ -836,9 +836,9 @@ def test_the_units_a_give_left_before_its_first_push_are_said_when_that_push_is_
     assert f"Left song/{creep.key}: {peer_file.TOO_BIG}" in result.output
 
 
-def test_a_removal_there_of_a_song_kept_here_is_left_saying_so_never_taken(two):
-    """Creep changed here and removed there, the owner keeping here's: its removal there is left, with why, never
-    said taken (nothing of it was), and the song given."""
+def test_a_song_kept_here_against_a_removal_there_answers_its_removal_too(two):
+    """Creep changed here and removed there, the owner keeping here's: the song is given, its removal there part of
+    that answer (neither taken nor left), and the give clears the tombstone there, so the two then agree."""
     from caracole.get import read_progress_line
     from caracole.removal import plan_removal, remove_song
 
@@ -851,9 +851,10 @@ def test_a_removal_there_of_a_song_kept_here_is_left_saying_so_never_taken(two):
     assert result.exit_code == 0, result.output
     units = [(e["id"], e["outcome"], e.get("why", "")) for e in map(read_progress_line, result.output.splitlines())
              if e is not None and e.get("event") == "unit"]
-    assert (f"removed/{creep.key}", "left", sync.SONG_HERE) in units, units
-    assert (f"song/{creep.key}", "given", "") in units, units
+    assert units == [(f"song/{creep.key}", "given", "")], units
     assert find_song(here.conn, creep.key) is not None and removed_song(here.conn, creep.key) is None
+    assert find_song(there.conn, creep.key) is not None and removed_song(there.conn, creep.key) is None
+    assert json.loads(run(here, "peer", "diff", HOST, "--json").output)["differences"] == []
 
 
 def test_a_removal_left_beside_its_songs_conflict_is_left_again_never_taken_at_the_next_sync(two):
@@ -871,6 +872,7 @@ def test_a_removal_left_beside_its_songs_conflict_is_left_again_never_taken_at_t
         assert f"Took removed/{creep.key}" not in result.output
     found = {d["id"]: d["proposal"] for d in json.loads(run(here, "peer", "diff", HOST, "--json").output)["differences"]}
     assert found == {f"song/{creep.key}": "conflict", f"removed/{creep.key}": "theirs"}
+    assert f"removed/{creep.key}" not in (sync.base_of(here.conn, sync.own_id(there.conn)) or {})  # nothing agreed
 
 
 def test_a_song_the_take_respells_is_given_as_the_take_left_it(two):

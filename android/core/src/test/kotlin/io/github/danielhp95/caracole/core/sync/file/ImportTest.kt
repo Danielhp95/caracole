@@ -209,6 +209,54 @@ class ImportTest {
         assertEquals(emptyMap(), other.database.read { Compare.keptOf(it, there.id) })
     }
 
+    /** Here took Wonderwall from Desk's first file, then changed it; Desk removed it since: its next file, at MADE. */
+    private fun aFileThatRemovedASongChangedHere(there: Caracole, here: Caracole): Pair<String, File> {
+        val song = there.add("Oasis", "Wonderwall")
+        here.apply(here.engine.compareFile(there.export(made = "2026-11-02T08:00:00Z")))
+        here.database.writeBlocking { it.execute("UPDATE songs SET album = 'Morning Glory' WHERE key = ?", song.key) }
+        there.database.writeBlocking { there.store.remove(it, song.key, "2026-11-02T12:00:00Z") }
+        stages.clear()
+        return song.key to there.export()
+    }
+
+    @Test fun aSongKeptHereAgainstTheFilesRemovalAnswersItsRemovalTooAndTheFileIsThenNoNewer() {
+        val there = Caracole()
+        val here = Caracole()
+        val (key, file) = aFileThatRemovedASongChangedHere(there, here)
+        val (song, removal) = "song/$key" to "removed/$key"
+        val c = here.engine.compareFile(file)
+        assertEquals(listOf(song to Compare.CONFLICT, removal to Compare.THEIRS), c.differences.map { it.id to it.proposal })
+        val outcome = here.apply(c, mapOf(song to Side.HERE))
+        assertEquals(emptyList(), outcome.taken)
+        assertEquals(emptyList(), outcome.left)
+        val theirs = there.state().getValue(removal).digest
+        assertEquals(mapOf(song to KeptEntry(here.state().getValue(song).digest, null, MADE),
+                           removal to KeptEntry(null, theirs, MADE)),
+                     here.database.read { Compare.keptOf(it, there.id) })
+        assertTrue(song in here.state(), "the song kept here")
+        assertEquals(FileError.older("Desk", "03/11/26"), assertFailsWith<FileError> { here.engine.compareFile(file) }.message)
+    }
+
+    @Test fun aSongTakenAsTheFileRemovedItTakesItsRemovalToo() {
+        val there = Caracole()
+        val here = Caracole()
+        val (key, file) = aFileThatRemovedASongChangedHere(there, here)
+        val outcome = here.apply(here.engine.compareFile(file), mapOf("song/$key" to Side.THERE))
+        assertEquals(setOf("song/$key", "removed/$key"), outcome.taken.toSet())
+        assertEquals(emptyList(), outcome.left)
+        assertTrue("song/$key" !in here.state() && "removed/$key" in here.state(), "${here.state().keys}")
+    }
+
+    @Test fun aRemovalBesideItsSongsConflictLeftUnattendedIsLeftSayingSo() {
+        val there = Caracole()
+        val here = Caracole()
+        val (key, file) = aFileThatRemovedASongChangedHere(there, here)
+        val outcome = here.apply(here.engine.compareFile(file), conflicts = Conflicts.LEAVE)
+        assertEquals(setOf("song/$key" to SyncEngine.UNSETTLED, "removed/$key" to io.github.danielhp95.caracole.core.sync.Take.SONG_HERE),
+                     outcome.left.toSet())
+        assertEquals(emptyList(), outcome.taken)
+    }
+
     @Test fun anImportCancelledInItsMirrorStageKeepsWhatItTookAgreedAndTheFileStillOffersTheRest() {
         val there = Caracole()
         val hysteria = "song/${there.add("Muse", "Hysteria").key}"  // in the file alone: taken
