@@ -95,7 +95,8 @@ def register(app: typer.Typer) -> None:
             try:
                 stats = autochords_pending(conn, cfg, overrides=overrides,
                                            between=lambda: _common.hand_over(cfg, conn), only=only,
-                                           hearing=hearing, transcriptions=transcriptions)
+                                           hearing=hearing, transcriptions=transcriptions,
+                                           remeasure=only is None)
             finally:
                 if hearing is not None:
                     hearing.close()

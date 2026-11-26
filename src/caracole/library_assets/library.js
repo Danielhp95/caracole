@@ -953,6 +953,323 @@
     });
     return form;
   };
+  // A song's lyrics looked up under another name (web/lyrics_routes.py), on its card, served where the data says so
+  // (``server.lyricsSearch``: caracole serve's alone): ``lyricsPanel``, for a song not ignored with no request of it
+  // waiting or running, open in what needs you, above Transcribe the lyrics (the lyrics sites before Whisper), for a
+  // song with no lyrics found, else folded right under its foot. Opened, it reads GET /api/lyrics/search once (no site asked):
+  // its Artist and Title are the name last asked (``[lyrics]``' ``as``), else the song's own, and the song's last
+  // search is listed, a row a record. Only its Search, pressed (or Enter in its fields), sends POST /lyrics/search:
+  // never as the card opens, as you type, or by a timer. While the search waits and runs (a job of no song's, followed
+  // on /api/jobs) its line says the sites are asked, the button waits, and once it is over the panel reads the GET
+  // again and draws its answer, its words the route's (the page's own are its controls' and the search's progress):
+  // the search's last line, the name it asked under (``asked``), its rows (the best fit first, "Best fit"; the record you picked
+  // "In use"), what each site that listed nothing said (a site that failed or waited, never "nothing found"). Each row
+  // of a search still pickable has Use these lyrics (POST /lyrics/pick with its record), the record in use Clear the
+  // pick (POST /lyrics/clear), as has a record picked that gave no lyrics (``picked_why``); both posted in place, the
+  // panel then gone and the song's line following the job, a refusal said in the panel; once that job is over the card
+  // is drawn again from the song, and the transcription offers read again. A search it followed over, the GET is read
+  // with the song's card (``card=1``): a song the search asked anew (missing, pending now under the name, said in the
+  // route's ``lyrics_note``) has its card drawn again, the focus where it was in the panel, and the offers read again.
+  const LYRICS_SEARCH = Boolean(server && server.lyricsSearch === true);
+  const lyricsSite = (site) => String(own.call(ICONS, site) && ICONS[site] && ICONS[site].name || site);
+  const whose = (name) => name + (/s$/.test(name) ? "'" : "'s");
+  const lyricsSearches = new Map();  // song id -> the search this page asked for, until it is over: {url, named, said}
+  const lyricsPanels = new Map();  // song id -> its panel drawn last (each card made again draws another)
+  const lyricsJobs = new Set();  // the picks and clears the panels queued: the offers read again once one is over
+  // Each search this page asked for followed on /api/jobs until it is over, whatever panel shows it meanwhile.
+  const followSearch = (id) => {
+    const asked = lyricsSearches.get(id);
+    if (!asked || asked.following) return;
+    asked.following = true;
+    let misses = 0;
+    const ended = (job) => {
+      lyricsSearches.delete(id);
+      const panel = lyricsPanels.get(id);
+      if (panel) panel.searched(job);
+    };
+    const tick = () => fetch(asked.url, { cache: "no-store", headers: { Accept: "application/json" } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((job) => {
+        if (!job || typeof job !== "object" || !job.active) {
+          ended(job && typeof job === "object" ? job : null);
+          return;
+        }
+        misses = 0;
+        const panel = lyricsPanels.get(id);
+        if (panel) panel.searching(asked, job.state);
+        setTimeout(tick, POLL);
+      }, () => {
+        misses += 1;
+        if (misses >= MISSES) ended(null);
+        else setTimeout(tick, POLL);
+      });
+    tick();
+  };
+  // A button that waits (a search on its way, a pick being sent) stays focusable, so a press from the keyboard leaves
+  // the focus where it was: aria-disabled, and its handler refusing the press.
+  const busyWith = (b, on) => {
+    if (on) b.setAttribute("aria-disabled", "true");
+    else b.removeAttribute("aria-disabled");
+  };
+  const isBusy = (b) => b.getAttribute("aria-disabled") === "true";
+  const lyricsPanel = (s, missing) => {
+    const id = Number(s.id);
+    if (!LYRICS_SEARCH || s.status === "ignored" || s.status === "removed" || !freeToAsk(id)) return null;
+    const panel = el("details", "lyrics-search");
+    const summary = el("summary", null,
+      missing ? "No lyrics found. Look them up under another name" : "Lyrics under another name…");
+    const why = el("div", "actions");
+    why.hidden = true;
+    const again = el("p", "hint lyrics-note");  // the route's words for a song asked anew under the name
+    again.hidden = true;
+    const form = songForm("link-form", "/lyrics/search", s);
+    let typed = false;  // a field you typed in keeps what you typed, whatever the GET answers
+    const field = (name, label, value) => {
+      const box = el("label", "f");
+      box.appendChild(el("span", null, label));
+      const input = el("input");
+      input.name = name;
+      input.required = true;
+      input.maxLength = 200;
+      input.autocomplete = "off";
+      input.spellcheck = false;
+      input.value = String(value || "");
+      input.addEventListener("input", () => { typed = true; });
+      box.appendChild(input);
+      form.appendChild(box);
+      return input;
+    };
+    const artist = field("artist", "Artist", s.artist);
+    const title = field("title", "Title", s.title);
+    const go = el("button", "btn small", "Search");
+    go.type = "submit";
+    go.setAttribute("aria-label", "Search LRCLIB, Megalobiz and AZLyrics for the lyrics under this name");
+    go.title = "Asks the three lyrics sites now, a few requests; nothing changes until you take one of them.";
+    form.appendChild(go);
+    const said = el("p", "lyrics-said");  // a live region, in the page empty: each change read out once
+    said.setAttribute("role", "status");
+    const asked = el("p", "hint");
+    asked.hidden = true;
+    const list = el("ol", "vrows");
+    list.setAttribute("aria-label", "What the lyrics sites list under that name");
+    list.hidden = true;
+    const notes = el("div");  // the search's own lines of the sites that listed none, each a muted line
+    notes.hidden = true;
+    panel.append(summary, why, form, said, asked, again, list, notes);
+    const say = (text) => {
+      if (said.textContent !== text) said.textContent = text;
+    };
+    // A pick or a clear, posted in place: the panel goes, the song's line follows the job (the focus on it, from a
+    // control of the panel); refused, it says why, the focus where it was.
+    const postHere = (one, button) => {
+      one.addEventListener("submit", (e) => {
+        e.preventDefault();
+        if (isBusy(button)) return;
+        busyWith(button, true);
+        say("Sending…");
+        send(one).then((answer) => {
+          busyWith(button, false);
+          const view = answer.ok && answer.body && answer.body.job;
+          if (!view || typeof view !== "object") {
+            say(failure(answer).line.text);
+            return;
+          }
+          lyricsJobs.add(Number(view.id));
+          const item = itemOf(panel);
+          const had = panel.contains(document.activeElement);
+          if (item && !isOwn(s, item)) spots.set(Number(view.id), item);
+          const line = item ? progressIn(item) : null;
+          if (had && line) focusOn(line);  // before the panel goes, so the focus is never on nothing
+          panel.hidden = true;
+          track(view);
+        }, () => {
+          busyWith(button, false);
+          say(UNREACHABLE.line.text);
+        });
+      });
+    };
+    const clearForm = (label) => {
+      const one = songForm("lyrics-clear", "/lyrics/clear", s);
+      const b = el("button", "btn small", "Clear the pick");
+      b.type = "submit";
+      b.setAttribute("aria-label", label);
+      b.title = "The record you picked is let go: the next run asks the sites under the name again.";
+      one.appendChild(b);
+      postHere(one, b);
+      return one;
+    };
+    // A record as the drawer's version rows show a version (card.css .vrow): its site, Best fit or In use, then its
+    // line as the route words it (``facts``: "Artist - Title · album · 4:31, audio 3:45 · timed"), then its button.
+    const rowOf = (row, search, picked) => {
+      const inUse = picked !== null && String(row.record) === picked;
+      const li = el("li", "vrow" + (inUse ? " cur" : ""));
+      li.dataset.record = String(row.record);
+      const site = lyricsSite(String(row.site));
+      const where = li.appendChild(el("span", "ver"));
+      const mark = sourceMark(String(row.site));
+      if (mark) where.appendChild(mark);
+      where.appendChild(document.createTextNode(site));
+      const marks = li.appendChild(el("span", "stars"));
+      if (row.best) marks.appendChild(el("b", null, "Best fit"));
+      if (inUse) {
+        const used = marks.appendChild(el("span", "inuse"));
+        used.append(glyph("check"), document.createTextNode("In use"));
+      }
+      const by = String(row.artist || "");
+      li.appendChild(el("span", "note", String(row.facts || "")));  // the route's words, the command's line
+      const acts = li.appendChild(el("span", "vbtns"));
+      const of = String(row.title || "") + (by ? " by " + by : "");
+      if (inUse) {
+        acts.appendChild(clearForm("Clear the pick of " + whose(site) + " lyrics for " + String(s.title)));
+      } else if (search.pickable === true) {
+        const one = songForm("lyrics-pick", "/lyrics/pick", s);
+        one.appendChild(hidden("record", String(row.record)));
+        const b = el("button", "btn small", "Use these lyrics");
+        b.type = "submit";
+        b.setAttribute("aria-label", "Use " + whose(site) + " " + (row.timed ? "timed" : "plain") + " lyrics of " + of);
+        b.title = "They become the song's lyrics, and its auto sheet is made again over them.";
+        one.appendChild(b);
+        postHere(one, b);
+        acts.appendChild(one);
+      }
+      return li;
+    };
+    // What GET /api/lyrics/search answered, drawn with its words as given; ``ended``, the state of the search this
+    // panel just followed, if any.
+    const draw = (body, ended) => {
+      if (!typed && body.as && typeof body.as === "object") {
+        artist.value = String(body.as.artist || "");
+        title.value = String(body.as.title || "");
+      }
+      const picked = typeof body.picked === "string" && body.picked ? body.picked : null;
+      const note = typeof body.picked_note === "string" ? body.picked_note : "";
+      why.replaceChildren();
+      why.hidden = !note;
+      if (note) {
+        why.appendChild(el("p", "note", note));
+        why.appendChild(clearForm("Clear the pick of the record " + picked + " for " + String(s.title)));
+      }
+      const search = body.search && typeof body.search === "object" ? body.search : null;
+      const rows = search ? listOf(search.rows).filter((r) => r && typeof r === "object") : [];
+      list.replaceChildren(...rows.map((row) => rowOf(row, search, picked)));
+      list.hidden = !rows.length;
+      notes.replaceChildren(...(search ? listOf(search.notes) : []).filter((n) => n && typeof n.line === "string")
+        .map((n) => {
+          const line = el("p", "hint", n.line);
+          line.dataset.state = String(n.state || "");
+          return line;
+        }));
+      notes.hidden = !notes.childNodes.length;
+      asked.textContent = search && typeof search.asked === "string" ? search.asked : "";
+      asked.hidden = !asked.textContent;
+      again.textContent = typeof body.lyrics_note === "string" ? body.lyrics_note : "";
+      again.hidden = !again.textContent;
+      if (ended !== undefined) {
+        say(ended === "done" && search && typeof search.line === "string" ? String(search.line) :
+          "The search didn't run to its end: the Journal says why.");
+      } else if (search && typeof search.line === "string" && !lyricsSearches.has(id)) {
+        say(String(search.line));
+      }
+      panel.dataset.read = "1";
+      // A search over may have asked the song anew (its lyrics missing, now pending under the name): the card drawn
+      // again from the song as it is now, the focus where it was in the panel, and the offers read again.
+      if (ended !== undefined && body.card && typeof body.card === "object") {
+        if (String(body.card.lyrics) !== String(s.lyrics)) {
+          songAgain(body.card);
+          summarize();
+          tallyChips();
+        }
+        readTranscriptions();
+      }
+    };
+    let read = false;
+    const readIt = (ended) => {
+      read = true;
+      const q = new URLSearchParams({ song: String(id) });
+      if (s.identity) q.set("identity", String(s.identity));
+      if (ended !== undefined) q.set("card", "1");
+      fetch("api/lyrics/search?" + q.toString(), { cache: "no-store", headers: { Accept: "application/json" } })
+        .then((r) => r.json().catch(() => null).then((body) => ({ ok: r.ok, status: r.status, body })))
+        .then(({ ok, status, body }) => {
+          if (ok && body && typeof body === "object") draw(body, ended);
+          else say(failure({ status, body }).line.text);
+        }, () => say(UNREACHABLE.line.text));
+    };
+    const api = {
+      searching: (on, state) => {
+        busyWith(go, true);
+        const doing = state === "running" ? "Asking" : "Waiting to ask";
+        say(on.said || doing + " LRCLIB, Megalobiz and AZLyrics under “" + on.named + "”…");
+      },
+      searched: (job) => {
+        busyWith(go, false);
+        if (panel.isConnected) readIt(job && typeof job.state === "string" ? job.state : "gone");
+      },
+    };
+    lyricsPanels.set(id, api);
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      if (lyricsSearches.has(id) || isBusy(go)) return;
+      busyWith(go, true);
+      say("Sending…");
+      send(form).then((answer) => {
+        const b = answer.body;
+        if (!answer.ok || !b || typeof b.url !== "string" || !/^[/]api[/]jobs[/]\d+$/.test(b.url)) {
+          busyWith(go, false);
+          say(failure(answer).line.text);
+          return;
+        }
+        const as = b.as && typeof b.as === "object" ? String(b.as.artist || "") + " - " + String(b.as.title || "") :
+          "";
+        const on = { url: b.url, named: as, said: typeof b.said === "string" ? b.said : "" };
+        lyricsSearches.set(id, on);
+        api.searching(on, "queued");
+        followSearch(id);
+      }, () => {
+        busyWith(go, false);
+        say(UNREACHABLE.line.text);
+      });
+    });
+    if (lyricsSearches.has(id)) {  // drawn again while its search goes: it says so, and follows it
+      api.searching(lyricsSearches.get(id), "running");
+      followSearch(id);
+    }
+    if (missing) {
+      panel.open = true;
+      readIt();
+    } else {
+      panel.addEventListener("toggle", () => {
+        if (panel.open && !read) readIt();
+      });
+    }
+    return panel;
+  };
+  // The control of a card's lyrics panel that holds the focus (its field, Search, a row's button, its summary), as a
+  // selector of the same one in the card drawn again in its place (refill); null for a node out of any panel.
+  const lyricsFocus = (node) => {
+    const panel = node && node.closest ? node.closest("details.lyrics-search") : null;
+    if (!panel) return null;
+    if (node.name === "artist" || node.name === "title") return "input[name=" + node.name + "]";
+    const row = node.closest("li[data-record]");
+    if (row) return "li[data-record=\"" + CSS.escape(row.dataset.record) + "\"] button";
+    if (node.closest("form.link-form")) return "form.link-form button";
+    return "summary";
+  };
+  // The focus given back there once the card is drawn again (its panel opened for a control inside it, folded now),
+  // else to the panel's summary, else to the line's chevron: never left on nothing.
+  const lyricsRefocus = (item, at) => {
+    if (!at) return;
+    const shown = cardOf(item);
+    const panel = shown ? shown.querySelector("details.lyrics-search:not([hidden])") : null;
+    if (panel && panel.contains(document.activeElement)) return;
+    const node = panel ? panel.querySelector(at) : null;
+    if (node && at !== "summary" && !panel.open) panel.open = true;
+    for (const next of [node, panel && panel.querySelector("summary"), chevronOf(item)]) {
+      if (!next) continue;
+      next.focus({ preventScroll: true });
+      if (document.activeElement === next) return;
+    }
+  };
   // The LaCuerda sheet of each song of yours that the bar's search found (a LaCuerda row of it with chords, which
   // mergeSites folds into its line), by song id: its line offers it until the page is loaded again.
   const lacuerdaFound = new Map();
@@ -1548,6 +1865,15 @@
   // a drawer of its card closed; closed, its card waits to be made until it opens. Its card in the pane (old selected),
   // fresh's takes its place there, opened; a line with no card (a song gone) leaves the pane empty (placeAgain).
   const refill = (old, fresh) => {
+    // A control of this song's lyrics panel holding the focus: the redrawn card's same one. Another song's line
+    // drawn again touches no focus.
+    const at = document.activeElement;
+    const back = partsOf(old).some((part) => part.contains(at)) ? lyricsFocus(at) : null;
+    const done = refilled(old, fresh);
+    if (back) lyricsRefocus(done, back);
+    return done;
+  };
+  const refilled = (old, fresh) => {
     const was = chevronOf(old);
     const shown = old === selected ? cardOf(old) : null;  // read before the merge: in the pane, outside old
     if (was && was.getAttribute("aria-expanded") === "true") openCard(fresh);
@@ -1943,6 +2269,9 @@
     if (fromVideo) more.push(fromVideo);
     const fromFile = server ? audioSheet(s) : null;
     if (fromFile) more.push(fromFile);
+    // The lyrics sites before Whisper: their search above Transcribe the lyrics.
+    const lyricsHere = server && s.lyrics === "missing" ? lyricsPanel(s, true) : null;
+    if (lyricsHere) more.push(lyricsHere);
     const transcribe = server ? transcribeOffer(s) : null;
     if (transcribe) more.push(transcribe);
     const override = server ? overrideOffer(s) : null;
@@ -1964,6 +2293,9 @@
     const foot = card.foot(s, { actions: [again], book: byIndex.has(id) ? bookButton(s) : null, info,
       remove: server && !removing.has(id) ? removeForm(s) : null });  // removing: its action says so
     if (foot) more.push(foot);
+    // Lyrics of its own under another name, folded right under the foot: a row of its own, so the foot stays one.
+    const lyricsElse = server && s.lyrics !== "missing" ? lyricsPanel(s, false) : null;
+    if (lyricsElse) more.push(lyricsElse);
     const others = listOf(s.files).filter((f) => f && !claimed.has(f) && f !== info);
     if (others.length) more.push({ heading: "Files", links: others });
     if (server && !server.guitar && listOf(s.files).some((f) => f && typeof f.guitarPage === "string" && f.guitarPage)) {
@@ -5015,6 +5347,15 @@
     if (view.kind === "songbook") return;
     const data = view.card && typeof view.card === "object" ? view.card : null;
     if (!data) return;
+    songAgain(data);
+    const spot = spots.get(Number(view.id));  // a result's row, or a line under the bar: the song's line, now
+    if (spot) spots.set(Number(view.id), refill(spot, lineFor(data)));
+    summarize();
+    tallyChips();  // the list itself stays as it is: a line the filter now hides goes at the next search
+  };
+  // A song's card data as it is now (a job's view's, or the lyrics panel's after a search): kept, its line drawn
+  // again where it is (refill: an open card made again, the focus on its same control).
+  const songAgain = (data) => {
     lostTo(Number(data.id), data.identity);
     const i = byIndex.get(Number(data.id));
     if (i !== undefined) {
@@ -5025,10 +5366,6 @@
     } else {
       arrived.set(Number(data.id), data);  // counted, and shown under the form until the next load
     }
-    const spot = spots.get(Number(view.id));  // a result's row, or a line under the bar: the song's line, now
-    if (spot) spots.set(Number(view.id), refill(spot, lineFor(data)));
-    summarize();
-    tallyChips();  // the list itself stays as it is: a line the filter now hides goes at the next search
   };
   const songOf = (view) => (view.songId === null || view.songId === undefined ? null : Number(view.songId));
   // Whether a job that is over brings what the page draws again: its song's line (none for a song the library
@@ -5048,6 +5385,7 @@
       settled.add(id);
       redraw(view);
       offerAfter(view);
+      if (lyricsJobs.delete(id)) readTranscriptions();  // a pick or a clear over: the offers as they are now
     }
     paint(view);
     // A removal done, its line saying so: the id names that song no more.

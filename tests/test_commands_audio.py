@@ -321,3 +321,19 @@ def test_the_same_upload_again_once_it_is_the_songs_audio_goes_on_with_it(tmp_pa
     assert "Audio: has this file's audio already." in result.output.splitlines()
     song = find_song(conn, identity_key("Nick Cani", "Vikingos veganos"))
     assert kept_files(tmp_path) == [Path(song.audio_path).name]
+
+
+@pytest.mark.slow
+def test_an_mp3_whose_first_frame_names_no_length_is_kept_as_long_as_its_frames(tmp_path, config, conn, lrclib,
+                                                                                 models):
+    # tests/fixtures/audio/short-guess.mp3: 10.1 s of frames, which mutagen and libsndfile guess at 1.7 s.
+    given = tmp_path / "mine" / "take.mp3"
+    given.parent.mkdir()
+    given.write_bytes((Path(__file__).parent / "fixtures" / "audio" / "short-guess.mp3").read_bytes())
+
+    result = invoke(config, str(given), "--song", "Nick Cani - Vikingos veganos")
+
+    assert result.exit_code == 0, result.output
+    assert "Audio: kept as its audio: MP3, 0:10." in result.output.splitlines()
+    assert "Nick Cani - Vikingos veganos | 0:10" in (tmp_path / "lib" / "wanted.txt").read_text(encoding="utf-8")
+    assert ("get", {"artist_name": "Nick Cani", "track_name": "Vikingos veganos", "duration": "10"}) in lrclib.requests

@@ -2,6 +2,7 @@ package io.github.danielhp95.caracole.viewer.render
 
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.index.Stamps
+import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.library.Kept
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.Overrides
@@ -23,7 +24,8 @@ import io.github.danielhp95.caracole.core.library.Versions as Rows
 /**
  * autochords/sheet_lyrics.py on the phone: lyrics that came after an auto sheet was made, put on it with no model
  * (merge.with_plain_lyrics), the first thing a render does, so every page of the song has them: the sheet kept again
- * (`sheet (auto).txt`), its version's `raw` saying `"lyrics": "plain"`, and the song's info.json written.
+ * (`sheet (auto).txt`), its version's `raw` saying `"lyrics": "plain"` and `"lyrics_key"` their words' [lyricsKey], and
+ * the song's info.json written.
  */
 object PlainLyrics {
     /** sheet_lyrics._wanting: each song, of [only] when given, whose auto sheet has no lyrics (its version's `raw`
@@ -67,11 +69,26 @@ object PlainLyrics {
                 continue
             }
             val version = Rows.get(db, auto.versionId) ?: throw NoSuchElementException("no version ${auto.versionId}")
-            Rows.setRaw(db, version.id, JsonObject(LinkedHashMap(version.raw).apply { put("lyrics", JsonPrimitive("plain")) }))
+            Rows.setRaw(db, version.id, JsonObject(LinkedHashMap(version.raw).apply {
+                put("lyrics", JsonPrimitive("plain"))
+                put("lyrics_key", JsonPrimitive(lyricsKey(plain)))
+            }))
             InfoJson.write(db, libraryDir, Songs.byId(db, song.id) ?: song)
             done.add(song)
         }
         return done
+    }
+
+    /** sheet_lyrics.lyrics_key: 16 hex digits of the SHA-256 of [plain] with each line (CRLF and CR read as LF) stripped
+     * of Python's whitespace, every run of blank lines one, and none at either end. */
+    fun lyricsKey(plain: String): String {
+        val lines = ArrayList<String>()
+        for (raw in plain.replace("\r\n", "\n").replace("\r", "\n").split("\n")) {
+            val line = PyText.strip(raw)
+            if (line.isNotEmpty() || (lines.isNotEmpty() && lines.last().isNotEmpty())) lines.add(line)
+        }
+        while (lines.isNotEmpty() && lines.last().isEmpty()) lines.removeAt(lines.size - 1)
+        return Canonical.sha256Hex(lines.joinToString("\n").toByteArray(Charsets.UTF_8)).substring(0, 16)
     }
 
     /** merge.with_plain_lyrics: a sheet build_sheet made with no lyrics, as it would have made it with [plain]: its

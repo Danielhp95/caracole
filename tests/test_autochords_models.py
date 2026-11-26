@@ -402,3 +402,119 @@ def test_whisper_hears_a_tone_without_error(tmp_path, monkeypatch, caplog):
     if device == "cuda" and (DRIVER_LIBS / "libcuda.so.1").exists():
         # Triton's word-timing kernels launch (the shells have gcc): Whisper doesn't fall back to its slower ones.
         assert fell_back == []
+
+
+# tests/fixtures/audio/'s files (its make.sh): short-guess.mp3 and long-guess.mp3, VBR MP3s with no length header
+# whose first frame's bitrate is far above and far below the rest's, so libsndfile guesses them far too short and far
+# too long; cbr.mp3, xing.mp3 and tone.m4a, files every reader agrees on.
+AUDIO = Path(__file__).parent / "fixtures" / "audio"
+MP3_FRAMES = {"short-guess.mp3": 386, "long-guess.mp3": 80}  # frames x 1152 samples at 44.1 kHz, as FFmpeg decodes
+
+
+def _before(path: Path, rate: int):
+    """``load_mono`` as it was before it counted an MP3's frames: libsndfile, else FFmpeg."""
+    import numpy as np
+    import torchaudio
+
+    from caracole.autochords.audio import load_librosa
+
+    librosa = load_librosa()
+    try:
+        return librosa.load(path, sr=rate, mono=True)[0]
+    except RuntimeError:
+        waveform, sr = torchaudio.load(str(path))
+        mono = waveform.mean(dim=0).numpy().astype(np.float32)
+        return librosa.resample(mono, orig_sr=sr, target_sr=rate, res_type="soxr_hq")
+
+
+@pytest.mark.autochords
+@needs_libs
+@pytest.mark.parametrize("name", sorted(MP3_FRAMES))
+def test_load_mono_hears_the_whole_of_an_mp3_with_no_length_header(name, caplog):
+    import logging
+
+    from caracole.autochords.audio import load_mono
+
+    seconds = MP3_FRAMES[name] * 1152 / 44100
+    with caplog.at_level(logging.WARNING, logger="caracole.autochords.audio"):
+        y = load_mono(AUDIO / name, SR)
+
+    assert len(y) / SR == pytest.approx(seconds, abs=1152 / 44100)
+    read_again = [r.getMessage() for r in caplog.records if "read again through FFmpeg" in r.getMessage()]
+    if name == "short-guess.mp3":  # libsndfile stops at its guess, 1.7 s: FFmpeg reads it again, the file named
+        assert len(read_again) == 1 and name in read_again[0]
+    else:  # libsndfile's guess is too long, but its reads end with the frames: its decode is whole, kept as it is
+        assert read_again == []
+
+
+@pytest.mark.autochords
+@needs_libs
+def test_an_mp3_ffmpeg_fails_to_read_again_keeps_what_libsndfile_decoded_and_says_how_much(monkeypatch, caplog):
+    import logging
+
+    import numpy as np
+    import torchaudio
+
+    from caracole.autochords.audio import load_mono
+
+    def fails(*args, **kwargs):
+        raise RuntimeError("Failed to decode")
+
+    monkeypatch.setattr(torchaudio, "load", fails)
+    with caplog.at_level(logging.WARNING, logger="caracole.autochords.audio"):
+        y = load_mono(AUDIO / "short-guess.mp3", SR)
+
+    assert np.array_equal(y, _before(AUDIO / "short-guess.mp3", SR))  # libsndfile's 1.7 s, as before the fix
+    said = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert any("short-guess.mp3: FFmpeg couldn't read it again (Failed to decode): only the 1.7 s libsndfile "
+               "decoded of its 10.1 s are heard." in m for m in said)
+
+
+@pytest.mark.autochords
+@needs_libs
+@pytest.mark.parametrize("name", ["cbr.mp3", "xing.mp3", "tone.m4a", "long-guess.mp3"])
+def test_a_file_every_reader_agrees_on_decodes_to_the_same_samples_as_before(name):
+    import numpy as np
+
+    from caracole.autochords.audio import load_mono
+
+    for rate in (SR, 16000):  # BTC's, and frame_db's
+        assert np.array_equal(load_mono(AUDIO / name, rate), _before(AUDIO / name, rate))
+
+
+@pytest.mark.autochords
+@needs_libs
+def test_frame_db_measures_the_whole_of_an_mp3_with_no_length_header():
+    import math
+
+    from caracole.autochords.separate import FRAME_S, frame_db
+
+    seconds = MP3_FRAMES["short-guess.mp3"] * 1152 / 44100
+
+    assert abs(len(frame_db(AUDIO / "short-guess.mp3")) - math.ceil(seconds / FRAME_S)) <= 1
+
+
+@pytest.mark.autochords
+@needs_libs
+@needs_btc
+def test_the_chords_of_an_mp3_with_no_length_header_cover_the_whole_song():
+    from caracole.autochords.btc import HOP_LENGTH, SAMPLE_RATE
+
+    seconds = MP3_FRAMES["short-guess.mp3"] * 1152 / 44100
+    segs = BTCRecognizer(BTC_WEIGHTS).recognize(AUDIO / "short-guess.mp3")
+
+    assert segs[-1].end == pytest.approx(seconds, abs=HOP_LENGTH / SAMPLE_RATE)
+
+
+@pytest.mark.autochords
+@needs_libs
+@pytest.mark.parametrize("name", sorted(MP3_FRAMES))
+def test_btcs_input_and_beat_thiss_describe_the_same_length(name):
+    from beat_this.inference import load_audio as beat_this_audio
+
+    from caracole.autochords.btc import SAMPLE_RATE
+    from caracole.autochords.btc import load_audio as btc_audio
+
+    signal, rate = beat_this_audio(str(AUDIO / name))
+
+    assert len(btc_audio(AUDIO / name)) / SAMPLE_RATE == pytest.approx(len(signal) / rate, abs=1152 / 44100)

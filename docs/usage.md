@@ -970,6 +970,76 @@ Then it asks Megalobiz for the songs LRCLIB left, and AZLyrics for those still w
     Megalobiz: 1 found, 2 timed, 3 missing, 0 errors
     AZLyrics: 1 found, 2 missing, 0 errors
 
+    caracole lyrics --song "ARTIST - TITLE" --as "ARTIST - TITLE"
+
+Lists what the three sites have under a name you type, for a song whose own name finds nothing
+there (a video's decorated title, a transliterated artist). caracole serve's library page does the
+same from the song's card (see [Lyrics under another name, from a
+card](#lyrics-under-another-name-from-a-card)). The song must be in the book and not
+ignored. The name is noted first as the song's `[lyrics]` `as`, so later nights ask under it too;
+typing the song's own name takes it out. Then each site is asked once, now, at a lookup's pace:
+LRCLIB's search (and its exact match, with the audio's length, when nothing it lists fits),
+Megalobiz's search, and AZLyrics' page of the artist you typed (never for a name with no Latin
+letter). That is 2 to 4 requests. The same name again within 7 days answers from the cache with
+none; after that the sites are asked again, so a record they added since is listed. Nothing of the
+song's lyrics changes.
+
+    Asked as 孟维来 - 野人 (its audio is 3:45); noted under [lyrics].
+     1. LRCLIB     孟维来 - 野人 · 野人 · 3:46 · timed · best fit
+     2. Megalobiz  (no artist) - 野人 · 3:45 · timed
+    AZLyrics: no artist page for 孟维来.
+    2 records marked instrumental aren't listed.
+    Take one: caracole lyrics --song '孟维来 - 野人『…』' --pick 1
+    Searched: LRCLIB and Megalobiz list 2 records for “孟维来 - 野人”.
+
+The best fit is the record the nightly passes would keep, then the records that fit the name, then
+the rest, 40 at most; a record more than 10 s off the audio says its gap ("4:31, audio 3:45").
+Instrumental records are counted, never listed. A site cooling down, out of its asks, blocking or
+failing is said and the others are listed; with no rows the last line is then `Not searched: …`,
+never `Nothing found`. A site turned off is said and left out: the others answering none is
+`Nothing found`. The list is kept for 7 days to pick from, until the song's next search. After
+that only the name asked and the day are kept (the nightly run drops the rows), so the card says
+`Asked as “…” on DD/MM/YY: over a week ago. Search again to pick one.`
+`--song` and `--as` go together (exit 2); a song not in the book or ignored exits 1. A name that
+changes the one kept is a new question for a song with no answer yet: a song pending or missing has
+the sites' earlier misses forgotten and is pending again, so no transcription is offered until every
+site has answered under the new name. Found lyrics and an instrumental verdict stay as they are; a
+pick replaces them. A search changes no stored lyrics.
+
+    caracole lyrics --song "ARTIST - TITLE" --pick N
+    caracole lyrics --song "ARTIST - TITLE" --record SITE:ID
+
+Makes row N of the song's last search (or the row that lists `SITE:ID`, such as `lrclib:28399373`)
+its lyrics, now, in place of whatever it had. Only a record that search listed can be taken, and only
+within its 7 days. LRCLIB's record comes from the search's own answer in the cache, with no request
+(one when the cache lost it); Megalobiz's and AZLyrics' cost one request each, at a lookup's pace.
+The record is noted under `[lyrics]` (its `as` kept) once the lyrics are written. A song with its
+audio gets its auto sheet made, or made again, over the new words at once where auto-chords is
+installed; otherwise tonight's run makes it (a chart already made takes the words as plain lyrics
+meanwhile). A song with a human sheet gets its lyrics and its page, no chords. It says each stage:
+
+    Lyrics: timed lyrics from LRCLIB: 孟维来 - 野人 (野人, 3:46); in place of AZLyrics' plain lyrics.
+    Chords: chords over the lyrics.
+
+A record with no lyrics now keeps nothing. A site cooling down, out of its asks, blocking or failing
+keeps nothing and changes nothing: the song, its `[lyrics]` and its records stay as they were, and it
+exits 0 (`No lyrics kept: …`). A refusal (the song not in the book or ignored, no search, one over a
+week old, a record it didn't list) exits 1, and so does a failure here: overrides.toml that can't be
+written or lyrics that can't be (nothing is then changed, though lyric files that couldn't be put
+back are said to hold the new words), an info.json, a chords failure or a PDF that can't be made (the
+lyrics stay kept: `Lyrics kept; the job failed after: …`). `--progress` adds a JSON line per stage, for
+caracole serve. A pick cut off between noting the record and storing its lyrics (the machine stopped)
+leaves the record noted and the old lyrics stored: pick it again.
+
+    caracole lyrics --song "ARTIST - TITLE" --clear
+
+Takes the record you picked out of `[lyrics]`, keeping its `as`, with no request. The lyrics that
+record gave go with it (its auto sheet is made again at the next run), the sites' earlier misses are
+forgotten and the song is pending, so tonight's run, or a lookup, asks every site again under the
+name that holds. A song with no record picked exits 1 ("nothing to clear"). `--pick`, `--record`,
+`--clear` and `--as` go one at a time (exit 2), and `--progress` only with `--pick` or `--record`.
+Each takes caracole's lock as asked for now, so a nightly run lets it in at its next pause.
+
 ### caracole fetch
 
     caracole fetch [--song "ARTIST - TITLE"]
@@ -1371,6 +1441,20 @@ says so and exits 1.
 A song's sheet is made again when its audio changes, and when timed lyrics arrive after a sheet made
 over plain lyrics or none, so that each chord can go over its word.
 
+An MP3 that names no length (no Xing or VBRI header: a recorder's) is as long as its frames say,
+for the chords, `caracole audio` and the lyrics sites alike; one libsndfile reads only in part is
+read through FFmpeg, with a warning naming the file. The first `caracole autochords` over every
+song after this came in (the nightly one; never a sheet made for one song) makes again, once, what
+was made from such a file whose length was guessed wrong: its auto sheet, over the whole of it; if
+it was read short, words heard from the part read are dropped and the song is offered them again
+(your own "it isn't sung" stays). Each song is a warning
+(`Artist - Title: its MP3 is 7:20 long, not the 3:56 its length was guessed at …`), the run's last
+line names them (`…; remeasured 2 whose MP3 names no length, made again: …`), and so does the to-do
+page, under "Made again: MP3s that name no length", until the next run. Where wanted.txt holds a
+line exactly as caracole writes one with the guessed length (`caracole audio`'s, or one you typed
+the very same), its length is corrected, and lyrics not found are asked for again with it; the
+song is then given to your phone at the next sync. A song with a human sheet is left alone.
+
 A song takes minutes, so it logs a line before each, `Working out the chords of Artist - Title
 (3 of 12)…`, and one after: `Artist - Title: auto sheet written (synced lyrics)`.
 
@@ -1600,6 +1684,18 @@ Megalobiz and AZLyrics are asked by the nightly run (its megalobiz and azlyrics 
   song's card, and as `lyrics_from` in `info.json`.
 - `[providers.megalobiz] enabled = false` and `[providers.azlyrics] enabled = false` turn them
   off.
+- `[lyrics]` in overrides.toml (see [overrides.toml](#overridestoml-your-decisions)) is kept by every one of these:
+  the sites are asked under its `as`, and a record you picked is asked of its own site alone. A
+  lookup says so: `under “Eagles - Hotel California”: LRCLIB has none; …`, `the record you picked:
+  megalobiz 24519`, `the record you picked is gone: lrclib 9`, `the record you picked isn't asked
+  now: lrclib 9` (within its 30 days).
+- A song whose record you picked and that has no lyrics is never transcribed, not even with
+  Transcribe anyway: only that one record was asked, never the other sites. Pick another record,
+  or clear the pick to have every site asked again, under the name you typed (`as`, which the clear
+  keeps), else the song's own.
+- A pick, a clear or a search the nightly run lets in at one of its pauses counts at once: the
+  passes read `[lyrics]` again after it, and what a site answered about the song meanwhile is kept
+  only if the song is still to be asked, as it was asked.
 
 **Megalobiz** gets two requests per song at most. Its API allows 1,000 requests a day, and
 caracole stops at 900 (see [Two paces](#configure)). It also allows 30 a minute, which caracole
@@ -2933,6 +3029,37 @@ meanwhile, the one queued is the answer and the second file is deleted.
   "That file is too big: …", "That file is longer than 30 minutes.", "No room to keep it here.".
 - Where chords can't be made: "No sheets from audio files here: auto-chords isn't installed.".
 
+#### Lyrics under another name, from a card
+
+When a song's own name finds no lyrics (a video's decorated title, a transliterated artist), its
+card can look them up under a name you type. A song with no lyrics found has it open, above
+Transcribe the lyrics: "No lyrics found. Look them up under another name". Any other song has
+"Lyrics under another name…" folded under its foot, to replace the lyrics it has. Ignored songs have
+none, and neither has a song while a request of it waits or runs.
+
+- Artist and Title are filled in with the name you last asked under, else the song's own. Only
+  Search, or Enter in a field, sends anything: opening the card or typing asks no site. Search
+  queues `caracole lyrics --song … --as "ARTIST - TITLE"`; its line says "Asking LRCLIB, Megalobiz
+  and AZLyrics under “孟维来 - 野人”…" and Search waits until it is over.
+- Then the panel lists what the search kept: one row a record, with its site, "Artist - Title",
+  album, length (and the audio's, when it is more than 10 s off), timed or plain. The best fit
+  comes first, marked Best fit, and the record you picked says In use. Under the rows, what each
+  site that listed nothing said, in `caracole lyrics --as`'s words, and how many instrumental
+  records were left out. A long list makes the card longer; from 1200 px the card's pane scrolls. The search's own words head it: `Searched: …`, `Nothing found: …` (every
+  site answered and none has any) or `Not searched: …; try again later.` (a site failed or
+  waited: never "Nothing found").
+- **Use these lyrics** on a row queues `caracole lyrics --song … --record SITE:ID --progress`. The
+  song's line then follows the pick, and its card is drawn again once it is over, its Lyrics tile
+  and its sheet as they are now. A search older than 7 days lists its rows with no button: search
+  again to pick one.
+- **Clear the pick** (`caracole lyrics --song … --clear`) is offered beside the row In use, and
+  when the record you picked has given no lyrics, which the panel says ("The record you picked
+  (megalobiz 8) has given no lyrics: pick another, or clear the pick."). The song is then pending:
+  tonight's run asks every site again. Transcribe the lyrics is offered only once they have all
+  answered.
+- A refusal is said in the panel ("Search again: that record isn't among its last search's, …").
+  The phone and the page opened as a file have no panel.
+
 #### Transcribing the lyrics from a card
 
 Where caracole can transcribe (as for `caracole transcribe`: auto-chords, Whisper, its two model
@@ -3534,6 +3661,10 @@ tab_ids = [1601668]
 [azlyrics]     # the AZLyrics page of a song its artist's name doesn't lead to
 "Misc Musicals - Hadestown Wait For Me" = "https://www.azlyrics.com/lyrics/hadestown/waitforme.html"
 
+[lyrics]       # the name a song's lyrics are asked under, and the record you picked
+"Plan B - Ill Manors" = { as = "Plan B - Ill Manors (Official)", record = "lrclib:28399373" }
+"Pomme - Mononoké" = { record = "azlyrics:pomme/mononoke" }
+
 [gametabs]     # the gametabs.net tab a song's tab of game music comes from
 "Hollow Knight - Resting Grounds" = "https://gametabs.net/tabs/hollow-knight/resting-grounds-2"
 
@@ -3639,6 +3770,29 @@ sheet, in place of any but a tab you pinned on UG or a sheet you picked on LaCue
 
 `[azlyrics]` names a song's lyrics page on AZLyrics, for a song its artist's name doesn't lead to.
 caracole asks for that page alone, while the song has no lyrics.
+
+`[lyrics]` holds, for a song whose own name finds no lyrics, the name to ask under (`as`, an
+"Artist - Title"), the record you picked (`record`), or both. A record is `lrclib:ID` or
+`megalobiz:ID` (the record's number on that site) or `azlyrics:ARTIST/SONG` (the two parts of its
+page's address, `azlyrics.com/lyrics/ARTIST/SONG.html`), and nothing else: no address, no other
+path. LRCLIB, Megalobiz and AZLyrics are asked under `as`, with no album, in place of the song's own
+name. A `[lyrics]` record wins over an `[azlyrics]` page, which wins over the `as` name. A record you
+picked is final: while the song has its lyrics no site is asked about it, nor for timed lyrics in
+place of plain ones. While it has none, only the record's own site is asked, for that record alone,
+one request; a record gone leaves the song without lyrics (the log says so), and it is asked again
+after 30 days. Until you pick another or clear the pick, a song whose record gave no lyrics, read or
+not yet, is not transcribed ("the record you picked (lrclib 9) has given no lyrics: pick another, or
+clear the pick"); one with a transcript kept may still be said not sung. The nightly run,
+`caracole lyrics`, a lookup and a sheet made from a YouTube video all keep to `[lyrics]`. An entry you write by hand takes effect at the next run for a song still pending,
+and at its next 30-day re-check for a song whose lyrics are missing. A `record` is never applied to a
+song that already has lyrics. An `as` is: a song with plain lyrics is asked of Megalobiz under it for
+timed ones, at the next run when Megalobiz hasn't been asked about it, else once its 30 days are
+over; one typed through `caracole lyrics --as` is asked at the next run for a song pending or
+missing, as the search forgets the sites' misses (`caracole lyrics --pick` and `--record` fetch at
+once). Clear or change a pick with the
+command (`caracole lyrics --song … --clear`, `--pick`, `--record`, `--as`): it forgets the sites'
+misses at once, so every site is asked again under the name that holds before a transcription is
+offered. A record you take out by hand leaves those misses for up to 30 days.
 
 `[harmonica]` says how each of a song's harmonica tabs is read, by its file's name. The value is a
 notation (`"signs"`, `"brackets"`, `"letters"`, `"signs after"` or `"barrett"`), `"legend"` for
@@ -4111,6 +4265,13 @@ and exits 1:
 
 `peer sync` and `peer import` say each unit they left the same way, by its name. A conflict left
 unanswered says `changed on both sides: choose a side with --choose or --prefer`.
+
+Without `--progress`, `peer sync`, `pull`, `take` and `import` also say each unit they took and
+gave, by its name: `Took Estopa - Tu Calorro`, `Took Radiohead - Creep (removed)` for a removal,
+`Took Radiohead - Creep (asked for again)` for a removal undone there while the song itself was
+left, `Gave Blur - Song 2: changed on both sides` for a conflict settled (Took: theirs came; Gave:
+yours went). A song and its removal's tombstone are one line. The phone's Journal says the same
+lines, the first 20 each way, then `Took … and 312 more`.
 
 Two caracoles whose databases are copies of each other count as the same caracole, and a sync
 says so. `caracole peer new-id` gives one of them its own id. It also forgets what that one agreed

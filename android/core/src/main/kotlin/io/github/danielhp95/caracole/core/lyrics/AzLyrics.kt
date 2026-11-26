@@ -9,6 +9,7 @@ import io.github.danielhp95.caracole.core.http.Response
 import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.LibraryStore
+import io.github.danielhp95.caracole.core.library.LyricsPick
 import io.github.danielhp95.caracole.core.library.OverrideUrls
 import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.PassStats
@@ -128,12 +129,18 @@ object AzLyrics {
     }
 
     /** azlyrics_fetch.songs_to_ask: the songs with no lyrics that AZLyrics hasn't answered a miss about since
-     * [recheckAfter], or that [picks] (Overrides.azlyrics) names a page for, newest first (of [only]'s ids). */
+     * [recheckAfter], or that [picks] (Overrides.azlyrics) names a page for, newest first (of [only]'s ids); of those
+     * with a picked record ([lyrics], Overrides.lyrics), only those whose record is AZLyrics' ([Lyrics.pickedDue]). */
     fun songsToAsk(db: Db, now: Instant, picks: Map<String, String> = emptyMap(), recheckAfter: Duration = RECHECK_AFTER,
-                   only: Set<Long>? = null): List<SongRow> {
+                   only: Set<Long>? = null, lyrics: Map<String, LyricsPick>? = null): List<SongRow> {
         val asked = ArrayList<SongRow>()
         for (song in Lrclib.songs(db, now)) {
             if (song.status == "ignored" || (only != null && song.id !in only)) continue
+            val record = Lyrics.pickedRecord(song, lyrics)
+            if (record != null) {
+                if (record.site == PROVIDER && Lyrics.pickedDue(song, now, recheckAfter)) asked += song
+                continue
+            }
             if (OverrideUrls.overrideKey(song.display) in picks) {
                 if (song.lyricsStatus == "pending" || song.lyricsStatus == "missing") asked += song
                 continue
@@ -171,6 +178,9 @@ object AzLyrics {
      * azlyrics_fetch.azlyrics_lyrics for [only]'s songs (a lookup's one, [songsToAsk]), `[azlyrics]`'s pages from
      * [overrides]. Found lyrics written as LRCLIB's plain ones are and stored with their page (the link back,
      * `Lyrics.url`); a miss: [CHECKED] now; an error: never a miss, a song LRCLIB missed back to pending.
+     * `[lyrics]` (Overrides.lyrics): the artist's page of a song's `as`, an `[azlyrics]` page winning over it; a
+     * picked record final, winning over that page: AZLyrics' asked for its page alone, its miss making the song's
+     * lyrics missing, any other site's passed over.
      */
     fun azlyricsLyrics(db: Db, client: Client, lib: LibraryStore, now: Instant, overrides: Overrides, only: Set<Long>,
                        recheckAfter: Duration = RECHECK_AFTER): AzLyricsStats {
@@ -182,15 +192,28 @@ object AzLyrics {
                 Versions.updateSong(db, song.id, linkedMapOf("lyrics_status" to "pending", "lyrics_at" to null), stamp)
             }
         }
-        val songs = songsToAsk(db, now, picks, recheckAfter, only).asSequence()
+        val chosen = overrides.lyrics
+        val songs = songsToAsk(db, now, picks, recheckAfter, only, chosen).asSequence()
         val asked = Passes.eachSong(songs, stats, "AZLyrics", onError = backToPending, onCut = backToPending) { song ->
-            val page = picks[OverrideUrls.overrideKey(song.display)]
-            val cache = page != null || db.kvGet("$CHECKED${song.id}") == null // a miss asked again goes past the cache
-            fetchAzLyrics(client, song.artists[0], song.title, page, cache)
+            val record = Lyrics.pickedRecord(song, chosen)
+            if (record != null) {
+                // past the cache once AZLyrics answered it a miss: an error since never makes its cached 404 a new one
+                fetchAzLyrics(client, "", "", record.page, cache = db.kvGet("$CHECKED${song.id}") == null)
+            } else {
+                val page = picks[OverrideUrls.overrideKey(song.display)]
+                // a miss asked again goes past the cache
+                val cache = page != null || db.kvGet("$CHECKED${song.id}") == null
+                val (artist, title, _) = Lyrics.askedAs(song, chosen)
+                fetchAzLyrics(client, artist, title, page, cache)
+            }
         }
         for ((song, lyrics) in asked) {
             if (lyrics == null) {
                 db.kvSet("$CHECKED${song.id}", stamp)
+                if (Lyrics.pickedRecord(song, chosen) != null) { // the one site asked missed: its lyrics are missing
+                    Versions.updateSong(db, song.id, linkedMapOf("lyrics_status" to "missing", "lyrics_at" to stamp),
+                                        stamp)
+                }
                 stats.missing++
                 continue
             }

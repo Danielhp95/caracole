@@ -1,6 +1,8 @@
 package io.github.danielhp95.caracole.core.library.internal.overrides
 
 import io.github.danielhp95.caracole.core.keys.Normalize
+import io.github.danielhp95.caracole.core.library.LyricsPick
+import io.github.danielhp95.caracole.core.library.LyricsRecord
 import io.github.danielhp95.caracole.core.library.OverridesError
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.py.PyRe
@@ -23,6 +25,14 @@ internal object Readers {
     const val NO_VIDEO = "none"
     const val VIDEO_SHAPE = "https://www.youtube.com/watch?v=…"
     private val HARMONICA_TAB by lazy { PyRegex.compile("harmonica-[1-9][0-9]{0,3}\\.txt") }
+    /** overrides.LYRICS_SHAPE. */
+    const val LYRICS_SHAPE =
+        "{ as = \"Artist - Title\", record = \"lrclib:ID\" | \"megalobiz:ID\" | \"azlyrics:ARTIST/SONG\" }"
+    /** overrides.LYRICS_RECORD_IDS: each lyrics site's ids, of exactly their shape there. */
+    private val LYRICS_RECORD_IDS by lazy {
+        val number = PyRegex.compile("[1-9][0-9]{0,11}")
+        mapOf("lrclib" to number, "megalobiz" to number, "azlyrics" to PyRegex.compile("[a-z0-9-]+/[a-z0-9-]+"))
+    }
 
     /** A harmonica tab's name, as inbox.py keeps it (`harmonica-1.txt`). */
     fun isHarmonicaTab(tab: String): Boolean = PyRe.fullmatch(HARMONICA_TAB, tab) != null
@@ -122,6 +132,44 @@ internal object Readers {
         check(answer != false) {
             "keyVersion refuses by raising IllegalArgumentException with key_version's words, never by answering false"
         }
+    }
+
+    /**
+     * overrides._lyrics_pick: a `[lyrics]` value, a table of `as` ("Artist - Title", split at its first " - " and
+     * stripped, as override_key splits a key), `record` (`site:id`, a site of [LYRICS_RECORD_IDS] and an id of its
+     * shape, as it is) or both, and no other key; anything else refused in Python's words, the whole value quoted.
+     */
+    fun lyricsPick(value: JsonElement, where: String): LyricsPick {
+        val table = value as? JsonObject
+        if (table == null || table.isEmpty() || !table.keys.all { it == "as" || it == "record" }) {
+            throw lyricsRefused(value, where)
+        }
+        return LyricsPick(table["as"]?.let { lyricsAsked(it, where, value) },
+                          table["record"]?.let { lyricsRecord(it, where, value) })
+    }
+
+    private fun lyricsRefused(value: JsonElement, where: String) =
+        OverridesError("$where: expected $LYRICS_SHAPE, got ${PyValues.repr(value)}")
+
+    /** str.partition: the text before the first [sep], and the rest after it; null without one. */
+    private fun partition(text: String, sep: String): Pair<String, String>? {
+        val at = text.indexOf(sep)
+        return if (at < 0) null else text.substring(0, at) to text.substring(at + sep.length)
+    }
+
+    private fun lyricsAsked(part: JsonElement, where: String, value: JsonElement): Pair<String, String> {
+        val (artist, title) = PyValues.text(part)?.let { partition(it, " - ") } ?: throw lyricsRefused(value, where)
+        val a = Py.strip(artist)
+        val t = Py.strip(title)
+        if (a.isEmpty() || t.isEmpty()) throw lyricsRefused(value, where)
+        return a to t
+    }
+
+    private fun lyricsRecord(part: JsonElement, where: String, value: JsonElement): LyricsRecord {
+        val (site, id) = PyValues.text(part)?.let { partition(it, ":") } ?: throw lyricsRefused(value, where)
+        val shape = LYRICS_RECORD_IDS[site] ?: throw lyricsRefused(value, where)
+        if (PyRe.fullmatch(shape, id) == null) throw lyricsRefused(value, where)
+        return LyricsRecord(site, id)
     }
 
     /**

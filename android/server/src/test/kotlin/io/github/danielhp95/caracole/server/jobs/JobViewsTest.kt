@@ -44,7 +44,7 @@ class JobViewsTest {
             .map { it.extra.getValue("job").jsonObject.getValue("kind").jsonPrimitive.content }.toSet()
         assertTrue(kinds.containsAll(setOf("sync", "peer-push", "index-merge", "add", "remove", "song", "versions",
                                            "lacuerda-artist", "lacuerda-search", "harptabs-artist", "songbook",
-                                           "review", "harmonica", "export")), "$kinds")
+                                           "review", "harmonica", "export", "lyrics-search")), "$kinds")
         assertTrue(misses.checked >= 300, "${misses.checked} records")
     }
 

@@ -9,6 +9,7 @@ import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.LibraryStore
+import io.github.danielhp95.caracole.core.library.LyricsPick
 import io.github.danielhp95.caracole.core.library.PassStats
 import io.github.danielhp95.caracole.core.library.Passes
 import io.github.danielhp95.caracole.core.library.SongRow
@@ -192,7 +193,16 @@ object Megalobiz {
     }
 
     /** megalobiz_fetch._wants: whether LRCLIB left the song for Megalobiz: missing, failed on and pending, or plain
-     * lyrics not Megalobiz's own. */
+     * lyrics not Megalobiz's own; for a song with a picked record ([picks]), only when it is Megalobiz's and the song
+     * has no lyrics. */
+    private fun wants(db: Db, song: SongRow, picks: Map<String, LyricsPick>?): Boolean {
+        val record = Lyrics.pickedRecord(song, picks)
+        if (record != null) {
+            return record.site == PROVIDER && (song.lyricsStatus == "pending" || song.lyricsStatus == "missing")
+        }
+        return wants(db, song)
+    }
+
     private fun wants(db: Db, song: SongRow): Boolean = when (song.lyricsStatus) {
         "missing" -> true
         "pending" -> db.kvGet("${Lrclib.FAILED}${song.id}") != null
@@ -202,12 +212,17 @@ object Megalobiz {
 
     /** megalobiz_fetch.songs_to_ask: the songs LRCLIB left for Megalobiz that it hasn't answered a miss about since
      * [recheckAfter] (of [only]'s ids, when given), those with no lyrics first, then those with plain ones, newest
-     * first within each. */
-    fun songsToAsk(db: Db, now: Instant, recheckAfter: Duration = RECHECK_AFTER, only: Set<Long>? = null): List<SongRow> {
+     * first within each; those whose picked record ([picks], Overrides.lyrics) is Megalobiz's by [Lyrics.pickedDue]. */
+    fun songsToAsk(db: Db, now: Instant, recheckAfter: Duration = RECHECK_AFTER, only: Set<Long>? = null,
+                   picks: Map<String, LyricsPick>? = null): List<SongRow> {
         val none = ArrayList<SongRow>()
         val plain = ArrayList<SongRow>()
         for (song in Lrclib.songs(db, now)) {
-            if (song.status == "ignored" || (only != null && song.id !in only) || !wants(db, song)) continue
+            if (song.status == "ignored" || (only != null && song.id !in only) || !wants(db, song, picks)) continue
+            if (Lyrics.pickedRecord(song, picks) != null) {
+                if (Lyrics.pickedDue(song, now, recheckAfter)) none += song
+                continue
+            }
             val checked = db.kvGet("$CHECKED${song.id}")
             if (checked != null && !PyValues.before(checked, now, recheckAfter)) continue
             (if (song.lyricsStatus == "found") plain else none) += song
@@ -225,7 +240,14 @@ object Megalobiz {
             parseSearch(it)
         }
         val found = pickResult(results, artist, title, durationS) ?: return null
-        val url = lrcUrl(found.id)
+        return fetchRecord(client, found.id, cache)
+    }
+
+    /** megalobiz_fetch.fetch_record: a record's timed lyrics, `/lrc/{id}`, the search's result that is the song or the
+     * record you picked (`[lyrics]`); null for one gone (its 404) or with no timed line. Errors propagate; [cache]
+     * goes to the first request. */
+    fun fetchRecord(client: Client, lrcId: BigInteger, cache: Boolean = true): Lyrics? {
+        val url = lrcUrl(lrcId)
         val answered = client.get(url, accept = LRC_ACCEPT, cache = cache)
         if (answered.status == 404) return null
         val lrc = HttpRules.readOnceMore(client, answered, url, { it is MegalobizParseError }, accept = LRC_ACCEPT) {
@@ -240,9 +262,12 @@ object Megalobiz {
      * megalobiz_fetch.megalobiz_lyrics for [only]'s songs (a lookup's one, [songsToAsk]): its length its own, else
      * [durations]', else LRCLIB's lyrics'; a miss asked again goes past the cache. Found lyrics written as LRCLIB's
      * and stored with their page (the link back, `Lyrics.url`); info.json is the viewer's, the phone's pages' (M5).
+     * [picks], Overrides.lyrics: a song searched under its `as`; one whose picked record is Megalobiz's asked for it
+     * alone ([fetchRecord]), its miss making the song's lyrics missing; any other picked record passed over.
      */
     fun megalobizLyrics(db: Db, client: Client, lib: LibraryStore, now: Instant, only: Set<Long>,
-                        durations: Map<Long, Double>? = null, recheckAfter: Duration = RECHECK_AFTER): MegalobizStats {
+                        durations: Map<Long, Double>? = null, recheckAfter: Duration = RECHECK_AFTER,
+                        picks: Map<String, LyricsPick>? = null): MegalobizStats {
         val stats = MegalobizStats()
         val stamp = Stamps.of(now)
 
@@ -254,14 +279,25 @@ object Megalobiz {
                 Versions.updateSong(db, song.id, linkedMapOf("lyrics_status" to "pending", "lyrics_at" to null), stamp)
             }
         }
-        val songs = songsToAsk(db, now, recheckAfter, only).asSequence()
+        val songs = songsToAsk(db, now, recheckAfter, only, picks).asSequence()
         val asked = Passes.eachSong(songs, stats, "Megalobiz", onError = backToPending, onCut = backToPending) { song ->
-            val cache = db.kvGet("$CHECKED${song.id}") == null // a miss asked again goes past the cache
-            fetchMegalobiz(client, song.artists[0], song.title, length(song), cache)
+            val record = Lyrics.pickedRecord(song, picks)
+            if (record != null) {
+                // past the cache once Megalobiz answered it a miss: an error since never makes its cached 404 a new one
+                fetchRecord(client, BigInteger(record.id), cache = db.kvGet("$CHECKED${song.id}") == null)
+            } else {
+                val cache = db.kvGet("$CHECKED${song.id}") == null // a miss asked again goes past the cache
+                val (artist, title, _) = Lyrics.askedAs(song, picks)
+                fetchMegalobiz(client, artist, title, length(song), cache)
+            }
         }
         for ((song, lyrics) in asked) {
             if (lyrics == null) {
                 db.kvSet("$CHECKED${song.id}", stamp)
+                if (Lyrics.pickedRecord(song, picks) != null) { // the one site asked missed: its lyrics are missing
+                    Versions.updateSong(db, song.id, linkedMapOf("lyrics_status" to "missing", "lyrics_at" to stamp),
+                                        stamp)
+                }
                 stats.missing++
                 continue
             }

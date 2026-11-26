@@ -14,6 +14,7 @@ import io.github.danielhp95.caracole.core.sync.KeptEntry
 import io.github.danielhp95.caracole.core.sync.KeptPair
 import io.github.danielhp95.caracole.core.sync.PeerState
 import io.github.danielhp95.caracole.core.sync.Scope
+import io.github.danielhp95.caracole.core.sync.SyncSaid
 import io.github.danielhp95.caracole.core.sync.SyncUnit
 import io.github.danielhp95.caracole.core.sync.Take
 import io.github.danielhp95.caracole.core.sync.PeerError
@@ -63,6 +64,8 @@ import java.util.Base64
  * - the sync redesign's rules (tests/test_conformance_sync_kept.py): the remembered answer ([kept]: merged_kept,
  *   compare with kept answers, record_kept, record_agreement and record_taken to the kv's byte, kept_of, a state's
  *   kept) and a sync's parts ([scope]: in_scope, listed_songs, change_of, names_of);
+ * - what a sync took and gave, a line a unit ([said], tests/test_conformance_sync_said.py: commands/peer.py's
+ *   done_lines);
  * - the `.caracole` file (tests/test_conformance_sync_file.py, [file]): each fixture exported by the phone as Python
  *   exported it, as data; Python's files read back alike, their units, their refusals and their checks; and each
  *   import's differences, takes and bases.
@@ -104,6 +107,7 @@ object SyncReplay : AreaReplay {
         nameKey(misses)
         kept(misses)
         scope(misses)
+        said(misses)
         file(misses)
     }
 
@@ -528,6 +532,19 @@ object SyncReplay : AreaReplay {
             val want = r.out!!.jsonObject.mapValues { (_, b) -> b.jsonArray.map(::text) }
             differs(r, want, got) ?: differs(r, want.keys.toList(), got.keys.toList())
         }
+    }
+
+    // --- what a sync took and gave (vectors/sync/said.jsonl) -------------------------------------------------------
+
+    const val SAID = "sync/said.jsonl"
+
+    /** Every record of said.jsonl (tests/test_conformance_sync_said.py): SyncSaid.lines' answer for a sync's units
+     * taken and given, its differences as compared, commands/peer.py's `done_lines`, line for line. */
+    fun said(misses: Misses) = each(records(SAID, "done_lines", misses), misses) { r ->
+        val given = r.extra.getValue("in").jsonObject
+        differs(r, r.out!!.jsonObject.getValue("done").jsonArray.map(::text),
+                SyncSaid.lines(given.getValue("taken").jsonArray.map(::text), given.getValue("given").jsonArray.map(::text),
+                               given.getValue("found").jsonArray.map(::difference)))
     }
 
     // --- the .caracole file (vectors/sync/file.jsonl and its files) -------------------------------------------

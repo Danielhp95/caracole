@@ -15,6 +15,9 @@ proper sheet later, caracole uses that one.
   Sheet from an audio file…), or `caracole audio FILE`. caracole keeps a copy as the song's audio, in place
   of anything it had, and makes the sheet right away.
 
+An MP3 that never says its length (a recorder's, with no Xing or VBRI header) is measured by its frames and heard
+whole, and a sheet an older caracole made from only its first part is made again once, by itself.
+
 Taking audio from YouTube goes against its robots.txt and its terms of service. That is your
 call. `[providers.youtube] enabled = false` in caracole.toml turns it off, and the add-on then
 works from your own files only. caracole never tries to get around a block.
@@ -24,6 +27,9 @@ More on this: [the sites caracole reads](sources.md).
 
 When a site has the lyrics, the chords go over the words. If the lyrics were timed for a
 recording of another length, caracole shifts them to fit and says so on the sheet.
+If the song's lyrics later become other words, the sheet is made again over them, once; the same
+words retimed (other times on a sheet already timed) change nothing. A sheet made before caracole kept track of its
+words isn't made again for this.
 
 When no site has them and the song has audio of its own (YouTube's, a purchase's or a file you gave it),
 **Transcribe the lyrics** on the song's card (or `caracole transcribe`) writes them down from the audio with Whisper.

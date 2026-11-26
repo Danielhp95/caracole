@@ -863,3 +863,27 @@ def test_another_caracoles_index_pages_are_a_job_of_no_song_with_one_stage():
     assert seen["steps"] == [{"name": "merge", "label": "Merge", "state": "running", "detail": ""}]
     done = peer_job("index-merge", "done", {"merge": ("done", "merged 12 pages: ug, lacuerda")})
     assert view(done, [done], None, None)["line"]["text"] == "Merged"
+
+
+def test_a_sync_that_took_2_and_gave_1_with_a_removal_names_each_in_the_journals_output(computers):
+    """The computer's Journal for a sync that took two (one a removal) and gave one: its Output is the command's, the
+    comparison a line a difference, then how many it took and gave (the reference the phone's entry says its own way,
+    tests/test_conformance_sync_said.py)."""
+    from caracole.removal import plan_removal, remove_song
+    from caracole.songs import find_song
+
+    here, there, _ = computers
+    there.song("Radiohead", "Creep")
+    synced(here, there)
+    remove_song(there.conn, there.cfg, plan_removal(there.conn, there.cfg, find_song(there.conn, "radiohead/creep")))
+    there.song("Estopa", "Tu Calorro", version=None)
+    here.song("Muse", "Hysteria", version=None)
+    job = synced(here, there)
+    _, journal = script(here.app, f"/requests.json?open={job.id}")
+    (shown,) = [r for g in journal["groups"] for r in g["requests"] if r["id"] == job.id]
+    output = [" ".join(line.split()) for step in shown["output"]["steps"] for line in step.get("lines", ())]
+    assert "theirs comes here Radiohead - Creep (gone there since the last share)" in output, output
+    assert "theirs comes here Radiohead - Creep (removed) (new there since the last share)" in output, output
+    assert "theirs comes here Estopa - Tu Calorro (new there since the last share)" in output, output
+    assert "ours goes there Muse - Hysteria (new here since the last share)" in output, output
+    assert "Here takes 3, there takes 1." in output and "Gave 1 change to http://localhost:8737." in output, output

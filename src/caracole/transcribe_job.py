@@ -239,9 +239,9 @@ class _Transcription(HearsWords, StagedRun):
         from caracole.autochords.transcript import ALREADY_TRANSCRIBED, why_not_offered
 
         if self.request.none:
-            from caracole.autochords.transcript import SAID_NOT_SUNG
+            from caracole.autochords.transcript import SAID_NOT_SUNG, without_picks
 
-            why = why_not_offered(self.conn, self.cfg, self.song, self.overrides)
+            why = why_not_offered(self.conn, self.cfg, self.song, without_picks(self.overrides))
             if why != SAID_NOT_SUNG:  # its word kept: ignored, a human sheet or lyrics since say otherwise
                 raise _Stop(f"{self.song.display} needs no sheet of its chords alone now: {why}")
             return

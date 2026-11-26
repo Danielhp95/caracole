@@ -18,7 +18,7 @@ from __future__ import annotations
 import os
 import re
 import sqlite3
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -34,6 +34,9 @@ AUDIO_EXTENSIONS = (
     ".wma", ".ape", ".wv",
 )
 DURATION_TOLERANCE_S = 3.0
+# kv: the length each headerless MP3 of Music/ counts to (mpeg_frames.py), by its path, with its size and mtime, so
+# that the nightly scan walks such a file's frames once, until it changes; a file gone leaves it at the next scan.
+FRAMES_KEY = "music:frames"
 MATCH_CUTOFF = 90
 MATCH_MARGIN = 8  # a fuzzy match must lead the next one by this much, as in matching
 _TRACK_PREFIX = re.compile(r"^\d{1,3}(?:\s*[-.]\s*|\s+)")
@@ -90,9 +93,14 @@ def _from_name(path: Path) -> tuple[str | None, str | None]:
     return (artist or None), (title or None)
 
 
-def read_audio(path: Path) -> AudioFile:
-    """Tags and duration of an audio file, falling back to its name when there are no tags."""
+def read_audio(path: Path, *, counted: Callable[[Path], float | None] | None = None) -> AudioFile:
+    """Tags and duration of an audio file, falling back to its name when there are no tags. An MP3 whose first frame
+    names no length is as long as its frames say (mpeg_frames.py), never mutagen's guess; ``counted`` gives that
+    length (``scan_music``'s record of the frames counted before), else they are counted now."""
     import mutagen  # here, not on import: inbox.py, which the pages import, compares names with Names
+    from mutagen.mp3 import MPEGInfo
+
+    from caracole import mpeg_frames
 
     try:
         f = mutagen.File(path, easy=True)
@@ -108,6 +116,11 @@ def read_audio(path: Path) -> AudioFile:
         title = title or name_title
     info = getattr(f, "info", None) if f is not None else None
     length = getattr(info, "length", None)
+    if isinstance(info, MPEGInfo):  # an MP3 whose first frame names no length: mutagen's is a guess, its frames say
+        try:
+            length = (counted or mpeg_frames.counted_length)(path) or length
+        except OSError:
+            pass
     return AudioFile(
         path=path, artist=artist, title=title, album=album,
         duration_s=float(length) if length else None, mtime=os.stat(path).st_mtime,
@@ -222,6 +235,39 @@ def _matches(audio: Sequence[AudioFile], songs: Sequence[Song]) -> list[_Match]:
     return found
 
 
+class _Frames:
+    """The scan's record of the headerless MP3s' counted lengths (kv ``FRAMES_KEY``): a file of the same size and
+    mtime as recorded is as long as recorded; any other is counted now; the record kept holds this scan's files."""
+
+    def __init__(self, conn: sqlite3.Connection):
+        from caracole.db import kv_get_json
+
+        self.conn = conn
+        before = kv_get_json(conn, FRAMES_KEY)
+        self.before = before if isinstance(before, dict) else {}
+        self.now: dict[str, list[Any]] = {}
+
+    def length(self, path: Path) -> float | None:
+        from caracole import mpeg_frames
+
+        st = os.stat(path)
+        seen = [st.st_size, st.st_mtime_ns]
+        kept = self.before.get(str(path))
+        if isinstance(kept, list) and len(kept) == 3 and kept[:2] == seen and isinstance(kept[2], (int, float)):
+            self.now[str(path)] = kept
+            return float(kept[2])
+        seconds = mpeg_frames.counted_length(path)
+        if seconds is not None:
+            self.now[str(path)] = [*seen, seconds]
+        return seconds
+
+    def keep(self) -> None:
+        from caracole.db import kv_set_json
+
+        if self.now != self.before:
+            kv_set_json(self.conn, FRAMES_KEY, self.now)
+
+
 def scan_music(conn: sqlite3.Connection, music_dir: Path, *, uploads: Path | None = None) -> ScanStats:
     """Link purchased files to wanted songs (``songs.audio_path``); forget files that are gone.
 
@@ -246,11 +292,13 @@ def scan_music(conn: sqlite3.Connection, music_dir: Path, *, uploads: Path | Non
             update_song(conn, s.id, audio_path=None, audio_mtime=None)
             s.audio_path, s.audio_mtime = None, None
     audio: list[AudioFile] = []
+    frames = _Frames(conn)
     for p in paths:
         try:
-            audio.append(read_audio(p))
+            audio.append(read_audio(p, counted=frames.length))
         except OSError:  # deleted or renamed since the folder was listed: a synced device's doing
             continue
+    frames.keep()
     paths = [af.path for af in audio]
     stats.seen = len(audio)
     by_song: dict[int, list[_Match]] = {}

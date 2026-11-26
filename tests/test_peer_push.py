@@ -986,3 +986,25 @@ def test_a_drop_is_asked_once_within_a_few_seconds_never_after_reading_the_state
     ((method, path, timeout),) = asked  # no state read for a fresh token, no second ask
     assert (method, path) == ("POST", peer_push.DROP_PATH)
     assert set(timeout.values()) == {peer_push.DROP_TIMEOUT} and peer_push.DROP_TIMEOUT <= 5
+
+
+def test_a_take_without_progress_says_each_unit_it_took_a_removal_once_as_one(pair):
+    """A push holding a removal (the song gone on the phone, its tombstone with it): ``caracole peer take`` by hand
+    says it once, as a removal, as the phone's Journal says it (commands/peer.py's done_lines)."""
+    from caracole.removal import plan_removal, remove_song
+
+    from test_commands_peer import run
+
+    computer, phone, pusher, _ = pair
+    creep = phone.song("Radiohead", "Creep")
+    gone = phone.song("Oasis", "Wonderwall", sheet=b"[Em]Wonderwall", version=None)
+    remove_song(phone.conn, phone.cfg, plan_removal(phone.conn, phone.cfg, gone))
+    computer.song("Oasis", "Wonderwall", sheet=b"[Em]Wonderwall", version=None)
+    state, found = comparison(phone, pusher)
+    push_all(phone, pusher, state, found)
+    (job,) = computer.app.queue.snapshot()
+    (step,) = job.steps
+    result = run(computer, *[a for a in step.args if a != "--progress"])
+    assert result.exit_code == 0, result.output
+    said = sorted(line.strip() for line in result.output.splitlines() if line.startswith("  Took "))
+    assert said == ["Took Oasis - Wonderwall (removed)", f"Took {creep.display}"], result.output

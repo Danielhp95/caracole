@@ -19,6 +19,7 @@ import io.github.danielhp95.caracole.core.sync.Side
 import io.github.danielhp95.caracole.core.sync.SyncEngine
 import io.github.danielhp95.caracole.core.sync.SyncFailed
 import io.github.danielhp95.caracole.core.sync.SyncOutcome
+import io.github.danielhp95.caracole.core.sync.SyncSaid
 import io.github.danielhp95.caracole.mirror.SyncError
 import io.github.danielhp95.caracole.server.http.AppConfig
 import io.github.danielhp95.caracole.server.http.GetAnswer
@@ -266,7 +267,7 @@ class SyncRoutes(val engine: SyncEngine, val queue: JobQueue, val settings: Sync
     }
 
     /** A sync's job (kind `sync`, under `sync:<address>`, SyncEngine's stages): [sync] run with the stages told to
-     * the job, each unit it left said in its Output ([sayLeft]); its outcome the view's, or on a failure what it did until then, the stages after the one that failed
+     * the job, what it took, gave and left said in its Output ([say]); its outcome the view's, or on a failure what it did until then, the stages after the one that failed
      * skipped, as the computer's queue ends them; [afterSync] whatever came of it. */
     private fun syncJob(shown: String, address: String,
                         sync: suspend (stage: (String, String, String) -> Unit) -> SyncOutcome): JobSpec = JobSpec(
@@ -279,9 +280,9 @@ class SyncRoutes(val engine: SyncEngine, val queue: JobQueue, val settings: Sync
                     context.stage(stage, state, detail)
                 }
                 context.outcome(SyncJson.outcome(outcome))
-                sayLeft(context, outcome)
+                say(context, outcome)
             } catch (e: SyncFailed) {
-                e.outcome?.let { context.outcome(SyncJson.outcome(it)); sayLeft(context, it) }
+                e.outcome?.let { context.outcome(SyncJson.outcome(it)); say(context, it) }
                 for ((stage, _) in SyncEngine.STAGES) if (stage !in told) context.stage(stage, "skipped")
                 throw e
             } finally {
@@ -339,7 +340,7 @@ class SyncRoutes(val engine: SyncEngine, val queue: JobQueue, val settings: Sync
     }
 
     companion object {
-        /** A line of a sync's Output for each unit it left as it was ([sayLeft]), in commands/peer.py's words
+        /** A line of a sync's Output for each unit it left as it was ([said]), in commands/peer.py's words
          * (LEFT, left_line): "Left as it was: Radiohead - Creep: changed here since compared", the unit by its label
          * as compared (else its id); a conflict the unattended sync left said as what it is, [CONFLICT_LEFT]. */
         const val LEFT = "Left as it was"
@@ -348,12 +349,19 @@ class SyncRoutes(val engine: SyncEngine, val queue: JobQueue, val settings: Sync
          * (Syncs' "tap Sync to choose"); the computer's command says its own way to settle one. */
         const val CONFLICT_LEFT = "changed on both sides: tap Sync to choose"
 
-        /** Each unit [outcome] left as it was, a line of the job's Output ([leftLine]), a sync's and a file's import's
-         * alike (SyncFileRoutes): where the Journal holds the reasons the Wi-Fi line's "the Journal says why" names
-         * (Syncs.said), a fresh comparison in the sheet having none of them; none for a removal whose song is here
-         * ([SyncOutcome.changesLeft]: no change left). */
-        internal fun sayLeft(context: JobContext, outcome: SyncOutcome) {
-            for ((unit, why) in outcome.changesLeft) context.say(leftLine(outcome.labels[unit] ?: unit, why))
+        /** What [outcome] did, the lines of the job's Output's step of what it said (Feed.SAID), a sync's (pressed in
+         * the sheet, or the unattended one) and a file's import's alike (SyncFileRoutes): each unit it took and gave
+         * by its name (SyncSaid, commands/peer.py's `done_lines`: at most SyncSaid.MOST a way, then how many more; a
+         * file gives none), then each unit it left as it was ([leftLine]), where the Journal holds the reasons the
+         * Wi-Fi line's "the Journal says why" names (Syncs.said), a fresh comparison in the sheet having none of them;
+         * none for a removal whose song is here ([SyncOutcome.changesLeft]: no change left). */
+        fun said(outcome: SyncOutcome): List<String> =
+            SyncSaid.lines(outcome.taken, outcome.given, outcome.compared) +
+                outcome.changesLeft.map { (unit, why) -> leftLine(outcome.labels[unit] ?: unit, why) }
+
+        /** [said]'s lines, said in the job's Output. */
+        internal fun say(context: JobContext, outcome: SyncOutcome) {
+            for (line in said(outcome)) context.say(line)
         }
 
         /** [name] left as it was, with [why] ([LEFT]): on one line, the name's whitespace collapsed as Python's

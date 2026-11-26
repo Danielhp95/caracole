@@ -38,7 +38,14 @@ of its own too (``TRANSCRIBE`` and the song's identity key), as a sheet from You
 lookup, nor a lookup it, and one at a time a song; it is the queue's, so two songs' run one after the other. A sheet
 made from an audio file you uploaded is one ``caracole audio --progress`` (``audio_sheet_steps``: the upload by its
 16-hex id, never a path), its JSON lines its stages (audio_sheet.py's), under ``AUDIO_SHEET`` and the song's identity
-key, as a sheet from YouTube's, the queue's. A video
+key, as a sheet from YouTube's, the queue's. A song's lyrics looked up under a name you typed is ``caracole lyrics
+--song --as`` (``lyrics_search_steps``), the lane's, a job of no song's (``LYRICS_SEARCH`` and the song's identity
+key, among ``INDEX_READS``) with no stages, its line its last line, though the lane sees its song (``song_of_job``),
+so it never runs beside the song's pick or transcription; a record of that search picked is ``caracole lyrics --song
+--record --progress`` (``lyrics_pick_steps``), its JSON lines its stages (lyrics_pick.py's), under ``LYRICS_PICK``
+and the song's identity key, the queue's and the song's, joining no lookup, nor a lookup it; and that record taken
+back is ``caracole lyrics --song --clear`` (``lyrics_clear_steps``), under ``LYRICS_CLEAR`` and the song's identity
+key, the queue's and the song's, with no stages, its line its last line. A video
 suggested for a search is ``caracole youtube --search --progress`` (``youtube_search_steps``),
 a job of no song's (``YOUTUBE_SEARCH`` and the query's key, among ``INDEX_READS``), whose stages are
 ``YOUTUBE_SEARCH_STAGES``, as are a pasted video's (``youtube_video_steps``: ``caracole youtube --video``, under
@@ -213,6 +220,12 @@ class Job:
         transcribe_job.py's."""
         return any(_transcribes(step.args) for step in self.steps)
 
+    @property
+    def picks_lyrics(self) -> bool:
+        """Whether it makes a record of its song's kept lyrics search its lyrics (``caracole lyrics --record``): its
+        stages are lyrics_pick.py's."""
+        return any(_picks_lyrics(step.args) for step in self.steps)
+
     def as_json(self) -> dict[str, Any]:
         """The job as plain data: its steps, each with a state (a lookup's stages; else its commands)."""
         if self.stages:
@@ -374,10 +387,11 @@ def _fetches(steps: Sequence[Step]) -> bool:
 def _reports(args: Sequence[str]) -> bool:
     """Whether a step's command writes ``caracole get --progress`` lines: a lookup, ``caracole versions
     --progress``, ``caracole lacuerda --search --progress``, ``caracole youtube --sheet --progress`` (``--search``,
-    ``--video``), ``caracole ug --link --progress``, ``caracole transcribe --progress``, ``caracole audio --progress``, or ``caracole peer take
-    --progress``, ``peer sync --progress`` or ``index merge --progress``."""
+    ``--video``), ``caracole ug --link --progress``, ``caracole transcribe --progress``, ``caracole audio --progress``,
+    ``caracole lyrics --progress`` (a pick), or ``caracole peer take --progress``, ``peer sync --progress`` or ``index
+    merge --progress``."""
     return args[:1] == (LOOKUP,) or (args[:1] in ((VERSIONS,), ("lacuerda",), ("youtube",), ("ug",), ("transcribe",),
-                                                  ("audio",), (PEER,))
+                                                  ("audio",), ("lyrics",), (PEER,))
                                      and "--progress" in _options(args)) or (
         args[:2] == INDEX_MERGE_COMMAND and "--progress" in _options(args))
 
@@ -439,8 +453,9 @@ LACUERDA_SEARCH = "lacuerda-search:"  # a query of LaCuerda's search: its job's 
 HARPTABS_ARTIST = "harptabs-artist:"  # a harptabs.com artist page's read: its job's key, the page's path after it
 YOUTUBE_SEARCH = "youtube-search:"  # a video suggested for a search: its job's key, the query's key after it
 UG_LINK = "ug-link:"  # a UG link pasted into the library page's search box, read: its job's key, its page's address after
-# what a site's index reads, and a search's suggestion: jobs of no song's
-INDEX_READS = (LACUERDA_ARTIST, LACUERDA_SEARCH, HARPTABS_ARTIST, YOUTUBE_SEARCH, UG_LINK)
+LYRICS_SEARCH = "lyrics-search:"  # a song's lyrics searched under a name: its job's key, the song's identity key after
+# what a site's index reads, a search's suggestion, and a song's lyrics searched: jobs of no song's
+INDEX_READS = (LACUERDA_ARTIST, LACUERDA_SEARCH, HARPTABS_ARTIST, YOUTUBE_SEARCH, UG_LINK, LYRICS_SEARCH)
 SEARCH_STAGES = (("search", "Search LaCuerda"),)  # ``caracole lacuerda --search --progress``'s one stage
 YOUTUBE_SEARCH_STAGES = (("video", "Search YouTube"), ("thumbnail", "Thumbnail"))  # ``caracole youtube --search``'s
 UG_LINK_STAGES = (("tab", "Tab page"), ("artist", "Artist page"))  # ``caracole ug --link --progress``'s; an artist's: the second
@@ -527,6 +542,39 @@ def _transcribes(args: Sequence[str]) -> bool:
     return args[:1] == ("transcribe",)
 
 
+def lyrics_search_steps(display: str, name: str) -> list[tuple[str, tuple[str, ...]]]:
+    """Look a song's lyrics up now under ``name`` ("Artist - Title", the one you typed): ``caracole lyrics --song
+    --as``, LRCLIB's, Megalobiz's and AZLyrics' records listed at the lookup pace (lyrics_search.py), kept for a pick;
+    no ``--progress`` and no stages: its line is its last line."""
+    return [(f"Looking for lyrics under “{name}”", ("lyrics", f"--song={display}", f"--as={name}"))]
+
+
+LYRICS_PICK = "lyrics:"  # a record of a song's kept lyrics search picked: its job's key, the song's key after it
+
+
+def lyrics_pick_steps(display: str, record: str) -> list[tuple[str, tuple[str, ...]]]:
+    """Make a record of the song's kept lyrics search (``record``, ``SITE:ID``) its lyrics now, and its auto sheet
+    again over them: ``caracole lyrics --song --record --progress``, one process for every stage (lyrics_pick.py's
+    ``STAGES``)."""
+    return [("Taking the lyrics", ("lyrics", f"--song={display}", f"--record={record}", "--progress"))]
+
+
+LYRICS_CLEAR = "lyrics-clear:"  # a song's picked lyrics record taken back: its job's key, the song's key after it
+
+
+def lyrics_clear_steps(display: str) -> list[tuple[str, tuple[str, ...]]]:
+    """Take the record you picked for a song's lyrics back now: ``caracole lyrics --song --clear``, no request
+    (lyrics_pick.py ``clear_pick``), then its PDF and the pages; no ``--progress`` and no stages: its line is its last
+    line."""
+    return [("Clearing the lyrics record you picked", ("lyrics", f"--song={display}", "--clear"))]
+
+
+def _picks_lyrics(args: Sequence[str]) -> bool:
+    """Whether a step's command makes a record of a song's kept lyrics search its lyrics (``caracole lyrics --pick``
+    or ``--record``)."""
+    return args[:1] == ("lyrics",) and any(arg.startswith(("--pick=", "--record=")) for arg in _options(args))
+
+
 AUDIO_SHEET = "audio:"  # a sheet from an audio file you gave: its job's key, the song's identity key after it
 
 
@@ -549,21 +597,25 @@ def uploads_named(jobs: Sequence[Job]) -> set[str]:
 
 
 def song_key_of(job_key: str) -> str:
-    """The song's identity key in a job's key: a removal's, a sheet from YouTube's, a transcription's and a sheet from
-    an audio file's have theirs after a prefix."""
+    """The song's identity key in a job's key: a removal's, a sheet from YouTube's, a transcription's, a sheet from
+    an audio file's, a lyrics pick's and a lyrics clear's have theirs after a prefix. A lyrics search's
+    (``LYRICS_SEARCH``) is deliberately kept whole: a job of no song's, as every ``INDEX_READS`` job is, which the page
+    follows by its id and which never joins the song's jobs; only ``song_of_job``, the lane's, sees its song."""
     return (job_key.removeprefix(REMOVING).removeprefix(YOUTUBE_SHEET).removeprefix(TRANSCRIBE)
-            .removeprefix(AUDIO_SHEET))
+            .removeprefix(AUDIO_SHEET).removeprefix(LYRICS_PICK).removeprefix(LYRICS_CLEAR))
 
 
 def song_of_job(job_key: str) -> str:
     """The song a job is about, for the lane alone (``JobQueue``'s place for a request, and the song a lane worker
     sees running): ``song_key_of``'s, and the song's own changes, Make this my version (``EXPORTING``) and a harmonica
     tab's reading (``READING``), whose keys hold the song's identity key after their prefix, up to its first ":" (an
-    identity key has none). The queue's joining and every other reader keep ``song_key_of`` and the whole key."""
+    identity key has none); and a lyrics search's (``LYRICS_SEARCH``), a job of no song's everywhere else, so that it
+    never runs beside the song's pick or transcription, nor they beside it. The queue's joining and every other reader
+    keep ``song_key_of`` and the whole key."""
     for prefix in (EXPORTING, READING):
         if job_key.startswith(prefix):
             return job_key.removeprefix(prefix).split(":", 1)[0]
-    return song_key_of(job_key)
+    return song_key_of(job_key.removeprefix(LYRICS_SEARCH))
 
 
 def _in_the_lane(args: Sequence[str]) -> bool:
@@ -577,6 +629,8 @@ def _in_the_lane(args: Sequence[str]) -> bool:
         return any(arg.startswith(("--search=", "--artist=")) for arg in options)
     if args[:1] == ("harptabs",):
         return any(arg.startswith("--artist=") for arg in options)
+    if args[:1] == ("lyrics",):
+        return any(arg.startswith("--as=") for arg in options)
     return False
 
 
@@ -585,8 +639,9 @@ def lane_of(steps: Sequence[tuple[str, Sequence[str]]]) -> bool:
     aside (``JobQueue.submit``): every one a command asked for now that sends a lookup's few requests and takes turns
     at caracole's lock in the lane (commands/_common.py ``exclusive(..., lane=True)``): ``caracole get``, but for a
     songbook's Get the missing songs (``--no-songbooks``), which would fill the lane for minutes; ``ug --link``;
-    ``lacuerda --search`` and ``--artist``; ``harptabs --artist``. A yt-dlp run (``youtube``), ``versions``, an add
-    and every other command are the queue's, and so is a request with one of them."""
+    ``lacuerda --search`` and ``--artist``; ``harptabs --artist``; ``lyrics --as``, a song's lyrics searched. A
+    yt-dlp run (``youtube``), ``versions``, an add and every other command are the queue's, and so is a request with
+    one of them."""
     return bool(steps) and all(_in_the_lane(tuple(args)) for _, args in steps)
 
 
@@ -632,7 +687,7 @@ def _stages(steps: Sequence[Step]) -> list[Stage]:
     """A job's stages, all waiting: a lookup's (``caracole versions --choose`` and ``--clear`` run one), then Keep
     it's it hasn't, a search of LaCuerda's (``SEARCH_STAGES``), a sheet from a YouTube video's
     (youtube_sheet.py's ``STAGES``), a transcription's (transcribe_job.py's ``STAGES``), a sheet from an audio
-    file's (audio_sheet.py's ``STAGES``), a sync's with another
+    file's (audio_sheet.py's ``STAGES``), a lyrics pick's (lyrics_pick.py's ``STAGES``), a sync's with another
     caracole (``PEER_TAKE_STAGES``,
     ``PEER_SYNC_STAGES``, ``INDEX_MERGE_STAGES``), and a UG link's read (``UG_LINK_STAGES``); none for other
     commands."""
@@ -660,6 +715,10 @@ def _stages(steps: Sequence[Step]) -> list[Stage]:
         from caracole.audio_sheet import STAGES as AUDIO_STAGES
 
         names.update((name, label) for name, label in AUDIO_STAGES if name not in names)
+    if any(_picks_lyrics(step.args) for step in steps):
+        from caracole.lyrics_pick import STAGES as PICK_STAGES
+
+        names.update((name, label) for name, label in PICK_STAGES if name not in names)
     for step in steps:
         names.update((name, label) for name, label in _peer_stages(step.args) if name not in names)
         names.update((name, label) for name, label in _ug_link_stages(step.args) if name not in names)
