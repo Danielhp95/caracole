@@ -60,6 +60,12 @@ made ``BUILT``:
   before the first change of a row, or never: a merge that moves records alone backs nothing up). ``err``:
   ``"TransferError"``, nothing written. Merged as the phone merges, noting no arrival (``arrivals=False``: the
   computer's own record, for the partial exports it makes, which the phone never does).
+- ``have.jsonl``: ``{fn: "core.index.Have.document", note, fixture, kw: {name, computer, sites, cut}, out, text}``:
+  the document the phone of ``fixture`` (replayed, kv ``sync:cut:<computer>`` set to ``cut`` when it isn't null)
+  asks ``POST /peer/index/newer`` with for ``sites`` (null: every one), ``out``, and ``text`` its bytes as the route
+  receives them (``json.dumps(ensure_ascii=False, separators=(",", ":"))``, core.json.PyJson's compact ``dumps``):
+  test_index_transfer_newer.have_document, which the route reads (``read_have``) and ``_night``'s partial exports
+  are asked with. The Kotlin replay builds ``Have.document`` of the same database and compares it byte for byte.
 - ``newest.jsonl``: ``{fn: "caracole.index_transfer.newest", fixture, out | err}``, over each phone fixture replayed.
 - ``sites.jsonl``: ``{fn: "caracole.index_transfer.SITES", args: [name], out: {name, title, tables, kv}}``, each site
   in caracole's order.
@@ -551,6 +557,21 @@ NIGHT_MERGES: list[tuple[str, str, str, list[str] | None]] = [
     ("unreadable", "unreadable", "phone-after", None),
 ]
 
+# Each phone's document of what it holds (have.jsonl): its name, the phone fixture, the sites asked (None: every
+# one, as the sync asks for the newer ones), its kv sync:cut:PEER (None: no record), and what it is.
+HAVE_CASES: list[tuple[str, str, list[str] | None, dict[str, Any] | None, str]] = [
+    ("whole", "phone-after", None, None, "a phone that merged the computer's whole export: no cut"),
+    ("whole-cut", "phone-after", None, {s: "2026-11-03T12:00:00Z" for s in index_transfer.SITES},
+     "the same phone with a cut of every site: newer-export's request"),
+    ("cut", "newer-after", None, {s: "2026-11-04T12:00:00Z" for s in index_transfer.SITES},
+     "a phone that merged a partial export of a cut"),
+    ("nothing", "fresh-before", None, None, "a phone that holds nothing of any site"),
+    ("no-validators", "rechecked-after", ["harptabs", "gametabs"], None,
+     "some sites; harptabs.com's sitemap with no validators, gametabs.net's with no keys"),
+    ("odd", "phone-before", ["gtptabs", "harptabs"], {"gtptabs": 5, "harptabs": "2026-11-01T00:00:00Z"},
+     "a record that isn't an object (left out), a time at +02:00, a cut that isn't a text (null)"),
+]
+
 NEWEST = ["fresh-before", "unseeded-before", "phone-before", "phone-after", "fresh-after", "unseeded-after",
           "rekey-after", "partial-after", "phone-sites-after", "stamps-before", "overflow-before",
           *(f"newest-{k}-before" for k in range(NEWEST_SOURCES))]
@@ -646,12 +667,12 @@ class Corpus:
         (``phone-after``): ``tonight`` whole, ``newer`` partial (its ``have`` that phone's records, its ``since`` the
         full export's time), ``uncut`` partial with no ``since`` (a phone that took the site catalogues), and ``newer`` as a file that lies about what it left out (``lying``) or can't say it
         (``unreadable``)."""
-        import test_index_transfer_newer as tn
-
         where = self.workdir / "night"
         where.mkdir()
-        with closing(self.replayed("phone-after", where / "phone")) as phone:
-            cut, uncut = tn.have_of(phone, since=_stamp(NOW)), tn.have_of(phone)
+        # The phone's own documents (have.jsonl's "whole-cut" and "whole"), read as the route reads them.
+        cut = index_transfer.read_have(self.have_document("phone-after", {s: _stamp(NOW) for s in index_transfer.SITES},
+                                                          None))[1]
+        uncut = index_transfer.read_have(self.have_document("phone-after", None, None))[1]
         with closing(db.connect(self.workdir / "computer" / "caracole.sqlite")) as conn:
             night(conn)
             for name, have, patch in (("tonight", None, None), ("newer", cut, None), ("uncut", uncut, None),
@@ -664,6 +685,27 @@ class Corpus:
                         patch(out)
                     out.execute("VACUUM")
                     self.texts[f"{name}-export"] = _fixture(dump_fixture(out, raw=True), f"{name}-export")
+
+    def have_document(self, fixture: str, cut: dict[str, Any] | None, sites: list[str] | None) -> dict[str, Any]:
+        """The document the phone of ``fixture`` asks ``PEER`` with (test_index_transfer_newer.have_document), its kv
+        ``sync:cut:PEER`` ``cut`` (none: no record)."""
+        import tempfile
+
+        import test_index_transfer_newer as tn
+
+        with tempfile.TemporaryDirectory(dir=self.workdir) as tmp, closing(self.replayed(fixture, Path(tmp))) as conn:
+            if cut is not None:
+                db.kv_set_json(conn, tn.CUT + PEER, cut)
+            return tn.have_document(conn, PEER, sites)
+
+    def haves(self) -> list[dict[str, Any]]:
+        out = []
+        for name, fixture, sites, cut, note in HAVE_CASES:
+            doc = self.have_document(fixture, cut, sites)
+            out.append({"fn": "core.index.Have.document", "note": note, "fixture": fixture,
+                        "kw": {"name": name, "computer": PEER, "sites": sites, "cut": cut}, "out": doc,
+                        "text": json.dumps(doc, ensure_ascii=False, separators=(",", ":"))})
+        return out
 
     def replayed_export(self, name: str, where: Path) -> Path:
         path = where / "export.sqlite"
@@ -862,6 +904,36 @@ def test_the_phones_export_holds_the_pages_noted_since_the_last_push_and_how_the
     assert {r["row"]["page"] for r in rows if r.get("table") == "ug_artist_tabs"} == {SONG_DONGYE}
     assert by_name["reads-export"]["out"]["rows"]["ug_artist_tabs"] == 2
     assert {m["note"] for m in corpus.exports if "err" in m} == {c[3] for c in EXPORT_CASES[-2:]}
+
+
+def test_have_jsonl_is_the_document_a_phone_asks_for_the_part_it_lacks_with(corpus):
+    check(INDEX / "have.jsonl", jsonl(corpus.haves(), corpus="index/have", made_by=MADE_BY))
+
+
+def test_each_have_document_is_read_by_the_route_and_a_computer_holding_the_same_sends_no_sitemap(corpus, tmp_path):
+    for record in corpus.haves():
+        name = record["kw"]["name"]
+        sites, have = index_transfer.read_have(json.loads(record["text"]))  # as the route reads its body
+        assert list(sites) == record["out"]["sites"], name
+        with closing(corpus.replayed(record["fixture"], tmp_path / name)) as conn:  # a computer whose index is its
+            path = tmp_path / name / "export.sqlite"
+            index_transfer.export(conn, path, sites, now=NIGHT_EXPORT, have=have)
+            with closing(sqlite3.connect(path)) as out:
+                cut = json.loads(out.execute(f"SELECT value FROM {index_transfer.META} WHERE key = 'partial'")
+                                 .fetchone()[0])
+                for site in sites:
+                    mapped = index_transfer.SITEMAPPED[site]
+                    records = index_transfer._records(conn, "main", mapped.key)
+                    named = {n for n, r in records.items() if isinstance(r, dict)}
+                    validated = {n for n in named if records[n].get("etag") is not None
+                                 or records[n].get("last_modified") is not None}
+                    assert set(cut[site]["same"]) == validated, (name, site)  # every one it can tell left out
+                    sent = {r[0] for r in out.execute(f"SELECT DISTINCT {mapped.column} FROM {mapped.table}")}
+                    if site == "lacuerda":
+                        sent = {p for p in sent if p.startswith("tabs/")}
+                    assert sent <= named - validated, (name, site, sent)  # rows of those with no validators alone
+    whole = next(r for r in corpus.haves() if r["kw"]["name"] == "whole-cut")
+    assert whole["out"]["have"]["ug"]["since"] == _stamp(NOW)  # newer-export was asked with it (_night)
 
 
 def test_newest_jsonl_is_what_index_transfer_newest_says(corpus):

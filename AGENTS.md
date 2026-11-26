@@ -2707,10 +2707,12 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   both records, so the two answers agree).
 - **Only the part it doesn't hold** of each site taken (SyncEngine.merge): `POST /peer/index/newer` with core.index's
   `Have` document (the phone's record of each sitemap but its `checked_at`, and `since`, kv `sync:cut:<computer id>`,
-  `Have.CUT_KEY`: the computer's own `exported_at` of the last export of its the phone merged, whole or partial, kept
-  apart from `sync:index:`, whose stamps the phone's own pushed pages move: a page the computer read meanwhile is
+  `Have.CUT_KEY`: the computer's own `exported_at` of the last partial export of the cut asked that the phone merged,
+  recorded only when that time is within the merge's clock bound (below), kept apart from `sync:index:`, whose stamps the phone's own pushed pages move: a page the computer read meanwhile is
   later than the cut, so it comes whatever the push did); a computer that answers 404 or 405 (older) or 413 (a
-  document too large) the whole, any other refusal the stage's failure. Once merged, the file's META `partial` is checked to be the cut asked for
+  document too large) the whole, any other refusal the stage's failure. The document is held to Python's by
+  vectors/index/have.jsonl (`IndexReplay.have`, byte for byte; tests/test_conformance_index.py feeds each to
+  `read_have` and to an export of the same database, which leaves out every sitemap that has validators). Once merged, the file's META `partial` is checked to be the cut asked for
   (`Have.mismatch`: every site, its `since`, nothing left out the phone lacks) and no sitemap it left out held
   otherwise (`Merged.unheld`), else the stage fails in "… isn't the part asked for" and nothing is recorded (its merge
   lost no row); else `sync:index:` and `index:merged` (the file's newest, a part's no later than the whole's) move

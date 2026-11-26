@@ -1,5 +1,6 @@
 package io.github.danielhp95.caracole.core.testing.replays
 
+import io.github.danielhp95.caracole.core.index.Have
 import io.github.danielhp95.caracole.core.index.IndexTransfer
 import io.github.danielhp95.caracole.core.index.Sites
 import io.github.danielhp95.caracole.core.index.Stamps
@@ -34,6 +35,7 @@ import java.nio.file.Files
  *   exactly when Python backed the database up; a refusal a TransferError that leaves the phone as it was;
  * - [seedFresh] and [freshMerge]: a new phone seeded as a new Python database is (fresh-before), then merging the
  *   full export as Python did (fresh-after);
+ * - [have], have.jsonl's document the phone asks the computer's part with (Have.document), byte for byte;
  * - [newest], newest.jsonl's each site's newest read; [sites], sites.jsonl's sites, their tables and kv;
  * - [stamps], stamps.jsonl's stamps.parse: datetime.fromisoformat's C reading, then the time in UTC.
  *
@@ -44,6 +46,7 @@ object IndexReplay : AreaReplay {
 
     const val MERGE = "index/merge.jsonl"
     const val NEWEST = "index/newest.jsonl"
+    const val HAVE = "index/have.jsonl"
     const val SITES = "index/sites.jsonl"
     const val STAMPS = "index/stamps.jsonl"
     const val NOW = "2026-11-03T12:00:00Z"
@@ -53,6 +56,7 @@ object IndexReplay : AreaReplay {
         seedFresh(misses)
         freshMerge(misses)
         newest(misses)
+        have(misses)
         sites(misses)
         stamps(misses)
     }
@@ -188,6 +192,32 @@ object IndexReplay : AreaReplay {
                         val order = Sites.ALL.map { it.name }.filter { it in newest }
                         misses.check(order == newest.keys.toList()) { "$fixture: in the order ${newest.keys}" }
                     }
+                }
+            }
+        }
+    }
+
+    /** have.jsonl: each phone fixture's `POST /peer/index/newer` document (Have.document of its database, its kv
+     * `sync:cut:<computer>` written as Python's kv_set_json writes it where the record gives one), as the PeerClient
+     * sends it (PyJson's compact dumps), byte for byte the text Python's route reads. */
+    fun have(misses: Misses) {
+        val records = Corpus.records(HAVE)
+        misses.check(records.size >= 6) { "$HAVE holds ${records.size} records" }
+        for (record in records) {
+            val fixture = record.extra.getValue("fixture").jsonPrimitive.content
+            val computer = record.kw.getValue("computer").jsonPrimitive.content
+            val sites = (record.kw["sites"] as? JsonArray)?.map { it.jsonPrimitive.content } ?: Sites.ALL.map { it.name }
+            val cut = record.kw["cut"] as? kotlinx.serialization.json.JsonObject
+            inFolder("caracole-have") { dir ->
+                TestDb.fresh(dir).use { database ->
+                    database.writeBlocking { db ->
+                        Fixtures.load(db, "index/fixtures/$fixture.jsonl")
+                        if (cut != null) db.kvSetJson(Have.CUT_KEY + computer, cut)
+                    }
+                    val text = io.github.danielhp95.caracole.core.json.PyJson.dumps(
+                        database.read { Have.document(it, computer, sites) }, compact = true)
+                    val want = record.extra.getValue("text").jsonPrimitive.content
+                    misses.check(text == want) { "${record.kw["name"]}: the phone's document $text, Python's $want" }
                 }
             }
         }

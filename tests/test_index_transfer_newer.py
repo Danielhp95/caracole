@@ -30,15 +30,32 @@ UG_SITEMAPS = [str(n) for n in range(1, 13)]  # twelve of UG's sitemaps, as a re
 home = tt.home  # the computer's database, test_index_transfer.py's fixture
 
 
+CUT = "sync:cut:"  # the phone's kv of each site's cut of a computer, by its id (core.index.Have.CUT_KEY)
+
+
+def have_document(conn: sqlite3.Connection, computer: str, sites=None) -> dict:
+    """``POST /peer/index/newer``'s document as the phone builds it of its database (core.index.Have.document, held to
+    this by vectors/index/have.jsonl): the sites asked, and of each the phone's record of every sitemap (listing page)
+    it holds, an object, less its ``checked_at``, and ``since``, its kv ``sync:cut:<computer>``'s text of the site,
+    else null."""
+    try:
+        cuts = json.loads(db.kv_get(conn, CUT + computer) or "{}")
+    except ValueError:
+        cuts = {}
+    cuts = cuts if isinstance(cuts, dict) else {}
+    names = list(transfer.chosen(sites))
+    return {"sites": names, "have": {name: {
+        "sitemaps": {n: {k: v for k, v in r.items() if k != "checked_at"}
+                     for n, r in transfer._records(conn, "main", transfer.SITEMAPPED[name].key).items()
+                     if isinstance(r, dict)},
+        "since": cuts.get(name) if isinstance(cuts.get(name), str) else None} for name in names}}
+
+
 def have_of(conn: sqlite3.Connection, sites=None, since: str | None = None) -> dict[str, transfer.Have]:
-    """What the phone holds of each site, as its sync asks with it: its record of each sitemap (listing page) but its
-    ``checked_at``, and ``since``."""
-    have = {}
-    for name in transfer.chosen(sites):
-        records = transfer._records(conn, "main", transfer.SITEMAPPED[name].key)
-        have[name] = transfer.Have({n: {k: v for k, v in r.items() if k != "checked_at"}
-                                    for n, r in records.items() if isinstance(r, dict)}, since)
-    return have
+    """What the phone holds of each site, as its sync asks with it (``have_document``, read as the route reads it),
+    with ``since`` in place of its cuts."""
+    _, have = transfer.read_have(have_document(conn, "", sites))
+    return {name: transfer.Have(h.sitemaps, since) for name, h in have.items()}
 
 
 def computer(conn: sqlite3.Connection) -> None:

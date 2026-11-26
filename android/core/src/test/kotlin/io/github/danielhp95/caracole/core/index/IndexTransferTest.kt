@@ -133,6 +133,8 @@ class IndexTransferTest {
 
     @Test fun newestIsWhatIndexTransferNewestSays() = Misses(IndexReplay.NEWEST).also { IndexReplay.newest(it) }.assertNone()
 
+    @Test fun theHaveDocumentIsPythons() = Misses(IndexReplay.HAVE).also { IndexReplay.have(it) }.assertNone()
+
     @Test fun theSitesAreIndexTransfersSites() = Misses(IndexReplay.SITES).also { IndexReplay.sites(it) }.assertNone()
 
     @Test fun aRecordIsWrittenBackAsJsonDumpsWritesJsonLoadsReading() {
