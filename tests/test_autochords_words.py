@@ -153,3 +153,39 @@ def test_a_line_never_passes_fifty_two_columns():
     for line in lines:
         assert len(line) == 1 or display_columns(" ".join(w.text for w in line))[-1] <= 52
     assert [len(line) for line in lines] == [4, 4, 4, 1, 1]
+
+
+def test_under_ten_seconds_sung_is_nothing_sung():
+    from caracole.autochords.words import MIN_SUNG_S, sung_time, too_little_sung
+
+    assert MIN_SUNG_S == 10.0
+    assert sung_time([Span(0.0, 2.5), Span(10.0, 13.7)]) == 6.2
+    assert too_little_sung([Span(0.0, 2.5), Span(10.0, 13.7)]) == "sung 6.2 s"
+    assert too_little_sung([]) == "sung 0.0 s"
+    assert too_little_sung([Span(0.0, 10.0)]) is None
+
+
+def test_few_words_or_few_a_minute_is_nothing_sung():
+    from caracole.autochords.words import MIN_WORDS, MIN_WORDS_A_MINUTE, too_few_words
+
+    assert (MIN_WORDS, MIN_WORDS_A_MINUTE) == (8, 20.0)
+
+    def words(n):
+        return [Word(float(i), i + 0.5, "la", True) for i in range(n)]
+
+    assert too_few_words(words(12), [Span(0.0, 100.0)]) == "12 words in 1:40 sung"  # 7 a minute
+    assert too_few_words(words(7), [Span(0.0, 30.0)]) == "7 words in 0:30 sung"  # under 8
+    assert too_few_words(words(5), [Span(0.0, 70.0)]) == "5 words in 1:10 sung"
+    assert too_few_words(words(1), [Span(0.0, 30.0)]) == "1 word in 0:30 sung"
+    assert too_few_words(words(43), [Span(0.0, 18.7)]) is None
+
+
+def test_the_measured_songs_are_sung():
+    from caracole.autochords.words import too_few_words, too_little_sung
+
+    # (words kept, seconds sung): docs/superpowers/plans/2026-11-20-transcribed-lyrics-results.md
+    for kept, sung in [(242, 116.2), (269, 206.7), (43, 18.7), (220, 150.0)]:
+        spans = [Span(0.0, sung)]
+        words = [Word(0.0, 0.1, "la", True)] * kept
+        assert too_little_sung(spans) is None
+        assert too_few_words(words, spans) is None

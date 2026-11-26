@@ -79,7 +79,9 @@ class LibraryPage(val assets: LibraryAssets, val requests: RequestsTab = Request
             put("youtube", JsonObject(mapOf("ok" to JsonPrimitive(false), "why" to JsonPrimitive(YOUTUBE_PROBLEM),
                                             "off" to JsonPrimitive(true))))
             put("transcribe", JsonObject(mapOf("ok" to JsonPrimitive(false), "why" to JsonPrimitive(YOUTUBE_PROBLEM),
-                                               "songs" to JsonArray(emptyList()), "time" to JsonPrimitive(""))))
+                                               "songs" to JsonArray(emptyList()), "nothing" to JsonArray(emptyList()),
+                                               "unsung" to JsonArray(emptyList()),
+                                               "transcribed" to JsonArray(emptyList()), "time" to JsonPrimitive(""))))
             controls.timers?.let { timers -> put("timers", JsonObject(timers.mapValues { JsonPrimitive(it.value) })) }
         })
         val out = LinkedHashMap<String, JsonElement>()

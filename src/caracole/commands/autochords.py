@@ -16,6 +16,12 @@ caracole's lock while it works, so it waits for another caracole writing the
 library (a ``caracole-admin`` command, say), and hands it to a waiting lookup
 between two songs (``_common.hand_over``), since a song takes minutes.
 
+Before their chords it hears the words of up to ``[autochords] transcribe_per_run`` songs (3) no lyrics site has
+(run.py ``autochords_pending``'s ``hearing``), handing the lock to a lookup between a song's vocals and its words too;
+none with ``transcribe = false``, nor where ``youtube_fetch.transcribe_problem`` says this machine can't (the GPU
+build's nightly unit sees no GPU), which the to-do page then says. A hearing's setup failing stops the hearing alone,
+and the command still exits 0 on its account.
+
 ``--song "Artist - Title"`` works on that song alone, now: its purchase, or the
 audio caracole took from YouTube for it, as the library page's sheet from a YouTube
 video does (youtube_sheet.py). It refuses a song that isn't in the library, or is
@@ -62,14 +68,19 @@ def register(app: typer.Typer) -> None:
         missing = missing_packages()
         if missing:
             fail(f"{NOT_BUILT} (missing: {', '.join(missing)})")
+        from caracole.autochords.hearing import Hearing, sweep
         from caracole.autochords.run import autochords_pending
         from caracole.music import scan_music
+        from caracole.youtube_fetch import transcribe_problem
 
         logs.at_least(logs.VERBOSE)  # a line per song: its progress, minutes apart
         cfg = load_cfg(ctx)
         overrides = load_ovr(cfg)
         conn = open_db(cfg)
+        auto = cfg.autochords
+        transcriptions = auto.transcribe_per_run if auto.transcribe else 0
         with exclusive(cfg, "autochords"):
+            sweep(cfg.cache_dir)  # the work folders a killed job left, under the lock as a Hearing makes its own
             # A track dropped in after the night's run, with the unit started by hand, is
             # linked here first.
             music = scan_music(conn, cfg.music_dir)
@@ -78,9 +89,16 @@ def register(app: typer.Typer) -> None:
             only = {song_named(conn, song, overrides).id} if song is not None else None
             # A song takes minutes: a lookup waiting for the lock goes between two of them.
             handed = _common.handoffs()
-            stats = autochords_pending(conn, cfg, overrides=overrides,
-                                       between=lambda: _common.hand_over(cfg, conn), only=only)
+            # Where this machine can't hear words (the GPU build's nightly unit sees no GPU), the pass says why.
+            hearing = Hearing(cfg) if transcriptions and transcribe_problem(cfg) is None else None
+            try:
+                stats = autochords_pending(conn, cfg, overrides=overrides,
+                                           between=lambda: _common.hand_over(cfg, conn), only=only,
+                                           hearing=hearing, transcriptions=transcriptions)
+            finally:
+                if hearing is not None:
+                    hearing.close()
             typer.echo(f"auto-chords: {stats.summary()}")
             write_pages(conn, cfg, _common.overrides_since(cfg, overrides, handed), utcnow())
-        if stats.errors:  # the setup's problems; stats.failures are listed on the to-do page
+        if stats.errors:  # the setup's problems; stats.failures and a hearing's are listed on the to-do page
             raise typer.Exit(1)

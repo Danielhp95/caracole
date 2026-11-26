@@ -195,6 +195,7 @@ def test_the_library_page_offers_it_where_chords_can_be_made(able, queue, conn):
     body, data = page_data(app_for(able, queue))
     assert data["server"]["youtube"] == {"ok": True, "why": None, "off": False}
     assert '<input name="youtube"' in body  # the request form's field
+    assert '<p class="hint">Sheet made from the video, its lyrics heard from it when no site has them</p>' in body
     cards = {s["id"]: s for s in data["songs"]}
     assert cards[none_yet.id]["youtubeSheet"] is True and cards[charted.id]["youtubeSheet"] is False
 

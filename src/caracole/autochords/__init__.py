@@ -14,10 +14,11 @@ here: it is pure Python, as ``align`` is, while ``btc`` and ``beats`` need torch
 librosa and beat_this, which only the auto-chords environment has.
 
 For a YouTube song no lyrics site has, its lyrics are transcribed from its audio
-(transcribe_job.py, outside the package, runs these): ``separate`` the vocals
-(demucs-rs) and each frame's loudness, ``words`` where someone sings, the guard,
-the lines and the LRC (pure Python), ``transcribe`` the words (Whisper large-v3),
-and ``transcript`` the kept transcript and the offer (no third-party import).
+(``hearing`` runs these, for transcribe_job.py outside the package): ``separate``
+the vocals (demucs-rs) and each frame's loudness, ``words`` where someone sings,
+the guard, nothing sung, the lines and the LRC (pure Python), ``transcribe`` the
+words (Whisper large-v3), and ``transcript`` the kept transcript and the offer
+(no third-party import).
 """
 
 from caracole.autochords.merge import (
