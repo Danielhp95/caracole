@@ -1362,6 +1362,9 @@ It is rows.js's, shared by both pages:
   ⚠ changed on both, counted in the parts ticked as `peer_sync.in_scope` counts them for `POST /sync/apply` (sync.js
   `inScope`, with `_removes`: a song a songbook lists comes along with Songbooks, but a removal of it is the
   library's), and the chips Compared, Your choice and the parts. A part a file doesn't hold: "Not in this file".
+  A removal there of a song this side gives (proposed so, or a conflict chosen here) is that answer, never to take
+  (sync.js `answeredByItsSong`, `peer_sync.answered_by_its_song`'s, held to kept.jsonl's cases by test_sync_sheet.py),
+  counted again once its song is chosen there.
   With a caracole of another schema, Site indexes says why none goes, in the server's words (the comparison's
   `indexes_skipped`), there alone: the done view adds nothing of it, and it is no failure.
 - **A card for each conflict** in those parts: its two documents (`GET /api/sync/unit`, once a card; a file's read from
@@ -1376,31 +1379,32 @@ It is rows.js's, shared by both pages:
   notification) is followed quietly (`caracoleLibrary.track`), never started again; the sheet opened meanwhile shows
   it. Once `POST /sync/apply` is sent its answer is followed whatever the sheet does meanwhile (`posting`: Escape, as
   Hide, only hides it).
-- **What it did**: "Synced with:" and the other side's name (the summary's one bold text), when, the two sides as
-  icons, and a section a kind of change (`.sync-section[data-kind=taken|given|conflicts|songbooks|indexes|pages|left]`,
-  `left` the units the sync left as they were, with why), each a button that opens its rows, closed at first; drawn
-  from the comparison, the choices and the cards' documents the sheet sent, and the view's `outcome` and its `report`
-  (§3.5), from the outcome alone for a sync the page didn't start. A file's has no given section. Its indexes say
-  what each merge added, never a site's whole size as if new (sync-words.js `indexNews`, `newTabs`): "+231 new tabs"
-  and "1,503,236 in all", "up to date", "1,503,236 tabs, all new here" for a side that had none, a fall in red; the
-  headline the sites (each once, one taken and given too) and their new tabs, each side's apart when it took and gave
-  ("+231 new here · +40 on Studio", never one sum), each row then saying which way it went (`went`: "taken from
-  Studio", "given to Studio"); a side whose tabs only fell said too ("−210 tabs here · +40 on Studio"); a site given
-  with nothing new "nothing new for Studio". A conflict is listed as kept only where its side came: chosen there and
-  taken, chosen here and given (a file's here once its job is done), so a sync refused before any change says
-  "Nothing was taken or given.". A stage that failed though the sync went on past it (the phone's indexes or its copy
-  of the computer's pages, its job done; the computer's indexes, its job failed) is said in its words, with no tick,
-  the title "Synced with:" where changes were taken or given ("Not synced with:" only where none was), and a row of
-  its own (`indexes` "Indexes not brought up to date", `pages` "Pages not brought up to date"). The Journal's
-  outcome agrees with that title for any sync that took or gave changes and then failed, whatever stage (the give or
-  one of its pushes, the agreement, the pages, the indexes) or the server stopping it: what was shared first, then the
-  failure ("Failed" where the job failed, "Shared" waiting where it is done but a stage failed, "Interrupted"),
-  never doubling a sentence the failure's words say; with nothing shared the failure alone (outcome.py
-  `_peer_outcome`, `Outcomes.peerOutcome`). Indexes skipped
-  for the other's database of another schema (the report's `indexes_skipped`, commands/peer.py's and SyncEngine's)
-  are its indexes row, "Indexes not synced". The headline's tone is the one its sides share, none when they differ.
-  Sending a file says both numbers in the size's unit (sync-words.js `sizeOf`, "1.5 of
-  2.1 GB", the phone's `Sizes.of`).
+- **What it did**: "Synced with:" and the other side's name (the summary's one bold text), when, the two sides as icons,
+  and a section a kind of change (`.sync-section[data-kind=taken|given|conflicts|songbooks|indexes|pages|left]`, `left`
+  the units the sync left as they were, with why, never a removal whose song is here, `peer_sync.SONG_HERE`: the view's
+  outcome leaves it out, `status.changes_left`, as the Journal's line and outcome count none of it, and so do the
+  phone's Status, Outcomes, JobViews and `SyncOutcome.changesLeft`, its "Not synced:" lines too), each a button that
+  opens its rows, closed at first; drawn from the comparison, the choices and the cards' documents the sheet sent, and
+  the view's `outcome` and its `report` (§3.5), from the outcome alone for a sync the page didn't start. A file's has no
+  given section. Its indexes say what each merge added, never a site's whole size as if new (sync-words.js `indexNews`,
+  `newTabs`): "+231 new tabs" and "1,503,236 in all", "up to date", "1,503,236 tabs, all new here" for a side that had
+  none, a fall in red; the headline the sites (each once, one taken and given too) and their new tabs, each side's apart
+  when it took and gave ("+231 new here · +40 on Studio", never one sum), each row then saying which way it went
+  (`went`: "taken from Studio", "given to Studio"); a side whose tabs only fell said too ("−210 tabs here · +40 on
+  Studio"); a site given with nothing new "nothing new for Studio". A conflict is listed as kept only where its side
+  came: chosen there and taken, chosen here and given (a file's here once its job is done), so a sync refused before any
+  change says "Nothing was taken or given.". A stage that failed though the sync went on past it (the phone's indexes or
+  its copy of the computer's pages, its job done; the computer's indexes, its job failed) is said in its words, with no
+  tick, the title "Synced with:" where changes were taken or given ("Not synced with:" only where none was), and a row
+  of its own (`indexes` "Indexes not brought up to date", `pages` "Pages not brought up to date"). The Journal's outcome
+  agrees with that title for any sync that took or gave changes and then failed, whatever stage (the give or one of its
+  pushes, the agreement, the pages, the indexes) or the server stopping it: what was shared first, then the failure
+  ("Failed" where the job failed, "Shared" waiting where it is done but a stage failed, "Interrupted"), never doubling a
+  sentence the failure's words say; with nothing shared the failure alone (outcome.py `_peer_outcome`,
+  `Outcomes.peerOutcome`). Indexes skipped for the other's database of another schema (the report's `indexes_skipped`,
+  commands/peer.py's and SyncEngine's) are its indexes row, "Indexes not synced". The headline's tone is the one its
+  sides share, none when they differ. Sending a file says both numbers in the size's unit (sync-words.js `sizeOf`, "1.5
+  of 2.1 GB", the phone's `Sizes.of`).
 - **Export**: `GET /api/sync/sizes`, the parts with their sizes, Site indexes unticked; `POST /sync/export`, then the
   file's link (`a[download]` to `api/sync/export?export=ID`), clicked once by the page: the browser saves it, the
   phone's `DownloadListener` shares it; clicked again it says the file was sent once (caracole serve answers 404

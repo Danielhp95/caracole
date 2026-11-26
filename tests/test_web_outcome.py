@@ -890,6 +890,38 @@ def test_a_sync_whose_indexes_were_of_another_schema_says_so_after_what_it_share
         assert said(("skipped", ordinary)) == ("ready", "Shared", "1 change taken, 1 change given.")
 
 
+def test_a_removal_left_because_its_song_is_here_is_no_change_left_in_the_journal_or_the_summary():
+    """A sync that met the other side's removal of a song this side keeps, the song's own difference left unsettled
+    (``peer_sync.SONG_HERE``): that is the sync's answer, the song kept, never a change left. Its line, outcome and
+    view read as the same sync without it; a real leftover beside it is counted alone."""
+    from caracole.peer_sync import SONG_HERE
+    from caracole.web.jobs_routes import peer_outcome
+
+    from test_web_sync import peer_job
+
+    answered = ("removed/oasis/wonderwall", "left", SONG_HERE)
+    took = [("song/a/one", "taken", ""), ("song/b/two", "taken", ""), ("song/c/three", "taken", "")]
+    done = {"compare": ("done", "4 differences"), "take": ("done", "took 3"), "give": ("done", "gave 0"),
+            "agree": ("done", "12 units the books agree on")}
+
+    def said(units):
+        job = peer_job("sync", "done", done, units=units)
+        line = job_line(job, None)
+        over = outcome(job, line)
+        return (line.tone, line.text), (over.tone, over.word, over.reason), peer_outcome(job)["left"]
+
+    for others in ([], took):  # nothing else, or three taken: as the same sync without the removal
+        assert said(others + [answered]) == said(others)
+    assert said([answered]) == (("ready", "Shared"), ("ready", "Shared", "Nothing changed in either book."), [])
+    assert said(took + [answered])[1] == ("ready", "Shared", "3 changes taken.")
+    # A real leftover beside it: one left, not two.
+    real = ("song/radiohead/creep", "left", "it changed here since the comparison")
+    assert said([real, answered]) == (
+        ("waiting", "Shared · 1 change left as it was"),
+        ("waiting", "Shared", "Nothing changed in either book. 1 change left as it was."),
+        [["song/radiohead/creep", "it changed here since the comparison"]])
+
+
 def test_a_sync_whose_indexes_or_pages_failed_after_its_changes_says_what_it_shared_first():
     """The phone's sync goes on past a failed index or mirror stage (its job done, its line a wait in the stage's
     words); the computer's exits 1 for its index stage. Either took and gave its changes first: the outcome says them,

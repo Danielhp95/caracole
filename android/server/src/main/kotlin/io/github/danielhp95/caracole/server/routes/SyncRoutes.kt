@@ -267,9 +267,9 @@ class SyncRoutes(val engine: SyncEngine, val queue: JobQueue, val settings: Sync
 
     /** Each unit [outcome] left as it was, a line of the job's Output ("Not synced: song/a/b: why"): where the
      * Journal holds the reasons the Wi-Fi line's "the Journal says why" names (Syncs.said), a fresh comparison in the
-     * sheet having none of them. */
+     * sheet having none of them; none for a removal whose song is here ([SyncOutcome.changesLeft]: no change left). */
     private fun sayLeft(context: JobContext, outcome: SyncOutcome) {
-        for ((unit, why) in outcome.left) context.say("$NOT_SYNCED$unit: $why")
+        for ((unit, why) in outcome.changesLeft) context.say("$NOT_SYNCED$unit: $why")
     }
 
     /** A sync's job (kind `sync`, under `sync:<address>`, SyncEngine's stages): [sync] run with the stages told to

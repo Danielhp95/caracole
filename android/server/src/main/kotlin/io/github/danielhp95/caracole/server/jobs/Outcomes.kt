@@ -379,7 +379,7 @@ object Outcomes {
         val action = if (kind == "sync") COMPARE_AGAIN else null
         val taken = job.units.count { it.outcome == "taken" }
         val given = job.units.count { it.outcome == "given" }
-        val left = job.units.count { it.outcome == "left" }
+        val left = Status.changesLeft(job.units).size
         val parts = ArrayList<String>()
         if (taken > 0 || kind != "sync") parts += "${Status.plural(taken, "change")} taken"
         if (given > 0) parts += "${Status.plural(given, "change")} given"

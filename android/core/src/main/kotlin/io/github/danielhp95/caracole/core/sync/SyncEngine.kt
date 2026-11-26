@@ -77,7 +77,12 @@ data class Comparison(val id: String, val address: String, val peer: PeerState, 
  * sites merged; and [report], the sync's report (the sync redesign's §3.5: with whom, when, its parts, each index
  * taken or given counted before and after), null for a sync that stopped. */
 data class SyncOutcome(val taken: List<String>, val given: List<String>, val left: List<Pair<String, String>>,
-                       val agreed: Int, val indexed: List<String>, val report: JsonObject? = null)
+                       val agreed: Int, val indexed: List<String>, val report: JsonObject? = null) {
+    /** What it left as it was that is a change left: [left] but a removal left because its song is here
+     * ([Take.SONG_HERE], its song's difference unsettled), the sync's answer, the song kept (status.py's
+     * changes_left): the job's outcome and its "Not synced:" lines say these. */
+    val changesLeft: List<Pair<String, String>> get() = left.filter { it.second != Take.SONG_HERE }
+}
 
 /** What `POST /sync/test` says of the computer at [address] ([SyncEngine.tested]): its state, how many songs and
  * songbooks it holds, its indexes' newest read (null: none), and when the phone last synced with it (null: never). */

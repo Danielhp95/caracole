@@ -848,6 +848,81 @@ def test_a_refusal_says_the_servers_words_and_compares_again(served, tmp_path):
         assert page.wait("!document.getElementById('sync-counts').hidden")
         assert page.js("document.getElementById('sync-go').textContent") == "Sync"
 
+# A removal there of a song kept here (peer_sync.answered_by_its_song): the sheet counts it as the sync takes it.
+
+def answered_by_its_song_cases() -> list[dict]:
+    """vectors/sync/kept.jsonl's answered_by_its_song records, which peer_sync and the phone's Compare answer."""
+    from helpers.corpus import VECTORS
+
+    with open(VECTORS / "sync" / "kept.jsonl", encoding="utf-8") as lines:
+        found = [json.loads(line) for line in lines if line.strip()]
+    return [r for r in found if r.get("fn") == "answered_by_its_song"]
+
+
+def unit_difference(d: dict, proposal: str) -> dict:
+    """A vector's difference (decide's lists') as POST /sync/compare answers it, its proposal ``proposal``."""
+    change = {"theirs": (None, "new"), "mine": ("changed", None), "conflict": ("changed", "gone")}[proposal]
+    return difference(d["id"], d["label"], proposal, "", change)
+
+
+@in_chromium
+def test_a_removal_there_of_a_song_given_here_is_never_counted_to_take_as_the_shared_vectors_say(served, tmp_path):
+    """Each answered_by_its_song case of kept.jsonl, its ``kept`` a proposed give (``decide``'s second list) and its
+    ``take`` to take: the sheet's ↓ counts the take less the removals its song's give answers, as the sync takes
+    them."""
+    cases = answered_by_its_song_cases()
+    assert len(cases) >= 12, len(cases)
+    fake = FakeSync()
+    with opened(tmp_path, served(fake)) as page:
+        for case in cases:
+            take, kept = case["in"]["take"], case["in"]["kept"]
+            fake.comparison = dict(copy.deepcopy(COMPARISON), indexes=[], songbooks={}, differences=[
+                *(unit_difference(d, "mine") for d in kept), *(unit_difference(d, "theirs") for d in take)])
+            page.js("location.hash = '#sheet=sync'")
+            at_view(page, "what")
+            assert page.wait("!document.getElementById('sync-counts').hidden")
+            counts = dict(page.js(COUNTS))
+            assert counts["take"] == f"{len(take) - len(case['out'])} to take", (case["case"], counts)
+            assert counts["give"] == f"{len(kept)} to give", (case["case"], counts)
+            page.press("Escape")
+            assert page.wait(f"!{SHEET}.open")
+
+
+@in_chromium
+@pytest.mark.parametrize("device", ["computer", "phone"])
+def test_a_removal_there_of_a_song_changed_on_both_is_counted_to_take_only_once_there_is_chosen(served, tmp_path,
+                                                                                               device):
+    """Wonderwall changed here and removed there: a conflict, and its removal to take. Before any choice the removal
+    counts to take; its song kept here, it is that answer, no take (the next card's counts say so); taken from there,
+    it is taken with the song."""
+    differences = [
+        song("song/oasis/wonderwall", "Oasis", "Wonderwall", "conflict", ("changed", "gone")),
+        difference("removed/oasis/wonderwall", "removed Oasis - Wonderwall", "theirs",
+                   "removed there since the last share", (None, "new")),
+        song("song/eagles/hotel california", "Eagles", "Hotel California", "conflict", ("changed", "changed")),
+        song("song/the beatles/let it be", "The Beatles", "Let It Be", "theirs", (None, "new")),
+    ]
+    fake = FakeSync(state=PHONE_STATE if device == "phone" else STATE,
+                    comparison=dict(copy.deepcopy(COMPARISON), indexes=[], songbooks={}, differences=differences))
+    size = {"width": 390, "height": 844, "mobile": True} if device == "phone" else {}
+    url = served(fake, sync="sheet" if device == "phone" else "tab")
+    with opened(tmp_path, url, **size) as page:
+        for side, then in (("here", "1 to take"), ("there", "2 to take")):
+            page.js("location.hash = '#sheet=sync'")
+            at_view(page, "what")
+            assert page.wait("!document.getElementById('sync-go').disabled")
+            assert page.js(COUNTS) == [["take", "2 to take"], ["give", "0 to give"], ["both", "2 changed on both"]]
+            page.click("#sync-go")
+            at_card(page)
+            assert page.js(CARD)["name"] == "Oasis · Wonderwall"
+            page.click(f"#sync-keep-{side}")
+            assert page.wait("document.getElementById('sync-card-at').textContent === '2 of 2'")
+            assert page.js(COUNTS)[0] == ["take", then], side
+            at_card(page)
+            page.click("#sync-cancel")  # queues nothing; opened again, it compares afresh
+            assert page.wait(f"!{SHEET}.open")
+        assert fake.posted("/sync/apply") == []
+
 
 # --- following it, and what it did ------------------------------------------------------------------------------
 
@@ -919,6 +994,23 @@ def test_a_songbook_left_as_it_was_is_named_by_its_name(served, tmp_path):
         sync_through(page, fake)
         left = next(s for s in page.js(SUMMARY) if s["kind"] == "left")
         assert left["rows"][0][0] == "Wedding set", left["rows"]
+
+
+@in_chromium
+def test_a_removal_left_because_its_song_is_here_is_never_listed_as_left(served, tmp_path):
+    """The unattended sync's answer to a removal there of a song kept here (peer_sync.SONG_HERE): no change left, so
+    the summary of the same sync reads as without it (jobs_routes.peer_outcome, status.changes_left)."""
+    from caracole.peer_sync import SONG_HERE
+
+    units = TAKEN_GIVEN + [("removed/oasis/live forever", "left", SONG_HERE)]
+    over = sync_view("done", {"compare": ("done", "10 differences"), "take": ("done", "took 6"),
+                              "give": ("done", "gave 3"), "agree": ("done", "312 units the books agree on")},
+                     units, REPORT)
+    assert over["outcome"]["left"] == [] and over["line"]["text"] == "Shared"
+    fake = FakeSync(views=VIEWS[:-1] + [over])
+    with opened(tmp_path, served(fake) + "#sheet=sync") as page:
+        sync_through(page, fake)
+        assert "left" not in [s["kind"] for s in page.js(SUMMARY)]
 
 
 def indexes_done(report: dict) -> FakeSync:

@@ -497,6 +497,25 @@ class SyncRoutesTest {
         assertTrue(routes.alone(address) != null, "once over, another may be queued")
     }
 
+    @Test fun `a removal on the computer of a song left in conflict is no unit not synced, in the outcome or the Output`() {
+        val creep = onComputer("Radiohead", "Creep")
+        val address = computer.address.toString()
+        runBlocking { withTimeout(20_000) { queue.await(routes.alone(address)!!.id) } }  // the phone takes Creep
+        computer.database.writeBlocking { computer.store.remove(it, creep.key, "2026-11-03T11:00:00Z") }
+        app.database.writeBlocking { it.execute("UPDATE songs SET album = 'Pablo Honey' WHERE key = ?", creep.key) }
+        val unit = "song/${creep.key}"
+
+        val ended = runBlocking { withTimeout(20_000) { queue.await(routes.alone(address)!!.id) } }
+        assertEquals("done", ended.state)
+        val view = JobViews.view(ended, queue)
+        // The removal is the song's answer (Take.SONG_HERE): only the song's conflict is left, said and counted.
+        assertEquals(JsonArray(listOf(JsonArray(listOf(JsonPrimitive(unit), JsonPrimitive(SyncEngine.UNSETTLED))))),
+                     view.getValue("outcome").jsonObject["left"])
+        assertEquals(listOf("${SyncRoutes.NOT_SYNCED}$unit: ${SyncEngine.UNSETTLED}"), ended.said)
+        assertEquals("Shared · 1 change left as it was",
+                     view.getValue("line").jsonObject.getValue("text").jsonPrimitive.content)
+    }
+
     @Test fun `alone with nothing answering fails its compare stage in its words and skips the rest`() {
         val address = computer.address.toString()
         computer.close()

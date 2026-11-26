@@ -1152,6 +1152,15 @@ def peer_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | No
     jobs.append(("sync, interrupted after it took a change",
                  _interrupted(peer_job("sync", "running", dict(taken, give=("running", "1 of 2")), units=took[:1])),
                  None, 0, None, None))
+    # A removal there of a song kept here, left as the sync's answer (peer_sync.SONG_HERE, its song's difference left
+    # unsettled): no change left, the sync read as without it; a real leftover beside it counted alone.
+    from caracole.peer_sync import SONG_HERE
+
+    answered = ("removed/oasis/live forever", "left", SONG_HERE)
+    for note, units in (("nothing else", [answered]), ("its changes", took + [answered]),
+                        ("one left beside it", left + [answered])):
+        jobs.append((f"sync, done, a removal whose song is here: {note}", peer_job("sync", "done", shared, units=units),
+                     None, 0, None, None))
     # A sync's agree stage counted in another script's digits, as Python's \d and int() read them.
     jobs.append(("sync, done, its count in Arabic-Indic digits", peer_job("sync", "done", {
         "compare": ("done", ""), "agree": ("done", " ١٢ units the books agree on\n")}, units=took),

@@ -67,13 +67,14 @@ internal object SyncJson {
         "indexes_skipped" to text(c.indexesSkipped),
     ))
 
-    /** A sync job's outcome: the units taken here, given there, left (with why), how many the two agree on, the
+    /** A sync job's outcome: the units taken here, given there, left (with why: [SyncOutcome.changesLeft], a removal
+     * whose song is here none), how many the two agree on, the
      * indexes merged, and the sync's report (the sync redesign's §3.5) when there is one, as jobs_routes.peer_outcome
      * adds it. */
     fun outcome(o: SyncOutcome): JsonObject = JsonObject(linkedMapOf<String, JsonElement>(
         "taken" to texts(o.taken),
         "given" to texts(o.given),
-        "left" to JsonArray(o.left.map { (id, why) -> JsonArray(listOf(JsonPrimitive(id), JsonPrimitive(why))) }),
+        "left" to JsonArray(o.changesLeft.map { (id, why) -> JsonArray(listOf(JsonPrimitive(id), JsonPrimitive(why))) }),
         "agreed" to JsonPrimitive(o.agreed),
         "indexed" to texts(o.indexed),
     ).apply { o.report?.let { put("report", it) } })

@@ -338,13 +338,23 @@ def _artist_read(steps: list[Step], details: str) -> Line:
     return Line(tone, _short(text), details=None if tone == "added" else details)
 
 
+def changes_left(job: Job) -> list[tuple[str, str]]:
+    """The units a sync, a take or a pull left as they were (``Job.units``), each with why: but a removal left because
+    its song is here (``peer_sync.SONG_HERE``, its song's difference left unsettled), which is the sync's answer, the
+    song kept, and no change left. Its line, its outcome and its view (``jobs_routes.peer_outcome``) count these."""
+    from caracole.peer_sync import SONG_HERE
+
+    return [(unit, why) for unit, said, why in job.units if said == "left" and why != SONG_HERE]
+
+
 def _peer_done(job: Job, kind: str, details: str) -> Line:
-    """A sync, a take or a pull that is done: "Shared" or "Taken"; with a unit left as it was (``Job.units``), how many,
-    a wait; a stage that failed though its command ended (``caracole peer take`` with no backup first), its words."""
+    """A sync, a take or a pull that is done: "Shared" or "Taken"; with a unit left as it was (``changes_left``), how
+    many, a wait; a stage that failed though its command ended (``caracole peer take`` with no backup first), its
+    words."""
     failed = _stage_failure(job.stages)
     if failed is not None:
         return Line("waiting", failed, details=details)
-    left = sum(1 for _, outcome, _ in job.units if outcome == "left")
+    left = len(changes_left(job))
     if left:
         return Line("waiting", f"{_PEER_DONE[kind]} · {plural(left, 'change')} left as "
                                f"{'it was' if left == 1 else 'they were'}", details=details)

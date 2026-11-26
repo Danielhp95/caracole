@@ -152,7 +152,7 @@ object JobViews {
         fun ids(said: String) = JsonArray(job.units.filter { it.outcome == said }.map { JsonPrimitive(it.id) })
         return JsonObject(linkedMapOf(
             "taken" to ids("taken"), "given" to ids("given"),
-            "left" to JsonArray(job.units.filter { it.outcome == "left" }.map {
+            "left" to JsonArray(Status.changesLeft(job.units).map {
                 JsonArray(listOf(JsonPrimitive(it.id), JsonPrimitive(it.why)))
             }),
             "agreed" to (count?.let { PyInt.parse(it.groupValues[1]) }?.let(::JsonPrimitive) ?: JsonNull),

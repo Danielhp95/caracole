@@ -96,7 +96,7 @@ from caracole.get import GTPTABS_KEPT, MATCH_NOT_FOUND, NAMES, SHEET_FROM
 from caracole.icons import AUTO, INBOX, tag
 from caracole.logs import plural
 from caracole.web.jobs import INDEX_READS, INTERRUPTED, LOOKUP, REMOVING, Job, Stage, song_key_of
-from caracole.web.status import _PEER_DONE, READY, _WAITING, Line, SongFacts, doing, peer_kind
+from caracole.web.status import _PEER_DONE, READY, _WAITING, Line, SongFacts, changes_left, doing, peer_kind
 
 if TYPE_CHECKING:
     from caracole.config import Config
@@ -482,7 +482,7 @@ def _peer_outcome(job: Job, kind: str, line: Line) -> Outcome:
     action = COMPARE_AGAIN if kind == "sync" else None
     taken = sum(1 for _, said, _ in job.units if said == "taken")
     given = sum(1 for _, said, _ in job.units if said == "given")
-    left = sum(1 for _, said, _ in job.units if said == "left")
+    left = len(changes_left(job))
     parts = [f"{plural(taken, 'change')} taken"] if taken or kind != "sync" else []
     parts += [f"{plural(given, 'change')} given"] if given else []
     said = (", ".join(parts)).capitalize() + "." if parts else "Nothing changed in either book."
