@@ -659,7 +659,7 @@ def test_an_info_json_that_cant_be_written_fails_the_job_after_the_lyrics_are_ke
     state, said = heard.ends()["lyrics"]
     assert state == "done" and said.startswith("timed lyrics from LRCLIB")
     assert "info.json couldn't be written (" in said
-    assert "its lyrics are kept" in result.failed
+    assert result.failed.startswith("info.json couldn't be written (")  # said once, after "Lyrics kept; …"
     assert get_song(conn, song.id).lyrics_status == "found" and entry(cfg).record.text == "lrclib:77"
 
 

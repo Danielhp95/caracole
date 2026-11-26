@@ -2172,15 +2172,25 @@ It is rows.js's, shared by both pages:
   library_assets/requests.js, drawn from `/requests.json`: web/feed.py; no page of its own, every link and redirect to
   a request is `/#tab=requests&job=N`, status.py `details_href`.
   - Its finished requests keep their steps (feed.py `_finished`, `"steps"` right after `"reason"`): a lookup's, a
-    sheet from a YouTube video's, a transcription's or a sheet from an audio file's that started (`outcome.lists_steps`; the phone's
+    sheet from a YouTube video's, a transcription's, a sheet from an audio file's or a lyrics pick's that started
+    (`outcome.lists_steps`; the phone's
     `Outcomes.listsSteps`, whose `RequestsRoutes` hands `Feed.feed` their chips), never one cancelled before it ran
     nor a request of other commands.
-  - The three staged jobs over one song (staged.py: a sheet from a YouTube video, `YOUTUBE_STEPS`; a transcription,
-    `TRANSCRIBE_STEPS`; a sheet from an audio file, `AUDIO_STEPS`, the YouTube sheet's, its Audio step naming no site)
-    share outcome.py's rules, each given its own stages (`_staged`: its steps, the stage of its words and the site its
-    Audio step names): `_staged_steps`, `_staged_holds` (Ready: what the chords stage says the sheet holds, or why its words
-    wait; a YouTube sheet whose lyrics were done but whose heard words failed: "Chords only, no lyrics: the words
-    couldn't be heard here (why)."; a YouTube sheet's one Words step is its vocals and words stages) and `_staged_stopped` (Not made yet: the first stage after the song's that stopped it).
+  - The four staged jobs over one song (staged.py: a sheet from a YouTube video, `YOUTUBE_STEPS`; a transcription,
+    `TRANSCRIBE_STEPS`; a sheet from an audio file, `AUDIO_STEPS`, the YouTube sheet's, its Audio step naming no site;
+    a lyrics pick, `LYRICS_PICK_STEPS`, Song, Lyrics, Chords and PDF, its Lyrics step naming the record's site) share
+    outcome.py's rules, each given its own stages (`_staged`, a `Staged`: its steps, the stage of its words that may
+    wait, the stage whose words its Ready says, the chords or the pick's lyrics, and the step that names a site and
+    which): `_staged_steps`, `_staged_holds` (Ready: what that stage says, the sheet's chords or the lyrics a pick took
+    and what they replaced, or why its words wait; a YouTube sheet whose lyrics were done but whose heard words failed:
+    "Chords only, no lyrics: the words couldn't be heard here (why)."; a YouTube sheet's one Words step is its vocals
+    and words stages) and `_staged_stopped` (Not made yet, a pick's Not kept: the first stage after the song's that
+    stopped it).
+  - A lyrics search (`LYRICS_SEARCH`, no stages) says its step's label while it runs, then its last line's words as
+    LaCuerda's search's (`_artist_read`: Searched, Nothing found, Not searched with Try again); a lyrics pick
+    (`LYRICS_PICK`) is Ready once its lyrics stage kept them, else Not kept, and failed after the keep says so in the
+    command's last line ("Lyrics kept; the job failed after: …", `lyrics_pick.KEPT_FAILED_AFTER`, status.py
+    `_kept_failed`).
 - The library page's lines read only its steps (`outcome.progress`: while a lookup runs, once it has run a second
   (`BAR_AFTER`), its line, a song's or a result's row, is a bar of them, library.js `showLine`'s `barred`: a segment
   a step, `segsOf`, then the step in hand, its site and `count`, `stepWords`, "Sheet · Ultimate Guitar · 3 of 7",

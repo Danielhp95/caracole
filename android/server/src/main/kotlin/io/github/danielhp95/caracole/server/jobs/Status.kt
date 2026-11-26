@@ -70,6 +70,7 @@ internal class Shape(val job: Job) {
     val fromYoutube: Boolean get() = steps.any { JobCommands.sheetsFromYoutube(it.args) }
     val transcribes: Boolean get() = steps.any { JobCommands.transcribes(it.args) }
     val fromAudio: Boolean get() = steps.any { JobCommands.sheetsFromAudio(it.args) }
+    val picksLyrics: Boolean get() = steps.any { JobCommands.picksLyrics(it.args) }
 
     private companion object {
         fun stepState(state: String): String = when (state) {
@@ -224,6 +225,9 @@ object Status {
                 if (song.review) return Line("review", "Needs your pick", reviewLink(song, todo), details)
                 if (song.notFound) return Line("missing", "Not on the sites", todoLink(todo), details)
             }
+            if (job.key.startsWith(JobCommands.LYRICS_PICK) && lyricsKept(job)) {  // kept, then failed: said kept
+                return Line("failed", keptFailed(job), details = details)
+            }
             return Line("failed", stageFailure(job.stages) ?: failure(job.steps), details = details)
         }
         val key = job.key
@@ -248,6 +252,10 @@ object Status {
             val made = job.stages.any { it.name == "chords" && it.state == Job.DONE }
             if (made && song?.sheet != null) return Line("ready", READY, "Open" to song.sheet)
             return Line("waiting", "Not made yet", details = details)
+        }
+        if (key.startsWith(JobCommands.LYRICS_PICK)) {  // Ready once its lyrics are kept, whatever sheet there is
+            if (lyricsKept(job)) return Line("ready", READY, song?.sheet?.let { "Open" to it })
+            return Line("waiting", "Not kept", details = details)
         }
         if (song?.sheet != null) return Line("ready", READY, "Open" to song.sheet)
         if (song != null && song.ignored) return Line("added", "Ignored · overrides.toml")
@@ -292,6 +300,23 @@ object Status {
         val tone = READ_TONES.entries.first { said.startsWith(it.key) }.value
         val text = said.split("; ", limit = 2)[0].split(" (", limit = 2)[0].trimEnd('.') + "."
         return Line(tone, short(text), details = if (tone == "added") null else details)
+    }
+
+    /** The command's last line for a lyrics pick that failed after its lyrics were kept (lyrics_pick.py's
+     * KEPT_FAILED_AFTER). */
+    const val KEPT_FAILED_AFTER = "Lyrics kept; the job failed after"
+
+    /** Whether a lyrics pick's lyrics stage kept the record's lyrics (status.py's _lyrics_kept). */
+    private fun lyricsKept(job: Shape): Boolean = job.stages.any { it.name == "lyrics" && it.state == Job.DONE }
+
+    /** A lyrics pick that failed after its lyrics were kept (status.py's _kept_failed): the command's last line, its
+     * first sentence; with no such line, the same words over its failed stage's. */
+    private fun keptFailed(job: Shape): String {
+        val said = job.steps.asReversed().firstNotNullOfOrNull { step ->
+            step.output.asReversed().firstOrNull { it.startsWith("$KEPT_FAILED_AFTER: ") }?.let(PyText::strip)
+        } ?: stageFailure(job.stages)?.let { "$KEPT_FAILED_AFTER: $it" } ?: "$KEPT_FAILED_AFTER."
+        val cut = short(firstSentence(said))
+        return if (listOf(".", "!", "?", "…").any(cut::endsWith)) cut else "$cut."
     }
 
     /** A sync, a take or a pull that is done (status.py's _peer_done). */

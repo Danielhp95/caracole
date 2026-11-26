@@ -908,6 +908,29 @@ def test_a_lyrics_search_and_a_pick_or_transcription_of_one_song_never_run_at_on
     assert not pick.lane and queue._next(False) is None  # it waits for the search to end
 
 
+def test_a_lyrics_search_and_a_lookup_of_one_song_both_the_lanes_run_one_after_the_other():
+    from caracole.web.jobs import LYRICS_SEARCH, lyrics_search_steps
+
+    def search(queue):
+        return queue.submit("Lyrics under …", LYRICS_SEARCH + VIKINGOS,
+                            lyrics_search_steps("Nick Cani - Vikingos veganos", "Nick Cani - Vikingos"))[0]
+
+    def get(queue):
+        return queue.submit("Fetch Nick Cani - Vikingos veganos", VIKINGOS,
+                            lookup_steps("Nick Cani", "Vikingos veganos"), fetching=True)[0]
+
+    for first, second in ((search, get), (get, search)):
+        queue = JobQueue(FakeRunner(), lane=LANE)
+        one = first(queue)
+        assert one.lane and queue._next(True).id == one.id
+        two = second(queue)
+        assert two.lane and two.id != one.id  # neither joins the other
+        assert queue._next(True) is None  # never beside it: the song's job runs
+        with queue._lock:
+            next(job for job in queue._jobs if job.id == one.id).state = "done"
+        assert queue._next(True).id == two.id  # then it, in the lane
+
+
 # --- a sync's report, and an import's stages ------------------------------------------------------------------------
 
 REPORT = {"with": {"name": "Studio", "kind": "server", "address": "http://192.168.1.20:8737"},

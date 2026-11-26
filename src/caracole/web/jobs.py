@@ -586,7 +586,9 @@ def uploads_named(jobs: Sequence[Job]) -> set[str]:
 
 def song_key_of(job_key: str) -> str:
     """The song's identity key in a job's key: a removal's, a sheet from YouTube's, a transcription's, a sheet from
-    an audio file's and a lyrics pick's have theirs after a prefix."""
+    an audio file's and a lyrics pick's have theirs after a prefix. A lyrics search's (``LYRICS_SEARCH``) is
+    deliberately kept whole: a job of no song's, as every ``INDEX_READS`` job is, which the page follows by its id and
+    which never joins the song's jobs; only ``song_of_job``, the lane's, sees its song."""
     return (job_key.removeprefix(REMOVING).removeprefix(YOUTUBE_SHEET).removeprefix(TRANSCRIBE)
             .removeprefix(AUDIO_SHEET).removeprefix(LYRICS_PICK))
 

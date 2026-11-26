@@ -695,7 +695,7 @@ def scenarios() -> list[tuple[str, list[dict[str, Any]], dict[str, Any]]]:
                      event("audio", "done", "kept as its audio: MP3, 3:18"), event("lyrics", "done", "found, timed"),
                      event("chords", "done", "chords over the lyrics"))),
         ], {}),
-        ("a lyrics search and a lyrics pick never join the song's lookup, each asked again is the one", [
+        ("a lyrics search and a lyrics pick never join the song's lookup; the pick asked again is the one", [
             submit("Get Radiohead - Creep", KEY, GET_CREEP, fetching=True),
             submit("Lyrics under Radiohead - Creep", "lyrics-search:radiohead/creep",
                    lyrics_search_steps("Radiohead - Creep (Live)", "Radiohead - Creep")),

@@ -60,6 +60,7 @@ STAGES = (
 )
 NO_NEW = "no new lyrics"
 NOTHING_KEPT = "; nothing kept"
+KEPT_FAILED_AFTER = "Lyrics kept; the job failed after"  # the command's last line for a failure after the keep
 FAR = 10.0  # seconds between the record's length and the audio's past which the lyrics stage says so
 
 
@@ -271,7 +272,7 @@ class _Pick(StagedRun):
             write_info(self.conn, self.cfg.library_dir, self.song)
         except (OSError, SharedFolder) as e:  # the lyrics are kept by now: the stage says so, the job fails after
             self.info_failed = f"; info.json couldn't be written ({e})"
-            self.result.failed = self.result.failed or f"its lyrics are kept, but info.json couldn't be written ({e})"
+            self.result.failed = self.result.failed or f"info.json couldn't be written ({e})"
         return None
 
     def _put_back(self, folder: Any, before: Any) -> str:

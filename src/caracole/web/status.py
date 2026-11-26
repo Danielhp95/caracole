@@ -61,6 +61,15 @@ ran. So a job of other commands reads the same way:
   "Not made yet"; it says why it failed in its failed stage's words ("no
   singing heard", "the GPU failed: …"). So does a sheet from an audio file
   you gave (``jobs.AUDIO_SHEET``).
+  A song's lyrics searched under a name (``jobs.LYRICS_SEARCH``), no song's, says
+  while it runs its step's label ("Looking for lyrics under “Artist - Title”…"),
+  then the words ``caracole lyrics --as`` ends with, as LaCuerda's search's:
+  "Searched: …", "Nothing found: …" or "Not searched: …" (a site failed or waited).
+  A record of it picked (``jobs.LYRICS_PICK``) says Ready once its lyrics stage
+  kept them, a sheet or none to open, else "Not kept" (a site waited or failed,
+  or the record has no lyrics now, which exit 0); failed after the keep (its
+  chords, its PDF or info.json), it says so as the command's last line does
+  ("Lyrics kept; the job failed after: …"), else in its failed stage's words.
   A sync with another caracole (``caracole peer sync``, the Sync tab's: sync_routes.py) says "Shared", and a push
   another caracole sent taken (``caracole peer take``, peer_routes.py) or a pull of its units "Taken"; with a unit
   left as it was (the owner skipped it, or it changed on a side since the comparison), "Shared · 2 changes left as
@@ -86,12 +95,14 @@ from typing import Any
 
 from caracole.get import SHEET_FROM
 from caracole.logs import plural
+from caracole.lyrics_pick import KEPT_FAILED_AFTER
 from caracole.web.jobs import (
     AUDIO_SHEET,
     EXPORTING,
     INDEX_MERGE_COMMAND,
     INDEX_READS,
     INTERRUPTED,
+    LYRICS_PICK,
     PEER,
     READING,
     REMOVING,
@@ -274,6 +285,8 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page:
                 return Line("review", "Needs your pick", _review_link(song, todo), details)
             if song.not_found:
                 return Line("missing", "Not on the sites", _todo_link(todo), details)
+        if job.song_key.startswith(LYRICS_PICK) and _lyrics_kept(job):  # kept, then failed: said kept
+            return Line("failed", _kept_failed(job), details=details)
         return Line("failed", _stage_failure(job.stages) or _failure(job.steps), details=details)
     kind = peer_kind(job)
     if kind is not None:  # no song's: what it took, gave and left
@@ -300,6 +313,10 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page:
         if made and song is not None and song.sheet:
             return Line("ready", READY, ("Open", song.sheet))
         return Line("waiting", "Not made yet", details=details)
+    if job.song_key.startswith(LYRICS_PICK):  # Ready once its lyrics are kept, whatever sheet there is to open
+        if _lyrics_kept(job):
+            return Line("ready", READY, ("Open", song.sheet) if song and song.sheet else None)
+        return Line("waiting", "Not kept", details=details)
     if song is not None and song.sheet:
         return Line("ready", READY, ("Open", song.sheet))
     if song is not None and song.ignored:
@@ -336,6 +353,24 @@ def _artist_read(steps: list[Step], details: str) -> Line:
     tone = next(t for prefix, t in _READ_TONES.items() if said.startswith(prefix))
     text = said.split("; ", 1)[0].split(" (", 1)[0].rstrip(".") + "."
     return Line(tone, _short(text), details=None if tone == "added" else details)
+
+
+def _lyrics_kept(job: Job) -> bool:
+    """Whether a lyrics pick's lyrics stage kept the record's lyrics."""
+    return any(stage.name == "lyrics" and stage.state == "done" for stage in job.stages)
+
+
+def _kept_failed(job: Job) -> str:
+    """A lyrics pick that failed after its lyrics were kept: the command's last line ("Lyrics kept; the job failed
+    after: …", lyrics_pick.py ``KEPT_FAILED_AFTER``), its first sentence; with no such line (its output lost), the
+    same words over its failed stage's."""
+    said = next((line.strip() for step in reversed(job.steps) for line in reversed(step.output)
+                 if line.startswith(KEPT_FAILED_AFTER + ": ")), None)
+    if said is None:
+        failed = _stage_failure(job.stages)
+        said = f"{KEPT_FAILED_AFTER}: {failed}" if failed else f"{KEPT_FAILED_AFTER}."
+    said = _short(_SENTENCE_END.split(said, maxsplit=1)[0])
+    return said if said.endswith((".", "!", "?", "…")) else said + "."
 
 
 def _peer_done(job: Job, kind: str, details: str) -> Line:

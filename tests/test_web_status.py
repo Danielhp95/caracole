@@ -447,3 +447,98 @@ def test_an_import_of_a_file_is_a_sync_and_says_its_stages_and_once_over_synced(
     for s in made.stages:
         s.state = "done"
     assert job_line(made, None) == Line("ready", "Shared")
+
+
+# --- a song's lyrics searched under a name, and a record of it picked --------------------------------------------
+
+YEREN = "孟维来 - 野人"
+
+
+def lyrics_search_job(state="running", said=None):
+    from caracole.web.jobs import LYRICS_SEARCH, lyrics_search_steps
+
+    made = job(state, lyrics_search_steps(f"{YEREN} (官方MV)", YEREN), fetching=False, states=[
+        {"running": "running", "done": "done", "failed": "failed"}[state]],
+               outputs=[["Asked as 孟维来 - 野人 (its audio is 3:46); noted under [lyrics].", said]
+                        if said else []])
+    made.song_key = LYRICS_SEARCH + "孟维来/野人"
+    return made
+
+
+def test_a_lyrics_search_ends_in_its_last_lines_words():
+    # No stages and no song: while it runs, its step's label; over, what its last line says, as LaCuerda's search's.
+    assert job_line(lyrics_search_job(), None) == Line("running", f"Looking for lyrics under “{YEREN}”…")
+    details = details_href(3)
+    searched = f"Searched: LRCLIB and AZLyrics list 3 records for “{YEREN}”."
+    assert job_line(lyrics_search_job("done", searched), None) == Line("added", searched)
+    nothing = f"Nothing found: LRCLIB, Megalobiz and AZLyrics list nothing for “{YEREN}”."
+    assert job_line(lyrics_search_job("done", nothing), None) == Line("missing", nothing, details=details)
+    waited = ("Not searched: LRCLIB failed (lrclib: 503: https://lrclib.net/api/search: busy); waiting out "
+              "Megalobiz until 27 Nov 03:00; try again later.")
+    assert job_line(lyrics_search_job("done", waited), None) == Line("waiting", "Not searched: LRCLIB failed.",
+                                                                    details=details)
+    failed = lyrics_search_job("failed", "error: The library's database can't be read.")
+    assert job_line(failed, None) == Line("failed", "The library's database can't be read.", details=details)
+
+
+def lyrics_pick_job(state="running", stages=None, *, output=()):
+    from caracole.lyrics_pick import STAGES
+    from caracole.web.jobs import LYRICS_PICK, Stage, lyrics_pick_steps
+
+    said = stages or {}
+    made = [Step(label, tuple(args)) for label, args in lyrics_pick_steps(f"{YEREN} (官方MV)", "lrclib:28399373")]
+    if state != "running":
+        made[0].state = "done" if state == "done" else "failed"
+    made[0].output = list(output)
+    return Job(6, f"Lyrics for {YEREN} (官方MV)", LYRICS_PICK + "孟维来/野人", made, state=state,
+               display=f"{YEREN} (官方MV)",
+               stages=[Stage(name, label, *said.get(name, ("waiting", ""))) for name, label in STAGES])
+
+
+TAKEN = {"song": ("done", "in the book; its last search's lrclib:28399373"),
+         "lyrics": ("done", f"timed lyrics from LRCLIB: {YEREN} (野人, 3:46); in place of AZLyrics' plain lyrics"),
+         "chords": ("done", "chords over the lyrics"), "pdf": ("done", "made"), "pages": ("done", "")}
+OPEN = SongFacts(sheet="%E5%AD%9F%E7%BB%B4%E6%9D%A5/%E9%87%8E%E4%BA%BA/sheet%20%28auto%29.html")
+
+
+def test_a_lyrics_pick_is_ready_once_its_lyrics_are_kept():
+    lines = {"song": "Finding the song…", "lyrics": "Fetching lyrics…", "chords": "Working out the chords…",
+             "pdf": "Making the PDF…", "pages": "Writing the logbook page…"}
+    for name, text in lines.items():
+        assert job_line(lyrics_pick_job(stages={name: ("running", "")}), SongFacts()) == Line("running", text)
+    assert job_line(lyrics_pick_job("done", TAKEN), OPEN) == Line("ready", "Ready", ("Open", OPEN.sheet))
+    # Kept with no sheet to open (no audio, auto-chords not here): Ready all the same, its lyrics being what it did.
+    alone = TAKEN | {"chords": ("skipped", "no audio to make an auto sheet from"), "pdf": ("skipped", "no sheet")}
+    assert job_line(lyrics_pick_job("done", alone), SongFacts()) == Line("ready", "Ready")
+    # The job failed after the keep (the chords, the PDF, info.json): failed, saying the lyrics are kept.
+    chords = lyrics_pick_job("failed", TAKEN | {"chords": ("failed", "auto-chords can't read the audio"),
+                                                "pdf": ("skipped", "no new lyrics")},
+                             output=["Lyrics kept; the job failed after: auto-chords can't read the audio."])
+    assert job_line(chords, OPEN) == Line("failed", "Lyrics kept; the job failed after: auto-chords can't read the "
+                                                    "audio.", details=details_href(6))
+    info = lyrics_pick_job("failed", TAKEN | {"lyrics": ("done", TAKEN["lyrics"][1] + "; info.json couldn't be "
+                                                                 "written ([Errno 28] No space left on device)")},
+                           output=["Lyrics kept; the job failed after: info.json couldn't be written ([Errno 28] "
+                                   "No space left on device)."])
+    assert job_line(info, OPEN).text == ("Lyrics kept; the job failed after: info.json couldn't be written ([Errno 28] "
+                                         "No space left on device).")
+    # Its output lost (an older server's history), the stage that failed still says why.
+    assert job_line(lyrics_pick_job("failed", chords_stages := TAKEN | {"chords": ("failed", "auto-chords failed")}),
+                    OPEN).text == "Lyrics kept; the job failed after: auto-chords failed."
+    assert chords_stages["lyrics"][0] == "done"
+
+
+def test_a_lyrics_pick_that_kept_none_is_not_kept():
+    details = details_href(6)
+    for said in ("waiting out LRCLIB until 27 Nov 03:00; nothing kept",
+                 "LRCLIB failed (lrclib: 503: https://lrclib.net/api/get/28399373: busy); nothing kept",
+                 "LRCLIB's record 28399373 has no lyrics now; nothing kept"):
+        state = "failed" if " failed (" in said else "skipped"
+        kept_none = TAKEN | {"lyrics": (state, said), "chords": ("skipped", "no new lyrics"),
+                             "pdf": ("skipped", "no new lyrics")}
+        # An auto sheet of before is none of its doing: never Ready.
+        assert job_line(lyrics_pick_job("done", kept_none), OPEN) == Line("waiting", "Not kept", details=details)
+    # A refusal fails the job in its song stage's words.
+    refused = lyrics_pick_job("failed", {"song": ("failed", "its last search is over a week old: search again")})
+    assert job_line(refused, OPEN) == Line("failed", "its last search is over a week old: search again.",
+                                           details=details)

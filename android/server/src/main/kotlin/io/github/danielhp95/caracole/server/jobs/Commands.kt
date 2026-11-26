@@ -352,7 +352,8 @@ object JobCommands {
     }
 
     /** The song's identity key in a job's key: a removal's, a sheet from YouTube's, a transcription's, a sheet from
-     * an audio file's and a lyrics pick's have theirs after a prefix. */
+     * an audio file's and a lyrics pick's have theirs after a prefix; a lyrics search's is kept whole, a job of no
+     * song's (jobs.song_key_of). */
     fun songKeyOf(jobKey: String): String =
         jobKey.removePrefix(REMOVING).removePrefix(YOUTUBE_SHEET).removePrefix(TRANSCRIBE).removePrefix(AUDIO_SHEET)
             .removePrefix(LYRICS_PICK)
@@ -403,9 +404,8 @@ object JobCommands {
     /**
      * Whether a command is an interactive lookup (AGENTS.md's): `caracole get`, `versions` (keep, keep more, choose,
      * clear), `lacuerda --artist` or `--search`, `harptabs --artist`, `ug --link`, `lyrics --as`: the jobs of the
-     * lookup kinds (song,
-     * versions, lacuerda-artist, lacuerda-search, harptabs-artist, ug-link) a long job of the phone's own lets go first
-     * (JobContext.yieldToQueued).
+     * lookup kinds (song, versions, lacuerda-artist, lacuerda-search, harptabs-artist, ug-link, lyrics-search) a long
+     * job of the phone's own lets go first (JobContext.yieldToQueued).
      */
     fun isLookup(args: List<String>): Boolean = when (first(args)) {
         LOOKUP, VERSIONS -> true
@@ -419,9 +419,9 @@ object JobCommands {
     /**
      * The kind (JobSpec.kind) of a job read back from the history, which keeps none (history.py's format 1) for a job
      * of commands: by its key, as jobs_routes.view tells them apart (a removal, an export, a songbook's change, a
-     * site's index read, a sync), or a kind of the phone's own by its key's prefix ([phoneKinds], each prefix's kind,
-     * PhoneKinds': the render job's `render:`…), else by its first command (`versions`, `review`); an add the phone
-     * ran itself (no command, an `add` stage) is "add"; any other a song's ("song").
+     * site's index read, a lyrics search, a sync), or a kind of the phone's own by its key's prefix ([phoneKinds], each
+     * prefix's kind, PhoneKinds': the render job's `render:`…), else by its first command (`versions`, `review`); an
+     * add the phone ran itself (no command, an `add` stage) is "add"; any other a song's ("song"), a lyrics pick's too.
      */
     fun kindOf(key: String, commands: List<List<String>>, stageNames: List<String>,
                phoneKinds: Map<String, String> = PhoneKinds.ALL.values.associate { it.key to it.kind }): String = when {
@@ -434,6 +434,7 @@ object JobCommands {
         key.startsWith(HARPTABS_ARTIST) -> "harptabs-artist"
         key.startsWith(YOUTUBE_SEARCH) -> "youtube-search"
         key.startsWith(UG_LINK) -> "ug-link"
+        key.startsWith(LYRICS_SEARCH) -> "lyrics-search"  // no song's, as the other index reads; a pick is a song's
         key.startsWith(YOUTUBE_SHEET) -> "youtube"
         key.startsWith(INDEX_MERGE) -> "index-merge"
         key.startsWith(SYNCING) || key.startsWith(IMPORTING) -> "sync"

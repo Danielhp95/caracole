@@ -69,6 +69,7 @@ object JobViewsReplay : AreaReplay {
             "SONGBOOK_OPENS" to JsonArray(Status.OPENS.sorted().map(::JsonPrimitive)),
             "LOOKUP_STEPS" to steps(Outcomes.LOOKUP_STEPS), "YOUTUBE_STEPS" to steps(Outcomes.YOUTUBE_STEPS),
             "TRANSCRIBE_STEPS" to steps(Outcomes.TRANSCRIBE_STEPS), "AUDIO_STEPS" to steps(Outcomes.AUDIO_STEPS),
+            "LYRICS_PICK_STEPS" to steps(Outcomes.LYRICS_PICK_STEPS), "NAMES" to texts(Outcomes.NAMES),
             "COMMAND_STEPS" to texts(Outcomes.COMMAND_STEPS), "PEER_STEPS" to texts(Outcomes.PEER_STEPS),
             "ASKS" to texts(Outcomes.ASKS), "ELSEWHERE" to texts(Outcomes.ELSEWHERE),
             "SITE_NAMES" to texts(Outcomes.SITE_NAMES),

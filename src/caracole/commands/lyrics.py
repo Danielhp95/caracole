@@ -390,9 +390,10 @@ def _lyrics_as(cfg: Config, display: str, typed: str) -> None:
 def _lyrics_pick(cfg: Config, display: str, *, pick: int | None, record: str | None, progress: bool) -> None:
     """A row of the song's last search made its lyrics now (lyrics_pick.py), said a stage a line, as ``caracole
     transcribe`` says its own; its last line "No lyrics kept: …" for a refusal, a failure or a site that gave none,
-    "Lyrics kept; the job failed after: …" for a chords or a PDF failure once they were kept."""
+    "Lyrics kept; the job failed after: …" for a chords, a PDF or an info.json failure once they were kept, which
+    caracole serve's request line says (status.py)."""
     from caracole.commands.get import _Lines
-    from caracole.lyrics_pick import NOTHING_KEPT, PickRequest, pick_lyrics
+    from caracole.lyrics_pick import KEPT_FAILED_AFTER, NOTHING_KEPT, PickRequest, pick_lyrics
     from caracole.overrides import OverridesError, override_key
     from caracole.progress import ticker
 
@@ -406,7 +407,7 @@ def _lyrics_pick(cfg: Config, display: str, *, pick: int | None, record: str | N
         said = result.details.get("lyrics", "").removesuffix(NOTHING_KEPT)
         kept = result.states.get("lyrics") == "done"
         done = f"Done in {result.seconds:.1f} s." if kept else f"No lyrics kept: {said}."
-        stopped = "Lyrics kept; the job failed after" if kept else "No lyrics kept"  # a chords or a PDF failure
+        stopped = KEPT_FAILED_AFTER if kept else "No lyrics kept"  # a chords, a PDF or an info.json failure
         _common.staged_end(reporter, result, progress=progress, refused=stopped, done=done)
 
 
