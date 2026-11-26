@@ -17,10 +17,14 @@ with linked audio is due when:
   kept none), which can put each chord over its word, or by an older caracole
   over timed lyrics with a character not one column wide (Chinese, say), whose
   chords it wrote at their characters' indexes rather than their display
-  columns (its version's ``raw`` has no ``columns``): once more, each, so timed
+  columns (its version's ``raw`` has no ``columns``), or over the song's lyrics
+  before they became other words (its version's ``raw["lyrics_key"]``, the key
+  of the words it was made over, ``_lyrics_key``, isn't the song's now: a pick
+  of other lyrics; a sheet an older caracole made keeps none, and isn't made
+  again for it): once more, each, so timed
   lyrics that don't fit the audio make a plain sheet again once, never every
   night (plain lyrics that come after a sheet of none rarely get here: they need
-  no model, and the next render puts them on it, sheet_lyrics.py);
+  no model, and the next render puts them on it, sheet_lyrics.py, with their key);
 - that file hasn't already failed;
 - no other song keeps a ``sheet (auto).txt`` where its own would go (two songs
   whose names make one folder, ``library.SharedFolder``): such a song is skipped,
@@ -93,6 +97,7 @@ from caracole.autochords.merge import (
     parse_lrc_words,
     youtube_credit,
 )
+from caracole.autochords.sheet_lyrics import lyrics_key
 from caracole.autochords.transcript import (
     LYRICS_SOURCE,
     NOT_SUNG,
@@ -665,6 +670,10 @@ def _skip_reason(conn: sqlite3.Connection, song: Song, overrides: Overrides) -> 
     elif (raw.get("lyrics") == "none" and not raw.get("heard_nothing") and not _instrumental(song)
           and _heard_nothing(conn, song)):
         return None  # noted as having nothing sung since: once more, to say so
+    words = raw.get("lyrics_key")  # none on a sheet an older caracole made: up to date, as it was
+    if (words is not None and raw.get("lyrics") in ("synced", "plain") and raw.get("lyrics_source") != LYRICS_SOURCE
+            and _lyrics_key(song) not in (None, words)):
+        return None  # the song's lyrics are other words now (another pick): once more, over them
     if raw.get("lyrics") == "plain" and _synced_key(song) not in (None, raw.get("synced_lyrics")):
         return None  # timed lyrics came since: once more, with each chord over its word where they fit the audio
     if raw.get("lyrics") == "synced" and raw.get("columns") != COLUMNS and _wider_lines(song):
@@ -683,6 +692,17 @@ def _synced_key(song: Song) -> str | None:
     if lyrics is None or not lyrics.synced:
         return None
     return hashlib.sha256(lyrics.synced.encode("utf-8")).hexdigest()[:16]
+
+
+def _lyrics_key(song: Song) -> str | None:
+    """The key of the song's stored lyrics' words (``sheet_lyrics.lyrics_key`` of their plain text), which an auto
+    sheet made over them keeps as ``lyrics_key``: it is made again once they are other words. None when the song has
+    no words, or its lyrics can't be read."""
+    try:
+        lyrics = _sung_lyrics(song)
+    except (TypeError, ValueError):
+        return None
+    return lyrics_key(lyrics.plain) if lyrics is not None else None
 
 
 def _wider_lines(song: Song) -> bool:
@@ -974,7 +994,8 @@ def _keep(
     The key heard goes into the version's ``raw``, for ``keys.song_key``, and so does the shift
     of timed lyrics LRCLIB timed for audio of another length (``lyrics_shift``), what its
     chord lines' columns count (``columns``: ``COLUMNS``), and the timed lyrics the song had,
-    used or not (``synced_lyrics``, ``_synced_key``). A sheet made over a transcript keeps it as
+    used or not (``synced_lyrics``, ``_synced_key``); a sheet over those lyrics, the key of their words
+    (``lyrics_key``, ``_lyrics_key``). A sheet made over a transcript keeps it as
     ``lyrics_source``, ``transcript`` (its LRC, for the viewer's sung line) and ``transcript_made_at``
     (``_skip_reason`` compares it with the transcript kept now). Audio from
     YouTube (``video``) gives the version the video's address, so info.json names it, and its
@@ -997,6 +1018,9 @@ def _keep(
     synced = _synced_key(song)
     if synced is not None:
         raw["synced_lyrics"] = synced
+    words = _lyrics_key(song) if used in ("synced", "plain") and transcript is None else None
+    if words is not None:
+        raw["lyrics_key"] = words
     if video is not None:
         raw["youtube"] = video.as_json()
     version_id = upsert_version(

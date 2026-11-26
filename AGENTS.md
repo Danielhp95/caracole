@@ -1998,7 +1998,7 @@ It is rows.js's, shared by both pages:
 - merge.py is pure Python and the only module `__init__.py` imports.
 - sheet_lyrics.py, no model either (render.py imports it, in any package), puts lyrics that came after a sheet of none
   on it, `render_all` first thing, so every path to a page gives it them (`merge.with_plain_lyrics`, a version's
-  `raw["lyrics"]` then "plain").
+  `raw["lyrics"]` then "plain", and `raw["lyrics_key"]` their words' `lyrics_key`).
 - btc.py (with the vendored btc_model.py and LICENSE-BTC) and beats.py need torch, librosa and beat_this; run.py runs
   them over the library (`autochords_pending`), logging each song it works on and its place among those due
   ("Working out the chords of A - T (3 of 12)…", `_count_due`), and telling `on_step` each step (`STEPS`: the models
@@ -2090,6 +2090,10 @@ It is rows.js's, shared by both pages:
     says `transcript.NOTE` after the credit and the shift's line.
   - The version's `raw` gets `lyrics_source` "transcript", `transcript` (the LRC) and `transcript_made_at`, and none of
     the three otherwise; `raw["lyrics"]` stays "synced".
+  - A sheet over the song's own lyrics (synced or plain, no transcript) keeps `raw["lyrics_key"]`, 16 hex digits of
+    the SHA-256 of their plain text, its lines stripped and its blank runs folded (sheet_lyrics.py `lyrics_key`, run.py
+    `_lyrics_key`): `_skip_reason` makes it due again once the song's are other words; one with no key (made before
+    it) never for that.
   - `_skip_reason` makes the song due again when such a sheet finds a site's lyrics or an instrumental verdict, or finds the kept transcript's
     `made_at` is not its own (other audio, or transcribed again), and when a sheet of none finds a transcript (not for an instrumental song).
   - youtube_sheet.py's `holds` says "chords over the transcribed lyrics" for it.
