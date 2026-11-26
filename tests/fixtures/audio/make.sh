@@ -10,6 +10,7 @@
 #   the mean: the guess far too long.
 # - cbr.mp3: a CBR MP3 with no header, whose guess is exact; xing.mp3: a VBR MP3 with LAME's Xing header, whose
 #   length is the header's; tone.m4a: AAC. The three every reader agrees on.
+# - cbr-22k.mp3: a CBR MP3 at 22.05 kHz (MPEG-2, 576 samples a frame), for a stream that changes its rate.
 set -euo pipefail
 cd "$(dirname "$0")"
 quiet=(-map_metadata -1 -fflags +bitexact -flags:a +bitexact -id3v2_version 0 -ac 2 -ar 44100)
@@ -31,5 +32,6 @@ ff -f concat -safe 0 -i "$work/list.txt" -map_metadata -1 -fflags +bitexact -id3
   -c copy long-guess.mp3
 ff -f lavfi -i "$(tone 330 2)" "${quiet[@]}" -c:a libmp3lame -b:a 64k -write_xing 0 cbr.mp3
 ff -f lavfi -i "$(tone 330 2)" "${quiet[@]}" -c:a libmp3lame -q:a 9 xing.mp3
+ff -f lavfi -i "$(tone 330 1)" "${quiet[@]/44100/22050}" -c:a libmp3lame -b:a 32k -write_xing 0 cbr-22k.mp3
 ff -f lavfi -i "$(tone 330 2)" -map_metadata -1 -fflags +bitexact -flags:a +bitexact -ac 2 -ar 44100 \
   -c:a aac -b:a 64k tone.m4a

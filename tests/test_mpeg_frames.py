@@ -137,3 +137,27 @@ def test_bytes_made_to_crash_a_reader_never_make_the_count_raise():
     for case in cases:
         found = count(io.BytesIO(case))
         assert found is None or (found.seconds >= 0 and found.frames >= 0)
+
+
+def test_a_stream_that_changes_its_rate_is_counted_through_each_frame_at_its_own_rate(tmp_path):
+    low = count(AUDIO / "cbr-22k.mp3")  # MPEG-2 Layer III at 22.05 kHz: 576 samples a frame
+    assert low.seconds == pytest.approx(low.frames * 576 / 22050)
+    (tmp_path / "both.mp3").write_bytes((AUDIO / "cbr.mp3").read_bytes() + (AUDIO / "cbr-22k.mp3").read_bytes())
+
+    found = count(tmp_path / "both.mp3")
+
+    assert found.frames == CBR_FRAMES + low.frames
+    assert found.seconds == pytest.approx(CBR_FRAMES * 1152 / 44100 + low.frames * 576 / 22050)
+
+
+def test_junk_right_after_the_id3v2_tag_is_passed_over_within_its_bound(tmp_path):
+    from caracole.mpeg_frames import FIRST_WITHIN
+
+    data = (AUDIO / "short-guess.mp3").read_bytes()
+    (tmp_path / "padded.mp3").write_bytes(_id3v2(b"\x00" * 20) + b"Lyrics, padding, junk" * 30 + data)
+    (tmp_path / "far.mp3").write_bytes(_id3v2(b"\x00" * 20) + b"j" * (FIRST_WITHIN + 1) + data)
+    (tmp_path / "untagged.mp3").write_bytes(b"junk" + data)  # no tag: no claim it is MPEG audio at all
+
+    assert count(tmp_path / "padded.mp3").frames == SHORT_FRAMES
+    assert count(tmp_path / "far.mp3") is None
+    assert count(tmp_path / "untagged.mp3") is None

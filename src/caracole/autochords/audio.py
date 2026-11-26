@@ -34,8 +34,9 @@ def load_mono(path: Path | str, rate: int) -> np.ndarray:
 
     An MP3 whose first frame names no length is decoded by libsndfile only as far as it guesses (its size over the
     first frame's bitrate), with no error: where that decode is more than ``DISAGREES_S`` off the length its
-    frames say (mpeg_frames.py), it is read again through FFmpeg, which decodes every frame, as beat_this reads it.
-    Every other file is read as libsndfile reads it."""
+    frames say (mpeg_frames.py), it is read again through FFmpeg, which decodes every frame, as beat_this reads it,
+    with a warning naming the file; should FFmpeg fail, libsndfile's part is kept, with a warning saying how much of
+    the file it is. Every other file is read as libsndfile reads it."""
     path = Path(path)
     if not path.is_file():
         raise FileNotFoundError(f"audio file not found: {path}")
@@ -47,11 +48,16 @@ def load_mono(path: Path | str, rate: int) -> np.ndarray:
     from caracole.mpeg_frames import counted_length
 
     counted = counted_length(path)
-    if counted is not None and abs(len(y) / rate - counted) > DISAGREES_S:
-        log.info("%s: libsndfile decoded %.1f s of the %.1f s its MP3 frames hold; read again through FFmpeg.",
-                 path, len(y) / rate, counted)
+    if counted is None or abs(len(y) / rate - counted) <= DISAGREES_S:
+        return y
+    log.warning("%s: libsndfile decoded %.1f s of the %.1f s its MP3 frames hold; read again through FFmpeg.",
+                path, len(y) / rate, counted)
+    try:
         return _ffmpeg(path, rate)
-    return y
+    except Exception as e:  # noqa: BLE001 - no worse than libsndfile's read, which is kept, and said
+        log.warning("%s: FFmpeg couldn't read it again (%s): only the %.1f s libsndfile decoded of its %.1f s are "
+                    "heard.", path, e, len(y) / rate, counted)
+        return y
 
 
 def _ffmpeg(path: Path, rate: int) -> np.ndarray:

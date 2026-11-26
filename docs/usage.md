@@ -1442,11 +1442,18 @@ A song's sheet is made again when its audio changes, and when timed lyrics arriv
 over plain lyrics or none, so that each chord can go over its word.
 
 An MP3 that names no length (no Xing or VBRI header: a recorder's) is as long as its frames say,
-for the chords, `caracole audio` and the lyrics sites alike. Once, the first run after this came in
-makes again the auto sheets made from such a file whose length was guessed wrong, each logged
-(`Artist - Title: its MP3 is 7:20 long, not the 3:56 its length was guessed at …`); where caracole
-wrote the guess in wanted.txt itself, the line's length is corrected, and lyrics not found are asked
-for again with it. A song with a human sheet is left alone.
+for the chords, `caracole audio` and the lyrics sites alike; one libsndfile reads only in part is
+read through FFmpeg, with a warning naming the file. The first `caracole autochords` over every
+song after this came in (the nightly one; never a sheet made for one song) makes again, once, what
+was made from such a file whose length was guessed wrong: its auto sheet, over the whole of it; if
+it was read short, words heard from the part read are dropped and the song is offered them again
+(your own "it isn't sung" stays). Each song is a warning
+(`Artist - Title: its MP3 is 7:20 long, not the 3:56 its length was guessed at …`), the run's last
+line names them (`…; remeasured 2 whose MP3 names no length, made again: …`), and so does the to-do
+page, under "Made again: MP3s that name no length", until the next run. Where wanted.txt holds a
+line exactly as caracole writes one with the guessed length (`caracole audio`'s, or one you typed
+the very same), its length is corrected, and lyrics not found are asked for again with it; the
+song is then given to your phone at the next sync. A song with a human sheet is left alone.
 
 A song takes minutes, so it logs a line before each, `Working out the chords of Artist - Title
 (3 of 12)…`, and one after: `Artist - Title: auto sheet written (synced lyrics)`.

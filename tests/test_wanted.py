@@ -613,3 +613,14 @@ def test_retime_wanted_corrects_the_length_caracole_wrote_and_nothing_the_owner_
     assert path.read_text() == text.replace("Grabaciones | 0:02", "Grabaciones | 0:10")
     assert retime_wanted(path, "ana/luna", 1_703, 10_083) == []  # once
     assert retime_wanted(tmp_path / "none.txt", "ana/luna", 1_703, 10_083) == []
+
+
+def test_retime_wanted_reports_only_what_it_wrote(tmp_path):
+    from caracole.wanted import retime_wanted
+
+    path = tmp_path / "wanted.txt"
+    data = b"Ana - Luna | Grab\xff | 0:02\n"  # not UTF-8: read with U+FFFD, whose bytes the line doesn't hold
+    path.write_bytes(data)
+
+    assert retime_wanted(path, "ana/luna", 1_703, 10_083) == []
+    assert path.read_bytes() == data

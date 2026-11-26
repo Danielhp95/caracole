@@ -556,6 +556,18 @@ def _autochords_failures(conn: sqlite3.Connection, cfg: Config) -> tuple[list[st
 
 
 WORDS_UNHEARD_TITLE = "Lyrics that couldn't be transcribed"
+REMEASURED_TITLE = "Made again: MP3s that name no length"
+REMEASURED_INTRO = ("caracole read these MP3s only as far as their first frame's bitrate guessed their length, which "
+                    "they don't say. It counts their frames now: the last auto-chords run made their auto sheets again "
+                    "over the whole of each, and words heard from the part read are to be heard again. Nothing to do.")
+
+
+def _remeasured(conn: sqlite3.Connection) -> list[str]:
+    """The songs the last auto-chords run remeasured (kv ``autochords:status``'s ``remeasured``, once ever:
+    autochords/remeasure.py)."""
+    status = kv_get_json(conn, "autochords:status", default=None)
+    names = status.get("remeasured") if isinstance(status, dict) else None
+    return [f"- **{md(n)}**" for n in names if isinstance(n, str)] if isinstance(names, list) else []
 
 
 def _words_unheard(conn: sqlite3.Connection, cfg: Config, songs: list[Song], overrides: Overrides,
@@ -935,6 +947,7 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
          "open the artist's page, or any of their tab pages, and copy its address.", n_artists),
         *no_sheet,
         ("Auto-chords couldn't read these purchases", unread, unread_intro, None),
+        (REMEASURED_TITLE, _remeasured(conn), REMEASURED_INTRO, None),
         (WORDS_UNHEARD_TITLE, unheard, unheard_intro, None),
         ("New Guitar Pro files from gtptabs.com", _new_gtptabs_files(conn, by_id, now),
          "caracole downloaded these in the last 7 days, one for each song that had none. Open each in "

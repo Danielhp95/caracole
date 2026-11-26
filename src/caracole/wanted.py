@@ -267,10 +267,11 @@ def remove_wanted(path: Path, key: str, *, tries: int = 3) -> list[int]:
 
 def retime_wanted(path: Path, key: str, was_ms: int, duration_ms: int, *, tries: int = 3) -> list[int]:
     """Write ``duration_ms`` in place of ``was_ms`` on each line of the song with this identity key that is exactly as
-    caracole writes one with that length (``format_line``: ``caracole audio``'s line, its length the file's as read
-    then); return their numbers. A line the owner wrote otherwise (another spelling, a comment, a length in seconds)
-    stays theirs, and the rest of the file byte for byte, written as ``remove_wanted`` writes it. NotRegularFile (an
-    OSError) for a symbolic link."""
+    caracole writes one with that length (``format_line``), byte for byte: ``caracole audio``'s line, its length the
+    file's as read then, and so also a line typed by hand that happens to be the very same; return the numbers of the
+    lines rewritten. A line written otherwise (another spelling, a comment, a length in seconds, bytes that aren't
+    UTF-8) is left as it is, and the rest of the file byte for byte, written as ``remove_wanted`` writes it.
+    NotRegularFile (an OSError) for a symbolic link."""
     path = Path(path)
     for _ in range(tries):
         try:
@@ -289,8 +290,11 @@ def retime_wanted(path: Path, key: str, was_ms: int, duration_ms: int, *, tries:
             if (line is None or line.identity != key or line.duration_ms is None
                     or body != format_line(line.artist, line.title, line.album, was_ms)):
                 continue
-            new = format_line(line.artist, line.title, line.album, duration_ms)
-            pieces[n] = piece.replace(body.encode("utf-8"), new.encode("utf-8"), 1)
+            written = body.encode("utf-8")
+            if written not in piece:  # read with a replacement character: not the bytes caracole writes
+                continue
+            pieces[n] = piece.replace(written, format_line(line.artist, line.title, line.album, duration_ms).encode(
+                "utf-8"), 1)
             changed.append(n + 1)
         if not changed:
             return []

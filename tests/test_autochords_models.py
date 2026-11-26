@@ -436,7 +436,7 @@ def test_load_mono_hears_the_whole_of_an_mp3_with_no_length_header(name, caplog)
     from caracole.autochords.audio import load_mono
 
     seconds = MP3_FRAMES[name] * 1152 / 44100
-    with caplog.at_level(logging.INFO, logger="caracole.autochords.audio"):
+    with caplog.at_level(logging.WARNING, logger="caracole.autochords.audio"):
         y = load_mono(AUDIO / name, SR)
 
     assert len(y) / SR == pytest.approx(seconds, abs=1152 / 44100)
@@ -445,6 +445,29 @@ def test_load_mono_hears_the_whole_of_an_mp3_with_no_length_header(name, caplog)
         assert len(read_again) == 1 and name in read_again[0]
     else:  # libsndfile's guess is too long, but its reads end with the frames: its decode is whole, kept as it is
         assert read_again == []
+
+
+@pytest.mark.autochords
+@needs_libs
+def test_an_mp3_ffmpeg_fails_to_read_again_keeps_what_libsndfile_decoded_and_says_how_much(monkeypatch, caplog):
+    import logging
+
+    import numpy as np
+    import torchaudio
+
+    from caracole.autochords.audio import load_mono
+
+    def fails(*args, **kwargs):
+        raise RuntimeError("Failed to decode")
+
+    monkeypatch.setattr(torchaudio, "load", fails)
+    with caplog.at_level(logging.WARNING, logger="caracole.autochords.audio"):
+        y = load_mono(AUDIO / "short-guess.mp3", SR)
+
+    assert np.array_equal(y, _before(AUDIO / "short-guess.mp3", SR))  # libsndfile's 1.7 s, as before the fix
+    said = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert any("short-guess.mp3: FFmpeg couldn't read it again (Failed to decode): only the 1.7 s libsndfile "
+               "decoded of its 10.1 s are heard." in m for m in said)
 
 
 @pytest.mark.autochords
