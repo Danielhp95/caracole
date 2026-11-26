@@ -2152,11 +2152,15 @@ It is rows.js's, shared by both pages:
 
 - Beyond a wanted.txt line, every change runs as a `caracole` command queued in jobs.py (One caracole at a time,
   below): in the queue, one at a time, or in the lookups' lane (`jobs.lane_of`: a lookup, a pasted UG link,
-  LaCuerda's search, an artist's page), up to `LANE` (3) at once on workers of their own (`caracole-lane-N`), started
-  at once unless the song has a job in the queue. The queue's worker starts a job only while no lane job runs or
-  waits, a lane worker the first lane job whose song has no job running (`JobQueue._take`, which `_next` wraps;
-  `jobs.song_of_job`, Make this my version's and a harmonica reading's jobs the song's too): a song never has two jobs
-  running, and its own job keeps its order (`test_web_jobs.py::test_a_songs_own_job_keeps_its_order`,
+  LaCuerda's search, an artist's page, a song's lyrics searched under a name, `lyrics --as`), up to `LANE` (3) at once
+  on workers of their own (`caracole-lane-N`), started at once unless the song has a job in the queue. The queue's
+  worker starts a job only while no lane job runs or waits, a lane worker the first lane job whose song has no job
+  running (`JobQueue._take`, which `_next` wraps; `jobs.song_of_job`, Make this my version's and a harmonica reading's
+  jobs the song's too, and a lyrics search's, `LYRICS_SEARCH`, no song's everywhere else, among `INDEX_READS`): a song
+  never has two jobs running, a lyrics search, its pick (`LYRICS_PICK`, `lyrics --record --progress`, the queue's and
+  the song's, `song_key_of`, joining no lookup) and its transcription never at once
+  (`test_web_jobs.py::test_a_lyrics_search_and_a_pick_or_transcription_of_one_song_never_run_at_once`), and its own
+  job keeps its order (`test_web_jobs.py::test_a_songs_own_job_keeps_its_order`,
   `::test_a_lookup_asked_while_the_songs_own_change_waits_or_runs_goes_into_the_queue_behind_it`). A queued one's
   line counts what it waits for (`jobs.ahead`: a lookup the lane's before it, any other every one before it and every
   lookup), and the Journal says its place among those queued in its own place, the queue's next "Queued · next,
