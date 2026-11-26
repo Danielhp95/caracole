@@ -57,6 +57,10 @@ internal object Merge {
         val actions = ArrayList<Action>()
         val kv = LinkedHashMap<String, String?>()
 
+        /** _Plan.checked: the file's rows of the site's first table its actions took (Merged.checked), by the
+         * statements' own counts, no table scanned for it. */
+        var checked = 0L
+
         val changes: Boolean get() = actions.isNotEmpty() || kv.isNotEmpty()
 
         fun take(noun: String, count: Int, run: (Db) -> Unit) {
@@ -168,7 +172,7 @@ internal object Merge {
         val names = plan.newerRecords(db, key, "checked_at")
         plan.take("sitemap", names.size) { c ->
             taken(c, names)
-            replace(c, table, "sitemap")
+            plan.checked += replace(c, table, "sitemap")
             takeRecords(c, key, names)
         }
         later(db, plan, completeKey(provider))
@@ -207,7 +211,7 @@ internal object Merge {
         val listings = plan.newerRecords(db, LC_PAGES, "checked_at")
         plan.take("listing page", listings.size) { c ->
             taken(c, listings)
-            replace(c, "lacuerda_index", "page")
+            plan.checked += replace(c, "lacuerda_index", "page")
             takeRecords(c, LC_PAGES, listings)
         }
         // An artist page's rows have no time of their own: the file's are taken where the database has none.
@@ -218,14 +222,14 @@ internal object Merge {
         ) { it.text(0)!! }
         plan.take("artist page", artists.size) { c ->
             taken(c, artists)
-            replace(c, "lacuerda_index", "page")
+            plan.checked += replace(c, "lacuerda_index", "page")
         }
         val search = "FROM $THEIRS.lacuerda_index t WHERE t.page = ? AND NOT EXISTS " +
             "(SELECT 1 FROM main.lacuerda_index m WHERE m.path = t.path)"
         val found = db.one("SELECT COUNT(*) $search", LC_SEARCH_PAGE) { it.long(0)!! }!!.toInt()
         plan.take("row of its search's answers", found) { c ->
             val cols = columns(c, "main", "lacuerda_index").joinToString(", ") { "t.$it" }
-            c.execute("INSERT OR IGNORE INTO main.lacuerda_index SELECT $cols $search", LC_SEARCH_PAGE)
+            plan.checked += c.execute("INSERT OR IGNORE INTO main.lacuerda_index SELECT $cols $search", LC_SEARCH_PAGE)
         }
         keysAgain(db, plan, LC_KEYS)
         later(db, plan, LC_COMPLETE)
@@ -280,6 +284,7 @@ internal object Merge {
                 said(done, total)
                 after = upto ?: break
             }
+            plan.checked += total
             takeRecords(c, UG_SITEMAPS, names)
             if (songs.isNotEmpty()) NewTabs.markDirty(c, songs, now)
         }
@@ -451,12 +456,13 @@ internal object Merge {
     /** A row of the sitemaps an action takes. */
     private const val IN_TAKEN = "sitemap IN (SELECT name FROM $TAKEN)"
 
-    /** _replace: the database's rows of the pages taken (by [column]) in place of the file's. */
-    private fun replace(db: Db, table: String, column: String) {
+    /** _replace: the database's rows of the pages taken (by [column]) in place of the file's; how many of the file's
+     * it took (its insert's own count). */
+    private fun replace(db: Db, table: String, column: String): Int {
         val cols = columns(db, "main", table).joinToString(", ")
         db.execute("DELETE FROM main.$table WHERE $column IN (SELECT name FROM $TAKEN)")
-        db.execute("INSERT OR REPLACE INTO main.$table ($cols) SELECT $cols FROM $THEIRS.$table " +
-                       "WHERE $column IN (SELECT name FROM $TAKEN)")
+        return db.execute("INSERT OR REPLACE INTO main.$table ($cols) SELECT $cols FROM $THEIRS.$table " +
+                              "WHERE $column IN (SELECT name FROM $TAKEN)")
     }
 
     /** _take_records: the file's records of the sitemaps (pages) taken, in place of the database's, the whole record

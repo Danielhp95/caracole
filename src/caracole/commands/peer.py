@@ -740,7 +740,9 @@ def _private_folder(cfg):
 
 def _taken_entries(merged, newest: dict[str, str]) -> list[dict]:
     """A report's ``indexes`` of the sites a merge took something of: each site's first table's rows before and
-    after (``index_transfer.SITES[site].tables[0]``), and its newest read now."""
+    after (``index_transfer.SITES[site].tables[0]``), ``new`` the rows it had not (after − before: a UG merge never
+    deletes one; a site whose sitemaps no longer list some, negative), ``checked`` the file's rows of the sitemaps and
+    listing pages it took, which the merge read (``SiteMerge.checked``), and its newest read now."""
     from caracole import index_transfer
 
     taken = []
@@ -750,20 +752,22 @@ def _taken_entries(merged, newest: dict[str, str]) -> list[dict]:
         first = index_transfer.SITES[site.site].tables[0]
         before, after = site.rows.get(first, (0, 0))
         taken.append({"site": site.site, "title": index_transfer.SITES[site.site].title, "direction": "taken",
-                      "before": before, "after": after, "read": newest.get(site.site)})
+                      "before": before, "after": after, "new": after - before, "checked": site.checked,
+                      "read": newest.get(site.site)})
     return taken
 
 
-def _merging(said: _Said):
-    """How a merge of indexes says how far it has got (commands/index.py ``Merging``): with ``--progress``, as the
-    index stage's running detail, which the Sync sheet shows; else on stderr, stdout staying the report."""
+def _merging(said: _Said, words=None):
+    """How a merge of indexes says how far it has got (commands/index.py ``Merging``, in ``words``, else
+    ``MergeWords``'): with ``--progress``, as the index stage's running detail, which the Sync sheet shows; else on
+    stderr, stdout staying the report."""
     import sys
 
     from caracole.commands.index import Merging, merge_console
 
     if said.progress:
-        return Merging(stage=lambda text: said.stage("index", "running", text), stream=sys.stdout)
-    return Merging(console=merge_console())
+        return Merging(stage=lambda text: said.stage("index", "running", text), stream=sys.stdout, words=words)
+    return Merging(console=merge_console(), words=words)
 
 
 def _merge_told(conn, cfg, path, sites, now, told):
@@ -792,8 +796,10 @@ def _take_indexes(cfg, address: str, sites: list[str], said: _Said) -> list[dict
         with sync.Peer(address, transport=transport_for_peer()) as peer:
             peer.index(path, sites)
         with exclusive(cfg, "peer sync", interactive=True), closing(open_db(cfg)) as conn:
+            # A site this side holds rows of is updated, its words what is newer there and the rows checked.
+            words = index_transfer.MergeWords(held=index_transfer.held(conn, sites), there="on the other side")
             try:
-                merged = _merge_told(conn, cfg, path, sites, utcnow(), _merging(said))
+                merged = _merge_told(conn, cfg, path, sites, utcnow(), _merging(said, words))
             except index_transfer.TransferError as e:
                 raise type(e)(index_transfer.refusal_words(e, path, "The other side's index export")) from e
             return _taken_entries(merged, index_transfer.newest(conn))
@@ -805,7 +811,8 @@ def _give_indexes(cfg, address: str, state, sites: list[str], said: _Said) -> li
     """This side's indexes of ``sites`` given: exported into ``cache_dir/peer`` (``index_transfer.export``, no
     lock), sent to the other side's Import a file (``peer_import.Uploader``: its routes, as its page sends a file),
     compared and synced there, of the indexes alone, and waited for, then deleted; the report's entries, each site's
-    tabs there before and after (``GET /api/sync/indexes``) and its newest read there now. Each of the three steps
+    tabs there before and after (``GET /api/sync/indexes``), ``new`` after − before, ``checked`` none (that answer
+    doesn't say how many rows its merge read there), and its newest read there now. Each of the three steps
     is the index stage's running detail as it begins, so a take's last detail never stands for the give."""
     import secrets
 
@@ -838,9 +845,13 @@ def _give_indexes(cfg, address: str, state, sites: list[str], said: _Said) -> li
             after = there.indexes()
     finally:
         path.unlink(missing_ok=True)
-    return [{"site": site, "title": index_transfer.SITES[site].title, "direction": "given",
-             "before": before.get(site, {}).get("tabs", 0), "after": after.get(site, {}).get("tabs", 0),
-             "read": after.get(site, {}).get("read")} for site in sites]
+    entries = []
+    for site in sites:
+        was, now = before.get(site, {}).get("tabs", 0), after.get(site, {}).get("tabs", 0)
+        entries.append({"site": site, "title": index_transfer.SITES[site].title, "direction": "given",
+                        "before": was, "after": now, "new": now - was, "checked": None,
+                        "read": after.get(site, {}).get("read")})
+    return entries
 
 
 def _take(cfg, folder, said: _Said) -> None:

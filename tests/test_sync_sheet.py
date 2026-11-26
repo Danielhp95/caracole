@@ -149,9 +149,9 @@ def sync_view(state: str, stages: dict[str, tuple[str, str]], units=(), report=N
 REPORT = {"with": {"name": "Studio", "kind": "server", "address": ADDRESS}, "at": "2026-11-03T18:42:00Z",
           "parts": ["library", "songbooks", "indexes"],
           "indexes": [{"site": "ug", "title": "Ultimate Guitar", "direction": "taken", "before": 1503236,
-                       "after": 1515576, "read": "2026-11-03T03:00:00Z"},
+                       "after": 1515576, "new": 12340, "checked": 117701, "read": "2026-11-03T03:00:00Z"},
                       {"site": "lacuerda", "title": "LaCuerda", "direction": "taken", "before": 23105,
-                       "after": 22895, "read": "2026-11-02T03:00:00Z"}]}
+                       "after": 22895, "new": -210, "checked": 22895, "read": "2026-11-02T03:00:00Z"}]}
 TAKEN_GIVEN = [("song/the beatles/let it be", "taken", ""), ("song/pomme/mononoke", "taken", ""),
                ("song/radiohead/creep", "taken", ""), ("song/eagles/hotel california", "given", ""),
                ("song/oasis/wonderwall", "taken", ""), ("songbook/campfire", "taken", ""),
@@ -880,7 +880,7 @@ def test_the_summary_draws_each_kind_of_change_closed_and_opens_on_its_chevron(s
         assert [(s["kind"], s["said"], s["way"]) for s in summary] == [
             ("taken", "3 songs taken", "left"), ("given", "1 song and 1 other change given", "right"),
             ("conflicts", "2 conflicts · mixed", "left right"), ("songbooks", "2 songbooks taken", "left"),
-            ("indexes", "2 indexes taken · +12,130 tabs", "left")]
+            ("indexes", "2 indexes taken · +12,340 new tabs", "left")]
         assert all(s["open"] == "false" and s["hidden"] for s in summary)  # each starts closed
         assert [s["rows"] for s in summary] == [
             [["Let It Be – The Beatles"], ["Mononoke – Pomme"], ["Creep – Radiohead"]],
@@ -890,9 +890,9 @@ def test_the_summary_draws_each_kind_of_change_closed_and_opens_on_its_chevron(s
                                            "UG · tab 1234567"],
              ["Wonderwall – Oasis", "Studio's version kept: its lyrics, found"]],
             [["Campfire", "3 songs added"], ["Wedding set", "12 songs"]],
-            [["Ultimate Guitar · ", "+12,340 tabs", "1,503,236 → 1,515,576 tabs tracked · read by Studio on 03/11/26"],
-             ["LaCuerda · ", "−210 tabs", "23,105 → 22,895 tabs tracked · its listings no longer name them, so they "
-                                         "would not have opened · read by Studio on 02/11/26"]]]
+            [["Ultimate Guitar · ", "+12,340 new tabs", "1,515,576 in all · read by Studio on 03/11/26"],
+             ["LaCuerda · ", "−210 tabs", "22,895 in all · its listings no longer name them, so they would not have "
+                                         "opened · read by Studio on 02/11/26"]]]
         page.click(".sync-section[data-kind=indexes] .sync-lane")
         assert page.js(SUMMARY)[4]["open"] == "true" and page.js(SUMMARY)[4]["hidden"] is False
         assert page.js("document.querySelector('.sync-section[data-kind=taken] .sync-rows').hidden") is True
@@ -921,6 +921,57 @@ def test_a_songbook_left_as_it_was_is_named_by_its_name(served, tmp_path):
         assert left["rows"][0][0] == "Wedding set", left["rows"]
 
 
+def indexes_done(report: dict) -> FakeSync:
+    """A FakeSync whose sync ends with ``report``."""
+    over = sync_view("done", {"compare": ("done", "9 differences"), "take": ("done", "took 6"),
+                              "give": ("done", "gave 3"), "agree": ("done", "312 units the two agree on"),
+                              "index": ("done", "took 3 indexes, gave 1 index")}, TAKEN_GIVEN, report)
+    return FakeSync(views=VIEWS[:-1] + [over])
+
+
+@in_chromium
+def test_each_index_says_what_its_merge_really_added_and_the_headline_counts_new_tabs(served, tmp_path):
+    # The owner's report: a phone that held almost every tab was told of a million new ones. Each site says the
+    # tabs this side hadn't, or up to date, or all new here when it had none; a site taken and given in one sync
+    # is one index of the headline and two rows; a site given says no date, its reads being the other side's.
+    report = dict(REPORT, indexes=[
+        {"site": "ug", "title": "Ultimate Guitar", "direction": "taken", "before": 1503005, "after": 1503236,
+         "new": 231, "checked": 117701, "read": "2026-11-03T03:00:00Z"},
+        {"site": "lacuerda", "title": "LaCuerda", "direction": "taken", "before": 23105, "after": 23105, "new": 0,
+         "checked": 812, "read": "2026-11-02T03:00:00Z"},
+        {"site": "gtptabs", "title": "gtptabs.com", "direction": "taken", "before": 0, "after": 1203, "new": 1203,
+         "checked": 1203, "read": "2026-11-01T03:00:00Z"},
+        {"site": "ug", "title": "Ultimate Guitar", "direction": "given", "before": 1515000, "after": 1515003,
+         "new": 3, "checked": None, "read": "2026-11-03T09:00:00Z"}])
+    fake = indexes_done(report)
+    with opened(tmp_path, served(fake) + "#sheet=sync") as page:
+        sync_through(page, fake)
+        indexes = next(s for s in page.js(SUMMARY) if s["kind"] == "indexes")
+        assert (indexes["said"], indexes["way"]) == ("3 indexes taken or given · +1,437 new tabs", "left right")
+        assert indexes["rows"] == [
+            ["Ultimate Guitar · ", "+231 new tabs", "1,503,236 in all · read by Studio on 03/11/26"],
+            ["LaCuerda · ", "up to date", "read by Studio on 02/11/26"],
+            ["gtptabs.com · ", "1,203 tabs, all new here", "read by Studio on 01/11/26"],
+            ["Ultimate Guitar · ", "+3 new tabs", "1,515,003 in all on Studio"]]
+
+
+@in_chromium
+def test_indexes_taken_with_nothing_new_say_up_to_date_and_an_older_report_its_tabs_before_and_after(served,
+                                                                                                   tmp_path):
+    report = dict(REPORT, indexes=[
+        {"site": "ug", "title": "Ultimate Guitar", "direction": "taken", "before": 1503236, "after": 1503236,
+         "new": 0, "checked": 50000, "read": "2026-11-03T03:00:00Z"},
+        # A report made before `new`: its tabs before and after say it.
+        {"site": "lacuerda", "title": "LaCuerda", "direction": "taken", "before": 23105, "after": 23105,
+         "read": "2026-11-02T03:00:00Z"}])
+    fake = indexes_done(report)
+    with opened(tmp_path, served(fake) + "#sheet=sync") as page:
+        sync_through(page, fake)
+        indexes = next(s for s in page.js(SUMMARY) if s["kind"] == "indexes")
+        assert indexes["said"] == "2 indexes taken · up to date"
+        assert [r[1] for r in indexes["rows"]] == ["up to date", "up to date"]
+
+
 @in_chromium
 def test_an_index_that_fell_is_red_and_says_why(served, tmp_path):
     fake = FakeSync(state=PHONE_STATE, views=PHONE_VIEWS)
@@ -928,8 +979,8 @@ def test_an_index_that_fell_is_red_and_says_why(served, tmp_path):
         sync_through(page, fake)
         page.click(".sync-section[data-kind=indexes] .sync-lane")
         rows = page.js(SUMMARY)[4]["rows"]
-        assert rows[1] == ["LaCuerda · ", "−210 tabs", "23,105 → 22,895 tabs tracked · its listings no longer name them, "
-                                                      "so they would not have opened · read by the computer on 02/11/26"]
+        assert rows[1] == ["LaCuerda · ", "−210 tabs", "22,895 in all · its listings no longer name them, so they would "
+                                                      "not have opened · read by the computer on 02/11/26"]
         colours = page.js("""['.sync-up', '.sync-down', '.sync-section[data-kind=indexes]'].map((s) =>
           getComputedStyle(document.querySelector('#sync-done ' + s)).color)""")
         found, failed = page.js("['--found', '--failed'].map((v) => { const p = document.createElement('p');"
@@ -963,7 +1014,7 @@ def test_a_sync_on_its_way_as_the_page_loads_is_followed_to_its_summary(served, 
         summary = page.js(SUMMARY)
         assert [(s["kind"], s["said"]) for s in summary] == [
             ("taken", "4 songs taken"), ("given", "2 songs and 1 other change given"), ("songbooks", "2 songbooks taken"),
-            ("indexes", "2 indexes taken · +12,130 tabs")]
+            ("indexes", "2 indexes taken · +12,340 new tabs")]
         # Names from the library's own cards where it has them, else the song's key.
         assert summary[0]["rows"][0] == ["let it be – the beatles"]
 

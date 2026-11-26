@@ -19,6 +19,7 @@ import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 import java.io.File
 import java.nio.file.Files
 
@@ -115,6 +116,13 @@ object IndexReplay : AreaReplay {
                     misses.check(taken == merged.sites && taken.keys.toList() == merged.sites.keys.toList()) {
                         "$label: took ${merged.sites}, Python $taken"
                     }
+                    // The rows of each site's taken sitemaps it read (SiteMerge.checked).
+                    val checked = out.getValue("sites").jsonArray.associate { site ->
+                        val s = site.jsonObject
+                        s.getValue("site").jsonPrimitive.content to s.getValue("checked").jsonPrimitive.long
+                    }
+                    val mine = merged.sites.keys.associateWith { merged.checked[it] ?: 0L }
+                    misses.check(checked == mine) { "$label: checked $mine, Python $checked" }
                     val after = database.read { Dumps.lines(it) }
                     val want = Dumps.fixture(fixture("after"))
                     misses.check(want == after) {

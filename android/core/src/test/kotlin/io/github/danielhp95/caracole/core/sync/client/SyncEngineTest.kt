@@ -4,6 +4,7 @@ import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.index.Merge
+import io.github.danielhp95.caracole.core.index.MergeProgress
 import io.github.danielhp95.caracole.core.index.MergedIndexes
 import io.github.danielhp95.caracole.core.index.Reads
 import io.github.danielhp95.caracole.core.index.Stamps
@@ -1089,7 +1090,8 @@ class SyncEngineTest {
         assertTrue(gtptabs > 0)
         assertEquals(listOf(JsonObject(linkedMapOf(
             "site" to JsonPrimitive("gtptabs"), "title" to JsonPrimitive("gtptabs.com"), "direction" to JsonPrimitive("taken"),
-            "before" to JsonPrimitive(0L), "after" to JsonPrimitive(gtptabs), "read" to JsonPrimitive("2026-11-03T10:00:00Z"),
+            "before" to JsonPrimitive(0L), "after" to JsonPrimitive(gtptabs), "new" to JsonPrimitive(gtptabs),
+            "checked" to JsonPrimitive(gtptabs), "read" to JsonPrimitive("2026-11-03T10:00:00Z"),
         ))), (report["indexes"] as JsonArray).toList())
     }
 
@@ -1108,7 +1110,9 @@ class SyncEngineTest {
         val given = (outcome.report!!["indexes"] as JsonArray).map { it as JsonObject }.single()
         assertEquals(linkedMapOf("site" to JsonPrimitive("lacuerda"), "title" to JsonPrimitive("LaCuerda"),
                                  "direction" to JsonPrimitive("given"), "before" to JsonPrimitive(before),
-                                 "after" to JsonPrimitive(after), "read" to JsonPrimitive("2026-11-03T09:00:00Z")),
+                                 "after" to JsonPrimitive(after), "new" to JsonPrimitive(after - before),
+                                 // how many rows its merge read there, the computer's answer doesn't say
+                                 "checked" to JsonNull, "read" to JsonPrimitive("2026-11-03T09:00:00Z")),
                      given.toMap())
         assertTrue(computer.requests.count { it == "GET /api/sync/indexes" } == 2, "${computer.requests}")
 
@@ -1196,6 +1200,12 @@ class SyncEngineTest {
         val ug = (outcome.report!!["indexes"] as JsonArray).map { it as JsonObject }.single()
         assertEquals(JsonPrimitive("ug"), ug["site"])
         assertEquals(JsonPrimitive(810L) to JsonPrimitive(815L), ug["before"] to ug["after"])
+        // The owner's report: the tabs really new here, and the rows of the two sitemaps checked, never 815 new.
+        assertEquals(JsonPrimitive(5L) to JsonPrimitive(415L), ug["new"] to ug["checked"])
+        val said = stages.filter { it.first == "index" && it.second == "running" }.map { it.third }
+        assertTrue("Ultimate Guitar · 2 sitemaps newer on the computer · 415 of 415 tabs checked" in said,
+                   said.joinToString("\n"))
+        assertTrue(said.none { it.startsWith(MergeProgress.IMPORTING) }, said.joinToString("\n"))
         assertEquals(mapOf("gtptabs" to EARLY, "ug" to LATE), phone.read { MergedIndexes.of(it) },
                      "the sync's own merge recorded what its file read")
     }

@@ -45,7 +45,7 @@ made ``BUILT``:
   out | err}``. The export replayed into a file of its own (``Fixtures.loadRaw``), the phone into a new database
   (``Fixtures.load``), then merged at ``now`` (a stamp; a song marked to fetch again takes it as its
   ``updated_at``); ``after`` is the phone's dump then (for a refusal, ``before``: nothing written). ``out``:
-  ``{changed, backup, sites: [{site, taken: [[noun, count]…], records: […], rows: {table: [before, after]}}…]}``,
+  ``{changed, backup, sites: [{site, taken: [[noun, count]…], records: […], rows: {table: [before, after]}, checked}…]}``,
   Python's ``Merged``, ``backup`` whether it backed the database up first (the Kotlin merge's callback, called once,
   before the first change, or never). ``err``: ``"TransferError"``, nothing written.
 - ``newest.jsonl``: ``{fn: "caracole.index_transfer.newest", fixture, out | err}``, over each phone fixture replayed.
@@ -481,7 +481,8 @@ def _fixture(records: list[dict[str, Any]], name: str) -> str:
 def _report(merged: index_transfer.Merged) -> dict[str, Any]:
     return {"changed": merged.changed, "backup": merged.backup is not None,
             "sites": [{"site": s.site, "taken": [list(t) for t in s.taken], "records": list(s.records),
-                       "rows": {t: list(r) for t, r in s.rows.items()}} for s in merged.sites]}
+                       "rows": {t: list(r) for t, r in s.rows.items()}, "checked": s.checked}
+                      for s in merged.sites]}
 
 
 class Corpus:

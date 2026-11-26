@@ -433,17 +433,18 @@ class Merging:
     of its own. Once what it writes to fails (``BrokenPipeError``: ``| head``, a caracole serve stopped; a terminal
     gone, EIO; a stream closed), it says nothing more and the merge goes on, as ``_Publishing`` does: the stream it
     wrote to (the console's, else ``stream``, where ``stage`` writes) is pointed at /dev/null, so that what the command
-    says after is dropped rather than failing it."""
+    says after is dropped rather than failing it. ``words``: another ``MergeWords`` (a sync's, of the sites it
+    updates), else one of its own."""
 
     def __init__(self, *, console: Console | None = None, stage: Callable[[str], None] | None = None,
-                 stream=None) -> None:
+                 stream=None, words=None) -> None:
         from caracole import logs
         from caracole.index_transfer import MergeWords
 
         self.console = console
         self.stage = stage
         self.stream = console.stream if stage is None and console is not None else stream
-        self._words = MergeWords()
+        self._words = MergeWords() if words is None else words
         self._quarter = 0
         self._cut = False
         live = stage is None and console is not None and console.live

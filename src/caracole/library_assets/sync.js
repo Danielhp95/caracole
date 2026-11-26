@@ -25,9 +25,10 @@
 //   opened then shows it, never another sync.
 // - **What it did**: "Synced with:" and the other side's name, when, the two sides as icons, and a section for each
 //   kind of change, closed until its chevron opens it: songs taken, songs given (why), the conflicts (whose version was
-//   kept, and how it differs), the songbooks, the indexes (each site's tabs before and after, a fall in red). Drawn from
-//   the comparison and the choices the sheet holds, and the view's outcome and report (§3.5); from the outcome alone
-//   for a sync it didn't start. A file's has no "given" arrow: a file takes nothing back.
+//   kept, and how it differs), the songbooks, the indexes (each site's new tabs, "up to date", or "all new here" for a
+//   side that had none, a fall in red; the headline the new tabs, never totals). Drawn from the comparison and the
+//   choices the sheet holds, and the view's outcome and report (§3.5); from the outcome alone for a sync it didn't
+//   start. A file's has no "given" arrow: a file takes nothing back.
 // - **Export**: the parts with their sizes (GET /api/sync/sizes), Site indexes unticked; Export makes the file (POST
 //   /sync/export) and downloads it (GET /api/sync/export, once), a link, which the phone hands to its share sheet.
 // - **Import a file**: the file input (#sync-file: the browser's chooser, the phone's picker), the file sent in parts
@@ -780,7 +781,8 @@
     box.append(button, list);
     return box;
   };
-  const signed = (n) => el("span", n < 0 ? "sync-down" : "sync-up", W.tabs(n, true) + " tabs");
+  const toned = (news) => el("span", news.tone === "up" ? "sync-up" : news.tone === "down" ? "sync-down" : null,
+                             news.said);
   const drawDone = () => {
     if (!ended) return;
     const job = ended.job;
@@ -871,24 +873,26 @@
       out.push(section("songbooks", W.counted(bookTaken.length + bookGiven.length, "songbook") + " " + how, way,
                        rows));
     }
-    // The indexes: the tabs each site's index tracks, before and after.
+    // The indexes: what each site's merge added, the tabs that side hadn't, never its whole size as if new.
     const sites = listOf(report && report.indexes).filter((s) => objOf(s));
     const indexed = sites.length ? [] : listOf(outcome.indexed).map(String);
     if (sites.length || indexed.length) {
       const directions = new Set(sites.map((s) => s.direction));
       const how = directions.size > 1 ? "taken or given" : directions.has("given") ? "given" : "taken";
       const way = directions.size > 1 ? "left right" : directions.has("given") ? "right" : "left";
-      const net = sites.reduce((n, s) => n + ((Number(s.after) || 0) - (Number(s.before) || 0)), 0);
-      const said = [W.counted(sites.length || indexed.length, "index", "indexes") + " " + how];
-      if (sites.length) said.push(" · ", signed(net));
+      const many = sites.length ? new Set(sites.map((s) => String(s.site))).size : indexed.length;
+      const said = [W.counted(many, "index", "indexes") + " " + how];
+      if (sites.length) said.push(" · ", toned(W.newTabs(sites)));
       if (how === "given") said.push(" for " + sides.there.the);
       const rows = sites.map((s) => {
-        const change = (Number(s.after) || 0) - (Number(s.before) || 0);
-        const reader = s.direction === "given" ? sides.here : sides.there;
-        const words = W.tabs(s.before) + " → " + W.tabs(s.after) + " tabs tracked"
-          + (change < 0 ? " · its listings no longer name them, so they would not have opened" : "")
-          + (s.read ? " · read by " + reader.the + " on " + W.day(s.read) : "");
-        return row([el("span", "sync-row-name", String(s.title || s.site) + " · "), signed(change)], words);
+        // A site given: its tabs on the other side, and no date (what the other side read of it is its own).
+        const given = s.direction === "given";
+        const news = W.indexNews(s, given ? "on " + sides.there.the : "here");
+        const words = [news.all && news.all + (given ? " on " + sides.there.the : ""),
+                       news.tone === "down" ? "its listings no longer name them, so they would not have opened" : "",
+                       !given && s.read ? "read by " + sides.there.the + " on " + W.day(s.read) : ""]
+          .filter(Boolean).join(" · ");
+        return row([el("span", "sync-row-name", String(s.title || s.site) + " · "), toned(news)], words);
       }).concat(indexed.map((site) => row(site, "")));
       out.push(section("indexes", said, way, rows));
     }

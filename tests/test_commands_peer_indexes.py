@@ -216,7 +216,7 @@ def test_a_site_read_more_recently_there_is_taken_and_counted(syncing):
     assert report["with"] == {"name": there.cfg.library_name, "kind": "server", "address": THERE}
     assert report["parts"] == ["library", "songbooks", "indexes"] and report["at"].endswith("Z")
     assert report["indexes"] == [{"site": "gtptabs", "title": "gtptabs.com", "direction": "taken", "before": 0,
-                                  "after": 2, "read": "2026-11-02T08:00:00Z"}]
+                                  "after": 2, "new": 2, "checked": 2, "read": "2026-11-02T08:00:00Z"}]
     assert leftovers(here) == []  # the copy taken, deleted once merged
     assert [b.label for b in backup.backups(here.cfg.state_dir)] == [backup.MERGE]  # the merge's, first
 
@@ -241,9 +241,23 @@ def test_a_site_read_more_recently_here_is_given_through_the_others_import_and_c
     assert "--parts=indexes" in job.steps[0].args
     assert job.song_key.startswith("import:") and job.report["indexes"][0]["site"] == "gtptabs"
     (report,) = reports(events)
+    # How many rows its merge read there, the other side's answer doesn't say: none, never a guess.
     assert report["indexes"] == [{"site": "gtptabs", "title": "gtptabs.com", "direction": "given", "before": 0,
-                                  "after": 2, "read": "2026-11-02T08:00:00Z"}]
+                                  "after": 2, "new": 2, "checked": None, "read": "2026-11-02T08:00:00Z"}]
     assert leftovers(here) == [] and peer_import._imports(there.cfg.state_dir / "peer") == []
+
+
+def test_a_site_this_side_holds_is_updated_its_report_counting_the_new_rows_and_those_checked(syncing):
+    here, there, asked = syncing
+    gtptabs_rows(here, BLUR[:1], at=datetime(2026, 10, 2, 8, 0, tzinfo=UTC))  # an older read of the same sitemap
+    gtptabs_rows(there, BLUR)
+    result, events = synced(here)
+    assert result.exit_code == 0, result.output
+    assert ("running", "gtptabs.com · 1 sitemap newer on the other side") in stage(events, "index")
+    assert ("running", "gtptabs.com · 1 sitemap") not in stage(events, "index")
+    (report,) = reports(events)
+    assert report["indexes"] == [{"site": "gtptabs", "title": "gtptabs.com", "direction": "taken", "before": 1,
+                                  "after": 2, "new": 1, "checked": 2, "read": "2026-11-02T08:00:00Z"}]
 
 
 def musescore_rows(side, locs, at=READ):

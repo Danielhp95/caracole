@@ -182,21 +182,31 @@ class MergeWords:
     """A merge's progress (``merge(progress=)``, ``backing_up``) in words, a line each, as commands/index.py's and
     commands/peer.py's merges say it: "Comparing with this database's indexes", "Backing up the database first",
     "Ultimate Guitar" (a site), "Ultimate Guitar · 41 sitemaps" (an action), "Ultimate Guitar · 41 sitemaps ·
-    600,000 of 1,367,059 tabs" (UG's sitemap rows, a chunk at a time)."""
+    600,000 of 1,367,059 tabs" (UG's sitemap rows, a chunk at a time).
+
+    A sync's merge of the other side's indexes passes ``held``, the sites this database held rows of before it
+    (``held``), and ``there``, where they were read: of those, each action says what is newer there and UG's rows
+    the rows checked, "Ultimate Guitar · 3 sitemaps newer on the other side · 50,000 of 117,701 tabs checked"
+    (the phone's MergeProgress.Updating alike, "on the computer"), never as if every row were new; a site it held
+    none of as any merge says it."""
 
     COMPARING = "Comparing with this database's indexes"
     BACKING_UP = "Backing up the database first"
 
-    def __init__(self) -> None:
+    def __init__(self, held: Iterable[str] = (), there: str = "") -> None:
         self._doing = ""
+        self._held = frozenset(held)
+        self._there = there
 
     def __call__(self, site: str, action: str, done: int, total: int) -> str:
+        updating = site in self._held
         if action == PLANNING:
             return self.COMPARING
         if action == UG_TABS:
-            return f"{self._doing} · {done:,} of {total:,} tabs"
+            return f"{self._doing} · {done:,} of {total:,} tabs" + (" checked" if updating else "")
         title = SITES[site].title if site in SITES else site
-        self._doing = f"{title} · {counted(total, action)}" if action else title
+        newer = f" newer {self._there}" if updating and self._there else ""
+        self._doing = f"{title} · {counted(total, action)}{newer}" if action else title
         return self._doing
 
 
@@ -223,12 +233,15 @@ class Exported:
 @dataclass
 class SiteMerge:
     """What a merge took of a site: ``taken``, (noun, count) for each kind of page; ``records``, its progress
-    records moved on; ``rows``, each table's rows (before, after)."""
+    records moved on; ``rows``, each table's rows (before, after); ``checked``, the file's rows of its first table
+    (``Site.tables[0]``: UG's ``ug_index``…) in the sitemaps and listing pages it took, which it read: counted as it
+    takes them, by the statements' own counts (UG's the count its chunks are cut by), no table scanned for it."""
 
     site: str
     taken: list[tuple[str, int]] = field(default_factory=list)
     records: list[str] = field(default_factory=list)
     rows: dict[str, tuple[int, int]] = field(default_factory=dict)
+    checked: int = 0
 
     @property
     def changed(self) -> bool:
@@ -624,6 +637,7 @@ class _Plan:
     kv: dict[str, str | None] = field(default_factory=dict)
     records: list[str] = field(default_factory=list)  # the progress records the kv moves on, in words
     keys: list[str] = field(default_factory=list)  # the keys records to let go: made again whole
+    checked: int = 0  # the file's rows of its first table its actions took (SiteMerge.checked)
 
     @property
     def changes(self) -> bool:
@@ -661,12 +675,13 @@ def _taken(conn: sqlite3.Connection, names: Iterable[str]) -> None:
     conn.executemany(f"INSERT OR IGNORE INTO {_TAKEN} (name) VALUES (?)", [(n,) for n in names])
 
 
-def _replace(conn: sqlite3.Connection, table: str, column: str) -> None:
-    """The database's rows of the pages taken (``_TAKEN``, by ``column``) in place of the file's."""
+def _replace(conn: sqlite3.Connection, table: str, column: str) -> int:
+    """The database's rows of the pages taken (``_TAKEN``, by ``column``) in place of the file's; how many of the
+    file's it took (its insert's own count)."""
     cols = ", ".join(_columns(conn, "main", table))
     conn.execute(f"DELETE FROM main.{table} WHERE {column} IN (SELECT name FROM {_TAKEN})")
-    conn.execute(f"INSERT OR REPLACE INTO main.{table} ({cols}) SELECT {cols} FROM {THEIRS}.{table} "
-                 f"WHERE {column} IN (SELECT name FROM {_TAKEN})")
+    return conn.execute(f"INSERT OR REPLACE INTO main.{table} ({cols}) SELECT {cols} FROM {THEIRS}.{table} "
+                        f"WHERE {column} IN (SELECT name FROM {_TAKEN})").rowcount
 
 
 def _take_records(conn: sqlite3.Connection, key: str, names: Sequence[str]) -> None:
@@ -681,7 +696,7 @@ def _sitemaps(conn: sqlite3.Connection, plan: _Plan, site: Any, noun: str = "sit
 
     def take(c: sqlite3.Connection) -> None:
         _taken(c, names)
-        _replace(c, site.table, "sitemap")
+        plan.checked += _replace(c, site.table, "sitemap")
         _take_records(c, site.sitemaps_key, names)
 
     plan.take(noun, len(names), take)
@@ -740,7 +755,7 @@ def _plan_lacuerda(conn: sqlite3.Connection, plan: _Plan) -> None:
 
     def take_listings(c: sqlite3.Connection) -> None:
         _taken(c, listings)
-        _replace(c, "lacuerda_index", "page")
+        plan.checked += _replace(c, "lacuerda_index", "page")
         _take_records(c, li.PAGES_KEY, listings)
 
     plan.take("listing page", len(listings), take_listings)
@@ -751,7 +766,7 @@ def _plan_lacuerda(conn: sqlite3.Connection, plan: _Plan) -> None:
 
     def take_artists(c: sqlite3.Connection) -> None:
         _taken(c, artists)
-        _replace(c, "lacuerda_index", "page")
+        plan.checked += _replace(c, "lacuerda_index", "page")
 
     plan.take("artist page", len(artists), take_artists)
     search = f"FROM {THEIRS}.lacuerda_index t WHERE t.page = ? AND NOT EXISTS " \
@@ -760,7 +775,8 @@ def _plan_lacuerda(conn: sqlite3.Connection, plan: _Plan) -> None:
 
     def take_search(c: sqlite3.Connection) -> None:
         cols = ", ".join(f"t.{col}" for col in _columns(c, "main", "lacuerda_index"))
-        c.execute(f"INSERT OR IGNORE INTO main.lacuerda_index SELECT {cols} {search}", (li.SEARCH_PAGE,))
+        plan.checked += c.execute(f"INSERT OR IGNORE INTO main.lacuerda_index SELECT {cols} {search}",
+                                  (li.SEARCH_PAGE,)).rowcount
 
     plan.take("row of its search's answers", found, take_search)
     _keys_again(conn, plan, li.KEYS_KEY)
@@ -778,7 +794,7 @@ def _plan_ug(conn: sqlite3.Connection, plan: _Plan) -> None:
         new = [r[0] for r in c.execute(
             f"SELECT t.tab_id FROM {THEIRS}.ug_index t WHERE t.sitemap IN (SELECT name FROM {_TAKEN}) "
             "AND NOT EXISTS (SELECT 1 FROM main.ug_index m WHERE m.tab_id = t.tab_id) ORDER BY t.tab_id")]
-        _take_ug_rows(c, plan.tell)
+        plan.checked += _take_ug_rows(c, plan.tell)
         _take_records(c, ug.SITEMAPS_KEY, names)
         ug.mark_dirty_for_new(c, new)
 
@@ -817,13 +833,14 @@ def _plan_ug(conn: sqlite3.Connection, plan: _Plan) -> None:
         plan.records.append("the index built whole")
 
 
-def _take_ug_rows(c: sqlite3.Connection, tell: Progress) -> None:
+def _take_ug_rows(c: sqlite3.Connection, tell: Progress) -> int:
     """The file's rows of UG's sitemaps taken (``_TAKEN``), as a refresh stores a sitemap (ug/index.py
     ``upsert_rows``): a row the database has keeps where and when it was first seen, and takes the file's keys and
     path. A statement for each ``UG_CHUNK`` of them, in ``tab_id`` order (the order one statement reads the file's
     table in, its rowid's: so the triggers' rows come out the same), each told: a chunk ends at the ``UG_CHUNK``-th
     row's ``tab_id`` after the last chunk's, the rest one chunk, its bound none (and so is a chunk that would end
-    past the file's last row, which a file made by hand repeating a ``tab_id`` may hold)."""
+    past the file's last row, which a file made by hand repeating a ``tab_id`` may hold). The rows it read: the count
+    its chunks are cut by."""
     rows = f"FROM {THEIRS}.ug_index WHERE sitemap IN (SELECT name FROM {_TAKEN})"
     (total,) = c.execute(f"SELECT COUNT(*) {rows}").fetchone()
     done, after = 0, None
@@ -845,7 +862,7 @@ def _take_ug_rows(c: sqlite3.Connection, tell: Progress) -> None:
         done = total if upto is None else done + UG_CHUNK
         tell("ug", UG_TABS, done, total)
         if upto is None:
-            return
+            return total
         after = upto
 
 
@@ -963,6 +980,13 @@ def tab_counts(conn: sqlite3.Connection) -> dict[str, int]:
             for name, site in SITES.items()}
 
 
+def held(conn: sqlite3.Connection, sites: Iterable[str] | None = None) -> set[str]:
+    """The sites (of ``sites``, else every one) whose first table holds a row here: one row looked for each, no
+    count, so a sync tells a site it updates from one it imports whole (``MergeWords``' ``held``)."""
+    return {name for name in chosen(sites) if conn.execute(
+        f"SELECT EXISTS (SELECT 1 FROM main.{SITES[name].tables[0]})").fetchone()[0]}
+
+
 # --- applying ------------------------------------------------------------------------------------------------------
 
 
@@ -986,7 +1010,7 @@ def _apply(conn: sqlite3.Connection, plan: _Plan) -> SiteMerge:
         conn.execute(f"DROP TABLE IF EXISTS {_TAKEN}")
     after = _counts(conn, site)
     return SiteMerge(plan.site, [(noun, n) for noun, n, _ in plan.actions], plan.records,
-                     {t: (before[t], after[t]) for t in site.tables})
+                     {t: (before[t], after[t]) for t in site.tables}, plan.checked)
 
 
 def _current_keys(conn: sqlite3.Connection, name: str) -> None:

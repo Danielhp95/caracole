@@ -125,18 +125,20 @@ object IndexTransfer {
             }
             backup?.invoke()
             val taken = LinkedHashMap<String, Map<String, Int>>()
+            val checked = LinkedHashMap<String, Long>()
             var ugChanges = 0L
             for ((i, plan) in plans.withIndex()) {
                 progress?.invoke(MergeProgress(plan.site, "", i.toLong(), plans.size.toLong()))
                 val before = Warmup.changes(db)
                 taken[plan.site] = Merge.apply(db, plan, progress)
+                checked[plan.site] = plan.checked
                 if (plan.site == "ug") ugChanges = Warmup.changes(db) - before
             }
             if (Warmup.optimizes(taken["ug"], ugChanges, optimizeAfter)) {
                 progress?.invoke(MergeProgress("ug", MergeProgress.OPTIMIZE, 0, 0))
                 Warmup.optimize(db)  // one segment each (prep-db)
             }
-            return Merged(taken, true, listed, read)
+            return Merged(taken, true, listed, read, checked)
         } finally {
             db.detach(Merge.THEIRS)
         }
@@ -313,9 +315,12 @@ object IndexTransfer {
  * the file, never by attaching it again (the catalogues job's sentence on what it doesn't read); and [newest], each
  * site merged's newest read in the file, as [IndexTransfer.newest] reads a database (never the database's after the
  * merge, which the phone's own reads move), a site the file says it read after the merge's `notAfter` left out, its
- * records that late never taken: what MergedIndexes records. */
+ * records that late never taken: what MergedIndexes records; [checked], each site merged's rows of its first table the
+ * file held in the sitemaps and listing pages it took, which the merge read (index_transfer's `SiteMerge.checked`;
+ * none for a merge that changed nothing). */
 data class Merged(val sites: Map<String, Map<String, Int>>, val changed: Boolean,
-                  val listed: List<String> = emptyList(), val newest: Map<String, String> = emptyMap())
+                  val listed: List<String> = emptyList(), val newest: Map<String, String> = emptyMap(),
+                  val checked: Map<String, Long> = emptyMap())
 
 /**
  * How far a merge has got (IndexTransfer.merge's `progress`), index_transfer.merge's `progress(site, action, done,
@@ -351,6 +356,24 @@ data class MergeProgress(val site: String, val action: String, val done: Long, v
     /** The step its words are of, for a Paced: each site's each action, a step of its own (UG's chunks one). */
     val step: Pair<String, String> get() = site to action
 
+    /**
+     * A sync's words for its merge of the computer's indexes, index_transfer.MergeWords(held=, there=) alike: of a site
+     * the phone held rows of before it ([held]), each action what is newer on the computer and UG's rows the rows
+     * checked ("Ultimate Guitar · 3 sitemaps newer on the computer · 50,000 of 117,701 tabs checked"), never
+     * "Importing" as if every row were new; a site it held none of, and every other step, as [words] says them.
+     */
+    class Updating(private val held: Set<String>) {
+        private var doing = ""
+
+        fun words(p: MergeProgress): String {
+            if (p.site !in held || p.action == PLANNING || p.action == OPTIMIZE) return p.words()
+            if (p.action == TAB) return "$doing · ${grouped(p.done)} of ${grouped(p.total)} tabs checked"
+            val title = Sites.named(p.site)?.title ?: p.site
+            doing = if (p.action.isEmpty()) title else "$title · ${counted(p.total, p.action)} newer on the computer"
+            return doing
+        }
+    }
+
     companion object {
         /** index_transfer.PLANNING and UG_TABS. */
         const val PLANNING = "planning"
@@ -363,6 +386,18 @@ data class MergeProgress(val site: String, val action: String, val done: Long, v
 
         /** What a merge's caller says as it gives the WAL the merge grew back (Database.checkpoint). */
         const val TIDYING = "Tidying the database…"
+
+        /** index_transfer.counted: "1 game page", "2 game pages", "3 tabs of its artist pages". */
+        fun counted(n: Long, noun: String): String =
+            "${grouped(n)} ${if (n == 1L) noun else PLURALS[noun] ?: noun + "s"}"
+
+        /** index_transfer._PLURALS. */
+        private val PLURALS = mapOf(
+            "tab of its artist pages" to "tabs of its artist pages",
+            "row of its search's answers" to "rows of its search's answers",
+            "artist of its directory" to "artists of its directory",
+            "artist page read of its directory" to "artist pages read of its directory",
+        )
 
         /** Python's `f"{n:,}"`: the digits in threes, by commas, ASCII alone (never a locale's). */
         fun grouped(n: Long): String {

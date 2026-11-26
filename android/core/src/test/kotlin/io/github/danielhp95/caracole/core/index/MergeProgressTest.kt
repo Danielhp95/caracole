@@ -154,6 +154,37 @@ class MergeProgressTest {
         assertEquals(MergeProgress("ug", MergeProgress.TAB, 0, 9).step, MergeProgress("ug", MergeProgress.TAB, 5, 9).step)
     }
 
+    @Test fun aSyncsWordsSayWhatIsNewerOnTheComputerOfASiteThePhoneHolds() {
+        // index_transfer.MergeWords(held=, there=) alike: of a site the phone held rows of, what is newer there and
+        // the rows checked, never "Importing" as if every row were new; a site it held none of, the catalogues' words.
+        val words = MergeProgress.Updating(setOf("ug"))
+        assertEquals(listOf(
+            "Comparing with the phone's index…", "Ultimate Guitar", "Ultimate Guitar · 3 sitemaps newer on the computer",
+            "Ultimate Guitar · 3 sitemaps newer on the computer · 50,000 of 117,701 tabs checked",
+            "Ultimate Guitar · 12 tabs of its artist pages newer on the computer",
+            "Ultimate Guitar · 1 artist of its directory newer on the computer",
+            "Importing · gtptabs.com", "Importing · gtptabs.com", "Making the search index ready…",
+        ), listOf(
+            MergeProgress("", MergeProgress.PLANNING, 0, 2), MergeProgress("ug", "", 0, 2),
+            MergeProgress("ug", "sitemap", 0, 3), MergeProgress("ug", MergeProgress.TAB, 50_000, 117_701),
+            MergeProgress("ug", "tab of its artist pages", 0, 12), MergeProgress("ug", "artist of its directory", 0, 1),
+            MergeProgress("gtptabs", "", 1, 2), MergeProgress("gtptabs", "sitemap", 0, 1),
+            MergeProgress("ug", MergeProgress.OPTIMIZE, 0, 0),
+        ).map(words::words))
+    }
+
+    @Test fun aMergeCountsTheRowsOfTheSitemapsItTookAsPythonsDoes() {
+        // checked, index_transfer's SiteMerge.checked: the file's rows of each site's first table it took.
+        val export = export("full-export")
+        TestDb.fresh(tmp.newFolder()).use { database ->
+            database.writeBlocking { IndexTransfer.seedFresh(it) }
+            val merged = database.writeBlocking { IndexTransfer.merge(it, export, now) }
+            val counts = database.read { TabCounts.of(it) }
+            assertEquals(counts.filterValues { it > 0 }, merged.checked.filterValues { it > 0 },
+                         "an empty phone checks every row it takes")
+        }
+    }
+
     @Test fun theVectorsReplayInChunksOfOneRowToo() {
         // Every merge of merge.jsonl, UG's sitemaps taken a row a statement: Python's database after, all the same.
         Misses(IndexReplay.MERGE).also { misses -> IndexReplay.mergeAll(misses, chunk = 1) }.assertNone()

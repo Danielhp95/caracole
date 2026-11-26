@@ -774,9 +774,11 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             return io {
                 val counted = database.write { db ->
                     val before = TabCounts.of(db)
+                    // A site the phone holds rows of is updated: its words what is newer there and the rows checked.
+                    val words = MergeProgress.Updating(before.filterValues { it > 0 }.keys)
                     val merged = namingFileAs(file, THE_COMPUTERS) {
                         IndexTransfer.merge(db, file, Stamps.of(clock()), newer, notAfter = notAfter(),
-                                            progress = { pacer.say(it.words(), it.step) })
+                                            progress = { pacer.say(words.words(it), it.step) })
                     }
                     db.kvSetJson(INDEX_KEY + computer, IndexStamps.json(had + newer.associateWith { indexes.getValue(it) }))
                     MergedIndexes.record(db, merged)
@@ -842,7 +844,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
                 for (site in Sites.ALL.map { it.name }.filter { it in pages }) {
                     val was = before[site] ?: continue
                     val now = after[site] ?: continue
-                    done.reported.add(entry(site, GIVEN, was.tabs, now.tabs, read[site]))
+                    done.reported.add(entry(site, GIVEN, was.tabs, now.tabs, read[site], checked = null))
                 }
             }
             return "sent ${pagesRead(pages)} · its request $job merged $them"
@@ -953,13 +955,17 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             "indexes" to JsonArray(indexes),
         ))
 
-        /** One index of a report: its site, its title, taken or given, its first table's rows before and after, and
-         * its newest read. */
-        fun entry(site: String, direction: String, before: Long, after: Long, read: String?): JsonObject =
+        /** One index of a report, commands/peer.py's alike: its site, its title, taken or given, its first table's rows
+         * before and after, `new` the rows that side hadn't (after − before: a UG merge never deletes one; a site
+         * whose sitemaps no longer list some, negative), `checked` the rows of the sitemaps and listing pages its merge
+         * took, which it read (Merged.checked; null for a site given, which the computer's count doesn't say), and its
+         * newest read. */
+        fun entry(site: String, direction: String, before: Long, after: Long, read: String?, checked: Long?): JsonObject =
             JsonObject(linkedMapOf(
                 "site" to JsonPrimitive(site), "title" to JsonPrimitive(Sites.named(site)?.title ?: site),
                 "direction" to JsonPrimitive(direction), "before" to JsonPrimitive(before),
-                "after" to JsonPrimitive(after), "read" to JsonPrimitive(read),
+                "after" to JsonPrimitive(after), "new" to JsonPrimitive(after - before),
+                "checked" to JsonPrimitive(checked), "read" to JsonPrimitive(read),
             ))
 
         /** A report's entries of the sites a merge changed (its rows, or its first table's count), in caracole's
@@ -973,7 +979,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
                 val was = before[site] ?: 0L
                 val now = after[site] ?: 0L
                 val changed = merged.changed && (merged.sites[site]?.values?.any { it != 0 } == true || was != now)
-                if (changed) entry(site, TAKEN, was, now, read(site)) else null
+                if (changed) entry(site, TAKEN, was, now, read(site), merged.checked[site] ?: 0L) else null
             }
 
         const val TAKEN = "taken"

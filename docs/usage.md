@@ -4074,8 +4074,9 @@ read 02/11/26"). **Sync** opens the sheet:
    sides gets a card that shows how the versions differ. Pick **This computer** or the other
    side's name. Tick **Same for the other N** first to answer the rest the same way. There is no
    skip: **Cancel** ends the sync with nothing taken or given.
-3. A summary lists what was taken and given, whose version each conflict kept, and each index's
-   tabs before and after.
+3. A summary lists what was taken and given, whose version each conflict kept, and what each
+   index brought: its new tabs ("+231 new tabs · 1,503,236 in all"), "up to date", or "all new
+   here" for a site this side had none of.
 
 The sync runs as a request in the Journal. Behind it is
 `caracole peer sync ADDRESS --push --parts=… --compared HASH --choose=SIDE:ID …`. If it left

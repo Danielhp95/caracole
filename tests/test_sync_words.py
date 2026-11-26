@@ -154,6 +154,37 @@ def test_each_change_and_number_reads_as_the_owner_reads_it(words):
     assert said["read"] == ["today", "yesterday", "30/10/26"]
 
 
+def test_what_an_indexs_merge_added_is_said_as_new_tabs_up_to_date_or_all_new_never_its_whole_size(words):
+    said = words("""[
+      W.indexNews({before: 1503005, after: 1503236, new: 231}, "here"),
+      W.indexNews({before: 1, after: 2, new: 1}, "here"),
+      W.indexNews({before: 23105, after: 23105, new: 0}, "here"),
+      W.indexNews({before: 0, after: 1503236, new: 1503236}, "here"),
+      W.indexNews({before: 0, after: 1, new: 1}, "on the computer"),
+      W.indexNews({before: 23105, after: 22895, new: -210}, "here"),
+      W.indexNews({before: 10, after: 15}, "here"),
+    ]""")
+    assert said == [
+        {"said": "+231 new tabs", "tone": "up", "all": "1,503,236 in all"},
+        {"said": "+1 new tab", "tone": "up", "all": "2 in all"},
+        {"said": "up to date", "tone": "", "all": ""},
+        {"said": "1,503,236 tabs, all new here", "tone": "up", "all": ""},
+        {"said": "1 tab, all new on the computer", "tone": "up", "all": ""},
+        {"said": "−210 tabs", "tone": "down", "all": "22,895 in all"},
+        {"said": "+5 new tabs", "tone": "up", "all": "15 in all"},  # a report made before `new`
+    ]
+    # The headline: every site's new tabs, never its total; with none, a fall, else up to date.
+    assert words("""[
+      W.newTabs([{before: 1503005, after: 1503236, new: 231}, {before: 23105, after: 22895, new: -210},
+                 {before: 0, after: 1203, new: 1203}]),
+      W.newTabs([{before: 23105, after: 22895, new: -210}]),
+      W.newTabs([{before: 5, after: 5, new: 0}]),
+      W.newTabs([{before: 0, after: 1, new: 1}]),
+    ]""") == [
+        {"said": "+1,434 new tabs", "tone": "up"}, {"said": "−210 tabs", "tone": "down"},
+        {"said": "up to date", "tone": ""}, {"said": "+1 new tab", "tone": "up"}]
+
+
 def test_each_side_is_named_for_its_device_and_the_other_for_its_kind(words):
     said = words("""[["computer", {kind: "server", name: "Studio", address: "http://10.0.0.7:8737"}],
       ["computer", {kind: "server", name: "", address: "http://10.0.0.7:8737"}], ["phone", {kind: "computer"}],

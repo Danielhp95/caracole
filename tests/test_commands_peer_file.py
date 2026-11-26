@@ -450,7 +450,7 @@ def test_an_import_with_indexes_merges_them_and_reports_each_site(libraries, tmp
     [report] = [line["report"] for line in events(out.output) if line.get("event") == "report"]
     assert report["parts"] == ["library", "songbooks", "indexes"]
     assert report["indexes"] == [{"site": "gtptabs", "title": "gtptabs.com", "direction": "taken", "before": 0,
-                                  "after": 2, "read": "2026-11-02T08:00:00Z"}]
+                                  "after": 2, "new": 2, "checked": 2, "read": "2026-11-02T08:00:00Z"}]
     said = [e["detail"] for e in events(out.output) if e.get("stage") == "index" and e["state"] == "running"]
     assert said[:4] == ["", "Copying the file's indexes out", "Comparing with this database's indexes",
                         "Backing up the database first"]

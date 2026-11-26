@@ -1183,7 +1183,10 @@ It is rows.js's, shared by both pages:
   icons, and a section a kind of change (`.sync-section[data-kind=taken|given|conflicts|songbooks|indexes|left]`,
   `left` the units the sync left as they were, with why), each a button that opens its rows, closed at first; drawn
   from the comparison, the choices and the cards' documents the sheet sent, and the view's `outcome` and its `report`
-  (§3.5), from the outcome alone for a sync the page didn't start. A file's has no given section.
+  (§3.5), from the outcome alone for a sync the page didn't start. A file's has no given section. Its indexes say
+  what each merge added, never a site's whole size as if new (sync-words.js `indexNews`, `newTabs`): "+231 new tabs"
+  and "1,503,236 in all", "up to date", "1,503,236 tabs, all new here" for a side that had none, a fall in red; the
+  headline the sites (each once, one taken and given too) and their new tabs; a site given no date.
 - **Export**: `GET /api/sync/sizes`, the parts with their sizes, Site indexes unticked; `POST /sync/export`, then the
   file's link (`a[download]` to `api/sync/export?export=ID`), clicked once by the page: the browser saves it, the
   phone's `DownloadListener` shares it; clicked again it says the file was sent once (caracole serve answers 404
@@ -2691,9 +2694,15 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   - Its JSON members are read as `json.loads(bytes)` reads them (`SyncFiles.json`: json.detect_encoding's UTF-8,
     UTF-16 or UTF-32, lone surrogates passed).
 - **The report** (`SyncOutcome.report`, the sync redesign's §3.5): with whom (`with`: name, kind, address), when,
-  its parts, and each index taken or given, its first table's rows (`TabCounts`) before and after: a taken one around
-  its merge here; a given one on the computer (`GET /api/sync/indexes`, `PeerClient.indexes`) before the push and
-  after its merge job, none from a computer that doesn't count them.
+  its parts, and each index taken or given, its first table's rows (`TabCounts`) before and after, `new` (after −
+  before) and `checked` (the rows of the sitemaps and listing pages its merge took, `Merged.checked`, index_transfer's
+  `SiteMerge.checked`, by the statements' own counts: no scan), commands/peer.py's `_taken_entries` and
+  `_give_indexes` alike: a taken one around its merge here; a given one on the computer (`GET /api/sync/indexes`,
+  `PeerClient.indexes`) before the push and after its merge job, its `checked` null (that answer doesn't say it), none
+  from a computer that doesn't count them. While it merges, a site the phone held rows of says what is newer there and
+  the rows checked (`MergeProgress.Updating`, index_transfer.MergeWords' `held` and `there` alike: "Ultimate Guitar ·
+  3 sitemaps newer on the computer · 50,000 of 117,701 tabs checked"), "Importing" kept for the catalogues and a site
+  whose table was empty.
 - A phone's own export writes the file `SyncFiles.export` makes (its indexes every site's whole, `IndexFile`, as
   `caracole index export` writes them, which SyncReplay compares with Python's as data; its pages through a
   `PageSource`, server/routes/sync/MirrorPages.kt: the mirror's and its layers' pages of each unit at the digest the

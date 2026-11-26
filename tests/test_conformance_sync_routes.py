@@ -373,7 +373,7 @@ NO_INDEX = "no index is newer on either side"  # commands/peer.py's
 REPORT = {"with": {"name": "Desk", "kind": "server", "address": "http://192.168.1.20:8737"},
           "at": "2026-11-03T09:31:00Z", "parts": ["library", "songbooks", "indexes"],
           "indexes": [{"site": "ug", "title": "Ultimate Guitar", "direction": "taken", "before": 1503236,
-                       "after": 1515576, "read": "2026-11-03T03:10:00Z"}]}
+                       "after": 1515576, "new": 12340, "checked": 117701, "read": "2026-11-03T03:10:00Z"}]}
 
 
 def view_records() -> list[dict[str, Any]]:

@@ -12,7 +12,10 @@
 // slugs or UG page, a blocked tab, by their values. ``changed(change, side)``: "added on the phone".
 // ``sides(device, peer)``: this device's and the other side's names, as headings, as places and in sentences, and
 // their icons. ``tabs(n, signed)``: 1,503,236 and +12,130 (a minus sign for a fall), digits grouped by hand, no locale.
-// ``day(stamp)`` and ``when(stamp)``: dd/mm/yy and dd/mm/yy, HH:MM, in this device's time.
+// ``day(stamp)`` and ``when(stamp)``: dd/mm/yy and dd/mm/yy, HH:MM, in this device's time. ``indexNews(entry,
+// where)``: what a sync's merge of a site's index added (a report's ``indexes`` entry), "+231 new tabs" and "1,503,236
+// in all", "up to date", "1,503,236 tabs, all new here", never its whole size as if it were new; ``newTabs(entries)``,
+// the headline's "+1,434 new tabs".
 (() => {
   "use strict";
   const NONE = "–";
@@ -43,6 +46,35 @@
   const counted = (n, word, many) => {
     const v = Math.round(Number(n) || 0);
     return (v < 0 ? MINUS : "") + grouped(v) + " " + (v === 1 ? word : many || word + "s");
+  };
+  // What a site's merge added (a report's ``indexes`` entry): ``new``, the tabs that side hadn't (after − before for a
+  // report made before it). ``said``: "+231 new tabs"; "1,503,236 tabs, all new here" (``where``: "here", "on the
+  // computer") for a side that had none; "up to date"; a fall, "−210 tabs". ``tone``: "up", "down" or "". ``all``: the
+  // tabs it holds now beside a change, "1,503,236 in all", else "".
+  const newOf = (entry) => {
+    const e = objOf(entry) || {};
+    return Math.round(typeof e.new === "number" ? e.new : (Number(e.after) || 0) - (Number(e.before) || 0));
+  };
+  const indexNews = (entry, where) => {
+    const e = objOf(entry) || {};
+    const n = newOf(e);
+    const after = Math.round(Number(e.after) || 0);
+    if (n === 0) return Object.freeze({ said: "up to date", tone: "", all: "" });
+    if (n > 0 && Math.round(Number(e.before) || 0) === 0) {
+      return Object.freeze({ said: counted(after, "tab") + ", all new " + text(where), tone: "up", all: "" });
+    }
+    return Object.freeze({ said: n > 0 ? "+" + counted(n, "new tab") : counted(n, "tab"), tone: n > 0 ? "up" : "down",
+                           all: tabs(after) + " in all" });
+  };
+  // A sync's headline: every site's new tabs, "+1,434 new tabs" (a site's fall never takes from them); with none, a
+  // fall, "−210 tabs"; else "up to date".
+  const newTabs = (entries) => {
+    const news = listOf(entries).map(newOf);
+    const added = news.filter((n) => n > 0).reduce((a, n) => a + n, 0);
+    const fell = news.filter((n) => n < 0).reduce((a, n) => a + n, 0);
+    if (added) return Object.freeze({ said: "+" + counted(added, "new tab"), tone: "up" });
+    if (fell) return Object.freeze({ said: counted(fell, "tab"), tone: "down" });
+    return Object.freeze({ said: "up to date", tone: "" });
   };
   // A size in bytes, as a person reads it: 0.4 MB, 3.4 MB, 207 MB, 1.2 GB (a megabyte a million bytes).
   const size = (bytes) => {
@@ -318,6 +350,6 @@
   };
 
   window.caracoleSyncWords = Object.freeze({
-    NONE, differ, changed, sides, tabs, counted, size, day, when, readOn, bookChange, ownKey,
+    NONE, differ, changed, sides, tabs, counted, size, day, when, readOn, bookChange, ownKey, indexNews, newTabs,
   });
 })();
