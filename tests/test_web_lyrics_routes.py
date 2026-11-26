@@ -15,7 +15,7 @@ from conftest import add_song
 
 from caracole import stamps
 from caracole.db import kv_set_json
-from caracole.lyrics_search import KV, Row, Search
+from caracole.lyrics_search import KV, Row, Search, last_line
 from caracole.overrides import set_lyrics_name, set_lyrics_record
 from caracole.songs import update_song
 from caracole.web.app import Request, WebApp
@@ -140,6 +140,33 @@ def test_pressed_again_the_search_on_its_way_is_the_answer_and_another_name_is_s
     assert answer(post(app, "/lyrics/search", fields | {"title": "野人 (Live)"}))["said"] == other["said"]
 
 
+def test_a_search_on_its_way_under_a_name_that_reads_as_none_is_said_with_no_name_never_the_one_typed(cfg, conn,
+                                                                                                       queue):
+    song = song_of(conn)
+    app = app_for(cfg, queue)
+    app.submit("Lyrics under “?”", LYRICS_SEARCH + song.key, lyrics_search_steps(song.display, "\x00"),
+               display=song.display)
+    other = answer(post(app, "/lyrics/search", {"song": str(song.id), "identity": song.key, "artist": "孟维来",
+                                                 "title": "野人"}))
+    assert other["as"] is None
+    assert other["said"] == "A search under “\x00” is on its way: ask under “孟维来 - 野人” once it is over."
+
+
+def test_a_field_with_a_control_character_or_a_leading_dash_reaches_the_command_cleaned_as_one_argument(cfg, conn,
+                                                                                                      queue):
+    # A NUL or a newline typed into a field is dropped as the command drops it; a name that begins with "-" is the
+    # value of --as=, one argument, never an option of the command's.
+    app = app_for(cfg, queue)
+    for n, (artist, title, asked) in enumerate((("Nick\x00 Cani", "Vikingos\nveganos", "Nick Cani - Vikingos veganos"),
+                                                ("--help", "-Vikingos", "--help - -Vikingos"))):
+        song = song_of(conn, title=f"Song {n}")
+        response = post(app, "/lyrics/search", {"song": str(song.id), "identity": song.key, "artist": artist,
+                                                 "title": title})
+        assert response.status == 202, response.body
+        [job] = [job for job in queue.snapshot() if job.song_key == LYRICS_SEARCH + song.key]
+        assert job.steps[0].args == ("lyrics", f"--song={song.display}", f"--as={asked}")
+
+
 def test_a_name_missing_too_long_or_with_a_dash_in_its_artist_is_refused(cfg, conn, queue):
     song = song_of(conn)
     app = app_for(cfg, queue)
@@ -189,9 +216,12 @@ def test_get_api_lyrics_search_reads_the_kept_search_and_the_lyrics_entry_with_n
         "picked": "lrclib:28399373", "length": 225.0,
         # transcript.picked_without_lyrics' words: a song still pending, its record not asked yet
         "picked_why": "the record you picked isn't read yet (lrclib 28399373): tonight's run or a lookup reads it",
-        "search": {"at": search.at, "as": {"artist": "孟维来", "title": "野人"},
+        # The length its rows were scored against (the audio may have changed since), and its last line's words.
+        "search": {"at": search.at, "as": {"artist": "孟维来", "title": "野人"}, "length": 225.0,
                    "rows": [row.as_json() for row in rows()], "said": search.said, "state": search.state,
-                   "instrumental": 2, "pickable": True}}
+                   "instrumental": 2, "pickable": True,
+                   "line": "Searched: LRCLIB, Megalobiz and AZLyrics list 3 records for “孟维来 - 野人”."}}
+    assert read["search"]["line"] == last_line(search)
     assert queue.snapshot() == []
     update_song(conn, song.id, lyrics_status="found")
     assert answer(get(app, f"/api/lyrics/search?song={song.id}"))["picked_why"] is None

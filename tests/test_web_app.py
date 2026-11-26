@@ -3092,10 +3092,9 @@ def test_the_router_answers_the_routes_of_each_route_module_and_each_lists_its_o
 
     names = sorted(m.name for m in pkgutil.iter_modules(web.__path__) if m.name.endswith("_routes"))
     assert names == ["audio_routes", "export_routes", "guitar_routes", "harmonica_routes", "jobs_routes",
-                     "library_routes", "lyrics_routes", "offline_routes", "peer_routes", "remove_routes", "review_routes",
-                     "search_routes",
-                     "songbook_routes", "sync_file_routes", "sync_routes", "transcribe_routes", "ug_link_routes",
-                     "versions_routes", "youtube_routes"]
+                     "library_routes", "lyrics_routes", "offline_routes", "peer_routes", "remove_routes",
+                     "review_routes", "search_routes", "songbook_routes", "sync_file_routes", "sync_routes",
+                     "transcribe_routes", "ug_link_routes", "versions_routes", "youtube_routes"]
     gathered = []
     for name in names:
         module = importlib.import_module(f"caracole.web.{name}")

@@ -1536,8 +1536,9 @@ It is rows.js's, shared by both pages:
     chevron's `aria-controls` naming it (test_library_card_place.py);
   - its parts in the phone's order, at every width: `cardHead` (`.card-head` > `.card-head-in` > `h2.card-name` and
     `.card-close`, `aria-hidden` and tabindex -1 in place), the facts, what needs you, the tiles, the foot (Fetch
-    again, Use LaCuerda's sheet, Add to a songbook…, ⋯), the Files group, On the sites, Elsewhere, Progressions
-    (test_library_card_place.py);
+    again, Use LaCuerda's sheet, Add to a songbook…, ⋯), Lyrics under another name… (served), the Files group, On the
+    sites, Elsewhere, Progressions (test_library_card_place.py); a song with no lyrics has its lyrics' search in what
+    needs you instead, open, above Transcribe the lyrics (`lyricsPanel`, web/lyrics_routes.py's);
   - in place, its head takes no room and sticks under the search bar (`--bar-h` on `:root`, the bar's border box,
     which a ResizeObserver writes; the panel a flex column, so it sticks the whole card): shown (`head-away` on the
     card) only while the card is on the screen and the whole of its line (its title's row, a request's `.progress`
@@ -2062,19 +2063,35 @@ It is rows.js's, shared by both pages:
   request and no lock: its state, the tab's names, its artist's page, `guess`, the library's `song`, `hits` as
   /api/search's `index` items) and `POST /ug/link` (`caracole ug --link --progress` queued under `jobs.UG_LINK`, among
   `INDEX_READS`, its stages `UG_LINK_STAGES`, when the state is `auto`; 409 known, other or gone, 429 not now).
-- **lyrics_routes.py** is a song's lyrics looked up under a name the owner types, for the card's panel (D10's):
+- **lyrics_routes.py** is a song's lyrics looked up under a name the owner types, for the card's panel (library.js
+  `lyricsPanel`, below):
   `POST /lyrics/search` (`song`, `identity`, `artist`, `title`: `caracole lyrics --song --as` queued under
   `jobs.LYRICS_SEARCH`, the lane's, a lookup the owner presses, never sent by the page by itself; 202 `{job, url, as}`,
   `as` the name the command reads from the fields joined, lyrics_search.py `typed_name`, never the fields as typed;
   pressed again, the search on its way, its `as` that one and `said` naming it when another was typed), `GET
   /api/lyrics/search?song=` (no request, no lock, no write: `[lyrics]`' `as` and `picked`, `picked_why`
   (`transcript.picked_without_lyrics`), the audio's `length`, the kept search however old, `lyrics_search.last_search`,
-  its `as`, rows, `said`, `state`, `instrumental` and `pickable`), `POST /lyrics/pick` (`record`, a row of the kept
+  its `as`, the `length` its rows were scored against, rows, `said`, `state`, `instrumental`, `pickable` and `line`,
+  its last line's words, `lyrics_search.last_line`), `POST /lyrics/pick` (`record`, a row of the kept
   search within its week, 409 "Search again: …" else; its site on; `caracole lyrics --record --progress` under
   `jobs.LYRICS_PICK`; another record while a pick waits or runs refused 409 in words, never dropped) and `POST
   /lyrics/clear` (`caracole lyrics --clear` under `jobs.LYRICS_CLEAR`; 409 nothing to clear); each 404 no song, 409
   `same_song`, 409 ignored. The phone has none of them (lyrics are searched on the computer, for now): its page offers
   no control for them, as for Transcribe (test_web_lyrics_routes.py).
+  - The card's panel (library.js `lyricsPanel`, card.css `details.lyrics-search`) is served where the data's
+    `server.lyricsSearch` is true (`WebControls.lyrics_search`, which library_routes.py sets; last in the member, the
+    phone's LibraryPage.kt `false` at the same place; the cards' own data unchanged), for a song not ignored with no
+    request of it waiting or running (`freeToAsk`): open in what needs you, before `transcribeOffer`, for a song with
+    lyrics `missing` (the lyrics sites before Whisper), else folded right under the foot, a part of its own. Opened it reads the
+    GET once; only its Search (or Enter in its fields) posts `/lyrics/search`, never the card opening, typing or a
+    timer. The search, a job of no song's, is followed on `/api/jobs/N` (`followSearch`, kept by song id in
+    `lyricsSearches`, so a card drawn again meanwhile follows it), its live line "Asking LRCLIB, Megalobiz and AZLyrics
+    under “…”…", then the GET read again: `search.line` said, a row a record (`ol.lyrics-rows`: site, names, album,
+    length with the audio's when more than 10 s off, timed or plain; Best fit, In use), each site that listed nothing
+    in its words (`ul.lyrics-notes`). Use these lyrics and Clear the pick post in place (`postHere`: the panel hidden,
+    the song's line following the job, a refusal said in the panel's line), and once that job is over the offers are
+    read again (`lyricsJobs`, `readTranscriptions`). A search over 7 days old lists its rows with no button
+    (test_web_page_lyrics_search.py).
 - **offline_routes.py** is `GET /api/offline`, the manifest caracole's Android app copies the library by (read-only:
   each file the written index.html links to, as `WebApp._file` sends it now, its bytes' SHA-256 and its headers;
   test_web_offline.py).

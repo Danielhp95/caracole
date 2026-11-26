@@ -9,8 +9,8 @@ their records taken as the song's lyrics, and that pick taken back.
                           what the card's panel shows, with no request, no lock and no write: the song's ``[lyrics]``
                           name (``as``) and record (``picked``), why that record gives it no lyrics (``picked_why``),
                           the song's audio length, and its kept search (its rows, each site's words and state, how
-                          many instrumental records were left out, the name it asked under, whether it is still
-                          pickable)
+                          many instrumental records were left out, the name it asked under and the length its rows
+                          were scored against, whether it is still pickable, and its last line's words)
     POST /lyrics/pick     one of those rows taken as the song's lyrics (``song``, ``identity``, ``record``): ``caracole
                           lyrics --song --record --progress`` queued under ``jobs.LYRICS_PICK``, the queue's
     POST /lyrics/clear    the record you picked taken back (``song``, ``identity``): ``caracole lyrics --song --clear``
@@ -140,7 +140,7 @@ def search(app: WebApp, form: dict[str, str], *, json: bool) -> Response:
     asked = _asked_by(job)
     if not new and asked != named:  # another name on its way: said, never taken for the one just typed
         with app.db() as conn:
-            answer["as"] = _as_json(typed_name(conn, asked)) or answer["as"]
+            answer["as"] = _as_json(typed_name(conn, asked))  # None for one that reads as no name now
         answer["said"] = f"A search under “{asked}” is on its way: ask under “{named}” once it is over."
     if json:
         return json_response(202, answer)
@@ -174,11 +174,11 @@ def api_search(app: WebApp, asked: dict[str, list[str]], *, now: datetime | None
 
 
 def _search_json(kept: Search, now: datetime) -> dict[str, Any]:
-    from caracole.lyrics_search import pickable
+    from caracole.lyrics_search import last_line, pickable
 
-    return {"at": kept.at, "as": _as_json(kept.asked), "rows": [row.as_json() for row in kept.rows],
-            "said": dict(kept.said), "state": dict(kept.state), "instrumental": kept.instrumental,
-            "pickable": pickable(kept, now)}
+    return {"at": kept.at, "as": _as_json(kept.asked), "length": kept.length,
+            "rows": [row.as_json() for row in kept.rows], "said": dict(kept.said), "state": dict(kept.state),
+            "instrumental": kept.instrumental, "pickable": pickable(kept, now), "line": last_line(kept)}
 
 
 def _record_of(job: Job) -> str:

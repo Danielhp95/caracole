@@ -972,7 +972,9 @@ Then it asks Megalobiz for the songs LRCLIB left, and AZLyrics for those still w
     caracole lyrics --song "ARTIST - TITLE" --as "ARTIST - TITLE"
 
 Lists what the three sites have under a name you type, for a song whose own name finds nothing
-there (a video's decorated title, a transliterated artist). The song must be in the book and not
+there (a video's decorated title, a transliterated artist). caracole serve's library page does the
+same from the song's card (see [Lyrics under another name, from a
+card](#lyrics-under-another-name-from-a-card)). The song must be in the book and not
 ignored. The name is noted first as the song's `[lyrics]` `as`, so later nights ask under it too;
 typing the song's own name takes it out. Then each site is asked once, now, at a lookup's pace:
 LRCLIB's search (and its exact match, with the audio's length, when nothing it lists fits),
@@ -3004,6 +3006,37 @@ meanwhile, the one queued is the answer and the second file is deleted.
 - Refused as it is sent: "Not an audio file caracole reads (MP3, M4A, FLAC, WAV, Ogg or AIFF).",
   "That file is too big: …", "That file is longer than 30 minutes.", "No room to keep it here.".
 - Where chords can't be made: "No sheets from audio files here: auto-chords isn't installed.".
+
+#### Lyrics under another name, from a card
+
+When a song's own name finds no lyrics (a video's decorated title, a transliterated artist), its
+card can look them up under a name you type. A song with no lyrics found has it open, above
+Transcribe the lyrics: "No lyrics found. Look them up under another name". Any other song has
+"Lyrics under another name…" folded under its foot, to replace the lyrics it has. Ignored songs have
+none, and neither has a song while a request of it waits or runs.
+
+- Artist and Title are filled in with the name you last asked under, else the song's own. Only
+  Search, or Enter in a field, sends anything: opening the card or typing asks no site. Search
+  queues `caracole lyrics --song … --as "ARTIST - TITLE"`; its line says "Asking LRCLIB, Megalobiz
+  and AZLyrics under “孟维来 - 野人”…" and Search waits until it is over.
+- Then the panel lists what the search kept: one row a record, with its site, "Artist - Title",
+  album, length (and the audio's, when it is more than 10 s off), timed or plain. The best fit
+  comes first, marked Best fit, and the record you picked says In use. Under the rows, what each
+  site that listed nothing said, a site that failed or waited too, and how many instrumental
+  records were left out. The search's own words head it: `Searched: …`, `Nothing found: …` (every
+  site answered and none has any) or `Not searched: …; try again later.` (a site failed or
+  waited: never "Nothing found").
+- **Use these lyrics** on a row queues `caracole lyrics --song … --record SITE:ID --progress`. The
+  song's line then follows the pick, and its card is drawn again once it is over, its Lyrics tile
+  and its sheet as they are now. A search older than 7 days lists its rows with no button: search
+  again to pick one.
+- **Clear the pick** (`caracole lyrics --song … --clear`) is offered beside the row In use, and
+  when the record you picked has given no lyrics, which the panel says ("The record you picked
+  (megalobiz 8) has given no lyrics: pick another, or clear the pick."). The song is then pending:
+  tonight's run asks every site again. Transcribe the lyrics is offered only once they have all
+  answered.
+- A refusal is said in the panel ("Search again: that record isn't among its last search's, …").
+  The phone and the page opened as a file have no panel.
 
 #### Transcribing the lyrics from a card
 

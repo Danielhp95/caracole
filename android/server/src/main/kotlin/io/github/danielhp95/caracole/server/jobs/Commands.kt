@@ -170,7 +170,8 @@ object JobCommands {
     const val AUDIO_SHEET = "audio:"  // a sheet from an audio file you gave: the song's identity key after it
     const val LYRICS_SEARCH = "lyrics-search:"  // a song's lyrics searched under a name: the song's key after it
     const val LYRICS_PICK = "lyrics:"  // a record of a song's kept lyrics search picked: the song's key after it
-    const val LYRICS_CLEAR = "lyrics-clear:"  // the record picked for a song's lyrics taken back: the song's key after it
+    const val LYRICS_CLEAR = "lyrics-clear:"  // the record picked for a song's lyrics taken back: the song's key
+                                              // after it
     const val INDEX_MERGE = "index-merge:"  // an index export's merge
     const val SYNCING = "sync:"  // a sync's (sync_routes.SYNCING): the address it syncs with after it
     const val IMPORTING = "import:"  // a file's import (sync_routes.IMPORTING): the staged file's id after it

@@ -209,6 +209,13 @@ no lyrics offers it at once, a failed transcription offers it again, one made me
 more. The card's own data says nothing of it (the phone, which transcribes nothing, writes the same cards); elsewhere no
 card offers it.
 
+Lyrics under another name (web/lyrics_routes.py): where the data's ``server.lyricsSearch`` says so (caracole serve's
+page alone), a song's card, not ignored and with no request of it on its way, has a panel (library.js
+``lyricsPanel``): above Transcribe the lyrics, open, for a song with no lyrics found, else folded under its foot. Its
+Artist and Title, and Search, which alone sends ``POST /lyrics/search``; the list of what LRCLIB, Megalobiz and
+AZLyrics have under that name, read with no request (``GET /api/lyrics/search``), each row's Use these lyrics posting
+``POST /lyrics/pick`` in place, and Clear the pick ``POST /lyrics/clear``. The file on disk and the phone have none.
+
 A sheet from an audio file of yours (web/audio_routes.py): where this caracole makes chords (``audio_member``, the
 data's ``server.audio``), the search bar has a "+" that chooses a file, or takes one dropped on the library, uploads it
 and shows what it names in a dialog, whose Make sheet posts ``POST /audio`` as the request form posts a request; and a
@@ -423,6 +430,8 @@ class WebControls:
     sheet (sync-tab.html, sync-panel.html and sync-sheet.html, put in as they are); ``"sheet"``, the sheet alone, as
     the phone's page has it (the app's sync button opens it); None, neither. ``in_app``: the page is the Android
     app's, whose own bar names the library, so the page draws no library-name row (the title still names it).
+    ``lyrics_search``: a song's card looks its lyrics up under another name, lists what the lyrics sites have and
+    takes one (web/lyrics_routes.py, library.js ``lyricsPanel``): caracole serve's alone; the phone's page has none.
     """
 
     csrf: str
@@ -436,6 +445,7 @@ class WebControls:
     badge: str | None = None
     sync: str | None = None
     in_app: bool = False
+    lyrics_search: bool = False
 
 
 def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now: datetime, *,
@@ -468,7 +478,9 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
                           # cards' own data stays the phone's too.
                           "transcribe": transcribe_member(conn, cfg, overrides),
                           # A sheet from an audio file of yours (web/audio_routes.py): the bar's "+", served alone.
-                          "audio": audio_member(cfg)}
+                          "audio": audio_member(cfg),
+                          # A song's lyrics looked up under another name (web/lyrics_routes.py), served alone.
+                          "lyricsSearch": controls.lyrics_search}
         if controls.timers is not None:
             data["server"]["timers"] = dict(controls.timers)
         for song in songs:

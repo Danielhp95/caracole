@@ -24,9 +24,9 @@ lyrics.
 
 The rows are kept in kv ``lyrics-search:<song id>`` (``KV``), replaced by the song's next search, for a pick within
 ``PICKABLE_FOR`` (``kept_search``, ``row_of``; ``last_search`` reads it however old, ``pickable`` says whether it
-still is). The name typed is read by ``typed_name``, the command's and caracole serve's route's alike. A row names its record only by an id the site answered, of the shape
-``[lyrics]`` takes (``overrides.LYRICS_RECORD_IDS``): one of any other shape is dropped as it is read, from the site
-or from kv.
+still is). The name typed is read by ``typed_name``, the command's and caracole serve's route's alike. A row names
+its record only by an id the site answered, of the shape ``[lyrics]`` takes (``overrides.LYRICS_RECORD_IDS``): one of
+any other shape is dropped as it is read, from the site or from kv.
 """
 
 from __future__ import annotations
