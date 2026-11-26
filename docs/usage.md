@@ -3022,8 +3022,8 @@ none, and neither has a song while a request of it waits or runs.
 - Then the panel lists what the search kept: one row a record, with its site, "Artist - Title",
   album, length (and the audio's, when it is more than 10 s off), timed or plain. The best fit
   comes first, marked Best fit, and the record you picked says In use. Under the rows, what each
-  site that listed nothing said, a site that failed or waited too, and how many instrumental
-  records were left out. The search's own words head it: `Searched: …`, `Nothing found: …` (every
+  site that listed nothing said, in `caracole lyrics --as`'s words, and how many instrumental
+  records were left out. A long list makes the card longer; from 1200 px the card's pane scrolls. The search's own words head it: `Searched: …`, `Nothing found: …` (every
   site answered and none has any) or `Not searched: …; try again later.` (a site failed or
   waited: never "Nothing found").
 - **Use these lyrics** on a row queues `caracole lyrics --song … --record SITE:ID --progress`. The

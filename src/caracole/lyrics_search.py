@@ -449,6 +449,38 @@ def last_line(search: Search) -> str:
     return "Not searched: every lyrics site is off (caracole.toml); nothing asked."
 
 
+@dataclass(frozen=True)
+class Note:
+    """A line a search says beside its rows: of a site that listed none (``site``, its ``state``), or the count of the
+    records marked instrumental (``site`` "", ``state`` "instrumental")."""
+
+    site: str
+    state: str
+    line: str
+
+
+def notes(search: Search) -> tuple[Note, ...]:
+    """What the search says of each site that listed no row, in its words (its name kept where they hold it, the first
+    letter capitalized, else the name before them; one full stop), then how many instrumental records weren't
+    listed: ``caracole lyrics --as``'s lines, and the card's (web/lyrics_routes.py), which composes none."""
+    said: list[Note] = []
+    for site in SITES:
+        if any(row.site == site for row in search.rows):
+            continue
+        words, who = search.said.get(site, ""), provider_name(site)
+        line = f"{words[:1].upper()}{words[1:]}" if who in words else f"{who}: {words}"
+        said.append(Note(site, search.state.get(site, NONE), line if line.endswith(".") else f"{line}."))
+    if search.instrumental:
+        said.append(Note("", "instrumental", f"{plural(search.instrumental, 'record')} marked instrumental "
+                                             f"{'isn\'t' if search.instrumental == 1 else 'aren\'t'} listed."))
+    return tuple(said)
+
+
+def far(row: Row, length: float | None) -> bool:
+    """Whether a row's record is more than ``FAR`` seconds off the audio's ``length``, so its gap is said."""
+    return row.duration is not None and length is not None and abs(row.duration - length) > FAR
+
+
 def _joined(sites: Any) -> str:
     names = [provider_name(site) for site in sites]
     return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"

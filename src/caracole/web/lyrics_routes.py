@@ -8,9 +8,11 @@ their records taken as the song's lyrics, and that pick taken back.
     GET  /api/lyrics/search?song=ID
                           what the card's panel shows, with no request, no lock and no write: the song's ``[lyrics]``
                           name (``as``) and record (``picked``), why that record gives it no lyrics (``picked_why``),
+                          the card's sentence of that record (``picked_note``),
                           the song's audio length, and its kept search (its rows, each site's words and state, how
                           many instrumental records were left out, the name it asked under and the length its rows
-                          were scored against, whether it is still pickable, and its last line's words)
+                          were scored against, each row far from it or not, each site with no rows in the command's
+                          words, whether it is still pickable, and its last line's words)
     POST /lyrics/pick     one of those rows taken as the song's lyrics (``song``, ``identity``, ``record``): ``caracole
                           lyrics --song --record --progress`` queued under ``jobs.LYRICS_PICK``, the queue's
     POST /lyrics/clear    the record you picked taken back (``song``, ``identity``): ``caracole lyrics --song --clear``
@@ -163,22 +165,40 @@ def api_search(app: WebApp, asked: dict[str, list[str]], *, now: datetime | None
         kept = last_search(conn, song.id)
         length = audio_length(conn, song)
     entry = overrides.lyrics.get(override_key(song.display))
+    record = entry.record if entry is not None else None
+    why = picked_without_lyrics(song, overrides)
     return json_response(200, {
         "song": song.id, "identity": song.key,
         "as": _as_json(entry.asked if entry is not None else None),
-        "picked": entry.record.text if entry is not None and entry.record is not None else None,
-        "picked_why": picked_without_lyrics(song, overrides),
+        "picked": record.text if record is not None else None,
+        "picked_why": why,
+        "picked_note": _picked_note(why, record, kept),
         "length": length,
         "search": _search_json(kept, now or datetime.now(UTC)) if kept is not None else None,
     })
 
 
+def _picked_note(why: str | None, record: Any, kept: Search | None) -> str | None:
+    """What the card says of the record you picked, a sentence: why it has given the song no lyrics, or which record
+    the lyrics are where the kept search lists it in no row (a row says In use); else None."""
+    if why:
+        return f"{why[:1].upper()}{why[1:]}."
+    if record is None or (kept is not None and any(row.record == record.text for row in kept.rows)):
+        return None
+    return f"Its lyrics are the record you picked ({record.site} {record.id})."
+
+
 def _search_json(kept: Search, now: datetime) -> dict[str, Any]:
-    from caracole.lyrics_search import last_line, pickable
+    """The kept search as the card draws it, every word the command's: each row with whether it is far from the
+    audio's length (``far``), each site with no rows in its words and the instrumental records counted (``notes``),
+    and its last line."""
+    from caracole.lyrics_search import far, last_line, notes, pickable
 
     return {"at": kept.at, "as": _as_json(kept.asked), "length": kept.length,
-            "rows": [row.as_json() for row in kept.rows], "said": dict(kept.said), "state": dict(kept.state),
-            "instrumental": kept.instrumental, "pickable": pickable(kept, now), "line": last_line(kept)}
+            "rows": [row.as_json() | {"far": far(row, kept.length)} for row in kept.rows], "said": dict(kept.said),
+            "state": dict(kept.state), "instrumental": kept.instrumental, "pickable": pickable(kept, now),
+            "notes": [{"site": n.site, "state": n.state, "line": n.line} for n in notes(kept)],
+            "line": last_line(kept)}
 
 
 def _record_of(job: Job) -> str:

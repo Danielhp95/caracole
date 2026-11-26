@@ -2071,8 +2071,10 @@ It is rows.js's, shared by both pages:
   pressed again, the search on its way, its `as` that one and `said` naming it when another was typed), `GET
   /api/lyrics/search?song=` (no request, no lock, no write: `[lyrics]`' `as` and `picked`, `picked_why`
   (`transcript.picked_without_lyrics`), the audio's `length`, the kept search however old, `lyrics_search.last_search`,
-  its `as`, the `length` its rows were scored against, rows, `said`, `state`, `instrumental`, `pickable` and `line`,
-  its last line's words, `lyrics_search.last_line`), `POST /lyrics/pick` (`record`, a row of the kept
+  its `as`, the `length` its rows were scored against, rows each with `far` (`lyrics_search.far`), `said`, `state`,
+  `instrumental`, `pickable`, `notes` (`lyrics_search.notes`, the command's lines of each site with no rows) and
+  `line`, its last line's words, `lyrics_search.last_line`; and `picked_note`, the card's sentence of the record
+  picked), `POST /lyrics/pick` (`record`, a row of the kept
   search within its week, 409 "Search again: …" else; its site on; `caracole lyrics --record --progress` under
   `jobs.LYRICS_PICK`; another record while a pick waits or runs refused 409 in words, never dropped) and `POST
   /lyrics/clear` (`caracole lyrics --clear` under `jobs.LYRICS_CLEAR`; 409 nothing to clear); each 404 no song, 409
@@ -2082,15 +2084,20 @@ It is rows.js's, shared by both pages:
     `server.lyricsSearch` is true (`WebControls.lyrics_search`, which library_routes.py sets; last in the member, the
     phone's LibraryPage.kt `false` at the same place; the cards' own data unchanged), for a song not ignored with no
     request of it waiting or running (`freeToAsk`): open in what needs you, before `transcribeOffer`, for a song with
-    lyrics `missing` (the lyrics sites before Whisper), else folded right under the foot, a part of its own. Opened it reads the
-    GET once; only its Search (or Enter in its fields) posts `/lyrics/search`, never the card opening, typing or a
-    timer. The search, a job of no song's, is followed on `/api/jobs/N` (`followSearch`, kept by song id in
-    `lyricsSearches`, so a card drawn again meanwhile follows it), its live line "Asking LRCLIB, Megalobiz and AZLyrics
-    under “…”…", then the GET read again: `search.line` said, a row a record (`ol.lyrics-rows`: site, names, album,
-    length with the audio's when more than 10 s off, timed or plain; Best fit, In use), each site that listed nothing
-    in its words (`ul.lyrics-notes`). Use these lyrics and Clear the pick post in place (`postHere`: the panel hidden,
-    the song's line following the job, a refusal said in the panel's line), and once that job is over the offers are
-    read again (`lyricsJobs`, `readTranscriptions`). A search over 7 days old lists its rows with no button
+    lyrics `missing` (the lyrics sites before Whisper), else folded right under the foot, a part of its own. Opened
+    it reads the GET once; only its Search (or Enter in its fields) posts `/lyrics/search`, never the card opening,
+    typing or a timer. The search, a job of no song's, is followed on `/api/jobs/N` (`followSearch`, kept by song id
+    in `lyricsSearches`, so a card drawn again meanwhile follows it), its live line (`p.lyrics-said`, a status
+    region kept in the accessibility tree while empty) "Asking LRCLIB, Megalobiz and AZLyrics under “…”…", then the
+    GET read again and drawn with its words as given, none composed on the page: `search.line`, `picked_note`,
+    `search.notes` (lyrics_search.py `notes`, the command's own lines) and each row's `far`. Its form is the pasted
+    link's (`.link-form`, `.f`), its rows the drawer's version rows (`ol.vrows`, `.vrow`, `.ver`, `.stars`, `.note`,
+    `.vbtns`, `.inuse`, `.cur`), its notes `.hint` lines; a long list grows the card (from 1200 px the pane scrolls).
+    A busy button is `aria-disabled` (`busyWith`), never `disabled`, so the focus a key gave it stays; a card drawn
+    again while its panel held the focus gives it to the same control (`lyricsFocus`, `lyricsRefocus` in `refill`).
+    Use these lyrics and Clear the pick post in place (`postHere`: the focus to the song's line, the panel hidden,
+    the line following the job, a refusal said in the panel's line), and once that job is over the offers are read
+    again (`lyricsJobs`, `readTranscriptions`). A search over 7 days old lists its rows with no button
     (test_web_page_lyrics_search.py).
 - **offline_routes.py** is `GET /api/offline`, the manifest caracole's Android app copies the library by (read-only:
   each file the written index.html links to, as `WebApp._file` sends it now, its bytes' SHA-256 and its headers;

@@ -628,3 +628,35 @@ def test_both_answering_is_a_good_run_once(cfg, conn, song, sites, a_strike_yest
     sites.lrclib.got = lrc(77)
     search(cfg, conn, song)
     assert oks.count("lrclib") == 1 and get_state(conn, "lrclib").strikes == 0
+
+
+# --- what a search says of each site, the command's and the card's alike -------------------------------------------
+
+
+def test_each_site_with_no_rows_is_noted_in_its_own_words_and_the_instrumental_records_counted():
+    from caracole.lyrics_search import Note, Row, Search, notes
+
+    search = Search(at="2026-11-25T13:00:00Z", asked=("孟维来", "野人"), length=225.0, lrclib={},
+                    rows=(Row("lrclib:1", "lrclib", "孟维来", "野人", "", 226.0, True),),
+                    said={"lrclib": "listed 1", "megalobiz": "waiting out Megalobiz until 26/11 18:00",
+                          "azlyrics": "no artist page for 孟维来"},
+                    state={"lrclib": "rows", "megalobiz": "cooling", "azlyrics": "none"}, instrumental=2)
+    # A site's words keep its name where they hold it, capitalized; else the name before them; one full stop.
+    assert notes(search) == (Note("megalobiz", "cooling", "Waiting out Megalobiz until 26/11 18:00."),
+                             Note("azlyrics", "none", "AZLyrics: no artist page for 孟维来."),
+                             Note("", "instrumental", "2 records marked instrumental aren't listed."))
+    failed = Search(at=search.at, asked=search.asked, length=None, lrclib={}, rows=(),
+                    said={"lrclib": "LRCLIB failed (lrclib: 502: Bad Gateway).", "megalobiz": "nothing listed",
+                          "azlyrics": "nothing listed"},
+                    state={"lrclib": "failed", "megalobiz": "none", "azlyrics": "none"}, instrumental=1)
+    assert [n.line for n in notes(failed)] == ["LRCLIB failed (lrclib: 502: Bad Gateway).",
+                                               "Megalobiz: nothing listed.", "AZLyrics: nothing listed.",
+                                               "1 record marked instrumental isn't listed."]
+
+
+def test_a_row_is_far_from_the_audio_past_FAR_seconds_and_never_without_a_length():
+    from caracole.lyrics_search import FAR, Row, far
+
+    row = Row("lrclib:1", "lrclib", "A", "T", "", 225.0 + FAR + 1, True)
+    assert far(row, 225.0) and not far(row, 225.0 + 2) and not far(row, None)
+    assert not far(Row("azlyrics:a/t", "azlyrics", "A", "T", "", None, False), 225.0)

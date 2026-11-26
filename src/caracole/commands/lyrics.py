@@ -348,7 +348,7 @@ def _lyrics_as(cfg: Config, display: str, typed: str) -> None:
     "Nothing found: " (every site asked answered none) or "Not searched: " (no rows, a site failed or waited)."""
     import shlex
 
-    from caracole.lyrics_search import FAR, SITES, is_own_name, last_line, search_lyrics
+    from caracole.lyrics_search import far, is_own_name, last_line, notes, search_lyrics
 
     name = _typed_name(cfg, typed)
     overrides = load_ovr(cfg)
@@ -364,19 +364,11 @@ def _lyrics_as(cfg: Config, display: str, typed: str) -> None:
         if row.album:
             parts.append(row.album)
         if row.duration:
-            far = found.length is not None and abs(row.duration - found.length) > FAR
-            parts.append(_clock(row.duration) + (f", audio {_clock(found.length)}" if far else ""))
+            parts.append(_clock(row.duration) + (f", audio {_clock(found.length)}" if far(row, found.length) else ""))
         parts += ["timed"] * row.timed + ["best fit"] * row.best
         typer.echo(f"{n:>2}. {provider_name(row.site):<10} {' · '.join(parts)}")
-    for site in SITES:
-        if any(row.site == site for row in found.rows):
-            continue
-        said, who = found.said.get(site, ""), provider_name(site)
-        line = f"{said[:1].upper()}{said[1:]}" if who in said else f"{who}: {said}"
-        typer.echo(line if line.endswith(".") else f"{line}.")  # an error's own full stop, never two
-    if found.instrumental:
-        typer.echo(f"{plural(found.instrumental, 'record')} marked instrumental "
-                   f"{'isn\'t' if found.instrumental == 1 else 'aren\'t'} listed.")
+    for note in notes(found):  # each site that listed none in its words, then the instrumental records counted
+        typer.echo(note.line)
     if found.rows:
         typer.echo(f"Take one: caracole lyrics --song {shlex.quote(song.display)} --pick 1")
     typer.echo(last_line(found))

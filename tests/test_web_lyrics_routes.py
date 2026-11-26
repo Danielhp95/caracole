@@ -206,7 +206,7 @@ def test_get_api_lyrics_search_reads_the_kept_search_and_the_lyrics_entry_with_n
     app = app_for(cfg, queue)
     empty = answer(get(app, f"/api/lyrics/search?song={song.id}"))
     assert empty == {"song": song.id, "identity": song.key, "as": None, "picked": None, "picked_why": None,
-                     "length": 225.0, "search": None}
+                     "picked_note": None, "length": 225.0, "search": None}
     search = keep_search(conn, song)
     set_lyrics_name(cfg.overrides_file, song.display, "孟维来 - 野人")
     set_lyrics_record(cfg.overrides_file, song.display, "lrclib:28399373")
@@ -217,14 +217,32 @@ def test_get_api_lyrics_search_reads_the_kept_search_and_the_lyrics_entry_with_n
         # transcript.picked_without_lyrics' words: a song still pending, its record not asked yet
         "picked_why": "the record you picked isn't read yet (lrclib 28399373): tonight's run or a lookup reads it",
         # The length its rows were scored against (the audio may have changed since), and its last line's words.
+        "picked_note": "The record you picked isn't read yet (lrclib 28399373): tonight's run or a lookup reads it.",
+        # Each row with whether it is far from the audio (lyrics_search.far), the notes the command prints of the
+        # sites with no rows (lyrics_search.notes), and its last line's words: the page composes none.
         "search": {"at": search.at, "as": {"artist": "孟维来", "title": "野人"}, "length": 225.0,
-                   "rows": [row.as_json() for row in rows()], "said": search.said, "state": search.state,
-                   "instrumental": 2, "pickable": True,
+                   "rows": [row.as_json() | {"far": False} for row in rows()], "said": search.said,
+                   "state": search.state, "instrumental": 2, "pickable": True,
+                   "notes": [{"site": "", "state": "instrumental",
+                              "line": "2 records marked instrumental aren't listed."}],
                    "line": "Searched: LRCLIB, Megalobiz and AZLyrics list 3 records for “孟维来 - 野人”."}}
     assert read["search"]["line"] == last_line(search)
     assert queue.snapshot() == []
     update_song(conn, song.id, lyrics_status="found")
-    assert answer(get(app, f"/api/lyrics/search?song={song.id}"))["picked_why"] is None
+    found = answer(get(app, f"/api/lyrics/search?song={song.id}"))
+    assert found["picked_why"] is None and found["picked_note"] is None  # In use on its row says it
+    # A record picked that the kept search doesn't list, its lyrics found: the note says which it is.
+    set_lyrics_record(cfg.overrides_file, song.display, "lrclib:5")
+    assert answer(get(app, f"/api/lyrics/search?song={song.id}"))["picked_note"] == (
+        "Its lyrics are the record you picked (lrclib 5).")
+
+
+def test_a_row_far_from_the_audio_says_so(cfg, conn, queue):
+    song = song_of(conn)
+    keep_search(conn, song, kept=(Row("lrclib:31", "lrclib", "孟维来", "野人 (Live)", "", 271.0, True),
+                                   Row("lrclib:32", "lrclib", "孟维来", "野人", "", 230.0, True)))
+    read = answer(get(app_for(cfg, queue), f"/api/lyrics/search?song={song.id}"))
+    assert [row["far"] for row in read["search"]["rows"]] == [True, False]
 
 
 def test_a_search_over_a_week_old_is_read_unpickable_and_a_picked_record_with_no_lyrics_says_why(cfg, conn, queue):

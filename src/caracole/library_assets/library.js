@@ -968,7 +968,6 @@
   // panel then gone and the song's line following the job, a refusal said in the panel; once that job is over the card
   // is drawn again from the song, and the transcription offers read again.
   const LYRICS_SEARCH = Boolean(server && server.lyricsSearch === true);
-  const LYRICS_GAP = 10;  // seconds off the audio's length past which a row says it (lyrics_search.FAR)
   const lyricsSite = (site) => String(own.call(ICONS, site) && ICONS[site] && ICONS[site].name || site);
   const whose = (name) => name + (/s$/.test(name) ? "'" : "'s");
   const clockOf = (seconds) => {
@@ -1007,15 +1006,22 @@
       });
     tick();
   };
+  // A button that waits (a search on its way, a pick being sent) stays focusable, so a press from the keyboard leaves
+  // the focus where it was: aria-disabled, and its handler refusing the press.
+  const busyWith = (b, on) => {
+    if (on) b.setAttribute("aria-disabled", "true");
+    else b.removeAttribute("aria-disabled");
+  };
+  const isBusy = (b) => b.getAttribute("aria-disabled") === "true";
   const lyricsPanel = (s, missing) => {
     const id = Number(s.id);
     if (!LYRICS_SEARCH || s.status === "ignored" || s.status === "removed" || !freeToAsk(id)) return null;
     const panel = el("details", "lyrics-search");
-    const summary = el("summary", "lyrics-search-head",
+    const summary = el("summary", null,
       missing ? "No lyrics found. Look them up under another name" : "Lyrics under another name…");
-    const why = el("div", "lyrics-why");
+    const why = el("div", "actions");
     why.hidden = true;
-    const form = songForm("lyrics-search-form", "/lyrics/search", s);
+    const form = songForm("link-form", "/lyrics/search", s);
     let typed = false;  // a field you typed in keeps what you typed, whatever the GET answers
     const field = (name, label, value) => {
       const box = el("label", "f");
@@ -1041,27 +1047,29 @@
     form.appendChild(go);
     const said = el("p", "lyrics-said");  // a live region, in the page empty: each change read out once
     said.setAttribute("role", "status");
-    const asked = el("p", "hint lyrics-asked");
+    const asked = el("p", "hint");
     asked.hidden = true;
-    const list = el("ol", "lyrics-rows");
+    const list = el("ol", "vrows");
     list.setAttribute("aria-label", "What the lyrics sites list under that name");
     list.hidden = true;
-    const notes = el("ul", "lyrics-notes");
+    const notes = el("div");  // the search's own lines of the sites that listed none, each a muted line
     notes.hidden = true;
     panel.append(summary, why, form, said, asked, list, notes);
     const say = (text) => {
       if (said.textContent !== text) said.textContent = text;
     };
-    // A pick or a clear, posted in place: the panel goes, the song's line follows the job; refused, it says why.
+    // A pick or a clear, posted in place: the panel goes, the song's line follows the job (the focus on it, from a
+    // control of the panel); refused, it says why, the focus where it was.
     const postHere = (one, button) => {
       one.addEventListener("submit", (e) => {
         e.preventDefault();
-        button.disabled = true;
+        if (isBusy(button)) return;
+        busyWith(button, true);
         say("Sending…");
         send(one).then((answer) => {
+          busyWith(button, false);
           const view = answer.ok && answer.body && answer.body.job;
           if (!view || typeof view !== "object") {
-            button.disabled = false;
             say(failure(answer).line.text);
             return;
           }
@@ -1069,11 +1077,12 @@
           const item = itemOf(panel);
           const had = panel.contains(document.activeElement);
           if (item && !isOwn(s, item)) spots.set(Number(view.id), item);
+          const line = item ? progressIn(item) : null;
+          if (had && line) focusOn(line);  // before the panel goes, so the focus is never on nothing
           panel.hidden = true;
           track(view);
-          if (had && item) focusOn(progressIn(item));
         }, () => {
-          button.disabled = false;
+          busyWith(button, false);
           say(UNREACHABLE.line.text);
         });
       });
@@ -1088,34 +1097,36 @@
       postHere(one, b);
       return one;
     };
+    // A record as the drawer's version rows show a version (card.css .vrow): its site, Best fit or In use, then
+    // "Artist - Title · album · length · timed", then its button.
     const rowOf = (row, search, picked) => {
-      const li = el("li", "lyrics-row");
+      const inUse = picked !== null && String(row.record) === picked;
+      const li = el("li", "vrow" + (inUse ? " cur" : ""));
       li.dataset.record = String(row.record);
       const site = lyricsSite(String(row.site));
-      const where = li.appendChild(el("span", "lyrics-site"));
+      const where = li.appendChild(el("span", "ver"));
       const mark = sourceMark(String(row.site));
       if (mark) where.appendChild(mark);
-      where.appendChild(el("span", "lyrics-site-name", site));
+      where.appendChild(document.createTextNode(site));
+      const marks = li.appendChild(el("span", "stars"));
+      if (row.best) marks.appendChild(el("b", null, "Best fit"));
+      if (inUse) {
+        const used = marks.appendChild(el("span", "inuse"));
+        used.append(glyph("check"), document.createTextNode("In use"));
+      }
       const by = String(row.artist || "");
-      li.appendChild(el("span", "lyrics-name", (by || "(no artist)") + " - " + String(row.title || "")));
-      const facts = [];
+      const facts = [(by || "(no artist)") + " - " + String(row.title || "")];
       if (row.album) facts.push(String(row.album));
       if (typeof row.duration === "number") {
-        const length = typeof search.length === "number" ? search.length : null;
-        facts.push(clockOf(row.duration) + (length !== null && Math.abs(row.duration - length) > LYRICS_GAP ?
-          " (audio " + clockOf(length) + ")" : ""));
+        facts.push(clockOf(row.duration) + (row.far === true && typeof search.length === "number" ?
+          " (audio " + clockOf(search.length) + ")" : ""));
       }
       facts.push(row.timed ? "timed" : "plain");
-      li.appendChild(el("span", "lyrics-meta", facts.join(" · ")));
-      const inUse = picked !== null && String(row.record) === picked;
-      const tags = [row.best ? "Best fit" : "", inUse ? "In use" : ""].filter(Boolean);
-      if (tags.length) {
-        const box = li.appendChild(el("span", "lyrics-tags"));
-        for (const tag of tags) box.appendChild(el("span", "lyrics-tag", tag));
-      }
+      li.appendChild(el("span", "note", facts.join(" · ")));
+      const acts = li.appendChild(el("span", "vbtns"));
       const of = String(row.title || "") + (by ? " by " + by : "");
       if (inUse) {
-        li.appendChild(clearForm("Clear the pick of " + whose(site) + " lyrics for " + String(s.title)));
+        acts.appendChild(clearForm("Clear the pick of " + whose(site) + " lyrics for " + String(s.title)));
       } else if (search.pickable === true) {
         const one = songForm("lyrics-pick", "/lyrics/pick", s);
         one.appendChild(hidden("record", String(row.record)));
@@ -1125,52 +1136,43 @@
         b.title = "They become the song's lyrics, and its auto sheet is made again over them.";
         one.appendChild(b);
         postHere(one, b);
-        li.appendChild(one);
+        acts.appendChild(one);
       }
       return li;
     };
-    // What GET /api/lyrics/search answered; ``ended``, the state of the search this panel just followed, if any.
+    // What GET /api/lyrics/search answered, drawn with its words as given; ``ended``, the state of the search this
+    // panel just followed, if any.
     const draw = (body, ended) => {
       if (!typed && body.as && typeof body.as === "object") {
         artist.value = String(body.as.artist || "");
         title.value = String(body.as.title || "");
       }
       const picked = typeof body.picked === "string" && body.picked ? body.picked : null;
-      const search = body.search && typeof body.search === "object" ? body.search : null;
-      const rows = search ? listOf(search.rows).filter((r) => r && typeof r === "object") : [];
-      // The record you picked, when it has given no lyrics (``picked_why``), or isn't among the rows to say In use.
-      const words = typeof body.picked_why === "string" && body.picked_why ? String(body.picked_why) :
-        picked && !rows.some((r) => String(r.record) === picked) ? "the lyrics are the record you picked (" +
-          picked.replace(":", " ") + ")" : "";
+      const note = typeof body.picked_note === "string" ? body.picked_note : "";
       why.replaceChildren();
-      why.hidden = !words;
-      if (words) {
-        why.appendChild(el("p", "note", words.charAt(0).toUpperCase() + words.slice(1) + "."));
+      why.hidden = !note;
+      if (note) {
+        why.appendChild(el("p", "note", note));
         why.appendChild(clearForm("Clear the pick of the record " + picked + " for " + String(s.title)));
       }
+      const search = body.search && typeof body.search === "object" ? body.search : null;
+      const rows = search ? listOf(search.rows).filter((r) => r && typeof r === "object") : [];
       list.replaceChildren(...rows.map((row) => rowOf(row, search, picked)));
       list.hidden = !rows.length;
-      notes.replaceChildren();
+      notes.replaceChildren(...(search ? listOf(search.notes) : []).filter((n) => n && typeof n.line === "string")
+        .map((n) => {
+          const line = el("p", "hint", n.line);
+          line.dataset.state = String(n.state || "");
+          return line;
+        }));
+      notes.hidden = !notes.childNodes.length;
       if (search) {
-        const state = search.state && typeof search.state === "object" ? search.state : {};
-        const words = search.said && typeof search.said === "object" ? search.said : {};
-        for (const site of ["lrclib", "megalobiz", "azlyrics"]) {
-          if (state[site] === "rows" || typeof words[site] !== "string" || !words[site]) continue;
-          const name = lyricsSite(site);
-          const w = String(words[site]);
-          notes.appendChild(el("li", null, (w.indexOf(name) === 0 ? w : name + ": " + w) + (/[.!?]$/.test(w) ? "" :
-            ".")));
-        }
-        const n = Number(search.instrumental) || 0;
-        if (n > 0) notes.appendChild(el("li", null, n === 1 ? "1 record marked instrumental isn't listed." :
-          n + " records marked instrumental aren't listed."));
         const name = search.as && typeof search.as === "object" ?
           String(search.as.artist || "") + " - " + String(search.as.title || "") : "";
         asked.textContent = "Asked as “" + name + "” on " + shortDate(search.at) + (search.pickable === true ? "." :
           ": over a week ago. Search again to pick one.");
       }
       asked.hidden = !search;
-      notes.hidden = !notes.childNodes.length;
       if (ended !== undefined) {
         say(ended === "done" && search && typeof search.line === "string" ? String(search.line) :
           "The search didn't run to its end: the Journal says why.");
@@ -1193,25 +1195,25 @@
     };
     const api = {
       searching: (on, state) => {
-        go.disabled = true;
+        busyWith(go, true);
         const doing = state === "running" ? "Asking" : "Waiting to ask";
         say(on.said || doing + " LRCLIB, Megalobiz and AZLyrics under “" + on.named + "”…");
       },
       searched: (job) => {
-        go.disabled = false;
+        busyWith(go, false);
         if (panel.isConnected) readIt(job && typeof job.state === "string" ? job.state : "gone");
       },
     };
     lyricsPanels.set(id, api);
     form.addEventListener("submit", (e) => {
       e.preventDefault();
-      if (lyricsSearches.has(id) || go.disabled) return;
-      go.disabled = true;
+      if (lyricsSearches.has(id) || isBusy(go)) return;
+      busyWith(go, true);
       say("Sending…");
       send(form).then((answer) => {
         const b = answer.body;
         if (!answer.ok || !b || typeof b.url !== "string" || !/^[/]api[/]jobs[/]\d+$/.test(b.url)) {
-          go.disabled = false;
+          busyWith(go, false);
           say(failure(answer).line.text);
           return;
         }
@@ -1222,7 +1224,7 @@
         api.searching(on, "queued");
         followSearch(id);
       }, () => {
-        go.disabled = false;
+        busyWith(go, false);
         say(UNREACHABLE.line.text);
       });
     });
@@ -1239,6 +1241,32 @@
       });
     }
     return panel;
+  };
+  // The control of a card's lyrics panel that holds the focus (its field, Search, a row's button, its summary), as a
+  // selector of the same one in the card drawn again in its place (refill); null for a node out of any panel.
+  const lyricsFocus = (node) => {
+    const panel = node && node.closest ? node.closest("details.lyrics-search") : null;
+    if (!panel) return null;
+    if (node.name === "artist" || node.name === "title") return "input[name=" + node.name + "]";
+    const row = node.closest("li[data-record]");
+    if (row) return "li[data-record=\"" + CSS.escape(row.dataset.record) + "\"] button";
+    if (node.closest("form.link-form")) return "form.link-form button";
+    return "summary";
+  };
+  // The focus given back there once the card is drawn again (its panel opened for a control inside it, folded now),
+  // else to the panel's summary, else to the line's chevron: never left on nothing.
+  const lyricsRefocus = (item, at) => {
+    if (!at) return;
+    const shown = cardOf(item);
+    const panel = shown ? shown.querySelector("details.lyrics-search:not([hidden])") : null;
+    if (panel && panel.contains(document.activeElement)) return;
+    const node = panel ? panel.querySelector(at) : null;
+    if (node && at !== "summary" && !panel.open) panel.open = true;
+    for (const next of [node, panel && panel.querySelector("summary"), chevronOf(item)]) {
+      if (!next) continue;
+      next.focus({ preventScroll: true });
+      if (document.activeElement === next) return;
+    }
   };
   // The LaCuerda sheet of each song of yours that the bar's search found (a LaCuerda row of it with chords, which
   // mergeSites folds into its line), by song id: its line offers it until the page is loaded again.
@@ -1764,6 +1792,12 @@
   // a drawer of its card closed; closed, its card waits to be made until it opens. Its card in the pane (old selected),
   // fresh's takes its place there, opened; a line with no card (a song gone) leaves the pane empty (placeAgain).
   const refill = (old, fresh) => {
+    const back = lyricsFocus(document.activeElement);  // a lyrics panel's control: the redrawn card's same one
+    const done = refilled(old, fresh);
+    lyricsRefocus(done, back);
+    return done;
+  };
+  const refilled = (old, fresh) => {
     const was = chevronOf(old);
     const shown = old === selected ? cardOf(old) : null;  // read before the merge: in the pane, outside old
     if (was && was.getAttribute("aria-expanded") === "true") openCard(fresh);

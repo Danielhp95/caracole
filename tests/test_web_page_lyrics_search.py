@@ -73,6 +73,8 @@ class FakeLyrics:
         self.ran: list[tuple[str, ...]] = []
         self.hold = threading.Event()
         self.hold.set()
+        self.pick_hold = threading.Event()  # a pick waits for it once it has begun
+        self.pick_hold.set()
         self.search = lambda asked: a_search(asked)
         self.cfg = None
         self.song = None
@@ -100,6 +102,7 @@ class FakeLyrics:
 
             emit(PROGRESS_PREFIX + json.dumps({"song": {"id": self.song.id, "display": self.song.display}}))
             stage("song", "done", "in the book")
+            self.pick_hold.wait(30)
             set_lyrics_record(self.cfg.overrides_file, self.song.display, record)
             self._in_the_book(lambda conn, song: update_song(conn, song.id, lyrics_status="found"))
             stage("lyrics", "done", "Timed lyrics from LRCLIB: 孟维来 - 野人 (野人, 3:46)")
@@ -126,6 +129,7 @@ def lyrics(able, tmp_path):
         conn.close()
     yield made
     made.hold.set()
+    made.pick_hold.set()
 
 
 @pytest.fixture
@@ -135,6 +139,7 @@ def live(able, lyrics):
     server.shutdown()
     server.server_close()
     lyrics.hold.set()
+    lyrics.pick_hold.set()
     queue.stop()
 
 
@@ -173,14 +178,19 @@ def drawn(page, card: str) -> None:
 
 
 def rows_of(card: str) -> str:
-    """Each row of the panel's list: its site's name, its names, its facts, its marks, and its button's words and
-    label (none: no button)."""
-    return (f"[...document.querySelectorAll({json.dumps(card + ' ' + PANEL + ' ol.lyrics-rows > li')})].map((li) => {{"
-            "const t = (s) => (li.querySelector(s) || {}).textContent || ''; "
+    """Each row of the panel's list (the drawer's version rows, ``.vrow``): its site's name, its facts, its marks,
+    and its button's words and label (none: no button)."""
+    return (f"[...document.querySelectorAll({json.dumps(card + ' ' + PANEL + ' > ol.vrows > li')})].map((li) => {{"
             "const b = li.querySelector('button'); "
-            "return [t('.lyrics-site-name'), t('.lyrics-name'), t('.lyrics-meta'), "
-            "[...li.querySelectorAll('.lyrics-tag')].map((m) => m.textContent), "
+            "return [li.querySelector('.ver').lastChild.textContent, li.querySelector('.note').textContent, "
+            "[...li.querySelectorAll('.stars > *')].map((m) => m.textContent), "
             "b ? [b.textContent, b.getAttribute('aria-label')] : null]; })")
+
+
+def notes_of(card: str) -> str:
+    """The panel's lines of the sites that listed none, as the route gave them."""
+    return (f"[...document.querySelectorAll({json.dumps(card + ' ' + PANEL + ' > div > p.hint[data-state]')})]"
+            ".map((p) => p.textContent)")
 
 
 def text_of(card: str, selector: str) -> str:
@@ -189,7 +199,7 @@ def text_of(card: str, selector: str) -> str:
 
 def fields_of(card: str) -> str:
     return (f"['artist', 'title'].map((n) => document.querySelector({panel_of(card)} + "
-            "` input[name=${n}]`).value)")
+            "` form.link-form input[name=${n}]`).value)")
 
 
 def type_into(page, card: str, name: str, text: str) -> None:
@@ -216,9 +226,10 @@ def test_a_song_with_no_lyrics_has_the_search_above_transcribe_filled_in(able, l
     assert order is True
     # The song's own name, nothing asked yet.
     assert browser.js(fields_of(card)) == [ARTIST, TITLE]
-    assert browser.js(text_of(card, "ol.lyrics-rows")) in (None, "")
+    assert browser.js(f"{rows_of(card)}.length") == 0
     # Typing in its fields sends nothing: only Search does.
     type_into(browser, card, "title", "野人")
+    # A negative needs a window: a second, many times the page's 100 ms poll, for anything typing set off to arrive.
     assert not browser.wait("false", timeout=1.0)
     assert posted == [] and f"/api/lyrics/search?song={song.id}&identity={song.key}" in map(unquote, posted.read)
     assert lyrics.ran == []
@@ -241,6 +252,7 @@ def test_a_song_with_lyrics_has_it_folded_under_its_foot(able, live, lyrics, bro
     drawn(browser, card)
     assert browser.js(fields_of(card)) == [ARTIST, TITLE]
     assert posted == []
+    # A negative needs a window: half a second, five of the page's polls, for an offer to be drawn.
     assert not browser.wait("document.querySelector('form.transcribe') !== null", timeout=0.5)
 
 
@@ -268,27 +280,31 @@ def test_searching_says_it_asks_then_lists_one_row_a_record_best_fit_first(able,
                                                  "artist": ARTIST, "title": "野人"})
     said = text_of(card, "p.lyrics-said")
     assert browser.wait(f"{said} === 'Asking LRCLIB, Megalobiz and AZLyrics under “孟维来 - 野人”…'"), browser.js(said)
-    assert browser.js(f"document.querySelector({panel_of(card)} + ' form.lyrics-search-form button').disabled")
+    # Waiting, Search stays where the focus can be (aria-disabled), and refuses a press.
+    assert browser.js(f"document.querySelector({panel_of(card)} + ' form.link-form button')"
+                      ".getAttribute('aria-disabled')") == "true"
     assert browser.js(f"document.querySelector({panel_of(card)} + ' p.lyrics-said').getAttribute('role')") == \
         "status"
     browser.press("Enter")  # pressed again while it runs: nothing more is sent
+    # A negative needs a window: half a second, five of the page's polls, for a second POST to arrive.
     assert not browser.wait("false", timeout=0.5) and len(posted) == 1
     lyrics.hold.set()
     line_words = "Searched: LRCLIB, Megalobiz and AZLyrics list 4 records for “孟维来 - 野人”."
     assert browser.wait(f"{said} === {json.dumps(line_words)}"), browser.js(said)
     assert browser.wait(f"{rows_of(card)}.length === 4")
     assert browser.js(rows_of(card)) == [
-        ["LRCLIB", "孟维来 - 野人", "野人 · 3:46 · timed", ["Best fit"],
+        ["LRCLIB", "孟维来 - 野人 · 野人 · 3:46 · timed", ["Best fit"],
          ["Use these lyrics", "Use LRCLIB's timed lyrics of 野人 by 孟维来"]],
-        ["LRCLIB", "孟维来 - 野人 (Live)", "野人 Live · 4:31 (audio 3:45) · timed", [],
+        ["LRCLIB", "孟维来 - 野人 (Live) · 野人 Live · 4:31 (audio 3:45) · timed", [],
          ["Use these lyrics", "Use LRCLIB's timed lyrics of 野人 (Live) by 孟维来"]],
-        ["Megalobiz", "(no artist) - 野人", "3:44 · timed", [],
+        ["Megalobiz", "(no artist) - 野人 · 3:44 · timed", [],
          ["Use these lyrics", "Use Megalobiz's timed lyrics of 野人"]],
-        ["AZLyrics", "孟维来 - 野人", "plain", [],
+        ["AZLyrics", "孟维来 - 野人 · plain", [],
          ["Use these lyrics", "Use AZLyrics' plain lyrics of 野人 by 孟维来"]]]
-    assert browser.js(text_of(card, "p.lyrics-asked")).startswith("Asked as “孟维来 - 野人”")
-    assert browser.js(text_of(card, "ul.lyrics-notes")) == "2 records marked instrumental aren't listed."
-    assert not browser.js(f"document.querySelector({panel_of(card)} + ' form.lyrics-search-form button').disabled")
+    assert browser.js(text_of(card, "> p.hint")).startswith("Asked as “孟维来 - 野人”")
+    assert browser.js(notes_of(card)) == ["2 records marked instrumental aren't listed."]
+    assert browser.js(f"document.querySelector({panel_of(card)} + ' form.link-form button')"
+                      ".getAttribute('aria-disabled')") is None
     assert lyrics.ran == [("lyrics", f"--song={song.display}", "--as=孟维来 - 野人")] and len(posted) == 1
 
 
@@ -302,7 +318,7 @@ def test_nothing_found_says_where_it_looked(able, live, lyrics, browser):
     card = opened(browser, lyrics.song)
     drawn(browser, card)
     type_into(browser, card, "title", "野人")
-    browser.click(f"{card} {PANEL} form.lyrics-search-form button[type=submit]")
+    browser.click(f"{card} {PANEL} form.link-form button[type=submit]")
     posted.next(0)
     said = text_of(card, "p.lyrics-said")
     assert browser.wait(f"{said} === 'Nothing found: LRCLIB, Megalobiz and AZLyrics list nothing for “孟维来 - 野人”.'"
@@ -321,16 +337,15 @@ def test_a_failed_site_is_said_never_nothing_found(able, live, lyrics, browser):
     browser.open(base)
     card = opened(browser, lyrics.song)
     drawn(browser, card)
-    browser.click(f"{card} {PANEL} form.lyrics-search-form button[type=submit]")
+    browser.click(f"{card} {PANEL} form.link-form button[type=submit]")
     posted.next(0)
     said = text_of(card, "p.lyrics-said")
     assert browser.wait(f"{said}.startsWith('Not searched: ')"), browser.js(said)
     assert "Nothing found" not in browser.js(said)
-    notes = f"[...document.querySelectorAll({json.dumps(card + ' ' + PANEL + ' ul.lyrics-notes > li')})]" \
-            ".map((li) => li.textContent)"
-    assert browser.js(notes) == ["LRCLIB failed (lrclib: 502: Bad Gateway).", "Megalobiz: nothing listed.",
-                                 "AZLyrics: waiting out AZLyrics until 26/11 18:00.",
-                                 "2 records marked instrumental aren't listed."]
+    # The command's words, as `caracole lyrics --as` prints them (lyrics_search.notes): the page composes none.
+    assert browser.js(notes_of(card)) == ["LRCLIB failed (lrclib: 502: Bad Gateway).", "Megalobiz: nothing listed.",
+                                          "Waiting out AZLyrics until 26/11 18:00.",
+                                          "2 records marked instrumental aren't listed."]
 
 
 def test_use_these_posts_the_record_in_place_and_the_line_follows_the_pick(able, live, lyrics, browser):
@@ -342,7 +357,7 @@ def test_use_these_posts_the_record_in_place_and_the_line_follows_the_pick(able,
     card = opened(browser, song)
     drawn(browser, card)
     assert browser.wait(f"{rows_of(card)}.length === 4")  # its rows drawn before a press lands in them
-    browser.click(f"{card} {PANEL} ol.lyrics-rows > li:first-child button[type=submit]")
+    browser.click(f"{card} {PANEL} > ol.vrows > li:first-child button[type=submit]")
     path, fields = posted.next(0)
     assert (path, fields) == ("/lyrics/pick", {"csrf": "tok", "song": str(song.id), "identity": song.key,
                                                "record": "lrclib:28399373"})
@@ -353,13 +368,13 @@ def test_use_these_posts_the_record_in_place_and_the_line_follows_the_pick(able,
     assert browser.wait(f"{again} !== null && {again}.querySelector('.foot + details.lyrics-search') !== null")
     read_again(posted)  # the offers read again: GET /transcribe
     assert browser.js("window.notReloaded === true")
-    assert browser.js(f"{again}.querySelector('form.transcribe')") is None
+    assert browser.wait(f"{again}.querySelector('form.transcribe') === null")  # once the offers' answer is drawn
     browser.js(f"{again}.querySelector('details.lyrics-search').open = true")
     shown = "#" + browser.js(f"{again}.id")
     drawn(browser, shown)
     assert browser.wait(f"{rows_of(shown)}.length === 4")
     first = browser.js(rows_of(shown))[0]
-    assert first[3] == ["Best fit", "In use"] and first[4] == [
+    assert first[2] == ["Best fit", "In use"] and first[3] == [
         "Clear the pick", "Clear the pick of LRCLIB's lyrics for 野人『不再借世人的手』『动态歌词MV』"]
 
 
@@ -373,7 +388,7 @@ def test_a_refused_pick_says_why_in_the_panel(able, live, lyrics, browser):
     assert browser.wait(f"{rows_of(card)}.length === 4")
     # The search replaced meanwhile (another device searched): its record is no row of it now.
     in_book(able, lambda conn: kv_set_json(conn, f"{KV}{song.id}", a_search(rows=found_rows()[2:]).as_json()))
-    browser.click(f"{card} {PANEL} ol.lyrics-rows > li:first-child button[type=submit]")
+    browser.click(f"{card} {PANEL} > ol.vrows > li:first-child button[type=submit]")
     posted.next(0)
     said = text_of(card, "p.lyrics-said")
     assert browser.wait(f"{said} === \"Search again: that record isn't among its last search's, or the search is "
@@ -390,8 +405,8 @@ def test_a_stale_search_offers_no_use_button(able, live, lyrics, browser):
     card = opened(browser, song)
     drawn(browser, card)
     assert browser.wait(f"{rows_of(card)}.length === 4")
-    assert [row[4] for row in browser.js(rows_of(card))] == [None] * 4
-    asked = browser.js(text_of(card, "p.lyrics-asked"))
+    assert [row[3] for row in browser.js(rows_of(card))] == [None] * 4
+    asked = browser.js(text_of(card, "> p.hint"))
     assert asked == f"Asked as “孟维来 - 野人” on {old:%d/%m/%y}: over a week ago. Search again to pick one."
     assert posted == []
 
@@ -404,13 +419,13 @@ def test_a_picked_record_with_no_lyrics_says_why_and_offers_clear(able, live, ly
     browser.open(base)
     card = opened(browser, song)
     drawn(browser, card)
-    assert browser.js(text_of(card, ".lyrics-why p")) == (
+    assert browser.js(text_of(card, "> div.actions > p.note")) == (
         "The record you picked (megalobiz 8) has given no lyrics: pick another, or clear the pick.")
     assert browser.js("document.querySelector('form.transcribe')") is None  # the server offers none: the panel says why
     assert browser.wait(f"{rows_of(card)}.length === 4")
-    in_use = [row for row in browser.js(rows_of(card)) if "In use" in row[3]]
-    assert [row[1] for row in in_use] == ["(no artist) - 野人"]
-    browser.click(f"{card} {PANEL} .lyrics-why button[type=submit]")
+    in_use = [row for row in browser.js(rows_of(card)) if "In use" in row[2]]
+    assert [row[1] for row in in_use] == ["(no artist) - 野人 · 3:44 · timed"]
+    browser.click(f"{card} {PANEL} > div.actions button[type=submit]")
     path, fields = posted.next(0)
     assert (path, fields) == ("/lyrics/clear", {"csrf": "tok", "song": str(song.id), "identity": song.key})
     over(queue, queued(queue, "Clear the lyrics record").id)
@@ -453,3 +468,142 @@ def test_none_on_the_phones_page_or_the_file(conn, cfg, tmp_path):
     served = WebControls(csrf="tok", lyrics_search=True)
     assert attribute_of(run(conn, cfg, tmp_path, probe, controls=served), "data-lyrics") is True
 
+
+
+FOCUSED = "(() => { const a = document.activeElement; return a && a !== document.body ? a.tagName + '.' + " \
+          "(a.getAttribute('name') || a.textContent.trim().slice(0, 20)) : null; })()"
+
+
+def tab_to(page, expression: str, most: int = 40) -> None:
+    """Tab until ``expression`` (of ``document.activeElement``, ``a``) is true; the focus never on nothing."""
+    for _ in range(most):
+        if page.js(f"(() => {{ const a = document.activeElement; return !!a && ({expression}); }})()"):
+            return
+        page.press("Tab")
+        assert page.js(FOCUSED) is not None
+    raise AssertionError(f"Tab never reached {expression}: {page.js(FOCUSED)}")
+
+
+def test_the_search_and_a_pick_from_the_keyboard_alone_never_leave_the_focus_on_nothing(able, live, lyrics, browser):
+    base, posted, _ = live
+    song = lyrics.song
+    lyrics.hold.clear()
+    browser.open(base)
+    assert browser.wait(f"document.querySelector({json.dumps(line(song) + ' .line-more')}) !== null")
+    browser.js(f"document.querySelector({json.dumps(line(song) + ' .line-more')}).focus()")
+    browser.press("Enter")  # the line's disclosure, as Tab reaches it
+    card = "#" + browser.js(f"document.querySelector({json.dumps(line(song) + ' .line-more')})"
+                            ".getAttribute('aria-controls')")
+    drawn(browser, card)
+    tab_to(browser, "a.name === 'title'")
+    browser.js("document.activeElement.select()")
+    browser.type("野人")
+    browser.press("Enter")
+    posted.next(0)
+    said = text_of(card, "p.lyrics-said")
+    assert browser.wait(f"{said}.startsWith('Asking')"), browser.js(said)
+    assert browser.js(FOCUSED) == "INPUT.title"
+    browser.press("Tab")  # to Search, which waits and keeps the focus
+    assert browser.js(FOCUSED) == "BUTTON.Search"
+    browser.press("Enter")  # refused while it waits: nothing more sent, the focus where it was
+    lyrics.hold.set()
+    assert browser.wait(f"{rows_of(card)}.length === 4")
+    assert browser.js(FOCUSED) == "BUTTON.Search" and len(posted) == 1
+    tab_to(browser, "a.textContent === 'Use these lyrics'")
+    browser.press("Enter")
+    path, fields = posted.next(1)
+    assert (path, fields["record"]) == ("/lyrics/pick", "lrclib:28399373")
+    assert browser.wait(f"{tone(song)} === 'ready'")
+    assert browser.js(FOCUSED) is not None  # the song's line had it, then whatever the card drawn again gives
+
+
+def test_a_card_drawn_again_while_its_panel_holds_the_focus_gives_it_to_the_same_control(able, live, lyrics, browser):
+    base, posted, queue = live
+    song = lyrics.song
+    set_lyrics_record(able.overrides_file, song.display, "megalobiz:8")
+    browser.open(base)
+    card = opened(browser, song)
+    drawn(browser, card)
+    type_into(browser, card, "title", "野人")
+    # A clear asked elsewhere (the Journal, another tab) ends while the focus is in the panel's Title: the card is
+    # drawn again (pending now, its panel folded under the foot), and the focus is on its Title, its panel open.
+    browser.js(f"fetch('lyrics/clear', {{method: 'POST', headers: {{Accept: 'application/json'}}, body: new "
+               f"URLSearchParams({{csrf: 'tok', song: '{song.id}', identity: {json.dumps(song.key)}}})}})"
+               ".then((r) => r.json()).then((b) => window.caracoleLibrary.track(b.job))")
+    over(queue, queued(queue, "Clear the lyrics record").id)
+    again = cards.card_js(line(song))
+    assert browser.wait(f"{again} !== null && {again}.querySelector('.foot + details.lyrics-search') !== null")
+    assert browser.wait(f"document.activeElement === {again}.querySelector('details.lyrics-search input[name=title]')"
+                        ), browser.js(FOCUSED)
+    assert browser.js(f"{again}.querySelector('details.lyrics-search').open") is True
+
+
+def test_a_card_opened_while_a_pick_of_its_song_waits_or_runs_has_no_panel_and_no_clear(able, live, lyrics, browser):
+    base, posted, queue = live
+    song = lyrics.song
+    in_book(able, lambda conn: kv_set_json(conn, f"{KV}{song.id}", a_search().as_json()))
+    lyrics.pick_hold.clear()
+    browser.open(base)
+    assert browser.wait(f"document.querySelector({json.dumps(line(song) + ' .line-more')}) !== null")
+    browser.js(f"fetch('lyrics/pick', {{method: 'POST', headers: {{Accept: 'application/json'}}, body: new "
+               f"URLSearchParams({{csrf: 'tok', song: '{song.id}', identity: {json.dumps(song.key)}, "
+               "record: 'lrclib:28399373'})}).then((r) => r.json()).then((b) => window.caracoleLibrary.track(b.job))")
+    assert browser.wait(f"{tone(song)} === 'running'"), browser.js(tone(song))
+    card = opened(browser, song)
+    assert browser.wait(f"document.querySelector({json.dumps(card + ' .card-head')}) !== null")
+    assert browser.js(f"document.querySelector({panel_of(card)})") is None
+    assert browser.js(f"document.querySelector({json.dumps(card + ' form.lyrics-clear')})") is None
+    lyrics.pick_hold.set()
+    assert browser.wait(f"{tone(song)} === 'ready'")
+
+
+def test_the_folded_panels_summary_is_a_thumbs_target_on_a_touch_screen(able, live, lyrics, tmp_path):
+    base, _, _ = live
+    song = lyrics.song
+    in_book(able, lambda conn: update_song(conn, song.id, lyrics_status="found"))
+    page = driven(tmp_path, 390)
+    try:
+        page.open(base)
+        assert page.js("matchMedia('(pointer: coarse)').matches")
+        card = opened(page, song)
+        assert page.wait(f"document.querySelector({panel_of(card)}) !== null")
+        height = page.js(f"document.querySelector({panel_of(card)} + ' > summary').getBoundingClientRect().height")
+        assert height >= 44, height
+    finally:
+        page.close()
+
+
+def a_long_list() -> tuple[Row, ...]:
+    """40 rows, one of a title of 300 letters with no space, one of 120 CJK characters."""
+    rows = [Row(f"lrclib:{n}", "lrclib", "孟维来", f"野人 {n}", "野人", 226.0 + n, True) for n in range(1, 39)]
+    return (Row("lrclib:900", "lrclib", "孟维来", "A" * 300, "B" * 80, 226.0, True, best=True, fits=True),
+            Row("megalobiz:901", "megalobiz", "", "野" * 120, "", 300.0, True), *rows)
+
+
+@pytest.mark.parametrize("width", [390, 1280])
+def test_a_long_list_and_long_titles_stay_in_the_card_and_every_button_is_reached(able, live, lyrics, tmp_path,
+                                                                                 width):
+    base, _, _ = live
+    song = lyrics.song
+    in_book(able, lambda conn: kv_set_json(conn, f"{KV}{song.id}", a_search(rows=a_long_list()).as_json()))
+    page = driven(tmp_path, width)
+    try:
+        page.open(base)
+        card = opened(page, song)
+        drawn(page, card)
+        assert page.wait(f"{rows_of(card)}.length === 40")
+        fits = page.js(f"(() => {{ const p = document.querySelector({panel_of(card)}); const r = "
+                       "p.getBoundingClientRect(); return [[...p.querySelectorAll('*')].filter((n) => { "
+                       "const b = n.getBoundingClientRect(); return b.width && (b.right > r.right + 0.5 || "
+                       "b.left < r.left - 0.5); }).map((n) => n.className || n.tagName), "
+                       "document.documentElement.scrollWidth <= window.innerWidth]; })()")
+        assert fits == [[], True]
+        # The last row's button brought into view (the page's scroll, or the pane's from 1200 px) is what a press
+        # there lands on.
+        hit = page.js(f"(() => {{ const b = [...document.querySelectorAll({json.dumps(card + ' ' + PANEL)} + "
+                      "' > ol.vrows button')].pop(); b.scrollIntoView({block: 'center'}); "
+                      "const r = b.getBoundingClientRect(); const at = document.elementFromPoint(r.x + r.width / 2, "
+                      "r.y + r.height / 2); return !!at && b.contains(at); })()")
+        assert hit is True
+    finally:
+        page.close()
