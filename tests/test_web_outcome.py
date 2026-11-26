@@ -793,3 +793,36 @@ def test_a_sync_whose_indexes_were_of_another_schema_says_so_after_what_it_share
     assert said(("skipped", INDEXES_NEWER), [])[2] == f"Nothing changed in either book. {INDEXES_NEWER}."
     for ordinary in (NO_INDEX, INDEXES_LEFT_OUT):
         assert said(("skipped", ordinary)) == ("ready", "Shared", "1 change taken, 1 change given.")
+
+
+def test_a_sync_whose_indexes_or_pages_failed_after_its_changes_says_what_it_shared_first():
+    """The phone's sync goes on past a failed index or mirror stage (its job done, its line a wait in the stage's
+    words); the computer's exits 1 for its index stage. Either took and gave its changes first: the outcome says them,
+    then what failed, never "Not taken". With nothing shared, the failure's words alone, as before."""
+    from test_web_sync import peer_job
+
+    took = [("song/oasis/wonderwall", "taken", ""), ("song/muse/hysteria", "given", "")]
+    done = {"compare": ("done", "4 differences"), "take": ("done", "took 1"), "give": ("done", "gave 1"),
+            "agree": ("done", "12 units the books agree on")}
+    index = "Couldn't download the computer's indexes: the connection was reset"
+    pages = "No answer from http://192.168.1.20:8737: timed out"
+
+    def said(state, stages, units=took):
+        job = peer_job("sync", state, dict(done, **stages), units=units)
+        if "mirror" in stages:  # the phone's own stage, after give, which caracole serve's sync has none of
+            job.stages.insert(3, Stage("mirror", "Copy", *stages["mirror"], ""))
+        over = outcome(job, job_line(job, None))
+        return over.tone, over.word, over.reason, over.action.label
+
+    assert said("done", {"index": ("failed", index)}) == (
+        "waiting", "Shared", f"1 change taken, 1 change given. {index}.", "Compare again")
+    assert said("done", {"mirror": ("failed", pages)}) == (
+        "waiting", "Shared", f"1 change taken, 1 change given. {pages}.", "Compare again")
+    assert said("failed", {"index": ("failed", index)}) == (
+        "failed", "Failed", f"1 change taken, 1 change given. {index}.", "Compare again")
+    left = took + [("song/radiohead/creep", "left", "skipped, as chosen")]
+    assert said("done", {"index": ("failed", index)}, left)[2] == (
+        f"1 change taken, 1 change given. 1 change left as it was. {index}.")
+    # Nothing shared: the failure's words, as before.
+    assert said("done", {"index": ("failed", index)}, []) == ("waiting", "Not taken", f"{index}.", "Compare again")
+    assert said("failed", {"index": ("failed", index)}, []) == ("failed", "Failed", f"{index}.", "Compare again")

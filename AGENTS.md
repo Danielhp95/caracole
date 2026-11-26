@@ -1196,10 +1196,13 @@ It is rows.js's, shared by both pages:
   with nothing new "nothing new for Studio". A conflict is listed as kept only where its side came: chosen there and
   taken, chosen here and given (a file's here once its job is done), so a sync refused before any change says
   "Nothing was taken or given.". A stage that failed though the sync went on past it (the phone's indexes or its copy
-  of the computer's pages, its job done) is said in its words, with no tick, and a row of its own (`indexes`
-  "Indexes not brought up to date", `pages` "Pages not brought up to date"); indexes skipped for the other's
-  database of another schema (the report's `indexes_skipped`, commands/peer.py's and SyncEngine's) are its indexes
-  row, "Indexes not synced". Sending a file says both numbers in the size's unit (sync-words.js `sizeOf`, "1.5 of
+  of the computer's pages, its job done; the computer's indexes, its job failed) is said in its words, with no tick,
+  the title "Synced with:" where changes were taken or given ("Not synced with:" only where none was), and a row of
+  its own (`indexes` "Indexes not brought up to date", `pages` "Pages not brought up to date"); the Journal's outcome
+  then says what was shared before the failure (outcome.py `_peer_outcome`, `Outcomes.peerOutcome`). Indexes skipped
+  for the other's database of another schema (the report's `indexes_skipped`, commands/peer.py's and SyncEngine's)
+  are its indexes row, "Indexes not synced". The headline's tone is the one its sides share, none when they differ.
+  Sending a file says both numbers in the size's unit (sync-words.js `sizeOf`, "1.5 of
   2.1 GB", the phone's `Sizes.of`).
 - **Export**: `GET /api/sync/sizes`, the parts with their sizes, Site indexes unticked; `POST /sync/export`, then the
   file's link (`a[download]` to `api/sync/export?export=ID`), clicked once by the page: the browser saves it, the
@@ -2166,7 +2169,11 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   `mirror.Links`); the bar's sync button, the library page's sync sheet
   (`SheetAddress`, `#sheet=sync`; Settings' Export and Import a file open it at theirs, the page's file input reaching
   Android's picker, `FileChooser`, its export the share sheet, `Exports`); Sync on Wi-Fi, that sync unattended
-  (`Syncs.run`: `Phone.sync.alone`, a notification on channel `syncs` for the conflicts it left); the queue's work, a
+  (`Syncs.run`: `Phone.sync.alone`, a notification on channel `syncs` for the conflicts it left; its line, Settings'
+  last outcome and the bar's, `Syncs.said`: "Up to date" only with nothing left and no index skipped, else what it
+  took and gave, each conflict left "changed on both sides", every other unit left "not synced", and the index
+  stage's words where the computer's database is of another schema (`Outcomes.indexesSkipped`), the line ending with
+  what to do, ": tap Sync to choose" or ": tap Sync to see why"; a stage that failed, its words); the queue's work, a
   sync among it, in a foreground service (`SyncService`).
   - Its debug build is an app of its own beside F-Droid's release (`io.github.danielhp95.caracole`, the release key):
     `io.github.danielhp95.caracole.debug` (`applicationIdSuffix`, versionName `…-debug`), "Debug caracole" with an

@@ -1433,6 +1433,8 @@ def test_a_sync_whose_indexes_or_pages_failed_says_so_with_no_tick_and_a_row_of_
     url = served(fake, sync="sheet" if phone else "tab") + "#sheet=sync"
     with opened(tmp_path, url, width=390 if phone else 1280, height=844, mobile=phone) as page:
         sync_through(page, fake)
+        # Its changes were taken and given: synced, on either device, though a later stage failed.
+        assert page.js("document.getElementById('sync-title').textContent") == "Synced with: Studio"
         assert page.js("document.getElementById('sync-check').hidden") is True, "no tick over a failure"
         assert page.js(STATUS) == words + "."
         assert page.js("document.getElementById('sync-status').dataset.tone") == "failed"
@@ -1486,3 +1488,18 @@ def test_indexes_given_with_nothing_new_say_so_plainly(served, tmp_path):
         sync_through(page, fake)
         indexes = next(s for s in page.js(SUMMARY) if s["kind"] == "indexes")
         assert indexes["said"] == "1 index given · nothing new for Studio"
+
+
+@in_chromium
+@pytest.mark.parametrize("phone", [True, False], ids=["phone", "computer"])
+def test_a_sync_that_took_and_gave_nothing_before_its_indexes_failed_is_not_synced(served, tmp_path, phone):
+    done = {"compare": ("done", "0 differences"), "take": ("done", "took 0"), "give": ("done", "gave 0"),
+            "agree": ("done", "312 units the two agree on"), "index": ("failed", INDEX_FAILED)}
+    over = sync_view("done" if phone else "failed", done, (), dict(PHONE_REPORT if phone else REPORT, indexes=[]))
+    fake = FakeSync(state=PHONE_STATE if phone else STATE, views=(PHONE_VIEWS if phone else VIEWS)[:-1] + [over])
+    url = served(fake, sync="sheet" if phone else "tab") + "#sheet=sync"
+    with opened(tmp_path, url, width=390 if phone else 1280, height=844, mobile=phone) as page:
+        sync_through(page, fake)
+        assert page.js("document.getElementById('sync-title').textContent") == "Not synced with: Studio"
+        assert page.js("document.getElementById('sync-check').hidden") is True
+        assert page.js(STATUS) == INDEX_FAILED + "."

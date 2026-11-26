@@ -808,7 +808,11 @@
     const steps = listOf(job.steps).filter((s) => objOf(s));
     const broke = steps.find((s) => s.state === "failed" && s.detail);
     const lineSaid = objOf(job.line) && job.line.text ? String(job.line.text) : "";
-    title.replaceChildren(failed ? "Not synced with: " : "Synced with: ", el("span", "sync-name", name));
+    // Synced where changes were taken or given, though a later stage failed (the computer's job failed, the phone's
+    // done: the same words on both); not synced only where none was.
+    const shared = listOf(outcome.taken).length > 0 || listOf(outcome.given).length > 0;
+    title.replaceChildren((failed || broke) && !shared ? "Not synced with: " : "Synced with: ",
+                          el("span", "sync-name", name));
     sub.textContent = W.when(report && typeof report.at === "string" ? report.at : new Date().toISOString());
     check.hidden = failed || Boolean(broke);
     devs.replaceChildren(...[sides.here, sides.there].map((side) => {

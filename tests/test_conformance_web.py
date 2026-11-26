@@ -1068,6 +1068,15 @@ def peer_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | No
         jobs.append((f"sync, done, its indexes skipped: {note}",
                      peer_job("sync", "done", dict(shared, index=("skipped", words)), units=units), None, 0, None,
                      None))
+    # A stage after the changes failed (the indexes, the phone's copy of the computer's pages): what was shared said
+    # first, then the failure, on the phone's job done and the computer's failed alike; with nothing shared, the
+    # failure's words alone. (The phone's mirror stage, which caracole serve's sync has none of: JobViewsTest.)
+    index = "Couldn't download the computer's indexes: the connection was reset"
+    for note, state, units in (("the phone's, done", "done", took), ("the computer's, failed", "failed", took),
+                               ("nothing shared, done", "done", []), ("nothing shared, failed", "failed", [])):
+        jobs.append((f"sync, its index stage failed after its changes: {note}",
+                     peer_job("sync", state, dict(shared, index=("failed", index)), units=units), None, 0, None,
+                     None))
     # A sync's agree stage counted in another script's digits, as Python's \d and int() read them.
     jobs.append(("sync, done, its count in Arabic-Indic digits", peer_job("sync", "done", {
         "compare": ("done", ""), "agree": ("done", " ١٢ units the books agree on\n")}, units=took),

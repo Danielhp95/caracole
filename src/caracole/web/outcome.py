@@ -94,7 +94,7 @@ from caracole.get import GTPTABS_KEPT, MATCH_NOT_FOUND, NAMES, SHEET_FROM
 from caracole.icons import AUTO, INBOX, tag
 from caracole.logs import plural
 from caracole.web.jobs import INDEX_READS, INTERRUPTED, LOOKUP, REMOVING, Job, Stage, song_key_of
-from caracole.web.status import READY, _WAITING, Line, SongFacts, doing, peer_kind
+from caracole.web.status import _PEER_DONE, READY, _WAITING, Line, SongFacts, doing, peer_kind
 
 if TYPE_CHECKING:
     from caracole.config import Config
@@ -171,6 +171,8 @@ PEER_STEPS = {"compare": "Compare", "check": "Check", "take": "Take", "give": "G
               "merge": "Merge"}  # jobs.INDEX_MERGE_STAGES
 # The kinds of no unit: another caracole's index pages merged.
 _NO_UNITS = ("index-merge",)
+# A sync's stages after its changes were taken and given: one that failed leaves them shared.
+_AFTER_THE_UNITS = ("index", "mirror")
 
 
 @dataclass(frozen=True)
@@ -471,19 +473,28 @@ def _peer_outcome(job: Job, kind: str, line: Line) -> Outcome:
     action = COMPARE_AGAIN if kind == "sync" else None
     if job.state == INTERRUPTED:
         return Outcome("waiting", "Interrupted", INTERRUPTED_RAN if job.started_at else INTERRUPTED_WAITED, action)
-    if line.tone == "failed":
+    taken = sum(1 for _, said, _ in job.units if said == "taken")
+    given = sum(1 for _, said, _ in job.units if said == "given")
+    # A stage after the changes that failed (the indexes, the phone's copy of the computer's pages), the changes taken
+    # or given before it: what was shared said first, then the failure.
+    after = (taken or given) and any(s.state == "failed" and s.name in _AFTER_THE_UNITS for s in job.stages)
+    if line.tone == "failed" and not after:
         return Outcome("failed", "Failed", _sentence(line.text), action)
     if kind in _NO_UNITS:  # what its one stage said it did
         said = next((s.detail for s in job.stages if s.state == "done" and s.detail), "")
         return Outcome(line.tone, line.text, _sentence(said) if said else "")
-    taken = sum(1 for _, said, _ in job.units if said == "taken")
-    given = sum(1 for _, said, _ in job.units if said == "given")
     left = sum(1 for _, said, _ in job.units if said == "left")
     parts = [f"{plural(taken, 'change')} taken"] if taken or kind != "sync" else []
     parts += [f"{plural(given, 'change')} given"] if given else []
     said = (", ".join(parts)).capitalize() + "." if parts else "Nothing changed in either book."
     skipped = indexes_skipped(job.stages)
     also = f" {skipped}." if skipped else ""
+    if after:
+        kept = f" {plural(left, 'change')} left as {'it was' if left == 1 else 'they were'}." if left else ""
+        reason = f"{said}{kept} {_sentence(line.text)}"
+        if line.tone == "failed":
+            return Outcome("failed", "Failed", reason, action)
+        return Outcome("waiting", _PEER_DONE[kind], reason, action)
     if line.tone == "ready":
         return Outcome("ready", line.text, said + also)
     word = line.text.partition(" · ")[0] if left else "Not taken"

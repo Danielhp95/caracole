@@ -142,6 +142,10 @@ object Outcomes {
                                   "gtptabs" to "gtptabs lists a page for it")
     private val NO_UNITS = setOf(Status.INDEX_MERGE_KIND)
 
+    /** A sync's stages after its changes were taken and given (outcome.py's _AFTER_THE_UNITS): one that failed leaves
+     * them shared. */
+    private val AFTER_THE_UNITS = setOf(SyncEngine.INDEX, SyncEngine.MIRROR)
+
     /** Why caracole serve's sync took and gave no index, its index stage skipped for the other's database of another
      * schema (sync_routes.INDEXES_NEWER and INDEXES_OLDER), as outcome.py's indexes_skipped reads them. */
     val INDEXES_SKIPPED: List<String> = listOf(
@@ -372,19 +376,29 @@ object Outcomes {
         if (job.state == Job.INTERRUPTED) {
             return Outcome("waiting", "Interrupted", if (job.startedAt != null) INTERRUPTED_RAN else INTERRUPTED_WAITED, action)
         }
-        if (line.tone == "failed") return Outcome("failed", "Failed", sentence(line.text), action)
+        val taken = job.units.count { it.outcome == "taken" }
+        val given = job.units.count { it.outcome == "given" }
+        // A stage after the changes that failed (the indexes, the copy of the computer's pages), the changes taken or
+        // given before it: what was shared said first, then the failure.
+        val after = (taken > 0 || given > 0) && job.stages.any { it.state == Job.FAILED && it.name in AFTER_THE_UNITS }
+        if (line.tone == "failed" && !after) return Outcome("failed", "Failed", sentence(line.text), action)
         if (kind in NO_UNITS) {
             val said = job.stages.firstOrNull { it.state == Job.DONE && it.detail.isNotEmpty() }?.detail ?: ""
             return Outcome(line.tone, line.text, if (said.isNotEmpty()) sentence(said) else "")
         }
-        val taken = job.units.count { it.outcome == "taken" }
-        val given = job.units.count { it.outcome == "given" }
         val left = job.units.count { it.outcome == "left" }
         val parts = ArrayList<String>()
         if (taken > 0 || kind != "sync") parts += "${Status.plural(taken, "change")} taken"
         if (given > 0) parts += "${Status.plural(given, "change")} given"
         val said = if (parts.isNotEmpty()) capitalize(parts.joinToString(", ")) + "." else "Nothing changed in either book."
         val also = indexesSkipped(job.stages)?.let { " $it." } ?: ""
+        if (after) {
+            val kept = if (left > 0) " ${Status.plural(left, "change")} left as ${if (left == 1) "it was" else "they were"}."
+                       else ""
+            val reason = "$said$kept ${sentence(line.text)}"
+            if (line.tone == "failed") return Outcome("failed", "Failed", reason, action)
+            return Outcome("waiting", Status.PEER_DONE.getValue(kind), reason, action)
+        }
         if (line.tone == "ready") return Outcome("ready", line.text, said + also)
         val word = if (left > 0) partition(line.text, " · ").first else "Not taken"
         val reason = if (left > 0) "$said ${Status.plural(left, "change")} left as ${if (left == 1) "it was" else "they were"}."

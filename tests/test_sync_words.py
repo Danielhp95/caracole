@@ -213,6 +213,18 @@ def test_what_an_indexs_merge_added_is_said_as_new_tabs_up_to_date_or_all_new_ne
         {"said": "−210 tabs here · +40 on Studio", "tone": ""}, {"said": "+231 new here · −5 tabs on Studio",
                                                                   "tone": ""},
         {"said": "−210 tabs here", "tone": "down"}]
+    # The headline's tone: the one tone its sides share, none when they differ.
+    assert words(f"""[
+      W.newTabs([{{direction: "taken", before: 10, after: 5, new: -5}},
+                 {{direction: "given", before: 10, after: 7, new: -3}}], {places}),
+      W.newTabs([{{direction: "taken", before: 10, after: 5, new: -5}},
+                 {{direction: "given", before: 3, after: 43, new: 40}}], {places}),
+      W.newTabs([{{direction: "taken", before: 1, after: 232, new: 231}},
+                 {{direction: "given", before: 3, after: 43, new: 40}}], {places}),
+    ]""") == [
+        {"said": "−5 tabs here · −3 tabs on Studio", "tone": "down"},
+        {"said": "−5 tabs here · +40 on Studio", "tone": ""},
+        {"said": "+231 new here · +40 on Studio", "tone": "up"}]
     # Which way a row went, for a sync that took and gave.
     assert words('[W.went("taken", "Studio"), W.went("given", "the computer"), W.went("", "x")]') == [
         "taken from Studio", "given to the computer", ""]

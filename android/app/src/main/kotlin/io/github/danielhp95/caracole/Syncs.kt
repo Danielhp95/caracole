@@ -169,19 +169,23 @@ object Syncs {
      * (a file that won't come, a unit changed since compared, one the computer's take left), "1 taken · 1 not synced:
      * tap Sync to see why" (the sheet's left section says why): never "Up to date" with anything left. [indexes], why
      * the index stage took and gave none (the computer's database of another schema, Outcomes.indexesSkipped), said
-     * after the rest in place of "Up to date".
+     * after the rest in place of "Up to date", and before what to do: the line ends with that.
      */
     internal fun said(outcome: JsonObject?, indexes: String? = null): String {
-        val left = conflictsLeft(outcome).first
         val what = done(outcome)
-        val said = when {
-            left > 0 -> "$what$TO_CHOOSE"
-            notSynced(outcome) > 0 -> "$what$TO_SEE_WHY"
-            indexes != null -> what
+        // What to do last, after what it did and why no index went.
+        val ask = when {
+            conflictsLeft(outcome).first > 0 -> TO_CHOOSE
+            notSynced(outcome) > 0 -> TO_SEE_WHY
+            else -> ""
+        }
+        val said = listOf(what, indexes.orEmpty()).filter { it.isNotEmpty() }.joinToString(" · ")
+        return when {
+            ask.isNotEmpty() -> "$said$ask"
+            indexes != null -> said
             what.isEmpty() -> UP_TO_DATE
             else -> "$UP_TO_DATE · $what"
         }
-        return listOf(said, indexes.orEmpty()).filter { it.isNotEmpty() }.joinToString(" · ")
     }
 
     /** The units [outcome] left for another reason than a conflict unsettled: every `left` entry but those

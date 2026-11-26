@@ -355,6 +355,35 @@ class JobViewsTest {
                      JobViews.view(queue.job(next.id)!!, queue)["outcome"])
     }
 
+    @Test fun aSyncWhosePagesOrIndexesFailedAfterItsChangesSaysWhatItSharedFirst() = runTest {
+        // The phone's own sync goes on past a failed mirror or index stage, its job done, its line a wait in the
+        // stage's words: its outcome says what it took and gave, then the failure, never "Not taken".
+        val queue = queue()
+        fun over(stage: String, outcome: String): Job {
+            val job = queue.submit(JobSpec("Sync with Laptop", "sync:http://laptop:8737/$stage$outcome", "sync", sync,
+                                           display = "Sync with Laptop") { context ->
+                for ((name, _) in sync) {
+                    if (name == stage) context.stage(name, "failed", "No answer from http://laptop:8737: timed out")
+                    else context.stage(name, "done")
+                }
+                context.outcome(Json.parseToJsonElement(outcome).jsonObject)
+            }).first
+            runCurrent()
+            return queue.job(job.id)!!
+        }
+        val took = """{"taken":["song/a/b"],"given":["song/c/d"],"left":[["song/e/f","changed since compared"]],
+            "agreed":12,"indexed":[]}"""
+        for (stage in listOf("mirror", "index")) {
+            val done = over(stage, took)
+            assertEquals(Outcome("waiting", "Shared", "1 change taken, 1 change given. 1 change left as it was. " +
+                                 "No answer from http://laptop:8737: timed out.", Outcomes.COMPARE_AGAIN),
+                         Outcomes.outcome(done, JobViews.line(done), null, null), stage)
+        }
+        val nothing = over("mirror", """{"taken":[],"given":[],"left":[],"agreed":12,"indexed":[]}""")
+        assertEquals(Outcome("waiting", "Not taken", "No answer from http://laptop:8737: timed out.",
+                             Outcomes.COMPARE_AGAIN), Outcomes.outcome(nothing, JobViews.line(nothing), null, null))
+    }
+
     @Test fun aSongsViewAndARemovalsNameTheSongByItsIdentityItsCardOnceOver() = runTest {
         val queue = queue()
         val add = queue.submit(JobSpec("Add Radiohead - Creep", "radiohead/creep", "add", emptyList(),

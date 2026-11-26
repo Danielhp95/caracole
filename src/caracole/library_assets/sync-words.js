@@ -71,7 +71,8 @@
   // A sync's headline: every site's new tabs, "+1,434 new tabs" (a site's fall never takes from them); with none, a
   // fall, "−210 tabs"; else "up to date". Taken and given in one sync, each side's apart, in ``places``' words (each
   // direction's, the rows' ``where``: ``{taken: "here", given: "on Studio"}``): "+231 new here · +40 on Studio", a
-  // side whose tabs only fell by them, "−210 tabs here · +40 on Studio" (no tone, the two told apart by their rows),
+  // side whose tabs only fell by them, "−210 tabs here · +40 on Studio" (the tone the sides share, none when they
+  // differ),
   // a side with nothing new and none fallen left out; never one sum, new to neither side.
   const added = (news) => news.filter((n) => n > 0).reduce((a, n) => a + n, 0);
   const fallen = (news) => news.filter((n) => n < 0).reduce((a, n) => a + n, 0);
@@ -89,7 +90,8 @@
       }).filter(Boolean);
       const tones = new Set(parts.map(([tone]) => tone));
       if (parts.length > 1 || tones.has("up")) {
-        return Object.freeze({ said: parts.map(([, said]) => said).join(" · "), tone: tones.size > 1 ? "" : "up" });
+        return Object.freeze({ said: parts.map(([, said]) => said).join(" · "),
+                               tone: tones.size > 1 ? "" : Array.from(tones)[0] });
       }
       if (parts.length) return Object.freeze({ said: parts[0][1], tone: "down" });
     }

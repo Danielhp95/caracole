@@ -220,6 +220,14 @@ class SyncsTest {
                                  phone = { phone(outcome("""{"taken": ["song/a/b"], "given": [], "left": []}"""),
                                                  index = "skipped" to SyncEngine.NOTHING_TO_INDEX) }) { _, _ -> }!!
         assertEquals("Up to date · 1 taken", ordinary.text)
+        // With something left to choose or to see, the line still ends with what to do.
+        val conflicts = outcome("""{"taken": [], "given": [], "left": [["song/a/b", "${SyncEngine.UNSETTLED}"],
+            ["song/c/d", "${SyncEngine.UNSETTLED}"]]}""")
+        assertEquals("2 changed on both sides · ${SyncEngine.INDEXES_NEWER}: tap Sync to choose",
+                     Syncs.said(conflicts, SyncEngine.INDEXES_NEWER))
+        val other = outcome("""{"taken": ["song/a/b"], "given": [], "left": [["song/c/d", "changed since compared"]]}""")
+        assertEquals("1 taken · 1 not synced · ${SyncEngine.INDEXES_OLDER}: tap Sync to see why",
+                     Syncs.said(other, SyncEngine.INDEXES_OLDER))
     }
 
     @Test
