@@ -344,8 +344,11 @@ def test_each_sites_state_is_kept_and_a_kept_searchs_last_line_is_the_one_it_pri
 def test_a_search_changes_no_lyrics(cfg, conn, song, sites):
     sites.lrclib.search = [lrc(77)]
     sites.megalobiz.records = [mz_record(lrc_id=24519, title="Vikingos veganos", artist="Nick Cani")]
-    search(cfg, conn, song)  # a new name: a new question (below)
+    first = get_song(conn, song.id)
+    search(cfg, conn, song)  # a new name: a new question (below), and no stored lyrics touched
     before = get_song(conn, song.id)
+    assert (first.lyrics_json, before.lyrics_json) == (None, None)
+    assert not any(path.name.startswith("lyrics") for path in cfg.library_dir.rglob("*"))
     search(cfg, conn, song)  # the same name again
     after = get_song(conn, song.id)
     assert (after.lyrics_status, after.lyrics_json, after.lyrics_at) == (
@@ -373,17 +376,20 @@ def test_a_new_name_is_a_new_question_and_the_same_name_again_none(cfg, conn, so
     assert db.kv_get(conn, f"megalobiz:checked:{song.id}") == "2026-11-26T00:00:00Z"
 
 
-def test_a_new_name_leaves_found_lyrics_and_forgets_the_misses(cfg, conn, song, sites):
+@pytest.mark.parametrize("status", ["found", "instrumental"])
+def test_a_new_name_leaves_found_lyrics_or_an_instrumental_verdict_and_their_stamps(cfg, conn, song, sites, status):
+    # A search only lists: an answer the song has stands until a pick replaces it.
     from caracole.lyrics import Lyrics
 
     plain = Lyrics(plain="Somos vikingos", synced=None, instrumental=False, duration=None, lrclib_id=None,
                    provider="azlyrics", url="https://www.azlyrics.com/lyrics/nickcani/vikingos.html")
-    update_song(conn, song.id, lyrics_status="found", lyrics_json=plain.to_json(), lyrics_at="2026-11-20T00:00:00Z")
+    stored = plain.to_json() if status == "found" else None
+    update_song(conn, song.id, lyrics_status=status, lyrics_json=stored, lyrics_at="2026-11-20T00:00:00Z")
     db.kv_set(conn, f"megalobiz:checked:{song.id}", "2026-11-20T00:00:00Z")
     search(cfg, conn, song)
     after = get_song(conn, song.id)
-    assert (after.lyrics_status, after.lyrics_json) == ("found", plain.to_json())
-    assert db.kv_get(conn, f"megalobiz:checked:{song.id}") is None  # asked for timed ones under the new name
+    assert (after.lyrics_status, after.lyrics_json, after.lyrics_at) == (status, stored, "2026-11-20T00:00:00Z")
+    assert db.kv_get(conn, f"megalobiz:checked:{song.id}") == "2026-11-20T00:00:00Z"
 
 
 # --- errors are never misses -------------------------------------------------------------------------------------

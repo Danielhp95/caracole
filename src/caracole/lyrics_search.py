@@ -2,10 +2,10 @@
 decorated title, a transliterated artist): ``caracole lyrics --song X --as "A - T"``.
 
 The name is noted first, ``[lyrics]``' ``as`` (taken out when it is the song's own), so the nights after ask under it
-too, and a name that changes it is a new question (``ask_anew``: the sites' misses forgotten, a song with no lyrics
-pending again); then each site is asked once, at a lookup's pace, by one interactive client of its own
-(``_common.make_client``, run ``lookup:…``), in the lookups' lane, where another lookup goes first in the clients'
-pauses:
+too, and a new name resets the question (``ask_anew``: for a song pending or missing alone, the sites' misses
+forgotten and the song pending again; found lyrics or an instrumental verdict stay as they are); then each site is
+asked once, at a lookup's pace, by one interactive client of its own (``_common.make_client``, run ``lookup:…``), in
+the lookups' lane, where another lookup goes first in the clients' pauses:
 
 - LRCLIB's ``/api/search`` for the typed name, then ``/api/get`` with it and the audio's length only when no record of
   the search fits it: each record with lyrics a row, an instrumental or empty one counted, never listed;
@@ -19,8 +19,8 @@ again, past the cache, once older (``max_age``: a cached 404 alike), so a record
 nightly passes read the same addresses through the cache with no age (AZLyrics' artist page; LRCLIB's search and
 get, for a song asked under ``as``): a search's fresher copy is theirs too, and theirs one younger than a week is the
 search's. A site turned off, cooling down, out of its asks or failing is passed over and said (``Search.said``, with
-its ``Search.state``), never a miss; a block cools it down, with no alert, as a lookup's does. Nothing of the song's
-lyrics changes.
+its ``Search.state``), never a miss; a block cools it down, with no alert, as a lookup's does. It changes no stored
+lyrics.
 
 The rows are kept in kv ``lyrics-search:<song id>`` (``KV``), replaced by the song's next search, for a pick within
 ``PICKABLE_FOR`` (``kept_search``, ``row_of``). A row names its record only by an id the site answered, of the shape
@@ -276,7 +276,7 @@ def search_lyrics(cfg: Config, conn: sqlite3.Connection, song: Song, name: tuple
     from caracole.overrides import set_lyrics_name
 
     if set_lyrics_name(cfg.overrides_file, song.display, None if is_own_name(song, name) else f"{name[0]} - {name[1]}"):
-        ask_anew(conn, song)  # another name holds now: every site is asked under it before any transcription
+        ask_anew(conn, song, renamed=True)  # another name holds now: every site is asked under it first
     length = audio_length(conn, song)
     query = search_query(name[0], name[1])
     ask = _Asking(cfg, conn, now)
@@ -303,18 +303,22 @@ def search_lyrics(cfg: Config, conn: sqlite3.Connection, song: Song, name: tuple
     return search
 
 
-def ask_anew(conn: sqlite3.Connection, song: Song) -> None:
-    """A ``[lyrics]`` entry changed (another name, a record picked or cleared) is a new question, written right after
-    the entry: the records of LRCLIB's failure and of Megalobiz's and AZLyrics' misses go, so each site is asked under
+def ask_anew(conn: sqlite3.Connection, song: Song, *, renamed: bool = False) -> None:
+    """A ``[lyrics]`` entry changed (another name, a record picked or cleared) is a new question, written with the
+    entry: the records of LRCLIB's failure and of Megalobiz's and AZLyrics' misses go, so each site is asked under
     what holds now, and a song with no lyrics is pending again with no ``lyrics_at`` (its misses were of the question
-    before), so no transcription is offered (transcript.py ``why_not_offered``) until every site answered it. A song
-    whose lyrics are found keeps them: a pick replaces them."""
+    before), so no transcription is offered (transcript.py ``why_not_offered``) until every site answered it. Found
+    lyrics are kept (a pick replaces them). ``renamed``, a name changed by a search, which only lists: only a song
+    with no answer, pending or missing, is asked anew; found lyrics or an instrumental verdict keep their state and
+    their stamps."""
     from caracole.azlyrics_fetch import CHECKED as AZLYRICS_CHECKED
     from caracole.db import kv_delete, savepoint
     from caracole.lyrics import FAILED
     from caracole.megalobiz_fetch import CHECKED as MEGALOBIZ_CHECKED
     from caracole.songs import update_song
 
+    if renamed and song.lyrics_status not in ("pending", "missing"):
+        return
     with savepoint(conn, "ask_anew"):
         for prefix in (FAILED, MEGALOBIZ_CHECKED, AZLYRICS_CHECKED):
             kv_delete(conn, f"{prefix}{song.id}")
@@ -380,23 +384,31 @@ class _Asking:
         return found
 
     def _stopped(self, site: str, client: Any, e: Exception) -> tuple[str, str]:
-        """What stopped a site's ask, recorded as a lookup records it, as a state and words."""
-        from caracole.commands._common import requests_today
-        from caracole.health import record_block, record_error
-        from caracole.http import BudgetExhausted, ProviderBlocked
+        return stopped(self.cfg, self.conn, self.now, site, client, e)
 
-        name, p = provider_name(site), self.cfg.provider(site)
-        if isinstance(e, ProviderBlocked):
-            state = record_block(self.conn, site, self.now, str(e))
-            return BLOCKED, f"{name} turned us back; no asks until {stamps.shown(state.cooldown_until)}"
-        if isinstance(e, BudgetExhausted):
-            if p.per_day is not None and requests_today(self.conn, site, self.now) >= p.per_day:
-                return SPENT, f"no more asks of {name} today ({p.per_day} spent)"
-            if client.policy.budget < p.lookup_requests:
-                return SPENT, f"no more asks of {name} this hour ({p.lookup_per_hour} spent)"
-            return SPENT, f"this search's {p.lookup_requests} asks of {name} are spent"
-        record_error(self.conn, site, self.now, str(e))
-        return FAILED, f"{name} failed ({e})"
+
+def stopped(cfg: Config, conn: sqlite3.Connection, now: datetime, site: str, client: Any, e: Exception, *,
+            whose: str = "this search's", why: bool = False) -> tuple[str, str]:
+    """What stopped a lookup's ask of a site (a block, a spent budget, an error), recorded as a lookup records it, as a
+    state of ``STATES`` and words: ``whose`` asks a lookup's budget was ("this pick's"), ``why`` the block's reason
+    said too ("LRCLIB turned us back (…); no asks until …")."""
+    from caracole.commands._common import requests_today
+    from caracole.health import record_block, record_error
+    from caracole.http import BudgetExhausted, ProviderBlocked
+
+    name, p = provider_name(site), cfg.provider(site)
+    if isinstance(e, ProviderBlocked):
+        state = record_block(conn, site, now, str(e))
+        reason = f" ({e})" if why else ""
+        return BLOCKED, f"{name} turned us back{reason}; no asks until {stamps.shown(state.cooldown_until)}"
+    if isinstance(e, BudgetExhausted):
+        if p.per_day is not None and requests_today(conn, site, now) >= p.per_day:
+            return SPENT, f"no more asks of {name} today ({p.per_day} spent)"
+        if client.policy.budget < p.lookup_requests:
+            return SPENT, f"no more asks of {name} this hour ({p.lookup_per_hour} spent)"
+        return SPENT, f"{whose} {p.lookup_requests} asks of {name} are spent"
+    record_error(conn, site, now, str(e))
+    return FAILED, f"{name} failed ({e})"
 
 
 def last_line(search: Search) -> str:

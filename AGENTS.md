@@ -139,10 +139,12 @@ sitemaps list by bare ids alone, and the fetch their page.
   asked answered none (a site off isn't asked: left out), "Not searched: " a site cooling, spent, blocked or failing.
   A block at any of a site's requests is its strike, with no good run recorded over it. Kept in kv `lyrics-search:<song id>` (`KV`, in `songs._PER_SONG_KV` and SongKv.kt; no unit's,
   never crossing to the phone), replaced by the next search, never under an id another song took meanwhile;
-  `kept_search` gives it for `PICKABLE_FOR` (7 days), `row_of` a record's row. It changes no lyrics; a name that changes
-  the `as` kept is a new question (`ask_anew`, right after the entry's write: kv `lyrics:failed:`, `megalobiz:checked:`
-  and `azlyrics:checked:` deleted, a song with no lyrics `pending` with no `lyrics_at`, found ones kept), so no
-  transcription is offered before every site answered under it; every writer of `[lyrics]` in the command uses it.
+  `kept_search` gives it for `PICKABLE_FOR` (7 days), `row_of` a record's row. It changes no stored lyrics; a new name
+  resets the question (`ask_anew(renamed=True)`, right after the entry's write: for a song pending or missing alone,
+  kv `lyrics:failed:`, `megalobiz:checked:` and `azlyrics:checked:` deleted and `pending` with no `lyrics_at`; found
+  lyrics or an instrumental verdict keep their state and stamps), so no transcription is offered before every site
+  answered under it. A pick (any state: a verdict yields to it) and a clear reset through the same function. Its
+  words for what stopped an ask are `stopped` (`whose`, `why`), the pick's too.
 - lyrics_pick.py: `caracole lyrics --song X --pick N | --record SITE:ID` (commands/lyrics.py `_lyrics_pick`), a
   `StagedRun` (`_Pick`, `STAGES` song, lyrics, chords, pdf, pages) under the lock as asked for now, never in the
   lane; its client a lookup's (`make_client(..., interactive=True)`), 0 or 1 request:
@@ -150,20 +152,24 @@ sitemaps list by bare ids alone, and the fetch their page.
     record from the argument alone); refused not in the book, ignored, no search, one over a week, not listed;
   - lyrics: LRCLIB's from the search's cached answers (`/api/search`, its `/api/get`; `CachedAnswers`, no request),
     else `fetch_lrclib_record`; Megalobiz's `fetch_record`, AZLyrics' `fetch_azlyrics(page=)`. None now: skipped,
-    nothing kept; off, cooling, spent, blocked: skipped, an error: failed (lyrics_search.py `_Asking._stopped`'s
-    words), each with no change to the song, its `[lyrics]` or its kv (errors are never misses), the command exiting 0.
-    Kept: `set_lyrics_record` (`as` kept), `ask_anew`, `write_lyrics`, found, info.json, and the auto sheet made due
-    where the words changed (`autochords_mtime` cleared, as new audio clears it: run.py `_skip_reason`), so a sheet
-    made before its `lyrics_key` is remade too;
-  - chords: `_autochords_sheet` after `_after_a_lookup`, only for a song keeping an auto sheet, its audio, no human
-    sheet, where `youtube_fetch.autochords_problem` is None (models imported only then); else skipped, tonight's run
-    remaking it (a chart takes plain words at the PDF's render, sheet_lyrics.py); pdf: `render_all` whenever it keeps
-    any sheet; pages.
+    nothing kept; off, cooling, spent, blocked: skipped, an error: failed (lyrics_search.py `stopped`'s words,
+    `whose="this pick's"`, a block's reason said), each with no change to the song, its `[lyrics]` or its kv (errors
+    are never misses), the command exiting 0. Kept, in this order: `write_lyrics`, then `set_lyrics_record` (`as`
+    kept), then in one savepoint `ask_anew`, found, and the auto sheet made due where the words changed
+    (`autochords_mtime` cleared, as new audio clears it: run.py `_skip_reason`, so a sheet made before its
+    `lyrics_key` is remade too), then info.json; the files or overrides.toml failing puts the files back
+    (`_put_back`), changes nothing else and fails the job (`_fail`, exit 1);
+  - chords (§4.5): skipped "no new lyrics", "its sheet is a site's: …", "no audio to make an auto sheet from" or
+    "auto-chords isn't here (…); tonight's run makes it again" (`youtube_fetch.autochords_problem`; a chart takes
+    plain words at the PDF's render meanwhile, sheet_lyrics.py); else `_after_a_lookup`, then `_autochords_sheet`,
+    which makes the sheet or makes it again (models imported only then); pdf: `render_all` whenever it keeps any
+    sheet, a failure the job's (`_fail`); pages.
   - `clear_pick`, `--clear`: `overrides.clear_lyrics_record` (`as` kept), the lyrics that record gave dropped (files,
-    `lyrics_json`, the auto sheet due), `ask_anew`, no request, under the lock as asked for now; exit 1 with no record.
-  - A pick or a clear changes the song unit's `lyrics_status`, `lyrics_json` and `lyrics_at` (peer_sync.py
-    `SONG_COLUMNS`) and its `[lyrics]` entry: a sync carries them; the kv it deletes is no unit's. Nothing of it runs
-    on the phone.
+    `lyrics_json`, the auto sheet due), `ask_anew`, no request, under the lock as asked for now; exit 1 with no record;
+    a lyric file that can't be removed is said, the clear standing.
+  - A search's reset, a pick or a clear changes the song unit's `lyrics_status`, `lyrics_json` and `lyrics_at`
+    (peer_sync.py `SONG_COLUMNS`) and its `[lyrics]` entry: a sync carries them; the kv it deletes is no unit's.
+    Nothing of it runs on the phone.
 
 #### megalobiz
 

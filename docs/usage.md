@@ -996,8 +996,10 @@ failing is said and the others are listed; with no rows the last line is then `N
 never `Nothing found`. A site turned off is said and left out: the others answering none is
 `Nothing found`. The list is kept for 7 days to pick from, until the song's next search.
 `--song` and `--as` go together (exit 2); a song not in the book or ignored exits 1. A name that
-changes the one kept is a new question: the sites' earlier misses are forgotten, and a song with no
-lyrics is pending again, so no transcription is offered until every site has answered under it.
+changes the one kept is a new question for a song with no answer yet: a song pending or missing has
+the sites' earlier misses forgotten and is pending again, so no transcription is offered until every
+site has answered under the new name. Found lyrics and an instrumental verdict stay as they are; a
+pick replaces them. A search changes no stored lyrics.
 
     caracole lyrics --song "ARTIST - TITLE" --pick N
     caracole lyrics --song "ARTIST - TITLE" --record SITE:ID
@@ -1006,10 +1008,10 @@ Makes row N of the song's last search (or the row that lists `SITE:ID`, such as 
 its lyrics, now, in place of whatever it had. Only a record that search listed can be taken, and only
 within its 7 days. LRCLIB's record comes from the search's own answer in the cache, with no request
 (one when the cache lost it); Megalobiz's and AZLyrics' cost one request each, at a lookup's pace.
-The record is noted under `[lyrics]` (its `as` kept), and a song with an auto sheet gets it made
-again over the new words at once where auto-chords is installed; otherwise tonight's run makes it
-again (a chart takes the words as plain lyrics meanwhile). A song with a human sheet gets its lyrics
-and its page, no chords. It says each stage:
+The record is noted under `[lyrics]` (its `as` kept) once the lyrics are written. A song with its
+audio gets its auto sheet made, or made again, over the new words at once where auto-chords is
+installed; otherwise tonight's run makes it (a chart already made takes the words as plain lyrics
+meanwhile). A song with a human sheet gets its lyrics and its page, no chords. It says each stage:
 
     Lyrics: timed lyrics from LRCLIB: 孟维来 - 野人 (野人, 3:46); in place of AZLyrics' plain lyrics.
     Chords: chords over the lyrics.
@@ -1017,7 +1019,9 @@ and its page, no chords. It says each stage:
 A record with no lyrics now keeps nothing. A site cooling down, out of its asks, blocking or failing
 keeps nothing and changes nothing: the song, its `[lyrics]` and its records stay as they were, and it
 exits 0 (`No lyrics kept: …`). A refusal (the song not in the book or ignored, no search, one over a
-week old, a record it didn't list) or a chords failure exits 1. `--progress` adds a JSON line per
+week old, a record it didn't list) exits 1, and so does a failure here: overrides.toml that can't be
+written or lyrics that can't be (nothing is then changed), a chords failure or a PDF that can't be
+made (the lyrics stay kept: `Lyrics kept; the job failed after: …`). `--progress` adds a JSON line per
 stage, for caracole serve.
 
     caracole lyrics --song "ARTIST - TITLE" --clear
@@ -3725,8 +3729,10 @@ clear the pick"); one with a transcript kept may still be said not sung. The nig
 `caracole lyrics`, a lookup and a sheet made from a YouTube video all keep to `[lyrics]`. An entry you write by hand takes effect at the next run for a song still pending,
 and at its next 30-day re-check for a song whose lyrics are missing. A `record` is never applied to a
 song that already has lyrics. An `as` is: a song with plain lyrics is asked of Megalobiz under it for
-timed ones, at the next run when Megalobiz hasn't been asked about it, else once its 30 days are over
-(`caracole lyrics --pick` and `--record` fetch at once). Clear or change a pick with the
+timed ones, at the next run when Megalobiz hasn't been asked about it, else once its 30 days are
+over; one typed through `caracole lyrics --as` is asked at the next run for a song pending or
+missing, as the search forgets the sites' misses (`caracole lyrics --pick` and `--record` fetch at
+once). Clear or change a pick with the
 command (`caracole lyrics --song … --clear`, `--pick`, `--record`, `--as`): it forgets the sites'
 misses at once, so every site is asked again under the name that holds before a transcription is
 offered. A record you take out by hand leaves those misses for up to 30 days.

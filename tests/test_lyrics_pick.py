@@ -408,15 +408,29 @@ def test_a_song_with_a_human_sheet_gets_its_lyrics_and_page_and_no_chords(cfg, c
     assert recognizer.calls == []
 
 
-def test_a_song_with_no_auto_sheet_simply_gets_its_lyrics(cfg, conn, song, sites, here):
+def test_a_song_with_its_audio_and_no_auto_sheet_gets_one_over_the_picked_lyrics_at_once(cfg, conn, song, sites,
+                                                                                         here):
+    # The feature's main case: a video whose decorated title found no lyrics; the owner searches, picks, and the sheet
+    # comes with its words at once.
     sites.lrclib.search = [lrc(77)]
     searched(cfg, conn, song, sites)
     recognizer = Recognizer()
     result, heard = pick(cfg, n=1, recognizer=recognizer)
     assert result.ok, result
-    assert heard.ends()["chords"] == ("skipped", "no auto sheet yet: tonight's run makes one over these lyrics")
+    assert heard.ends()["chords"] == ("done", "chords over the lyrics")
+    assert recognizer.calls and auto_raw(conn, song)["lyrics"] == "synced"
+    assert heard.ends()["pdf"][0] == "done" and heard.ends()["pdf"][1] != "no sheet"
+
+
+def test_without_auto_chords_a_song_with_no_auto_sheet_waits_for_tonights(cfg, conn, song, sites, monkeypatch):
+    monkeypatch.setattr(youtube_fetch, "autochords_problem", lambda cfg: "built without auto-chords (missing: torch)")
+    sites.lrclib.search = [lrc(77)]
+    searched(cfg, conn, song, sites)
+    result, heard = pick(cfg, n=1)
+    assert result.ok, result
+    assert heard.ends()["chords"] == (
+        "skipped", "auto-chords isn't here (built without auto-chords (missing: torch)); tonight's run makes it again")
     assert heard.ends()["pdf"] == ("skipped", "no sheet")
-    assert recognizer.calls == []
 
 
 def test_without_auto_chords_the_chords_wait_for_tonight_and_it_exits_0(cfg, conn, song, sites, monkeypatch):
@@ -526,3 +540,167 @@ def test_a_clear_with_no_record_is_nothing_to_clear(cfg, conn, song, sites):
     after = get_song(conn, song.id)
     assert (after.lyrics_status, after.lyrics_at) == ("missing", "2026-11-20T00:00:00Z")
     assert entry(cfg).asked == NAME
+
+
+# --- fix round 1 ---------------------------------------------------------------------------------------------------
+
+
+def test_a_block_says_its_reason_and_keeps_nothing(cfg, conn, song, sites):
+    sites.megalobiz.records = [mz_record(lrc_id=8, title="Vikingos veganos", artist="Nick Cani", duration=10.0)]
+    searched(cfg, conn, song, sites)
+    sites.megalobiz.failing = {"lrc": 429}
+    result, heard = pick(cfg, record="megalobiz:8")
+    assert result.ok, result
+    state, said = heard.ends()["lyrics"]
+    assert state == "skipped" and said.startswith("Megalobiz turned us back (") and said.endswith(", nothing kept")
+    assert "); no asks until " in said and entry(cfg).record is None
+
+
+def test_a_kept_search_that_cant_be_read_is_no_search_never_an_old_one(cfg, conn, song, sites):
+    from caracole.db import kv_set_json
+
+    kv_set_json(conn, f"{KV}{song.id}", {"at": "2026-11-26T12:00:00Z", "as": "nonsense"})
+    result, _ = pick(cfg, n=1)
+    assert result.refused == (
+        "search Nick Cani - Vikingos veganos (Video Oficial)'s lyrics first (caracole lyrics --song … --as …)")
+
+
+def test_the_owners_case_a_chinese_name_is_picked_and_noted_under_its_key(cfg, conn, sites):
+    cfg.library_dir.mkdir(parents=True, exist_ok=True)
+    s = add_song(conn, "孟维来", "野人『MV』", duration_ms=None)
+    update_song(conn, s.id, lyrics_status="missing", lyrics_at="2026-11-20T00:00:00Z")
+    record = {**lrc(28399373, synced="[00:00.50]你是野人\n[00:05.20]我也是野人\n", duration=226.0, album="野人"),
+              "name": "野人", "trackName": "野人", "artistName": "孟维来"}
+    sites.lrclib.search = [record]
+    search_lyrics(cfg, conn, s, ("孟维来", "野人"), now=NOW)
+    sites.forget()
+    heard = Heard()
+    result = pick_lyrics(cfg, PickRequest("孟维来", "野人『MV』", pick=1), heard, runner=fake_chordpro, now=NOW)
+    assert result.ok, result
+    assert sites.requests() == 0
+    ends = heard.ends()
+    assert ends["lyrics"] == ("done", "timed lyrics from LRCLIB: 孟维来 - 野人 (野人, 3:46)")
+    assert ends["chords"] == ("skipped", "no audio to make an auto sheet from")
+    assert ends["pdf"] == ("skipped", "no sheet")
+    after = get_song(conn, s.id)
+    assert after.lyrics_status == "found" and "我也是野人" in song_lyrics(after).synced
+    noted = load_overrides(cfg.overrides_file).lyrics[override_key("孟维来 - 野人『MV』")]
+    assert noted.asked == ("孟维来", "野人") and noted.record.text == "lrclib:28399373"
+
+
+def test_a_broken_overrides_file_fails_the_job_and_keeps_nothing(cfg, conn, song, sites):
+    sites.lrclib.search = [lrc(77)]
+    searched(cfg, conn, song, sites)
+    before = get_song(conn, song.id)
+    import caracole.overrides as ov
+
+    def broken(*args, **kwargs):
+        raise ov.OverridesError("overrides.toml: line 3: not TOML")
+
+    from unittest import mock
+
+    with mock.patch.object(ov, "set_lyrics_record", broken):
+        result, heard = pick(cfg, n=1)
+    assert not result.ok and result.failed.startswith("couldn't note the record in overrides.toml")
+    after = get_song(conn, song.id)
+    assert (after.lyrics_status, after.lyrics_json, after.lyrics_at) == (
+        before.lyrics_status, before.lyrics_json, before.lyrics_at)
+    assert not (song_dir(cfg.library_dir, song) / "lyrics.lrc").exists()
+
+
+def test_lyrics_that_cant_be_written_fail_the_job_and_leave_the_entry_and_the_song_as_they_were(
+        cfg, conn, song, sites, monkeypatch):
+    import caracole.lyrics as lyrics_module
+
+    sites.lrclib.search = [lrc(77)]
+    searched(cfg, conn, song, sites)
+    kv_set(conn, f"megalobiz:checked:{song.id}", "2026-11-20T00:00:00Z")
+    before = get_song(conn, song.id)
+
+    def full(song_dir, lyrics):
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(lyrics_module, "write_lyrics", full)
+    result, heard = pick(cfg, n=1)
+    assert not result.ok and "couldn't write its lyrics" in result.failed
+    assert entry(cfg).record is None
+    after = get_song(conn, song.id)
+    assert (after.lyrics_status, after.lyrics_at) == (before.lyrics_status, before.lyrics_at)
+    assert kv_get(conn, f"megalobiz:checked:{song.id}") == "2026-11-20T00:00:00Z"
+
+
+def test_a_pdf_that_cant_be_made_fails_the_job(cfg, conn, song, sites, monkeypatch):
+    import caracole.render as render
+
+    auto_sheet_of(cfg, conn, song)
+    monkeypatch.setattr(youtube_fetch, "autochords_problem", lambda cfg: "built without auto-chords")
+    sites.lrclib.search = [lrc(77)]
+    searched(cfg, conn, song, sites)
+    real = render.render_all
+
+    def failing(*args, **kwargs):
+        stats = real(*args, **kwargs)
+        stats.failed = 1
+        return stats
+
+    monkeypatch.setattr(render, "render_all", failing)
+    result, heard = pick(cfg, n=1)
+    assert heard.ends()["pdf"] == ("failed", "chordpro couldn't make the PDF (see the log)")
+    assert result.failed == "chordpro couldn't make the PDF (see the log)" and not result.ok
+    assert get_song(conn, song.id).lyrics_status == "found"  # the lyrics stay kept
+
+
+def test_a_clear_after_a_megalobiz_pick_drops_its_lyrics(cfg, conn, song, sites):
+    sites.megalobiz.records = [mz_record(lrc_id=8, title="Vikingos veganos", artist="Nick Cani", duration=10.0)]
+    searched(cfg, conn, song, sites)
+    assert pick(cfg, record="megalobiz:8")[0].ok
+    said = clear_pick(cfg, conn, get_song(conn, song.id), load_overrides(cfg.overrides_file))
+    assert "its lyrics from it dropped" in said
+    assert get_song(conn, song.id).lyrics_json is None
+
+
+def test_a_clear_after_an_azlyrics_pick_drops_its_lyrics(cfg, conn, sites):
+    from helpers.azlyrics_site import POMME
+
+    cfg.library_dir.mkdir(parents=True, exist_ok=True)
+    s = add_song(conn, "Pomme", "Mononoke (clip officiel)", duration_ms=None)
+    sites.azlyrics.pages = dict(POMME)
+    search_lyrics(cfg, conn, s, ("Pomme", "Mononoke"), now=NOW)
+    pick_lyrics(cfg, PickRequest("Pomme", "Mononoke (clip officiel)", record="azlyrics:pomme/mononoke"), Heard(),
+                runner=fake_chordpro, now=NOW)
+    assert get_song(conn, s.id).lyrics_status == "found"
+    said = clear_pick(cfg, conn, get_song(conn, s.id), load_overrides(cfg.overrides_file))
+    assert "its lyrics from it dropped" in said
+    after = get_song(conn, s.id)
+    assert (after.lyrics_status, after.lyrics_json) == ("pending", None)
+    assert not (song_dir(cfg.library_dir, after) / "lyrics.txt").exists()
+
+
+def test_a_clear_leaves_lyrics_that_didnt_come_from_its_record_alone(cfg, conn, song, sites):
+    other = Lyrics.from_record(lrc(9, synced=OTHER))
+    update_song(conn, song.id, lyrics_status="found", lyrics_json=other.to_json(), lyrics_at="2026-11-20T00:00:00Z")
+    set_lyrics_record(cfg.overrides_file, song.display, "megalobiz:8")  # written by hand, after they came
+    said = clear_pick(cfg, conn, get_song(conn, song.id), load_overrides(cfg.overrides_file))
+    assert said is not None and "dropped" not in said
+    after = get_song(conn, song.id)
+    assert (after.lyrics_status, after.lyrics_json) == ("found", other.to_json())
+
+
+def test_a_lyrics_file_that_cant_be_removed_is_said_and_the_clear_stands(cfg, conn, song, sites, monkeypatch):
+    from pathlib import Path
+
+    sites.lrclib.search = [lrc(77)]
+    searched(cfg, conn, song, sites)
+    assert pick(cfg, n=1)[0].ok
+    real = Path.unlink
+
+    def stuck(self, missing_ok=False):
+        if self.name == "lyrics.lrc":
+            raise PermissionError(13, "Permission denied")
+        return real(self, missing_ok=missing_ok)
+
+    monkeypatch.setattr(Path, "unlink", stuck)
+    said = clear_pick(cfg, conn, get_song(conn, song.id), load_overrides(cfg.overrides_file))
+    assert "lyrics.lrc couldn't be removed (" in said
+    after = get_song(conn, song.id)
+    assert (after.lyrics_status, after.lyrics_json) == ("pending", None) and entry(cfg).record is None

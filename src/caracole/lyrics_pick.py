@@ -113,7 +113,8 @@ class _Pick(StagedRun):
 
     def find_song(self) -> str:
         from caracole.db import kv_get_json
-        from caracole.lyrics_search import KV, kept_search, row_of
+        from caracole import stamps
+        from caracole.lyrics_search import KV, PICKABLE_FOR, kept_search, row_of
         from caracole.normalize import identity_key
         from caracole.songs import find_song
 
@@ -126,7 +127,9 @@ class _Pick(StagedRun):
             raise _Stop(f"{song.display} is ignored (overrides.toml)")
         search = kept_search(self.conn, song.id, self.now)
         if search is None:
-            if isinstance(kv_get_json(self.conn, f"{KV}{song.id}"), dict):
+            kept = kv_get_json(self.conn, f"{KV}{song.id}")
+            at = stamps.parse(kept["at"]) if isinstance(kept, dict) and isinstance(kept.get("at"), str) else None
+            if at is not None and stamps.utc(self.now) - at > PICKABLE_FOR:
                 raise _Stop("its last search is over a week old: search again")
             raise _Stop(f"search {song.display}'s lyrics first (caracole lyrics --song … --as …)")
         if req.pick is not None:
@@ -176,7 +179,7 @@ class _Pick(StagedRun):
         from caracole.health import get_state, is_cooling, record_ok
         from caracole.http import BudgetExhausted, ProviderError
         from caracole.lyrics import fetch_lrclib_record
-        from caracole.lyrics_search import FAILED, _Asking
+        from caracole.lyrics_search import BLOCKED, FAILED, stopped
         from caracole.megalobiz_fetch import fetch_record
         from caracole.stamps import shown
 
@@ -199,9 +202,9 @@ class _Pick(StagedRun):
             else:
                 lyrics = fetch_azlyrics(client, artist="", title="", page=record.page)
         except (ProviderError, BudgetExhausted) as e:
-            state, said = _Asking(self.cfg, self.conn, self.now)._stopped(site, client, e)
-            said = said.replace("this search's", "this pick's")
-            return None, ("failed" if state == FAILED else "skipped", f"{said}{NOTHING_KEPT}")
+            state, said = stopped(self.cfg, self.conn, self.now, site, client, e, whose="this pick's", why=True)
+            end = ", nothing kept" if state == BLOCKED else NOTHING_KEPT  # §4.5's words for a block
+            return None, ("failed" if state == FAILED else "skipped", f"{said}{end}")
         finally:
             self.result.requests[site] = client.requests_made
             client.close()
@@ -228,9 +231,10 @@ class _Pick(StagedRun):
         return "done", self._kept_said(lyrics, before)
 
     def _keep(self, record: LyricsRecord, lyrics: Any, before: Any) -> tuple[str, str] | None:
-        """The record noted under ``[lyrics]``, the question asked anew, the lyrics written and found, the auto sheet
-        made due where the words changed (``before``, the song's lyrics till now); None once kept, else the stage's
-        end."""
+        """The lyrics written first; only then the record noted under ``[lyrics]``, and, in one savepoint, the question
+        asked anew, the lyrics found and the auto sheet made due where the words changed (``before``, the song's lyrics
+        till now). A local failure (the files, overrides.toml) puts the files back and changes nothing else, and fails
+        the job (``_fail``: exit 1). None once kept, else the stage's end."""
         from caracole import stamps
         from caracole.db import savepoint
         from caracole.library import SharedFolder, song_dir, write_info
@@ -240,24 +244,38 @@ class _Pick(StagedRun):
         from caracole.songs import get_song, update_song
 
         song = self.song
+        folder = song_dir(self.cfg.library_dir, song)
+        try:  # the lyrics on disk first: until they are, nothing else is written
+            write_lyrics(folder, lyrics)
+        except (OSError, SharedFolder) as e:
+            self._put_back(folder, before)
+            return self._fail(f"couldn't write its lyrics ({e}){NOTHING_KEPT}")
         try:
             set_lyrics_record(self.cfg.overrides_file, song.display, record.text)
             self.overrides = load_overrides(self.cfg.overrides_file)
-        except OverridesError as e:
-            return "failed", f"couldn't note the record in overrides.toml: {e}{NOTHING_KEPT}"
-        ask_anew(self.conn, song)  # a record picked is a new question: what the sites missed before goes
-        try:
-            write_lyrics(song_dir(self.cfg.library_dir, song), lyrics)
-        except (OSError, SharedFolder) as e:  # the record is noted, the song pending: tonight's run reads it
-            return "failed", f"couldn't write its lyrics ({e}); tonight's run reads the record"
+        except OverridesError as e:  # the files written are taken back: the song stays as it was
+            self._put_back(folder, before)
+            return self._fail(f"couldn't note the record in overrides.toml: {e}{NOTHING_KEPT}")
         other_words = before is None or (before.plain, before.synced) != (lyrics.plain, lyrics.synced)
         due = {"autochords_mtime": None} if other_words and _has_auto_sheet(self.conn, song) else {}
         with savepoint(self.conn, "lyrics_pick"):
+            ask_anew(self.conn, song)  # a record picked is a new question: what the sites missed before goes
             update_song(self.conn, song.id, lyrics_status="found", lyrics_json=lyrics.to_json(),
                         lyrics_at=stamps.stamp(self.now), **due)
         self.song = get_song(self.conn, song.id)
         write_info(self.conn, self.cfg.library_dir, self.song)  # its "lyrics_from": the link back to their page
         return None
+
+    def _put_back(self, folder: Any, before: Any) -> None:
+        """The song's lyric files as its stored lyrics had them (none for none), after a keep that couldn't finish."""
+        from caracole.library import SharedFolder
+        from caracole.lyrics import Lyrics, write_lyrics
+
+        try:
+            write_lyrics(folder, before or Lyrics(plain="", synced=None, instrumental=False, duration=None,
+                                                  lrclib_id=None))
+        except (OSError, SharedFolder) as e:
+            log.warning("%s's lyric files couldn't be put back: %s", self.song.display, e)
 
     def _kept_said(self, lyrics: Any, before: Any) -> str:
         row = self.row
@@ -287,8 +305,6 @@ class _Pick(StagedRun):
             return "its sheet is a site's: no auto sheet to make again"
         if not self.song.audio_path or not Path(self.song.audio_path).is_file():
             return "no audio to make an auto sheet from"
-        if not _has_auto_sheet(self.conn, self.song):
-            return "no auto sheet yet: tonight's run makes one over these lyrics"
         return None
 
     def chords(self) -> tuple[str, str]:
@@ -320,9 +336,9 @@ class _Pick(StagedRun):
         stats = render_all(self.conn, self.cfg, self.overrides, runner=self.runner, now=self.now,
                            song_ids={self.song.id})
         if stats.font_error:
-            return "failed", stats.font_error
+            return self._fail(stats.font_error)
         if stats.failed:
-            return "failed", "chordpro couldn't make the PDF (see the log)"
+            return self._fail("chordpro couldn't make the PDF (see the log)")
         return "made" if stats.rendered else "up to date"
 
     def _check_readable(self) -> None:
@@ -387,13 +403,17 @@ def clear_pick(cfg: Config, conn: sqlite3.Connection, song: Song, overrides: Ove
             due = {"autochords_mtime": None} if _has_auto_sheet(conn, song) else {}
             update_song(conn, song.id, lyrics_status="pending", lyrics_json=None, lyrics_at=None, **due)
         ask_anew(conn, get_song(conn, song.id))
+    stuck = ""
     if gave:
         folder = song_dir(cfg.library_dir, song)
         for name in ("lyrics.txt", "lyrics.lrc"):
-            (folder / name).unlink(missing_ok=True)
+            try:
+                (folder / name).unlink(missing_ok=True)
+            except OSError as e:  # the clear stands; the file is said
+                stuck += f"; {name} couldn't be removed ({e.strerror or e})"
         write_info(conn, cfg.library_dir, get_song(conn, song.id))
     named = asked_name(song, load_overrides(cfg.overrides_file).lyrics)
     under = f"under “{named}”" if named else "under its own name"
     dropped = "; its lyrics from it dropped" if gave else ""
-    return (f"Cleared the record you picked for {song.display} ({record.site} {record.id}){dropped}; every lyrics "
-            f"site is asked again {under}, tonight or at a lookup.")
+    return (f"Cleared the record you picked for {song.display} ({record.site} {record.id}){dropped}{stuck}; every "
+            f"lyrics site is asked again {under}, tonight or at a lookup.")
