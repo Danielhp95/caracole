@@ -344,14 +344,46 @@ def test_each_sites_state_is_kept_and_a_kept_searchs_last_line_is_the_one_it_pri
 def test_a_search_changes_no_lyrics(cfg, conn, song, sites):
     sites.lrclib.search = [lrc(77)]
     sites.megalobiz.records = [mz_record(lrc_id=24519, title="Vikingos veganos", artist="Nick Cani")]
+    search(cfg, conn, song)  # a new name: a new question (below)
     before = get_song(conn, song.id)
-    search(cfg, conn, song)
+    search(cfg, conn, song)  # the same name again
     after = get_song(conn, song.id)
     assert (after.lyrics_status, after.lyrics_json, after.lyrics_at) == (
         before.lyrics_status, before.lyrics_json, before.lyrics_at)
     assert not any(path.name.startswith("lyrics") for path in cfg.library_dir.rglob("*"))
     assert [e for e, _ in sites.megalobiz.requests] == ["search"]  # no record read to list it
     assert load_overrides(cfg.overrides_file).lyrics[override_key(" - ".join(SONG))].record is None
+
+
+def test_a_new_name_is_a_new_question_and_the_same_name_again_none(cfg, conn, song, sites):
+    # The sites' misses were of the name before: forgotten, the song pending, so none offers a transcription before
+    # every site answered under the name that holds now.
+    for prefix in ("megalobiz:checked:", "azlyrics:checked:", "lyrics:failed:"):
+        db.kv_set(conn, f"{prefix}{song.id}", "2026-11-20T00:00:00Z")
+    search(cfg, conn, song)
+    after = get_song(conn, song.id)
+    assert (after.lyrics_status, after.lyrics_at) == ("pending", None)
+    assert all(db.kv_get(conn, f"{p}{song.id}") is None
+               for p in ("megalobiz:checked:", "azlyrics:checked:", "lyrics:failed:"))
+    update_song(conn, song.id, lyrics_status="missing", lyrics_at="2026-11-26T00:00:00Z")
+    db.kv_set(conn, f"megalobiz:checked:{song.id}", "2026-11-26T00:00:00Z")
+    search(cfg, conn, song)  # the name kept already: nothing asked anew
+    after = get_song(conn, song.id)
+    assert (after.lyrics_status, after.lyrics_at) == ("missing", "2026-11-26T00:00:00Z")
+    assert db.kv_get(conn, f"megalobiz:checked:{song.id}") == "2026-11-26T00:00:00Z"
+
+
+def test_a_new_name_leaves_found_lyrics_and_forgets_the_misses(cfg, conn, song, sites):
+    from caracole.lyrics import Lyrics
+
+    plain = Lyrics(plain="Somos vikingos", synced=None, instrumental=False, duration=None, lrclib_id=None,
+                   provider="azlyrics", url="https://www.azlyrics.com/lyrics/nickcani/vikingos.html")
+    update_song(conn, song.id, lyrics_status="found", lyrics_json=plain.to_json(), lyrics_at="2026-11-20T00:00:00Z")
+    db.kv_set(conn, f"megalobiz:checked:{song.id}", "2026-11-20T00:00:00Z")
+    search(cfg, conn, song)
+    after = get_song(conn, song.id)
+    assert (after.lyrics_status, after.lyrics_json) == ("found", plain.to_json())
+    assert db.kv_get(conn, f"megalobiz:checked:{song.id}") is None  # asked for timed ones under the new name
 
 
 # --- errors are never misses -------------------------------------------------------------------------------------
@@ -377,7 +409,8 @@ def test_no_rows_and_a_failure_is_not_searched_never_nothing_found(cfg, conn, so
     assert found.rows == ()
     assert last_line(found).startswith("Not searched: LRCLIB failed (")
     assert last_line(found).endswith("; try again later.")
-    assert get_song(conn, song.id).lyrics_status == "missing"
+    assert get_song(conn, song.id).lyrics_status == "pending"  # the new name's question, never LRCLIB's error's miss
+    assert get_song(conn, song.id).lyrics_at is None
 
 
 def test_a_block_cools_the_site_down_with_no_alert_and_a_cooling_site_isnt_asked(cfg, conn, song, sites):

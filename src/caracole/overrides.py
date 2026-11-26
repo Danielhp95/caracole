@@ -42,7 +42,8 @@ Tables:
 - ``[lyrics]``: "Artist - Title" → ``{ as = "Artist - Title", record = "site:id" }``, either part or both
   (``LyricsPick``): ``as`` the name the song's lyrics are asked under, where its own finds nothing, and ``record``
   the record you picked (``LyricsRecord``), on LRCLIB or Megalobiz by its id (``lrclib:28399373``), on AZLyrics by its
-  page's artist and song (``azlyrics:pomme/mononoke``); ``set_lyrics_name`` and ``set_lyrics_record`` write them.
+  page's artist and song (``azlyrics:pomme/mononoke``); ``set_lyrics_name`` and ``set_lyrics_record`` write them,
+  ``clear_lyrics_record`` takes the record out.
 - ``[gametabs]``: "Artist - Title" → the gametabs.net tab (its page) you picked
   (``GameTabsPick``): gametabs_fetch.py keeps that tab for the song, as its next
   ``gametab-N.txt`` beside any it has, whatever game or composer its page names.
@@ -1012,19 +1013,22 @@ def add_harmonica(path: Path, display: str, tab: str, reading: str | Mapping[str
 _KEEP = object()  # a part of a [lyrics] entry left as it is
 
 
-def _set_lyrics(path: Path, display: str, asked: Any = _KEEP, record: Any = _KEEP) -> None:
-    """Set the parts of the song's ``[lyrics]`` entry given (a part None takes it out), keeping the other. The song's
-    entry is found by its key, as the table is read (the last one counts), so the song written another way changes
-    the entry it has; the same again writes nothing, and the entry goes once neither part is left. A table written
-    by hand (``[lyrics."Artist - Title"]``) keeps its lines and comments while a part of it is left."""
+def _set_lyrics(path: Path, display: str, asked: Any = _KEEP, record: Any = _KEEP) -> bool:
+    """Set the parts of the song's ``[lyrics]`` entry given (a part None takes it out), keeping the other, and say
+    whether the entry changed. The song's entry is found by its key, as the table is read (the last one counts), so the
+    song written another way changes the entry it has; the same again writes nothing, and the entry goes once neither
+    part is left. A table written by hand (``[lyrics."Artist - Title"]``) keeps its lines and comments while a part of
+    it is left."""
     wanted = override_key(display)
     where = f"[lyrics] {display!r}"
     if asked not in (None, _KEEP):
         asked = _lyrics_asked(asked, where, asked)
     if record not in (None, _KEEP):
         record = _lyrics_record(record, where, record)
+    changed = False
 
     def change(doc) -> None:
+        nonlocal changed
         if "lyrics" not in doc and asked in (None, _KEEP) and record in (None, _KEEP):
             return
         t = _table_of(doc, "lyrics")
@@ -1034,6 +1038,7 @@ def _set_lyrics(path: Path, display: str, asked: Any = _KEEP, record: Any = _KEE
                          record=before.record if record is _KEEP else record)
         if now == before:
             return
+        changed = True
         value = _lyrics_value(now)
         if not value:
             del t[key]
@@ -1050,18 +1055,26 @@ def _set_lyrics(path: Path, display: str, asked: Any = _KEEP, record: Any = _KEE
             t[key if key is not None else display] = made
 
     _edit(path, change)
+    return changed
 
 
-def set_lyrics_name(path: Path, display: str, name: str | None) -> None:
+def set_lyrics_name(path: Path, display: str, name: str | None) -> bool:
     """Set the name ("Artist - Title") the song's lyrics are asked under, its ``[lyrics]`` entry's ``as``, or with
-    None take it out, keeping the record you picked (``_set_lyrics``)."""
-    _set_lyrics(path, display, asked=name)
+    None take it out, keeping the record you picked (``_set_lyrics``); whether it changed."""
+    return _set_lyrics(path, display, asked=name)
 
 
-def set_lyrics_record(path: Path, display: str, record: str) -> None:
+def set_lyrics_record(path: Path, display: str, record: str) -> bool:
     """Set the lyrics record you picked for the song (``lrclib:ID``, ``megalobiz:ID``, ``azlyrics:ARTIST/SONG``), its
-    ``[lyrics]`` entry's ``record``, keeping the name its lyrics are asked under (``_set_lyrics``)."""
-    _set_lyrics(path, display, record=record)
+    ``[lyrics]`` entry's ``record``, keeping the name its lyrics are asked under (``_set_lyrics``); whether it
+    changed."""
+    return _set_lyrics(path, display, record=record)
+
+
+def clear_lyrics_record(path: Path, display: str) -> bool:
+    """Take the record you picked out of the song's ``[lyrics]`` entry, keeping the name its lyrics are asked under
+    (``_set_lyrics``: the entry goes once no ``as`` is left); whether there was one."""
+    return _set_lyrics(path, display, record=None)
 
 
 def add_artist_url(path: Path, artist: str, url: str) -> None:

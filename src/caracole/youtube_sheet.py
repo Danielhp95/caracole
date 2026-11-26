@@ -66,7 +66,6 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 from caracole.autochords.hearing import Hearing, sweep
@@ -311,20 +310,6 @@ class _Sheet(HearsWords, StagedRun):
         if outcome == GAVE_UP:
             return self._fail("can't download this video; try another")
         return "failed", "download failed; try again later"
-
-    def _audio_length(self) -> float | None:
-        """The audio's length in seconds: as yt-dlp reported it, else as its file says."""
-        from caracole.music import read_audio
-        from caracole.youtube_fetch import youtube_audio
-
-        video = youtube_audio(self.conn, self.song)
-        if video is not None and video.duration:
-            return video.duration
-        try:
-            return read_audio(Path(self.song.audio_path or "")).duration_s
-        except Exception as e:  # noqa: BLE001 - a length is a hint: LRCLIB is asked without one
-            log.info("The length of %s can't be read: %s", self.song.audio_path, e)
-            return None
 
     def lyrics(self) -> tuple[str, str]:
         """LRCLIB's lyrics, then Megalobiz's timed ones where LRCLIB left the song without (megalobiz_fetch.py):

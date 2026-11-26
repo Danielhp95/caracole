@@ -33,7 +33,9 @@ the lookups' lane (``_common.exclusive(..., lane=True)``), where another lookup 
 their client's pause before each request but its first; LaCuerda's search checks its gate and
 sends its one request in one turn. Each one's good run is what its own client was answered.
 ``caracole lyrics --song X --as "A - T"`` lists what the three lyrics sites have under a name typed, in the lane too
-(lyrics_search.py), with a client a site; it changes no lyrics.
+(lyrics_search.py), with a client a site; it changes no lyrics. ``--pick N`` or ``--record SITE:ID`` makes a row of
+that search the song's lyrics and its auto sheet again over them (lyrics_pick.py), ``--clear`` takes the record
+picked back, each under the lock as asked for now, as ``versions --keep`` takes it.
 ``caracole gametabs --index`` reads gametabs.net's game pages into its local index
 (gametabs_index.py), the games of your songs first, the same way: their tabs' composers and
 instruments, so that a song is found by its composer. ``caracole ireal`` reads iReal Pro's forum's sitemaps and
@@ -103,23 +105,51 @@ def register(app: typer.Typer) -> None:
         ctx: typer.Context,
         song: str | None = typer.Option(
             None, "--song", metavar='"ARTIST - TITLE"',
-            help="With --as: the song whose lyrics the sites are asked for under another name.",
+            help="With --as, --pick, --record or --clear: the song whose lyrics they are.",
         ),
         asked: str | None = typer.Option(
             None, "--as", metavar='"ARTIST - TITLE"',
             help="With --song: list what LRCLIB, Megalobiz and AZLyrics have under this name, now, at a lookup's "
                  "pace, and note it under \\[lyrics] so the nights ask under it too. Changes no lyrics.",
         ),
+        pick: int | None = typer.Option(
+            None, "--pick", metavar="N", min=1,
+            help="With --song: make row N of its last --as search its lyrics now, and its auto sheet again over them.",
+        ),
+        record: str | None = typer.Option(
+            None, "--record", metavar="SITE:ID",
+            help="With --song: as --pick, the row of its last search that lists this record (lrclib:ID, "
+                 "megalobiz:ID, azlyrics:ARTIST/SONG).",
+        ),
+        clear: bool = typer.Option(
+            False, "--clear",
+            help="With --song: take the record you picked out of \\[lyrics] (its name kept), the lyrics it gave with "
+                 "it; every site is asked again. Sends no request.",
+        ),
+        progress: bool = typer.Option(
+            False, "--progress", help="With --pick or --record: a JSON line per stage too, for caracole serve.",
+        ),
     ) -> None:
         """Fetch lyrics from LRCLIB for songs that have none yet, timed ones from Megalobiz, then AZLyrics' where none."""
         cfg = load_cfg(ctx)
-        if song is None and asked is None:
+        asks = [name for name, given in (("--as", asked is not None), ("--pick", pick is not None),
+                                         ("--record", record is not None), ("--clear", clear)) if given]
+        if progress and not (pick is not None or record is not None):
+            _common.fail("--progress goes with --pick or --record", 2)
+        if song is None and not asks:
             _lyrics(cfg)
             return
-        if song is None or asked is None:
-            _common.fail("--song and --as go together: caracole lyrics --song \"Artist - Title\" --as \"Artist - "
-                         "Title\".", 2)
-        _lyrics_as(cfg, song, asked)
+        if song is None or not asks:
+            _common.fail("--song goes with one of --as, --pick, --record and --clear: caracole lyrics --song "
+                         "\"Artist - Title\" --as \"Artist - Title\".", 2)
+        if len(asks) > 1:
+            _common.fail(f"{' and '.join(asks)} don't go together: give one.", 2)
+        if asked is not None:
+            _lyrics_as(cfg, song, asked)
+        elif clear:
+            _lyrics_clear(cfg, song)
+        else:
+            _lyrics_pick(cfg, song, pick=pick, record=record, progress=progress)
 
     @app.command("lacuerda")
     def lacuerda_cmd(
@@ -355,6 +385,51 @@ def _lyrics_as(cfg: Config, display: str, typed: str) -> None:
     if found.rows:
         typer.echo(f"Take one: caracole lyrics --song {shlex.quote(song.display)} --pick 1")
     typer.echo(last_line(found))
+
+
+def _lyrics_pick(cfg: Config, display: str, *, pick: int | None, record: str | None, progress: bool) -> None:
+    """A row of the song's last search made its lyrics now (lyrics_pick.py), said a stage a line, as ``caracole
+    transcribe`` says its own; its last line "No lyrics kept: …" for a refusal, a failure or a site that gave none."""
+    from caracole.commands.get import _Lines
+    from caracole.lyrics_pick import NOTHING_KEPT, PickRequest, pick_lyrics
+    from caracole.overrides import OverridesError, override_key
+    from caracole.progress import ticker
+
+    try:
+        override_key(display)
+    except OverridesError as e:
+        _common.fail(str(e), 2)
+    artist, _, title = display.partition(" - ")
+    with _Lines(cfg.library_dir, show=False, json_lines=progress, ticker=None if progress else ticker()) as reporter:
+        result = pick_lyrics(cfg, PickRequest(artist.strip(), title.strip(), pick=pick, record=record), reporter)
+        said = result.details.get("lyrics", "").removesuffix(NOTHING_KEPT)
+        done = (f"Done in {result.seconds:.1f} s." if result.states.get("lyrics") == "done"
+                else f"No lyrics kept: {said}.")
+        _common.staged_end(reporter, result, progress=progress, refused="No lyrics kept", done=done)
+
+
+def _lyrics_clear(cfg: Config, display: str) -> None:
+    """The record you picked for the song taken out of ``[lyrics]`` (lyrics_pick.py ``clear_pick``), with no request,
+    under caracole's lock as asked for now; then its PDF and the pages. Exit 1 for a song with no record picked."""
+    from caracole.lyrics_pick import clear_pick
+    from caracole.overrides import OverridesError, override_key
+    from caracole.render import render_all
+
+    try:
+        override_key(display)
+    except OverridesError as e:
+        _common.fail(str(e), 2)
+    with exclusive(cfg, f"lyrics --clear {display}", interactive=True), closing(open_db(cfg)) as conn:
+        overrides = load_ovr(cfg)
+        song = _common.song_named(conn, display, overrides)
+        said = clear_pick(cfg, conn, song, overrides)
+        if said is None:
+            _common.fail(f"{song.display} has no lyrics record picked under [lyrics]: nothing to clear.")
+        overrides = load_ovr(cfg)
+        now = utcnow()
+        render_all(conn, cfg, overrides, now=now, song_ids={song.id})
+        write_pages(conn, cfg, overrides, now)
+    typer.echo(said)
 
 
 def _megalobiz(cfg: Config, overrides: Overrides) -> None:

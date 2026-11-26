@@ -31,6 +31,7 @@ from collections.abc import Callable
 from contextlib import closing
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from caracole.config import Config
@@ -163,6 +164,21 @@ class StagedRun:
         except KeyError:
             raise _Stop(f"{self.song.display} left the book while {self.MAKING} (removed, or merged into a song "
                         "of the same name)") from None
+
+    def _audio_length(self) -> float | None:
+        """The song's audio's length in seconds: as yt-dlp reported it, else as its file says; None when neither
+        tells (a length is a hint: the lyrics sites are asked without one)."""
+        from caracole.music import read_audio
+        from caracole.youtube_fetch import youtube_audio
+
+        video = youtube_audio(self.conn, self.song)
+        if video is not None and video.duration:
+            return video.duration
+        try:
+            return read_audio(Path(self.song.audio_path or "")).duration_s
+        except Exception as e:  # noqa: BLE001 - a length is a hint: LRCLIB is asked without one
+            log.info("The length of %s can't be read: %s", self.song.audio_path, e)
+            return None
 
     # --- the stages both jobs end with -------------------------------------------------------------------
 

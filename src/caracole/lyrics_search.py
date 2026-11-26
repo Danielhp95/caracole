@@ -2,8 +2,10 @@
 decorated title, a transliterated artist): ``caracole lyrics --song X --as "A - T"``.
 
 The name is noted first, ``[lyrics]``' ``as`` (taken out when it is the song's own), so the nights after ask under it
-too; then each site is asked once, at a lookup's pace, by one interactive client of its own (``_common.make_client``,
-run ``lookup:…``), in the lookups' lane, where another lookup goes first in the clients' pauses:
+too, and a name that changes it is a new question (``ask_anew``: the sites' misses forgotten, a song with no lyrics
+pending again); then each site is asked once, at a lookup's pace, by one interactive client of its own
+(``_common.make_client``, run ``lookup:…``), in the lookups' lane, where another lookup goes first in the clients'
+pauses:
 
 - LRCLIB's ``/api/search`` for the typed name, then ``/api/get`` with it and the audio's length only when no record of
   the search fits it: each record with lyrics a row, an instrumental or empty one counted, never listed;
@@ -273,7 +275,8 @@ def search_lyrics(cfg: Config, conn: sqlite3.Connection, song: Song, name: tuple
     from caracole.lyrics import search_query
     from caracole.overrides import set_lyrics_name
 
-    set_lyrics_name(cfg.overrides_file, song.display, None if is_own_name(song, name) else f"{name[0]} - {name[1]}")
+    if set_lyrics_name(cfg.overrides_file, song.display, None if is_own_name(song, name) else f"{name[0]} - {name[1]}"):
+        ask_anew(conn, song)  # another name holds now: every site is asked under it before any transcription
     length = audio_length(conn, song)
     query = search_query(name[0], name[1])
     ask = _Asking(cfg, conn, now)
@@ -298,6 +301,25 @@ def search_lyrics(cfg: Config, conn: sqlite3.Connection, song: Song, name: tuple
     if conn.execute("SELECT 1 FROM songs WHERE id = ? AND key = ?", (song.id, song.key)).fetchone() is not None:
         kv_set_json(conn, f"{KV}{song.id}", search.as_json())  # never under an id another lookup gave a new song
     return search
+
+
+def ask_anew(conn: sqlite3.Connection, song: Song) -> None:
+    """A ``[lyrics]`` entry changed (another name, a record picked or cleared) is a new question, written right after
+    the entry: the records of LRCLIB's failure and of Megalobiz's and AZLyrics' misses go, so each site is asked under
+    what holds now, and a song with no lyrics is pending again with no ``lyrics_at`` (its misses were of the question
+    before), so no transcription is offered (transcript.py ``why_not_offered``) until every site answered it. A song
+    whose lyrics are found keeps them: a pick replaces them."""
+    from caracole.azlyrics_fetch import CHECKED as AZLYRICS_CHECKED
+    from caracole.db import kv_delete, savepoint
+    from caracole.lyrics import FAILED
+    from caracole.megalobiz_fetch import CHECKED as MEGALOBIZ_CHECKED
+    from caracole.songs import update_song
+
+    with savepoint(conn, "ask_anew"):
+        for prefix in (FAILED, MEGALOBIZ_CHECKED, AZLYRICS_CHECKED):
+            kv_delete(conn, f"{prefix}{song.id}")
+        if song.lyrics_status != "found":
+            update_song(conn, song.id, lyrics_status="pending", lyrics_at=None)
 
 
 def _said(found: _Found) -> str:

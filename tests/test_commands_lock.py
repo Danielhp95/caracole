@@ -470,6 +470,8 @@ ASKED_NOW = [
     ("youtube", "--song", "Radiohead - Creep", "--none"),
     ("youtube", "--song", "Radiohead - Creep", "--sheet", "--url", VIDEO, "--progress"),
     ("transcribe", "--song", "A - T", "--progress"),
+    ("lyrics", "--song=A - T", "--pick=1"),
+    ("lyrics", "--song=A - T", "--clear"),
 ]
 # Bulk work: the nightly run's steps, or a pass over the whole library by hand, waits for the whole run.
 BULK = [("run",), ("fetch",), ("render",), ("youtube",), ("lyrics",), ("match",), ("sync",)]
