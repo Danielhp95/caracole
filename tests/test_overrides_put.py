@@ -97,3 +97,29 @@ def test_an_alias_an_artists_page_and_a_blocked_tab_are_put_and_taken_out(tmp_pa
     put_block(path, 4242, False)
     o = load_overrides(path)
     assert not o.alias and not o.artist_url and not o.block
+
+
+def test_song_entries_carry_lyrics_and_put_song_entries_writes_them_back(tmp_path):
+    from caracole.overrides import LyricsPick, LyricsRecord, set_lyrics_name, set_lyrics_record
+
+    there, here = tmp_path / "there.toml", tmp_path / "here.toml"
+    add_match(there, SONG, "radiohead/creep")
+    set_lyrics_name(there, SONG, "Radiohead - Creep (Acoustic)")
+    set_lyrics_record(there, SONG, "lrclib:28399373")
+    wanted = entries_of(there)
+    assert wanted == {"match": "radiohead/creep",
+                      "lyrics": {"as": "Radiohead - Creep (Acoustic)", "record": "lrclib:28399373"}}
+    here.write_text("# mine\n", encoding="utf-8")
+    put_song_entries(here, SONG, wanted)
+    assert entries_of(here) == wanted
+    assert '[lyrics]\n"Radiohead - Creep" = {as = "Radiohead - Creep (Acoustic)", record = "lrclib:28399373"}' in (
+        here.read_text(encoding="utf-8"))
+    assert load_overrides(here).lyrics[KEY] == LyricsPick(("Radiohead", "Creep (Acoustic)"),
+                                                          LyricsRecord("lrclib", "28399373"))
+    put_song_entries(here, SONG, {"lyrics": {"record": "azlyrics:radiohead/creep"}})  # only the members set
+    assert entries_of(here) == {"lyrics": {"record": "azlyrics:radiohead/creep"}}
+    before = here.read_bytes()
+    for bad in ({"as": "Creep"}, {"record": "genius:1"}, {}, "lrclib:1"):
+        with pytest.raises(OverridesError, match=r"\[lyrics\] 'Radiohead - Creep': expected"):
+            put_song_entries(here, SONG, {"lyrics": bad})
+    assert here.read_bytes() == before

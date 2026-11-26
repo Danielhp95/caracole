@@ -1043,3 +1043,112 @@ def test_add_ireal_writes_the_picks_address_in_the_songs_one_entry(tmp_path):
     assert o.ireal == {"thad-jones/groove-merchant": IRealPick("groove-merchant-thad-jones", 9518, 38106)}
     assert song_entries(o, "thad-jones/groove-merchant") == {
         "ireal": "https://forums.irealpro.com/threads/groove-merchant-thad-jones.9518/post-38106"}
+
+
+# --- [lyrics]: the name a song's lyrics are asked under, and the record you picked ----------------------------------
+
+LYRICS_EXAMPLE = '''
+[lyrics]   # the name a song's lyrics are asked under, and the record you picked
+"孟维来 - 野人『不再借世人的手 替我开脱』『动态歌词MV』" = { as = "孟维来 - 野人", record = "lrclib:28399373" }
+"Plan B - Ill Manors" = { as = "  Plan B -  Ill Manors (Official) " }   # asked under it, nothing picked
+"Pomme - Mononoké" = { record = "azlyrics:pomme/mononoke" }         # picked under its own name
+"Daft Punk - Veridis Quo" = { record = "megalobiz:105007" }
+'''
+
+
+def test_lyrics_holds_the_name_asked_under_and_the_record_picked(tmp_path):
+    from caracole.overrides import LyricsPick, LyricsRecord
+
+    o = load_overrides(write(tmp_path, LYRICS_EXAMPLE))
+    chinese = override_key("孟维来 - 野人『不再借世人的手 替我开脱』『动态歌词MV』")
+    assert o.lyrics == {
+        chinese: LyricsPick(("孟维来", "野人"), LyricsRecord("lrclib", "28399373")),
+        "plan-b/ill-manors": LyricsPick(("Plan B", "Ill Manors (Official)"), None),
+        "pomme/mononoke": LyricsPick(None, LyricsRecord("azlyrics", "pomme/mononoke")),
+        "daft-punk/veridis-quo": LyricsPick(None, LyricsRecord("megalobiz", "105007")),
+    }
+    assert o.lyrics[chinese].record.text == "lrclib:28399373" and o.lyrics[chinese].record.page is None
+    pomme = o.lyrics["pomme/mononoke"].record
+    assert pomme.text == "azlyrics:pomme/mononoke"
+    assert pomme.page == "https://www.azlyrics.com/lyrics/pomme/mononoke.html"
+    assert o.lyrics["daft-punk/veridis-quo"].record.page is None
+    assert o.has_table("lyrics") and Overrides().lyrics == {}
+
+
+@pytest.mark.parametrize("value", [
+    '"lrclib:1"', "{}", '{ as = "A - B", note = "x" }', '{ as = "AB" }', '{ as = " - B" }', '{ as = 3 }',
+    '{ record = "lrclib:0" }', '{ record = "lrclib:x" }', '{ record = "lrclib:1234567890123" }',
+    '{ record = "lrclib:٣" }', '{ record = "lrclib: 1" }', '{ record = "genius:1" }', '{ record = "azlyrics:a" }',
+    '{ record = "azlyrics:A/b" }', '{ record = "azlyrics:a/b/c" }', '{ record = "azlyrics:../b" }',
+    '{ record = "azlyrics:a/b.html" }', '{ record = "https://lrclib.net/api/get/1" }', '{ record = 1 }',
+])
+def test_a_lyrics_entry_of_another_shape_is_an_error(tmp_path, value):
+    with pytest.raises(OverridesError) as e:
+        load_overrides(write(tmp_path, f'[lyrics]\n"Pomme - Mononoké" = {value}\n'))
+    assert ("[lyrics] 'Pomme - Mononoké': expected { as = \"Artist - Title\", record = \"lrclib:ID\" | "
+            "\"megalobiz:ID\" | \"azlyrics:ARTIST/SONG\" }, got ") in str(e.value)
+    with pytest.raises(OverridesError, match=re.escape("[lyrics] 'Pomme': expected \"Artist - Title\"")):
+        load_overrides(write(tmp_path, '[lyrics]\n"Pomme" = { record = "lrclib:1" }\n'))
+
+
+def test_set_lyrics_name_keeps_the_record_and_none_takes_the_name_out(tmp_path):
+    from caracole.overrides import LyricsPick, LyricsRecord, set_lyrics_name
+
+    p = write(tmp_path, '# mine\n[lyrics]  # names\n"pomme - mononoké" = { record = "azlyrics:pomme/mononoke" }\n')
+    set_lyrics_name(p, "Pomme - Mononoké", " Pomme -  Mononoke ")  # the song written another way: its entry
+    text = p.read_text(encoding="utf-8")
+    assert text.startswith("# mine\n[lyrics]  # names\n")
+    assert '"pomme - mononoké" = {as = "Pomme - Mononoke", record = "azlyrics:pomme/mononoke"}' in text
+    assert load_overrides(p).lyrics == {
+        "pomme/mononoke": LyricsPick(("Pomme", "Mononoke"), LyricsRecord("azlyrics", "pomme/mononoke"))}
+    before = p.read_bytes()
+    set_lyrics_name(p, "Pomme - Mononoké", "Pomme - Mononoke")  # the same: nothing written
+    assert p.read_bytes() == before
+    set_lyrics_name(p, "Pomme - Mononoké", None)
+    assert load_overrides(p).lyrics == {"pomme/mononoke": LyricsPick(None, LyricsRecord("azlyrics", "pomme/mononoke"))}
+    set_lyrics_name(p, "Plan B - Ill Manors", "Plan B - Ill Manors (Official)")  # a new song's
+    assert load_overrides(p).lyrics["plan-b/ill-manors"] == LyricsPick(("Plan B", "Ill Manors (Official)"), None)
+    assert '"Plan B - Ill Manors" = {as = "Plan B - Ill Manors (Official)"}' in p.read_text(encoding="utf-8")
+    other = tmp_path / "other.toml"
+    other.write_text("# nothing\n", encoding="utf-8")
+    set_lyrics_name(other, "Pomme - Mononoké", None)  # nothing to take out: no table made
+    assert other.read_text(encoding="utf-8") == "# nothing\n"
+    for bad in ("Mononoke", "Pomme - "):
+        with pytest.raises(OverridesError, match=re.escape("[lyrics] 'Pomme - Mononoké': expected { as =")):
+            set_lyrics_name(other, "Pomme - Mononoké", bad)
+    assert other.read_text(encoding="utf-8") == "# nothing\n"
+
+
+def test_set_lyrics_record_keeps_the_name(tmp_path):
+    from caracole.overrides import LyricsPick, LyricsRecord, set_lyrics_name, set_lyrics_record
+
+    p = write(tmp_path, "")
+    set_lyrics_name(p, "Plan B - Ill Manors", "Plan B - Ill Manors (Official)")
+    set_lyrics_record(p, "plan b - ill manors", "lrclib:28399373")
+    assert load_overrides(p).lyrics == {
+        "plan-b/ill-manors": LyricsPick(("Plan B", "Ill Manors (Official)"), LyricsRecord("lrclib", "28399373"))}
+    assert p.read_text(encoding="utf-8").count("Ill Manors") == 2  # one entry, written as it was first
+    before = p.read_bytes()
+    set_lyrics_record(p, "Plan B - Ill Manors", "lrclib:28399373")
+    assert p.read_bytes() == before
+    set_lyrics_record(p, "Plan B - Ill Manors", "megalobiz:105007")
+    assert load_overrides(p).lyrics["plan-b/ill-manors"].record == LyricsRecord("megalobiz", "105007")
+    for bad in ("genius:1", "lrclib:0", "azlyrics:../x", ""):
+        with pytest.raises(OverridesError, match=re.escape("[lyrics] 'Plan B - Ill Manors': expected { as =")):
+            set_lyrics_record(p, "Plan B - Ill Manors", bad)
+    assert load_overrides(p).lyrics["plan-b/ill-manors"].record == LyricsRecord("megalobiz", "105007")
+
+
+def test_the_entry_goes_once_neither_is_left(tmp_path):
+    from caracole.overrides import set_lyrics_name
+
+    p = write(tmp_path, '[lyrics]\n"Plan B - Ill Manors" = { as = "Plan B - Ill Manors (Official)" }\n'
+                        '"Pomme - Mononoké" = { record = "azlyrics:pomme/mononoke" }\n')
+    set_lyrics_name(p, "Plan B - Ill Manors", None)
+    assert list(load_overrides(p).lyrics) == ["pomme/mononoke"] and "Ill Manors" not in p.read_text(encoding="utf-8")
+    # A table written by hand keeps its lines and comments while a part of it is left.
+    p = write(tmp_path, '[lyrics."Plan B - Ill Manors"]  # its own name finds nothing\nas = "Plan B - X"\n'
+                        'record = "lrclib:7"\n')
+    set_lyrics_name(p, "Plan B - Ill Manors", None)
+    assert "# its own name finds nothing" in p.read_text(encoding="utf-8")
+    assert load_overrides(p).lyrics["plan-b/ill-manors"].asked is None

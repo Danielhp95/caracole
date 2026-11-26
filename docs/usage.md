@@ -3426,6 +3426,10 @@ tab_ids = [1601668]
 [azlyrics]     # the AZLyrics page of a song its artist's name doesn't lead to
 "Misc Musicals - Hadestown Wait For Me" = "https://www.azlyrics.com/lyrics/hadestown/waitforme.html"
 
+[lyrics]       # the name a song's lyrics are asked under, and the record you picked
+"Plan B - Ill Manors" = { as = "Plan B - Ill Manors (Official)", record = "lrclib:28399373" }
+"Pomme - Mononoké" = { record = "azlyrics:pomme/mononoke" }
+
 [gametabs]     # the gametabs.net tab a song's tab of game music comes from
 "Hollow Knight - Resting Grounds" = "https://gametabs.net/tabs/hollow-knight/resting-grounds-2"
 
@@ -3531,6 +3535,12 @@ sheet, in place of any but a tab you pinned on UG or a sheet you picked on LaCue
 
 `[azlyrics]` names a song's lyrics page on AZLyrics, for a song its artist's name doesn't lead to.
 caracole asks for that page alone, while the song has no lyrics.
+
+`[lyrics]` holds, for a song whose own name finds no lyrics, the name to ask under (`as`, an
+"Artist - Title"), the record you picked (`record`), or both. A record is `lrclib:ID` or
+`megalobiz:ID` (the record's number on that site) or `azlyrics:ARTIST/SONG` (the two parts of its
+page's address, `azlyrics.com/lyrics/ARTIST/SONG.html`), and nothing else: no address, no other
+path.
 
 `[harmonica]` says how each of a song's harmonica tabs is read, by its file's name. The value is a
 notation (`"signs"`, `"brackets"`, `"letters"`, `"signs after"` or `"barrett"`), `"legend"` for
