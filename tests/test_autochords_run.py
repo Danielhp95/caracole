@@ -2021,6 +2021,27 @@ def test_audio_whisper_cant_load_gets_its_chords_and_is_never_heard_every_night(
         again.close()
 
 
+def test_a_song_said_not_sung_is_never_heard_at_night(conn, cfg, tmp_path, loud):
+    # The owner's Not sung: chords only (caracole transcribe --none): the nightly pass hears it no more, nor its next
+    # file (their word is about the song, not its audio), its sheet the chords alone, until they say it is sung.
+    from caracole.autochords.transcript import SAID_NOT_SUNG, SILENT, drop_transcript, why_not_offered
+
+    s = offered_song(conn, cfg, tmp_path, "River Road")
+    drop_transcript(conn, s, "2026-11-25T00:00:00Z")
+    hearing = hearing_of(cfg)
+    try:
+        stats = run(conn, cfg, hearing=hearing, transcriptions=3)
+        assert hearing.separator.calls == [] and hearing.transcriber.calls == []
+        assert (stats.generated, stats.heard, stats.silent) == (1, 0, 0)
+        assert SILENT in auto_sheet(cfg, conn, s) and auto_raw(conn, s)["heard_nothing"] is True
+        later = with_audio(conn, tmp_path, s, seconds=60.0, name="River Road (2).wav")  # a new file
+        assert why_not_offered(conn, cfg, later, Overrides()) == SAID_NOT_SUNG
+        again = run(conn, cfg, hearing=hearing, transcriptions=3)
+        assert hearing.separator.calls == [] and (again.generated, again.heard) == (1, 0)
+    finally:
+        hearing.close()
+
+
 def test_a_bug_hearing_a_song_fails_the_run_and_its_chords_are_made_all_the_same(conn, cfg, tmp_path, loud,
                                                                                      caplog):
     from test_transcribe_job import Transcriber

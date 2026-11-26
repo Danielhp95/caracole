@@ -27,9 +27,10 @@ serve reads into the job's stages; staged.py's ``StagedRun`` is that reporting h
   caracole can do ("not transcribed: its lyrics are found"); only otherwise the setting off, or "not transcribed here:
   why" for this caracole's reason, then the offer's other reasons. A waiting lookup goes first before each, the song
   checked still one for YouTube and still offered after it. Their failing here (the separator, the GPU, Whisper's
-  model, audio Whisper can't load) fails their stage alone, never the sheet (``WORDS_FAIL_THE_JOB``), and files
-  nothing against the song: the chords are made chords-only by auto-chords' own reader, and the song stays offered
-  Transcribe the lyrics.
+  model, audio Whisper can't load) fails their stage alone, never the sheet (``WORDS_FAIL_THE_JOB``): the chords are
+  made chords-only by auto-chords' own reader. The setup's failure files nothing against the song, which stays offered
+  Transcribe the lyrics; audio Whisper can't load is noted as Whisper's alone (``transcribe:unreadable:``), offered no
+  transcription until it changes.
 - ``chords``: auto-chords for this song alone (``autochords_pending``'s ``only``), once the audio is the
   video's; a waiting lookup goes first (``_common.hand_over``), as the models take minutes. The chords go
   over the timed lyrics when their length fits the audio, else above the lyrics as a chart (merge.py), over the

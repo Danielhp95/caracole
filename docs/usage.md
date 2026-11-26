@@ -1363,13 +1363,13 @@ words too. Its last line says what it heard:
 
 - `transcribe = false` or `transcribe_per_run = 0` hears nothing.
 - Where this machine can't transcribe, it hears nothing and the to-do page says why, under
-  **Lyrics couldn't be transcribed in the last run**. That includes the GPU build's nightly unit,
+  **Lyrics that couldn't be transcribed**. That includes the GPU build's nightly unit,
   which doesn't see the GPU: the words then come from caracole serve's jobs.
 - A setup that fails (the separator, the GPU, Whisper's model) stops the hearing for the rest of
   the run, and the to-do page says so; the chords go on, and it still exits 0.
 - Audio Whisper can't load still gets its chords. Its words aren't heard, nor offered on its card,
-  until the file changes; the to-do page lists it under **Lyrics couldn't be transcribed in the
-  last run**.
+  until the file changes; the to-do page lists it under **Lyrics that couldn't be transcribed**.
+- A song you said isn't sung (`caracole transcribe --none`) is never heard, whatever its audio.
 - A bug while hearing a song fails the run (exit 1), and the song's chords are made all the same.
 
 ### caracole youtube
@@ -1397,7 +1397,7 @@ without the model files, it asks nothing and exits 1.
 
 ### caracole transcribe
 
-    caracole transcribe --song "ARTIST - TITLE" [--progress]
+    caracole transcribe --song "ARTIST - TITLE" [--force | --none] [--progress]
 
 Transcribes, with Whisper, the lyrics of a song whose audio came from YouTube and that no lyrics
 site has. It keeps them as the song's transcript and makes its auto sheet again with the chords over
@@ -1406,6 +1406,11 @@ flake's `packages.autochords`, with Whisper, its model files and demucs-rs. With
 nothing and exits 1. It says each stage as it ends; while the vocals, the words and the chords run,
 a live line on a terminal says what they are doing (`Words · 1:12 of 3:58`), and the journal gets
 that line once a minute. `--progress` writes a JSON line per stage instead, for caracole serve.
+
+| Option | What it does |
+|---|---|
+| `--force` | It is sung. Hears a song caracole heard nothing sung in, or that you said isn't sung, with no rule of nothing sung: Whisper runs whatever the singing found, over the whole song when none was. Also tries audio Whisper couldn't load again, after an ffmpeg or Whisper upgrade. |
+| `--none` | It isn't sung. For a song with a transcript: drops it, makes the sheet again with the chords alone, and never hears the song again, whatever its audio, until `--force`. |
 
 ### When the pages are rewritten
 
@@ -1697,7 +1702,8 @@ It exits 0 once the sheet is made, and 1 otherwise:
 | `Transcript kept; no sheet made: …` | The words were heard and kept, but before the chords the song got a human sheet, was ignored or found its lyrics, or the chords then failed. | Its transcript is kept, unused while it has a human sheet or lyrics; after a failure, Try again makes the sheet over it. |
 | `Transcript and sheet kept: a bug in caracole …` | The sheet over the transcript was made, then caracole hit a bug. | Both are kept. |
 | `Words: failed: no singing heard.` | Less than 10 seconds of singing, so Whisper didn't run, or too few words in it (under 8, or under 20 a minute). Nothing is kept. | Not offered until its audio changes. |
-| `can't read the audio` | Whisper couldn't load the audio. | Not offered, and no chords tried, until its audio changes. The to-do page lists the file. |
+| `Whisper can't read the audio: …` | Whisper couldn't load the audio. The line says what to do. | Not offered until its audio changes, or `--force`. Its chords are still made. The to-do page lists it. |
+| `… can't be said not sung: it has no transcript.` | `--none` for a song with no transcript of its audio. | Unchanged. |
 | `can't measure the audio here`, `the separator can't run here`, `its vocals can't be read`, `its vocals are … shorter than the song`, `the GPU failed`, `Whisper's model won't load` | The setup failed, not the song. | Still offered. |
 
 Anything else Whisper fails on is a bug in caracole. It says so, and the song stays offered.
@@ -2836,6 +2842,12 @@ transcribed lyrics.". If it fails, the Journal gives the reason ("no singing hea
 failed: …") with Try again. One runs at a time per song, and never beside another transcription
 or a lookup. A song no longer offered one is refused ("… isn't offered a transcription: its lyrics
 are found."). Where caracole can't transcribe, no card offers it. The phone never offers it.
+
+Your word over caracole's goes on the card too. A song in which nothing sung was heard says so, with
+**Transcribe anyway** (`caracole transcribe --force`). One whose sheet is over its transcript has
+**Not sung: chords only** (`caracole transcribe --none`): its transcript is dropped, its sheet made
+again with the chords alone, and it is never heard again. Each is posted in place, as Transcribe
+the lyrics is.
 
 #### A YouTube video for a search
 

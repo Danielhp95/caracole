@@ -31,21 +31,19 @@ What fails is ``HearingFailed``, told apart as auto-chords tells it:
   the loudness reader or by Whisper, which reads it first for the language), a GPU missing, busy or out of memory, or
   a Whisper model that won't load (``SetupFailed``, in its own words: "the GPU failed: ...", "Whisper's model won't
   load: ...");
-- ``"audio"``: Whisper's own "Failed to load audio" on the mix (``transcribe.is_audio_error``, "can't read the
-  audio"), alone filed as auto-chords files a file it can't read (run.py ``_unreadable``: kv
-  ``autochords:failed:<song id>``), so the song is offered no transcription, nor auto-chords tried on it, until its
-  audio changes. Not filed so for a caller that makes the chords all the same (``file_unreadable=False``, "Whisper
-  can't read the audio"): Whisper reads the mix through the ffmpeg program, auto-chords through its own reader, the
-  one the vocals read the mix with already, which gives its own verdict as the chords are made. Noted instead as
-  Whisper's alone (transcript.py ``note_whisper_cant_read``, kv ``transcribe:unreadable:<song id>``), so that no
-  transcription is offered over that audio again, the card's nor the nightly pass's, until it changes.
+- ``"audio"``: Whisper's own "Failed to load audio" on the mix (``transcribe.is_audio_error``, "Whisper can't read
+  the audio"), noted as Whisper's alone (transcript.py ``note_whisper_cant_read``, kv ``transcribe:unreadable:<song
+  id>``), so that no transcription is offered over that audio again, the card's nor the nightly pass's, until it
+  changes or the owner asks for one by hand (``why_not_offered``'s ``anyway``). Never filed as audio auto-chords can't
+  read: Whisper reads the mix through the ffmpeg program, auto-chords through its own reader, the one the vocals read
+  the mix with already, which gives its own verdict as the chords are made.
 
 ``words`` refuses, before Whisper runs, vocals that aren't the Hearing's current stem of the song's audio as it is
 (``_current``: another song's, of audio replaced since, or a stem the next song's separation removed): a caller's bug,
 a ValueError in words of its own, never read as the separator's failure.
 
-Anything else is a bug, caracole's or deep in Whisper, raised as it is and filing nothing against the song. Beside the
-audio's, only nothing sung is recorded against the song.
+Anything else is a bug, caracole's or deep in Whisper, raised as it is and filing nothing against the song. Beside
+Whisper's refusal of the audio, only nothing sung is recorded against the song.
 
 The stems are in a work folder of the Hearing's own under the cache (``WORK_PREFIX``), its ``OWNER`` flocked while
 the Hearing lives and gone with ``close``; ``sweep`` removes those a killed job left, no live one holds.
@@ -71,8 +69,7 @@ if TYPE_CHECKING:
     from caracole.autochords.words import Span
     from caracole.songs import Song
 
-UNREADABLE = "can't read the audio"  # the audio's failure, in the words a job says it
-WHISPER_UNREADABLE = "Whisper can't read the audio"  # the same, not filed: auto-chords' reader still to say
+WHISPER_UNREADABLE = "Whisper can't read the audio"  # the audio's failure, in the words a job says it
 WORK_PREFIX = "transcribe-"  # a Hearing's work folder under the cache, the stems in it
 # A file in each work folder, flocked by the Hearing that made it for as long as it lives: a folder whose owner's lock
 # anyone can take (its job killed: the kernel let go of it) is a killed job's, and swept.
@@ -85,8 +82,8 @@ Doing = Callable[[str], None]  # told what a long step is at as it goes ("2 of ~
 
 
 class HearingFailed(Exception):
-    """The song couldn't be heard: the setup's (``kind`` "setup", filing nothing) or the audio's ("audio", filed), in
-    ``words``, the words a job says it in."""
+    """The song couldn't be heard: the setup's (``kind`` "setup", filing nothing) or the audio's ("audio", noted as
+    Whisper's), in ``words``, the words a job says it in."""
 
     def __init__(self, kind: Literal["setup", "audio"], words: str):
         super().__init__(words)
@@ -175,12 +172,18 @@ class Hearing:
         return Vocals(audio, stem, sung_spans(stem_db[:both], mix_db[:both]), length)
 
     def words(self, conn: sqlite3.Connection, song: Song, vocals: Vocals, stamp: str, *, on_doing: Doing,
-              anyway: bool = False, file_unreadable: bool = True) -> Kept | Nothing:
+              anyway: bool = False) -> Kept | Nothing:
         """The song's words heard where its ``vocals`` say it is sung, kept as its transcript made at ``stamp``, or
-        nothing sung noted (the module docstring); ``HearingFailed`` the setup's or the audio's, the audio's filed
-        against the song unless ``file_unreadable`` is false."""
+        nothing sung noted (the module docstring); ``HearingFailed`` the setup's or the audio's, the audio's noted as
+        Whisper's against the song."""
         from caracole.autochords.transcribe import SetupFailed, is_audio_error
-        from caracole.autochords.transcript import MODEL, Transcript, keep_transcript, note_heard_nothing
+        from caracole.autochords.transcript import (
+            MODEL,
+            Transcript,
+            keep_transcript,
+            note_heard_nothing,
+            note_whisper_cant_read,
+        )
         from caracole.autochords.words import Span, guard, lines_of, to_lrc, too_few_words, too_little_sung
 
         def nothing(why: str) -> Nothing:
@@ -201,16 +204,10 @@ class Hearing:
         except RuntimeError as e:
             if not is_audio_error(e):
                 raise  # a bug, deep in Whisper or in caracole: said as one, and nothing filed against the song
-            if not file_unreadable:  # auto-chords' own reader says, as the chords are made
-                from caracole.autochords.run import _short
-                from caracole.autochords.transcript import note_whisper_cant_read
+            from caracole.autochords.run import _short  # auto-chords' own reader says, as the chords are made
 
-                note_whisper_cant_read(conn, song, stamp, _short(e, song.audio_path or ""))
-                raise HearingFailed("audio", WHISPER_UNREADABLE) from e
-            from caracole.autochords.run import _unreadable
-
-            _unreadable(conn, song, e, stamp)
-            raise HearingFailed("audio", UNREADABLE) from e
+            note_whisper_cant_read(conn, song, stamp, _short(e, song.audio_path or ""))
+            raise HearingFailed("audio", WHISPER_UNREADABLE) from e
         spans = vocals.spans or [Span(0.0, vocals.length)]  # no span (``anyway`` alone gets here): the whole song
         kept, dropped = guard(heard.words, spans)
         why = too_few_words(kept, spans)

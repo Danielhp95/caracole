@@ -42,6 +42,10 @@ or Transcribe the lyrics on the song's card. With the CPU build, the nightly uni
 Audio Whisper can't read still gets its chords, wherever its words were to be heard. caracole then stops offering to
 transcribe it until the file changes, and the to-do page lists it.
 
+When caracole gets it wrong, the card lets you say otherwise. A song in which nothing sung was heard has **Transcribe
+anyway**; one whose sheet is over its transcript has **Not sung: chords only**, which drops the words and never hears
+the song again.
+
 ## Install
 
 ```sh
@@ -65,5 +69,6 @@ to half an hour on a CPU and a couple of minutes on a GPU.
 | `caracole youtube --song "Artist - Title" [--url URL] --sheet` | Makes that song's sheet from a video, now |
 | `caracole youtube --song "Artist - Title" --none` | Never uses YouTube for that song |
 | `caracole transcribe --song "Artist - Title"` | Transcribes the lyrics, then remakes the sheet |
+| `caracole transcribe --song "Artist - Title" --force` / `--none` | It is sung after all / it isn't sung |
 
 None of this runs on the phone. Details: [Audio from YouTube](usage.md#audio-from-youtube).

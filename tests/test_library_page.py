@@ -272,7 +272,7 @@ def test_the_served_page_has_the_request_form_and_its_token(conn, cfg):
     assert served == {"csrf": 't0k"<en', "busy": [wanted.id], "active": 2, "removing": [found.id], "jobs": [job],
                       "guitar": False}
     assert set(youtube) == {"ok", "why", "off"}
-    assert set(transcribe) == {"ok", "why", "songs", "time"}
+    assert set(transcribe) == {"ok", "why", "songs", "nothing", "transcribed", "time"}
     # Where the songs just requested go, and the list of requests.
     assert re.search(r'<section class="requested" id="requested"[^>]*hidden>', shell)
     assert re.search(r'<aside class="tray" id="tray"[^>]*hidden>', shell)
@@ -298,6 +298,7 @@ def test_the_served_page_lists_the_songs_offered_a_transcription(conn, cfg, tmp_
     monkeypatch.setattr(yf, "transcribe_problem", lambda cfg: None)
     html = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok"))
     assert data_of(html)["server"]["transcribe"] == {"ok": True, "why": None, "songs": [offered.id, later.id],
+                                                     "nothing": [], "transcribed": [],
                                                      "time": "up to half an hour"}
     cards_now = {s["id"]: s for s in data_of(html)["songs"]}
     assert "transcribe" not in cards_now[offered.id] and found.id in cards_now
@@ -305,7 +306,7 @@ def test_the_served_page_lists_the_songs_offered_a_transcription(conn, cfg, tmp_
     monkeypatch.setattr(yf, "transcribe_problem", lambda cfg: "built without Whisper")
     html = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok"))
     assert data_of(html)["server"]["transcribe"] == {"ok": False, "why": "Whisper isn't installed", "songs": [],
-                                                     "time": ""}
+                                                     "nothing": [], "transcribed": [], "time": ""}
     assert "server" not in data_of(page(conn, cfg))  # the file on disk offers none of it
 
 

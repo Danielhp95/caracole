@@ -476,20 +476,29 @@
   // or in the Requests tab (``transcribing``, requests.js's form). The songs offered are read again once a song's job
   // is over (``offerAfter``, ``readTranscriptions``: GET /transcribe), so a sheet from a video that found no lyrics
   // offers it at once, a transcription that failed offers it again, and one made meanwhile offers it no more.
+  // The owner's word over caracole's, the same way (``overrideOffer``): a song heard to have nothing sung
+  // (``server.transcribe.nothing``) has Transcribe anyway (``force=1``), one with a transcript kept
+  // (``server.transcribe.transcribed``) Not sung: chords only (``none=1``).
   const TRANSCRIBE = server && server.transcribe && typeof server.transcribe === "object" ? server.transcribe : null;
   const TRANSCRIBES = Boolean(TRANSCRIBE && TRANSCRIBE.ok === true);  // only then is the offer read again
-  let transcribable = new Set(TRANSCRIBES ? listOf(TRANSCRIBE.songs).map(Number) : []);
+  const offeredIn = (body, name) => new Set(body && body.ok === true ? listOf(body[name]).map(Number) : []);
+  let transcribable = offeredIn(TRANSCRIBE, "songs");
+  let nothingHeard = offeredIn(TRANSCRIBE, "nothing");
+  let unsung = offeredIn(TRANSCRIBE, "transcribed");
   const transcribeHint = () => "From the audio, " + String(TRANSCRIBE.time || "") + ".";
-  const offersTranscription = (id) => {
+  // No request of the song waits or runs, and it isn't going.
+  const freeToAsk = (id) => {
     const asked = jobOfSong(id);
-    return transcribable.has(Number(id)) && !removing.has(Number(id)) && !busy.has(Number(id)) &&
-      !(asked && isActive(asked));
+    return !removing.has(Number(id)) && !busy.has(Number(id)) && !(asked && isActive(asked));
   };
+  const offersTranscription = (id) => transcribable.has(Number(id)) && freeToAsk(id);
   const transcribing = (id) => transcribable.delete(Number(id));
+  const offeredAny = (id) => transcribable.has(id) || nothingHeard.has(id) || unsung.has(id);
   // A song that may be offered one once its job is over: its lyrics missing, and a sheet from YouTube for it (no human
-  // sheet, not ignored, no purchase: its card's ``youtubeSheet``), as a sheet from a video or a transcription leaves
-  // it.
-  const mayBeOffered = (s) => Boolean(s) && typeof s === "object" && s.lyrics === "missing" && s.youtubeSheet === true;
+  // sheet, not ignored, no purchase: its card's ``youtubeSheet``), or an auto sheet (a purchase's), as a sheet from a
+  // video or a transcription leaves it.
+  const mayBeOffered = (s) => Boolean(s) && typeof s === "object" && s.lyrics === "missing" &&
+    (s.youtubeSheet === true || s.auto === true);
   const songById = (id) => (byIndex.has(Number(id)) ? songs[byIndex.get(Number(id))] : arrived.get(Number(id)) || null);
   // A song's card made again where it was made already (open, or opened once), its offer as it is now; one never opened
   // is made with it when it opens.
@@ -517,12 +526,17 @@
     }).then((r) => (r.ok ? r.json() : null)).catch(() => null).then((body) => {
       transcribeAsking = false;
       if (body && typeof body === "object") {
-        const now = new Set(body.ok === true ? listOf(body.songs).map(Number) : []);
-        const changed = Array.from(now).filter((id) => !transcribable.has(id))
-          .concat(Array.from(transcribable).filter((id) => !now.has(id)));
-        transcribable = now;
+        const changed = new Set();
+        const differ = (was, now) => {
+          for (const id of now) if (!was.has(id)) changed.add(id);
+          for (const id of was) if (!now.has(id)) changed.add(id);
+          return now;
+        };
+        transcribable = differ(transcribable, offeredIn(body, "songs"));
+        nothingHeard = differ(nothingHeard, offeredIn(body, "nothing"));
+        unsung = differ(unsung, offeredIn(body, "transcribed"));
         for (const id of changed) cardAgain(id);
-        if (changed.length) document.dispatchEvent(new CustomEvent("caracole:transcribe"));
+        if (changed.size) document.dispatchEvent(new CustomEvent("caracole:transcribe"));
       }
       if (transcribeAgain) {
         transcribeAgain = false;
@@ -535,14 +549,14 @@
     const id = view.songId === null || view.songId === undefined ? null : Number(view.songId);
     if (!TRANSCRIBES || view.kind !== "song" || id === null) return;
     const s = view.card && typeof view.card === "object" ? view.card : songById(id);
-    if (transcribable.has(id) || mayBeOffered(s)) readTranscriptions();
+    if (offeredAny(id) || mayBeOffered(s)) readTranscriptions();
   };
   // The Requests tab's request of a song over, one this page may not follow (asked on another device): by its name.
   const requestOver = (display) => {
     if (!TRANSCRIBES) return;
     const s = songs.find((x) => x && String(x.display) === String(display)) ||
       Array.from(arrived.values()).find((x) => x && String(x.display) === String(display));
-    if (s && (transcribable.has(Number(s.id)) || mayBeOffered(s))) readTranscriptions();
+    if (s && (offeredAny(Number(s.id)) || mayBeOffered(s))) readTranscriptions();
   };
   // The song a request of the Requests tab names (``display``) when it is offered one now, its card; else null.
   const offeredSong = (display) => {
@@ -563,6 +577,32 @@
     form.append(go, el("p", "hint", transcribeHint()));
     postInPlace(form, go, s, (body) => {
       transcribing(s.id);
+      return body.job;
+    });
+    return form;
+  };
+  // The owner's word over caracole's on a song's card, served: Transcribe anyway for a song heard to have nothing
+  // sung (caracole transcribe --force: its words heard whatever the singing found), Not sung: chords only for one
+  // with a transcript kept (--none: the transcript dropped, its sheet made again of its chords alone, never heard
+  // again); posted in place as Transcribe the lyrics is, and gone once asked for.
+  const overrideOffer = (s) => {
+    const id = Number(s.id);
+    const anyway = nothingHeard.has(id);
+    if (!(anyway || unsung.has(id)) || !freeToAsk(id)) return null;
+    const form = songForm(anyway ? "transcribe-anyway" : "not-sung", "/transcribe", s);
+    form.appendChild(hidden(anyway ? "force" : "none", "1"));
+    const said = el("p", "hint", anyway ? "Nothing sung was heard in its audio." :
+      "Its words were heard from the audio, unverified.");
+    const go = el("button", "btn small", anyway ? "Transcribe anyway" : "Not sung: chords only");
+    go.type = "submit";
+    go.setAttribute("aria-label", (anyway ? "Transcribe the lyrics of " : "Not sung: make the chords alone of ") +
+      String(s.title) + " by " + String(s.artist) + (anyway ? " anyway" : ""));
+    go.title = anyway ? "Whisper hears it all the same, and the auto sheet is made again over its words." :
+      "Its transcript is dropped, the auto sheet made again of its chords alone, and it is never heard again.";
+    form.append(said, go);
+    postInPlace(form, go, s, (body) => {
+      nothingHeard.delete(id);
+      unsung.delete(id);
       return body.job;
     });
     return form;
@@ -1486,6 +1526,8 @@
     if (fromVideo) more.push(fromVideo);
     const transcribe = server ? transcribeOffer(s) : null;
     if (transcribe) more.push(transcribe);
+    const override = server ? overrideOffer(s) : null;
+    if (override) more.push(override);
     const picked = lacuerdaNote(s);
     if (picked) more.push(picked);
     if (server && s.notFound && s.status === "wanted" && !removing.has(id)) {
@@ -4619,10 +4661,12 @@
         if (fromVideo.contains(document.activeElement)) focusOn(p);
         fromVideo.remove();
       }
-      const transcribe = inItem(item, "form.transcribe");
-      if (transcribe && isActive(view)) {  // and its lyrics transcribed
-        if (transcribe.contains(document.activeElement)) focusOn(p);
-        transcribe.remove();
+      for (const offer of ["form.transcribe", "form.transcribe-anyway", "form.not-sung"]) {
+        const transcribe = inItem(item, offer);
+        if (transcribe && isActive(view)) {  // and its lyrics transcribed, or said not sung
+          if (transcribe.contains(document.activeElement)) focusOn(p);
+          transcribe.remove();
+        }
       }
       const picker = inItem(item, "form.pick-form");
       if (picker && isActive(view)) {  // POST /review would refuse a pick now: the line is drawn again after

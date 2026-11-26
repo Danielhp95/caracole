@@ -1117,7 +1117,7 @@ def test_autochords_section_copes_with_a_bad_timestamp(conn, cfg):
     assert "nonsense" not in text and "B - U" not in text
 
 
-WORDS_UNHEARD = "Lyrics couldn't be transcribed in the last run"
+WORDS_UNHEARD = "Lyrics that couldn't be transcribed"
 
 
 def test_the_todo_page_says_why_words_werent_heard(conn, cfg):
@@ -1141,22 +1141,27 @@ def test_the_todo_page_says_why_words_werent_heard(conn, cfg):
 
 def test_the_todo_page_lists_the_songs_whisper_cant_read(conn, cfg, tmp_path):
     # Their chords are made: they aren't under the files auto-chords can't read, but here, why their sheets have no
-    # words, until their audio changes.
+    # words, while that is all that keeps their words from being heard: until their audio changes, a site has their
+    # lyrics, they are ignored or a human sheet comes.
+    from test_autochords_transcript import youtube_song
+
     from caracole.autochords.transcript import note_whisper_cant_read
 
-    s = add_song(conn, "Nick Cani", "Vikingos veganos")
-    audio = tmp_path / "a.m4a"
-    audio.write_bytes(b"audio")
-    update_song(conn, s.id, audio_path=str(audio), audio_mtime=os.stat(audio).st_mtime)
-    s = get_song(conn, s.id)
+    s = youtube_song(conn, tmp_path, "Nick Cani", "Vikingos veganos")
     note_whisper_cant_read(conn, s, "2026-11-25T04:12:00Z", "RuntimeError: Failed to load audio: moov atom")
     text = todo(conn, cfg)
     assert f"## {WORDS_UNHEARD} (1)\n" in text and AUTOCHORDS not in text
     section = section_of(text, WORDS_UNHEARD)
     assert "- **Nick Cani - Vikingos veganos**: Whisper can't read its audio · RuntimeError: Failed to load audio: " \
            "moov atom" in section
-    update_song(conn, s.id, audio_mtime=(s.audio_mtime or 0) + 5)
-    assert WORDS_UNHEARD not in todo(conn, cfg)
+    assert "--force" in section
+    for change, back in (({"lyrics_status": "found"}, {"lyrics_status": "missing"}),
+                         ({"status": "ignored"}, {"status": s.status}),
+                         ({"audio_mtime": (s.audio_mtime or 0) + 5}, {"audio_mtime": s.audio_mtime})):
+        update_song(conn, s.id, **change)
+        assert WORDS_UNHEARD not in todo(conn, cfg), change
+        update_song(conn, s.id, **back)
+    assert WORDS_UNHEARD in todo(conn, cfg)
 
 
 # --- MuseScore: links and the inbox -------------------------------------------------------------

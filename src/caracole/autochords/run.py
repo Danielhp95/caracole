@@ -45,9 +45,9 @@ Two kinds of failure are told apart, because only one is the purchase's:
   song alone. kv ``autochords:failed:<song id>`` keeps the file's path and
   mtime, so it isn't decoded again every night: the song is tried again once
   its file changes (a new download, a converted copy), and the record is
-  dropped once the song's file changes or goes. A transcription that can't
-  read the file files it the same way (transcribe_job.py), and transcript.py
-  offers such a song no transcription.
+  dropped once the song's file changes or goes. transcript.py offers such a
+  song no transcription. (Whisper's decoder refusing a file auto-chords reads
+  is Whisper's alone: transcript.py ``note_whisper_cant_read``.)
 - **A setup that can't work** blames no purchase: model files missing or
   unusable, models that fail on a generated test tone (a sandbox that stops
   them, a checkpoint that won't load), or a sheet that can't be kept in the
@@ -269,7 +269,7 @@ def autochords_pending(
     listening = _Listening(hearing, transcriptions)
     for listed in turns.each(songs):
         song = listening.first(conn, cfg, listed, turns, stats, stamp, told)
-        if song is None:  # left the book while a lookup went first, or a bug hearing it: counted as one
+        if song is None:  # left the book while its words were heard and a lookup went first
             continue
         overrides = turns.overrides
         failure = _known_failure(conn, song)  # first, so a failure goes when its file does
@@ -384,7 +384,7 @@ class _Listening:
                 return song
         told(STEPS[5])
         try:  # audio Whisper can't load noted as Whisper's alone: the vocals read it as the chords do
-            heard = hearing.words(conn, song, vocals, stamp, on_doing=_quiet, file_unreadable=False)
+            heard = hearing.words(conn, song, vocals, stamp, on_doing=_quiet)
         except HearingFailed as e:
             if e.kind == "setup":
                 return self._stop(stats, song, e.words)
@@ -561,8 +561,8 @@ def _failed_display(conn: sqlite3.Connection, song_id: int) -> str | None:
 
 
 def _failed_key(song_id: int) -> str:
-    """kv: the audio file of the song that couldn't be read, written here (and by the transcription job, through
-    ``_unreadable``); transcript.py reads it too, offering such a song no transcription."""
+    """kv: the audio file of the song that couldn't be read, written here (``_unreadable``); transcript.py reads it
+    too, offering such a song no transcription."""
     return f"{UNREADABLE}{song_id}"
 
 

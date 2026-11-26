@@ -555,21 +555,24 @@ def _autochords_failures(conn: sqlite3.Connection, cfg: Config) -> tuple[list[st
                    f"Auto-chords tries a changed file again on its next run{last}.{youtube}")
 
 
-WORDS_UNHEARD_TITLE = "Lyrics couldn't be transcribed in the last run"
+WORDS_UNHEARD_TITLE = "Lyrics that couldn't be transcribed"
 
 
-def _words_unheard(conn: sqlite3.Connection, songs: list[Song]) -> tuple[list[str], str, bool]:
+def _words_unheard(conn: sqlite3.Connection, cfg: Config, songs: list[Song],
+                   overrides: Overrides) -> tuple[list[str], str, bool]:
     """The songs whose audio Whisper can't load (transcript.py ``whisper_cant_read``: their chords made, their words
-    never heard until the audio changes), and why the last auto-chords run heard no words a song waited for, from kv
+    never heard until the audio changes), while that is all that keeps their words from being heard
+    (``why_not_offered`` says so: lyrics still missing, not ignored, no human sheet, that audio still theirs), whichever
+    hearing noted it, the nightly pass or a job; and why the last auto-chords run heard no words a song waited for, from kv
     ``autochords:status``'s ``transcribe_problem`` (``autochords.run.autochords_pending``): its setup failing, or this
     machine (the GPU build's nightly unit sees no GPU). The songs are the items, the reason the intro: the section
     shows for either (its third member)."""
-    from caracole.autochords.transcript import whisper_cant_read
+    from caracole.autochords.transcript import WHISPER_UNREADABLE_WHY, whisper_cant_read, why_not_offered
 
     items = []
     for song in songs:
         error = whisper_cant_read(conn, song)
-        if error is not None:
+        if error is not None and why_not_offered(conn, cfg, song, overrides) == WHISPER_UNREADABLE_WHY:
             items.append(f"- **{md(song.display)}**: Whisper can't read its audio" + (f" · {md(error)}" if error else ""))
     intro = []
     status = kv_get_json(conn, "autochords:status", default=None)
@@ -584,7 +587,8 @@ def _words_unheard(conn: sqlite3.Connection, songs: list[Song]) -> tuple[list[st
                      "from a video, or Transcribe the lyrics on a song's card.")
     if items:
         intro.append("Whisper can't load the audio of these songs, so their sheets have the chords alone. A new file "
-                     "or another video under `[youtube]` gets their words heard.")
+                     "or another video under `[youtube]` gets their words heard; after an ffmpeg or Whisper upgrade, "
+                     "`caracole transcribe --song \"Artist - Title\" --force` tries one again.")
     return items, "\n\n".join(intro), bool(intro)
 
 
@@ -895,7 +899,7 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
                 "", *_near_names_intro(songs), *review]
     artists, n_artists = _artists_to_find(conn, songs, overrides)
     unread, unread_intro = _autochords_failures(conn, cfg)
-    unheard, unheard_intro, unheard_said = _words_unheard(conn, songs)
+    unheard, unheard_intro, unheard_said = _words_unheard(conn, cfg, songs, overrides)
     ms_pages, ms_intro, n_ms, ms_blocking = _musescore_pages(conn, cfg, songs, overrides, now)
     if route_problem(cfg) is None:  # caracole takes these songs' audio from YouTube
         states = youtube if youtube is not None else song_states(conn, overrides, now)

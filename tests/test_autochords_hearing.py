@@ -135,28 +135,30 @@ def test_anyway_with_no_word_heard_is_still_nothing_sung(conn, cfg):
     (Separator(), Transcriber(fail=tx.SetupFailed("the GPU failed: CUDA out of memory")), "setup",
      "the GPU failed: CUDA out of memory"),
     (Separator(), Transcriber(fail=RuntimeError("Failed to load audio: [mov,mp4] moov atom not found")), "audio",
-     "can't read the audio"),
+     "Whisper can't read the audio"),
 ], ids=["the separator", "the GPU", "the audio"])
-def test_a_failure_says_whose_it_is_and_only_the_audios_is_filed(conn, cfg, separator, transcriber, kind, words):
-    song = offered(conn, cfg)
-    with pytest.raises(HearingFailed) as failed:
-        hear(cfg, conn, song, separator=separator, transcriber=transcriber)
-    assert (failed.value.kind, failed.value.words, str(failed.value)) == (kind, words, words)
-    assert (kv_get(conn, f"autochords:failed:{song.id}") is not None) == (kind == "audio")
-    assert noted(conn, song) is None and kv_get(conn, f"{TRANSCRIPT}{song.id}") is None
-
-
-def test_audio_whisper_cant_read_is_filed_only_where_the_caller_says(conn, cfg):
-    # Whisper reads the mix through the ffmpeg program, auto-chords through its own reader, which the vocals read it
-    # with already: a caller that makes the chords all the same files nothing against the chords, and auto-chords
-    # gives its own verdict. Whisper's is noted for that audio alone: no transcription is offered over it again, nor
-    # by hand (``anyway``: it would fail the same way), until the audio changes.
+def test_a_failure_says_whose_it_is_and_only_the_audios_is_noted(conn, cfg, separator, transcriber, kind, words):
     from caracole.autochords.transcript import WHISPER_CANT_READ
 
     song = offered(conn, cfg)
     with pytest.raises(HearingFailed) as failed:
-        hear(cfg, conn, song, transcriber=Transcriber(fail=RuntimeError("Failed to load audio: moov atom not found")),
-             file_unreadable=False)
+        hear(cfg, conn, song, separator=separator, transcriber=transcriber)
+    assert (failed.value.kind, failed.value.words, str(failed.value)) == (kind, words, words)
+    assert kv_get(conn, f"autochords:failed:{song.id}") is None  # never as audio auto-chords can't read
+    assert (kv_get(conn, f"{WHISPER_CANT_READ}{song.id}") is not None) == (kind == "audio")
+    assert noted(conn, song) is None and kv_get(conn, f"{TRANSCRIPT}{song.id}") is None
+
+
+def test_audio_whisper_cant_read_is_noted_as_whispers_alone(conn, cfg):
+    # Whisper reads the mix through the ffmpeg program, auto-chords through its own reader, which the vocals read it
+    # with already: the hearing files nothing against the chords, and auto-chords gives its own verdict. Whisper's is
+    # noted for that audio alone: no transcription is offered over it again until the audio changes, but by hand
+    # (``anyway``: after an ffmpeg or Whisper upgrade).
+    from caracole.autochords.transcript import WHISPER_CANT_READ
+
+    song = offered(conn, cfg)
+    with pytest.raises(HearingFailed) as failed:
+        hear(cfg, conn, song, transcriber=Transcriber(fail=RuntimeError("Failed to load audio: moov atom not found")))
     assert (failed.value.kind, failed.value.words) == ("audio", "Whisper can't read the audio")
     assert kv_get(conn, f"autochords:failed:{song.id}") is None
     assert kv_get_json(conn, f"{WHISPER_CANT_READ}{song.id}") == {
@@ -164,7 +166,7 @@ def test_audio_whisper_cant_read_is_filed_only_where_the_caller_says(conn, cfg):
         "error": "RuntimeError: Failed to load audio: moov atom not found"}
     song = get_song(conn, song.id)
     assert why_not_offered(conn, cfg, song, Overrides()) == "Whisper can't read its audio"
-    assert why_not_offered(conn, cfg, song, Overrides(), anyway=True) == "Whisper can't read its audio"
+    assert why_not_offered(conn, cfg, song, Overrides(), anyway=True) is None
     changed = replace(song, audio_mtime=(song.audio_mtime or 0) + 5)
     assert why_not_offered(conn, cfg, changed, Overrides()) is None
 
