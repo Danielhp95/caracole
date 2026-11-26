@@ -68,7 +68,7 @@ _PER_SONG_KV = ("render:", "render:files:", "render:export:", "render:progressio
                 "ug:blocked:", "youtube:", "transcript:", "transcribe:none:",
                 "transcribe:unreadable:", "transcribe:failed:",
                 "sheet_versions:same:",
-                "sheet_versions:yours:", "sheet_versions:unkeepable:")
+                "sheet_versions:yours:", "sheet_versions:unkeepable:", "lyrics-search:")
 
 
 def utc_now_iso() -> str:

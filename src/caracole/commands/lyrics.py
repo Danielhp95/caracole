@@ -32,6 +32,8 @@ a harptabs.com artist runs. Its last line starts as ``caracole lacuerda --artist
 the lookups' lane (``_common.exclusive(..., lane=True)``), where another lookup goes first in
 their client's pause before each request but its first; LaCuerda's search checks its gate and
 sends its one request in one turn. Each one's good run is what its own client was answered.
+``caracole lyrics --song X --as "A - T"`` lists what the three lyrics sites have under a name typed, in the lane too
+(lyrics_search.py), with a client a site; it changes no lyrics.
 ``caracole gametabs --index`` reads gametabs.net's game pages into its local index
 (gametabs_index.py), the games of your songs first, the same way: their tabs' composers and
 instruments, so that a song is found by its composer. ``caracole ireal`` reads iReal Pro's forum's sitemaps and
@@ -97,9 +99,27 @@ LACUERDA_SEARCHES_PER_HOUR = 20  # lacuerda_search.SEARCHES_PER_HOUR, for the he
 
 def register(app: typer.Typer) -> None:
     @app.command("lyrics")
-    def lyrics_cmd(ctx: typer.Context) -> None:
+    def lyrics_cmd(
+        ctx: typer.Context,
+        song: str | None = typer.Option(
+            None, "--song", metavar='"ARTIST - TITLE"',
+            help="With --as: the song whose lyrics the sites are asked for under another name.",
+        ),
+        asked: str | None = typer.Option(
+            None, "--as", metavar='"ARTIST - TITLE"',
+            help="With --song: list what LRCLIB, Megalobiz and AZLyrics have under this name, now, at a lookup's "
+                 "pace, and note it under \\[lyrics] so the nights ask under it too. Changes no lyrics.",
+        ),
+    ) -> None:
         """Fetch lyrics from LRCLIB for songs that have none yet, timed ones from Megalobiz, then AZLyrics' where none."""
-        _lyrics(load_cfg(ctx))
+        cfg = load_cfg(ctx)
+        if song is None and asked is None:
+            _lyrics(cfg)
+            return
+        if song is None or asked is None:
+            _common.fail("--song and --as go together: caracole lyrics --song \"Artist - Title\" --as \"Artist - "
+                         "Title\".", 2)
+        _lyrics_as(cfg, song, asked)
 
     @app.command("lacuerda")
     def lacuerda_cmd(
@@ -261,6 +281,77 @@ def _lyrics(cfg: Config) -> None:
     handed = _common.handoffs()
     _azlyrics(cfg, overrides)
     _sheets_with_lyrics(cfg, _common.overrides_since(cfg, overrides, handed))
+
+
+def _typed_name(cfg: Config, text: str) -> tuple[str, str]:
+    """The artist and the title a name typed for ``--as`` says: read by song_names.py's one parser of free text, each
+    part then cleaned and capped as ``[lyrics]``' ``as`` is (``lyrics._asked_part``); exit 2 for a text that doesn't
+    say who its artist is, or a part that cleans to nothing."""
+    import unicodedata
+
+    from caracole import db
+    from caracole.lyrics import _asked_part
+    from caracole.song_names import read_names
+
+    kept = "".join(c for c in text if c.isspace() or unicodedata.category(c) != "Cc")
+    try:
+        conn: sqlite3.Connection | None = db.connect(cfg.db_path)
+    except (OSError, sqlite3.Error):
+        conn = None
+    try:
+        named = read_names(conn, kept)
+    finally:
+        if conn is not None:
+            conn.close()
+    artist, title = (_asked_part(part) for part in named) if named is not None else ("", "")
+    if not artist or not title:
+        _common.fail(f"--as: expected \"Artist - Title\", got {text!r}", 2)
+    return artist, title
+
+
+def _clock(seconds: float) -> str:
+    whole = round(seconds)
+    return f"{whole // 60}:{whole % 60:02d}"
+
+
+def _lyrics_as(cfg: Config, display: str, typed: str) -> None:
+    """List what the lyrics sites have under a name you type for a song (lyrics_search.py): the name noted under
+    ``[lyrics]`` first, then each site asked once, in the lookups' lane, the rows numbered. A site that fails, waits
+    or blocks says so and the others are listed; it exits 0 whatever the sites answered, since nothing changed.
+
+    Its last line starts with what came of it, which caracole serve's request line reads: "Searched: " (rows),
+    "Nothing found: " (every site asked answered none) or "Not searched: " (no rows, a site failed or waited)."""
+    from caracole.lyrics_search import FAR, SITES, is_own_name, last_line, search_lyrics
+
+    name = _typed_name(cfg, typed)
+    overrides = load_ovr(cfg)
+    with exclusive(cfg, f"lyrics --as {display}", lane=True), closing(open_db(cfg)) as conn:
+        song = _common.song_named(conn, display, overrides)
+        found = search_lyrics(cfg, conn, song, name, now=utcnow())
+    audio = f" (its audio is {_clock(found.length)})" if found.length else ""
+    noted = ("; the song's own name, so none is kept under [lyrics]" if is_own_name(song, name)
+             else "; noted under [lyrics]")
+    typer.echo(f"Asked as {found.name}{audio}{noted}.")
+    for n, row in enumerate(found.rows, 1):
+        parts = [f"{row.artist or '(no artist)'} - {row.title}"]
+        if row.album:
+            parts.append(row.album)
+        if row.duration:
+            far = found.length is not None and abs(row.duration - found.length) > FAR
+            parts.append(_clock(row.duration) + (f", audio {_clock(found.length)}" if far else ""))
+        parts += ["timed"] * row.timed + ["best fit"] * row.best
+        typer.echo(f"{n:>2}. {provider_name(row.site):<10} {' · '.join(parts)}")
+    for site in SITES:
+        if any(row.site == site for row in found.rows):
+            continue
+        said, who = found.said.get(site, ""), provider_name(site)
+        typer.echo(f"{said[:1].upper()}{said[1:]}." if who in said else f"{who}: {said}.")
+    if found.instrumental:
+        typer.echo(f"{plural(found.instrumental, 'record')} marked instrumental "
+                   f"{'isn\'t' if found.instrumental == 1 else 'aren\'t'} listed.")
+    if found.rows:
+        typer.echo(f'Take one: caracole lyrics --song "{song.display}" --pick 1')
+    typer.echo(last_line(found))
 
 
 def _megalobiz(cfg: Config, overrides: Overrides) -> None:

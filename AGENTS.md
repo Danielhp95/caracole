@@ -123,6 +123,20 @@ sitemaps list by bare ids alone, and the fetch their page.
     name holds), `picked_said` ("the record you picked: lrclib 9", "… is gone: …", "… isn't asked now: …", an LRCLIB
     record within its 30 days too). A song with a record and no lyrics is never heard (transcript.py
     `picked_without_lyrics`).
+- lyrics_search.py: `caracole lyrics --song X --as "A - T"` (commands/lyrics.py `_lyrics_as`, the typed text read by
+  song_names.py's `read_names`, each part cleaned as `as` is), an interactive lookup in the lane: the name written as
+  `as` first (`set_lyrics_name`; the song's own name takes it out), then `search_lyrics` asks each site once by a
+  lookup's client of its own: LRCLIB's `/api/search` (its query kept, `Search.lrclib`), `/api/get` only when no record
+  of it fits (`pick_candidate` over the records with lyrics), Megalobiz's search, AZLyrics' artist page (none for a
+  name with no Latin letter): 2–4 requests, the cache's answer for a name asked before. Rows (`Row`: `record`, site,
+  names, album, length, timed, `best`, `fits`), the best fit first (LRCLIB's `pick_candidate`, else `pick_result`, else
+  `pick_song`), then those that fit, then the rest, `MOST_ROWS` (40); an instrumental or empty record counted, never
+  listed; a record only by an id the site answered, of `[lyrics]`' shape (`overrides._LYRICS_RECORD_IDS`), checked as
+  it is read and again from kv. A site off, cooling, spent, blocked (no alert) or failing is said in `said`, never a
+  miss, the others listed; `last_line`: "Searched: " rows, "Nothing found: " every site asked answered none, "Not
+  searched: " else. Kept in kv `lyrics-search:<song id>` (`KV`, in `songs._PER_SONG_KV` and SongKv.kt; no unit's,
+  never crossing to the phone), replaced by the next search, never under an id another song took meanwhile;
+  `kept_search` gives it for `PICKABLE_FOR` (7 days), `row_of` a record's row. It changes no lyrics.
 
 #### megalobiz
 
@@ -3750,8 +3764,8 @@ picks one).
 #### Bulk work
 
 - The nightly run (its index refresh and UG's artist directory included), `caracole index build` and every command
-  but `caracole get`, `caracole versions`, `caracole lacuerda --artist` and `--search`, `caracole harptabs --artist`
-  and `caracole ug --link`.
+  but `caracole get`, `caracole versions`, `caracole lacuerda --artist` and `--search`, `caracole harptabs --artist`,
+  `caracole ug --link` and `caracole lyrics --song --as`.
 - Budgets per run (`config.DEFAULT_PROVIDERS`):
   - `ug` 60, and UG's artist directory a budget of its own, `[ug_directory].budget` (25,000; below);
   - `lrclib` 200;
@@ -3820,7 +3834,9 @@ picks one).
   - `caracole harptabs --artist`, one artist's page (an artist's Songs, once in 30 days);
   - `caracole ug --link`, a UG page pasted into the library page's box: a tab's page, then its artist's lists, or an
     artist's lists (ug/link.py), each list page 30 days from the cache;
-  - and `caracole lacuerda --search`, one query of LaCuerda's search (one request).
+  - `caracole lacuerda --search`, one query of LaCuerda's search (one request);
+  - and `caracole lyrics --song --as`, what the three lyrics sites list under a name typed (lyrics_search.py, 2–4
+    requests, one client a site).
 - `caracole lacuerda --search`:
   - a query at most once in 30 days, kv `lacuerda:search:<key>`, its words' key in alphabetical order;
   - none once your library or LaCuerda's index answers it well, `lacuerda_search.answered`, checked again after the
@@ -4383,8 +4399,8 @@ picks one).
     it;
   - one its process left, or untouched for `TICKET_STALE` s, a lookup killed while it waited, no longer counts.
 - Lookups take the lock in the lane (`exclusive(..., lane=True)`, which implies `interactive`): `caracole get`
-  (get.py `_Lookup.run`), `ug --link` (commands/ug.py `_read`), `lacuerda --search` and `--artist`, and `harptabs
-  --artist` (commands/lyrics.py), the five
+  (get.py `_Lookup.run`), `ug --link` (commands/ug.py `_read`), `lacuerda --search` and `--artist`, `harptabs
+  --artist` and `lyrics --song --as` (commands/lyrics.py), the six
   (`test_commands_lock.py::test_lookups_take_the_lock_in_the_lane_what_the_owner_asked_for_now_as_a_lookup_and_bulk_work_neither`):
   - a shared flock of `state_dir/caracole.lock.lane` (`LANE_NAME`) from before they ask for the lock until they let
     go of it (`_release`), so a lookup run in a process that goes on, or whose acquire was interrupted, leaves it;

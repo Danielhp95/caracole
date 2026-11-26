@@ -481,6 +481,7 @@ LANE = [
     ("lacuerda", "--search=calamaro flaca", "--progress"),
     ("lacuerda", "--artist=andres-calamaro"),
     ("harptabs", "--artist=Radiohead"),
+    ("lyrics", "--song=A - T", "--as=B - U"),
 ]
 
 

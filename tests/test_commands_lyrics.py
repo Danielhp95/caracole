@@ -1182,7 +1182,7 @@ def test_registering_the_commands_imports_neither_pass(tmp_path):
     passes = ("caracole.lyrics", "caracole.lacuerda", "caracole.lacuerda_fetch", "caracole.lacuerda_index",
               "caracole.lacuerda_search", "caracole.gtptabs", "caracole.gtptabs_fetch", "caracole.musescore",
               "caracole.musescore_fetch", "caracole.megalobiz", "caracole.megalobiz_fetch", "caracole.azlyrics",
-              "caracole.azlyrics_fetch")
+              "caracole.azlyrics_fetch", "caracole.lyrics_search", "caracole.song_names", "httpx", "rapidfuzz")
     code = (
         "import sys, typer\n"
         "from caracole.commands import lyrics\n"
@@ -1290,3 +1290,72 @@ def test_lyrics_with_no_auto_sheet_to_give_them_to_says_nothing_of_one(tmp_path,
     result = run(tmp_path, "lyrics")
     assert result.exit_code == 0, result.output
     assert "Auto sheets" not in result.stdout
+
+
+# --- caracole lyrics --song --as: what the lyrics sites list under a name you type --------------------------------
+
+
+def test_lyrics_as_lists_numbered_rows_and_ends_in_its_last_line(tmp_path, sites, quick):
+    from test_lyrics_search import Lrclib, lrc
+
+    (tmp_path / "state").mkdir()
+    conn = open_db(tmp_path)
+    try:
+        add_song(conn, "Nick Cani", "Vikingos veganos (Video Oficial)", duration_ms=200000)
+    finally:
+        conn.close()
+    sites.lrclib = Lrclib([lrc(77), lrc(78, track="Vikingos veganos (Live)", album="En vivo", duration=271.0,
+                                      synced=None),
+                           lrc(5, instrumental=True, plain=None, synced=None)])
+    sites.megalobiz.records = [record(lrc_id=31, title="Vikingos veganos", artist="", duration=200.0)]
+    result = run(tmp_path, "lyrics", "--song=Nick Cani - Vikingos veganos (Video Oficial)",
+                 "--as=Nick Cani - Vikingos veganos")
+    assert result.exit_code == 0, result.output
+    assert result.stdout.splitlines() == [
+        "Asked as Nick Cani - Vikingos veganos (its audio is 3:20); noted under [lyrics].",
+        " 1. LRCLIB     Nick Cani - Vikingos veganos · Pruebas · 3:20 · timed · best fit",
+        " 2. LRCLIB     Nick Cani - Vikingos veganos (Live) · En vivo · 4:31, audio 3:20",
+        " 3. Megalobiz  (no artist) - Vikingos veganos · 3:20 · timed",
+        "AZLyrics: no artist page for Nick Cani.",
+        "1 record marked instrumental isn't listed.",
+        'Take one: caracole lyrics --song "Nick Cani - Vikingos veganos (Video Oficial)" --pick 1',
+        "Searched: LRCLIB and Megalobiz list 3 records for “Nick Cani - Vikingos veganos”.",
+    ]
+    conn = open_db(tmp_path)
+    try:
+        assert get_song(conn, 1).lyrics_status == "pending"  # a search changes no lyrics
+    finally:
+        conn.close()
+    assert 'as = "Nick Cani - Vikingos veganos"' in (tmp_path / "lib" / "overrides.toml").read_text(encoding="utf-8")
+
+
+def test_lyrics_as_of_a_name_that_finds_nothing_and_a_wait(tmp_path, sites, quick):
+    (tmp_path / "state").mkdir()
+    conn = open_db(tmp_path)
+    try:
+        add_song(conn, "孟维来", "野人『MV』", duration_ms=None)
+        record_block(conn, "megalobiz", datetime.now(UTC), "429")
+    finally:
+        conn.close()
+    result = run(tmp_path, "lyrics", "--song=孟维来 - 野人『MV』", "--as=孟维来 - 野人")
+    assert result.exit_code == 0, result.output
+    lines = result.stdout.splitlines()
+    assert lines[0] == "Asked as 孟维来 - 野人; noted under [lyrics]."
+    assert lines[1:3] == ["LRCLIB: nothing listed.", lines[2]] and lines[2].startswith("Waiting out Megalobiz until ")
+    assert lines[3] == "AZLyrics: no artist page for 孟维来."
+    assert lines[-1].startswith("Not searched: waiting out Megalobiz until ") and "Take one" not in result.stdout
+
+
+@pytest.mark.parametrize("args", [
+    ["--song=A - T"], ["--as=B - U"], ["--song=A - T", "--as=nobody"], ["--song=A - T", "--as= - U"],
+], ids=["song alone", "as alone", "an as with no artist", "an as with an empty part"])
+def test_lyrics_options_that_dont_go_together_exit_2(tmp_path, sites, args):
+    (tmp_path / "state").mkdir()
+    conn = open_db(tmp_path)
+    try:
+        add_song(conn, "A", "T")
+    finally:
+        conn.close()
+    result = run(tmp_path, "lyrics", *args)
+    assert result.exit_code == 2, result.output
+    assert sites.lrclib.requests == [] and not (tmp_path / "lib" / "overrides.toml").exists()
