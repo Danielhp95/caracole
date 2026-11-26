@@ -20,7 +20,9 @@ from conftest import add_song
 
 from caracole.config import ProviderPolicy
 from caracole.http import PoliteClient, ProviderBlocked
-from caracole.lyrics import LyricsStats, fetch_pending_lyrics, lyrics_from_json
+from caracole.db import kv_get
+from caracole.lyrics import ASKED_MOST, FAILED, LyricsStats, asked_as, fetch_pending_lyrics, lyrics_from_json
+from caracole.overrides import load_overrides
 from caracole.songs import get_song, update_song
 
 FIXTURES = Path(__file__).parent / "fixtures" / "lrclib"
@@ -42,6 +44,7 @@ class FakeLrclib:
 
     ``/api/get`` finds a record by artist and track, and by album and duration
     (±2 s) when they are sent; a miss answers ``get_miss``, its documented 404.
+    ``/api/get/{id}`` finds a record by its id, else the 404.
     ``/api/search`` lists the records with that track name. ``broken`` maps an
     artist, and ``failing`` an endpoint ("get", "search"), to the status every
     request about it gets. Every request that reaches it is recorded, and every
@@ -64,6 +67,11 @@ class FakeLrclib:
             return httpx.Response(self.broken[params["artist_name"]], json={"name": "Error"})
         if endpoint in self.failing:
             return httpx.Response(self.failing[endpoint], text="Bad Gateway")
+        if endpoint.startswith("get/"):  # a record by its id
+            for r in self.records:
+                if str(r["id"]) == endpoint.removeprefix("get/"):
+                    return httpx.Response(200, json=r)
+            return httpx.Response(404, json={"name": "TrackNotFound"})
         if endpoint == "get":
             for r in self.records:
                 if self._gets(r, params):
@@ -608,3 +616,101 @@ def test_a_lookup_asks_for_its_own_songs_lyrics_alone(conn, tmp_path):
     assert stats == LyricsStats(tried=1, found=1)
     assert get_song(conn, newer.id).lyrics_status == "pending"
     assert all(params["track_name"] == "De Música Ligera" for _, params in lrclib.requests)
+
+
+# --- [lyrics]: the name asked under, the record picked ----------------------------------------------------------------
+
+YEREN = "孟维来 - 野人『不再借世人的手 替我开脱』『动态歌词MV』"
+
+
+def lyrics_table(tmp_path: Path, display: str, entry: str):
+    """``Overrides.lyrics`` of an overrides.toml whose ``[lyrics]`` holds ``entry`` for ``display``."""
+    path = tmp_path / "overrides.toml"
+    path.write_text(f'[lyrics]\n"{display}" = {entry}\n', encoding="utf-8")
+    return load_overrides(path).lyrics
+
+
+def yeren(conn, **fields):
+    artist, title = YEREN.split(" - ", 1)
+    song = add_song(conn, artist, title, album="动态歌词", duration_ms=251000)
+    if fields:
+        update_song(conn, song.id, **fields)
+    return get_song(conn, song.id)
+
+
+def plain_lyrics() -> str:
+    from caracole.lyrics import Lyrics
+
+    return Lyrics(plain="一行", synced=None, instrumental=False, duration=251.0, lrclib_id=9, raw={}).to_json()
+
+
+def test_a_song_with_a_lyrics_name_is_asked_under_it_with_no_album(conn, tmp_path):
+    song = yeren(conn)
+    lrclib = FakeLrclib([load("get_by_id.json")])
+    stats = run(lrclib, conn, tmp_path, picks=lyrics_table(tmp_path, YEREN, '{ as = "孟维来 - 野人" }'))
+    assert stats == LyricsStats(tried=1, found=1)
+    assert lrclib.requests == [("get", {"artist_name": "孟维来", "track_name": "野人", "duration": "251"})]
+    assert lyrics_from_json(get_song(conn, song.id).lyrics_json).lrclib_id == 28399373
+
+
+def test_a_lyrics_name_is_asked_cleaned_and_capped_and_one_of_nothing_is_no_name(conn, tmp_path):
+    from caracole.overrides import LyricsPick
+    from caracole.overrides import override_key as key
+
+    song = yeren(conn)
+    def asked(artist, title):
+        return asked_as(song, {key(song.display): LyricsPick(asked=(artist, title), record=None)})
+
+    assert asked("孟维来\n", "野\t人\x00 \x1b[31m") == ("孟维来", "野 人 [31m", None)
+    assert asked("\u200b孟维来\ufeff", "野人") == ("孟维来", "野人", None)
+    assert asked("A" * 300, "野人")[0] == "A" * ASKED_MOST
+    assert asked("\x00\x01", "野人") == (song.artists[0], song.title, song.album)  # cleaned to nothing: no name
+    assert asked_as(song, None) == asked_as(song, {}) == (song.artists[0], song.title, "动态歌词")
+
+
+def test_a_pending_song_with_a_picked_lrclib_record_gets_that_record_by_its_id(conn, tmp_path):
+    song = yeren(conn)
+    lrclib = FakeLrclib([load("get_by_id.json")])
+    picks = lyrics_table(tmp_path, YEREN, '{ as = "孟维来 - 野人", record = "lrclib:28399373" }')
+    assert run(lrclib, conn, tmp_path, picks=picks) == LyricsStats(tried=1, found=1)
+    assert lrclib.requests == [("get/28399373", {})]
+    stored = get_song(conn, song.id)
+    assert stored.lyrics_status == "found"
+    kept = lyrics_from_json(stored.lyrics_json)
+    assert (kept.provider, kept.lrclib_id, kept.url) == ("lrclib", 28399373, None)
+    here = folder(tmp_path, "孟维来", song.title)
+    assert (here / "lyrics.lrc").read_text(encoding="utf-8").startswith("[00:18.20] 示例歌词 第一行")
+
+
+def test_a_song_with_its_picked_record_is_asked_by_no_pass(conn, tmp_path):
+    # Found: LRCLIB asks a found song nothing anyway; another site's record keeps it from LRCLIB even while pending.
+    found = yeren(conn, lyrics_status="found", lyrics_json=plain_lyrics(), lyrics_at=STAMP)
+    lrclib = FakeLrclib([load("get_by_id.json")])
+    assert run(lrclib, conn, tmp_path, picks=lyrics_table(tmp_path, YEREN, '{ record = "lrclib:28399373" }')) \
+        == LyricsStats()
+    update_song(conn, found.id, lyrics_status="pending", lyrics_json=None, lyrics_at=None)
+    assert run(lrclib, conn, tmp_path, picks=lyrics_table(tmp_path, YEREN, '{ record = "megalobiz:24519" }')) \
+        == LyricsStats()
+    assert lrclib.requests == []
+
+
+def test_a_picked_record_gone_is_a_miss_and_an_error_is_none(conn, tmp_path):
+    song = yeren(conn)
+    picks = lyrics_table(tmp_path, YEREN, '{ record = "lrclib:28399373" }')
+    broken = FakeLrclib(failing={"get/28399373": 502})
+    assert run(broken, conn, tmp_path, picks=picks).errors == 1
+    stored = get_song(conn, song.id)
+    assert (stored.lyrics_status, stored.lyrics_at) == ("pending", None)  # an error: never a miss
+    assert kv_get(conn, f"{FAILED}{song.id}") == STAMP
+
+    gone = FakeLrclib()
+    assert run(gone, conn, tmp_path, picks=picks) == LyricsStats(tried=1, missing=1)
+    assert gone.requests == [("get/28399373", {})]
+    stored = get_song(conn, song.id)
+    assert (stored.lyrics_status, stored.lyrics_at) == ("missing", STAMP)  # the pick stays; the song has none
+    assert kv_get(conn, f"{FAILED}{song.id}") is None
+
+    assert run(gone, conn, tmp_path, NOW + timedelta(days=29), picks=picks) == LyricsStats()
+    gone.records.append(load("get_by_id.json"))  # asked again after 30 days, past the cache
+    assert run(gone, conn, tmp_path, NOW + timedelta(days=31), picks=picks) == LyricsStats(tried=1, found=1)
+    assert gone.requests == [("get/28399373", {})] * 2

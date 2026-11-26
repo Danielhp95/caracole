@@ -10,6 +10,7 @@ import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.Kept
 import io.github.danielhp95.caracole.core.library.LibraryStore
+import io.github.danielhp95.caracole.core.library.LyricsPick
 import io.github.danielhp95.caracole.core.library.PassStats
 import io.github.danielhp95.caracole.core.library.Passes
 import io.github.danielhp95.caracole.core.library.SongRow
@@ -214,6 +215,18 @@ object Lrclib {
         return best?.let { outcome(Lyrics.fromRecord(it)) } ?: LyricsResult("missing", null)
     }
 
+    /** lyrics.fetch_lrclib_record: a record of LRCLIB's by its id, `/api/get/{id}` (the record you picked,
+     * `[lyrics]`), or null when it is gone (its 404); its lyrics as [Lyrics.fromRecord] reads them, which may be none.
+     * Errors propagate as [fetchLyrics]' do; [cache] goes to the first request. */
+    fun fetchRecord(client: Client, lrclibId: Long, cache: Boolean = true): Lyrics? {
+        val url = "$API/get/$lrclibId"
+        val resp = client.get(url, accept = GET_ACCEPT, cache = cache)
+        val found = HttpRules.readOnceMore(client, resp, url, { it is LrclibParseError }, accept = GET_ACCEPT) {
+            getRecord(it)
+        }
+        return found?.let { Lyrics.fromRecord(it) }
+    }
+
     /**
      * lyrics.write_lyrics: `lyrics.txt` and, for timed lyrics, `lyrics.lrc` in the song's folder [dir], each ending in
      * a newline and written atomically (Kept.writeAtomic, which makes the folder); a file these lyrics have no text
@@ -247,12 +260,16 @@ object Lrclib {
         return Songs.list(db)
     }
 
-    /** lyrics._songs_to_look_up: songs never looked up, newest first, then misses older than [recheckAfter]. */
-    private fun songsToLookUp(db: Db, now: Instant, recheckAfter: Duration): List<SongRow> {
+    /** lyrics._songs_to_look_up: songs never looked up, newest first, then misses older than [recheckAfter]; never
+     * a song whose record ([picks]) was picked on another site. */
+    private fun songsToLookUp(db: Db, now: Instant, recheckAfter: Duration,
+                              picks: Map<String, LyricsPick>?): List<SongRow> {
         val pending = ArrayList<SongRow>()
         val due = ArrayList<SongRow>()
         for (song in songs(db, now)) {
             if (song.status == "ignored") continue
+            val record = Lyrics.pickedRecord(song, picks)
+            if (record != null && record.site != PROVIDER) continue
             if (song.lyricsStatus == "pending") {
                 pending += song
             } else if (song.lyricsStatus == "missing" && PyValues.before(song.lyricsAt, now, recheckAfter)) {
@@ -267,17 +284,26 @@ object Lrclib {
      * [recheckMissingAfter] (asked past the cache: its cached answer is the old miss), not ignored. [durations]: a
      * length in seconds by song id, for a song with none of its own. Found lyrics written ([writeLyrics]) and stored;
      * every outcome stamps `lyrics_at` [now]. Errors are never misses (Passes' ladder); the songs an error left are
-     * remembered in kv [FAILED] until LRCLIB answers about them.
+     * remembered in kv [FAILED] until LRCLIB answers about them. [picks], Overrides.lyrics: a song asked under its
+     * `as` ([Lyrics.askedAs]); one whose picked record is LRCLIB's asked for that record alone ([fetchRecord], its 404
+     * a miss), one whose record is another site's passed over; without it, every request is what it was.
      */
     fun fetchPendingLyrics(db: Db, client: Client, lib: LibraryStore, now: Instant, only: Set<Long>,
                            durations: Map<Long, Double>? = null,
-                           recheckMissingAfter: Duration = RECHECK_MISSING_AFTER): LyricsStats {
+                           recheckMissingAfter: Duration = RECHECK_MISSING_AFTER,
+                           picks: Map<String, LyricsPick>? = null): LyricsStats {
         val stats = LyricsStats()
         val stamp = Stamps.of(now)
-        val songs = songsToLookUp(db, now, recheckMissingAfter).asSequence().filter { it.id in only }
+        val songs = songsToLookUp(db, now, recheckMissingAfter, picks).asSequence().filter { it.id in only }
         val asked = Passes.eachSong(songs, stats, "LRCLIB") { song ->
-            fetchLyrics(client, song.artists[0], song.title, song.album, durationS(song) ?: durations?.get(song.id),
-                        cache = song.lyricsStatus != "missing")
+            val cache = song.lyricsStatus != "missing"
+            val record = Lyrics.pickedRecord(song, picks)
+            if (record != null) {
+                fetchRecord(client, record.id.toLong(), cache)?.let(::outcome) ?: LyricsResult("missing", null)
+            } else {
+                val (artist, title, album) = Lyrics.askedAs(song, picks)
+                fetchLyrics(client, artist, title, album, durationS(song) ?: durations?.get(song.id), cache = cache)
+            }
         }
         for ((song, result) in asked) {
             record(db, lib, song, result, stamp)

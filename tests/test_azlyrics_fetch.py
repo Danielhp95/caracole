@@ -302,3 +302,69 @@ def test_its_miss_goes_with_the_song():
     from caracole.songs import _PER_SONG_KV
 
     assert CHECKED in _PER_SONG_KV
+
+
+# --- [lyrics]: the name asked under, the record picked ----------------------------------------------------------------
+
+
+def lyrics_table(tmp_path, display: str, entry: str):
+    """``Overrides.lyrics`` of an overrides.toml whose ``[lyrics]`` holds ``entry`` for ``display``."""
+    from caracole.overrides import load_overrides
+
+    path = tmp_path / "overrides.toml"
+    path.write_text(f'[lyrics]\n"{display}" = {entry}\n', encoding="utf-8")
+    return load_overrides(path).lyrics
+
+
+def test_azlyrics_reads_the_artist_page_of_the_lyrics_name(conn, tmp_path):
+    song = mononoke(conn, artist="ポム", title="もののけ")  # no address of its own
+    site = FakeAzLyrics()
+    stats = run(site, conn, tmp_path, lyrics=lyrics_table(tmp_path, song.display, '{ as = "Pomme - mononoke" }'))
+    assert (stats.tried, stats.found) == (1, 1)
+    assert site.requests == [ARTIST, SONG]
+
+
+def test_an_azlyrics_page_pick_wins_over_the_lyrics_name(conn, tmp_path):
+    song = mononoke(conn, artist="Misc Musicals", title="Mononoke At Night")
+    site = FakeAzLyrics()
+    run(site, conn, tmp_path, picks={override_key(song.display): PAGE},
+        lyrics=lyrics_table(tmp_path, song.display, '{ as = "Soda Stereo - Sobredosis de TV" }'))
+    assert site.requests == [SONG]
+
+
+def test_a_pending_song_with_a_picked_azlyrics_record_gets_its_page(conn, tmp_path):
+    song = mononoke(conn, artist="Misc Musicals", title="Mononoke At Night", status="pending")
+    site = FakeAzLyrics()
+    stats = run(site, conn, tmp_path, lyrics=lyrics_table(tmp_path, song.display,
+                                                          '{ record = "azlyrics:pomme/mononoke" }'))
+    assert (stats.tried, stats.found) == (1, 1)
+    assert site.requests == [SONG]
+    kept = lyrics_from_json(get_song(conn, song.id).lyrics_json)
+    assert (kept.provider, kept.url) == ("azlyrics", PAGE)
+
+
+def test_a_song_with_another_sites_picked_record_is_passed_over(conn, tmp_path):
+    song = mononoke(conn)
+    kv_set(conn, f"{FAILED}{song.id}", EARLIER)
+    site = FakeAzLyrics()
+    for record in ("lrclib:28399373", "megalobiz:24519"):
+        picks = {override_key(song.display): PAGE}  # a picked record wins over an [azlyrics] page too
+        assert run(site, conn, tmp_path, picks=picks,
+                   lyrics=lyrics_table(tmp_path, song.display, f'{{ record = "{record}" }}')).tried == 0
+    assert site.requests == []
+
+
+def test_a_picked_azlyrics_record_gone_is_a_miss_and_an_error_is_none(conn, tmp_path):
+    song = mononoke(conn, status="pending")
+    picks = lyrics_table(tmp_path, song.display, '{ record = "azlyrics:pomme/gone" }')
+    assert run(FakeAzLyrics(failing={"/lyrics/pomme/gone.html": 502}), conn, tmp_path, lyrics=picks).errors == 1
+    stored = get_song(conn, song.id)
+    assert (stored.lyrics_status, stored.lyrics_at) == ("pending", None)  # an error: never a miss
+
+    site = FakeAzLyrics()
+    assert run(site, conn, tmp_path, lyrics=picks).missing == 1
+    assert site.requests == ["/lyrics/pomme/gone.html"]
+    stored = get_song(conn, song.id)
+    assert (stored.lyrics_status, stored.lyrics_at) == ("missing", STAMP)
+    assert kv_get(conn, f"{CHECKED}{song.id}") == STAMP
+    assert run(site, conn, tmp_path, NOW + timedelta(days=29), lyrics=picks).tried == 0

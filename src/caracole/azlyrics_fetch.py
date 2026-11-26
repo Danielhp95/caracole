@@ -20,6 +20,12 @@ failure. What each answer does:
 - **An error** (provider_pass.py's ladder; a block propagates): never a miss. A song LRCLIB missed goes back to pending,
   so that the next run asks every site again (LRCLIB and Megalobiz from their cache or their 30 days); any other is
   left as it was.
+
+``[lyrics]`` (``lyrics``, lyrics.py): the artist's page is that of its ``as``, and the song looked for on it its title;
+an ``[azlyrics]`` page wins over it. A record you picked is final, and wins over an ``[azlyrics]`` page: a song whose
+record is another site's is never asked; one whose record is AZLyrics' is asked for that page alone
+(``LyricsRecord.page``), one request, while it has no lyrics (``lyrics.picked_due``), and that page gone is a miss that
+makes its lyrics missing, as the one site asked answered one, asked again after 30 days, past the cache.
 """
 
 from __future__ import annotations
@@ -30,16 +36,20 @@ from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from caracole import stamps
 from caracole.azlyrics import PROVIDER, AzLyricsParseError, artist_url, parse_artist, parse_lyrics, pick_song
 from caracole.db import kv_delete, kv_get, kv_set
 from caracole.http import Client, read_once_more
 from caracole.library import song_dir, write_info
-from caracole.lyrics import FAILED, Lyrics, write_lyrics
+from caracole.lyrics import FAILED, Lyrics, asked_as, picked_due, picked_record, write_lyrics
 from caracole.overrides import override_key
 from caracole.provider_pass import PassStats, as_now, each_song
 from caracole.songs import Song, get_song, list_songs, update_song
+
+if TYPE_CHECKING:
+    from caracole.overrides import LyricsPick
 
 log = logging.getLogger(__name__)
 
@@ -65,18 +75,24 @@ def _wants(conn: sqlite3.Connection, song: Song) -> bool:
 
 
 def songs_to_ask(conn: sqlite3.Connection, now: datetime, *, picks: Mapping[str, str] | None = None,
-                 recheck_after: timedelta = RECHECK_AFTER, only: Collection[int] | None = None) -> list[Song]:
+                 recheck_after: timedelta = RECHECK_AFTER, only: Collection[int] | None = None,
+                 lyrics: Mapping[str, LyricsPick] | None = None) -> list[Song]:
     """The songs with no lyrics that AZLyrics hasn't answered a miss about since ``recheck_after``, or that ``picks``
-    (``Overrides.azlyrics``) names a page for, newest first."""
+    (``Overrides.azlyrics``) names a page for, newest first; of those with a picked record (``lyrics``,
+    ``Overrides.lyrics``), only those whose record is AZLyrics', by ``lyrics.picked_due``."""
     return [song for song in list_songs(conn)
-            if _due(conn, song, now, picks=picks, recheck_after=recheck_after, only=only)]
+            if _due(conn, song, now, picks=picks, recheck_after=recheck_after, only=only, lyrics=lyrics)]
 
 
 def _due(conn: sqlite3.Connection, song: Song, now: datetime, *, picks: Mapping[str, str] | None,
-         recheck_after: timedelta, only: Collection[int] | None) -> bool:
+         recheck_after: timedelta, only: Collection[int] | None,
+         lyrics: Mapping[str, LyricsPick] | None = None) -> bool:
     """Whether ``songs_to_ask`` lists the song."""
     if song.status == "ignored" or (only is not None and song.id not in only):
         return False
+    record = picked_record(song, lyrics)
+    if record is not None:
+        return record.site == PROVIDER and picked_due(song, now, recheck_after)
     if override_key(song.display) in (picks or {}):
         return song.lyrics_status in ("pending", "missing")
     checked = kv_get(conn, f"{CHECKED}{song.id}")
@@ -117,31 +133,40 @@ def azlyrics_lyrics(
     picks: Mapping[str, str] | None = None,
     only: Collection[int] | None = None,
     recheck_after: timedelta = RECHECK_AFTER,
+    lyrics: Mapping[str, LyricsPick] | None = None,
 ) -> AzLyricsStats:
     """Ask AZLyrics about the songs left with no lyrics (``songs_to_ask``; of ``only``'s ids when given, a lookup's one
-    song); see the module docstring."""
+    song); see the module docstring. ``picks``: ``Overrides.azlyrics``; ``lyrics``: ``Overrides.lyrics``, the name a
+    song is asked under and the record picked; without them, every request is what it was."""
     stats = AzLyricsStats()
     stamp = stamps.stamp(now)
 
     def turn(song: Song) -> Lyrics | None:  # a miss asked again goes past the cache
+        record = picked_record(song, lyrics)
+        if record is not None:
+            return fetch_azlyrics(client, artist="", title="", page=record.page, cache=song.lyrics_status != "missing")
         page = (picks or {}).get(override_key(song.display))
         cache = page is not None or kv_get(conn, f"{CHECKED}{song.id}") is None
-        return fetch_azlyrics(client, artist=song.artists[0], title=song.title, page=page, cache=cache)
+        artist, title, _ = asked_as(song, lyrics)
+        return fetch_azlyrics(client, artist=artist, title=title, page=page, cache=cache)
 
     def back_to_pending(song: Song, error: Exception) -> None:
         if song.lyrics_status == "missing":  # a song is missing only once every site asked answered a miss
             update_song(conn, song.id, lyrics_status="pending", lyrics_at=None)
 
-    songs = as_now(conn, songs_to_ask(conn, now, picks=picks, recheck_after=recheck_after, only=only),
-                   lambda song: _due(conn, song, now, picks=picks, recheck_after=recheck_after, only=only))
-    for song, lyrics in each_song(songs, stats, turn, site="AZLyrics", on_error=back_to_pending,
-                                  on_cut=back_to_pending):
-        if lyrics is None:
+    songs = as_now(conn, songs_to_ask(conn, now, picks=picks, recheck_after=recheck_after, only=only, lyrics=lyrics),
+                   lambda song: _due(conn, song, now, picks=picks, recheck_after=recheck_after, only=only,
+                                     lyrics=lyrics))
+    for song, found in each_song(songs, stats, turn, site="AZLyrics", on_error=back_to_pending,
+                                 on_cut=back_to_pending):
+        if found is None:
             kv_set(conn, f"{CHECKED}{song.id}", stamp)
+            if picked_record(song, lyrics) is not None:  # the one site asked missed: the song's lyrics are missing
+                update_song(conn, song.id, lyrics_status="missing", lyrics_at=stamp)
             stats.missing += 1
             continue
-        write_lyrics(song_dir(library_dir, song), lyrics)
-        update_song(conn, song.id, lyrics_status="found", lyrics_json=lyrics.to_json(), lyrics_at=stamp)
+        write_lyrics(song_dir(library_dir, song), found)
+        update_song(conn, song.id, lyrics_status="found", lyrics_json=found.to_json(), lyrics_at=stamp)
         kv_delete(conn, f"{CHECKED}{song.id}")
         kv_delete(conn, f"{FAILED}{song.id}")
         write_info(conn, library_dir, get_song(conn, song.id))  # its "lyrics_from": the link back to their page

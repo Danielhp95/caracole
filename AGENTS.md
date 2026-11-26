@@ -103,6 +103,11 @@ sitemaps list by bare ids alone, and the fetch their page.
   - `Lyrics.provider` and `.url`: who answered and the page to link back to.
   - `fits` and `another_version`: the matching rules another site's picker keeps.
   - kv `lyrics:failed:`: the songs LRCLIB failed on.
+  - `[lyrics]` (`Overrides.lyrics`, each pass's `picks=`, AZLyrics' `lyrics=`), the three sites alike: `asked_as`, the
+    name asked under (its `as`, cleaned: NFC, control characters out, `ASKED_MOST` characters, with no album; one that
+    cleans to nothing no name); `picked_record` and `picked_due`, a record picked final: only its site asks, for it
+    alone (`fetch_lrclib_record`, `/api/get/{id}`; Megalobiz's `fetch_record`; AZLyrics' page), while the song is
+    pending, or missing for 30 days; that record gone its lyrics missing. Without it, every request is what it was.
 
 #### megalobiz
 

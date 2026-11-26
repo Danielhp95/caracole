@@ -286,7 +286,8 @@ object LyricsReplay : AreaReplay {
             }
             Scenarios.replay(record, misses) { world ->
                 val s: LyricsStats = Lrclib.fetchPendingLyrics(world.db, world.clients.getValue("lrclib"),
-                                                               LibraryStore(world.library), world.now, only(kw), durations)
+                                                               LibraryStore(world.library), world.now, only(kw), durations,
+                                                               picks = Overrides.read(world.db).lyrics)
                 stats(s, linkedMapOf("found" to s.found, "missing" to s.missing, "instrumental" to s.instrumental))
             }
         }
@@ -297,7 +298,8 @@ object LyricsReplay : AreaReplay {
             val kw = record.getValue("kw").jsonObject
             Scenarios.replay(record, misses) { world ->
                 val s: MegalobizStats = Megalobiz.megalobizLyrics(world.db, world.clients.getValue("megalobiz"),
-                                                                  LibraryStore(world.library), world.now, only(kw))
+                                                                  LibraryStore(world.library), world.now, only(kw),
+                                                                  picks = Overrides.read(world.db).lyrics)
                 stats(s, linkedMapOf("found" to s.found, "timed" to s.timed, "missing" to s.missing))
             }
         }

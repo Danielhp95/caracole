@@ -74,6 +74,7 @@ JSON = [["content-type", "application/json"]]
 HTML = [["content-type", "text/html; charset=utf-8"]]
 LRCLIB_GET = "https://lrclib.net/api/get"
 LRCLIB_SEARCH = "https://lrclib.net/api/search"
+LRCLIB_RECORD = "GET https://lrclib.net/api/get/28399373"
 
 
 def fl(x: float | None) -> str | None:
@@ -705,6 +706,11 @@ class World:
             self.conn.execute("INSERT INTO phone_overrides (tbl, key, written, value) VALUES (?, ?, ?, ?)",
                               (row["tbl"], row["key"], row["written"], row["value"]))
 
+    def write_lyrics_entry(self, song_id: int, entry: str) -> None:
+        """overrides.toml's ``[lyrics]`` of the song, ``entry`` its value as TOML."""
+        display = self.get(song_id).display
+        self.write_overrides(f'[lyrics]\n"{display}" = {entry}\n', display)
+
     def overrides(self):
         from caracole.overrides import Overrides, load_overrides
 
@@ -773,17 +779,21 @@ def lrclib_scenarios(tmp: Path) -> list[dict[str, Any]]:
 
     out = []
 
-    def case(name: str, make, answers, *, cache=None, budget: int = 6, durations=None) -> None:
+    def case(name: str, make, answers, *, cache=None, budget: int = 6, durations=None,
+             lyrics: str | None = None) -> None:
         w = World(tmp, f"lrclib-{len(out)}")
         try:
             song_id = make(w)
             kw: dict[str, Any] = {"only": [song_id]}
             if durations is not None:
                 kw["durations"] = {str(song_id): durations}
+            if lyrics is not None:
+                w.write_lyrics_entry(song_id, lyrics)
 
             def call(clients):
                 given = {song_id: durations} if durations is not None else None
-                s = fetch_pending_lyrics(w.conn, clients["lrclib"], w.library, NOW, only={song_id}, durations=given)
+                s = fetch_pending_lyrics(w.conn, clients["lrclib"], w.library, NOW, only={song_id}, durations=given,
+                                         picks=w.overrides().lyrics)
                 return stats_of(s, "found", "missing", "instrumental")
 
             out.append(w.record("lrclib", "caracole.lyrics.fetch_pending_lyrics", name, call, kw,
@@ -871,6 +881,32 @@ def lrclib_scenarios(tmp: Path) -> list[dict[str, Any]]:
          lambda w: w.song("Nadie", "Canción Inventada", duration_ms=0),
          lambda w, sid: {lrclib_get("Nadie", "Canción Inventada"): MISS,
                          lrclib_search("Nadie", "Canción Inventada"): EMPTY})
+    yeren = ("孟维来", "野人『不再借世人的手 替我开脱』『动态歌词MV』")
+    case("a song asked under its [lyrics] name, with no album",
+         lambda w: w.song(*yeren, album="动态歌词", duration_ms=251000),
+         lambda w, sid: {lrclib_get("孟维来", "野人", None, 251): ok(fixture_ref("lrclib/get_by_id.json"))},
+         lyrics='{ as = "孟维来 - 野人" }')
+    case("a [lyrics] name of control characters and spaces, cleaned",
+         lambda w: w.song(*yeren, duration_ms=251000),
+         lambda w, sid: {lrclib_get("孟维来", "野 人", None, 251): MISS, lrclib_search("孟维来", "野 人"): EMPTY},
+         lyrics='{ as = "孟维来\\u0007 - 野\\t人\\u001b" }')
+    case("a pending song with its picked LRCLIB record: that record by its id, one request",
+         lambda w: w.song(*yeren, album="动态歌词", duration_ms=251000),
+         lambda w, sid: {LRCLIB_RECORD: ok(fixture_ref("lrclib/get_by_id.json"))},
+         lyrics='{ as = "孟维来 - 野人", record = "lrclib:28399373" }')
+    case("the picked LRCLIB record gone: a miss, the song missing",
+         lambda w: w.song(*yeren, duration_ms=251000), lambda w, sid: {LRCLIB_RECORD: MISS},
+         lyrics='{ record = "lrclib:28399373" }')
+    case("the picked LRCLIB record gone 30 days ago: asked again past the cache",
+         lambda w: w.song(*yeren, duration_ms=251000, lyrics_status="missing", lyrics_at=LONG_AGO),
+         lambda w, sid: {LRCLIB_RECORD: ok(fixture_ref("lrclib/get_by_id.json"))},
+         cache=lambda w, sid: {LRCLIB_RECORD: held(MISS)}, lyrics='{ record = "lrclib:28399373" }')
+    case("an error on the picked LRCLIB record: never a miss",
+         lambda w: w.song(*yeren, duration_ms=251000), lambda w, sid: {LRCLIB_RECORD: status(502, "Bad Gateway")},
+         lyrics='{ record = "lrclib:28399373" }')
+    case("a record picked on another site: LRCLIB asks nothing",
+         lambda w: w.song(*yeren, duration_ms=251000), lambda w, sid: {},
+         lyrics='{ as = "孟维来 - 野人", record = "megalobiz:24519" }')
     return out
 
 
@@ -902,13 +938,16 @@ def megalobiz_scenarios(tmp: Path) -> list[dict[str, Any]]:
 
     out = []
 
-    def case(name: str, make, answers, *, cache=None, budget: int = 6) -> None:
+    def case(name: str, make, answers, *, cache=None, budget: int = 6, lyrics: str | None = None) -> None:
         w = World(tmp, f"megalobiz-{len(out)}")
         try:
             song_id = make(w)
+            if lyrics is not None:
+                w.write_lyrics_entry(song_id, lyrics)
 
             def call(clients):
-                s = megalobiz_lyrics(w.conn, clients["megalobiz"], w.library, NOW, only={song_id})
+                s = megalobiz_lyrics(w.conn, clients["megalobiz"], w.library, NOW, only={song_id},
+                                     picks=w.overrides().lyrics)
                 return stats_of(s, "found", "timed", "missing")
 
             out.append(w.record("megalobiz", "caracole.megalobiz_fetch.megalobiz_lyrics", name, call,
@@ -983,6 +1022,23 @@ def megalobiz_scenarios(tmp: Path) -> list[dict[str, Any]]:
     case("a song with no length of its own and no lyrics' length",
          lambda w: w.song(*eagles, lyrics_status="found", lyrics_json=plain_lrclib(None), lyrics_at=LATELY),
          lambda w, sid: {megalobiz_search(*eagles, None): hit[search], megalobiz_lrc(24519): hit[megalobiz_lrc(24519)]})
+    case("a song searched under its [lyrics] name",
+         lambda w: w.song("Los Águilas", "Hotel Californio (Video Oficial)", duration_ms=391000,
+                          lyrics_status="missing", lyrics_at=LATELY),
+         lambda w, sid: hit, lyrics='{ as = "Eagles - Hotel California" }')
+    case("plain lyrics you picked: no timed upgrade asked",
+         lambda w: w.song(*eagles, lyrics_status="found", lyrics_json=plain_lrclib(391.0), lyrics_at=LATELY),
+         lambda w, sid: {}, lyrics='{ record = "lrclib:55" }')
+    case("a pending song with its picked Megalobiz record: that record alone, one request",
+         lambda w: w.song("Los Águilas", "Hotel Californio", duration_ms=391000),
+         lambda w, sid: {megalobiz_lrc(24519): hit[megalobiz_lrc(24519)]}, lyrics='{ record = "megalobiz:24519" }')
+    case("the picked Megalobiz record gone: a miss, the song missing",
+         lambda w: w.song(*eagles, duration_ms=391000),
+         lambda w, sid: {megalobiz_lrc(24519): status(404, '{"error": "not_found"}', JSON)},
+         lyrics='{ record = "megalobiz:24519" }')
+    case("a record picked on another site: Megalobiz asks nothing, LRCLIB's failure aside",
+         lambda w: (sid := w.song(*eagles, duration_ms=391000), w.kv(f"{FAILED}{sid}", LATELY))[0],
+         lambda w, sid: {}, lyrics='{ record = "lrclib:28399373" }')
     return out
 
 
@@ -1006,19 +1062,22 @@ def azlyrics_scenarios(tmp: Path) -> list[dict[str, Any]]:
     out = []
 
     def case(name: str, make, answers, *, cache=None, budget: int = 6, picks: str | None = None,
-             asked: str | None = None) -> None:
+             asked: str | None = None, lyrics: str | None = None) -> None:
         w = World(tmp, f"azlyrics-{len(out)}")
         try:
             song_id = make(w)
             display = w.get(song_id).display
-            if picks is not None:
-                w.write_overrides(f'[azlyrics]\n"{display}" = "{picks}"\n', display)
+            if picks is not None or lyrics is not None:
+                tables = ([f'[azlyrics]\n"{display}" = "{picks}"\n'] if picks is not None else []) + \
+                         ([f'[lyrics]\n"{display}" = {lyrics}\n'] if lyrics is not None else [])
+                w.write_overrides("".join(tables), display)
 
             def call(clients):
                 client = clients["azlyrics"]
+                o = w.overrides()
                 try:
-                    s = azlyrics_lyrics(w.conn, client, w.library, NOW, picks=w.overrides().azlyrics,
-                                        only={song_id})
+                    s = azlyrics_lyrics(w.conn, client, w.library, NOW, picks=o.azlyrics, only={song_id},
+                                        lyrics=o.lyrics)
                 except ProviderBlocked as e:
                     if asked is None:
                         raise
@@ -1088,6 +1147,20 @@ def azlyrics_scenarios(tmp: Path) -> list[dict[str, Any]]:
          lambda w: missed(w), lambda w, sid: {POMME: status(403, "Forbidden")})
     case("a budget spent before the lyrics page: nothing marked",
          lambda w: missed(w), lambda w, sid: {POMME: AZ_HIT[POMME]}, budget=1)
+    case("its artist's page of the [lyrics] name",
+         lambda w: missed(w, "ポム", "もののけ"), lambda w, sid: AZ_HIT, lyrics='{ as = "Pomme - mononoke" }')
+    case("a page you named wins over the [lyrics] name",
+         lambda w: missed(w, "Someone Else", "Mononoke"), lambda w, sid: {MONONOKE: AZ_HIT[MONONOKE]},
+         picks="azlyrics.com/lyrics/pomme/mononoke.html", lyrics='{ as = "Soda Stereo - Sobredosis de TV" }')
+    case("a pending song with its picked AZLyrics record: that page alone, one request",
+         lambda w: w.song("Someone Else", "Mononoke"), lambda w, sid: {MONONOKE: AZ_HIT[MONONOKE]},
+         lyrics='{ record = "azlyrics:pomme/mononoke" }')
+    case("the picked AZLyrics record gone: a miss, the song missing",
+         lambda w: w.song("Someone Else", "Mononoke"), lambda w, sid: {MONONOKE: AZ_404},
+         lyrics='{ record = "azlyrics:pomme/mononoke" }')
+    case("a record picked on another site: AZLyrics asks nothing, the page you named aside",
+         lambda w: missed(w), lambda w, sid: {}, picks="azlyrics.com/lyrics/pomme/mononoke.html",
+         lyrics='{ record = "megalobiz:24519" }')
     return out
 
 

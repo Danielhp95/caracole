@@ -3540,7 +3540,11 @@ caracole asks for that page alone, while the song has no lyrics.
 "Artist - Title"), the record you picked (`record`), or both. A record is `lrclib:ID` or
 `megalobiz:ID` (the record's number on that site) or `azlyrics:ARTIST/SONG` (the two parts of its
 page's address, `azlyrics.com/lyrics/ARTIST/SONG.html`), and nothing else: no address, no other
-path.
+path. LRCLIB, Megalobiz and AZLyrics are asked under `as`, with no album, in place of the song's own
+name (an `[azlyrics]` page still wins on AZLyrics). A record you picked is final: while the song has
+its lyrics no site is asked about it, nor for timed lyrics in place of plain ones. While it has none,
+only the record's own site is asked, for that record alone, one request; a record gone leaves the
+song without lyrics, and it is asked again after 30 days.
 
 `[harmonica]` says how each of a song's harmonica tabs is read, by its file's name. The value is a
 notation (`"signs"`, `"brackets"`, `"letters"`, `"signs after"` or `"barrett"`), `"legend"` for

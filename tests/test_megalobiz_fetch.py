@@ -367,3 +367,76 @@ def test_a_song_a_sync_removed_in_the_passs_pause_is_passed_over(conn, cfg, tmp_
     megalobiz_lyrics(conn, client, cfg.library_dir, NOW)
     assert taken
     assert not (cfg.library_dir / "Radiohead" / "Creep").exists()
+
+
+# --- [lyrics]: the name asked under, the record picked ----------------------------------------------------------------
+
+
+def lyrics_table(tmp_path, display: str, entry: str):
+    """``Overrides.lyrics`` of an overrides.toml whose ``[lyrics]`` holds ``entry`` for ``display``."""
+    from caracole.overrides import load_overrides
+
+    path = tmp_path / "overrides.toml"
+    path.write_text(f'[lyrics]\n"{display}" = {entry}\n', encoding="utf-8")
+    return load_overrides(path).lyrics
+
+
+def test_megalobiz_asks_under_the_lyrics_name(conn, tmp_path):
+    site = FakeMegalobiz([None])
+    song = add_song(conn, "Los Águilas", "Hotel Californio (Video Oficial)", duration_ms=391000)
+    update_song(conn, song.id, lyrics_status="missing", lyrics_at=EARLIER)
+    picks = lyrics_table(tmp_path, song.display, '{ as = "Eagles - Hotel California" }')
+    assert run(site, conn, tmp_path, picks=picks) == MegalobizStats(tried=1, found=1)
+    assert site.requests[0] == ("search", {"title": "Hotel California", "artist": "Eagles", "duration": "391",
+                                           "limit": "10"})
+
+
+def test_a_song_with_its_picked_record_is_asked_by_no_pass(conn, tmp_path):
+    # Plain lyrics you picked are final: Megalobiz's 30-day timed upgrade never asks about them.
+    site = FakeMegalobiz([None])
+    song = eagles(conn, status="found", lyrics=PLAIN)
+    for record_ in ("lrclib:3", "megalobiz:24519", "azlyrics:eagles/hotelcalifornia"):
+        picks = lyrics_table(tmp_path, song.display, f'{{ record = "{record_}" }}')
+        assert run(site, conn, tmp_path, picks=picks) == MegalobizStats()
+    assert site.requests == []
+    assert lyrics_from_json(get_song(conn, song.id).lyrics_json).provider == "lrclib"
+
+
+def test_a_pending_song_with_another_sites_picked_record_is_passed_over(conn, tmp_path):
+    site = FakeMegalobiz([None])
+    song = eagles(conn, status="pending")
+    kv_set(conn, f"{FAILED}{song.id}", EARLIER)  # LRCLIB failed on its record: still never Megalobiz's song
+    for record_ in ("lrclib:28399373", "azlyrics:eagles/hotelcalifornia"):
+        assert run(site, conn, tmp_path, picks=lyrics_table(tmp_path, song.display, f'{{ record = "{record_}" }}')) \
+            == MegalobizStats()
+    assert site.requests == []
+
+
+def test_a_pending_song_with_a_picked_megalobiz_record_gets_its_lrc(conn, tmp_path):
+    site = FakeMegalobiz([record(lrc_id=777, title="Otra Cosa", artist="Nadie")])
+    song = eagles(conn, status="pending")
+    picks = lyrics_table(tmp_path, song.display, '{ as = "Eagles - Hotel California", record = "megalobiz:777" }')
+    assert run(site, conn, tmp_path, picks=picks) == MegalobizStats(tried=1, found=1)
+    assert site.requests == [("lrc", {})]
+    lyrics = lyrics_from_json(get_song(conn, song.id).lyrics_json)
+    assert (lyrics.provider, lyrics.url, lyrics.raw["id"]) == ("megalobiz", "https://megalobiz.com/lrc/777/otra-cosa",
+                                                               777)
+    info = json.loads((folder(tmp_path) / "info.json").read_text(encoding="utf-8"))
+    assert info["lyrics_from"] == {"source": "megalobiz", "href": "https://megalobiz.com/lrc/777/otra-cosa"}
+
+
+def test_a_picked_megalobiz_record_gone_is_a_miss_and_an_error_is_none(conn, tmp_path):
+    song = eagles(conn, status="pending")
+    picks = lyrics_table(tmp_path, song.display, '{ record = "megalobiz:777" }')
+    assert run(FakeMegalobiz([], failing={"lrc": 502}), conn, tmp_path, picks=picks).errors == 1
+    stored = get_song(conn, song.id)
+    assert (stored.lyrics_status, stored.lyrics_at) == ("pending", None)  # an error: never a miss
+
+    gone = FakeMegalobiz([])
+    assert run(gone, conn, tmp_path, picks=picks) == MegalobizStats(tried=1, missing=1)
+    assert gone.requests == [("lrc", {})]
+    stored = get_song(conn, song.id)
+    assert (stored.lyrics_status, stored.lyrics_at) == ("missing", STAMP)  # the one site asked missed
+    assert kv_get(conn, f"{CHECKED}{song.id}") == STAMP
+    assert run(gone, conn, tmp_path, NOW + timedelta(days=29), picks=picks) == MegalobizStats()
+    assert gone.requests == [("lrc", {})]

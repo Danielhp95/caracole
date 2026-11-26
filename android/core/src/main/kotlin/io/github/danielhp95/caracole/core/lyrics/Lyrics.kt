@@ -2,12 +2,18 @@ package io.github.danielhp95.caracole.core.lyrics
 
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.json.PyJson
+import io.github.danielhp95.caracole.core.library.LyricsPick
+import io.github.danielhp95.caracole.core.library.LyricsRecord
+import io.github.danielhp95.caracole.core.library.OverrideUrls
+import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.library.internal.LyricsFiles
 import io.github.danielhp95.caracole.core.lyrics.internal.PyValues
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.py.PyRe
 import io.github.danielhp95.caracole.core.py.PyRegex
+import io.github.danielhp95.caracole.core.py.PyText
+import io.github.danielhp95.caracole.core.py.PyUnicode
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -15,6 +21,8 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.longOrNull
+import java.time.Duration
+import java.time.Instant
 
 /**
  * lyrics.py's Lyrics: a song's lyrics, from one record of one provider. [plain] is "" when there are none, [synced]
@@ -76,6 +84,53 @@ data class Lyrics(val plain: String, val synced: String?, val instrumental: Bool
 
         /** lyrics.plain_from_synced: plain lyrics from LRC text; an empty timed line a break between stanzas. */
         fun plainFromSynced(synced: String): String = LyricsFiles.plainFromSynced(synced)
+
+        // --- [lyrics]: the name asked under, the record picked --------------------------------------------------
+
+        /** lyrics.ASKED_MOST: characters of each part of `[lyrics]`' `as` the sites are asked. */
+        const val ASKED_MOST = 200
+        private const val INVISIBLE = "\u200b\u200e\u200f\ufeff" // wanted.py's: zero-width characters at a name's ends
+
+        /** lyrics._asked_part: a part of `as` as the sites are asked it: NFC, any control character that is no space
+         * dropped, its spaces folded into one, no zero-width character at its ends, at most [ASKED_MOST] characters
+         * (code points); "" for one of none of these. */
+        internal fun askedPart(text: String): String {
+            val nfc = PyUnicode.nfc(text)
+            val kept = StringBuilder()
+            var i = 0
+            while (i < nfc.length) {
+                val cp = nfc.codePointAt(i)
+                if (PyUnicode.isSpace(cp) || PyUnicode.category(cp) != "Cc") kept.appendCodePoint(cp)
+                i += Character.charCount(cp)
+            }
+            val name = Py.strip(PyText.strip(Py.split(kept.toString()).joinToString(" "), INVISIBLE))
+            return Py.strip(Py.slice(name, 0, ASKED_MOST))
+        }
+
+        private fun pick(song: SongRow, picks: Map<String, LyricsPick>?): LyricsPick? =
+            if (picks.isNullOrEmpty()) null else picks[OverrideUrls.overrideKey(song.display)]
+
+        /** lyrics.asked_as: the artist, title and album the lyrics sites are asked under: the song's `[lyrics]` `as`
+         * in [picks] (Overrides.lyrics), cleaned ([askedPart]), with no album; else, or for one that cleans to
+         * nothing, the song's own first artist, title and album. */
+        fun askedAs(song: SongRow, picks: Map<String, LyricsPick>?): Triple<String, String, String?> {
+            val asked = pick(song, picks)?.asked
+            if (asked != null) {
+                val artist = askedPart(asked.first)
+                val title = askedPart(asked.second)
+                if (artist.isNotEmpty() && title.isNotEmpty()) return Triple(artist, title, null)
+            }
+            return Triple(song.artists[0], song.title, song.album)
+        }
+
+        /** lyrics.picked_record: the record you picked for the song (`[lyrics]`' `record`), or null. */
+        fun pickedRecord(song: SongRow, picks: Map<String, LyricsPick>?): LyricsRecord? = pick(song, picks)?.record
+
+        /** lyrics.picked_due: whether a song with a picked record is asked for it, by its site alone: while it has no
+         * lyrics, pending, or missing (the record gone) for [recheckAfter]; never an ignored song. */
+        fun pickedDue(song: SongRow, now: Instant, recheckAfter: Duration): Boolean =
+            song.status != "ignored" && (song.lyricsStatus == "pending" ||
+                (song.lyricsStatus == "missing" && PyValues.before(song.lyricsAt, now, recheckAfter)))
     }
 }
 
