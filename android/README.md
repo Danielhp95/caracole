@@ -756,4 +756,19 @@ frame for frame, beat_this's fp32 logits, and the fp16-stored file's beats and d
 `--ml` pushes the four files into the emulator's `/data/local/tmp/caracole-models` (again only when one changed) and
 runs `ModelParityTest` from `:ml`'s own test APK, which reports each model's load, each clip's time and its peak RSS.
 `--tcpdump FILE` turns the emulator's Wi-Fi off, so that everything goes through the network its console captures,
-keeps the capture in FILE, and fails the run on any packet to or from a host but 10.0.2.2.
+keeps the capture in FILE, and fails the run on any packet to or from a host but 10.0.2.2. A control before and after
+the classes (a ping of 10.0.2.2 and a connection to a listener on the host's loopback) must be in the capture too, or
+the run fails: an empty capture proves nothing. A run killed with SIGKILL leaves the emulator's Wi-Fi off:
+`adb -s emulator-NNNN shell svc wifi enable`. `:ml`'s test APK runs under AndroidJUnitRunner, not CaracoleTestRunner:
+it has no HTTP code, so `caracole.network=loopback` isn't set for it.
+
+BTC's graph and `models.json` (`tests/conformance/data/caracole/autochords/`) are `:ml`'s resources, so the debug
+build's alone; `:core`, whose resources are the rest of that folder, leaves them out. That nothing of this reaches the
+release is a check to run again:
+
+    android/scripts/release-check.sh
+
+It builds the release (unsigned without the release key: the same packaged output) and the debug build, and checks
+that the release's runtime classpath names no `onnxruntime` and no `:ml`, and that its APK holds no
+`libonnxruntime*`, no class under `ai/onnxruntime/` (dexdump), nothing under `caracole/autochords/` and no
+`TelemetryInitializer` in its manifest (aapt2), with the debug APK as the control that holds the first three.

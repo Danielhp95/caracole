@@ -31,3 +31,5 @@ the same bits on every run on a CPU of the kernels its meta names (`cpu_capabili
 mismatch is expected, and the generator skips its byte check there, saying so; there, as for the phone's runtime,
 the check that counts is the gates', which `vectors/autochords/models.jsonl`'s meta record holds (`gates`: BTC's
 argmax and logits, beat_this's fp32 logits, the fp16-stored file's beats and downbeats by F, with no logit bound).
+`data/caracole/autochords/` ships in the debug build alone, as android/ml's resources: `:core`, whose resource root
+is `data/`, leaves it out, so the release carries none of it until the stage that ships the models.

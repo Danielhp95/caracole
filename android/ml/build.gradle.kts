@@ -35,9 +35,12 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    // The computer's model outputs, their inputs and the models' pins, as the device test's assets (autochords/…),
-    // read through the instrumentation's AssetManager as CorpusOnDeviceTest reads the rest of the corpus.
+    // The computer's model outputs and their inputs, as the device test's assets (autochords/…), read through the
+    // instrumentation's AssetManager as CorpusOnDeviceTest reads the rest of the corpus.
     sourceSets.getByName("androidTest").assets.srcDir(layout.buildDirectory.dir("generated/modelAssets"))
+    // The runtime data of the models, caracole/autochords/ on the classpath (BTC's graph, models.json's pins):
+    // :ml's, so the debug build's alone, which :core leaves out (core/build.gradle.kts).
+    sourceSets.getByName("main").resources.srcDir(layout.buildDirectory.dir("generated/modelData"))
 }
 
 val copyModelVectors by tasks.registering(Sync::class) {
@@ -46,12 +49,15 @@ val copyModelVectors by tasks.registering(Sync::class) {
         include("models.jsonl", "frontend.jsonl")
         into("autochords")
     }
-    from("../../tests/conformance/data/caracole/autochords") {
-        include("models.json")
-        into("autochords")
-    }
 }
 tasks.matching { it.name.endsWith("AndroidTestAssets") }.configureEach { dependsOn(copyModelVectors) }
+
+val copyModelData by tasks.registering(Sync::class) {
+    into(layout.buildDirectory.dir("generated/modelData"))
+    from("../../tests/conformance/data/caracole/autochords") { into("caracole/autochords") }
+}
+tasks.matching { it.name.contains("JavaRes") || it.name.contains("JavaResource") || it.name.startsWith("lint") }
+    .configureEach { dependsOn(copyModelData) }
 
 kotlin {
     compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }

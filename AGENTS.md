@@ -2049,7 +2049,8 @@ It is rows.js's, shared by both pages:
     as played;
   - `data/caracole/autochords/btc-graph.onnx` and `models.json` (the pins: each file's bytes and SHA-256, BTC's git
     blob, repository and commit, its mean and std, each model's name for `raw["models"]`), exported in the test from
-    the shell's model files, the same bytes as `.#chord-models`;
+    the shell's model files, the same bytes as `.#chord-models`; on the phone `:ml`'s resources, the debug build's
+    alone (`:core` leaves `caracole/autochords/` out of its resources, so the release carries none of it);
   - every record checked against `BTCRecognizer.recognize` and `detect_beats` on the clip, exactly;
   - the gates the phone's runtime is held to, in models.jsonl's meta record (`gates`, the test's `GATES`, the
     design's §4.2): BTC's argmax equal on every frame but where the stored top-two margin is under 1e-3, its logits
@@ -2204,8 +2205,12 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   memory pattern (beat_this's peak RSS halved). Its `ModelParityTest` (its own test APK) holds it to
   vectors/autochords/models.jsonl on the emulator, every threshold the records' `gates`, beat_this's chunking,
   postprocessor and F-measure ported in the test alone (`BeatThis`, held to the computer's beats over its own logits),
-  the models `.#chord-models` (`./android#ml`'s `CARACOLE_CHORD_MODELS`), pushed by `device-test.sh --ml`. It handles
-  no text: no ForbiddenApiTest.
+  the models `.#chord-models` (`./android#ml`'s `CARACOLE_CHORD_MODELS`), pushed by `device-test.sh --ml`; its test
+  APK runs under AndroidJUnitRunner (no HTTP code there, so no `caracole.network=loopback`). `:ml` carries
+  `caracole/autochords/` (BTC's graph, models.json), which `:core` leaves out. `android/scripts/release-check.sh`
+  holds the release to none of it: no onnxruntime or `:ml` on its runtime classpath, no `libonnxruntime*`, class under
+  `ai/onnxruntime/`, `caracole/autochords/` entry or TelemetryInitializer in its APK, the debug APK the control. It
+  handles no text: no ForbiddenApiTest.
 - Milestones 1–6 are built (docs/android_port.md's status, "Built: milestones 4 to 6"), each route a module of its
   own:
   - `server/routes/Stubs.kt` keeps YouTube's routes and `GET /lookup` alone, answering "…: not on the phone yet."

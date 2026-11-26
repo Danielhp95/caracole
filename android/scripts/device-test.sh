@@ -17,11 +17,17 @@
 #                   free port never 8737) for every class run, named to each as -e sites http://10.0.2.2:PORT
 #   --ml            :ml's ModelParityTest (its own test APK, io.github.danielhp95.caracole.ml.test) over the chord and
 #                   beat models in $CARACOLE_CHORD_MODELS (`nix build .#chord-models`; unset, the ./android#ml
-#                   shell's), pushed into /data/local/tmp/caracole-models (a file again only when its SHA-256 differs)
+#                   shell's), pushed into /data/local/tmp/caracole-models, a cache left there for the next run (a
+#                   file pushed again only when its SHA-256 differs)
 #   --tcpdump FILE  every packet the emulator sends or gets while the classes run, into FILE (pcap), with Wi-Fi off
 #                   so that all of it goes through the one interface the emulator's console captures (its cellular
 #                   network); any packet to or from a host but 10.0.2.2 fails the run (ARP between the emulator and
-#                   10.0.2.2, and link-local multicast, which reaches no host, are listed and allowed)
+#                   10.0.2.2, and link-local multicast, which reaches no host, are listed and allowed). A control
+#                   before and after the classes, a ping of 10.0.2.2 and a TCP connection to a listener of the
+#                   script's on the host's loopback, must be in the capture, or it fails too: a capture that
+#                   recorded nothing, or a network with no route out, proves nothing. The script turns Wi-Fi back on
+#                   as it ends, an error too; killed with SIGKILL it can't: `adb -s emulator-NNNN shell svc wifi
+#                   enable` then
 #
 # It builds assembleDebug and assembleDebugAndroidTest first (the debug build, io.github.danielhp95.caracole.debug, and
 # its tests, io.github.danielhp95.caracole.debug.test), outside the lock, then takes the first free emulator of
@@ -215,9 +221,18 @@ fi
 failed=0
 results=()
 
-# The capture, with Wi-Fi off (the console captures the cellular network alone), once the network has settled.
+# The capture, with Wi-Fi off (the console captures the cellular network alone), once the network has settled. Its
+# control: a listener on the host's loopback (10.0.2.2 to the emulator, nothing that leaves the machine), and
+# `control`, a ping of 10.0.2.2 and one connection to the listener, sent before and after the classes.
 capture=""
 if [ -n "$tcpdump" ]; then
+    probe_port="$(free_port)"
+    while [ "$probe_port" = 8737 ]; do probe_port="$(free_port)"; done
+    (exec 9>&-; exec python3 -c 'import socket, sys
+s = socket.create_server(("127.0.0.1", int(sys.argv[1])))
+while True:
+    c, _ = s.accept(); c.recv(64); c.sendall(b"ok\n"); c.close()' "$probe_port") &
+    servers+=($!)
     capturing=1
     adb shell svc wifi disable
     sleep 15
@@ -225,6 +240,12 @@ if [ -n "$tcpdump" ]; then
     [ -n "$capture" ] || { echo "device-test.sh: the emulator wouldn't capture" >&2; exit 3; }
     echo "device-test.sh: capturing into $tcpdump" >&2
 fi
+control() {
+    [ -n "$capture" ] || return 0
+    adb shell ping -c 1 -W 2 10.0.2.2 >/dev/null 2>&1 || true
+    adb shell "echo caracole-probe | nc -w 2 10.0.2.2 $probe_port" >/dev/null 2>&1 || true
+}
+control
 
 # One class run: `am instrument -w`, its args; the app's data cleared, the print spooler and choosers closed after.
 run_class() {
@@ -288,19 +309,24 @@ for spec in "${classes[@]:-}"; do
     run_with_computer "$name" "$dir"
 done
 
-# The capture read: a packet to or from a host but 10.0.2.2 fails the run.
+# The capture read: a packet to or from a host but 10.0.2.2 fails the run, and so does a control missing from it.
 if [ -n "$capture" ]; then
+    control
     adb emu network capture stop >/dev/null
     adb shell svc wifi enable
     capturing=0
     mv "$capture" "$tcpdump"
-    if python3 - "$tcpdump" <<'EOF'; then results+=("PASS tcpdump"); else results+=("FAIL tcpdump"); failed=1; fi
+    read_ok=0
+    python3 - "$tcpdump" "$probe_port" <<'EOF' || read_ok=$?
 import ipaddress, struct, sys
 
 data = open(sys.argv[1], "rb").read()
 assert data[:4] == bytes.fromhex("d4c3b2a1") and struct.unpack("<I", data[20:24])[0] == 1, "not an Ethernet pcap"
 guest, host = ipaddress.ip_address("10.0.2.15"), ipaddress.ip_address("10.0.2.2")
+probe = int(sys.argv[2])
 packets, others, allowed = 0, [], []
+# The control's packets: ICMP echo requests and replies, the listener's SYN and SYN-ACK, each way.
+seen = {"ping": 0, "pong": 0, "syn": 0, "syn-ack": 0}
 at = 24
 while at < len(data):
     length = struct.unpack("<I", data[at + 8:at + 12])[0]
@@ -320,18 +346,34 @@ while at < len(data):
         others.append(f"ethertype {kind}")
         continue
     if {src, dst} == {guest, host}:
+        if kind == "0800":
+            body = frame[14 + 4 * (frame[14] & 15):]
+            if frame[23] == 1 and body[0] == 8 and dst == host:
+                seen["ping"] += 1
+            elif frame[23] == 1 and body[0] == 0 and dst == guest:
+                seen["pong"] += 1
+            elif frame[23] == 6:
+                ports, flags = struct.unpack(">HH", body[:4]), body[13]
+                if dst == host and ports[1] == probe and flags & 0x12 == 0x02:
+                    seen["syn"] += 1
+                elif dst == guest and ports[0] == probe and flags & 0x12 == 0x12:
+                    seen["syn-ack"] += 1
         continue
     if any(dst in ipaddress.ip_network(net) for net in ("224.0.0.0/24", "ff02::/16")):
         allowed.append(f"link-local multicast {src} -> {dst}")
         continue
     others.append(f"{src} -> {dst}")
 print(f"tcpdump: {packets} packets, {len(others)} to or from a host but 10.0.2.2")
+missing = [name for name, n in seen.items() if n < 2]
+print("  control (before and after the classes): " + ", ".join(f"{name} {n}" for name, n in seen.items())
+      + (f"; missing: {', '.join(missing)}: the capture proves nothing" if missing else ""))
 for line in sorted(set(allowed)):
     print(f"  allowed: {line}")
 for line in others:
     print(f"  {line}")
-sys.exit(1 if others else 0)
+sys.exit(1 if others or missing else 0)
 EOF
+    if [ "$read_ok" = 0 ]; then results+=("PASS tcpdump"); else results+=("FAIL tcpdump"); failed=1; fi
 fi
 
 echo

@@ -21,6 +21,9 @@ kotlin {
 sourceSets {
     main {
         resources.srcDir("../../tests/conformance/data")
+        // The chord models' graph and pins are :ml's, the debug build's alone until the stage that ships them: never
+        // in the release through :core.
+        resources.exclude("caracole/autochords/**")
     }
 }
 

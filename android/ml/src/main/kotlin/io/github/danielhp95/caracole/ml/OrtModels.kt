@@ -50,6 +50,9 @@ class OrtModels(private val dir: File, private val threads: Int, private val bea
     private fun btc(): OrtSession = btc ?: open(BTC_GRAPH).also { btc = it }
 
     private fun open(name: String): OrtSession {
+        val file = File(dir, name)
+        require(file.isFile) { "no $name in $dir" }
+        if (name == BTC_GRAPH) require(File(dir, BTC_WEIGHTS).isFile) { "no $BTC_WEIGHTS beside $BTC_GRAPH in $dir" }
         val options = OrtSession.SessionOptions().apply {
             setIntraOpNumThreads(threads)
             setInterOpNumThreads(1)
@@ -59,7 +62,7 @@ class OrtModels(private val dir: File, private val threads: Int, private val bea
             setMemoryPatternOptimization(false)
             setCPUArenaAllocator(false)
         }
-        return options.use { env.createSession(File(dir, name).path, it) }
+        return options.use { env.createSession(file.path, it) }
     }
 
     private fun run(session: OrtSession, input: String, values: FloatArray, shape: LongArray,
@@ -73,11 +76,18 @@ class OrtModels(private val dir: File, private val threads: Int, private val bea
             }
         }
 
+    /** Closes the sessions; the process's [OrtEnvironment] is kept on purpose, one a process, for the next. */
     override fun close() {
-        btc?.close()
-        beat?.close()
-        btc = null
-        beat = null
+        try {
+            btc?.close()
+        } finally {
+            btc = null
+            try {
+                beat?.close()
+            } finally {
+                beat = null
+            }
+        }
     }
 
     companion object {

@@ -37,8 +37,9 @@ import org.junit.runner.RunWith
  *   reference beat after the trim fails, never passes for nothing.
  *
  * The models are those `nix build .#chord-models` makes, pushed by `android/scripts/device-test.sh --ml` into the
- * folder the argument `models` names (models.json pins each file; the APK carries none). It reports what it measured
- * on its stream: each model's load and each clip's run, and each model's peak RSS.
+ * folder the argument `models` names; models.json, :ml's resource (caracole/autochords/, with BTC's graph), pins each
+ * file, and the APK carries no weights. It reports what it measured on its stream: each model's load and each clip's
+ * run, and each model's peak RSS.
  */
 @RunWith(AndroidJUnit4::class)
 class ModelParityTest {
@@ -54,6 +55,10 @@ class ModelParityTest {
             assertEquals(name, pin.getLong("bytes"), file.length())
             assertEquals(name, pin.getString("sha256"), sha256(file))
         }
+        // :ml carries the graph on its classpath (caracole/autochords/, the debug build's alone): the one pinned.
+        val graph = javaClass.classLoader!!.getResourceAsStream("caracole/autochords/${OrtModels.BTC_GRAPH}")!!
+            .use { it.readBytes() }
+        assertEquals(pins.getJSONObject("btc").getJSONObject("graph").getString("sha256"), sha256(graph))
         val btc = pins.getJSONObject("btc")
         assertEquals(btc.getInt("window"), OrtModels.WINDOW)
         assertEquals(btc.getInt("bins"), OrtModels.BINS)
@@ -80,14 +85,16 @@ class ModelParityTest {
         val gate = gates.getJSONObject("btc")
         val loaded = System.nanoTime()
         measured("btc") { OrtModels(models, threads).use { ort ->
+            val padding = ort.padding
             var first = true
             for (clip in clips) {
                 val frontend = inputs.getValue(clip.getString("clip"))
                 val cqt = floats(frontend.getJSONObject("cqt"))
                 val btc = clip.getJSONObject("btc")
                 val frames = btc.getInt("frames")
+                assertEquals(clip.getString("clip"), frames * OrtModels.BINS, cqt.size)
                 val windows = (frames + OrtModels.WINDOW - 1) / OrtModels.WINDOW
-                val features = FloatArray(windows * OrtModels.WINDOW * OrtModels.BINS) { ort.padding }
+                val features = FloatArray(windows * OrtModels.WINDOW * OrtModels.BINS) { padding }
                 System.arraycopy(cqt, 0, features, 0, cqt.size)
                 val started = System.nanoTime()
                 val logits = ort.chords(features, windows)
@@ -206,7 +213,8 @@ class ModelParityTest {
                 ?: fail("no models: run it through android/scripts/device-test.sh --ml") as Nothing
             models = File(folder)
             threads = arguments.getString("threads")?.toInt() ?: 1
-            pins = JSONObject(asset("models.json").readText())
+            pins = JSONObject(ModelParityTest::class.java.classLoader!!
+                .getResourceAsStream("caracole/autochords/models.json")!!.bufferedReader(Charsets.UTF_8).readText())
             fps = pins.getJSONObject("beats").getInt("fps")
             val meta = records("models.jsonl").first { it.optString("kind") == "meta" }
             gates = meta.getJSONObject("gates")
@@ -256,6 +264,9 @@ class ModelParityTest {
         fun ints(array: JSONArray) = IntArray(array.length()) { array.getInt(it) }
 
         fun doubles(array: JSONArray) = List(array.length()) { array.getDouble(it) }
+
+        fun sha256(bytes: ByteArray): String =
+            MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 
         fun sha256(file: File): String {
             val digest = MessageDigest.getInstance("SHA-256")
