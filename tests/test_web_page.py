@@ -849,7 +849,7 @@ SHIFTS = """(() => {
     for (const e of list.getEntries()) {
       if (e.hadRecentInput) continue;
       const moved = (e.sources || []).map((s) => (s.node ? s.node.id || String(s.node.className || s.node.nodeName) : "?"));
-      window.shifts.push({ value: Math.round(e.value * 10000) / 10000, moved });
+      window.shifts.push({ value: Math.round(e.value * 10000) / 10000, moved, at: e.startTime });
     }
   }).observe({ type: "layout-shift", buffered: true });
   return true;
@@ -912,6 +912,11 @@ COUNTDOWN = """(() => {
     const p = window.song.querySelector('.progress');
     if (!p) return;
     if (window.lines[window.lines.length - 1] !== p.textContent) window.lines.push(p.textContent);
+    if (window.sentAt === undefined && p.textContent.startsWith('Removing…')) {  // sent: Undo gone, its card closed
+      window.sentAt = performance.now();
+      const card = cardOf(window.song);
+      window.cardAtSend = Boolean(card && card.checkVisibility());
+    }
     const undo = p.querySelector('button.undo');
     if (window.counting || !undo || !p.textContent.includes('never touches Music/.')) return;
     const r = undo.getBoundingClientRect();
@@ -926,9 +931,9 @@ COUNTDOWN = """(() => {
 @pytest.mark.parametrize("left,size", [("#show=wanted", "390,844"), ("#sort=title", "390,844"), ("#q=creep", "1280,800")])
 def test_remove_counts_down_on_the_line_then_removes_the_song_there(serve, cfg, conn, tmp_path, left, size):
     # One tap: the song's own line says "Removing in 5 s · Undo" and what goes, the focus on Undo, and nothing is
-    # sent for those five seconds (half a second here: QUICK) but the question of what goes; then the removal, and
-    # the line follows it to Removed. The page never leaves the library as you left it (its filter or order here),
-    # and nothing on the screen moves but the line.
+    # sent for those five seconds (half a second here: QUICK) but the question of what goes; then the removal, its
+    # card closed as it is sent, and the line alone follows it to Removed. The page never leaves the library as you
+    # left it (its filter or order here), and nothing on the screen moves while Undo can still keep the song.
     for n in range(8):
         add_song(conn, "Band", f"Song {n:02}")
     creep = add_song(conn, "Radiohead", "Creep")
@@ -953,6 +958,7 @@ def test_remove_counts_down_on_the_line_then_removes_the_song_there(serve, cfg, 
                     c.querySelector('.progress').getAttribute('role'), location.pathname, location.hash]; })()""")
         page.js("new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))")
         shifts, counts = page.js("window.shifts"), page.js(COUNTS)
+        sent_at, card_at_send = page.js("window.sentAt"), page.js("window.cardAtSend")
         lines, counting = page.js("window.lines"), page.js("window.counting")
     # Its seconds, counted down one by one, then the removal's own line to its end.
     said = [text for text in lines if text]
@@ -978,10 +984,12 @@ def test_remove_counts_down_on_the_line_then_removes_the_song_there(serve, cfg, 
     assert ["remove", "--yes", "--", "Radiohead - Creep"] in runner.calls
     assert gone == ["Creep", 0, "status", "/", left]  # still the library, as you left it; nothing left to open
     assert find_song(conn, creep.key) is None
-    # Its line keeps its place, its size and its request line where it was, Removed, until the page is loaded again:
-    # nothing on the screen moves (the line's dot, by a pixel, as its words change: no shift at all; nor the masthead,
-    # whose Requests tab counts what runs).
-    assert [s for s in shifts if s["value"] > 0] == [], shifts
+    # Nothing on the screen moves while it counts down (the line's dot, by a pixel, as its words change: no shift at
+    # all; nor the masthead, whose Requests tab counts what runs); as the removal is sent its card closes (the owner's
+    # ruling of 2026-11-26: one line waits), and the line says Removed for a moment before it leaves the list
+    # (test_library_remove.py).
+    assert sent_at is not None and card_at_send is False, (sent_at, card_at_send)
+    assert [s for s in shifts if s["value"] > 0 and s["at"] < sent_at] == [], (shifts, sent_at)
     # It counts no more: the masthead, the buttons and the count agree on twelve songs left.
     searched = left == "#q=creep"
     assert counts == {"summary": ["12 wanted"],
@@ -992,9 +1000,9 @@ def test_remove_counts_down_on_the_line_then_removes_the_song_there(serve, cfg, 
 
 def test_a_song_that_gets_a_removed_songs_id_is_a_new_song_on_the_page(serve, cfg, conn, tmp_path):
     # songs.id has no AUTOINCREMENT: the song added once your newest one is removed gets its id again. On the page
-    # that loaded with the song removed, the id names it no more: the removed song's line still says Removed, under
-    # its artist, and the new song comes once, as new, under the form; neither Select nor Add a song takes the one
-    # for the other.
+    # that loaded with the song removed, the id names it no more: the removed song's line says Removed, then leaves
+    # the list, its artist's with it, and the new song comes once, as new, under the form; neither Select nor Add a
+    # song takes the one for the other.
     from caracole.songbook import make_songbook, songbooks_file
 
     add_song(conn, "Band", "Song")
@@ -1011,14 +1019,14 @@ def test_a_song_that_gets_a_removed_songs_id_is_a_new_song_on_the_page(serve, cf
         page.js(f"window.song = document.querySelector('{item}')")
         press_remove(page, item)
         assert page.wait("window.song.querySelector('.progress')?.textContent === 'Removed'", timeout=20)
+        assert page.wait("!window.song.isConnected", timeout=10)  # then it leaves the list
         page.js("""(() => { const form = document.querySelector("form.request-form");
           form.elements.namedItem("artist").value = "Muse"; form.elements.namedItem("title").value = "Uprising";
           form.querySelector('button[type="submit"]').click(); })()""")
         assert page.wait("(document.querySelector('#requested article .progress') || {}).textContent === "
                          "'Ready'", timeout=20), page.js("document.getElementById('requested').innerText")
         shown = page.js("""(() => ({
-          creep: [window.song.querySelector('h3').textContent, window.song.querySelector('.progress').textContent,
-                  window.song.closest('section.artist').querySelector('.artist-name').textContent],
+          artists: Array.from(document.querySelectorAll('#list section.artist')).map((g) => g.dataset.artist),
           list: Array.from(document.querySelectorAll('#list h3')).map((h) => h.textContent),
           requested: Array.from(document.querySelectorAll('#requested article h3')).map((h) => h.textContent),
           summary: Array.from(document.querySelectorAll('#summary .stat')).map((s) => s.textContent) }))()""")
@@ -1038,8 +1046,7 @@ def test_a_song_that_gets_a_removed_songs_id_is_a_new_song_on_the_page(serve, cf
         uprisings = page.js(yours)
     uprising = find_song(conn, override_key("Muse - Uprising"))
     assert uprising.id == creep.id  # its id again
-    assert shown == {"creep": ["Creep", "Removed", "Radiohead"], "list": ["Song", "Creep"],
-                     "requested": ["Uprising"], "summary": ["1 wanted"]}, shown
+    assert shown == {"artists": ["band"], "list": ["Song"], "requested": ["Uprising"], "summary": ["1 wanted"]}, shown
     assert picks == ["Pick Song by Band"]
     assert (creeps, uprisings) == ([], ["Uprising"])
 
@@ -1048,8 +1055,8 @@ def test_a_song_removed_elsewhere_whose_id_comes_back_is_a_new_song_on_the_page(
     # The newest song removed elsewhere (another tab, another device, caracole remove) while the page was open: the
     # page never saw it go. The song asked for next gets its id again, and comes on the page as a new song, once,
     # under the form, while it is looked up as once it is in: never on the removed song's line, under its artist, or
-    # on its line in a songbook's set list, and the removed song's line says Removed from then on. Neither Select nor
-    # Add a song takes the one for the other.
+    # on its line in a songbook's set list, and the removed song's line says Removed, then leaves the list. Neither
+    # Select nor Add a song takes the one for the other.
     from caracole.songbook import make_songbook, songbooks_file
 
     add_song(conn, "Band", "Song")
@@ -1060,9 +1067,11 @@ def test_a_song_removed_elsewhere_whose_id_comes_back_is_a_new_song_on_the_page(
     yours = ("Array.from(document.querySelectorAll('#songbooks .add-results .line'))"
              ".filter((l) => l.textContent.includes('Yours')).map((l) => l.querySelector('h3').textContent)")
     # The removed song's line in the list, under its artist, and in Campfire's set list.
-    creeps_line = """Array.from(document.querySelectorAll('#list section.artist'))
-      .find((g) => g.querySelector('.artist-name').textContent === 'Radiohead').querySelector('article')"""
+    creeps_line = """(Array.from(document.querySelectorAll('#list section.artist'))
+      .find((g) => g.querySelector('.artist-name').textContent === 'Radiohead') || null)?.querySelector('article')"""
     record = """(() => {
+      const line = () => %s;  // its node, kept once it has left the list too
+      let creep = line();
       window.said = { list: [], set: [] };
       const note = (where, p) => {
         const t = p ? p.textContent : '';
@@ -1070,10 +1079,11 @@ def test_a_song_removed_elsewhere_whose_id_comes_back_is_a_new_song_on_the_page(
         if (t && seen[seen.length - 1] !== t) seen.push(t);
       };
       new MutationObserver(() => {  // every text they show, as it changes
-        note('list', (%s || document).querySelector('.progress'));
-        const line = Array.from(document.querySelectorAll('#songbooks .set-line'))
+        if (line()) creep = line();
+        note('list', creep && creep.querySelector('.progress'));
+        const setLine = Array.from(document.querySelectorAll('#songbooks .set-line'))
           .find((li) => (li.querySelector('h3') || {}).textContent === 'Creep');
-        note('set', line && line.querySelector(':scope > .progress'));
+        note('set', setLine && setLine.querySelector(':scope > .progress'));
       }).observe(document.body, { subtree: true, childList: true, characterData: true });
     })()""" % creeps_line
     with browser.Browser(tmp_path / "chrome", width=1280, height=800) as page:
@@ -1094,12 +1104,12 @@ def test_a_song_removed_elsewhere_whose_id_comes_back_is_a_new_song_on_the_page(
                          "'Ready'", timeout=20), page.js("document.getElementById('requested').innerText")
         page.click("#tab-library")  # the step out of the library taken back: shown once Back is
         assert page.wait("window.caracoleTabs.current() === 'library'")
-        shown = page.js("""(() => { const song = %s; return {
-          creep: [song.querySelector('h3').textContent, song.querySelector('.progress').textContent, song.dataset.id],
+        assert page.wait(f"!{creeps_line}", timeout=10)  # it has left the list, its artist with it
+        shown = page.js("""(() => { return {
           list: Array.from(document.querySelectorAll('#list h3')).map((h) => h.textContent),
           requested: Array.from(document.querySelectorAll('#requested article h3')).map((h) => h.textContent),
           summary: Array.from(document.querySelectorAll('#summary .stat')).map((s) => s.textContent),
-          said: window.said }; })()""" % creeps_line)
+          said: window.said }; })()""")
         page.click("#tab-songbooks")
         page.click("#songbooks .new-book")
         picks = page.js("[document.querySelector('.pick-count').textContent].concat(Array.from("
@@ -1113,9 +1123,11 @@ def test_a_song_removed_elsewhere_whose_id_comes_back_is_a_new_song_on_the_page(
         creeps = page.js(yours)
     uprising = find_song(conn, override_key("Muse - Uprising"))
     assert uprising.id == creep.id  # its id again
-    assert shown == {"creep": ["Creep", "Removed", None], "list": ["Song", "Creep"],
-                     "requested": ["Uprising"], "summary": ["1 wanted"],
-                     "said": {"list": ["Removed"], "set": []}}, shown
+    said = shown.pop("said")
+    assert shown == {"list": ["Song"], "requested": ["Uprising"], "summary": ["1 wanted"]}, shown
+    # Its line says Removed, never another song's line (Uprising's request is never on it), then leaves; its line in
+    # Campfire's set list says nothing.
+    assert said == {"list": ["Removed"], "set": []}, said
     assert picks == ["0 selected", "Pick Song by Band"]  # Creep's pick gone with it: its id is Uprising's now
     assert creeps == []
 
@@ -1220,7 +1232,7 @@ openCardOf(lineOf("Creep")).querySelector("form.remove button").click();
 
 def test_a_song_asked_for_on_the_page_then_removed_there_is_drawn_as_gone(serve, cfg, conn, tmp_path):
     # A song new to the page (its line under "Just requested", library.js's ``arrived``) removed from that line is
-    # drawn as one the page was loaded with is: nothing left to open, fetch or pick, and counted no more.
+    # drawn as one the page was loaded with is: nothing left to open, fetch or pick, counted no more, then gone.
     add_song(conn, "Band", "Song")
     runner = FakeCaracole(cfg)
     url = serve(runner, "(() => {})();\n", timers=QUICK)
@@ -1241,6 +1253,7 @@ def test_a_song_asked_for_on_the_page_then_removed_there_is_drawn_as_gone(serve,
         left = page.js(f"{line}.querySelectorAll('a, button, form').length")
         gone = page.js(f"{line}.classList.contains('gone')")
         after = page.js(stats)
+        assert page.wait(f"{line} === null", timeout=10)  # then it leaves "Just requested"
     assert find_song(conn, override_key("Muse - Uprising")) is None
     assert left == 0 and gone
     assert after == before

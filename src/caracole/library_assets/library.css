@@ -219,20 +219,19 @@ section.artist + section.artist, .groups > section + section.nothing { border-to
    fewer, and each run, div.run, of 40 lines or folded artists, is a .cv). Each is as tall as what it holds says
    (``--bands``, ``--lines``, ``--folds``, set on it, times the heights below) until it has been laid out once, then as
    tall as it was. Its containment clips what is painted outside it 6 px out, room for a focused line's ring (drawn 2
-   to 5 px outside the line, which is as wide as the run); one that holds an open card, or the box a removed one
-   keeps, is laid out whole, so that nothing of it is cut (the card's "⋯" menu rises over the run's top, its shadow
+   to 5 px outside the line, which is as wide as the run); one that holds an open card is laid out whole, so that
+   nothing of it is cut (the card's "⋯" menu rises over the run's top, its shadow
    falls past the run's sides). A flow root either way, so that an open card's margins stay inside it and nothing
    moves as its containment comes and goes. Runs move no divider: a run's first line or group keeps the one over it,
    but the first in its box (under a band, or the list's top), and the line after an open card's box has none, as
    card.css's rule has it within a run. */
 #list .cv { display: flow-root; content-visibility: auto; contain-intrinsic-size: auto calc(var(--bands, 0) *
   var(--band-h) + var(--lines, 0) * var(--line-h) + var(--folds, 0) * var(--fold-h)); overflow-clip-margin: 6px; }
-#list .cv:has(.line-panel:not([hidden]), .line.card-gone) { content-visibility: visible; }
+#list .cv:has(.line-panel:not([hidden])) { content-visibility: visible; }
 .lines > .run + .run > .line:first-child, .groups > * + .run > section.artist:first-child,
 .groups > .run + section.artist { border-top: 1px solid var(--border); }
 .lines > .run:has(> .line:last-child:not(.hit):not(.selected) > .line-more[aria-expanded="true"])
-  + .run > .line:first-child,
-.lines > .run:has(> .line.card-gone:last-child) + .run > .line:first-child { border-top: 0; }
+  + .run > .line:first-child { border-top: 0; }
 section.artist:focus { outline: none; }
 section.artist:focus-visible > .artist-title { outline: 3px solid var(--focus); outline-offset: -3px; }
 /* The band of an artist: 34 px, their name in the second accent (--artist) a little bigger than the titles under

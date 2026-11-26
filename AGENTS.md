@@ -1322,6 +1322,25 @@ It is rows.js's, shared by both pages:
 
 - select.js knows only the songs the page was loaded with, less those gone since: a line offers Add to a songbook…
   for those alone.
+- Remove, the owner's ask of 2026-11-26 from the phone ("the tile should dissapear"; the line stayed until a reload,
+  as tall as its open card, which a phone's app never does), and the ruling after it, one line waits:
+  - through the five seconds with Undo nothing moves: the card stays open, its buttons waiting (`holdForms`), Undo on
+    the line;
+  - as the removal is sent its card closes (`sendRemoval`, `closeForGood`: its ⋯ menu closed, its history entry taken
+    back as card.js does; from 1200 px the pane let go, `unselect`), and its line alone, one line tall, says
+    "Removing…", then Removed once its job is done (a song removed elsewhere and learnt of as below says Removed
+    too), for `GONE_AFTER` (2 s, the timers' `gone`), then leaves (`leaveSoon`);
+  - leaving, the list is drawn again by `render` (a fresh page's bands, folds, runs, counts and A-Z strip, no removed
+    song), the lines above where they were on the screen (`steady`), the focus on it given to the next line of its
+    list (#list's, the results' or "Just requested"'s), else the one before, else the search box; a line under "Just
+    requested" just goes;
+  - what moves the page (the close at send, the leave) waits while a pointer is down and 400 ms after the last let go,
+    while a finger is on the screen (touches counted apart: a pan fires `pointercancel` at once) and while the page
+    scrolls (`SCROLL_SETTLE`, 180 ms with no scroll, or its `scrollend`), `PRESS_MOST` (3 s) at most from when it fell
+    due (`whenFree`: pointers and touches let go of on blur, a hidden page and `lostpointercapture`);
+  - a removal that fails puts the line back with its reason, its card closed, to open again;
+  - the live region says Removed once, on the line; its leaving says nothing more (`tell` writes a count only when it
+    changes) (test_library_remove.py).
 - songs.id has no AUTOINCREMENT, so the next song added may get a removed song's id:
   - library.js knows a song gone by its removal done on the page, or by a view or a card of `/jobs.json` that names
     another song's identity under its id (the view's `identity`, `jobs_routes.view`);
@@ -1506,8 +1525,8 @@ It is rows.js's, shared by both pages:
     open card's margins never move it as its containment comes and goes (test_web_page.py's Remove: no shift).
   - Its containment clips what is painted outside it `overflow-clip-margin: 6px` out, room for a focused line's ring
     (base.css's, 2 to 5 px outside the line, as wide as its run: test_library_long.py reads its four sides' pixels).
-    One that holds an open card, or a removed song's `.card-gone` box, is laid out whole
-    (`.cv:has(.line-panel:not([hidden]), .line.card-gone)`), so that its containment never cuts the card's "⋯" menu or
+    One that holds an open card is laid out whole
+    (`.cv:has(.line-panel:not([hidden]))`), so that its containment never cuts the card's "⋯" menu or
     its shadow; the dividers' rules follow the runs (a run's first line or group keeps the one over it, but the first
     in its box); find in page finds a line off the screen.
   - The A–Z strip's smooth jump, whose end is set while the runs it passes are as tall as their estimates, is taken

@@ -636,7 +636,8 @@ would bring the song back.
 before it takes caracole's lock, so the nightly run never waits for your answer.
 
 On the web page, **Remove** in a song's card does the same. It says in one line what goes, counts
-down five seconds with Undo, then removes the song ([caracole serve](#caracole-serve)).
+down five seconds with Undo, then removes the song ([caracole serve](#caracole-serve)). As it is sent the
+card closes and the song's line alone waits; it says Removed for a moment, then leaves the list.
 
 ### Names in other scripts
 
