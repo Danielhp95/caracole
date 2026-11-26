@@ -415,8 +415,9 @@ class WebControls:
     timers in milliseconds in place of its own: ``poll``, between two asks of
     ``/jobs.json``, and of ``/requests.json`` while the Requests tab shows a request that waits or runs
     (1500), ``idle``, between two asks of ``/requests.json`` while it shows none (10000), and ``undo``, Remove's
-    countdown (5000), and ``gone``, how long a removed song's line says Removed before it leaves the list (2000);
-    the page users get carries none. ``guitar``: whether it shows Guitar Pro files in the browser (it has alphaTab:
+    countdown (5000), ``gone``, how long a removed song's line says Removed before it leaves the list (2000), and
+    ``press``, how long what moves the page waits at most for a pointer still down (3000); the page users get carries
+    none. ``guitar``: whether it shows Guitar Pro files in the browser (it has alphaTab:
     web/alphatab.py), so a song's Guitar Pro files offer Open in the browser beside Download. ``badge``: the server's
     badge for a library that isn't the usual one (library_name.py: "Scratch library", ``caracole serve --label``),
     beside the library's name and first in the title; the file never has one. ``sync``: how it syncs with another

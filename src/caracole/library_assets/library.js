@@ -995,6 +995,34 @@
   // nothing else meanwhile; then the removal, whose line the song's follows to Removed, never leaving the page.
   // Undo stops it. Without JavaScript the form posts, and caracole serve asks on a page of its own, whose answers
   // go back to the library as you left it (`back`: the address after #, its search, filters and sort).
+  // What moves the page under a finger (a removal's card closing as it is sent, its line leaving) waits while a
+  // pointer is down and 400 ms after the last let go (its click, a second tap), PRESS_MOST at most: a pointer the page
+  // never hears come up (a touch the system took, the app sent away, a mouse held as the window lost the focus) is
+  // let go of on blur, a hidden page and lostpointercapture, and the wait has its bound all the same.
+  const PRESS_MOST = paced("press", 3000);
+  const pressing = new Set();  // the pointers down on the page
+  let pressedLast = 0;  // when the last of them was let go (performance.now())
+  const pointerUp = (e) => {
+    if (e && e.pointerId !== undefined) pressing.delete(e.pointerId);
+    else pressing.clear();
+    pressedLast = performance.now();
+  };
+  addEventListener("pointerdown", (e) => pressing.add(e.pointerId), true);
+  for (const name of ["pointerup", "pointercancel", "lostpointercapture"]) addEventListener(name, pointerUp, true);
+  addEventListener("blur", () => pointerUp(null));
+  document.addEventListener("visibilitychange", () => { if (document.hidden) pointerUp(null); });
+  const whenFree = (fn) => {
+    const since = performance.now();
+    const go = () => {
+      const now = performance.now();
+      if ((pressing.size || now - pressedLast < 400) && now - since < PRESS_MOST) {
+        setTimeout(go, 100);
+        return;
+      }
+      fn();
+    };
+    go();
+  };
   const REMOVE_WAIT = 5;  // seconds
   const REMOVE_SECOND = paced("undo", REMOVE_WAIT * 1000) / REMOVE_WAIT;  // ms each of them lasts
   const removals = new Map();  // song id -> its removal counting down (startRemoval)
@@ -1121,14 +1149,34 @@
     };
     r.timer = setTimeout(tick, REMOVE_SECOND);
   };
-  // The seconds are over: the removal, sent with the line's key (an id the library gave another song since
-  // removes nothing); its line follows the job from here, as tall as it was, so that nothing under it moves.
+  // The seconds are over, Undo gone: the removal, sent with the line's key (an id the library gave another song
+  // since removes nothing). Its card closes (its ⋯ menu with it, its entry taken back as card.js does; from 1200 px the
+  // pane let go), once no pointer is down, so that only its line waits, one line tall, "Removing…" then Removed (the
+  // owner's ruling of 2026-11-26).
+  const closeForGood = (item) => {
+    for (const part of partsOf(item)) {
+      for (const menu of part.querySelectorAll("details.foot-more[open]")) menu.open = false;
+    }
+    if (item === selected) {
+      unselect();
+      return;
+    }
+    const more = chevronOf(item);
+    if (more && more.getAttribute("aria-expanded") === "true") shut(more);
+    const card = cardOf(item);
+    if (card && card.parentNode !== pane) card.hidden = true;
+  };
   const sendRemoval = (id, r) => {
     for (const item of removalItems(id, r)) {
       const p = progressIn(item);
       const tall = p.getBoundingClientRect().height;
-      if (tall) p.style.minHeight = tall + "px";
+      if (tall) p.style.minHeight = tall + "px";  // the countdown's height until it moves (whenFree)
       showLine(p, { line: { tone: "running", text: "Removing…" } });
+      whenFree(() => {
+        p.style.minHeight = "";
+        if (item.isConnected || item === selected) closeForGood(item);
+        placePlaysSoon();
+      });
     }
     r.ready.then(() => {
       if (removals.get(id) !== r) return;
@@ -2639,9 +2687,10 @@
     const total = songs.filter(counted).length;
     const n = shownNow.filter((i) => counted(songs[i])).length;
     count.hidden = n === total;
-    count.textContent = n === total ? "" : n + "/" + plural(total, "song");
+    const said = n === total ? "" : n + "/" + plural(total, "song");
+    if (count.textContent !== said) count.textContent = said;  // a live region: said again only when it changes
     const shows = server && state.all ? resultsShown : n;
-    filterLive.textContent = plural(shows, "song");
+    if (filterLive.textContent !== plural(shows, "song")) filterLive.textContent = plural(shows, "song");
     showN.textContent = "Show " + plural(shows, "song");
   };
 
@@ -2780,7 +2829,7 @@
     // Searching the sites, served: the results take the list's place, its tools with it, until Escape.
     const searchingAll = Boolean(server) && state.all;
     document.body.classList.toggle("searching-all", searchingAll);
-    drawBar(matching.length === 0, keyed(state.q));
+    drawBar(!matching.some((i) => counted(songs[i])), keyed(state.q));  // a removed song matches nothing
     let answerInList = false;  // the file's line that searches the sites, in the list's empty state
     if (searchingAll) {
       drawResults(query, false);
@@ -5055,16 +5104,14 @@
       return;
     }
     songs[i] = Object.assign({}, songs[i], { status: "removed" });
-    // Drawn again where it is, as tall as it was, its line where it was: nothing on the screen moves, seconds
-    // after the tap.
+    // Drawn again where it is, as tall as it was, its line where it was: nothing on the screen moves as its job
+    // ends; then it leaves the list (leaveSoon).
     const gone = (old) => {
       const fresh = goneItem(songs[i]);
       if (!old) return fresh;
-      // An opened card keeps its box, its margins and edge (card.css), as it keeps its height.
-      if (old !== selected && old.matches('.line:not(.hit):has(> .line-more[aria-expanded="true"])')) {
-        fresh.classList.add("card-gone");  // its card in the pane: the pane empties, the line keeps its own box
-      }
-      const tall = old.isConnected ? old.getBoundingClientRect().height : 0;
+      // Its card closed as the removal was sent: the line alone, as tall as it is (one opened again meanwhile goes).
+      const open = old !== selected && old.matches('.line:not(.hit):has(> .line-more[aria-expanded="true"])');
+      const tall = old.isConnected && !open ? old.getBoundingClientRect().height : 0;
       const line = old.querySelector(".progress");
       const top = line && old.isConnected ? line.getBoundingClientRect().top : null;
       const kept = refill(old, fresh);
@@ -5082,59 +5129,72 @@
     tallyChips();
     tell();
   };
-  // A removed song's line says Removed where it was for GONE_AFTER ms, as tall as it was, then leaves the list, the
-  // lines under it moving up (the owner's ask of 2026-11-26: "the tile should dissapear"), never while a finger or
-  // the mouse is down on the page, whose tap would land on the line that takes its place. The focus on it goes to
-  // the line after it (else before it); an artist it leaves with one line folds into it, one it leaves with none
-  // goes; the pane, its card's, stays empty until it holds another (placeAgain).
+  // A removed song's line says Removed where it was for GONE_AFTER ms, its card closed when the removal was sent
+  // (sendRemoval), then leaves the list (the owner's ask of 2026-11-26: "the tile should dissapear"), once no pointer
+  // is down (whenFree). The list is drawn again as render draws it (its bands, folds, runs, counts and the A-Z strip),
+  // the lines above it where they were on the screen (``steady``); the focus on it goes to the next line of its list,
+  // else the one before, else the search box. A line under "Just requested" (a spot) just goes.
   const GONE_AFTER = paced("gone", 2000);
-  const pressing = new Set();  // the pointers down on the page
-  let pressedLast = 0;  // when the last of them was let go (performance.now())
-  addEventListener("pointerdown", (e) => pressing.add(e.pointerId), true);
-  for (const name of ["pointerup", "pointercancel"]) {
-    addEventListener(name, (e) => {
-      pressing.delete(e.pointerId);
-      pressedLast = performance.now();
-    }, true);
-  }
+  // The lines of the list ``node`` is in that stay: #list's, the results' (#found) or #requested's.
+  const linesBeside = (node) => {
+    const box = node.closest("#list, #found, #requested");
+    return box ? Array.from(box.querySelectorAll("article.line")).filter((l) => l === node || !l.classList.contains("gone"))
+      : [node];
+  };
+  const focusLine = (line) => {
+    const more = line.querySelector(".line-more");
+    if (more) more.focus({ preventScroll: true });
+    else focusOn(line);
+  };
+  // ``fn`` (which takes ``node`` out of the page), with what is on the screen kept where it was: anchored to the line
+  // before ``node`` when ``node`` is on the screen or under it, so the lines under it move up into its place, else (it
+  // is over the screen's top) to the first line on the screen, so nothing moves under the reader.
+  const steady = (node, fn) => {
+    const listed = linesBeside(node);
+    const at = listed.indexOf(node);
+    const bar = document.querySelector(".searchbar");
+    const top = bar ? Math.max(0, bar.getBoundingClientRect().bottom) : 0;
+    const nodeTop = node.getBoundingClientRect().top;
+    const anchor = nodeTop >= top ? listed[at - 1]
+      : listed.find((l, n) => n !== at && l.getBoundingClientRect().top >= top);
+    const was = anchor ? anchor.getBoundingClientRect().top : null;
+    fn();
+    const keep = () => {
+      if (!anchor || !anchor.isConnected || was === null) return;
+      const moved = anchor.getBoundingClientRect().top - was;
+      if (Math.abs(moved) >= 0.5) window.scrollBy(0, moved);
+    };
+    keep();
+    requestAnimationFrame(() => { keep(); requestAnimationFrame(keep); });  // once the runs on the screen are laid out
+  };
   const leaveSoon = (node) => {
-    const leave = () => {
-      if (pressing.size || performance.now() - pressedLast < 400) {  // its click, or a second tap, still to come
-        setTimeout(leave, 200);
-        return;
-      }
+    setTimeout(() => whenFree(() => {
       if (!node.isConnected || !node.classList.contains("gone")) return;
-      const listed = Array.from(document.querySelectorAll("#list article.line, #requested article.line"));
+      const listed = linesBeside(node);
       const at = listed.indexOf(node);
-      const next = listed.slice(at + 1).concat(listed.slice(0, Math.max(at, 0)).reverse())
-        .find((line) => !line.classList.contains("gone"));
+      const next = listed[at + 1] || listed[at - 1] || null;
       const focused = node.contains(document.activeElement);
-      const group = node.closest("section.artist");
-      const run = node.parentNode && node.parentNode.classList.contains("run") ? node.parentNode : null;
-      node.remove();
-      if (run && !run.children.length) run.remove();
-      if (group) {
-        const left = Array.from(group.querySelectorAll(":scope > .lines article.line"));
-        const box = group.parentNode && group.parentNode.classList.contains("run") ? group.parentNode : null;
-        if (!left.length) group.remove();
-        else if (left.length === 1 && !group.matches(".folded, .meant") && !group.querySelector(":scope > .lines ~ *")
-                 && shownSongs.has(left[0])) {
-          const s = shownSongs.get(left[0]);
-          const mine = songs.concat(Array.from(arrived.values())).filter(counted)
-            .filter((x) => String(x.sortArtist || "") === String(group.dataset.artist || "")).length;
-          group.replaceWith(artistGroup({ key: group.dataset.artist, name: String(shownName(s, s.artist)) }, left,
-                                        { mine }));
+      const had = focused ? null : document.activeElement;
+      const spot = Boolean(node.closest("#requested"));
+      steady(node, () => {
+        if (spot) {
+          const box = node.closest("#requested");
+          node.remove();
+          if (box && !box.querySelector("article")) box.hidden = true;
+        } else {
+          node.remove();
+          render();  // the list as a fresh page would draw it: the removed song isn't
         }
-        if (box && !box.children.length) box.remove();
-      }
-      if (focused && next) {
-        const more = next.querySelector(".line-more");
-        (more || next).focus({ preventScroll: true });
+      });
+      if (focused) {
+        if (next && next.isConnected) focusLine(next);
+        else input.focus({ preventScroll: true });
+      } else if (had && had !== document.activeElement && had.isConnected) {
+        had.focus({ preventScroll: true });  // render took it from where it was
       }
       placePlaysSoon();
       keepSelected();
-    };
-    setTimeout(leave, GONE_AFTER);
+    }), GONE_AFTER);
   };
   // A song new to the page since it loaded (``arrived``: its line under the bar, or a result's row), removed: drawn
   // as gone where it shows, as a song the page was loaded with is, and counted no more.

@@ -227,12 +227,11 @@ section.artist + section.artist, .groups > section + section.nothing { border-to
    card.css's rule has it within a run. */
 #list .cv { display: flow-root; content-visibility: auto; contain-intrinsic-size: auto calc(var(--bands, 0) *
   var(--band-h) + var(--lines, 0) * var(--line-h) + var(--folds, 0) * var(--fold-h)); overflow-clip-margin: 6px; }
-#list .cv:has(.line-panel:not([hidden]), .line.card-gone) { content-visibility: visible; }
+#list .cv:has(.line-panel:not([hidden])) { content-visibility: visible; }
 .lines > .run + .run > .line:first-child, .groups > * + .run > section.artist:first-child,
 .groups > .run + section.artist { border-top: 1px solid var(--border); }
 .lines > .run:has(> .line:last-child:not(.hit):not(.selected) > .line-more[aria-expanded="true"])
-  + .run > .line:first-child,
-.lines > .run:has(> .line.card-gone:last-child) + .run > .line:first-child { border-top: 0; }
+  + .run > .line:first-child { border-top: 0; }
 section.artist:focus { outline: none; }
 section.artist:focus-visible > .artist-title { outline: 3px solid var(--focus); outline-offset: -3px; }
 /* The band of an artist: 34 px, their name in the second accent (--artist) a little bigger than the titles under
