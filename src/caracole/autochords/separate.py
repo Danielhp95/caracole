@@ -148,7 +148,8 @@ class DemucsSeparator:
 
 def frame_db(path: Path, *, frame_s: float = FRAME_S, rate: int = 16000) -> list[float]:
     """The RMS loudness of each ``frame_s`` frame of the audio at ``path``, in dB, one value per frame. The file is
-    read as BTC reads its own (audio.py ``load_mono``: libsndfile, else FFmpeg for the AAC of YouTube's .m4a)."""
+    read as BTC reads its own (audio.py ``load_mono``: libsndfile, else FFmpeg for the AAC of YouTube's .m4a and an
+    MP3 libsndfile decodes only in part)."""
     from caracole.autochords.audio import load_librosa, load_mono
 
     samples = load_mono(path, rate)

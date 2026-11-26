@@ -1441,6 +1441,13 @@ says so and exits 1.
 A song's sheet is made again when its audio changes, and when timed lyrics arrive after a sheet made
 over plain lyrics or none, so that each chord can go over its word.
 
+An MP3 that names no length (no Xing or VBRI header: a recorder's) is as long as its frames say,
+for the chords, `caracole audio` and the lyrics sites alike. Once, the first run after this came in
+makes again the auto sheets made from such a file whose length was guessed wrong, each logged
+(`Artist - Title: its MP3 is 7:20 long, not the 3:56 its length was guessed at …`); where caracole
+wrote the guess in wanted.txt itself, the line's length is corrected, and lyrics not found are asked
+for again with it. A song with a human sheet is left alone.
+
 A song takes minutes, so it logs a line before each, `Working out the chords of Artist - Title
 (3 of 12)…`, and one after: `Artist - Title: auto sheet written (synced lyrics)`.
 

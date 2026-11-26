@@ -91,8 +91,12 @@ def _from_name(path: Path) -> tuple[str | None, str | None]:
 
 
 def read_audio(path: Path) -> AudioFile:
-    """Tags and duration of an audio file, falling back to its name when there are no tags."""
+    """Tags and duration of an audio file, falling back to its name when there are no tags. An MP3 whose first frame
+    names no length is as long as its frames say (mpeg_frames.py), never mutagen's guess."""
     import mutagen  # here, not on import: inbox.py, which the pages import, compares names with Names
+    from mutagen.mp3 import MPEGInfo
+
+    from caracole.mpeg_frames import counted_length
 
     try:
         f = mutagen.File(path, easy=True)
@@ -108,6 +112,11 @@ def read_audio(path: Path) -> AudioFile:
         title = title or name_title
     info = getattr(f, "info", None) if f is not None else None
     length = getattr(info, "length", None)
+    if isinstance(info, MPEGInfo):  # an MP3 whose first frame names no length: mutagen's is a guess, its frames say
+        try:
+            length = counted_length(path) or length
+        except OSError:
+            pass
     return AudioFile(
         path=path, artist=artist, title=title, album=album,
         duration_s=float(length) if length else None, mtime=os.stat(path).st_mtime,

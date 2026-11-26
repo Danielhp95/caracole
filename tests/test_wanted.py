@@ -595,3 +595,21 @@ def test_removing_refuses_a_symlinked_file(tmp_path, secret):
     with pytest.raises(OSError, match="symbolic link"):
         remove_wanted(path, "radiohead/creep")
     assert secret.read_text(encoding="utf-8") == "Radiohead - Creep\n" and path.is_symlink()
+
+
+def test_retime_wanted_corrects_the_length_caracole_wrote_and_nothing_the_owner_did(tmp_path):
+    from caracole.wanted import retime_wanted
+
+    path = tmp_path / "wanted.txt"
+    text = ("# mine\n"
+            "Ana - Luna | Grabaciones | 0:02\n"  # as `caracole audio` wrote it, its length the guess
+            "Ana - Luna | 0:02  # a second line, the owner's: a comment\n"
+            "Ana - Sol | 0:02\n"  # another song
+            "Ana - Luna | 2\n")  # the owner's way of writing it
+    path.write_bytes(text.encode())
+
+    assert retime_wanted(path, "ana/luna", 1_703, 10_083) == [2]
+
+    assert path.read_text() == text.replace("Grabaciones | 0:02", "Grabaciones | 0:10")
+    assert retime_wanted(path, "ana/luna", 1_703, 10_083) == []  # once
+    assert retime_wanted(tmp_path / "none.txt", "ana/luna", 1_703, 10_083) == []

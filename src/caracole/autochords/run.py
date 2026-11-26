@@ -97,6 +97,7 @@ from caracole.autochords.merge import (
     parse_lrc_words,
     youtube_credit,
 )
+from caracole.autochords.remeasure import remeasure_once
 from caracole.autochords.sheet_lyrics import lyrics_key
 from caracole.autochords.transcript import (
     LYRICS_SOURCE,
@@ -271,6 +272,7 @@ def autochords_pending(
     stats = AutoStats()
     told = on_step or (lambda said: None)
     models = _Models(cfg, recognizer, beats_fn)
+    remeasure_once(conn, cfg, list_songs(conn), overrides, stamp)  # once ever: an MP3 whose length was guessed
     songs = [s for s in list_songs(conn) if only is None or s.id in only]
     hears = transcriptions if hearing is not None else 0
     due, worked = _count_due(conn, cfg, songs, overrides, hears, parse_stamp(stamp)), 0

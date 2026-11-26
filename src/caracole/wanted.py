@@ -265,6 +265,41 @@ def remove_wanted(path: Path, key: str, *, tries: int = 3) -> list[int]:
     raise OSError(f"{path} kept changing while caracole took a line out of it; try again")
 
 
+def retime_wanted(path: Path, key: str, was_ms: int, duration_ms: int, *, tries: int = 3) -> list[int]:
+    """Write ``duration_ms`` in place of ``was_ms`` on each line of the song with this identity key that is exactly as
+    caracole writes one with that length (``format_line``: ``caracole audio``'s line, its length the file's as read
+    then); return their numbers. A line the owner wrote otherwise (another spelling, a comment, a length in seconds)
+    stays theirs, and the rest of the file byte for byte, written as ``remove_wanted`` writes it. NotRegularFile (an
+    OSError) for a symbolic link."""
+    path = Path(path)
+    for _ in range(tries):
+        try:
+            data = read_regular(path)
+        except FileNotFoundError:
+            return []
+        pieces = re.split(rb"(?<=\n)", data)
+        changed: list[int] = []
+        for n, piece in enumerate(pieces):
+            raw = piece.decode("utf-8", errors="replace").removeprefix("﻿")
+            body = raw.rstrip("\n").rstrip("\r")
+            try:
+                line = _parse_line(body, n + 1)
+            except _LineError:
+                continue
+            if (line is None or line.identity != key or line.duration_ms is None
+                    or body != format_line(line.artist, line.title, line.album, was_ms)):
+                continue
+            new = format_line(line.artist, line.title, line.album, duration_ms)
+            pieces[n] = piece.replace(body.encode("utf-8"), new.encode("utf-8"), 1)
+            changed.append(n + 1)
+        if not changed:
+            return []
+        if read_regular(path) == data:
+            write_atomic(path, b"".join(pieces))
+            return changed
+    raise OSError(f"{path} kept changing while caracole corrected a song's length in it; try again")
+
+
 def _without(data: bytes, key: str) -> tuple[bytes, list[int]]:
     """The file's bytes without the lines of the song with this key, and those lines' numbers."""
     bom = data.startswith(codecs.BOM_UTF8)

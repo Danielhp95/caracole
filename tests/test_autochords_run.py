@@ -2346,3 +2346,58 @@ def test_the_count_of_songs_due_counts_those_the_words_make_due(conn, cfg, tmp_p
     said = [r.getMessage() for r in caplog.records if r.getMessage().startswith("Working out the chords")]
     assert said == ["Working out the chords of Nobody - Two (1 of 2)…", "Working out the chords of Nobody - One (2 of 2)…"]
     assert all(over_words(conn, s) for s in songs)
+
+
+# --- once, the sheets an MP3 whose length was guessed wrong cut short (remeasure.py) --------------------------------
+
+AUDIO = Path(__file__).parent / "fixtures" / "audio"  # make.sh's files: tests/test_mpeg_frames.py says which is which
+
+
+def with_fixture(conn, tmp_path, song, name, **fields):
+    """One of tests/fixtures/audio/'s files, copied, linked to the song as scan_music would."""
+    path = tmp_path / "music" / f"{song.id}-{name}"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes((AUDIO / name).read_bytes())
+    update_song(conn, song.id, audio_path=str(path), audio_mtime=os.stat(path).st_mtime, **fields)
+    return get_song(conn, song.id)
+
+
+def test_once_an_auto_sheet_of_an_mp3_whose_length_was_guessed_is_made_again_and_never_twice(
+        conn, cfg, tmp_path, caplog):
+    from caracole.autochords.remeasure import KEY
+    from caracole.db import kv_delete, kv_set
+
+    cut = with_fixture(conn, tmp_path, add_song(conn, "Ana", "Luna", duration_ms=2_000), "short-guess.mp3",
+                       lyrics_status="missing", lyrics_at="2026-11-01T00:00:00Z")
+    long = with_fixture(conn, tmp_path, add_song(conn, "Ana", "Mar", duration_ms=None), "long-guess.mp3")
+    agreed = [with_fixture(conn, tmp_path, add_song(conn, "Bea", name, duration_ms=None), name)
+              for name in ("cbr.mp3", "xing.mp3", "tone.m4a")]
+    human = with_fixture(conn, tmp_path, add_song(conn, "Cai", "Sol", duration_ms=None), "short-guess.mp3")
+    keep_human_sheet(conn, cfg, human)
+    cfg.wanted_file.write_text("Ana - Luna | 0:02\nAna - Mar\nBea - cbr.mp3\n", encoding="utf-8")
+    kv_set(conn, "megalobiz:checked:" + str(cut.id), "2026-11-01T00:00:00Z")
+    kv_set(conn, KEY, "before")  # the sheets as a caracole made them before it counted an MP3's frames
+    run(conn, cfg, now=datetime(2026, 11, 1, tzinfo=UTC))
+    kv_delete(conn, KEY)
+
+    recognizer = FakeRecognizer()
+    with caplog.at_level(logging.INFO, logger="caracole.autochords.remeasure"):
+        run(conn, cfg, recognizer, now=datetime(2026, 11, 26, tzinfo=UTC))
+
+    assert sorted(p.name for p in recognizer.calls) == [f"{cut.id}-short-guess.mp3", f"{long.id}-long-guess.mp3"]
+    said = [r.getMessage() for r in caplog.records]
+    assert any(m.startswith("Ana - Luna: its MP3 is 0:10 long, not the 0:02") and "wanted.txt corrected" in m
+               for m in said)
+    assert any(m.startswith("Ana - Mar: its MP3 is 0:02 long, not the 0:11") for m in said)
+    # The length caracole wrote is corrected, and LRCLIB, asked with the wrong one, asked again; no other line.
+    assert cfg.wanted_file.read_text(encoding="utf-8") == "Ana - Luna | 0:10\nAna - Mar\nBea - cbr.mp3\n"
+    now = get_song(conn, cut.id)
+    assert (now.duration_ms, now.lyrics_status, now.lyrics_at) == (10_000, "missing", None)
+    assert kv_get(conn, "megalobiz:checked:" + str(cut.id)) is None
+    assert kv_get(conn, KEY) == "2026-11-26T00:00:00Z"
+    assert all(get_song(conn, s.id).autochords_mtime == s.audio_mtime for s in agreed)
+    assert [f.name for f in kept_files(conn, human.id)] == ["sheet.txt"]
+
+    again = FakeRecognizer()
+    run(conn, cfg, again, now=datetime(2026, 11, 27, tzinfo=UTC))
+    assert again.calls == []
