@@ -150,7 +150,8 @@ def server_member(controls: WebControls) -> dict[str, Any]:
     return {"csrf": controls.csrf, "busy": sorted(controls.busy), "active": controls.active,
             "removing": sorted(controls.removing), "jobs": list(controls.jobs), "guitar": False,
             "youtube": {"ok": False, "why": YOUTUBE_PROBLEM, "off": True},
-            "transcribe": {"ok": False, "why": YOUTUBE_PROBLEM, "songs": [], "time": ""}}
+            "transcribe": {"ok": False, "why": YOUTUBE_PROBLEM, "songs": [], "nothing": [], "unsung": [],
+                           "transcribed": [], "time": ""}}
 
 
 def data_objects() -> dict[str, dict[str, Any]]:

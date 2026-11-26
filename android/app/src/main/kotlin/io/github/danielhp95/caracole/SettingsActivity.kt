@@ -36,7 +36,8 @@ import java.time.Instant
 /**
  * The settings: caracole serve's address, Test (the computer at that address asked what it holds, nothing changed:
  * SyncRoutes.tested's words, "studio answered: 96 songs, 3 songbooks, its indexes read 02/11/26"), the storage the
- * copy takes, Sync on Wi-Fi by itself (the bar's sync, unattended: [Syncs]), Export and Import a file (the library
+ * copy takes, Sync beside Test (the library page's sync sheet at its sync flow, for the address typed; a blank one
+ * is said as Test says it, and nothing opens), Sync on Wi-Fi by itself (the bar's sync, unattended: [Syncs]), Export and Import a file (the library
  * page's sync sheet at that flow, MainActivity's [MainActivity.SHEET]), the text size a pinch left, with Reset, and
  * the phone's backups ([BackupsActivity]), and the site catalogues: the date of the ones imported last ("Of 24 Nov
  * 2026 · 3 weeks old"), or of the computer's indexes a sync merged ("From the computer · 3 Nov 2026 · …"), else of
@@ -46,7 +47,7 @@ import java.time.Instant
  * it (the Journal's Try again too), Download then the owner's go-ahead, the question kept for the next screen until it
  * is answered (a rotation's). Download asks to show notifications first, the download's own with its bar. A
  * phone's caracole that can't start is said under the catalogues' button ("Couldn't start · …"), never a crash, and
- * its start tried again as the screen comes back. Syncing itself is the library screen's bar's sync button.
+ * its start tried again as the screen comes back. The library screen's bar has the same sync button.
  * No item's text ends in "…".
  */
 class SettingsActivity : Activity() {
@@ -111,6 +112,7 @@ class SettingsActivity : Activity() {
             if (on) askToNotify()
         }
 
+        findViewById<Button>(R.id.open_sync).setOnClickListener { openSync() }
         findViewById<Button>(R.id.export).setOnClickListener { sheet(EXPORT) }
         findViewById<Button>(R.id.import_file).setOnClickListener { sheet(IMPORT) }
 
@@ -176,6 +178,11 @@ class SettingsActivity : Activity() {
     private fun sheet(flow: String) {
         settings.server = address.text.toString().trim()
         startActivity(Intent(this, MainActivity::class.java).putExtra(MainActivity.SHEET, flow))
+    }
+
+    /** Sync: the sheet at its sync flow for the address typed; with none, Test's own words for it, in place. */
+    private fun openSync() {
+        if (address.text.toString().isBlank()) test() else sheet(MainActivity.SYNC)
     }
 
     /** Android 13 and later show the notification of a sync that left conflicts, and the site catalogues' download's

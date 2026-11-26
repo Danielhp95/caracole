@@ -20,10 +20,11 @@
 The library page's request form sends its YouTube video here (``POST /request`` with ``youtube``, which
 library_routes.py hands over: ``sheet_from_youtube``), in place of a lookup. The job is one ``caracole youtube
 --sheet --progress`` (jobs.py ``youtube_sheet_steps``, youtube_sheet.py): the audio taken with yt-dlp, as the
-youtube step takes it, within its budget and pauses, the lyrics from LRCLIB, the chords from the audio, the PDF
-and the viewer. Its key is the song's after ``jobs.YOUTUBE_SHEET``, so it never joins the song's lookup, nor a
-lookup it, and one at a time a song: asked again while one waits or runs, that one is the answer. Its view is the
-song's (/jobs.json's ``kind`` "song"), so the song's line says how it goes, its stages as steps (outcome.py).
+youtube step takes it, within its budget and pauses, the lyrics from the lyrics sites, else the words heard from the
+audio where caracole can transcribe, the chords from the audio, the PDF and the viewer. Its key is the song's after
+``jobs.YOUTUBE_SHEET``, so it never joins the song's lookup, nor a lookup it, and one at a time a song: asked again
+while one waits or runs, that one is the answer. Its view is the song's (/jobs.json's ``kind`` "song"), so the song's
+line says how it goes, its stages as steps (outcome.py).
 
 The video is given to the command as its plain address (``youtube_urls.watch_url``), never as pasted: no
 playlist, no tracking. Refused, with nothing written or queued (``pages.Refused``): a link that is no YouTube

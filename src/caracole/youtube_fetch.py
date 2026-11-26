@@ -28,7 +28,8 @@ whose download fails ``GIVE_UP_AFTER`` times, the network aside, is given up as 
 YouTube won't give: the next run searches again, or waits for another paste.
 
 The route is off, and nothing is asked of YouTube, without auto-chords: this caracole
-must have torch, librosa and beat_this, both model files, and yt-dlp (``route_problem``).
+must have torch, librosa and beat_this, both model files, and yt-dlp (``route_problem``;
+``autochords_problem`` is the first two, all a transcription of any audio needs of them).
 """
 
 from __future__ import annotations
@@ -94,14 +95,9 @@ def autochords_missing() -> list[str]:
     return missing_packages()
 
 
-def route_problem(cfg: Config) -> str | None:
-    """Why caracole takes no song's audio from YouTube here, or None when it does.
-
-    Off with ``[providers.youtube] enabled = false``, and without what makes chords of
-    the audio: a download auto-chords can't use is no use to anyone.
-    """
-    if not cfg.provider(PROVIDER).enabled:
-        return f"turned off ([providers.{PROVIDER}] enabled = false)"
+def autochords_problem(cfg: Config) -> str | None:
+    """Why this caracole makes no chords of any audio, or None when it does: the packages and the BTC and beat_this
+    files. Nothing is imported to find out."""
     missing = autochords_missing()
     if missing:
         return (f"built without auto-chords (missing: {', '.join(missing)}): nothing "
@@ -112,6 +108,20 @@ def route_problem(cfg: Config) -> str | None:
             return f"auto-chords has no {what} configured"
         if not path.is_file():
             return f"auto-chords' {what} {verb} there ({path})"
+    return None
+
+
+def route_problem(cfg: Config) -> str | None:
+    """Why caracole takes no song's audio from YouTube here, or None when it does.
+
+    Off with ``[providers.youtube] enabled = false``, and without what makes chords of
+    the audio: a download auto-chords can't use is no use to anyone.
+    """
+    if not cfg.provider(PROVIDER).enabled:
+        return f"turned off ([providers.{PROVIDER}] enabled = false)"
+    problem = autochords_problem(cfg)
+    if problem is not None:
+        return problem
     if shutil.which(cfg.ytdlp_bin) is None:
         return f"yt-dlp isn't there ({cfg.ytdlp_bin})"
     return None
@@ -124,17 +134,23 @@ def route_reason(cfg: Config) -> str | None:
         return None
     if problem.startswith("turned off"):
         return "YouTube is off"
-    if "built without auto-chords" in problem:
-        return "auto-chords isn't installed"
-    if problem.startswith("auto-chords"):
-        return "auto-chords' model files are missing"
+    if problem == autochords_problem(cfg):
+        return autochords_reason(problem)
     return "yt-dlp is missing"
 
 
+def autochords_reason(problem: str) -> str:
+    """An ``autochords_problem`` in a few words."""
+    if "built without auto-chords" in problem:
+        return "auto-chords isn't installed"
+    return "auto-chords' model files are missing"
+
+
 def transcribe_problem(cfg: Config) -> str | None:
-    """Why no song's lyrics are transcribed from its audio here, or None when they can be: the YouTube route
-    (the audio), Whisper, both model files and demucs-rs. Nothing is imported to find out."""
-    problem = route_problem(cfg)
+    """Why no song's lyrics are transcribed from its audio here, or None when they can be: auto-chords (any audio
+    will do, YouTube's or a purchase's, so neither YouTube nor yt-dlp), Whisper, both model files and demucs-rs, and
+    the GPU where the build needs it. Nothing is imported to find out."""
+    problem = autochords_problem(cfg)
     if problem is not None:
         return problem
     if importlib.util.find_spec("whisper") is None:
@@ -147,6 +163,8 @@ def transcribe_problem(cfg: Config) -> str | None:
             return f"the {what} isn't there ({path})"
     if shutil.which(cfg.demucs_bin) is None:
         return f"demucs-rs isn't there ({cfg.demucs_bin})"
+    if os.environ.get("CARACOLE_TORCH_CUDA") == "1" and not Path("/dev/nvidiactl").exists():
+        return "the GPU build's separator needs the GPU, which this unit doesn't see (no /dev/nvidiactl)"
     return None
 
 
@@ -155,8 +173,10 @@ def transcribe_reason(cfg: Config) -> str | None:
     problem = transcribe_problem(cfg)
     if problem is None:
         return None
-    if problem == route_problem(cfg):
-        return route_reason(cfg)
+    if problem == autochords_problem(cfg):
+        return autochords_reason(problem)
+    if "needs the GPU" in problem:
+        return "the GPU isn't visible here"
     if problem == "built without Whisper":
         return "Whisper isn't installed"
     if problem.startswith("demucs-rs"):

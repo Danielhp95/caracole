@@ -85,6 +85,8 @@ object JobCommands {
         "song" to "Find the song",
         "audio" to "Audio from YouTube",
         "lyrics" to "Lyrics",
+        "vocals" to "Where the singing is",
+        "words" to "Transcribing the lyrics",
         "chords" to "Chords from the audio",
         "pdf" to "PDF",
         "pages" to "The logbook page",
