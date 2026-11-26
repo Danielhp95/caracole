@@ -71,10 +71,11 @@ def odd_in(page, where: str, selector: str, floor: int) -> None:
 @pytest.mark.parametrize("scheme", ["light", "dark"])
 def test_the_library_page_has_four_corner_radii(library, live, tmp_path, size, scheme, monkeypatch):  # noqa: F811
     import caracole.library_page as library_page
-    from caracole.audio_store import AUDIO_MAX
+    from caracole.audio_store import AUDIO_MAX, TOO_BIG
 
     # The bar's "+" drawn (a sheet from an audio file: its dialog measured too, refused, as this caracole makes none).
-    monkeypatch.setattr(library_page, "audio_member", lambda cfg: {"ok": True, "why": None, "limit": AUDIO_MAX})
+    monkeypatch.setattr(library_page, "audio_member", lambda cfg: {"ok": True, "why": None, "limit": AUDIO_MAX,
+                                                                       "too_big": TOO_BIG})
     base, runner = live
     from test_web_page_steps import FROM_UG
 

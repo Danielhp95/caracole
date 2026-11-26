@@ -73,7 +73,8 @@ class LibraryPageTest {
         assertEquals(listOf("ok", "why", "off"), member.getValue("youtube").jsonObject.keys.toList())
         assertEquals(listOf("ok", "why", "songs", "nothing", "unsung", "transcribed", "time"),
                      member.getValue("transcribe").jsonObject.keys.toList())
-        assertEquals(obj("ok" to false, "why" to LibraryPage.AUDIO_PROBLEM, "limit" to 0), member.getValue("audio"))
+        assertEquals(obj("ok" to false, "why" to LibraryPage.AUDIO_PROBLEM, "limit" to 0, "too_big" to ""),
+                     member.getValue("audio"))
     }
 
     @Test
@@ -90,7 +91,8 @@ class LibraryPageTest {
                                              "songs" to emptyList<Int>(), "nothing" to emptyList<Int>(),
                                              "unsung" to emptyList<Int>(), "transcribed" to emptyList<Int>(),
                                              "time" to ""),
-                         "audio" to obj("ok" to false, "why" to LibraryPage.AUDIO_PROBLEM, "limit" to 0)),
+                         "audio" to obj("ok" to false, "why" to LibraryPage.AUDIO_PROBLEM, "limit" to 0,
+                                        "too_big" to "")),
                      served.getValue("server"))
         for (name in data.keys - "songs") assertEquals(data.getValue(name), served.getValue(name), name)
     }

@@ -153,7 +153,7 @@ def server_member(controls: WebControls) -> dict[str, Any]:
             "youtube": {"ok": False, "why": YOUTUBE_PROBLEM, "off": True},
             "transcribe": {"ok": False, "why": YOUTUBE_PROBLEM, "songs": [], "nothing": [], "unsung": [],
                            "transcribed": [], "time": ""},
-            "audio": {"ok": False, "why": AUDIO_PROBLEM, "limit": 0}}
+            "audio": {"ok": False, "why": AUDIO_PROBLEM, "limit": 0, "too_big": ""}}
 
 
 def data_objects() -> dict[str, dict[str, Any]]:
@@ -480,7 +480,7 @@ def test_the_server_member_is_build_library_pages(conn, cfg):
     with (off, mock.patch.object(library_page, "route_reason", lambda cfg: YOUTUBE_PROBLEM),
           mock.patch.object(library_page, "transcribe_reason", lambda cfg: YOUTUBE_PROBLEM),
           mock.patch.object(library_page, "audio_member",
-                            lambda cfg: {"ok": False, "why": AUDIO_PROBLEM, "limit": 0})):
+                            lambda cfg: {"ok": False, "why": AUDIO_PROBLEM, "limit": 0, "too_big": ""})):
         html = build_library_page(conn, cfg, Overrides(), NOW, controls=SERVER_CONTROLS)
     data = json.loads(re.search(r'<script type="application/json" id="songs">(.*?)</script>', html, re.S).group(1))
     assert data["server"] == server_member(SERVER_CONTROLS)

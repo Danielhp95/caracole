@@ -500,15 +500,16 @@ def audio_member(cfg: Config) -> dict[str, Any]:
     """The served page's ``server.audio``: whether this caracole makes a song's sheet from an audio file (``ok``:
     auto-chords and its model files, ``youtube_fetch.autochords_problem``; neither YouTube nor yt-dlp), why not
     (``why``, in a few words), and the most an upload takes (``limit``, ``audio_store.AUDIO_MAX``; 0 where none is
-    taken). Where it is, the bar has its "+" and a song's card Sheet from an audio file… (library.js ``audioSheet``).
+    taken), and the upload route's words for a file past it (``too_big``, ``audio_store.TOO_BIG``, which the page
+    says before sending one). Where it is, the bar has its "+" and a song's card Sheet from an audio file… (library.js ``audioSheet``).
     The phone's (LibraryPage.kt) is the same shape, saying it can't."""
-    from caracole.audio_store import AUDIO_MAX
+    from caracole.audio_store import AUDIO_MAX, TOO_BIG
     from caracole.youtube_fetch import autochords_problem, autochords_reason
 
     problem = autochords_problem(cfg)
     if problem is not None:
-        return {"ok": False, "why": autochords_reason(problem), "limit": 0}
-    return {"ok": True, "why": None, "limit": AUDIO_MAX}
+        return {"ok": False, "why": autochords_reason(problem), "limit": 0, "too_big": ""}
+    return {"ok": True, "why": None, "limit": AUDIO_MAX, "too_big": TOO_BIG}
 
 
 def assemble_page(data: Mapping[str, Any], controls: WebControls | None, *, problem: str | None,

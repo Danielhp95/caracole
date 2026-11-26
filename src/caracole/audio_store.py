@@ -46,7 +46,7 @@ import stat
 import threading
 import time
 import unicodedata
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from shutil import disk_usage
@@ -102,9 +102,10 @@ _lock = threading.RLock()
 
 
 def held() -> threading.RLock:
-    """The staged uploads' lock, for a route to hold across a check and what it does after it: an upload's ``named``
-    (the jobs' uploads) read and its ``stage``, Make sheet's ``staged`` and its job queued, a drop's check and its
-    ``drop``, so that no upload lets go of a file a job is being queued for."""
+    """The staged uploads' lock, for a route to hold across a check and what it does after it: Make sheet's ``staged``
+    and its job queued, a drop's check and its ``drop``; an upload passes ``stage`` and ``sweep`` a function of the
+    jobs' uploads, which they call under it. So no upload lets go of a file a job is being queued for, and none
+    holds the store while it reads a file."""
     return _lock
 
 
@@ -363,10 +364,16 @@ def _touched(root: Path, upload_id: str) -> float:
     return max(times, default=0.0)
 
 
-def stage(cfg: Config, data: bytes, name: str, *, named: Collection[str]) -> Staged:
+def _ids(named: Collection[str] | Callable[[], Collection[str]]) -> set[str]:
+    return set(named() if callable(named) else named)
+
+
+def stage(cfg: Config, data: bytes, name: str, *,
+          named: Collection[str] | Callable[[], Collection[str]]) -> Staged:
     """An upload's bytes, sent under ``name``, staged in the folder until a job keeps them as a song's audio
-    (``keep(move=True)``). First every other staged upload goes that ``named`` (the ids the waiting and running jobs
-    name) doesn't hold, so that at most one no job names waits. AudioError, nothing written: no name or no bytes
+    (``keep(move=True)``). The bytes are read (their format, length and digest) before the store's lock is taken;
+    under it, first every other staged upload goes that ``named`` (the ids the waiting and running jobs name, or a
+    function giving them, called under the lock: as they are then) doesn't hold, so that at most one no job names waits. AudioError, nothing written: no name or no bytes
     (400), past ``AUDIO_MAX`` (413), not an audio file caracole reads (415), longer than ``MAX_SECONDS`` (422), no
     room (507)."""
     shown = _display_name(name)
@@ -380,7 +387,7 @@ def stage(cfg: Config, data: bytes, name: str, *, named: Collection[str]) -> Sta
     digest = hashlib.sha256(data).hexdigest()
     with _lock:
         root = _store(cfg)
-        for upload_id in _staged_ids(root) - set(named):
+        for upload_id in _staged_ids(root) - _ids(named):
             _drop_pieces(root, upload_id)
         _room(root, len(data))
         while True:
@@ -462,15 +469,17 @@ def drop(cfg: Config, upload_id: str) -> None:
             raise AudioError(GONE, 404)
 
 
-def sweep(cfg: Config, named: Collection[str], *, now: float | None = None) -> list[str]:
-    """Delete each staged upload left ``EXPIRES`` (an hour) that ``named`` (the ids the waiting and running jobs name)
-    doesn't hold, whatever is left of it; the ids deleted."""
+def sweep(cfg: Config, named: Collection[str] | Callable[[], Collection[str]], *,
+          now: float | None = None) -> list[str]:
+    """Delete each staged upload left ``EXPIRES`` (an hour) that ``named`` (the ids the waiting and running jobs name,
+    or a function giving them, called under the lock) doesn't hold, whatever is left of it; the ids deleted."""
     now = time.time() if now is None else now
     with _lock:
         root = folder(cfg)
         if not _is_store(root):
             return []
-        gone = sorted(upload_id for upload_id in _staged_ids(root) - set(named)
+        held = _ids(named)
+        gone = sorted(upload_id for upload_id in _staged_ids(root) - held
                       if now - _touched(root, upload_id) > EXPIRES)
         for upload_id in gone:
             _drop_pieces(root, upload_id)

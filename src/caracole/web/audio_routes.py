@@ -5,7 +5,8 @@
                           name it was sent under, size, format, length and tags, the song its tags or its name
                           name (``guess``, audio_sheet.py ``names_of``), and the library's song of it (``song``: its
                           id, identity, whether it has a human sheet and its link, and the audio it has: "purchase",
-                          "youtube", "upload" or null)
+                          "youtube", "upload" or null); sent from a song's card with its ``song`` and ``identity``,
+                          ``song`` is that song, whatever the file names (404 none, 409 another's identity)
     POST /audio           the song's auto sheet from a staged upload (``upload``, its id): a song of the library
                           (``song`` and ``identity``), or one by name (``artist``, ``title``, and optionally
                           ``album`` and ``duration``, else the file's: written to wanted.txt first, as a request
@@ -29,8 +30,10 @@ here: …", ``youtube_fetch.autochords_problem``; neither YouTube nor yt-dlp is 
 no room (507); an upload that isn't staged (400 not an id, 404 gone); a song an audio file's sheet isn't for (409:
 ignored, or with a human sheet; a purchase linked or YouTube's audio is no refusal, as the file replaces it, the
 owner's decision of 2026-11-25), as the command refuses it again when it runs; and a drop while a job names the
-upload (409). Each route holds the store's lock (``audio_store.held``) from what it reads of the queue to what it
-changes, so that an upload from another tab never lets go of a file Make sheet is queueing.
+upload (409). Make sheet and a drop hold the store's lock (``audio_store.held``) from what they read of the queue
+to what they change, and an upload reads the jobs' uploads under it (``stage``'s and ``sweep``'s ``named``, a
+function), so that an upload from another tab never lets go of a file Make sheet is queueing, and no route waits for
+another's file to be read.
 """
 
 from __future__ import annotations
@@ -99,22 +102,39 @@ def upload(app: WebApp, params: dict[str, list[str]], data: bytes) -> Response:
     from caracole.songs import find_song
 
     _can_make(app)
+    card = _card_song(app, params)
+
+    def named() -> set[str]:  # the jobs' uploads, read under the store's lock
+        return uploads_named(app.queue.snapshot())
+
     try:
-        with audio_store.held():  # the uploads jobs name, as they are while this one is staged
-            named = uploads_named(app.queue.snapshot())
-            audio_store.sweep(app.cfg, named)
-            up = audio_store.stage(app.cfg, data, (params.get("name") or [""])[0], named=named)
+        audio_store.sweep(app.cfg, named)
+        up = audio_store.stage(app.cfg, data, (params.get("name") or [""])[0], named=named)
     except audio_store.AudioError as e:
         raise _refused(e, "Not taken") from None
     except OSError as e:
         raise Refused(503, "Not kept", f"The file couldn't be kept: {e.strerror or e}.") from e
     with app.db() as conn:
         artist, title = names_of(conn, up.name, up.tags)
-        song = find_song(conn, identity_key(artist, title)) if artist else None
+        song = card if card is not None else find_song(conn, identity_key(artist, title)) if artist else None
         shown = _song(app.cfg, conn, song) if song is not None else None
     return json_response(200, {
         "upload": up.id, "name": up.name, "size": up.size, "format": up.format, "duration": up.duration,
         "tags": up.tags, "guess": {"artist": artist or "", "title": title}, "song": shown})
+
+
+def _card_song(app: WebApp, params: dict[str, list[str]]) -> Song | None:
+    """The song a card's upload names (``song`` and ``identity`` in the query), whose audio the answer says; None for
+    the "+" (no ``song``). 404 for none, 409 for an identity another song's now: before anything is staged."""
+    from caracole.songs import get_song
+
+    asked = (params.get("song") or [""])[0].strip()
+    if not asked:
+        return None
+    with no_such_song(), app.db() as conn:
+        song = get_song(conn, song_id(asked, where="address"))
+    same_song(song, {"identity": (params.get("identity") or [""])[0]})
+    return song
 
 
 def _song(cfg: Config, conn: sqlite3.Connection, song: Song) -> dict[str, Any]:

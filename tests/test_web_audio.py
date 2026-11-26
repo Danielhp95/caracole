@@ -7,6 +7,7 @@ caracole that can make chords of audio: auto-chords' packages taken to be there,
 
 import http.client
 import json
+import threading
 from dataclasses import replace
 from types import SimpleNamespace
 from urllib.parse import quote, urlencode
@@ -71,6 +72,13 @@ def upload(app, data: bytes, name: str = "vikingos.mp3", **headers):
             "accept": "application/json", "x-caracole-form-token": "tok"} | headers
     sent = {k: v for k, v in sent.items() if v is not None}
     return app.handle(Request("POST", f"/audio/upload?name={quote(name)}", sent, data))
+
+
+def upload_for(app, data: bytes, song: str):
+    """``POST /audio/upload`` from a song's card: ``song`` the query's song and identity, after the file's name."""
+    sent = {"host": HOST, "content-type": BYTES, "sec-fetch-site": "same-origin", "origin": f"http://{HOST}",
+            "accept": "application/json", "x-caracole-form-token": "tok"}
+    return app.handle(Request("POST", f"/audio/upload?name=anything.mp3&{song}", sent, data))
 
 
 def post(app, fields, **headers):
@@ -312,3 +320,50 @@ def test_an_upload_from_another_tab_while_make_sheet_queues_never_lets_go_of_its
     second = answer(other[0])["upload"]
     assert staged_ids(able) == {first, second}  # the queued job's file stays
     assert queue.snapshot()[0].steps[0].args[2] == f"--upload={first}"
+
+
+def test_an_upload_for_a_cards_song_answers_that_songs_audio_whatever_the_file_names(able, queue, conn, tmp_path):
+    # A song's card sends its song and identity with the file: the answer's ``song`` is that song, its audio as it is
+    # now, whatever the file's tags or name point to; an identity another song's now is refused before anything is
+    # staged.
+    app = app_for(able, queue)
+    song = add_song(conn, *NICK)
+    bought = tmp_path / "Music" / "vikingos.flac"
+    bought.parent.mkdir()
+    bought.write_bytes(audio("FLAC"))
+    update_song(conn, song.id, audio_path=str(bought), audio_mtime=bought.stat().st_mtime)
+    response = upload_for(app, audio("MP3"), f"song={song.id}&identity={quote(song.key)}")
+    assert response.status == 200, response.body
+    said = answer(response)
+    assert said["song"]["id"] == song.id and said["song"]["audio"] == "purchase"
+    assert said["guess"] == {"artist": "", "title": "anything"}  # the file's own guess, beside it
+    assert upload_for(app, audio("MP3"), f"song={song.id}&identity=someone%2Felse").status == 409
+    assert upload_for(app, audio("MP3"), "song=999999").status == 404
+    assert len(staged_ids(able)) == 1
+
+
+def test_an_upload_holds_the_store_only_to_read_the_jobs_uploads_and_let_go_of_the_others(able, queue,
+                                                                                           monkeypatch):
+    # The file is read (its format, its length, its digest) before the store's lock is taken: another route waits for
+    # the ids and the drops alone, never for a long file's examination.
+    app = app_for(able, queue)
+    examining = threading.Event()
+    go_on = threading.Event()
+    examine = audio_store._examine
+
+    def slow_examine(f):
+        examining.set()
+        go_on.wait(10)
+        return examine(f)
+
+    monkeypatch.setattr(audio_store, "_examine", slow_examine)
+    sending = threading.Thread(target=lambda: upload(app, audio("MP3")))
+    sending.start()
+    assert examining.wait(10)
+    try:
+        assert audio_store.held().acquire(timeout=2), "the store held while the file is examined"
+        audio_store.held().release()
+    finally:
+        go_on.set()
+        sending.join(10)
+    assert len(staged_ids(able)) == 1

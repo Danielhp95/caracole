@@ -83,7 +83,7 @@ class LibraryPage(val assets: LibraryAssets, val requests: RequestsTab = Request
                                                "unsung" to JsonArray(emptyList()),
                                                "transcribed" to JsonArray(emptyList()), "time" to JsonPrimitive(""))))
             put("audio", JsonObject(mapOf("ok" to JsonPrimitive(false), "why" to JsonPrimitive(AUDIO_PROBLEM),
-                                          "limit" to JsonPrimitive(0))))
+                                          "limit" to JsonPrimitive(0), "too_big" to JsonPrimitive(""))))
             controls.timers?.let { timers -> put("timers", JsonObject(timers.mapValues { JsonPrimitive(it.value) })) }
         })
         val out = LinkedHashMap<String, JsonElement>()

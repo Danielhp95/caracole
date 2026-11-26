@@ -1843,7 +1843,10 @@ It is rows.js's, shared by both pages:
     the waiting and running jobs name, `jobs.uploads_named`, so a new one lets go of every other; `sweep` first), the
     answer its id, name (a name to show alone), size, format, length, tags, the song they name (`guess`,
     audio_sheet.py `names_of`) and the library's song of it (`song`: `has_sheet`, `sheet`, and `audio`, "purchase",
-    "youtube", "upload" or null, so the dialog says what the file replaces); each `AudioError` its status and words.
+    "youtube", "upload" or null, so the dialog says what the file replaces; sent from a card with `song` and
+    `identity`, that song, whatever the file names: 404 none, 409 another's identity, before anything is staged); each
+    `AudioError` its status and words. A file staged and then not used (a refused Make sheet, a Cancel whose upload had
+    already arrived, the page left) is let go by the next upload or the hour's sweep.
   - `POST /audio` (`upload`, and `song` with `identity`, or `artist` and `title`, written to wanted.txt first with the
     file's album and length): `caracole audio --progress --upload=<id> --song=…` queued under `jobs.AUDIO_SHEET` and the
     song's key (`audio_sheet_steps`, by the id, never a path), "Sheet from an audio file: Artist - Title", the queue's,
@@ -1854,20 +1857,29 @@ It is rows.js's, shared by both pages:
   - `POST /audio/drop` (JSON `{"upload"}`): deleted now, 409 while a job names it.
   - 409 for the upload and Make sheet where this caracole makes no chords ("No sheets from audio files here: …",
     `audio_reason`).
-  - Each holds the store's lock (`audio_store.held`, an RLock) from what it reads of the queue to what it changes, so
-    an upload from another tab never lets go of a file Make sheet is queueing
-    (`test_web_audio.py::test_an_upload_from_another_tab_while_make_sheet_queues_never_lets_go_of_its_file`).
+  - Make sheet and a drop hold the store's lock (`audio_store.held`, an RLock) from what they read of the queue to what
+    they change; an upload reads the file first and then the jobs' uploads under it (`stage`'s and `sweep`'s `named`, a
+    function called under the lock), so an upload from another tab never lets go of a file Make sheet is queueing, and
+    no route waits for another's file to be read
+    (`test_web_audio.py::test_an_upload_from_another_tab_while_make_sheet_queues_never_lets_go_of_its_file`,
+    `::test_an_upload_holds_the_store_only_to_read_the_jobs_uploads_and_let_go_of_the_others`).
   - The page's side (library.js `audioDialog`, `audioSheet`; filter.css): where library_page.py's `server.audio`
-    (`audio_member`: `ok`, `why`, `limit`; the phone's LibraryPage.kt `AUDIO_PROBLEM`, `ok` false) says so, the bar's
+    (`audio_member`: `ok`, `why`, `limit`, `too_big` the route's words for a file past it; the phone's LibraryPage.kt
+    `AUDIO_PROBLEM`, `ok` false) says so, the bar's
     "+" (`#add-audio`, before Filter, and its hidden `#audio-file`, made by the script alone: none on the file or the
     phone) and a file dropped on the Library while it shows open `dialog#audio-sheet` (a sheet from the bottom under
-    720 px): XHR's upload with its progress, sent as `application/octet-stream` (a File's own type is refused 415), a
-    file past `limit` refused unsent; the guess in Artist and Title, the library's song and what the file replaces;
+    720 px, sliding up there alone): XHR's upload, sent as `application/octet-stream` (a File's own type is refused
+    415), its count `aria-hidden` beside the live region, which says only its start and its outcome; a file past
+    `limit` refused unsent in `too_big`'s words; of several files the first, the dialog saying so; a file dropped on
+    the open dialog a new choice; the guess in Artist and Title, the library's song and what the file replaces;
     Make sheet through `sendRequest`, the request form's own path (the line under the bar, `track`); Cancel or
     Escape `POST /audio/drop`. A card's Sheet from an audio file… (not ignored, no human sheet by its `files`, a
     purchase or YouTube's audio no matter: the cards' data unchanged) opens it for that song, its names not to edit,
-    and posts its `songForm` in place (`song`, `identity`, `upload`); its transcription offers read again as after a
-    YouTube sheet (`offerAfter`). test_web_page_audio.py.
+    and posts its `songForm` in place (`song`, `identity`, `upload`), its upload sent with the song so the dialog says
+    what that song's audio is; its transcription offers read again as after a YouTube sheet (`offerAfter`). The served
+    page never lets a drop load another page (library.js `keepDrops`): a file dropped where nothing takes it, or a
+    link or text outside a field, is taken and nothing done; into a field a drop is the browser's.
+    test_web_page_audio.py.
 - **ug_link_routes.py** is a UG link pasted into the library page's box: `GET /api/ug/link` (ug/link.py `known`, no
   request and no lock: its state, the tab's names, its artist's page, `guess`, the library's `song`, `hits` as
   /api/search's `index` items) and `POST /ug/link` (`caracole ug --link --progress` queued under `jobs.UG_LINK`, among

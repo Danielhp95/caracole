@@ -128,8 +128,9 @@ html.sheet-open { overflow: hidden; }
   background: var(--surface); color: var(--text); box-shadow: var(--pop-shadow); }
 .audio-sheet::backdrop { background: rgb(0 0 0 / 45%); }
 .audio-head { margin: 0 0 6px; font-size: 1.05rem; }
-.audio-said { margin: 0 0 12px; color: var(--muted); font-size: .9rem; font-variant-numeric: tabular-nums;
+.audio-line { margin: 0 0 12px; color: var(--muted); font-size: .9rem; font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere; }
+.audio-note { margin: -6px 0 12px; color: var(--muted); font-size: .85rem; }
 .audio-said.refused { color: var(--failed); font-weight: 600; }
 .audio-form { display: grid; gap: 10px; }
 .audio-form p { margin: 0; }
@@ -138,9 +139,6 @@ html.sheet-open { overflow: hidden; }
 .audio-replaces, .audio-form .hint { color: var(--muted); font-size: .85rem; }
 .audio-acts { display: flex; flex-wrap: wrap; gap: 8px; }
 .audio-form .audio-acts { margin-top: 4px; }
-@media (min-width: 720px) {
-  .audio-sheet:modal { animation: none; }
-}
 @media (max-width: 719px) {
   .audio-sheet:modal { position: fixed; inset: auto 0 0; width: 100%; max-width: none; margin: 0; padding: 8px 16px
     calc(16px + env(safe-area-inset-bottom)); border-width: 1px 0 0; border-radius: var(--radius-l) var(--radius-l) 0 0;
@@ -157,8 +155,10 @@ html.sheet-open { overflow: hidden; }
 }
 @media (prefers-reduced-motion: no-preference) {
   .filter-panel:modal { animation: sheet-up .22s ease-out; }
-  .audio-sheet:modal { animation: sheet-up .22s ease-out; }  /* a phone's sheet; from 720 px it just shows */
   .filter-panel:modal::backdrop { animation: dim-in .22s ease-out; }
+}
+@media (prefers-reduced-motion: no-preference) and (max-width: 719px) {
+  .audio-sheet:modal { animation: sheet-up .22s ease-out; }  /* a phone's sheet; from 720 px the box just shows */
 }
 @keyframes sheet-up { from { transform: translateY(100%); } }
 @keyframes dim-in { from { opacity: 0; } }

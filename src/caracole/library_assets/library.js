@@ -499,12 +499,33 @@
   // The bar's "+" (``#add-audio``, before Filter) and its hidden chooser (``#audio-file``), made here alone, so the
   // file on disk and the phone (whose ``server.audio`` says it can't) show neither; and the dialog
   // (``dialog#audio-sheet``, a sheet from the bottom on a phone). A file chosen, or dropped on the Library, is sent at
-  // once (POST /audio/upload, its bytes as application/octet-stream, the form token in its header: XHR, for its
-  // progress, "Uploading “…” · 3.1 of 8.4 MB", Cancel aborting it); then what it is and the song it names, Artist and
-  // Title filled with that guess (a card's song: its names, not to edit), the library's song of that name, and what
-  // the file replaces as its audio; Make sheet, through ``sendRequest`` as the request form (POST /audio with the
-  // upload's id and the names), or the card's form in place; Cancel, or Escape, drops the file (POST /audio/drop). A
-  // refusal says the server's words, with Choose another file. A file past ``server.audio.limit`` is refused unsent.
+  // once (POST /audio/upload, its bytes as application/octet-stream, the form token in its header; a card's with its
+  // song and identity, so the answer's song is that one: XHR, for its progress, "Uploading “…” · 3.1 of 8.4 MB", the
+  // count for the eye alone, the live region saying only that it begins and how it ends; Cancel aborting it); then
+  // what it is and the song it names, Artist and Title filled with that guess (a card's song: its names, not to edit),
+  // the library's song, and what the file replaces as its audio; Make sheet, through ``sendRequest`` as the request
+  // form (POST /audio with the upload's id and the names), or the card's form in place; Cancel, or Escape, drops the
+  // file (POST /audio/drop). A refusal says the server's words, with Choose another file; a file dropped on the dialog
+  // is a new choice. A file past ``server.audio.limit`` is refused unsent, in the route's words (``too_big``). Of
+  // several files only the first is sent, and the dialog says so.
+  const holdsFiles = (e) => Boolean(e.dataTransfer) && Array.from(e.dataTransfer.types || []).indexOf("Files") >= 0;
+  // The served page never lets a drop load another page in its place: a file dropped where nothing takes it (another
+  // tab's panel, the bar), which the browser would open in the tab, the library page gone, is taken and nothing done
+  // with it; and so is a link or text dropped outside a field, which a browser loads as an address. Into a field (the
+  // search box, the request form's) a drop is the browser's own, which inserts its text. Who takes a drop (the
+  // Library, the "+"'s dialog) prevents it first; this one hears it last, on the document.
+  const editable = (node) => Boolean(node && node.closest && node.closest("input, textarea, [contenteditable]"));
+  const keepDrops = () => {
+    document.addEventListener("dragover", (e) => {
+      if (e.defaultPrevented || (!holdsFiles(e) && editable(e.target))) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "none";
+    });
+    document.addEventListener("drop", (e) => {
+      if (e.defaultPrevented || (!holdsFiles(e) && editable(e.target))) return;
+      e.preventDefault();
+    });
+  };
   function audioDialog(sendRequest) {
     const tools = byId("tools");
     const filter = byId("filter");
@@ -527,11 +548,17 @@
     dialog.setAttribute("aria-labelledby", "audio-head");
     const head = el("h2", "audio-head", "Sheet from an audio file");
     head.id = "audio-head";
-    const said = el("p", "audio-said");
+    const line = el("p", "audio-line");
+    const said = el("span", "audio-said");  // the live region: an upload's start, its answer or its refusal
     said.setAttribute("aria-live", "polite");
+    const count = el("span", "audio-count");  // how far it has gone, for the eye alone
+    count.setAttribute("aria-hidden", "true");
+    line.append(said, count);
+    const note = el("p", "audio-note");
+    note.hidden = true;
     const body = el("div", "audio-body");
     const acts = el("div", "audio-acts");
-    dialog.append(el("div", "grab"), head, said, body, acts);
+    dialog.append(el("div", "grab"), head, line, note, body, acts);
     document.body.appendChild(dialog);
     const MB = (n) => (n / 1e6).toFixed(1);
     const mins = (seconds) => {
@@ -573,6 +600,7 @@
     const refuse = (words) => {
       xhr = null;
       said.textContent = words;
+      count.textContent = "";
       said.classList.add("refused");
       body.replaceChildren();
       const again = button("Choose another file", "btn primary");
@@ -599,6 +627,7 @@
       staged = String(answer.upload);
       said.classList.remove("refused");
       said.textContent = String(answer.name) + " · " + String(answer.format) + " · " + mins(answer.duration);
+      count.textContent = "";
       const guess = answer.guess && typeof answer.guess === "object" ? answer.guess : {};
       const form = el("form", "audio-form");
       const make = el("button", "btn primary", "Make sheet");
@@ -612,9 +641,9 @@
         form.append(artistBox, titleBox);
         names = [artist, title];
       }
+      // The song the file is for: a card's own (the route answers for the song it was sent with), else the guess's.
       const song = answer.song && typeof answer.song === "object" ? answer.song : null;
-      const ours = song && (!target || Number(song.id) === Number(target.s.id));
-      if (song && ours) {
+      if (song) {
         const lib = el("p", "audio-song", "In your library: " + String(song.display));
         if (song.has_sheet) {
           lib.append(" · it has a sheet ");
@@ -624,7 +653,7 @@
             lib.appendChild(open);
           }
         }
-        const replaces = { purchase: "This file will replace its bought audio as its audio (the file in Music/ stays).",
+        const replaces = { purchase: "This file will replace its bought audio (the file in Music/ stays).",
           youtube: "This file will replace its audio from YouTube.",
           upload: "This file will replace the file you gave it before." }[song.audio];
         form.appendChild(lib);
@@ -674,10 +703,13 @@
       (names ? names[1] : make).focus({ preventScroll: true });
     };
     // A file to send: the dialog opened (or kept open: Choose another file), the one before let go.
-    const begin = (file) => {
+    const begin = (file, of = 1) => {
       drop();
       said.classList.remove("refused");
+      count.textContent = "";
       body.replaceChildren();
+      note.hidden = of < 2;
+      note.textContent = of < 2 ? "" : "Only the first file is used: " + String(file.name || "audio") + ".";
       if (!dialog.open) {
         if (!window.matchMedia("(min-width: 720px)").matches) document.documentElement.classList.add("sheet-open");
         dialog.showModal();
@@ -687,22 +719,27 @@
       acts.replaceChildren(no);
       const limit = Number(AUDIO.limit) || 0;
       if (limit && file.size > limit) {
-        refuse("That file is too big: an audio file is " + Math.round(limit / 1048576) +
-          " MiB at most; `caracole audio FILE` takes any.");
+        refuse(String(AUDIO.too_big || "That file is too big."));
         return;
       }
       const name = String(file.name || "audio");
-      said.textContent = "Uploading “" + name + "” · 0.0 of " + MB(file.size) + " MB";
+      said.textContent = "Uploading “" + name + "”";
+      count.textContent = " · 0.0 of " + MB(file.size) + " MB";
       no.focus({ preventScroll: true });
       const sending = new XMLHttpRequest();
       xhr = sending;
-      sending.open("POST", "audio/upload?name=" + encodeURIComponent(name));
+      const asked = new URLSearchParams({ name });
+      if (target) {  // a card's: the answer says that song's audio, whatever the file names
+        asked.set("song", String(Number(target.s.id)));
+        if (target.s.identity) asked.set("identity", String(target.s.identity));
+      }
+      sending.open("POST", "audio/upload?" + asked.toString());
       // A browser sends a File as its own type (audio/mpeg), which a bytes route refuses: the bytes, as bytes.
       sending.setRequestHeader("Content-Type", "application/octet-stream");
       sending.setRequestHeader("Accept", "application/json");
       sending.setRequestHeader("X-Caracole-Form-Token", String(server.csrf || ""));
       sending.upload.onprogress = (e) => {
-        if (xhr === sending) said.textContent = "Uploading “" + name + "” · " + MB(e.loaded) + " of " +
+        if (xhr === sending) count.textContent = " · " + MB(e.loaded) + " of " +
           MB(e.lengthComputable ? e.total : file.size) + " MB";
       };
       sending.onload = () => {
@@ -731,8 +768,9 @@
     };
     chooser.addEventListener("change", () => {
       const file = chooser.files && chooser.files[0];
+      const of = chooser.files ? chooser.files.length : 0;
       chooser.value = "";  // the same file chosen again is a change too
-      if (file) begin(file);
+      if (file) begin(file, of);
     });
     plus.addEventListener("click", () => {
       target = null;
@@ -748,21 +786,28 @@
       e.preventDefault();
       cancel();
     });
-    // A file dropped on the Library, while it shows: the dialog, with it, for the "+". Anything else is the browser's.
-    const holdsFiles = (e) => Boolean(e.dataTransfer) && Array.from(e.dataTransfer.types || []).indexOf("Files") >= 0;
-    libraryView.addEventListener("dragover", (e) => {
-      if (!holdsFiles(e) || !libraryView.checkVisibility()) return;
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "copy";
-    });
-    libraryView.addEventListener("drop", (e) => {
-      const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-      if (!file || !libraryView.checkVisibility()) return;
-      e.preventDefault();
-      target = null;
-      opener = plus;
-      begin(file);
-    });
+    // A file dropped on the Library, while it shows: the dialog, with it, for the "+"; on the dialog open, a new
+    // choice for whom it is open. Anywhere else the page's guard (``keepDrops``) keeps the browser from opening it.
+    const dropped = (e) => (e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files : []);
+    const takes = (where, ok, fresh) => {
+      where.addEventListener("dragover", (e) => {
+        if (!holdsFiles(e) || !ok()) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+      });
+      where.addEventListener("drop", (e) => {
+        const files = dropped(e);
+        if (!files.length || !ok()) return;
+        e.preventDefault();
+        if (fresh) {
+          target = null;
+          opener = plus;
+        }
+        begin(files[0], files.length);
+      });
+    };
+    takes(libraryView, () => !dialog.open && libraryView.checkVisibility(), true);
+    takes(dialog, () => dialog.open, false);
   }
   // Lyrics transcribed from a song's audio (web/transcribe_routes.py), on a song's card, served: for a song offered
   // one (``server.transcribe.songs``: its audio from YouTube, every lyrics site missed) where this caracole transcribes
@@ -5382,6 +5427,7 @@
         });
       });
     }
+    keepDrops();
     if (AUDIO && requested) audioDialog(sendRequest);
     schedule();
   }

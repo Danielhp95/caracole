@@ -254,9 +254,10 @@ def test_on_a_phone_the_bars_plus_holds_one_row_beside_filter_and_sort(conn, cfg
     # Served where a sheet can be made from an audio file, the bar has a third tool, the "+", sized as Filter is: the
     # field and the three tools one row at 390 px, at the pages' own text size and at twice it, nothing past the screen.
     import caracole.library_page as library_page
-    from caracole.audio_store import AUDIO_MAX
+    from caracole.audio_store import AUDIO_MAX, TOO_BIG
 
-    monkeypatch.setattr(library_page, "audio_member", lambda cfg: {"ok": True, "why": None, "limit": AUDIO_MAX})
+    monkeypatch.setattr(library_page, "audio_member", lambda cfg: {"ok": True, "why": None, "limit": AUDIO_MAX,
+                                                                       "too_big": TOO_BIG})
     songs(conn, cfg)
     script = r"""
     document.documentElement.style.setProperty("line-height", %s);

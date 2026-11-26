@@ -274,7 +274,7 @@ def test_the_served_page_has_the_request_form_and_its_token(conn, cfg):
                       "guitar": False}
     assert set(youtube) == {"ok", "why", "off"}
     assert set(transcribe) == {"ok", "why", "songs", "nothing", "unsung", "transcribed", "time"}
-    assert set(audio) == {"ok", "why", "limit"}
+    assert set(audio) == {"ok", "why", "limit", "too_big"}
     # Where the songs just requested go, and the list of requests.
     assert re.search(r'<section class="requested" id="requested"[^>]*hidden>', shell)
     assert re.search(r'<aside class="tray" id="tray"[^>]*hidden>', shell)
@@ -318,14 +318,14 @@ def test_the_served_page_says_whether_a_sheet_can_be_made_from_an_audio_file(con
     from dataclasses import replace
 
     import caracole.youtube_fetch as yf
-    from caracole.audio_store import AUDIO_MAX
+    from caracole.audio_store import AUDIO_MAX, TOO_BIG
     from caracole.config import AutochordsConfig
     from caracole.library_page import WebControls
 
     monkeypatch.setattr(yf, "autochords_missing", lambda: ["torch"])
     html = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok"))
     served = data_of(html)["server"]
-    assert served["audio"] == {"ok": False, "why": "auto-chords isn't installed", "limit": 0}
+    assert served["audio"] == {"ok": False, "why": "auto-chords isn't installed", "limit": 0, "too_big": ""}
     assert list(served)[-1] == "audio"
     monkeypatch.setattr(yf, "autochords_missing", lambda: [])
     files = {"btc_weights": tmp_path / "btc.pt", "beat_checkpoint": tmp_path / "final0.ckpt"}
@@ -333,7 +333,8 @@ def test_the_served_page_says_whether_a_sheet_can_be_made_from_an_audio_file(con
         path.write_bytes(b"model")
     able = replace(cfg, ytdlp_bin=str(tmp_path / "no-yt-dlp"), autochords=AutochordsConfig(**files))
     html = build_library_page(conn, able, Overrides(), NOW, controls=WebControls(csrf="tok"))
-    assert data_of(html)["server"]["audio"] == {"ok": True, "why": None, "limit": AUDIO_MAX}
+    # Its refusal of a file past the limit in audio_store's words, which the page says before sending one.
+    assert data_of(html)["server"]["audio"] == {"ok": True, "why": None, "limit": AUDIO_MAX, "too_big": TOO_BIG}
     assert data_of(html)["server"]["youtube"]["ok"] is False  # no yt-dlp: no sheet from a video, one from a file
 
 

@@ -2876,7 +2876,9 @@ The dialog shows the upload as it goes ("Uploading “song.mp3” · 3.1 of 8.4 
 for a song you have, with what the file will replace. Correct the names if they are wrong (a card's
 song keeps its own) and press **Make sheet**: a line under the bar, or the song's own line, says how
 it goes. **Cancel** or Escape deletes the file sent; a refusal says why, with **Choose another
-file**. The file on disk and the phone have no +.
+file**, and a file dropped on the dialog is a new choice. Of several files only the first is used,
+and the dialog says so. A file dropped anywhere else on the page is never opened in its place. The
+file on disk and the phone have no +.
 
 The file goes up in one
 request, 128 MiB at most (`caracole audio FILE` takes any size), and waits in the state folder's
