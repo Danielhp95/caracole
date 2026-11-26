@@ -799,7 +799,42 @@ def lacuerda_records(corpus: Corpus) -> list[dict]:
 
 def _parametrized(test: Callable) -> list[tuple]:
     """The cases a parametrized test of test_song_names.py lists."""
-    return [tuple(case) for mark in test.pytestmark if mark.name == "parametrize" for case in mark.args[1]]
+    return [tuple(case) if isinstance(case, (tuple, list)) else (case,)
+            for mark in test.pytestmark if mark.name == "parametrize" for case in mark.args[1]]
+
+
+# The parametrized tests of test_song_names.py whose cases names_records takes: (text, cleaned), (channel, cleaned),
+# (title, channel, expected) and (text, expected) or (text,). test_every_names_case_reaches_the_corpus holds them to the module.
+CLEAN_TESTS = ("test_a_text_loses_what_a_videos_title_adds_to_a_songs_name",
+               "test_a_cjk_lyric_videos_title_loses_its_channels_words_and_its_quoted_lyrics",
+               "test_a_quoted_lyric_goes_wherever_it_is_but_a_short_quote_is_a_title",
+               "test_cjk_noise_goes_by_its_share_of_the_group",
+               "test_each_bracket_closes_on_its_own_mark", "test_words_glued_to_a_bracket_are_words",
+               "test_an_uploads_title_is_cleaned")
+CHANNEL_TESTS = ("test_a_channels_name_loses_its_label_words",)
+VIDEO_TESTS = ("test_a_videos_title_of_two_parts_is_its_artist_and_its_song",
+               "test_a_videos_title_none_of_the_rules_reads_is_its_channels_song",
+               "test_an_underscore_between_spaces_parts_the_text")
+VIDEO_TESTS_CJK = ("test_a_cjk_lyric_videos_title_names_its_song",
+                   "test_a_parts_tags_are_no_words_of_its_own_only_beside_a_title_bracket",
+                   "test_a_tag_bracket_is_never_the_title", "test_a_subtitles_bracket_is_a_videos_words",
+                   "test_a_bracketed_title_yields_to_an_artist_it_can_know",
+                   "test_a_bracketed_titles_artist_loses_its_loose_tail_as_clean_cuts_one",
+                   "test_a_bracketed_titles_artist_loses_a_leading_by",
+                   "test_an_uploads_title_names_its_song")  # helpers/song_name_cases.py's
+TEXT_TESTS = ("test_a_part_of_brackets_alone_is_its_first_brackets_content",
+              "test_a_part_less_its_title_brackets_is_its_own_words",
+              "test_a_bracket_is_the_title_when_no_mark_parts_the_text",
+              "test_two_parts_are_the_artist_and_the_title_whoever_they_are")  # (text,) alone
+# Those it can't take: their cases need a library no fixture has, each pinned on the phone by a hand test.
+NAMES_BY_HAND = {
+    "test_an_uploads_title_names_its_song_by_an_artist_of_yours":
+        "SongNamesTest.aLongLatinQuoteAfterAnArtistOfYoursIsTheTitle",
+}
+
+
+def _cases(tsn: object, names: tuple[str, ...]) -> list[tuple]:
+    return [case for name in names for case in _parametrized(getattr(tsn, name))]
 
 
 def names_records(corpus: Corpus) -> list[dict]:
@@ -809,13 +844,7 @@ def names_records(corpus: Corpus) -> list[dict]:
     from caracole.songs import list_songs
 
     out = []
-    cleaned = [t for test in (tsn.test_a_text_loses_what_a_videos_title_adds_to_a_songs_name,
-                              tsn.test_a_cjk_lyric_videos_title_loses_its_channels_words_and_its_quoted_lyrics,
-                              tsn.test_a_quoted_lyric_goes_wherever_it_is_but_a_short_quote_is_a_title,
-                              tsn.test_cjk_noise_goes_by_its_share_of_the_group,
-                              tsn.test_each_bracket_closes_on_its_own_mark, tsn.test_words_glued_to_a_bracket_are_words,
-                              tsn.test_an_uploads_title_is_cleaned)
-               for t, _ in _parametrized(test)]
+    cleaned = [t for t, _ in _cases(tsn, CLEAN_TESTS)]
     extra = ["Song (Official Music Video) [HD]", "「MV」 曲", "Artist – Title (Lyric Video) 4K", "''",
              "Song【官方M/V】", "【告白氣球 Official MV】", "Kanpai // Kotaro", "Song[Official Video]Remix", "「」 x", "x 【】",
              # The edges of CJK's ranges (U+F8FF, U+F900, U+A000, U+D7B0), and nested groups.
@@ -824,22 +853,13 @@ def names_records(corpus: Corpus) -> list[dict]:
              "Live「Lightning Crashes」"]  # a quote of 17 Latin letters: a lyric to clean, which knows no artist
     for text in dict.fromkeys([*cleaned, *extra]):
         out.append(record("caracole.song_names.clean", None, [text], {}, lambda: clean(text)))
-    channels = [c for c, _ in _parametrized(tsn.test_a_channels_name_loses_its_label_words)]
+    channels = [c for c, _ in _cases(tsn, CHANNEL_TESTS)]
     for channel in [*channels, "Silvana Estrada - Topic", "BTSVEVO", "Rosalía Official", "VEVO - Topic"]:
         out.append(record("caracole.song_names.clean_channel", None, [channel], {}, lambda: clean_channel(channel)))
-    videos = [*_parametrized(tsn.test_a_videos_title_of_two_parts_is_its_artist_and_its_song),
-              *_parametrized(tsn.test_a_videos_title_none_of_the_rules_reads_is_its_channels_song),
-              *_parametrized(tsn.test_an_underscore_between_spaces_parts_the_text),
+    videos = [*_cases(tsn, VIDEO_TESTS),
               (*tsn.VIKINGOS_VIDEO, None), (*tsn.SILVANA_VIDEO, None), ("Wonderwall - Oasis", "Oasis", None),
               ("Silvana Estrada Que problema", "kintanedu", None), ("Love Me Tender", "Elvis Presley - Topic", None),
-              *_parametrized(tsn.test_a_cjk_lyric_videos_title_names_its_song),
-              *_parametrized(tsn.test_a_parts_tags_are_no_words_of_its_own_only_beside_a_title_bracket),
-              *_parametrized(tsn.test_a_tag_bracket_is_never_the_title),
-              *_parametrized(tsn.test_a_subtitles_bracket_is_a_videos_words),
-              *_parametrized(tsn.test_a_bracketed_title_yields_to_an_artist_it_can_know),
-              *_parametrized(tsn.test_a_bracketed_titles_artist_loses_its_loose_tail_as_clean_cuts_one),
-              *_parametrized(tsn.test_a_bracketed_titles_artist_loses_a_leading_by),
-              *_parametrized(tsn.test_an_uploads_title_names_its_song)]  # helpers/song_name_cases.py's
+              *_cases(tsn, VIDEO_TESTS_CJK)]
     videos = list(dict.fromkeys((title, channel) for title, channel, *_ in videos))  # a title of two tests once
     texts = ["Silvana Estrada - Que problema", "Silvana Estrada – Que problema", "Silvana Estrada — Que problema",
              "Silvana Estrada | Que problema", "Muse - Hysteria - Live", "Nick Cani – Vikingos veganos",
@@ -856,10 +876,7 @@ def names_records(corpus: Corpus) -> list[dict]:
              "Estopa La raja de tu falda", "Hasta la Raíz", "Billy Joel Uptown girl", "Silvana Tregua",
              "silvana tregua", "Hyperfanes Somos vikingos veganos", "hyperfanes Somos vikingos veganos",
              "nick cani vikingos veganos", "onda una mas", "Onda Una más", "lumbre agua", "creep",
-             *(t for test in (tsn.test_a_part_of_brackets_alone_is_its_first_brackets_content,
-                              tsn.test_a_part_less_its_title_brackets_is_its_own_words,
-                              tsn.test_a_bracket_is_the_title_when_no_mark_parts_the_text)
-               for t, _ in _parametrized(test)),
+             *(t for t, *_ in _cases(tsn, TEXT_TESTS)),
              "周杰倫 Jay Chou【告白氣球 Love Confession】Official MV", "周杰倫 七里香", "周杰倫 七里香【Live】",
              "周杰倫 七里香《周杰倫的床邊故事》"]
     for name in [None, *FIXTURES]:
@@ -1089,3 +1106,23 @@ def write_all(out: str, workdir: str) -> None:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(text, encoding="utf-8")
 
+
+
+def test_every_names_case_reaches_the_corpus():
+    # A parametrized test of test_song_names.py that calls read_names or clean is one names_records takes, so the
+    # phone replays its cases; or one NAMES_BY_HAND names, with the phone's hand test that pins it.
+    import inspect
+
+    import test_song_names as tsn
+
+    taken = {*CLEAN_TESTS, *CHANNEL_TESTS, *VIDEO_TESTS, *VIDEO_TESTS_CJK, *TEXT_TESTS}
+    missed = []
+    for name, test in vars(tsn).items():
+        marks = getattr(test, "pytestmark", [])
+        if not name.startswith("test_") or not any(mark.name == "parametrize" for mark in marks):
+            continue
+        source = inspect.getsource(test)
+        if re.search(r"\b(?:read_names|clean)\(", source) and name not in taken and name not in NAMES_BY_HAND:
+            missed.append(name)
+    assert missed == []
+    assert not (taken | set(NAMES_BY_HAND)) - set(vars(tsn))  # every name listed is a test there

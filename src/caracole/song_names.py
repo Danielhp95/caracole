@@ -18,11 +18,12 @@ Those paths, each reading names here and nowhere else (no page splits a text its
   "[Videoclip Oficial]", "(Letra)", "(Visualizer)", "(Karaoke Version)", "【MV】", a year beside them too); holding CJK,
   two thirds of its letters (CJK characters, Latin letters and digits) a video's or a lyric channel's (``_CJK_NOISE``:
   "『动态歌词MV』", "【抖音】", "【中文字幕】", "(華納 official 高畫質 HD 官方完整版MV)", 20 of 22; never "(Cover 葛東琪)");
-- a lyric quoted in 「」 or 『』, a sentence (ending in 。！？…, or a space between two CJK characters) or longer than
-  ``LYRIC_CHARS``, unless it is the whole text: "野人『不再借世人的手 替我开脱，…也能够耐住寂寞。』" is 野人, and
-  "宋冬野「斑马，斑马」" stays. A long quote of Latin words alone is a title where the words before it are, whole, an
-  artist ``read_names`` knows (the channel's name among them; ``clean`` alone knows none): "Live「Lightning Crashes」"
-  from Live's channel is Lightning Crashes by Live, "Lemon「I still love you even now」" from 米津玄師's is Lemon.
+- a lyric quoted in 「」 or 『』, a sentence (ending in 。！？… with a pause in it, ，、； or a space, or a space between
+  two CJK characters) or longer than ``LYRIC_CHARS``, unless it is the whole text:
+  "野人『不再借世人的手 替我开脱，…也能够耐住寂寞。』" is 野人, and "宋冬野「斑马，斑马」" and "Aimer「どうして？」" stay.
+  A long quote of Latin words alone is a title where the words before it are, whole, an artist ``read_names`` knows
+  (the channel's name among them; ``clean`` alone knows none): "Live「Lightning Crashes」" from Live's channel is
+  Lightning Crashes by Live, "Lemon「I still love you even now」" from 米津玄師's is Lemon.
 
 Then a last part of a video's words after a mark ("… | Official Video"), then such words loose at its end, two or more
 ("… Official Video", "… Con Letra", "… 官方完整版 MV": a run of a lyric channel's words is one of them) or one of a
@@ -56,7 +57,7 @@ written, as "(Live)" is ("周深 大鱼【Live】" from 周深's channel is 大�
    孤勇者《英雄联盟：双城之战》动画主题曲" from 陈奕迅's channel is 孤勇者); with neither, it can't know where the artist
    ends. With no words before it, the words after it, less their groups and a leading "by" in any case, are the
    artist ("《孤勇者》 by 陈奕迅"; before it, a band's own "By" stays: "By Divine Right「Song」"); a title group alone,
-   or with "by" alone, names no one.
+   or with "by" alone, or a tag's or a video's words alone ("《孤勇者》 Cover", "「Lemon」 Piano ver."), names no one.
 3. **A known artist first, or after " by ".** The longest run of the first words that is a known artist's whole name
    is the artist, the rest the title ("silvana estrada que problema"; never a name that ends with a word names leave
    out, ``identity_key``: "Joaquín Sabina y nos dieron las diez"); or the words after the last " by " are, those before
@@ -139,12 +140,14 @@ _CJK_LETTERS = _CJK.pattern[1:-1]  # Hangul, kana and Han: normalize.py's _CJK, 
 # A text holding CJK in words: runs of CJK, and of other letters and digits ("m/v" whole), marks and spaces between.
 _PIECE = re.compile(f"[{_CJK_LETTERS}]+|m/v(?![^\\W_{_CJK_LETTERS}])|[^\\W_{_CJK_LETTERS}]+")
 _CJK_GAP = re.compile(f"[{_CJK_LETTERS}]\\s+[{_CJK_LETTERS}]")  # a space between two CJK characters: a sentence's
-# A bracket pair, each opener closed by its own closer (the full-width （） and ［］ as () and [] are, kept as written).
-_GROUPS = re.compile(r"\([^()]*\)|\[[^\[\]]*\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》"
+# A bracket pair, each opener closed by its own closer (the full-width （） and ［］ as () and [] are, kept as written);
+# ( ) and [ ] hold neither, so a group nested in the other kind is the group ("[HD]" in "(Live [HD])").
+_GROUPS = re.compile(r"\([^()\[\]]*\)|\[[^\[\]()]*\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》"
                      r"|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕")
 _LYRIC_QUOTES = "「『"  # the groups that quote a lyric
 _TITLE_OPENERS = "【《「『〈"  # the groups that name a title: 【】《》「」『』〈〉
 _SENTENCE_END = "。！？…"
+_PAUSES = " \uff0c\u3001\uff1b"  # a space, ，、；: a quote that ends as a sentence and pauses in it is a lyric
 _QUOTES = "\"'“”‘’«»「」『』"
 _TOPIC = re.compile(r"^(.*\S)\s+-\s+topic$", re.IGNORECASE)
 _LABEL = re.compile(r"\s*(?:vevo|official|oficial|officiel)(?:\s+channel)?$", re.IGNORECASE)
@@ -208,10 +211,11 @@ def _noise_group(inner: str) -> bool:
 
 
 def _lyric(inner: str) -> bool:
-    """Whether a 「」 or 『』 group's words are a sentence: ending as one, a space between two CJK characters, or,
-    holding a CJK character, longer than ``LYRIC_CHARS``."""
+    """Whether a 「」 or 『』 group's words are a sentence: ending as one with a pause in it (``_PAUSES``), a space
+    between two CJK characters, or, holding a CJK character, longer than ``LYRIC_CHARS``."""
     inner = inner.strip()
-    return bool(inner) and (inner[-1] in _SENTENCE_END or _CJK_GAP.search(inner) is not None
+    ends = bool(inner) and inner[-1] in _SENTENCE_END and any(c in _PAUSES for c in inner)
+    return bool(inner) and (ends or _CJK_GAP.search(inner) is not None
                             or len(inner) > LYRIC_CHARS and _CJK.search(inner) is not None)
 
 
@@ -436,8 +440,8 @@ def _own(part: str) -> str:
 def _bracketed(text: str, known: _Known) -> tuple[str, str] | None:
     """Rule 2: a text no mark parts, its first CJK title group the title; the words before it the artist, less a video's
     words loose at their end, but where they begin with an artist ``known`` knows and go on, those words the title;
-    else the words after it, less their groups and a leading "by" ("By Divine Right" before it stays); none for a
-    title group alone."""
+    else the words after it, less their groups and a leading "by" ("By Divine Right" before it stays), where they
+    are words of their own (``_own_words``: "Cover" names no one); none for a title group alone."""
     titles = _titles(text)
     if _MARK.search(text) or not titles:
         return None
@@ -448,7 +452,8 @@ def _bracketed(text: str, known: _Known) -> tuple[str, str] | None:
             return named  # "陈奕迅 孤勇者《英雄联盟：双城之战》" from 陈奕迅's channel
         artist = before
     else:
-        artist = _without_by(_artist_words(_ungrouped(text[titles[0].end():])))
+        after = _artist_words(_ungrouped(text[titles[0].end():]))
+        artist = _without_by(after) if _own_words(after) else ""  # a tag's or a video's words name no one
     if not name_words(artist) or not name_words(title):
         return None
     return artist, title

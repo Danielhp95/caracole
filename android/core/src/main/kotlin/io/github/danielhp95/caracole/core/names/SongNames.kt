@@ -122,9 +122,10 @@ object SongNames {
     /** A space between two CJK characters: a sentence's. */
     private val CJK_GAP = PyRegex.compile("[$CJK_LETTERS]\\s+[$CJK_LETTERS]")
 
-    /** A bracket pair, each opener closed by its own closer. */
+    /** A bracket pair, each opener closed by its own closer; ( ) and [ ] hold neither, so a group nested in the other
+     * kind is the group ("[HD]" in "(Live [HD])"). */
     private val GROUPS = PyRegex.compile(
-        "\\([^()]*\\)|\\[[^\\[\\]]*\\]|\uff08[^\uff08\uff09]*\uff09|\uff3b[^\uff3b\uff3d]*\uff3d" +
+        "\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|\uff08[^\uff08\uff09]*\uff09|\uff3b[^\uff3b\uff3d]*\uff3d" +
             "|\u3010[^\u3010\u3011]*\u3011|\u300c[^\u300c\u300d]*\u300d|\u300e[^\u300e\u300f]*\u300f" +
             "|\u300a[^\u300a\u300b]*\u300b" +
             "|\u3008[^\u3008\u3009]*\u3009|\u3016[^\u3016\u3017]*\u3017|\u3014[^\u3014\u3015]*\u3015",
@@ -139,6 +140,9 @@ object SongNames {
     /** The groups that name a title: \u3010\u3011\u300a\u300b\u300c\u300d\u300e\u300f\u3008\u3009. */
     private const val TITLE_OPENERS = "\u3010\u300a\u300c\u300e\u3008"
     private val SENTENCE_END = Py.codePoints("\u3002\uff01\uff1f\u2026").toSet()
+
+    /** A space, ，、；: a quote that ends as a sentence and pauses in it is a lyric. */
+    private val PAUSES = Py.codePoints(" \uff0c\u3001\uff1b").toSet()
 
     /** The first splits "Artist - Title". */
     private val MARK = PyRegex.compile("\\s+(?:-|\u2013|\u2014|\\||~|//|_)\\s+")
@@ -196,13 +200,14 @@ object SongNames {
         return letters > 0 && 3 * words.sumOf { noiseLetters(it) } >= 2 * letters
     }
 
-    /** Whether a 「」 or 『』 group's words are a sentence: ending as one, a space between two CJK characters, or,
-     * holding a CJK character, longer than [LYRIC_CHARS]. */
+    /** Whether a 「」 or 『』 group's words are a sentence: ending as one with a pause in it ([PAUSES]), a space
+     * between two CJK characters, or, holding a CJK character, longer than [LYRIC_CHARS]. */
     private fun lyric(inner: String): Boolean {
         val s = Py.strip(inner)
         if (s.isEmpty()) return false
         val points = Py.codePoints(s)
-        return points.last() in SENTENCE_END || PyRe.search(CJK_GAP, s) != null ||
+        val ends = points.last() in SENTENCE_END && points.any { it in PAUSES }
+        return ends || PyRe.search(CJK_GAP, s) != null ||
             points.size > LYRIC_CHARS && PyRe.search(CJK, s) != null
     }
 
@@ -382,8 +387,8 @@ object SongNames {
 
     /** Rule 2: a text no mark parts, its first CJK title group the title; the words before it the artist, less a
      * video's words loose at their end, but where they begin with an artist [known] knows and go on, those words the
-     * title; else the words after it, less their groups and a leading "by" ("By Divine Right" before it stays); none
-     * for a title group alone. */
+     * title; else the words after it, less their groups and a leading "by" ("By Divine Right" before it stays), where
+     * they are words of their own ([ownWords]: "Cover" names no one); none for a title group alone. */
     private fun bracketed(text: String, known: Known): Pair<String, String>? {
         val titles = titles(text)
         if (PyRe.search(MARK, text) != null || titles.isEmpty()) return null
@@ -396,7 +401,8 @@ object SongNames {
             }
             artist = before
         } else {
-            artist = withoutBy(artistWords(ungrouped(text.substring(titles[0].range.last + 1))))
+            val after = artistWords(ungrouped(text.substring(titles[0].range.last + 1)))
+            artist = if (ownWords(after)) withoutBy(after) else "" // a tag's or a video's words name no one
         }
         if (Normalize.nameWords(artist).isEmpty() || Normalize.nameWords(title).isEmpty()) return null
         return artist to title

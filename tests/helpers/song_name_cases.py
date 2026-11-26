@@ -36,6 +36,30 @@ READ: list[tuple[str, str | None, tuple[str, str] | None]] = [
     ("《孤勇者》 By 陈奕迅", None, ("陈奕迅", "孤勇者")),
     ("《Stand by Me》 by", "Ben E King", ("Ben E King", "Stand by Me")),
     ("Stand by Me《Ben E King》", None, ("Stand by Me", "Ben E King")),  # a "by" inside a title is a word
+    # After the title bracket, a tag's or a video's words alone name no artist: the channel does, or no one.
+    ("《孤勇者》 Cover", "某up主", ("某up主", "孤勇者")),
+    ("《孤勇者》 Cover", None, None),
+    ("《孤勇者》 Lyrics", "陈奕迅", ("陈奕迅", "孤勇者")),
+    ("《孤勇者》 Lyrics", None, None),
+    ("《孤勇者》 動態歌詞", "陈奕迅", ("陈奕迅", "孤勇者")),
+    ("《孤勇者》 動態歌詞", None, None),
+    ("《大鱼》 现场版", "周深", ("周深", "大鱼")),
+    ("《大鱼》 现场版", None, None),
+    ("「Lemon」 Remix", "米津玄師", ("米津玄師", "Lemon")),
+    ("「Lemon」 Remix", None, None),
+    ("「Lemon」 Piano ver.", "米津玄師", ("米津玄師", "Lemon")),
+    ("「Lemon」 Piano ver.", None, None),
+    ("「Lemon」 Acoustic Version", "米津玄師", ("米津玄師", "Lemon")),
+    ("「Lemon」 Acoustic Version", None, None),
+    ("「Lemon」 Instrumental", "米津玄師", ("米津玄師", "Lemon")),
+    ("「Lemon」 Instrumental", None, None),
+    ("「夜に駆ける」 Live", "YOASOBI", ("YOASOBI", "夜に駆ける")),
+    ("「夜に駆ける」 Live", None, None),
+    ("《孤勇者》 by 陈奕迅", None, ("陈奕迅", "孤勇者")),
+    # A short quote that ends as a sentence, with no pause inside it, is a title.
+    ("KOKIA「ありがとう…」", "KOKIA", ("KOKIA", "ありがとう…")),
+    ("Aimer「どうして？」", "Aimer", ("Aimer", "どうして？")),
+    ("「夜に駆ける。」(Official Video)", "YOASOBI", ("YOASOBI", "夜に駆ける。")),
 ]
 
 KNOWN: list[tuple[str, str, tuple[str, str] | None]] = [
@@ -46,4 +70,13 @@ CLEAN: list[tuple[str, str]] = [
     # A lyric channel's group goes (two thirds of its letters its words).
     ("【抖音】别知己", "别知己"),
     ("【純音樂】Summer", "Summer"),
+    # A quote that ends as a sentence is a lyric only with a pause inside it (，、； or a space).
+    ("晴天「故事的小黄花，从出生那年就飘着。」", "晴天"),
+    ("晴天「为什么、为什么？」", "晴天"),
+    ("晴天「为什么；为什么？」", "晴天"),
+    # A Latin group inside the other Latin bracket kind goes, the outer one staying.
+    ("Artist - Song (Official Video [4K])", "Artist - Song (Official Video)"),
+    ("Artist - Song (Live [HD])", "Artist - Song (Live)"),
+    ("Artist - Song [Lyrics (HD)]", "Artist - Song [Lyrics]"),
+    ("Song [Official Video (HD)]", "Song [Official Video]"),
 ]

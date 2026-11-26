@@ -771,8 +771,9 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     known artist, the channel's song and the suggested video's.
   - A bracket of a version's or a tag's words alone (`_TAGS`: "【Live】", "【翻唱】") is never a title: leading the text
     or a part it goes (`_untagged`), after the song's words it stays as written.
-  - A long 「」 or 『』 quote of Latin words is a lyric, but a title after an artist known whole (`_decoration`,
-    `_whole_artist`: the channel's name or a known artist; `clean` alone knows none).
+  - A 「」 or 『』 quote is a lyric when it ends as a sentence with a pause in it (`_PAUSES`), has a space between two
+    CJK characters, or is longer than `LYRIC_CHARS` (`_lyric`); one of Latin words alone that long is a title after
+    an artist known whole (`_decoration`, `_whole_artist`: the channel's name or a known artist; `clean` knows none).
 - Every path that turns text into a name uses it:
   - `/api/search`'s `names` (with the YouTube video suggested for the query), which the library page's request form,
     its Make sheet and the lookup page's form by name fill in, each field until you type into it (no page splits
