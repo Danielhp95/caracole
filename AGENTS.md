@@ -1332,7 +1332,9 @@ It is rows.js's, shared by both pages:
     list (#list's, the results' or "Just requested"'s), else the one before, else the search box; a line under "Just
     requested" just goes;
   - what moves the page (the close at send, the leave) waits while a pointer is down and 400 ms after the last let go,
-    `PRESS_MOST` (3 s) at most (`whenFree`: a pointer let go of on blur, a hidden page and `lostpointercapture`);
+    while a finger is on the screen (touches counted apart: a pan fires `pointercancel` at once) and while the page
+    scrolls (`SCROLL_SETTLE`, 180 ms with no scroll, or its `scrollend`), `PRESS_MOST` (3 s) at most from when it fell
+    due (`whenFree`: pointers and touches let go of on blur, a hidden page and `lostpointercapture`);
   - a removal that fails puts the line back with its reason, its card closed, to open again;
   - the live region says Removed once, on the line; its leaving says nothing more (`tell` writes a count only when it
     changes) (test_library_remove.py).

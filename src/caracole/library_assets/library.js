@@ -996,26 +996,49 @@
   // Undo stops it. Without JavaScript the form posts, and caracole serve asks on a page of its own, whose answers
   // go back to the library as you left it (`back`: the address after #, its search, filters and sort).
   // What moves the page under a finger (a removal's card closing as it is sent, its line leaving) waits while a
-  // pointer is down and 400 ms after the last let go (its click, a second tap), PRESS_MOST at most: a pointer the page
-  // never hears come up (a touch the system took, the app sent away, a mouse held as the window lost the focus) is
-  // let go of on blur, a hidden page and lostpointercapture, and the wait has its bound all the same.
+  // pointer is down and 400 ms after the last let go (its click, a second tap), while a finger is on the screen (a
+  // touch that pans the list fires pointercancel at once: its touches are counted apart) and while the page scrolls
+  // (a fling goes on after the finger leaves: SCROLL_SETTLE ms with no scroll, or its scrollend), PRESS_MOST at most
+  // from when the move fell due. A pointer or a touch the page never hears end (the system took it, the app sent
+  // away, a mouse held as the window lost the focus) is let go of on blur, a hidden page and lostpointercapture, and
+  // the wait has its bound all the same.
   const PRESS_MOST = paced("press", 3000);
+  const SCROLL_SETTLE = 180;  // ms
   const pressing = new Set();  // the pointers down on the page
+  const touching = new Set();  // the touches on the screen, by identifier
   let pressedLast = 0;  // when the last of them was let go (performance.now())
+  let scrolledLast = 0;  // when the page last scrolled, 0 once its scroll ended
   const pointerUp = (e) => {
     if (e && e.pointerId !== undefined) pressing.delete(e.pointerId);
     else pressing.clear();
     pressedLast = performance.now();
   };
+  const touches = (e, on) => {
+    for (const t of Array.from(e.changedTouches || [])) {
+      if (on) touching.add(t.identifier);
+      else touching.delete(t.identifier);
+    }
+    if (!on) pressedLast = performance.now();
+  };
+  const quietly = { capture: true, passive: true };
   addEventListener("pointerdown", (e) => pressing.add(e.pointerId), true);
   for (const name of ["pointerup", "pointercancel", "lostpointercapture"]) addEventListener(name, pointerUp, true);
-  addEventListener("blur", () => pointerUp(null));
-  document.addEventListener("visibilitychange", () => { if (document.hidden) pointerUp(null); });
+  addEventListener("touchstart", (e) => touches(e, true), quietly);
+  for (const name of ["touchend", "touchcancel"]) addEventListener(name, (e) => touches(e, false), quietly);
+  addEventListener("scroll", () => { scrolledLast = performance.now(); }, quietly);
+  addEventListener("scrollend", () => { scrolledLast = 0; }, quietly);
+  const letAllGo = () => {
+    pointerUp(null);
+    touching.clear();
+  };
+  addEventListener("blur", letAllGo);
+  document.addEventListener("visibilitychange", () => { if (document.hidden) letAllGo(); });
   const whenFree = (fn) => {
     const since = performance.now();
     const go = () => {
       const now = performance.now();
-      if ((pressing.size || now - pressedLast < 400) && now - since < PRESS_MOST) {
+      const busy = pressing.size || touching.size || now - pressedLast < 400 || now - scrolledLast < SCROLL_SETTLE;
+      if (busy && now - since < PRESS_MOST) {
         setTimeout(go, 100);
         return;
       }

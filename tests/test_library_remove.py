@@ -406,3 +406,132 @@ def test_a_song_removed_from_the_search_leaves_its_results(serve, cfg, conn, tmp
     assert left == ["Airbag", "Karma Police"] and focus is True, (left, focus)
     assert "Wonderwall" not in alone and focus_alone == "q" and searching, (alone, focus_alone)
     assert "Nothing for “wonderwall”" in said, said
+
+
+# The script's own moves of the list from now on: each time render empties it (window.rendered) and each scrollBy
+# (window.scripted), with the page's time.
+MOVES = """(() => {
+  window.rendered = []; window.scripted = []; window.events = [];
+  const list = document.getElementById('list');
+  new MutationObserver((records) => {
+    if (records.some((r) => r.removedNodes.length)) window.rendered.push(performance.now());
+  }).observe(list, { childList: true });
+  const by = window.scrollBy.bind(window);
+  window.scrollBy = (...a) => { window.scripted.push(performance.now()); return by(...a); };
+  for (const n of ['pointercancel', 'touchend']) {
+    addEventListener(n, () => window.events.push([n, performance.now()]), { capture: true, passive: true });
+  }
+  return true;
+})()"""
+
+
+def test_a_finger_scrolling_the_list_holds_the_line_until_it_lets_go_and_the_scroll_settles(
+        serve, cfg, conn, tmp_path, phone_controls):  # noqa: F811
+    # The owner removes a song, then scrolls on: a pan fires pointercancel at once, but the finger is still on the
+    # screen and the list still moving, so the line's leave, falling due meanwhile, waits; the list is neither drawn
+    # again nor scrolled by the script under the finger. Once it lets go and the scroll settles, the line leaves.
+    creep, _ = library(conn)
+    url = serve(FakeCaracole(cfg), "(() => {})();\n", timers=QUICK)
+    item = f'#list [data-id="{creep.id}"]'
+    with browser.Browser(tmp_path / "chrome", width=PHONE[0], height=PHONE[1], mobile=True) as page:
+        page.open(url)
+        page.js(f"window.song = document.querySelector('{item}')")
+        cards.install(page)
+        assert page.js(WATCH)
+        remove_by_touch(page, item)
+        assert page.wait("window.removedAt !== undefined", timeout=20), page.js("window.lines")
+        assert page.js(MOVES)
+        time.sleep(GONE_AFTER - 0.6)  # the finger comes down before the leave falls due, and pans past it
+        y = 700
+        page.send("Input.dispatchTouchEvent", type="touchStart", touchPoints=[{"x": 200, "y": y}])
+        scrolled_from = page.js("scrollY")
+        for _ in range(24):  # about 1.2 s of panning, the list going up a few pixels at a time
+            y -= 12
+            page.send("Input.dispatchTouchEvent", type="touchMove", touchPoints=[{"x": 200, "y": y}])
+            time.sleep(0.05)
+        during = page.js("({ left: window.leftAt !== undefined, rendered: window.rendered.length, "
+                         "scripted: window.scripted.length, scrolled: scrollY, due: window.removedAt + "
+                         f"{GONE_AFTER * 1000}, now: performance.now(), "
+                         "cancelled: window.events.some((e) => e[0] === 'pointercancel') })")
+        page.send("Input.dispatchTouchEvent", type="touchEnd", touchPoints=[])
+        assert page.wait("window.leftAt !== undefined", timeout=10), page.js("window.lines")
+        after = page.js("({ left: window.leftAt, rendered: window.rendered, scripted: window.scripted, "
+                        "up: window.events.filter((e) => e[0] === 'touchend').map((e) => e[1]) })")
+    assert during["cancelled"] and during["scrolled"] > scrolled_from, (during, scrolled_from)  # a real pan
+    assert during["now"] > during["due"], during  # the leave fell due while the finger panned
+    assert not during["left"] and during["rendered"] == 0 and during["scripted"] == 0, during
+    up = after["up"][0]
+    assert after["left"] >= up + 300, after  # let go, then a moment for its click and the scroll to settle
+    assert all(t >= up for t in after["rendered"] + after["scripted"]), after
+
+
+def big_library(conn):
+    """A few hundred songs: bands of 5 and 3, and runs of folded artists between them."""
+    for a in range(40):
+        for t in range(5 if a % 2 else 3):
+            add_song(conn, f"Band {a:02}", f"Tune {t}")
+        for f in range(4):
+            add_song(conn, f"Solo {a:02}{f}", "Song")
+
+
+# Each frame from now on: the page's scroll and the top of ``anchor`` on the screen (window.frames), until stopped.
+FRAMES = """((anchor) => {
+  window.frames = []; window.framing = true;
+  const frame = () => {
+    if (!window.framing) return;
+    window.frames.push([performance.now(), scrollY, anchor.isConnected ? anchor.getBoundingClientRect().top : null]);
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+  return anchor.getBoundingClientRect().top;
+})"""
+
+
+def first_on_screen() -> str:
+    """The first of the list's lines on the screen under the search bar (library.js steady's anchor for a line that
+    left from over the screen's top)."""
+    return """(() => { const bar = document.querySelector('.searchbar'); const top = bar ? Math.max(0,
+      bar.getBoundingClientRect().bottom) : 0; return [...document.querySelectorAll('#list article.line')]
+      .find((l) => !l.classList.contains('gone') && l.getBoundingClientRect().top >= top); })()"""
+
+
+@pytest.mark.parametrize("where", ["on the screen", "above the screen"])
+def test_in_a_long_list_scrolled_deep_what_is_on_the_screen_stays_where_it_was(
+        serve, cfg, conn, tmp_path, phone_controls, where):  # noqa: F811
+    # render() draws new runs, those over the screen as tall as their estimates until laid out: the line above the one
+    # that leaves (it on the screen), or the first line on the screen (it above it), stays at its place on the screen
+    # in every frame across the leave, and 300 ms after.
+    big_library(conn)
+    url = serve(FakeCaracole(cfg), "(() => {})();\n", timers=QUICK)
+    with browser.Browser(tmp_path / "chrome", width=PHONE[0], height=PHONE[1], mobile=True) as page:
+        page.open(url)
+        cards.install(page)
+        page.js("window.scrollTo(0, document.documentElement.scrollHeight * 0.55)")
+        assert page.wait("scrollY > 0")
+        # The line in the middle of the screen, or once removed scrolled 2000 px past.
+        song_id = page.js("""(() => { const l = [...document.querySelectorAll('#list article.line')]
+          .find((x) => x.getBoundingClientRect().top > innerHeight * 0.45); return l.dataset.id; })()""")
+        item = f'#list [data-id="{song_id}"]'
+        page.js(f"window.song = document.querySelector('{item}')")
+        assert page.js(WATCH)
+        remove_by_touch(page, item)
+        assert page.wait("window.sentAt !== undefined && window.atSend !== undefined", timeout=20)
+        if where == "above the screen":
+            page.js("window.scrollBy(0, 2000)")
+            assert page.wait("window.song.getBoundingClientRect().bottom < 0")
+            time.sleep(0.3)  # the scroll settled, the runs on the screen laid out
+            anchor = first_on_screen()
+        else:
+            anchor = ("(() => { const ls = [...document.querySelectorAll('#list article.line')]; "
+                      "return ls[ls.indexOf(window.song) - 1]; })()")
+        assert page.wait("window.removedAt !== undefined", timeout=20)
+        assert page.js("window.leftAt") is None
+        top = page.js(f"{FRAMES}({anchor})")
+        assert page.wait("window.leftAt !== undefined", timeout=10)
+        time.sleep(0.3)
+        page.js("window.framing = false")
+        frames = page.js("window.frames")
+        left_at = page.js("window.leftAt")
+    assert any(t > left_at for t, _, _ in frames) and len(frames) > 10, frames
+    off = [(t, y, at) for t, y, at in frames if at is None or abs(at - top) > 1]
+    assert off == [], (top, left_at, off)
