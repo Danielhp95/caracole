@@ -20,7 +20,7 @@ from helpers.megalobiz_site import record as mz_record
 
 from caracole import db
 from caracole.commands import _common
-from caracole.health import get_state, is_cooling
+from caracole.health import get_state, is_cooling, record_block
 from caracole.lyrics_search import KV, MOST_ROWS, PICKABLE_FOR, kept_search, row_of, search_lyrics
 from caracole.overrides import load_overrides, override_key, set_lyrics_record
 from caracole.songs import get_song, update_song
@@ -500,7 +500,8 @@ def test_a_site_off_and_one_erring_is_not_searched_naming_the_one_that_erred(cfg
     assert "Megalobiz" not in line
 
 
-def test_every_site_off_asks_nothing_and_says_so(cfg, conn, song, sites):
+def test_a_guard_says_every_site_off_though_no_caracole_toml_turns_lrclib_off(cfg, conn, song, sites):
+    # LRCLIB isn't switchable (config.SWITCHABLE): only dataclasses.replace builds this, the guard's case.
     from caracole.lyrics_search import last_line
 
     found = search_lyrics(off(cfg, "lrclib", "megalobiz", "azlyrics"), conn, get_song(conn, song.id), NAME, now=NOW)
@@ -538,4 +539,53 @@ def test_with_no_rows_a_get_that_fails_is_not_searched(cfg, conn, song, sites):
     sites.lrclib.failing = {"get": 502}
     found = search(cfg, conn, song)
     assert found.state["lrclib"] == "failed"
-    assert last_line(found).startswith("Not searched: nothing listed; its ask by the exact name not made: LRCLIB failed")
+    assert found.said["lrclib"].startswith("nothing listed; its ask by the exact name not made: LRCLIB failed (")
+    assert last_line(found).startswith("Not searched: LRCLIB failed (")
+    assert last_line(found).endswith("; try again later.")
+
+
+# --- a block or an error at LRCLIB's get, after its search answered: the streak and the good run -----------------
+
+
+@pytest.fixture
+def a_strike_yesterday(conn):
+    record_block(conn, "lrclib", NOW - timedelta(days=2), "403")  # one strike, its cooldown (26 h) over
+    return get_state(conn, "lrclib")
+
+
+def test_a_block_at_the_get_after_the_search_answered_is_the_streaks_next_strike(cfg, conn, song, sites,
+                                                                               a_strike_yesterday):
+    from caracole.health import COOLDOWN_BASE, COOLDOWN_MARGIN
+
+    sites.lrclib.search = [lrc(90, track="Otra", artist="Otro")]
+    sites.lrclib.failing = {"get": 403}
+    found = search(cfg, conn, song)
+    state = get_state(conn, "lrclib")
+    assert state.strikes == 2 and state.cooldown_until == NOW + 2 * COOLDOWN_BASE + COOLDOWN_MARGIN
+    assert state.last_ok == a_strike_yesterday.last_ok  # no good run recorded over the block
+    assert records(found)[:1] == ["lrclib:90"] and found.state["lrclib"] == "rows"
+    assert found.said["lrclib"].startswith("listed 1; its ask by the exact name not made: LRCLIB turned us back; ")
+
+
+def test_an_error_at_the_get_after_the_search_answered_is_recorded_as_the_lookups_envelope_does(
+        cfg, conn, song, sites, a_strike_yesterday):
+    # get.py's envelope: an error is recorded, and a client that answered is a good run all the same (a block alone
+    # isn't): the error stays the site's last error, the strikes go.
+    sites.lrclib.search = [lrc(90, track="Otra", artist="Otro")]
+    sites.lrclib.failing = {"get": 502}
+    search(cfg, conn, song)
+    state = get_state(conn, "lrclib")
+    assert state.last_error and "502" in state.last_error and state.last_error_at == NOW
+    assert state.strikes == 0 and state.last_ok == NOW
+
+
+def test_both_answering_is_a_good_run_once(cfg, conn, song, sites, a_strike_yesterday, monkeypatch):
+    from caracole import health
+
+    oks: list[str] = []
+    ok = health.record_ok
+    monkeypatch.setattr(health, "record_ok", lambda c, provider, now: oks.append(provider) or ok(c, provider, now))
+    sites.lrclib.search = [lrc(90, track="Otra", artist="Otro")]
+    sites.lrclib.got = lrc(77)
+    search(cfg, conn, song)
+    assert oks.count("lrclib") == 1 and get_state(conn, "lrclib").strikes == 0

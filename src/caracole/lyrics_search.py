@@ -56,6 +56,7 @@ SITES = ("lrclib", "megalobiz", "azlyrics")  # in the order they are asked and l
 ROWS, NONE, OFF, COOLING, SPENT, BLOCKED, FAILED = "rows", "none", "off", "cooling", "spent", "blocked", "failed"
 STATES = (ROWS, NONE, OFF, COOLING, SPENT, BLOCKED, FAILED)
 ANSWERED = (ROWS, NONE)
+NOT_MADE = "; its ask by the exact name not made: "  # LRCLIB's words, between what it listed and why its get wasn't
 _AZLYRICS_PAGE = re.compile(r"https://www\.azlyrics\.com/lyrics/([a-z0-9-]+/[a-z0-9-]+)\.html")
 
 
@@ -326,7 +327,7 @@ class _Asking:
     def __call__(self, site: str, work: Callable[[Any], _Found]) -> _Found:
         from caracole.commands._common import lookup_run_id, make_client
         from caracole.health import get_state, is_cooling, record_ok
-        from caracole.http import BudgetExhausted, ProviderError
+        from caracole.http import BudgetExhausted, ProviderBlocked, ProviderError
 
         name, p = provider_name(site), self.cfg.provider(site)
         if not p.enabled:
@@ -342,12 +343,15 @@ class _Asking:
             return _Found(said=said, state=state)
         finally:
             client.close()
-        if client.answered_any():  # its own client's answers, never another lookup's of the same second
+        # A good run is its own client's answers, never another lookup's of the same second, and never a run that
+        # met a block, at any of its requests (a block after an answer is the streak's next strike); an error after
+        # an answer is recorded and the run is good all the same, as get.py's envelope records them.
+        if client.answered_any() and not isinstance(found.after, ProviderBlocked):
             record_ok(self.conn, site, self.now)
         if found.after is not None:  # a second ask stopped after the first answered: its rows stay, said
             state, said = self._stopped(site, client, found.after)
             listed = f"listed {len(found.rows)}" if found.rows else "nothing listed"
-            found.said = f"{listed}; its ask by the exact name not made: {said}"
+            found.said = f"{listed}{NOT_MADE}{said}"
             found.state = ROWS if found.rows else state
             return found
         found.state = ROWS if found.rows else NONE
@@ -385,9 +389,11 @@ def last_line(search: Search) -> str:
     answered = [site for site in SITES if search.state.get(site) in ANSWERED]
     left = [site for site in SITES if site not in answered and search.state.get(site) != OFF]  # a site off isn't asked
     if left:
-        return f"Not searched: {'; '.join(search.said.get(site, '') for site in left)}; try again later."
+        why = [search.said.get(site, "").partition(NOT_MADE)[2] or search.said.get(site, "") for site in left]
+        return f"Not searched: {'; '.join(why)}; try again later."
     if answered:
         return f"Nothing found: {_joined(answered)} {'lists' if len(answered) == 1 else 'list'} nothing for {quoted}."
+    # A guard: no caracole.toml reaches it today, LRCLIB being no switchable provider (config.SWITCHABLE).
     return "Not searched: every lyrics site is off (caracole.toml); nothing asked."
 
 

@@ -136,8 +136,8 @@ sitemaps list by bare ids alone, and the fetch their page.
   listed; a record only by an id the site answered, of `[lyrics]`' shape (`overrides.LYRICS_RECORD_IDS`), checked as
   it is read and again from kv. Each site's `state` (`STATES`: rows, none, off, cooling, spent, blocked, failed) and
   its words (`said`), never a miss, the others listed; `last_line`: "Searched: " rows, "Nothing found: " every site
-  asked answered none (a site off isn't asked: left out), "Not searched: " a site cooling, spent, blocked or failing,
-  or every site off. Kept in kv `lyrics-search:<song id>` (`KV`, in `songs._PER_SONG_KV` and SongKv.kt; no unit's,
+  asked answered none (a site off isn't asked: left out), "Not searched: " a site cooling, spent, blocked or failing.
+  A block at any of a site's requests is its strike, with no good run recorded over it. Kept in kv `lyrics-search:<song id>` (`KV`, in `songs._PER_SONG_KV` and SongKv.kt; no unit's,
   never crossing to the phone), replaced by the next search, never under an id another song took meanwhile;
   `kept_search` gives it for `PICKABLE_FOR` (7 days), `row_of` a record's row. It changes no lyrics.
 
@@ -690,7 +690,7 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 | page_log.py | the library page's line in the log, one a build (below) |
 | page_icon.py | caracole's logo (docs/logo/) drawn in SVG, its black and its copper traced by docs/logo/trace.py: every page's tab (`LINK`, a `data:` URI for a page's head; `SVG`, caracole serve's `/favicon.ico`) and bar (`mark`); the standard library alone |
 | library_name.py | which library a page shows (below) |
-| overrides.py | overrides.toml (`[harmonica]`: a tab's reading pinned, `add_harmonica`, checked by viewer/harptab.py `check_spec`; `[lyrics]`: the name a song's lyrics are asked under and the record picked, `LyricsPick`, `LyricsRecord` (`site:id`, a site of `_LYRICS_RECORD_IDS` and an id of its shape alone), `set_lyrics_name`, `set_lyrics_record`) |
+| overrides.py | overrides.toml (`[harmonica]`: a tab's reading pinned, `add_harmonica`, checked by viewer/harptab.py `check_spec`; `[lyrics]`: the name a song's lyrics are asked under and the record picked, `LyricsPick`, `LyricsRecord` (`site:id`, a site of `LYRICS_RECORD_IDS` and an id of its shape alone), `set_lyrics_name`, `set_lyrics_record`) |
 | ug_urls.py | UG's addresses as an address bar shows them, the one reading of them: overrides.py's (`ug_path`, `pin_url`, `artist_page_address`) and a pasted link's (`read_link`), which library.js's `ugLink` mirrors (helpers/ug_links.py's shapes); the standard library alone |
 | library.py | song folders, safe file access in the synced library |
 | download_names.py | the name a kept file downloads under ("Eagles - Hotel California (2).gp5"): web/app.py's `Content-Disposition`, the `download` of index.html's and the viewer's links; the standard library alone (the viewer imports it) |

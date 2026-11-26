@@ -28,7 +28,7 @@ internal object Readers {
     /** overrides.LYRICS_SHAPE. */
     const val LYRICS_SHAPE =
         "{ as = \"Artist - Title\", record = \"lrclib:ID\" | \"megalobiz:ID\" | \"azlyrics:ARTIST/SONG\" }"
-    /** overrides._LYRICS_RECORD_IDS: each lyrics site's ids, of exactly their shape there. */
+    /** overrides.LYRICS_RECORD_IDS: each lyrics site's ids, of exactly their shape there. */
     private val LYRICS_RECORD_IDS by lazy {
         val number = PyRegex.compile("[1-9][0-9]{0,11}")
         mapOf("lrclib" to number, "megalobiz" to number, "azlyrics" to PyRegex.compile("[a-z0-9-]+/[a-z0-9-]+"))
