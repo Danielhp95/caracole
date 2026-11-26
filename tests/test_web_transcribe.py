@@ -210,7 +210,8 @@ def test_the_page_reads_the_offer_again_as_the_served_page_has_it(able, queue, c
     assert response.status == 200
     assert dict(response.headers)["Content-Type"] == "application/json; charset=utf-8"
     assert dict(response.headers)["Cache-Control"] == "no-store"
-    assert answer(response) == {"ok": True, "why": None, "songs": [], "time": "up to half an hour"}
+    assert answer(response) == {"ok": True, "why": None, "songs": [], "nothing": [], "unsung": [], "transcribed": [],
+                                "time": "up to half an hour"}
     update_song(conn, song.id, lyrics_status="missing", lyrics_at="2026-11-21T00:00:00Z")  # every site missed it
     assert answer(offers(app))["songs"] == [song.id]
     html = build_library_page(conn, able, Overrides(), datetime.now(UTC), controls=WebControls(csrf="tok"))
@@ -226,7 +227,7 @@ def test_where_it_cant_run_the_offer_says_why_and_offers_no_song(cfg, queue, con
     youtube_song(conn, tmp_path, "Nick Cani", "Vikingos veganos")
     monkeypatch.setattr(yf, "transcribe_problem", lambda cfg: "built without Whisper")
     assert answer(offers(app_for(cfg, queue))) == {"ok": False, "why": "Whisper isn't installed", "songs": [],
-                                                   "time": ""}
+                                                   "nothing": [], "unsung": [], "transcribed": [], "time": ""}
 
 
 def test_the_offer_is_read_by_the_pages_script_alone(able, queue, conn):
@@ -235,3 +236,105 @@ def test_the_offer_is_read_by_the_pages_script_alone(able, queue, conn):
     assert offers(app, **{"x-caracole-form-token": None}).status == 403  # no form token: not the page's script
     assert offers(app, **{"x-caracole-form-token": "old"}).status == 403  # a page of a server before this one
     assert queue.snapshot() == []
+
+
+# --- the owner's word over caracole's: Transcribe anyway, Not sung ------------------------------------------------
+
+
+def heard_nothing_song(conn, tmp_path, artist="Nick Cani", title="Vikingos veganos"):
+    from caracole.autochords.transcript import note_heard_nothing
+
+    song = youtube_song(conn, tmp_path, artist, title)
+    note_heard_nothing(conn, song, "2026-11-21T00:00:00Z", why="sung 6.2 s", by="caracole")
+    return song
+
+
+def transcribed_song(conn, tmp_path, artist="Estopa", title="Como Camarón"):
+    from test_autochords_transcript import made
+
+    from caracole.autochords.transcript import keep_transcript
+
+    song = youtube_song(conn, tmp_path, artist, title)
+    keep_transcript(conn, song, made(song))
+    return song
+
+
+def test_transcribe_anyway_queues_caracole_transcribe_force(able, queue, conn, tmp_path):
+    song = heard_nothing_song(conn, tmp_path)
+    app = app_for(able, queue)
+    refused = post(app, {"song": str(song.id), "identity": song.key})  # not offered as it is: nothing sung
+    assert refused.status == 409 and "nothing sung was heard" in answer(refused)["error"]
+    response = post(app, {"song": str(song.id), "identity": song.key, "force": "1"})
+    assert response.status == 200, response.body
+    [job] = queue.snapshot()
+    assert job.title == "Lyrics from the audio: Nick Cani - Vikingos veganos"
+    assert [(s.label, s.args) for s in job.steps] == transcribe_steps(song.display, force=True)
+    queue.run_pending()
+    assert queue._runner.calls == [["transcribe", "--progress", "--force", "--song=Nick Cani - Vikingos veganos"]]
+
+
+def test_not_sung_queues_caracole_transcribe_none(able, queue, conn, tmp_path):
+    song = transcribed_song(conn, tmp_path)
+    response = post(app_for(able, queue), {"song": str(song.id), "identity": song.key, "none": "1"})
+    assert response.status == 200, response.body
+    [job] = queue.snapshot()
+    assert job.song_key == TRANSCRIBE + song.key and job.title == "Not sung, chords only: Estopa - Como Camarón"
+    assert [s.name for s in job.stages] == [name for name, _ in STAGES] and job.transcribes
+    queue.run_pending()
+    assert queue._runner.calls == [["transcribe", "--progress", "--none", "--song=Estopa - Como Camarón"]]
+
+
+def test_the_owners_word_is_refused_for_a_song_neither_applies_to(able, queue, conn, tmp_path):
+    app = app_for(able, queue)
+    found = youtube_song(conn, tmp_path, "Radiohead", "Creep", lyrics_status="found")
+    offered_now = youtube_song(conn, tmp_path, "Soda Stereo", "Persiana americana")
+    for song, field, said in (
+            (found, "force", "Radiohead - Creep isn't offered a transcription: its lyrics are found."),
+            (found, "none", "Radiohead - Creep can't be said not sung: its lyrics are found."),
+            (offered_now, "none", "Soda Stereo - Persiana americana can't be said not sung: it has no transcript.")):
+        response = post(app, {"song": str(song.id), "identity": song.key, field: "1"})
+        assert (response.status, answer(response)["error"]) == (409, said)
+    both = post(app, {"song": str(offered_now.id), "identity": offered_now.key, "force": "1", "none": "1"})
+    assert both.status == 400
+    assert queue.snapshot() == []
+
+
+def test_the_offer_names_the_songs_heard_to_have_nothing_and_those_transcribed(able, queue, conn, tmp_path,
+                                                                               monkeypatch):
+    # Transcribe anyway's songs told apart by whose word it is: caracole's (``nothing``) or the owner's (``unsung``).
+    from caracole.autochords.transcript import drop_transcript
+
+    monkeypatch.delenv("CARACOLE_TORCH_CUDA", raising=False)
+    nothing = heard_nothing_song(conn, tmp_path)
+    transcribed = transcribed_song(conn, tmp_path)
+    marked = transcribed_song(conn, tmp_path, "Estopa", "Vino tinto")
+    drop_transcript(conn, marked, "2026-11-21T00:00:00Z")
+    offered_now = youtube_song(conn, tmp_path, "Soda Stereo", "Persiana americana")
+    youtube_song(conn, tmp_path, "Radiohead", "Creep", lyrics_status="found")  # a site's lyrics: none of the three
+    assert answer(offers(app_for(able, queue))) == {
+        "ok": True, "why": None, "songs": [offered_now.id], "nothing": [nothing.id], "unsung": [marked.id],
+        "transcribed": [transcribed.id], "time": "up to half an hour"}
+
+
+def test_whisper_cant_read_its_audio_says_what_to_do_and_force_tries_it_again(able, queue, conn, tmp_path):
+    from caracole.autochords.transcript import note_whisper_cant_read
+
+    song = youtube_song(conn, tmp_path, "Nick Cani", "Vikingos veganos")
+    note_whisper_cant_read(conn, song, "2026-11-21T00:00:00Z", "RuntimeError: Failed to load audio")
+    app = app_for(able, queue)
+    refused = post(app, {"song": str(song.id), "identity": song.key})
+    assert (refused.status, answer(refused)["error"]) == (409, (
+        "Nick Cani - Vikingos veganos isn't offered a transcription: Whisper can't read its audio (a new file, or "
+        "another video under [youtube], gets its words heard; after an ffmpeg or Whisper upgrade, caracole "
+        "transcribe --force tries it again)."))
+    assert answer(offers(app))["nothing"] == []  # the card offers no Transcribe anyway for it: that is by hand
+    assert post(app, {"song": str(song.id), "identity": song.key, "force": "1"}).status == 200
+
+
+def test_force_on_a_song_offered_a_transcription_simply_transcribes_it(able, queue, conn, tmp_path):
+    # Forcing what is offered anyway is harmless: accepted, queued with --force.
+    song = youtube_song(conn, tmp_path, "Nick Cani", "Vikingos veganos")
+    response = post(app_for(able, queue), {"song": str(song.id), "identity": song.key, "force": "1"})
+    assert response.status == 200, response.body
+    queue.run_pending()
+    assert queue._runner.calls == [["transcribe", "--progress", "--force", "--song=Nick Cani - Vikingos veganos"]]

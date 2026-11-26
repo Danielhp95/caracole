@@ -205,9 +205,10 @@ def test_a_transcription_that_fails_ends_saying_so_never_done_and_exits_1(tmp_pa
     assert not any(line.startswith("Done in ") for line in lines)
 
 
-def test_audio_whisper_cant_load_is_filed_and_exits_1(tmp_path, config, conn, models, monkeypatch):
-    # Its words are all this job is for: audio Whisper can't load is filed as auto-chords files a file it can't read,
-    # so the song is offered no transcription again until its audio changes (a sheet from a video files nothing).
+def test_audio_whisper_cant_load_is_noted_and_exits_1_saying_what_to_do(tmp_path, config, conn, models, monkeypatch):
+    # Its words are all this job is for: audio Whisper can't load is noted as Whisper's, as the nightly pass and a
+    # sheet from a video note it (never as audio auto-chords can't read, which reads it), so the song is offered no
+    # transcription again until its audio changes, and the job says what to do.
     from caracole.autochords.transcript import why_not_offered
     from caracole.overrides import Overrides
     from caracole.songs import get_song
@@ -228,10 +229,13 @@ def test_audio_whisper_cant_load_is_filed_and_exits_1(tmp_path, config, conn, mo
     result = invoke(config, "--song", "Nick Cani - Vikingos veganos")
     assert result.exit_code == 1, result.output
     lines = result.output.splitlines()
-    assert "Words: failed: can't read the audio." in lines
-    assert lines[-1] == "No transcript made: can't read the audio."
-    assert kv_get(conn, f"autochords:failed:{song.id}") is not None
-    assert why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) == "its audio can't be read"
+    said = ("Whisper can't read the audio: a new file, or another video under [youtube], gets its words heard; after "
+            "an ffmpeg or Whisper upgrade, caracole transcribe --force tries it again")
+    assert f"Words: failed: {said}." in lines
+    assert lines[-1] == f"No transcript made: {said}."
+    assert kv_get(conn, f"autochords:failed:{song.id}") is None
+    assert kv_get(conn, f"transcribe:unreadable:{song.id}") is not None
+    assert why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) == "Whisper can't read its audio"
 
 
 def test_a_transcription_refused_at_its_chords_says_its_transcript_is_kept(tmp_path, config, conn, models,
@@ -330,3 +334,29 @@ def test_registering_the_command_imports_no_model(tmp_path):
                          check=False)
     assert out.returncode == 0, out.stderr[-2000:]
     assert out.stdout.strip() == "[]"
+
+
+def test_force_and_none_together_are_refused_before_anything_runs(config):
+    result = invoke(config, "--song", "Nick Cani - Vikingos veganos", "--force", "--none")
+    assert result.exit_code == 2 and "--force and --none say opposite things" in result.output
+
+
+@pytest.mark.slow
+def test_none_drops_the_transcript_and_says_so_then_force_hears_it_again(tmp_path, config, conn, models, monkeypatch):
+    monkeypatch.setattr(yf, "transcribe_problem", lambda cfg: None)
+    song = offered(conn, load_config(config, env={}))
+    assert invoke(config, "--song", "Nick Cani - Vikingos veganos").exit_code == 0
+    models.clear()
+    result = invoke(config, "--song", "Nick Cani - Vikingos veganos", "--none")
+    assert result.exit_code == 0, result.output
+    lines = result.output.splitlines()
+    for said in ("Vocals: skipped: you said nothing is sung.", "Words: transcript dropped.",
+                 "Chords: chords only: you said it isn't sung."):
+        assert said in lines, result.output
+    assert kv_get(conn, f"transcript:{song.id}") is None and not any(m.startswith(("demucs", "whisper"))
+                                                                     for m in models)
+    refused = invoke(config, "--song", "Nick Cani - Vikingos veganos")
+    assert refused.exit_code == 1 and refused.output.splitlines()[-1] == (
+        "No transcript made: Nick Cani - Vikingos veganos isn't offered a transcription: you said it isn't sung.")
+    assert invoke(config, "--song", "Nick Cani - Vikingos veganos", "--force").exit_code == 0
+    assert kv_get(conn, f"transcript:{song.id}") is not None

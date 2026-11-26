@@ -198,13 +198,16 @@ elsewhere the form says why in one line, and the cards offer nothing.
 
 Lyrics transcribed from a song's audio (web/transcribe_routes.py): where this caracole transcribes
 (``youtube_fetch.transcribe_reason``), the data's ``server.transcribe`` lists the songs offered one
-(``transcript.offered_song_ids``: audio from YouTube, every lyrics site missed) and how long one takes here
-(``transcribe_time``), and such a song's card has Transcribe the lyrics (library.js ``transcribeOffer``), as its
-request that ended Ready has in the Requests tab (requests.js), posting ``POST /transcribe`` in place; asked for,
-it is gone from both. Once a song's job ends, the page reads the member again (``GET /transcribe``,
-``transcribe_member``): a sheet from a video that found no lyrics offers it at once, a failed transcription offers it
-again, one made meanwhile from a terminal offers it no more. The card's own data says nothing of it (the phone, which
-transcribes nothing, writes the same cards); elsewhere no card offers it.
+(``transcript.offers``: audio of its own, every lyrics site missed) and how long one takes here (``transcribe_time``),
+and such a song's card has Transcribe the lyrics (library.js ``transcribeOffer``), as its request that ended Ready has
+in the Requests tab (requests.js), posting ``POST /transcribe`` in place; asked for, it is gone from both. The owner's
+word over caracole's goes there too: a song heard to have nothing sung (``nothing``), or said not sung (``unsung``, its
+hint the owner's word), has Transcribe anyway, one with a transcript kept (``transcribed``) Not sung: chords only
+(library.js ``overrideOffer``), each posting ``POST /transcribe`` with ``force=1`` or ``none=1`` in place. Once a song's
+job ends, the page reads the member again (``GET /transcribe``, ``transcribe_member``): a sheet from a video that found
+no lyrics offers it at once, a failed transcription offers it again, one made meanwhile from a terminal offers it no
+more. The card's own data says nothing of it (the phone, which transcribes nothing, writes the same cards); elsewhere no
+card offers it.
 
 Remove stays on the page: one tap and the song's own line says "Removing in 5 s
 · Undo", the focus on Undo, with what goes in one sentence under it (the
@@ -472,14 +475,17 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
 def transcribe_member(conn: sqlite3.Connection, cfg: Config, overrides: Overrides) -> dict[str, Any]:
     """The served page's ``server.transcribe``, as ``GET /transcribe`` answers it too (web/transcribe_routes.py), the
     page asking it again once a song's job ends: whether this caracole transcribes (``ok``), why not (``why``,
-    ``youtube_fetch.transcribe_reason``), the songs offered one (``songs``, ``transcript.offered_song_ids``) and how
-    long one takes here (``time``, ``transcribe_time``); none offered and no time where it can't."""
-    from caracole.autochords.transcript import offered_song_ids
+    ``youtube_fetch.transcribe_reason``), the songs offered one (``songs``), those offered Transcribe anyway, heard to
+    have nothing sung (``nothing``) or said not sung by the owner (``unsung``), and those with a transcript kept,
+    offered Not sung: chords only (``transcribed``), all four ``transcript.offers``, read with no model; and how long
+    one takes here (``time``, ``transcribe_time``); none offered and no time where it can't. The phone's
+    (LibraryPage.kt) is the same shape."""
+    from caracole.autochords.transcript import offers
 
     why = transcribe_reason(cfg)
     if why is not None:
-        return {"ok": False, "why": why, "songs": [], "time": ""}
-    return {"ok": True, "why": None, "songs": offered_song_ids(conn, cfg, overrides), "time": transcribe_time(cfg)}
+        return {"ok": False, "why": why, "songs": [], "nothing": [], "unsung": [], "transcribed": [], "time": ""}
+    return {"ok": True, "why": None, **offers(conn, cfg, overrides), "time": transcribe_time(cfg)}
 
 
 def assemble_page(data: Mapping[str, Any], controls: WebControls | None, *, problem: str | None,

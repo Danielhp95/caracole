@@ -563,3 +563,13 @@ def test_a_shared_links_services_are_switchable_on_and_asked_one_share_at_a_time
     off = load_config(p, env={"HOME": str(tmp_path)})
     assert [name for name in SHARE_PROVIDERS if not off.provider(name).enabled] == ["spotify", "youtube-oembed"]
     assert off.provider("youtube").enabled  # yt-dlp's switch is its own
+
+
+def test_the_nightly_pass_hears_up_to_transcribe_per_run_songs(tmp_path):
+    assert load_config(None, env={"HOME": str(tmp_path)}).autochords.transcribe_per_run == 3
+    p = write(tmp_path, "[autochords]\ntranscribe_per_run = 0\n")
+    assert load_config(p, env={"HOME": str(tmp_path)}).autochords.transcribe_per_run == 0
+    p = write(tmp_path, "[autochords]\ntranscribe_per_run = -1\n")
+    with pytest.raises(ConfigError, match=r"^\[autochords\]\.transcribe_per_run must be a non-negative integer, "
+                                          r"not -1$"):
+        load_config(p, env={"HOME": str(tmp_path)})

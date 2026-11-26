@@ -511,11 +511,15 @@ def _sheets_from_youtube(args: Sequence[str]) -> bool:
 TRANSCRIBE = "transcribe:"  # lyrics transcribed from a song's audio: its job's key, the song's identity key after it
 
 
-def transcribe_steps(display: str) -> list[tuple[str, tuple[str, ...]]]:
+def transcribe_steps(display: str, *, force: bool = False, none: bool = False) -> list[tuple[str, tuple[str, ...]]]:
     """Transcribe a song's lyrics from its audio now, and make its auto sheet again over them: ``caracole transcribe
     --progress``, one process for every stage (transcribe_job.py's ``STAGES``): where the singing is, the words, the
-    chords, the PDF."""
-    return [("Transcribing the lyrics", ("transcribe", "--progress", f"--song={display}"))]
+    chords, the PDF. ``force``, Transcribe anyway (``--force``); ``none``, Not sung: chords only (``--none``), its
+    transcript dropped and its chords made alone."""
+    if none:
+        return [("Making the chords alone", ("transcribe", "--progress", "--none", f"--song={display}"))]
+    flags = ("--force",) if force else ()
+    return [("Transcribing the lyrics", ("transcribe", "--progress", *flags, f"--song={display}"))]
 
 
 def _transcribes(args: Sequence[str]) -> bool:

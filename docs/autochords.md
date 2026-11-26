@@ -33,6 +33,22 @@ one missed, the words heard from the audio, then the chords over them. If the tr
 chords, and the card still offers Transcribe the lyrics. `[autochords] transcribe = false` in caracole.toml turns this
 off.
 
+The nightly auto-chords run does the same for up to three songs a night, newest first, before their chords
+(`[autochords] transcribe_per_run`, 0 for none). A song past that gets its chords tonight and its words on a later
+night, and its sheet is made again then. On a CPU each song heard takes about 7 times its length, so three 4-minute
+songs are about an hour and a half.
+
+With the GPU build (`autochords-cuda`), the nightly unit hears no words: its separator needs the GPU, and the nightly
+unit doesn't see it. The to-do page says so. The words then come from the library page's jobs: a sheet from a video,
+or Transcribe the lyrics on the song's card. With the CPU build, the nightly unit hears them on the CPU.
+
+Audio Whisper can't read still gets its chords, wherever its words were to be heard. caracole then stops offering to
+transcribe it until the file changes, and the to-do page lists it.
+
+When caracole gets it wrong, the card lets you say otherwise. A song in which nothing sung was heard has **Transcribe
+anyway**; one whose sheet is over its transcript has **Not sung: chords only**, which drops the words and never hears
+that audio again (a new file is heard once more).
+
 ## Install
 
 ```sh
@@ -56,6 +72,7 @@ to half an hour on a CPU and a couple of minutes on a GPU.
 | `caracole youtube --song "Artist - Title" [--url URL] --sheet` | Makes that song's sheet from a video, now |
 | `caracole youtube --song "Artist - Title" --none` | Never uses YouTube for that song |
 | `caracole transcribe --song "Artist - Title"` | Transcribes the lyrics, then remakes the sheet |
+| `caracole transcribe --song "Artist - Title" --force` / `--none` | It is sung after all / it isn't sung |
 | `caracole audio FILE [--song "Artist - Title"]` | Makes that song's sheet from an audio file of yours, now |
 
 None of this runs on the phone. Details: [Audio from YouTube](usage.md#audio-from-youtube).

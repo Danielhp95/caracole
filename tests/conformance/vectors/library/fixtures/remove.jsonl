@@ -75,6 +75,10 @@
 {"kv":"transcribe:none:1:more","value":"{}"}
 {"kv":"transcribe:none:2","value":"{}"}
 {"kv":"transcribe:none:2:more","value":"{}"}
+{"kv":"transcribe:unreadable:1","value":"{}"}
+{"kv":"transcribe:unreadable:1:more","value":"{}"}
+{"kv":"transcribe:unreadable:2","value":"{}"}
+{"kv":"transcribe:unreadable:2:more","value":"{}"}
 {"kv":"transcript:1","value":"{}"}
 {"kv":"transcript:1:more","value":"{}"}
 {"kv":"transcript:2","value":"{}"}

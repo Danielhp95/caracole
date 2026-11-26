@@ -45,9 +45,9 @@ Two kinds of failure are told apart, because only one is the purchase's:
   song alone. kv ``autochords:failed:<song id>`` keeps the file's path and
   mtime, so it isn't decoded again every night: the song is tried again once
   its file changes (a new download, a converted copy), and the record is
-  dropped once the song's file changes or goes. A transcription that can't
-  read the file files it the same way (transcribe_job.py), and transcript.py
-  offers such a song no transcription.
+  dropped once the song's file changes or goes. transcript.py offers such a
+  song no transcription. (Whisper's decoder refusing a file auto-chords reads
+  is Whisper's alone: transcript.py ``note_whisper_cant_read``.)
 - **A setup that can't work** blames no purchase: model files missing or
   unusable, models that fail on a generated test tone (a sandbox that stops
   them, a checkpoint that won't load), or a sheet that can't be kept in the
@@ -55,9 +55,14 @@ Two kinds of failure are told apart, because only one is the purchase's:
 - **A bug laying out the sheet**, once the models have heard the file (``_hear``),
   is caracole's, never the file's: that song stays due, and the run exits 1.
 
+Before a song's chords, the words of a few songs no lyrics site has are heard
+(``autochords_pending``'s ``hearing``), so that each sheet is made once, over them.
+
 Each run is recorded in kv ``autochords:status`` for the to-do page:
-``{"at", "generated", "skipped", "failed": [{"song", "error", "audio"}]}``,
-where ``failed`` lists every purchase whose current file can't be read.
+``{"at", "generated", "skipped", "failed": [{"song", "error", "audio"}], "heard", "silent", "transcribe_problem"}``,
+where ``failed`` lists every purchase whose current file can't be read, ``heard`` and ``silent`` count the songs
+whose words were heard and those heard to have nothing sung, and ``transcribe_problem`` says why words a song
+waited for weren't heard (None for none).
 """
 
 from __future__ import annotations
@@ -74,7 +79,7 @@ from collections.abc import Callable, Collection, Iterable, Iterator, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from caracole.autochords.align import lyrics_offset, shifted_lrc
 from caracole.autochords.beats import detect_beats
@@ -90,11 +95,14 @@ from caracole.autochords.merge import (
 )
 from caracole.autochords.transcript import (
     LYRICS_SOURCE,
+    NOT_SUNG,
     NOTE,
     SILENT,
     UNREADABLE,
     Transcript,
+    said_not_sung,
     transcript_of,
+    why_not_offered,
 )
 from caracole.autochords.transcript import heard_nothing as _heard_nothing
 from caracole.chordpro import display_columns
@@ -108,7 +116,10 @@ from caracole.overrides import Overrides, load_overrides
 from caracole.songs import AUTO_SHEET, HUMAN_SHEET, Song, get_song, list_songs, refresh_status, update_song
 from caracole.versions import get_version, upsert_version
 from caracole.youtube import Video
-from caracole.youtube_fetch import youtube_audio
+from caracole.youtube_fetch import transcribe_problem, youtube_audio
+
+if TYPE_CHECKING:
+    from caracole.autochords.hearing import Hearing
 
 log = logging.getLogger(__name__)
 
@@ -118,8 +129,10 @@ SYNC_TOLERANCE_S = 2.0  # LRCLIB's own tolerance when it matches a duration
 STATUS_KEY = "autochords:status"  # kv: the last run, for the to-do page
 COLUMNS = "display"  # what a sheet's chord lines count, in its version's raw: display columns (merge._on_words)
 ERROR_CHARS = 300  # an error as the to-do page lists it: one line, if a long one
-# What ``autochords_pending`` tells its ``on_step`` as each step starts.
-STEPS = ("setting up the models", "hearing the chords", "finding the beats", "writing the sheet")
+# What ``autochords_pending`` tells its ``on_step`` as each step starts: a song's chords, then, before them, its words
+# where it hears them (``hearing``).
+STEPS = ("setting up the models", "hearing the chords", "finding the beats", "writing the sheet",
+         "separating the vocals", "hearing the words")
 TONE_SECONDS = 2.0
 TONE_HZ = (261.63, 329.63, 392.0)  # C major: C4, E4 and G4
 
@@ -155,6 +168,10 @@ class AutoStats:
     ``errors`` are the setup's problems, which blame no purchase: the models
     couldn't run, or a sheet couldn't be kept. The songs they stopped count as
     failed and are tried again next run, and ``caracole autochords`` exits 1.
+
+    ``heard`` and ``silent``: the songs whose words were heard this run, kept as their transcript, and those heard to
+    have nothing sung. ``transcribe_problem``: why words a song waited for weren't heard, the setup's (the separator,
+    the GPU, Whisper's model) or this machine's (``youtube_fetch.transcribe_problem``); no exit 1 on its account.
     """
 
     generated: int = 0
@@ -162,10 +179,19 @@ class AutoStats:
     failed: int = 0
     failures: list[Failure] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+    heard: int = 0
+    silent: int = 0
+    transcribe_problem: str | None = None
 
     def summary(self) -> str:
-        """One line for the journal or a notification: "1 generated, 4 skipped, 0 failed"."""
-        return f"{self.generated} generated, {self.skipped} skipped, {self.failed} failed"
+        """One line for the journal or a notification: "1 generated, 4 skipped, 0 failed", then what was heard, or
+        why nothing was, where anything was to hear ("; words heard for 1, nothing sung in 1")."""
+        said = f"{self.generated} generated, {self.skipped} skipped, {self.failed} failed"
+        if self.heard or self.silent:
+            said += f"; words heard for {self.heard}, nothing sung in {self.silent}"
+        if self.transcribe_problem is not None:
+            said += f"; words not heard: {self.transcribe_problem}"
+        return said
 
 
 def _overrides_again(cfg: Config, overrides: Overrides) -> Overrides:
@@ -190,6 +216,8 @@ def autochords_pending(
     between: Callable[[], bool] | None = None,
     only: Collection[int] | None = None,
     on_step: Callable[[str], None] | None = None,
+    hearing: Hearing | None = None,
+    transcriptions: int = 0,
 ) -> AutoStats:
     """Generate the auto sheets that are due, keep them in the library, and record the run.
 
@@ -215,6 +243,20 @@ def autochords_pending(
 
     ``on_step`` is told each step as it starts, in a few words (``STEPS``): the models set
     up, then each song's chords, beats and sheet, for a job that says how it goes.
+
+    ``hearing`` (autochords/hearing.py) hears the words of up to ``transcriptions`` songs a run, in turn, newest
+    first, before their chords: a song with audio that ``transcript.why_not_offered`` offers them (every lyrics site
+    asked and missed, in the nightly run's steps before this pass; not heard yet). Its vocals separated, a waiting
+    lookup goes first (``between``), then, the song read again and still offered with the audio separated, its words,
+    kept as its transcript or nothing sung noted, either making its sheet due (``_skip_reason``). A song past the cap
+    gets its chords now and its words on a later run, its sheet then made again. The setup's failure (the separator,
+    the GPU, Whisper's model) stops the hearing for the run, kept as ``transcribe_problem``, the chords going on;
+    audio Whisper can't load (which the vocals read with auto-chords' own reader) is noted as Whisper's alone
+    (transcript.py ``note_whisper_cant_read``), offered no words again until it changes, its chords made; a bug is
+    one of the run's ``errors`` (exit 1), its chords made all the same. The cap counts the songs whose hearing
+    started, one passed over after a lookup went first or stopped by a bug too: the separation's time was spent.
+    With no ``hearing`` and a cap, a song offered its words says why this machine hears none
+    (``youtube_fetch.transcribe_problem``: the nightly unit of the GPU build sees no GPU).
     """
     stamp = (now or datetime.now(UTC)).astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     if overrides is None:
@@ -223,8 +265,15 @@ def autochords_pending(
     told = on_step or (lambda said: None)
     models = _Models(cfg, recognizer, beats_fn)
     songs = [s for s in list_songs(conn) if only is None or s.id in only]
-    due, worked = _count_due(conn, cfg, songs, overrides), 0
-    for song, overrides in _songs_in_turn(conn, cfg, songs, overrides, between):
+    hears = transcriptions if hearing is not None else 0
+    due, worked = _count_due(conn, cfg, songs, overrides, hears), 0
+    turns = _Turns(cfg, conn, overrides, between)
+    listening = _Listening(hearing, transcriptions)
+    for listed in turns.each(songs):
+        song = listening.first(conn, cfg, listed, turns, stats, stamp, told)
+        if song is None:  # left the book while its words were heard and a lookup went first
+            continue
+        overrides = turns.overrides
         failure = _known_failure(conn, song)  # first, so a failure goes when its file does
         if not song.audio_path or not _due(conn, cfg, song, overrides, failure, stats):
             continue
@@ -242,33 +291,158 @@ def autochords_pending(
 
 def _songs_in_turn(conn: sqlite3.Connection, cfg: Config, songs: Iterable[Song], overrides: Overrides,
                    between: Callable[[], bool] | None) -> Iterator[tuple[Song, Overrides]]:
-    """Each of ``songs`` in its turn, with overrides.toml as the run knows it then. ``between`` is called before
-    each turn but the first, once the one before is over, in no transaction; once it says it handed caracole's lock
-    to a lookup, overrides.toml is read again, and so is each song after, as the lookup may have changed them: one
-    merged into another meanwhile is passed over."""
-    handed = False
-    for n, listed in enumerate(songs):
-        if n and between is not None and between():
-            handed = True
-            overrides = _overrides_again(cfg, overrides)
-        song = listed
-        if handed:
+    """Each of ``songs`` in its turn, with overrides.toml as the run knows it then (``_Turns``)."""
+    turns = _Turns(cfg, conn, overrides, between)
+    for song in turns.each(songs):
+        yield song, turns.overrides
+
+
+@dataclass
+class _Turns:
+    """A pass's turns over its songs, and overrides.toml as it knows it now. ``between`` is called before each turn
+    but the first, once the one before is over, and wherever the pass lets a lookup go first within one
+    (``hand_over``), in no transaction; once it says it handed caracole's lock to a lookup, overrides.toml is read
+    again, and so is each song after, as the lookup may have changed them: one merged into another meanwhile is
+    passed over."""
+
+    cfg: Config
+    conn: sqlite3.Connection
+    overrides: Overrides
+    between: Callable[[], bool] | None
+    handed: bool = False
+
+    def hand_over(self) -> bool:
+        """A waiting lookup let go first; whether one was, overrides.toml then read again."""
+        if self.between is None or not self.between():
+            return False
+        self.handed = True
+        self.overrides = _overrides_again(self.cfg, self.overrides)
+        return True
+
+    def each(self, songs: Iterable[Song]) -> Iterator[Song]:
+        for n, listed in enumerate(songs):
+            if n:
+                self.hand_over()
+            song = listed
+            if self.handed:
+                try:
+                    song = get_song(self.conn, listed.id)
+                except KeyError:  # merged into another song meanwhile
+                    continue
+            yield song
+
+
+@dataclass
+class _Listening:
+    """A run's hearing of words: ``hearing``, up to ``cap`` songs (``tried`` so far), ``stopped`` once its setup
+    failed; with no ``hearing``, why this machine hears none said once a song is offered its words (``asked``)."""
+
+    hearing: Hearing | None
+    cap: int
+    tried: int = 0
+    stopped: bool = False
+    asked: bool = False
+
+    def first(self, conn: sqlite3.Connection, cfg: Config, song: Song, turns: _Turns, stats: AutoStats, stamp: str,
+              told: Callable[[str], None]) -> Song | None:
+        """The song after its words were heard where they are to be (``autochords_pending``), read again; None for a
+        song that left the book meanwhile."""
+        if not self.cap or self.stopped or self.tried >= self.cap or not song.audio_path:
+            return song
+        if self.hearing is None and self.asked:  # said already: nothing more to hear or say this run
+            return song
+        if why_not_offered(conn, cfg, song, turns.overrides) is not None:
+            return song
+        if self.hearing is None:
+            self.asked = True
+            stats.transcribe_problem = transcribe_problem(cfg)
+            return song
+        return self._hear_words(conn, cfg, self.hearing, song, turns, stats, stamp, told)
+
+    def _hear_words(self, conn: sqlite3.Connection, cfg: Config, hearing: Hearing, song: Song, turns: _Turns,
+                    stats: AutoStats, stamp: str, told: Callable[[str], None]) -> Song | None:
+        from caracole.autochords.hearing import HearingFailed, Nothing
+
+        self.tried += 1
+        log.info("Hearing the words of %s (%d of up to %d)…", song.display, self.tried, self.cap)
+        separated = (song.audio_path, song.audio_mtime)
+        told(STEPS[4])
+        try:
+            vocals = hearing.vocals(song, on_doing=_quiet)
+        except HearingFailed as e:  # the setup's alone
+            return self._stop(stats, song, e.words)
+        except Exception as e:  # noqa: BLE001 - a bug: the run fails, the song's chords made all the same
+            return _hearing_bug(conn, stats, song, e)
+        if turns.hand_over():  # a lookup went first: the song as it left it, and still to hear
             try:
-                song = get_song(conn, listed.id)
-            except KeyError:  # merged into another song meanwhile
-                continue
-        yield song, overrides
+                song = get_song(conn, song.id)
+            except KeyError:
+                return None
+            why = why_not_offered(conn, cfg, song, turns.overrides)
+            if (song.audio_path, song.audio_mtime) != separated:
+                why = "its audio changed"
+            if why is not None:
+                log.info("%s: its words aren't heard now (%s)", song.display, why)
+                return song
+        told(STEPS[5])
+        try:  # audio Whisper can't load noted as Whisper's alone: the vocals read it as the chords do
+            heard = hearing.words(conn, song, vocals, stamp, on_doing=_quiet)
+        except HearingFailed as e:
+            if e.kind == "setup":
+                return self._stop(stats, song, e.words)
+            log.warning("%s: %s; its chords are made without its words", song.display, e.words)
+            return _again(conn, song)
+        except Exception as e:  # noqa: BLE001 - a bug: the run fails, the song's chords made all the same
+            return _hearing_bug(conn, stats, song, e)
+        if isinstance(heard, Nothing):
+            stats.silent += 1
+            log.info("%s: nothing sung was heard (%s)", song.display, heard.why)
+        else:
+            stats.heard += 1
+            log.info("%s: words heard, %s", song.display, heard.said)
+        return _again(conn, song)
+
+    def _stop(self, stats: AutoStats, song: Song, words: str) -> Song:
+        """The setup failed: no more words heard this run, why kept for the to-do page, the chords going on."""
+        self.stopped = True
+        stats.transcribe_problem = words
+        log.warning("%s: its words can't be heard here (%s); no song's are heard this run", song.display, words)
+        return song
 
 
-def _count_due(conn: sqlite3.Connection, cfg: Config, songs: Iterable[Song], overrides: Overrides) -> int:
+def _again(conn: sqlite3.Connection, song: Song) -> Song | None:
+    """The song read again after its hearing; None for one gone meanwhile."""
+    try:
+        return get_song(conn, song.id)
+    except KeyError:
+        return None
+
+
+def _hearing_bug(conn: sqlite3.Connection, stats: AutoStats, song: Song, e: Exception) -> Song | None:
+    """A bug hearing the song, caracole's or deep in Whisper: one of the run's errors (the command exits 1), logged
+    with its traceback whatever it raised; the song read again, its chords made as ever, counted by them."""
+    stats.errors.append(f"{song.display}: {type(e).__name__}: {e}")
+    log.error("%s: hearing its words failed: %s: %s", song.display, type(e).__name__, e, exc_info=True)
+    return _again(conn, song)
+
+
+def _quiet(said: str) -> None:
+    """What a long step of hearing is at, which a pass over the library says nowhere: a line a song is its log."""
+
+
+def _count_due(conn: sqlite3.Connection, cfg: Config, songs: Iterable[Song], overrides: Overrides,
+               hears: int = 0) -> int:
     """How many of ``songs`` are due now, for the "3 of 12" before each, as ``_due`` would find them, counting
-    nothing in a run's stats."""
+    nothing in a run's stats; with the first ``hears`` songs offered their words counted due too, as hearing them
+    makes their sheet due."""
     n = 0
     for song in songs:
         if not song.audio_path or _known_failure(conn, song) is not None:
             continue
+        heard = hears > 0 and why_not_offered(conn, cfg, song, overrides) is None
+        hears -= heard
         try:
-            if _skip_reason(conn, song, overrides) is not None:
+            if _skip_reason(conn, song, overrides) is not None and not heard:
                 continue
         except Exception:  # noqa: BLE001 - a song's bad data: ``_due`` says so as its turn comes
             continue
@@ -350,14 +524,15 @@ def _generate(conn: sqlite3.Connection, cfg: Config, song: Song, models: tuple[R
     told(STEPS[3])
     try:
         transcript = transcript_of(conn, song)
-        made = _make_sheet(song, heard, source=_from_youtube(video), transcript=transcript,
-                           silent=transcript is None and _heard_nothing(conn, song))
+        silent = transcript is None and _heard_nothing(conn, song)
+        made = _make_sheet(song, heard, source=_from_youtube(video), transcript=transcript, silent=silent,
+                           said=silent and said_not_sung(conn, song))
     except Exception as e:  # noqa: BLE001 - a bug laying it out is caracole's, never the file's: the song stays due
         _error(stats, song, e)
         return
     try:
         _keep(conn, cfg, song, made.text, made.used, made.key, stamp, video=video, shift=made.shift,
-              transcript=made.transcript, silent=made.silent)
+              transcript=made.transcript, silent=made.silent, said=made.said)
     except Exception as e:  # noqa: BLE001 - the library's problem, not the purchase's
         _error(stats, song, e)
         return
@@ -369,7 +544,8 @@ def _record_run(conn: sqlite3.Connection, stats: AutoStats, stamp: str, only: Co
     """kv ``autochords:status``, the run's record for the to-do page, stamped ``stamp``. After a run over some songs
     (``only``), the other songs' failures stay listed, as the last whole run found them."""
     failed = [asdict(f) for f in stats.failures]
-    record = {"at": stamp, "generated": stats.generated, "skipped": stats.skipped, "failed": failed}
+    record = {"at": stamp, "generated": stats.generated, "skipped": stats.skipped, "failed": failed,
+              "heard": stats.heard, "silent": stats.silent, "transcribe_problem": stats.transcribe_problem}
     if only is not None:  # the other songs' failures stay listed, as the last whole run found them
         before = kv_get_json(conn, STATUS_KEY)
         before = before if isinstance(before, dict) else {}
@@ -388,8 +564,8 @@ def _failed_display(conn: sqlite3.Connection, song_id: int) -> str | None:
 
 
 def _failed_key(song_id: int) -> str:
-    """kv: the audio file of the song that couldn't be read, written here (and by the transcription job, through
-    ``_unreadable``); transcript.py reads it too, offering such a song no transcription."""
+    """kv: the audio file of the song that couldn't be read, written here (``_unreadable``); transcript.py reads it
+    too, offering such a song no transcription."""
     return f"{UNREADABLE}{song_id}"
 
 
@@ -731,10 +907,11 @@ class _Made:
     shift: float | None
     transcript: Transcript | None = None
     silent: bool = False
+    said: bool = False  # silent by the owner's word, not by what was heard
 
 
 def _make_sheet(song: Song, heard: _Heard, *, source: str | None = None,
-                transcript: Transcript | None = None, silent: bool = False) -> _Made:
+                transcript: Transcript | None = None, silent: bool = False, said: bool = False) -> _Made:
     """One song's auto sheet, from its audio file. ``source`` says where that came from, when it wasn't a
     purchase, on the sheet's line after the song's name; the shift has the line after it.
 
@@ -742,7 +919,8 @@ def _make_sheet(song: Song, heard: _Heard, *, source: str | None = None,
     instrumental wins too), else its ``transcript`` (Whisper's words from this
     very audio: timed lyrics whose duration is the audio's, so they fit as they are and no shift is searched,
     with NOTE on the line after the shift's), else none. ``silent`` (the audio noted as having nothing sung)
-    puts SILENT there instead, only where no site has lyrics, none says it is instrumental and no transcript is used.
+    puts SILENT there instead, only where no site has lyrics, none says it is instrumental and no transcript is used;
+    NOT_SUNG where it is the owner's word (``said``, ``transcript.said_not_sung``), not what was heard.
 
     The key is estimated from the chords as recognized, each weighed by how long it sounds,
     before they are snapped to beats and laid out.
@@ -757,8 +935,9 @@ def _make_sheet(song: Song, heard: _Heard, *, source: str | None = None,
     # The shift on a line of its own after the credit: render.py takes that line for the credit, and the viewer of
     # a sheet from YouTube draws the video in its place, so the shift is the first of the sheet's own words
     silent = silent and lyrics is None and over is None and not _instrumental(song)
+    said = said and silent
     notes = (source, timed.note() if timed is not None else None, NOTE if over is not None else None,
-             SILENT if silent else None)
+             (NOT_SUNG if said else SILENT) if silent else None)
     note = "\n".join(part for part in notes if part)
     text = build_sheet(
         segments,
@@ -772,7 +951,7 @@ def _make_sheet(song: Song, heard: _Heard, *, source: str | None = None,
         source=note or None,
     )
     shift = timed.shift if timed is not None else None
-    return _Made(text, "synced" if synced else "plain" if plain else "none", key, shift, over, silent)
+    return _Made(text, "synced" if synced else "plain" if plain else "none", key, shift, over, silent, said)
 
 
 def _keep(
@@ -788,6 +967,7 @@ def _keep(
     shift: float | None = None,
     transcript: Transcript | None = None,
     silent: bool = False,
+    said: bool = False,
 ) -> None:
     """Keep one song's auto sheet, under a version of provider ``auto``; the song becomes found.
 
@@ -812,6 +992,8 @@ def _keep(
         raw["transcript_made_at"] = transcript.made_at
     if silent:
         raw["heard_nothing"] = True
+    if silent and said:
+        raw["not_sung_by"] = "you"  # the owner's word, not what was heard (youtube_sheet.HOLDS["said"])
     synced = _synced_key(song)
     if synced is not None:
         raw["synced_lyrics"] = synced

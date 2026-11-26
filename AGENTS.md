@@ -311,9 +311,10 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     (`_still_ours`: `_unsheeted`, not ignored and no human sheet, and no audio of its own, bought or given, else a
     refusal) and still offered (else that stage skipped, the chords over the lyrics a lookup found).
     `WORDS_FAIL_THE_JOB` false: a failure to hear fails its own stage alone, the chords made chords-only, the command
-    exiting 0, the song still offered Transcribe the lyrics; audio Whisper can't load filed nothing ("Whisper can't
-    read the audio", hearing.py's `file_unreadable`: auto-chords' own reader, the one the vocals read the mix with,
-    gives its verdict as the chords are made); nothing sung is the words' done "nothing sung was heard (why)".
+    exiting 0, the song still offered Transcribe the lyrics; audio Whisper can't load filed nothing against the chords
+    ("Whisper can't read the audio": auto-chords' own reader, the one the vocals read the mix with, gives its verdict as
+    the chords are made), noted as Whisper's alone (`transcribe:unreadable:`), offered no transcription until it
+    changes; nothing sung is the words' done "nothing sung was heard (why)".
   - `autochords_pending(only=)`, once, after the words: run.py `_make_sheet` takes the transcript; before it, the
     audio still the one the vocals separated (`_same_audio`) where they ran.
   - caracole serve's sheet from a YouTube video runs it (web/youtube_routes.py).
@@ -358,7 +359,18 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     skipped "transcribed already") and checks the song after each hand-over (`_still_to_hear`: None to go on, a skip
     of that stage in its words, or a refusal; here, still offered else a refusal);
     `WORDS_FAIL_THE_JOB`, true here, makes a failure to hear and nothing sung fail the job, else they end their
-    stage alone (nothing sung done "nothing sung was heard (why)").
+    stage alone (nothing sung done "nothing sung was heard (why)"); audio Whisper can't load fails it in words that
+    say what to do.
+  - The owner's word over caracole's (`TranscribeRequest(force, none)`, `--force`, `--none`): `force`, "it is sung",
+    offers the song by `why_not_offered(anyway=True)` (nothing sung, caracole's or the owner's word, and Whisper's
+    refusal of the audio passed over) and hears it with hearing.py's `anyway`; `none`, "it isn't sung", only for a
+    song with its own audio's transcript kept (`transcript.why_not_unsung`), vocals skipped "you said nothing is
+    sung", words done "transcript dropped" (`drop_transcript`: kv `transcribe:none:` `by` "you", for that audio
+    alone, so neither the nightly pass nor a sheet from a video hears it again until `force` or a new file, a new
+    start; no new kv prefix, and it never crosses to the phone), then the chords alone, said as the owner's word,
+    never as nothing heard: the sheet's note `transcript.NOT_SUNG`, raw `not_sung_by` "you" beside `heard_nothing`,
+    the chords stage's `youtube_sheet.HOLDS["said"]` (outcome.py passes the chords' words through), the card's
+    `unsung` (Transcribe anyway, "You said it isn't sung.") apart from `nothing`.
   - Nothing sung, by words.py's rule (no sung span or under `MIN_SUNG_S` of them: Whisper isn't run; too few words
     kept, under `MIN_WORDS` or `MIN_WORDS_A_MINUTE`), is noted with why, and the job fails "no singing heard".
   - The stem in hearing.py's work folder under `cache_dir`, gone with the job.
@@ -1805,21 +1817,26 @@ It is rows.js's, shared by both pages:
     sheet's.
   - Refused 409 where it can't run (`youtube_fetch.transcribe_reason`, "No lyrics transcribed here: …") and for a
     song not offered one (`transcript.why_not_offered`, in the command's words "… isn't offered a transcription: …").
-  - Offered only on the served page, from served-only data: library_page.py `server.transcribe`
-    (`transcribe_member`: `ok`, `why`, `songs` `offered_song_ids` when `ok`, `time` `transcribe_time` when `ok`,
-    else `[]` and `""`), the cards' own data unchanged (the phone writes the same cards, and its member says it
-    can't); library.js `transcribeOffer` on a card, and requests.js on the newest request that ended Ready of a song
-    offered one (matched by `display`, the name a song's requests go by, none while a request of it waits or runs),
-    through `caracoleLibrary`'s `offeredSong`, `transcribeHint` and `transcribing`; asked for, neither offers it while
-    its request waits or runs.
-  - Read again live, never left to a reload (library.js `readTranscriptions`, one GET at a time): once a song's job
-    the page follows is over (`offerAfter`) or a request the Journal saw waiting or running is over
-    (`caracoleLibrary.requestOver`), when the song is offered one or may be (`mayBeOffered`: its card's lyrics
-    `missing` and `youtubeSheet`), and only where `server.transcribe.ok`; each song whose offer changed has its
-    card made again where it was made (`cardAgain`, `refill`), and requests.js draws its answer again
-    ("caracole:transcribe"). So a sheet from a video that found no lyrics offers it at once (the sheet's lyrics
-    stage asks LRCLIB, Megalobiz and AZLyrics, each noting its miss), a transcription that failed on the GPU offers
-    it again, and one made from a terminal meanwhile no more.
+  - `force=1` (Transcribe anyway) queues `--force`, refused as `why_not_offered(anyway=True)` says; `none=1` (Not
+    sung: chords only) `--none`, titled "Not sung, chords only: Artist - Title", refused as
+    `transcript.why_not_unsung` says ("… can't be said not sung: …"); both, 400.
+  - Offered only on the served page, from served-only data: library_page.py `server.transcribe` (`transcribe_member`:
+    `ok`, `why`, `songs`, `nothing` and `unsung` (Transcribe anyway, heard nothing or the owner's mark, its hint "You
+    said it isn't sung.") and `transcribed` (Not sung: chords only), all four `transcript.offers` when `ok`, `time`
+    `transcribe_time` when `ok`, else `[]` and `""`; the phone's LibraryPage.kt the same shape), the cards' own data
+    unchanged (the phone writes the same cards, and its member says it can't); library.js `transcribeOffer` (and
+    `overrideOffer`, Transcribe anyway or Not sung) on a card, and requests.js on the newest request that ended Ready of
+    a song offered one (matched by `display`, the name a song's requests go by, none while a request of it waits or
+    runs), through `caracoleLibrary`'s `offeredSong`, `transcribeHint` and `transcribing`; asked for, neither offers it
+    while its request waits or runs.
+  - Read again live, never left to a reload (library.js `readTranscriptions`, one GET at a time): once a song's job the
+    page follows is over (`offerAfter`) or a request the Journal saw waiting or running is over
+    (`caracoleLibrary.requestOver`), when the song is offered one of the four or may be (`mayBeOffered`: its card's
+    lyrics `missing` and `youtubeSheet` or `auto`), and only where `server.transcribe.ok`; each song whose offer changed
+    has its card made again where it was made (`cardAgain`, `refill`), and requests.js draws its answer again
+    ("caracole:transcribe"). So a sheet from a video that found no lyrics offers it at once (the sheet's lyrics stage
+    asks LRCLIB, Megalobiz and AZLyrics, each noting its miss), a transcription that failed on the GPU offers it again,
+    and one made from a terminal meanwhile no more.
 - **audio_routes.py** is an audio file uploaded from the library page, made into its song's auto sheet:
   - `POST /audio/upload?name=` (a `bytes` route, `audio_store.AUDIO_MAX`, 128 MiB, one body: the form token in its
     header, the cross-origin check, refused unread past it): the bytes staged (`audio_store.stage`, `named` the uploads
@@ -2023,7 +2040,27 @@ It is rows.js's, shared by both pages:
 - btc.py (with the vendored btc_model.py and LICENSE-BTC) and beats.py need torch, librosa and beat_this; run.py runs
   them over the library (`autochords_pending`), logging each song it works on and its place among those due
   ("Working out the chords of A - T (3 of 12)…", `_count_due`), and telling `on_step` each step (`STEPS`: the models
-  set up, a song's chords, beats and sheet), which a staged job's chords stage says.
+  set up, a song's chords, beats and sheet, then a song's vocals and words), which a staged job's chords stage says.
+  - Before a song's chords, `autochords_pending(hearing=, transcriptions=)` hears its words (hearing.py, `_Listening`):
+    up to `transcriptions` songs a run (`[autochords] transcribe_per_run`, 3; the command passes 0 with `transcribe`
+    off), newest first, each one `why_not_offered` offers (the lyrics sites asked first, in the nightly run's own
+    steps); its vocals, a waiting lookup let go first (`_Turns.hand_over`, the same `between` as between two songs),
+    the song read again and still offered with the audio separated, then its words, a transcript or nothing sung
+    making its sheet due (`_skip_reason`). A song past the cap gets its chords now, its words a later run.
+  - In bulk: the setup's failure stops the hearing for the run, kept as `AutoStats.transcribe_problem`, the chords
+    going on and the command exiting 0 on its account; audio Whisper can't load (the vocals
+    read it with auto-chords' own reader) noted as Whisper's alone, its chords made tonight, never heard again (no
+    separation, no slot) until it changes, todo.py listing it under the words not heard, never the files auto-chords
+    can't read; a bug one of the run's `errors` (exit 1), logged with its traceback, its chords made all the same
+    (`_hearing_bug`). The cap counts the songs whose hearing started; `_count_due` counts as due the first
+    `transcriptions` songs offered their words. kv
+    `autochords:status` keeps `heard`, `silent` and `transcribe_problem`, which todo.py says ("Lyrics that couldn't
+    be transcribed", with the songs whose audio Whisper can't load while that alone keeps their words unheard).
+  - The command builds no `Hearing` where `youtube_fetch.transcribe_problem` says this machine can't transcribe;
+    the pass then says why once a song waits for its words. The owner's decision of 2026-11-25: the nightly unit
+    gets no GPU (nix/module.nix), so with the CUDA build it hears no words (its wgpu separator has no adapter), the
+    to-do page says so, and the words come from caracole serve's jobs; with the CPU build it hears them on the CPU,
+    about 7 times a song's length each.
 - audio.py, `load_mono`: every model's audio, mono at a rate, through librosa (libsndfile: WAV, FLAC, Ogg, MP3), else
   torchaudio (FFmpeg, through torchcodec) for the AAC of an .m4a, as YouTube's audio always is (youtube.py) and an
   iTunes purchase; btc.py `load_audio` and separate.py `frame_db` both read through it, and `load_librosa` gives numba
@@ -2040,8 +2077,10 @@ It is rows.js's, shared by both pages:
     `MIN_WORDS`, 8, or `MIN_WORDS_A_MINUTE`, 20, each with its why, "sung 6.2 s", "5 words in 1:10 sung"); the lines
     (`lines_of`) and the enhanced LRC (`to_lrc`);
   - transcript.py, no third-party import (every page build asks it): kv `transcript:<id>` and `transcribe:none:<id>`
-    (`keep_transcript`, `note_heard_nothing`, its `why` and `by`), and which songs are offered one (`why_not_offered`,
-    which also reads run.py's `autochords:failed:<id>`, its key `UNREADABLE`);
+    (`keep_transcript`, `note_heard_nothing`, its `why` and `by`), `transcribe:unreadable:<id>` (`WHISPER_CANT_READ`,
+    `note_whisper_cant_read`: audio Whisper can't load, which auto-chords reads; of the current audio alone), and which
+    songs are offered one (`why_not_offered`, which also reads run.py's `autochords:failed:<id>`, its key
+    `UNREADABLE`; "Whisper can't read its audio" for the second, `anyway` or not);
   - separate.py: demucs-rs, a program run as a subprocess (`DemucsSeparator`; `SeparatorFailed` in its own words,
     its output read as UTF-8 with what isn't replaced; a wgpu demucs-rs that dies by a signal after "Done!" with the
     stem written, as it does from Python, has separated it, logged; on success, what it said of its device logged
@@ -2061,7 +2100,9 @@ It is rows.js's, shared by both pages:
     stamp, on_doing=, anyway=)`, words.py's rule applied (Whisper not run under `MIN_SUNG_S`; nothing kept on too
     few words), the transcript kept (`Kept`) or nothing sung noted with why, by "caracole" (`Nothing`); `anyway`
     skips both rules, Whisper run whatever the spans, its words kept within them, or all of them with no span (the
-    whole song one), only no word at all nothing sung; `close`.
+    whole song one), only no word at all nothing sung; `close`. `words` refuses (ValueError, in its own words,
+    before Whisper runs) vocals that aren't this Hearing's current stem of the song's audio as it is now: another
+    song's, of audio replaced since, or a stem the next song's separation removed (`_current`).
   - It works in a `transcribe-*` folder under the cache (`WORK_PREFIX`), one song's stem at a time, gone with
     `close`; one a killed job left is swept at the next job's start (`sweep`: a folder no live Hearing holds
     (`_held`), its `OWNER`, `.owner`, flocked while it lives, as another transcription asked for now may take the lock
@@ -2072,12 +2113,13 @@ It is rows.js's, shared by both pages:
     The setup's (`"setup"`) record nothing against the song, which stays offered: `frame_db` failing on the mix,
     whatever it raises ("can't measure the audio here (…)": a reader's failure is no proof the audio is bad),
     `SeparatorFailed`, a stem `frame_db` can't read or one more than `SHORT_STEM_FRAMES` (4, 0.2 s) shorter than the
-    mix ("the separator can't run here (…)"), and `SetupFailed`. The audio's (`"audio"`, "can't read the audio") is
-    Whisper's own "Failed to load audio" on the mix alone (transcribe.py `is_audio_error`), filed as run.py files
-    audio it can't read (`_unreadable`, kv `autochords:failed:`, transcript.py's `UNREADABLE`), which
-    `why_not_offered` reads ("its audio can't be read") until the audio changes, unless the caller makes the chords
-    all the same (`Hearing.words(file_unreadable=False)`, a sheet from a video's: "Whisper can't read the audio",
-    nothing filed, as Whisper reads through the ffmpeg program and auto-chords through its own reader, which says);
+    mix ("the separator can't run here (…)"), and `SetupFailed`. The audio's (`"audio"`, "Whisper can't read the
+    audio") is Whisper's own "Failed to load audio" on the mix alone (transcribe.py `is_audio_error`), noted as
+    Whisper's alone (`note_whisper_cant_read`, kv `transcribe:unreadable:`), whichever job or pass heard it, never
+    filed against the chords, as Whisper reads through the ffmpeg program and auto-chords through its own reader,
+    which says; `why_not_offered` reads it ("Whisper can't read its audio", after a site's lyrics, ignored and a human
+    sheet, which come first) until the audio changes, or by hand (`anyway`, `caracole transcribe --force`, after an
+    ffmpeg or Whisper upgrade), a refusal adding what to do (`refused_for`, `WHISPER_UNREADABLE_DO`);
     anything else Whisper raises is a bug, raised as it is, filing nothing; and nothing sung is noted.
 - Which words go under the chords (run.py `_make_sheet`): a site's lyrics whenever the song has any (a site's
   verdict that it is instrumental wins too: a chart alone, the transcript kept unused), else the
@@ -2129,7 +2171,8 @@ It is rows.js's, shared by both pages:
   - `autochords.cuda` picks `autochords-cuda` as the flake's default `autochords.package`; then caracole-web and
     `caracole-admin` (the units whose children transcribe) get `PrivateDevices = false`, `DevicePolicy = "closed"`,
     `DeviceAllow` (`char-nvidiactl`, `-nvidia-caps`, `-nvidia-frontend`, `-nvidia-uvm` from nixpkgs' ollama module,
-    `char-drm` for Vulkan) and the `video` and `render` groups. The nightly units never get them.
+    `char-drm` for Vulkan) and the `video` and `render` groups. The nightly units never get them (the owner's
+    decision of 2026-11-25), so the nightly auto-chords pass of this build hears no words, and says so (run.py).
     Without `autochords.enable` it does nothing, and the module warns (a `warnings` entry, not an assertion);
     nix/module.nix alone, without the flake, doesn't switch `autochords.package`.
     `whisperModel` and `separatorModel` are `CARACOLE_WHISPER_MODEL` and `CARACOLE_DEMUCS_MODEL`.

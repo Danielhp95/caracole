@@ -17,6 +17,7 @@ internal object SongKv {
         "lyrics:failed:", "megalobiz:checked:", "azlyrics:checked:",
         "autochords:failed:", "gtptabs:checked:", "harptabs:checked:", "gametabs:checked:", "ireal:checked:", "ug:blocked:", "youtube:",
         "transcript:", "transcribe:none:",
+        "transcribe:unreadable:",
         "sheet_versions:same:",
         "sheet_versions:yours:", "sheet_versions:unkeepable:",
     )

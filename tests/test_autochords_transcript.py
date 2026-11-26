@@ -164,3 +164,33 @@ def test_offered_song_ids_lists_the_songs_due(conn, cfg, tmp_path):
     second = youtube_song(conn, tmp_path, "B", "Two")
     youtube_song(conn, tmp_path, "C", "Three", lyrics_status="found")
     assert tr.offered_song_ids(conn, cfg, Overrides()) == sorted([first.id, second.id])
+
+
+def test_a_song_with_lyrics_is_told_so_before_whisper_cant_read_its_audio(conn, cfg, tmp_path):
+    # The lyrics sites come first: a song a site has lyrics for, or one ignored, is told that, never what Whisper made
+    # of its audio; the record says why only while it is all that keeps the words from being heard.
+    song = youtube_song(conn, tmp_path)
+    tr.note_whisper_cant_read(conn, song, "2026-11-25T00:00:00Z", "RuntimeError: Failed to load audio")
+    assert tr.why_not_offered(conn, cfg, song, Overrides()) == tr.WHISPER_UNREADABLE_WHY
+    update_song(conn, song.id, lyrics_status="found")
+    assert tr.why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) == "its lyrics are found"
+    update_song(conn, song.id, lyrics_status="missing", status="ignored")
+    assert tr.why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) == "ignored"
+
+
+def test_the_owners_not_sung_holds_for_that_audio_and_a_new_file_is_heard_again(conn, cfg, tmp_path):
+    song = youtube_song(conn, tmp_path)
+    tr.keep_transcript(conn, song, made(song))
+    assert tr.why_not_unsung(conn, cfg, song, Overrides()) is None
+    tr.drop_transcript(conn, song, "2026-11-25T00:00:00Z")
+    assert tr.transcript_of(conn, song) is None and tr.said_not_sung(conn, song)
+    assert tr.why_not_offered(conn, cfg, song, Overrides()) == tr.SAID_NOT_SUNG
+    assert tr.why_not_unsung(conn, cfg, song, Overrides()) == tr.NO_TRANSCRIPT
+    assert tr.heard_nothing(conn, song)
+    assert tr.offers(conn, cfg, Overrides()) == {"songs": [], "nothing": [], "unsung": [song.id], "transcribed": []}
+    moved = dataclasses.replace(song, audio_mtime=(song.audio_mtime or 0) + 5)  # a new file: a new start
+    assert not tr.heard_nothing(conn, moved) and not tr.said_not_sung(conn, moved)
+    assert tr.why_not_offered(conn, cfg, moved, Overrides()) is None
+    tr.keep_transcript(conn, song, made(song))  # Transcribe anyway heard it: their word is gone with it
+    assert not tr.said_not_sung(conn, song)
+    assert tr.offers(conn, cfg, Overrides()) == {"songs": [], "nothing": [], "unsung": [], "transcribed": [song.id]}

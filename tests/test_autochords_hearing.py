@@ -7,6 +7,7 @@ hears fixed words, the loudness of the stem and the mix fixed frames (``separate
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -134,27 +135,40 @@ def test_anyway_with_no_word_heard_is_still_nothing_sung(conn, cfg):
     (Separator(), Transcriber(fail=tx.SetupFailed("the GPU failed: CUDA out of memory")), "setup",
      "the GPU failed: CUDA out of memory"),
     (Separator(), Transcriber(fail=RuntimeError("Failed to load audio: [mov,mp4] moov atom not found")), "audio",
-     "can't read the audio"),
+     "Whisper can't read the audio"),
 ], ids=["the separator", "the GPU", "the audio"])
-def test_a_failure_says_whose_it_is_and_only_the_audios_is_filed(conn, cfg, separator, transcriber, kind, words):
+def test_a_failure_says_whose_it_is_and_only_the_audios_is_noted(conn, cfg, separator, transcriber, kind, words):
+    from caracole.autochords.transcript import WHISPER_CANT_READ
+
     song = offered(conn, cfg)
     with pytest.raises(HearingFailed) as failed:
         hear(cfg, conn, song, separator=separator, transcriber=transcriber)
     assert (failed.value.kind, failed.value.words, str(failed.value)) == (kind, words, words)
-    assert (kv_get(conn, f"autochords:failed:{song.id}") is not None) == (kind == "audio")
+    assert kv_get(conn, f"autochords:failed:{song.id}") is None  # never as audio auto-chords can't read
+    assert (kv_get(conn, f"{WHISPER_CANT_READ}{song.id}") is not None) == (kind == "audio")
     assert noted(conn, song) is None and kv_get(conn, f"{TRANSCRIPT}{song.id}") is None
 
 
-def test_audio_whisper_cant_read_is_filed_only_where_the_caller_says(conn, cfg):
+def test_audio_whisper_cant_read_is_noted_as_whispers_alone(conn, cfg):
     # Whisper reads the mix through the ffmpeg program, auto-chords through its own reader, which the vocals read it
-    # with already: a job that makes the chords all the same files nothing, and auto-chords gives its own verdict.
+    # with already: the hearing files nothing against the chords, and auto-chords gives its own verdict. Whisper's is
+    # noted for that audio alone: no transcription is offered over it again until the audio changes, but by hand
+    # (``anyway``: after an ffmpeg or Whisper upgrade).
+    from caracole.autochords.transcript import WHISPER_CANT_READ
+
     song = offered(conn, cfg)
     with pytest.raises(HearingFailed) as failed:
-        hear(cfg, conn, song, transcriber=Transcriber(fail=RuntimeError("Failed to load audio: moov atom not found")),
-             file_unreadable=False)
+        hear(cfg, conn, song, transcriber=Transcriber(fail=RuntimeError("Failed to load audio: moov atom not found")))
     assert (failed.value.kind, failed.value.words) == ("audio", "Whisper can't read the audio")
     assert kv_get(conn, f"autochords:failed:{song.id}") is None
-    assert why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) is None
+    assert kv_get_json(conn, f"{WHISPER_CANT_READ}{song.id}") == {
+        "audio": song.audio_path, "audio_mtime": song.audio_mtime, "at": STAMP,
+        "error": "RuntimeError: Failed to load audio: moov atom not found"}
+    song = get_song(conn, song.id)
+    assert why_not_offered(conn, cfg, song, Overrides()) == "Whisper can't read its audio"
+    assert why_not_offered(conn, cfg, song, Overrides(), anyway=True) is None
+    changed = replace(song, audio_mtime=(song.audio_mtime or 0) + 5)
+    assert why_not_offered(conn, cfg, changed, Overrides()) is None
 
 
 def test_hearing_builds_each_model_once_a_run(conn, cfg, tmp_path, monkeypatch):
@@ -205,3 +219,27 @@ def test_sweep_still_spares_a_live_jobs_folder(conn, cfg):
         hearing.close()
     assert not vocals.stem.parents[2].exists()  # the work folder itself, gone once the Hearing is closed
     sweep(cfg.cache_dir / "nowhere")  # a cache not made yet: nothing to sweep
+
+
+def test_words_refuse_vocals_that_are_no_longer_the_songs_current_stem(conn, cfg):
+    # A pass over the library separates one song's vocals at a time, the next song's taking the last one's place:
+    # vocals heard before another song was separated, of another song, or of audio replaced since are a caller's bug,
+    # refused in words of its own before Whisper runs, never blamed on the separator.
+    first, second = offered(conn, cfg), offered(conn, cfg, artist="Otro", title="Canción")
+    transcriber = Transcriber()
+    hearing = Hearing(cfg, separator=Separator(), transcriber=transcriber)
+    try:
+        earlier = hearing.vocals(first, on_doing=lambda said: None)
+        now = hearing.vocals(second, on_doing=lambda said: None)
+        with pytest.raises(ValueError, match=r"^the vocals of Nick Cani - Vikingos veganos are no longer its "
+                                             r"current stem: separate them again$"):
+            hearing.words(conn, first, earlier, STAMP, on_doing=lambda said: None)
+        with pytest.raises(ValueError, match=r"^the vocals given aren't Nick Cani - Vikingos veganos's"):
+            hearing.words(conn, first, now, STAMP, on_doing=lambda said: None)
+        moved = replace(second, audio_mtime=(second.audio_mtime or 0) + 5)
+        with pytest.raises(ValueError, match=r"^the vocals of Otro - Canción were separated from other audio"):
+            hearing.words(conn, moved, now, STAMP, on_doing=lambda said: None)
+        assert transcriber.calls == []
+        assert isinstance(hearing.words(conn, second, now, STAMP, on_doing=lambda said: None), Kept)
+    finally:
+        hearing.close()

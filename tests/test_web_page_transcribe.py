@@ -26,7 +26,7 @@ from test_web_page_youtube import serve
 
 import caracole.youtube_fetch as yf
 from caracole import db
-from caracole.autochords.transcript import MODEL, Transcript, keep_transcript
+from caracole.autochords.transcript import MODEL, Transcript, drop_transcript, keep_transcript, note_heard_nothing
 from caracole.config import AutochordsConfig
 from caracole.get import PROGRESS_PREFIX
 from caracole.library import song_dir
@@ -103,6 +103,13 @@ class FakeTranscribe:
             for name in ("chords", "pdf"):
                 stage(name, "skipped", "no transcript")
             return 1
+        if "--none" in args:  # as the real one leaves it: the transcript dropped, that audio marked by the owner
+            self._in_the_book(lambda conn, song: drop_transcript(conn, song, "2026-11-21T00:00:00Z"))
+            stage("words", "done", "transcript dropped")
+            self._sheet()
+            for name, detail in (("chords", "chords only: you said it isn't sung"), ("pdf", "made"), ("pages", "")):
+                stage(name, "done", detail)
+            return 0
         self._in_the_book(lambda conn, song: keep_transcript(conn, song, Transcript(
             lrc="[00:09.30]Somos vikingos\n", audio=song.audio_path, audio_mtime=song.audio_mtime, model=MODEL,
             language="es", device="cpu", words_dropped=3, made_at="2026-11-21T00:00:00Z")))
@@ -396,6 +403,75 @@ def test_a_transcription_asked_in_the_requests_tab_that_failed_is_offered_there_
     browser.click("#tab-library")
     card = opened(browser, song)
     assert browser.wait(f"document.querySelector({json.dumps(card + ' form.transcribe')}) !== null")
+    assert browser.js(NO_RELOAD)
+
+
+def in_the_book(cfg, song, change) -> None:
+    conn = db.connect(cfg.db_path)
+    try:
+        change(conn, get_song(conn, song.id))
+    finally:
+        conn.close()
+
+
+def transcribed(conn, song):
+    keep_transcript(conn, song, Transcript(
+        lrc="[00:09.30]Somos vikingos\n", audio=song.audio_path, audio_mtime=song.audio_mtime, model=MODEL,
+        language="es", device="cpu", words_dropped=3, made_at="2026-11-21T00:00:00Z"))
+
+
+def said_not_sung(conn, song):
+    transcribed(conn, song)
+    drop_transcript(conn, song, "2026-11-21T00:00:00Z")
+
+
+SAID = "You said it isn't sung."  # the card's hint over the owner's mark: never "Nothing sung was heard"
+# After the job, what the real command leaves on the card: (the offer's form, its hint).
+TRANSCRIBED_AFTER = ("form.not-sung", "Its words were heard from the audio, unverified.")
+
+
+@pytest.mark.parametrize("given,form,button,hint,flag,after", [
+    (lambda conn, song: note_heard_nothing(conn, song, "2026-11-21T00:00:00Z", why="sung 6.2 s", by="caracole"),
+     "form.transcribe-anyway", "Transcribe anyway", "Nothing sung was heard in its audio.", ("force", "--force"),
+     TRANSCRIBED_AFTER),
+    (said_not_sung, "form.transcribe-anyway", "Transcribe anyway", SAID, ("force", "--force"), TRANSCRIBED_AFTER),
+    (transcribed, "form.not-sung", "Not sung: chords only", "Its words were heard from the audio, unverified.",
+     ("none", "--none"), ("form.transcribe-anyway", SAID)),
+], ids=["heard nothing: Transcribe anyway", "said not sung: Transcribe anyway", "transcribed: Not sung"])
+def test_the_owners_word_over_caracoles_is_offered_on_the_card_and_posts_in_place(able, live, transcriber, browser,
+                                                                                given, form, button, hint, flag,
+                                                                                after):
+    # A song caracole heard to have nothing sung offers Transcribe anyway; one whose sheet is over a transcript, Not
+    # sung: chords only. Neither offers Transcribe the lyrics. One press posts POST /transcribe with its flag, in place:
+    # the song's line follows the job, and the offer is gone.
+    base, posted, _ = live
+    song = transcriber.song
+    in_the_book(able, song, given)
+    browser.open(base)
+    browser.js("window.notReloaded = true")
+    card = opened(browser, song)
+    offer = json.dumps(card + " " + form)
+    assert browser.wait(f"document.querySelector({offer}) !== null")
+    assert browser.js(f"document.querySelector({offer} + ' button').textContent") == button
+    assert browser.js(f"document.querySelector({offer} + ' .hint').textContent") == hint
+    assert browser.js(f"document.querySelector({json.dumps(card + ' form.transcribe')})") is None
+    browser.click(card + f' {form} button[type="submit"]')
+    path, fields = posted.next(0)
+    assert (path, fields) == ("/transcribe", {"csrf": "tok", "song": str(song.id), "identity": song.key,
+                                              flag[0]: "1"})
+    wait_for(browser, bar_of(line(song)), ["done", "done", "running", "waiting", "waiting"])
+    assert browser.wait(f"document.querySelector({json.dumps(form)}) === null")
+    assert transcriber.ran == [("transcribe", "--progress", flag[1], f"--song={DISPLAY}")]
+    # Over: the offer read again, with no reload, and its card offers what the job left: Not sung over the transcript
+    # Transcribe anyway kept, Transcribe anyway in the owner's words over the mark --none left.
+    transcriber.hold.set()
+    assert browser.wait(f"{tone(song)} === 'ready'")
+    read_again(posted)
+    again = cards.card_js(line(song))
+    offer = json.dumps(after[0])
+    assert browser.wait(f"{again} !== null && {again}.querySelector({offer}) !== null")
+    assert browser.js(f"{again}.querySelector({offer} + ' .hint').textContent") == after[1]
+    assert browser.js(f"{again}.querySelector({json.dumps(form if form != after[0] else 'form.transcribe')})") is None
     assert browser.js(NO_RELOAD)
 
 

@@ -175,6 +175,9 @@ class AutochordsConfig:
     # Whether a sheet made from a song's audio hears its words first, where no lyrics site has them (a sheet from a
     # YouTube video); off, the song is offered Transcribe the lyrics on its card alone.
     transcribe: bool = True
+    # How many songs the nightly auto-chords pass hears the words of, at most, newest first (0: none): on a CPU a song
+    # heard takes about 7 times its length.
+    transcribe_per_run: int = 3
 
 
 @dataclass(frozen=True)
@@ -230,7 +233,7 @@ _NTFY_KEYS = {"url"}
 _DIRECTORY_KEYS = {"concurrency", "delay", "budget"}
 DIRECTORY_CONCURRENCY_MAX = 32  # requests in flight at once that [ug_directory].concurrency may ask, at most
 _AUTOCHORDS_KEYS = {"btc_weights", "beat_checkpoint", "device", "whisper_model", "separator_model", "transcribe_device",
-                    "transcribe"}
+                    "transcribe", "transcribe_per_run"}
 
 
 def _check_keys(table: Mapping[str, Any], allowed: set[str], where: str) -> None:
@@ -480,6 +483,7 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
         separator_model=ac_path("separator_model", "CARACOLE_DEMUCS_MODEL"),
         transcribe_device=_transcribe_device(ac_t.get("transcribe_device", "auto")),
         transcribe=_bool(ac_t.get("transcribe", True), "[autochords].transcribe"),
+        transcribe_per_run=_count(ac_t.get("transcribe_per_run", 3), "[autochords].transcribe_per_run"),
     )
 
     cjk_font_value = _optional_string(data, "cjk_font", "cjk_font") or env.get("CARACOLE_CJK_FONT")
