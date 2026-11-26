@@ -40,7 +40,8 @@ interface Asking {
  * for what a stage reads from the cache alone with no client (the match stage's backfill): every lookup gives it,
  * whatever asking wraps the envelope; a test's context may have none. */
 data class StageContext(val db: Db, val song: SongRow, val overrides: Overrides, val config: PhoneConfig,
-                        val library: LibraryStore, val asking: Asking, val now: Instant, val cacheDir: File? = null)
+                        val library: LibraryStore, val asking: Asking, val now: Instant, val cacheDir: File? = null,
+                        val askedUnderName: () -> Unit = {})
 
 /** How a stage ended: done, skipped or failed, and get.py's words for it. */
 data class StageEnd(val state: String, val detail: String)

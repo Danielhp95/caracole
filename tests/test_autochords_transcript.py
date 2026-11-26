@@ -91,21 +91,36 @@ def test_a_song_is_offered_once_every_site_switched_on_missed(conn, cfg, tmp_pat
     assert tr.why_not_offered(conn, off, get_song(conn, song.id), Overrides()) is not None
 
 
-def test_a_song_whose_picked_record_is_gone_is_offered_once_its_site_missed(conn, cfg, tmp_path):
-    # A record you picked is final: no other site is ever asked about the song, so its own site's miss is every
-    # site's, the lyrics sites asked first all the same.
+@pytest.mark.parametrize("site,record_id", [("lrclib", "9"), ("megalobiz", "24519"), ("azlyrics", "pomme/mononoke")])
+def test_a_song_with_a_picked_record_and_no_lyrics_is_never_offered_until_the_pick_is_cleared(conn, cfg, tmp_path,
+                                                                                               site, record_id):
+    # The owner's rule: the lyrics databases before Whisper. With a record picked, one record of one site is all that
+    # is ever asked, the other sites never: refused, `anyway` or not, gone or not read yet, whatever any site's
+    # checked: record says (every one is set here). Cleared, the song is as any other: every site missed, offered.
     from caracole.overrides import LyricsPick, LyricsRecord, override_key
 
     song = youtube_song(conn, tmp_path)
-    for key in ("megalobiz:checked:", "azlyrics:checked:"):
-        conn.execute("DELETE FROM kv WHERE key = ?", (f"{key}{song.id}",))
-    picked = {site: Overrides(lyrics={override_key(song.display): LyricsPick(None, LyricsRecord(site, "8"))})
-              for site in ("lrclib", "megalobiz", "azlyrics")}
-    assert tr.why_not_offered(conn, cfg, song, picked["lrclib"]) is None
-    assert tr.why_not_offered(conn, cfg, song, picked["megalobiz"]) == "megalobiz hasn't been asked"
-    kv_set(conn, f"megalobiz:checked:{song.id}", "2026-11-01T00:00:00Z")
-    assert tr.why_not_offered(conn, cfg, song, picked["megalobiz"]) is None
-    assert tr.why_not_offered(conn, cfg, song, Overrides()) == "azlyrics hasn't been asked"
+    picked = Overrides(lyrics={override_key(song.display): LyricsPick(None, LyricsRecord(site, record_id))})
+    gone = tr.PICKED_GONE.format(record=f"{site} {record_id}")
+    assert gone == f"the record you picked has no lyrics ({site} {record_id}): pick another, or clear the pick"
+    for anyway in (False, True):
+        assert tr.why_not_offered(conn, cfg, song, picked, anyway=anyway) == gone
+    nothing_offered = {"songs": [], "nothing": [], "unsung": [], "transcribed": []}
+    assert tr.offers(conn, cfg, picked) == nothing_offered  # the served card's member offers it nothing
+    tr.note_heard_nothing(conn, song, "2026-11-20T00:00:00Z", why="sung 6.2 s", by="caracole")
+    assert tr.offers(conn, cfg, picked) == nothing_offered  # nor Transcribe anyway
+    conn.execute("DELETE FROM kv WHERE key = ?", (f"{tr.HEARD_NOTHING}{song.id}",))
+    assert tr.offers(conn, cfg, Overrides())["songs"] == [song.id]
+    update_song(conn, song.id, lyrics_status="pending", lyrics_at=None)
+    pending = get_song(conn, song.id)
+    unread = tr.PICKED_UNREAD.format(record=f"{site} {record_id}")
+    for anyway in (False, True):
+        assert tr.why_not_offered(conn, cfg, pending, picked, anyway=anyway) == unread
+    assert tr.why_not_offered(conn, cfg, song, Overrides()) is None  # the pick cleared
+    named = Overrides(lyrics={override_key(song.display): LyricsPick(("A", "T2"), None)})
+    assert tr.why_not_offered(conn, cfg, song, named) is None  # a name alone: as before
+    update_song(conn, song.id, lyrics_status="found")
+    assert tr.why_not_offered(conn, cfg, get_song(conn, song.id), picked) == "its lyrics are found"
 
 
 def _human_sheet(conn, cfg, song):

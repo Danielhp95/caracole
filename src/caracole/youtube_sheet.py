@@ -143,6 +143,7 @@ class _Sheet(HearsWords, StagedRun):
         self.request = request
         self.hearing = Hearing(cfg, separator=separator, transcriber=transcriber)
         self.hears = hears  # None: as [autochords] transcribe and this caracole say (``_why_not_heard``)
+        self.asked_under_name = False  # the lyrics stage's: a site asked under [lyrics]' name (``lyrics``)
 
     # --- whether its words are heard ----------------------------------------------------------------------
 
@@ -311,7 +312,7 @@ class _Sheet(HearsWords, StagedRun):
     def lyrics(self) -> tuple[str, str]:
         """LRCLIB's lyrics, then Megalobiz's timed ones where LRCLIB left the song without (megalobiz_fetch.py):
         timed lyrics put each chord over its word. Then AZLyrics' plain ones where it still has none."""
-        from caracole.lyrics import picked_record, picked_said
+        from caracole.lyrics import asked_name, picked_record, picked_said, said_under
 
         if self.song.lyrics_status == "instrumental":
             return "done", "already there"
@@ -325,8 +326,11 @@ class _Sheet(HearsWords, StagedRun):
                 return own
             found = self.song.lyrics_status == "found"
             return "done", "already there" if found else picked_said(record, kept=False, gone=False)
+        self.asked_under_name = False
         lrclib = ("done", "already there") if self.song.lyrics_status == "found" else self._lrclib(length)
-        return self._then(self._then(lrclib, self._megalobiz(length)), self._azlyrics())
+        state, said = self._then(self._then(lrclib, self._megalobiz(length)), self._azlyrics())
+        named = asked_name(self.song, self.overrides.lyrics) if record is None and self.asked_under_name else None
+        return state, said_under(said, named)
 
     def _then(self, before: tuple[str, str], then: tuple[str, str] | None) -> tuple[str, str]:
         """What the stage says once one more site was asked after those before it (None: there was nothing to ask it)."""
@@ -372,7 +376,7 @@ class _Sheet(HearsWords, StagedRun):
         """Megalobiz asked about the song; None when there is nothing to ask it (lyrics timed already, Megalobiz turned
         off or cooling down)."""
         from caracole.health import is_cooling
-        from caracole.lyrics import asked_name, asked_under, picked_record, picked_said
+        from caracole.lyrics import asked_name, picked_record, picked_said
         from caracole.megalobiz_fetch import megalobiz_lyrics, songs_to_ask
 
         self._song_again()
@@ -394,14 +398,15 @@ class _Sheet(HearsWords, StagedRun):
             said = "timed from Megalobiz"
         else:
             said = "nor has Megalobiz" if self.song.lyrics_status == "missing" else "Megalobiz has no timed ones"
-        return "done", asked_under(said, asked_name(self.song, picks)) if stats.tried else said
+        self.asked_under_name |= asked_name(self.song, picks) is not None and bool(stats.tried)
+        return "done", said
 
     def _azlyrics(self) -> tuple[str, str] | None:
         """AZLyrics asked about the song; None when there is nothing to ask it (lyrics there already, AZLyrics turned
         off or cooling down)."""
         from caracole.azlyrics_fetch import azlyrics_lyrics, songs_to_ask
         from caracole.health import is_cooling
-        from caracole.lyrics import asked_name, asked_under, picked_record, picked_said
+        from caracole.lyrics import PAGE_NAMED, asked_name, picked_record, picked_said
         from caracole.overrides import override_key
 
         self._song_again()
@@ -419,13 +424,15 @@ class _Sheet(HearsWords, StagedRun):
             return "done", picked_said(record, kept=bool(stats.found), gone=bool(stats.missing))
         said = "found on AZLyrics" if stats.found else "nor has AZLyrics"
         paged = override_key(self.song.display) in picks  # an [azlyrics] page: asked for it, not by name
-        return "done", asked_under(said, None if paged else asked_name(self.song, lyrics)) if stats.tried else said
+        has_name = asked_name(self.song, lyrics) is not None and bool(stats.tried)
+        self.asked_under_name |= has_name and not paged
+        return "done", said + PAGE_NAMED if has_name and paged else said
 
     def _lrclib(self, length: float | None) -> tuple[str, str]:
         from caracole.commands._common import alert_block, make_client
         from caracole.health import answered_any, get_state, is_cooling, record_block, record_ok
         from caracole.http import ProviderBlocked
-        from caracole.lyrics import asked_name, asked_under, fetch_pending_lyrics, picked_record, picked_said, song_lyrics
+        from caracole.lyrics import asked_name, fetch_pending_lyrics, picked_record, picked_said, song_lyrics
 
         if is_cooling(self.conn, "lrclib", self.now):
             until = get_state(self.conn, "lrclib").cooldown_until
@@ -452,16 +459,16 @@ class _Sheet(HearsWords, StagedRun):
         if stats.failures:
             return "failed", "no lyrics yet (LRCLIB unavailable); tried again tonight"
         record = picked_record(self.song, picks)
-        if record is not None and stats.tried:
+        if record is not None and record.site == "lrclib":  # kept, gone, or not asked within its 30 days
             return "done", picked_said(record, kept=bool(stats.found or stats.instrumental), gone=bool(stats.missing))
-        name = None if record is not None else asked_name(self.song, picks)
+        self.asked_under_name |= asked_name(self.song, picks) is not None and bool(stats.tried)
         if stats.found:
             found = song_lyrics(self.song)
-            return "done", asked_under("found, timed" if found is not None and found.synced else "found", name)
+            return "done", "found, timed" if found is not None and found.synced else "found"
         if stats.instrumental:
-            return "done", asked_under("an instrumental", name)
+            return "done", "an instrumental"
         if stats.missing:
-            return "done", asked_under("LRCLIB has none", name)
+            return "done", "LRCLIB has none"
         return "done", "not asked: LRCLIB answered for it lately"
 
     def chords(self) -> tuple[str, str] | str:

@@ -1533,10 +1533,12 @@ Megalobiz and AZLyrics are asked by the nightly run (its megalobiz and azlyrics 
   off.
 - `[lyrics]` in overrides.toml (see [overrides.toml](#overridestoml-your-decisions)) is kept by every one of these:
   the sites are asked under its `as`, and a record you picked is asked of its own site alone. A
-  lookup says so: `found under “Eagles - Hotel California”`, `the record you picked: megalobiz
-  24519`, `the record you picked is gone: lrclib 9`. A record gone is every site asked, since no
-  other is asked about the song: the song is offered a transcription, and a sheet made from a
-  YouTube video hears its words.
+  lookup says so: `under “Eagles - Hotel California”: LRCLIB has none; …`, `the record you picked:
+  megalobiz 24519`, `the record you picked is gone: lrclib 9`, `the record you picked isn't asked
+  now: lrclib 9` (within its 30 days).
+- A song whose record you picked and that has no lyrics is never transcribed, not even with
+  Transcribe anyway: only that one record was asked, never the other sites. Pick another record,
+  or clear the pick to have every site asked under the song's own name.
 
 **Megalobiz** gets two requests per song at most. Its API allows 1,000 requests a day, and
 caracole stops at 900 (see [Two paces](#configure)). It also allows 30 a minute, which caracole
@@ -3551,7 +3553,8 @@ name. A `[lyrics]` record wins over an `[azlyrics]` page, which wins over the `a
 picked is final: while the song has its lyrics no site is asked about it, nor for timed lyrics in
 place of plain ones. While it has none, only the record's own site is asked, for that record alone,
 one request; a record gone leaves the song without lyrics (the log says so), and it is asked again
-after 30 days. The nightly run, `caracole lyrics`, a lookup and a sheet made from a YouTube video all
+after 30 days. Until you pick another or clear the pick, such a song is not transcribed ("the record
+you picked has no lyrics (lrclib 9): pick another, or clear the pick"). The nightly run, `caracole lyrics`, a lookup and a sheet made from a YouTube video all
 keep to `[lyrics]`. An entry you write by hand takes effect at the next run for a song still pending,
 and at its next 30-day re-check for a song whose lyrics are missing. A `record` is never applied to a
 song that already has lyrics. An `as` is: a song with plain lyrics is asked of Megalobiz under it for

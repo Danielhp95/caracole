@@ -115,10 +115,12 @@ sitemaps list by bare ids alone, and the fetch their page.
     youtube_sheet.py; the phone's three lookup stages `ctx.overrides.lyrics`), a lookup the table read again after a
     turn. A lookup's and a YouTube sheet's lyrics stage with a record picked on Megalobiz or AZLyrics asks that site
     alone (the frame's short cut, LookupRun.kt `lyrics` alike), and get.py's put-back to pending (Megalobiz skipped
-    for its cooldown) never touches a song with a record: no other site concerns it. Their words: `asked_under`
-    ("found under “A - T”", a site that asked under `as`), `picked_said` ("the record you picked: lrclib 9", "… is
-    gone: …", "… isn't asked now: …"). A record gone is every site asked: transcript.py `why_not_offered` asks only
-    the record's site's `checked:`.
+    for its cooldown) never touches a song with a record: no other site concerns it. Their words: `said_under`, the
+    name said once, first, when a site was asked under `as` ("under “A - T”: LRCLIB has none; …"; the frame's,
+    LookupRun.kt by `StageContext.askedUnderName`; `PAGE_NAMED` after AZLyrics' words for an `[azlyrics]` page while a
+    name holds), `picked_said` ("the record you picked: lrclib 9", "… is gone: …", "… isn't asked now: …", an LRCLIB
+    record within its 30 days too). A song with a record and no lyrics is never heard (transcript.py
+    `picked_without_lyrics`).
 
 #### megalobiz
 
@@ -2058,7 +2060,11 @@ It is rows.js's, shared by both pages:
     (`keep_transcript`, `note_heard_nothing`, its `why` and `by`), `transcribe:unreadable:<id>` (`WHISPER_CANT_READ`,
     `note_whisper_cant_read`: audio Whisper can't load, which auto-chords reads; of the current audio alone), and which
     songs are offered one (`why_not_offered`, which also reads run.py's `autochords:failed:<id>`, its key
-    `UNREADABLE`; "Whisper can't read its audio" for the second, `anyway` or not);
+    `UNREADABLE`; "Whisper can't read its audio" for the second, `anyway` or not; a song with a `[lyrics]` record and
+    no lyrics never, `anyway` or not, after a human sheet and before its lyrics' status, by the record alone and no
+    `checked:` kv: `picked_without_lyrics`, `PICKED_GONE` "the record you picked has no lyrics (lrclib 9): pick
+    another, or clear the pick", `PICKED_UNREAD` while it is pending, the owner's rule of the databases first, as one
+    record of one site is all that is asked);
   - separate.py: demucs-rs, a program run as a subprocess (`DemucsSeparator`; `SeparatorFailed` in its own words,
     its output read as UTF-8 with what isn't replaced; a wgpu demucs-rs that dies by a signal after "Done!" with the
     stem written, as it does from Python, has separated it, logged; on success, what it said of its device logged

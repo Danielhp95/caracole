@@ -539,6 +539,22 @@ def test_a_song_not_offered_is_refused_with_its_reason_and_nothing_runs(conn, cf
     assert not cfg.wanted_file.exists()  # a song not in the book is never added to wanted.txt
 
 
+@pytest.mark.parametrize("force", [False, True], ids=["asked", "force"])
+def test_a_song_whose_picked_record_has_no_lyrics_is_refused_force_or_not(conn, cfg, force):
+    # The owner's Transcribe anyway passes over nothing sung and Whisper's refusal, never over the lyrics databases:
+    # with a record picked, the others were never asked.
+    from caracole.autochords.transcript import PICKED_GONE
+    from caracole.overrides import set_lyrics_record
+
+    song = offered(conn, cfg)
+    set_lyrics_record(cfg.overrides_file, song.display, "lrclib:9")
+    separator, transcriber, recognizer = Separator(), Transcriber(), Recognizer()
+    result, heard = make(cfg, separator=separator, transcriber=transcriber, recognizer=recognizer, force=force)
+    said = (f"{song.display} isn't offered a transcription: " + PICKED_GONE.format(record="lrclib 9"))
+    assert not result.ok and result.refused == said
+    assert separator.calls == transcriber.calls == recognizer.calls == []
+
+
 # --- the setup's failures and the audio's ---------------------------------------------------------------------------
 
 

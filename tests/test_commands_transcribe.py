@@ -183,6 +183,22 @@ def test_transcribe_refuses_a_song_not_offered_and_exits_1(tmp_path, config, con
     assert models == []
 
 
+@pytest.mark.parametrize("force", [[], ["--force"]], ids=["asked", "force"])
+def test_transcribe_refuses_a_song_whose_picked_record_has_no_lyrics_force_or_not(tmp_path, config, conn, models,
+                                                                                 monkeypatch, force):
+    from caracole.overrides import set_lyrics_record
+
+    monkeypatch.setattr(yf, "transcribe_problem", lambda cfg: None)
+    cfg = load_config(config, env={})
+    offered(conn, cfg)
+    set_lyrics_record(cfg.overrides_file, "Nick Cani - Vikingos veganos", "megalobiz:8")
+    result = invoke(config, "--song", "Nick Cani - Vikingos veganos", *force)
+    assert result.exit_code == 1, result.output
+    assert ("No transcript made: Nick Cani - Vikingos veganos isn't offered a transcription: the record you picked "
+            "has no lyrics (megalobiz 8): pick another, or clear the pick.") in result.output
+    assert models == []
+
+
 def test_a_transcription_that_fails_ends_saying_so_never_done_and_exits_1(tmp_path, config, conn, models,
                                                                            monkeypatch):
     # The separator can't run here: the last line says what stopped it, as a refusal's does, never "Done in …".

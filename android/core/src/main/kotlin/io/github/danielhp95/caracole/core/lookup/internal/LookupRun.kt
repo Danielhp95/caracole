@@ -310,7 +310,7 @@ internal class LookupRun(private val lookup: Lookup, private val db: Db) {
         found = current
         return try {
             stage.run(StageContext(db, current, overrides, lookup.cfg, lookup.store, asking, now,
-                                  lookup.clients.cacheDir))
+                                  lookup.clients.cacheDir) { askedUnderName = true })
                 .let { if (nothing) it else done(it) }
         } catch (e: SharedFolder) {
             StageEnd("failed", LookupWords.sharedFolder(e))
@@ -371,6 +371,10 @@ internal class LookupRun(private val lookup: Lookup, private val db: Db) {
         return StageEnd("done", if (stats.written > 0) LookupWords.PAGES_MADE else LookupWords.UP_TO_DATE)
     }
 
+    /** Whether a lyrics site was asked under `[lyrics]`' `as` in this lyrics stage (StageContext.askedUnderName),
+     * so that the stage says the name once ([Lyrics.saidUnder]). */
+    private var askedUnderName = false
+
     /** LRCLIB, then Megalobiz for the timed lyrics LRCLIB left the song without, then AZLyrics for a song still
      * without any. Megalobiz skipped before it was asked (its cooldown) answered no miss: a song LRCLIB missed is put
      * back to pending, as an error or a cut turn puts it (Megalobiz.megalobizLyrics), unless AZLyrics then found its
@@ -378,6 +382,7 @@ internal class LookupRun(private val lookup: Lookup, private val db: Db) {
      * alone, and nothing is put back to pending, no other site's cooldown or error concerning it. */
     private fun lyrics(): StageEnd {
         val record = Lyrics.pickedRecord(song, overrides.lyrics)
+        askedUnderName = false
         if (record != null && record.site != Lrclib.PROVIDER) {
             val own = site(if (record.site == Megalobiz.PROVIDER) lookup.stages.megalobiz else lookup.stages.azlyrics,
                            nothing = true)
@@ -396,7 +401,8 @@ internal class LookupRun(private val lookup: Lookup, private val db: Db) {
                                 Stamps.of(now))
             found = Songs.byId(db, song.id) ?: found
         }
-        return out
+        val name = if (record == null && askedUnderName) Lyrics.askedName(song, overrides.lyrics) else null
+        return StageEnd(out.state, Lyrics.saidUnder(out.detail, name))
     }
 
     private fun then(out: StageEnd, then: StageEnd): StageEnd {

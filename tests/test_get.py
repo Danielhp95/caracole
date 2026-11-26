@@ -23,7 +23,7 @@ from caracole.commands import _common
 from caracole.config import load_config
 from caracole.health import get_state, record_block
 from caracole.overrides import load_overrides, tab_id_from_url
-from caracole.songs import find_song, get_song, list_songs
+from caracole.songs import find_song, get_song, list_songs, update_song
 from caracole.ug.index import mark_built, upsert_rows
 
 TAB = "https://tabs.ultimate-guitar.com/tab/"
@@ -600,9 +600,32 @@ def test_a_lookup_asks_the_lyrics_sites_under_the_songs_lyrics_name(cfg, conn, s
 
     assert [httpx.URL(u).params["artist_name"] for u in sites.lrclib()] == ["Radiohead"]
     assert [httpx.URL(u).params.get("artist") for u in sites.megalobiz_asked()] == ["Radiohead"]
-    assert result.details["lyrics"] == ("found under “Radiohead - Creep”; Megalobiz has no timed ones under "
-                                        "“Radiohead - Creep”")
+    assert result.details["lyrics"] == "under “Radiohead - Creep”: found; Megalobiz has no timed ones"
     assert get_song(conn, result.song_id).lyrics_status == "found"
+
+
+def test_a_lookup_says_the_name_once_when_every_site_missed_under_it(cfg, conn, sites):
+    from caracole.overrides import set_lyrics_name
+
+    set_lyrics_name(cfg.overrides_file, "Radio Head - Creep (Official Video)", "Radiohead - Creep")
+    result, _ = look_up(cfg, sites=sites, artist="Radio Head", title="Creep (Official Video)")
+    assert result.details["lyrics"] == ("under “Radiohead - Creep”: LRCLIB has none; Megalobiz has no timed ones; "
+                                        "AZLyrics has none")
+
+
+@pytest.mark.parametrize("record", ["lrclib:9", "megalobiz:5", "azlyrics:radiohead/creep"])
+def test_a_picked_record_within_its_30_days_isnt_asked_and_says_so(cfg, conn, sites, record):
+    from caracole.overrides import set_lyrics_record
+
+    from conftest import add_song
+
+    song = add_song(conn, "Radiohead", "Creep")
+    update_song(conn, song.id, lyrics_status="missing", lyrics_at="2026-10-10T00:00:00Z")
+    set_lyrics_record(cfg.overrides_file, song.display, record)
+    result, _ = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+    said = record.replace(":", " ", 1)
+    assert result.details["lyrics"] == f"the record you picked isn't asked now: {said}"
+    assert sites.lrclib() == [] and sites.megalobiz_asked() == [] and not any("azlyrics" in u for u in sites.requests)
 
 
 def test_a_lookup_keeps_the_record_you_picked_and_asks_no_other_site(cfg, conn, sites):

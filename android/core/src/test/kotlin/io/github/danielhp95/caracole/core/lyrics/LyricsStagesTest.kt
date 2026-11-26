@@ -42,10 +42,13 @@ class LyricsStagesTest {
 
     private fun stage(w: LyricsWorld, run: (StageContext) -> StageEnd, song: SongRow, provider: String,
                       answers: Map<String, HttpAnswer>, config: PhoneConfig = PhoneConfig.DEFAULTS,
-                      overrides: Overrides = Overrides(), budget: Long = 6): Pair<StageEnd, FakeTransport> {
+                      overrides: Overrides = Overrides(), budget: Long = 6,
+                      askedUnderName: () -> Unit = {}): Pair<StageEnd, FakeTransport> {
         val (client, site) = w.client(provider, answers, budget)
         val asking = FakeAsking(mapOf<String, Client>(provider to client))
-        val end = w.db { db -> run(StageContext(db, song, overrides, config, w.library, asking, w.now)) }
+        val end = w.db { db ->
+            run(StageContext(db, song, overrides, config, w.library, asking, w.now, askedUnderName = askedUnderName))
+        }
         return end to site
     }
 
@@ -139,18 +142,22 @@ class LyricsStagesTest {
     }
 
     /** D4: each stage hands its pass `[lyrics]` (ctx.overrides.lyrics) and says what came of it: a site asked under
-     * the song's `as` says so, a record you picked is said kept or gone, and a site a record picked elsewhere passes
-     * over has nothing to ask. */
+     * the song's `as` tells the frame, which says the name once (Lyrics.saidUnder), a record you picked is said kept,
+     * gone or not asked now, and a site a record picked elsewhere passes over has nothing to ask. */
     @Test fun theLookupsLyricsStagesKeepToTheLyricsTable() {
         fun lyrics(song: SongRow, pick: LyricsPick) =
             Overrides(lyrics = mapOf(OverrideUrls.overrideKey(song.display) to pick))
         LyricsWorld(tmp.newFolder()).use { w ->
             val song = w.song("Soda Stereo", "De Música Ligera (En Vivo)", 213_000L)
             val named = lyrics(song, LyricsPick("Soda Stereo" to "De Música Ligera", null))
+            var told = 0
             val (end, site) = stage(w, LrclibStage::run, song, "lrclib", mapOf(soda to fixture("lrclib/get_hit.json")),
-                                    overrides = named)
-            assertEquals(StageEnd("done", "found under “Soda Stereo - De Música Ligera”"), end)
+                                    overrides = named) { told++ }
+            assertEquals(StageEnd("done", "found"), end)
+            assertEquals(1, told)
             assertEquals(listOf(soda), site.said)
+            assertEquals("under “Soda Stereo - De Música Ligera”: found; Megalobiz has no timed ones",
+                         Lyrics.saidUnder("found; Megalobiz has no timed ones", Lyrics.askedName(song, named.lyrics)))
         }
         LyricsWorld(tmp.newFolder()).use { w ->
             val song = w.song("Soda Stereo", "De Música Ligera", 213_000L)
@@ -177,6 +184,14 @@ class LyricsStagesTest {
                                     mapOf(eaglesLrc to fixture("megalobiz/lrc_24519.json")), overrides = picked)
             assertEquals(StageEnd("done", "the record you picked: megalobiz 24519"), end)
             assertEquals(listOf(eaglesLrc), site.said)
+        }
+        LyricsWorld(tmp.newFolder()).use { w ->  // an LRCLIB record missed within its 30 days: not asked, and said so
+            val song = w.song("Soda Stereo", "De Música Ligera", 213_000L, "lyrics_status" to "missing",
+                              "lyrics_at" to Stamps.of(w.now))
+            val picked = lyrics(song, LyricsPick(null, LyricsRecord("lrclib", "9")))
+            val (end, site) = stage(w, LrclibStage::run, song, "lrclib", emptyMap(), overrides = picked)
+            assertEquals(StageEnd("done", "the record you picked isn't asked now: lrclib 9"), end)
+            assertEquals(emptyList(), site.said)
         }
     }
 }

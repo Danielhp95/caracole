@@ -57,6 +57,7 @@
 {"args":["azlyrics.com"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'azlyrics.com'"}
 {"args":["azlyrics:../x"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'azlyrics:../x'"}
 {"args":["azlyrics:pomme/mononoke"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'azlyrics:pomme/mononoke'"}
+{"args":["azlyrics:radiohead/creep"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'azlyrics:radiohead/creep'"}
 {"args":["cowboy bebop - spokey dokey"],"fn":"caracole.overrides.override_key","out":"cowboy-bebop/spokey-dokey"}
 {"args":["es.ultimate-guitar.com"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'es.ultimate-guitar.com'"}
 {"args":["example.com/tab/85053"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'example.com/tab/85053'"}
@@ -203,6 +204,7 @@
 {"args":["soda stereo - persiana americana"],"fn":"caracole.overrides.override_key","out":"soda-stereo/persiana-americana"}
 {"args":["tabs.ultimate-guitar.com/tab/radiohead/creep-power-302?ref=x"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'tabs.ultimate-guitar.com/tab/radiohead/creep-power-302?ref=x'"}
 {"args":["ultimate-guitar.com"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'ultimate-guitar.com'"}
+{"args":["under “Radiohead - Creep”: found; Megalobiz has no timed ones"],"fn":"caracole.overrides.override_key","out":"under-radiohead/creep-found-megalobiz-has-no-timed-ones"}
 {"args":["www.harptabs.com/tab/23862/piano-man-c-harmonica?ref=1"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'www.harptabs.com/tab/23862/piano-man-c-harmonica?ref=1'"}
 {"args":["{ record = \"azlyrics:../b\" }"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got '{ record = \"azlyrics:../b\" }'"}
 {"args":["{ record = \"azlyrics:A/b\" }"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got '{ record = \"azlyrics:A/b\" }'"}
@@ -347,6 +349,7 @@
 {"args":["azlyrics.com"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'azlyrics.com'"}
 {"args":["azlyrics:../x"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'azlyrics:../x'"}
 {"args":["azlyrics:pomme/mononoke"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'azlyrics:pomme/mononoke'"}
+{"args":["azlyrics:radiohead/creep"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'azlyrics:radiohead/creep'"}
 {"args":["cowboy bebop - spokey dokey"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'cowboy bebop - spokey dokey'"}
 {"args":["es.ultimate-guitar.com"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'es.ultimate-guitar.com'"}
 {"args":["example.com/tab/85053"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'example.com/tab/85053'"}
@@ -493,6 +496,7 @@
 {"args":["soda stereo - persiana americana"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'soda stereo - persiana americana'"}
 {"args":["tabs.ultimate-guitar.com/tab/radiohead/creep-power-302?ref=x"],"fn":"caracole.overrides.tab_id_from_url","out":302}
 {"args":["ultimate-guitar.com"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'ultimate-guitar.com'"}
+{"args":["under “Radiohead - Creep”: found; Megalobiz has no timed ones"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'under “Radiohead - Creep”: found; Megalobiz has no timed ones'"}
 {"args":["www.harptabs.com/tab/23862/piano-man-c-harmonica?ref=1"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'www.harptabs.com/tab/23862/piano-man-c-harmonica?ref=1'"}
 {"args":["{ record = \"azlyrics:../b\" }"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: '{ record = \"azlyrics:../b\" }'"}
 {"args":["{ record = \"azlyrics:A/b\" }"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: '{ record = \"azlyrics:A/b\" }'"}
@@ -637,6 +641,7 @@
 {"args":["azlyrics.com"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["azlyrics:../x"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["azlyrics:pomme/mononoke"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
+{"args":["azlyrics:radiohead/creep"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["cowboy bebop - spokey dokey"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["es.ultimate-guitar.com"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["example.com/tab/85053"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
@@ -783,6 +788,7 @@
 {"args":["soda stereo - persiana americana"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["tabs.ultimate-guitar.com/tab/radiohead/creep-power-302?ref=x"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com/tab/radiohead/creep-power-302"}
 {"args":["ultimate-guitar.com"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
+{"args":["under “Radiohead - Creep”: found; Megalobiz has no timed ones"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["www.harptabs.com/tab/23862/piano-man-c-harmonica?ref=1"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["{ record = \"azlyrics:../b\" }"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["{ record = \"azlyrics:A/b\" }"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
@@ -927,6 +933,7 @@
 {"args":["azlyrics.com"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["azlyrics:../x"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["azlyrics:pomme/mononoke"],"fn":"caracole.overrides.artist_page_address","out":null}
+{"args":["azlyrics:radiohead/creep"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["cowboy bebop - spokey dokey"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["es.ultimate-guitar.com"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["example.com/tab/85053"],"fn":"caracole.overrides.artist_page_address","out":null}
@@ -1073,6 +1080,7 @@
 {"args":["soda stereo - persiana americana"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["tabs.ultimate-guitar.com/tab/radiohead/creep-power-302?ref=x"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["ultimate-guitar.com"],"fn":"caracole.overrides.artist_page_address","out":null}
+{"args":["under “Radiohead - Creep”: found; Megalobiz has no timed ones"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["www.harptabs.com/tab/23862/piano-man-c-harmonica?ref=1"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["{ record = \"azlyrics:../b\" }"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["{ record = \"azlyrics:A/b\" }"],"fn":"caracole.overrides.artist_page_address","out":null}
@@ -1217,6 +1225,7 @@
 {"args":["azlyrics.com"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["azlyrics:../x"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["azlyrics:pomme/mononoke"],"fn":"caracole.overrides._artist_url_value","out":null}
+{"args":["azlyrics:radiohead/creep"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["cowboy bebop - spokey dokey"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["es.ultimate-guitar.com"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["example.com/tab/85053"],"fn":"caracole.overrides._artist_url_value","out":null}
@@ -1363,6 +1372,7 @@
 {"args":["soda stereo - persiana americana"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["tabs.ultimate-guitar.com/tab/radiohead/creep-power-302?ref=x"],"fn":"caracole.overrides._artist_url_value","out":"https://tabs.ultimate-guitar.com/tab/radiohead/creep-power-302"}
 {"args":["ultimate-guitar.com"],"fn":"caracole.overrides._artist_url_value","out":null}
+{"args":["under “Radiohead - Creep”: found; Megalobiz has no timed ones"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["www.harptabs.com/tab/23862/piano-man-c-harmonica?ref=1"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["{ record = \"azlyrics:../b\" }"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["{ record = \"azlyrics:A/b\" }"],"fn":"caracole.overrides._artist_url_value","out":null}
@@ -1507,6 +1517,7 @@
 {"args":["azlyrics.com"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["azlyrics:../x"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["azlyrics:pomme/mononoke"],"fn":"caracole.overrides.pasted_tab_id","out":null}
+{"args":["azlyrics:radiohead/creep"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["cowboy bebop - spokey dokey"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["es.ultimate-guitar.com"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["example.com/tab/85053"],"fn":"caracole.overrides.pasted_tab_id","out":null}
@@ -1653,6 +1664,7 @@
 {"args":["soda stereo - persiana americana"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["tabs.ultimate-guitar.com/tab/radiohead/creep-power-302?ref=x"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["ultimate-guitar.com"],"fn":"caracole.overrides.pasted_tab_id","out":null}
+{"args":["under “Radiohead - Creep”: found; Megalobiz has no timed ones"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["www.harptabs.com/tab/23862/piano-man-c-harmonica?ref=1"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["{ record = \"azlyrics:../b\" }"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["{ record = \"azlyrics:A/b\" }"],"fn":"caracole.overrides.pasted_tab_id","out":null}
@@ -1797,6 +1809,7 @@
 {"args":["azlyrics.com"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'azlyrics.com'"}
 {"args":["azlyrics:../x"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'azlyrics:../x'"}
 {"args":["azlyrics:pomme/mononoke"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'azlyrics:pomme/mononoke'"}
+{"args":["azlyrics:radiohead/creep"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'azlyrics:radiohead/creep'"}
 {"args":["cowboy bebop - spokey dokey"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'cowboy bebop - spokey dokey'"}
 {"args":["es.ultimate-guitar.com"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'es.ultimate-guitar.com'"}
 {"args":["example.com/tab/85053"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'example.com/tab/85053'"}
@@ -1943,6 +1956,7 @@
 {"args":["soda stereo - persiana americana"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'soda stereo - persiana americana'"}
 {"args":["tabs.ultimate-guitar.com/tab/radiohead/creep-power-302?ref=x"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'tabs.ultimate-guitar.com/tab/radiohead/creep-power-302?ref=x'"}
 {"args":["ultimate-guitar.com"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'ultimate-guitar.com'"}
+{"args":["under “Radiohead - Creep”: found; Megalobiz has no timed ones"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'under “Radiohead - Creep”: found; Megalobiz has no timed ones'"}
 {"args":["www.harptabs.com/tab/23862/piano-man-c-harmonica?ref=1"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'www.harptabs.com/tab/23862/piano-man-c-harmonica?ref=1'"}
 {"args":["{ record = \"azlyrics:../b\" }"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got '{ record = \"azlyrics:../b\" }'"}
 {"args":["{ record = \"azlyrics:A/b\" }"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got '{ record = \"azlyrics:A/b\" }'"}
@@ -2087,6 +2101,7 @@
 {"args":["azlyrics.com"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'azlyrics.com'"}
 {"args":["azlyrics:../x"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'azlyrics:../x'"}
 {"args":["azlyrics:pomme/mononoke"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'azlyrics:pomme/mononoke'"}
+{"args":["azlyrics:radiohead/creep"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'azlyrics:radiohead/creep'"}
 {"args":["cowboy bebop - spokey dokey"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'cowboy bebop - spokey dokey'"}
 {"args":["es.ultimate-guitar.com"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'es.ultimate-guitar.com'"}
 {"args":["example.com/tab/85053"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'example.com/tab/85053'"}
@@ -2233,6 +2248,7 @@
 {"args":["soda stereo - persiana americana"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'soda stereo - persiana americana'"}
 {"args":["tabs.ultimate-guitar.com/tab/radiohead/creep-power-302?ref=x"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'tabs.ultimate-guitar.com/tab/radiohead/creep-power-302?ref=x'"}
 {"args":["ultimate-guitar.com"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'ultimate-guitar.com'"}
+{"args":["under “Radiohead - Creep”: found; Megalobiz has no timed ones"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'under “Radiohead - Creep”: found; Megalobiz has no timed ones'"}
 {"args":["www.harptabs.com/tab/23862/piano-man-c-harmonica?ref=1"],"fn":"caracole.overrides.harptabs_pick_from_url","out":{"path":"tab/23862/piano-man-c-harmonica","slug":"piano-man-c-harmonica","tab_id":23862,"url":"https://www.harptabs.com/tab/23862/piano-man-c-harmonica"}}
 {"args":["{ record = \"azlyrics:../b\" }"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got '{ record = \"azlyrics:../b\" }'"}
 {"args":["{ record = \"azlyrics:A/b\" }"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got '{ record = \"azlyrics:A/b\" }'"}
@@ -2377,6 +2393,7 @@
 {"args":["azlyrics.com"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'azlyrics.com'"}
 {"args":["azlyrics:../x"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'azlyrics:../x'"}
 {"args":["azlyrics:pomme/mononoke"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'azlyrics:pomme/mononoke'"}
+{"args":["azlyrics:radiohead/creep"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'azlyrics:radiohead/creep'"}
 {"args":["cowboy bebop - spokey dokey"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'cowboy bebop - spokey dokey'"}
 {"args":["es.ultimate-guitar.com"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'es.ultimate-guitar.com'"}
 {"args":["example.com/tab/85053"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'example.com/tab/85053'"}
@@ -2523,6 +2540,7 @@
 {"args":["soda stereo - persiana americana"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'soda stereo - persiana americana'"}
 {"args":["tabs.ultimate-guitar.com/tab/radiohead/creep-power-302?ref=x"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'tabs.ultimate-guitar.com/tab/radiohead/creep-power-302?ref=x'"}
 {"args":["ultimate-guitar.com"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'ultimate-guitar.com'"}
+{"args":["under “Radiohead - Creep”: found; Megalobiz has no timed ones"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'under “Radiohead - Creep”: found; Megalobiz has no timed ones'"}
 {"args":["www.harptabs.com/tab/23862/piano-man-c-harmonica?ref=1"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'www.harptabs.com/tab/23862/piano-man-c-harmonica?ref=1'"}
 {"args":["{ record = \"azlyrics:../b\" }"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got '{ record = \"azlyrics:../b\" }'"}
 {"args":["{ record = \"azlyrics:A/b\" }"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got '{ record = \"azlyrics:A/b\" }'"}
@@ -2667,6 +2685,7 @@
 {"args":["azlyrics.com"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'azlyrics.com'"}
 {"args":["azlyrics:../x"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'azlyrics:../x'"}
 {"args":["azlyrics:pomme/mononoke"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'azlyrics:pomme/mononoke'"}
+{"args":["azlyrics:radiohead/creep"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'azlyrics:radiohead/creep'"}
 {"args":["cowboy bebop - spokey dokey"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'cowboy bebop - spokey dokey'"}
 {"args":["es.ultimate-guitar.com"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'es.ultimate-guitar.com'"}
 {"args":["example.com/tab/85053"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'example.com/tab/85053'"}
@@ -2813,6 +2832,7 @@
 {"args":["soda stereo - persiana americana"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'soda stereo - persiana americana'"}
 {"args":["tabs.ultimate-guitar.com/tab/radiohead/creep-power-302?ref=x"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'tabs.ultimate-guitar.com/tab/radiohead/creep-power-302?ref=x'"}
 {"args":["ultimate-guitar.com"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'ultimate-guitar.com'"}
+{"args":["under “Radiohead - Creep”: found; Megalobiz has no timed ones"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'under “Radiohead - Creep”: found; Megalobiz has no timed ones'"}
 {"args":["www.harptabs.com/tab/23862/piano-man-c-harmonica?ref=1"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'www.harptabs.com/tab/23862/piano-man-c-harmonica?ref=1'"}
 {"args":["{ record = \"azlyrics:../b\" }"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got '{ record = \"azlyrics:../b\" }'"}
 {"args":["{ record = \"azlyrics:A/b\" }"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got '{ record = \"azlyrics:A/b\" }'"}
@@ -2957,6 +2977,7 @@
 {"args":["azlyrics.com"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["azlyrics:../x"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["azlyrics:pomme/mononoke"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
+{"args":["azlyrics:radiohead/creep"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["cowboy bebop - spokey dokey"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["es.ultimate-guitar.com"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["example.com/tab/85053"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
@@ -3103,6 +3124,7 @@
 {"args":["soda stereo - persiana americana"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["tabs.ultimate-guitar.com/tab/radiohead/creep-power-302?ref=x"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["ultimate-guitar.com"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
+{"args":["under “Radiohead - Creep”: found; Megalobiz has no timed ones"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["www.harptabs.com/tab/23862/piano-man-c-harmonica?ref=1"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["{ record = \"azlyrics:../b\" }"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["{ record = \"azlyrics:A/b\" }"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
@@ -3247,6 +3269,7 @@
 {"args":["azlyrics.com"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["azlyrics:../x"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["azlyrics:pomme/mononoke"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
+{"args":["azlyrics:radiohead/creep"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["cowboy bebop - spokey dokey"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["es.ultimate-guitar.com"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["example.com/tab/85053"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
@@ -3393,6 +3416,7 @@
 {"args":["soda stereo - persiana americana"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["tabs.ultimate-guitar.com/tab/radiohead/creep-power-302?ref=x"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["ultimate-guitar.com"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
+{"args":["under “Radiohead - Creep”: found; Megalobiz has no timed ones"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["www.harptabs.com/tab/23862/piano-man-c-harmonica?ref=1"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["{ record = \"azlyrics:../b\" }"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["{ record = \"azlyrics:A/b\" }"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}

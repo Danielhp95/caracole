@@ -130,9 +130,12 @@ data class Lyrics(val plain: String, val synced: String?, val instrumental: Bool
             return if (asked == Triple(song.artists[0], song.title, song.album)) null else "${asked.first} - ${asked.second}"
         }
 
-        /** lyrics.asked_under: a lyrics site's answer in a lookup's words, with the name it was asked under
-         * ([askedName]) when it isn't the song's own. */
-        fun askedUnder(said: String, name: String?): String = if (name == null) said else "$said under “$name”"
+        /** lyrics.said_under: a lookup's lyrics stage in its words, the name its sites were asked under said once,
+         * first, when it isn't the song's own ([askedName]) and a site was asked under it: "under “A - T”: …". */
+        fun saidUnder(said: String, name: String?): String = if (name == null) said else "under “$name”: $said"
+
+        /** lyrics.PAGE_NAMED: after AZLyrics' words, for a page `[azlyrics]` names while a `[lyrics]` name holds. */
+        const val PAGE_NAMED = " (the page you named)"
 
         /** lyrics.picked_said: what a lookup says of the record you picked, its site's pass done: kept, gone, or not
          * asked now (within 30 days of its miss, or its site off). */

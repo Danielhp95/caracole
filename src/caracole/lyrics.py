@@ -508,10 +508,13 @@ def asked_name(song: Song, picks: Mapping[str, LyricsPick] | None) -> str | None
     return None if (artist, title, album) == (song.artists[0], song.title, song.album) else f"{artist} - {title}"
 
 
-def asked_under(said: str, name: str | None) -> str:
-    """A lyrics site's answer in a lookup's words, with the name it was asked under (``asked_name``) when it isn't
-    the song's own."""
-    return said if name is None else f"{said} under “{name}”"
+def said_under(said: str, name: str | None) -> str:
+    """A lookup's lyrics stage in its words, the name its sites were asked under said once, first, when it isn't the
+    song's own (``asked_name``) and a site was asked under it: "under “A - T”: LRCLIB has none; …"."""
+    return said if name is None else f"under “{name}”: {said}"
+
+
+PAGE_NAMED = " (the page you named)"  # after AZLyrics' words, for a page [azlyrics] names while a [lyrics] name holds
 
 
 def picked_said(record: LyricsRecord, *, kept: bool, gone: bool) -> str:

@@ -572,7 +572,7 @@ def test_a_sheet_from_youtube_asks_its_lyrics_under_the_lyrics_name(setup, conn,
     assert result.ok, result
     assert lrclib.requests == [("get", {"artist_name": "Nick Cani", "track_name": "Vikingos veganos",
                                         "duration": "200"})]
-    assert heard.ends()["lyrics"] == ("done", "found, timed under “Nick Cani - Vikingos veganos”")
+    assert heard.ends()["lyrics"] == ("done", "under “Nick Cani - Vikingos veganos”: found, timed")
     assert megalobiz.requests == []  # timed lyrics already
 
 
@@ -644,10 +644,12 @@ def test_a_video_no_site_has_lyrics_for_gets_its_words_heard_before_its_chords(s
     assert not list(setup.cache_dir.glob("transcribe-*"))  # the stem went with the job
 
 
-def test_a_picked_record_gone_is_every_site_asked_and_the_words_are_heard(setup, conn, fake, sites, megalobiz,
-                                                                         azlyrics, ears, tmp_path):
-    # The record you picked is final: its own site alone is asked, and once it is gone there no other will be, so the
-    # sites were asked and missed and the words are heard from the audio, the owner's rule kept.
+def test_a_picked_record_gone_makes_a_chords_only_sheet_and_its_words_are_never_heard(setup, conn, fake, sites,
+                                                                                    megalobiz, azlyrics, ears,
+                                                                                    tmp_path):
+    # The record you picked is final: its own site alone is asked, for it alone, and the other lyrics databases never
+    # are, so the owner's rule (the databases before Whisper) keeps the song from Whisper: the stage says what to do.
+    from caracole.autochords.transcript import PICKED_GONE
     from caracole.overrides import set_lyrics_record
 
     lrclib, _ = sites
@@ -658,9 +660,9 @@ def test_a_picked_record_gone_is_every_site_asked_and_the_words_are_heard(setup,
     ends = heard.ends()
     assert ends["lyrics"] == ("done", "the record you picked is gone: megalobiz 8")
     assert lrclib.requests == [] and [e for e, _ in megalobiz.requests] == ["lrc"] and azlyrics.requests == []
-    assert ends["vocals"][0] == "done", ends["vocals"]
-    assert ears.log == ["separator", "transcriber"]
-    assert ends["chords"] == ("done", "chords over the transcribed lyrics")
+    assert ends["vocals"] == ("skipped", "not transcribed: " + PICKED_GONE.format(record="megalobiz 8"))
+    assert ears.log == []
+    assert ends["chords"] == ("done", "chords only, no lyrics")
 
 
 @pytest.mark.parametrize("found,said,chords", [

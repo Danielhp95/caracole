@@ -1973,6 +1973,24 @@ def test_the_run_hears_up_to_its_cap_newest_first(conn, cfg, tmp_path, loud):
     assert stats.summary() == "3 generated, 0 skipped, 0 failed; words heard for 2, nothing sung in 0"
 
 
+def test_a_song_with_a_picked_record_and_no_lyrics_is_never_heard_and_spends_no_slot(conn, cfg, tmp_path, loud):
+    # The newest song's lyrics record you picked has none: the owner's rule keeps it from Whisper (its lyrics are a
+    # pick's, the other databases never asked), so the one slot goes to the next song; it gets its chords alone.
+    from caracole.overrides import set_lyrics_record
+
+    older = offered_song(conn, cfg, tmp_path, "Older", added_at="2026-10-01T00:00:00Z")
+    picked = offered_song(conn, cfg, tmp_path, "Picked", added_at="2026-10-02T00:00:00Z")
+    set_lyrics_record(cfg.overrides_file, picked.display, "lrclib:9")
+    hearing = hearing_of(cfg)
+    try:
+        stats = run(conn, cfg, hearing=hearing, transcriptions=1)
+    finally:
+        hearing.close()
+    assert heard_names(hearing) == ["Older.wav"]
+    assert (stats.generated, stats.heard) == (2, 1)
+    assert over_words(conn, older) and not over_words(conn, picked)
+
+
 def test_a_song_past_the_cap_gets_its_chords_now_and_its_words_a_run_later(conn, cfg, tmp_path, loud):
     older = offered_song(conn, cfg, tmp_path, "Older", added_at="2026-10-01T00:00:00Z")
     newer = offered_song(conn, cfg, tmp_path, "Newer", added_at="2026-10-02T00:00:00Z")
