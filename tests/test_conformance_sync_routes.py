@@ -53,7 +53,7 @@ import httpx
 import pytest
 from helpers.corpus import VECTORS, check, jsonl
 
-from caracole import __version__, db
+from caracole import __version__, db, normalize
 from caracole import peer_sync as sync
 from caracole.web import sync_routes
 from caracole.web.app import Request, WebApp
@@ -206,6 +206,11 @@ def route_records(corpus: Corpus, monkeypatch) -> list[dict[str, Any]]:
     compare(first, "not an address", "ftp://desk")
     first.state = dict(first.state, server=HERE_ID)
     compare(first, "this very caracole: its database copied")
+    first.state = dict(state_of(corpus.replayed("sync", "plain"), changes=both), key_version=normalize.KEY_VERSION + 1)
+    compare(first, "a caracole whose songs are keyed by other rules: refused, nothing compared")
+    first.state = {k: v for k, v in state_of(corpus.replayed("sync", "plain"), changes=both).items()
+                   if k != "key_version"}
+    compare(first, "an older caracole, whose state says no key version: compared as before")
 
     # Test: what the other holds, its newest index read, the last sync with it, in words; refused as a comparison is.
     tested = Sides(corpus, "rich", "-routes-test", {f"sync:peer:{THERE_ID}": peers[f"sync:peer:{THERE_ID}"]})
@@ -219,6 +224,8 @@ def route_records(corpus: Corpus, monkeypatch) -> list[dict[str, Any]]:
     test(never, "not an address", "ftp://desk")
     never.state = dict(never.state, server=HERE_ID)
     test(never, "this very caracole: its database copied")
+    never.state = dict(state_of(corpus.replayed("sync", "plain"), name=""), key_version=normalize.KEY_VERSION - 1)
+    test(never, "a caracole whose songs are keyed by other rules: refused")
 
     # Two that agreed once: each side's change since, and both's. Here is the fixture as it is; what each side held
     # when they agreed is the base, which both keep alike, and there is as its state says, the songbook and the song

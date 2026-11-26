@@ -48,6 +48,7 @@ import pytest
 from caracole import download_names, inline, page_icon
 from caracole.get import GTPTABS_KEPT, MATCH_NOT_FOUND, SHEET_FROM
 from caracole.library_name import SCRATCH_LINK, LibraryName
+from caracole.youtube_sheet import HOLDS as _YOUTUBE_HOLDS
 from caracole.web import app as app_module
 from caracole.web import files, pages, security
 from caracole.web.app import Request, Response, Route, WebApp, html_response, json_response
@@ -904,6 +905,26 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
     add("a sheet from YouTube, not made", in_state(youtube, "done", {
         "song": ("done", ""), "audio": ("skipped", "waiting out YouTube until 2026-11-04 11:30 UTC")}),
         facts=_status.SongFacts())
+    sheet_stages = {"song": ("done", ""), "audio": ("done", "downloaded"), "lyrics": ("done", "LRCLIB has none")}
+    add("a sheet from YouTube, its words running", in_state(youtube, "running", sheet_stages | {
+        "vocals": ("running", "2 of ~12 min")}), facts=ready)
+    add("a sheet from YouTube, its words heard", in_state(youtube, "done", sheet_stages | {
+        "vocals": ("done", "sung from 9.3 s"), "words": ("done", "212 words in 31 lines (en)"),
+        "chords": ("done", "chords over the transcribed lyrics"), "pdf": ("done", ""), "pages": ("done", "")}),
+        facts=ready)
+    add("a sheet from YouTube, its words skipped", in_state(youtube, "done", sheet_stages | {
+        "vocals": ("skipped", "not transcribed here: demucs-rs is missing"), "words": ("skipped", "no vocals"),
+        "chords": ("done", _YOUTUBE_HOLDS["none"]), "pdf": ("done", ""), "pages": ("done", "")}), facts=ready)
+    add("a sheet from YouTube, its words failed", in_state(youtube, "done", sheet_stages | {
+        "vocals": ("done", "sung from 9.3 s"), "words": ("failed", "Whisper can't read the audio"),
+        "chords": ("done", _YOUTUBE_HOLDS["none"]), "pdf": ("done", ""), "pages": ("done", "")}), facts=ready)
+    add("a sheet from YouTube, its vocals failed", in_state(youtube, "done", sheet_stages | {
+        "vocals": ("failed", "the separator can't run here (no GPU adapter)"), "words": ("skipped", "no vocals"),
+        "chords": ("done", _YOUTUBE_HOLDS["none"]), "pdf": ("done", ""), "pages": ("done", "")}), facts=ready)
+    add("a sheet from YouTube, nothing sung", in_state(youtube, "done", sheet_stages | {
+        "vocals": ("done", "sung 6.2 s"), "words": ("done", "nothing sung was heard (6.2 s sung)"),
+        "chords": ("done", _YOUTUBE_HOLDS["silent"]), "pdf": ("done", ""), "pages": ("done", "")}),
+        facts=ready)
     # A song's lyrics transcribed from its audio (caracole transcribe: transcribe_job.STAGES).
     transcription = queued_job(f"Lyrics from the audio: {V_DISPLAY}", _jobs.TRANSCRIBE + V_KEY,
                                _jobs.transcribe_steps(V_DISPLAY), display=V_DISPLAY)
@@ -951,6 +972,38 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
         facts=ready)
     add("a transcription, not made", in_state(transcription, "done", heard | {
         "chords": ("skipped", "no transcript")}), facts=ready)
+    unsung = queued_job(f"Not sung, chords only: {V_DISPLAY}", _jobs.TRANSCRIBE + V_KEY,
+                        _jobs.transcribe_steps(V_DISPLAY, none=True), display=V_DISPLAY)
+    add("a transcription the owner said isn't sung, ready", in_state(unsung, "done", {
+        "song": ("done", "in the book"), "vocals": ("skipped", "you said nothing is sung"),
+        "words": ("done", "transcript dropped"), "chords": ("done", _YOUTUBE_HOLDS["said"]), "pdf": ("done", "made"),
+        "pages": ("done", "_todo.md and index.html rewritten")}), facts=ready)
+    # A sheet from an audio file you gave (caracole audio: audio_sheet.STAGES), its Audio step naming no site.
+    from_file = queued_job(f"Sheet from an audio file: {V_DISPLAY}", _jobs.AUDIO_SHEET + V_KEY,
+                           _jobs.audio_sheet_steps(V_DISPLAY, "0123456789abcdef"), display=V_DISPLAY)
+    kept = {"song": ("done", "in the book"), "audio": ("done", "kept as its audio: MP3, 3:18")}
+    add("a sheet from an audio file, its audio", in_state(from_file, "running", {
+        "song": ("done", "in the book"), "audio": ("running", "")}), facts=_status.SongFacts())
+    add("a sheet from an audio file, its words running", in_state(from_file, "running", kept | {
+        "lyrics": ("done", "LRCLIB has none"), "vocals": ("running", "2 of ~12 min")}), facts=_status.SongFacts())
+    add("a sheet from an audio file, ready over the lyrics found", in_state(from_file, "done", kept | {
+        "lyrics": ("done", "found, timed"), "vocals": ("skipped", "not transcribed: its lyrics are found"),
+        "words": ("skipped", "no vocals"), "chords": ("done", "chords over the lyrics"), "pdf": ("done", "made"),
+        "pages": ("done", "")}), facts=ready)
+    add("a sheet from an audio file, ready over the words heard", in_state(from_file, "done", kept | {
+        "lyrics": ("done", "LRCLIB has none"), "vocals": ("done", "sung from 9.3 s"),
+        "words": ("done", "212 words in 31 lines (en)"), "chords": ("done", "chords over the transcribed lyrics"),
+        "pdf": ("done", "made"), "pages": ("done", "")}), facts=ready)
+    add("a sheet from an audio file, its words failed", in_state(from_file, "done", kept | {
+        "lyrics": ("done", "LRCLIB has none"), "vocals": ("done", "sung from 9.3 s"),
+        "words": ("failed", "the GPU failed: CUDA out of memory"), "chords": ("done", _YOUTUBE_HOLDS["none"]),
+        "pdf": ("done", "made"), "pages": ("done", "")}), facts=ready)
+    add("a sheet from an audio file, refused: a human sheet", in_state(from_file, "failed", {
+        "song": ("failed", f"{V_DISPLAY} already has a sheet")}, code=1), facts=ready)
+    add("a sheet from an audio file, its upload gone", in_state(from_file, "failed", {
+        "song": ("done", "in the book"), "audio": ("failed", "that upload is gone: it was left over an hour, or "
+                                                            "another file was chosen since. Choose it again")},
+        code=1), facts=_status.SongFacts())
     video = queued_job("Search YouTube for “creep”", _jobs.YOUTUBE_SEARCH + "creep",
                        _jobs.youtube_search_steps("creep"))
     add("a video searched for, done", in_state(video, "done", {"video": ("done", ""), "thumbnail": ("done", "")},
@@ -974,6 +1027,7 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
             ("an add", plain, V_ID, _status.SongFacts()), ("a fetch of commands", fetch, V_ID, _status.SongFacts()),
             ("a removal of commands", removal, V_ID, None), ("a pull", pull, None, None),
             ("a sheet from YouTube", youtube, V_ID, ready), ("a transcription", transcription, V_ID, ready),
+            ("a sheet from an audio file", from_file, V_ID, ready),
             ("a video searched for", video, None, None)):
         first = {job.stages[0].name: ("running", "")} if job.stages else None
         add(f"{note}, every state: queued", job, song_id, facts=facts)
@@ -1167,6 +1221,7 @@ def tables_record() -> dict:
         "LOOKUP_STEPS": [[name, list(names)] for name, names in _outcome.LOOKUP_STEPS],
         "YOUTUBE_STEPS": [[name, list(names)] for name, names in _outcome.YOUTUBE_STEPS],
         "TRANSCRIBE_STEPS": [[name, list(names)] for name, names in _outcome.TRANSCRIBE_STEPS],
+        "AUDIO_STEPS": [[name, list(names)] for name, names in _outcome.AUDIO_STEPS],
         "COMMAND_STEPS": _outcome.COMMAND_STEPS, "PEER_STEPS": _outcome.PEER_STEPS, "ASKS": _outcome._ASKS,
         "WHAT": {name: list(said) for name, said in _outcome._WHAT.items()}, "ELSEWHERE": _outcome._ELSEWHERE,
         "SITE_NAMES": _outcome.SITE_NAMES,

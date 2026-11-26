@@ -346,7 +346,7 @@ TAKE_RULES = (
     "tombstones: a song taken forgets this side's",
     "a song new here: through the one way songs are added, then the peer's",
     "a song absent there: removed by remove_song's rules",
-    "a removed unit: a tombstone made only where neither the song nor one is",
+    "a removed unit: a tombstone made only where neither the song nor one is, left saying so where the song is",
     "an absent removed unit: the tombstone forgotten",
     "whole or nothing: files fetched and checked before any change",
     "whole or nothing: the rows, the carried kv and the overrides entries together",
@@ -393,7 +393,7 @@ TAKES: dict[str, Take] = {
         R[7], "a removed unit taken where neither the song nor a tombstone is: a tombstone made",
         lambda h: None, lambda t: t.removed("Oasis", "Wonderwall"), [WONDERWALL]),
     "tombstone_beside_a_song": Take(
-        R[7], "a removed unit taken where the song is: no tombstone made",
+        R[7], "a removed unit taken where the song is: left, its song here, no tombstone made",
         lambda h: h.song("Oasis", "Wonderwall"), lambda t: t.removed("Oasis", "Wonderwall"), [WONDERWALL]),
     "tombstone_dropped": Take(
         R[8], "a removed unit the peer has no longer: the tombstone forgotten",
@@ -1351,6 +1351,8 @@ def test_each_take_does_what_its_rule_says(corpus):
     assert list(takes["absent_there"]["out"]["after"]) == ["removed/radiohead/creep"]
     assert list(takes["tombstone_made"]["out"]["after"]) == ["removed/oasis/wonderwall"]
     assert "removed/oasis/wonderwall" not in takes["tombstone_beside_a_song"]["out"]["after"]
+    assert takes["tombstone_beside_a_song"]["out"]["taken"] == []
+    assert takes["tombstone_beside_a_song"]["out"]["left"] == [["removed/oasis/wonderwall", sync.SONG_HERE]]
     assert takes["tombstone_dropped"]["out"]["after"] == {}
     assert takes["folder_moved"]["out"]["paths"] == ["Soda Stereo/De Música Ligera/sheet.txt",
                                                      "Soda Stereo/De Música Ligera/tab.txt"]

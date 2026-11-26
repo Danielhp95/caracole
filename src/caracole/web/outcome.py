@@ -25,15 +25,17 @@ the job and what the library knows of its song:
   Guitar"), one that failed as the outcome words it where it can ("Ultimate Guitar answered 502. The sheet waits
   until tonight."), joined by " · "; nothing for a plain step, a skipped one or one that waits, nor from a stage
   the server cut off, whose words are what it said while it ran.
-- **A sheet from a YouTube video** (``YOUTUBE_STEPS``): Song, Audio (YouTube, the site it names), Lyrics, Chords
-  and PDF, fixed as a lookup's are, a step with nothing to do skipped in its place, its audio skipped for a block,
+- **A sheet from a YouTube video** (``YOUTUBE_STEPS``): Song, Audio (YouTube, the site it names), Lyrics, Words (the
+  lyrics heard from the audio: its vocals and words stages), Chords and PDF, fixed as a lookup's are, a step with nothing to do skipped in its place, its audio skipped for a block,
   a cooldown or a spent budget drawn failed, as a lookup's sheet is; Ready
   says what the sheet holds (its chords stage's words: chords over the timed lyrics, a chart then the lyrics, or
-  chords alone), or why its lyrics wait, and Not made yet the stage that stopped it, in its words.
+  chords alone, or, its words failed, why they couldn't be heard), or why its lyrics wait, and Not made yet the stage that stopped it, in its words.
 - **A song's lyrics transcribed from its audio** (``TRANSCRIBE_STEPS``): Song, Vocals, Words, Chords and PDF, as a sheet
   from a YouTube video's are, none naming a site; Ready says what the sheet holds ("chords over the transcribed
   lyrics"), and Not made yet the stage that stopped it, in its words (``_staged_holds``, ``_staged_stopped``: the
-  two jobs' rules, each given its stages).
+  jobs' rules, each given its stages).
+- **A sheet from an audio file you gave** (``AUDIO_STEPS``): a YouTube sheet's steps, its Audio step the file kept
+  ("kept as its audio: MP3, 3:18"), naming no site; Ready and Not made yet as a YouTube sheet's.
 - **Progress** (``progress``), for the library page: a lookup's steps, a bar on the song's line (or a search
   result's row) while it runs, with the step in hand (``_in_hand``: the one that runs, else the first that
   waits, between two steps, else the last), its place ``at`` and ``count``, "3 of 7", its place among every
@@ -111,11 +113,13 @@ LOOKUP_STEPS = (
     ("Extras", ("ug", "lacuerda", "gtptabs", "harptabs", "gametabs")),
     ("Songbooks", ("songbooks",)),
 )
-# A sheet from a YouTube video's steps (youtube_sheet.STAGES): the audio, the lyrics, the chords, the PDF.
+# A sheet from a YouTube video's steps (youtube_sheet.STAGES): the audio, the lyrics, the words heard from it (the
+# vocals and words stages, one step), the chords, the PDF.
 YOUTUBE_STEPS = (
     ("Song", ("song",)),
     ("Audio", ("audio",)),
     ("Lyrics", ("lyrics",)),
+    ("Words", ("vocals", "words")),
     ("Chords", ("chords",)),
     ("PDF", ("pdf",)),
 )
@@ -129,7 +133,10 @@ TRANSCRIBE_STEPS = (
     ("Chords", ("chords",)),
     ("PDF", ("pdf",)),
 )
-# A staged job's steps, as the two tables above: each a name and the stages it stands for.
+# A sheet from an audio file you gave's steps (audio_sheet.STAGES): a YouTube sheet's, its Audio step the file kept,
+# naming no site.
+AUDIO_STEPS = YOUTUBE_STEPS
+# A staged job's steps, as the three tables above: each a name and the stages it stands for.
 StepTable = tuple[tuple[str, tuple[str, ...]], ...]
 # A step's site in full, by its tag (icons.tag): get.py's names, YouTube's, and where an auto sheet or a file you filed
 # came from; a tag it lacks is named as it is.
@@ -228,7 +235,7 @@ def steps(job: Job, facts: SongFacts | None = None) -> list[Chip]:
                 for stage in job.stages if stage.state != "skipped"]
     staged = _staged(job)
     if job.stages and staged is not None:
-        return _staged_steps(job, staged[0])
+        return _staged_steps(job, staged[0], staged[2])
     if job.stages:
         return _lookup_steps(job, facts)
     chips = []
@@ -248,14 +255,17 @@ def lists_steps(job: Job) -> bool:
     return not job.active and job.started_at is not None and (job.looks_up or _staged(job) is not None)
 
 
-def _staged(job: Job) -> tuple[StepTable, str] | None:
+def _staged(job: Job) -> tuple[StepTable, str, str] | None:
     """A job of stages over one song (staged.py) as this module reads it: its steps (``YOUTUBE_STEPS``,
-    ``TRANSCRIBE_STEPS``) and the stage of the words a Ready one says may wait (a sheet from YouTube's lyrics, a
-    transcription's words); None for any other job."""
+    ``TRANSCRIBE_STEPS``, ``AUDIO_STEPS``), the stage of the words a Ready one says may wait (a sheet's lyrics, a
+    transcription's words), and the site its Audio step names (YouTube for a YouTube sheet's, none for a file you
+    gave); None for any other job."""
     if job.from_youtube:
-        return YOUTUBE_STEPS, "lyrics"
+        return YOUTUBE_STEPS, "lyrics", SITE_NAMES[YOUTUBE_SOURCE]
     if job.transcribes:
-        return TRANSCRIBE_STEPS, "words"
+        return TRANSCRIBE_STEPS, "words", ""
+    if job.from_audio:
+        return AUDIO_STEPS, "lyrics", ""
     return None
 
 
@@ -280,10 +290,11 @@ def _lookup_steps(job: Job, facts: SongFacts | None) -> list[Chip]:
     return chips
 
 
-def _staged_steps(job: Job, table: StepTable) -> list[Chip]:
-    """A staged job's steps, ``table``'s (a sheet from a YouTube video's, a transcription's): a YouTube sheet's
-    audio skipped for a block, a cooldown or a spent budget is the step that stopped it, drawn failed, and names
-    YouTube; a step every stage of which ended skipped, with nothing to do, keeps its place, skipped."""
+def _staged_steps(job: Job, table: StepTable, audio_site: str) -> list[Chip]:
+    """A staged job's steps, ``table``'s (a sheet from a YouTube video's, a transcription's, a sheet from an audio
+    file's): a YouTube sheet's audio skipped for a block, a cooldown or a spent budget is the step that stopped it,
+    drawn failed; its Audio step names ``audio_site`` (YouTube, or none for a file you gave); a step every stage of
+    which ended skipped, with nothing to do, keeps its place, skipped."""
     by_name = {stage.name: stage for stage in job.stages}
     chips = []
     for name, names in table:
@@ -291,7 +302,7 @@ def _staged_steps(job: Job, table: StepTable) -> list[Chip]:
                  or by_name[n].state == INTERRUPTED else by_name[n].state) for n in names if n in by_name]
         state = _state([s for _, s in read])
         if state is not None:
-            chips.append(Chip(name, state, SITE_NAMES[YOUTUBE_SOURCE] if name == "Audio" else "", _found(read)))
+            chips.append(Chip(name, state, audio_site if name == "Audio" else "", _found(read)))
     return chips
 
 
@@ -555,9 +566,15 @@ def _waits(stages: list[Stage], *, after_sheet: bool = False) -> str:
 def _staged_holds(stages: list[Stage], words: str) -> str:
     """A staged job that is ready (a sheet from a YouTube video, a transcription): what its sheet holds (its chords
     stage's words), or, when the stage of its words (``words``: the sheet's lyrics, the transcription's words) waits,
-    why."""
+    why; and a sheet whose lyrics were done but whose words (``words``'s stage in a YouTube sheet, which hears them
+    after the lyrics) failed, its chords' words then why they couldn't be heard."""
     by_name = {stage.name: stage for stage in stages}
     waited, chords = by_name.get(words), by_name.get("chords")
+    heard = next((by_name[n] for n in ("vocals", "words") if n in by_name and by_name[n].state == "failed"
+                  and by_name[n].detail), None)  # whichever stage of the Words step failed
+    if (words == "lyrics" and waited is not None and waited.state == "done" and heard is not None
+            and chords is not None and chords.detail):
+        return f"{_capital(chords.detail).rstrip('.')}: the words couldn't be heard here ({heard.detail})."
     if waited is not None and waited.state in ("skipped", "failed") and waited.detail:
         return _capital(waited.detail)
     return _capital(chords.detail.removeprefix("up to date: ")) if chords is not None and chords.detail else ""

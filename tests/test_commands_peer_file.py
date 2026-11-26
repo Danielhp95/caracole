@@ -275,6 +275,30 @@ def test_a_librarys_own_export_is_refused_and_changes_nothing(libraries, tmp_pat
     assert not (desk.cfg.state_dir / "backups").exists()
 
 
+def test_a_file_of_a_caracole_whose_song_keys_changed_is_refused_and_takes_nothing(libraries, tmp_path,
+                                                                                     monkeypatch):
+    from caracole import normalize, songs
+
+    desk, studio, _ = libraries
+    desk_with_a_songbook(desk)
+    assert run(studio, "peer", "import", "--yes", str(exported(desk, tmp_path / "d.caracole"))).exit_code == 0
+    # Desk is upgraded: its normalizer keys Creep otherwise (a KEY_VERSION bump), it re-keys its songs, and exports.
+    with monkeypatch.context() as upgraded:
+        old = songs.identity_key
+        upgraded.setattr(songs, "identity_key", lambda a, t: old(a, t) + "-v3" if t == "Creep" else old(a, t))
+        upgraded.setattr(normalize, "KEY_VERSION", normalize.KEY_VERSION + 1)
+        songs.rekey_songs(desk.conn)
+        f = exported(desk, tmp_path / "e.caracole")
+    before, base, backups = studio.units(), db.kv_get(studio.conn, sync.BASE_KEY + desk.id()), sorted(
+        (studio.cfg.state_dir / "backups").iterdir())
+    out = run(studio, "peer", "import", "--yes", "--progress", str(f))
+    assert out.exit_code == 2 and peer_file.OTHER_KEYS in out.output, out.output
+    assert [(e["stage"], e["state"]) for e in events(out.output)] == [("check", "running"), ("check", "failed")]
+    assert find_song(studio.conn, "radiohead/creep") is not None and removed_song(studio.conn, "radiohead/creep") is None
+    assert studio.units() == before and db.kv_get(studio.conn, sync.BASE_KEY + desk.id()) == base
+    assert sorted((studio.cfg.state_dir / "backups").iterdir()) == backups
+
+
 def test_something_that_isnt_a_file_caracole_exported_is_refused(libraries, tmp_path):
     _, studio, _ = libraries
     (tmp_path / "notes.txt").write_text("hello\n", encoding="utf-8")
@@ -358,12 +382,61 @@ def test_a_conflict_kept_here_is_remembered_and_not_asked_again_at_the_next_impo
     assert [e for e in events(out.output) if e.get("event") == "unit"] == []
     assert "Nothing to take. 1 kept as they are here" in out.output
     assert load_overrides(studio.cfg.overrides_file).version == {override_key(CREEP): "key=Gm&capo=0"}
-    # a change on the file's side after the answer is the file's again
+    # a change on the file's side after the answer, which still lacks the version kept, is a conflict again: left
+    # unasked, the version kept here as it was, until the owner takes the file's
     add_version(desk.cfg.overrides_file, CREEP, "key=Em&capo=0")
-    out = run(studio, "peer", "import", "--yes", str(exported(desk, tmp_path / "3.caracole")))
+    third = exported(desk, tmp_path / "3.caracole")
+    out = run(studio, "peer", "import", "--yes", str(third))
+    assert out.exit_code == 0, out.output
+    assert "Left song/radiohead/creep: both books changed it: choose one" in out.output
+    assert load_overrides(studio.cfg.overrides_file).version == {override_key(CREEP): "key=Gm&capo=0"}
+    out = run(studio, "peer", "import", "--yes", f"--choose=there:{unit}", str(third))
     assert out.exit_code == 0, out.output
     assert load_overrides(studio.cfg.overrides_file).version == {override_key(CREEP): "key=Em&capo=0"}
     assert sync.kept_of(studio.conn, desk.id()) == {}
+
+
+def killed_rendering(conn, cfg, overrides, **kw):
+    """``render_all`` raising, as a render's bug does, or as caracole serve's stop kills its child mid-render."""
+    raise RuntimeError("killed while rendering")
+
+
+def test_an_import_killed_after_its_take_keeps_what_it_took_agreed_and_its_file_still_offers_the_rest(
+        libraries, tmp_path, monkeypatch):
+    desk, studio, _ = libraries
+    desk.song(version="key=Am&capo=0")  # Creep, chorded otherwise on each side: kept here as chosen
+    studio.song(version="key=Gm&capo=0")
+    desk.song("Oasis", "Wonderwall", sheet=b"[Em]Today", version=None)  # in the file alone: taken
+    creep, wonderwall = "song/radiohead/creep", "song/oasis/wonderwall"
+    f = exported(desk, tmp_path / "d.caracole")
+    made = peer_file.read_file(f).made
+    monkeypatch.setattr("caracole.render.render_all", killed_rendering)
+    out = run(studio, "peer", "import", "--yes", f"--choose=here:{creep}", str(f))
+    assert out.exit_code == 1 and isinstance(out.exception, RuntimeError)
+    # What it took is agreed at the file's made; the answer "keep mine", remembered at the agree, died with it.
+    assert sync.base_of(studio.conn, desk.id()) == {wonderwall: (desk.units()[wonderwall].digest, made)}
+    assert sync.kept_of(studio.conn, desk.id()) == {}
+
+    monkeypatch.setattr("caracole.render.render_all", lambda conn, cfg, overrides, **kw: None)
+    again = run(studio, "peer", "import", "--yes", "--progress", f"--choose=here:{creep}", str(f))
+    assert again.exit_code == 0, again.output  # still offered: its Creep is a conflict again, never no newer
+    assert [e for e in events(again.output) if e.get("event") == "unit"] == []  # Wonderwall isn't taken again
+    assert sync.kept_of(studio.conn, desk.id()) == {creep: (studio.units()[creep].digest, desk.units()[creep].digest,
+                                                            made)}
+
+
+def test_a_file_an_import_killed_after_its_take_took_whole_is_no_newer_the_next_time(libraries, tmp_path, in_utc,
+                                                                                      monkeypatch):
+    desk, studio, _ = libraries
+    desk_with_a_songbook(desk)
+    f = exported(desk, tmp_path / "d.caracole")
+    monkeypatch.setattr("caracole.render.render_all", killed_rendering)
+    out = run(studio, "peer", "import", "--yes", str(f))
+    assert out.exit_code == 1 and studio.units() == desk.units()
+    monkeypatch.setattr("caracole.render.render_all", lambda conn, cfg, overrides, **kw: None)
+    again = run(studio, "peer", "import", "--yes", str(f))
+    day = datetime.now(UTC).strftime("%d/%m/%y")
+    assert again.exit_code == 2 and f"Nothing in this file is newer than your sync with Desk on {day}." in again.output
 
 
 def test_a_conflict_neither_chosen_nor_preferred_is_left_and_named(libraries, tmp_path):
@@ -582,6 +655,98 @@ def test_a_staged_index_export_goes_by_the_name_it_was_sent_under_and_is_deleted
     assert report["with"]["name"] == "phone-indexes.sqlite" and not folder.exists()
 
 
+def compared_in_the_tab(lib: Lib, folder: Path) -> str:
+    """The hash the Sync tab's comparison of the file staged in ``folder`` names (POST /sync/import/compare's)."""
+    from caracole.commands.peer import _library
+
+    file = peer_file.read_file(folder / peer_import.FILE)
+    overrides, books = _library(lib.cfg)
+    with peer_file.FileSource(file, lib.conn, lib.cfg.library_dir) as source:
+        return sync.compared_hash(peer_file.compare_file(lib.conn, overrides, books, file, source).found)
+
+
+def staged_long_ago(folder: Path) -> None:
+    """The staged import in ``folder`` last touched more than ``peer_import.EXPIRES`` ago: its last part came in
+    long before its import ran (a long job ahead of it in the queue, the owner choosing sides)."""
+    import os
+
+    then = time.time() - peer_import.EXPIRES - 600
+    for path in (folder / peer_import.FILE, folder / peer_import.OPENED, folder):
+        os.utime(path, (then, then))
+
+
+def test_a_stale_import_keeps_its_staged_file_to_compare_again_and_takes_it_then(libraries, tmp_path):
+    from caracole.commands.peer import STALE
+
+    desk, studio, _ = libraries
+    desk_with_a_songbook(desk)
+    folder = stage(studio, exported(desk, tmp_path / "d.caracole").read_bytes())
+    shown = compared_in_the_tab(studio, folder)
+    studio.song("Muse", "Hysteria", version=None)  # the library moves on before the job runs (a lookup, the night)
+    staged_long_ago(folder)  # and the job ran over an hour after the last part came
+    out = run(studio, "peer", "import", "--yes", "--progress", f"--compared={shown}", str(folder))
+    assert out.exit_code == 1 and STALE in out.output, out.output
+    assert folder.exists() and studio.songs() == {"muse/hysteria"}  # kept, nothing taken
+    assert peer_import.sweep(studio.cfg.state_dir) == []  # its hour runs from the import's end
+    out = run(studio, "peer", "import", "--yes", "--progress", f"--compared={compared_in_the_tab(studio, folder)}",
+              str(folder))
+    assert out.exit_code == 0, out.output
+    assert "oasis/wonderwall" in studio.songs() and not folder.exists()
+
+
+def test_a_kept_folder_that_cant_be_touched_leaves_the_imports_own_ending(libraries, tmp_path, monkeypatch):
+    # peer_import.kept runs in a finally: a touch refused (another owner, a read-only mount) never stands for how
+    # the import ended.
+    from caracole.commands.peer import STALE
+
+    desk, studio, _ = libraries
+    desk_with_a_songbook(desk)
+    folder = stage(studio, exported(desk, tmp_path / "d.caracole").read_bytes())
+    shown = compared_in_the_tab(studio, folder)
+    studio.song("Muse", "Hysteria", version=None)
+
+    def refused(*args, **kw):
+        raise PermissionError(1, "Operation not permitted")
+
+    monkeypatch.setattr(peer_import.os, "utime", refused)
+    out = run(studio, "peer", "import", "--yes", "--progress", f"--compared={shown}", str(folder))
+    assert out.exit_code == 1 and STALE in out.output, out.output
+    assert isinstance(out.exception, SystemExit) and folder.exists(), out.exception  # no traceback over it
+    out = run(studio, "peer", "import", "--yes", "--progress", f"--compared={compared_in_the_tab(studio, folder)}",
+              str(folder))
+    assert out.exit_code == 0 and not isinstance(out.exception, OSError), (out.output, out.exception)
+    assert not folder.exists()
+
+
+def test_an_import_a_new_comparison_can_settle_keeps_its_staged_file_and_lets_go_of_it(libraries, tmp_path):
+    desk, studio, _ = libraries
+    f = a_file_that_removed_a_song_changed_here(desk, studio, tmp_path)
+    folder = stage(studio, f.read_bytes())
+    out = run(studio, "peer", "import", "--yes", "--progress", "--choose=here:song/oasis/nothing", str(folder))
+    assert out.exit_code == 2 and "no longer a difference" in out.output and folder.exists()
+    out = run(studio, "peer", "import", "--yes", "--progress", str(folder))  # its conflict left with no side
+    assert out.exit_code == 1 and folder.exists(), out.output
+    # The import over, its hold is gone: another file opened lets it go, as an hour does.
+    assert peer_import.let_go(studio.cfg.state_dir, set()) == [folder.name[len(peer_import.PREFIX):]]
+
+
+def test_a_file_an_import_refuses_or_takes_whole_is_deleted(libraries, tmp_path):
+    desk, studio, _ = libraries
+    desk_with_a_songbook(desk)
+    data = exported(desk, tmp_path / "d.caracole").read_bytes()
+    folder = stage(studio, data)
+    assert run(studio, "peer", "import", "--yes", str(folder)).exit_code == 0 and not folder.exists()
+    again = stage(studio, data)  # the same file: nothing newer in it
+    staged_long_ago(again)
+    out = run(studio, "peer", "import", "--yes", str(again))
+    assert out.exit_code == 2 and "Nothing in this file is newer" in out.output and not again.exists()
+    own = stage(studio, exported(studio, tmp_path / "own.caracole").read_bytes())
+    out = run(studio, "peer", "import", "--yes", str(own))
+    assert out.exit_code == 2 and peer_file.OWN_EXPORT in out.output and not own.exists()
+    garbage = stage(studio, b"not a file at all")
+    assert run(studio, "peer", "import", "--yes", str(garbage)).exit_code == 2 and not garbage.exists()
+
+
 def test_a_staged_file_not_whole_yet_is_refused_and_left_for_the_rest_to_come(libraries, tmp_path):
     desk, studio, _ = libraries
     desk_with_a_songbook(desk)
@@ -681,3 +846,56 @@ def test_a_sync_from_the_tab_after_an_import_kept_a_unit_gives_it_there(librarie
     # a hash that names neither comparison is refused all the same
     stale = run(studio, "peer", "sync", HOST, "--push", "--yes", "--compared", "0" * 64)
     assert stale.exit_code == 1 and "changed since that comparison" in stale.output
+
+
+def a_file_that_removed_a_song_changed_here(desk: Lib, studio: Lib, tmp_path: Path) -> Path:
+    """Studio took Wonderwall from Desk's file, then changed it; Desk removed it since: its next file."""
+    from caracole.removal import plan_removal, remove_song
+
+    desk_with_a_songbook(desk)
+    assert run(studio, "peer", "import", "--yes", str(exported(desk, tmp_path / "a.caracole"))).exit_code == 0
+    add_version(studio.cfg.overrides_file, "Oasis - Wonderwall", "key=Em&capo=2")  # changed here
+    remove_song(desk.conn, desk.cfg, plan_removal(desk.conn, desk.cfg, find_song(desk.conn, "oasis/wonderwall")))
+    return exported(desk, tmp_path / "b.caracole")
+
+
+def test_a_song_kept_here_against_the_files_removal_answers_its_removal_too(libraries, tmp_path, in_utc):
+    """"Keep mine" for a song the file removed is the removal's answer too: nothing taken nor left, the import done,
+    both answers remembered, so the same file is then refused as no newer."""
+    desk, studio, _ = libraries
+    f = a_file_that_removed_a_song_changed_here(desk, studio, tmp_path)
+    song, removal = "song/oasis/wonderwall", "removed/oasis/wonderwall"
+    out = run(studio, "peer", "import", "--yes", "--progress", f"--choose=here:{song}", str(f))
+    assert out.exit_code == 0, out.output
+    assert [e for e in events(out.output) if e.get("event") == "unit"] == []
+    assert find_song(studio.conn, "oasis/wonderwall") is not None and removed_song(studio.conn, "oasis/wonderwall") is None
+    made = peer_file.read_file(f).made
+    removed_there = peer_file.read_file(f).state.units[removal].digest
+    assert sync.kept_of(studio.conn, desk.id()) == {song: (studio.units()[song].digest, None, made),
+                                                    removal: (None, removed_there, made)}
+    again = run(studio, "peer", "import", "--yes", str(f))
+    day = datetime.now(UTC).strftime("%d/%m/%y")
+    assert again.exit_code == 2 and f"Nothing in this file is newer than your sync with Desk on {day}." in again.output
+    assert find_song(studio.conn, "oasis/wonderwall") is not None
+
+
+def test_a_song_taken_as_the_file_removed_it_takes_its_removal_too(libraries, tmp_path):
+    desk, studio, _ = libraries
+    f = a_file_that_removed_a_song_changed_here(desk, studio, tmp_path)
+    out = run(studio, "peer", "import", "--yes", "--progress", "--choose=there:song/oasis/wonderwall", str(f))
+    assert out.exit_code == 0, out.output
+    assert sorted((e["id"], e["outcome"]) for e in events(out.output) if e.get("event") == "unit") == [
+        ("removed/oasis/wonderwall", "taken"), ("song/oasis/wonderwall", "taken")]
+    assert find_song(studio.conn, "oasis/wonderwall") is None
+    assert removed_song(studio.conn, "oasis/wonderwall") is not None
+
+
+def test_a_removal_beside_its_songs_conflict_left_unsettled_is_left_saying_so(libraries, tmp_path):
+    desk, studio, _ = libraries
+    f = a_file_that_removed_a_song_changed_here(desk, studio, tmp_path)
+    out = run(studio, "peer", "import", "--yes", "--progress", str(f))
+    assert out.exit_code == 1, out.output  # units left
+    units = sorted((e["id"], e["outcome"], e["why"]) for e in events(out.output) if e.get("event") == "unit")
+    assert ("removed/oasis/wonderwall", "left", sync.SONG_HERE) in units, units
+    assert find_song(studio.conn, "oasis/wonderwall") is not None
+    assert "removed/oasis/wonderwall" not in sync.kept_of(studio.conn, desk.id())  # nothing kept for the removal

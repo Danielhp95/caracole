@@ -11,6 +11,9 @@ proper sheet later, caracole uses that one.
 - A file you bought. Put it in `~/Music` and caracole matches it by its tags.
 - YouTube. The nightly run takes the audio of a few songs that have no sheet.
 - A video you choose. Paste its link on the library page and the sheet is made right away.
+- A file from your computer: the **+** on the library page (or drop the file on it, or a song's
+  Sheet from an audio file…), or `caracole audio FILE`. caracole keeps a copy as the song's audio, in place
+  of anything it had, and makes the sheet right away.
 
 Taking audio from YouTube goes against its robots.txt and its terms of service. That is your
 call. `[providers.youtube] enabled = false` in caracole.toml turns it off, and the add-on then
@@ -22,9 +25,32 @@ More on this: [the sites caracole reads](sources.md).
 When a site has the lyrics, the chords go over the words. If the lyrics were timed for a
 recording of another length, caracole shifts them to fit and says so on the sheet.
 
-When no site has them and the audio came from YouTube, **Transcribe the lyrics** on the song's
-card (or `caracole transcribe`) writes them down from the audio with Whisper. The sheet is marked
-as transcribed, and lyrics from a site replace them later.
+When no site has them and the song has audio of its own (YouTube's, a purchase's or a file you gave it),
+**Transcribe the lyrics** on the song's card (or `caracole transcribe`) writes them down from the audio with Whisper.
+The sheet is marked as transcribed, and lyrics from a site replace them later.
+
+A sheet from a video you paste, or from a file you give, does this by itself: the lyrics sites first, then, if every
+one missed, the words heard from the audio, then the chords over them. If the transcription fails, you still get the
+chords, and the card still offers Transcribe the lyrics. `[autochords] transcribe = false` in caracole.toml turns this
+off.
+
+The nightly auto-chords run does the same for up to three songs a night, newest first, before their chords
+(`[autochords] transcribe_per_run`, 0 for none). A song past that gets its chords tonight and its words on a later
+night, and its sheet is made again then. On a CPU each song heard takes about 7 times its length, so three 4-minute
+songs are about an hour and a half. If hearing a song fails (the separator, a stem cut short, Whisper's setup), the
+night stops hearing, and the next nights pass over that song for 30 days, or until its file changes, so that the
+others are heard; the to-do page lists it, and its card still offers Transcribe the lyrics.
+
+With the GPU build (`autochords-cuda`), the nightly unit hears no words: its separator needs the GPU, and the nightly
+unit doesn't see it. The to-do page says so. The words then come from the library page's jobs: a sheet from a video,
+or Transcribe the lyrics on the song's card. With the CPU build, the nightly unit hears them on the CPU.
+
+Audio Whisper can't read still gets its chords, wherever its words were to be heard. caracole then stops offering to
+transcribe it until the file changes, and the to-do page lists it.
+
+When caracole gets it wrong, the card lets you say otherwise. A song in which nothing sung was heard has **Transcribe
+anyway**; one whose sheet is over its transcript has **Not sung: chords only**, which drops the words and never hears
+that audio again (a new file is heard once more).
 
 ## Install
 
@@ -49,5 +75,7 @@ to half an hour on a CPU and a couple of minutes on a GPU.
 | `caracole youtube --song "Artist - Title" [--url URL] --sheet` | Makes that song's sheet from a video, now |
 | `caracole youtube --song "Artist - Title" --none` | Never uses YouTube for that song |
 | `caracole transcribe --song "Artist - Title"` | Transcribes the lyrics, then remakes the sheet |
+| `caracole transcribe --song "Artist - Title" --force` / `--none` | It is sung after all / it isn't sung |
+| `caracole audio FILE [--song "Artist - Title"]` | Makes that song's sheet from an audio file of yours, now |
 
 None of this runs on the phone. Details: [Audio from YouTube](usage.md#audio-from-youtube).

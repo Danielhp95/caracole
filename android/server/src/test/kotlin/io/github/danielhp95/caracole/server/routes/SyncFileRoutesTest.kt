@@ -61,9 +61,9 @@ class SyncFileRoutesTest {
 
     @After fun stop() = scope.cancel()
 
-    /** A phone over the sync corpus's [fixture] (its id `0f1e2d3c4b5a6978`), its routes and its queue running, a
-     * mirror its import keeps a file's pages in. */
-    private inner class Phone(fixture: String = "plain") : AutoCloseable {
+    /** A phone over the sync corpus's [fixture] (its id [syncId], `0f1e2d3c4b5a6978` unless given), its routes and its
+     * queue running, a mirror its import keeps a file's pages in. */
+    private inner class Phone(fixture: String = "plain", syncId: String = "0f1e2d3c4b5a6978") : AutoCloseable {
         val dir: File = tmp.newFolder()
         val state = File(dir, "state")
         val mirror = Mirror(File(dir, "mirror"))
@@ -90,7 +90,7 @@ class SyncFileRoutesTest {
         init {
             app.database.writeBlocking { db ->
                 Fixtures.load(db, "sync/fixtures/$fixture.jsonl", app.libraryDir)
-                db.kvSet("sync:id", "0f1e2d3c4b5a6978")
+                db.kvSet("sync:id", syncId)
             }
         }
 
@@ -182,8 +182,11 @@ class SyncFileRoutesTest {
         }
     }
 
+    // A phone the file knows nothing of (the file corpus's FRESH): as 0f1e2d3c4b5a6978 it would read the file's kept
+    // answer for Karma Police, which plain lacks, and so a conflict to choose.
     @Test
-    fun `a file's import takes what it gives, keeps its pages as a layer, and leaves no staging behind`() = Phone().use { phone ->
+    fun `a file's import takes what it gives, keeps its pages as a layer, and leaves no staging behind`() =
+        Phone(syncId = "2233445566778899").use { phone ->
         val id = phone.send(full())
         val compared = phone.app.postScript("/sync/import/compare", listOf("import" to id))
         assertEquals(200, compared.status)

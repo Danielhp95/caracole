@@ -64,7 +64,7 @@ object Outcomes {
     /** A sheet from a YouTube video's steps (youtube_sheet.STAGES). */
     val YOUTUBE_STEPS: List<Pair<String, List<String>>> = listOf(
         "Song" to listOf("song"), "Audio" to listOf("audio"), "Lyrics" to listOf("lyrics"),
-        "Chords" to listOf("chords"), "PDF" to listOf("pdf"),
+        "Words" to listOf("vocals", "words"), "Chords" to listOf("chords"), "PDF" to listOf("pdf"),
     )
     private const val YOUTUBE_SOURCE = "YouTube"
 
@@ -74,11 +74,18 @@ object Outcomes {
         "Chords" to listOf("chords"), "PDF" to listOf("pdf"),
     )
 
-    /** A staged job's steps and the stage of its words a Ready one says may wait (outcome._staged); null for any
-     * other job. */
-    private fun staged(job: Shape): Pair<List<Pair<String, List<String>>>, String>? = when {
-        job.fromYoutube -> YOUTUBE_STEPS to "lyrics"
-        job.transcribes -> TRANSCRIBE_STEPS to "words"
+    /** A sheet from an audio file you gave's steps (audio_sheet.STAGES): a YouTube sheet's, its Audio step naming
+     * no site. */
+    val AUDIO_STEPS: List<Pair<String, List<String>>> = YOUTUBE_STEPS
+
+    /** A staged job (outcome._staged): its steps, the stage of its words a Ready one says may wait, and the site its
+     * Audio step names (YouTube for a YouTube sheet's, none for a file you gave); null for any other job. */
+    private class Staged(val table: List<Pair<String, List<String>>>, val words: String, val audioSite: String)
+
+    private fun staged(job: Shape): Staged? = when {
+        job.fromYoutube -> Staged(YOUTUBE_STEPS, "lyrics", SITE_NAMES.getValue(YOUTUBE_SOURCE))
+        job.transcribes -> Staged(TRANSCRIBE_STEPS, "words", "")
+        job.fromAudio -> Staged(AUDIO_STEPS, "lyrics", "")
         else -> null
     }
 
@@ -185,7 +192,7 @@ object Outcomes {
                      if (stage.state == Job.INTERRUPTED) Job.FAILED else stage.state)
             }
         }
-        if (job.stages.isNotEmpty()) staged(job)?.let { return stagedSteps(job, it.first) }
+        if (job.stages.isNotEmpty()) staged(job)?.let { return stagedSteps(job, it.table, it.audioSite) }
         if (job.stages.isNotEmpty()) return lookupSteps(job, facts)
         return job.steps.filter { it.state != Job.SKIPPED }.map { step ->
             val name = COMMAND_STEPS[step.args.firstOrNull() ?: ""] ?: step.label
@@ -213,7 +220,7 @@ object Outcomes {
         return chips
     }
 
-    private fun stagedSteps(job: Shape, table: List<Pair<String, List<String>>>): List<Chip> {
+    private fun stagedSteps(job: Shape, table: List<Pair<String, List<String>>>, audioSite: String): List<Chip> {
         val byName = job.stages.associateBy { it.name }
         val chips = ArrayList<Chip>()
         for ((name, names) in table) {
@@ -222,7 +229,7 @@ object Outcomes {
                     stage.state == Job.INTERRUPTED) Job.FAILED else stage.state
             }
             val state = stateOf(read.map { it.second }) ?: continue
-            chips += Chip(name, state, if (name == "Audio") SITE_NAMES.getValue(YOUTUBE_SOURCE) else "", found(read))
+            chips += Chip(name, state, if (name == "Audio") audioSite else "", found(read))
         }
         return chips
     }
@@ -346,7 +353,7 @@ object Outcomes {
         if (tone == "ready") {
             val href = line.link?.let { href(it.second) }
             if (text == Status.READY) {
-                val said = staged(job)?.let { stagedHolds(job.stages, it.second) } ?: waits(job.stages, afterSheet = true)
+                val said = staged(job)?.let { stagedHolds(job.stages, it.words) } ?: waits(job.stages, afterSheet = true)
                 return Outcome("ready", "Ready", said, href?.let { Action("Open", href = it) })
             }
             return Outcome("ready", text, "", if (line.link != null && href != null) Action(line.link.first, href = href) else null)
@@ -361,7 +368,7 @@ object Outcomes {
             return Outcome(tone, word, if (rest.isNotEmpty()) sentence(rest) else "", if (tone == "waiting") again else null)
         }
         if (tone == "missing") return notFound(job, facts, songId)
-        staged(job)?.let { if (tone == "waiting") return Outcome("waiting", text, stagedStopped(job.stages, it.first), again) }
+        staged(job)?.let { if (tone == "waiting") return Outcome("waiting", text, stagedStopped(job.stages, it.table), again) }
         if (tone == "waiting") {
             return Outcome("waiting", text, waits(job.stages).ifEmpty { if (job.stages.isNotEmpty()) "" else NOT_ASKED }, again)
         }
@@ -446,6 +453,12 @@ object Outcomes {
         val byName = stages.associateBy { it.name }
         val lyrics = byName[words]
         val chords = byName["chords"]
+        val heard = listOf("vocals", "words").mapNotNull { byName[it] }
+            .firstOrNull { it.state == Job.FAILED && it.detail.isNotEmpty() }  // whichever stage of Words failed
+        if (words == "lyrics" && lyrics != null && lyrics.state == Job.DONE && heard != null &&
+            chords != null && chords.detail.isNotEmpty()) {
+            return "${capital(chords.detail).trimEnd('.')}: the words couldn't be heard here (${heard.detail})."
+        }
         if (lyrics != null && (lyrics.state == Job.SKIPPED || lyrics.state == Job.FAILED) && lyrics.detail.isNotEmpty()) {
             return capital(lyrics.detail)
         }

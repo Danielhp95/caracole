@@ -32,6 +32,7 @@ import io.github.danielhp95.caracole.core.sync.internal.client.IndexStamps
 import io.github.danielhp95.caracole.mirror.SyncError
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonArray
@@ -106,13 +107,21 @@ class SameCaracole(message: String) : Exception(message)
  * 2. **take**: each difference decided (a choice, else its proposal, else, for a conflict, [prefer]; a conflict with
  *    neither is refused before any change; skip leaves it, [SKIPPED]); then, inside Database.write, a backup of the
  *    phone's database (Take.backupBeforeSync: none, nothing taken) and Take.applyUnits from the computer, each unit
- *    left that changed on either side since the comparison.
+ *    left that changed on either side since the comparison; then, in the same write, what was taken recorded as
+ *    agreed at the computer's clock as compared (Compare.recordTaken, peer_sync.record_taken: those the phone now
+ *    holds so), so that whatever stops the sync after its take leaves it agreed, never a conflict once the computer
+ *    changes it.
  * 3. **give**: the units the computer takes, as documents of the phone's state after its take, as peer_push.push_units
- *    gives them (`POST /peer/push/new`, each file it needs, `POST /peer/push`): a unit the phone changed since the
- *    comparison is left out ([CHANGED_HERE]), and so is a song whose file the phone can no longer read as kept
- *    ([FILE_CHANGED]). Then the computer's request is followed every second, 10 minutes at most, with no lock held,
- *    and each unit is given or left as its request says it (its `units`). A request that can't be sent or followed
- *    stops the sync there: no agreement is recorded on either side.
+ *    gives them (`POST /peer/push/new`, each file it needs, `POST /peer/push`), in as many pushes as the computer's
+ *    limits ask ([pushLimits], Give.cut), one at a time: a unit the phone changed since the comparison is left out
+ *    ([CHANGED_HERE]), and so is a song whose file the phone can no longer read as kept ([FILE_CHANGED]), one with a
+ *    kept file past 64 MiB (FileError.TOO_BIG) and a unit that alone passes what a push carries (Give.TOO_LONG,
+ *    Give.TOO_HEAVY). Each push's request is followed every second, 10 minutes at most, with no lock held, before the
+ *    next is opened, and each unit is given or left as its request says it (its `units`). A request that can't be
+ *    sent or followed stops the sync there, saying how far the give got: the pushes before it taken and agreed there,
+ *    the phone no more than its take did; a push that fails, or is cancelled, before its document is taken is let go
+ *    of there at once (`POST /peer/push/drop`, PeerClient.pushDrop), so that it holds none of the computer's two slots
+ *    for the hour (a drop that fails is said nowhere: the phone's next push lets go of it there).
  * 4. **mirror**: the mirror of the computer's pages brought up to date ([mirrorRefresh], told what to say as it goes:
  *    "120 of 640 pages"; skipped without one); its failure stops nothing.
  * 5. **agree**: the computer's state read again; what the two hold alike now recorded as agreed at its clock, inside
@@ -186,10 +195,14 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
     internal var pollEveryMs: Long = POLL_EVERY_MS
     internal var polls: Int = POLLS
 
+    /** What the computer takes of a push at most (its routes' limits, Give.Limits'); a test's own, smaller. */
+    internal var pushLimits: Give.Limits = Give.Limits()
+
     private val kept = KeptById<Comparison>(KEPT_SECONDS)
 
     /** The phone and the computer at [address] (a [peerAddress]), compared; kept by its id for 10 minutes. A
-     * [PeerError] (or mirror's SyncError) when the computer can't be asked; [SameCaracole] when it is this phone. */
+     * [PeerError] (or mirror's SyncError) when the computer can't be asked, an [OtherKeys] when it keys its songs by
+     * other rules than the phone (PeerClient.state); [SameCaracole] when it is this phone. */
     fun compare(address: String): Comparison {
         val compared = compared(client(address), address)
         val comparison = Comparison(KeptById.newId(), address, compared.peer, compared.syncedBefore, compared.differences,
@@ -279,12 +292,20 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
                 null -> done.left.add(d.id to UNSETTLED)
             }
         }
+        // The song given: its removal on the computer answered with it, neither taken nor left.
+        toTake.removeAll(Compare.answeredByItsSong(toTake, toGive).toSet())
 
         // 2. take
-        if (toTake.isEmpty()) stage(TAKE, SKIPPED_STATE, "") else take(client, stage, done, toTake)
+        var took: Applied? = null
+        if (toTake.isEmpty()) stage(TAKE, SKIPPED_STATE, "")
+        else {
+            val at = fresh.peer.now ?: Stamps.of(clock())
+            took = take(client, stage, done, toTake) { db, mine, taken -> Compare.recordTaken(db, computer, mine, taken, at) }
+        }
 
         // 3. give
-        if (toGive.isEmpty()) stage(GIVE, SKIPPED_STATE, "") else give(client, stage, done, me, fresh, toGive)
+        if (toGive.isEmpty()) stage(GIVE, SKIPPED_STATE, "")
+        else give(client, stage, done, me, fresh, toGive, took?.respelledDigests.orEmpty())
 
         // 4. mirror
         val refresh = mirrorRefresh
@@ -384,7 +405,9 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
      * 1. **check**: the file read and compared again; a hash other than the comparison's refuses it before any
      *    change ([STALE]), as does a refusal of the file's (its words); then each difference within [parts] decided.
      * 2. **take**: a backup first (none: nothing taken), then each unit the file gives, from it (FileSource), as a
-     *    pull takes one.
+     *    pull takes one; then, in the same write, what was taken recorded as agreed with the file's caracole at its
+     *    `made` (SyncFiles.recordTaken), so that an import stopped before its agree (the mirror stage cancelled, the
+     *    app killed) leaves it agreed.
      * 3. **mirror**: the units taken handed to the pages hook ([pagesFromFile]), which keeps the file's pages of them,
      *    told what to say as it goes ("12 of 40 pages kept"); skipped with no hook or nothing taken; its failure stops
      *    nothing.
@@ -433,6 +456,10 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
                 null -> done.left.add(d.id to UNSETTLED)
             }
         }
+        // A song kept here: the file's removal of it answered with it, remembered beside it.
+        val answered = Compare.answeredByItsSong(toTake, toKeep)
+        toTake.removeAll(answered.toSet())
+        toKeep.addAll(answered)
         val keptHere = SyncFiles.keptAnswers(scoped, toKeep)
         stage(CHECK, DONE, "${plural(scoped.size, "difference")} with ${Py.strip(sf.name).ifEmpty { "a file" }}'s file")
 
@@ -441,7 +468,11 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             stage(TAKE, SKIPPED_STATE, "")
             emptyList()
         } else {
-            FileSource(sf, database, store.libraryDir).use { source -> take(source, stage, done, toTake).taken }
+            FileSource(sf, database, store.libraryDir).use { source ->
+                take(source, stage, done, toTake) { db, mine, taken ->
+                    SyncFiles.recordTaken(db, sf, mine, taken)
+                }.taken
+            }
         }
 
         // 3. mirror
@@ -626,9 +657,12 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
                      "Give one a new id: caracole peer new-id.")
 
     /** The take stage: a backup of the phone's database, then each unit of [toTake] taken from [source], each left
-     * that changed on either side since the comparison. */
+     * that changed on either side since the comparison; then, in the take's own write, what was taken recorded as
+     * agreed by [agree] (the phone's units now, and each unit taken with its digest there: Compare.recordTaken with the
+     * computer, SyncFiles.recordTaken with a file's caracole), [agreeTaken]. */
     private suspend fun take(source: UnitSource, stage: (String, String, String) -> Unit, done: Done,
-                             toTake: List<Difference>): Applied {
+                             toTake: List<Difference>,
+                             agree: (Db, Map<String, SyncUnit>, Map<String, String?>) -> Unit): Applied {
         stage(TAKE, RUNNING, plural(toTake.size, "change"))
         val now = Stamps.of(clock())
         val wanted = toTake.map { it.id to it.theirs?.digest }
@@ -641,11 +675,13 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
                         ?: throw SyncFailed(NO_BACKUP, done.outcome())
                     // Each unit taken is the phone's as it is done (a savepoint of its own): recorded then, so that
                     // a take the database stops says what it took before.
-                    Take.applyUnits(db, store, source, wanted, expectedHere, now, checks) { id, what ->
+                    val took = Take.applyUnits(db, store, source, wanted, expectedHere, now, checks) { id, what ->
                         if (what == "taken") done.taken.add(id)
                         seen++
                         stage(TAKE, RUNNING, "$seen of ${plural(toTake.size, "change")}")
                     }
+                    agreeTaken(db, took, wanted, agree)
+                    took
                 }
             }
         }
@@ -654,63 +690,115 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         return applied
     }
 
-    /** The units the computer takes pushed (peer_push.push_units), and its request followed to its end: each unit
-     * given, or left with why. */
+    /** What [applied] took (of [wanted]: each unit and its digest there as compared) recorded as agreed by [agree]
+     * (of those the phone now holds so), as the take ends, so that whatever stops the sync or the import after it (the
+     * give refused or cut off, the mirror stage or the job cancelled, the agree stage's own read) leaves it agreed
+     * rather than a conflict once the other side changes it. A library that can't be read records nothing here, and
+     * says nothing: the agree stage reads it again, and its failure is said there, failing the stage; the database's
+     * own failure stops the take, as Take.applyUnits' does. */
+    private fun agreeTaken(db: Db, applied: Applied, wanted: List<Pair<String, String?>>,
+                           agree: (Db, Map<String, SyncUnit>, Map<String, String?>) -> Unit) {
+        if (applied.taken.isEmpty()) return
+        val mine = try {
+            Units.libraryState(db)
+        } catch (e: Exception) {
+            if (Take.databaseFailed(e)) throw e
+            return
+        }
+        val digests = wanted.toMap()
+        agree(db, mine, applied.taken.associateWith { digests[it] })
+    }
+
+    /** The units the computer takes pushed (peer_push.push_units), in as many pushes as its limits ask
+     * ([pushLimits], Give.cut), one at a time, each followed to its take's end before the next is opened: each unit
+     * given, or left with why. A song with a kept file past 64 MiB is left out ([FileError.TOO_BIG], the export's
+     * words for it), and so is a unit that alone passes what a push carries (Give.TOO_LONG, Give.TOO_HEAVY). A push
+     * that fails stops the give there, its pushes before it taken (and agreed there as their takes ended), saying how
+     * far it got; one that fails, or is cancelled, before its document is taken is let go of there first. A unit
+     * whose digest here differs from the one compared is left ([CHANGED_HERE]), but for a song this sync's take
+     * respelled ([respelled]: its digest as the take ended, in the take's own write), which is given as the take left
+     * it: that change is the sync's own, and any other since still leaves it. */
     private suspend fun give(client: PeerClient, stage: (String, String, String) -> Unit, done: Done, me: String,
-                             fresh: Compared, toGive: List<Difference>) {
+                             fresh: Compared, toGive: List<Difference>, respelled: Map<String, String?>) {
         stage(GIVE, RUNNING, plural(toGive.size, "change"))
         val (state, documents) = database.read { db ->
             Units.libraryState(db) to toGive.associate { d -> d.id to Units.document(db, store.libraryDir, d.id) }
         }
         val before = done.left.size
+        val givenBefore = done.given.size
         val entries = ArrayList<Give.Entry>()
+        val sizes = HashMap<String, Long>()
         for (d in toGive) {
             val now = state[d.id]?.digest
-            if (now != d.mine?.digest) done.left.add(d.id to CHANGED_HERE)
-            else entries.add(Give.Entry(d.id, expected = d.theirs?.digest, digest = now, unit = documents[d.id]))
-        }
-        if (entries.isEmpty()) {
-            stage(GIVE, DONE, "gave 0, left ${toGive.size}")
-            return
+            if (now != (if (d.id in respelled) respelled[d.id] else d.mine?.digest)) {
+                done.left.add(d.id to CHANGED_HERE)
+                continue
+            }
+            val entry = Give.Entry(d.id, expected = d.theirs?.digest, digest = now, unit = documents[d.id])
+            val kept = Give.files(listOf(entry)).associateWith { sha -> io { Give.size(database, store.libraryDir, sha) } }
+            if (kept.values.any { it > SyncFiles.FILE_MAX }) {
+                done.left.add(d.id to FileError.TOO_BIG)
+                continue
+            }
+            sizes.putAll(kept)
+            entries.add(entry)
         }
         val at = fresh.peer.now ?: Stamps.of(clock())
         val token = fresh.peer.token
-        val sent: List<Give.Entry>
-        val ended: JsonObject
-        val job: Int
-        try {
-            val (push, need) = io { client.pushNew(token, me, Give.files(entries)) }
-            val unreadable = HashSet<String>()
-            need.forEachIndexed { i, sha ->
-                stage(GIVE, RUNNING, "${i + 1} of ${plural(need.size, "file")}")  // a count the bar fills by
-                val bytes = io { Give.read(database, store.libraryDir, sha) }
-                if (bytes == null) unreadable.add(sha) else io { client.pushFile(token, push, sha, bytes) }
+        val (pushes, tooMuch) = Give.cut(entries, sizes, pushLimits, me) { Give.document(me, name, version, at, state, it) }
+        done.left.addAll(tooMuch)
+        pushes.forEachIndexed { n, batch ->
+            val which = if (pushes.size == 1) "" else "push ${n + 1} of ${pushes.size}: "
+            val sent: List<Give.Entry>
+            val ended: JsonObject
+            var job: Int? = null
+            var opened: String? = null  // the push opened there, until its document is taken
+            try {
+                val (push, need) = io { client.pushNew(token, me, Give.files(batch)) }
+                opened = push
+                val unreadable = HashSet<String>()
+                need.forEachIndexed { i, sha ->
+                    stage(GIVE, RUNNING, "$which${i + 1} of ${plural(need.size, "file")}")  // a count the bar fills by
+                    val bytes = io { Give.read(database, store.libraryDir, sha) }
+                    if (bytes == null) unreadable.add(sha) else io { client.pushFile(token, push, sha, bytes) }
+                }
+                sent = batch.filter { entry -> Give.files(listOf(entry)).none { it in unreadable } }
+                for (entry in batch) if (entry !in sent) done.left.add(entry.id to FILE_CHANGED)
+                job = io { client.push(token, push, Give.document(me, name, version, at, state, sent)) }
+                stage(GIVE, RUNNING, "${which}the computer's Journal entry $job takes ${plural(sent.size, "change")}")
+                ended = awaitJob(client, job)
+            } catch (e: CancellationException) {
+                // A push cancelled before its document was taken lets go of its slot there all the same.
+                val dropping = opened
+                if (dropping != null && job == null) withContext(NonCancellable) { io { client.pushDrop(token, dropping, me) } }
+                throw e
+            } catch (e: Exception) {
+                // A push that failed before its document was taken lets go of its slot there at once
+                // (peer_push.push_units); a drop that fails too says nothing over why the push failed.
+                val dropping = opened
+                if (dropping != null && job == null) io { client.pushDrop(token, dropping, me) }
+                val far = if (n == 0) "" else "${done.given.size - givenBefore} given in the first " +
+                    (if (n == 1) "push" else "$n pushes") + " of ${pushes.size}; then "
+                // commands/peer.py's words: the whole give counted, and once a push was taken, that it stays so.
+                val why = far + which + said(e) + (if (n == 0) "" else " $TAKEN_STAY")
+                stage(GIVE, FAILED, why)
+                throw SyncFailed("Couldn't give them ${toGive.size}: $why", done.outcome(), e)
             }
-            sent = entries.filter { entry -> Give.files(listOf(entry)).none { it in unreadable } }
-            for (entry in entries) if (entry !in sent) done.left.add(entry.id to FILE_CHANGED)
-            job = io { client.push(token, push, Give.document(me, name, version, at, state, sent)) }
-            stage(GIVE, RUNNING, "the computer's Journal entry $job takes ${plural(sent.size, "change")}")
-            ended = awaitJob(client, job)
-        } catch (e: Exception) {
-            if (e is CancellationException) throw e
-            val why = said(e)
-            stage(GIVE, FAILED, why)
-            throw SyncFailed("Couldn't give them ${entries.size}: $why", done.outcome(), e)
-        }
-        val units = Give.units(ended)
-        val jobState = Give.text(ended["state"])
-        for (entry in sent) {
-            val (outcome, why) = units[entry.id] ?: (null to "")
-            if (outcome == "taken") {
-                done.given.add(entry.id)
-            } else {
-                done.left.add(entry.id to why.ifEmpty {
-                    if (jobState != "done") "their Journal entry $job: $jobState" else "not taken there"
-                })
+            val units = Give.units(ended)
+            val jobState = Give.text(ended["state"])
+            for (entry in sent) {
+                val (outcome, why) = units[entry.id] ?: (null to "")
+                if (outcome == "taken") {
+                    done.given.add(entry.id)
+                } else {
+                    done.left.add(entry.id to why.ifEmpty {
+                        if (jobState != "done") "their Journal entry $job: $jobState" else "not taken there"
+                    })
+                }
             }
         }
         val left = done.left.size - before
-        stage(GIVE, DONE, "gave ${done.given.size}" + if (left == 0) "" else ", left $left")
+        stage(GIVE, DONE, "gave ${done.given.size - givenBefore}" + if (left == 0) "" else ", left $left")
     }
 
     /** The computer's request [id] followed, every [pollEveryMs], until it is over (peer_push.wait_for): how it ended.
@@ -1160,6 +1248,10 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         const val UNSETTLED = "both books changed it: choose one"
         const val CHANGED_HERE = "changed here since compared"
         const val FILE_CHANGED = "a file it keeps changed here since we kept it"
+
+        /** A give that stopped after some of its pushes were taken: what the owner may count on (commands/peer.py's
+         * TAKEN_STAY). */
+        const val TAKEN_STAY = "The pushes taken there stay taken; the next sync gives the rest."
 
         /** sync_routes.STALE (and commands/peer.py's): the two changed since the comparison. */
         const val STALE = "Both books changed since that comparison. Compare again, then choose again."

@@ -2,9 +2,10 @@
 unit whole, its kept files, a pull of another caracole's units queued, another caracole's push staged (peer_push.py),
 and this library's site indexes.
 
-    GET  /api/peer/state?peer=   this caracole's id, its version, its library's name, each unit of its library (a song,
-                                 a removal, a songbook, an artist's alias or UG page, a blocked tab) with its label and
-                                 its digest, and what it last agreed on with the caracole ``peer`` names (its id)
+    GET  /api/peer/state?peer=   this caracole's id, its version, its library's name, the rules its songs are keyed by
+                                 (``key_version``), each unit of its library (a song, a removal, a songbook, an
+                                 artist's alias or UG page, a blocked tab) with its label and its digest, and what it
+                                 last agreed on with the caracole ``peer`` names (its id)
                                  and the answers "keep mine" its imports of that one's files remembered (``kept``):
                                  ``peer_sync.state_document``; its settings, which a phone takes
                                  (``politeness.settings_document``); and the form token, for a pull's form
@@ -16,9 +17,13 @@ and this library's site indexes.
     POST /peer/push/new          A push opened (JSON ``{"format", "from", "files"}``): its id and the files of
                                  ``files`` this side needs sent, ``{"push", "need"}`` (``peer_push.new_push``)
     POST /peer/push/file?push=&sha256=   A file the push needs, its bytes (``peer_push.stage_file``): ``{"ok": true}``
-    POST /peer/push?push=        The push sent (JSON: its document, ``peer_push.read_push_document``), checked and
-                                 kept (``peer_push.send``), then ``caracole peer take --progress DIR`` queued, as
-                                 Changes from <its library>: ``{"job": view}``
+    POST /peer/push?push=        The push sent (JSON: its document, ``peer_push.read_push_document``: 409 for one
+                                 of songs keyed by other rules), checked and kept (``peer_push.send``), then
+                                 ``caracole peer take --progress DIR`` queued, as Changes from <its library>:
+                                 ``{"job": view}``
+    POST /peer/push/drop         A push never sent let go of now (JSON ``{"push", "from"}``: its pusher failed after
+                                 it opened it; ``from`` the caracole that opened it, as a send's): ``{"dropped"}``;
+                                 404 for none, 409 for one whose take waits or runs (``peer_push.drop``)
     GET  /api/peer/index[?sites=]   this library's site indexes (``sites``: those named, by commas; every one with
                                  none), as ``caracole index export`` writes them, a SQLite file streamed, one at a
                                  time
@@ -42,10 +47,12 @@ A push is the phone's, which can't be asked to pull: it sends this side the unit
 request a write with the form token in its header (a ``json`` or ``bytes`` route, web/app.py). Its files are staged
 in ``state_dir/peer/``, never in the library, and checked by their SHA-256; its take is a command, queued under
 ``peer-push:<its id>`` as a job of its own, and one from the same caracole while another is waiting or running is
-refused (409), that push left open. The index (whole, or the part the asker lacks) is read in one transaction into a
-file of ``cache_dir/peer/``, taking no lock, and that file is gone once it is open to be sent. The index pages another
-caracole posts are staged in ``state_dir/peer/`` (at most two waiting) until their merge, a command under caracole's
-lock, deletes them: caracole serve writes nothing else for a sync (AGENTS.md).
+refused (409), that push left open for its pusher to drop (``POST /peer/push/drop``), as it drops any push it fails
+to send; a caracole's next push lets go of its push never sent, so one sender holds one open push at a time. The
+index (whole, or the part the asker lacks) is read in one transaction into a file of ``cache_dir/peer/``, taking no
+lock, and that file is gone once it is open to be sent. The index pages another caracole posts are staged in
+``state_dir/peer/`` (at most two waiting) until their merge, a command under caracole's lock, deletes them: caracole
+serve writes nothing else for a sync (AGENTS.md).
 """
 
 from __future__ import annotations
@@ -81,6 +88,8 @@ ROUTES = (
           body="bytes", limit=peer_push.FILE_MAX),
     Route("POST", "/peer/push", lambda app, asked, doc: push(app, _params(asked.target), doc), body="json",
           limit=peer_push.DOCUMENT_MAX),
+    Route("POST", "/peer/push/drop", lambda app, asked, doc: push_drop(app, doc), body="json",
+          limit=peer_push.DROP_MAX),
     Route("GET", "/api/peer/index", lambda app, asked: index(app, asked, _params(asked.target))),
     Route("POST", "/peer/index/newer", lambda app, asked, doc: index_newer(app, doc), body="json",
           limit=HAVE_MAX),
@@ -250,11 +259,23 @@ def push(app: WebApp, params: dict[str, str], doc: Any) -> Response:
     except Refused:
         peer_push.unsend(state_dir, push_id)
         raise
-    if not new:  # a take of this caracole's waits or runs: this push stays open, to send again once it is over
+    if not new:  # a take of this caracole's waits or runs: this push is open again, never sent, for its pusher to drop
         peer_push.unsend(state_dir, push_id)
         raise Refused(409, "Taking already", f"{shown}: being taken already (request {job.id}). Send again once "
                                              "that's done.")
     return app.queued(job)
+
+
+def push_drop(app: WebApp, doc: Any) -> Response:
+    """``POST /peer/push/drop``: the push ``push`` names, never sent, deleted now, asked by the caracole that opened
+    it (``from``); 409 once its take is queued (its document taken), 404 for none."""
+    doc = doc if isinstance(doc, dict) else {}
+    push_id = doc.get("push")
+    try:
+        peer_push.drop(app.cfg.state_dir, push_id, doc.get("from"))
+    except peer_push.PushError as e:
+        raise Refused(e.status, "Not dropped", str(e)) from None
+    return json_response(200, {"dropped": push_id})
 
 
 class _Streamed(io.BufferedReader):
@@ -275,8 +296,11 @@ class _Streamed(io.BufferedReader):
 
 
 def _leftovers(folder) -> None:
-    """Delete the copies of the indexes a process killed while it made one left in ``folder``, an hour after."""
+    """Delete the copies of the indexes a process killed while it made one left in ``folder``, an hour after: this
+    route's (``index-…``), and those of a ``peer sync`` or ``peer import`` killed (``peer_push.sweep_copies``)."""
     import time
+
+    peer_push.sweep_copies(folder)
 
     try:
         entries = list(os.scandir(folder))

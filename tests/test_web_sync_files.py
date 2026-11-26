@@ -497,6 +497,14 @@ def test_a_file_refused_says_its_words_and_is_deleted(pair, tmp_path, monkeypatc
         status, said = file_compared(studio.app, sent(studio.app, data[:len(data) // 2]))  # cut short
         assert status == 400 and said["error"].startswith("That file can't be read whole")
         assert staged_imports(studio) == []
+
+        from caracole import normalize
+
+        with monkeypatch.context() as upgraded:  # Desk's caracole keys its songs by other rules
+            upgraded.setattr(normalize, "KEY_VERSION", normalize.KEY_VERSION + 1)
+            other = desk_file(desk, tmp_path)
+        status, said = file_compared(studio.app, sent(studio.app, other))
+        assert (status, said["error"]) == (409, peer_file.OTHER_KEYS) and staged_imports(studio) == []
     finally:
         monkeypatch.undo()
         time.tzset()
@@ -569,6 +577,33 @@ def test_sync_on_an_import_refuses_a_comparison_this_library_moved_from(pair, tm
     status, said = applied(studio.app, found["comparison"], prefer="there")
     assert (status, said["error"]) == (409, sync_routes.STALE) and studio.app.queue.snapshot() == []
     assert applied(studio.app, found["comparison"], prefer="there")[0] == 409  # that comparison is gone
+
+
+def test_a_sync_on_an_import_gone_stale_before_its_job_ran_keeps_the_file_to_compare_again(pair, tmp_path):
+    from caracole.commands.peer import STALE
+
+    desk, studio = pair
+    two_differences(desk, studio)
+    import_id = sent(studio.app, desk_file(desk, tmp_path))
+    _, found = file_compared(studio.app, import_id)
+    assert applied(studio.app, found["comparison"], prefer="there")[0] == 200
+    studio.song("Muse", "Hysteria", version=None)  # a request ahead of it in the queue moved the library on
+    folder = staged(studio, import_id)
+    then = time.time() - peer_import.EXPIRES - 600  # and ran for over an hour after the last part came
+    for path in (folder / peer_import.FILE, folder / peer_import.OPENED, folder):
+        os.utime(path, (then, then))
+    studio.app.queue.run_pending()
+    (job,) = studio.app.queue.snapshot()
+    assert job.state == "failed" and f"error: {STALE}" in job.steps[0].output, [s.output for s in job.steps]
+    assert [f.name for f in staged_imports(studio)] == [f"import-{import_id}"]  # Compare again: the file is here
+    status, found = file_compared(studio.app, import_id)
+    assert status == 200, found
+    status, answer = applied(studio.app, found["comparison"], prefer="there")
+    assert status == 200, answer
+    studio.app.queue.run_pending()
+    (job,) = [j for j in studio.app.queue.snapshot() if j.id == answer["job"]["id"]]
+    assert job.state == "done", [s.output for s in job.steps]
+    assert WONDERWALL_UNIT in studio.units() and staged_imports(studio) == []  # taken, then deleted
 
 
 def test_two_computers_one_imports_the_others_export_through_the_routes(pair):

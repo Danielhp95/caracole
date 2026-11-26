@@ -21,6 +21,13 @@ SLACK_S = 0.3  # a word within this of a span is kept
 STEM_WITHIN_DB = 12.0  # the stem is sung when it is at most this far under the mix
 FLOOR_DB = 40.0  # frames this far under the mix's loudest are silence
 
+# "Nothing sung" (docs/superpowers/plans/2026-11-20-transcribed-lyrics-results.md): a vocalise or a pad the separator
+# calls vocals gives a few seconds of spans, or a dozen invented words over minutes; the measured sung songs sit at
+# 78-138 words a minute and 18.7 s or more.
+MIN_SUNG_S = 10.0  # spans totalling less than this: nothing sung, and Whisper isn't run
+MIN_WORDS = 8  # fewer words kept than this: nothing sung
+MIN_WORDS_A_MINUTE = 20.0  # fewer kept words per minute of span than this: nothing sung
+
 SEG_COLS = 12  # a Whisper segment's first word breaks a line this wide
 PUNCT_COLS = 18  # a line ending in punctuation breaks once this wide
 BREATH_S = 0.5  # silence from a word's end to the next word's start that is a breath...
@@ -84,6 +91,27 @@ def guard(words: list[Word], spans: list[Span]) -> tuple[list[Word], list[Word]]
         near = any(word.start <= s.end + SLACK_S and word.end >= s.start - SLACK_S for s in spans)
         (kept if near else dropped).append(word)
     return kept, dropped
+
+
+def sung_time(spans: list[Span]) -> float:
+    """Seconds of singing, the spans' total, to a tenth."""
+    return round(sum(s.end - s.start for s in spans), 1)
+
+
+def too_little_sung(spans: list[Span]) -> str | None:
+    """Why the spans are no singing ("sung 6.2 s"), or None when they total ``MIN_SUNG_S`` or more."""
+    seconds = sung_time(spans)
+    return f"sung {seconds:.1f} s" if seconds < MIN_SUNG_S else None
+
+
+def too_few_words(kept: list[Word], spans: list[Span]) -> str | None:
+    """Why the words kept are no lyrics ("5 words in 1:10 sung"): under ``MIN_WORDS``, or under
+    ``MIN_WORDS_A_MINUTE`` per minute of span; None otherwise."""
+    seconds = sum(s.end - s.start for s in spans)
+    if len(kept) >= MIN_WORDS and len(kept) * 60 >= MIN_WORDS_A_MINUTE * seconds:
+        return None
+    minutes, rest = divmod(round(seconds), 60)
+    return f"{len(kept)} word{'' if len(kept) == 1 else 's'} in {minutes}:{rest:02d} sung"
 
 
 def _width(line: list[Word]) -> int:

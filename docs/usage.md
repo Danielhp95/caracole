@@ -145,13 +145,15 @@ scored_sheets = 3                 # sheets per song scored for coverage: the top
 label_penalty = 0.5               # off the rating of an intro, solo, outro, riff or lesson
 variant_bonus = 0.25              # onto an acoustic or live version, when your song is one
 
-[autochords]                      # read only by `caracole autochords` and `caracole transcribe`
+[autochords]                      # read by `caracole autochords`, `transcribe` and `youtube --sheet`
 # btc_weights = "/path/to/weights.pt"         # or $CARACOLE_BTC_WEIGHTS
 # beat_checkpoint = "/path/to/final0.ckpt"    # or $CARACOLE_BEAT_CHECKPOINT
 device = "cpu"                    # where the models run
 # whisper_model = "/path/to/large-v3.pt"      # or $CARACOLE_WHISPER_MODEL
 # separator_model = "/path/to/htdemucs.safetensors"  # or $CARACOLE_DEMUCS_MODEL
 transcribe_device = "auto"        # where Whisper runs: "auto" (the GPU when there is one), "cpu" or "cuda"
+transcribe = true                 # a sheet from a video hears the words no lyrics site has; false: the card offers it
+transcribe_per_run = 3            # songs whose words the nightly `caracole autochords` hears, newest first; 0: none
 ```
 
 caracole keeps one sheet and one text tab per song, and beside the sheet the other Ultimate Guitar
@@ -166,9 +168,10 @@ its `library`, `music`, `state` and `cache` folders. One you set yourself still 
 | `state_dir` | `$STATE_DIRECTORY` when systemd sets it, else `$XDG_STATE_HOME/caracole`, else `~/.local/state/caracole` |
 | `cache_dir` | `$CACHE_DIRECTORY`, else `$XDG_CACHE_HOME/caracole`, else `~/.cache/caracole` |
 
-The state folder holds `caracole.sqlite`, `caracole.lock`, the `requests.jsonl` of `caracole serve`
-and, in `backups/`, the last three copies of the database (see
-[Keeping the database](#keeping-the-database)). Back it up, but don't sync it.
+The state folder holds `caracole.sqlite`, `caracole.lock`, the `requests.jsonl` of `caracole serve`,
+in `backups/` the last three copies of the database (see
+[Keeping the database](#keeping-the-database)), and in `audio/` the audio files you give caracole
+(see [caracole audio](#caracole-audio)), which can't be fetched again. Back it up, but don't sync it.
 
 The cache keeps every response caracole has received, so deleting it costs only requests. PDFs are
 made there too, so caracole must be able to write to it. Its `icons` folder holds each site's icon
@@ -431,17 +434,36 @@ never read.
 
 First, what a video's title adds is dropped: brackets such as "(Official Video)" or "(Letra)", a
 last part such as "… | Official Video", format words such as "HD" or "4K", and quotes around the
-text. "(feat. …)" and "(En Vivo)" stay. Then the first rule that fits names the song:
+text. "(feat. …)" and "(En Vivo)" stay. Lyric channels' brackets go too: their own words, as in
+"【動態歌詞Lyrics】", "【中文字幕】" or "(官方完整版MV)", and a line of the lyrics quoted in 「」 or
+『』: one that ends as a sentence, or a long one. A short quote is a title and stays:
+"宋冬野「斑马，斑马」". So is one that ends as a sentence, or a long one of Latin words, right
+after the channel's name or a known artist: "Aimer「どうして？」" and "Live「Lightning Crashes」"
+from their channels, never "晴天「为什么？」" from 周杰倫's. A quote left alone once the video's
+brackets go is the title: "「夜に駆ける。」(Official Video)". A bracket of a version's or a tag's
+words alone, such as "【Live】", "【现场版】" or "【翻唱】", is never the title. After the song's name
+it stays: "周深 大鱼【Live】" is "大鱼【Live】". At the start it is the upload's and goes: "【翻唱】大鱼"
+is "大鱼". Then the first rule that fits names the song:
 
 1. **Artist - Title.** The first dash with a space on each side splits them. An en or em dash, "|",
-   "~" and "//" work too. "Muse - Hysteria - Live" is "Hysteria - Live" by Muse. The two are
-   swapped when only the second part is a known artist, as in a fan's upload.
-2. **A known artist first, or after "by".** "silvana estrada que problema" or "Que problema by
+   "~", "//" and "_" work too. "Muse - Hysteria - Live" is "Hysteria - Live" by Muse. The two are
+   swapped when only the second part is a known artist, as in a fan's upload. A part's brackets
+   of 【】《》「」『』〈〉 are left out of it: "【翻唱】周深" is 周深. A part that is only brackets is
+   the first one's words: "《消愁》" is 消愁, and so are "《消愁》 Live" and "《消愁》 by".
+2. **A title in brackets.** With no mark, the first of those brackets is the title. The words
+   before it are the artist, and what follows it is left out: "米津玄師 MV「Lemon」" is "Lemon" by
+   米津玄師. When those words begin with the channel's name or a known artist and go on, they are
+   the title: "陈奕迅 孤勇者《英雄联盟：双城之战》" from 陈奕迅's channel is "孤勇者". With no words
+   before it, the words after it are the artist: "《孤勇者》陈奕迅", or "《孤勇者》 by 陈奕迅", unless
+   they are only tags or a video's words: "《孤勇者》 Cover" names no artist, and "《孤勇者》 Piano
+   Cover by Jane" names Jane. A band named "By …"
+   before the bracket keeps it: "By Divine Right「Song」".
+3. **A known artist first, or after "by".** "silvana estrada que problema" or "Que problema by
    Silvana Estrada", once caracole knows her. A known song title is left whole: "Love Me Tender" is
    not "Me Tender" by Love.
-3. **A video's channel.** A pasted video's title that names no artist is its channel's song:
+4. **A video's channel.** A pasted video's title that names no artist is its channel's song:
    "Creep" from "Radiohead - Topic" is Radiohead's.
-4. **The video suggested for a search.** When YouTube's first video for a query is that very song,
+5. **The video suggested for a search.** When YouTube's first video for a query is that very song,
    its artist is used: "creep" is Radiohead's "Creep".
 
 If no rule fits, the text doesn't say who its artist is, and it is never cut at its first space. A
@@ -592,8 +614,9 @@ what goes and what stays, then asks:
 removed and it exits 1.
 
 It takes every line in wanted.txt that names the song, the files caracole wrote in the song's
-folder, the folder once empty, the song's record in the database, and the audio caracole took from
-YouTube for it. Syncthing then deletes the files on every device. It leaves:
+folder, the folder once empty, the song's record in the database, the audio caracole took from
+YouTube for it, and the audio file you gave it (`caracole audio`). Syncthing then deletes the files
+on every device. It leaves:
 
 - Any file caracole didn't write, such as a `sheet.pdf` or `lyrics.txt` you put where caracole
   made none. The command names each one.
@@ -1350,6 +1373,29 @@ over plain lyrics or none, so that each chord can go over its word.
 A song takes minutes, so it logs a line before each, `Working out the chords of Artist - Title
 (3 of 12)…`, and one after: `Artist - Title: auto sheet written (synced lyrics)`.
 
+Before the chords, it hears the words of up to `[autochords] transcribe_per_run` songs (3), newest
+first, as `caracole transcribe` does (see [Lyrics transcribed from the
+audio](#lyrics-transcribed-from-the-audio)): songs with audio that every lyrics site missed and that
+weren't heard yet. A song past the cap gets its chords now and its words on a later run, its sheet
+then made again over them. It lets a waiting lookup go first between a song's vocals and its
+words too. Its last line says what it heard:
+
+    auto-chords: 2 generated, 4 skipped, 0 failed; words heard for 1, nothing sung in 1
+
+- `transcribe = false` or `transcribe_per_run = 0` hears nothing.
+- Where this machine can't transcribe, it hears nothing and the to-do page says why, under
+  **Lyrics that couldn't be transcribed**. That includes the GPU build's nightly unit,
+  which doesn't see the GPU: the words then come from caracole serve's jobs.
+- A setup that fails (the separator, the GPU, Whisper's model) stops the hearing for the rest of
+  the run, and the to-do page says so; the chords go on, and it still exits 0. The song it failed
+  on is noted, and the next nights pass over it for 30 days, or until its file changes, so that
+  the others are heard; the to-do page lists it. Its card still offers Transcribe the lyrics.
+- Audio Whisper can't load still gets its chords. Its words aren't heard, nor offered on its card,
+  until the file changes; the to-do page lists it under **Lyrics that couldn't be transcribed**.
+- A song you said isn't sung (`caracole transcribe --none`) is never heard again, until its audio
+  changes: a new file is heard once more.
+- A bug while hearing a song fails the run (exit 1), and the song's chords are made all the same.
+
 ### caracole youtube
 
     caracole youtube [--song "ARTIST - TITLE" [--url URL | --none] [--sheet [--progress]]] [--search QUERY | --video URL]
@@ -1363,7 +1409,7 @@ does (see [Audio from YouTube](#audio-from-youtube)). The chords come next, from
 
 | Option | What it does |
 |---|---|
-| `--song "ARTIST - TITLE"` | Takes that song's audio now, even when its search found nothing lately. It refuses a song that has a human sheet, is ignored or has a purchase linked. |
+| `--song "ARTIST - TITLE"` | Takes that song's audio now, even when its search found nothing lately. It refuses a song that has a human sheet, is ignored or has audio of its own (a purchase, or a file you gave it). |
 | `--url URL` | With `--song`. First writes the video under `[youtube]` in overrides.toml, so the song's audio comes from it. |
 | `--none` | With `--song`. Writes `"none"` there and lets go of any audio the song had from YouTube. It asks nothing, so it works with YouTube off, and for a song not in the library yet. |
 | `--sheet` | With `--song`. Does it all now: audio, chords and sheet. See "A sheet from a video, now" under [Audio from YouTube](#audio-from-youtube). |
@@ -1375,7 +1421,7 @@ without the model files, it asks nothing and exits 1.
 
 ### caracole transcribe
 
-    caracole transcribe --song "ARTIST - TITLE" [--progress]
+    caracole transcribe --song "ARTIST - TITLE" [--force | --none] [--progress]
 
 Transcribes, with Whisper, the lyrics of a song whose audio came from YouTube and that no lyrics
 site has. It keeps them as the song's transcript and makes its auto sheet again with the chords over
@@ -1385,6 +1431,56 @@ nothing and exits 1. It says each stage as it ends; while the vocals, the words 
 a live line on a terminal says what they are doing (`Words · 1:12 of 3:58`), and the journal gets
 that line once a minute. `--progress` writes a JSON line per stage instead, for caracole serve.
 
+| Option | What it does |
+|---|---|
+| `--force` | It is sung. Hears a song caracole heard nothing sung in, or that you said isn't sung, with no rule of nothing sung: Whisper runs whatever the singing found, over the whole song when none was. Also tries audio Whisper couldn't load again, after an ffmpeg or Whisper upgrade. A song offered a transcription anyway is simply transcribed. |
+| `--none` | It isn't sung. For a song with a transcript: drops it, makes the sheet again with the chords alone (`Chords only: you said it isn't sung`), and never hears that audio again until `--force`. A new file is heard once more. |
+
+### caracole audio
+
+    caracole audio FILE [--song "ARTIST - TITLE"] [--progress]
+    caracole audio --upload ID [--song "ARTIST - TITLE"] [--progress]
+
+Makes a song's auto sheet from an audio file of yours (MP3, M4A, FLAC, WAV, Ogg or AIFF, 30
+minutes at most), now:
+
+    $ caracole audio "03 - Nick Cani - Vikingos veganos.flac"
+    Read “03 - Nick Cani - Vikingos veganos.flac” as Nick Cani - Vikingos veganos.
+    Song: added to wanted.txt, line 16.
+    Audio: kept as its audio: FLAC, 3:18.
+    Lyrics: found, timed.
+    …
+
+- The song is `--song`, else the file's artist and title tags, else its name, less its track number.
+  A file that names no artist asks for `--song` and exits 2. A song the library doesn't have goes
+  into wanted.txt with the file's album and length, so LRCLIB is asked with that length.
+- A copy of the file is kept in the state folder's `audio/`, as `<song id>-<digest>.<ext>`, private
+  to caracole and never synced. It becomes the song's audio, whatever the song had: a purchase stays
+  in Music/ but is no longer its audio, YouTube's audio is let go of at the next youtube step, and a
+  file given before is deleted. The scan never links a purchase over it. The same file again changes
+  nothing (`Audio: has this file's audio already.`).
+- Then it goes on as [a sheet from a video](#a-sheet-from-a-video-now) does: the lyrics sites first,
+  the words heard from the file only when every one missed, the chords, the PDF, the viewer and the
+  pages. A lookup waiting for the lock goes first before the vocals, the words and the chords.
+- `--upload ID` takes a file caracole serve was sent, moved into place rather than copied. Without
+  `--song`, the song is the one the file's tags or name say, as for a file (the page always names it).
+  Once moved, the upload leaves a small marker beside the file for 30 days (the Journal's history),
+  so the same request again (Try again after the Audio step, or one cut off on the way) goes on:
+  `Audio: has this file's audio already.` while the song's audio is that file. An upload lost before
+  its Audio step (a request interrupted, its file swept after an hour or replaced by another upload),
+  or one a later file of yours has replaced since, says the upload is gone: choose it again.
+  A request cut off while it kept the file and never asked again leaves the file in `audio/` for
+  those 30 days; then it is deleted.
+- No file of yours is deleted while another song's audio is that file too.
+- Two songs merged into one (after an upgrade that spells a song's key anew) keep the file you gave
+  either; of two such files, the one given last, and the next scan deletes the older.
+
+It needs the flake's `packages.autochords` (auto-chords and its model files; no YouTube, no yt-dlp).
+It exits 0 once the sheet is made, and when a site's block, cooldown, spent budget or error makes
+the lyrics wait. It exits 1 for a song that is ignored or has a human sheet (`No sheet made: …
+already has a sheet.`), for a file caracole doesn't read or auto-chords can't read, and, before it
+reads anything, for a caracole that makes no chords. A removal deletes the song's file in `audio/`.
+
 ### When the pages are rewritten
 
 A command that changes what `_todo.md` and `index.html` show rewrites both when it is done.
@@ -1392,7 +1488,7 @@ A command that changes what `_todo.md` and `index.html` show rewrites both when 
 | Commands | Rewrite the pages |
 |---|---|
 | `match` (not `--dry-run`), `render`, `scan`, `todo`, `add`, `search --add`, `sync`, `autochords`, and every `songbook` command but `list` and `show` | Always. |
-| `transcribe` | Once it took the song. |
+| `transcribe`, `audio` | Once it took the song. |
 | `review` | When an answer changed something. |
 | `fetch`, `lyrics`, `lacuerda`, `gtptabs`, `harptabs`, `gametabs`, `musescore`, `youtube` | When they did something or were blocked, so that Provider health shows the cooldown. |
 
@@ -1430,7 +1526,7 @@ one request at a time. While a lookup runs or waits, no other caracole takes the
 
 What you ask for now also waits as a lookup does, not behind the whole run:
 
-- `add`, `remove`, `review`, `fetch --song`, `render --song` and `transcribe`;
+- `add`, `remove`, `review`, `fetch --song`, `render --song`, `transcribe` and `audio`;
 - `youtube --song` (with `--sheet` or `--none` too), `youtube --search` and `youtube --video`;
 - `caracole songbook make`, `add`, `remove`, `move`, `set`, `rename`, `delete` and `render`.
 
@@ -1587,18 +1683,29 @@ page, or run:
 
 - A song the library doesn't have goes into wanted.txt, and the video goes under `[youtube]`.
   Without `--url`, caracole uses the video under `[youtube]`, else the one its search picks.
-- It prints a line per stage: the audio (on the terms above), the lyrics, the chords (a few
-  minutes on a CPU), then the PDF, the viewer `sheet (auto).html` and the pages. `--progress`
-  adds a JSON line per stage, for caracole serve.
+- It prints a line per stage: the audio (on the terms above), the lyrics, the vocals and the
+  words, the chords (a few minutes on a CPU), then the PDF, the viewer `sheet (auto).html` and
+  the pages. `--progress` adds a JSON line per stage, for caracole serve.
+- The lyrics sites are always asked first. When every one has missed, the words are heard from
+  the audio, as `caracole transcribe` hears them (see [Lyrics transcribed from the
+  audio](#lyrics-transcribed-from-the-audio)), and the chords are made once, over them. That
+  takes a couple of minutes more on a GPU, up to half an hour on a CPU. A song a site has
+  lyrics for says `Vocals: skipped: not transcribed: its lyrics are found.` (or `instrumental`)
+  wherever it runs. For a song no site has words for, it says `turned off` with `[autochords]
+  transcribe = false`, or `not transcribed here: …` where this caracole can't transcribe.
 - With timed lyrics, each chord goes over its word, as on Ultimate Guitar. With plain lyrics you
-  get a chord chart, then the lyrics. With none, only the chart.
+  get a chord chart, then the lyrics. With none, only the chart. When nothing sung was heard, the
+  chart says `Instrumental: nothing sung was heard in the audio`.
 
 It exits 0 when the sheet is made, and when a block, a cooldown, a spent budget or a network
-error makes the song wait. It exits 1 when:
+error makes the song wait. A transcription that fails here (the separator, the GPU, Whisper's
+model, or `Whisper can't read the audio`) fails its own stage alone and marks nothing against
+the song: the sheet is made with the chords only, and the song's card still offers Transcribe
+the lyrics. It exits 1 when:
 
-- The song has a human sheet, is ignored, has a purchase linked, or has `"none"` under
-  `[youtube]` and you gave no video. A human sheet kept, or the song ignored, while a lookup went
-  first before the chords counts too.
+- The song has a human sheet, is ignored, has audio of its own (bought or given), or has `"none"`
+  under `[youtube]` and you gave no video. A human sheet kept, or the song ignored, while a lookup
+  went first before the chords counts too.
 - YouTube won't give the video, or auto-chords can't read the audio.
 - This caracole can't make chords from audio. It says so before it asks anything.
 - Another caracole removed the song meanwhile (`No sheet made: … left the book while its sheet
@@ -1627,13 +1734,16 @@ or a purchase, makes the sheet again.
 
 ### Lyrics transcribed from the audio
 
-For a song whose audio came from YouTube and that no lyrics site has words for, caracole can hear
-the words itself, with Whisper large-v3, and make the auto sheet again with the chords over them:
+For a song with audio of its own (taken from YouTube, a purchase, or a file you gave it) that no
+lyrics site has words for, caracole can hear the words itself, with Whisper large-v3, and make the
+auto sheet again with the chords over them:
 
     caracole transcribe --song "Nick Cani - Vikingos veganos"
 
+A sheet from a video does this by itself, before its chords (see [A sheet from a video,
+now](#a-sheet-from-a-video-now)); this command is for a song whose sheet came without the words.
 It never adds a song to wanted.txt, and it takes only a song that is offered a transcription.
-That is a song with audio from YouTube that caracole can read, no human sheet, not ignored,
+That is a song with audio caracole can read, no human sheet, not ignored,
 lyrics missing at every lyrics site you have switched on, and not transcribed yet.
 
 - demucs-rs separates the vocals, to find where someone sings. Whisper then hears the whole song.
@@ -1642,6 +1752,8 @@ lyrics missing at every lyrics site you have switched on, and not transcribed ye
 - The sheet says `Lyrics transcribed from the audio (Whisper), unverified`.
 - The words are kept as the song's transcript. Its lyrics stay missing, and lyrics a site has
   later win.
+- When nothing sung was heard, the auto sheet says `Instrumental: nothing sung was heard in the audio`
+  and is made again once to say so; lyrics a site has later replace it.
 - It takes a couple of minutes on a GPU and up to half an hour on a CPU (`[autochords]
   transcribe_device`, `"auto"` by default). A lookup waiting for the lock goes first before each
   long stage.
@@ -1655,12 +1767,13 @@ It exits 0 once the sheet is made, and 1 otherwise:
 
 | It says | What happened | The song afterwards |
 |---|---|---|
-| `caracole transcribes nothing here: …` | This caracole can't transcribe: no Whisper, auto-chords, yt-dlp, demucs-rs or model file, or YouTube is off. | Unchanged. |
+| `caracole transcribes nothing here: …` | This caracole can't transcribe: no Whisper, auto-chords, demucs-rs or model file, or a CUDA build on a machine that doesn't see the GPU. YouTube and yt-dlp aren't needed. | Unchanged. |
 | `No transcript made: …` | The song isn't offered one or isn't in the book. Or, during the job, its lyrics were found, it got a human sheet or was ignored, its audio changed or it was removed. | Unchanged. |
 | `Transcript kept; no sheet made: …` | The words were heard and kept, but before the chords the song got a human sheet, was ignored or found its lyrics, or the chords then failed. | Its transcript is kept, unused while it has a human sheet or lyrics; after a failure, Try again makes the sheet over it. |
 | `Transcript and sheet kept: a bug in caracole …` | The sheet over the transcript was made, then caracole hit a bug. | Both are kept. |
-| `Words: failed: no singing heard.` | Nothing is kept. | Not offered until its audio changes. |
-| `can't read the audio` | Whisper couldn't load the audio. | Not offered, and no chords tried, until its audio changes. The to-do page lists the file. |
+| `Words: failed: no singing heard.` | Less than 10 seconds of singing, so Whisper didn't run, or too few words in it (under 8, or under 20 a minute). Nothing is kept. | Not offered until its audio changes. |
+| `Whisper can't read the audio: …` | Whisper couldn't load the audio. The line says what to do. | Not offered until its audio changes, or `--force`. Its chords are still made. The to-do page lists it. |
+| `… can't be said not sung: it has no transcript.` | `--none` for a song with no transcript of its audio. | Unchanged. |
 | `can't measure the audio here`, `the separator can't run here`, `its vocals can't be read`, `its vocals are … shorter than the song`, `the GPU failed`, `Whisper's model won't load` | The setup failed, not the song. | Still offered. |
 
 Anything else Whisper fails on is a bug in caracole. It says so, and the song stays offered.
@@ -2764,20 +2877,60 @@ Request. caracole then makes the sheet from the video instead of a lookup:
 with no purchase linked has the same in its card, **From a YouTube video**, whose Make the sheet
 replaces any YouTube audio it had.
 
-The line shows a bar of steps: Song, Audio (YouTube), Lyrics, Chords and PDF. The audio and the
+The line shows a bar of steps: Song, Audio (YouTube), Lyrics, Words, Chords and PDF. Words is the lyrics
+heard from the audio, only when no lyrics site has them. The audio and the
 chords say what they are doing ("Chords · 4 of 5 · finding the beats"). When it is Ready,
 the title opens `sheet (auto).html` and the Journal says what the sheet holds ("Chords over the
-lyrics.", "Chords only, no lyrics."), or why the lyrics wait. The nightly run asks LRCLIB again
+lyrics.", "Chords only, no lyrics."), or why the lyrics wait. If the words couldn't be heard here
+it says why ("Chords only, no lyrics: the words couldn't be heard here (…).") and over a song with
+nothing sung, "Chords only: nothing sung was heard." The nightly run asks LRCLIB again
 and remakes the sheet with them.
 
 - **Not made yet**: a block, a cooldown, a spent budget or a network error. Try again.
 - **Failed**: YouTube won't give the video ("can't download this video; try another"), or
   auto-chords can't read the audio.
 - Refused before anything is queued: a song with a human sheet ("… already has a sheet."), an
-  ignored one, one with bought audio, or a link that isn't a YouTube video's.
+  ignored one, one with audio of its own (bought or given), or a link that isn't a YouTube
+  video's.
 
 One runs at a time per song. Where chords can't be made, the form has no video field and says why
 ("No sheets from YouTube here: auto-chords isn't installed.").
+
+#### A sheet from an audio file
+
+Where caracole can make chords from audio (`packages.autochords` and its model files; no YouTube, no
+yt-dlp), the search bar has a **+** ("Make a sheet from an audio file"). Press it and choose a file,
+or drop one on the Library. A song you have that isn't ignored and has no human sheet has **Sheet
+from an audio file…** in its card too, beside From a YouTube video, even with a purchase linked.
+
+The dialog shows the upload as it goes ("Uploading “song.mp3” · 3.1 of 8.4 MB"), then the file
+("song.mp3 · MP3 · 3:18"), Artist and Title filled with the song it names, and "In your library: …"
+for a song you have, with what the file will replace. Correct the names if they are wrong (a card's
+song keeps its own) and press **Make sheet**: a line under the bar, or the song's own line, says how
+it goes. **Cancel** or Escape deletes the file sent; a refusal says why, with **Choose another
+file**, and a file dropped on the dialog is a new choice. Of several files only the first is used,
+and the dialog says so. A file dropped anywhere else on the page is never opened in its place. The
+file on disk and the phone have no +.
+
+The file goes up in one
+request, 128 MiB at most (`caracole audio FILE` takes any size), and waits in the state folder's
+`audio/` until its sheet is asked for. caracole reads what it is from its bytes, never its name:
+MP3, M4A, FLAC, WAV, Ogg or AIFF, 30 minutes at most. It answers the song the file's tags or its
+name say, and whether you have it, with the audio the file would replace (bought, YouTube's, or a
+file given before). A file sent and never used is deleted when the next one comes, or after an
+hour.
+
+Asking for the sheet queues `caracole audio --upload ID --song "ARTIST - TITLE" --progress`, a song
+new to the library first going into wanted.txt with the file's album and length. The bar shows Song,
+Audio, Lyrics, Words, Chords and PDF, Audio saying `kept as its audio: MP3, 3:18`, and Ready and
+Not made yet read as for a sheet from a YouTube video. One runs at a time per song; asked again
+meanwhile, the one queued is the answer and the second file is deleted.
+
+- Refused before anything is queued: a song with a human sheet ("… already has a sheet.") or an
+  ignored one. A purchase linked is no refusal: the file replaces it as the song's audio.
+- Refused as it is sent: "Not an audio file caracole reads (MP3, M4A, FLAC, WAV, Ogg or AIFF).",
+  "That file is too big: …", "That file is longer than 30 minutes.", "No room to keep it here.".
+- Where chords can't be made: "No sheets from audio files here: auto-chords isn't installed.".
 
 #### Transcribing the lyrics from a card
 
@@ -2796,6 +2949,13 @@ transcribed lyrics.". If it fails, the Journal gives the reason ("no singing hea
 failed: …") with Try again. One runs at a time per song, and never beside another transcription
 or a lookup. A song no longer offered one is refused ("… isn't offered a transcription: its lyrics
 are found."). Where caracole can't transcribe, no card offers it. The phone never offers it.
+
+Your word over caracole's goes on the card too. A song in which nothing sung was heard says so, with
+**Transcribe anyway** (`caracole transcribe --force`). One whose sheet is over its transcript has
+**Not sung: chords only** (`caracole transcribe --none`): its transcript is dropped, its sheet made
+again with the chords alone, and that audio is never heard again (a new file is). Its card then
+says "You said it isn't sung." with Transcribe anyway. Each is posted in place, as Transcribe the
+lyrics is.
 
 #### A YouTube video for a search
 
@@ -3129,8 +3289,8 @@ kept file while it is as kept. These reads take no lock and ask no site. `POST /
 | `GET /api/sync/export?export=ID` | Sends it once and deletes it. An unsent one goes when the next is made, or after an hour. |
 | `POST /sync/import/open` | JSON `{"size", "name"}`, 8 GiB at most, one at a time. Answers an id and the part size (8 MiB). |
 | `POST /sync/import/part?import=ID&at=N` | Sends each part, in order, into `state_dir/peer/import-<id>/`. |
-| `POST /sync/import/compare` | Form field `import`. Reads the file whole and compares it as `POST /sync/compare` does, or refuses it in `caracole peer import`'s words and deletes it: 400 for a file caracole didn't export, of another version or cut short; 409 for this library's own export, or one with nothing new since your last sync with its caracole. |
-| `POST /sync/apply` | On that comparison, queues `caracole peer import` ("Sync with a file from <its library>"), which deletes the folder when done. |
+| `POST /sync/import/compare` | Form field `import`. Reads the file whole and compares it as `POST /sync/compare` does, or refuses it in `caracole peer import`'s words and deletes it: 400 for a file caracole didn't export, of another version or cut short; 409 for this library's own export, one with nothing new since your last sync with its caracole, or one whose caracole names songs by different rules. |
+| `POST /sync/apply` | On that comparison, queues `caracole peer import` ("Sync with a file from <its library>"), which deletes the folder when done, unless it stopped where comparing again can settle it (the library changed since, a unit left). |
 | `POST /sync/import/drop` | JSON `{"import"}`. Deletes it now, as Cancel does (409 while its import waits or runs). |
 
 An import never taken is deleted an hour after its last part, or when the next file is opened if
@@ -3899,12 +4059,22 @@ After a first sync, each side remembers what the two agreed on. A unit changed o
 comes from that side, so a song added or removed on one side is added or removed on the other. A
 unit changed on both sides, to different things, is a conflict, and you choose which to keep.
 Before the first sync there is no history: a unit only one side has comes from that side, and a
-unit both have that differs is a conflict.
+unit both have that differs is a conflict. What a sync or an import takes counts as agreed once
+it is taken, even if what follows then fails (giving the other side its share, making the pages)
+and the sync fails with it: a later change there alone still comes here, with no conflict.
 
 Both sides must use the same sync format, format 3 today. Another format is refused. After an
 upgrade from an older format, the first sync compares with no history. A song one side removed in
 the meantime then shows up as a song to take from the other side. To keep it removed, choose `here`
 for it on the side that removed it.
+
+Both sides must also name songs by the same rules. A caracole whose rules changed (a new version
+can spell a song's key otherwise) would see each of the other's songs as one removed and one added.
+So a comparison, a pull, a push and an import between two such caracoles are refused before
+anything changes: "This caracole and the other name songs by different rules: update both to the
+same version, then sync." The Share tab answers it with a 409, and the commands exit 1 (an import,
+2). A caracole older than this check says nothing of its rules and is read as before, so update
+both sides.
 
 `caracole peer diff` asks the other library what it holds, in one request, and lists every
 difference with the side it would come from:
@@ -3949,12 +4119,23 @@ from <its library>".
 
 `caracole peer take [--progress] DIR` takes the push the way a pull takes units. It waits for the
 nightly run, backs the database up, leaves any unit that changed here since the phone compared
-("changed here since the comparison"), then deletes the folder. It exits 0 unless caracole hits a
-bug. `--progress` prints JSON lines for the Journal; while it renders the songs taken, its render
+("changed here since the comparison"), then deletes the folder. It exits 1 for a push it refuses
+(one that is gone, or from a caracole that names songs by different rules), else 0 unless caracole
+hits a bug. `--progress` prints JSON lines for the Journal; while it renders the songs taken, its render
 step says which it is at ("12 of 20 songs").
 
 Two pushes can be staged at once, one per caracole (a second gets a 409). A file can be 64 MiB and
-a whole push 2 GiB. A push left for an hour is deleted.
+a whole push 2 GiB. A push left for an hour is deleted. A push that fails before its document is
+taken is deleted at once: its sender drops it (`POST /peer/push/drop`), and a caracole's next push
+replaces its push never sent, so a failed sync never blocks the next one.
+
+A big give (a first sync of a whole library) goes in several pushes, each within those limits (a
+push document is 16 MiB at most), one after the other, each taken before the next is sent. If one
+fails, or its take isn't seen to end within ten minutes, the pushes before it stay taken, the
+next sync gives the rest, and the sync says how far it got. While it waits for a push to be taken,
+a lookup asked for meanwhile goes first; a song that lookup changes is left for the next sync. A
+song with a kept file over 64 MiB is left out with the reason, as an export leaves it; the phone
+takes no such file either.
 
 `GET /api/peer/index` serves the site indexes as `caracole index export` writes them
 (`?sites=ug,lacuerda` for some). It serves one copy at a time and answers 503 meanwhile.
@@ -4021,6 +4202,8 @@ changes. A file takes nothing back. To give your changes, export a file of your 
 Import refuses a file, before changing anything (exit 2), when the file:
 
 - isn't a caracole export, or comes from another version of caracole;
+- comes from a caracole that names songs by different rules ("That file's caracole and this one
+  name songs by different rules: update both to the same version, then export it again.");
 - is cut short or damaged ("That file can't be read whole (…): export it again.");
 - is this library's own export (`caracole backup` keeps copies to go back to);
 - holds nothing newer than your last sync with its caracole ("Nothing in this file is newer than
@@ -4028,7 +4211,10 @@ Import refuses a file, before changing anything (exit 2), when the file:
 
 Otherwise it backs the database up (`…-before-sync.sqlite`) and takes each unit as `peer pull`
 does. A conflict goes by `--choose`, else `--prefer`, else you are asked, else it is left. A song
-removed there is removed here, but a part the file doesn't hold never removes anything. Then it
+removed there is removed here, but a part the file doesn't hold never removes anything. Nor is the
+removal taken while the song stays here: if you keep your song, the removal is answered with it,
+and if the song's conflict is left, so is the removal ("its song is here: its removal there is not
+taken"). Then it
 renders the songs taken, records the agreement and merges the file's indexes if `--parts` names
 them. `--progress` names these steps check, take, render, agree and index, and the render step says
 which of the songs taken it is at ("12 of 20 songs").
@@ -4043,7 +4229,9 @@ the rest. `--parts indexes` alone records no agreement.
 SOURCE can also be an index export, whose indexes are merged and nothing else. Or it is the folder
 of an upload that caracole serve staged (`state_dir/peer/import-<id>/`, one at a time, 8 GiB at
 most). That folder is refused until every part has arrived ("That file isn't whole yet: send the
-rest of it."), and deleted after the import or an hour after its last part.
+rest of it."), and deleted after the import or an hour after its last part. An import that stops
+where comparing again can settle it (the library changed since the comparison, a unit left)
+keeps the folder for an hour from its end, so the Sync tab's Compare again needs no new upload.
 
 `--choose`, `--prefer`, `--compared`, `--progress` and `--yes` work as for `peer sync`. Import
 exits 2 for a file refused, 1 for a unit left or indexes not merged, and 0 otherwise.
@@ -4072,6 +4260,10 @@ caracole: update this one to take them"), and so do the Sync sheet's **Site inde
 summary once the sync is over, the Journal's outcome after what it shared, and the phone's Sync on
 Wi-Fi line. The units still sync. If the stage fails, the sync says why and exits 1, and the units stay
 synced.
+
+The copies of an index being taken, given or merged live in `cache_dir/peer/` and are deleted once
+done. A copy left by a sync or import that was killed is deleted an hour later, when the next
+`peer sync` or `peer import` starts, or when caracole serve is next asked for its indexes.
 
 ### The Share tab
 

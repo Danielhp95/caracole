@@ -10,9 +10,11 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import io.github.danielhp95.caracole.core.sync.OtherKeys
 import io.github.danielhp95.caracole.core.sync.PeerClient
 import io.github.danielhp95.caracole.core.sync.PeerError
 import io.github.danielhp95.caracole.core.sync.SyncEngine
+import io.github.danielhp95.caracole.core.sync.Take
 import io.github.danielhp95.caracole.mirror.Http
 import io.github.danielhp95.caracole.mirror.ServerAddress
 import io.github.danielhp95.caracole.mirror.SyncError
@@ -39,7 +41,8 @@ import java.util.concurrent.TimeUnit
  * with a unit left, nor where its indexes were of another schema); then a notification only for the conflicts it
  * left ([conflictsLeft], "2 songs changed on both sides: tap to choose"), whose tap opens the sheet, and that
  * notification taken back by a sync that left none. No address, nothing answering there, or something else answering
- * (a Wi-Fi login page): it does nothing and says nothing.
+ * (a Wi-Fi login page): it does nothing and says nothing. A caracole whose songs are keyed by other rules (OtherKeys)
+ * is no silence: its refusal is the outcome, said on the bar.
  */
 object Syncs {
     private const val WIFI = "caracole-sync-wifi"
@@ -79,11 +82,12 @@ object Syncs {
 
     /**
      * [run]'s own, over [settings]: the probe ([ask], the computer's state read through [http]; a [SyncError] or a
-     * [PeerError] when no caracole answers), then the phone's sync ([phone], asked only once one does) queued and
-     * awaited, and [notify] told how many conflicts it left and whether all are songs, when it left any, else
-     * [cleared]. A sync whose job ended done with a stage failed (the copy of the computer's pages, say: the engine
-     * goes on past it) is a failed outcome, in that stage's words. While it runs, [Caracole.status] says the stage it
-     * is at and what that says (Working.doing), read every [followMs].
+     * [PeerError] when no caracole answers, silent; [OtherKeys] when one answers whose songs are keyed by other rules,
+     * a failed outcome in Units.OTHER_KEYS' words, never silent), then the phone's sync ([phone], asked only once one
+     * does) queued and awaited, and [notify] told how many conflicts it left and whether all are songs, when it left
+     * any, else [cleared]. A sync whose job ended done with a stage failed (the copy of the computer's pages, say: the
+     * engine goes on past it) is a failed outcome, in that stage's words. While it runs, [Caracole.status] says the
+     * stage it is at and what that says (Working.doing), read every [followMs].
      */
     internal suspend fun run(settings: Settings, probe: Boolean, http: Http,
                              ask: (ServerAddress) -> Unit = { PeerClient(it, http).state(null) },
@@ -97,7 +101,8 @@ object Syncs {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            if (probe && (e is SyncError || e is PeerError)) return null
+            // No caracole answering is silent; one whose songs are keyed by other rules answered: its refusal said.
+            if (probe && (e is SyncError || (e is PeerError && e !is OtherKeys))) return null
             return ended(settings, Outcome(System.currentTimeMillis(), false, words(e)))
         }
         status.value = SyncState.Running(null)
@@ -167,7 +172,8 @@ object Syncs {
      * What a sync did, in the bar's line's words: "Up to date" when nothing changed, "Up to date · 1 taken, 2 given";
      * with conflicts left, "1 taken, 2 changed on both sides: tap Sync to choose"; with units left for another reason
      * (a file that won't come, a unit changed since compared, one the computer's take left), "1 taken · 1 not synced:
-     * tap Sync to see why" (the sheet's left section says why): never "Up to date" with anything left. [indexes], why
+     * tap Sync to see why" (the sheet's left section says why): never "Up to date" with anything left but a removal
+     * whose song is here (Take.SONG_HERE, the sync's answer). [indexes], why
      * the index stage took and gave none (the computer's database of another schema, Outcomes.indexesSkipped), said
      * after the rest in place of "Up to date", and before what to do: the line ends with that.
      */
@@ -189,9 +195,14 @@ object Syncs {
     }
 
     /** The units [outcome] left for another reason than a conflict unsettled: every `left` entry but those
-     * [conflictsLeft] counts. */
-    private fun notSynced(outcome: JsonObject?): Int =
-        ((outcome?.get("left") as? JsonArray)?.size ?: 0) - conflictsLeft(outcome).first
+     * [conflictsLeft] counts, and but a removal left because its song is here (Take.SONG_HERE): that is the sync's
+     * answer, the song kept, so a sync that left only those is up to date. */
+    private fun notSynced(outcome: JsonObject?): Int {
+        val kept = (outcome?.get("left") as? JsonArray).orEmpty().count { entry ->
+            ((entry as? JsonArray)?.getOrNull(1) as? JsonPrimitive)?.takeIf { it.isString }?.content == Take.SONG_HERE
+        }
+        return ((outcome?.get("left") as? JsonArray)?.size ?: 0) - conflictsLeft(outcome).first - kept
+    }
 
     /** "1 taken, 2 given, 2 changed on both sides · 1 not synced", or "" when it did nothing. */
     private fun done(outcome: JsonObject?): String {

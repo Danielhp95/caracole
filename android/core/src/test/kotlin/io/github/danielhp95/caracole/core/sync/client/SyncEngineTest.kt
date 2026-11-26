@@ -11,8 +11,10 @@ import io.github.danielhp95.caracole.core.index.Reads
 import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.json.PyJson
+import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.SongRow
+import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.index.IndexTransfer
 import io.github.danielhp95.caracole.core.index.Sizes as CataloguesSizes
 import io.github.danielhp95.caracole.core.sync.Compare
@@ -20,6 +22,7 @@ import io.github.danielhp95.caracole.core.sync.Comparison
 import io.github.danielhp95.caracole.core.sync.Conflicts
 import io.github.danielhp95.caracole.core.sync.IndexWaiting
 import io.github.danielhp95.caracole.core.sync.KeptPair
+import io.github.danielhp95.caracole.core.sync.OtherKeys
 import io.github.danielhp95.caracole.core.sync.Scope
 import io.github.danielhp95.caracole.core.sync.PeerClient
 import io.github.danielhp95.caracole.core.sync.PeerError
@@ -27,6 +30,7 @@ import io.github.danielhp95.caracole.core.sync.Side
 import io.github.danielhp95.caracole.core.sync.SyncEngine
 import io.github.danielhp95.caracole.core.sync.SyncFailed
 import io.github.danielhp95.caracole.core.sync.SyncOutcome
+import io.github.danielhp95.caracole.core.sync.Take
 import io.github.danielhp95.caracole.core.sync.Units
 import io.github.danielhp95.caracole.core.sync.file.IndexFile
 import io.github.danielhp95.caracole.core.sync.file.SyncFiles
@@ -34,6 +38,7 @@ import io.github.danielhp95.caracole.core.testing.Dumps
 import io.github.danielhp95.caracole.core.testing.TestDb
 import io.github.danielhp95.caracole.core.testing.sync.FakeComputer
 import io.github.danielhp95.caracole.mirror.ServerAddress
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
@@ -206,6 +211,7 @@ class SyncEngineTest {
         assertTrue(Triple("give", "running", "1 of 1 file") in stages, stages.joinToString("\n"))
         val push = computer.pushes.single()
         assertEquals(phoneId, (push["from"] as JsonPrimitive).content)
+        assertEquals(JsonPrimitive(Normalize.KEY_VERSION), push["key_version"], "the rules its songs are keyed by")
         assertEquals(JsonPrimitive(computer.now), push["at"])
         assertEquals(phoneState().keys, (push["units"] as JsonObject).keys, "the phone's whole state, after its take")
         assertEquals(computer.state(), phoneState())
@@ -280,6 +286,32 @@ class SyncEngineTest {
         // The base records what the two hold alike alone.
         val base = assertNotNull(phone.read { Compare.baseOf(it, computer.id) })
         assertNull(base[unitOf(creep)]?.first)
+    }
+
+    @Test fun `a computer whose songs are keyed by other rules is refused before anything changes on either side`() {
+        // The computer is updated past the phone (or the other way round): a KEY_VERSION bump re-keyed its songs, so a
+        // song both hold would read as removed on one side and new on the other (python.md's F1). Neither a
+        // comparison, Test nor the Sync of a comparison made before goes on: nothing taken, given or agreed.
+        onPhone("Muse", "Hysteria")
+        onComputer("Radiohead", "Creep")
+        val c = engine.compare(computer.address.toString())  // compared while the two keyed songs alike
+        computer.keyVersion = JsonPrimitive(Normalize.KEY_VERSION + 1)
+        val before = phoneState() to computer.state()
+        val address = computer.address.toString()
+        assertEquals(Units.OTHER_KEYS, assertFailsWith<OtherKeys> { engine.compare(address) }.message)
+        assertEquals(Units.OTHER_KEYS, assertFailsWith<OtherKeys> { engine.tested(address) }.message)
+        val refused = assertFailsWith<SyncFailed> { apply(c) }
+        assertEquals(Units.OTHER_KEYS, refused.message)
+        assertNull(refused.outcome)
+        assertEquals(listOf(Triple("compare", "running", ""), Triple("compare", "failed", Units.OTHER_KEYS)), stages)
+        assertEquals(before, phoneState() to computer.state())
+        assertEquals(emptyList(), computer.asked("POST", "/peer/push/new") + computer.asked("GET", "/api/peer/unit"))
+        assertNull(phone.read { Compare.baseOf(it, computer.id) })
+        assertFalse(File(stateDir, "backups").exists())
+        // An older computer, whose state names no key version, is compared as before: the gap that closes only once
+        // both sides are updated.
+        computer.keyVersion = null
+        assertEquals(c.hash, engine.compare(address).hash)
     }
 
     @Test fun `two libraries changed since the comparison are refused at its stage, before any change`() {
@@ -853,8 +885,8 @@ class SyncEngineTest {
         assertEquals(400, refused.status)
     }
 
-    @Test fun `two pushes left open make the computer refuse a third, and the give says why`() {
-        withFile("Estopa", "Tu Calorro", "a Guitar Pro file".toByteArray())
+    @Test fun `a push that fails after it is opened lets go of its slot there at once, and the give says why`() {
+        val song = withFile("Estopa", "Tu Calorro", "a Guitar Pro file".toByteArray())
         computer.answers["POST /peer/push/file"] = { exchange ->
             FakeComputer.json(exchange, 503, FakeComputer.obj("error" to JsonPrimitive("The file couldn't be kept: disk full.")))
         }
@@ -864,14 +896,242 @@ class SyncEngineTest {
                          "couldn't be kept: disk full.", failed.message)
             assertEquals("failed", ended()["give"])
             assertNull(ended()["agree"], "no agreement recorded")
+            assertEquals(0, computer.pushesHere, "the push it opened let go of there")
             stages.clear()
         }
-        assertEquals(2, computer.pushesHere)
-        val third = assertFailsWith<SyncFailed> { apply(engine.compare(computer.address.toString())) }
-        assertEquals("Couldn't give them 1: ${computer.address} answered 409: Two pushes are " +
-                     "here already, waiting to be taken: try again once one is, or in an hour.", third.message)
-        assertEquals(emptyList(), assertNotNull(third.outcome).given, "as peer sync --push fails, nothing given")
+        assertEquals(2, computer.asked("POST", "/peer/push/drop").size)
         assertNull(phone.read { Compare.baseOf(it, computer.id) })
+
+        // A drop that fails too (the computer gone) never hides why the push failed; the push is left open there,
+        // and the phone's next push lets go of it.
+        computer.answers["POST /peer/push/drop"] = { exchange ->
+            exchange.requestBody.readBytes()
+            FakeComputer.json(exchange, 503, FakeComputer.obj("error" to JsonPrimitive("Restarting.")))
+        }
+        val failed = assertFailsWith<SyncFailed> { apply(engine.compare(computer.address.toString())) }
+        assertEquals("Couldn't give them 1: ${computer.address} answered 503: The file couldn't be kept: disk full.",
+                     failed.message)
+        assertEquals(1, computer.pushesHere)
+        computer.answers.remove("POST /peer/push/drop")
+        computer.answers.remove("POST /peer/push/file")
+        val drops = computer.asked("POST", "/peer/push/drop").size
+        val outcome = apply(engine.compare(computer.address.toString()))
+        assertEquals(listOf(unitOf(song)), outcome.given)
+        assertEquals(drops, computer.asked("POST", "/peer/push/drop").size, "a push that goes through drops nothing")
+        assertEquals(0, computer.pushesHere)
+    }
+
+    /** Push documents of a few songs each: the phone's limit and the computer's, alike. */
+    private fun smallPushes(document: Long = 6_000) {
+        engine.pushLimits = io.github.danielhp95.caracole.core.sync.internal.client.Give.Limits(document = document)
+        computer.limits = computer.limits + ("POST /peer/push" to document)
+    }
+
+    private fun songs(n: Int): List<SongRow> = (0 until n).map { onPhone("Band", "Song $it", album = "An album ".repeat(40)) }
+
+    @Test fun `a give past what one push carries goes in several, each within the computer's limits, each taken`() {
+        smallPushes()
+        val given = songs(12)
+        val outcome = apply(engine.compare(computer.address.toString()))
+        assertEquals(given.map(::unitOf).sorted(), outcome.given.sorted())
+        assertEquals(emptyList(), outcome.left)
+        val sizes = computer.pushes.map { PyJson.dumps(it, compact = true).toByteArray(Charsets.UTF_8).size }
+        assertTrue(sizes.size >= 3 && sizes.all { it <= 6_000 }, "the pushes sent: $sizes")
+        assertEquals(sizes.size, computer.asked("POST", "/peer/push/new").size)
+        assertEquals(computer.state(), phoneState())
+        assertEquals(0, computer.pushesHere)
+        assertEquals("gave 12", stages.last { it.first == "give" }.third)
+        assertEquals(emptyList(), engine.compare(computer.address.toString()).differences)
+    }
+
+    @Test fun `a give that stops at its second push keeps the first taken and agreed, and says how far it got`() {
+        smallPushes()
+        songs(12)
+        computer.refuse = { route, n -> if (route == "POST /peer/push" && n == 2) 503 else null }
+        val failed = assertFailsWith<SyncFailed> { apply(engine.compare(computer.address.toString())) }
+        val first = computer.taken.single().taken.size
+        assertTrue(first in 1 until 12, "push 1 took $first")
+        val pushes = computer.asked("POST", "/peer/push/new").size
+        assertTrue(pushes == 2, "push 3 never opened: $pushes")
+        assertTrue(failed.message!!.startsWith("Couldn't give them 12: $first given in the first push of "), failed.message)
+        assertTrue("; then push 2 of " in failed.message!! && "answered 503: Not now." in failed.message!!, failed.message)
+        assertEquals("failed", ended()["give"])
+        assertEquals(first, failed.outcome!!.given.size)
+        assertEquals(0, computer.pushesHere, "push 2 let go of there")
+
+        computer.refuse = null
+        val again = engine.compare(computer.address.toString())
+        assertEquals(12 - first, again.differences.size, "push 1's were agreed as its take ended")
+        assertEquals(12 - first, apply(again).given.size)
+    }
+
+    @Test fun `a give cancelled after its push is opened lets go of the push there, then is cancelled`() {
+        withFile("Estopa", "Tu Calorro", "a Guitar Pro file".toByteArray())
+        val sending = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        computer.answers["POST /peer/push/file"] = { exchange ->
+            exchange.requestBody.readBytes()
+            sending.countDown()
+            release.await(10, java.util.concurrent.TimeUnit.SECONDS)
+            FakeComputer.json(exchange, 200, FakeComputer.obj("ok" to JsonPrimitive(true)))
+        }
+        val c = engine.compare(computer.address.toString())
+        runBlocking {
+            val job = launch(kotlinx.coroutines.Dispatchers.Default) {
+                engine.apply(c, emptyMap(), null) { name, state, detail -> stages.add(Triple(name, state, detail)) }
+            }
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { sending.await(10, java.util.concurrent.TimeUnit.SECONDS) }
+            job.cancel()
+            release.countDown()
+            job.join()
+            assertTrue(job.isCancelled)
+        }
+        assertEquals(1, computer.asked("POST", "/peer/push/drop").size)
+        assertEquals(0, computer.pushesHere, "the push it opened let go of there")
+        assertEquals(emptyList(), computer.asked("POST", "/peer/push"))
+    }
+
+    @Test fun `a give that stops at its second push of three says what the computer's says, of the whole give`() {
+        // peer sync --push's words: the whole give counted (a unit left too big among it), then how far it got, why,
+        // and that the pushes taken stay taken (commands/peer.py TAKEN_STAY).
+        smallPushes()
+        songs(12)
+        val big = onPhone("Bach", "Mass in B minor")
+        val path = phoneStore.folderOf(big).relativeTo(phoneLibrary).path + "/score-1.pdf"
+        RandomAccessFile(File(phoneLibrary, path).apply { parentFile.mkdirs() }, "rw").use { it.setLength(64L * 1024 * 1024 + 1) }
+        phone.writeBlocking { db ->
+            db.execute("INSERT INTO versions (provider, tab_id, song_id, slot, kind, url, fetched_at) " +
+                       "VALUES ('inbox', 'score-1', ?, 'guitar', 'score', '', ?)", big.id, NOW)
+            db.execute("INSERT INTO files (version_id, song_id, name, path, sha256, kept_rank, created_at) " +
+                       "VALUES (?, ?, 'score-1.pdf', ?, ?, 0, ?)", db.lastRowid(), big.id, path, "ab".repeat(32), NOW)
+        }
+        computer.refuse = { route, n -> if (route == "POST /peer/push" && n == 2) 503 else null }
+        val failed = assertFailsWith<SyncFailed> { apply(engine.compare(computer.address.toString())) }
+        val first = computer.taken.single().taken.size
+        val why = "$first given in the first push of 3; then push 2 of 3: ${computer.address} answered 503: Not now. " +
+            SyncEngine.TAKEN_STAY
+        assertEquals("Couldn't give them 13: $why", failed.message)
+        assertEquals(why, stages.last { it.first == "give" }.third)
+    }
+
+    @Test fun `a song with a kept file past 64 MiB is left out of the give in the export's words, the rest given`() {
+        val big = onPhone("Bach", "Mass in B minor")
+        val path = phoneStore.folderOf(big).relativeTo(phoneLibrary).path + "/score-1.pdf"
+        RandomAccessFile(File(phoneLibrary, path).apply { parentFile.mkdirs() }, "rw").use { it.setLength(64L * 1024 * 1024 + 1) }
+        phone.writeBlocking { db ->
+            db.execute("INSERT INTO versions (provider, tab_id, song_id, slot, kind, url, fetched_at) " +
+                       "VALUES ('inbox', 'score-1', ?, 'guitar', 'score', '', ?)", big.id, NOW)
+            db.execute("INSERT INTO files (version_id, song_id, name, path, sha256, kept_rank, created_at) " +
+                       "VALUES (?, ?, 'score-1.pdf', ?, ?, 0, ?)", db.lastRowid(), big.id, path, "ab".repeat(32), NOW)
+        }
+        val hysteria = onPhone("Muse", "Hysteria")
+        val outcome = apply(engine.compare(computer.address.toString()))
+        assertEquals(listOf(unitOf(hysteria)), outcome.given)
+        assertEquals(listOf(unitOf(big) to io.github.danielhp95.caracole.core.sync.file.FileError.TOO_BIG), outcome.left)
+        assertEquals(emptyList(), computer.asked("POST", "/peer/push/file"))
+        assertNull(phone.read { Compare.baseOf(it, computer.id) }!![unitOf(big)], "never agreed")
+    }
+
+    @Test fun `F4 a song with a kept file past 64 MiB on the computer is left with why, never as changed there`() {
+        val song = onComputer("Bach", "Mass in B minor")
+        val name = "score-1.pdf"
+        val path = computer.store.folderOf(song).relativeTo(computer.libraryDir).path + "/" + name
+        RandomAccessFile(File(computer.libraryDir, path).apply { parentFile.mkdirs() }, "rw").use { it.setLength(64L * 1024 * 1024 + 1) }
+        computer.answers["GET /api/peer/file"] = { exchange ->  // the file's length, as caracole serve answers it
+            exchange.responseHeaders.add("Content-Type", "application/octet-stream")
+            exchange.sendResponseHeaders(200, 64L * 1024 * 1024 + 1)
+            runCatching { File(computer.libraryDir, path).inputStream().use { it.copyTo(exchange.responseBody) } }
+        }
+        computer.database.writeBlocking { db ->
+            db.execute("INSERT INTO versions (provider, tab_id, song_id, slot, kind, url, fetched_at) " +
+                       "VALUES ('inbox', 'score-1', ?, 'guitar', 'score', '', ?)", song.id, NOW)
+            db.execute("INSERT INTO files (version_id, song_id, name, path, sha256, kept_rank, created_at) " +
+                       "VALUES (?, ?, ?, ?, ?, 0, ?)", db.lastRowid(), song.id, name, path, "cd".repeat(32), NOW)
+        }
+        val why = "$name is over 64 MiB: the phone takes no file that big. The song stays as it was here."
+        repeat(2) {
+            val outcome = apply(engine.compare(computer.address.toString()))
+            assertEquals(emptyList(), outcome.taken)
+            assertEquals(listOf(unitOf(song) to why), outcome.left)
+        }
+        // Answered with no length at all, it is stopped at the cap as it streams: the same words, nothing kept.
+        computer.answers["GET /api/peer/file"] = { exchange ->
+            exchange.responseHeaders.add("Content-Type", "application/octet-stream")
+            exchange.sendResponseHeaders(200, 0)
+            runCatching { File(computer.libraryDir, path).inputStream().use { it.copyTo(exchange.responseBody) } }
+        }
+        val streamed = apply(engine.compare(computer.address.toString()))
+        assertEquals(listOf(unitOf(song) to why), streamed.left)
+        assertEquals(emptyList(), phoneLibrary.walk().filter { it.isFile && it.name == name }.toList(), "nothing kept")
+        assertEquals(null, phone.read { db -> db.one("SELECT key FROM songs WHERE key = ?", song.key) { it.text(0) } })
+    }
+
+    @Test fun `a push of songs keyed by other rules, refused, lets go of what it opened`() {
+        onPhone("Muse", "Hysteria")
+        computer.answers["POST /peer/push"] = { exchange ->
+            exchange.requestBody.readBytes()
+            FakeComputer.json(exchange, 409, FakeComputer.obj("error" to JsonPrimitive(Units.OTHER_KEYS)))
+        }
+        val failed = assertFailsWith<SyncFailed> { apply(engine.compare(computer.address.toString())) }
+        assertEquals("Couldn't give them 1: ${computer.address} answered 409: ${Units.OTHER_KEYS}", failed.message)
+        assertEquals(1, computer.asked("POST", "/peer/push/drop").size)
+        assertEquals(0, computer.pushesHere)
+    }
+
+    private fun proposals(found: List<io.github.danielhp95.caracole.core.sync.Difference>) =
+        found.associate { it.id to (it.proposal to it.why) }
+
+    @Test fun `what a sync took stays agreed when its give then fails, so a later change on the computer alone is its`() {
+        onComputer("Radiohead", "Karma Police")
+        apply(engine.compare(computer.address.toString()))  // a first sync, agreed
+        val creep = onComputer("Radiohead", "Creep")
+        val hysteria = onPhone("Muse", "Hysteria")
+        computer.now = "2026-11-03T13:00:00Z"  // the computer's clock as the second sync compares
+        computer.answers["POST /peer/push/new"] = { exchange ->
+            exchange.requestBody.readBytes()
+            FakeComputer.json(exchange, 503, FakeComputer.obj("error" to JsonPrimitive("Busy.")))
+        }
+        stages.clear()
+        val failed = assertFailsWith<SyncFailed> { apply(engine.compare(computer.address.toString())) }
+        assertEquals(listOf(unitOf(creep)), assertNotNull(failed.outcome).taken, "the take stage took Creep")
+        assertEquals("failed", ended()["give"])
+        assertNull(ended()["agree"])
+        computer.answers.remove("POST /peer/push/new")
+        val base = assertNotNull(phone.read { Compare.baseOf(it, computer.id) })
+        assertEquals(computer.state().getValue(unitOf(creep)).digest to "2026-11-03T13:00:00Z", base[unitOf(creep)],
+                     "what was taken is agreed, at its digest, by the computer's clock as compared")
+        assertFalse(unitOf(hysteria) in base, "what wasn't given isn't")
+
+        // The computer changes Creep afterwards (its nightly run); the phone never touched it since it took it.
+        computer.database.writeBlocking { it.execute("UPDATE songs SET album = 'Pablo Honey' WHERE key = ?", creep.key) }
+        assertEquals(mapOf(unitOf(creep) to ("theirs" to "changed there since the last share"),
+                           unitOf(hysteria) to ("mine" to "new here since the last share")),
+                     proposals(engine.compare(computer.address.toString()).differences))
+        // The computer reads it so too, comparing a file of the phone's (peer_file.compare_file: its own base for the
+        // phone, none, merged with the one the file keeps).
+        val computerBase = computer.database.read { Compare.baseOf(it, phoneId) }
+        assertEquals(mapOf(unitOf(creep) to ("mine" to "changed here since the last share"),
+                           unitOf(hysteria) to ("theirs" to "new there since the last share")),
+                     proposals(Compare.compare(computer.state(), phoneState(), Compare.mergedBase(computerBase, base))))
+    }
+
+    @Test fun `what a sync took stays agreed when its agree stage can't read the computer's state`() {
+        val creep = onComputer("Radiohead", "Creep")
+        val c = engine.compare(computer.address.toString())
+        computer.onUnit = {  // caracole serve stops answering as the phone takes: its agree's read fails
+            computer.answers["GET /api/peer/state"] = { exchange ->
+                FakeComputer.json(exchange, 503, FakeComputer.obj("error" to JsonPrimitive("Restarting.")))
+            }
+        }
+        assertFailsWith<SyncFailed> { apply(c) }
+        assertEquals("failed", ended()["agree"])
+        computer.onUnit = null
+        computer.answers.remove("GET /api/peer/state")
+        assertEquals(computer.state().getValue(unitOf(creep)).digest,
+                     phone.read { Compare.baseOf(it, computer.id) }?.get(unitOf(creep))?.first)
+        computer.database.writeBlocking { it.execute("UPDATE songs SET album = 'Pablo Honey' WHERE key = ?", creep.key) }
+        assertEquals(mapOf(unitOf(creep) to ("theirs" to "changed there since the last share")),
+                     proposals(engine.compare(computer.address.toString()).differences))
     }
 
     @Test fun `a take that outlasts the wait fails the give, and the computer refuses the next while it still runs`() {
@@ -887,7 +1147,7 @@ class SyncEngineTest {
         val refused = assertFailsWith<SyncFailed> { apply(waiting.compare(computer.address.toString()), on = waiting) }
         assertEquals("Couldn't give them 1: ${computer.address} answered 409: Changes from " +
                      "Phone are being taken already (request 1): send them again once that is over.", refused.message)
-        assertEquals(2, computer.pushesHere, "the push refused stays open, to send again")
+        assertEquals(1, computer.pushesHere, "the push refused let go of there: the first, whose take runs, stays")
 
         held.countDown()
         computer.holdTakes = null
@@ -1003,6 +1263,48 @@ class SyncEngineTest {
         assertFailsWith<SyncFailed> { apply(engine.compare(computer.address.toString())) }
     }
 
+    @Test fun `a removal on the computer of a song the unattended sync leaves in conflict is left saying so, never taken`() {
+        val creep = onComputer("Radiohead", "Creep")
+        apply(engine.compare(computer.address.toString()))  // the phone takes Creep, agreed
+        computer.database.writeBlocking { computer.store.remove(it, creep.key, "2026-11-03T11:00:00Z") }
+        phone.writeBlocking { it.execute("UPDATE songs SET album = 'Pablo Honey' WHERE key = ?", creep.key) }
+        val removal = "removed/${creep.key}"
+
+        repeat(2) { n ->  // Sync on Wi-Fi, and again with nothing changed since
+            val outcome = apply(engine.compare(computer.address.toString()), conflicts = Conflicts.LEAVE)
+            assertEquals(emptyList(), outcome.taken, "sync ${n + 1} took ${outcome.taken}")
+            assertEquals(setOf(unitOf(creep) to SyncEngine.UNSETTLED, removal to Take.SONG_HERE), outcome.left.toSet())
+            assertTrue(phone.read { Songs.byKey(it, creep.key) } != null, "the song still here")
+        }
+        assertTrue(removal !in phone.read { Compare.baseOf(it, computer.id) }.orEmpty(), "nothing agreed of it")
+    }
+
+    @Test fun `a song kept on the phone against its removal on the computer is given, its removal answered with it`() {
+        val creep = onComputer("Radiohead", "Creep")
+        apply(engine.compare(computer.address.toString()))
+        computer.database.writeBlocking { computer.store.remove(it, creep.key, "2026-11-03T11:00:00Z") }
+        phone.writeBlocking { it.execute("UPDATE songs SET album = 'Pablo Honey' WHERE key = ?", creep.key) }
+
+        val outcome = apply(engine.compare(computer.address.toString()), mapOf(unitOf(creep) to Side.HERE))
+        assertEquals(emptyList(), outcome.taken)
+        assertEquals(listOf(unitOf(creep)), outcome.given)
+        assertEquals(emptyList(), outcome.left, "nothing about its removal")
+        assertTrue("removed/${creep.key}" !in computer.state(), "the song given clears the computer's tombstone")
+        assertEquals(emptyList(), engine.compare(computer.address.toString()).differences)
+    }
+
+    @Test fun `a song the take respells as the computer writes its artist is given as the take left it`() {
+        val desperado = onPhone("eagles", "Desperado")
+        val hotel = onComputer("Eagles", "Hotel California")
+        val outcome = apply(engine.compare(computer.address.toString()))
+        assertEquals(listOf(unitOf(hotel)), outcome.taken)
+        assertEquals(listOf(unitOf(desperado)), outcome.given, "left: ${outcome.left}")
+        assertEquals(emptyList(), outcome.left)
+        assertEquals("Eagles", phone.read { Songs.byKey(it, desperado.key) }!!.artist)
+        assertEquals(phoneState().getValue(unitOf(desperado)).digest, computer.state().getValue(unitOf(desperado)).digest)
+        assertEquals(emptyList(), engine.compare(computer.address.toString()).differences)
+    }
+
     @Test fun `a unit kept at an import is given at the next sync without asking`() {
         val here = onPhone("Oasis", "Wonderwall", album = "Morning Glory")
         onComputer("Oasis", "Wonderwall", album = "(What's the Story) Morning Glory?")
@@ -1019,6 +1321,26 @@ class SyncEngineTest {
         assertEquals(mine, computer.state().getValue(unit).digest, "the computer took the phone's version")
         assertEquals(emptyMap(), phone.read { Compare.keptOf(it, computer.id) }, "the kept answer dropped once agreed")
         assertEquals(emptyList(), engine.compare(computer.address.toString()).differences)
+    }
+
+    @Test fun `a unit kept at an import then changed on the computer is a conflict, which the unattended sync leaves`() {
+        val here = onPhone("Eagles", "Hotel California", album = "kept on the phone")
+        onComputer("Eagles", "Hotel California", album = "the file's")
+        val unit = unitOf(here)
+        val (mine, theirs) = phoneState().getValue(unit).digest to computer.state().getValue(unit).digest
+        // An import of the computer's file answered "keep mine" for it; the computer changes its own after, its nightly
+        // run, say: its version still lacks the phone's, so both changed it since they last agreed.
+        phone.writeBlocking { db -> Compare.recordKept(db, computer.id, mapOf(unit to (mine to theirs)), "2026-11-02T09:00:00Z") }
+        computer.database.writeBlocking { it.execute("UPDATE songs SET album = 'the computer''s, later' WHERE key = ?", here.key) }
+
+        val c = engine.compare(computer.address.toString())
+        assertEquals(listOf(Triple(unit, Compare.CONFLICT, "both books changed it since the last share")),
+                     c.differences.map { Triple(it.id, it.proposal, it.why) })
+        val outcome = apply(c, conflicts = Conflicts.LEAVE)  // Sync on Wi-Fi's
+        assertEquals(listOf(unit to SyncEngine.UNSETTLED), outcome.left)
+        assertEquals(mine, phoneState().getValue(unit).digest, "the version kept here, as it was")
+        // Asked of the owner, the same comparison is refused before any change: the sheet asks.
+        assertFailsWith<SyncFailed> { apply(engine.compare(computer.address.toString())) }
     }
 
     @Test fun `the comparison carries each difference's names, change, part and songbooks, and the indexes waiting`() {

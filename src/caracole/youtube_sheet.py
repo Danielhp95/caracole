@@ -7,7 +7,8 @@ you chose the video of, in one process, under caracole's lock, its stages report
 serve reads into the job's stages; staged.py's ``StagedRun`` is that reporting half):
 
 - ``song``: the song, found in the library or added to wanted.txt as ``caracole add`` adds it, then synced;
-  refused when it is ignored, has a human sheet or has a purchase linked, and, without a video given, when
+  refused when it is ignored, has a human sheet or has audio of its own (a purchase linked, or a file you gave it:
+  audio_store.py, which audio_sheet.py keeps), and, without a video given, when
   ``[youtube]`` says "none" for it. The video given is written under ``[youtube]`` in overrides.toml, as
   ``caracole youtube --url`` writes it.
 - ``audio``: the song's audio from YouTube, as the youtube step takes it (youtube_fetch.py), for this song
@@ -19,18 +20,33 @@ serve reads into the job's stages; staged.py's ``StagedRun`` is that reporting h
   ``durations``). A song whose lyrics came earlier keeps them. Then Megalobiz, the same way, for the timed
   lyrics LRCLIB left the song without (megalobiz_fetch.py): they put each chord over its word. Then AZLyrics' plain
   ones, for a song still without any (azlyrics_fetch.py).
+- ``vocals`` and ``words``: the song's words heard from the audio, transcribe_job.py's ``HearsWords`` stages (where
+  someone sings, then Whisper over the mix, kept as the song's transcript, or nothing sung noted), only once every
+  lyrics site was asked and missed (transcript.py ``why_not_offered``), where this caracole can transcribe
+  (``youtube_fetch.transcribe_problem``) and ``[autochords] transcribe`` is on; else vocals skipped "not
+  transcribed: why", and words "no vocals". A site's words or instrumental verdict is said first, whatever this
+  caracole can do ("not transcribed: its lyrics are found"); only otherwise the setting off, or "not transcribed here:
+  why" for this caracole's reason, then the offer's other reasons. A waiting lookup goes first before each, the song
+  checked still one for YouTube and still offered after it. Their failing here (the separator, the GPU, Whisper's
+  model, audio Whisper can't load) fails their stage alone, never the sheet (``WORDS_FAIL_THE_JOB``): the chords are
+  made chords-only by auto-chords' own reader. The setup's failure files nothing against the song, which stays offered
+  Transcribe the lyrics; audio Whisper can't load is noted as Whisper's alone (``transcribe:unreadable:``), offered no
+  transcription until it changes.
 - ``chords``: auto-chords for this song alone (``autochords_pending``'s ``only``), once the audio is the
   video's; a waiting lookup goes first (``_common.hand_over``), as the models take minutes. The chords go
-  over the timed lyrics when their length fits the audio, else above the lyrics as a chart (merge.py). A song
+  over the timed lyrics when their length fits the audio, else above the lyrics as a chart (merge.py), over the
+  transcript where the words were heard, else alone. A song
   that left the book meanwhile (another caracole removed it, or merged it into a song of the same name), or is no
-  longer one for YouTube (a human sheet kept, ignored, bought audio), ends the sheet there, before the models write
-  anything: a refusal its song stage says, the stages left skipped.
+  longer one for YouTube (a human sheet kept, ignored, audio of its own), or whose audio changed after its vocals were
+  separated, ends the sheet there, before the models write anything: a refusal its song stage says, the stages left
+  skipped.
 - ``pdf``: the PDF and the viewer, ``sheet (auto).html``, for this song alone (``render_all``'s
   ``song_ids``): the sheet is readable from here on (``Progress.readable``).
 - ``pages``: _todo.md and index.html.
 
-While the audio and the chords run, each says what it does (staged.py ``_doing``), which the song's line shows: the
-video downloaded or searched for, then auto-chords' steps.
+While the audio, the vocals, the words and the chords run, each says what it does (staged.py ``_doing``), which the
+song's line shows: the video downloaded or searched for, demucs-rs's minutes, how far Whisper has heard the mix, then
+auto-chords' steps.
 
 A stage that can't go on skips those after it that need it, saying why. A block, a cooldown, a spent budget
 or a site's error is a wait, never a failure, and the command exits 0, as every command does. What waiting
@@ -53,9 +69,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from caracole.autochords.hearing import Hearing, sweep
 from caracole.config import Config
 from caracole.get import Progress
 from caracole.staged import StagedResult, StagedRun, _Stop
+from caracole.transcribe_job import HearsWords
 
 log = logging.getLogger(__name__)
 
@@ -64,23 +82,34 @@ STAGES = (
     ("song", "Find the song"),
     ("audio", "Audio from YouTube"),
     ("lyrics", "Lyrics"),
+    ("vocals", "Where the singing is"),
+    ("words", "Transcribing the lyrics"),
     ("chords", "Chords from the audio"),
     ("pdf", "PDF"),
     ("pages", "The logbook page"),
 )
+TURNED_OFF = "not transcribed: turned off ([autochords] transcribe = false)"  # the vocals' skip, so set
+SITES_ANSWERED = ("found", "instrumental")  # a song's lyrics status once a site gave words or its verdict
 # What the chords stage says the sheet holds, by the lyrics auto-chords laid the chords over
 # (autochords/run.py's version ``raw["lyrics"]``), which caracole serve's Ready says.
 HOLDS = {
     "synced": "chords over the lyrics",
     "plain": "chords, then the lyrics",
     "none": "chords only, no lyrics",
+    "silent": "chords only: nothing sung was heard",  # ``raw["heard_nothing"]``
+    "said": "chords only: you said it isn't sung",  # ``raw["not_sung_by"]``, the owner's word
     "transcript": "chords over the transcribed lyrics",  # synced, over Whisper's words (``raw["lyrics_source"]``)
 }
 
 
 def holds(raw: dict[str, object]) -> str:
     """What the auto sheet's version (its ``raw``) says the sheet holds."""
-    used = "transcript" if raw.get("lyrics_source") == "transcript" else str(raw.get("lyrics"))
+    if raw.get("lyrics_source") == "transcript":
+        used = "transcript"
+    elif raw.get("heard_nothing") and raw.get("lyrics") == "none":
+        used = "said" if raw.get("not_sung_by") == "you" else "silent"
+    else:
+        used = str(raw.get("lyrics"))
     return HOLDS.get(used, "chords")
 NO_AUDIO = "no audio"
 
@@ -101,46 +130,94 @@ class SheetRequest:
 
 @dataclass
 class SheetResult(StagedResult):
-    """What came of a sheet from a YouTube video: its stages' ends, its files once readable, the requests it sent."""
+    """What came of a sheet from a YouTube video (or from an audio file, audio_sheet.py): its stages' ends, its files
+    once readable, the requests it sent."""
 
 
-class _Sheet(StagedRun):
+class _Sheet(HearsWords, StagedRun):
     STAGES = STAGES
 
     def __init__(self, cfg: Config, request: SheetRequest, progress: Progress, *, runner: Callable,
-                 recognizer: Any, beats_fn: Any, now: datetime | None, clock: Callable[[], float]):
+                 recognizer: Any, beats_fn: Any, separator: Any, transcriber: Any, hears: bool | None,
+                 now: datetime | None, clock: Callable[[], float]):
         super().__init__(cfg, progress, SheetResult(display=request.display), runner=runner, recognizer=recognizer,
                          beats_fn=beats_fn, now=now, clock=clock)
         self.request = request
+        self.hearing = Hearing(cfg, separator=separator, transcriber=transcriber)
+        self.hears = hears  # None: as [autochords] transcribe and this caracole say (``_why_not_heard``)
+
+    # --- whether its words are heard ----------------------------------------------------------------------
+
+    def _why_not_heard(self) -> str | None:
+        """Before the vocals: why the song's words aren't heard, or None to hear them. Not without the video's audio;
+        not for a song a lyrics site gave words or its instrumental verdict, said first in the offer's words, whatever
+        this caracole can do (a site's lyrics on a caracole that can't transcribe are no fault of its); not with
+        ``[autochords] transcribe`` off, nor where this caracole can't transcribe (``hears`` True passes over both,
+        False is off); and not unless every lyrics site was asked and missed, the lyrics stage's answer
+        (``why_not_offered``)."""
+        from caracole.youtube_fetch import transcribe_reason
+
+        if self.result.states.get("audio") != "done":
+            return NO_AUDIO
+        if self.song.lyrics_status in SITES_ANSWERED:
+            return self._not_offered()  # "not transcribed: its lyrics are found"
+        if self.hears is False or (self.hears is None and not self.cfg.autochords.transcribe):
+            return TURNED_OFF
+        if self.hears is None and (reason := transcribe_reason(self.cfg)) is not None:
+            return f"not transcribed here: {reason}"
+        return self._not_offered()
+
+    def _still_to_hear(self) -> str | None:
+        """After a lookup went first: the song still this job's (``_still_ours``), else the sheet ends there; and
+        still offered a transcription (a lookup may have found its lyrics meanwhile, which the chords then go over),
+        else why not."""
+        self._still_ours(self.song)
+        return self._not_offered()
+
+    def _not_offered(self) -> str | None:
+        from caracole.autochords.transcript import why_not_offered
+
+        why = why_not_offered(self.conn, self.cfg, self.song, self.overrides)
+        return None if why is None else f"not transcribed: {why}"
 
     # --- the stages -------------------------------------------------------------------------------
 
-    def find_song(self) -> str:
+    def _the_song(self, *, album: str | None = None, duration_ms: int | None = None) -> tuple[Any, str]:
+        """The request's song, found in the book or added to wanted.txt as ``caracole add`` adds it (a new line with
+        ``album`` and ``duration_ms``), then synced; and what the song stage says of it. Refused (``_Stop``) when it is
+        ignored, or a song wanted.txt can't hold. The stems a killed job left under the cache are swept first, as a
+        transcription sweeps them."""
         from caracole.normalize import identity_key
-        from caracole.overrides import OverridesError, add_youtube, load_overrides
         from caracole.songs import find_song
         from caracole.wanted import append_wanted, sync_wanted
-        from caracole.youtube_urls import watch_url
 
+        sweep(self.cfg.cache_dir)
         req = self.request
         key = identity_key(req.artist, req.title)
         if key in self.overrides.ignore:
             raise _Stop(f"{req.display} is ignored (overrides.toml)")
         song = find_song(self.conn, key)
-        said = "in the book"
+        if song is not None:
+            return song, "in the book"
+        try:
+            line = append_wanted(self.cfg.wanted_file, req.artist, req.title, album, duration_ms)
+        except ValueError as e:  # a song the file can't hold, such as an artist with " - " in it
+            raise _Stop(f"Can't add this song: {e}") from e
+        except OSError as e:
+            raise _Stop(f"Couldn't write wanted.txt: {e.strerror or e}") from e
+        sync_wanted(self.conn, self.cfg.wanted_file, self.now)
+        song = find_song(self.conn, line.identity)
         if song is None:
-            try:
-                line = append_wanted(self.cfg.wanted_file, req.artist, req.title)
-            except ValueError as e:  # a song the file can't hold, such as an artist with " - " in it
-                raise _Stop(f"Can't add this song: {e}") from e
-            except OSError as e:
-                raise _Stop(f"Couldn't write wanted.txt: {e.strerror or e}") from e
-            sync_wanted(self.conn, self.cfg.wanted_file, self.now)
-            song = find_song(self.conn, line.identity)
-            if song is None:
-                raise _Stop(f"{req.display} is in wanted.txt, line {line.line_no}, but didn't reach the book")
-            said = f"added to wanted.txt, line {line.line_no}"
-        self._still_for_youtube(song)
+            raise _Stop(f"{req.display} is in wanted.txt, line {line.line_no}, but didn't reach the book")
+        return song, f"added to wanted.txt, line {line.line_no}"
+
+    def find_song(self) -> str:
+        from caracole.overrides import OverridesError, add_youtube, load_overrides
+        from caracole.youtube_urls import watch_url
+
+        req = self.request
+        song, said = self._the_song()
+        self._still_ours(song)
         if req.url is None and song.key in self.overrides.youtube and self.overrides.youtube[song.key] is None:
             raise _Stop(f'[youtube] says "none" for {song.display}: give it a video')
         if req.url is not None:
@@ -155,19 +232,25 @@ class _Sheet(StagedRun):
         self.progress.song(song.id, song.display)
         return said
 
-    def _still_for_youtube(self, song: Any) -> None:
-        """The song still one whose auto sheet comes from YouTube, else the sheet ends there (``_Stop``): not ignored,
-        with no human sheet and no bought audio; as it is found, and again before its models, as a lookup that went
-        first may have kept UG's chords meanwhile (auto-chords would skip it: no failure of the sheet's)."""
-        from caracole.songs import HUMAN_SHEET
+    def _still_ours(self, song: Any) -> None:
+        """The song still one whose auto sheet this job makes, else the sheet ends there (``_Stop``); as it is found,
+        and again after each lookup that went first, which may have kept UG's chords meanwhile (auto-chords would skip
+        it: no failure of the sheet's). From YouTube: not ignored, with no human sheet (``_unsheeted``), and no audio of
+        its own, a purchase's or a file you gave it, which auto-chords uses."""
         from caracole.youtube_fetch import youtube_audio
+
+        self._unsheeted(song)
+        if song.audio_path and youtube_audio(self.conn, song) is None:
+            raise _Stop(f"{song.display} has its own audio (bought or given); auto-chords uses that")
+
+    def _unsheeted(self, song: Any) -> None:
+        """The song not ignored and with no human sheet, else the sheet ends there (``_Stop``)."""
+        from caracole.songs import HUMAN_SHEET
 
         if song.status == "ignored" or song.key in self.overrides.ignore:
             raise _Stop(f"{song.display} is ignored (overrides.toml)")
         if self.conn.execute("SELECT 1 FROM files WHERE song_id = ? AND name = ?", (song.id, HUMAN_SHEET)).fetchone():
             raise _Stop(f"{song.display} already has a sheet")
-        if song.audio_path and youtube_audio(self.conn, song) is None:
-            raise _Stop(f"{song.display} has bought audio in Music/; auto-chords uses that")
 
     def audio(self) -> tuple[str, str] | str:
         from caracole.commands._common import alert_block, make_youtube
@@ -371,7 +454,9 @@ class _Sheet(StagedRun):
         if self.result.states.get("audio") != "done":
             return "skipped", NO_AUDIO
         self._after_a_lookup()  # the models take minutes: a waiting lookup goes first
-        self._still_for_youtube(self.song)
+        self._still_ours(self.song)
+        if self.voiced is not None:  # its words were heard of this audio
+            self._same_audio()
         return self._autochords_sheet()
 
     def run(self) -> SheetResult:
@@ -381,13 +466,17 @@ class _Sheet(StagedRun):
 
 def make_sheet(cfg: Config, request: SheetRequest, progress: Progress | None = None, *,
                runner: Callable = subprocess.run, recognizer: Any = None, beats_fn: Any = None,
+               separator: Any = None, transcriber: Any = None, hears: bool | None = None,
                now: datetime | None = None, clock: Callable[[], float] = time.monotonic) -> SheetResult:
     """Make one song's auto sheet from a YouTube video now, stage by stage (see the module docstring),
     reporting to ``progress``.
 
-    ``runner`` runs chordpro, and ``recognizer`` and ``beats_fn`` stand in for auto-chords' models (tests pass
-    fakes; None builds the models from ``cfg``, as ``caracole autochords`` does); ``now`` is the run's time.
-    The caller checks first that this caracole can make chords of the audio (``youtube_fetch.route_problem``).
+    ``runner`` runs chordpro, ``recognizer`` and ``beats_fn`` stand in for auto-chords' models, ``separator`` and
+    ``transcriber`` for demucs-rs and Whisper (tests pass fakes; None builds each model from ``cfg``, as ``caracole
+    autochords`` and ``caracole transcribe`` do); ``hears``, whether the words are heard where no lyrics site has
+    them: None as ``[autochords] transcribe`` and ``youtube_fetch.transcribe_problem`` say, True whatever they say
+    (tests, with the fakes), False never. ``now`` is the run's time. The caller checks first that this caracole can
+    make chords of the audio (``youtube_fetch.route_problem``).
     """
     return _Sheet(cfg, request, progress or Progress(), runner=runner, recognizer=recognizer, beats_fn=beats_fn,
-                  now=now, clock=clock).run()
+                  separator=separator, transcriber=transcriber, hears=hears, now=now, clock=clock).run()

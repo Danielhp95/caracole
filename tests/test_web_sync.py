@@ -264,6 +264,23 @@ def test_a_comparison_refuses_an_address_nothing_answering_and_this_very_caracol
     assert status == 502 and said["error"].startswith("No answer at http://192.168.1.20:8737")
 
 
+def test_test_and_a_comparison_refuse_a_caracole_whose_songs_are_keyed_by_other_rules(computers, monkeypatch):
+    from caracole import normalize
+
+    from test_commands_peer import by_keys
+
+    here, there, asked = computers
+    two_conflicts(here, there)
+    other = by_keys(sync_routes.transport(), normalize.KEY_VERSION + 1)  # there runs a caracole of other keys
+    monkeypatch.setattr(sync_routes, "transport", lambda: other)
+    before = kv_rows(here)
+    for path in ("/sync/test", "/sync/compare"):
+        status, said = script(here.app, path, {"address": THERE})
+        assert (status, said["error"]) == (409, sync.OTHER_KEYS), path
+    assert asked == [("GET", "/api/peer/state")] * 2  # refused as the state is read: nothing asked after it
+    assert kv_rows(here) == before and here.app.queue.snapshot() == []
+
+
 def test_a_comparison_names_each_songs_artist_and_title_and_each_sides_change_and_part(computers):
     here, there, asked = computers
     two_conflicts(here, there)

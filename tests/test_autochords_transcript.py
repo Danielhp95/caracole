@@ -12,7 +12,7 @@ from conftest import add_song
 
 from caracole.autochords import transcript as tr
 from caracole.config import ProviderPolicy
-from caracole.db import kv_get, kv_set
+from caracole.db import kv_get, kv_get_json, kv_set
 from caracole.library import keep_file
 from caracole.overrides import Overrides
 from caracole.songs import get_song, update_song
@@ -65,14 +65,17 @@ def test_a_transcript_of_other_audio_is_none_and_the_offer_comes_back(conn, cfg,
 def test_heard_nothing_holds_for_that_audio_alone(conn, cfg, tmp_path):
     song = youtube_song(conn, tmp_path)
     assert not tr.heard_nothing(conn, song)
-    tr.note_heard_nothing(conn, song, "2026-11-20T00:00:00Z")
+    tr.note_heard_nothing(conn, song, "2026-11-20T00:00:00Z", why="sung 6.2 s", by="caracole")
     assert tr.heard_nothing(conn, song)
+    assert kv_get_json(conn, f"{tr.HEARD_NOTHING}{song.id}") == {
+        "audio": song.audio_path, "audio_mtime": song.audio_mtime, "at": "2026-11-20T00:00:00Z", "why": "sung 6.2 s",
+        "by": "caracole"}
     assert tr.why_not_offered(conn, cfg, song, Overrides()) is not None
     update_song(conn, song.id, audio_mtime=song.audio_mtime + 5)
     other = get_song(conn, song.id)
     assert not tr.heard_nothing(conn, other)
     assert tr.why_not_offered(conn, cfg, other, Overrides()) is None
-    tr.note_heard_nothing(conn, song, "2026-11-20T00:00:00Z")
+    tr.note_heard_nothing(conn, song, "2026-11-20T00:00:00Z", why="you said so", by="you")
     tr.keep_transcript(conn, song, made(song))
     assert kv_get(conn, f"{tr.HEARD_NOTHING}{song.id}") is None
 
@@ -95,7 +98,7 @@ def _human_sheet(conn, cfg, song):
     keep_file(conn, cfg.library_dir, song=song, version_id=vid, name="sheet.txt", data=b"[ch]G[/ch]\nHi", rank=1)
 
 
-@pytest.mark.parametrize("what", ["pending", "found", "instrumental", "human", "ignored", "overridden", "bought"])
+@pytest.mark.parametrize("what", ["pending", "found", "instrumental", "human", "ignored", "overridden"])
 def test_no_offer_for_pending_or_found_or_instrumental_lyrics_a_human_sheet_an_ignored_song_or_bought_audio(
         conn, cfg, tmp_path, what):
     song = youtube_song(conn, tmp_path)
@@ -108,9 +111,34 @@ def test_no_offer_for_pending_or_found_or_instrumental_lyrics_a_human_sheet_an_i
         update_song(conn, song.id, status="ignored")
     elif what == "overridden":
         overrides = Overrides(ignore=frozenset({song.key}))
-    else:
-        conn.execute("DELETE FROM kv WHERE key = ?", (f"youtube:{song.id}",))
     assert tr.why_not_offered(conn, cfg, get_song(conn, song.id), overrides)
+
+
+def test_a_purchase_is_offered_a_transcription(conn, cfg, tmp_path):
+    song = youtube_song(conn, tmp_path)
+    conn.execute("DELETE FROM kv WHERE key = ?", (f"youtube:{song.id}",))  # audio that isn't from YouTube
+    assert tr.why_not_offered(conn, cfg, song, Overrides()) is None
+    assert song.id in tr.offered_song_ids(conn, cfg, Overrides())
+
+
+def test_a_song_with_no_audio_isnt_offered(conn, cfg, tmp_path):
+    song = add_song(conn, "A", "T")
+    update_song(conn, song.id, lyrics_status="missing", lyrics_at="2026-11-01T00:00:00Z")
+    kv_set(conn, f"megalobiz:checked:{song.id}", "2026-11-01T00:00:00Z")
+    kv_set(conn, f"azlyrics:checked:{song.id}", "2026-11-01T00:00:00Z")
+    assert tr.why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) == "it has no audio"
+
+
+def test_anyway_passes_over_nothing_sung_and_nothing_else(conn, cfg, tmp_path):
+    song = youtube_song(conn, tmp_path)
+    tr.note_heard_nothing(conn, song, "2026-11-20T00:00:00Z", why="sung 2 s", by="caracole")
+    assert tr.why_not_offered(conn, cfg, song, Overrides()) == "nothing sung was heard"
+    assert tr.why_not_offered(conn, cfg, song, Overrides(), anyway=True) is None
+    update_song(conn, song.id, lyrics_status="found")  # the sites come first, forced or not
+    assert tr.why_not_offered(conn, cfg, get_song(conn, song.id), Overrides(), anyway=True)
+    update_song(conn, song.id, lyrics_status="missing")
+    tr.keep_transcript(conn, song, made(song))
+    assert tr.why_not_offered(conn, cfg, song, Overrides(), anyway=True) == tr.ALREADY_TRANSCRIBED
 
 
 def test_a_song_whose_audio_file_is_gone_is_not_offered(conn, cfg, tmp_path):
@@ -136,3 +164,73 @@ def test_offered_song_ids_lists_the_songs_due(conn, cfg, tmp_path):
     second = youtube_song(conn, tmp_path, "B", "Two")
     youtube_song(conn, tmp_path, "C", "Three", lyrics_status="found")
     assert tr.offered_song_ids(conn, cfg, Overrides()) == sorted([first.id, second.id])
+
+
+def test_a_song_with_lyrics_is_told_so_before_whisper_cant_read_its_audio(conn, cfg, tmp_path):
+    # The lyrics sites come first: a song a site has lyrics for, or one ignored, is told that, never what Whisper made
+    # of its audio; the record says why only while it is all that keeps the words from being heard.
+    song = youtube_song(conn, tmp_path)
+    tr.note_whisper_cant_read(conn, song, "2026-11-25T00:00:00Z", "RuntimeError: Failed to load audio")
+    assert tr.why_not_offered(conn, cfg, song, Overrides()) == tr.WHISPER_UNREADABLE_WHY
+    update_song(conn, song.id, lyrics_status="found")
+    assert tr.why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) == "its lyrics are found"
+    update_song(conn, song.id, lyrics_status="missing", status="ignored")
+    assert tr.why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) == "ignored"
+
+
+def test_the_owners_not_sung_holds_for_that_audio_and_a_new_file_is_heard_again(conn, cfg, tmp_path):
+    song = youtube_song(conn, tmp_path)
+    tr.keep_transcript(conn, song, made(song))
+    assert tr.why_not_unsung(conn, cfg, song, Overrides()) is None
+    tr.drop_transcript(conn, song, "2026-11-25T00:00:00Z")
+    assert tr.transcript_of(conn, song) is None and tr.said_not_sung(conn, song)
+    assert tr.why_not_offered(conn, cfg, song, Overrides()) == tr.SAID_NOT_SUNG
+    assert tr.why_not_unsung(conn, cfg, song, Overrides()) == tr.NO_TRANSCRIPT
+    assert tr.heard_nothing(conn, song)
+    assert tr.offers(conn, cfg, Overrides()) == {"songs": [], "nothing": [], "unsung": [song.id], "transcribed": []}
+    moved = dataclasses.replace(song, audio_mtime=(song.audio_mtime or 0) + 5)  # a new file: a new start
+    assert not tr.heard_nothing(conn, moved) and not tr.said_not_sung(conn, moved)
+    assert tr.why_not_offered(conn, cfg, moved, Overrides()) is None
+    tr.keep_transcript(conn, song, made(song))  # Transcribe anyway heard it: their word is gone with it
+    assert not tr.said_not_sung(conn, song)
+    assert tr.offers(conn, cfg, Overrides()) == {"songs": [], "nothing": [], "unsung": [], "transcribed": [song.id]}
+
+
+def test_whisper_cant_read_drops_nothing_sung_and_the_card_offers_nothing_over_that_file(conn, cfg, tmp_path):
+    # caracole noted nothing sung on too little singing (Whisper never ran); the owner asked anyway; Whisper can't load
+    # the file. Its verdict of nothing sung goes: the card offers no Transcribe anyway that can only fail again.
+    song = youtube_song(conn, tmp_path)
+    tr.note_heard_nothing(conn, song, "2026-11-25T00:00:00Z", why="sung 6.2 s", by="caracole")
+    assert tr.offers(conn, cfg, Overrides())["nothing"] == [song.id]
+    tr.note_whisper_cant_read(conn, song, "2026-11-25T01:00:00Z", "RuntimeError: Failed to load audio")
+    assert not tr.heard_nothing(conn, song)
+    assert tr.offers(conn, cfg, Overrides()) == {"songs": [], "nothing": [], "unsung": [], "transcribed": []}
+    assert tr.why_not_offered(conn, cfg, song, Overrides()) == tr.WHISPER_UNREADABLE_WHY
+
+
+@pytest.mark.parametrize("came", ["transcript", "nothing sung", "whisper can't read"])
+def test_a_hearing_that_comes_to_something_drops_the_failed_hearings_note(conn, cfg, tmp_path, came):
+    from datetime import UTC, datetime
+
+    song = youtube_song(conn, tmp_path)
+    now = datetime(2026, 11, 25, 3, 0, tzinfo=UTC)
+    tr.note_hearing_failed(conn, song, "2026-11-25T03:00:00Z", "the separator can't run here (x)")
+    assert tr.hearing_failed(conn, song, now) == "the separator can't run here (x)"
+    assert tr.why_not_offered(conn, cfg, song, Overrides()) is None  # by hand, offered as ever
+    if came == "transcript":
+        tr.keep_transcript(conn, song, made(song))
+    elif came == "nothing sung":
+        tr.note_heard_nothing(conn, song, "2026-11-25T04:00:00Z", why="sung 6.2 s", by="caracole")
+    else:
+        tr.note_whisper_cant_read(conn, song, "2026-11-25T04:00:00Z", "RuntimeError: Failed to load audio")
+    assert kv_get(conn, f"{tr.HEARING_FAILED}{song.id}") is None and tr.hearing_failed(conn, song, now) is None
+
+
+def test_a_removal_takes_the_failed_hearings_note_with_the_song(conn, cfg, tmp_path):
+    from caracole.songs import _PER_SONG_KV, delete_song_kv
+
+    song = youtube_song(conn, tmp_path)
+    tr.note_hearing_failed(conn, song, "2026-11-25T03:00:00Z", "the GPU failed: CUDA out of memory")
+    assert tr.HEARING_FAILED in _PER_SONG_KV
+    delete_song_kv(conn, song.id)
+    assert kv_get(conn, f"{tr.HEARING_FAILED}{song.id}") is None

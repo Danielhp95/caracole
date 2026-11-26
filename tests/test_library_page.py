@@ -269,10 +269,12 @@ def test_the_served_page_has_the_request_form_and_its_token(conn, cfg):
     served = data_of(html)["server"]
     youtube = served.pop("youtube")  # whether a sheet can be made from a YouTube video here: test_web_youtube.py
     transcribe = served.pop("transcribe")  # whether lyrics are transcribed here, and for which songs (below)
+    audio = served.pop("audio")  # whether a sheet can be made from an audio file here (below)
     assert served == {"csrf": 't0k"<en', "busy": [wanted.id], "active": 2, "removing": [found.id], "jobs": [job],
                       "guitar": False}
     assert set(youtube) == {"ok", "why", "off"}
-    assert set(transcribe) == {"ok", "why", "songs", "time"}
+    assert set(transcribe) == {"ok", "why", "songs", "nothing", "unsung", "transcribed", "time"}
+    assert set(audio) == {"ok", "why", "limit", "too_big"}
     # Where the songs just requested go, and the list of requests.
     assert re.search(r'<section class="requested" id="requested"[^>]*hidden>', shell)
     assert re.search(r'<aside class="tray" id="tray"[^>]*hidden>', shell)
@@ -298,6 +300,7 @@ def test_the_served_page_lists_the_songs_offered_a_transcription(conn, cfg, tmp_
     monkeypatch.setattr(yf, "transcribe_problem", lambda cfg: None)
     html = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok"))
     assert data_of(html)["server"]["transcribe"] == {"ok": True, "why": None, "songs": [offered.id, later.id],
+                                                     "nothing": [], "unsung": [], "transcribed": [],
                                                      "time": "up to half an hour"}
     cards_now = {s["id"]: s for s in data_of(html)["songs"]}
     assert "transcribe" not in cards_now[offered.id] and found.id in cards_now
@@ -305,8 +308,34 @@ def test_the_served_page_lists_the_songs_offered_a_transcription(conn, cfg, tmp_
     monkeypatch.setattr(yf, "transcribe_problem", lambda cfg: "built without Whisper")
     html = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok"))
     assert data_of(html)["server"]["transcribe"] == {"ok": False, "why": "Whisper isn't installed", "songs": [],
-                                                     "time": ""}
+                                                     "nothing": [], "unsung": [], "transcribed": [], "time": ""}
     assert "server" not in data_of(page(conn, cfg))  # the file on disk offers none of it
+
+
+def test_the_served_page_says_whether_a_sheet_can_be_made_from_an_audio_file(conn, cfg, tmp_path, monkeypatch):
+    # Served alone, after the transcriptions: whether this caracole makes chords of a file (auto-chords and its model
+    # files: no YouTube, no yt-dlp), why not, and the most an upload takes; the "+" and the cards read it.
+    from dataclasses import replace
+
+    import caracole.youtube_fetch as yf
+    from caracole.audio_store import AUDIO_MAX, TOO_BIG
+    from caracole.config import AutochordsConfig
+    from caracole.library_page import WebControls
+
+    monkeypatch.setattr(yf, "autochords_missing", lambda: ["torch"])
+    html = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok"))
+    served = data_of(html)["server"]
+    assert served["audio"] == {"ok": False, "why": "auto-chords isn't installed", "limit": 0, "too_big": ""}
+    assert list(served)[-1] == "audio"
+    monkeypatch.setattr(yf, "autochords_missing", lambda: [])
+    files = {"btc_weights": tmp_path / "btc.pt", "beat_checkpoint": tmp_path / "final0.ckpt"}
+    for path in files.values():
+        path.write_bytes(b"model")
+    able = replace(cfg, ytdlp_bin=str(tmp_path / "no-yt-dlp"), autochords=AutochordsConfig(**files))
+    html = build_library_page(conn, able, Overrides(), NOW, controls=WebControls(csrf="tok"))
+    # Its refusal of a file past the limit in audio_store's words, which the page says before sending one.
+    assert data_of(html)["server"]["audio"] == {"ok": True, "why": None, "limit": AUDIO_MAX, "too_big": TOO_BIG}
+    assert data_of(html)["server"]["youtube"]["ok"] is False  # no yt-dlp: no sheet from a video, one from a file
 
 
 PAGE_BUILD = r"""

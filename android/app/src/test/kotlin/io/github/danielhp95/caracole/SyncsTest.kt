@@ -1,6 +1,10 @@
 package io.github.danielhp95.caracole
 
+import io.github.danielhp95.caracole.core.sync.OtherKeys
+import io.github.danielhp95.caracole.core.sync.PeerError
 import io.github.danielhp95.caracole.core.sync.SyncEngine
+import io.github.danielhp95.caracole.core.sync.Take
+import io.github.danielhp95.caracole.core.sync.Units
 import io.github.danielhp95.caracole.mirror.Http
 import io.github.danielhp95.caracole.server.jobs.JobQueue
 import io.github.danielhp95.caracole.server.jobs.JobSpec
@@ -138,6 +142,30 @@ class SyncsTest {
     }
 
     @Test
+    fun `the probe finding a caracole whose songs are keyed by other rules says so as a failed sync, asking no more`() =
+        runBlocking {
+            // A caracole answers, but one side's key bump makes the two name songs by different rules: never "no
+            // caracole here" (the last outcome, "Up to date", kept up for good), but the refusal, in its words.
+            val earlier = Outcome(1_000L, true, "Up to date")
+            val settings = settings("192.168.1.20:8737").also { it.lastOutcome = earlier }
+            Caracole.status.value = SyncState.Ended(earlier)
+            val outcome = Syncs.run(settings, probe = true, http = Http(), ask = { throw OtherKeys(Units.OTHER_KEYS) },
+                                    phone = { error("the phone's caracole was asked") }, cleared = { cleared++ }) { n, songs ->
+                notified.add(n to songs)
+            }!!
+            assertFalse(outcome.ok)
+            assertEquals(Units.OTHER_KEYS, outcome.text)
+            assertEquals(outcome, settings.lastOutcome)
+            assertEquals(SyncState.Ended(outcome), Caracole.status.value)
+            assertEquals(emptyList(), notified)
+            assertEquals(0, cleared)
+            // Any other PeerError, as SyncError, is still no caracole answering: nothing done, nothing said.
+            assertNull(Syncs.run(settings, probe = true, http = Http(), ask = { throw PeerError("not a caracole") },
+                                 phone = { error("asked") }) { _, _ -> error("notified") })
+            assertEquals(outcome, settings.lastOutcome)
+        }
+
+    @Test
     fun `asked by hand, nothing answering is said`() = runBlocking {
         val by = settings(nothingAt())
         val outcome = Syncs.run(by, probe = false, http = Http(), phone = { error("asked") }) { _, _ -> error("notified") }!!
@@ -202,6 +230,17 @@ class SyncsTest {
         val both = outcome("""{"taken": [], "given": [], "left": [["song/a/b", "${SyncEngine.UNSETTLED}"],
             ["song/c/d", "${SyncEngine.UNSETTLED}"], ["song/e/f", "$why"]]}""")
         assertEquals("2 changed on both sides · 1 not synced: tap Sync to choose", Syncs.said(both))
+    }
+
+    @Test
+    fun `a removal left because its song is here is the sync up to date, never a unit not synced`() {
+        // The computer removed a song the phone keeps (core.sync.Take.SONG_HERE): the answer, left on purpose.
+        val kept = outcome("""{"taken": [], "given": [], "left": [["removed/a/b", "${Take.SONG_HERE}"]],
+            "agreed": 9, "indexed": []}""")
+        assertEquals("Up to date", Syncs.said(kept))
+        val more = outcome("""{"taken": ["song/c/d"], "given": [], "left": [["removed/a/b", "${Take.SONG_HERE}"],
+            ["song/e/f", "changed since compared"]]}""")
+        assertEquals("1 taken · 1 not synced: tap Sync to see why", Syncs.said(more))
     }
 
     @Test

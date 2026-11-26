@@ -198,8 +198,8 @@ def test_a_lookup_cancelled_before_it_ran_lists_no_steps_and_a_sheet_from_youtub
     shown = by_id(feed([made], {made.id: line}, outcomes={made.id: outcome(made, line, SHEET)},
                        facts={made.id: SHEET}, now=NOW))[made.id]
     assert [(c["name"], c["site"], c["state"]) for c in shown["steps"]] == [
-        ("Song", "", "done"), ("Audio", "YouTube", "done"), ("Lyrics", "", "done"), ("Chords", "", "done"),
-        ("PDF", "", "done")]
+        ("Song", "", "done"), ("Audio", "YouTube", "done"), ("Lyrics", "", "done"), ("Words", "", "skipped"),
+        ("Chords", "", "done"), ("PDF", "", "done")]
 
 
 def test_every_request_keeps_its_output_and_what_each_command_printed_once_it_is_opened():

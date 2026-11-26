@@ -459,11 +459,356 @@
     go.type = "submit";
     go.setAttribute("aria-label", "Make the sheet of " + String(s.title) + " by " + String(s.artist) +
       " from this video");
-    go.title = "Chords from its audio, lyrics from LRCLIB. A few minutes.";
+    // Where the lyrics are heard from the audio on a CPU alone, the time says so (``server.transcribe.time``).
+    const slow = server && server.transcribe && server.transcribe.ok === true &&
+      String(server.transcribe.time || "").indexOf("half an hour") >= 0;
+    go.title = "Chords from its audio; lyrics from the lyrics sites, else heard from the audio. A few minutes." +
+      (slow ? " (up to half an hour when they're heard)" : "");
     form.append(label, go);
     postInPlace(form, go, s);
     return form;
   };
+  // A sheet from an audio file of yours (web/audio_routes.py), served where this caracole makes chords
+  // (``server.audio.ok``): the bar's "+" and a dropped file (below, ``openAudio``), and on a song's card, beside From a
+  // YouTube video, Sheet from an audio file… for a song not ignored and with no human sheet, read from what its card
+  // carries (a purchase or YouTube's audio is no matter: the file replaces it). It opens the file chooser for that
+  // song, then the same dialog, the song's names shown and not to edit; its Make sheet posts this form (POST /audio
+  // with the song, its identity and the upload's id) in place, the song's line then saying how it goes.
+  const AUDIO = server && server.audio && typeof server.audio === "object" && server.audio.ok === true
+    ? server.audio : null;
+  let openAudio = null;  // (song, form): the chooser for a song's card; set once the dialog is made
+  const HUMAN = ["sheet.txt", "sheet.pdf"];
+  const audioSheet = (s) => {
+    if (!AUDIO || !openAudio || s.status === "ignored") return null;
+    if (listOf(s.files).some((f) => f && HUMAN.indexOf(f.name) >= 0)) return null;
+    const id = Number(s.id);
+    const asked = jobOfSong(id);
+    if (removing.has(id) || busy.has(id) || (asked && isActive(asked))) return null;
+    const form = songForm("audio-sheet", "/audio", s);
+    form.appendChild(hidden("upload", ""));
+    const go = el("button", "btn small", "Sheet from an audio file…");
+    go.type = "button";
+    go.setAttribute("aria-label", "Make the sheet of " + String(s.title) + " by " + String(s.artist) +
+      " from an audio file");
+    go.title = "Chords from the file; lyrics from the lyrics sites, else heard from it.";
+    go.addEventListener("click", () => openAudio(s, form, go));
+    form.appendChild(go);
+    postInPlace(form, go, s);
+    return form;
+  };
+  // The bar's "+" (``#add-audio``, before Filter) and its hidden chooser (``#audio-file``), made here alone, so the
+  // file on disk and the phone (whose ``server.audio`` says it can't) show neither; and the dialog
+  // (``dialog#audio-sheet``, a sheet from the bottom on a phone). A file chosen, or dropped on the Library, is sent at
+  // once (POST /audio/upload, its bytes as application/octet-stream, the form token in its header; a card's with its
+  // song and identity, so the answer's song is that one: XHR, for its progress, "Uploading “…” · 3.1 of 8.4 MB", the
+  // count for the eye alone, the live region saying only that it begins and how it ends; Cancel aborting it); then
+  // what it is and the song it names, Artist and Title filled with that guess (a card's song: its names, not to edit),
+  // the library's song, and what the file replaces as its audio; Make sheet, through ``sendRequest`` as the request
+  // form (POST /audio with the upload's id and the names), or the card's form in place; Cancel, or Escape, drops the
+  // file (POST /audio/drop). A refusal says the server's words, with Choose another file; a file dropped on the dialog
+  // is a new choice. A file past ``server.audio.limit`` is refused unsent, in the route's words (``too_big``). Of
+  // several files only the first is sent, and the dialog says so.
+  const holdsFiles = (e) => Boolean(e.dataTransfer) && Array.from(e.dataTransfer.types || []).indexOf("Files") >= 0;
+  // The served page never lets a drop load another page in its place: a file dropped where nothing takes it (another
+  // tab's panel, the bar), which the browser would open in the tab, the library page gone, is taken and nothing done
+  // with it; and so is a link or text dropped outside a field, which a browser loads as an address. Into a field (the
+  // search box, the request form's) a drop is the browser's own, which inserts its text. Who takes a drop (the
+  // Library, the "+"'s dialog) prevents it first; this one hears it last, on the document.
+  const editable = (node) => Boolean(node && node.closest && node.closest("input, textarea, [contenteditable]"));
+  const keepDrops = () => {
+    document.addEventListener("dragover", (e) => {
+      if (e.defaultPrevented || (!holdsFiles(e) && editable(e.target))) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "none";
+    });
+    document.addEventListener("drop", (e) => {
+      if (e.defaultPrevented || (!holdsFiles(e) && editable(e.target))) return;
+      e.preventDefault();
+    });
+  };
+  function audioDialog(sendRequest) {
+    const tools = byId("tools");
+    const filter = byId("filter");
+    const plus = el("button", "tool", "+");
+    plus.type = "button";
+    plus.id = "add-audio";
+    plus.setAttribute("aria-label", "Make a sheet from an audio file");
+    plus.title = "Make a sheet from an audio file";
+    plus.setAttribute("aria-haspopup", "dialog");
+    tools.insertBefore(plus, filter);
+    const chooser = el("input");
+    chooser.type = "file";
+    chooser.id = "audio-file";
+    chooser.hidden = true;
+    chooser.accept = "audio/*,.mp3,.m4a,.flac,.wav,.ogg,.aif,.aiff";
+    chooser.tabIndex = -1;
+    tools.appendChild(chooser);
+    const dialog = el("dialog", "audio-sheet");
+    dialog.id = "audio-sheet";
+    dialog.setAttribute("aria-labelledby", "audio-head");
+    const head = el("h2", "audio-head", "Sheet from an audio file");
+    head.id = "audio-head";
+    const line = el("p", "audio-line");
+    const said = el("span", "audio-said");  // the live region: an upload's start, its answer or its refusal
+    said.setAttribute("aria-live", "polite");
+    const count = el("span", "audio-count");  // how far it has gone, for the eye alone
+    count.setAttribute("aria-hidden", "true");
+    line.append(said, count);
+    const note = el("p", "audio-note");
+    note.hidden = true;
+    const body = el("div", "audio-body");
+    const acts = el("div", "audio-acts");
+    dialog.append(el("div", "grab"), head, line, note, body, acts);
+    document.body.appendChild(dialog);
+    const MB = (n) => (n / 1e6).toFixed(1);
+    const mins = (seconds) => {
+      const t = Math.round(Number(seconds) || 0);
+      return Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0");
+    };
+    let xhr = null;  // the upload on its way
+    let staged = null;  // the upload's id, once the server staged it, until it is made a sheet or dropped
+    let target = null;  // a card's song and its form, or null for the "+"
+    let opener = plus;
+    const button = (text, cls) => {
+      const b = el("button", cls || "btn", text);
+      b.type = "button";
+      return b;
+    };
+    const drop = () => {
+      if (xhr) {
+        xhr.abort();
+        xhr = null;
+      }
+      if (staged) {
+        fetch("audio/drop", { method: "POST", body: JSON.stringify({ upload: staged }), headers: {
+          Accept: "application/json", "Content-Type": "application/json",
+          "X-Caracole-Form-Token": String(server.csrf || "") } }).catch(() => null);
+        staged = null;
+      }
+    };
+    const close = () => {
+      if (dialog.open) dialog.close();
+      document.documentElement.classList.remove("sheet-open");
+      if (opener && opener.isConnected) opener.focus({ preventScroll: true });
+    };
+    const cancel = () => {
+      drop();
+      close();
+    };
+    const choose = () => chooser.click();
+    // Refused: the server's words (or the page's, for a file past the limit), and Choose another file.
+    const refuse = (words) => {
+      xhr = null;
+      said.textContent = words;
+      count.textContent = "";
+      said.classList.add("refused");
+      body.replaceChildren();
+      const again = button("Choose another file", "btn primary");
+      again.addEventListener("click", choose);
+      const no = button("Cancel");
+      no.addEventListener("click", cancel);
+      acts.replaceChildren(again, no);
+      again.focus({ preventScroll: true });
+    };
+    const field = (label, name, value) => {
+      const wrap = el("label", "f");
+      wrap.appendChild(el("span", null, label));
+      const input = el("input");
+      input.name = name;
+      input.required = true;
+      input.maxLength = 200;
+      input.autocomplete = "off";
+      input.value = value;
+      wrap.appendChild(input);
+      return [wrap, input];
+    };
+    // The upload's answer: what the file is, the song it names, and Make sheet.
+    const shown = (answer) => {
+      staged = String(answer.upload);
+      said.classList.remove("refused");
+      said.textContent = String(answer.name) + " · " + String(answer.format) + " · " + mins(answer.duration);
+      count.textContent = "";
+      const guess = answer.guess && typeof answer.guess === "object" ? answer.guess : {};
+      const form = el("form", "audio-form");
+      const make = el("button", "btn primary", "Make sheet");
+      make.type = "submit";
+      let names = null;
+      if (target) {
+        form.appendChild(el("p", "audio-names", String(target.s.display)));
+      } else {
+        const [artistBox, artist] = field("Artist", "artist", String(guess.artist || ""));
+        const [titleBox, title] = field("Title", "title", String(guess.title || ""));
+        form.append(artistBox, titleBox);
+        names = [artist, title];
+      }
+      // The song the file is for: a card's own (the route answers for the song it was sent with), else the guess's.
+      const song = answer.song && typeof answer.song === "object" ? answer.song : null;
+      if (song) {
+        const lib = el("p", "audio-song", "In your library: " + String(song.display));
+        if (song.has_sheet) {
+          lib.append(" · it has a sheet ");
+          if (song.sheet) {
+            const open = el("a", null, "Open");
+            open.href = String(song.sheet);
+            lib.appendChild(open);
+          }
+        }
+        const replaces = { purchase: "This file will replace its bought audio (the file in Music/ stays).",
+          youtube: "This file will replace its audio from YouTube.",
+          upload: "This file will replace the file you gave it before." }[song.audio];
+        form.appendChild(lib);
+        if (replaces) form.appendChild(el("p", "audio-replaces", replaces));
+        // Its sheet the song's own: nothing to make while the names are its.
+        if (song.has_sheet && names) {
+          const as = names.map((n) => n.value);
+          const same = () => names.every((n, k) => n.value === as[k]);
+          make.disabled = true;
+          for (const n of names) n.addEventListener("input", () => (make.disabled = same()));
+        }
+      }
+      const slow = TRANSCRIBE && TRANSCRIBE.ok === true && String(TRANSCRIBE.time || "").indexOf("half an hour") >= 0;
+      form.appendChild(el("p", "hint", "Chords from the file; lyrics from the lyrics sites, else heard from it. " +
+        (slow ? "A few minutes, up to half an hour when they're heard." : "A few minutes.")));
+      const no = button("Cancel");
+      no.addEventListener("click", cancel);
+      const bar = el("div", "audio-acts");
+      bar.append(make, no);
+      form.appendChild(bar);
+      acts.replaceChildren();
+      body.replaceChildren(form);
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const upload = staged;
+        staged = null;  // the job's now: no drop as the dialog closes
+        const was = target;
+        close();
+        if (was && was.form.isConnected) {
+          was.form.elements.namedItem("upload").value = upload;
+          was.form.requestSubmit();
+          return;
+        }
+        const fields = new URLSearchParams({ csrf: String(server.csrf || ""), upload });
+        let artist = "", title = "";
+        if (was) {
+          fields.set("song", String(Number(was.s.id)));
+          if (was.s.identity) fields.set("identity", String(was.s.identity));
+          [artist, title] = [String(was.s.artist), String(was.s.title)];
+        } else {
+          [artist, title] = names.map((n) => String(n.value || "").trim().replace(/\s+/g, " "));
+          fields.set("artist", artist);
+          fields.set("title", title);
+        }
+        sendRequest(artist, title, () => postTo("audio", fields));
+      });
+      (names ? names[1] : make).focus({ preventScroll: true });
+    };
+    // A file to send: the dialog opened (or kept open: Choose another file), the one before let go.
+    const begin = (file, of = 1) => {
+      drop();
+      said.classList.remove("refused");
+      count.textContent = "";
+      body.replaceChildren();
+      note.hidden = of < 2;
+      note.textContent = of < 2 ? "" : "Only the first file is used: " + String(file.name || "audio") + ".";
+      if (!dialog.open) {
+        if (!window.matchMedia("(min-width: 720px)").matches) document.documentElement.classList.add("sheet-open");
+        dialog.showModal();
+      }
+      const no = button("Cancel");
+      no.addEventListener("click", cancel);
+      acts.replaceChildren(no);
+      const limit = Number(AUDIO.limit) || 0;
+      if (limit && file.size > limit) {
+        refuse(String(AUDIO.too_big || "That file is too big."));
+        return;
+      }
+      const name = String(file.name || "audio");
+      said.textContent = "Uploading “" + name + "”";
+      count.textContent = " · 0.0 of " + MB(file.size) + " MB";
+      no.focus({ preventScroll: true });
+      const sending = new XMLHttpRequest();
+      xhr = sending;
+      const asked = new URLSearchParams({ name });
+      if (target) {  // a card's: the answer says that song's audio, whatever the file names
+        asked.set("song", String(Number(target.s.id)));
+        if (target.s.identity) asked.set("identity", String(target.s.identity));
+      }
+      sending.open("POST", "audio/upload?" + asked.toString());
+      // A browser sends a File as its own type (audio/mpeg), which a bytes route refuses: the bytes, as bytes.
+      sending.setRequestHeader("Content-Type", "application/octet-stream");
+      sending.setRequestHeader("Accept", "application/json");
+      sending.setRequestHeader("X-Caracole-Form-Token", String(server.csrf || ""));
+      sending.upload.onprogress = (e) => {
+        if (xhr === sending) count.textContent = " · " + MB(e.loaded) + " of " +
+          MB(e.lengthComputable ? e.total : file.size) + " MB";
+      };
+      sending.onload = () => {
+        if (xhr !== sending) return;
+        xhr = null;
+        let answer = null;
+        try {
+          answer = JSON.parse(sending.responseText);
+        } catch (err) {
+          answer = null;
+        }
+        if (sending.status === 200 && answer && typeof answer.upload === "string") {
+          if (dialog.open) shown(answer);
+          else {  // closed meanwhile: let go of it
+            staged = answer.upload;
+            drop();
+          }
+        } else {
+          refuse((answer && answer.error) || "caracole serve answered " + sending.status + ".");
+        }
+      };
+      sending.onerror = () => {
+        if (xhr === sending) refuse("No answer from caracole serve. Is it running?");
+      };
+      sending.send(file);
+    };
+    chooser.addEventListener("change", () => {
+      const file = chooser.files && chooser.files[0];
+      const of = chooser.files ? chooser.files.length : 0;
+      chooser.value = "";  // the same file chosen again is a change too
+      if (file) begin(file, of);
+    });
+    plus.addEventListener("click", () => {
+      target = null;
+      opener = plus;
+      choose();
+    });
+    openAudio = (s, form, go) => {
+      target = { s, form };
+      opener = go;
+      choose();
+    };
+    dialog.addEventListener("cancel", (e) => {  // Escape: Cancel
+      e.preventDefault();
+      cancel();
+    });
+    // A file dropped on the Library, while it shows: the dialog, with it, for the "+"; on the dialog open, a new
+    // choice for whom it is open. Anywhere else the page's guard (``keepDrops``) keeps the browser from opening it.
+    const dropped = (e) => (e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files : []);
+    const takes = (where, ok, fresh) => {
+      where.addEventListener("dragover", (e) => {
+        if (!holdsFiles(e) || !ok()) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+      });
+      where.addEventListener("drop", (e) => {
+        const files = dropped(e);
+        if (!files.length || !ok()) return;
+        e.preventDefault();
+        if (fresh) {
+          target = null;
+          opener = plus;
+        }
+        begin(files[0], files.length);
+      });
+    };
+    takes(libraryView, () => !dialog.open && libraryView.checkVisibility(), true);
+    takes(dialog, () => dialog.open, false);
+  }
   // Lyrics transcribed from a song's audio (web/transcribe_routes.py), on a song's card, served: for a song offered
   // one (``server.transcribe.songs``: its audio from YouTube, every lyrics site missed) where this caracole transcribes
   // (``server.transcribe.ok``), Transcribe the lyrics and how long it takes here (POST /transcribe with the song:
@@ -472,20 +817,30 @@
   // or in the Requests tab (``transcribing``, requests.js's form). The songs offered are read again once a song's job
   // is over (``offerAfter``, ``readTranscriptions``: GET /transcribe), so a sheet from a video that found no lyrics
   // offers it at once, a transcription that failed offers it again, and one made meanwhile offers it no more.
+  // The owner's word over caracole's, the same way (``overrideOffer``): a song heard to have nothing sung
+  // (``server.transcribe.nothing``), or said not sung by you (``unsung``, its hint your word), has Transcribe anyway
+  // (``force=1``), one with a transcript kept (``server.transcribe.transcribed``) Not sung: chords only (``none=1``).
   const TRANSCRIBE = server && server.transcribe && typeof server.transcribe === "object" ? server.transcribe : null;
   const TRANSCRIBES = Boolean(TRANSCRIBE && TRANSCRIBE.ok === true);  // only then is the offer read again
-  let transcribable = new Set(TRANSCRIBES ? listOf(TRANSCRIBE.songs).map(Number) : []);
+  const offeredIn = (body, name) => new Set(body && body.ok === true ? listOf(body[name]).map(Number) : []);
+  let transcribable = offeredIn(TRANSCRIBE, "songs");
+  let nothingHeard = offeredIn(TRANSCRIBE, "nothing");
+  let saidUnsung = offeredIn(TRANSCRIBE, "unsung");
+  let unsung = offeredIn(TRANSCRIBE, "transcribed");
   const transcribeHint = () => "From the audio, " + String(TRANSCRIBE.time || "") + ".";
-  const offersTranscription = (id) => {
+  // No request of the song waits or runs, and it isn't going.
+  const freeToAsk = (id) => {
     const asked = jobOfSong(id);
-    return transcribable.has(Number(id)) && !removing.has(Number(id)) && !busy.has(Number(id)) &&
-      !(asked && isActive(asked));
+    return !removing.has(Number(id)) && !busy.has(Number(id)) && !(asked && isActive(asked));
   };
+  const offersTranscription = (id) => transcribable.has(Number(id)) && freeToAsk(id);
   const transcribing = (id) => transcribable.delete(Number(id));
+  const offeredAny = (id) => transcribable.has(id) || nothingHeard.has(id) || saidUnsung.has(id) || unsung.has(id);
   // A song that may be offered one once its job is over: its lyrics missing, and a sheet from YouTube for it (no human
-  // sheet, not ignored, no purchase: its card's ``youtubeSheet``), as a sheet from a video or a transcription leaves
-  // it.
-  const mayBeOffered = (s) => Boolean(s) && typeof s === "object" && s.lyrics === "missing" && s.youtubeSheet === true;
+  // sheet, not ignored, no purchase: its card's ``youtubeSheet``), or an auto sheet (a purchase's), as a sheet from a
+  // video or a transcription leaves it.
+  const mayBeOffered = (s) => Boolean(s) && typeof s === "object" && s.lyrics === "missing" &&
+    (s.youtubeSheet === true || s.auto === true);
   const songById = (id) => (byIndex.has(Number(id)) ? songs[byIndex.get(Number(id))] : arrived.get(Number(id)) || null);
   // A song's card made again where it was made already (open, or opened once), its offer as it is now; one never opened
   // is made with it when it opens.
@@ -513,12 +868,18 @@
     }).then((r) => (r.ok ? r.json() : null)).catch(() => null).then((body) => {
       transcribeAsking = false;
       if (body && typeof body === "object") {
-        const now = new Set(body.ok === true ? listOf(body.songs).map(Number) : []);
-        const changed = Array.from(now).filter((id) => !transcribable.has(id))
-          .concat(Array.from(transcribable).filter((id) => !now.has(id)));
-        transcribable = now;
+        const changed = new Set();
+        const differ = (was, now) => {
+          for (const id of now) if (!was.has(id)) changed.add(id);
+          for (const id of was) if (!now.has(id)) changed.add(id);
+          return now;
+        };
+        transcribable = differ(transcribable, offeredIn(body, "songs"));
+        nothingHeard = differ(nothingHeard, offeredIn(body, "nothing"));
+        saidUnsung = differ(saidUnsung, offeredIn(body, "unsung"));
+        unsung = differ(unsung, offeredIn(body, "transcribed"));
         for (const id of changed) cardAgain(id);
-        if (changed.length) document.dispatchEvent(new CustomEvent("caracole:transcribe"));
+        if (changed.size) document.dispatchEvent(new CustomEvent("caracole:transcribe"));
       }
       if (transcribeAgain) {
         transcribeAgain = false;
@@ -531,14 +892,14 @@
     const id = view.songId === null || view.songId === undefined ? null : Number(view.songId);
     if (!TRANSCRIBES || view.kind !== "song" || id === null) return;
     const s = view.card && typeof view.card === "object" ? view.card : songById(id);
-    if (transcribable.has(id) || mayBeOffered(s)) readTranscriptions();
+    if (offeredAny(id) || mayBeOffered(s)) readTranscriptions();
   };
   // The Requests tab's request of a song over, one this page may not follow (asked on another device): by its name.
   const requestOver = (display) => {
     if (!TRANSCRIBES) return;
     const s = songs.find((x) => x && String(x.display) === String(display)) ||
       Array.from(arrived.values()).find((x) => x && String(x.display) === String(display));
-    if (s && (transcribable.has(Number(s.id)) || mayBeOffered(s))) readTranscriptions();
+    if (s && (offeredAny(Number(s.id)) || mayBeOffered(s))) readTranscriptions();
   };
   // The song a request of the Requests tab names (``display``) when it is offered one now, its card; else null.
   const offeredSong = (display) => {
@@ -559,6 +920,35 @@
     form.append(go, el("p", "hint", transcribeHint()));
     postInPlace(form, go, s, (body) => {
       transcribing(s.id);
+      return body.job;
+    });
+    return form;
+  };
+  // The owner's word over caracole's on a song's card, served: Transcribe anyway for a song heard to have nothing
+  // sung (caracole transcribe --force: its words heard whatever the singing found), Not sung: chords only for one
+  // with a transcript kept (--none: the transcript dropped, its sheet made again of its chords alone, that audio never
+  // heard again); a song you said isn't sung says so, with Transcribe anyway; posted in place as Transcribe the
+  // lyrics is, and gone once asked for.
+  const overrideOffer = (s) => {
+    const id = Number(s.id);
+    const said = saidUnsung.has(id);  // your word, not what was heard
+    const anyway = said || nothingHeard.has(id);
+    if (!(anyway || unsung.has(id)) || !freeToAsk(id)) return null;
+    const form = songForm(anyway ? "transcribe-anyway" : "not-sung", "/transcribe", s);
+    form.appendChild(hidden(anyway ? "force" : "none", "1"));
+    const hint = el("p", "hint", said ? "You said it isn't sung." : anyway ? "Nothing sung was heard in its audio." :
+      "Its words were heard from the audio, unverified.");
+    const go = el("button", "btn small", anyway ? "Transcribe anyway" : "Not sung: chords only");
+    go.type = "submit";
+    go.setAttribute("aria-label", (anyway ? "Transcribe the lyrics of " : "Not sung: make the chords alone of ") +
+      String(s.title) + " by " + String(s.artist) + (anyway ? " anyway" : ""));
+    go.title = anyway ? "Whisper hears it all the same, and the auto sheet is made again over its words." :
+      "Its transcript is dropped, the auto sheet made again of its chords alone, and this audio is never heard again.";
+    form.append(hint, go);
+    postInPlace(form, go, s, (body) => {
+      nothingHeard.delete(id);
+      saidUnsung.delete(id);
+      unsung.delete(id);
       return body.job;
     });
     return form;
@@ -1480,8 +1870,12 @@
     if (fromYouTube) more.push(fromYouTube);
     const fromVideo = server ? youtubeSheet(s) : null;
     if (fromVideo) more.push(fromVideo);
+    const fromFile = server ? audioSheet(s) : null;
+    if (fromFile) more.push(fromFile);
     const transcribe = server ? transcribeOffer(s) : null;
     if (transcribe) more.push(transcribe);
+    const override = server ? overrideOffer(s) : null;
+    if (override) more.push(override);
     const picked = lacuerdaNote(s);
     if (picked) more.push(picked);
     if (server && s.notFound && s.status === "wanted" && !removing.has(id)) {
@@ -4615,10 +5009,12 @@
         if (fromVideo.contains(document.activeElement)) focusOn(p);
         fromVideo.remove();
       }
-      const transcribe = inItem(item, "form.transcribe");
-      if (transcribe && isActive(view)) {  // and its lyrics transcribed
-        if (transcribe.contains(document.activeElement)) focusOn(p);
-        transcribe.remove();
+      for (const offer of ["form.transcribe", "form.transcribe-anyway", "form.not-sung"]) {
+        const transcribe = inItem(item, offer);
+        if (transcribe && isActive(view)) {  // and its lyrics transcribed, or said not sung
+          if (transcribe.contains(document.activeElement)) focusOn(p);
+          transcribe.remove();
+        }
       }
       const picker = inItem(item, "form.pick-form");
       if (picker && isActive(view)) {  // POST /review would refuse a pick now: the line is drawn again after
@@ -4975,52 +5371,64 @@
       }
       return null;
     };
+    // A request of a song by its names (``sending``, its POST: the answer's ``job``): a line for it at once under the
+    // bar, "Sending…", which then says how its request goes; a song the library has, its own line there; one shown
+    // there already, asked for again, that line. A refusal says why on it until the next request. The view, or null.
+    // The request form's, and a sheet from an audio file's (Make sheet in its dialog).
+    const sendRequest = (artist, title, sending) => {
+      for (const card of refused) card.remove();
+      refused.clear();
+      let spot = placeholder(artist, title);
+      requestedList.prepend(spot);
+      requested.hidden = false;
+      if (state.all) spot.scrollIntoView({ block: "nearest", behavior: smooth() });  // under the bar, in view
+      return sending().then((answer) => {
+        const view = answer.ok && answer.body && answer.body.job;
+        if (!view) {
+          showLine(progressIn(spot), failure(answer));
+          refused.add(spot);
+          return null;
+        }
+        const id = Number(view.id);
+        const shown = spots.has(id) ? [id, spots.get(id)] : spotOf(view);
+        if (shown) {  // asked for again: its line says how it goes, where it is, still in the page
+          if (chevronOf(spot)) awayGone(chevronOf(spot));  // it leaves the page
+          spot.remove();
+          keepSelected();
+          spot = shown[1];
+          if (shown[0] !== id) spots.delete(shown[0]);
+        } else {
+          const i = songOf(view) === null ? undefined : byIndex.get(songOf(view));
+          if (i !== undefined) spot = refill(spot, lineFor(songs[i]));  // a song the library has: its line
+        }
+        spots.set(id, spot);
+        track(view);
+        return view;
+      }, () => {
+        showLine(progressIn(spot), UNREACHABLE);
+        refused.add(spot);
+        return null;
+      });
+    };
     if (requestForm && requested) {
       requestForm.addEventListener("submit", (e) => {
         e.preventDefault();
-        for (const card of refused) card.remove();
-        refused.clear();
         const field = (name) => requestForm.elements.namedItem(name);
         const typed = (name) => String(field(name).value || "").trim().replace(/\s+/g, " ");
-        let spot = placeholder(typed("artist"), typed("title"));
-        requestedList.prepend(spot);
-        requested.hidden = false;
-        if (state.all) spot.scrollIntoView({ block: "nearest", behavior: smooth() });  // under the bar, in view
         const button = requestForm.querySelector('button[type="submit"]');
         button.disabled = true;
-        send(requestForm).then((answer) => {
+        sendRequest(typed("artist"), typed("title"), () => send(requestForm)).then((view) => {
           button.disabled = false;
-          const view = answer.ok && answer.body && answer.body.job;
-          if (!view) {
-            showLine(progressIn(spot), failure(answer));
-            refused.add(spot);
-            return;
-          }
+          if (!view) return;
           for (const name of ["artist", "title", "album", "duration", "youtube"]) {
             if (field(name)) field(name).value = "";  // a YouTube video's field only where a sheet can be made of one
           }
           typedInto.clear();
-          const id = Number(view.id);
-          const shown = spots.has(id) ? [id, spots.get(id)] : spotOf(view);
-          if (shown) {  // asked for again: its line says how it goes, where it is, still in the page
-            if (chevronOf(spot)) awayGone(chevronOf(spot));  // it leaves the page
-            spot.remove();
-            keepSelected();
-            spot = shown[1];
-            if (shown[0] !== id) spots.delete(shown[0]);
-          } else {
-            const i = songOf(view) === null ? undefined : byIndex.get(songOf(view));
-            if (i !== undefined) spot = refill(spot, lineFor(songs[i]));  // a song the library has: its line
-          }
-          spots.set(id, spot);
-          track(view);
-        }, () => {
-          button.disabled = false;
-          showLine(progressIn(spot), UNREACHABLE);
-          refused.add(spot);
         });
       });
     }
+    keepDrops();
+    if (AUDIO && requested) audioDialog(sendRequest);
     schedule();
   }
   summarize();

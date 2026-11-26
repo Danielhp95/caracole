@@ -10,6 +10,7 @@ import io.github.danielhp95.caracole.core.py.PyUrl
 import io.github.danielhp95.caracole.core.sync.Compare
 import io.github.danielhp95.caracole.core.sync.Comparison
 import io.github.danielhp95.caracole.core.sync.Conflicts
+import io.github.danielhp95.caracole.core.sync.OtherKeys
 import io.github.danielhp95.caracole.core.sync.PeerError
 import io.github.danielhp95.caracole.core.sync.PeerState
 import io.github.danielhp95.caracole.core.sync.SameCaracole
@@ -289,11 +290,13 @@ class SyncRoutes(val engine: SyncEngine, val queue: JobQueue, val settings: Sync
     )
 
     /** [ask], the computer asked: refused as sync_routes._compared refuses (502 when it can't be asked, 409 when it is
-     * this very phone). */
+     * this very phone or keys its songs by other rules, OtherKeys). */
     private fun <T> asking(ask: () -> T): T = try {
         ask()
     } catch (e: SameCaracole) {
         throw Refused(409, "The same scribe", e.message ?: "")
+    } catch (e: OtherKeys) {
+        throw Refused(409, "Update both first", e.message ?: "")
     } catch (e: SyncError.BadAddress) {
         throw Refused(400, "Not an address", e.message ?: "")
     } catch (e: PeerError) {
