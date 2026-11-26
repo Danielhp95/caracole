@@ -1,10 +1,13 @@
 package io.github.danielhp95.caracole.core.index
 
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import androidx.sqlite.execSQL
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.json.PyJson
+import io.github.danielhp95.caracole.core.sync.SyncEngine
 import io.github.danielhp95.caracole.core.testing.Dumps
 import io.github.danielhp95.caracole.core.testing.Fixtures
 import io.github.danielhp95.caracole.core.testing.Misses
@@ -132,6 +135,23 @@ class IndexTransferTest {
 
     @Test fun newestIsWhatIndexTransferNewestSays() = Misses(IndexReplay.NEWEST).also { IndexReplay.newest(it) }.assertNone()
 
+    @Test fun theHaveDocumentIsPythons() = Misses(IndexReplay.HAVE).also { IndexReplay.have(it) }.assertNone()
+
+    /** route.jsonl: the route the phone asks its part over is the one caracole serve answers (method, path, its
+     * token's header, JSON), and the statuses after which it asks for the whole are those the record names, no
+     * other (a route that answered 404 by mistake falls back; one that answers 400 must show). */
+    @Test fun theNewerRouteIsTheOneTheRecordStates() {
+        val out = io.github.danielhp95.caracole.core.testing.Corpus.records("index/route.jsonl").single().out!!
+            .jsonObject
+        fun text(key: String) = out.getValue(key).jsonPrimitive.content
+        assertEquals("POST" to "json", text("method") to text("body"))
+        assertEquals(text("path"), io.github.danielhp95.caracole.core.sync.PeerClient.INDEX_NEWER_PATH)
+        assertEquals(text("token_header"), io.github.danielhp95.caracole.core.sync.PeerClient.TOKEN_HEADER)
+        assertEquals(out.getValue("whole_instead").jsonArray.map { it.jsonPrimitive.int }.toSet(),
+                     io.github.danielhp95.caracole.core.sync.PeerClient.WHOLE_INSTEAD)
+        assertEquals(text("limit").toLong(), 1024L * 1024)
+    }
+
     @Test fun theSitesAreIndexTransfersSites() = Misses(IndexReplay.SITES).also { IndexReplay.sites(it) }.assertNone()
 
     @Test fun aRecordIsWrittenBackAsJsonDumpsWritesJsonLoadsReading() {
@@ -178,6 +198,106 @@ class IndexTransferTest {
                                     Triple(634073L, "", 0L)), rows(db))
                 assertEquals(setOf("0-9", "s", "t"), letters(db))
             }
+        }
+    }
+
+    /** What a merge says it read (Merged.newest): each site's newest read in the file, as `newest` reads a database,
+     * never the database's after it, which the phone's own reads move; of the sites merged alone. */
+    @Test fun aMergeSaysEachSitesNewestReadInTheFileNeverTheDatabases() {
+        TestDb.fresh(tmp.newFolder()).use { database ->
+            // A whole export into a new phone: the file's newest is what the phone's database says after it.
+            val merged = database.writeBlocking { IndexTransfer.merge(it, export("full-export"), now) }
+            assertEquals(database.read { IndexTransfer.newest(it) }, merged.newest)
+            assertEquals(IndexTransfer.SITES.toSet(), merged.newest.keys, "every site the file holds a read of")
+        }
+        TestDb.fresh(tmp.newFolder()).use { database ->
+            // The phone's own read of gtptabs.com since (a progress record of its own, later than the file's).
+            database.writeBlocking { it.kvSet("gtptabs:index:complete_at", "2026-11-02T09:00:00Z") }
+            val gtptabs = listOf("gtptabs")
+            val merged = database.writeBlocking { IndexTransfer.merge(it, export("partial-export"), now, gtptabs) }
+            assertEquals(mapOf("gtptabs" to "2026-10-28T03:30:00Z"), merged.newest, "the file's, of the site merged")
+            assertEquals("2026-11-02T09:00:00Z", database.read { IndexTransfer.newest(it) }["gtptabs"])
+            // A merge of nothing newer says the file's all the same.
+            val again = database.writeBlocking { IndexTransfer.merge(it, export("partial-export"), now, gtptabs) }
+            assertEquals(false, again.changed)
+            assertEquals(mapOf("gtptabs" to "2026-10-28T03:30:00Z"), again.newest)
+            val both = database.writeBlocking { IndexTransfer.merge(it, export("partial-export"), now) }
+            assertEquals(mapOf("gtptabs" to "2026-10-28T03:30:00Z", "musescore" to "2026-10-28T03:30:00Z"), both.newest)
+        }
+    }
+
+    /** A site the file says it read after the clock's bound (`notAfter`) is left out of what it says it read: its
+     * records that late were never taken. */
+    @Test fun aSiteTheFileDatesAfterTheBoundIsNoReadItSaysItTook() {
+        TestDb.fresh(tmp.newFolder()).use { database ->
+            val bound = Stamps.parse("2026-10-27T00:00:00Z")!!
+            val merged = database.writeBlocking {
+                IndexTransfer.merge(it, export("partial-export"), now, notAfter = bound)
+            }
+            assertEquals(emptyMap(), merged.newest)
+            val at = Stamps.parse("2026-10-28T03:30:00Z")!!
+            val later = database.writeBlocking { IndexTransfer.merge(it, export("partial-export"), now, notAfter = at) }
+            assertEquals(mapOf("gtptabs" to "2026-10-28T03:30:00Z", "musescore" to "2026-10-28T03:30:00Z"),
+                         later.newest, "a read at the bound itself is no later than it")
+        }
+    }
+
+    /** kv `index:merged` (MergedIndexes): each site's latest newest read of the whole exports merged, never moved back
+     * by an older file, a site it never merged left as it was; its odd entries none. */
+    @Test fun theRecordOfTheExportsMergedKeepsEachSitesLatest() {
+        TestDb.fresh(tmp.newFolder()).use { database ->
+            assertEquals(emptyMap(), database.read { MergedIndexes.of(it) })
+            fun record(vararg sites: Pair<String, String>) = database.writeBlocking {
+                MergedIndexes.record(it, Merged(emptyMap(), false, newest = mapOf(*sites)))
+            }
+            record("ug" to "2026-11-17T03:30:00Z", "gtptabs" to "2026-11-10T03:30:00Z")
+            record("ug" to "2026-11-10T03:30:00Z", "lacuerda" to "2026-11-01T00:00:00+01:00")
+            assertEquals(mapOf("gtptabs" to "2026-11-10T03:30:00Z", "lacuerda" to "2026-11-01T00:00:00+01:00",
+                               "ug" to "2026-11-17T03:30:00Z"), database.read { MergedIndexes.of(it) })
+            assertEquals("""{"gtptabs": "2026-11-10T03:30:00Z", "lacuerda": "2026-11-01T00:00:00+01:00", """ +
+                             """"ug": "2026-11-17T03:30:00Z"}""", database.read { it.kvGet(MergedIndexes.KEY) },
+                         "its sites in code-point order, as kv text")
+            database.writeBlocking { it.kvSet(MergedIndexes.KEY, """{"ug": "not a time", "lacuerda": 3}""") }
+            assertEquals(mapOf("ug" to "not a time"), database.read { MergedIndexes.of(it) })
+            record("ug" to "2026-11-10T03:30:00Z")
+            assertEquals(mapOf("ug" to "2026-11-10T03:30:00Z"), database.read { MergedIndexes.of(it) },
+                         "a stamp that is no time gives way")
+        }
+    }
+
+    /** A sitemap the computer re-checked and found unchanged (its record's `checked_at` alone moved: a 304) moves the
+     * phone's record on and writes no row of it, and is no site taken: no action told, none in a sync's report; a
+     * second merge writes nothing (index_transfer._sitemaps alike, its merge.jsonl's `rechecked` record). */
+    @Test fun aSitemapFoundUnchangedMovesItsRecordAloneAndIsNoSiteTaken() {
+        val export = export("rechecked-export")
+        TestDb.fresh(tmp.newFolder()).use { database ->
+            database.writeBlocking { Fixtures.load(it, "index/fixtures/phone-after.jsonl") }
+            val rows = { database.read { db -> db.query("SELECT * FROM musescore_index ORDER BY path") { it.text(0) } } }
+            val before = rows()
+            val said = ArrayList<MergeProgress>()
+            val (merged, written) = database.writeBlocking { db ->
+                val changes = db.one("SELECT total_changes()") { it.long(0)!! }!!
+                val merged = IndexTransfer.merge(db, export, now, listOf("musescore"), progress = { said += it })
+                merged to db.one("SELECT total_changes()") { it.long(0)!! }!! - changes
+            }
+            assertTrue(merged.changed)
+            assertEquals(mapOf("musescore" to emptyMap()), merged.sites)
+            assertEquals(1L, written, "its record alone")
+            assertEquals(before, rows())
+            val theirs = BundledSQLiteDriver().open(export.path).let { c ->
+                try {
+                    c.prepare("SELECT value FROM kv WHERE key = 'musescore:sitemaps'").use { it.step(); it.getText(0) }
+                } finally {
+                    c.close()
+                }
+            }
+            assertTrue(PyJson.equal(Canonical.parse(theirs),
+                                    Canonical.parse(database.read { it.kvGet("musescore:sitemaps") }!!)))
+            assertTrue(said.none { it.site == "musescore" && it.action == "sitemap" })
+            val counts = mapOf("musescore" to 1L)
+            assertEquals(emptyList(), SyncEngine.taken(merged, counts, counts, listOf("musescore")) { null })
+            val again = database.writeBlocking { IndexTransfer.merge(it, export, now, listOf("musescore")) }
+            assertTrue(!again.changed, "a second merge writes nothing")
         }
     }
 }

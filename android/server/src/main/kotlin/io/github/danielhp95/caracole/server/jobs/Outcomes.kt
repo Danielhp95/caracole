@@ -4,6 +4,7 @@ import io.github.danielhp95.caracole.core.py.PyRegex
 import io.github.danielhp95.caracole.core.py.PyText
 import io.github.danielhp95.caracole.core.py.PyUnicode
 import io.github.danielhp95.caracole.core.py.PyUrl
+import io.github.danielhp95.caracole.core.sync.SyncEngine
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -171,9 +172,51 @@ object Outcomes {
     const val INTERRUPTED_WAITED = "The server stopped before it ran. Try again runs it."
     const val LYRICS_KEPT = "Lyrics kept."  // an interrupted lyrics pick's, its lyrics kept before the stop
     private const val NO_NEW = "no new lyrics"  // lyrics_pick.py's: a pick's chords skipped as it kept nothing
+
+    /** A sync's, whose next step is Compare again ([COMPARE_AGAIN]), never Try again: the action its entry offers
+     * named (outcome.py's INTERRUPTED_SYNC_RAN and INTERRUPTED_SYNC_WAITED). */
+    const val INTERRUPTED_SYNC_RAN = "The server stopped mid-way. Compare again to finish."
+    const val INTERRUPTED_SYNC_WAITED = "The server stopped before it ran. Compare again to run it."
+    /** A take's (the other device pushed) and a pull's (the other caracole asked), whose entry offers no action: what
+     * the owner can do, from the other side (outcome.py's INTERRUPTED_TAKE_* and INTERRUPTED_PULL_*). */
+    const val INTERRUPTED_TAKE_RAN = "The server stopped mid-way. Share again from the other device to finish."
+    const val INTERRUPTED_TAKE_WAITED = "The server stopped before it ran. Share again from the other device to run it."
+    const val INTERRUPTED_PULL_RAN = "The server stopped mid-way. Sync again from the other caracole to finish."
+    const val INTERRUPTED_PULL_WAITED = "The server stopped before it ran. Sync again from the other caracole to run it."
+    /** A merge of the phone's index pages (`POST /peer/index`), which offers none either: the phone forgets its notes
+     * of those pages only once their merge ends done (SyncEngine's index stage), so its next sync sends them again
+     * (outcome.py's INTERRUPTED_MERGE_*). */
+    const val INTERRUPTED_MERGE_RAN = "The server stopped mid-way. The phone's next sync sends them again."
+    const val INTERRUPTED_MERGE_WAITED = "The server stopped before it ran. The phone's next sync sends them again."
+    private val INTERRUPTED = mapOf("sync" to (INTERRUPTED_SYNC_RAN to INTERRUPTED_SYNC_WAITED),
+                                    "peer-push" to (INTERRUPTED_TAKE_RAN to INTERRUPTED_TAKE_WAITED),
+                                    "peer-pull" to (INTERRUPTED_PULL_RAN to INTERRUPTED_PULL_WAITED),
+                                    Status.INDEX_MERGE_KIND to (INTERRUPTED_MERGE_RAN to INTERRUPTED_MERGE_WAITED))
+    /** A give stopped after some of its pushes, in commands/peer.py's words: its `given_so_far` ("3 given in the
+     * first 2 pushes of 4; then …"), which SyncEngine's give writes alike; the count of what was given said there, so
+     * its outcome says it once (outcome.py's _GIVEN_SO_FAR, test_web_outcome.py feeding it given_so_far's own
+     * words). Reword those and this with them. */
+    private val GIVEN_SO_FAR = PyRegex.compile("""\b\d+ given in the first """)
     internal val ELSEWHERE = mapOf("lacuerda" to "LaCuerda has a sheet",
                                   "gtptabs" to "gtptabs lists a page for it")
     private val NO_UNITS = setOf(Status.INDEX_MERGE_KIND)
+
+
+    /** Why caracole serve's sync took and gave no index, its index stage skipped for the other's database of another
+     * schema (sync_routes.INDEXES_NEWER and INDEXES_OLDER), as outcome.py's indexes_skipped reads them. */
+    val INDEXES_SKIPPED: List<String> = listOf(
+        "The indexes there are of a newer caracole: update this one to take them",
+        "The indexes there are of an older caracole: update that one to share them",
+    )
+
+    /** Why a sync's index stage took and gave no index, when it skipped them for the other's database of another
+     * schema (outcome.py's indexes_skipped): caracole serve's words, or the phone's own (SyncEngine.INDEXES_NEWER,
+     * INDEXES_OLDER); null for one skipped for nothing newer or left out, and for any other. */
+    fun indexesSkipped(stages: List<Stage>): String? = stages.firstOrNull {
+        it.name == SyncEngine.INDEX && it.state == Job.SKIPPED && (it.detail in INDEXES_SKIPPED ||
+            it.detail == SyncEngine.INDEXES_NEWER || it.detail == SyncEngine.INDEXES_OLDER)
+    }?.detail
+
     val COMPARE_AGAIN = Action("Compare again", href = "/#tab=sync")
 
     // --- the running request's steps --------------------------------------------------------------------------
@@ -397,26 +440,45 @@ object Outcomes {
     /** A sync, a take, a pull or a merge over (outcome.py's _peer_outcome). */
     private fun peerOutcome(job: Shape, kind: String, line: Line): Outcome {
         val action = if (kind == "sync") COMPARE_AGAIN else null
+        val taken = job.units.count { it.outcome == "taken" }
+        val given = job.units.count { it.outcome == "given" }
+        val left = Status.changesLeft(job.units).size
+        val parts = ArrayList<String>()
+        if (taken > 0 || kind != "sync") parts += "${Status.plural(taken, "change")} taken"
+        val gave = if (given > 0) listOf("${Status.plural(given, "change")} given") else emptyList()
+        val said = if (parts.isNotEmpty() || gave.isNotEmpty()) capitalize((parts + gave).joinToString(", ")) + "."
+                   else "Nothing changed in either book."
+        val kept = if (left > 0) " ${Status.plural(left, "change")} left as ${if (left == 1) "it was" else "they were"}."
+                   else ""
+        // Changes taken or given, then a failure (any stage after them, or the server stopping it): what was shared
+        // said first, as the Sync sheet titles it "Synced with", then the failure, never doubling its words.
+        val shared = taken > 0 || given > 0
         if (job.state == Job.INTERRUPTED) {
-            return Outcome("waiting", "Interrupted", if (job.startedAt != null) INTERRUPTED_RAN else INTERRUPTED_WAITED, action)
+            val (ran, waited) = INTERRUPTED[kind] ?: (INTERRUPTED_RAN to INTERRUPTED_WAITED)
+            val stopped = if (job.startedAt != null) ran else waited
+            return Outcome("waiting", "Interrupted", if (shared) "$said$kept $stopped" else stopped, action)
         }
-        if (line.tone == "failed") return Outcome("failed", "Failed", sentence(line.text), action)
+        val after = shared && (line.tone == "failed" || job.stages.any { it.state == Job.FAILED })
+        if (line.tone == "failed" && !after) return Outcome("failed", "Failed", sentence(line.text), action)
         if (kind in NO_UNITS) {
             val said = job.stages.firstOrNull { it.state == Job.DONE && it.detail.isNotEmpty() }?.detail ?: ""
             return Outcome(line.tone, line.text, if (said.isNotEmpty()) sentence(said) else "")
         }
-        val taken = job.units.count { it.outcome == "taken" }
-        val given = job.units.count { it.outcome == "given" }
-        val left = job.units.count { it.outcome == "left" }
-        val parts = ArrayList<String>()
-        if (taken > 0 || kind != "sync") parts += "${Status.plural(taken, "change")} taken"
-        if (given > 0) parts += "${Status.plural(given, "change")} given"
-        val said = if (parts.isNotEmpty()) capitalize(parts.joinToString(", ")) + "." else "Nothing changed in either book."
-        if (line.tone == "ready") return Outcome("ready", line.text, said)
+        val also = indexesSkipped(job.stages)?.let { " $it." } ?: ""
+        if (after) {
+            val failure = sentence(line.text)
+            // The give's failure counts what it gave: said there alone.
+            val lead = if (GIVEN_SO_FAR.find(failure) == null) said
+                       else if (parts.isNotEmpty()) capitalize(parts.joinToString(", ")) + "." else ""
+            val reason = listOf(PyText.strip(lead + kept), failure).filter { it.isNotEmpty() }.joinToString(" ")
+            if (line.tone == "failed") return Outcome("failed", "Failed", reason, action)
+            return Outcome("waiting", Status.PEER_DONE.getValue(kind), reason, action)
+        }
+        if (line.tone == "ready") return Outcome("ready", line.text, said + also)
         val word = if (left > 0) partition(line.text, " · ").first else "Not taken"
         val reason = if (left > 0) "$said ${Status.plural(left, "change")} left as ${if (left == 1) "it was" else "they were"}."
                      else sentence(line.text)
-        return Outcome("waiting", word, reason, action)
+        return Outcome("waiting", word, reason + also, action)
     }
 
     /** Not found (outcome.py's _not_found): Ultimate Guitar has no chords for it once the fetch asked it, else the

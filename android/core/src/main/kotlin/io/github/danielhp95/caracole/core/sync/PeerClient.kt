@@ -17,12 +17,15 @@ import java.io.IOException
 import java.io.InputStream
 
 /** /api/peer/state, as the phone reads it: [kept], the answers the computer's imports of the phone's files
- * remembered for it, as it keeps them (`here` the computer's), its odd entries left out; [keyVersion], the rules its
- * songs are keyed by as it says them (`key_version`; null: it says none, a computer older than the member). */
+ * remembered for it, as it keeps them (`here` the computer's), its odd entries left out; [schema], the schema the
+ * computer's database is at (null: it says none, an older caracole's state, or a value that is no integer);
+ * [keyVersion], the rules its songs are keyed by as it says them (`key_version`; null: it says none, a computer older
+ * than the member). Of the two, [keyVersion] refuses the whole comparison (Units.otherKeys), before the schema's
+ * refusal of the indexes alone (SyncEngine.indexesSkipped) is ever reached. */
 data class PeerState(val format: Int, val server: String?, val caracole: String, val name: String, val now: String?,
                      val units: Map<String, SyncUnit>, val base: Base?, val token: String,
                      val indexes: Map<String, String> = emptyMap(), val settings: JsonObject? = null,
-                     val kept: Kept = emptyMap(), val keyVersion: JsonElement? = null) {
+                     val kept: Kept = emptyMap(), val schema: Long? = null, val keyVersion: JsonElement? = null) {
     companion object {
         /** A state document, read as [PeerClient.state] reads the computer's (read_state_document): its `settings`
          * the computer's settings, none for a member that isn't an object. A [PeerError] for one that can't be read. */
@@ -61,8 +64,10 @@ class OtherKeys(message: String) : PeerError(message, 200)
  *   with it; the calls after it that give the old token send the fresh one.
  * - **The index**: [index] streams `GET /api/peer/index` to a file, with a read timeout of [INDEX_TIMEOUT_MS]
  *   between two reads (the file is as large as the computer's indexes, and made before its first byte comes: a
- *   connection that goes quiet for longer is a lost one, so a sync job never waits on it for ever); [pushIndex]
- *   streams the pages the phone's lookups read to `POST /peer/index`, a `bytes` route of the push's kind.
+ *   connection that goes quiet for longer is a lost one, so a sync job never waits on it for ever); [indexNewer]
+ *   streams the part the phone doesn't hold alike, `POST /peer/index/newer` (a `json` route: the form token), false
+ *   for a computer older than it; [pushIndex] streams the pages the phone's lookups read to `POST /peer/index`, a
+ *   `bytes` route of the push's kind.
  *
  * Every answer that says no is a [PeerError] in the words peer_sync.Peer says it; a document that can't be read, too.
  */
@@ -196,30 +201,67 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
         val path = INDEX_PATH + (sites?.let { "?sites=" + Documents.quote(it.joinToString(",")) } ?: "")
         http.get(address, address.resolve(path), emptyMap(), readTimeoutMs = INDEX_TIMEOUT_MS) { answer ->
             if (answer.status != 200) throw refused(Answered(answer.status, readAtMost(answer.body, MAX_JSON)))
-            var got = 0L
-            onBytes?.invoke(got, answer.contentLength)
-            // The answer's bytes as they come; a write that fails is the phone's storage, never the connection.
-            val out = try {
-                to.outputStream()
-            } catch (e: IOException) {
-                throw PeerError("The phone's storage failed: ${e.message ?: e.javaClass.simpleName}.", cause = e)
-            }
-            out.use {
-                val buffer = ByteArray(64 * 1024)
-                while (true) {
-                    val n = answer.body.read(buffer)
-                    if (n < 0) break
-                    try {
-                        out.write(buffer, 0, n)
-                    } catch (e: IOException) {
-                        to.delete()
-                        throw PeerError("The phone's storage failed: ${e.message ?: e.javaClass.simpleName}.", cause = e)
-                    }
-                    got += n
-                    onBytes?.invoke(got, answer.contentLength)
+            streamTo(answer, to, onBytes)
+        }
+    }
+
+    /** POST /peer/index/newer: the part of the computer's indexes the phone doesn't hold ([have], its document:
+     * core.index.Have), streamed into [to] as [index] streams the whole, with the form token in its header (a 403 that
+     * says reload asks once more with a fresh one); false, nothing written, for a computer that doesn't know the route
+     * (404 or 405: older than the app) or refuses the document as too large (413), which the caller asks for the whole
+     * instead ([WHOLE_INSTEAD]); a [PeerError] for any other refusal, in the computer's words (a 400 a bug, which must
+     * show), never taken for an older computer. */
+    fun indexNewer(token: String, to: File, have: JsonObject,
+                   onBytes: ((got: Long, total: Long) -> Unit)? = null): Boolean {
+        val body = PyJson.dumps(have, compact = true).toByteArray(Charsets.UTF_8)
+        var use = renewed[token] ?: token
+        repeat(2) { asked ->
+            val refusal = http.post(address, address.resolve(INDEX_NEWER_PATH), JSON,
+                                    mapOf(TOKEN_HEADER to use, "Accept" to JSON), body,
+                                    readTimeoutMs = INDEX_TIMEOUT_MS) { answer ->
+                if (answer.status == 200) {
+                    streamTo(answer, to, onBytes)
+                    null
+                } else {
+                    Answered(answer.status, readAtMost(answer.body, MAX_JSON))
                 }
-                out.fd.sync()
+            } ?: return true
+            if (refusal.status in WHOLE_INSTEAD) return false
+            if (refusal.status != 403 || !saysReload(refusal) || asked > 0) throw refused(refusal)
+            val fresh = state(asking).token
+            renewed[token] = fresh
+            renewed[use] = fresh
+            use = fresh
+        }
+        error("unreachable")
+    }
+
+    /** An index answer's bytes into [to] as they come, [onBytes] told the bytes so far and its Content-Length; a write
+     * that fails is the phone's storage, never the connection. */
+    private fun streamTo(answer: Http.Answer, to: File, onBytes: ((got: Long, total: Long) -> Unit)?) {
+        var got = 0L
+        onBytes?.invoke(got, answer.contentLength)
+        // The answer's bytes as they come; a write that fails is the phone's storage, never the connection.
+        val out = try {
+            to.outputStream()
+        } catch (e: IOException) {
+            throw PeerError("The phone's storage failed: ${e.message ?: e.javaClass.simpleName}.", cause = e)
+        }
+        out.use {
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val n = answer.body.read(buffer)
+                if (n < 0) break
+                try {
+                    out.write(buffer, 0, n)
+                } catch (e: IOException) {
+                    to.delete()
+                    throw PeerError("The phone's storage failed: ${e.message ?: e.javaClass.simpleName}.", cause = e)
+                }
+                got += n
+                onBytes?.invoke(got, answer.contentLength)
             }
+            out.fd.sync()
         }
     }
 
@@ -350,6 +392,11 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
         const val PUSH_PATH = "/peer/push"
         const val PUSH_DROP_PATH = "/peer/push/drop"
         const val INDEX_PUSH_PATH = "/peer/index"
+        const val INDEX_NEWER_PATH = "/peer/index/newer"
+
+        /** The statuses of `POST /peer/index/newer` after which the whole export is asked for: a computer older than
+         * the route (404, 405) and a document past its limit (413). Any other is the index stage's failure. */
+        val WHOLE_INSTEAD = setOf(404, 405, 413)
         const val JOBS_PATH = "/api/jobs/"
         const val SYNC_INDEXES_PATH = "/api/sync/indexes"
         const val TOKEN_HEADER = "X-Caracole-Form-Token"

@@ -195,6 +195,20 @@ def test_the_state_says_when_it_was_made_by_this_sides_clock():
     assert len(doc["now"]) == 20 and doc["now"].endswith("Z") and doc["indexes"] == {}
 
 
+def test_the_state_says_its_databases_schema_and_a_reader_takes_an_integer_alone():
+    from caracole import db
+
+    doc = sync.state_document("abc", "0.1.0", "Tabs", {})
+    assert list(doc)[:5] == ["format", "server", "caracole", "schema", "name"]  # who this side is
+    assert doc["schema"] == db.SCHEMA_VERSION
+    assert sync.read_state_document(json.loads(json.dumps(doc))).schema == db.SCHEMA_VERSION
+    # A caracole older than the member says none; any other value is none too, never a schema guessed.
+    older = {k: v for k, v in doc.items() if k != "schema"}
+    assert sync.read_state_document(older).schema is None
+    for said in (None, "17", 17.0, True, [17]):
+        assert sync.read_state_document({**doc, "schema": said}).schema is None, said
+
+
 @pytest.mark.parametrize(("typed", "address"), [
     ("192.168.1.20:8737", "http://192.168.1.20:8737"),
     ("http://phone.lan:8737/", "http://phone.lan:8737"),

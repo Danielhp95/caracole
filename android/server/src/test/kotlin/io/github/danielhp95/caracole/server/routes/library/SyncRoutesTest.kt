@@ -157,8 +157,9 @@ class SyncRoutesTest {
     @Test fun `compare answers the comparison the tab draws, and remembers the address`() {
         val creep = onComputer("Radiohead", "Creep")
         val compared = compare()
-        assertEquals(listOf("comparison", "peer", "synced_before", "holds", "differences", "songbooks", "indexes"),
-                     compared.keys.toList())
+        assertEquals(listOf("comparison", "peer", "synced_before", "holds", "differences", "songbooks", "indexes",
+                            "indexes_skipped"), compared.keys.toList())
+        assertEquals(JsonNull, compared["indexes_skipped"])
         assertEquals(JsonObject(linkedMapOf(
             "address" to JsonPrimitive(computer.address.toString()), "server" to JsonPrimitive(computer.id),
             "caracole" to JsonPrimitive("0.1.0"), "name" to JsonPrimitive("Desk"), "kind" to JsonPrimitive("computer"),
@@ -423,6 +424,16 @@ class SyncRoutesTest {
         assertEquals(JsonObject(linkedMapOf("read" to JsonNull, "tabs" to JsonPrimitive(0))), sites["ug"])
     }
 
+    @Test fun `a computer of another schema is compared with no index waiting, and the comparison says why`() {
+        onComputer("Radiohead", "Creep")
+        computer.indexes = mapOf("ug" to "2026-11-03T10:00:00Z")
+        computer.schema = io.github.danielhp95.caracole.core.db.Database.SCHEMA_VERSION + 1
+        val compared = compare()
+        assertEquals(JsonArray(emptyList()), compared["indexes"])
+        assertEquals(JsonPrimitive(SyncEngine.INDEXES_NEWER), compared["indexes_skipped"])
+        assertEquals(1, compared.getValue("differences").jsonArray.size, "its units compared as ever")
+    }
+
     @Test fun `apply sends the parts to the engine`() {
         computer.load(RICH)
         val hysteria = onPhone("Muse", "Hysteria")
@@ -475,8 +486,42 @@ class SyncRoutesTest {
                      outcome["left"])
         assertEquals(before, computer.state().getValue(unit) to app.database.read { Units.libraryState(it) }.getValue(unit),
                      "the conflict as it was on both sides")
+        // Each unit left said by its name, a conflict as what it is, in commands/peer.py's words (LEFT): which the
+        // Journal's Output shows (Feed's step of what it said), where the Wi-Fi line sends the owner.
+        val said = "Left as it was: Oasis - Wonderwall: changed on both sides: tap Sync to choose"
+        assertEquals(listOf(said), ended.said)
+        assertEquals(said, SyncRoutes.leftLine("Oasis - Wonderwall", SyncEngine.UNSETTLED))
+        val feed = io.github.danielhp95.caracole.server.jobs.Feed.feed(listOf(ended), emptyMap(), opened = setOf(ended.id))
+        val shown = feed.toString()
+        assertTrue(io.github.danielhp95.caracole.server.jobs.Feed.SAID in shown && said in shown && unit !in shown,
+                   shown)
         assertEquals(1, synced.get())
         assertTrue(routes.alone(address) != null, "once over, another may be queued")
+    }
+
+    @Test fun `a name holding a newline is said on one line, as commands-peer's left_line says it`() {
+        assertEquals("Left as it was: songbook Wedding set: changed here since compared",
+                     SyncRoutes.leftLine("songbook Wedding\n set", "changed here since compared"))
+        assertTrue("\n" !in SyncRoutes.leftLine("Radiohead -\tCreep\r\n", SyncEngine.UNSETTLED))
+    }
+
+    @Test fun `a removal on the computer of a song left in conflict is no unit not synced, in the outcome or the Output`() {
+        val creep = onComputer("Radiohead", "Creep")
+        val address = computer.address.toString()
+        runBlocking { withTimeout(20_000) { queue.await(routes.alone(address)!!.id) } }  // the phone takes Creep
+        computer.database.writeBlocking { computer.store.remove(it, creep.key, "2026-11-03T11:00:00Z") }
+        app.database.writeBlocking { it.execute("UPDATE songs SET album = 'Pablo Honey' WHERE key = ?", creep.key) }
+        val unit = "song/${creep.key}"
+
+        val ended = runBlocking { withTimeout(20_000) { queue.await(routes.alone(address)!!.id) } }
+        assertEquals("done", ended.state)
+        val view = JobViews.view(ended, queue)
+        // The removal is the song's answer (Take.SONG_HERE): only the song's conflict is left, said and counted.
+        assertEquals(JsonArray(listOf(JsonArray(listOf(JsonPrimitive(unit), JsonPrimitive(SyncEngine.UNSETTLED))))),
+                     view.getValue("outcome").jsonObject["left"])
+        assertEquals(listOf("Left as it was: Radiohead - Creep: changed on both sides: tap Sync to choose"), ended.said)
+        assertEquals("Shared · 1 change left as it was",
+                     view.getValue("line").jsonObject.getValue("text").jsonPrimitive.content)
     }
 
     @Test fun `alone with nothing answering fails its compare stage in its words and skips the rest`() {

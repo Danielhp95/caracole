@@ -16,7 +16,7 @@ import httpx
 import pytest
 
 from caracole import db, index_transfer, peer_file, peer_import, site_index
-from caracole.commands.peer import PEER_IMPORT_STAGES
+from caracole.commands.peer import CONFLICT_LEFT, LEFT, PEER_IMPORT_STAGES
 from caracole import peer_sync as sync
 from caracole.config import load_config
 from caracole.get import read_progress_line
@@ -231,7 +231,7 @@ def test_a_unit_an_import_left_is_taken_from_the_same_file_next_time(libraries, 
 
     monkeypatch.setattr(overrides, "put_song_entries", failing)
     out = run(studio, "peer", "import", "--yes", str(f))
-    assert out.exit_code == 1 and "Left song/oasis/wonderwall" in out.output
+    assert out.exit_code == 0 and f"{LEFT}: Oasis - Wonderwall: " in out.output  # a unit left: no failure
     monkeypatch.setattr(overrides, "put_song_entries", real)
     again = run(studio, "peer", "import", "--yes", str(f))
     assert again.exit_code == 0, again.output
@@ -388,7 +388,7 @@ def test_a_conflict_kept_here_is_remembered_and_not_asked_again_at_the_next_impo
     third = exported(desk, tmp_path / "3.caracole")
     out = run(studio, "peer", "import", "--yes", str(third))
     assert out.exit_code == 0, out.output
-    assert "Left song/radiohead/creep: both books changed it: choose one" in out.output
+    assert f"{LEFT}: Radiohead - Creep: {CONFLICT_LEFT}" in out.output
     assert load_overrides(studio.cfg.overrides_file).version == {override_key(CREEP): "key=Gm&capo=0"}
     out = run(studio, "peer", "import", "--yes", f"--choose=there:{unit}", str(third))
     assert out.exit_code == 0, out.output
@@ -445,7 +445,7 @@ def test_a_conflict_neither_chosen_nor_preferred_is_left_and_named(libraries, tm
     studio.song(version="key=Gm&capo=0")
     out = run(studio, "peer", "import", "--yes", str(exported(desk, tmp_path / "d.caracole")))
     assert out.exit_code == 0, out.output
-    assert "Left song/radiohead/creep: both books changed it: choose one" in out.output
+    assert f"{LEFT}: Radiohead - Creep: {CONFLICT_LEFT}" in out.output
     assert sync.kept_of(studio.conn, desk.id()) == {}
     out = run(studio, "peer", "import", "--yes", "--prefer", "there", str(exported(desk, tmp_path / "e.caracole")))
     assert out.exit_code == 0, out.output
@@ -523,7 +523,7 @@ def test_an_import_with_indexes_merges_them_and_reports_each_site(libraries, tmp
     [report] = [line["report"] for line in events(out.output) if line.get("event") == "report"]
     assert report["parts"] == ["library", "songbooks", "indexes"]
     assert report["indexes"] == [{"site": "gtptabs", "title": "gtptabs.com", "direction": "taken", "before": 0,
-                                  "after": 2, "read": "2026-11-02T08:00:00Z"}]
+                                  "after": 2, "new": 2, "checked": 2, "read": "2026-11-02T08:00:00Z"}]
     said = [e["detail"] for e in events(out.output) if e.get("stage") == "index" and e["state"] == "running"]
     assert said[:4] == ["", "Copying the file's indexes out", "Comparing with this database's indexes",
                         "Backing up the database first"]
@@ -537,6 +537,21 @@ def test_an_import_with_indexes_merges_them_and_reports_each_site(libraries, tmp
     other.conn.close()
 
 
+def test_an_import_over_a_site_this_side_holds_says_what_is_newer_in_the_file(libraries, tmp_path):
+    desk, studio, _ = libraries
+    desk.song()
+    gtptabs_index(desk, datetime(2026, 11, 2, 8, 0, tzinfo=UTC), ["https://gtptabs.com/tabs/2/blur.html",
+                                                                  "https://gtptabs.com/tabs/2/blur/beetlebum.html"])
+    gtptabs_index(studio, datetime(2026, 10, 2, 8, 0, tzinfo=UTC), ["https://gtptabs.com/tabs/2/blur.html"])
+    f = exported(desk, tmp_path / "i.caracole", "--parts", "library,songbooks,indexes")
+    out = run(studio, "peer", "import", "--yes", "--progress", str(f))
+    assert out.exit_code == 0, out.output
+    said = [e["detail"] for e in events(out.output) if e.get("stage") == "index" and e["state"] == "running"]
+    assert "gtptabs.com · 1 sitemap newer in the file" in said and "gtptabs.com · 1 sitemap" not in said
+    [report] = [line["report"] for line in events(out.output) if line.get("event") == "report"]
+    assert [(e["before"], e["after"], e["new"], e["checked"]) for e in report["indexes"]] == [(1, 2, 1, 2)]
+
+
 def test_indexes_that_cant_be_merged_say_so_and_the_import_exits_1(libraries, tmp_path, monkeypatch):
     desk, studio, _ = libraries
     desk.song()
@@ -544,10 +559,11 @@ def test_indexes_that_cant_be_merged_say_so_and_the_import_exits_1(libraries, tm
     f = exported(desk, tmp_path / "i.caracole", "--parts", "library,songbooks,indexes")
 
     def refused(*args, **kw):
-        raise index_transfer.TransferError("the disk is full")
+        raise index_transfer.TransferError("The disk is full")  # a refusal's words begin with a capital, as most do
 
     monkeypatch.setattr(index_transfer, "merge", refused)
     out = run(studio, "peer", "import", "--yes", "--progress", str(f))
+    # Appended mid-sentence, its first letter lower.
     assert out.exit_code == 1 and "The file's indexes weren't merged: the disk is full" in out.output
     assert ("index", "failed") in [(e["stage"], e["state"]) for e in events(out.output) if "stage" in e]
     [report] = [e["report"] for e in events(out.output) if e.get("event") == "report"]
@@ -710,7 +726,7 @@ def test_an_import_a_new_comparison_can_settle_keeps_its_staged_file_and_lets_go
     out = run(studio, "peer", "import", "--yes", "--progress", "--choose=here:song/oasis/nothing", str(folder))
     assert out.exit_code == 2 and "no longer a difference" in out.output and folder.exists()
     out = run(studio, "peer", "import", "--yes", "--progress", str(folder))  # its conflict left with no side
-    assert out.exit_code == 1 and folder.exists(), out.output
+    assert out.exit_code == 0 and folder.exists(), out.output
     # The import over, its hold is gone: another file opened lets it go, as an hour does.
     assert peer_import.let_go(studio.cfg.state_dir, set()) == [folder.name[len(peer_import.PREFIX):]]
 
@@ -765,10 +781,59 @@ def test_a_song_left_out_of_the_file_is_left_here_saying_why(libraries, tmp_path
     result = run(desk, "peer", "export", str(f))
     assert result.exit_code == 0 and "Left out song/oasis/wonderwall" in result.output
     out = run(studio, "peer", "import", "--yes", str(f))
-    assert out.exit_code == 1 and "Left song/oasis/wonderwall" in "\n".join(
+    assert out.exit_code == 0 and f"{LEFT}: Oasis - Wonderwall: " in "\n".join(
         " ".join(line.split()) for line in out.output.splitlines())
     assert "radiohead/creep" in studio.songs() and "oasis/wonderwall" not in studio.songs()
 
+
+def a_file_of_four(desk: Lib, tmp_path: Path, *, left: bool, taken: bool = True, indexes: bool = False) -> Path:
+    """Desk's file: Creep, Hysteria and the songbook Campfire, three changes to take (none without ``taken``); with
+    ``left``, Wonderwall too, whose sheet changed since caracole kept it, so that the file names it but doesn't hold
+    it; with ``indexes``, gtptabs.com's index too."""
+    if taken:
+        desk.song("Radiohead", "Creep")
+        desk.song("Muse", "Hysteria", version=None)
+        make_songbook(songbooks_file(desk.cfg.library_dir), "Campfire", [CREEP])
+    if left:
+        song = desk.song("Oasis", "Wonderwall", sheet=b"[Em]Today", version=None)
+        (song_dir(desk.cfg.library_dir, song) / "sheet.txt").write_bytes(b"edited")
+    if indexes:
+        gtptabs_index(desk, datetime(2026, 11, 2, 8, 0, tzinfo=UTC), ["https://gtptabs.com/tabs/3/oasis.html"])
+    return exported(desk, tmp_path / "d.caracole", *(("--parts", "library,songbooks,indexes") if indexes else ()))
+
+
+WONDERWALL_LEFT = (f"{LEFT}: Oasis - Wonderwall: the file names it but doesn't hold it: it was left out as it was "
+                   "exported (a file it keeps had changed there, or was too big for it)")
+TOOK_THREE = "From Desk's file: Took 3 changes; 2 songs rendered again."
+NOT_MERGED = "The file's indexes weren't merged: the disk is full"
+
+
+@pytest.mark.parametrize("note, left, taken, indexes, status, ended", [
+    ("took 3 and left 1", True, True, False, 0, [WONDERWALL_LEFT, TOOK_THREE]),
+    ("took nothing and left 1", True, False, False, 0, [WONDERWALL_LEFT, "From Desk's file: Took 0 changes."]),
+    ("left 1, its indexes not merged", True, True, True, 1, [WONDERWALL_LEFT, NOT_MERGED, TOOK_THREE]),
+    ("took 3 and left none", False, True, False, 0, [TOOK_THREE]),
+])
+def test_an_import_that_left_a_unit_is_no_failure_but_one_whose_indexes_werent_merged_is(
+        libraries, tmp_path, monkeypatch, note, left, taken, indexes, status, ended):
+    """A unit left as it was is no failure of the import, as it is none of ``peer sync``'s: exit 0, each unit said,
+    the staged file kept for the Sync tab's Compare again; indexes not merged still exit 1, once the rest is done."""
+    desk, studio, _ = libraries
+    folder = stage(studio, a_file_of_four(desk, tmp_path, left=left, taken=taken, indexes=indexes).read_bytes())
+    if indexes:
+        def refused(*args, **kw):
+            raise index_transfer.TransferError("The disk is full")
+
+        monkeypatch.setattr(index_transfer, "merge", refused)
+    out = run(studio, "peer", "import", "--yes", "--progress", str(folder))
+    assert out.exit_code == status and "error:" not in out.output, out.output
+    said = [(e["id"], e["outcome"]) for e in events(out.output) if e.get("event") == "unit"]
+    assert sorted(said) == sorted([("song/radiohead/creep", "taken"), ("song/muse/hysteria", "taken"),
+                                   ("songbook/campfire", "taken")] * taken
+                                  + [("song/oasis/wonderwall", "left")] * left), out.output
+    plain = [line for line in out.output.splitlines() if read_progress_line(line) is None]
+    assert [line for line in plain if line.startswith((LEFT, "The file's", "From "))] == ended, plain
+    assert folder.exists() == left, note  # kept for Compare again while a unit is left; else taken whole, deleted
 
 
 # --- peer sync --parts, and the answers an import remembered ---------------------------------------------------------
@@ -879,7 +944,7 @@ def test_a_removal_beside_its_songs_conflict_left_unsettled_is_left_saying_so(li
     desk, studio, _ = libraries
     f = a_file_that_removed_a_song_changed_here(desk, studio, tmp_path)
     out = run(studio, "peer", "import", "--yes", "--progress", str(f))
-    assert out.exit_code == 1, out.output  # units left
+    assert out.exit_code == 0, out.output  # units left: no failure
     units = sorted((e["id"], e["outcome"], e["why"]) for e in events(out.output) if e.get("event") == "unit")
     assert ("removed/oasis/wonderwall", "left", sync.SONG_HERE) in units, units
     assert find_song(studio.conn, "oasis/wonderwall") is not None

@@ -3381,7 +3381,8 @@ the file as a download.
 `GET /api/peer/state` answers what this library holds, unit by unit, for another caracole's
 `caracole peer` (see [Two caracoles](#two-caracoles-the-phones-and-the-computers)). It includes
 what the two last agreed on and each "keep mine" this library remembered from imports of that
-caracole's files. `GET /api/peer/unit` gives one unit whole, and `GET /api/peer/file` a song's
+caracole's files, and the schema of this database, so that a caracole of another asks for none of
+its indexes. `GET /api/peer/unit` gives one unit whole, and `GET /api/peer/file` a song's
 kept file while it is as kept. These reads take no lock and ask no site. `POST /peer/pull` queues
 `caracole peer pull` of the units another caracole asks this one to take.
 
@@ -4088,9 +4089,14 @@ and the file lacks stays, and how far an index has got never moves back.
 - New Ultimate Guitar tabs mark their songs to be fetched again, as a refresh does.
 - LaCuerda's artist pages and search answers carry no time, so only those the database lacks come
   in.
+- A gtptabs.com, MuseScore, harptabs.com or gametabs.net sitemap, or a LaCuerda listing page, the
+  file only checked again and found unchanged moves its record on, and none of its rows is written
+  ("its progress (sitemaps found unchanged)"); a sync's report leaves such a site out.
+- A file that holds only part of an index (the phone's download, `POST /peer/index/newer`) says
+  which sitemaps it left out. Those are never read as gone.
 
-Before it changes anything it backs the database up into `backups/` (`…-before-merge.sqlite`), and
-without room for that copy it merges nothing. While it works it says how far it has got on stderr:
+Before it changes a row it backs the database up into `backups/` (`…-before-merge.sqlite`), and
+without room for that copy it merges nothing. A merge that only moves records on makes no backup. While it works it says how far it has got on stderr:
 the comparison, the backup, each site's sitemaps or pages, and Ultimate Guitar's tabs as they go in
 (`Ultimate Guitar · 41 sitemaps · 600,000 of 1,367,059 tabs`, 50,000 at a time). In a terminal
 that is one live line, taken off for a warning; in a journal or a pipe, or with `-v`, a line a step
@@ -4231,7 +4237,12 @@ other side's spelling and folder ("Radiohead - Creep" for your "radiohead - cree
 capitals of the artist's name differ, every song here by that artist takes the new spelling. A
 unit the other side doesn't have is removed here, as `caracole remove` would, so name only units
 that `diff` lists. A unit that changed since it was compared is left. `peer pull` then says why
-and exits 1.
+and exits 1:
+
+    Left as it was: Radiohead - Creep: changed there since compared
+
+`peer sync` and `peer import` say each unit they left the same way, by its name. A conflict left
+unanswered says `changed on both sides: choose a side with --choose or --prefer`.
 
 Two caracoles whose databases are copies of each other count as the same caracole, and a sync
 says so. `caracole peer new-id` gives one of them its own id. It also forgets what that one agreed
@@ -4266,6 +4277,16 @@ takes no such file either.
 
 `GET /api/peer/index` serves the site indexes as `caracole index export` writes them
 (`?sites=ug,lacuerda` for some). It serves one copy at a time and answers 503 meanwhile.
+
+`POST /peer/index/newer` serves only the part the phone doesn't hold, which is what the phone
+asks for. The phone sends its record of each sitemap it holds and the time of the last export it
+merged from this computer (JSON, with the form token, 1 MiB at most). The answer holds each
+sitemap whose record differs, with all of its rows, the pages read a page at a time since then
+(less an hour, and earlier for pages a merge brought in meanwhile), and every progress record.
+After a night's refresh that is a few sitemaps of Ultimate Guitar's instead of all of them. A
+computer older than the route answers 404, and the phone downloads the whole index as before; so
+does a document past the limit (413). The first part after such a whole download sends every
+page read a page at a time, once.
 
 ### Syncing by hand: peer sync --push, --choose, --compared
 
@@ -4351,7 +4372,12 @@ where comparing again can settle it (the library changed since the comparison, a
 keeps the folder for an hour from its end, so the Sync tab's Compare again needs no new upload.
 
 `--choose`, `--prefer`, `--compared`, `--progress` and `--yes` work as for `peer sync`. Import
-exits 2 for a file refused, 1 for a unit left or indexes not merged, and 0 otherwise.
+exits 2 for a file refused or an option it can't take (a `--choose` that names no difference
+now). It exits 1 when the library changed since the comparison, you answer no to "Go on?",
+overrides.toml or songbooks.toml can't be read, it took nothing for want of a backup, its indexes
+weren't merged, or for a bug. Otherwise it exits 0. A unit left is no failure, as for `peer sync`:
+the Journal says "Shared · 1 change left as it was", as the phone's does, and its Output names the
+unit and why.
 
 ### Syncing parts, and the indexes
 
@@ -4370,8 +4396,13 @@ stage). Whichever side read a site more recently gives that index to the other:
   `caracole peer import`. The sync waits up to ten minutes for it. The other side must run this
   version of caracole or a later one.
 
-If neither side is newer, nothing is sent ("no index is newer on either side"). If the stage
-fails, the sync says why and exits 1, and the units stay synced.
+If neither side is newer, nothing is sent ("no index is newer on either side"). If the other
+side's database is of another schema, no index goes either way, since its merge would refuse the
+file once downloaded: the stage says which side to update ("The indexes there are of a newer
+caracole: update this one to take them"), and so do the Sync sheet's **Site indexes** line, its
+summary once the sync is over, the Journal's outcome after what it shared, and the phone's Sync on
+Wi-Fi line. The units still sync. If the stage fails, the sync says why and exits 1, and the units stay
+synced.
 
 The copies of an index being taken, given or merged live in `cache_dir/peer/` and are deleted once
 done. A copy left by a sync or import that was killed is deleted an hour later, when the next
@@ -4394,14 +4425,16 @@ read 02/11/26"). **Sync** opens the sheet:
    sides gets a card that shows how the versions differ. Pick **This computer** or the other
    side's name. Tick **Same for the other N** first to answer the rest the same way. There is no
    skip: **Cancel** ends the sync with nothing taken or given.
-3. A summary lists what was taken and given, whose version each conflict kept, and each index's
-   tabs before and after.
+3. A summary lists what was taken and given, whose version each conflict kept, and what each
+   index brought: its new tabs ("+231 new tabs · 1,503,236 in all"), "up to date", or "all new
+   here" for a site this side had none of.
 
 The sync runs as a request in the Journal. Behind it is
 `caracole peer sync ADDRESS --push --parts=… --compared HASH --choose=SIDE:ID …`. If it left
 something or failed, the Journal offers **Compare again**, because your choices belonged to a
-comparison that is past. If the libraries changed after the comparison, Sync is refused and the
-sheet compares again, keeping your choices.
+comparison that is past. Its Output names each unit left and why, as the phone's Journal does.
+If the libraries changed after the comparison, Sync is refused and the sheet compares again,
+keeping your choices.
 
 **Export** shows each part's size. Library and Songbooks are ticked. Site indexes is not, because
 it is big. The browser saves `<library name>-dd-mm-yy.caracole`
@@ -4424,7 +4457,7 @@ The tab's routes, which the phone's own server answers the same way:
 |---|---|
 | `GET /api/sync` | This caracole's id, name and `device` (`computer` or `phone`), its counts, the addresses it synced with. |
 | `POST /sync/test` | What the caracole at `address` holds. 400 for a bad address, 502 when nothing answers, 409 for this very caracole. |
-| `POST /sync/compare` | The comparison. |
+| `POST /sync/compare` | The comparison, with `indexes_skipped` saying why no index goes when the other's database is of another schema. |
 | `GET /api/sync/unit?comparison=&id=` | One unit as both sides hold it. |
 | `GET /api/sync/indexes` | Each site's index: its newest read and the tabs it tracks. |
 | `POST /sync/apply` | Queues the sync. `parts` works as `--parts`. |
@@ -4480,6 +4513,11 @@ Journal, with how far it has got as the stage's detail.
 If the computer refuses the file or doesn't answer, the phone keeps the pages for the next sync
 and the sync says why. A 409 means the two run different versions of caracole, or two files
 already wait to be merged. A 404 means the computer's caracole is too old for this route.
+
+The phone waits for that merge, up to 10 minutes, and forgets the pages only once it is done. If
+the merge fails, or is still going, the next sync sends them again; merging the same pages twice
+changes nothing. Once merged, the computer's newest read of a site may be the phone's own page.
+The phone notes that, so its next sync doesn't download the site's whole index for it.
 
 ### What the offline copy lists
 

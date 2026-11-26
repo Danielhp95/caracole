@@ -14,7 +14,7 @@ SyncRoutes (lane phone-sync-routes, then sync-routes) and JobViews (lane jobs) a
   - ``POST /sync/test``: ``form`` ``{address}``, ``out`` ``{peer, songs, songbooks, indexes, synced_at, said}`` or
     the refusal;
   - ``POST /sync/compare``: ``form`` ``{address}``, ``out`` ``{comparison, peer, synced_before, holds, differences,
-    songbooks, indexes}`` with the comparison's id masked (``"<comparison>"``);
+    songbooks, indexes, indexes_skipped}`` with the comparison's id masked (``"<comparison>"``);
   - ``GET /api/sync/unit``: ``compare`` the form of the comparison it follows, ``query`` ``{comparison, id}``
     (``comparison`` ``"<comparison>"`` for that one's id; any other text is one no comparison has), ``out`` ``{id,
     here, there}`` or the refusal;
@@ -239,7 +239,12 @@ def route_records(corpus: Corpus, monkeypatch) -> list[dict[str, Any]]:
     agreed_on[creep] = ("1" * 64, AGREED_AT)  # both changed since
     base = {"format": sync.FORMAT, "units": {k: list(v) for k, v in sorted(agreed_on.items())}}
     indexed = {"ug:index:refreshed_at": "2026-11-01T03:30:00Z", "lacuerda:index:complete_at": "2026-10-20T03:30:00Z",
-               "musescore:index:complete_at": "2026-10-22T03:30:00Z"}
+               "musescore:index:complete_at": "2026-10-22T03:30:00Z",
+               # The phone's own records, which a computer never reads: there's MuseScore index merged as there has
+               # it (a file's, the catalogues), and a LaCuerda page its lookup read. The phone lists the indexes its
+               # sync takes and gives by them, as here lists those whose newest read differs: the same three.
+               "index:merged": {"musescore": "2026-10-22T03:30:00Z"},
+               "phone:read:lacuerda:estopa/": "2026-11-02T18:00:00Z"}
     agreed = Sides(corpus, "rich", "-routes-agreed", {f"sync:base:{THERE_ID}": base, **{
         k: v for k, v in peers.items() if k == f"sync:peer:{THERE_ID}"}, **indexed})
     overrides, books = lib.overrides(), lib.books()
@@ -375,7 +380,7 @@ NO_INDEX = "no index is newer on either side"  # commands/peer.py's
 REPORT = {"with": {"name": "Desk", "kind": "server", "address": "http://192.168.1.20:8737"},
           "at": "2026-11-03T09:31:00Z", "parts": ["library", "songbooks", "indexes"],
           "indexes": [{"site": "ug", "title": "Ultimate Guitar", "direction": "taken", "before": 1503236,
-                       "after": 1515576, "read": "2026-11-03T03:10:00Z"}]}
+                       "after": 1515576, "new": 12340, "checked": 117701, "read": "2026-11-03T03:10:00Z"}]}
 
 
 def view_records() -> list[dict[str, Any]]:

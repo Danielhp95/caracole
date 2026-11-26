@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 
 from caracole import peer_file, peer_import, site_index
+from caracole.library import song_dir
 from caracole.songbook import load_songbooks, make_songbook, songbooks_file
 from caracole.web import sync_file_routes
 
@@ -565,6 +566,42 @@ def test_sync_on_an_import_queues_peer_import_of_its_folder_and_its_view_is_a_sy
     report = polled["outcome"]["report"]
     assert report["with"] == {"name": "Desk", "kind": "file", "address": None}
     assert report["parts"] == ["library", "songbooks"] and report["indexes"] == []
+
+
+def test_an_import_that_left_a_unit_says_what_it_shared_and_left_as_the_phones_does(pair, tmp_path):
+    """A file whose Wonderwall the export left out (its sheet changed since caracole kept it): Creep is taken,
+    Wonderwall left as it was. Its job is done, never failed: the line, the Journal's outcome and the Sync sheet's
+    view are the phone's for the same import (vectors/web/outcome.jsonl's "import, took 3 and left 1"), its Output
+    names what it left, and the file is kept for Compare again."""
+    from caracole.web.outcome import COMPARE_AGAIN
+
+    from test_web_app import get_json
+
+    desk, studio = pair
+    desk.song("Radiohead", "Creep")
+    song = desk.song("Oasis", "Wonderwall", sheet=b"[Em]Today", version=None)
+    (song_dir(desk.cfg.library_dir, song) / "sheet.txt").write_bytes(b"edited")
+    import_id = sent(studio.app, desk_file(desk, tmp_path))
+    _, found = file_compared(studio.app, import_id)
+    assert applied(studio.app, found["comparison"])[0] == 200
+    studio.app.queue.run_pending()
+    (job,) = studio.app.queue.snapshot()
+    assert job.state == "done", [s.output for s in job.steps]
+    polled = json.loads(get_json(studio.app, f"/jobs.json?jobs={job.id}").body)["jobs"][0]
+    assert polled["line"] == {"tone": "waiting", "text": "Shared · 1 change left as it was",
+                              "link": None, "details": f"#tab=requests&job={job.id}"}
+    assert polled["outcome"]["taken"] == [CREEP_UNIT] and [u for u, _ in polled["outcome"]["left"]] == [
+        WONDERWALL_UNIT]
+    journal = json.loads(get_json(studio.app, f"/requests.json?open={job.id}").body)
+    (shown,) = [r for g in journal["groups"] for r in g["requests"] if r["id"] == job.id]
+    assert (shown["state"], shown["says"], shown["reason"]) == (
+        "done", {"tone": "waiting", "text": "Shared"}, "1 change taken. 1 change left as it was.")
+    assert [(a["label"], a.get("href")) for a in shown["actions"]] == [(COMPARE_AGAIN.label, COMPARE_AGAIN.href)]
+    output = [line for step in shown["output"]["steps"] for line in step.get("lines", ())]
+    assert "Left as it was: Oasis - Wonderwall: the file names it but doesn't hold it: it was left out as it was " \
+           "exported (a file it keeps had changed there, or was too big for it)" in output
+    assert not any(line.startswith("error:") for line in output)
+    assert [f.name for f in staged_imports(studio)] == [f"import-{import_id}"]  # kept: Compare again reads it
 
 
 def test_sync_on_an_import_refuses_a_comparison_this_library_moved_from(pair, tmp_path):

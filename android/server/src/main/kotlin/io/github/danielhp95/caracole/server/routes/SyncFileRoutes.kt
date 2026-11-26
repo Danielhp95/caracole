@@ -379,12 +379,14 @@ class SyncFileRoutes(
                     throw SyncFailed(e.message ?: "", null, e)
                 }
                 try {
-                    context.outcome(SyncJson.outcome(engine.apply(c, choices, prefer, parts, Conflicts.ASK, stage)))
+                    val outcome = engine.apply(c, choices, prefer, parts, Conflicts.ASK, stage)
+                    context.outcome(SyncJson.outcome(outcome))
+                    SyncRoutes.sayLeft(context, outcome)
                 } finally {
                     imports.release(id)
                 }
             } catch (e: SyncFailed) {
-                e.outcome?.let { context.outcome(SyncJson.outcome(it)) }
+                e.outcome?.let { context.outcome(SyncJson.outcome(it)); SyncRoutes.sayLeft(context, it) }
                 for ((name, _) in SyncEngine.FILE_STAGES) if (name !in told) context.stage(name, "skipped")
                 throw e
             } finally {

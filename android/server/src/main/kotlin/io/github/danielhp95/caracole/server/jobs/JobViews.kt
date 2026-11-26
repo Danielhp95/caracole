@@ -152,7 +152,7 @@ object JobViews {
         fun ids(said: String) = JsonArray(job.units.filter { it.outcome == said }.map { JsonPrimitive(it.id) })
         return JsonObject(linkedMapOf(
             "taken" to ids("taken"), "given" to ids("given"),
-            "left" to JsonArray(job.units.filter { it.outcome == "left" }.map {
+            "left" to JsonArray(Status.changesLeft(job.units).map {
                 JsonArray(listOf(JsonPrimitive(it.id), JsonPrimitive(it.why)))
             }),
             "agreed" to (count?.let { PyInt.parse(it.groupValues[1]) }?.let(::JsonPrimitive) ?: JsonNull),
@@ -186,12 +186,34 @@ object JobViews {
     /** "Queued · after …", or with others ahead "Queued · 3 requests ahead, now …": what [behind] is doing as
      * [doing] words it. */
     internal fun queuedBehind(ahead: Int, behind: Job): String {
+        if (behind.spec.kind == PhoneKinds.CATALOGUES.kind) return behindCatalogues(ahead, behind)
         val doing = doing(behind)
         return if (ahead <= 1) "Queued · after $doing" else "Queued · $ahead requests ahead, now $doing"
     }
 
+    /**
+     * A request queued behind the site catalogues' import: what it waits for, never the import's own count of tabs
+     * (every row of GitHub's file, which the request has no part in), but its share, from the stage's done and total
+     * ([Stage.done]), left out while there is none: "Queued · waits for the site catalogues to finish importing
+     * (79 %)"; with others ahead, "Queued · 2 requests ahead, now the site catalogues importing (79 %)"; the job
+     * having said nothing yet, its name alone as ever.
+     */
+    private fun behindCatalogues(ahead: Int, behind: Job): String {
+        val stage = behind.stages.firstOrNull { it.state == Job.RUNNING }
+        val said = !stage?.detail.isNullOrEmpty()
+        val done = stage?.done
+        val total = stage?.total
+        val share = if (done != null && total != null && total > 0) " (${(done * 100 + total / 2) / total} %)" else ""
+        val name = named(behind)
+        return when {
+            !said -> if (ahead <= 1) "Queued · after $name" else "Queued · $ahead requests ahead, now $name"
+            ahead <= 1 -> "Queued · waits for $name to finish importing$share"
+            else -> "Queued · $ahead requests ahead, now $name importing$share"
+        }
+    }
+
     /** The phone's kinds that count as they go ("{doing}", "{done} of {total}"): named, their count after. */
-    private val COUNTING = setOf(PhoneKinds.CATALOGUES.kind, PhoneKinds.RENDER.kind)
+    private val COUNTING = setOf(PhoneKinds.RENDER.kind)
 
     /**
      * What a running job of the phone's own is doing, as a queued line says it, each thing once: a kind that counts its
