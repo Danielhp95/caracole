@@ -1,14 +1,18 @@
 package io.github.danielhp95.caracole.core.youtube
 
 import java.io.ByteArrayOutputStream
+import java.io.IOException
 import java.io.InputStream
 import java.net.ConnectException
 import java.net.InetAddress
+import java.net.Inet6Address
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.net.SocketException
 import java.util.Base64
 import java.util.Collections
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -35,12 +39,25 @@ class HostGateTest {
 
     private val loopback: InetAddress = InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1))
 
-    /** The names a resolver was asked, and every one sent to [port] on loopback. */
-    private class ToLoopback(val port: Int) : HostGate.Resolver {
+    /**
+     * A resolver that answers every name with a public address (203.0.113.7, TEST-NET-3, at the port asked), and the
+     * connector that dials that address on loopback's [port] instead: what the gate was asked to look up is [asked],
+     * what it dialled [dialled].
+     */
+    private class ToLoopback(val port: Int, val address: InetAddress = PUBLIC) : HostGate.Resolver, HostGate.Connector {
         val asked: MutableList<String> = Collections.synchronizedList(mutableListOf())
+        val dialled: MutableList<InetSocketAddress> = Collections.synchronizedList(mutableListOf())
         override fun resolve(host: String, port: Int): List<InetSocketAddress> {
             asked += "$host:$port"
-            return listOf(InetSocketAddress(InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1)), this.port))
+            return listOf(InetSocketAddress(address, port))
+        }
+        override fun connect(socket: Socket, address: InetSocketAddress, timeoutMs: Int) {
+            dialled += address
+            socket.connect(InetSocketAddress(InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1)), port), timeoutMs)
+        }
+
+        companion object {
+            val PUBLIC: InetAddress = InetAddress.getByAddress(byteArrayOf(203.toByte(), 0, 113, 7))
         }
     }
 
@@ -54,7 +71,8 @@ class HostGateTest {
         idleTimeoutMs: Int = HostGate.IDLE_TIMEOUT_MS,
         headTimeoutMs: Int = HostGate.HEAD_TIMEOUT_MS,
     ): Pair<HostGate, HostGate.Opened> {
-        val gate = HostGate(mode, rule, resolver, maxConnections, HostGate.CONNECT_TIMEOUT_MS, idleTimeoutMs, headTimeoutMs)
+        val gate = HostGate(mode, rule, resolver, maxConnections, HostGate.CONNECT_TIMEOUT_MS, idleTimeoutMs, headTimeoutMs,
+                            connector = resolver as? HostGate.Connector ?: HostGate.Connector.DIRECT)
         gates += gate
         return gate to gate.start()
     }
@@ -178,9 +196,11 @@ class HostGateTest {
             assertEquals("world", s.getInputStream().readAllBytes().toString(Charsets.US_ASCII))
         }
         assertEquals(listOf("rr3---sn-abc.googlevideo.com:443"), resolver.asked.toList())
+        assertEquals(listOf(InetSocketAddress(ToLoopback.PUBLIC, 443)), resolver.dialled.toList(),
+                     "the address checked is the one dialled, with no second lookup")
         eventually("logged ${gate.log()}") {
             gate.log()["rr3---sn-abc.googlevideo.com"] ==
-                HostGate.HostUse(connects = 1, bytesUp = 5, bytesDown = 5, refused = 1)
+                HostGate.HostUse(connects = 1, bytesUp = 5, bytesDown = 5, refused = 1, why = HostGate.WHY_OFF_RULE)
         }
         assertTrue(gate.refusedAny())
     }
@@ -231,7 +251,7 @@ class HostGateTest {
         val (gate, opened) = gate(HostGate.Mode.NETWORK, HostGate.HostRule.YOUTUBE, resolver)
         val answer = ask(opened, connectLine("example.com:443", auth(opened)))
         assertEquals(403, status(answer))
-        assertEquals(HostGate.HostUse(refused = 1), gate.log()["example.com"])
+        assertEquals(HostGate.HostUse(refused = 1, why = HostGate.WHY_OFF_RULE), gate.log()["example.com"])
         assertTrue(gate.refusedAny())
         assertEquals(emptyList(), resolver.asked.toList())
     }
@@ -252,7 +272,7 @@ class HostGateTest {
             val (gate, opened) = gate(HostGate.Mode.NETWORK, rule, resolver)
             assertEquals(403, status(ask(opened, connectLine("jnn-pa.googleapis.com:443", auth(opened)))))
             assertEquals(403, status(ask(opened, connectLine("JNN-PA.googleapis.com.:443", auth(opened)))))
-            assertEquals(HostGate.HostUse(refused = 2), gate.log()["jnn-pa.googleapis.com"])
+            assertEquals(HostGate.HostUse(refused = 2, why = HostGate.WHY_BY_NAME), gate.log()["jnn-pa.googleapis.com"])
             assertEquals(emptyList(), resolver.asked.toList())
         }
     }
@@ -382,7 +402,7 @@ class HostGateTest {
         val answer = ask(opened, "GET http://www.youtube.com/watch?v=x HTTP/1.1\r\nHost: www.youtube.com\r\n" +
             "Proxy-Authorization: ${auth(opened)}\r\n\r\n")
         assertEquals(403, status(answer))
-        assertEquals(HostGate.HostUse(refused = 1), gate.log()["www.youtube.com"])
+        assertEquals(HostGate.HostUse(refused = 1, why = HostGate.WHY_OFF_RULE), gate.log()["www.youtube.com"])
         assertEquals(405, status(ask(opened, "POST http://www.youtube.com/ HTTP/1.1\r\n" +
             "Proxy-Authorization: ${auth(opened)}\r\n\r\n")))
         assertEquals(400, status(ask(opened, "GET https://www.youtube.com/ HTTP/1.1\r\n" +
@@ -468,7 +488,7 @@ class HostGateTest {
         for (i in 0 until names) ask(opened, connectLine("h$i.example.com:443", auth(opened)))
         val log = gate.log()
         assertEquals(HostGate.LOG_HOSTS + 1, log.size)
-        assertEquals(HostGate.HostUse(refused = 20), log["(other hosts)"])
+        assertEquals(HostGate.HostUse(refused = 20, why = HostGate.WHY_OFF_RULE), log["(other hosts)"])
         assertEquals(names, log.values.sumOf { it.refused })
     }
 
@@ -477,5 +497,281 @@ class HostGateTest {
         assertEquals(HostGate.Mode.LOOPBACK, HostGate.Mode.of("loopback"))
         assertEquals(HostGate.Mode.NETWORK, HostGate.Mode.of(null))
         assertEquals(HostGate.Mode.NETWORK, HostGate.Mode.of("anything"))
+    }
+
+    // Fix round 1.
+
+    /** A client that writes [text] a byte every [everyMs] until the gate closes it; the thread ends then. */
+    private fun trickle(opened: HostGate.Opened, text: String, everyMs: Long): Pair<Socket, Thread> {
+        val s = connect(opened)
+        val t = thread(isDaemon = true) {
+            try {
+                var i = 0
+                while (true) {
+                    s.getOutputStream().write(text[i % text.length].code)
+                    s.getOutputStream().flush()
+                    i++
+                    Thread.sleep(everyMs)
+                }
+            } catch (_: Exception) {
+            }
+        }
+        return s to t
+    }
+
+    /** -1, or the reset a closed connection may give. */
+    private fun endOf(s: Socket): Int = try {
+        s.getInputStream().read()
+    } catch (_: SocketException) {
+        -1
+    }
+
+    private fun gateThreads(opened: HostGate.Opened) =
+        Thread.getAllStackTraces().keys.filter { it.isAlive && it.name.startsWith("caracole-gate-${opened.port}-") }
+
+    @Test
+    fun aClientThatTricklesItsHeadIsCutAtTheHeadDeadline() {
+        val (_, opened) = gate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE, headTimeoutMs = 400)
+        val start = System.nanoTime()
+        val (s, t) = trickle(opened, "CONNECT 127.0.0.1:1 HTTP/1.1\r\nX-Slow: " + "a".repeat(10_000), everyMs = 40)
+        s.use { assertEquals(-1, endOf(it)) }
+        val took = (System.nanoTime() - start) / 1_000_000
+        assertTrue(took in 350..3_000, "cut after $took ms")
+        t.join(5_000)
+    }
+
+    @Test
+    fun sixteenTricklingClientsKeepAnAuthenticatedConnectOutNoLongerThanTheHeadDeadline() {
+        val server = upstream(0, ByteArray(0))
+        val (_, opened) = gate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE, headTimeoutMs = 500)
+        val start = System.nanoTime()
+        val slow = (1..HostGate.MAX_CONNECTIONS).map { trickle(opened, "GET / HTTP/1.1\r\nX: " + "a".repeat(100_000), 50) }
+        Thread.sleep(100)
+        assertEquals(503, status(ask(opened, connectLine("127.0.0.1:${server.port}", auth(opened)))),
+                     "the tricklers hold every connection at first")
+        var answer: Int
+        do {
+            answer = status(ask(opened, connectLine("127.0.0.1:${server.port}", auth(opened))))
+            if (answer == 503) Thread.sleep(20)
+        } while (answer == 503 && System.nanoTime() - start < 10_000_000_000L)
+        val took = (System.nanoTime() - start) / 1_000_000
+        assertEquals(200, answer)
+        assertTrue(took < 2_000, "the CONNECT waited $took ms")
+        slow.forEach { (s, t) -> s.close(); t.join(5_000) }
+    }
+
+    @Test
+    fun aTunnelWhoseClientHalfClosedAndStopsReadingIsClosedAtTheIdleTimeout() {
+        val server = ServerSocket(0, 50, loopback).also { servers += it }
+        val ended = AtomicBoolean(false)
+        val writer = thread(isDaemon = true) {
+            server.accept().use { s ->
+                try {
+                    while (true) s.getOutputStream().write(ByteArray(64 * 1024))
+                } catch (_: IOException) {
+                    ended.set(true)
+                }
+            }
+        }
+        val (gate, opened) = gate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE, idleTimeoutMs = 300)
+        val client = connect(opened)
+        client.receiveBufferSize = 4096
+        client.getOutputStream().write(connectLine("127.0.0.1:${server.localPort}", auth(opened)).toByteArray())
+        assertEquals(200, status(head(client.getInputStream())))
+        client.shutdownOutput()
+        writer.join(10_000)
+        assertTrue(ended.get(), "the upstream's writes failed once the gate closed it")
+        client.close()
+        gate.close()
+        assertEquals(emptyList(), gateThreads(opened).map { it.name })
+    }
+
+    @Test
+    fun aRelayWhoseClientStopsReadingIsClosedAtTheIdleTimeout() {
+        val server = ServerSocket(0, 50, loopback).also { servers += it }
+        val ended = AtomicBoolean(false)
+        val writer = thread(isDaemon = true) {
+            server.accept().use { s ->
+                head(s.getInputStream())
+                try {
+                    s.getOutputStream().write("HTTP/1.1 200 OK\r\n\r\n".toByteArray())
+                    while (true) s.getOutputStream().write(ByteArray(64 * 1024))
+                } catch (_: IOException) {
+                    ended.set(true)
+                }
+            }
+        }
+        val (gate, opened) = gate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE, idleTimeoutMs = 300)
+        val client = connect(opened)
+        client.receiveBufferSize = 4096
+        client.getOutputStream().write(("GET http://127.0.0.1:${server.localPort}/ HTTP/1.1\r\n" +
+            "Proxy-Authorization: ${auth(opened)}\r\n\r\n").toByteArray())
+        writer.join(10_000)
+        assertTrue(ended.get(), "the upstream's writes failed once the gate closed it")
+        client.close()
+        gate.close()
+        assertEquals(emptyList(), gateThreads(opened).map { it.name })
+    }
+
+    /** What an upstream HTTP server was asked, for each of [answers] in turn. */
+    private fun httpUpstream(vararg answers: String): Pair<Int, MutableList<String>> {
+        val server = ServerSocket(0, 50, loopback).also { servers += it }
+        val asked = Collections.synchronizedList(mutableListOf<String>())
+        thread(isDaemon = true) {
+            for (answer in answers) {
+                try {
+                    server.accept().use { s ->
+                        asked += head(s.getInputStream())
+                        s.getOutputStream().write(answer.toByteArray(Charsets.ISO_8859_1))
+                    }
+                } catch (_: IOException) {
+                    return@thread
+                }
+            }
+        }
+        return server.localPort to asked
+    }
+
+    @Test
+    fun theRelaySendsTheUrlsAuthorityAsItsHost() {
+        val ok = "HTTP/1.1 204 No Content\r\n\r\n"
+        val (port, asked) = httpUpstream(ok, ok)
+        val (_, opened) = gate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE)
+        assertEquals(204, status(ask(opened, "GET http://127.0.0.1:$port/a HTTP/1.1\r\nHost: evil.example\r\n" +
+            "Accept: */*\r\nProxy-Authorization: ${auth(opened)}\r\n\r\n")))
+        assertEquals(204, status(ask(opened, "GET http://127.0.0.1:$port/b HTTP/1.1\r\n" +
+            "Proxy-Authorization: ${auth(opened)}\r\n\r\n")))
+        eventually("both asked") { asked.size == 2 }
+        assertEquals("GET /a HTTP/1.1\r\nHost: 127.0.0.1:$port\r\nAccept: */*\r\nConnection: close\r\n\r\n", asked[0])
+        assertEquals("GET /b HTTP/1.1\r\nHost: 127.0.0.1:$port\r\nConnection: close\r\n\r\n", asked[1])
+    }
+
+    @Test
+    fun aHeaderLineWithABareCrOrAControlCharacterIs400() {
+        val (gate, opened) = gate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE)
+        for (bad in listOf("X-A: a\rb", "X-A: a\u0001b", "X-A: a\u007fb", "X-A: a\u0000b")) {
+            assertEquals(400, status(ask(opened, "CONNECT 127.0.0.1:1 HTTP/1.1\r\n$bad\r\n" +
+                "Proxy-Authorization: ${auth(opened)}\r\n\r\n")), bad)
+        }
+        assertEquals(407, status(ask(opened, "CONNECT 127.0.0.1:1 HTTP/1.1\r\nX-A: a\tb\r\n\r\n")), "a tab is allowed")
+        assertEquals(emptyMap(), gate.log())
+    }
+
+    @Test
+    fun anUpstreamThatClosesBeforeAnsweringOrAnswersPastTheCapIs502() {
+        val (port, _) = httpUpstream("", "HTTP/1.1 200 OK\r\nX: " + "a".repeat(HostGate.HEAD_MAX + 10) + "\r\n\r\n")
+        val (_, opened) = gate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE)
+        val get = "GET http://127.0.0.1:$port/ HTTP/1.1\r\nProxy-Authorization: ${auth(opened)}\r\n\r\n"
+        assertEquals(502, status(ask(opened, get)), "closed before answering")
+        assertEquals(502, status(ask(opened, get)), "a head past the cap")
+    }
+
+    @Test
+    fun underTheYouTubeRuleANameThatResolvesToALocalAddressIsRefused() {
+        fun v6(vararg bytes: Int): InetAddress = Inet6Address.getByAddress(null, ByteArray(16) { bytes[it].toByte() }, -1)
+        val mapped = IntArray(16).also { it[10] = 0xff; it[11] = 0xff; it[12] = 10; it[15] = 1 }
+        val local = listOf(
+            InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1)),
+            InetAddress.getByAddress(byteArrayOf(127, 9, 9, 9)),
+            InetAddress.getByAddress(byteArrayOf(10, 1, 2, 3)),
+            InetAddress.getByAddress(byteArrayOf(172.toByte(), 16, 0, 1)),
+            InetAddress.getByAddress(byteArrayOf(192.toByte(), 168.toByte(), 1, 1)),
+            InetAddress.getByAddress(byteArrayOf(169.toByte(), 254.toByte(), 1, 1)),
+            InetAddress.getByAddress(byteArrayOf(0, 0, 0, 0)),
+            InetAddress.getByAddress(byteArrayOf(0, 1, 2, 3)),
+            InetAddress.getByAddress(byteArrayOf(224.toByte(), 0, 0, 1)),
+            InetAddress.getByAddress(byteArrayOf(100, 64, 0, 1)),
+            InetAddress.getByAddress(byteArrayOf(100, 127, 255.toByte(), 254.toByte())),
+            InetAddress.getByAddress(byteArrayOf(255.toByte(), 255.toByte(), 255.toByte(), 255.toByte())),
+            v6(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1),
+            v6(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+            v6(0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1),
+            v6(0xfc, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1),
+            v6(0xfd, 0x12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1),
+            v6(0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1),
+            v6(*mapped),
+        )
+        for (address in local) {
+            val net = ToLoopback(1, address)
+            val (gate, opened) = gate(HostGate.Mode.NETWORK, HostGate.HostRule.YOUTUBE, net)
+            assertEquals(403, status(ask(opened, connectLine("www.youtube.com:443", auth(opened)))), "$address")
+            val use = gate.log()["www.youtube.com"]
+            assertEquals(1, use?.refused, "$address")
+            assertTrue(use?.why?.startsWith("resolves to ") == true, "${use?.why}")
+            assertEquals(emptyList(), net.dialled.toList(), "$address")
+        }
+        // One local address among public ones is enough.
+        val both = object : HostGate.Resolver {
+            override fun resolve(host: String, port: Int) =
+                listOf(InetSocketAddress(ToLoopback.PUBLIC, port), InetSocketAddress(local[2], port))
+        }
+        val (_, opened) = gate(HostGate.Mode.NETWORK, HostGate.HostRule.YOUTUBE, both)
+        assertEquals(403, status(ask(opened, connectLine("www.youtube.com:443", auth(opened)))))
+    }
+
+    @Test
+    fun observeConnectsToALocalAddressAsResolved() {
+        val server = upstream(0, ByteArray(0))
+        val ten = InetAddress.getByAddress(byteArrayOf(10, 0, 0, 1))
+        val net = ToLoopback(server.port, ten)
+        val (_, opened) = gate(HostGate.Mode.NETWORK, HostGate.HostRule.OBSERVE, net)
+        assertEquals(200, status(ask(opened, connectLine("example.com:443", auth(opened)))))
+        assertEquals(listOf(InetSocketAddress(ten, 443)), net.dialled.toList())
+    }
+
+    @Test
+    fun noGateThreadIsLeftWhateverCloseRacesWith() {
+        repeat(30) { round ->
+            val gate = HostGate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE, never)
+            val opened = gate.start()
+            val hammers = (1..4).map {
+                thread(isDaemon = true) {
+                    try {
+                        while (true) Socket(loopback, opened.port).use { it.getOutputStream().write("CONN".toByteArray()) }
+                    } catch (_: IOException) {
+                    }
+                }
+            }
+            Thread.sleep((round % 5).toLong())
+            gate.close()
+            hammers.forEach { it.join(5_000) }
+            assertEquals(emptyList(), gateThreads(opened).map { it.name }, "round $round")
+        }
+    }
+
+    @Test
+    fun aHeadPastTheCapIs400() {
+        val (_, opened) = gate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE)
+        val start = "GET http://127.0.0.1:1/ HTTP/1.1\r\nX: "
+        assertEquals(400, status(ask(opened, start + "a".repeat(HostGate.HEAD_MAX + 1 - start.length))))
+    }
+
+    @Test
+    fun theEdgesOfATargetAreRefused() {
+        val (_, opened) = gate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE, never)
+        val a = "Proxy-Authorization: ${auth(opened)}\r\n"
+        fun get(target: String, more: String = "") = status(ask(opened, "GET $target HTTP/1.1\r\n$more$a\r\n"))
+        assertEquals(400, get("http://127.0.0.1:1/", "Transfer-Encoding: chunked\r\n"))
+        assertEquals(400, get("http://127.0.0.1:1/", "Content-Length: 5\r\n"))
+        assertEquals(400, get("http://u:p@127.0.0.1:1/"))
+        assertEquals(400, get("http://127.0.0.1%2e:1/"))
+        assertEquals(400, status(ask(opened, connectLine("www.youtube.com%2e:443", auth(opened)))))
+        assertEquals(400, status(ask(opened, connectLine("[fe80::1%25en0]:443", auth(opened)))))
+        assertEquals(400, status(ask(opened, connectLine("127.0.0.1\u0000:443", auth(opened)))))
+        assertEquals(400, status(ask(opened, connectLine("127.1:80", auth(opened)))))
+        assertEquals(400, status(ask(opened, connectLine("0x7f.0.0.1:80", auth(opened)))))
+        assertEquals(403, status(ask(opened, connectLine("[::ffff:127.0.0.1]:80", auth(opened)))))
+        assertEquals(403, status(ask(opened, connectLine("localhost:80", auth(opened)))))
+    }
+
+    @Test
+    fun underObserveJnnPaIsRefusedUnderItAndByGet() {
+        val (gate, opened) = gate(HostGate.Mode.NETWORK, HostGate.HostRule.OBSERVE, never)
+        assertEquals(403, status(ask(opened, connectLine("x.jnn-pa.googleapis.com:443", auth(opened)))))
+        assertEquals(403, status(ask(opened, "GET http://jnn-pa.googleapis.com/ HTTP/1.1\r\n" +
+            "Proxy-Authorization: ${auth(opened)}\r\n\r\n")))
+        assertEquals(mapOf("x.jnn-pa.googleapis.com" to HostGate.HostUse(refused = 1, why = HostGate.WHY_BY_NAME),
+                           "jnn-pa.googleapis.com" to HostGate.HostUse(refused = 1, why = HostGate.WHY_BY_NAME)),
+                     gate.log())
     }
 }
