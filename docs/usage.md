@@ -3203,8 +3203,8 @@ kept file while it is as kept. These reads take no lock and ask no site. `POST /
 | `GET /api/sync/export?export=ID` | Sends it once and deletes it. An unsent one goes when the next is made, or after an hour. |
 | `POST /sync/import/open` | JSON `{"size", "name"}`, 8 GiB at most, one at a time. Answers an id and the part size (8 MiB). |
 | `POST /sync/import/part?import=ID&at=N` | Sends each part, in order, into `state_dir/peer/import-<id>/`. |
-| `POST /sync/import/compare` | Form field `import`. Reads the file whole and compares it as `POST /sync/compare` does, or refuses it in `caracole peer import`'s words and deletes it: 400 for a file caracole didn't export, of another version or cut short; 409 for this library's own export, or one with nothing new since your last sync with its caracole. |
-| `POST /sync/apply` | On that comparison, queues `caracole peer import` ("Sync with a file from <its library>"), which deletes the folder when done. |
+| `POST /sync/import/compare` | Form field `import`. Reads the file whole and compares it as `POST /sync/compare` does, or refuses it in `caracole peer import`'s words and deletes it: 400 for a file caracole didn't export, of another version or cut short; 409 for this library's own export, one with nothing new since your last sync with its caracole, or one whose caracole names songs by different rules. |
+| `POST /sync/apply` | On that comparison, queues `caracole peer import` ("Sync with a file from <its library>"), which deletes the folder when done, unless it stopped where comparing again can settle it (the library changed since, a unit left). |
 | `POST /sync/import/drop` | JSON `{"import"}`. Deletes it now, as Cancel does (409 while its import waits or runs). |
 
 An import never taken is deleted an hour after its last part, or when the next file is opened if
@@ -3968,12 +3968,22 @@ After a first sync, each side remembers what the two agreed on. A unit changed o
 comes from that side, so a song added or removed on one side is added or removed on the other. A
 unit changed on both sides, to different things, is a conflict, and you choose which to keep.
 Before the first sync there is no history: a unit only one side has comes from that side, and a
-unit both have that differs is a conflict.
+unit both have that differs is a conflict. What a sync or an import takes counts as agreed once
+it is taken, even if what follows then fails (giving the other side its share, making the pages)
+and the sync fails with it: a later change there alone still comes here, with no conflict.
 
 Both sides must use the same sync format, format 3 today. Another format is refused. After an
 upgrade from an older format, the first sync compares with no history. A song one side removed in
 the meantime then shows up as a song to take from the other side. To keep it removed, choose `here`
 for it on the side that removed it.
+
+Both sides must also name songs by the same rules. A caracole whose rules changed (a new version
+can spell a song's key otherwise) would see each of the other's songs as one removed and one added.
+So a comparison, a pull, a push and an import between two such caracoles are refused before
+anything changes: "This caracole and the other name songs by different rules: update both to the
+same version, then sync." The Share tab answers it with a 409, and the commands exit 1 (an import,
+2). A caracole older than this check says nothing of its rules and is read as before, so update
+both sides.
 
 `caracole peer diff` asks the other library what it holds, in one request, and lists every
 difference with the side it would come from:
@@ -4018,12 +4028,23 @@ from <its library>".
 
 `caracole peer take [--progress] DIR` takes the push the way a pull takes units. It waits for the
 nightly run, backs the database up, leaves any unit that changed here since the phone compared
-("changed here since the comparison"), then deletes the folder. It exits 0 unless caracole hits a
-bug. `--progress` prints JSON lines for the Journal; while it renders the songs taken, its render
+("changed here since the comparison"), then deletes the folder. It exits 1 for a push it refuses
+(one that is gone, or from a caracole that names songs by different rules), else 0 unless caracole
+hits a bug. `--progress` prints JSON lines for the Journal; while it renders the songs taken, its render
 step says which it is at ("12 of 20 songs").
 
 Two pushes can be staged at once, one per caracole (a second gets a 409). A file can be 64 MiB and
-a whole push 2 GiB. A push left for an hour is deleted.
+a whole push 2 GiB. A push left for an hour is deleted. A push that fails before its document is
+taken is deleted at once: its sender drops it (`POST /peer/push/drop`), and a caracole's next push
+replaces its push never sent, so a failed sync never blocks the next one.
+
+A big give (a first sync of a whole library) goes in several pushes, each within those limits (a
+push document is 16 MiB at most), one after the other, each taken before the next is sent. If one
+fails, or its take isn't seen to end within ten minutes, the pushes before it stay taken, the
+next sync gives the rest, and the sync says how far it got. While it waits for a push to be taken,
+a lookup asked for meanwhile goes first; a song that lookup changes is left for the next sync. A
+song with a kept file over 64 MiB is left out with the reason, as an export leaves it; the phone
+takes no such file either.
 
 `GET /api/peer/index` serves the site indexes as `caracole index export` writes them
 (`?sites=ug,lacuerda` for some). It serves one copy at a time and answers 503 meanwhile.
@@ -4080,6 +4101,8 @@ changes. A file takes nothing back. To give your changes, export a file of your 
 Import refuses a file, before changing anything (exit 2), when the file:
 
 - isn't a caracole export, or comes from another version of caracole;
+- comes from a caracole that names songs by different rules ("That file's caracole and this one
+  name songs by different rules: update both to the same version, then export it again.");
 - is cut short or damaged ("That file can't be read whole (…): export it again.");
 - is this library's own export (`caracole backup` keeps copies to go back to);
 - holds nothing newer than your last sync with its caracole ("Nothing in this file is newer than
@@ -4087,7 +4110,10 @@ Import refuses a file, before changing anything (exit 2), when the file:
 
 Otherwise it backs the database up (`…-before-sync.sqlite`) and takes each unit as `peer pull`
 does. A conflict goes by `--choose`, else `--prefer`, else you are asked, else it is left. A song
-removed there is removed here, but a part the file doesn't hold never removes anything. Then it
+removed there is removed here, but a part the file doesn't hold never removes anything. Nor is the
+removal taken while the song stays here: if you keep your song, the removal is answered with it,
+and if the song's conflict is left, so is the removal ("its song is here: its removal there is not
+taken"). Then it
 renders the songs taken, records the agreement and merges the file's indexes if `--parts` names
 them. `--progress` names these steps check, take, render, agree and index, and the render step says
 which of the songs taken it is at ("12 of 20 songs").
@@ -4102,7 +4128,9 @@ the rest. `--parts indexes` alone records no agreement.
 SOURCE can also be an index export, whose indexes are merged and nothing else. Or it is the folder
 of an upload that caracole serve staged (`state_dir/peer/import-<id>/`, one at a time, 8 GiB at
 most). That folder is refused until every part has arrived ("That file isn't whole yet: send the
-rest of it."), and deleted after the import or an hour after its last part.
+rest of it."), and deleted after the import or an hour after its last part. An import that stops
+where comparing again can settle it (the library changed since the comparison, a unit left)
+keeps the folder for an hour from its end, so the Sync tab's Compare again needs no new upload.
 
 `--choose`, `--prefer`, `--compared`, `--progress` and `--yes` work as for `peer sync`. Import
 exits 2 for a file refused, 1 for a unit left or indexes not merged, and 0 otherwise.
@@ -4126,6 +4154,10 @@ stage). Whichever side read a site more recently gives that index to the other:
 
 If neither side is newer, nothing is sent ("no index is newer on either side"). If the stage
 fails, the sync says why and exits 1, and the units stay synced.
+
+The copies of an index being taken, given or merged live in `cache_dir/peer/` and are deleted once
+done. A copy left by a sync or import that was killed is deleted an hour later, when the next
+`peer sync` or `peer import` starts, or when caracole serve is next asked for its indexes.
 
 ### The Share tab
 

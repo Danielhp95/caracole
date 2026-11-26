@@ -2,11 +2,16 @@ package io.github.danielhp95.caracole.core.sync.client
 
 import com.sun.net.httpserver.HttpExchange
 import io.github.danielhp95.caracole.core.json.Canonical
+import io.github.danielhp95.caracole.core.keys.Normalize
+import io.github.danielhp95.caracole.core.sync.OtherKeys
 import io.github.danielhp95.caracole.core.sync.PeerClient
 import io.github.danielhp95.caracole.core.sync.PeerError
+import io.github.danielhp95.caracole.core.sync.PeerState
 import io.github.danielhp95.caracole.core.sync.SyncUnit
+import io.github.danielhp95.caracole.core.sync.Units
 import io.github.danielhp95.caracole.core.testing.sync.FakeComputer
 import io.github.danielhp95.caracole.mirror.Http
+import io.github.danielhp95.caracole.mirror.ServerAddress
 import io.github.danielhp95.caracole.mirror.SyncError
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -20,6 +25,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -98,6 +104,26 @@ class PeerClientTest {
         assertTrue("isn't JSON" in assertFailsWith<PeerError> { client.state("me") }.message!!)
     }
 
+    @Test fun `a state whose songs are keyed by other rules is refused, and one that says none is read as before`() {
+        // peer_sync.Peer.state: a state of another key_version is OtherKeys, in its words; an older computer's, which
+        // names none (or null), as before (the gap that closes once both sides are updated); 2.0 is 2, as Python's ==.
+        fun saying(keys: String) = state.replace("\"name\":\"Desk\",", "\"name\":\"Desk\",\"key_version\":$keys,")
+        val ours = Normalize.KEY_VERSION
+        answer("GET /api/peer/state", 200, state)
+        assertNull(client.state("me").keyVersion)  // an older computer's state names none
+        for (same in listOf("$ours", "$ours.0", "null")) {
+            answer("GET /api/peer/state", 200, saying(same))
+            assertEquals("Desk", client.state("me").name, same)
+        }
+        for (other in listOf("${ours + 1}", "${ours - 1}", "\"$ours\"", "true", "[2]", "{}")) {
+            answer("GET /api/peer/state", 200, saying(other))
+            val refused = assertFailsWith<OtherKeys>(other) { client.state("me") }
+            assertEquals(Units.OTHER_KEYS, refused.message)
+            assertTrue(refused is PeerError)
+            assertEquals(Canonical.parse(other), PeerState.read(Canonical.parse(saying(other))).keyVersion)
+        }
+    }
+
     @Test fun `the state takes as long as a minute, where another read gives up sooner`() {
         val impatient = PeerClient(computer.address, Http(readTimeoutMs = 150))
         computer.answers["GET /api/peer/state"] = { exchange ->
@@ -143,6 +169,66 @@ class PeerClientTest {
         assertTrue("404" in assertFailsWith<PeerError> { client.file("a/b", "x", sha) }.message!!)
     }
 
+    /** GET /api/peer/file answered with [length] (0: none, chunked) and [total] bytes of zeros, a MiB at a time,
+     * until the phone stops reading; how many it wrote. */
+    private fun bigFile(length: Long, total: Long): java.util.concurrent.atomic.AtomicLong {
+        val written = java.util.concurrent.atomic.AtomicLong()
+        computer.answers["GET /api/peer/file"] = { exchange ->
+            exchange.responseHeaders.add("Content-Type", "application/octet-stream")
+            exchange.sendResponseHeaders(200, length)
+            val chunk = ByteArray(1 shl 20)
+            try {
+                while (written.get() < total) {
+                    val n = minOf(chunk.size.toLong(), total - written.get()).toInt()
+                    exchange.responseBody.write(chunk, 0, n)
+                    written.addAndGet(n.toLong())
+                }
+            } catch (e: java.io.IOException) {
+                // the phone hung up: what it would never take
+            }
+        }
+        return written
+    }
+
+    @Test fun `a file past 64 MiB is never taken, said so, and refused by its length before it is read`() {
+        val past = PeerClient.MAX_FILE + 1L
+        val written = bigFile(past, past)
+        val refused = assertFailsWith<PeerError> { client.file("bach/mass-in-b-minor", "score-1.pdf", sha) }
+        assertEquals("score-1.pdf is over 64 MiB: the phone takes no file that big. The song stays as it was here.",
+                     refused.message)
+        assertTrue(written.get() < PeerClient.MAX_FILE / 2, "the phone read ${written.get()} bytes of it")
+
+        // An answer that says no length is stopped at the cap as it streams, in the same words.
+        val streaming = bigFile(0, past + 8L * 1024 * 1024)
+        val streamed = assertFailsWith<PeerError> { client.file("bach/mass-in-b-minor", "score-1.pdf", sha) }
+        assertEquals(refused.message, streamed.message)
+        assertTrue(streaming.get() < past + 8L * 1024 * 1024, "the phone read past the cap: ${streaming.get()} bytes")
+    }
+
+    @Test fun `a Content-Length that says less than it sends is read no further, and its bytes are no file's`() {
+        // HttpURLConnection reads what the length says and no more: a file past the cap whose server says 10 bytes
+        // gives those 10, whose SHA-256 isn't the file's, so the song is left as one the computer changed.
+        val body = ByteArray(1 shl 20) { 7 }
+        java.net.ServerSocket(0, 1, java.net.InetAddress.getLoopbackAddress()).use { server ->
+            val serving = Thread {
+                server.accept().use { socket ->
+                    val input = socket.getInputStream().bufferedReader()
+                    while (input.readLine().orEmpty().isNotEmpty()) Unit
+                    val out = socket.getOutputStream()
+                    out.write("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: 10\r\n\r\n"
+                                  .toByteArray())
+                    runCatching { out.write(body); out.flush() }
+                }
+            }.apply { isDaemon = true; start() }
+            val lying = PeerClient(ServerAddress.parse("127.0.0.1:${server.localPort}"))
+            val refused = assertFailsWith<PeerError> { lying.file("bach/mass-in-b-minor", "score-1.pdf",
+                                                                  Canonical.sha256Hex(body)) }
+            assertEquals("${lying.address} sent score-1.pdf changed since compared. The song stays as it was here.",
+                         refused.message)
+            serving.join(5_000)
+        }
+    }
+
     @Test fun `a push is opened, its files sent and its document posted, each with the form token in its header`() {
         val opened = mutableListOf<Got>()
         val sent = mutableListOf<Got>()
@@ -173,6 +259,39 @@ class PeerClientTest {
             assertNull(got.headers["origin"])
             assertNull(got.headers["sec-fetch-site"])
         }
+    }
+
+    @Test fun `a push is dropped with the form token in its header, and a drop that fails is no more than false`() {
+        val dropped = mutableListOf<Got>()
+        answer("POST /peer/push/drop", 200, """{"dropped":"0123456789abcdef"}""", dropped)
+        assertTrue(client.pushDrop("tok-1", "0123456789abcdef", "a1b2c3d4e5f60718"))
+        val got = dropped.single()
+        assertEquals("""{"push":"0123456789abcdef","from":"a1b2c3d4e5f60718"}""", got.body.toString(Charsets.UTF_8))
+        assertEquals("tok-1", got.headers["x-caracole-form-token"])
+        assertEquals("application/json", got.headers["content-type"])
+        answer("POST /peer/push/drop", 409, """{"error":"That push is sent: its take waits or runs here."}""")
+        assertFalse(client.pushDrop("tok-1", "0123456789abcdef", "a1b2c3d4e5f60718"))
+        val gone = PeerClient(ServerAddress.parse("http://127.0.0.1:1"))  // nothing answers there
+        assertFalse(gone.pushDrop("tok-1", "0123456789abcdef", "a1b2c3d4e5f60718"))
+
+        // A 403 that says reload is no more than false: no state read again for a token, no second ask.
+        answer("POST /peer/push/drop", 403, """{"error":"Older than the server.","reload":true}""")
+        val before = computer.requests.size
+        assertFalse(client.pushDrop("tok-1", "0123456789abcdef", "a1b2c3d4e5f60718"))
+        assertEquals(listOf("POST /peer/push/drop"), computer.requests.drop(before))
+
+        // A server that doesn't answer is let be within DROP_TIMEOUT_MS, never the client's minute.
+        val release = java.util.concurrent.CountDownLatch(1)
+        computer.answers["POST /peer/push/drop"] = { exchange ->
+            exchange.requestBody.readBytes()
+            release.await(30, java.util.concurrent.TimeUnit.SECONDS)
+            FakeComputer.send(exchange, 200, "{}".toByteArray(), "application/json")
+        }
+        val started = System.nanoTime()
+        assertFalse(client.pushDrop("tok-1", "0123456789abcdef", "a1b2c3d4e5f60718"))
+        val ms = (System.nanoTime() - started) / 1_000_000
+        release.countDown()
+        assertTrue(ms in PeerClient.DROP_TIMEOUT_MS..PeerClient.DROP_TIMEOUT_MS + 3_000L, "waited $ms ms")
     }
 
     @Test fun `a 403 that says reload reads the state again once, and its fresh token goes on being sent`() {

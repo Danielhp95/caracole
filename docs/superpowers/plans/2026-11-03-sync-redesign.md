@@ -224,8 +224,9 @@ kv `sync:base:<peer id>` keeps a second member:
   `there_changed = theirs digest != was_there`.
   - Neither changed, and they differ: proposal `MINE` with why `KEPT_HERE` when the chooser is `"mine"`, else
     `THEIRS` with why `KEPT_THERE`.
-  - One changed: that side's, in the usual words (`_changed`).
-  - Both changed: `CONFLICT`.
+  - The chooser's side alone changed: the chooser's still, in the usual words (`_changed`).
+  - The other side changed (its version still lacks the one kept), or both did: `CONFLICT`, never taken unasked (the
+    bug hunt of 2026-11-25: taken as that side's, the unattended sync replaced the version kept).
   - A unit in `kept` that the two hold alike is no difference.
 - **Words:** `KEPT_HERE = "kept here, as you chose when a file of the other's was imported"` and `KEPT_THERE = "kept
   there, as you chose when a file of this one's was imported"`.
