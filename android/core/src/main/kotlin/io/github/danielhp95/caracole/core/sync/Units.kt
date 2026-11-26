@@ -2,13 +2,16 @@ package io.github.danielhp95.caracole.core.sync
 
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.json.Canonical
+import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.OverridesStore
 import io.github.danielhp95.caracole.core.library.SongbookStore
 import io.github.danielhp95.caracole.core.library.Songs
+import io.github.danielhp95.caracole.core.sync.internal.client.Documents as ClientDocuments
 import io.github.danielhp95.caracole.core.sync.internal.units.Cells
 import io.github.danielhp95.caracole.core.sync.internal.units.Documents
 import io.github.danielhp95.caracole.core.sync.internal.units.SongUnits
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import java.io.File
@@ -55,6 +58,20 @@ object Units {
     /** peer_sync.FORMAT: of every document a side answers and of the base it keeps. FORMAT 3 hashes a version's raw
      * record without what [VOLATILE_RAW] names, which FORMAT 2 hashed. */
     const val FORMAT = 3
+
+    /** peer_sync.OTHER_KEYS: why two caracoles whose songs are keyed by different rules (another
+     * Normalize.KEY_VERSION) never sync: units are named by those keys, so a song one side re-keyed would read as
+     * removed there and a new one here. */
+    const val OTHER_KEYS =
+        "This caracole and the other name songs by different rules: update both to the same version, then sync."
+
+    /** peer_sync.other_keys: whether a document's `key_version` ([said]: a state's, a push's, a file's manifest's)
+     * names other rules than the phone keys its songs by: any value but Normalize.KEY_VERSION, as Python's `!=`
+     * compares a JSON value with an int (2.0 is 2; a text, true or a list is another). None, no member or null (a
+     * caracole older than the member, which says none), is read as before: the one gap that closes only once both
+     * sides are updated. Such a document is refused before anything changes ([OTHER_KEYS]). */
+    fun otherKeys(said: JsonElement?): Boolean =
+        said != null && said !is JsonNull && !ClientDocuments.isNumber(said, Normalize.KEY_VERSION)
 
     /** peer_sync.VOLATILE_RAW: what a version's raw record holds that is no part of its unit, by provider. UG's tab
      * page gives a tab's rating and votes as they are the day it is read, so two sides that read one tab on two days

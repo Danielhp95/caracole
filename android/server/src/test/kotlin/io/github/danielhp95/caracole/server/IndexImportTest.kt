@@ -1,5 +1,7 @@
 package io.github.danielhp95.caracole.server
 
+import io.github.danielhp95.caracole.core.db.Database
+import io.github.danielhp95.caracole.core.index.MergedIndexes
 import io.github.danielhp95.caracole.core.testing.Fixtures
 import io.github.danielhp95.caracole.core.testing.RefusingTransport
 import io.github.danielhp95.caracole.core.testing.TestDb
@@ -39,7 +41,9 @@ class IndexImportTest {
         override val isCancelled: Boolean = false
     }
 
-    @Test fun itsStageSaysEachStepOfTheMerge() {
+    /** The corpus's partial export (gtptabs.com's and MuseScore's indexes) imported by a phone of its own: what the
+     * job's stage was told, and the phone's database after it. */
+    private fun imported(check: (Told, File, Database) -> Unit) {
         val scope = CoroutineScope(SupervisorJob())
         try {
             TestDb.fresh(tmp.newFolder("db")).use { database ->
@@ -51,15 +55,26 @@ class IndexImportTest {
                 Fixtures.loadRaw(export, "index/fixtures/partial-export.jsonl")
                 val told = Told()
                 runBlocking { phone.importSpec(export).run!!(told) }
-                val running = told.stages.filter { it.second == "running" }.map { it.third }
-                assertEquals(listOf("", "Comparing with the phone's index", "Importing · gtptabs.com",
-                                    "Importing · MuseScore", "Tidying the database"), running)
-                assertTrue(running.none { it.endsWith("…") }, "$running")
-                assertEquals(Triple("merge", "done", "merged"), told.stages.last())
-                assertFalse(export.exists(), "the file is deleted after")
+                check(told, export, database)
             }
         } finally {
             scope.cancel()
         }
+    }
+
+    @Test fun itsStageSaysEachStepOfTheMerge() = imported { told, export, _ ->
+        val running = told.stages.filter { it.second == "running" }.map { it.third }
+        assertEquals(listOf("", "Comparing with the phone's index", "Importing · gtptabs.com",
+                            "Importing · MuseScore", "Tidying the database"), running)
+        assertTrue(running.none { it.endsWith("…") }, "$running")
+        assertEquals(Triple("merge", "done", "merged"), told.stages.last())
+        assertFalse(export.exists(), "the file is deleted after")
+    }
+
+    /** What the file read of each site, recorded (MergedIndexes), so that the next sync with the computer asks it for
+     * a site only once its index is newer than the file's. */
+    @Test fun itRecordsWhatTheFileReadForTheNextSync() = imported { _, _, database ->
+        assertEquals("""{"gtptabs": "2026-10-28T03:30:00Z", "musescore": "2026-10-28T03:30:00Z"}""",
+                     database.read { it.kvGet(MergedIndexes.KEY) })
     }
 }

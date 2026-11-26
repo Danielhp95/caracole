@@ -123,6 +123,8 @@ class FakeSheet:
         for name in ("song", "audio", "lyrics"):
             stage(name, "running")
             stage(name, "done")
+        stage("vocals", "skipped", "not transcribed: its lyrics are found")
+        stage("words", "skipped", "no vocals")
         stage("chords", "running")
         self.hold.wait(30)
         stage("chords", "done", "chords over LRCLIB's timed lyrics")
@@ -233,12 +235,39 @@ def test_a_songs_card_makes_its_sheet_from_the_video_pasted_and_its_line_follows
     path, fields = posted.next(0)
     assert (path, fields) == ("/youtube", {"csrf": "tok", "song": str(song.id), "identity": song.key,
                                        "youtube": PASTED})
-    # The line is a bar of the job's steps while it runs (Song, Audio, Lyrics, Chords, PDF), the form gone.
-    wait_for(browser, bar_of(line(song)), ["done", "done", "done", "running", "waiting"])
-    wait_for(browser, words_of(line(song)), ["Chords", " · 4 of 5"])
+    # The line is a bar of the job's steps while it runs (Song, Audio, Lyrics, Words, Chords, PDF), the form gone.
+    wait_for(browser, bar_of(line(song)), ["done", "done", "done", "skipped", "running", "waiting"])
+    wait_for(browser, words_of(line(song)), ["Chords", " · 5 of 6"])
     assert browser.js(f"document.querySelector({form})") is None
     assert sheet.ran == [("youtube", "--sheet", "--progress", f"--url=https://www.youtube.com/watch?v={VIKINGOS}",
                           "--song=Nick Cani - Vikingos veganos")]
+
+
+SITES_FIRST = "Chords from its audio; lyrics from the lyrics sites, else heard from the audio. A few minutes."
+SLOW = " (up to half an hour when they're heard)"
+
+
+@pytest.mark.parametrize("member, title", [
+    ({"ok": True, "why": None, "songs": [], "time": "up to half an hour"}, SITES_FIRST + SLOW),
+    ({"ok": True, "why": None, "songs": [], "time": "a couple of minutes"}, SITES_FIRST),
+    ({"ok": False, "why": "no GPU", "songs": [], "time": ""}, SITES_FIRST),
+    (None, SITES_FIRST),
+], ids=["cpu", "gpu", "cannot", "no-member"])
+def test_the_form_titles_its_button_by_where_the_words_are_heard(able, live, sheet, browser, monkeypatch, member,
+                                                                 title):
+    # ``server.transcribe`` (library_page.transcribe_member) says whether and how long a transcription takes here;
+    # only a CPU's "up to half an hour" is added to the button's title, never where it can't or the member is absent.
+    import caracole.library_page as library_page
+
+    monkeypatch.setattr(library_page, "transcribe_member", lambda conn, cfg, overrides: member)
+    base, posted = live
+    song = wanted(able)
+    browser.open(base)
+    opened(browser, song)
+    card = cards.open_card(browser, line(song))
+    button = json.dumps(card + ' form.youtube-sheet button[type="submit"]')
+    assert browser.wait(f"document.querySelector({button}) !== null")
+    assert browser.js(f"document.querySelector({button}).title") == title
 
 
 def test_the_request_form_sends_its_youtube_video(able, live, sheet, browser):

@@ -10,6 +10,7 @@ import io.github.danielhp95.caracole.core.py.PyUrl
 import io.github.danielhp95.caracole.core.sync.Compare
 import io.github.danielhp95.caracole.core.sync.Comparison
 import io.github.danielhp95.caracole.core.sync.Conflicts
+import io.github.danielhp95.caracole.core.sync.OtherKeys
 import io.github.danielhp95.caracole.core.sync.PeerError
 import io.github.danielhp95.caracole.core.sync.PeerState
 import io.github.danielhp95.caracole.core.sync.SameCaracole
@@ -65,7 +66,8 @@ interface SyncSettings {
  *                             (`synced_before`, null: never), the parts it holds, each difference (its kind, proposal,
  *                             why, each side's digest, a song's names, each side's change since the two agreed, its
  *                             part and the songbooks that list it), each songbook difference's two documents, and the
- *                             indexes newer on either side; the comparison kept 10 minutes
+ *                             indexes its Sync will take and give (SyncEngine's index stage's rule, not
+ *                             sync_routes._waiting's); the comparison kept 10 minutes
  *     GET  /api/sync/unit?comparison=&id=   a unit of a comparison kept, its two documents (`here`, the phone's now;
  *                             `there`, the computer's, asked of it now; null where a side hasn't got it): the page's
  *                             script alone asks it
@@ -264,7 +266,7 @@ class SyncRoutes(val engine: SyncEngine, val queue: JobQueue, val settings: Sync
     }
 
     /** A sync's job (kind `sync`, under `sync:<address>`, SyncEngine's stages): [sync] run with the stages told to
-     * the job; its outcome the view's, or on a failure what it did until then, the stages after the one that failed
+     * the job, each unit it left said in its Output ([sayLeft]); its outcome the view's, or on a failure what it did until then, the stages after the one that failed
      * skipped, as the computer's queue ends them; [afterSync] whatever came of it. */
     private fun syncJob(shown: String, address: String,
                         sync: suspend (stage: (String, String, String) -> Unit) -> SyncOutcome): JobSpec = JobSpec(
@@ -277,8 +279,9 @@ class SyncRoutes(val engine: SyncEngine, val queue: JobQueue, val settings: Sync
                     context.stage(stage, state, detail)
                 }
                 context.outcome(SyncJson.outcome(outcome))
+                sayLeft(context, outcome)
             } catch (e: SyncFailed) {
-                e.outcome?.let { context.outcome(SyncJson.outcome(it)) }
+                e.outcome?.let { context.outcome(SyncJson.outcome(it)); sayLeft(context, it) }
                 for ((stage, _) in SyncEngine.STAGES) if (stage !in told) context.stage(stage, "skipped")
                 throw e
             } finally {
@@ -288,11 +291,13 @@ class SyncRoutes(val engine: SyncEngine, val queue: JobQueue, val settings: Sync
     )
 
     /** [ask], the computer asked: refused as sync_routes._compared refuses (502 when it can't be asked, 409 when it is
-     * this very phone). */
+     * this very phone or keys its songs by other rules, OtherKeys). */
     private fun <T> asking(ask: () -> T): T = try {
         ask()
     } catch (e: SameCaracole) {
         throw Refused(409, "The same scribe", e.message ?: "")
+    } catch (e: OtherKeys) {
+        throw Refused(409, "Update both first", e.message ?: "")
     } catch (e: SyncError.BadAddress) {
         throw Refused(400, "Not an address", e.message ?: "")
     } catch (e: PeerError) {
@@ -334,6 +339,30 @@ class SyncRoutes(val engine: SyncEngine, val queue: JobQueue, val settings: Sync
     }
 
     companion object {
+        /** A line of a sync's Output for each unit it left as it was ([sayLeft]), in commands/peer.py's words
+         * (LEFT, left_line): "Left as it was: Radiohead - Creep: changed here since compared", the unit by its label
+         * as compared (else its id); a conflict the unattended sync left said as what it is, [CONFLICT_LEFT]. */
+        const val LEFT = "Left as it was"
+
+        /** A conflict left unsettled ([SyncEngine.UNSETTLED]), as its line says it: what to do, the Wi-Fi line's own
+         * (Syncs' "tap Sync to choose"); the computer's command says its own way to settle one. */
+        const val CONFLICT_LEFT = "changed on both sides: tap Sync to choose"
+
+        /** Each unit [outcome] left as it was, a line of the job's Output ([leftLine]), a sync's and a file's import's
+         * alike (SyncFileRoutes): where the Journal holds the reasons the Wi-Fi line's "the Journal says why" names
+         * (Syncs.said), a fresh comparison in the sheet having none of them; none for a removal whose song is here
+         * ([SyncOutcome.changesLeft]: no change left). */
+        internal fun sayLeft(context: JobContext, outcome: SyncOutcome) {
+            for ((unit, why) in outcome.changesLeft) context.say(leftLine(outcome.labels[unit] ?: unit, why))
+        }
+
+        /** [name] left as it was, with [why] ([LEFT]): on one line, the name's whitespace collapsed as Python's
+         * split() and join collapse it (a songbook named over two lines). */
+        fun leftLine(name: String, why: String): String {
+            val shown = Py.split(name).joinToString(" ").ifEmpty { name }
+            return "$LEFT: $shown: ${if (why == SyncEngine.UNSETTLED) CONFLICT_LEFT else why}"
+        }
+
         /** POST /sync/apply's form at most: a line a difference, for a library's every unit. */
         const val APPLY_LIMIT = 1_048_576
 

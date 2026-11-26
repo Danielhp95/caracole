@@ -8763,6 +8763,28 @@
 {"args":["['’‘`´ʼ]","x́ (acústica)"],"fn":"re.sub","kw":{"repl":"|"},"out":"x́ (acústica)"}
 {"args":["['’‘`´ʼ]","Dancing Queen – Single Version"],"fn":"re.findall","out":[]}
 {"args":["['’‘`´ʼ]","Dancing Queen – Single Version"],"fn":"re.sub","kw":{"repl":"|"},"out":"Dancing Queen – Single Version"}
+{"args":["['’‘`´ʼ]","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.findall","out":[]}
+{"args":["['’‘`´ʼ]","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.sub","kw":{"repl":"|"},"out":"孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"}
+{"args":["['’‘`´ʼ]","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.findall","out":[]}
+{"args":["['’‘`´ʼ]","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.sub","kw":{"repl":"|"},"out":"林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"}
+{"args":["['’‘`´ʼ]","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.findall","out":[]}
+{"args":["['’‘`´ʼ]","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.sub","kw":{"repl":"|"},"out":"[MV] IU(아이유) _ Blueming(블루밍)"}
+{"args":["['’‘`´ʼ]","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.findall","out":[]}
+{"args":["['’‘`´ʼ]","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"repl":"|"},"out":"《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"}
+{"args":["['’‘`´ʼ]","𠀀𮯯 𮯰"],"fn":"re.findall","out":[]}
+{"args":["['’‘`´ʼ]","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["['’‘`´ʼ]","Official Video "],"fn":"re.findall","out":[]}
+{"args":["['’‘`´ʼ]","Official Video "],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video "}
+{"args":["['’‘`´ʼ]","Official Video 豈"],"fn":"re.findall","out":[]}
+{"args":["['’‘`´ʼ]","Official Video 豈"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video 豈"}
+{"args":["['’‘`´ʼ]","Official Video ꀀ"],"fn":"re.findall","out":[]}
+{"args":["['’‘`´ʼ]","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ꀀ"}
+{"args":["['’‘`´ʼ]","Official Video ힰ"],"fn":"re.findall","out":[]}
+{"args":["['’‘`´ʼ]","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ힰ"}
+{"args":["['’‘`´ʼ]","Song (Official Video [4K])"],"fn":"re.findall","out":[]}
+{"args":["['’‘`´ʼ]","Song (Official Video [4K])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song (Official Video [4K])"}
+{"args":["['’‘`´ʼ]","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","out":[]}
+{"args":["['’‘`´ʼ]","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song [Lyrics (HD)] (Live [HD])"}
 {"args":["[\\W_]+","Hotel California - 2013 Remaster"],"fn":"re.findall","out":[" "," - "," "]}
 {"args":["[\\W_]+","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hotel|California|2013|Remaster"}
 {"args":["[\\W_]+","Creep (Acoustic)"],"fn":"re.findall","out":[" (",")"]}
@@ -8843,6 +8865,28 @@
 {"args":["[\\W_]+","x́ (acústica)"],"fn":"re.sub","kw":{"repl":"|"},"out":"x|acústica|"}
 {"args":["[\\W_]+","Dancing Queen – Single Version"],"fn":"re.findall","out":[" "," – "," "]}
 {"args":["[\\W_]+","Dancing Queen – Single Version"],"fn":"re.sub","kw":{"repl":"|"},"out":"Dancing|Queen|Single|Version"}
+{"args":["[\\W_]+","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.findall","out":[" - ","『"," ","，"," ","。』『","』"]}
+{"args":["[\\W_]+","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.sub","kw":{"repl":"|"},"out":"孟维来|野人|不再借世人的手|替我开脱|遍野的花骨朵|也能够耐住寂寞|动态歌词MV|"}
+{"args":["[\\W_]+","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.findall","out":[" "," "," - "," "," "," ("," "," "," "," ","/",")"]}
+{"args":["[\\W_]+","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.sub","kw":{"repl":"|"},"out":"林俊傑|JJ|Lin|修煉愛情|Practice|Love|華納|official|高畫質|HD|官方完整版m|v|"}
+{"args":["[\\W_]+","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.findall","out":["[","] ","(",") _ ","(",")"]}
+{"args":["[\\W_]+","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.sub","kw":{"repl":"|"},"out":"|MV|IU|아이유|Blueming|블루밍|"}
+{"args":["[\\W_]+","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.findall","out":["《","》"," (",")〈","〉〖","〗〔","〕［","］（","）"]}
+{"args":["[\\W_]+","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"repl":"|"},"out":"|孤勇者|陈奕迅|动态歌词版|公式|歌詞付き|フル|가사|純音樂|"}
+{"args":["[\\W_]+","𠀀𮯯 𮯰"],"fn":"re.findall","out":["𮯯 "]}
+{"args":["[\\W_]+","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"repl":"|"},"out":"𠀀|𮯰"}
+{"args":["[\\W_]+","Official Video "],"fn":"re.findall","out":[" "," "]}
+{"args":["[\\W_]+","Official Video "],"fn":"re.sub","kw":{"repl":"|"},"out":"Official|Video|"}
+{"args":["[\\W_]+","Official Video 豈"],"fn":"re.findall","out":[" "," "]}
+{"args":["[\\W_]+","Official Video 豈"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official|Video|豈"}
+{"args":["[\\W_]+","Official Video ꀀ"],"fn":"re.findall","out":[" "," "]}
+{"args":["[\\W_]+","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official|Video|ꀀ"}
+{"args":["[\\W_]+","Official Video ힰ"],"fn":"re.findall","out":[" "," "]}
+{"args":["[\\W_]+","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official|Video|ힰ"}
+{"args":["[\\W_]+","Song (Official Video [4K])"],"fn":"re.findall","out":[" ("," "," [","])"]}
+{"args":["[\\W_]+","Song (Official Video [4K])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song|Official|Video|4K|"}
+{"args":["[\\W_]+","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","out":[" ["," (",")] ("," [","])"]}
+{"args":["[\\W_]+","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song|Lyrics|HD|Live|HD|"}
 {"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hotel California - 2013 Remaster"],"fn":"re.findall","out":[]}
 {"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Creep (Acoustic)"],"fn":"re.findall","out":[]}
@@ -8923,6 +8967,28 @@
 {"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","x́ (acústica)"],"fn":"re.sub","kw":{"repl":"|"},"out":"x́ (acústica)"}
 {"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Dancing Queen – Single Version"],"fn":"re.findall","out":[]}
 {"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Dancing Queen – Single Version"],"fn":"re.sub","kw":{"repl":"|"},"out":"Dancing Queen – Single Version"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.findall","out":["孟","维","来","野","人","不","再","借","世","人","的","手","替","我","开","脱","遍","野","的","花","骨","朵","也","能","够","耐","住","寂","寞","动","态","歌","词"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.sub","kw":{"repl":"|"},"out":"||| - ||『||||||| ||||，|||||| |||||||。』『||||MV』"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.findall","out":["林","俊","傑","修","煉","愛","情","華","納","高","畫","質","官","方","完","整","版"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.sub","kw":{"repl":"|"},"out":"||| JJ Lin - |||| Practice Love (|| official ||| HD |||||m/v)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.findall","out":["아","이","유","블","루","밍"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.sub","kw":{"repl":"|"},"out":"[MV] IU(|||) _ Blueming(|||)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.findall","out":["孤","勇","者","陈","奕","迅","动","态","歌","词","版","公","式","歌","詞","付","き","フ","ル","가","사","純","音","樂"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"repl":"|"},"out":"《|||》||| (|||||)〈||〉〖||||〗〔||〕［||］（|||）"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","𠀀𮯯 𮯰"],"fn":"re.findall","out":["𠀀","𮯯"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"repl":"|"},"out":"|| 𮯰"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video "],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video "],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video "}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video 豈"],"fn":"re.findall","out":["豈"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video 豈"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video ꀀ"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ꀀ"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video ힰ"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ힰ"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Song (Official Video [4K])"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Song (Official Video [4K])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song (Official Video [4K])"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song [Lyrics (HD)] (Live [HD])"}
 {"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Hotel California - 2013 Remaster"],"fn":"re.findall","out":[]}
 {"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Creep (Acoustic)"],"fn":"re.findall","out":[]}
@@ -9003,6 +9069,28 @@
 {"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","x́ (acústica)"],"fn":"re.sub","kw":{"repl":"|"},"out":"x́ (acústica)"}
 {"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Dancing Queen – Single Version"],"fn":"re.findall","out":[]}
 {"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Dancing Queen – Single Version"],"fn":"re.sub","kw":{"repl":"|"},"out":"Dancing Queen – Single Version"}
+{"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.findall","out":["孟","维","来","野","人","不","再","借","世","人","的","手","替","我","开","脱","遍","野","的","花","骨","朵","也","能","够","耐","住","寂","寞","动","态","歌","词"]}
+{"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.sub","kw":{"repl":"|"},"out":"||| - ||『||||||| ||||，|||||| |||||||。』『||||MV』"}
+{"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.findall","out":["林","俊","傑","修","煉","愛","情","華","納","高","畫","質","官","方","完","整","版"]}
+{"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.sub","kw":{"repl":"|"},"out":"||| JJ Lin - |||| Practice Love (|| official ||| HD |||||m/v)"}
+{"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.findall","out":[]}
+{"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.sub","kw":{"repl":"|"},"out":"[MV] IU(아이유) _ Blueming(블루밍)"}
+{"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.findall","out":["孤","勇","者","陈","奕","迅","动","态","歌","词","版","公","式","歌","詞","付","純","音","樂"]}
+{"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"repl":"|"},"out":"《|||》||| (|||||)〈||〉〖|||き〗〔フル〕［가사］（|||）"}
+{"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","𠀀𮯯 𮯰"],"fn":"re.findall","out":["𠀀","𮯯"]}
+{"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"repl":"|"},"out":"|| 𮯰"}
+{"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Official Video "],"fn":"re.findall","out":[]}
+{"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Official Video "],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video "}
+{"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Official Video 豈"],"fn":"re.findall","out":["豈"]}
+{"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Official Video 豈"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video |"}
+{"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Official Video ꀀ"],"fn":"re.findall","out":[]}
+{"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ꀀ"}
+{"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Official Video ힰ"],"fn":"re.findall","out":[]}
+{"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ힰ"}
+{"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Song (Official Video [4K])"],"fn":"re.findall","out":[]}
+{"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Song (Official Video [4K])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song (Official Video [4K])"}
+{"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","out":[]}
+{"args":["[㐀-䶿一-鿿豈-﫿𠀀-𮯯]","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song [Lyrics (HD)] (Live [HD])"}
 {"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Hotel California - 2013 Remaster"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[" - 2013 Remaster"]}
 {"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Hotel California|"}
 {"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Creep (Acoustic)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
@@ -9083,6 +9171,28 @@
 {"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","x́ (acústica)"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"x́ (acústica)"}
 {"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Dancing Queen – Single Version"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[" – Single Version"]}
 {"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Dancing Queen – Single Version"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Dancing Queen|"}
+{"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"}
+{"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"}
+{"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"[MV] IU(아이유) _ Blueming(블루밍)"}
+{"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"}
+{"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","𠀀𮯯 𮯰"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Official Video "],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Official Video "],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video "}
+{"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Official Video 豈"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Official Video 豈"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video 豈"}
+{"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Official Video ꀀ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Official Video ꀀ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ꀀ"}
+{"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Official Video ힰ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Official Video ힰ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ힰ"}
+{"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Song (Official Video [4K])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Song (Official Video [4K])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song (Official Video [4K])"}
+{"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s+[-–—]\\s+(?:(?:\\d{4}\\s+)?(?:digital\\s+)?remaster(?:ed)?(?:\\s+(?:version|edition|\\d{4}))*|remasterizad[oa](?:\\s+\\d{4})?|(?:live|(?:en|ao)\\s+vivo|en\\s+directo|(?:mtv\\s+)?unplugged|acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:[\\s;,/].*)?|radio\\s+(?:edit|version)|single\\s+(?:edit|version)|album\\s+version|edit|demo(?:\\s+version)?|bonus\\s+track|mono|stereo|(?:\\d{4}\\s+)?(?:stereo|mono)\\s+(?:mix|version)|\\d{4}\\s+mix|recorded\\s+(?:live\\s+)?at\\s.*|[^-–—]*\\bsessions?|from\\s.*\\bsoundtrack\\b.*|from\\s+[\\\"“].*)\\s*$","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song [Lyrics (HD)] (Live [HD])"}
 {"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Hotel California - 2013 Remaster"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Creep (Acoustic)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
@@ -9163,6 +9273,28 @@
 {"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","x́ (acústica)"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"x́ (acústica)"}
 {"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Dancing Queen – Single Version"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Dancing Queen – Single Version"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Dancing Queen – Single Version"}
+{"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"}
+{"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"}
+{"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"[MV] IU(아이유) _ Blueming(블루밍)"}
+{"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"}
+{"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","𠀀𮯯 𮯰"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Official Video "],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Official Video "],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video "}
+{"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Official Video 豈"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Official Video 豈"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video 豈"}
+{"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Official Video ꀀ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Official Video ꀀ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ꀀ"}
+{"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Official Video ힰ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Official Video ힰ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ힰ"}
+{"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Song (Official Video [4K])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Song (Official Video [4K])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song (Official Video [4K])"}
+{"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[\\(\\[](?:feat\\.?|ft\\.?|featuring|with)\\s[^\\)\\]]*[\\)\\]]","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song [Lyrics (HD)] (Live [HD])"}
 {"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Hotel California - 2013 Remaster"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Creep (Acoustic)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[" (Acoustic)"]}
@@ -9243,6 +9375,28 @@
 {"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","x́ (acústica)"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"x́|"}
 {"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Dancing Queen – Single Version"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Dancing Queen – Single Version"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Dancing Queen – Single Version"}
+{"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"}
+{"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"}
+{"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"[MV] IU(아이유) _ Blueming(블루밍)"}
+{"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"}
+{"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","𠀀𮯯 𮯰"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Official Video "],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Official Video "],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video "}
+{"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Official Video 豈"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Official Video 豈"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video 豈"}
+{"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Official Video ꀀ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Official Video ꀀ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ꀀ"}
+{"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Official Video ힰ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Official Video ힰ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ힰ"}
+{"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Song (Official Video [4K])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Song (Official Video [4K])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song (Official Video [4K])"}
+{"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[\\(\\[](?:live(?:\\s+(?:at|from|in|on)\\b[^\\)\\]]*)?|(?:(?:en|ao)\\s+vivo|en\\s+directo)(?:\\s[^\\)\\]]*)?|(?:\\d{4}\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?|remasterizad[oa](?:\\s+\\d{4})?|(?:acoustic|(?:en\\s+)?ac[uú]stic[oa]|versi[oó]n\\s+ac[uú]stica)(?:\\s+version)?|(?:mtv\\s+)?unplugged|radio\\s+(?:edit|version)|single\\s+edit|demo(?:\\s+version)?|\\d{4}\\s+mix|mono|stereo|from\\s[^\\)\\]]*\\bsoundtrack\\b[^\\)\\]]*|from\\s+[\\\"“][^\\)\\]]*)[\\)\\]]","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song [Lyrics (HD)] (Live [HD])"}
 {"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Hotel California - 2013 Remaster"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Creep (Acoustic)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":["Acoustic"]}
@@ -9323,6 +9477,28 @@
 {"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","x́ (acústica)"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"x́ (|)"}
 {"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Dancing Queen – Single Version"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Dancing Queen – Single Version"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Dancing Queen – Single Version"}
+{"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"}
+{"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"}
+{"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"[MV] IU(아이유) _ Blueming(블루밍)"}
+{"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"}
+{"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","𠀀𮯯 𮯰"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Official Video "],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Official Video "],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video "}
+{"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Official Video 豈"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Official Video 豈"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video 豈"}
+{"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Official Video ꀀ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Official Video ꀀ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ꀀ"}
+{"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Official Video ힰ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Official Video ힰ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ힰ"}
+{"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Song (Official Video [4K])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Song (Official Video [4K])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song (Official Video [4K])"}
+{"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\b(?:acoustic|ac[uú]stic[oa]|unplugged)\\b","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song [Lyrics (HD)] (Live [HD])"}
 {"args":["\\b(?:live|vivo|directo)\\b","Hotel California - 2013 Remaster"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\b(?:live|vivo|directo)\\b","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["\\b(?:live|vivo|directo)\\b","Creep (Acoustic)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
@@ -9403,6 +9579,28 @@
 {"args":["\\b(?:live|vivo|directo)\\b","x́ (acústica)"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"x́ (acústica)"}
 {"args":["\\b(?:live|vivo|directo)\\b","Dancing Queen – Single Version"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\b(?:live|vivo|directo)\\b","Dancing Queen – Single Version"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Dancing Queen – Single Version"}
+{"args":["\\b(?:live|vivo|directo)\\b","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\b(?:live|vivo|directo)\\b","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"}
+{"args":["\\b(?:live|vivo|directo)\\b","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\b(?:live|vivo|directo)\\b","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"}
+{"args":["\\b(?:live|vivo|directo)\\b","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\b(?:live|vivo|directo)\\b","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"[MV] IU(아이유) _ Blueming(블루밍)"}
+{"args":["\\b(?:live|vivo|directo)\\b","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\b(?:live|vivo|directo)\\b","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"}
+{"args":["\\b(?:live|vivo|directo)\\b","𠀀𮯯 𮯰"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\b(?:live|vivo|directo)\\b","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["\\b(?:live|vivo|directo)\\b","Official Video "],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\b(?:live|vivo|directo)\\b","Official Video "],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video "}
+{"args":["\\b(?:live|vivo|directo)\\b","Official Video 豈"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\b(?:live|vivo|directo)\\b","Official Video 豈"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video 豈"}
+{"args":["\\b(?:live|vivo|directo)\\b","Official Video ꀀ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\b(?:live|vivo|directo)\\b","Official Video ꀀ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ꀀ"}
+{"args":["\\b(?:live|vivo|directo)\\b","Official Video ힰ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\b(?:live|vivo|directo)\\b","Official Video ힰ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ힰ"}
+{"args":["\\b(?:live|vivo|directo)\\b","Song (Official Video [4K])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\b(?:live|vivo|directo)\\b","Song (Official Video [4K])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song (Official Video [4K])"}
+{"args":["\\b(?:live|vivo|directo)\\b","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":["Live"]}
+{"args":["\\b(?:live|vivo|directo)\\b","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song [Lyrics (HD)] (| [HD])"}
 {"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Hotel California - 2013 Remaster"],"fn":"re.findall","out":[" - "]}
 {"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hotel California|2013 Remaster"}
 {"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Creep (Acoustic)"],"fn":"re.findall","out":["(",")"]}
@@ -9483,6 +9681,28 @@
 {"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","x́ (acústica)"],"fn":"re.sub","kw":{"repl":"|"},"out":"x́ |acústica|"}
 {"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Dancing Queen – Single Version"],"fn":"re.findall","out":[" – "]}
 {"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Dancing Queen – Single Version"],"fn":"re.sub","kw":{"repl":"|"},"out":"Dancing Queen|Single Version"}
+{"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.findall","out":[" - ","『","』","『","』"]}
+{"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.sub","kw":{"repl":"|"},"out":"孟维来|野人|不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。||动态歌词MV|"}
+{"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.findall","out":[" - ","(",")"]}
+{"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.sub","kw":{"repl":"|"},"out":"林俊傑 JJ Lin|修煉愛情 Practice Love |華納 official 高畫質 HD 官方完整版m/v|"}
+{"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.findall","out":["[","]","(",")","(",")"]}
+{"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.sub","kw":{"repl":"|"},"out":"|MV| IU|아이유| _ Blueming|블루밍|"}
+{"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.findall","out":["《","》","(",")","〈","〉","〖","〗","〔","〕","［","］","（","）"]}
+{"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"repl":"|"},"out":"|孤勇者|陈奕迅 |动态歌词版||公式||歌詞付き||フル||가사||純音樂|"}
+{"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","𠀀𮯯 𮯰"],"fn":"re.findall","out":[]}
+{"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Official Video "],"fn":"re.findall","out":[]}
+{"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Official Video "],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video "}
+{"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Official Video 豈"],"fn":"re.findall","out":[]}
+{"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Official Video 豈"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video 豈"}
+{"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Official Video ꀀ"],"fn":"re.findall","out":[]}
+{"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ꀀ"}
+{"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Official Video ힰ"],"fn":"re.findall","out":[]}
+{"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ힰ"}
+{"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Song (Official Video [4K])"],"fn":"re.findall","out":["(","[","]",")"]}
+{"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Song (Official Video [4K])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song |Official Video |4K||"}
+{"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","out":["[","(",")","]","(","[","]",")"]}
+{"args":["\\s+[-–—/|]\\s+|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song |Lyrics |HD|| |Live |HD||"}
 {"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Hotel California - 2013 Remaster"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Creep (Acoustic)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
@@ -9563,6 +9783,28 @@
 {"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","x́ (acústica)"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"x́ (acústica)"}
 {"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Dancing Queen – Single Version"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Dancing Queen – Single Version"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Dancing Queen – Single Version"}
+{"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"}
+{"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"}
+{"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"[MV] IU(아이유) _ Blueming(블루밍)"}
+{"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"}
+{"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","𠀀𮯯 𮯰"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Official Video "],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Official Video "],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video "}
+{"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Official Video 豈"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Official Video 豈"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video 豈"}
+{"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Official Video ꀀ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Official Video ꀀ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ꀀ"}
+{"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Official Video ힰ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Official Video ힰ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ힰ"}
+{"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Song (Official Video [4K])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Song (Official Video [4K])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song (Official Video [4K])"}
+{"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*[(\\[（［【]\\s*(?:feat\\.|ft\\.|(?:feat|ft|featuring|with)\\s)[^)\\]）］】]*[)\\]）］】]|\\s+(?:feat\\.|ft\\.|featuring\\s).*$","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song [Lyrics (HD)] (Live [HD])"}
 {"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Hotel California - 2013 Remaster"],"fn":"re.findall","out":[]}
 {"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Creep (Acoustic)"],"fn":"re.findall","out":["(Acoustic)"]}
@@ -9643,6 +9885,28 @@
 {"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","x́ (acústica)"],"fn":"re.sub","kw":{"repl":"|"},"out":"x́ |"}
 {"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Dancing Queen – Single Version"],"fn":"re.findall","out":[]}
 {"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Dancing Queen – Single Version"],"fn":"re.sub","kw":{"repl":"|"},"out":"Dancing Queen – Single Version"}
+{"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.findall","out":[]}
+{"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.sub","kw":{"repl":"|"},"out":"孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"}
+{"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.findall","out":["(華納 official 高畫質 HD 官方完整版m/v)"]}
+{"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.sub","kw":{"repl":"|"},"out":"林俊傑 JJ Lin - 修煉愛情 Practice Love |"}
+{"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.findall","out":["[MV]","(아이유)","(블루밍)"]}
+{"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.sub","kw":{"repl":"|"},"out":"| IU| _ Blueming|"}
+{"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.findall","out":["(动态歌词版)","［가사］","（純音樂）"]}
+{"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"repl":"|"},"out":"《孤勇者》陈奕迅 |〈公式〉〖歌詞付き〗〔フル〕||"}
+{"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","𠀀𮯯 𮯰"],"fn":"re.findall","out":[]}
+{"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Official Video "],"fn":"re.findall","out":[]}
+{"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Official Video "],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video "}
+{"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Official Video 豈"],"fn":"re.findall","out":[]}
+{"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Official Video 豈"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video 豈"}
+{"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Official Video ꀀ"],"fn":"re.findall","out":[]}
+{"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ꀀ"}
+{"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Official Video ힰ"],"fn":"re.findall","out":[]}
+{"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ힰ"}
+{"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Song (Official Video [4K])"],"fn":"re.findall","out":["(Official Video [4K]"]}
+{"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Song (Official Video [4K])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song |)"}
+{"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","out":["[Lyrics (HD)","(Live [HD]"]}
+{"args":["[(\\[（［【][^)\\]）］】]*[)\\]）］】]","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song |] |)"}
 {"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Hotel California - 2013 Remaster"],"fn":"re.findall","out":["","","","","","","","","",""]}
 {"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"H||l C|l||r|| - 2013 R||s|r"}
 {"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Creep (Acoustic)"],"fn":"re.findall","out":["","","","",""]}
@@ -9723,86 +9987,130 @@
 {"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","x́ (acústica)"],"fn":"re.sub","kw":{"repl":"|"},"out":"x́ (|cús||)"}
 {"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Dancing Queen – Single Version"],"fn":"re.findall","out":["","","","","","","","","","","","","","",""]}
 {"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Dancing Queen – Single Version"],"fn":"re.sub","kw":{"repl":"|"},"out":"D||||g Q|||| – S||gl| V|r|||"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Hotel California - 2013 Remaster"],"fn":"re.findall","out":[" - "]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hotel California|2013 Remaster"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Creep (Acoustic)"],"fn":"re.findall","out":[]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Creep (Acoustic)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Creep (Acoustic)"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Wonderwall - Live at Knebworth"],"fn":"re.findall","out":[" - "]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Wonderwall - Live at Knebworth"],"fn":"re.sub","kw":{"repl":"|"},"out":"Wonderwall|Live at Knebworth"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Hurt (feat. X)"],"fn":"re.findall","out":[]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Hurt (feat. X)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hurt (feat. X)"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Ma Di (feat. 宋冬野)"],"fn":"re.findall","out":[]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Ma Di (feat. 宋冬野)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Ma Di (feat. 宋冬野)"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","南山南（feat. 宋冬野）"],"fn":"re.findall","out":[]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","南山南（feat. 宋冬野）"],"fn":"re.sub","kw":{"repl":"|"},"out":"南山南（feat. 宋冬野）"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Song Dongye (宋冬野)"],"fn":"re.findall","out":[]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Song Dongye (宋冬野)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song Dongye (宋冬野)"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","【斑马斑马】Zebra Zebra"],"fn":"re.findall","out":[]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","【斑马斑马】Zebra Zebra"],"fn":"re.sub","kw":{"repl":"|"},"out":"【斑马斑马】Zebra Zebra"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Rock'n’Roll"],"fn":"re.findall","out":[]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Rock'n’Roll"],"fn":"re.sub","kw":{"repl":"|"},"out":"Rock'n’Roll"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Clandestino - En Vivo"],"fn":"re.findall","out":[" - "]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Clandestino - En Vivo"],"fn":"re.sub","kw":{"repl":"|"},"out":"Clandestino|En Vivo"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Lamento Boliviano - Versión Acústica"],"fn":"re.findall","out":[" - "]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Lamento Boliviano - Versión Acústica"],"fn":"re.sub","kw":{"repl":"|"},"out":"Lamento Boliviano|Versión Acústica"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","LIVE AND LET DIE"],"fn":"re.findall","out":[]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","LIVE AND LET DIE"],"fn":"re.sub","kw":{"repl":"|"},"out":"LIVE AND LET DIE"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Yesterday - Remastered 2009"],"fn":"re.findall","out":[" - "]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Yesterday - Remastered 2009"],"fn":"re.sub","kw":{"repl":"|"},"out":"Yesterday|Remastered 2009"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Sunday Bloody Sunday - Live From Red Rocks"],"fn":"re.findall","out":[" - "]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Sunday Bloody Sunday - Live From Red Rocks"],"fn":"re.sub","kw":{"repl":"|"},"out":"Sunday Bloody Sunday|Live From Red Rocks"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Africa by Toto"],"fn":"re.findall","out":[]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Africa by Toto"],"fn":"re.sub","kw":{"repl":"|"},"out":"Africa by Toto"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Toto - Topic"],"fn":"re.findall","out":[" - "]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Toto - Topic"],"fn":"re.sub","kw":{"repl":"|"},"out":"Toto|Topic"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Toto VEVO"],"fn":"re.findall","out":[]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Toto VEVO"],"fn":"re.sub","kw":{"repl":"|"},"out":"Toto VEVO"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Toto Official Channel"],"fn":"re.findall","out":[]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Toto Official Channel"],"fn":"re.sub","kw":{"repl":"|"},"out":"Toto Official Channel"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Imagine (1971)"],"fn":"re.findall","out":[]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Imagine (1971)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Imagine (1971)"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Smells Like Teen Spirit (Remastered 2021)"],"fn":"re.findall","out":[]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Smells Like Teen Spirit (Remastered 2021)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Smells Like Teen Spirit (Remastered 2021)"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Hallelujah - From \"Shrek\" Soundtrack"],"fn":"re.findall","out":[" - "]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Hallelujah - From \"Shrek\" Soundtrack"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hallelujah|From \"Shrek\" Soundtrack"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Ojitos Lindos - ACÚSTICO"],"fn":"re.findall","out":[" - "]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Ojitos Lindos - ACÚSTICO"],"fn":"re.sub","kw":{"repl":"|"},"out":"Ojitos Lindos|ACÚSTICO"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Hello / Adele"],"fn":"re.findall","out":[]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Hello / Adele"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hello / Adele"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Café Tacvba | Eres"],"fn":"re.findall","out":[" | "]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Café Tacvba | Eres"],"fn":"re.sub","kw":{"repl":"|"},"out":"Café Tacvba|Eres"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Desert Rose ~ Sting"],"fn":"re.findall","out":[" ~ "]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Desert Rose ~ Sting"],"fn":"re.sub","kw":{"repl":"|"},"out":"Desert Rose|Sting"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Kanpai // Kotaro"],"fn":"re.findall","out":[" // "]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Kanpai // Kotaro"],"fn":"re.sub","kw":{"repl":"|"},"out":"Kanpai|Kotaro"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Sakura sakura"],"fn":"re.findall","out":[]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Sakura sakura"],"fn":"re.sub","kw":{"repl":"|"},"out":"Sakura sakura"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Tsunami"],"fn":"re.findall","out":[]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Tsunami"],"fn":"re.sub","kw":{"repl":"|"},"out":"Tsunami"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Konnichiwa"],"fn":"re.findall","out":[]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Konnichiwa"],"fn":"re.sub","kw":{"repl":"|"},"out":"Konnichiwa"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Shinkansen"],"fn":"re.findall","out":[]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Shinkansen"],"fn":"re.sub","kw":{"repl":"|"},"out":"Shinkansen"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Kitte"],"fn":"re.findall","out":[]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Kitte"],"fn":"re.sub","kw":{"repl":"|"},"out":"Kitte"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Matcha"],"fn":"re.findall","out":[]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Matcha"],"fn":"re.sub","kw":{"repl":"|"},"out":"Matcha"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Ninja"],"fn":"re.findall","out":[]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Ninja"],"fn":"re.sub","kw":{"repl":"|"},"out":"Ninja"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Itto"],"fn":"re.findall","out":[]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Itto"],"fn":"re.sub","kw":{"repl":"|"},"out":"Itto"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","ΚΑΛΗΜΕΡΑ ΣΑΣ"],"fn":"re.findall","out":[]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","ΚΑΛΗΜΕΡΑ ΣΑΣ"],"fn":"re.sub","kw":{"repl":"|"},"out":"ΚΑΛΗΜΕΡΑ ΣΑΣ"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Straße — Live"],"fn":"re.findall","out":[" — "]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Straße — Live"],"fn":"re.sub","kw":{"repl":"|"},"out":"Straße|Live"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","İstanbul (Live)"],"fn":"re.findall","out":[]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","İstanbul (Live)"],"fn":"re.sub","kw":{"repl":"|"},"out":"İstanbul (Live)"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","ΚΕΛΒΙΝ kK"],"fn":"re.findall","out":[]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","ΚΕΛΒΙΝ kK"],"fn":"re.sub","kw":{"repl":"|"},"out":"ΚΕΛΒΙΝ kK"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","x́ (acústica)"],"fn":"re.findall","out":[]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","x́ (acústica)"],"fn":"re.sub","kw":{"repl":"|"},"out":"x́ (acústica)"}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Dancing Queen – Single Version"],"fn":"re.findall","out":[" – "]}
-{"args":["\\s+(?:-|–|—|\\||~|//)\\s+","Dancing Queen – Single Version"],"fn":"re.sub","kw":{"repl":"|"},"out":"Dancing Queen|Single Version"}
+{"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.findall","out":[]}
+{"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.sub","kw":{"repl":"|"},"out":"孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"}
+{"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.findall","out":["","","","","","","","","f","","",""]}
+{"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.sub","kw":{"repl":"|"},"out":"林俊傑 JJ L|| - 修煉愛情 P|c|| L|| (華納 |||||l 高畫質 HD 官方完整版m/v)"}
+{"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.findall","out":["","","",""]}
+{"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.sub","kw":{"repl":"|"},"out":"[MV] IU(아이유) _ Bl||||g(블루밍)"}
+{"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.findall","out":[]}
+{"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"repl":"|"},"out":"《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"}
+{"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","𠀀𮯯 𮯰"],"fn":"re.findall","out":[]}
+{"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Official Video "],"fn":"re.findall","out":["f","","","","","",""]}
+{"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Official Video "],"fn":"re.sub","kw":{"repl":"|"},"out":"O||||l V||| "}
+{"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Official Video 豈"],"fn":"re.findall","out":["f","","","","","",""]}
+{"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Official Video 豈"],"fn":"re.sub","kw":{"repl":"|"},"out":"O||||l V||| 豈"}
+{"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Official Video ꀀ"],"fn":"re.findall","out":["f","","","","","",""]}
+{"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"O||||l V||| ꀀ"}
+{"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Official Video ힰ"],"fn":"re.findall","out":["f","","","","","",""]}
+{"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"O||||l V||| ힰ"}
+{"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Song (Official Video [4K])"],"fn":"re.findall","out":["","","f","","","","","",""]}
+{"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Song (Official Video [4K])"],"fn":"re.sub","kw":{"repl":"|"},"out":"S||g (O||||l V||| [4K])"}
+{"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","out":["","","","",""]}
+{"args":["(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\\1)|t(?=ch)","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"repl":"|"},"out":"S||g [Ly|cs (HD)] (L|| [HD])"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Hotel California - 2013 Remaster"],"fn":"re.findall","out":[" - "]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hotel California|2013 Remaster"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Creep (Acoustic)"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Creep (Acoustic)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Creep (Acoustic)"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Wonderwall - Live at Knebworth"],"fn":"re.findall","out":[" - "]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Wonderwall - Live at Knebworth"],"fn":"re.sub","kw":{"repl":"|"},"out":"Wonderwall|Live at Knebworth"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Hurt (feat. X)"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Hurt (feat. X)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hurt (feat. X)"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Ma Di (feat. 宋冬野)"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Ma Di (feat. 宋冬野)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Ma Di (feat. 宋冬野)"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","南山南（feat. 宋冬野）"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","南山南（feat. 宋冬野）"],"fn":"re.sub","kw":{"repl":"|"},"out":"南山南（feat. 宋冬野）"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Song Dongye (宋冬野)"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Song Dongye (宋冬野)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song Dongye (宋冬野)"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","【斑马斑马】Zebra Zebra"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","【斑马斑马】Zebra Zebra"],"fn":"re.sub","kw":{"repl":"|"},"out":"【斑马斑马】Zebra Zebra"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Rock'n’Roll"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Rock'n’Roll"],"fn":"re.sub","kw":{"repl":"|"},"out":"Rock'n’Roll"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Clandestino - En Vivo"],"fn":"re.findall","out":[" - "]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Clandestino - En Vivo"],"fn":"re.sub","kw":{"repl":"|"},"out":"Clandestino|En Vivo"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Lamento Boliviano - Versión Acústica"],"fn":"re.findall","out":[" - "]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Lamento Boliviano - Versión Acústica"],"fn":"re.sub","kw":{"repl":"|"},"out":"Lamento Boliviano|Versión Acústica"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","LIVE AND LET DIE"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","LIVE AND LET DIE"],"fn":"re.sub","kw":{"repl":"|"},"out":"LIVE AND LET DIE"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Yesterday - Remastered 2009"],"fn":"re.findall","out":[" - "]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Yesterday - Remastered 2009"],"fn":"re.sub","kw":{"repl":"|"},"out":"Yesterday|Remastered 2009"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Sunday Bloody Sunday - Live From Red Rocks"],"fn":"re.findall","out":[" - "]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Sunday Bloody Sunday - Live From Red Rocks"],"fn":"re.sub","kw":{"repl":"|"},"out":"Sunday Bloody Sunday|Live From Red Rocks"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Africa by Toto"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Africa by Toto"],"fn":"re.sub","kw":{"repl":"|"},"out":"Africa by Toto"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Toto - Topic"],"fn":"re.findall","out":[" - "]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Toto - Topic"],"fn":"re.sub","kw":{"repl":"|"},"out":"Toto|Topic"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Toto VEVO"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Toto VEVO"],"fn":"re.sub","kw":{"repl":"|"},"out":"Toto VEVO"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Toto Official Channel"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Toto Official Channel"],"fn":"re.sub","kw":{"repl":"|"},"out":"Toto Official Channel"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Imagine (1971)"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Imagine (1971)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Imagine (1971)"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Smells Like Teen Spirit (Remastered 2021)"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Smells Like Teen Spirit (Remastered 2021)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Smells Like Teen Spirit (Remastered 2021)"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Hallelujah - From \"Shrek\" Soundtrack"],"fn":"re.findall","out":[" - "]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Hallelujah - From \"Shrek\" Soundtrack"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hallelujah|From \"Shrek\" Soundtrack"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Ojitos Lindos - ACÚSTICO"],"fn":"re.findall","out":[" - "]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Ojitos Lindos - ACÚSTICO"],"fn":"re.sub","kw":{"repl":"|"},"out":"Ojitos Lindos|ACÚSTICO"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Hello / Adele"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Hello / Adele"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hello / Adele"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Café Tacvba | Eres"],"fn":"re.findall","out":[" | "]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Café Tacvba | Eres"],"fn":"re.sub","kw":{"repl":"|"},"out":"Café Tacvba|Eres"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Desert Rose ~ Sting"],"fn":"re.findall","out":[" ~ "]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Desert Rose ~ Sting"],"fn":"re.sub","kw":{"repl":"|"},"out":"Desert Rose|Sting"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Kanpai // Kotaro"],"fn":"re.findall","out":[" // "]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Kanpai // Kotaro"],"fn":"re.sub","kw":{"repl":"|"},"out":"Kanpai|Kotaro"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Sakura sakura"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Sakura sakura"],"fn":"re.sub","kw":{"repl":"|"},"out":"Sakura sakura"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Tsunami"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Tsunami"],"fn":"re.sub","kw":{"repl":"|"},"out":"Tsunami"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Konnichiwa"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Konnichiwa"],"fn":"re.sub","kw":{"repl":"|"},"out":"Konnichiwa"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Shinkansen"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Shinkansen"],"fn":"re.sub","kw":{"repl":"|"},"out":"Shinkansen"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Kitte"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Kitte"],"fn":"re.sub","kw":{"repl":"|"},"out":"Kitte"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Matcha"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Matcha"],"fn":"re.sub","kw":{"repl":"|"},"out":"Matcha"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Ninja"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Ninja"],"fn":"re.sub","kw":{"repl":"|"},"out":"Ninja"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Itto"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Itto"],"fn":"re.sub","kw":{"repl":"|"},"out":"Itto"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","ΚΑΛΗΜΕΡΑ ΣΑΣ"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","ΚΑΛΗΜΕΡΑ ΣΑΣ"],"fn":"re.sub","kw":{"repl":"|"},"out":"ΚΑΛΗΜΕΡΑ ΣΑΣ"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Straße — Live"],"fn":"re.findall","out":[" — "]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Straße — Live"],"fn":"re.sub","kw":{"repl":"|"},"out":"Straße|Live"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","İstanbul (Live)"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","İstanbul (Live)"],"fn":"re.sub","kw":{"repl":"|"},"out":"İstanbul (Live)"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","ΚΕΛΒΙΝ kK"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","ΚΕΛΒΙΝ kK"],"fn":"re.sub","kw":{"repl":"|"},"out":"ΚΕΛΒΙΝ kK"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","x́ (acústica)"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","x́ (acústica)"],"fn":"re.sub","kw":{"repl":"|"},"out":"x́ (acústica)"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Dancing Queen – Single Version"],"fn":"re.findall","out":[" – "]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Dancing Queen – Single Version"],"fn":"re.sub","kw":{"repl":"|"},"out":"Dancing Queen|Single Version"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.findall","out":[" - "]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.sub","kw":{"repl":"|"},"out":"孟维来|野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.findall","out":[" - "]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.sub","kw":{"repl":"|"},"out":"林俊傑 JJ Lin|修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.findall","out":[" _ "]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.sub","kw":{"repl":"|"},"out":"[MV] IU(아이유)|Blueming(블루밍)"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"repl":"|"},"out":"《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","𠀀𮯯 𮯰"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Official Video "],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Official Video "],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video "}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Official Video 豈"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Official Video 豈"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video 豈"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Official Video ꀀ"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ꀀ"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Official Video ힰ"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ힰ"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Song (Official Video [4K])"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Song (Official Video [4K])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song (Official Video [4K])"}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","out":[]}
+{"args":["\\s+(?:-|–|—|\\||~|//|_)\\s+","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song [Lyrics (HD)] (Live [HD])"}
 {"args":["\\s+by\\s+","Hotel California - 2013 Remaster"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\s+by\\s+","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["\\s+by\\s+","Creep (Acoustic)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
@@ -9883,6 +10191,28 @@
 {"args":["\\s+by\\s+","x́ (acústica)"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"x́ (acústica)"}
 {"args":["\\s+by\\s+","Dancing Queen – Single Version"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\s+by\\s+","Dancing Queen – Single Version"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Dancing Queen – Single Version"}
+{"args":["\\s+by\\s+","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s+by\\s+","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"}
+{"args":["\\s+by\\s+","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s+by\\s+","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"}
+{"args":["\\s+by\\s+","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s+by\\s+","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"[MV] IU(아이유) _ Blueming(블루밍)"}
+{"args":["\\s+by\\s+","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s+by\\s+","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"}
+{"args":["\\s+by\\s+","𠀀𮯯 𮯰"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s+by\\s+","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["\\s+by\\s+","Official Video "],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s+by\\s+","Official Video "],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video "}
+{"args":["\\s+by\\s+","Official Video 豈"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s+by\\s+","Official Video 豈"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video 豈"}
+{"args":["\\s+by\\s+","Official Video ꀀ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s+by\\s+","Official Video ꀀ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ꀀ"}
+{"args":["\\s+by\\s+","Official Video ힰ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s+by\\s+","Official Video ힰ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ힰ"}
+{"args":["\\s+by\\s+","Song (Official Video [4K])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s+by\\s+","Song (Official Video [4K])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song (Official Video [4K])"}
+{"args":["\\s+by\\s+","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s+by\\s+","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song [Lyrics (HD)] (Live [HD])"}
 {"args":["(?:19|20)\\d\\d","Hotel California - 2013 Remaster"],"fn":"re.findall","out":["2013"]}
 {"args":["(?:19|20)\\d\\d","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hotel California - | Remaster"}
 {"args":["(?:19|20)\\d\\d","Creep (Acoustic)"],"fn":"re.findall","out":[]}
@@ -9963,86 +10293,130 @@
 {"args":["(?:19|20)\\d\\d","x́ (acústica)"],"fn":"re.sub","kw":{"repl":"|"},"out":"x́ (acústica)"}
 {"args":["(?:19|20)\\d\\d","Dancing Queen – Single Version"],"fn":"re.findall","out":[]}
 {"args":["(?:19|20)\\d\\d","Dancing Queen – Single Version"],"fn":"re.sub","kw":{"repl":"|"},"out":"Dancing Queen – Single Version"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Hotel California - 2013 Remaster"],"fn":"re.findall","out":[]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hotel California - 2013 Remaster"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Creep (Acoustic)"],"fn":"re.findall","out":["Acoustic"]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Creep (Acoustic)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Creep|"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Wonderwall - Live at Knebworth"],"fn":"re.findall","out":[]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Wonderwall - Live at Knebworth"],"fn":"re.sub","kw":{"repl":"|"},"out":"Wonderwall - Live at Knebworth"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Hurt (feat. X)"],"fn":"re.findall","out":["feat. X"]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Hurt (feat. X)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hurt|"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Ma Di (feat. 宋冬野)"],"fn":"re.findall","out":["feat. 宋冬野"]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Ma Di (feat. 宋冬野)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Ma Di|"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","南山南（feat. 宋冬野）"],"fn":"re.findall","out":[]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","南山南（feat. 宋冬野）"],"fn":"re.sub","kw":{"repl":"|"},"out":"南山南（feat. 宋冬野）"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Song Dongye (宋冬野)"],"fn":"re.findall","out":["宋冬野"]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Song Dongye (宋冬野)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song Dongye|"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","【斑马斑马】Zebra Zebra"],"fn":"re.findall","out":["斑马斑马"]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","【斑马斑马】Zebra Zebra"],"fn":"re.sub","kw":{"repl":"|"},"out":"|Zebra Zebra"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Rock'n’Roll"],"fn":"re.findall","out":[]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Rock'n’Roll"],"fn":"re.sub","kw":{"repl":"|"},"out":"Rock'n’Roll"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Clandestino - En Vivo"],"fn":"re.findall","out":[]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Clandestino - En Vivo"],"fn":"re.sub","kw":{"repl":"|"},"out":"Clandestino - En Vivo"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Lamento Boliviano - Versión Acústica"],"fn":"re.findall","out":[]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Lamento Boliviano - Versión Acústica"],"fn":"re.sub","kw":{"repl":"|"},"out":"Lamento Boliviano - Versión Acústica"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","LIVE AND LET DIE"],"fn":"re.findall","out":[]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","LIVE AND LET DIE"],"fn":"re.sub","kw":{"repl":"|"},"out":"LIVE AND LET DIE"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Yesterday - Remastered 2009"],"fn":"re.findall","out":[]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Yesterday - Remastered 2009"],"fn":"re.sub","kw":{"repl":"|"},"out":"Yesterday - Remastered 2009"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Sunday Bloody Sunday - Live From Red Rocks"],"fn":"re.findall","out":[]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Sunday Bloody Sunday - Live From Red Rocks"],"fn":"re.sub","kw":{"repl":"|"},"out":"Sunday Bloody Sunday - Live From Red Rocks"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Africa by Toto"],"fn":"re.findall","out":[]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Africa by Toto"],"fn":"re.sub","kw":{"repl":"|"},"out":"Africa by Toto"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Toto - Topic"],"fn":"re.findall","out":[]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Toto - Topic"],"fn":"re.sub","kw":{"repl":"|"},"out":"Toto - Topic"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Toto VEVO"],"fn":"re.findall","out":[]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Toto VEVO"],"fn":"re.sub","kw":{"repl":"|"},"out":"Toto VEVO"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Toto Official Channel"],"fn":"re.findall","out":[]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Toto Official Channel"],"fn":"re.sub","kw":{"repl":"|"},"out":"Toto Official Channel"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Imagine (1971)"],"fn":"re.findall","out":["1971"]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Imagine (1971)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Imagine|"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Smells Like Teen Spirit (Remastered 2021)"],"fn":"re.findall","out":["Remastered 2021"]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Smells Like Teen Spirit (Remastered 2021)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Smells Like Teen Spirit|"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Hallelujah - From \"Shrek\" Soundtrack"],"fn":"re.findall","out":[]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Hallelujah - From \"Shrek\" Soundtrack"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hallelujah - From \"Shrek\" Soundtrack"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Ojitos Lindos - ACÚSTICO"],"fn":"re.findall","out":[]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Ojitos Lindos - ACÚSTICO"],"fn":"re.sub","kw":{"repl":"|"},"out":"Ojitos Lindos - ACÚSTICO"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Hello / Adele"],"fn":"re.findall","out":[]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Hello / Adele"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hello / Adele"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Café Tacvba | Eres"],"fn":"re.findall","out":[]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Café Tacvba | Eres"],"fn":"re.sub","kw":{"repl":"|"},"out":"Café Tacvba | Eres"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Desert Rose ~ Sting"],"fn":"re.findall","out":[]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Desert Rose ~ Sting"],"fn":"re.sub","kw":{"repl":"|"},"out":"Desert Rose ~ Sting"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Kanpai // Kotaro"],"fn":"re.findall","out":[]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Kanpai // Kotaro"],"fn":"re.sub","kw":{"repl":"|"},"out":"Kanpai // Kotaro"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Sakura sakura"],"fn":"re.findall","out":[]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Sakura sakura"],"fn":"re.sub","kw":{"repl":"|"},"out":"Sakura sakura"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Tsunami"],"fn":"re.findall","out":[]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Tsunami"],"fn":"re.sub","kw":{"repl":"|"},"out":"Tsunami"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Konnichiwa"],"fn":"re.findall","out":[]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Konnichiwa"],"fn":"re.sub","kw":{"repl":"|"},"out":"Konnichiwa"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Shinkansen"],"fn":"re.findall","out":[]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Shinkansen"],"fn":"re.sub","kw":{"repl":"|"},"out":"Shinkansen"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Kitte"],"fn":"re.findall","out":[]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Kitte"],"fn":"re.sub","kw":{"repl":"|"},"out":"Kitte"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Matcha"],"fn":"re.findall","out":[]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Matcha"],"fn":"re.sub","kw":{"repl":"|"},"out":"Matcha"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Ninja"],"fn":"re.findall","out":[]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Ninja"],"fn":"re.sub","kw":{"repl":"|"},"out":"Ninja"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Itto"],"fn":"re.findall","out":[]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Itto"],"fn":"re.sub","kw":{"repl":"|"},"out":"Itto"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","ΚΑΛΗΜΕΡΑ ΣΑΣ"],"fn":"re.findall","out":[]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","ΚΑΛΗΜΕΡΑ ΣΑΣ"],"fn":"re.sub","kw":{"repl":"|"},"out":"ΚΑΛΗΜΕΡΑ ΣΑΣ"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Straße — Live"],"fn":"re.findall","out":[]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Straße — Live"],"fn":"re.sub","kw":{"repl":"|"},"out":"Straße — Live"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","İstanbul (Live)"],"fn":"re.findall","out":["Live"]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","İstanbul (Live)"],"fn":"re.sub","kw":{"repl":"|"},"out":"İstanbul|"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","ΚΕΛΒΙΝ kK"],"fn":"re.findall","out":[]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","ΚΕΛΒΙΝ kK"],"fn":"re.sub","kw":{"repl":"|"},"out":"ΚΕΛΒΙΝ kK"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","x́ (acústica)"],"fn":"re.findall","out":["acústica"]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","x́ (acústica)"],"fn":"re.sub","kw":{"repl":"|"},"out":"x́|"}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Dancing Queen – Single Version"],"fn":"re.findall","out":[]}
-{"args":["\\s*[(\\[【「]([^()\\[\\]【】「」]*)[)\\]】」]","Dancing Queen – Single Version"],"fn":"re.sub","kw":{"repl":"|"},"out":"Dancing Queen – Single Version"}
+{"args":["(?:19|20)\\d\\d","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.findall","out":[]}
+{"args":["(?:19|20)\\d\\d","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.sub","kw":{"repl":"|"},"out":"孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"}
+{"args":["(?:19|20)\\d\\d","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.findall","out":[]}
+{"args":["(?:19|20)\\d\\d","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.sub","kw":{"repl":"|"},"out":"林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"}
+{"args":["(?:19|20)\\d\\d","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.findall","out":[]}
+{"args":["(?:19|20)\\d\\d","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.sub","kw":{"repl":"|"},"out":"[MV] IU(아이유) _ Blueming(블루밍)"}
+{"args":["(?:19|20)\\d\\d","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.findall","out":[]}
+{"args":["(?:19|20)\\d\\d","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"repl":"|"},"out":"《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"}
+{"args":["(?:19|20)\\d\\d","𠀀𮯯 𮯰"],"fn":"re.findall","out":[]}
+{"args":["(?:19|20)\\d\\d","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["(?:19|20)\\d\\d","Official Video "],"fn":"re.findall","out":[]}
+{"args":["(?:19|20)\\d\\d","Official Video "],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video "}
+{"args":["(?:19|20)\\d\\d","Official Video 豈"],"fn":"re.findall","out":[]}
+{"args":["(?:19|20)\\d\\d","Official Video 豈"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video 豈"}
+{"args":["(?:19|20)\\d\\d","Official Video ꀀ"],"fn":"re.findall","out":[]}
+{"args":["(?:19|20)\\d\\d","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ꀀ"}
+{"args":["(?:19|20)\\d\\d","Official Video ힰ"],"fn":"re.findall","out":[]}
+{"args":["(?:19|20)\\d\\d","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ힰ"}
+{"args":["(?:19|20)\\d\\d","Song (Official Video [4K])"],"fn":"re.findall","out":[]}
+{"args":["(?:19|20)\\d\\d","Song (Official Video [4K])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song (Official Video [4K])"}
+{"args":["(?:19|20)\\d\\d","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","out":[]}
+{"args":["(?:19|20)\\d\\d","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song [Lyrics (HD)] (Live [HD])"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Hotel California - 2013 Remaster"],"fn":"re.findall","out":[]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hotel California - 2013 Remaster"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Creep (Acoustic)"],"fn":"re.findall","out":["(Acoustic)"]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Creep (Acoustic)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Creep |"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Wonderwall - Live at Knebworth"],"fn":"re.findall","out":[]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Wonderwall - Live at Knebworth"],"fn":"re.sub","kw":{"repl":"|"},"out":"Wonderwall - Live at Knebworth"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Hurt (feat. X)"],"fn":"re.findall","out":["(feat. X)"]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Hurt (feat. X)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hurt |"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Ma Di (feat. 宋冬野)"],"fn":"re.findall","out":["(feat. 宋冬野)"]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Ma Di (feat. 宋冬野)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Ma Di |"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","南山南（feat. 宋冬野）"],"fn":"re.findall","out":["（feat. 宋冬野）"]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","南山南（feat. 宋冬野）"],"fn":"re.sub","kw":{"repl":"|"},"out":"南山南|"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Song Dongye (宋冬野)"],"fn":"re.findall","out":["(宋冬野)"]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Song Dongye (宋冬野)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song Dongye |"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","【斑马斑马】Zebra Zebra"],"fn":"re.findall","out":["【斑马斑马】"]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","【斑马斑马】Zebra Zebra"],"fn":"re.sub","kw":{"repl":"|"},"out":"|Zebra Zebra"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Rock'n’Roll"],"fn":"re.findall","out":[]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Rock'n’Roll"],"fn":"re.sub","kw":{"repl":"|"},"out":"Rock'n’Roll"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Clandestino - En Vivo"],"fn":"re.findall","out":[]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Clandestino - En Vivo"],"fn":"re.sub","kw":{"repl":"|"},"out":"Clandestino - En Vivo"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Lamento Boliviano - Versión Acústica"],"fn":"re.findall","out":[]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Lamento Boliviano - Versión Acústica"],"fn":"re.sub","kw":{"repl":"|"},"out":"Lamento Boliviano - Versión Acústica"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","LIVE AND LET DIE"],"fn":"re.findall","out":[]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","LIVE AND LET DIE"],"fn":"re.sub","kw":{"repl":"|"},"out":"LIVE AND LET DIE"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Yesterday - Remastered 2009"],"fn":"re.findall","out":[]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Yesterday - Remastered 2009"],"fn":"re.sub","kw":{"repl":"|"},"out":"Yesterday - Remastered 2009"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Sunday Bloody Sunday - Live From Red Rocks"],"fn":"re.findall","out":[]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Sunday Bloody Sunday - Live From Red Rocks"],"fn":"re.sub","kw":{"repl":"|"},"out":"Sunday Bloody Sunday - Live From Red Rocks"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Africa by Toto"],"fn":"re.findall","out":[]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Africa by Toto"],"fn":"re.sub","kw":{"repl":"|"},"out":"Africa by Toto"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Toto - Topic"],"fn":"re.findall","out":[]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Toto - Topic"],"fn":"re.sub","kw":{"repl":"|"},"out":"Toto - Topic"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Toto VEVO"],"fn":"re.findall","out":[]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Toto VEVO"],"fn":"re.sub","kw":{"repl":"|"},"out":"Toto VEVO"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Toto Official Channel"],"fn":"re.findall","out":[]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Toto Official Channel"],"fn":"re.sub","kw":{"repl":"|"},"out":"Toto Official Channel"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Imagine (1971)"],"fn":"re.findall","out":["(1971)"]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Imagine (1971)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Imagine |"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Smells Like Teen Spirit (Remastered 2021)"],"fn":"re.findall","out":["(Remastered 2021)"]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Smells Like Teen Spirit (Remastered 2021)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Smells Like Teen Spirit |"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Hallelujah - From \"Shrek\" Soundtrack"],"fn":"re.findall","out":[]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Hallelujah - From \"Shrek\" Soundtrack"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hallelujah - From \"Shrek\" Soundtrack"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Ojitos Lindos - ACÚSTICO"],"fn":"re.findall","out":[]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Ojitos Lindos - ACÚSTICO"],"fn":"re.sub","kw":{"repl":"|"},"out":"Ojitos Lindos - ACÚSTICO"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Hello / Adele"],"fn":"re.findall","out":[]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Hello / Adele"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hello / Adele"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Café Tacvba | Eres"],"fn":"re.findall","out":[]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Café Tacvba | Eres"],"fn":"re.sub","kw":{"repl":"|"},"out":"Café Tacvba | Eres"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Desert Rose ~ Sting"],"fn":"re.findall","out":[]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Desert Rose ~ Sting"],"fn":"re.sub","kw":{"repl":"|"},"out":"Desert Rose ~ Sting"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Kanpai // Kotaro"],"fn":"re.findall","out":[]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Kanpai // Kotaro"],"fn":"re.sub","kw":{"repl":"|"},"out":"Kanpai // Kotaro"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Sakura sakura"],"fn":"re.findall","out":[]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Sakura sakura"],"fn":"re.sub","kw":{"repl":"|"},"out":"Sakura sakura"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Tsunami"],"fn":"re.findall","out":[]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Tsunami"],"fn":"re.sub","kw":{"repl":"|"},"out":"Tsunami"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Konnichiwa"],"fn":"re.findall","out":[]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Konnichiwa"],"fn":"re.sub","kw":{"repl":"|"},"out":"Konnichiwa"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Shinkansen"],"fn":"re.findall","out":[]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Shinkansen"],"fn":"re.sub","kw":{"repl":"|"},"out":"Shinkansen"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Kitte"],"fn":"re.findall","out":[]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Kitte"],"fn":"re.sub","kw":{"repl":"|"},"out":"Kitte"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Matcha"],"fn":"re.findall","out":[]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Matcha"],"fn":"re.sub","kw":{"repl":"|"},"out":"Matcha"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Ninja"],"fn":"re.findall","out":[]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Ninja"],"fn":"re.sub","kw":{"repl":"|"},"out":"Ninja"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Itto"],"fn":"re.findall","out":[]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Itto"],"fn":"re.sub","kw":{"repl":"|"},"out":"Itto"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","ΚΑΛΗΜΕΡΑ ΣΑΣ"],"fn":"re.findall","out":[]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","ΚΑΛΗΜΕΡΑ ΣΑΣ"],"fn":"re.sub","kw":{"repl":"|"},"out":"ΚΑΛΗΜΕΡΑ ΣΑΣ"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Straße — Live"],"fn":"re.findall","out":[]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Straße — Live"],"fn":"re.sub","kw":{"repl":"|"},"out":"Straße — Live"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","İstanbul (Live)"],"fn":"re.findall","out":["(Live)"]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","İstanbul (Live)"],"fn":"re.sub","kw":{"repl":"|"},"out":"İstanbul |"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","ΚΕΛΒΙΝ kK"],"fn":"re.findall","out":[]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","ΚΕΛΒΙΝ kK"],"fn":"re.sub","kw":{"repl":"|"},"out":"ΚΕΛΒΙΝ kK"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","x́ (acústica)"],"fn":"re.findall","out":["(acústica)"]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","x́ (acústica)"],"fn":"re.sub","kw":{"repl":"|"},"out":"x́ |"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Dancing Queen – Single Version"],"fn":"re.findall","out":[]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Dancing Queen – Single Version"],"fn":"re.sub","kw":{"repl":"|"},"out":"Dancing Queen – Single Version"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.findall","out":["『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』","『动态歌词MV』"]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.sub","kw":{"repl":"|"},"out":"孟维来 - 野人||"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.findall","out":["(華納 official 高畫質 HD 官方完整版m/v)"]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.sub","kw":{"repl":"|"},"out":"林俊傑 JJ Lin - 修煉愛情 Practice Love |"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.findall","out":["[MV]","(아이유)","(블루밍)"]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.sub","kw":{"repl":"|"},"out":"| IU| _ Blueming|"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.findall","out":["《孤勇者》","(动态歌词版)","〈公式〉","〖歌詞付き〗","〔フル〕","［가사］","（純音樂）"]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"repl":"|"},"out":"|陈奕迅 ||||||"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","𠀀𮯯 𮯰"],"fn":"re.findall","out":[]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Official Video "],"fn":"re.findall","out":[]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Official Video "],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video "}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Official Video 豈"],"fn":"re.findall","out":[]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Official Video 豈"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video 豈"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Official Video ꀀ"],"fn":"re.findall","out":[]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ꀀ"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Official Video ힰ"],"fn":"re.findall","out":[]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ힰ"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Song (Official Video [4K])"],"fn":"re.findall","out":["[4K]"]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Song (Official Video [4K])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song (Official Video |)"}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","out":["(HD)","[HD]"]}
+{"args":["\\([^()\\[\\]]*\\)|\\[[^\\[\\]()]*\\]|（[^（）]*）|［[^［］]*］|【[^【】]*】|「[^「」]*」|『[^『』]*』|《[^《》]*》|〈[^〈〉]*〉|〖[^〖〗]*〗|〔[^〔〕]*〕","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song [Lyrics |] (Live |)"}
 {"args":["^(.*\\S)\\s+-\\s+topic$","Hotel California - 2013 Remaster"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["^(.*\\S)\\s+-\\s+topic$","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["^(.*\\S)\\s+-\\s+topic$","Creep (Acoustic)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
@@ -10123,6 +10497,28 @@
 {"args":["^(.*\\S)\\s+-\\s+topic$","x́ (acústica)"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"x́ (acústica)"}
 {"args":["^(.*\\S)\\s+-\\s+topic$","Dancing Queen – Single Version"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["^(.*\\S)\\s+-\\s+topic$","Dancing Queen – Single Version"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Dancing Queen – Single Version"}
+{"args":["^(.*\\S)\\s+-\\s+topic$","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["^(.*\\S)\\s+-\\s+topic$","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"}
+{"args":["^(.*\\S)\\s+-\\s+topic$","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["^(.*\\S)\\s+-\\s+topic$","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"}
+{"args":["^(.*\\S)\\s+-\\s+topic$","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["^(.*\\S)\\s+-\\s+topic$","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"[MV] IU(아이유) _ Blueming(블루밍)"}
+{"args":["^(.*\\S)\\s+-\\s+topic$","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["^(.*\\S)\\s+-\\s+topic$","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"}
+{"args":["^(.*\\S)\\s+-\\s+topic$","𠀀𮯯 𮯰"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["^(.*\\S)\\s+-\\s+topic$","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["^(.*\\S)\\s+-\\s+topic$","Official Video "],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["^(.*\\S)\\s+-\\s+topic$","Official Video "],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video "}
+{"args":["^(.*\\S)\\s+-\\s+topic$","Official Video 豈"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["^(.*\\S)\\s+-\\s+topic$","Official Video 豈"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video 豈"}
+{"args":["^(.*\\S)\\s+-\\s+topic$","Official Video ꀀ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["^(.*\\S)\\s+-\\s+topic$","Official Video ꀀ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ꀀ"}
+{"args":["^(.*\\S)\\s+-\\s+topic$","Official Video ힰ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["^(.*\\S)\\s+-\\s+topic$","Official Video ힰ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ힰ"}
+{"args":["^(.*\\S)\\s+-\\s+topic$","Song (Official Video [4K])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["^(.*\\S)\\s+-\\s+topic$","Song (Official Video [4K])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song (Official Video [4K])"}
+{"args":["^(.*\\S)\\s+-\\s+topic$","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["^(.*\\S)\\s+-\\s+topic$","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song [Lyrics (HD)] (Live [HD])"}
 {"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Hotel California - 2013 Remaster"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Hotel California - 2013 Remaster"}
 {"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Creep (Acoustic)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
@@ -10203,3 +10599,331 @@
 {"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","x́ (acústica)"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"x́ (acústica)"}
 {"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Dancing Queen – Single Version"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
 {"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Dancing Queen – Single Version"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Dancing Queen – Single Version"}
+{"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"}
+{"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"}
+{"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"[MV] IU(아이유) _ Blueming(블루밍)"}
+{"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"}
+{"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","𠀀𮯯 𮯰"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Official Video "],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Official Video "],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video "}
+{"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Official Video 豈"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Official Video 豈"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video 豈"}
+{"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Official Video ꀀ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Official Video ꀀ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ꀀ"}
+{"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Official Video ힰ"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Official Video ힰ"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Official Video ힰ"}
+{"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Song (Official Video [4K])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Song (Official Video [4K])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song (Official Video [4K])"}
+{"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","kw":{"flags":"IGNORECASE"},"out":[]}
+{"args":["\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"flags":"IGNORECASE","repl":"|"},"out":"Song [Lyrics (HD)] (Live [HD])"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Hotel California - 2013 Remaster"],"fn":"re.findall","out":["Hotel","California","2013","Remaster"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | - | |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Creep (Acoustic)"],"fn":"re.findall","out":["Creep","Acoustic"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Creep (Acoustic)"],"fn":"re.sub","kw":{"repl":"|"},"out":"| (|)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Wonderwall - Live at Knebworth"],"fn":"re.findall","out":["Wonderwall","Live","at","Knebworth"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Wonderwall - Live at Knebworth"],"fn":"re.sub","kw":{"repl":"|"},"out":"| - | | |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Hurt (feat. X)"],"fn":"re.findall","out":["Hurt","feat","X"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Hurt (feat. X)"],"fn":"re.sub","kw":{"repl":"|"},"out":"| (|. |)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Ma Di (feat. 宋冬野)"],"fn":"re.findall","out":["Ma","Di","feat","宋冬野"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Ma Di (feat. 宋冬野)"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | (|. |)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","南山南（feat. 宋冬野）"],"fn":"re.findall","out":["南山南","feat","宋冬野"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","南山南（feat. 宋冬野）"],"fn":"re.sub","kw":{"repl":"|"},"out":"|（|. |）"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Song Dongye (宋冬野)"],"fn":"re.findall","out":["Song","Dongye","宋冬野"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Song Dongye (宋冬野)"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | (|)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","【斑马斑马】Zebra Zebra"],"fn":"re.findall","out":["斑马斑马","Zebra","Zebra"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","【斑马斑马】Zebra Zebra"],"fn":"re.sub","kw":{"repl":"|"},"out":"【|】| |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Rock'n’Roll"],"fn":"re.findall","out":["Rock","n","Roll"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Rock'n’Roll"],"fn":"re.sub","kw":{"repl":"|"},"out":"|'|’|"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Clandestino - En Vivo"],"fn":"re.findall","out":["Clandestino","En","Vivo"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Clandestino - En Vivo"],"fn":"re.sub","kw":{"repl":"|"},"out":"| - | |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Lamento Boliviano - Versión Acústica"],"fn":"re.findall","out":["Lamento","Boliviano","Versión","Acústica"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Lamento Boliviano - Versión Acústica"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | - | |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","LIVE AND LET DIE"],"fn":"re.findall","out":["LIVE","AND","LET","DIE"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","LIVE AND LET DIE"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | | |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Yesterday - Remastered 2009"],"fn":"re.findall","out":["Yesterday","Remastered","2009"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Yesterday - Remastered 2009"],"fn":"re.sub","kw":{"repl":"|"},"out":"| - | |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Sunday Bloody Sunday - Live From Red Rocks"],"fn":"re.findall","out":["Sunday","Bloody","Sunday","Live","From","Red","Rocks"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Sunday Bloody Sunday - Live From Red Rocks"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | | - | | | |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Africa by Toto"],"fn":"re.findall","out":["Africa","by","Toto"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Africa by Toto"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Toto - Topic"],"fn":"re.findall","out":["Toto","Topic"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Toto - Topic"],"fn":"re.sub","kw":{"repl":"|"},"out":"| - |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Toto VEVO"],"fn":"re.findall","out":["Toto","VEVO"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Toto VEVO"],"fn":"re.sub","kw":{"repl":"|"},"out":"| |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Toto Official Channel"],"fn":"re.findall","out":["Toto","Official","Channel"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Toto Official Channel"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Imagine (1971)"],"fn":"re.findall","out":["Imagine","1971"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Imagine (1971)"],"fn":"re.sub","kw":{"repl":"|"},"out":"| (|)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Smells Like Teen Spirit (Remastered 2021)"],"fn":"re.findall","out":["Smells","Like","Teen","Spirit","Remastered","2021"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Smells Like Teen Spirit (Remastered 2021)"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | | | (| |)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Hallelujah - From \"Shrek\" Soundtrack"],"fn":"re.findall","out":["Hallelujah","From","Shrek","Soundtrack"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Hallelujah - From \"Shrek\" Soundtrack"],"fn":"re.sub","kw":{"repl":"|"},"out":"| - | \"|\" |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Ojitos Lindos - ACÚSTICO"],"fn":"re.findall","out":["Ojitos","Lindos","ACÚSTICO"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Ojitos Lindos - ACÚSTICO"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | - |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Hello / Adele"],"fn":"re.findall","out":["Hello","Adele"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Hello / Adele"],"fn":"re.sub","kw":{"repl":"|"},"out":"| / |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Café Tacvba | Eres"],"fn":"re.findall","out":["Café","Tacvba","Eres"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Café Tacvba | Eres"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | | |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Desert Rose ~ Sting"],"fn":"re.findall","out":["Desert","Rose","Sting"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Desert Rose ~ Sting"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | ~ |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Kanpai // Kotaro"],"fn":"re.findall","out":["Kanpai","Kotaro"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Kanpai // Kotaro"],"fn":"re.sub","kw":{"repl":"|"},"out":"| // |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Sakura sakura"],"fn":"re.findall","out":["Sakura","sakura"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Sakura sakura"],"fn":"re.sub","kw":{"repl":"|"},"out":"| |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Tsunami"],"fn":"re.findall","out":["Tsunami"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Tsunami"],"fn":"re.sub","kw":{"repl":"|"},"out":"|"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Konnichiwa"],"fn":"re.findall","out":["Konnichiwa"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Konnichiwa"],"fn":"re.sub","kw":{"repl":"|"},"out":"|"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Shinkansen"],"fn":"re.findall","out":["Shinkansen"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Shinkansen"],"fn":"re.sub","kw":{"repl":"|"},"out":"|"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Kitte"],"fn":"re.findall","out":["Kitte"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Kitte"],"fn":"re.sub","kw":{"repl":"|"},"out":"|"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Matcha"],"fn":"re.findall","out":["Matcha"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Matcha"],"fn":"re.sub","kw":{"repl":"|"},"out":"|"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Ninja"],"fn":"re.findall","out":["Ninja"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Ninja"],"fn":"re.sub","kw":{"repl":"|"},"out":"|"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Itto"],"fn":"re.findall","out":["Itto"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Itto"],"fn":"re.sub","kw":{"repl":"|"},"out":"|"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","ΚΑΛΗΜΕΡΑ ΣΑΣ"],"fn":"re.findall","out":["ΚΑΛΗΜΕΡΑ","ΣΑΣ"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","ΚΑΛΗΜΕΡΑ ΣΑΣ"],"fn":"re.sub","kw":{"repl":"|"},"out":"| |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Straße — Live"],"fn":"re.findall","out":["Straße","Live"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Straße — Live"],"fn":"re.sub","kw":{"repl":"|"},"out":"| — |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","İstanbul (Live)"],"fn":"re.findall","out":["İstanbul","Live"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","İstanbul (Live)"],"fn":"re.sub","kw":{"repl":"|"},"out":"| (|)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","ΚΕΛΒΙΝ kK"],"fn":"re.findall","out":["ΚΕΛΒΙΝ","kK"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","ΚΕΛΒΙΝ kK"],"fn":"re.sub","kw":{"repl":"|"},"out":"| |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","x́ (acústica)"],"fn":"re.findall","out":["x","acústica"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","x́ (acústica)"],"fn":"re.sub","kw":{"repl":"|"},"out":"|́ (|)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Dancing Queen – Single Version"],"fn":"re.findall","out":["Dancing","Queen","Single","Version"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Dancing Queen – Single Version"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | – | |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.findall","out":["孟维来","野人","不再借世人的手","替我开脱","遍野的花骨朵","也能够耐住寂寞","动态歌词","MV"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.sub","kw":{"repl":"|"},"out":"| - |『| |，| |。』『||』"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.findall","out":["林俊傑","JJ","Lin","修煉愛情","Practice","Love","華納","official","高畫質","HD","官方完整版","m/v"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | | - | | | (| | | | ||)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.findall","out":["MV","IU","아이유","Blueming","블루밍"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.sub","kw":{"repl":"|"},"out":"[|] |(|) _ |(|)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.findall","out":["孤勇者","陈奕迅","动态歌词版","公式","歌詞付き","フル","가사","純音樂"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"repl":"|"},"out":"《|》| (|)〈|〉〖|〗〔|〕［|］（|）"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","𠀀𮯯 𮯰"],"fn":"re.findall","out":["𠀀𮯯","𮯰"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"repl":"|"},"out":"| |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Official Video "],"fn":"re.findall","out":["Official","Video"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Official Video "],"fn":"re.sub","kw":{"repl":"|"},"out":"| | "}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Official Video 豈"],"fn":"re.findall","out":["Official","Video","豈"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Official Video 豈"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Official Video ꀀ"],"fn":"re.findall","out":["Official","Video","ꀀ"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Official Video ힰ"],"fn":"re.findall","out":["Official","Video","ힰ"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"| | |"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Song (Official Video [4K])"],"fn":"re.findall","out":["Song","Official","Video","4K"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Song (Official Video [4K])"],"fn":"re.sub","kw":{"repl":"|"},"out":"| (| | [|])"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","out":["Song","Lyrics","HD","Live","HD"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|m/v(?![^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯])|[^\\W_ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"repl":"|"},"out":"| [| (|)] (| [|])"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hotel California - 2013 Remaster"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hotel California - 2013 Remaster"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Creep (Acoustic)"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Creep (Acoustic)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Creep (Acoustic)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Wonderwall - Live at Knebworth"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Wonderwall - Live at Knebworth"],"fn":"re.sub","kw":{"repl":"|"},"out":"Wonderwall - Live at Knebworth"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hurt (feat. X)"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hurt (feat. X)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hurt (feat. X)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Ma Di (feat. 宋冬野)"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Ma Di (feat. 宋冬野)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Ma Di (feat. 宋冬野)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","南山南（feat. 宋冬野）"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","南山南（feat. 宋冬野）"],"fn":"re.sub","kw":{"repl":"|"},"out":"南山南（feat. 宋冬野）"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Song Dongye (宋冬野)"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Song Dongye (宋冬野)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song Dongye (宋冬野)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","【斑马斑马】Zebra Zebra"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","【斑马斑马】Zebra Zebra"],"fn":"re.sub","kw":{"repl":"|"},"out":"【斑马斑马】Zebra Zebra"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Rock'n’Roll"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Rock'n’Roll"],"fn":"re.sub","kw":{"repl":"|"},"out":"Rock'n’Roll"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Clandestino - En Vivo"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Clandestino - En Vivo"],"fn":"re.sub","kw":{"repl":"|"},"out":"Clandestino - En Vivo"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Lamento Boliviano - Versión Acústica"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Lamento Boliviano - Versión Acústica"],"fn":"re.sub","kw":{"repl":"|"},"out":"Lamento Boliviano - Versión Acústica"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","LIVE AND LET DIE"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","LIVE AND LET DIE"],"fn":"re.sub","kw":{"repl":"|"},"out":"LIVE AND LET DIE"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Yesterday - Remastered 2009"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Yesterday - Remastered 2009"],"fn":"re.sub","kw":{"repl":"|"},"out":"Yesterday - Remastered 2009"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Sunday Bloody Sunday - Live From Red Rocks"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Sunday Bloody Sunday - Live From Red Rocks"],"fn":"re.sub","kw":{"repl":"|"},"out":"Sunday Bloody Sunday - Live From Red Rocks"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Africa by Toto"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Africa by Toto"],"fn":"re.sub","kw":{"repl":"|"},"out":"Africa by Toto"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Toto - Topic"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Toto - Topic"],"fn":"re.sub","kw":{"repl":"|"},"out":"Toto - Topic"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Toto VEVO"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Toto VEVO"],"fn":"re.sub","kw":{"repl":"|"},"out":"Toto VEVO"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Toto Official Channel"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Toto Official Channel"],"fn":"re.sub","kw":{"repl":"|"},"out":"Toto Official Channel"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Imagine (1971)"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Imagine (1971)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Imagine (1971)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Smells Like Teen Spirit (Remastered 2021)"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Smells Like Teen Spirit (Remastered 2021)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Smells Like Teen Spirit (Remastered 2021)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hallelujah - From \"Shrek\" Soundtrack"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hallelujah - From \"Shrek\" Soundtrack"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hallelujah - From \"Shrek\" Soundtrack"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Ojitos Lindos - ACÚSTICO"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Ojitos Lindos - ACÚSTICO"],"fn":"re.sub","kw":{"repl":"|"},"out":"Ojitos Lindos - ACÚSTICO"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hello / Adele"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Hello / Adele"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hello / Adele"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Café Tacvba | Eres"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Café Tacvba | Eres"],"fn":"re.sub","kw":{"repl":"|"},"out":"Café Tacvba | Eres"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Desert Rose ~ Sting"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Desert Rose ~ Sting"],"fn":"re.sub","kw":{"repl":"|"},"out":"Desert Rose ~ Sting"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Kanpai // Kotaro"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Kanpai // Kotaro"],"fn":"re.sub","kw":{"repl":"|"},"out":"Kanpai // Kotaro"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Sakura sakura"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Sakura sakura"],"fn":"re.sub","kw":{"repl":"|"},"out":"Sakura sakura"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Tsunami"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Tsunami"],"fn":"re.sub","kw":{"repl":"|"},"out":"Tsunami"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Konnichiwa"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Konnichiwa"],"fn":"re.sub","kw":{"repl":"|"},"out":"Konnichiwa"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Shinkansen"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Shinkansen"],"fn":"re.sub","kw":{"repl":"|"},"out":"Shinkansen"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Kitte"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Kitte"],"fn":"re.sub","kw":{"repl":"|"},"out":"Kitte"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Matcha"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Matcha"],"fn":"re.sub","kw":{"repl":"|"},"out":"Matcha"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Ninja"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Ninja"],"fn":"re.sub","kw":{"repl":"|"},"out":"Ninja"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Itto"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Itto"],"fn":"re.sub","kw":{"repl":"|"},"out":"Itto"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","ΚΑΛΗΜΕΡΑ ΣΑΣ"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","ΚΑΛΗΜΕΡΑ ΣΑΣ"],"fn":"re.sub","kw":{"repl":"|"},"out":"ΚΑΛΗΜΕΡΑ ΣΑΣ"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Straße — Live"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Straße — Live"],"fn":"re.sub","kw":{"repl":"|"},"out":"Straße — Live"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","İstanbul (Live)"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","İstanbul (Live)"],"fn":"re.sub","kw":{"repl":"|"},"out":"İstanbul (Live)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","ΚΕΛΒΙΝ kK"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","ΚΕΛΒΙΝ kK"],"fn":"re.sub","kw":{"repl":"|"},"out":"ΚΕΛΒΙΝ kK"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","x́ (acústica)"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","x́ (acústica)"],"fn":"re.sub","kw":{"repl":"|"},"out":"x́ (acústica)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Dancing Queen – Single Version"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Dancing Queen – Single Version"],"fn":"re.sub","kw":{"repl":"|"},"out":"Dancing Queen – Single Version"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.findall","out":["手 替","朵 也"]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.sub","kw":{"repl":"|"},"out":"孟维来 - 野人『不再借世人的|我开脱，遍野的花骨|能够耐住寂寞。』『动态歌词MV』"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.sub","kw":{"repl":"|"},"out":"林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.sub","kw":{"repl":"|"},"out":"[MV] IU(아이유) _ Blueming(블루밍)"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"repl":"|"},"out":"《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","𠀀𮯯 𮯰"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video "],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video "],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video "}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video 豈"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video 豈"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video 豈"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video ꀀ"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ꀀ"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video ힰ"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ힰ"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Song (Official Video [4K])"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Song (Official Video [4K])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song (Official Video [4K])"}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","out":[]}
+{"args":["[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]\\s+[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song [Lyrics (HD)] (Live [HD])"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Hotel California - 2013 Remaster"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Hotel California - 2013 Remaster"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hotel California - 2013 Remaster"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Creep (Acoustic)"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Creep (Acoustic)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Creep (Acoustic)"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Wonderwall - Live at Knebworth"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Wonderwall - Live at Knebworth"],"fn":"re.sub","kw":{"repl":"|"},"out":"Wonderwall - Live at Knebworth"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Hurt (feat. X)"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Hurt (feat. X)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hurt (feat. X)"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Ma Di (feat. 宋冬野)"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Ma Di (feat. 宋冬野)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Ma Di (feat. 宋冬野)"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","南山南（feat. 宋冬野）"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","南山南（feat. 宋冬野）"],"fn":"re.sub","kw":{"repl":"|"},"out":"南山南（feat. 宋冬野）"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Song Dongye (宋冬野)"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Song Dongye (宋冬野)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song Dongye (宋冬野)"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","【斑马斑马】Zebra Zebra"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","【斑马斑马】Zebra Zebra"],"fn":"re.sub","kw":{"repl":"|"},"out":"【斑马斑马】Zebra Zebra"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Rock'n’Roll"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Rock'n’Roll"],"fn":"re.sub","kw":{"repl":"|"},"out":"Rock'n’Roll"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Clandestino - En Vivo"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Clandestino - En Vivo"],"fn":"re.sub","kw":{"repl":"|"},"out":"Clandestino - En Vivo"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Lamento Boliviano - Versión Acústica"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Lamento Boliviano - Versión Acústica"],"fn":"re.sub","kw":{"repl":"|"},"out":"Lamento Boliviano - Versión Acústica"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","LIVE AND LET DIE"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","LIVE AND LET DIE"],"fn":"re.sub","kw":{"repl":"|"},"out":"LIVE AND LET DIE"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Yesterday - Remastered 2009"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Yesterday - Remastered 2009"],"fn":"re.sub","kw":{"repl":"|"},"out":"Yesterday - Remastered 2009"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Sunday Bloody Sunday - Live From Red Rocks"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Sunday Bloody Sunday - Live From Red Rocks"],"fn":"re.sub","kw":{"repl":"|"},"out":"Sunday Bloody Sunday - Live From Red Rocks"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Africa by Toto"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Africa by Toto"],"fn":"re.sub","kw":{"repl":"|"},"out":"Africa by Toto"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Toto - Topic"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Toto - Topic"],"fn":"re.sub","kw":{"repl":"|"},"out":"Toto - Topic"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Toto VEVO"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Toto VEVO"],"fn":"re.sub","kw":{"repl":"|"},"out":"Toto VEVO"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Toto Official Channel"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Toto Official Channel"],"fn":"re.sub","kw":{"repl":"|"},"out":"Toto Official Channel"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Imagine (1971)"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Imagine (1971)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Imagine (1971)"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Smells Like Teen Spirit (Remastered 2021)"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Smells Like Teen Spirit (Remastered 2021)"],"fn":"re.sub","kw":{"repl":"|"},"out":"Smells Like Teen Spirit (Remastered 2021)"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Hallelujah - From \"Shrek\" Soundtrack"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Hallelujah - From \"Shrek\" Soundtrack"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hallelujah - From \"Shrek\" Soundtrack"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Ojitos Lindos - ACÚSTICO"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Ojitos Lindos - ACÚSTICO"],"fn":"re.sub","kw":{"repl":"|"},"out":"Ojitos Lindos - ACÚSTICO"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Hello / Adele"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Hello / Adele"],"fn":"re.sub","kw":{"repl":"|"},"out":"Hello / Adele"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Café Tacvba | Eres"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Café Tacvba | Eres"],"fn":"re.sub","kw":{"repl":"|"},"out":"Café Tacvba | Eres"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Desert Rose ~ Sting"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Desert Rose ~ Sting"],"fn":"re.sub","kw":{"repl":"|"},"out":"Desert Rose ~ Sting"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Kanpai // Kotaro"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Kanpai // Kotaro"],"fn":"re.sub","kw":{"repl":"|"},"out":"Kanpai // Kotaro"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Sakura sakura"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Sakura sakura"],"fn":"re.sub","kw":{"repl":"|"},"out":"Sakura sakura"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Tsunami"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Tsunami"],"fn":"re.sub","kw":{"repl":"|"},"out":"Tsunami"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Konnichiwa"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Konnichiwa"],"fn":"re.sub","kw":{"repl":"|"},"out":"Konnichiwa"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Shinkansen"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Shinkansen"],"fn":"re.sub","kw":{"repl":"|"},"out":"Shinkansen"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Kitte"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Kitte"],"fn":"re.sub","kw":{"repl":"|"},"out":"Kitte"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Matcha"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Matcha"],"fn":"re.sub","kw":{"repl":"|"},"out":"Matcha"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Ninja"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Ninja"],"fn":"re.sub","kw":{"repl":"|"},"out":"Ninja"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Itto"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Itto"],"fn":"re.sub","kw":{"repl":"|"},"out":"Itto"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","ΚΑΛΗΜΕΡΑ ΣΑΣ"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","ΚΑΛΗΜΕΡΑ ΣΑΣ"],"fn":"re.sub","kw":{"repl":"|"},"out":"ΚΑΛΗΜΕΡΑ ΣΑΣ"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Straße — Live"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Straße — Live"],"fn":"re.sub","kw":{"repl":"|"},"out":"Straße — Live"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","İstanbul (Live)"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","İstanbul (Live)"],"fn":"re.sub","kw":{"repl":"|"},"out":"İstanbul (Live)"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","ΚΕΛΒΙΝ kK"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","ΚΕΛΒΙΝ kK"],"fn":"re.sub","kw":{"repl":"|"},"out":"ΚΕΛΒΙΝ kK"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","x́ (acústica)"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","x́ (acústica)"],"fn":"re.sub","kw":{"repl":"|"},"out":"x́ (acústica)"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Dancing Queen – Single Version"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Dancing Queen – Single Version"],"fn":"re.sub","kw":{"repl":"|"},"out":"Dancing Queen – Single Version"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.findall","out":["动态歌词"]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『动态歌词MV』"],"fn":"re.sub","kw":{"repl":"|"},"out":"孟维来 - 野人『不再借世人的手 替我开脱，遍野的花骨朵 也能够耐住寂寞。』『|MV』"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.findall","out":["高畫質","官方","完整版"]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official 高畫質 HD 官方完整版m/v)"],"fn":"re.sub","kw":{"repl":"|"},"out":"林俊傑 JJ Lin - 修煉愛情 Practice Love (華納 official | HD ||m/v)"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","[MV] IU(아이유) _ Blueming(블루밍)"],"fn":"re.sub","kw":{"repl":"|"},"out":"[MV] IU(아이유) _ Blueming(블루밍)"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.findall","out":["动态歌词","版","公式","歌詞付き","フル","가사","純音樂"]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","《孤勇者》陈奕迅 (动态歌词版)〈公式〉〖歌詞付き〗〔フル〕［가사］（純音樂）"],"fn":"re.sub","kw":{"repl":"|"},"out":"《孤勇者》陈奕迅 (||)〈|〉〖|〗〔|〕［|］（|）"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","𠀀𮯯 𮯰"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","𠀀𮯯 𮯰"],"fn":"re.sub","kw":{"repl":"|"},"out":"𠀀𮯯 𮯰"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Official Video "],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Official Video "],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video "}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Official Video 豈"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Official Video 豈"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video 豈"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Official Video ꀀ"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Official Video ꀀ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ꀀ"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Official Video ힰ"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Official Video ힰ"],"fn":"re.sub","kw":{"repl":"|"},"out":"Official Video ힰ"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Song (Official Video [4K])"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Song (Official Video [4K])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song (Official Video [4K])"}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.findall","out":[]}
+{"args":["뮤직비디오|中文字幕|中英字幕|动态歌词|動態歌詞|歌詞付き|简体字幕|繁體字幕|字幕版|完整版|純音樂|纯音乐|高画质|高畫質|高音質|高音质|フル|中字|公式|字幕|官方|循环|循環|抖音|拼音|无损|歌詞|歌词|热门|無損|熱門|高清|가사|공식|版","Song [Lyrics (HD)] (Live [HD])"],"fn":"re.sub","kw":{"repl":"|"},"out":"Song [Lyrics (HD)] (Live [HD])"}

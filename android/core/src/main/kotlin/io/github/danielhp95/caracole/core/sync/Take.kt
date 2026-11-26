@@ -27,9 +27,11 @@ import java.io.File
 
 /** What a take did: the units taken, those left (with why), the songs it wrote (to render again: those taken and
  * those respelled, by id, in order), the songs respelled to the artist's spelling a song taken writes (their unit
- * ids), and whether a songbook changed. */
+ * ids), whether a songbook changed, and each respelled song's digest as the take ended (null: the library couldn't be
+ * read then), the change being the take's own, so that a give in the same sync sends it as it is now. */
 data class Applied(val taken: List<String>, val left: List<Pair<String, String>>, val songs: List<Long>,
-                   val respelled: List<String>, val songbooksChanged: Boolean)
+                   val respelled: List<String>, val songbooksChanged: Boolean,
+                   val respelledDigests: Map<String, String?> = emptyMap())
 
 /**
  * peer_sync.apply_units on the phone (the plan's §5.6, the rules both sides keep): each unit chosen read from a
@@ -40,6 +42,16 @@ object Take {
     /** Why a unit is left: either side holds it otherwise than when the two were compared. */
     const val CHANGED_HERE = "changed here since compared"
     const val CHANGED_THERE = "changed there since compared"
+
+    /** Why a tombstone there is left: its song stays here (kept here, or its own difference left), so taking it would
+     * change nothing, and saying it taken would read as the song gone (peer_sync.SONG_HERE). */
+    const val SONG_HERE = "its song is here: its removal there is not taken"
+
+    /** Whether a unit left as it was, for [why], is a change left: every reason but [SONG_HERE], that removal being
+     * the sync's answer, the song kept (status.py's changes_left). The one rule of SyncOutcome.changesLeft (the
+     * sync's own outcome), Status.changesLeft (a job's units, as the computer's commands say them) and Syncs'
+     * notSynced (a `lastOutcome` an older build saved, which still lists them). */
+    fun isChangeLeft(why: String?): Boolean = why != SONG_HERE
 
     /** The order units are taken in: songs first, then tombstones, songbooks and the rest (peer_sync._KINDS). */
     private val KINDS = listOf("song", "removed", "songbook", "alias", "artist_url", "block")
@@ -58,7 +70,8 @@ object Take {
      * got) from [source]: songs first, then tombstones, songbooks and the rest, each by id. A unit is left, saying
      * why, when its document no longer has the digest compared ([CHANGED_THERE]), when the phone's digest of it
      * differs from [expectedHere]'s ([CHANGED_HERE]: the phone's digests when compared, null for a unit it hadn't;
-     * a unit it doesn't name isn't checked), or when it can't be taken: an error in one unit never stops the rest.
+     * a unit it doesn't name isn't checked), or when it can't be taken, a tombstone among them whose song stays here
+     * ([SONG_HERE]): an error in one unit never stops the rest.
      * [now] (a stored time) stamps what the take writes. [onUnit] is told of each unit as it is done: its id, and
      * "taken" or "left" (the why is in [Applied.left]).
      *
@@ -141,7 +154,16 @@ object Take {
             taken += id
             onUnit?.invoke(id, "taken")
         }
-        return Applied(taken, left, songs.toList(), respelled, songbooks)
+        val respelledDigests = if (respelled.isEmpty()) emptyMap() else {
+            val now = try {
+                Units.libraryState(db).mapValues { it.value.digest }
+            } catch (e: Exception) {
+                if (databaseFailed(e)) throw e
+                emptyMap()
+            }
+            respelled.associateWith { now[it] }
+        }
+        return Applied(taken, left, songs.toList(), respelled, songbooks, respelledDigests)
     }
 
     /** A full openable database of the library's tables (songs, versions, files, removed, kv and the phone's), as
@@ -176,13 +198,14 @@ object Take {
     private fun kindOrder(id: String): Int = KINDS.indexOf(id.substringBefore('/')).let { if (it < 0) 99 else it }
 
     /** A tombstone the peer has made where neither the song nor a tombstone of it is here; one here under other
-     * names given theirs (its unit's names alone); one it has no longer forgotten. */
+     * names given theirs (its unit's names alone); one it has no longer forgotten; one whose song is here left
+     * ([SONG_HERE]). */
     private fun takeRemoved(db: Db, key: String, doc: JsonObject?) {
         if (doc == null) {
             Upsert.forgetRemoved(db, key)
             return
         }
-        if (Songs.byKey(db, key) != null) return
+        if (Songs.byKey(db, key) != null) throw UnitError(SONG_HERE)
         val artist = SongTake.text(SongTake.need(doc, "artist"))
         val title = SongTake.text(SongTake.need(doc, "title"))
         if (Upsert.removedSong(db, key) != null) {

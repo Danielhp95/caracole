@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 from conftest import subprocess_pythonpath
-from test_transcribe_job import MIX, STEM, WORDS, offered
+from test_transcribe_job import MIX, SAID, STEM, WORDS, offered
 from test_youtube_sheet import wav
 from typer.testing import CliRunner
 
@@ -122,13 +122,13 @@ def test_transcribe_says_each_stage_and_exits_0(tmp_path, config, conn, models, 
     assert result.exit_code == 0, result.output
     lines = result.output.splitlines()
     for said in ("Song: in the book.", "Vocals: sung from 24.8 s, 1 stretch.",
-                 "Words: 6 words in 2 lines (es), 1 dropped.", "Chords: chords over the transcribed lyrics.",
+                 f"Words: {SAID}.", "Chords: chords over the transcribed lyrics.",
                  "PDF: made.", "Pages: _todo.md and index.html rewritten."):
         assert said in lines, result.output
     sheet = tmp_path / "lib" / "Nick Cani" / "Vikingos veganos" / "sheet (auto).txt"
     assert any(line.startswith(f"Sheet: {sheet}, readable after") for line in lines)
     events = [e for e in map(read_progress_line, lines) if e is not None]
-    assert {"stage": "words", "state": "done", "detail": "6 words in 2 lines (es), 1 dropped"} in events
+    assert {"stage": "words", "state": "done", "detail": SAID} in events
     assert {"song": {"id": song.id, "display": "Nick Cani - Vikingos veganos"}} in events
     assert events[-1]["done"]["ok"] is True and events[-1]["done"]["refused"] is None
     assert any(line.startswith("Done in ") for line in lines)
@@ -158,7 +158,7 @@ def test_by_hand_each_long_stage_says_what_it_does_on_a_live_line_cleared_for_ea
     assert any(line.startswith("Words · 0:00 of ") for line in shown), shown
     assert any(line.startswith("Chords · ") for line in shown), shown
     assert screen.getvalue().endswith("\r")  # the live line cleared at the end
-    assert " · " not in result.stdout and "Words: 6 words in 2 lines (es), 1 dropped." in result.stdout.splitlines()
+    assert " · " not in result.stdout and f"Words: {SAID}." in result.stdout.splitlines()
 
 
 def test_with_progress_no_live_line_is_drawn(tmp_path, config, conn, models, monkeypatch):
@@ -203,6 +203,39 @@ def test_a_transcription_that_fails_ends_saying_so_never_done_and_exits_1(tmp_pa
     assert "Vocals: failed: the separator can't run here (No possible adapter)." in lines
     assert lines[-1] == "No transcript made: the separator can't run here (No possible adapter)."
     assert not any(line.startswith("Done in ") for line in lines)
+
+
+def test_audio_whisper_cant_load_is_noted_and_exits_1_saying_what_to_do(tmp_path, config, conn, models, monkeypatch):
+    # Its words are all this job is for: audio Whisper can't load is noted as Whisper's, as the nightly pass and a
+    # sheet from a video note it (never as audio auto-chords can't read, which reads it), so the song is offered no
+    # transcription again until its audio changes, and the job says what to do.
+    from caracole.autochords.transcript import why_not_offered
+    from caracole.overrides import Overrides
+    from caracole.songs import get_song
+
+    class Undecodable:
+        def __init__(self, model_path, *, device, cache_dir):
+            self.device = device
+
+        def hear(self, mix, stem, first_sung_s, **kwargs):
+            if Path(mix).name == "test-tone.wav":
+                return tx.Heard("en", [])
+            raise RuntimeError("Failed to load audio: [mov,mp4] moov atom not found")
+
+    monkeypatch.setattr(yf, "transcribe_problem", lambda cfg: None)
+    monkeypatch.setattr(tx, "WhisperTranscriber", Undecodable)
+    cfg = load_config(config, env={})
+    song = offered(conn, cfg)
+    result = invoke(config, "--song", "Nick Cani - Vikingos veganos")
+    assert result.exit_code == 1, result.output
+    lines = result.output.splitlines()
+    said = ("Whisper can't read the audio: a new file, or another video under [youtube], gets its words heard; after "
+            "an ffmpeg or Whisper upgrade, caracole transcribe --force tries it again")
+    assert f"Words: failed: {said}." in lines
+    assert lines[-1] == f"No transcript made: {said}."
+    assert kv_get(conn, f"autochords:failed:{song.id}") is None
+    assert kv_get(conn, f"transcribe:unreadable:{song.id}") is not None
+    assert why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) == "Whisper can't read its audio"
 
 
 def test_a_transcription_refused_at_its_chords_says_its_transcript_is_kept(tmp_path, config, conn, models,
@@ -301,3 +334,29 @@ def test_registering_the_command_imports_no_model(tmp_path):
                          check=False)
     assert out.returncode == 0, out.stderr[-2000:]
     assert out.stdout.strip() == "[]"
+
+
+def test_force_and_none_together_are_refused_before_anything_runs(config):
+    result = invoke(config, "--song", "Nick Cani - Vikingos veganos", "--force", "--none")
+    assert result.exit_code == 2 and "--force and --none say opposite things" in result.output
+
+
+@pytest.mark.slow
+def test_none_drops_the_transcript_and_says_so_then_force_hears_it_again(tmp_path, config, conn, models, monkeypatch):
+    monkeypatch.setattr(yf, "transcribe_problem", lambda cfg: None)
+    song = offered(conn, load_config(config, env={}))
+    assert invoke(config, "--song", "Nick Cani - Vikingos veganos").exit_code == 0
+    models.clear()
+    result = invoke(config, "--song", "Nick Cani - Vikingos veganos", "--none")
+    assert result.exit_code == 0, result.output
+    lines = result.output.splitlines()
+    for said in ("Vocals: skipped: you said nothing is sung.", "Words: transcript dropped.",
+                 "Chords: chords only: you said it isn't sung."):
+        assert said in lines, result.output
+    assert kv_get(conn, f"transcript:{song.id}") is None and not any(m.startswith(("demucs", "whisper"))
+                                                                     for m in models)
+    refused = invoke(config, "--song", "Nick Cani - Vikingos veganos")
+    assert refused.exit_code == 1 and refused.output.splitlines()[-1] == (
+        "No transcript made: Nick Cani - Vikingos veganos isn't offered a transcription: you said it isn't sung.")
+    assert invoke(config, "--song", "Nick Cani - Vikingos veganos", "--force").exit_code == 0
+    assert kv_get(conn, f"transcript:{song.id}") is not None

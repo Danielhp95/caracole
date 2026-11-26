@@ -17,11 +17,15 @@ import java.io.IOException
 import java.io.InputStream
 
 /** /api/peer/state, as the phone reads it: [kept], the answers the computer's imports of the phone's files
- * remembered for it, as it keeps them (`here` the computer's), its odd entries left out. */
+ * remembered for it, as it keeps them (`here` the computer's), its odd entries left out; [schema], the schema the
+ * computer's database is at (null: it says none, an older caracole's state, or a value that is no integer);
+ * [keyVersion], the rules its songs are keyed by as it says them (`key_version`; null: it says none, a computer older
+ * than the member). Of the two, [keyVersion] refuses the whole comparison (Units.otherKeys), before the schema's
+ * refusal of the indexes alone (SyncEngine.indexesSkipped) is ever reached. */
 data class PeerState(val format: Int, val server: String?, val caracole: String, val name: String, val now: String?,
                      val units: Map<String, SyncUnit>, val base: Base?, val token: String,
                      val indexes: Map<String, String> = emptyMap(), val settings: JsonObject? = null,
-                     val kept: Kept = emptyMap()) {
+                     val kept: Kept = emptyMap(), val schema: Long? = null, val keyVersion: JsonElement? = null) {
     companion object {
         /** A state document, read as [PeerClient.state] reads the computer's (read_state_document): its `settings`
          * the computer's settings, none for a member that isn't an object. A [PeerError] for one that can't be read. */
@@ -39,7 +43,12 @@ data class IndexCount(val read: String?, val tabs: Long)
 
 /** What the computer answered that the phone can't go on with, said as one sentence ([message]); [status], the
  * HTTP status it answered with, when it answered one. Nothing answering at all is mirror's SyncError.NoAnswer. */
-class PeerError(message: String, val status: Int? = null, cause: Throwable? = null) : Exception(message, cause)
+open class PeerError(message: String, val status: Int? = null, cause: Throwable? = null) : Exception(message, cause)
+
+/** peer_sync.OtherKeys: the computer keys its songs by other rules than the phone (its state's `key_version`,
+ * Units.otherKeys): the two never compare nor take from each other until both are updated to one version, said in
+ * Units.OTHER_KEYS. */
+class OtherKeys(message: String) : PeerError(message, 200)
 
 /**
  * The computer's peer routes, from the phone (peer_sync.Peer's reads, and the push the phone sends because it serves
@@ -48,15 +57,17 @@ class PeerError(message: String, val status: Int? = null, cause: Throwable? = nu
  * - **Reads** (`Accept: application/json`): [state], with a 60 s read timeout (a library's every song is read to
  *   answer); [unit], its document checked to be of [Units.FORMAT] and of the id asked; [file], its bytes checked against
  *   the SHA-256 the unit gives; [job], the computer's request as `GET /api/jobs/<id>` gives it.
- * - **The push**: [pushNew], [pushFile] and [push], each with the form token in the header `X-Caracole-Form-Token`
- *   (caracole serve's `json` and `bytes` routes) and no Origin or Sec-Fetch-Site, which a non-browser never sends. A
- *   403 whose JSON says `reload` (a token older than the server: it restarted since the state was read) reads the
- *   state again, once, for its fresh token, and sends the call again with it; the calls after it that give the old
- *   token send the fresh one.
+ * - **The push**: [pushNew], [pushFile] and [push] ([pushDrop] once it fails after it is opened), each with the form
+ *   token in the header `X-Caracole-Form-Token` (caracole serve's `json` and `bytes` routes) and no Origin or
+ *   Sec-Fetch-Site, which a non-browser never sends. A 403 whose JSON says `reload` (a token older than the server:
+ *   it restarted since the state was read) reads the state again, once, for its fresh token, and sends the call again
+ *   with it; the calls after it that give the old token send the fresh one.
  * - **The index**: [index] streams `GET /api/peer/index` to a file, with a read timeout of [INDEX_TIMEOUT_MS]
  *   between two reads (the file is as large as the computer's indexes, and made before its first byte comes: a
- *   connection that goes quiet for longer is a lost one, so a sync job never waits on it for ever); [pushIndex]
- *   streams the pages the phone's lookups read to `POST /peer/index`, a `bytes` route of the push's kind.
+ *   connection that goes quiet for longer is a lost one, so a sync job never waits on it for ever); [indexNewer]
+ *   streams the part the phone doesn't hold alike, `POST /peer/index/newer` (a `json` route: the form token), false
+ *   for a computer older than it; [pushIndex] streams the pages the phone's lookups read to `POST /peer/index`, a
+ *   `bytes` route of the push's kind.
  *
  * Every answer that says no is a [PeerError] in the words peer_sync.Peer says it; a document that can't be read, too.
  */
@@ -65,7 +76,9 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
     private var asking: String? = null
     private val renewed = HashMap<String, String>()
 
-    /** GET /api/peer/state, a 60 s read timeout: the computer's state, with its base for [asking] (the phone's id). */
+    /** GET /api/peer/state, a 60 s read timeout: the computer's state, with its base for [asking] (the phone's id);
+     * [OtherKeys] for one whose songs are keyed by other rules than the phone's, so that no comparison, take or push
+     * follows it (peer_sync.Peer.state). */
     fun state(asking: String?): PeerState {
         this.asking = asking
         val answer = get(STATE_PATH + (asking?.let { "?peer=" + Documents.quote(it) } ?: ""), STATE_TIMEOUT_MS)
@@ -74,11 +87,13 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
                             "something else?", 404)
         }
         if (answer.status != 200) throw refused(answer)
-        return try {
+        val state = try {
             Documents.state(answer.json())
         } catch (e: Documents.Unreadable) {
             throw PeerError("$address answered ${e.message}.", 200, e)
         }
+        if (Units.otherKeys(state.keyVersion)) throw OtherKeys(Units.OTHER_KEYS)
+        return state
     }
 
     /** POST /peer/push/new: the push's id, and the shas the computer needs. */
@@ -117,6 +132,23 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
         }
         return id ?: throw PeerError("$address took the push but named no Journal entry for it.",
                                      answer.status)
+    }
+
+    /** POST /peer/push/drop: the push [push] there, never sent, let go of, asked as the caracole that opened it
+     * ([from]); whether it was (peer_push.Pusher.push_drop). An error, or its refusal (409 once its document was
+     * taken), is no more than that: the phone's next push lets go of it there, or it is swept within the hour. */
+    fun pushDrop(token: String, push: String, from: String): Boolean = try {
+        // Asked once, within [DROP_TIMEOUT_MS] of a read and with the token held (no state read again on a 403): a
+        // drop is the last thing a failure or a cancelled job does, and a server that doesn't answer it at once is
+        // let be (peer_push.Pusher.push_drop).
+        val doc = JsonObject(linkedMapOf("push" to JsonPrimitive(push), "from" to JsonPrimitive(from)))
+        val body = PyJson.dumps(doc, compact = true).toByteArray(Charsets.UTF_8)
+        http.post(address, address.resolve(PUSH_DROP_PATH), JSON,
+                  mapOf(TOKEN_HEADER to (renewed[token] ?: token), "Accept" to JSON), body, DROP_TIMEOUT_MS) {
+            it.status
+        } == 200
+    } catch (e: Exception) {
+        false
     }
 
     /** GET /api/jobs/<id>: the computer's request, as its Job.as_json gives it, its `state` a text
@@ -169,30 +201,67 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
         val path = INDEX_PATH + (sites?.let { "?sites=" + Documents.quote(it.joinToString(",")) } ?: "")
         http.get(address, address.resolve(path), emptyMap(), readTimeoutMs = INDEX_TIMEOUT_MS) { answer ->
             if (answer.status != 200) throw refused(Answered(answer.status, readAtMost(answer.body, MAX_JSON)))
-            var got = 0L
-            onBytes?.invoke(got, answer.contentLength)
-            // The answer's bytes as they come; a write that fails is the phone's storage, never the connection.
-            val out = try {
-                to.outputStream()
-            } catch (e: IOException) {
-                throw PeerError("The phone's storage failed: ${e.message ?: e.javaClass.simpleName}.", cause = e)
-            }
-            out.use {
-                val buffer = ByteArray(64 * 1024)
-                while (true) {
-                    val n = answer.body.read(buffer)
-                    if (n < 0) break
-                    try {
-                        out.write(buffer, 0, n)
-                    } catch (e: IOException) {
-                        to.delete()
-                        throw PeerError("The phone's storage failed: ${e.message ?: e.javaClass.simpleName}.", cause = e)
-                    }
-                    got += n
-                    onBytes?.invoke(got, answer.contentLength)
+            streamTo(answer, to, onBytes)
+        }
+    }
+
+    /** POST /peer/index/newer: the part of the computer's indexes the phone doesn't hold ([have], its document:
+     * core.index.Have), streamed into [to] as [index] streams the whole, with the form token in its header (a 403 that
+     * says reload asks once more with a fresh one); false, nothing written, for a computer that doesn't know the route
+     * (404 or 405: older than the app) or refuses the document as too large (413), which the caller asks for the whole
+     * instead ([WHOLE_INSTEAD]); a [PeerError] for any other refusal, in the computer's words (a 400 a bug, which must
+     * show), never taken for an older computer. */
+    fun indexNewer(token: String, to: File, have: JsonObject,
+                   onBytes: ((got: Long, total: Long) -> Unit)? = null): Boolean {
+        val body = PyJson.dumps(have, compact = true).toByteArray(Charsets.UTF_8)
+        var use = renewed[token] ?: token
+        repeat(2) { asked ->
+            val refusal = http.post(address, address.resolve(INDEX_NEWER_PATH), JSON,
+                                    mapOf(TOKEN_HEADER to use, "Accept" to JSON), body,
+                                    readTimeoutMs = INDEX_TIMEOUT_MS) { answer ->
+                if (answer.status == 200) {
+                    streamTo(answer, to, onBytes)
+                    null
+                } else {
+                    Answered(answer.status, readAtMost(answer.body, MAX_JSON))
                 }
-                out.fd.sync()
+            } ?: return true
+            if (refusal.status in WHOLE_INSTEAD) return false
+            if (refusal.status != 403 || !saysReload(refusal) || asked > 0) throw refused(refusal)
+            val fresh = state(asking).token
+            renewed[token] = fresh
+            renewed[use] = fresh
+            use = fresh
+        }
+        error("unreachable")
+    }
+
+    /** An index answer's bytes into [to] as they come, [onBytes] told the bytes so far and its Content-Length; a write
+     * that fails is the phone's storage, never the connection. */
+    private fun streamTo(answer: Http.Answer, to: File, onBytes: ((got: Long, total: Long) -> Unit)?) {
+        var got = 0L
+        onBytes?.invoke(got, answer.contentLength)
+        // The answer's bytes as they come; a write that fails is the phone's storage, never the connection.
+        val out = try {
+            to.outputStream()
+        } catch (e: IOException) {
+            throw PeerError("The phone's storage failed: ${e.message ?: e.javaClass.simpleName}.", cause = e)
+        }
+        out.use {
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val n = answer.body.read(buffer)
+                if (n < 0) break
+                try {
+                    out.write(buffer, 0, n)
+                } catch (e: IOException) {
+                    to.delete()
+                    throw PeerError("The phone's storage failed: ${e.message ?: e.javaClass.simpleName}.", cause = e)
+                }
+                got += n
+                onBytes?.invoke(got, answer.contentLength)
             }
+            out.fd.sync()
         }
     }
 
@@ -234,13 +303,20 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
         return unit
     }
 
-    /** GET /api/peer/file: a kept file of its song of [songKey], checked against [sha256]. */
+    /** GET /api/peer/file: a kept file of its song of [songKey], checked against [sha256]. One past [MAX_FILE] is
+     * never taken, a [PeerError] in [TOO_BIG]'s words: refused by its Content-Length before a byte of it is read, or,
+     * an answer that gives none, once its bytes pass it. An answer whose Content-Length says less than it sends is read
+     * no further than it says (HttpURLConnection's), so those bytes aren't the file of that SHA-256: "sent … changed
+     * since compared", the song left as it was here. */
     override fun file(songKey: String, name: String, sha256: String): ByteArray {
         val path = FILE_PATH + "?song=" + Documents.quote(songKey) + "&name=" + Documents.quote(name)
-        val answer = http.get(address, address.resolve(path)) { Answered(it.status, readAtMost(it.body, MAX_FILE)) }
+        val answer = http.get(address, address.resolve(path)) {
+            if (it.status == 200 && it.contentLength > MAX_FILE) Answered(it.status, null)
+            else Answered(it.status, readAtMost(it.body, MAX_FILE))
+        }
         if (answer.status != 200) throw refused(answer)
-        val bytes = answer.bytes
-        if (bytes == null || Canonical.sha256Hex(bytes) != sha256) {
+        val bytes = answer.bytes ?: throw PeerError("$name $TOO_BIG. The song stays as it was here.", 200)
+        if (Canonical.sha256Hex(bytes) != sha256) {
             throw PeerError("$address sent $name changed since compared. The song stays as it was here.", 200)
         }
         return bytes
@@ -314,7 +390,13 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
         const val PUSH_NEW_PATH = "/peer/push/new"
         const val PUSH_FILE_PATH = "/peer/push/file"
         const val PUSH_PATH = "/peer/push"
+        const val PUSH_DROP_PATH = "/peer/push/drop"
         const val INDEX_PUSH_PATH = "/peer/index"
+        const val INDEX_NEWER_PATH = "/peer/index/newer"
+
+        /** The statuses of `POST /peer/index/newer` after which the whole export is asked for: a computer older than
+         * the route (404, 405) and a document past its limit (413). Any other is the index stage's failure. */
+        val WHOLE_INSTEAD = setOf(404, 405, 413)
         const val JOBS_PATH = "/api/jobs/"
         const val SYNC_INDEXES_PATH = "/api/sync/indexes"
         const val TOKEN_HEADER = "X-Caracole-Form-Token"
@@ -322,14 +404,30 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
         /** peer_sync.PEER_TIMEOUT: a caracole reads every song of its library to answer its state. */
         const val STATE_TIMEOUT_MS = 60_000
 
+        /** peer_push.DROP_TIMEOUT: a push's drop waited for at most, in ms. */
+        const val DROP_TIMEOUT_MS = 5_000
+
         /** The index's export, at most between two reads: the computer makes it whole before it sends a byte. */
         const val INDEX_TIMEOUT_MS = 10 * 60_000
 
         /** A JSON answer read at most (a state of every unit is a few megabytes). */
         const val MAX_JSON = 64 * 1024 * 1024
 
-        /** A kept file read at most: peer_push.FILE_MAX, what a push may send of one. */
+        /** A kept file read at most: peer_push.FILE_MAX, what a push may send of one (`POST /peer/push/file`'s
+         * limit); the phone takes no file past it ([TOO_BIG]) and gives none (FileError.TOO_BIG). */
         const val MAX_FILE = 64 * 1024 * 1024
+
+        /** Why a file past [MAX_FILE] is never taken, after its name. */
+        const val TOO_BIG = "is over 64 MiB: the phone takes no file that big"
+
+        /** peer_push.NEW_MAX: `POST /peer/push/new`'s document at most. */
+        const val PUSH_NEW_MAX = 1024L * 1024
+
+        /** peer_push.DOCUMENT_MAX: `POST /peer/push`'s document at most. */
+        const val PUSH_DOCUMENT_MAX = 16L * 1024 * 1024
+
+        /** peer_push.PUSH_MAX: a push's files' bytes at most. */
+        const val PUSH_MAX = 2L * 1024 * 1024 * 1024
 
         /** An index export sent at most: peer_push.INDEX_MAX, POST /peer/index's limit. */
         const val INDEX_MAX = 64L * 1024 * 1024

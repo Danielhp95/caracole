@@ -20,6 +20,8 @@
   font-size: .88rem; font-weight: 600; white-space: nowrap; cursor: pointer; }
 .tool:hover { border-color: var(--text); }
 .tool .glyph, .tool-menu .glyph { flex: none; width: calc(16 * var(--sp)); height: calc(16 * var(--sp)); }
+/* The "+": a sheet from an audio file (library.js audioDialog), square, its "+" its glyph at every width. */
+.tool#add-audio { justify-content: center; min-width: calc(40 * var(--sp)); padding: 0; font-size: 1.2rem; font-weight: 500; }
 .tool.on { border-color: var(--accent); background: var(--accent-soft); }
 .tool.on > .glyph { color: var(--accent); }
 .filter-n { display: inline-grid; place-items: center; min-width: calc(20 * var(--sp)); height: calc(20 * var(--sp)); padding: 0 6px;
@@ -117,17 +119,46 @@ html.sheet-open { overflow: hidden; }
   .bar-row .tool-menu .glyph { left: 50%; transform: translate(-50%, -50%); }
   .bar-row .tool .filter-n { position: absolute; top: calc(-5 * var(--sp)); right: calc(-5 * var(--sp)); font-size: .7rem; }
   .bar-row .tool#filter { position: relative; }
+  .bar-row .tool#add-audio { min-width: calc(44 * var(--sp)); font-size: 1.3rem; }
   .tags { flex-basis: 100%; }
+}
+/* The "+"'s dialog: a box over the page dimmed from 720 px, a sheet from the bottom on a phone, as Filter's is. */
+.audio-sheet { width: min(calc(440 * var(--sp)), calc(100vw - 32px)); max-height: calc(100% - 24px); padding: 12px 16px 16px;
+  overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--border-strong); border-radius: var(--radius-l);
+  background: var(--surface); color: var(--text); box-shadow: var(--pop-shadow); }
+.audio-sheet::backdrop { background: rgb(0 0 0 / 45%); }
+.audio-head { margin: 0 0 6px; font-size: 1.05rem; }
+.audio-line { margin: 0 0 12px; color: var(--muted); font-size: .9rem; font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere; }
+.audio-note { margin: -6px 0 12px; color: var(--muted); font-size: .85rem; }
+.audio-said.refused { color: var(--failed); font-weight: 600; }
+.audio-form { display: grid; gap: 10px; }
+.audio-form p { margin: 0; }
+.audio-names { font-weight: 600; overflow-wrap: anywhere; }
+.audio-song, .audio-replaces { font-size: .9rem; }
+.audio-replaces, .audio-form .hint { color: var(--muted); font-size: .85rem; }
+.audio-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.audio-form .audio-acts { margin-top: 4px; }
+@media (max-width: 719px) {
+  .audio-sheet:modal { position: fixed; inset: auto 0 0; width: 100%; max-width: none; margin: 0; padding: 8px 16px
+    calc(16px + env(safe-area-inset-bottom)); border-width: 1px 0 0; border-radius: var(--radius-l) var(--radius-l) 0 0;
+    box-shadow: 0 -16px 40px rgb(0 0 0 / 30%); }
+  .audio-sheet .grab { display: block; width: 40px; height: 4px; margin: 0 auto 10px; border-radius: var(--radius-s);
+    background: var(--border-strong); }
 }
 /* A thumb's targets: every control of the toolbar and of the panel. */
 @media (pointer: coarse) {
   .tool, .bar-row .tool, .tag, .clear-filters, .clear-all, .fchip, .tonics button { min-height: calc(44 * var(--sp)); }
+  .tool#add-audio, .bar-row .tool#add-audio { min-width: calc(44 * var(--sp)); }
   .seg [role="radio"] { min-height: calc(44 * var(--sp)); }
   .clear-filters, .clear-all { min-width: calc(44 * var(--sp)); }
 }
 @media (prefers-reduced-motion: no-preference) {
   .filter-panel:modal { animation: sheet-up .22s ease-out; }
   .filter-panel:modal::backdrop { animation: dim-in .22s ease-out; }
+}
+@media (prefers-reduced-motion: no-preference) and (max-width: 719px) {
+  .audio-sheet:modal { animation: sheet-up .22s ease-out; }  /* a phone's sheet; from 720 px the box just shows */
 }
 @keyframes sheet-up { from { transform: translateY(100%); } }
 @keyframes dim-in { from { opacity: 0; } }

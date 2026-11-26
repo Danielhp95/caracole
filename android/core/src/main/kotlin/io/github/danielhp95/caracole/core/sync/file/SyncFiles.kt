@@ -12,6 +12,7 @@ import io.github.danielhp95.caracole.core.json.CanonicalError
 import io.github.danielhp95.caracole.core.json.JsonText
 import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.json.PyJsonBytes
+import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.py.PyUnicode
 import io.github.danielhp95.caracole.core.sync.Compare
@@ -62,8 +63,10 @@ data class Made(val file: File, val parts: List<String>, val songs: Int, val son
  * ([checkImportable], [checkWhole]), and what an import keeps after ([recordImport]).
  *
  * **The file** is a zip of what a sync reads from the other side: `caracole.json`, the manifest (its own format
- * [FORMAT], the caracole and schema that wrote it, the sync's format, the library's id, name and when it was made,
- * its parts and its counts, the sites of its indexes); `state.json`, the state document of the file's units, as of
+ * [FORMAT], the caracole and schema that wrote it, the sync's format, the rules its songs are keyed by
+ * (Normalize.KEY_VERSION: a file of others is refused as it is read, FileError.OTHER_KEYS; one that names none is an
+ * older caracole's, read as before), the library's id, name and when it was made, its parts and its counts, the sites
+ * of its indexes); `state.json`, the state document of the file's units, as of
  * `made`; `bases.json`, every base this library keeps; `units.jsonl`, each unit's document, in Compare.order;
  * `files/<sha256>`, each kept file once; `pages.json` and `pages/<sha256>`, the pages caracole made of its units
  * ([PageSource]), a page whose bytes are a kept file's held once, under `files/`; `indexes.sqlite`, every site's
@@ -200,6 +203,7 @@ object SyncFiles {
                 val manifest = obj(
                     "format" to JsonPrimitive(FORMAT), "caracole" to JsonPrimitive(version),
                     "schema" to JsonPrimitive(Database.SCHEMA_VERSION), "sync" to JsonPrimitive(Units.FORMAT),
+                    "key_version" to JsonPrimitive(Normalize.KEY_VERSION),
                     "id" to JsonPrimitive(id), "name" to JsonPrimitive(name), "made" to JsonPrimitive(now),
                     "parts" to JsonArray(chosen.map(::JsonPrimitive)), "songs" to JsonPrimitive(songs),
                     "songbooks" to JsonPrimitive(songbooks), "units" to JsonPrimitive(snapshot.documents.size),
@@ -356,7 +360,9 @@ object SyncFiles {
         val ordered = Compare.order(units.values.map { Difference(it.id, it.label, it, null, "", "") })
         return obj(
             "format" to JsonPrimitive(Units.FORMAT), "server" to JsonPrimitive(id), "caracole" to JsonPrimitive(version),
-            "name" to JsonPrimitive(name), "now" to JsonPrimitive(now),
+            "schema" to JsonPrimitive(Database.SCHEMA_VERSION), "name" to JsonPrimitive(name),
+            "key_version" to JsonPrimitive(Normalize.KEY_VERSION),
+            "now" to JsonPrimitive(now),
             "indexes" to JsonObject(indexes.mapValues { JsonPrimitive(it.value) }),
             "units" to JsonObject(ordered.associateTo(LinkedHashMap()) { d ->
                 d.id to obj("label" to JsonPrimitive(d.label), "digest" to JsonPrimitive(d.mine!!.digest))
@@ -495,6 +501,7 @@ object SyncFiles {
             if (!Documents.isNumber(manifest["sync"], Units.FORMAT)) {
                 throw FileError(FileError.otherFormat("$FORMAT, its sync's ${pyStr(manifest["sync"])}"))
             }
+            if (Units.otherKeys(manifest["key_version"])) throw FileError(FileError.OTHER_KEYS)
             checkLayout(members)
             checkManifest(manifest)
             val names = members.associateBy { it.name }
@@ -859,6 +866,19 @@ object SyncFiles {
      * it carries (a song its songbooks list). */
     fun speaksFor(file: SyncFile, unitId: String): Boolean =
         (file.state != null && unitId in file.state.units) || Scope.partOf(unitId) in file.holds
+
+    /** peer_file.record_taken: as an import's take of [file] ends, keep as agreed with its caracole at its `made` each
+     * unit taken ([taken]: its digest in the file, null for one it lacks) that this library ([mine], its whole state
+     * now) holds so, of those the file speaks for (Compare.recordTaken), so that an import stopped before its agree
+     * stage (its mirror stage cancelled, the app killed) leaves what it took agreed; [recordImport] then records the
+     * rest at the same time. An index export, or a file that names no caracole or time, records nothing. Called inside
+     * Database.write. How many were agreed. */
+    fun recordTaken(db: Db, file: SyncFile, mine: Map<String, SyncUnit>, taken: Map<String, String?>): Int {
+        if (file.indexOnly || file.state == null) return 0
+        val peer = file.id ?: return 0
+        val made = file.made ?: return 0
+        return Compare.recordTaken(db, peer, mine, taken.filterKeys { speaksFor(file, it) }, made)
+    }
 
     /**
      * peer_file.record_import: after an import of [file], keep, as agreed with its caracole at its `made`, each unit

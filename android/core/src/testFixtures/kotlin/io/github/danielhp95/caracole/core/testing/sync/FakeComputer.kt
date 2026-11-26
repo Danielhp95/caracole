@@ -8,11 +8,13 @@ import io.github.danielhp95.caracole.core.index.TabCounts
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.json.CanonicalError
 import io.github.danielhp95.caracole.core.json.PyJson
+import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.py.PyUnicode
 import io.github.danielhp95.caracole.core.sync.Applied
 import io.github.danielhp95.caracole.core.sync.Compare
+import io.github.danielhp95.caracole.core.sync.PeerClient
 import io.github.danielhp95.caracole.core.sync.PeerError
 import io.github.danielhp95.caracole.core.sync.SyncUnit
 import io.github.danielhp95.caracole.core.sync.Take
@@ -45,16 +47,23 @@ import java.util.concurrent.TimeUnit
  * units are those caracole's peer_sync gives a library of the same rows: lane sync-units holds the two to the vectors),
  * answering as Python's routes answer (web/peer_routes.py, peer_push.py; the plan's §5.3), in their words:
  *
- * - `GET /api/peer/state?peer=`: its id, version, [name], clock ([now]), [indexes], units in peer_sync._order, the base
- *   it agreed on with the phone that asks and the answers its imports of that phone's files kept (`kept`), its [settings] (politeness.settings_document: none while null, as a
- *   caracole older than them answers) and the form token ([token]).
+ * - `GET /api/peer/state?peer=`: its id, version, the [schema] its database is at (none while null, as a caracole
+ *   older than the member answers), [name], the rules its songs are keyed by ([keyVersion]: none while null, as a
+ *   caracole older than the member answers), clock ([now]), its indexes' newest reads (IndexTransfer.newest of
+ *   [database], as web/peer_routes.state answers them; [indexes] in their place while set), units in
+ *   peer_sync._order, the base it agreed on with the phone that asks and the answers its imports of that phone's files
+ *   kept (`kept`), its [settings] (politeness.settings_document: none while null, as a caracole older than them
+ *   answers) and the form token ([token]).
  * - `GET /api/peer/unit?id=` and `GET /api/peer/file?song=&name=`: a unit's document, a kept file's bytes (404 else).
  * - `POST /peer/push/new`, `/peer/push/file`, `/peer/push`: each with the token in its header, else 403 with
  *   `reload`; each checked as peer_push.py checks it (read_new, new_push: at most [OPEN] pushes here, open or sent
- *   and not taken yet, 409 else; stage_file; read_push_document, check_digests and send: each file a song document
- *   keeps staged or kept here, 400 else), each refusal `{error}` with its status. The push's take is queued as
+ *   and not taken yet, 409 else; stage_file; read_push_document, 409 for a push of songs keyed by other rules,
+ *   check_digests and send: each file a song document keeps staged or kept here, 400 else), each refusal `{error}`
+ *   with its status; a phone's `push/new` lets go of the push it opened before and never sent (one open push a
+ *   sender). `POST /peer/push/drop` (`{"push", "from"}`, the token in its header) lets go of a push never sent, as
+ *   peer_push.drop: 404 for none, 400 for another's, 409 once its document was taken. The push's take is queued as
  *   `caracole peer take` is, under `peer-push:<from>` (a take of that caracole's that waits or runs refuses the push,
- *   409 "Taking already", which leaves it open), and runs after the answer on the fake's one worker: its stages check,
+ *   409 "Taking already", never sent: its pusher drops it, or its next `push/new` lets go of it), and runs after the answer on the fake's one worker: its stages check,
  *   take, render, agree (jobs.PEER_TAKE_STAGES), each unit taken or left said as its `units` (Job.as_json), the take
  *   Take.applyUnits from what was staged (a unit changed here since the comparison left), then the agreement at the
  *   push's `at`; the push gone once its take is over. [takeFails]: the take fails instead, its stage saying so, the
@@ -62,6 +71,10 @@ import java.util.concurrent.TimeUnit
  * - `GET /api/jobs/<id>`: the request as Job.as_json gives it; it answers "running" to [runningPolls] polls first,
  *   then (without [holdTakes]) as it is once over.
  * - `GET /api/peer/index?sites=`: [index]'s bytes for the sites asked, recorded in [indexAsked].
+ * - `POST /peer/index/newer`: the part of the indexes the phone lacks, as peer_routes.index_newer answers it: the
+ *   token in its header (403 with `reload` else), its document recorded in [newerAsked], then [newer]'s bytes for it
+ *   (a partial export Python made, a test's fixture), 404 while [newer] is null, as a caracole older than the route
+ *   answers; [newerRefusal], a status it answers instead (a 503, say), `{error}`.
  * - `GET /api/sync/indexes`: each site's newest read (IndexTransfer.newest, [indexes] over it) and its tabs
  *   (TabCounts), as web/sync_routes.py answers it (the sync redesign's §3.4.1); 404 while [countsIndexes] is false,
  *   as a caracole older than the route answers.
@@ -70,10 +83,14 @@ import java.util.concurrent.TimeUnit
  *   at most [INDEX_OPEN] waiting (409); each kept in [indexPushes], then `caracole index merge --delete --progress`
  *   queued, `202 {"job": N}`, whose one stage, merge, IndexTransfer.merge takes the file into [database] with (the
  *   port of the merge the computer runs), the request "failed" with the stage's words when it refuses it.
+ *   [mergeFails]: the merge fails instead, in those words (no room for its backup, say). [holdTakes]: each merge waits
+ *   for it to count down first, as a take does.
  *
- * [answers] replaces what a route answers ("GET /api/peer/state" → a handler); [requests] records each request as
- * "METHOD path?query"; [onUnit] and [onPoll] run before a unit or a poll is answered (a test changes the library
- * there, or looks at the phone's lock). A failure in a route is a 500, kept in [errors].
+ * [answers] replaces what a route answers ("GET /api/peer/state" → a handler), and [refuse] its n-th answer by a
+ * status; a push route's body past its limit ([limits]) is answered 413 before it is read, as server.py answers it.
+ * [requests] records each request as "METHOD path?query"; [onUnit] and [onPoll] run before a unit or a poll is
+ * answered (a test changes the library there, or looks at the phone's lock). A failure in a route is a 500, kept in
+ * [errors].
  */
 class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
     val database: Database = Database(File(dir, "caracole.sqlite"))
@@ -83,15 +100,30 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
 
     @Volatile var token: String = "computer-token-1"
     @Volatile var now: String = "2026-11-03T12:00:00Z"
-    @Volatile var indexes: Map<String, String> = emptyMap()
+    @Volatile var schema: Int? = Database.SCHEMA_VERSION
+    @Volatile var indexes: Map<String, String>? = null
     @Volatile var settings: JsonObject? = null
     @Volatile var index: (List<String>?) -> ByteArray = { ByteArray(0) }
+    @Volatile var newer: ((JsonObject) -> ByteArray)? = null
+    @Volatile var newerRefusal: Int? = null
     @Volatile var takeFails: String? = null
+    @Volatile var mergeFails: String? = null
     @Volatile var holdTakes: CountDownLatch? = null
     @Volatile var runningPolls: Int = 0
     @Volatile var onUnit: ((String) -> Unit)? = null
     @Volatile var onPoll: ((Int) -> Unit)? = null
     @Volatile var countsIndexes: Boolean = true
+    /** The status to answer the [n]-th request (from 1) of a route ("POST /peer/push") with, `{error}`, in place
+     * of the route's answer; null: answered as ever. */
+    @Volatile var refuse: ((route: String, n: Int) -> Int?)? = null
+    private val counts = HashMap<String, Int>()
+
+    /** Each push route's body limit, as web/peer_routes.py declares it (peer_push.py's constants): a body past it
+     * answered 413 before it is read, as server.py does. A test's own, smaller. */
+    @Volatile var limits: Map<String, Long> = mapOf(
+        "POST /peer/push/new" to PeerClient.PUSH_NEW_MAX, "POST /peer/push/file" to PeerClient.MAX_FILE.toLong(),
+        "POST /peer/push" to PeerClient.PUSH_DOCUMENT_MAX, "POST /peer/push/drop" to 16L * 1024)
+    @Volatile var keyVersion: JsonElement? = JsonPrimitive(Normalize.KEY_VERSION)  // null: says none, as an older one
 
     val requests = CopyOnWriteArrayList<String>()
     val answers = ConcurrentHashMap<String, (HttpExchange) -> Unit>()
@@ -99,6 +131,7 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
     val pushes = CopyOnWriteArrayList<JsonObject>()
     val taken = CopyOnWriteArrayList<Applied>()
     val indexAsked = CopyOnWriteArrayList<List<String>?>()
+    val newerAsked = CopyOnWriteArrayList<JsonObject>()
     val indexPushes = CopyOnWriteArrayList<ByteArray>()
 
     private val random = SecureRandom()
@@ -169,6 +202,20 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
                 val path = exchange.requestURI.rawPath
                 val raw = path + (exchange.requestURI.rawQuery?.let { "?$it" } ?: "")
                 requests.add("${exchange.requestMethod} $raw")
+                val limit = limits["${exchange.requestMethod} $path"]
+                val length = exchange.requestHeaders.getFirst("Content-Length")?.toLongOrNull() ?: -1
+                if (limit != null && length > limit) {  // server.py: the route's limit, before the body is read
+                    send(exchange, 413, "That is too long to send here.\n".toByteArray(), "text/plain; charset=utf-8")
+                    return@createContext
+                }
+                val asked = "${exchange.requestMethod} $path"
+                val n = synchronized(counts) { (counts[asked] ?: 0).plus(1).also { counts[asked] = it } }
+                val refused = refuse?.invoke(asked, n)
+                if (refused != null) {
+                    exchange.requestBody.readBytes()
+                    json(exchange, refused, obj("error" to JsonPrimitive("Not now.")))
+                    return@createContext
+                }
                 val replaced = answers["${exchange.requestMethod} $path"]
                 if (replaced != null) replaced(exchange) else route(exchange, exchange.requestMethod, path)
             } catch (e: Refusal) {
@@ -236,7 +283,10 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
             "POST /peer/push/new" -> if (tokenOk(exchange)) pushNew(exchange)
             "POST /peer/push/file" -> if (tokenOk(exchange)) pushFile(exchange, query["push"].orEmpty(), query["sha256"].orEmpty())
             "POST /peer/push" -> if (tokenOk(exchange)) push(exchange, query["push"].orEmpty())
+            "POST /peer/push/drop" -> if (tokenOk(exchange)) pushDrop(exchange)
             "POST /peer/index" -> if (tokenOk(exchange)) pushIndex(exchange)
+            "POST /peer/index/newer" -> if (newer == null) json(exchange, 404, obj("error" to JsonPrimitive("no such route")))
+                                        else if (tokenOk(exchange)) indexNewer(exchange)
             "GET /api/sync/indexes" -> if (countsIndexes) json(exchange, 200, indexCounts())
                                        else json(exchange, 404, obj("error" to JsonPrimitive("no such route")))
             else -> if (method == "GET" && path.startsWith("/api/jobs/")) job(exchange, path.removePrefix("/api/jobs/"))
@@ -246,7 +296,7 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
 
     /** `GET /api/sync/indexes`'s answer: every site of IndexTransfer's, its newest read and its tabs. */
     fun indexCounts(): JsonObject {
-        val (newest, tabs) = database.read { db -> (IndexTransfer.newest(db) + indexes) to TabCounts.of(db) }
+        val (newest, tabs) = database.read { db -> (IndexTransfer.newest(db) + indexes.orEmpty()) to TabCounts.of(db) }
         return obj("indexes" to JsonObject(tabs.mapValues { (site, count) ->
             obj("read" to JsonPrimitive(newest[site]), "tabs" to JsonPrimitive(count))
         }))
@@ -256,10 +306,12 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
     fun stateDocument(peer: String?): JsonObject {
         val (units, base) = database.read { db -> Units.libraryState(db) to peer?.let { Compare.baseOf(db, it) } }
         val kept = peer?.let { asker -> database.read { db -> Compare.keptOf(db, asker) } }
-        return JsonObject(linkedMapOf(
+        val indexes = indexes ?: database.read { IndexTransfer.newest(it) }
+        return JsonObject(linkedMapOf(*listOfNotNull(
             "format" to JsonPrimitive(Units.FORMAT),
             "server" to JsonPrimitive(id),
             "caracole" to JsonPrimitive("0.1.0"),
+            schema?.let { "schema" to JsonPrimitive(it) },
             "name" to JsonPrimitive(name),
             "now" to JsonPrimitive(now),
             "indexes" to JsonObject(indexes.toSortedMap(Py.CODE_POINT_ORDER).mapValues { JsonPrimitive(it.value) }),
@@ -271,12 +323,13 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
                     JsonArray(listOf(entry.first?.let(::JsonPrimitive) ?: JsonNull, JsonPrimitive(entry.second)))
                 })
             } ?: JsonNull),
-        ).also { doc ->
+        ).toTypedArray()).also { doc ->
             kept?.let { k ->
                 doc["kept"] = JsonObject(k.toSortedMap(Py.CODE_POINT_ORDER).mapValues { (_, e) ->
                     JsonArray(listOf(JsonPrimitive(e.here), JsonPrimitive(e.there), JsonPrimitive(e.at)))
                 })
             }
+            keyVersion?.let { doc["key_version"] = it }
             settings?.let { doc["settings"] = it }
         } + ("token" to JsonPrimitive(token)))
     }
@@ -311,6 +364,13 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
         send(exchange, 200, index(asked), "application/vnd.sqlite3")
     }
 
+    private fun indexNewer(exchange: HttpExchange) {
+        val doc = body(exchange) as? JsonObject ?: throw Refusal(400, "the request is no object")
+        newerAsked.add(doc)
+        newerRefusal?.let { throw Refusal(it, "Couldn't copy the indexes: the disk is full") }
+        send(exchange, 200, newer!!(doc), "application/vnd.sqlite3")
+    }
+
     private fun tokenOk(exchange: HttpExchange): Boolean {
         if (exchange.requestHeaders.getFirst("X-Caracole-Form-Token") == token) return true
         json(exchange, 403, obj("error" to JsonPrimitive("This is older than the server, or not from it: read its " +
@@ -338,12 +398,29 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
         notFromHere(from)
         val need = files.filter { kept(it) == null }
         val push = synchronized(lock) {
+            open.entries.removeIf { (_, p) -> p.from == from && p.sent == null }  // its push never sent goes
             if (open.size >= OPEN) {
                 throw Refusal(409, "Two pushes are here already, waiting to be taken: try again once one is, or in an hour.")
             }
             generateSequence { hex(8) }.first { it !in open }.also { open[it] = Push(from, need) }
         }
         json(exchange, 200, obj("push" to JsonPrimitive(push), "need" to JsonArray(need.map(::JsonPrimitive))))
+    }
+
+    /** peer_push.drop: a push never sent let go of, asked by whoever opened it. */
+    private fun pushDrop(exchange: HttpExchange) {
+        val doc = body(exchange) as? JsonObject
+        val pushId = text(doc?.get("push")).orEmpty()
+        checkId(pushId)
+        val from = text(doc?.get("from"))
+        if (from == null || !ID.matches(from)) throw Refusal(400, "Who pushes? Its caracole's id is 16 hex.")
+        synchronized(lock) {
+            val push = open[pushId] ?: throw Refusal(404, "No such push is open here.")
+            if (push.from != from) throw Refusal(400, "That push was opened by another caracole.")
+            if (push.sent != null) throw Refusal(409, "That push is sent: its take waits or runs here.")
+            open.remove(pushId)
+        }
+        json(exchange, 200, obj("dropped" to JsonPrimitive(pushId)))
     }
 
     /** peer_push.stage_file. */
@@ -385,7 +462,7 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
             val shown = "Changes from ${Py.slice(Py.strip(sent.name).ifEmpty { "another caracole" }, null, 120)}"
             val key = PEER_PUSH + sent.from
             val busy = jobs.values.firstOrNull { it.active && it.key == key }
-            if (busy != null) {  // the push stays open, to send again once that is over
+            if (busy != null) {  // the push is refused, never sent: its pusher drops it, or its next push lets go of it
                 throw Refusal(409, "$shown are being taken already (request ${busy.id}): send them again once that is over.")
             }
             push.sent = doc
@@ -471,6 +548,13 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
             holdTakes?.await()
             job.state = "running"
             stage.state = "running"
+            val fails = mergeFails
+            if (fails != null) {
+                stage.state = "failed"
+                stage.detail = fails
+                job.state = "failed"
+                return
+            }
             val merged = database.writeBlocking { db -> IndexTransfer.merge(db, file, now) }
             stage.detail = if (merged.changed) merged.sites.keys.joinToString("; ") else "Nothing newer"
             stage.state = "done"
@@ -508,6 +592,7 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
         if (data == null || data["format"] != JsonPrimitive(Units.FORMAT)) {
             throw Refusal(400, "That isn't a push of format ${Units.FORMAT} (the other caracole may be of another version).")
         }
+        if (Units.otherKeys(data["key_version"])) throw Refusal(409, Units.OTHER_KEYS)
         val from = text(data["from"])
         if (from == null || !ID.matches(from)) throw Refusal(400, "Who pushes? Its caracole's id is 16 hex.")
         val name = text(data["name"])

@@ -32,7 +32,8 @@ object Reads {
         return out
     }
 
-    /** A push to [peer] answered: the pages noted up to [upTo] forgotten, and [upTo] the last push's stamp. */
+    /** A push to [peer] whose merge there is done (the computer's request that merges it ended done, never its
+     * answer alone): the pages noted up to [upTo] forgotten, and [upTo] the last push's stamp. */
     fun forget(db: Db, peer: String, upTo: String) {
         db.savepoint("reads_forget") {
             db.execute("DELETE FROM kv WHERE key >= ? AND key < ? AND value <= ?", READ, READ.dropLast(1) + ";", upTo)

@@ -195,6 +195,20 @@ def test_the_state_says_when_it_was_made_by_this_sides_clock():
     assert len(doc["now"]) == 20 and doc["now"].endswith("Z") and doc["indexes"] == {}
 
 
+def test_the_state_says_its_databases_schema_and_a_reader_takes_an_integer_alone():
+    from caracole import db
+
+    doc = sync.state_document("abc", "0.1.0", "Tabs", {})
+    assert list(doc)[:5] == ["format", "server", "caracole", "schema", "name"]  # who this side is
+    assert doc["schema"] == db.SCHEMA_VERSION
+    assert sync.read_state_document(json.loads(json.dumps(doc))).schema == db.SCHEMA_VERSION
+    # A caracole older than the member says none; any other value is none too, never a schema guessed.
+    older = {k: v for k, v in doc.items() if k != "schema"}
+    assert sync.read_state_document(older).schema is None
+    for said in (None, "17", 17.0, True, [17]):
+        assert sync.read_state_document({**doc, "schema": said}).schema is None, said
+
+
 @pytest.mark.parametrize(("typed", "address"), [
     ("192.168.1.20:8737", "http://192.168.1.20:8737"),
     ("http://phone.lan:8737/", "http://phone.lan:8737"),
@@ -238,6 +252,26 @@ def test_the_peer_is_asked_once_and_what_it_answers_otherwise_is_said():
         raise httpx.ConnectError("refused")
     with pytest.raises(sync.PeerError, match="No answer at http://phone:8737"):
         read("http://phone:8737", httpx.MockTransport(refused))
+
+
+def test_a_peer_whose_songs_are_keyed_by_other_rules_is_refused_as_its_state_is_read_and_one_saying_none_is_not():
+    from caracole import normalize
+
+    doc = sync.state_document("abc", "0.1.0", "Phone", {"song/a": sync.Unit("song/a", "A - B", "d")})
+    assert doc["key_version"] == normalize.KEY_VERSION
+
+    def answering(state):
+        return httpx.MockTransport(lambda request: httpx.Response(200, json=state))
+
+    older = {k: v for k, v in doc.items() if k != "key_version"}  # a caracole before the member says none
+    for state in (doc, older, doc | {"key_version": None}):
+        assert read("http://phone:8737", answering(state)).units == {"song/a": sync.Unit("song/a", "A - B", "d")}
+    assert sync.read_state_document(older).key_version is None
+    for other in (normalize.KEY_VERSION + 1, normalize.KEY_VERSION - 1, str(normalize.KEY_VERSION), [2], {}):
+        assert sync.read_state_document(doc | {"key_version": other}).key_version == other  # read as it says it
+        with pytest.raises(sync.OtherKeys) as refused:
+            read("http://phone:8737", answering(doc | {"key_version": other}))
+        assert str(refused.value) == sync.OTHER_KEYS and isinstance(refused.value, sync.PeerError)
 
 
 # --- FORMAT 3 --------------------------------------------------------------------------------------------------
@@ -503,6 +537,43 @@ def test_a_song_taken_forgets_the_tombstone_this_side_had_of_it(libraries):
     done = here.take(there, [f"song/{gone.key}", f"removed/{gone.key}"])
     assert done.left == [] and removed_song(here.conn, gone.key) is None
     assert find_song(here.conn, gone.key) is not None and here.digests() == there.digests()
+
+
+def test_a_removal_whose_song_stays_here_is_left_saying_so_never_taken(libraries):
+    here, there = libraries("here"), libraries("there")
+    creep = here.song("Radiohead", "Creep")
+    there.removed("Radiohead", "Creep")
+    unit = f"removed/{creep.key}"
+    done = here.take(there, [unit])  # its song's difference kept here, or left
+    assert done.taken == [] and done.left == [(unit, sync.SONG_HERE)]
+    assert sync.SONG_HERE == "its song is here: its removal there is not taken"
+    assert find_song(here.conn, creep.key) is not None and removed_song(here.conn, creep.key) is None
+    # Nothing agreed of it, so the next comparison shows it again, never hidden.
+    sync.record_agreement(here.conn, "0123456789abcdef", here.units(), there.units(), "2026-11-15T00:00:00Z")
+    base = {u: d for u, (d, _) in (sync.base_of(here.conn, "0123456789abcdef") or {}).items()}
+    assert unit in {d.id for d in sync.compare(here.units(), there.units(), base)}
+
+
+def test_a_song_the_take_respells_says_its_digest_as_the_take_ended(libraries):
+    here, there = libraries("here"), libraries("there")
+    desperado = here.song("eagles", "Desperado")
+    hotel = there.song("Eagles", "Hotel California")
+    before = here.digests()[f"song/{desperado.key}"]
+    done = here.take(there, [f"song/{hotel.key}"])
+    assert done.respelled == [f"song/{desperado.key}"]
+    assert done.respelled_digests == {f"song/{desperado.key}": here.digests()[f"song/{desperado.key}"]}
+    assert done.respelled_digests[f"song/{desperado.key}"] != before
+
+
+def test_a_song_the_take_respells_leaves_the_songbook_that_lists_it_as_it_was(libraries):
+    here, there = libraries("here"), libraries("there")
+    here.song("eagles", "Desperado")
+    here.songbook("Campfire", ["eagles - Desperado"])
+    hotel = there.song("Eagles", "Hotel California")
+    before = here.digests()["songbook/campfire"]
+    done = here.take(there, [f"song/{hotel.key}"])
+    assert done.respelled == ["song/eagles/desperado"] and not done.songbooks
+    assert here.digests()["songbook/campfire"] == before
 
 
 def test_a_kept_file_whose_name_no_folder_holds_is_refused(libraries):

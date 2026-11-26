@@ -644,8 +644,9 @@ def test_harptabs_takes_each_artist_page_read_more_recently(home, conn, tmp_path
     harp_page(conn, "artist/9/bob-dylan", ["Blowin' in the Wind"], LATE)
     harp_page(home, "artist/9/bob-dylan", [], EARLY)
 
-    merge(conn, export(home, tmp_path, ["harptabs"]), state=tmp_path / "state")
+    merged = merge(conn, export(home, tmp_path, ["harptabs"]), state=tmp_path / "state")
 
+    assert merged.sites[0].checked == 0  # no sitemap taken: no row of its sitemaps' table read
     titles = dict(conn.execute("SELECT artist, group_concat(title, '|') FROM (SELECT * FROM harptabs_artist_tabs "
                                "ORDER BY place) GROUP BY artist"))
     assert titles == {"artist/1178/billy-joel": "Piano Man|Honesty|Vienna", "artist/9/bob-dylan": "Blowin' in the Wind"}
@@ -674,6 +675,60 @@ def test_a_sitemap_read_more_recently_replaces_its_rows_and_the_others_stay(home
     assert set(records) == {"sitemap-tabs-1.xml", "sitemap-tabs-2.xml", "sitemap-tabs-3.xml"}
     assert kv(conn, site.complete_key) == "2026-10-28T03:30:00Z"
     assert ("sitemap", 1) in merged.sites[0].taken
+    assert merged.sites[0].checked == 2  # the rows of the one sitemap taken, read from the file
+    assert merged.sites[0].rows["gtptabs_index"] == (4, 5)
+
+
+def rechecked(conn, site: site_index.Site, name: str, at: datetime) -> None:
+    """A sitemap found unchanged (a 304) at its re-check: only its record's ``checked_at`` moves (site_index.py)."""
+    site_index._record(conn, site, name, {**site_index.sitemaps(conn, site)[name], "checked_at": db_stamp(at)})
+
+
+def test_a_sitemap_rechecked_and_found_unchanged_moves_its_record_alone_and_is_no_site_taken(home, conn, tmp_path):
+    from caracole.commands.peer import _taken_entries
+
+    site = gtptabs_fetch.SITE
+    locs = [f"https://gtptabs.com/tabs/2/blur/song-{i}.html" for i in range(1, 51)]
+    sitemap(home, site, "sitemap-tabs-1.xml", locs, EARLY)
+    merge(conn, export(home, tmp_path, ["gtptabs"], name="first.sqlite"), state=tmp_path / "state")
+    before = rows(conn, "gtptabs_index")
+    rechecked(home, site, "sitemap-tabs-1.xml", LATE)
+    path = export(home, tmp_path, ["gtptabs"], name="week.sqlite")
+    changes = conn.total_changes
+
+    merged, told = told_merge(conn, path, state=tmp_path / "state")
+
+    assert conn.total_changes - changes == 1  # its record alone: no row deleted or inserted
+    assert rows(conn, "gtptabs_index") == before
+    assert site_index.sitemaps(conn, site) == site_index.sitemaps(home, site)  # the record moved on
+    done = merged.sites[0]
+    assert (done.taken, done.checked, done.rows["gtptabs_index"]) == ([], 0, (50, 50))
+    assert done.records == ["sitemaps found unchanged"]
+    assert ("gtptabs", "sitemap", 0, 1) not in told  # no action told for it
+    assert _taken_entries(merged, {}) == []  # no site of a sync's report
+    assert not merge(conn, path, state=tmp_path / "state").changed  # and a second merge writes nothing
+
+
+@pytest.mark.parametrize("change", ["etag", "last_modified", "rows", "keys", "no validators", "older record"])
+def test_a_sitemap_whose_record_differs_beside_its_time_is_taken_as_before(home, conn, tmp_path, change):
+    site = gtptabs_fetch.SITE
+    sitemap(home, site, "sitemap-tabs-1.xml", ["https://gtptabs.com/tabs/2/blur.html"], EARLY)
+    merge(conn, export(home, tmp_path, ["gtptabs"], name="first.sqlite"), state=tmp_path / "state")
+    entry = {**site_index.sitemaps(conn, site)["sitemap-tabs-1.xml"], "checked_at": db_stamp(LATE)}
+    if change == "no validators":  # a site that sends none: a re-read with the same count may hold other rows
+        site_index._record(conn, site, "sitemap-tabs-1.xml", {**entry, "etag": None, "checked_at": db_stamp(EARLY)})
+        entry = {**entry, "etag": None}
+    elif change == "older record":  # a record written without a field the other side's has
+        entry.pop("keys")
+    else:
+        entry[change] = {"etag": '"other"', "last_modified": "Wed, 28 Oct 2026 03:30:00 GMT", "rows": 2,
+                         "keys": normalize.KEY_VERSION - 1}[change]
+    site_index._record(home, site, "sitemap-tabs-1.xml", entry)
+
+    merged = merge(conn, export(home, tmp_path, ["gtptabs"], name="week.sqlite"), state=tmp_path / "state")
+
+    assert merged.sites[0].taken == [("sitemap", 1)] and merged.sites[0].checked == 1
+    assert site_index.sitemaps(conn, site)["sitemap-tabs-1.xml"] == entry
 
 
 def test_ug_takes_each_sitemap_indexed_more_recently_and_marks_the_songs_its_new_tabs_are_for(home, conn, tmp_path):
@@ -701,6 +756,7 @@ def test_ug_takes_each_sitemap_indexed_more_recently_and_marks_the_songs_its_new
     assert db.kv_get_json(conn, ug_index.LISTED_KEY) == ["1", "2", "last"]
     assert ug_index.index_state(conn) == "complete"
     assert ("sitemap", 2) in merged.sites[0].taken
+    assert merged.sites[0].checked == 3  # the rows of sitemaps 1 and 2, read from the file
     # Its search tables follow the rows, by their triggers.
     assert conn.execute("SELECT 1 FROM ug_artists WHERE artist_key = 'oasis'").fetchone() is not None
 
@@ -741,8 +797,9 @@ def test_lacuerda_takes_listing_pages_read_more_recently_and_the_artist_pages_it
     lacuerda_index.store_search(home, SearchAnswer(songs=(SearchSong("bunbury", "Enrique Bunbury", LCSong(
         "lady_blue", "Lady Blue", "RA", (1,))),)))
 
-    merge(conn, export(home, tmp_path, ["lacuerda"]), state=tmp_path / "state")
+    merged = merge(conn, export(home, tmp_path, ["lacuerda"]), state=tmp_path / "state")
 
+    assert merged.sites[0].checked == 6  # a listing page's 2 rows, an artist page's 2, its search's 2
     by_page: dict[str, set[str]] = {}
     for path, page in conn.execute("SELECT path, page FROM lacuerda_index"):
         by_page.setdefault(page, set()).add(path)
@@ -872,6 +929,31 @@ def test_a_merge_tells_before_planning_the_backup_each_site_each_action_and_each
         ("harptabs", "artist page", 0, 1),
     ]
     assert merged.changed and rows(conn, "ug_index") == rows(home, "ug_index")
+
+
+def test_a_merges_words_say_each_step_and_a_syncs_say_what_is_newer_of_a_site_this_side_holds():
+    words = transfer.MergeWords()
+    assert [words("", transfer.PLANNING, 0, 2), words("ug", "", 0, 2), words("ug", "sitemap", 0, 41),
+            words("ug", transfer.UG_TABS, 600_000, 1_367_059), words("harptabs", "artist page", 0, 1)] == [
+        "Comparing with this database's indexes", "Ultimate Guitar", "Ultimate Guitar · 41 sitemaps",
+        "Ultimate Guitar · 41 sitemaps · 600,000 of 1,367,059 tabs", "harptabs.com · 1 artist page"]
+    # A sync's, of the sites this side held rows of before it: what is newer there, and the rows checked; a site it
+    # held none of as any merge says it.
+    words = transfer.MergeWords(held={"ug"}, there="on the other side")
+    assert [words("ug", "", 0, 2), words("ug", "sitemap", 0, 3), words("ug", transfer.UG_TABS, 50_000, 117_701),
+            words("ug", "tab of its artist pages", 0, 12), words("gtptabs", "", 1, 2),
+            words("gtptabs", "sitemap", 0, 1)] == [
+        "Ultimate Guitar", "Ultimate Guitar · 3 sitemaps newer on the other side",
+        "Ultimate Guitar · 3 sitemaps newer on the other side · 50,000 of 117,701 tabs checked",
+        "Ultimate Guitar · 12 tabs of its artist pages newer on the other side", "gtptabs.com",
+        "gtptabs.com · 1 sitemap"]
+
+
+def test_held_is_the_sites_whose_first_table_holds_a_row(home):
+    assert transfer.held(home) == set()
+    sitemap(home, gtptabs_fetch.SITE, "sitemap-tabs-1.xml", ["https://gtptabs.com/tabs/2/blur.html"], EARLY)
+    artist_tab(home, SONG_DONGYE, 2001, "斑马 斑马", EARLY)  # an artist page's tab: no row of UG's sitemaps
+    assert transfer.held(home) == {"gtptabs"}
 
 
 def test_a_merge_that_takes_nothing_tells_its_planning_alone(home, conn, tmp_path):

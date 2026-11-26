@@ -1,6 +1,10 @@
 package io.github.danielhp95.caracole
 
+import io.github.danielhp95.caracole.core.sync.OtherKeys
+import io.github.danielhp95.caracole.core.sync.PeerError
 import io.github.danielhp95.caracole.core.sync.SyncEngine
+import io.github.danielhp95.caracole.core.sync.Take
+import io.github.danielhp95.caracole.core.sync.Units
 import io.github.danielhp95.caracole.mirror.Http
 import io.github.danielhp95.caracole.server.jobs.JobQueue
 import io.github.danielhp95.caracole.server.jobs.JobSpec
@@ -74,9 +78,10 @@ class SyncsTest {
     }
 
     /** A queue whose sync job ends with [outcome] (null: it fails, as a compare that couldn't ask fails it), its
-     * [failed] stage said failed and the job going on past it, as the engine goes on past its mirror stage. */
+     * [failed] stage said failed and the job going on past it, as the engine goes on past its mirror stage; its
+     * [index] stage ended so (its state and words), done else. */
     private fun phone(outcome: JsonObject?, queued: MutableList<String> = mutableListOf(),
-                      failed: Pair<String, String>? = null): Syncs.Unattended {
+                      failed: Pair<String, String>? = null, index: Pair<String, String>? = null): Syncs.Unattended {
         val queue = JobQueue(scope)
         return Syncs.Unattended(
             alone = { address ->
@@ -88,7 +93,8 @@ class SyncsTest {
                         throw IllegalStateException("No answer from $address (refused).")
                     }
                     for ((stage, _) in SyncEngine.STAGES) {
-                        job.stage(stage, if (stage == failed?.first) "failed" else "done", failed?.second.orEmpty())
+                        if (stage == SyncEngine.INDEX && index != null) job.stage(stage, index.first, index.second)
+                        else job.stage(stage, if (stage == failed?.first) "failed" else "done", failed?.second.orEmpty())
                     }
                     job.outcome(outcome)
                 })).first
@@ -136,6 +142,30 @@ class SyncsTest {
     }
 
     @Test
+    fun `the probe finding a caracole whose songs are keyed by other rules says so as a failed sync, asking no more`() =
+        runBlocking {
+            // A caracole answers, but one side's key bump makes the two name songs by different rules: never "no
+            // caracole here" (the last outcome, "Up to date", kept up for good), but the refusal, in its words.
+            val earlier = Outcome(1_000L, true, "Up to date")
+            val settings = settings("192.168.1.20:8737").also { it.lastOutcome = earlier }
+            Caracole.status.value = SyncState.Ended(earlier)
+            val outcome = Syncs.run(settings, probe = true, http = Http(), ask = { throw OtherKeys(Units.OTHER_KEYS) },
+                                    phone = { error("the phone's caracole was asked") }, cleared = { cleared++ }) { n, songs ->
+                notified.add(n to songs)
+            }!!
+            assertFalse(outcome.ok)
+            assertEquals(Units.OTHER_KEYS, outcome.text)
+            assertEquals(outcome, settings.lastOutcome)
+            assertEquals(SyncState.Ended(outcome), Caracole.status.value)
+            assertEquals(emptyList(), notified)
+            assertEquals(0, cleared)
+            // Any other PeerError, as SyncError, is still no caracole answering: nothing done, nothing said.
+            assertNull(Syncs.run(settings, probe = true, http = Http(), ask = { throw PeerError("not a caracole") },
+                                 phone = { error("asked") }) { _, _ -> error("notified") })
+            assertEquals(outcome, settings.lastOutcome)
+        }
+
+    @Test
     fun `asked by hand, nothing answering is said`() = runBlocking {
         val by = settings(nothingAt())
         val outcome = Syncs.run(by, probe = false, http = Http(), phone = { error("asked") }) { _, _ -> error("notified") }!!
@@ -179,6 +209,64 @@ class SyncsTest {
         assertTrue(done.ok)
         assertEquals("2 changed on both sides: tap Sync to choose", done.text, "never \"Up to date\" then")
         assertEquals(listOf(2 to true), notified)
+    }
+
+    @Test
+    fun `a sync that left a unit for another reason than a conflict is no sync up to date`() = runBlocking {
+        // A song it couldn't take (its file changed since compared, one the computer's take left, a [version] the
+        // phone's checks refuse): counted, and the sheet's "left" section says why.
+        val why = "http://192.168.1.20:8737 sent score-1.pdf changed since compared. The song stays as it was here."
+        val alone = outcome("""{"taken": [], "given": [], "left": [["song/bach/mass in b minor", "$why"]],
+            "agreed": 9, "indexed": []}""")
+        assertEquals("1 not synced: the Journal says why", Syncs.said(alone))
+        val done = Syncs.run(settings("http://192.168.1.20:8737"), probe = true, http = Http(), ask = {},
+                             cleared = { cleared++ },
+                             phone = { phone(outcome("""{"taken": ["song/a/b"], "given": [],
+                                 "left": [["song/bach/mass in b minor", "$why"]], "agreed": 9}""")) }) { n, songs ->
+            notified.add(n to songs)
+        }!!
+        assertEquals("1 taken · 1 not synced: the Journal says why", done.text)
+        assertEquals(emptyList(), notified, "no conflict to choose: no notification")
+        val both = outcome("""{"taken": [], "given": [], "left": [["song/a/b", "${SyncEngine.UNSETTLED}"],
+            ["song/c/d", "${SyncEngine.UNSETTLED}"], ["song/e/f", "$why"]]}""")
+        assertEquals("2 changed on both sides · 1 not synced: tap Sync to choose", Syncs.said(both))
+    }
+
+    @Test
+    fun `a removal left because its song is here is the sync up to date, never a unit not synced`() {
+        // The computer removed a song the phone keeps (core.sync.Take.SONG_HERE): the answer, left on purpose.
+        val kept = outcome("""{"taken": [], "given": [], "left": [["removed/a/b", "${Take.SONG_HERE}"]],
+            "agreed": 9, "indexed": []}""")
+        assertEquals("Up to date", Syncs.said(kept))
+        val more = outcome("""{"taken": ["song/c/d"], "given": [], "left": [["removed/a/b", "${Take.SONG_HERE}"],
+            ["song/e/f", "changed since compared"]]}""")
+        assertEquals("1 taken · 1 not synced: the Journal says why", Syncs.said(more))
+    }
+
+    @Test
+    fun `a sync whose indexes were of another schema says so in place of up to date`() = runBlocking {
+        val skipped = Syncs.run(settings("http://192.168.1.20:8737"), probe = true, http = Http(), ask = {},
+                                phone = { phone(outcome("""{"taken": ["song/a/b"], "given": [], "left": []}"""),
+                                                index = "skipped" to SyncEngine.INDEXES_NEWER) }) { _, _ -> }!!
+        assertTrue(skipped.ok, "the units synced as ever")
+        assertEquals("1 taken · ${SyncEngine.INDEXES_NEWER}", skipped.text)
+        val nothing = Syncs.run(settings("http://192.168.1.20:8737"), probe = true, http = Http(), ask = {},
+                                phone = { phone(outcome("""{"taken": [], "given": [], "left": []}"""),
+                                                index = "skipped" to SyncEngine.INDEXES_OLDER) }) { _, _ -> }!!
+        assertEquals(SyncEngine.INDEXES_OLDER, nothing.text)
+        // Skipped for nothing newer: up to date, as ever.
+        val ordinary = Syncs.run(settings("http://192.168.1.20:8737"), probe = true, http = Http(), ask = {},
+                                 phone = { phone(outcome("""{"taken": ["song/a/b"], "given": [], "left": []}"""),
+                                                 index = "skipped" to SyncEngine.NOTHING_TO_INDEX) }) { _, _ -> }!!
+        assertEquals("Up to date · 1 taken", ordinary.text)
+        // With something left to choose or to see, the line still ends with what to do.
+        val conflicts = outcome("""{"taken": [], "given": [], "left": [["song/a/b", "${SyncEngine.UNSETTLED}"],
+            ["song/c/d", "${SyncEngine.UNSETTLED}"]]}""")
+        assertEquals("2 changed on both sides · ${SyncEngine.INDEXES_NEWER}: tap Sync to choose",
+                     Syncs.said(conflicts, SyncEngine.INDEXES_NEWER))
+        val other = outcome("""{"taken": ["song/a/b"], "given": [], "left": [["song/c/d", "changed since compared"]]}""")
+        assertEquals("1 taken · 1 not synced · ${SyncEngine.INDEXES_OLDER}: the Journal says why",
+                     Syncs.said(other, SyncEngine.INDEXES_OLDER))
     }
 
     @Test

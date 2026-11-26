@@ -11,6 +11,8 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import time
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -42,7 +44,7 @@ from caracole.library import song_dir
 from caracole.lyrics import Lyrics
 from caracole.overrides import Overrides
 from caracole.songs import get_song, update_song
-from caracole.transcribe_job import STAGES, TranscribeRequest, make_transcript
+from caracole.transcribe_job import STAGES, TranscribeRequest, _Transcription, make_transcript
 from caracole.youtube import Video
 from caracole.youtube_fetch import Record, _save
 
@@ -53,6 +55,7 @@ STEM = [-80.0] * 500 + [-12.0] * 700
 MIX = [-10.0] * 1200
 REAL_FRAME_DB = separate.frame_db  # the autouse ``loudness`` fakes it; a test of the real reader puts it back
 INTRO = Word(0.0, 0.4, "Suscríbete", False, True)  # Whisper's own, over the intro nobody sings
+# Sung as a song is (words.py's rule): 16 words in the 35.4 s sung, 27 a minute.
 WORDS = [
     INTRO,
     Word(25.5, 26.0, "Somos", True, True),
@@ -61,10 +64,24 @@ WORDS = [
     Word(27.1, 27.6, "prueba", True),
     Word(30.0, 30.5, "comemos", True, True),
     Word(30.6, 31.0, "lechuga", True),
+    Word(31.1, 31.3, "y", True),
+    Word(31.4, 32.0, "tomate", True),
+    Word(34.5, 35.0, "nunca", True, True),
+    Word(35.1, 35.5, "carne", True),
+    Word(35.6, 35.8, "de", True),
+    Word(35.9, 36.4, "vaca", True),
+    Word(38.0, 38.4, "somos", True, True),
+    Word(38.5, 39.0, "vikingos", True),
+    Word(39.1, 39.6, "veganos", True),
+    Word(39.7, 40.0, "hoy", True),
 ]
 LRC = ("[00:25.50] <00:25.50>Somos <00:26.10>vikingos <00:26.70>de <00:27.10>prueba\n"
        "[00:27.60]\n"
-       "[00:30.00] <00:30.00>comemos <00:30.60>lechuga\n")
+       "[00:30.00] <00:30.00>comemos <00:30.60>lechuga <00:31.10>y <00:31.40>tomate\n"
+       "[00:32.00]\n"
+       "[00:34.50] <00:34.50>nunca <00:35.10>carne <00:35.60>de <00:35.90>vaca\n"
+       "[00:38.00] <00:38.00>somos <00:38.50>vikingos <00:39.10>veganos <00:39.70>hoy\n")
+SAID = "16 words in 4 lines (es), 1 dropped"  # the words stage's end, for WORDS
 
 
 class Separator:
@@ -140,9 +157,9 @@ def offered(conn, cfg, artist="Nick Cani", title="Vikingos veganos", seconds=60.
 
 
 def make(cfg, *, separator=None, transcriber=None, recognizer=None, progress=None, artist="Nick Cani",
-         title="Vikingos veganos"):
+         title="Vikingos veganos", force=False, none=False):
     heard = progress or Heard()
-    result = make_transcript(cfg, TranscribeRequest(artist, title), heard,
+    result = make_transcript(cfg, TranscribeRequest(artist, title, force=force, none=none), heard,
                              separator=separator or Separator(), transcriber=transcriber or Transcriber(),
                              recognizer=recognizer or Recognizer(), beats_fn=beats, runner=fake_chordpro, now=NOW)
     return result, heard
@@ -174,7 +191,7 @@ def test_an_offered_song_gets_its_transcript_and_its_sheet_over_it(conn, cfg):
     ends = heard.ends()
     assert ends["song"] == ("done", "in the book")
     assert ends["vocals"] == ("done", "sung from 24.8 s, 1 stretch")
-    assert ends["words"] == ("done", "6 words in 2 lines (es), 1 dropped")
+    assert ends["words"] == ("done", SAID)
     assert ends["chords"] == ("done", "chords over the transcribed lyrics")
     assert ends["pdf"] == ("done", "made")
     assert ends["pages"] == ("done", "_todo.md and index.html rewritten")
@@ -243,7 +260,7 @@ def test_each_long_stage_says_how_far_it_is_as_it_runs(conn, cfg, monkeypatch, g
         ("pdf", ""), ("pages", ""),
     ]
     assert heard.ends()["vocals"] == ("done", "sung from 24.8 s, 1 stretch")
-    assert heard.ends()["words"] == ("done", "6 words in 2 lines (es), 1 dropped")
+    assert heard.ends()["words"] == ("done", SAID)
 
 
 def test_words_outside_the_singing_are_dropped(conn, cfg):
@@ -256,8 +273,13 @@ def test_words_outside_the_singing_are_dropped(conn, cfg):
     assert heard.ends()["words"][1].endswith(", 1 dropped")
 
 
-@pytest.mark.parametrize("words", [[], [INTRO]], ids=["nothing heard", "only the intro"])
-def test_no_singing_heard_records_it_and_fails_without_a_sheet(conn, cfg, words):
+@pytest.mark.parametrize("words,why", [
+    ([], "0 words in 0:35 sung"),
+    ([INTRO], "0 words in 0:35 sung"),
+    (WORDS[:6], "5 words in 0:35 sung"),  # a shouted line over a song's worth of singing: under 8 words
+    (WORDS[:11], "10 words in 0:35 sung"),  # 17 a minute, under 20: a pad's invented words
+], ids=["nothing heard", "only the intro", "five words", "ten words"])
+def test_no_singing_heard_records_it_and_fails_without_a_sheet(conn, cfg, words, why):
     song = offered(conn, cfg)
     recognizer = Recognizer()
     result, heard = make(cfg, transcriber=Transcriber(words), recognizer=recognizer)
@@ -267,9 +289,11 @@ def test_no_singing_heard_records_it_and_fails_without_a_sheet(conn, cfg, words)
     assert [ends[name][0] for name in ("chords", "pdf", "pages")] == ["skipped", "skipped", "done"]
     assert recognizer.calls == [] and not auto_sheet(cfg, conn, song).exists()
     assert kept(conn, song) is None
-    # Not offered again until the song's audio changes.
+    # Not offered again until the song's audio changes, and noted with why.
     assert heard_nothing(conn, song)
     assert why_not_offered(conn, cfg, song, Overrides()) == "nothing sung was heard"
+    noted = kv_get_json(conn, f"{HEARD_NOTHING}{song.id}")
+    assert (noted["why"], noted["by"]) == (why, "caracole")
 
 
 
@@ -352,7 +376,7 @@ def test_a_second_transcription_in_the_first_ones_hand_over_leaves_its_stem_alon
     result, _ = make(cfg, transcriber=StemFirst(), progress=heard)
     assert second and second[0].ok, second
     assert result.ok, result
-    assert heard.ends()["words"] == ("done", "6 words in 2 lines (es), 1 dropped")
+    assert heard.ends()["words"] == ("done", SAID)
     assert kv_get(conn, f"autochords:failed:{first.id}") is None
     assert why_not_offered(conn, cfg, get_song(conn, first.id), Overrides()) == "already transcribed"
     assert not list(cfg.cache_dir.glob("transcribe-*"))  # both went with their jobs
@@ -436,19 +460,53 @@ def test_a_songs_auto_sheet_record_that_cant_be_read_is_a_refusal_never_a_traceb
     assert separator.calls == transcriber.calls == recognizer.calls == []
 
 
-def test_with_no_singing_found_whisper_never_runs_and_nothing_sung_is_noted(conn, cfg, monkeypatch):
-    # The guard would drop every word Whisper heard: it isn't run (up to half an hour on a CPU).
+@pytest.mark.parametrize("stem,vocals,why", [
+    ([-80.0] * 1200, "no singing found", "sung 0.0 s"),
+    ([-80.0] * 500 + [-12.0] * 120 + [-80.0] * 580, "sung from 24.8 s, 1 stretch", "sung 6.4 s"),  # a vocalise
+], ids=["no singing found", "six seconds sung"])
+def test_with_no_singing_found_whisper_never_runs_and_nothing_sung_is_noted(conn, cfg, monkeypatch, stem, vocals,
+                                                                            why):
+    # The guard would drop every word Whisper heard, or keep too few to be lyrics: it isn't run (up to half an hour
+    # on a CPU).
     song = offered(conn, cfg)
     monkeypatch.setattr(separate, "frame_db",
-                        lambda path, **kw: [-80.0] * 1200 if Path(path).name == "vocals.wav" else list(MIX))
+                        lambda path, **kw: list(stem) if Path(path).name == "vocals.wav" else list(MIX))
     transcriber, recognizer = Transcriber(), Recognizer()
     result, heard = make(cfg, transcriber=transcriber, recognizer=recognizer)
     assert not result.ok and result.failed == "no singing heard" and result.bug is None
     ends = heard.ends()
-    assert ends["vocals"] == ("done", "no singing found")
+    assert ends["vocals"] == ("done", vocals)
     assert ends["words"] == ("failed", "no singing heard")
     assert transcriber.calls == [] and recognizer.calls == []
     assert heard_nothing(conn, song) and kept(conn, song) is None
+    assert kv_get_json(conn, f"{HEARD_NOTHING}{song.id}")["why"] == why
+
+
+class Lenient(_Transcription):
+    """A job whose words not coming fail no more than their own stage, as a sheet from a YouTube video's is; the
+    transcription's chords, which need a transcript, left out."""
+
+    WORDS_FAIL_THE_JOB = False
+
+    def chords(self):
+        return "skipped", "not this job's"
+
+
+@pytest.mark.parametrize("transcriber,words", [
+    (Transcriber(fail=tx.SetupFailed("the GPU failed: CUDA out of memory")),
+     ("failed", "the GPU failed: CUDA out of memory")),
+    (Transcriber(WORDS[:6]), ("done", "nothing sung was heard (5 words in 0:35 sung)")),
+], ids=["the setup failed", "nothing sung"])
+def test_a_job_whose_words_dont_fail_it_ends_their_stage_alone(conn, cfg, transcriber, words):
+    song = offered(conn, cfg)
+    heard = Heard()
+    result = Lenient(cfg, TranscribeRequest("Nick Cani", "Vikingos veganos"), heard, separator=Separator(),
+                     transcriber=transcriber, recognizer=Recognizer(), beats_fn=beats, runner=fake_chordpro, now=NOW,
+                     clock=time.monotonic).run()
+    assert result.ok and result.failed is None, result
+    assert heard.ends()["words"] == words
+    assert kept(conn, song) is None
+    assert not list(cfg.cache_dir.glob("transcribe-*"))  # the work folder goes with the job all the same
 
 # --- refused: nothing runs ----------------------------------------------------------------------------------------
 
@@ -515,24 +573,33 @@ def test_a_gpu_failure_fails_the_job_records_nothing_and_the_song_stays_offered(
     assert why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) is None
 
 
-def filed_unreadable(conn, cfg, song) -> bool:
-    """Whether the song's audio is filed as auto-chords files a file it can't read, and so offered no transcription
-    until it changes."""
-    record = kv_get_json(conn, f"autochords:failed:{song.id}")
-    return (record["audio"], record["audio_mtime"]) == (song.audio_path, song.audio_mtime) and (
-        why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) == "its audio can't be read")
+def test_audio_whisper_cant_read_is_noted_as_whispers_and_the_job_says_what_to_do(conn, cfg):
+    # Whisper reads the mix through the ffmpeg program: its refusal is no verdict on the file auto-chords reads. Noted
+    # as Whisper's alone, as the nightly pass and a sheet from a video note it; never filed as audio auto-chords can't
+    # read. The job fails in words that say what to do, and --force tries it again (an ffmpeg or Whisper upgrade).
+    from caracole.autochords.transcript import WHISPER_CANT_READ
 
-
-def test_audio_whisper_cant_read_is_filed_as_auto_chords_files_it(conn, cfg):
     song = offered(conn, cfg)
     fail = RuntimeError("Failed to load audio: [mov,mp4] moov atom not found")
     result, heard = make(cfg, transcriber=Transcriber(fail=fail))
-    assert not result.ok and result.bug is None and result.failed == "can't read the audio"
-    assert heard.ends()["words"] == ("failed", "can't read the audio")
-    assert filed_unreadable(conn, cfg, song)
-    assert kv_get_json(conn, f"autochords:failed:{song.id}")["error"] == (
-        "RuntimeError: Failed to load audio: [mov,mp4] moov atom not found")
+    said = ("Whisper can't read the audio: a new file, or another video under [youtube], gets its words heard; after "
+            "an ffmpeg or Whisper upgrade, caracole transcribe --force tries it again")
+    assert not result.ok and result.bug is None and result.failed == said
+    assert heard.ends()["words"] == ("failed", said)
+    assert kv_get(conn, f"autochords:failed:{song.id}") is None
+    record = kv_get_json(conn, f"{WHISPER_CANT_READ}{song.id}")
+    assert (record["audio"], record["audio_mtime"]) == (song.audio_path, song.audio_mtime)
+    assert record["error"] == "RuntimeError: Failed to load audio: [mov,mp4] moov atom not found"
+    song = get_song(conn, song.id)
+    assert why_not_offered(conn, cfg, song, Overrides()) == "Whisper can't read its audio"
     assert kept(conn, song) is None and not heard_nothing(conn, song)
+    refused, _ = make(cfg)
+    assert refused.refused == ("Nick Cani - Vikingos veganos isn't offered a transcription: Whisper can't read its "
+                               "audio (a new file, or another video under [youtube], gets its words heard; after an "
+                               "ffmpeg or Whisper upgrade, caracole transcribe --force tries it again)")
+    again, _ = make(cfg, force=True)  # after an upgrade: heard now, and the note goes with its transcript
+    assert again.ok, again
+    assert kept(conn, song) is not None and kv_get(conn, f"{WHISPER_CANT_READ}{song.id}") is None
 
 
 @pytest.mark.parametrize("fail", [IndexError("list index out of range"),
@@ -605,8 +672,8 @@ def test_a_song_whose_audio_is_the_aac_m4a_youtube_gives_is_transcribed(conn, cf
     import soundfile
 
     monkeypatch.setattr(separate, "frame_db", REAL_FRAME_DB)
-    song_of = [(1.0, 0.0), (3.0, 0.3)]  # a second's silence, then three of singing
-    song = offered(conn, cfg, seconds=4.0, audio=lambda path: aac_m4a(path.with_suffix(".m4a"), song_of))
+    song_of = [(1.0, 0.0), (11.0, 0.3)]  # a second's silence, then eleven of singing: enough to be sung
+    song = offered(conn, cfg, seconds=12.0, audio=lambda path: aac_m4a(path.with_suffix(".m4a"), song_of))
     assert Path(song.audio_path).suffix == ".m4a"
 
     class Stem(Separator):
@@ -617,8 +684,8 @@ def test_a_song_whose_audio_is_the_aac_m4a_youtube_gives_is_transcribed(conn, cf
             soundfile.write(out, aac_samples(song_of), AAC_RATE)
             return out
 
-    words = [Word(0.0, 0.2, "Suscríbete", False, True), Word(1.5, 2.0, "Somos", True, True),
-             Word(2.1, 2.8, "vikingos", True)]
+    words = [Word(0.0, 0.2, "Suscríbete", False, True),
+             *(replace(w, start=w.start - 24.0, end=w.end - 24.0) for w in WORDS[1:9])]  # two lines, from 1.5 s
     transcriber = Transcriber(words)
     result, heard = make(cfg, separator=Stem(), transcriber=transcriber)
     assert result.ok, result
@@ -626,7 +693,7 @@ def test_a_song_whose_audio_is_the_aac_m4a_youtube_gives_is_transcribed(conn, cf
     state, detail = ends["vocals"]
     assert state == "done" and detail.endswith(" s, 1 stretch"), detail
     assert 0.6 <= float(detail.removeprefix("sung from ").partition(" s")[0]) <= 1.0  # the singing from 1 s
-    assert ends["words"] == ("done", "2 words in 1 line (es), 1 dropped")
+    assert ends["words"] == ("done", "8 words in 2 lines (es), 1 dropped")
     assert ends["chords"] == ("done", "chords over the transcribed lyrics")
     assert kv_get(conn, f"autochords:failed:{song.id}") is None
     assert "Somos vikingos" in auto_sheet(cfg, conn, song).read_text(encoding="utf-8")
@@ -910,3 +977,104 @@ def test_the_lock_goes_to_a_waiting_lookup_before_each_long_stage(conn, cfg, tmp
     order = log.read_text(encoding="utf-8").splitlines()
     assert order == ["lookup", "separator", "lookup", "transcriber", "lookup", "recognizer"]
     assert _common.handoffs() == handed + 3
+
+
+# --- the owner's word over caracole's: --force and --none -----------------------------------------------------------
+
+
+def test_force_hears_a_song_heard_to_have_nothing_and_keeps_its_words(conn, cfg):
+    # Five words over a song's worth of singing: nothing sung, by caracole's rule. The owner says it is sung: Whisper's
+    # words are kept all the same, within the singing, and the sheet is made over them.
+    song = offered(conn, cfg)
+    first, _ = make(cfg, transcriber=Transcriber(WORDS[:6]))
+    assert first.failed == "no singing heard" and heard_nothing(conn, song)
+    assert why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) == "nothing sung was heard"
+    recognizer = Recognizer()
+    result, heard = make(cfg, transcriber=Transcriber(WORDS[:6]), recognizer=recognizer, force=True)
+    assert result.ok, result
+    ends = heard.ends()
+    assert ends["words"] == ("done", "5 words in 2 lines (es), 1 dropped")
+    assert ends["chords"] == ("done", "chords over the transcribed lyrics")
+    transcript = kept(conn, song)
+    assert transcript is not None and transcript.lrc.startswith("[00:25.50] <00:25.50>Somos")
+    assert not heard_nothing(conn, get_song(conn, song.id)) and recognizer.calls
+    assert NOTE in auto_sheet(cfg, conn, song).read_text(encoding="utf-8")
+
+
+def test_force_hears_the_whole_song_where_no_singing_was_found(conn, cfg, monkeypatch):
+    # The separator found no singing at all: Whisper isn't run by caracole's rule; asked anyway, it hears the whole
+    # song, its words kept, the intro's too, as one span.
+    monkeypatch.setattr(separate, "frame_db", lambda path, **kwargs: [-80.0] * 1200 if Path(path).name == "vocals.wav"
+                        else list(MIX))
+    song = offered(conn, cfg)
+    transcriber = Transcriber()
+    result, heard = make(cfg, transcriber=transcriber, force=True)
+    assert result.ok, result
+    assert heard.ends()["vocals"] == ("done", "no singing found") and transcriber.calls
+    assert heard.ends()["words"] == ("done", "17 words in 5 lines (es), 0 dropped")
+    assert kept(conn, song) is not None
+
+
+def test_none_drops_the_transcript_and_makes_the_chords_alone(conn, cfg):
+    # Whisper's words over a pad passed the rules: the owner says it isn't sung. Its transcript goes, the song noted
+    # not sung by their word, and its sheet is made again of its chords alone; neither model runs.
+    from caracole.autochords.transcript import NOT_SUNG, SAID_NOT_SUNG, SILENT
+
+    song = offered(conn, cfg)
+    assert make(cfg)[0].ok and kept(conn, song) is not None
+    separator, transcriber, recognizer = Separator(), Transcriber(), Recognizer()
+    result, heard = make(cfg, separator=separator, transcriber=transcriber, recognizer=recognizer, none=True)
+    assert result.ok, result
+    ends = heard.ends()
+    assert ends["song"] == ("done", "in the book")
+    assert ends["vocals"] == ("skipped", "you said nothing is sung")
+    assert ends["words"] == ("done", "transcript dropped")
+    assert ends["chords"] == ("done", "chords only: you said it isn't sung")  # the owner's word, not what was heard
+    assert ends["pdf"] == ("done", "made")
+    assert separator.calls == transcriber.calls == [] and recognizer.calls
+    assert kept(conn, song) is None and not result.transcript_kept
+    noted = kv_get_json(conn, f"{HEARD_NOTHING}{song.id}")
+    assert (noted["why"], noted["by"]) == ("you said so", "you")
+    song = get_song(conn, song.id)
+    sheet = auto_sheet(cfg, conn, song).read_text(encoding="utf-8")
+    assert NOTE not in sheet and NOT_SUNG in sheet and SILENT not in sheet and "Somos" not in sheet
+    assert why_not_offered(conn, cfg, song, Overrides()) == SAID_NOT_SUNG
+    assert why_not_offered(conn, cfg, song, Overrides(), anyway=True) is None  # until the owner says it is
+    # Their word is about that audio: a new file is a new start, offered a transcription again.
+    other = Path(song.audio_path).with_name("other.wav")
+    wav(other, 60.0)
+    update_song(conn, song.id, audio_path=str(other), audio_mtime=other.stat().st_mtime)
+    assert why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) is None
+
+
+def test_none_is_refused_for_a_song_with_no_transcript_and_changes_nothing(conn, cfg):
+    song = offered(conn, cfg)
+    separator, transcriber, recognizer = Separator(), Transcriber(), Recognizer()
+    result, heard = make(cfg, separator=separator, transcriber=transcriber, recognizer=recognizer, none=True)
+    assert result.refused == "Nick Cani - Vikingos veganos can't be said not sung: it has no transcript"
+    assert heard.ends()["song"] == ("failed", result.refused)
+    assert separator.calls == transcriber.calls == recognizer.calls == []
+    assert kv_get(conn, f"{HEARD_NOTHING}{song.id}") is None
+    assert why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) is None
+
+
+def test_transcribe_anyway_over_audio_whisper_cant_read_leaves_no_offer_over_that_file(conn, cfg, monkeypatch):
+    # Too little singing: caracole noted nothing sung, Whisper never run. Transcribe anyway: Whisper can't load the
+    # file. Its verdict of nothing sung goes with it, so the card offers no Transcribe anyway that can only fail
+    # again; asked again, the refusal says what to do.
+    from caracole.autochords.transcript import offers
+
+    monkeypatch.setattr(separate, "frame_db", lambda path, **kwargs: [-80.0] * 1200 if Path(path).name == "vocals.wav"
+                        else list(MIX))
+    song = offered(conn, cfg)
+    assert make(cfg)[0].failed == "no singing heard" and offers(conn, cfg, Overrides())["nothing"] == [song.id]
+    fail = RuntimeError("Failed to load audio: [mov,mp4] moov atom not found")
+    result, _ = make(cfg, transcriber=Transcriber(fail=fail), force=True)
+    assert result.failed.startswith("Whisper can't read the audio: a new file")
+    song = get_song(conn, song.id)
+    assert not heard_nothing(conn, song)
+    assert offers(conn, cfg, Overrides()) == {"songs": [], "nothing": [], "unsung": [], "transcribed": []}
+    refused, _ = make(cfg)
+    assert refused.refused.endswith("Whisper can't read its audio (a new file, or another video under [youtube], gets "
+                                    "its words heard; after an ffmpeg or Whisper upgrade, caracole transcribe --force "
+                                    "tries it again)")

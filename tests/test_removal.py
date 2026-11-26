@@ -224,6 +224,26 @@ def test_a_purchase_stays_and_the_youtube_audio_it_replaced_goes(conn, cfg):
     assert bought.read_bytes() == b"fLaC" and not left.exists()
 
 
+def test_a_removal_deletes_the_songs_uploaded_audio_and_says_so(conn, cfg):
+    from helpers.audio_files import given
+
+    from caracole.removal import brief, describe, plan_removal, remove_song
+
+    song = creep(conn, cfg)
+    mine = given(conn, cfg.state_dir, song, "MP3")
+    theirs = given(conn, cfg.state_dir, add_song(conn, "Oasis", "Wonderwall"), "WAV")
+    plan = plan_removal(conn, cfg, get_song(conn, song.id))
+    assert plan.uploaded_audio == str(mine) and plan.audio is None  # caracole's to delete, not a purchase of yours
+    goes, stays, _ = describe(plan, cfg)
+    assert "the audio file you gave it, from caracole's own folder" in goes, goes
+    assert not any("you bought" in line for line in stays), stays
+    assert brief(plan) == ("Deletes our 8 files for it, its record, its wanted.txt line and the audio file you gave "
+                           "it; never touches Music/.")
+    result = remove_song(conn, cfg, plan, now=NOW)
+    assert not mine.exists() and result.errors == []
+    assert theirs.exists()  # another song's stays
+
+
 def test_a_youtube_record_naming_a_file_outside_caracoles_cache_deletes_nothing(conn, cfg):
     song = creep(conn, cfg)
     mine = cfg.music_dir / "Creep.m4a"

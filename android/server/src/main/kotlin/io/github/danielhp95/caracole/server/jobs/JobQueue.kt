@@ -47,6 +47,10 @@ data class JobSpec(val title: String, val key: String, val kind: String, val sta
  * about (an add's, once added), as `caracole get --progress`'s events tell caracole serve's. */
 interface JobContext {
     fun stage(name: String, state: String, detail: String = "")
+
+    /** How far stage [name] has got, [done] of [total] (null for neither: it counts nothing now), kept as data beside
+     * its words, for a line that says a share of it (JobViews.queuedBehind). */
+    fun progress(name: String, done: Long?, total: Long?) {}
     fun say(line: String)
     fun outcome(value: JsonObject)
     val isCancelled: Boolean
@@ -80,7 +84,16 @@ class Stage internal constructor(val name: String, val label: String) {
     var runningDetail: String = ""
         internal set
 
-    internal fun copy() = Stage(name, label).also { it.state = state; it.detail = detail; it.runningDetail = runningDetail }
+    /** How far the stage has got as numbers ([JobContext.progress]), none while it counts nothing: what a line that
+     * says a percentage reads, never the words. */
+    var done: Long? = null
+        internal set
+    var total: Long? = null
+        internal set
+
+    internal fun copy() = Stage(name, label).also {
+        it.state = state; it.detail = detail; it.runningDetail = runningDetail; it.done = done; it.total = total
+    }
 }
 
 /** One of a job's commands as it runs (web/jobs.py's Step): its state (waiting, running, done, failed, skipped,
@@ -782,6 +795,11 @@ class JobQueue(private val scope: CoroutineScope, val limit: Int = LIMIT, val ke
                 stage.detail = detail
                 if (state == Job.RUNNING) stage.runningDetail = detail
             }
+        }
+
+        override fun progress(name: String, done: Long?, total: Long?) = synchronized(lock) {
+            job.stages.firstOrNull { it.name == name }?.let { it.done = done; it.total = total }
+            Unit
         }
 
         /** A line of its output; one with line breaks in it is said a line at a time, as a command prints them. */

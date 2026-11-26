@@ -75,19 +75,21 @@ class JobViewsTest {
         val importing = "Importing · Ultimate Guitar · 600,000 of 1,521,145 tabs"
         val catalogues = phoneJob(queue, kind, "") { context ->
             context.stage("catalogues", "running", PhoneKinds.fill(kind.running, "doing" to importing))
+            context.progress("catalogues", 600_000, 1_521_145)
             gate.await()
         }
         runCurrent()
         val lookup = queue.submit(JobSpec("Get Muse - Hysteria", "muse/hysteria", "song", emptyList(),
                                           commands = JobCommands.lookupSteps("Muse", "Hysteria"), fetching = true)).first
         val add = queue.submit(JobSpec("Add b", "b", "add", emptyList()) {}).first
-        assertEquals(listOf("queued", "Queued · after the site catalogues ($importing)", null),
+        val importWait = "Queued · waits for the site catalogues to finish importing (39 %)"
+        assertEquals(listOf("queued", importWait, null),
                      line(JobViews.view(queue.job(lookup.id)!!, queue)))
-        assertEquals(listOf("queued", "Queued · 2 requests ahead, now the site catalogues ($importing)", null),
+        assertEquals(listOf("queued", "Queued · 2 requests ahead, now the site catalogues importing (39 %)", null),
                      line(JobViews.view(queue.job(add.id)!!, queue)))
         // Its line alone, given the jobs (the Requests tab's and /jobs.json's).
         val jobs = queue.snapshot()
-        assertEquals("Queued · after the site catalogues ($importing)",
+        assertEquals(importWait,
                      JobViews.line(queue.job(lookup.id)!!, 1, behind = JobViews.behind(queue.job(lookup.id)!!, jobs)).text)
         // A sync's: its running stage and its words; a job of commands ahead (Python's too) is counted as ever.
         assertEquals(null, JobViews.behind(queue.job(catalogues.id)!!, jobs), "a running job waits for none")
@@ -148,6 +150,35 @@ class JobViewsTest {
     /** Behind a kind whose line is the same while it runs (a backup, a file filed, a restore): that line once, its
      * first letter small; behind one that counts (the pages remade), its name and its count, or its name alone before
      * it has counted anything. No parentheses twice. */
+    /** The first start's Download queues the catalogues; the sync pressed while its import of 1.5 million rows runs
+     * waits behind it, and its line, which the Sync sheet's going view draws, says no count of tabs of the import's. */
+    @Test fun aSyncQueuedBehindTheCataloguesImportSaysItsShareNeverItsTabs() = runTest {
+        val queue = queue()
+        val kind = PhoneKinds.CATALOGUES
+        val gate = CompletableDeferred<Unit>()
+        val end = CompletableDeferred<Unit>()
+        val importing = "Importing · Ultimate Guitar · 1,200,000 of 1,521,145 tabs"
+        queue.submit(JobSpec(kind.title, kind.key + "first-start", kind.kind, listOf(kind.stage),
+                             display = kind.display) { context ->
+            context.stage(kind.stage.first, "running", PhoneKinds.fill(kind.running, "doing" to "Downloading · 52 of 52 MB"))
+            gate.await()
+            context.stage(kind.stage.first, "running", PhoneKinds.fill(kind.running, "doing" to importing))
+            context.progress(kind.stage.first, 1_200_000, 1_521_145)
+            end.await()
+        })
+        runCurrent()
+        val sync = queue.submit(JobSpec("Sync with Desk", "sync:http://192.168.1.20:8737", "sync", SyncEngine.STAGES,
+                                        display = "Sync with Desk") {}).first
+        val text = { JobViews.view(queue.job(sync.id)!!, queue)["line"]!!.jsonObject["text"]!!.jsonPrimitive.content }
+        assertEquals("Queued · waits for the site catalogues to finish importing", text(), "no total yet: no share")
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals("Queued · waits for the site catalogues to finish importing (79 %)", text())
+        end.complete(Unit)
+        runCurrent()
+        assertTrue("tabs" !in text() && "1,200,000" !in text())
+    }
+
     @Test fun aRequestQueuedBehindAPhonesOwnJobSaysItsKindsOwnLineOnce() = runTest {
         val queue = queue()
         fun behind(spec: JobSpec, said: String?): String {
@@ -322,6 +353,35 @@ class JobViewsTest {
         runCurrent()
         assertEquals(Json.parseToJsonElement("""{"taken":[],"given":[],"left":[],"agreed":null,"indexed":[]}"""),
                      JobViews.view(queue.job(next.id)!!, queue)["outcome"])
+    }
+
+    @Test fun aSyncWhosePagesOrIndexesFailedAfterItsChangesSaysWhatItSharedFirst() = runTest {
+        // The phone's own sync goes on past a failed mirror or index stage, its job done, its line a wait in the
+        // stage's words: its outcome says what it took and gave, then the failure, never "Not taken".
+        val queue = queue()
+        fun over(stage: String, outcome: String): Job {
+            val job = queue.submit(JobSpec("Sync with Laptop", "sync:http://laptop:8737/$stage$outcome", "sync", sync,
+                                           display = "Sync with Laptop") { context ->
+                for ((name, _) in sync) {
+                    if (name == stage) context.stage(name, "failed", "No answer from http://laptop:8737: timed out")
+                    else context.stage(name, "done")
+                }
+                context.outcome(Json.parseToJsonElement(outcome).jsonObject)
+            }).first
+            runCurrent()
+            return queue.job(job.id)!!
+        }
+        val took = """{"taken":["song/a/b"],"given":["song/c/d"],"left":[["song/e/f","changed since compared"]],
+            "agreed":12,"indexed":[]}"""
+        for (stage in listOf("mirror", "index")) {
+            val done = over(stage, took)
+            assertEquals(Outcome("waiting", "Shared", "1 change taken, 1 change given. 1 change left as it was. " +
+                                 "No answer from http://laptop:8737: timed out.", Outcomes.COMPARE_AGAIN),
+                         Outcomes.outcome(done, JobViews.line(done), null, null), stage)
+        }
+        val nothing = over("mirror", """{"taken":[],"given":[],"left":[],"agreed":12,"indexed":[]}""")
+        assertEquals(Outcome("waiting", "Not taken", "No answer from http://laptop:8737: timed out.",
+                             Outcomes.COMPARE_AGAIN), Outcomes.outcome(nothing, JobViews.line(nothing), null, null))
     }
 
     @Test fun aSongsViewAndARemovalsNameTheSongByItsIdentityItsCardOnceOver() = runTest {

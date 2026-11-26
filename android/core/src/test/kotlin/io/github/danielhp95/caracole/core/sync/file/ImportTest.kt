@@ -15,6 +15,7 @@ import io.github.danielhp95.caracole.core.sync.SyncFailed
 import io.github.danielhp95.caracole.core.sync.SyncOutcome
 import io.github.danielhp95.caracole.core.sync.Units
 import io.github.danielhp95.caracole.core.index.IndexTransfer
+import io.github.danielhp95.caracole.core.index.MergeProgress
 import io.github.danielhp95.caracole.core.testing.Fixtures
 import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.TestDb
@@ -57,10 +58,12 @@ class ImportTest {
         val library = File(dir, "library").apply { mkdirs() }
         val store = LibraryStore(library)
         val pagesHanded = CopyOnWriteArrayList<Pair<SyncFile, List<String>>>()
+        @Volatile var pagesFail: Exception? = null  // what the pages hook throws, as it ends
         val engine = SyncEngine(database, store, File(dir, "state"), client = { PeerClient(ServerAddress.parse(it)) },
                                 mirrorRefresh = null, pagesFromFile = { f, taken, say ->
                                     pagesHanded.add(f to taken)
                                     say("1 of 2 pages kept")
+                                    pagesFail?.let { throw it }
                                 })
             .also { it.zone = ZoneOffset.UTC }
 
@@ -207,6 +210,77 @@ class ImportTest {
         assertEquals(emptyMap(), other.database.read { Compare.keptOf(it, there.id) })
     }
 
+    /** Here took Wonderwall from Desk's first file, then changed it; Desk removed it since: its next file, at MADE. */
+    private fun aFileThatRemovedASongChangedHere(there: Caracole, here: Caracole): Pair<String, File> {
+        val song = there.add("Oasis", "Wonderwall")
+        here.apply(here.engine.compareFile(there.export(made = "2026-11-02T08:00:00Z")))
+        here.database.writeBlocking { it.execute("UPDATE songs SET album = 'Morning Glory' WHERE key = ?", song.key) }
+        there.database.writeBlocking { there.store.remove(it, song.key, "2026-11-02T12:00:00Z") }
+        stages.clear()
+        return song.key to there.export()
+    }
+
+    @Test fun aSongKeptHereAgainstTheFilesRemovalAnswersItsRemovalTooAndTheFileIsThenNoNewer() {
+        val there = Caracole()
+        val here = Caracole()
+        val (key, file) = aFileThatRemovedASongChangedHere(there, here)
+        val (song, removal) = "song/$key" to "removed/$key"
+        val c = here.engine.compareFile(file)
+        assertEquals(listOf(song to Compare.CONFLICT, removal to Compare.THEIRS), c.differences.map { it.id to it.proposal })
+        val outcome = here.apply(c, mapOf(song to Side.HERE))
+        assertEquals(emptyList(), outcome.taken)
+        assertEquals(emptyList(), outcome.left)
+        val theirs = there.state().getValue(removal).digest
+        assertEquals(mapOf(song to KeptEntry(here.state().getValue(song).digest, null, MADE),
+                           removal to KeptEntry(null, theirs, MADE)),
+                     here.database.read { Compare.keptOf(it, there.id) })
+        assertTrue(song in here.state(), "the song kept here")
+        assertEquals(FileError.older("Desk", "03/11/26"), assertFailsWith<FileError> { here.engine.compareFile(file) }.message)
+    }
+
+    @Test fun aSongTakenAsTheFileRemovedItTakesItsRemovalToo() {
+        val there = Caracole()
+        val here = Caracole()
+        val (key, file) = aFileThatRemovedASongChangedHere(there, here)
+        val outcome = here.apply(here.engine.compareFile(file), mapOf("song/$key" to Side.THERE))
+        assertEquals(setOf("song/$key", "removed/$key"), outcome.taken.toSet())
+        assertEquals(emptyList(), outcome.left)
+        assertTrue("song/$key" !in here.state() && "removed/$key" in here.state(), "${here.state().keys}")
+    }
+
+    @Test fun aRemovalBesideItsSongsConflictLeftUnattendedIsLeftSayingSo() {
+        val there = Caracole()
+        val here = Caracole()
+        val (key, file) = aFileThatRemovedASongChangedHere(there, here)
+        val outcome = here.apply(here.engine.compareFile(file), conflicts = Conflicts.LEAVE)
+        assertEquals(setOf("song/$key" to SyncEngine.UNSETTLED, "removed/$key" to io.github.danielhp95.caracole.core.sync.Take.SONG_HERE),
+                     outcome.left.toSet())
+        assertEquals(emptyList(), outcome.taken)
+        val kept = here.database.read { Compare.keptOf(it, there.id) }
+        assertTrue("removed/$key" !in kept, "nothing kept for the removal: $kept")
+    }
+
+    @Test fun anImportCancelledInItsMirrorStageKeepsWhatItTookAgreedAndTheFileStillOffersTheRest() {
+        val there = Caracole()
+        val hysteria = "song/${there.add("Muse", "Hysteria").key}"  // in the file alone: taken
+        val wonderwall = "song/${there.add("Oasis", "Wonderwall", "(What's the Story) Morning Glory?").key}"
+        val here = Caracole()
+        here.add("Oasis", "Wonderwall", "Morning Glory")  // otherwise here: kept here as chosen
+        val file = there.export()
+        here.pagesFail = kotlinx.coroutines.CancellationException("the sync's job is cancelled")
+        assertFailsWith<kotlinx.coroutines.CancellationException> {
+            here.apply(here.engine.compareFile(file), mapOf(wonderwall to Side.HERE))
+        }
+        assertNull(ended()["agree"], "stopped before its agree stage")
+        // What it took is agreed at the file's made; the answer "keep mine", remembered at the agree, went with it.
+        assertEquals(mapOf(hysteria to (there.state().getValue(hysteria).digest to MADE)),
+                     here.database.read { Compare.baseOf(it, there.id) })
+        assertEquals(emptyMap(), here.database.read { Compare.keptOf(it, there.id) })
+        here.pagesFail = null
+        val again = here.engine.compareFile(file)  // never no newer: its Wonderwall is a conflict again
+        assertEquals(listOf(wonderwall to Compare.CONFLICT), again.differences.map { it.id to it.proposal })
+    }
+
     @Test fun anIndexFileMergesItsIndexesAndRecordsNoAgreement() {
         val here = Caracole()
         val file = File(tmp.newFolder(), "upload.part").also { it.delete() }
@@ -238,6 +312,29 @@ class ImportTest {
         var at = 0
         for (line in said) if (at < steps.size && line == steps[at]) at++
         assertEquals(steps.size, at, said.joinToString("\n"))
+        assertEquals("done", ended()["index"])
+    }
+
+    @Test fun anImportOverASiteThePhoneHoldsSaysWhatIsNewerInTheFileNeverImporting() {
+        // A phone that holds UG's index (the catalogues) imports a computer's file with its indexes: the file's
+        // sitemaps update it, said so; LaCuerda, which the phone holds none of, is imported.
+        val there = Caracole()
+        val full = File(tmp.newFolder(), "export.sqlite").also { Fixtures.loadRaw(it, "index/fixtures/full-export.jsonl") }
+        there.database.writeBlocking { db -> IndexTransfer.merge(db, full, "2026-11-01T10:00:00Z") }
+        val here = Caracole()
+        here.database.writeBlocking { db ->
+            db.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) " +
+                           "VALUES (999999, 'blur', 'song-2', 'chords', 'old', '2026-10-01T00:00:00Z', " +
+                           "'blur/song-2-chords-999999')")
+        }
+        here.engine.ticks = { 0L }
+        here.apply(here.engine.compareFile(there.export(listOf(Scope.LIBRARY, Scope.INDEXES))))
+        val said = stages.filter { it.first == "index" && it.second == "running" }.map { it.third }
+        assertTrue(said.none { it.startsWith("${MergeProgress.IMPORTING} · Ultimate Guitar") }, said.joinToString("\n"))
+        val ug = said.filter { it.startsWith("Ultimate Guitar · ") }
+        assertTrue(ug.any { it.endsWith(" newer in the file") }, said.joinToString("\n"))
+        assertTrue(ug.any { " newer in the file · " in it && it.endsWith(" tabs checked") }, said.joinToString("\n"))
+        assertTrue("${MergeProgress.IMPORTING} · LaCuerda" in said, said.joinToString("\n"))
         assertEquals("done", ended()["index"])
     }
 

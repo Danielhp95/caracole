@@ -16,6 +16,7 @@ import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.db.isSqliteError
 import io.github.danielhp95.caracole.core.index.IndexTransfer
 import io.github.danielhp95.caracole.core.index.MergeProgress
+import io.github.danielhp95.caracole.core.index.MergedIndexes
 import io.github.danielhp95.caracole.core.index.Paced
 import io.github.danielhp95.caracole.core.index.Sizes
 import io.github.danielhp95.caracole.core.index.Stamps
@@ -61,10 +62,12 @@ import java.time.Instant
  *    clock and a day, as a sync's merge: no record dated later is newer than the phone's), saying each step of it
  *    (MergeProgress.words: "Comparing with the phone's index…", "Importing · Ultimate Guitar · 600,000 of 1,521,145
  *    tabs", "Importing · harptabs.com", "Making the search index ready…"), kv [Catalogues.IMPORTED] its name once the
- *    merge took it, and "Catalogues of DATE", with a sentence for the sites the file holds that this version doesn't
- *    know (caracole_export's `sites` as the merge read them, Merged.listed, against [IndexTransfer.SITES],
- *    [unknown]); once the merge has begun, whatever came of it, the WAL checkpointed ("Tidying the database…") and
- *    the search's answers forgotten ([forget]). No lookup runs inside the merge's write.
+ *    merge took it and what the file read of each site recorded in that write (MergedIndexes: the next sync with the
+ *    computer asks it only for a site newer than the catalogues), and "Catalogues of DATE", with a sentence for the
+ *    sites the file holds that this version doesn't know (caracole_export's `sites` as the merge read them,
+ *    Merged.listed, against [IndexTransfer.SITES], [unknown]); once the merge has begun, whatever came of it, the WAL
+ *    checkpointed ("Tidying the database…") and the search's answers forgotten ([forget]). No lookup runs inside the
+ *    merge's write.
  *
  * Its words while it runs come at most once a second of [ticks] within a step, each step's first and last at once
  * (Paced: the last before each yield and the end). [chunk] is IndexTransfer.merge's (a test's fewer rows a chunk).
@@ -170,7 +173,13 @@ class CataloguesRunner(
         val unknown = try {
             parts.database.write { db ->
                 val merged = IndexTransfer.merge(db, fetched.file, Stamps.of(clock()), notAfter = notAfter(),
-                                                 chunk = chunk, progress = { doing(it.words(), it.step) })
+                                                 chunk = chunk, progress = {
+                                                     val tabs = it.action == MergeProgress.TAB  // a share of UG's rows
+                                                     context.progress(STAGE, if (tabs) it.done else null,
+                                                                      if (tabs) it.total else null)
+                                                     doing(it.words(), it.step)
+                                                 })
+                MergedIndexes.record(db, merged)  // what the file read: a sync asks the computer only for newer
                 db.kvSet(Catalogues.IMPORTED, take.file.name)
                 db.kvDelete(ASKING)
                 // As the merge read the file's META, its guard on: the file is never attached again after it.

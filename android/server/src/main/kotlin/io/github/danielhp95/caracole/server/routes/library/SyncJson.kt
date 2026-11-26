@@ -27,7 +27,9 @@ internal object SyncJson {
      * never); the parts the other side holds; each difference with its kind, its proposal, why, each side's digest,
      * a song's names (Scope.namesOf; null for another kind), what each side did since the two last agreed
      * (Scope.changeOf), its part (Scope.partOf) and the songbooks that list it; each songbook difference's two
-     * documents; and each site whose newest read differs.
+     * documents; the indexes (IndexWaiting: with the computer, each its Sync takes and gives; with a file, each
+     * site whose newest read differs); and why its Sync takes and gives none (`indexes_skipped`: a computer of
+     * another schema, in the phone's words; null else).
      */
     fun comparison(c: Comparison): JsonObject = JsonObject(linkedMapOf(
         "comparison" to JsonPrimitive(c.id),
@@ -62,15 +64,19 @@ internal object SyncJson {
                 "there" to text(w.there), "newer" to JsonPrimitive(w.newer),
             ))
         }),
+        "indexes_skipped" to text(c.indexesSkipped),
     ))
 
-    /** A sync job's outcome: the units taken here, given there, left (with why), how many the two agree on, the
+    /** A sync job's outcome: the units taken here, given there, left (with why: [SyncOutcome.changesLeft], a removal
+     * whose song is here none), how many the two agree on, the
      * indexes merged, and the sync's report (the sync redesign's §3.5) when there is one, as jobs_routes.peer_outcome
      * adds it. */
     fun outcome(o: SyncOutcome): JsonObject = JsonObject(linkedMapOf<String, JsonElement>(
         "taken" to texts(o.taken),
         "given" to texts(o.given),
-        "left" to JsonArray(o.left.map { (id, why) -> JsonArray(listOf(JsonPrimitive(id), JsonPrimitive(why))) }),
+        "left" to JsonArray(o.changesLeft.map { (id, why) ->
+            JsonArray(listOf(JsonPrimitive(id), JsonPrimitive(why)))
+        }),
         "agreed" to JsonPrimitive(o.agreed),
         "indexed" to texts(o.indexed),
     ).apply { o.report?.let { put("report", it) } })

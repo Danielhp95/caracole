@@ -28,7 +28,7 @@ It also gets a data folder, `/var/lib/caracole` unless you choose another. Don't
 |---|---|
 | `library` | sheets, lyrics, guitar parts, `_todo.md`, `index.html`, `wanted.txt`, `overrides.toml`, `songbooks.toml`, `_inbox/`: synced to your devices |
 | `music` | audio you bought, read-only, for auto-chords |
-| `state` | the database, its last three copies (`backups/`, made at the end of each nightly run) and caracole's lock, `caracole`'s alone: back it up, never sync it |
+| `state` | the database, its last three copies (`backups/`, made at the end of each nightly run), the audio files you give caracole (`audio/`) and caracole's lock, `caracole`'s alone: back it up, never sync it |
 | `cache` | every raw HTTP response, kept forever: losing it costs only requests |
 
 caracole keeps no credentials. ntfy is only a topic URL, readable by anyone who knows it and by
@@ -183,7 +183,8 @@ ffmpeg and deno. It uses the two model files `nix/autochords.nix` fetches, check
 JKU's server is sometimes down: see [When something is wrong](#when-something-is-wrong). Then:
 
 - `caracole-autochords.service` runs after each successful run, with no network, on the CPU, a few
-  minutes a song.
+  minutes a song. Before the chords it hears the words of up to three songs no lyrics site has
+  (`[autochords] transcribe_per_run`), about 7 times a song's length each on the CPU.
 - The nightly run takes the audio of up to three songs a night with no human sheet from YouTube.
   This goes against YouTube's robots.txt and terms, on the terms
   [usage.md](usage.md#audio-from-youtube) gives.
@@ -200,7 +201,10 @@ transcription can run on it:
 
 This uses the flake's `autochords-cuda` build (about 6.7 GiB, unfree CUDA libraries). Whisper runs
 on CUDA and demucs-rs on Vulkan. Only caracole-web and `caracole-admin` get the GPU devices; the
-nightly units don't, and the chord models stay on the CPU. It needs `autochords.enable`, or it does
+nightly units don't, and the chord models stay on the CPU. So with this build the nightly
+auto-chords unit hears no words (its separator needs the GPU it doesn't see), and the to-do page
+says so. The words come from the library page's jobs instead: a sheet from a video, or Transcribe
+the lyrics on a song's card. It needs `autochords.enable`, or it does
 nothing and the build warns. If you import nix/module.nix without the flake, set
 `autochords.package` to a CUDA build yourself.
 

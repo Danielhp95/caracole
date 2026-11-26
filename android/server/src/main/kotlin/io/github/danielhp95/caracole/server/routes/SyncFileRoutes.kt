@@ -308,7 +308,8 @@ class SyncFileRoutes(
     /**
      * sync_file_routes._compare_staged: [read] of the file staged as [id], once whole, held meanwhile (never waiting
      * for another hold: 409); a file refused (a [FileError]) is deleted and refused in its words (409 for this
-     * library's own export or one no newer than the last sync with its caracole, 400 else); one gone, 404 ([GONE_FILE]).
+     * library's own export, one no newer than the last sync with its caracole or one whose songs are keyed by other
+     * rules, 400 else); one gone, 404 ([GONE_FILE]).
      */
     private fun <T> staged(id: String, read: (File) -> T): T = try {
         imports.held(id, wait = false) {
@@ -318,7 +319,8 @@ class SyncFileRoutes(
             } catch (e: FileError) {
                 imports.remove(id)
                 val said = e.message ?: ""
-                throw Refused(if (said == FileError.OWN_EXPORT || said.startsWith(OLDER)) 409 else 400, NOT_TAKEN, said)
+                val taking = said == FileError.OWN_EXPORT || said == FileError.OTHER_KEYS || said.startsWith(OLDER)
+                throw Refused(if (taking) 409 else 400, NOT_TAKEN, said)
             } catch (e: PeerError) {
                 imports.remove(id)
                 throw Refused(400, NOT_TAKEN, e.message ?: "")
@@ -377,12 +379,14 @@ class SyncFileRoutes(
                     throw SyncFailed(e.message ?: "", null, e)
                 }
                 try {
-                    context.outcome(SyncJson.outcome(engine.apply(c, choices, prefer, parts, Conflicts.ASK, stage)))
+                    val outcome = engine.apply(c, choices, prefer, parts, Conflicts.ASK, stage)
+                    context.outcome(SyncJson.outcome(outcome))
+                    SyncRoutes.sayLeft(context, outcome)
                 } finally {
                     imports.release(id)
                 }
             } catch (e: SyncFailed) {
-                e.outcome?.let { context.outcome(SyncJson.outcome(it)) }
+                e.outcome?.let { context.outcome(SyncJson.outcome(it)); SyncRoutes.sayLeft(context, it) }
                 for ((name, _) in SyncEngine.FILE_STAGES) if (name !in told) context.stage(name, "skipped")
                 throw e
             } finally {

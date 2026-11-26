@@ -4,6 +4,7 @@ import io.github.danielhp95.caracole.core.keys.SafeName
 import io.github.danielhp95.caracole.core.py.PyRegex
 import io.github.danielhp95.caracole.core.py.PyText
 import io.github.danielhp95.caracole.core.py.PyUrl
+import io.github.danielhp95.caracole.core.sync.Take
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -69,6 +70,7 @@ internal class Shape(val job: Job) {
     val looksUp: Boolean get() = steps.any { JobCommands.looksUp(it.args) }
     val fromYoutube: Boolean get() = steps.any { JobCommands.sheetsFromYoutube(it.args) }
     val transcribes: Boolean get() = steps.any { JobCommands.transcribes(it.args) }
+    val fromAudio: Boolean get() = steps.any { JobCommands.sheetsFromAudio(it.args) }
 
     private companion object {
         fun stepState(state: String): String = when (state) {
@@ -242,7 +244,8 @@ object Status {
             return Line("ready", DONE.getValue(book.action), opens?.let { "Open songbook" to it })
         }
         if (JobCommands.INDEX_READS.any(key::startsWith)) return artistRead(job.steps, details)
-        if (key.startsWith(JobCommands.YOUTUBE_SHEET) || key.startsWith(JobCommands.TRANSCRIBE)) {
+        if (key.startsWith(JobCommands.YOUTUBE_SHEET) || key.startsWith(JobCommands.TRANSCRIBE) ||
+            key.startsWith(JobCommands.AUDIO_SHEET)) {
             val made = job.stages.any { it.name == "chords" && it.state == Job.DONE }
             if (made && song?.sheet != null) return Line("ready", READY, "Open" to song.sheet)
             return Line("waiting", "Not made yet", details = details)
@@ -292,10 +295,18 @@ object Status {
         return Line(tone, short(text), details = if (tone == "added") null else details)
     }
 
+    /** The units a sync, a take or a pull left as they were, each with why (status.py's changes_left): but a removal
+     * left because its song is here ([Take.isChangeLeft]), the sync's answer, the song kept, and no change left. Its
+     * line, its outcome and its view (JobViews' peerOutcome) count these. Over a job's units as its commands said
+     * them (status.py's port, held by job_views*.jsonl), every reason among them; the phone's own sync's outcome is
+     * SyncOutcome.changesLeft already. */
+    fun changesLeft(units: List<JobUnit>): List<JobUnit> =
+        units.filter { it.outcome == "left" && Take.isChangeLeft(it.why) }
+
     /** A sync, a take or a pull that is done (status.py's _peer_done). */
     private fun peerDone(job: Shape, kind: String, details: String): Line {
         stageFailure(job.stages)?.let { return Line("waiting", it, details = details) }
-        val left = job.units.count { it.outcome == "left" }
+        val left = changesLeft(job.units).size
         if (left > 0) {
             return Line("waiting", "${PEER_DONE.getValue(kind)} · ${plural(left, "change")} left as " +
                                    (if (left == 1) "it was" else "they were"), details = details)

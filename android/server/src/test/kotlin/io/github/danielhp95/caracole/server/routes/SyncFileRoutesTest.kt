@@ -61,9 +61,9 @@ class SyncFileRoutesTest {
 
     @After fun stop() = scope.cancel()
 
-    /** A phone over the sync corpus's [fixture] (its id `0f1e2d3c4b5a6978`), its routes and its queue running, a
-     * mirror its import keeps a file's pages in. */
-    private inner class Phone(fixture: String = "plain") : AutoCloseable {
+    /** A phone over the sync corpus's [fixture] (its id [syncId], `0f1e2d3c4b5a6978` unless given), its routes and its
+     * queue running, a mirror its import keeps a file's pages in. */
+    private inner class Phone(fixture: String = "plain", syncId: String = "0f1e2d3c4b5a6978") : AutoCloseable {
         val dir: File = tmp.newFolder()
         val state = File(dir, "state")
         val mirror = Mirror(File(dir, "mirror"))
@@ -90,7 +90,7 @@ class SyncFileRoutesTest {
         init {
             app.database.writeBlocking { db ->
                 Fixtures.load(db, "sync/fixtures/$fixture.jsonl", app.libraryDir)
-                db.kvSet("sync:id", "0f1e2d3c4b5a6978")
+                db.kvSet("sync:id", syncId)
             }
         }
 
@@ -182,8 +182,11 @@ class SyncFileRoutesTest {
         }
     }
 
+    // A phone the file knows nothing of (the file corpus's FRESH): as 0f1e2d3c4b5a6978 it would read the file's kept
+    // answer for Karma Police, which plain lacks, and so a conflict to choose.
     @Test
-    fun `a file's import takes what it gives, keeps its pages as a layer, and leaves no staging behind`() = Phone().use { phone ->
+    fun `a file's import takes what it gives, keeps its pages as a layer, and leaves no staging behind`() =
+        Phone(syncId = "2233445566778899").use { phone ->
         val id = phone.send(full())
         val compared = phone.app.postScript("/sync/import/compare", listOf("import" to id))
         assertEquals(200, compared.status)
@@ -204,6 +207,7 @@ class SyncFileRoutesTest {
         assertNotNull(kept, said)
         assertTrue(kept.groupValues[1].toInt() <= kept.groupValues[2].toInt() && kept.groupValues[2].toInt() > 0, said)
         assertEquals(emptyList(), phone.staged(), "its staging deleted once the job is over")
+        assertEquals(emptyList(), job.said, "nothing left, nothing said")
 
         val layer = phone.mirror.layers().single()
         assertEquals("a1b2c3d4e5f60718", layer.id, "the layer of the file's caracole")
@@ -215,5 +219,27 @@ class SyncFileRoutesTest {
         assertEquals(200, served.status)
         assertEquals(LayerPolicy.NOTHING, served.header("Content-Security-Policy"))
         assertTrue(phone.app.database.read { db -> db.one("SELECT COUNT(*) FROM songs WHERE key = 'radiohead/creep'") { it.long(0) } } == 1L)
+    }
+
+    @Test
+    fun `a file's import says each unit it left by its name, as a sync does, in its Output's step of what it said`() =
+        Phone(syncId = "2233445566778899").use { phone ->
+        val id = phone.send(full())
+        val answer = phone.app.postScript("/sync/import/compare", listOf("import" to id)).json.jsonObject
+        val skipped = answer.getValue("differences").jsonArray.first().jsonObject
+        val unit = skipped.getValue("id").jsonPrimitive.content
+        val label = skipped.getValue("label").jsonPrimitive.content
+        val queued = phone.app.postScript("/sync/apply", listOf(
+            "comparison" to answer.getValue("comparison").jsonPrimitive.content, "prefer" to "",
+            "choices" to "skip\t$unit"))
+        assertEquals(200, queued.status, queued.json.toString())
+        val jobId = queued.json.jsonObject.getValue("job").jsonObject.getValue("id").jsonPrimitive.int
+        val job = runBlocking { withTimeout(60_000) { phone.queue.await(jobId) } }
+        val said = "Left as it was: $label: ${SyncEngine.SKIPPED}"
+        assertEquals(listOf(said), job.said, job.output.joinToString("\n"))
+        assertEquals(said, SyncRoutes.leftLine(label, SyncEngine.SKIPPED), "the sync's own words")
+        val shown = io.github.danielhp95.caracole.server.jobs.Feed.feed(listOf(job), emptyMap(), opened = setOf(job.id))
+            .toString()
+        assertTrue(io.github.danielhp95.caracole.server.jobs.Feed.SAID in shown && said in shown, shown)
     }
 }

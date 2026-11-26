@@ -8,6 +8,7 @@ import io.github.danielhp95.caracole.core.catalogues.FakeGitHub
 import io.github.danielhp95.caracole.core.catalogues.Limited
 import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.db.Database
+import io.github.danielhp95.caracole.core.index.MergedIndexes
 import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.testing.Fixtures
@@ -247,8 +248,21 @@ class CataloguesRunnerTest {
                                               "this caracole's database is at $schema"), detail(job))
         assertTrue(phone.parts.stateDir.path !in detail(job), "no path of the phone's in its words")
         assertNull(phone.kv(Catalogues.IMPORTED))
+        assertNull(phone.kv(MergedIndexes.KEY), "no read recorded of a file it didn't take")
         assertEquals(0L, phone.tabs())
         assertEquals(emptyList(), phone.cache.listFiles().orEmpty().toList())
+    }
+
+    /** What the catalogues' file read of each site, recorded as it is merged (MergedIndexes), so that a sync with the
+     * computer that published them asks it for a site only once its index is newer than them: the file's newest
+     * reads (its sitemaps of 28 Oct), never the phone's own, which its lookups move. */
+    @Test fun theImportRecordsWhatItsFileReadForTheNextSync() {
+        val phone = phone()
+        phone.parts.database.writeBlocking { it.kvSet("gtptabs:index:complete_at", "2026-11-20T09:00:00Z") }
+        publish(newest to export())
+        assertEquals(Job.DONE, run(phone).state)
+        assertEquals("""{"gtptabs": "2026-10-28T03:30:00Z", "musescore": "2026-10-28T03:30:00Z"}""",
+                     phone.kv(MergedIndexes.KEY))
     }
 
     @Test fun aSiteItDoesntKnowIsImportedAndSaid() {

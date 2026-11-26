@@ -7,6 +7,7 @@ import io.github.danielhp95.caracole.core.health.Alerts
 import io.github.danielhp95.caracole.core.http.Transport
 import io.github.danielhp95.caracole.core.index.IndexTransfer
 import io.github.danielhp95.caracole.core.index.MergeProgress
+import io.github.danielhp95.caracole.core.index.MergedIndexes
 import io.github.danielhp95.caracole.core.index.Paced
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.Overrides
@@ -369,8 +370,9 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
     }
 
     /** The computer's index in [file] merged, as a job of kind "index" (key "index"), so it never writes beside a
-     * sync; the file is deleted after, and the WAL the merge grew given back (Database.checkpoint). The device tests'
-     * and the e2e's way to give the phone an index (the app queues none). */
+     * sync, and what it read recorded (MergedIndexes: the next sync asks the computer for none of it again); the file
+     * is deleted after, and the WAL the merge grew given back (Database.checkpoint). The device tests' and the e2e's
+     * way to give the phone an index (the app queues none). */
     fun importIndex(file: File): Job = queue.submit(importSpec(file)).first
 
     /** [importIndex]'s job: its stage says each step of the merge as a sync's index stage says them (Paced, each
@@ -386,6 +388,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
                 try {
                     val merged = deps.database.write { db ->
                         IndexTransfer.merge(db, file, now(), progress = { paced.say(it.words(), it.step) })
+                            .also { MergedIndexes.record(db, it) }
                     }
                     paced.say(MergeProgress.TIDYING)
                     deps.database.checkpoint()

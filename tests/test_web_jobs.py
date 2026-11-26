@@ -740,6 +740,38 @@ def test_a_sheet_from_youtube_never_joins_the_songs_lookup_nor_a_lookup_it():
     assert not new and after.id == lookup.id
 
 
+# --- a sheet from an audio file you gave ------------------------------------------------------------------------
+
+
+def test_a_sheet_from_an_audio_file_is_one_caracole_audio_of_the_queue_never_joining_a_lookup():
+    from caracole.audio_sheet import STAGES
+    from caracole.web.jobs import AUDIO_SHEET, _reports, audio_sheet_steps, song_key_of, song_of_job
+
+    steps = audio_sheet_steps("Nick Cani - Vikingos veganos", "0123456789abcdef")
+    assert steps == [("Making the sheet", ("audio", "--progress", "--upload=0123456789abcdef",
+                                           "--song=Nick Cani - Vikingos veganos"))]
+    assert _reports(steps[0][1]) and not lane_of(steps)
+    progress = ['caracole-progress: {"song":{"id":7,"display":"Nick Cani - Vikingos veganos"}}',
+                'caracole-progress: {"stage":"audio","state":"running","detail":""}',
+                "kept"]
+    queue = JobQueue(FakeRunner(lines={"audio": progress}), lane=LANE)
+    lookup, _ = queue.submit("Fetch Nick Cani - Vikingos veganos", "nick cani/vikingos veganos",
+                             lookup_steps("Nick Cani", "Vikingos veganos"), fetching=True)
+    job, new = queue.submit("Sheet from an audio file", AUDIO_SHEET + "nick cani/vikingos veganos", steps,
+                            display="Nick Cani - Vikingos veganos")
+    assert new and job.id != lookup.id and not job.lane
+    assert [s.name for s in job.stages] == [name for name, _ in STAGES]
+    assert song_key_of(job.song_key) == song_of_job(job.song_key) == "nick cani/vikingos veganos"
+    again, new = queue.submit("Sheet from an audio file", AUDIO_SHEET + "nick cani/vikingos veganos",
+                              audio_sheet_steps("Nick Cani - Vikingos veganos", "fedcba9876543210"))
+    assert not new and again.id == job.id  # one at a time a song: the one waiting is the answer
+    queue.run_pending()
+    done = queue.job(job.id)
+    assert done.state == "done" and done.song_id == 7 and done.from_audio
+    assert not done.looks_up and not done.from_youtube and not done.transcribes
+    assert done.steps[0].output == ["kept"]  # its progress is data, not output
+
+
 # --- a song's lyrics transcribed from its audio -----------------------------------------------------------------
 
 

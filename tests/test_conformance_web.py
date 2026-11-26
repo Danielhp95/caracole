@@ -48,6 +48,7 @@ import pytest
 from caracole import download_names, inline, page_icon
 from caracole.get import GTPTABS_KEPT, MATCH_NOT_FOUND, SHEET_FROM
 from caracole.library_name import SCRATCH_LINK, LibraryName
+from caracole.youtube_sheet import HOLDS as _YOUTUBE_HOLDS
 from caracole.web import app as app_module
 from caracole.web import files, pages, security
 from caracole.web.app import Request, Response, Route, WebApp, html_response, json_response
@@ -904,6 +905,26 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
     add("a sheet from YouTube, not made", in_state(youtube, "done", {
         "song": ("done", ""), "audio": ("skipped", "waiting out YouTube until 2026-11-04 11:30 UTC")}),
         facts=_status.SongFacts())
+    sheet_stages = {"song": ("done", ""), "audio": ("done", "downloaded"), "lyrics": ("done", "LRCLIB has none")}
+    add("a sheet from YouTube, its words running", in_state(youtube, "running", sheet_stages | {
+        "vocals": ("running", "2 of ~12 min")}), facts=ready)
+    add("a sheet from YouTube, its words heard", in_state(youtube, "done", sheet_stages | {
+        "vocals": ("done", "sung from 9.3 s"), "words": ("done", "212 words in 31 lines (en)"),
+        "chords": ("done", "chords over the transcribed lyrics"), "pdf": ("done", ""), "pages": ("done", "")}),
+        facts=ready)
+    add("a sheet from YouTube, its words skipped", in_state(youtube, "done", sheet_stages | {
+        "vocals": ("skipped", "not transcribed here: demucs-rs is missing"), "words": ("skipped", "no vocals"),
+        "chords": ("done", _YOUTUBE_HOLDS["none"]), "pdf": ("done", ""), "pages": ("done", "")}), facts=ready)
+    add("a sheet from YouTube, its words failed", in_state(youtube, "done", sheet_stages | {
+        "vocals": ("done", "sung from 9.3 s"), "words": ("failed", "Whisper can't read the audio"),
+        "chords": ("done", _YOUTUBE_HOLDS["none"]), "pdf": ("done", ""), "pages": ("done", "")}), facts=ready)
+    add("a sheet from YouTube, its vocals failed", in_state(youtube, "done", sheet_stages | {
+        "vocals": ("failed", "the separator can't run here (no GPU adapter)"), "words": ("skipped", "no vocals"),
+        "chords": ("done", _YOUTUBE_HOLDS["none"]), "pdf": ("done", ""), "pages": ("done", "")}), facts=ready)
+    add("a sheet from YouTube, nothing sung", in_state(youtube, "done", sheet_stages | {
+        "vocals": ("done", "sung 6.2 s"), "words": ("done", "nothing sung was heard (6.2 s sung)"),
+        "chords": ("done", _YOUTUBE_HOLDS["silent"]), "pdf": ("done", ""), "pages": ("done", "")}),
+        facts=ready)
     # A song's lyrics transcribed from its audio (caracole transcribe: transcribe_job.STAGES).
     transcription = queued_job(f"Lyrics from the audio: {V_DISPLAY}", _jobs.TRANSCRIBE + V_KEY,
                                _jobs.transcribe_steps(V_DISPLAY), display=V_DISPLAY)
@@ -951,6 +972,38 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
         facts=ready)
     add("a transcription, not made", in_state(transcription, "done", heard | {
         "chords": ("skipped", "no transcript")}), facts=ready)
+    unsung = queued_job(f"Not sung, chords only: {V_DISPLAY}", _jobs.TRANSCRIBE + V_KEY,
+                        _jobs.transcribe_steps(V_DISPLAY, none=True), display=V_DISPLAY)
+    add("a transcription the owner said isn't sung, ready", in_state(unsung, "done", {
+        "song": ("done", "in the book"), "vocals": ("skipped", "you said nothing is sung"),
+        "words": ("done", "transcript dropped"), "chords": ("done", _YOUTUBE_HOLDS["said"]), "pdf": ("done", "made"),
+        "pages": ("done", "_todo.md and index.html rewritten")}), facts=ready)
+    # A sheet from an audio file you gave (caracole audio: audio_sheet.STAGES), its Audio step naming no site.
+    from_file = queued_job(f"Sheet from an audio file: {V_DISPLAY}", _jobs.AUDIO_SHEET + V_KEY,
+                           _jobs.audio_sheet_steps(V_DISPLAY, "0123456789abcdef"), display=V_DISPLAY)
+    kept = {"song": ("done", "in the book"), "audio": ("done", "kept as its audio: MP3, 3:18")}
+    add("a sheet from an audio file, its audio", in_state(from_file, "running", {
+        "song": ("done", "in the book"), "audio": ("running", "")}), facts=_status.SongFacts())
+    add("a sheet from an audio file, its words running", in_state(from_file, "running", kept | {
+        "lyrics": ("done", "LRCLIB has none"), "vocals": ("running", "2 of ~12 min")}), facts=_status.SongFacts())
+    add("a sheet from an audio file, ready over the lyrics found", in_state(from_file, "done", kept | {
+        "lyrics": ("done", "found, timed"), "vocals": ("skipped", "not transcribed: its lyrics are found"),
+        "words": ("skipped", "no vocals"), "chords": ("done", "chords over the lyrics"), "pdf": ("done", "made"),
+        "pages": ("done", "")}), facts=ready)
+    add("a sheet from an audio file, ready over the words heard", in_state(from_file, "done", kept | {
+        "lyrics": ("done", "LRCLIB has none"), "vocals": ("done", "sung from 9.3 s"),
+        "words": ("done", "212 words in 31 lines (en)"), "chords": ("done", "chords over the transcribed lyrics"),
+        "pdf": ("done", "made"), "pages": ("done", "")}), facts=ready)
+    add("a sheet from an audio file, its words failed", in_state(from_file, "done", kept | {
+        "lyrics": ("done", "LRCLIB has none"), "vocals": ("done", "sung from 9.3 s"),
+        "words": ("failed", "the GPU failed: CUDA out of memory"), "chords": ("done", _YOUTUBE_HOLDS["none"]),
+        "pdf": ("done", "made"), "pages": ("done", "")}), facts=ready)
+    add("a sheet from an audio file, refused: a human sheet", in_state(from_file, "failed", {
+        "song": ("failed", f"{V_DISPLAY} already has a sheet")}, code=1), facts=ready)
+    add("a sheet from an audio file, its upload gone", in_state(from_file, "failed", {
+        "song": ("done", "in the book"), "audio": ("failed", "that upload is gone: it was left over an hour, or "
+                                                            "another file was chosen since. Choose it again")},
+        code=1), facts=_status.SongFacts())
     video = queued_job("Search YouTube for “creep”", _jobs.YOUTUBE_SEARCH + "creep",
                        _jobs.youtube_search_steps("creep"))
     add("a video searched for, done", in_state(video, "done", {"video": ("done", ""), "thumbnail": ("done", "")},
@@ -974,6 +1027,7 @@ def kinds_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | N
             ("an add", plain, V_ID, _status.SongFacts()), ("a fetch of commands", fetch, V_ID, _status.SongFacts()),
             ("a removal of commands", removal, V_ID, None), ("a pull", pull, None, None),
             ("a sheet from YouTube", youtube, V_ID, ready), ("a transcription", transcription, V_ID, ready),
+            ("a sheet from an audio file", from_file, V_ID, ready),
             ("a video searched for", video, None, None)):
         first = {job.stages[0].name: ("running", "")} if job.stages else None
         add(f"{note}, every state: queued", job, song_id, facts=facts)
@@ -1055,6 +1109,62 @@ def peer_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | No
             "agree": ("done", "12 units"), "index": ("running", "Ultimate Guitar · 600,000 of 1,367,059 tabs")}),
          None, 0, None, None),
     ]
+    # A sync whose index stage skipped the indexes for the other's database of another schema: its outcome says why
+    # after what it shared; one skipped for nothing newer, or left out, says nothing of them.
+    from caracole.commands.peer import INDEXES_LEFT_OUT, NO_INDEX
+    from caracole.web.sync_routes import INDEXES_NEWER, INDEXES_OLDER
+
+    shared = {"compare": ("done", "4 differences"), "take": ("done", "took 1"), "give": ("done", "gave 1"),
+              "agree": ("done", "12 units the books agree on")}
+    for note, words, units in (("of a newer caracole", INDEXES_NEWER, took),
+                               ("of an older caracole, one left", INDEXES_OLDER, left),
+                               ("nothing newer", NO_INDEX, took), ("left out", INDEXES_LEFT_OUT, took)):
+        jobs.append((f"sync, done, its indexes skipped: {note}",
+                     peer_job("sync", "done", dict(shared, index=("skipped", words)), units=units), None, 0, None,
+                     None))
+    # A stage after the changes failed (the indexes, the phone's copy of the computer's pages): what was shared said
+    # first, then the failure, on the phone's job done and the computer's failed alike; with nothing shared, the
+    # failure's words alone. (The phone's mirror stage, which caracole serve's sync has none of: JobViewsTest.)
+    index = "Couldn't download the computer's indexes: the connection was reset"
+    for note, state, units in (("the phone's, done", "done", took), ("the computer's, failed", "failed", took),
+                               ("nothing shared, done", "done", []), ("nothing shared, failed", "failed", [])):
+        jobs.append((f"sync, its index stage failed after its changes: {note}",
+                     peer_job("sync", state, dict(shared, index=("failed", index)), units=units), None, 0, None,
+                     None))
+    # Any stage after the changes failed (the give, a push of several, the agreement), or the server stopped it after
+    # some were taken: what was shared said first, then the failure (the Sync sheet's "Synced with" for the same job);
+    # with nothing shared, the give's failure alone.
+    from caracole.commands.peer import TAKEN_STAY
+
+    give = "Couldn't give them 2: No answer from http://192.168.1.20:8737: timed out"
+    # commands/peer.py's words for a give stopped after its first push (``far``), which count what it gave.
+    pushed = (f"Couldn't give them 3: 1 given in the first push of 3; then push 2 of 3: the computer answered 503. "
+              f"{TAKEN_STAY}")
+    agree = "Couldn't note where the books agree: database is locked"
+    taken = {"compare": ("done", "4 differences"), "take": ("done", "took 1")}
+    for note, stages, units, said in (
+            ("taken, then the give failed", dict(taken, give=("failed", give)), took[:1], give),
+            ("taken, then a push of three failed after one", dict(taken, give=("failed", pushed)), took, pushed),
+            ("nothing taken, a push of three failed after one", dict(taken, give=("failed", pushed)), took[1:],
+             pushed),
+            ("taken, then the agreement failed",
+             dict(taken, give=("done", "gave 1"), agree=("failed", agree)), took, agree),
+            ("nothing shared, the give failed", dict(taken, give=("failed", give)), [], give)):
+        jobs.append((f"sync, failed after its changes: {note}",
+                     peer_job("sync", "failed", stages, units=units, output=(f"error: {said}",)), None, 0, None,
+                     None))
+    jobs.append(("sync, interrupted after it took a change",
+                 _interrupted(peer_job("sync", "running", dict(taken, give=("running", "1 of 2")), units=took[:1])),
+                 None, 0, None, None))
+    # A removal there of a song kept here, left as the sync's answer (peer_sync.SONG_HERE, its song's difference left
+    # unsettled): no change left, the sync read as without it; a real leftover beside it counted alone.
+    from caracole.peer_sync import SONG_HERE
+
+    answered = ("removed/oasis/live forever", "left", SONG_HERE)
+    for note, units in (("nothing else", [answered]), ("its changes", took + [answered]),
+                        ("one left beside it", left + [answered])):
+        jobs.append((f"sync, done, a removal whose song is here: {note}", peer_job("sync", "done", shared, units=units),
+                     None, 0, None, None))
     # A sync's agree stage counted in another script's digits, as Python's \d and int() read them.
     jobs.append(("sync, done, its count in Arabic-Indic digits", peer_job("sync", "done", {
         "compare": ("done", ""), "agree": ("done", " ١٢ units the books agree on\n")}, units=took),
@@ -1136,7 +1246,7 @@ def tables_record() -> dict:
     """The words status.py and outcome.py look up by a stage's, a step's, a command's or a site's name (a step's site
     in full by its tag, ``SITE_NAMES``), whole: what the records above don't draw (the phone's own sync's mirror and
     index stages among them)."""
-    from caracole.web import songbooks
+    from caracole.web import songbooks, sync_routes
 
     return {"fn": "tables", "args": [], "kw": {}, "out": {
         "STAGE_LINES": _status.STAGE_LINES, "PEER_KINDS": _status.PEER_KINDS, "PEER_DONE": _status._PEER_DONE,
@@ -1145,9 +1255,11 @@ def tables_record() -> dict:
         "LOOKUP_STEPS": [[name, list(names)] for name, names in _outcome.LOOKUP_STEPS],
         "YOUTUBE_STEPS": [[name, list(names)] for name, names in _outcome.YOUTUBE_STEPS],
         "TRANSCRIBE_STEPS": [[name, list(names)] for name, names in _outcome.TRANSCRIBE_STEPS],
+        "AUDIO_STEPS": [[name, list(names)] for name, names in _outcome.AUDIO_STEPS],
         "COMMAND_STEPS": _outcome.COMMAND_STEPS, "PEER_STEPS": _outcome.PEER_STEPS, "ASKS": _outcome._ASKS,
         "WHAT": {name: list(said) for name, said in _outcome._WHAT.items()}, "ELSEWHERE": _outcome._ELSEWHERE,
-        "SITE_NAMES": _outcome.SITE_NAMES}}
+        "SITE_NAMES": _outcome.SITE_NAMES,
+        "INDEXES_SKIPPED": [sync_routes.INDEXES_NEWER, sync_routes.INDEXES_OLDER]}}
 
 
 def outcome_records() -> list[dict]:

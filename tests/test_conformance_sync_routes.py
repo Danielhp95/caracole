@@ -14,7 +14,7 @@ SyncRoutes (lane phone-sync-routes, then sync-routes) and JobViews (lane jobs) a
   - ``POST /sync/test``: ``form`` ``{address}``, ``out`` ``{peer, songs, songbooks, indexes, synced_at, said}`` or
     the refusal;
   - ``POST /sync/compare``: ``form`` ``{address}``, ``out`` ``{comparison, peer, synced_before, holds, differences,
-    songbooks, indexes}`` with the comparison's id masked (``"<comparison>"``);
+    songbooks, indexes, indexes_skipped}`` with the comparison's id masked (``"<comparison>"``);
   - ``GET /api/sync/unit``: ``compare`` the form of the comparison it follows, ``query`` ``{comparison, id}``
     (``comparison`` ``"<comparison>"`` for that one's id; any other text is one no comparison has), ``out`` ``{id,
     here, there}`` or the refusal;
@@ -53,7 +53,7 @@ import httpx
 import pytest
 from helpers.corpus import VECTORS, check, jsonl
 
-from caracole import __version__, db
+from caracole import __version__, db, normalize
 from caracole import peer_sync as sync
 from caracole.web import sync_routes
 from caracole.web.app import Request, WebApp
@@ -206,6 +206,11 @@ def route_records(corpus: Corpus, monkeypatch) -> list[dict[str, Any]]:
     compare(first, "not an address", "ftp://desk")
     first.state = dict(first.state, server=HERE_ID)
     compare(first, "this very caracole: its database copied")
+    first.state = dict(state_of(corpus.replayed("sync", "plain"), changes=both), key_version=normalize.KEY_VERSION + 1)
+    compare(first, "a caracole whose songs are keyed by other rules: refused, nothing compared")
+    first.state = {k: v for k, v in state_of(corpus.replayed("sync", "plain"), changes=both).items()
+                   if k != "key_version"}
+    compare(first, "an older caracole, whose state says no key version: compared as before")
 
     # Test: what the other holds, its newest index read, the last sync with it, in words; refused as a comparison is.
     tested = Sides(corpus, "rich", "-routes-test", {f"sync:peer:{THERE_ID}": peers[f"sync:peer:{THERE_ID}"]})
@@ -219,6 +224,8 @@ def route_records(corpus: Corpus, monkeypatch) -> list[dict[str, Any]]:
     test(never, "not an address", "ftp://desk")
     never.state = dict(never.state, server=HERE_ID)
     test(never, "this very caracole: its database copied")
+    never.state = dict(state_of(corpus.replayed("sync", "plain"), name=""), key_version=normalize.KEY_VERSION - 1)
+    test(never, "a caracole whose songs are keyed by other rules: refused")
 
     # Two that agreed once: each side's change since, and both's. Here is the fixture as it is; what each side held
     # when they agreed is the base, which both keep alike, and there is as its state says, the songbook and the song
@@ -232,7 +239,12 @@ def route_records(corpus: Corpus, monkeypatch) -> list[dict[str, Any]]:
     agreed_on[creep] = ("1" * 64, AGREED_AT)  # both changed since
     base = {"format": sync.FORMAT, "units": {k: list(v) for k, v in sorted(agreed_on.items())}}
     indexed = {"ug:index:refreshed_at": "2026-11-01T03:30:00Z", "lacuerda:index:complete_at": "2026-10-20T03:30:00Z",
-               "musescore:index:complete_at": "2026-10-22T03:30:00Z"}
+               "musescore:index:complete_at": "2026-10-22T03:30:00Z",
+               # The phone's own records, which a computer never reads: there's MuseScore index merged as there has
+               # it (a file's, the catalogues), and a LaCuerda page its lookup read. The phone lists the indexes its
+               # sync takes and gives by them, as here lists those whose newest read differs: the same three.
+               "index:merged": {"musescore": "2026-10-22T03:30:00Z"},
+               "phone:read:lacuerda:estopa/": "2026-11-02T18:00:00Z"}
     agreed = Sides(corpus, "rich", "-routes-agreed", {f"sync:base:{THERE_ID}": base, **{
         k: v for k, v in peers.items() if k == f"sync:peer:{THERE_ID}"}, **indexed})
     overrides, books = lib.overrides(), lib.books()
@@ -368,7 +380,7 @@ NO_INDEX = "no index is newer on either side"  # commands/peer.py's
 REPORT = {"with": {"name": "Desk", "kind": "server", "address": "http://192.168.1.20:8737"},
           "at": "2026-11-03T09:31:00Z", "parts": ["library", "songbooks", "indexes"],
           "indexes": [{"site": "ug", "title": "Ultimate Guitar", "direction": "taken", "before": 1503236,
-                       "after": 1515576, "read": "2026-11-03T03:10:00Z"}]}
+                       "after": 1515576, "new": 12340, "checked": 117701, "read": "2026-11-03T03:10:00Z"}]}
 
 
 def view_records() -> list[dict[str, Any]]:

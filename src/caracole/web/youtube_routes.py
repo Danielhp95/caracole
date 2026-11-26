@@ -20,10 +20,11 @@
 The library page's request form sends its YouTube video here (``POST /request`` with ``youtube``, which
 library_routes.py hands over: ``sheet_from_youtube``), in place of a lookup. The job is one ``caracole youtube
 --sheet --progress`` (jobs.py ``youtube_sheet_steps``, youtube_sheet.py): the audio taken with yt-dlp, as the
-youtube step takes it, within its budget and pauses, the lyrics from LRCLIB, the chords from the audio, the PDF
-and the viewer. Its key is the song's after ``jobs.YOUTUBE_SHEET``, so it never joins the song's lookup, nor a
-lookup it, and one at a time a song: asked again while one waits or runs, that one is the answer. Its view is the
-song's (/jobs.json's ``kind`` "song"), so the song's line says how it goes, its stages as steps (outcome.py).
+youtube step takes it, within its budget and pauses, the lyrics from the lyrics sites, else the words heard from the
+audio where caracole can transcribe, the chords from the audio, the PDF and the viewer. Its key is the song's after
+``jobs.YOUTUBE_SHEET``, so it never joins the song's lookup, nor a lookup it, and one at a time a song: asked again
+while one waits or runs, that one is the answer. Its view is the song's (/jobs.json's ``kind`` "song"), so the song's
+line says how it goes, its stages as steps (outcome.py).
 
 The video is given to the command as its plain address (``youtube_urls.watch_url``), never as pasted: no
 playlist, no tracking. Refused, with nothing written or queued (``pages.Refused``): a link that is no YouTube
@@ -137,8 +138,8 @@ def youtube_problem(app: WebApp) -> str | None:
 
 
 def youtube_is_for(conn: sqlite3.Connection, song: Song, overrides: Overrides) -> None:
-    """Refused (409) for a song a sheet from YouTube isn't for: ignored, with a human sheet, or with a purchase
-    linked, in the words ``caracole youtube --sheet`` refuses it in."""
+    """Refused (409) for a song a sheet from YouTube isn't for: ignored, with a human sheet, or with audio of its own
+    (a purchase linked, or a file you gave it), in the words ``caracole youtube --sheet`` refuses it in."""
     from caracole.songs import HUMAN_SHEET
     from caracole.youtube_fetch import youtube_audio
 
@@ -146,7 +147,8 @@ def youtube_is_for(conn: sqlite3.Connection, song: Song, overrides: Overrides) -
     if conn.execute("SELECT 1 FROM files WHERE song_id = ? AND name = ?", (song.id, HUMAN_SHEET)).fetchone():
         raise Refused(409, "Has a sheet", f"{song.display} already has a sheet.")
     if song.audio_path and youtube_audio(conn, song) is None:
-        raise Refused(409, "Has its audio", f"{song.display} has bought audio in Music/; auto-chords uses that.")
+        raise Refused(409, "Has its audio",
+                      f"{song.display} has its own audio (bought or given); auto-chords uses that.")
 
 
 # --- a video suggested for a search ---------------------------------------------------------------------

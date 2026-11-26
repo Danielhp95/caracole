@@ -1117,6 +1117,53 @@ def test_autochords_section_copes_with_a_bad_timestamp(conn, cfg):
     assert "nonsense" not in text and "B - U" not in text
 
 
+WORDS_UNHEARD = "Lyrics that couldn't be transcribed"
+
+
+def test_the_todo_page_says_why_words_werent_heard(conn, cfg):
+    # The nightly auto-chords unit with the GPU build sees no GPU: it hears no words, and says so here; the page's own
+    # jobs still hear them. A run that heard, or was told to hear nothing, says nothing.
+    assert WORDS_UNHEARD not in todo(conn, cfg)
+    gpu = "the GPU build's separator needs the GPU, which this unit doesn't see (no /dev/nvidiactl)"
+    kv_set_json(conn, "autochords:status", {"at": "2026-11-25T04:12:00Z", "generated": 1, "skipped": 0,
+                                            "failed": [], "heard": 0, "silent": 0, "transcribe_problem": gpu})
+    text = todo(conn, cfg)
+    assert f"## {WORDS_UNHEARD}\n" in text  # one reason, no count: the section counts songs
+    section = section_of(text, WORDS_UNHEARD)
+    assert gpu in section
+    assert "2026-11-25 04:12 UTC" in section and "Transcribe the lyrics" in section
+    for record in ({"at": "2026-11-25T04:12:00Z", "failed": [], "heard": 2, "transcribe_problem": None},
+                   {"at": "2026-11-25T04:12:00Z", "failed": [], "transcribe_problem": ["not", "words"]},
+                   {"at": "2026-11-25T04:12:00Z", "failed": []}):
+        kv_set_json(conn, "autochords:status", record)
+        assert WORDS_UNHEARD not in todo(conn, cfg), record
+
+
+def test_the_todo_page_lists_the_songs_whisper_cant_read(conn, cfg, tmp_path):
+    # Their chords are made: they aren't under the files auto-chords can't read, but here, why their sheets have no
+    # words, while that is all that keeps their words from being heard: until their audio changes, a site has their
+    # lyrics, they are ignored or a human sheet comes.
+    from test_autochords_transcript import youtube_song
+
+    from caracole.autochords.transcript import note_whisper_cant_read
+
+    s = youtube_song(conn, tmp_path, "Nick Cani", "Vikingos veganos")
+    note_whisper_cant_read(conn, s, "2026-11-25T04:12:00Z", "RuntimeError: Failed to load audio: moov atom")
+    text = todo(conn, cfg)
+    assert f"## {WORDS_UNHEARD} (1)\n" in text and AUTOCHORDS not in text
+    section = section_of(text, WORDS_UNHEARD)
+    assert "- **Nick Cani - Vikingos veganos**: Whisper can't read its audio · RuntimeError: Failed to load audio: " \
+           "moov atom" in section
+    assert "--force" in section
+    for change, back in (({"lyrics_status": "found"}, {"lyrics_status": "missing"}),
+                         ({"status": "ignored"}, {"status": s.status}),
+                         ({"audio_mtime": (s.audio_mtime or 0) + 5}, {"audio_mtime": s.audio_mtime})):
+        update_song(conn, s.id, **change)
+        assert WORDS_UNHEARD not in todo(conn, cfg), change
+        update_song(conn, s.id, **back)
+    assert WORDS_UNHEARD in todo(conn, cfg)
+
+
 # --- MuseScore: links and the inbox -------------------------------------------------------------
 
 MS = "https://musescore.com"
@@ -1431,3 +1478,22 @@ def test_an_artist_the_directory_names_is_looked_for_on_their_page(conn, cfg):
     text = todo(conn, cfg)
     assert "## Artists to find" not in text
     assert "caracole looks for it on Maná's UG page in the next run" in review_item(text, "Maná - Rayando el Sol")
+
+
+def test_the_todo_page_lists_the_songs_whose_hearing_failed_at_night(conn, cfg, tmp_path):
+    # The nightly run passes over them for 30 days, or until their file changes, so that the others are heard.
+    from test_autochords_transcript import youtube_song
+
+    from caracole.autochords.transcript import note_hearing_failed
+    from caracole.stamps import stamp
+
+    s = youtube_song(conn, tmp_path, "Nick Cani", "Vikingos veganos")
+    note_hearing_failed(conn, s, stamp(NOW), "the separator can't run here (its vocals are 3.5 s shorter)")
+    text = todo(conn, cfg)
+    assert f"## {WORDS_UNHEARD} (1)\n" in text
+    section = section_of(text, WORDS_UNHEARD)
+    assert ("- **Nick Cani - Vikingos veganos**: its hearing failed · the separator can't run here (its vocals are "
+            "3.5 s shorter)") in section
+    assert "30 days or until their file changes" in section
+    update_song(conn, s.id, audio_mtime=(s.audio_mtime or 0) + 5)  # a new file: tried again, so not listed
+    assert WORDS_UNHEARD not in todo(conn, cfg)

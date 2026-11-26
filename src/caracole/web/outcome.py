@@ -25,15 +25,17 @@ the job and what the library knows of its song:
   Guitar"), one that failed as the outcome words it where it can ("Ultimate Guitar answered 502. The sheet waits
   until tonight."), joined by " · "; nothing for a plain step, a skipped one or one that waits, nor from a stage
   the server cut off, whose words are what it said while it ran.
-- **A sheet from a YouTube video** (``YOUTUBE_STEPS``): Song, Audio (YouTube, the site it names), Lyrics, Chords
-  and PDF, fixed as a lookup's are, a step with nothing to do skipped in its place, its audio skipped for a block,
+- **A sheet from a YouTube video** (``YOUTUBE_STEPS``): Song, Audio (YouTube, the site it names), Lyrics, Words (the
+  lyrics heard from the audio: its vocals and words stages), Chords and PDF, fixed as a lookup's are, a step with nothing to do skipped in its place, its audio skipped for a block,
   a cooldown or a spent budget drawn failed, as a lookup's sheet is; Ready
   says what the sheet holds (its chords stage's words: chords over the timed lyrics, a chart then the lyrics, or
-  chords alone), or why its lyrics wait, and Not made yet the stage that stopped it, in its words.
+  chords alone, or, its words failed, why they couldn't be heard), or why its lyrics wait, and Not made yet the stage that stopped it, in its words.
 - **A song's lyrics transcribed from its audio** (``TRANSCRIBE_STEPS``): Song, Vocals, Words, Chords and PDF, as a sheet
   from a YouTube video's are, none naming a site; Ready says what the sheet holds ("chords over the transcribed
   lyrics"), and Not made yet the stage that stopped it, in its words (``_staged_holds``, ``_staged_stopped``: the
-  two jobs' rules, each given its stages).
+  jobs' rules, each given its stages).
+- **A sheet from an audio file you gave** (``AUDIO_STEPS``): a YouTube sheet's steps, its Audio step the file kept
+  ("kept as its audio: MP3, 3:18"), naming no site; Ready and Not made yet as a YouTube sheet's.
 - **Progress** (``progress``), for the library page: a lookup's steps, a bar on the song's line (or a search
   result's row) while it runs, with the step in hand (``_in_hand``: the one that runs, else the first that
   waits, between two steps, else the last), its place ``at`` and ``count``, "3 of 7", its place among every
@@ -66,8 +68,10 @@ the job and what the library knows of its song:
 - **A sync with another caracole** (``caracole peer sync``, the Sync tab's), a push another sent taken (``caracole peer
   take``) and a pull it asked for (``peer pull``; ``status.peer_kind``): their stages as steps (``PEER_STEPS``: Compare,
   Take, Give, Agree; Check, Take, Render, Agree), each skipped one not drawn; over, Shared or Taken, what it took
-  and gave in a sentence, how many changes it left, and for a sync, the next step Compare again (the Sync tab), never
-  Try again: a sync is made of the choices of one comparison, and a push is the other caracole's to send again.
+  and gave in a sentence, how many changes it left, and why no index went either way when its index stage skipped
+  them for the other's database of another schema (``indexes_skipped``), and for a sync, the next step Compare again
+  (the Sync tab), never Try again: a sync is made of the choices of one comparison, and a push is the other
+  caracole's to send again.
   Another caracole's index pages merged (``caracole index merge --progress``, Merge): Merged, and what its stage
   said it did.
 
@@ -92,7 +96,7 @@ from caracole.get import GTPTABS_KEPT, MATCH_NOT_FOUND, NAMES, SHEET_FROM
 from caracole.icons import AUTO, INBOX, tag
 from caracole.logs import plural
 from caracole.web.jobs import INDEX_READS, INTERRUPTED, LOOKUP, REMOVING, Job, Stage, song_key_of
-from caracole.web.status import READY, _WAITING, Line, SongFacts, doing, peer_kind
+from caracole.web.status import _PEER_DONE, READY, _WAITING, Line, SongFacts, changes_left, doing, peer_kind
 
 if TYPE_CHECKING:
     from caracole.config import Config
@@ -109,11 +113,13 @@ LOOKUP_STEPS = (
     ("Extras", ("ug", "lacuerda", "gtptabs", "harptabs", "gametabs")),
     ("Songbooks", ("songbooks",)),
 )
-# A sheet from a YouTube video's steps (youtube_sheet.STAGES): the audio, the lyrics, the chords, the PDF.
+# A sheet from a YouTube video's steps (youtube_sheet.STAGES): the audio, the lyrics, the words heard from it (the
+# vocals and words stages, one step), the chords, the PDF.
 YOUTUBE_STEPS = (
     ("Song", ("song",)),
     ("Audio", ("audio",)),
     ("Lyrics", ("lyrics",)),
+    ("Words", ("vocals", "words")),
     ("Chords", ("chords",)),
     ("PDF", ("pdf",)),
 )
@@ -127,7 +133,10 @@ TRANSCRIBE_STEPS = (
     ("Chords", ("chords",)),
     ("PDF", ("pdf",)),
 )
-# A staged job's steps, as the two tables above: each a name and the stages it stands for.
+# A sheet from an audio file you gave's steps (audio_sheet.STAGES): a YouTube sheet's, its Audio step the file kept,
+# naming no site.
+AUDIO_STEPS = YOUTUBE_STEPS
+# A staged job's steps, as the three tables above: each a name and the stages it stands for.
 StepTable = tuple[tuple[str, tuple[str, ...]], ...]
 # A step's site in full, by its tag (icons.tag): get.py's names, YouTube's, and where an auto sheet or a file you filed
 # came from; a tag it lacks is named as it is.
@@ -161,6 +170,27 @@ IN_REVIEW = "Not sure which UG song it is."
 CANCELLED = "Cancelled before it ran."
 INTERRUPTED_RAN = "The server stopped mid-way. Try again to finish."
 INTERRUPTED_WAITED = "The server stopped before it ran. Try again runs it."
+# A sync's, whose next step is Compare again (COMPARE_AGAIN), never Try again: the action its entry offers named.
+INTERRUPTED_SYNC_RAN = "The server stopped mid-way. Compare again to finish."
+INTERRUPTED_SYNC_WAITED = "The server stopped before it ran. Compare again to run it."
+# A take's (the other device pushed) and a pull's (the other caracole asked), whose entry offers no action: what the
+# owner can do, from the other side.
+INTERRUPTED_TAKE_RAN = "The server stopped mid-way. Share again from the other device to finish."
+INTERRUPTED_TAKE_WAITED = "The server stopped before it ran. Share again from the other device to run it."
+INTERRUPTED_PULL_RAN = "The server stopped mid-way. Sync again from the other caracole to finish."
+INTERRUPTED_PULL_WAITED = "The server stopped before it ran. Sync again from the other caracole to run it."
+# A merge of the phone's index pages (``POST /peer/index``), which offers none either: the phone forgets its notes of
+# those pages only once their merge ends done, so its next sync sends them again by itself.
+INTERRUPTED_MERGE_RAN = "The server stopped mid-way. The phone's next sync sends them again."
+INTERRUPTED_MERGE_WAITED = "The server stopped before it ran. The phone's next sync sends them again."
+_INTERRUPTED = {"sync": (INTERRUPTED_SYNC_RAN, INTERRUPTED_SYNC_WAITED),
+                "peer-push": (INTERRUPTED_TAKE_RAN, INTERRUPTED_TAKE_WAITED),
+                "peer-pull": (INTERRUPTED_PULL_RAN, INTERRUPTED_PULL_WAITED),
+                "index-merge": (INTERRUPTED_MERGE_RAN, INTERRUPTED_MERGE_WAITED)}
+# A give stopped after some of its pushes, in commands/peer.py's words (``given_so_far``): "3 given in the first 2
+# pushes of 4; then …", the count of what was given said there, so its outcome says it once (test_web_outcome.py feeds
+# it given_so_far's own words).
+_GIVEN_SO_FAR = re.compile(r"\b\d+ given in the first ")
 _ELSEWHERE = {"lacuerda": "LaCuerda has a sheet", "gtptabs": "gtptabs lists a page for it"}
 # A sync's and a take's steps, by their stages' names (jobs.PEER_SYNC_STAGES, PEER_TAKE_STAGES; the phone's sync adds
 # mirror and index).
@@ -224,7 +254,7 @@ def steps(job: Job, facts: SongFacts | None = None) -> list[Chip]:
                 for stage in job.stages if stage.state != "skipped"]
     staged = _staged(job)
     if job.stages and staged is not None:
-        return _staged_steps(job, staged[0])
+        return _staged_steps(job, staged[0], staged[2])
     if job.stages:
         return _lookup_steps(job, facts)
     chips = []
@@ -244,14 +274,17 @@ def lists_steps(job: Job) -> bool:
     return not job.active and job.started_at is not None and (job.looks_up or _staged(job) is not None)
 
 
-def _staged(job: Job) -> tuple[StepTable, str] | None:
+def _staged(job: Job) -> tuple[StepTable, str, str] | None:
     """A job of stages over one song (staged.py) as this module reads it: its steps (``YOUTUBE_STEPS``,
-    ``TRANSCRIBE_STEPS``) and the stage of the words a Ready one says may wait (a sheet from YouTube's lyrics, a
-    transcription's words); None for any other job."""
+    ``TRANSCRIBE_STEPS``, ``AUDIO_STEPS``), the stage of the words a Ready one says may wait (a sheet's lyrics, a
+    transcription's words), and the site its Audio step names (YouTube for a YouTube sheet's, none for a file you
+    gave); None for any other job."""
     if job.from_youtube:
-        return YOUTUBE_STEPS, "lyrics"
+        return YOUTUBE_STEPS, "lyrics", SITE_NAMES[YOUTUBE_SOURCE]
     if job.transcribes:
-        return TRANSCRIBE_STEPS, "words"
+        return TRANSCRIBE_STEPS, "words", ""
+    if job.from_audio:
+        return AUDIO_STEPS, "lyrics", ""
     return None
 
 
@@ -276,10 +309,11 @@ def _lookup_steps(job: Job, facts: SongFacts | None) -> list[Chip]:
     return chips
 
 
-def _staged_steps(job: Job, table: StepTable) -> list[Chip]:
-    """A staged job's steps, ``table``'s (a sheet from a YouTube video's, a transcription's): a YouTube sheet's
-    audio skipped for a block, a cooldown or a spent budget is the step that stopped it, drawn failed, and names
-    YouTube; a step every stage of which ended skipped, with nothing to do, keeps its place, skipped."""
+def _staged_steps(job: Job, table: StepTable, audio_site: str) -> list[Chip]:
+    """A staged job's steps, ``table``'s (a sheet from a YouTube video's, a transcription's, a sheet from an audio
+    file's): a YouTube sheet's audio skipped for a block, a cooldown or a spent budget is the step that stopped it,
+    drawn failed; its Audio step names ``audio_site`` (YouTube, or none for a file you gave); a step every stage of
+    which ended skipped, with nothing to do, keeps its place, skipped."""
     by_name = {stage.name: stage for stage in job.stages}
     chips = []
     for name, names in table:
@@ -287,7 +321,7 @@ def _staged_steps(job: Job, table: StepTable) -> list[Chip]:
                  or by_name[n].state == INTERRUPTED else by_name[n].state) for n in names if n in by_name]
         state = _state([s for _, s in read])
         if state is not None:
-            chips.append(Chip(name, state, SITE_NAMES[YOUTUBE_SOURCE] if name == "Audio" else "", _found(read)))
+            chips.append(Chip(name, state, audio_site if name == "Audio" else "", _found(read)))
     return chips
 
 
@@ -467,25 +501,53 @@ def _peer_outcome(job: Job, kind: str, line: Line) -> Outcome:
     was stopped. A sync's next step is a comparison afresh in the Sync tab, never Try again (its choices were made on a
     comparison that is past); a take's or a pull's is the other caracole's to send again."""
     action = COMPARE_AGAIN if kind == "sync" else None
+    taken = sum(1 for _, said, _ in job.units if said == "taken")
+    given = sum(1 for _, said, _ in job.units if said == "given")
+    left = len(changes_left(job))
+    parts = [f"{plural(taken, 'change')} taken"] if taken or kind != "sync" else []
+    gave = [f"{plural(given, 'change')} given"] if given else []
+    said = (", ".join(parts + gave)).capitalize() + "." if parts or gave else "Nothing changed in either book."
+    kept = f" {plural(left, 'change')} left as {'it was' if left == 1 else 'they were'}." if left else ""
+    # Changes taken or given, then a failure (any stage after them: the give, a push of several, the agreement, the
+    # phone's copy of the pages, the indexes; or the server stopping it): what was shared said first, as the Sync
+    # sheet titles it "Synced with", then the failure, never doubling what its words say already.
+    shared = bool(taken or given)
     if job.state == INTERRUPTED:
-        return Outcome("waiting", "Interrupted", INTERRUPTED_RAN if job.started_at else INTERRUPTED_WAITED, action)
-    if line.tone == "failed":
+        ran, waited = _INTERRUPTED.get(kind, (INTERRUPTED_RAN, INTERRUPTED_WAITED))
+        stopped = ran if job.started_at else waited
+        return Outcome("waiting", "Interrupted", f"{said}{kept} {stopped}" if shared else stopped, action)
+    after = shared and (line.tone == "failed" or any(s.state == "failed" for s in job.stages))
+    if line.tone == "failed" and not after:
         return Outcome("failed", "Failed", _sentence(line.text), action)
     if kind in _NO_UNITS:  # what its one stage said it did
         said = next((s.detail for s in job.stages if s.state == "done" and s.detail), "")
         return Outcome(line.tone, line.text, _sentence(said) if said else "")
-    taken = sum(1 for _, said, _ in job.units if said == "taken")
-    given = sum(1 for _, said, _ in job.units if said == "given")
-    left = sum(1 for _, said, _ in job.units if said == "left")
-    parts = [f"{plural(taken, 'change')} taken"] if taken or kind != "sync" else []
-    parts += [f"{plural(given, 'change')} given"] if given else []
-    said = (", ".join(parts)).capitalize() + "." if parts else "Nothing changed in either book."
+    skipped = indexes_skipped(job.stages)
+    also = f" {skipped}." if skipped else ""
+    if after:
+        failure = _sentence(line.text)
+        if _GIVEN_SO_FAR.search(failure):  # the give's failure counts what it gave: said there alone
+            said = (", ".join(parts)).capitalize() + "." if parts else ""
+        reason = " ".join(words for words in ((said + kept).strip(), failure) if words)
+        if line.tone == "failed":
+            return Outcome("failed", "Failed", reason, action)
+        return Outcome("waiting", _PEER_DONE[kind], reason, action)
     if line.tone == "ready":
-        return Outcome("ready", line.text, said)
+        return Outcome("ready", line.text, said + also)
     word = line.text.partition(" · ")[0] if left else "Not taken"
     reason = f"{said} {plural(left, 'change')} left as {'it was' if left == 1 else 'they were'}." if left else (
         _sentence(line.text))
-    return Outcome("waiting", word, reason, action)
+    return Outcome("waiting", word, reason + also, action)
+
+
+def indexes_skipped(stages: list[Stage]) -> str | None:
+    """Why a sync's index stage took and gave no index, when it skipped them for the other's database of another
+    schema (its detail ``sync_routes.INDEXES_NEWER`` or ``INDEXES_OLDER``, as ``caracole peer sync`` said it); None
+    for one skipped for nothing newer or left out, and for any other."""
+    from caracole.web.sync_routes import INDEXES_NEWER, INDEXES_OLDER
+
+    return next((s.detail for s in stages if s.name == "index" and s.state == "skipped"
+                 and s.detail in (INDEXES_NEWER, INDEXES_OLDER)), None)
 
 
 def _not_found(job: Job, facts: SongFacts | None, song_id: int | None) -> Outcome:
@@ -530,9 +592,15 @@ def _waits(stages: list[Stage], *, after_sheet: bool = False) -> str:
 def _staged_holds(stages: list[Stage], words: str) -> str:
     """A staged job that is ready (a sheet from a YouTube video, a transcription): what its sheet holds (its chords
     stage's words), or, when the stage of its words (``words``: the sheet's lyrics, the transcription's words) waits,
-    why."""
+    why; and a sheet whose lyrics were done but whose words (``words``'s stage in a YouTube sheet, which hears them
+    after the lyrics) failed, its chords' words then why they couldn't be heard."""
     by_name = {stage.name: stage for stage in stages}
     waited, chords = by_name.get(words), by_name.get("chords")
+    heard = next((by_name[n] for n in ("vocals", "words") if n in by_name and by_name[n].state == "failed"
+                  and by_name[n].detail), None)  # whichever stage of the Words step failed
+    if (words == "lyrics" and waited is not None and waited.state == "done" and heard is not None
+            and chords is not None and chords.detail):
+        return f"{_capital(chords.detail).rstrip('.')}: the words couldn't be heard here ({heard.detail})."
     if waited is not None and waited.state in ("skipped", "failed") and waited.detail:
         return _capital(waited.detail)
     return _capital(chords.detail.removeprefix("up to date: ")) if chords is not None and chords.detail else ""

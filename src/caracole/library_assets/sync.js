@@ -25,9 +25,12 @@
 //   opened then shows it, never another sync.
 // - **What it did**: "Synced with:" and the other side's name, when, the two sides as icons, and a section for each
 //   kind of change, closed until its chevron opens it: songs taken, songs given (why), the conflicts (whose version was
-//   kept, and how it differs), the songbooks, the indexes (each site's tabs before and after, a fall in red). Drawn from
-//   the comparison and the choices the sheet holds, and the view's outcome and report (§3.5); from the outcome alone
-//   for a sync it didn't start. A file's has no "given" arrow: a file takes nothing back.
+//   kept, where its side was taken or given), the songbooks, the indexes (each site's new tabs, "up to date", or "all
+//   new here" for a side that had none, a fall in red; the headline the new tabs, never totals; or why none went:
+//   another schema there, or the stage's failure), the pages the phone failed to copy, what it left. A stage that
+//   failed though the sync went on past it is said in its words, with no tick. Drawn from the comparison and the
+//   choices the sheet holds, and the view's outcome and report (§3.5); from the outcome alone for a sync it didn't
+//   start. A file's has no "given" arrow: a file takes nothing back.
 // - **Export**: the parts with their sizes (GET /api/sync/sizes), Site indexes unticked; Export makes the file (POST
 //   /sync/export) and downloads it (GET /api/sync/export, once), a link, which the phone hands to its share sheet.
 // - **Import a file**: the file input (#sync-file: the browser's chooser, the phone's picker), the file sent in parts
@@ -182,6 +185,16 @@
   const inScope = (d, parts) => parts.indexOf(partOf(d)) >= 0
     || (kindOf(d) === "song" && parts.indexOf("songbooks") >= 0 && listOf(d.with).length > 0 && !removes(d));
   const scoped = () => differences().filter((d) => inScope(d, ticked()));
+  // peer_sync.answered_by_its_song: the removals of ``take`` (removed/<key>) whose song ``kept`` gives (song/<key>,
+  // proposed so or a conflict chosen here), part of that same answer: never taken (vectors/sync/kept.jsonl).
+  const answeredByItsSong = (take, kept) => {
+    const songs = new Set(kept.filter((d) => d.id.startsWith("song/")).map((d) => d.id.slice("song/".length)));
+    return take.filter((d) => d.id.startsWith("removed/") && songs.has(d.id.slice("removed/".length)));
+  };
+  // The removals of ``found`` to take that its songs given answer, the owner's choices as they are now: what the
+  // counts and each part's line leave out, so the two agree.
+  const answeredIn = (found) => answeredByItsSong(found.filter((d) => d.proposal === "theirs"),
+    found.filter((d) => d.proposal === "mine" || (d.proposal === "conflict" && choices.get(d.id) === "here")));
   const keyOf = (d) => [d.id, d.here || "", d.there || ""].join("\n");
   const nameIn = (d) => {
     const names = objOf(d.names);
@@ -224,7 +237,7 @@
   };
   const drawCounts = () => {
     const found = scoped();
-    const n = { take: found.filter((d) => d.proposal === "theirs").length,
+    const n = { take: found.filter((d) => d.proposal === "theirs").length - answeredIn(found).length,
                 give: found.filter((d) => d.proposal === "mine").length,
                 both: found.filter((d) => d.proposal === "conflict").length };
     for (const key of Object.keys(n)) {
@@ -244,11 +257,13 @@
     if (line) line.textContent = words;
   };
   // What waits in a part, where it is known: "2 changed on Studio", "newer on the computer: Ultimate Guitar (read
-  // today) and 1 more".
+  // today) and 1 more"; or why no index goes either way, in the server's words (indexes_skipped: the other's database
+  // of another schema), said here alone.
   const waiting = (part) => {
     if (!compared) return "";
     const sides = sidesNow();
     if (part === "indexes") {
+      if (typeof compared.indexes_skipped === "string" && compared.indexes_skipped) return compared.indexes_skipped;
       const said = [];
       for (const [newer, side] of [["there", sides.there], ["here", sides.here]]) {
         if (newer === "here" && isFile()) continue;
@@ -260,7 +275,8 @@
       }
       return said.join(" · ");
     }
-    const mine = differences().filter((d) => partOf(d) === part);
+    const answered = new Set(answeredIn(differences()));
+    const mine = differences().filter((d) => partOf(d) === part && !answered.has(d));
     const there = mine.filter((d) => listOf(d.change)[1]).length;
     const here = isFile() ? 0 : mine.filter((d) => listOf(d.change)[0]).length;
     return [there ? there + " changed " + lowered(sides.there.on) : "",
@@ -778,7 +794,8 @@
     box.append(button, list);
     return box;
   };
-  const signed = (n) => el("span", n < 0 ? "sync-down" : "sync-up", W.tabs(n, true) + " tabs");
+  const toned = (news) => el("span", news.tone === "up" ? "sync-up" : news.tone === "down" ? "sync-down" : null,
+                             news.said);
   const drawDone = () => {
     if (!ended) return;
     const job = ended.job;
@@ -796,9 +813,19 @@
       kind: withWhom.kind || (device() === "phone" ? "computer" : null), name, address: withWhom.address });
     const failed = job.state === "failed" || job.state === "interrupted" || job.state === "cancelled"
       || (objOf(job.line) && job.line.tone === "failed");
-    title.replaceChildren(failed ? "Not synced with: " : "Synced with: ", el("span", "sync-name", name));
+    // A stage that failed though the sync went on past it (the phone's indexes or its copy of the computer's pages,
+    // its job done, its line the stage's words in a waiting tone; the computer's indexes, its job failed): said in
+    // its words, with no tick, and a row of what it left as it was.
+    const steps = listOf(job.steps).filter((s) => objOf(s));
+    const broke = steps.find((s) => s.state === "failed" && s.detail);
+    const lineSaid = objOf(job.line) && job.line.text ? String(job.line.text) : "";
+    // Synced where changes were taken or given, though a later stage failed (the computer's job failed, the phone's
+    // done: the same words on both); not synced only where none was.
+    const shared = listOf(outcome.taken).length > 0 || listOf(outcome.given).length > 0;
+    title.replaceChildren((failed || broke) && !shared ? "Not synced with: " : "Synced with: ",
+                          el("span", "sync-name", name));
     sub.textContent = W.when(report && typeof report.at === "string" ? report.at : new Date().toISOString());
-    check.hidden = failed;
+    check.hidden = failed || Boolean(broke);
     devs.replaceChildren(...[sides.here, sides.there].map((side) => {
       const dev = el("div", "sync-dev");
       dev.append(icon(side.icon), el("span", null, side.name));
@@ -811,9 +838,14 @@
     const taken = listOf(outcome.taken).map(String);
     const given = listOf(outcome.given).map(String);
     const leftIds = new Set(listOf(outcome.left).map((e) => String(Array.isArray(e) ? e[0] : e)));
-    // The conflicts it settled: those of the parts it synced, each with a side, and none it left as it was.
+    // The conflicts it settled: those of the parts it synced, each with a side, and none it left as it was; each kept
+    // only where its side came: there's taken, here's given (a file's here once its job is done, its agree stage
+    // having kept the answer), so a sync refused before any change keeps none.
+    const cameThrough = (d) => chosen.get(d.id) === "there" ? taken.includes(d.id)
+      : file ? job.state === "done" : given.includes(d.id);
     const conflictIds = new Set(Array.from(found.values()).filter((d) => d.proposal === "conflict"
-      && chosen.has(d.id) && inScope(d, was ? was.parts : PARTS) && !leftIds.has(d.id)).map((d) => d.id));
+      && chosen.has(d.id) && inScope(d, was ? was.parts : PARTS) && !leftIds.has(d.id) && cameThrough(d))
+      .map((d) => d.id));
     const read = was && was.docs ? was.docs : new Map();  // each card's two documents, as it showed them
     const books = objOf(was && was.compared && was.compared.songbooks) || {};
     const out = [];
@@ -869,26 +901,52 @@
       out.push(section("songbooks", W.counted(bookTaken.length + bookGiven.length, "songbook") + " " + how, way,
                        rows));
     }
-    // The indexes: the tabs each site's index tracks, before and after.
+    // The indexes: what each site's merge added, the tabs that side hadn't, never its whole size as if new.
     const sites = listOf(report && report.indexes).filter((s) => objOf(s));
     const indexed = sites.length ? [] : listOf(outcome.indexed).map(String);
+    const indexStep = steps.find((s) => s.name === "index");
+    const indexFailed = broke && broke.name === "index" ? broke : null;
+    // Of another schema there, the index stage skipped before any download (the report's indexes_skipped; for a sync
+    // this sheet compared, the comparison's words its stage said too).
+    const skippedWhy = report && typeof report.indexes_skipped === "string" && report.indexes_skipped
+      ? report.indexes_skipped : indexStep && indexStep.state === "skipped" && was && was.compared
+        && typeof was.compared.indexes_skipped === "string" && was.compared.indexes_skipped === indexStep.detail
+        ? was.compared.indexes_skipped : "";
     if (sites.length || indexed.length) {
       const directions = new Set(sites.map((s) => s.direction));
       const how = directions.size > 1 ? "taken or given" : directions.has("given") ? "given" : "taken";
       const way = directions.size > 1 ? "left right" : directions.has("given") ? "right" : "left";
-      const net = sites.reduce((n, s) => n + ((Number(s.after) || 0) - (Number(s.before) || 0)), 0);
-      const said = [W.counted(sites.length || indexed.length, "index", "indexes") + " " + how];
-      if (sites.length) said.push(" · ", signed(net));
-      if (how === "given") said.push(" for " + sides.there.the);
+      const many = sites.length ? new Set(sites.map((s) => String(s.site))).size : indexed.length;
+      const said = [W.counted(many, "index", "indexes") + " " + how];
+      const places = { taken: "here", given: "on " + sides.there.the };
+      const news = sites.length ? W.newTabs(sites, places) : null;
+      if (news && how === "given" && !news.tone) said.push(" · nothing new for " + sides.there.the);
+      else if (news) said.push(" · ", toned(news), how === "given" ? " for " + sides.there.the : "");
+      if (indexFailed) said.push(" · not all brought up to date");
       const rows = sites.map((s) => {
-        const change = (Number(s.after) || 0) - (Number(s.before) || 0);
-        const reader = s.direction === "given" ? sides.here : sides.there;
-        const words = W.tabs(s.before) + " → " + W.tabs(s.after) + " tabs tracked"
-          + (change < 0 ? " · its listings no longer name them, so they would not have opened" : "")
-          + (s.read ? " · read by " + reader.the + " on " + W.day(s.read) : "");
-        return row([el("span", "sync-row-name", String(s.title || s.site) + " · "), signed(change)], words);
+        // A site given: its tabs on the other side, and no date (what the other side read of it is its own). Taken
+        // and given in one sync, each row says which way it went, so a site's two rows differ at a glance.
+        const given = s.direction === "given";
+        const news = W.indexNews(s, given ? places.given : places.taken);
+        const words = [directions.size > 1 ? W.went(s.direction, sides.there.the) : "",
+                       news.all && news.all + (given ? " " + places.given : ""),
+                       news.tone === "down" ? "its listings no longer name them, so they would not have opened" : "",
+                       !given && s.read ? "read by " + sides.there.the + " on " + W.day(s.read) : ""]
+          .filter(Boolean).join(" · ");
+        return row([el("span", "sync-row-name", String(s.title || s.site) + " · "), toned(news)], words);
       }).concat(indexed.map((site) => row(site, "")));
+      if (indexFailed) rows.push(row(String(indexFailed.label || "Indexes"), String(indexFailed.detail)));
       out.push(section("indexes", said, way, rows));
+    } else if (indexFailed) {
+      out.push(section("indexes", "Indexes not brought up to date", "",
+                       [row(String(indexFailed.label || "Indexes"), String(indexFailed.detail))]));
+    } else if (skippedWhy) {
+      out.push(section("indexes", "Indexes not synced", "", [row("Site indexes", skippedWhy)]));
+    }
+    // The phone's copy of the computer's pages, where it failed.
+    if (broke && broke.name === "mirror") {
+      out.push(section("pages", "Pages not brought up to date", "", [row(String(broke.label || "Copy"),
+                                                                           String(broke.detail))]));
     }
     // What it left as it was, and why.
     const left = listOf(outcome.left).map((e) => (Array.isArray(e) ? e : [e, ""]));
@@ -900,7 +958,8 @@
       + "either side."));
     sections.replaceChildren(...out);
     fileNote.hidden = !file;
-    if (failed) say(String(objOf(job.line) && job.line.text || "The sync failed."), "failed");
+    if (failed) say(lineSaid || "The sync failed.", "failed");
+    else if (broke) say(lineSaid && job.line.tone === "waiting" ? lineSaid : String(broke.detail) + ".", "failed");
     else say("");
     cancel.hidden = true;
     go.hidden = false;
@@ -958,8 +1017,7 @@
   };
 
   // --- import ----------------------------------------------------------------------------------------------------
-  const sending = (have, size) => "Sending the file: " + (have / 1e6).toFixed(have >= 10e6 ? 0 : 1) + " of "
-    + W.size(size);
+  const sending = (have, size) => "Sending the file: " + W.sizeOf(have, size);
   const upload = (file) => {
     const mine = turn;
     flow = "import";

@@ -21,12 +21,14 @@ from ``caracole autochords``, which the caracole-autochords unit runs after each
 ``--song "Artist - Title" --sheet`` makes that song's auto sheet now, as caracole serve's sheet from a
 YouTube video does (youtube_sheet.py): the song added to wanted.txt if it isn't in the library, the video
 (``--url``, else the one under ``[youtube]``, else its search's pick) written there and its audio taken,
-its lyrics from LRCLIB, the chords from the audio, its PDF and viewer, then the pages; ``--progress`` adds a
-JSON line per stage, which caracole serve reads, as ``caracole get --progress`` does; without it, what a long
+its lyrics from the lyrics sites, else its words heard from the audio where this caracole can transcribe and
+``[autochords] transcribe`` is on, the chords from the audio, its PDF and viewer, then the pages; ``--progress``
+adds a JSON line per stage, which caracole serve reads, as ``caracole get --progress`` does; without it, what a long
 stage is doing goes on progress.py's ticker, as the pass's yt-dlp runs do. It exits 0 once the
-sheet is made, and for a block, a cooldown, a spent budget or a site's error, which wait; 1 for a song it
-won't make a sheet of, a video YouTube won't give, audio auto-chords can't read, or a caracole that can't
-make chords of the audio, which it says before it asks anything.
+sheet is made, words or none (a transcription that fails here makes the chords alone), and for a block, a cooldown,
+a spent budget or a site's error, which wait; 1 for a song it won't make a sheet of, a video YouTube won't give,
+audio auto-chords can't read, or a caracole that can't make chords of the audio, which it says before it asks
+anything.
 
 Every command module is imported on every start, so the pass is imported inside the command.
 """
@@ -91,7 +93,8 @@ def register(app: typer.Typer) -> None:
         sheet: bool = typer.Option(
             False, "--sheet",
             help="With --song: make its auto sheet now, the song added to the library if it isn't there: the "
-                 "audio, the lyrics from LRCLIB, the chords from the audio, the PDF and the viewer.",
+                 "audio, the lyrics from the lyrics sites, else heard from the audio, the chords from the audio, "
+                 "the PDF and the viewer.",
         ),
         progress: bool = typer.Option(False, "--progress", help="With --sheet or --search: a JSON line per stage "
                                                                 "too, for caracole serve."),
@@ -467,7 +470,7 @@ def _one_song(conn: sqlite3.Connection, cfg: Config, display: str, overrides: Ov
     song = song_named(conn, display, overrides)
     if conn.execute("SELECT 1 FROM files WHERE song_id = ? AND name = 'sheet.txt'", (song.id,)).fetchone():
         fail(f'"{song.display}" has a human sheet: caracole takes no audio from YouTube for it.')
-    if song.audio_path and youtube_audio(conn, song) is None:  # a purchase, linked from Music/
+    if song.audio_path and youtube_audio(conn, song) is None:  # a purchase, or a file you gave it
         audio = Path(song.audio_path)
         where = f"{audio.relative_to(cfg.music_dir)} in Music/" if audio.is_relative_to(cfg.music_dir) else audio
         fail(f'"{song.display}" has its audio already ({where}): caracole takes none from YouTube for it.')

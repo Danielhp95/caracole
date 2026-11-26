@@ -23,20 +23,31 @@ def test_a_unit_kept_here_and_changed_on_neither_side_is_this_sides_not_a_confli
     assert (d.proposal, d.why) == (sync.MINE, sync.KEPT_HERE)
 
 
-def test_a_change_after_a_kept_answer_is_compared_as_usual():
-    kept = {"song/b": ("bh", "bt", "mine")}
-
-    def proposal(h, t):
+def test_after_a_kept_answer_a_change_on_the_choosers_side_is_the_choosers_and_one_on_the_other_a_conflict():
+    def proposal(h, t, chooser):
+        kept = {"song/b": ("bh", "bt", chooser)}
         return sync.compare({"song/b": U("song/b", h)}, {"song/b": U("song/b", t)}, {}, kept=kept)[0].proposal
 
-    assert (proposal("bh2", "bt"), proposal("bh", "bt2"), proposal("bh2", "bt2")) == (sync.MINE, sync.THEIRS,
-                                                                                      sync.CONFLICT)
+    assert [proposal("bh2", "bt", "mine"), proposal("bh", "bt2", "mine"), proposal("bh2", "bt2", "mine")] == [
+        sync.MINE, sync.CONFLICT, sync.CONFLICT]
+    assert [proposal("bh", "bt2", "theirs"), proposal("bh2", "bt", "theirs"), proposal("bh2", "bt2", "theirs")] == [
+        sync.THEIRS, sync.CONFLICT, sync.CONFLICT]
 
 
-def test_a_change_after_a_kept_answer_says_so_in_the_usual_words():
-    kept = {"song/b": ("bh", "bt", "mine")}
-    [gone] = sync.compare({}, {"song/b": U("song/b", "bt")}, {}, kept=kept)
-    [changed] = sync.compare({"song/b": U("song/b", "bh")}, {"song/b": U("song/b", "bt2")}, None, kept=kept)
+def test_a_unit_kept_here_then_changed_there_alone_is_a_conflict_for_the_owner_never_theirs():
+    # An import answered "keep mine" (record_kept's entry, no agreement since); the other side changes its own after:
+    # its version still lacks what the owner kept, so both books changed it since they last agreed.
+    kept = sync.merged_kept(None, {"song/b": ("bh", "bt", T1)}, None, {})
+    [d] = sync.compare({"song/b": U("song/b", "bh")}, {"song/b": U("song/b", "bt2")}, None, kept=kept)
+    assert (d.proposal, d.why) == (sync.CONFLICT, "both books changed it since the last share")
+    [gone] = sync.compare({"song/b": U("song/b", "bh")}, {}, None, kept=kept)
+    assert (gone.proposal, gone.why) == (sync.CONFLICT, "both books changed it since the last share")
+
+
+def test_a_change_on_the_choosers_side_after_a_kept_answer_says_so_in_the_usual_words():
+    [gone] = sync.compare({}, {"song/b": U("song/b", "bt")}, {}, kept={"song/b": ("bh", "bt", "mine")})
+    [changed] = sync.compare({"song/b": U("song/b", "bh")}, {"song/b": U("song/b", "bt2")}, None,
+                             kept={"song/b": ("bh", "bt", "theirs")})
     assert (gone.proposal, gone.why) == (sync.MINE, "gone here since the last share")
     assert (changed.proposal, changed.why) == (sync.THEIRS, "changed there since the last share")
 

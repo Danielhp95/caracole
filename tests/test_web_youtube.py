@@ -159,15 +159,20 @@ def test_where_no_chords_can_be_made_it_says_why_and_queues_nothing(cfg, queue, 
 @pytest.mark.parametrize("case,said", [
     ("human", "Nick Cani - Vikingos veganos already has a sheet."),
     ("ignored", "Nick Cani - Vikingos veganos is ignored in overrides.toml."),
-    ("purchase", "Nick Cani - Vikingos veganos has bought audio in Music/; auto-chords uses that."),
+    ("purchase", "Nick Cani - Vikingos veganos has its own audio (bought or given); auto-chords uses that."),
+    ("given", "Nick Cani - Vikingos veganos has its own audio (bought or given); auto-chords uses that."),
 ])
 def test_a_song_youtube_isnt_for_is_refused(able, queue, conn, case, said):
+    from helpers.audio_files import given
+
     song = add_song(conn, "Nick Cani", "Vikingos veganos")
     if case == "human":
         keep_human_sheet(conn, able, song)
     elif case == "ignored":
         able.overrides_file.parent.mkdir(parents=True, exist_ok=True)
         able.overrides_file.write_text('[ignore]\nsongs = ["Nick Cani - Vikingos veganos"]\n', encoding="utf-8")
+    elif case == "given":  # an audio file you gave it (audio_store.py)
+        given(conn, able.state_dir, song)
     else:
         bought = able.music_dir / "Nick Cani - Vikingos veganos.flac"
         bought.parent.mkdir(parents=True)
@@ -195,6 +200,7 @@ def test_the_library_page_offers_it_where_chords_can_be_made(able, queue, conn):
     body, data = page_data(app_for(able, queue))
     assert data["server"]["youtube"] == {"ok": True, "why": None, "off": False}
     assert '<input name="youtube"' in body  # the request form's field
+    assert '<p class="hint">Sheet made from the video, its lyrics heard from it when no site has them</p>' in body
     cards = {s["id"]: s for s in data["songs"]}
     assert cards[none_yet.id]["youtubeSheet"] is True and cards[charted.id]["youtubeSheet"] is False
 

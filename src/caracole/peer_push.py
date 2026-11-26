@@ -11,26 +11,38 @@ in its header (web/app.py's ``json`` and ``bytes`` routes):
    SHA-256).
 2. ``POST /peer/push/file?push=&sha256=``, once a file needed: its bytes, checked by their SHA-256 and kept as
    ``files/<sha256>`` (``stage_file``).
-3. ``POST /peer/push?push=``: the push document (``read_push_document``), each unit's document checked against its
-   digest (``check_digests``) and each file its songs keep staged or kept here, then kept as ``push.json``
+3. ``POST /peer/push?push=``: the push document (``read_push_document``: refused, 409, from a caracole whose songs
+   are keyed by other rules, its ``key_version``), each unit's document checked against its digest
+   (``check_digests``) and each file its songs keep staged or kept here, then kept as ``push.json``
    (``send``); ``caracole peer take DIR`` is queued, which takes its units from a ``StagedSource``, as a pull takes
    a peer's, and deletes the folder once it is over.
+
+A push that fails after it is opened (a file or its document refused, a network that drops) is let go of at once:
+``POST /peer/push/drop`` (``drop``) deletes a push never sent, asked by whoever opened it, as a send is (its id, and
+the caracole that opened it), never one whose document was taken (409: its take waits or runs). The pusher asks it on
+any failure after ``push/new``, and a sender's next ``push/new`` lets go of its earlier push never sent too: a sender
+holds one open push at a time, so that a push that stops never holds a slot here for the hour.
 
 Nothing of it goes into the library, and caracole serve writes nothing else for a push (AGENTS.md). A push's id is
 16 hex and a file's SHA-256 64 hex, both checked before any path is built of them (``_folder`` builds the one path
 an id names, and ``sent_folder`` checks the one a take is given). At most ``OPEN`` (2) pushes are here at once, open
-or sent and not taken yet; a file is at most ``FILE_MAX`` (64 MiB) and a push's files ``PUSH_MAX`` (2 GiB). A push
-untouched for ``EXPIRES`` (an hour), sent or not, is deleted (``sweep``: when caracole serve starts, at each of the
-three requests, and as a take ends), unless a take holds it (``held``).
+or sent and not taken yet, one never sent of each sender at most; a file is at most ``FILE_MAX`` (64 MiB) and a
+push's files ``PUSH_MAX`` (2 GiB). A push untouched for ``EXPIRES`` (an hour), sent or not, is deleted (``sweep``:
+when caracole serve starts, at each of the three requests, and as a take ends), unless a take holds it (``held``).
 
 A caracole pushes to another as the phone does (``Pusher``, ``push_units``), so ``caracole peer sync --push`` gives
-the other side its units with no need for it to reach this one.
+the other side its units with no need for it to reach this one: in as many pushes as the other side's limits ask
+(``_cut``), each taken there before the next is opened, a song with a kept file past ``FILE_MAX`` left out.
 
 **The phone's index pages** (``POST /peer/index``): an index export of the pages its lookups read
 (``index_transfer.export(pages=)``), at most ``INDEX_MAX`` (64 MiB), whose bytes must open as a SQLite file's, kept
 as ``state_dir/peer/index-<16 hex>.sqlite`` (0600, ``stage_index``) for ``caracole index merge --delete --progress``,
 which deletes it once it is merged or refused. At most ``INDEX_OPEN`` (2) wait at once (409 for another); one an
 hour old that no queued or running request names is deleted as the next comes (``sweep_indexes``).
+
+**A sync's copies of the indexes** (``cache_dir/peer``): those ``caracole peer sync`` and ``peer import`` download,
+export or copy out of a file, held while they are read (``holding_copy``), and those a killed command left swept an
+hour on (``sweep_copies``).
 """
 
 from __future__ import annotations
@@ -52,8 +64,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from caracole import normalize, stamps
 from caracole import peer_sync as sync
-from caracole import stamps
 
 ID = re.compile(r"[0-9a-f]{16}")  # a push's id, and a caracole's (kv sync:id: db.py's schema 15, peer_sync.new_id)
 SHA256 = re.compile(r"[0-9a-f]{64}")
@@ -62,6 +74,7 @@ FILE_MAX = 64 * 1024 * 1024  # a file's bytes, at most (POST /peer/push/file's l
 PUSH_MAX = 2 * 1024 ** 3  # a push's files' bytes, at most
 NEW_MAX = 1024 * 1024  # POST /peer/push/new's document, at most
 DOCUMENT_MAX = 16 * 1024 * 1024  # POST /peer/push's, at most
+DROP_MAX = 16 * 1024  # POST /peer/push/drop's, at most
 EXPIRES = 3600.0  # seconds a push is left untouched before it is deleted
 FOLDER = "peer"  # under state_dir
 PREFIX = "push-"
@@ -186,12 +199,16 @@ def new_push(state_dir: Path, *, sender: str, files: Sequence[str], need: Sequen
     """A push opened for ``sender`` (``read_new``'s), which names ``files``, of which this side needs ``need``
     (``needed``): its folder made; PushError when ``sender`` is this caracole (``own``, its id), or with ``OPEN``
     pushes here already, open or sent and not taken yet (409); OSError when its folder can't be made. Pushes left
-    untouched for an hour go first (``sweep``)."""
+    untouched for an hour go first (``sweep``), and so does the push ``sender`` opened before and never sent: one
+    sender holds one open push at a time."""
     _not_from_here(sender, own)
     need = list(need)
     sweep(state_dir, now)
     with _lock:
         root = state_dir / FOLDER
+        for folder in _pushes(root):
+            if _never_sent_by(folder, sender):
+                shutil.rmtree(folder, ignore_errors=True)
         if len(_pushes(root)) >= OPEN:
             raise PushError("Two pushes wait here already. Try again once one is taken, or in an "
                             "hour.", 409)
@@ -209,6 +226,36 @@ def new_push(state_dir: Path, *, sender: str, files: Sequence[str], need: Sequen
         _private_dir(folder / FILES)
         _write_private(folder / NEW, json.dumps({"from": sender, "files": list(files), "need": need}).encode())
     return Opened(push_id, need)
+
+
+def _never_sent_by(folder: Path, sender: str) -> bool:
+    """Whether the push in ``folder`` was opened by ``sender`` and its document never taken (no take queued)."""
+    opened = _read_json(folder / NEW)
+    return isinstance(opened, Mapping) and opened.get("from") == sender and not os.path.lexists(folder / DOCUMENT)
+
+
+def drop(state_dir: Path, push_id: str, sender: str) -> None:
+    """The push ``push_id`` deleted now, never sent (``POST /peer/push/drop``: its pusher failed after it opened it),
+    asked by ``sender``, the caracole that opened it, as a send is; PushError for a bad id or sender (400), no such
+    push here (404), one another caracole opened (400), or one whose document was taken, its take queued or running
+    (409)."""
+    check_id(push_id)
+    if not isinstance(sender, str) or not ID.fullmatch(sender):
+        raise PushError("Who pushes? Its caracole's id is 16 hex.")
+    with _lock:
+        folder = _folder(state_dir, push_id)
+        try:
+            entry = os.lstat(folder)
+        except FileNotFoundError:
+            entry = None
+        if entry is None or not stat.S_ISDIR(entry.st_mode):
+            raise PushError("No such push is open here.", 404)
+        opened = _read_json(folder / NEW)
+        if not isinstance(opened, Mapping) or opened.get("from") != sender:
+            raise PushError("That push was opened by another caracole.")
+        if os.path.lexists(folder / DOCUMENT):
+            raise PushError("That push is sent: its take waits or runs here.", 409)
+        shutil.rmtree(folder, ignore_errors=True)
 
 
 def stage_file(state_dir: Path, push_id: str, digest: str, data: bytes) -> None:
@@ -286,6 +333,71 @@ def sweep_indexes(state_dir: Path, named: set[str], now: float | None = None) ->
             if old and str(path) not in named:
                 path.unlink(missing_ok=True)
                 gone.append(path.name)
+    return gone
+
+
+# --- the copies of the indexes a sync or an import works on (cache_dir/peer) ---------------------------------------
+
+# commands/peer.py's: the indexes taken (sync-), given (give-, index_transfer.export's .part while it is made) or copied
+# out of a .caracole file (import-), and SQLite's files beside each
+COPY = re.compile(r"((?:sync|give|import)-indexes-[0-9a-f]{12}\.sqlite)(?:\.[0-9a-f]{12}\.part)?"
+                  r"(?:-journal|-wal|-shm)?")
+
+
+@contextmanager
+def holding_copy(path: Path) -> Iterator[None]:
+    """The copy at ``path`` held by the command working on it (an flock of it, gone with the process however it
+    ends), so that no ``sweep_copies`` deletes it, nor its side files, while a merge or an upload reads it for more
+    than an hour, its time standing still. Closed only once SQLite is done with it: closing a descriptor of a file
+    lets go of the POSIX locks this process's connections hold on it."""
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_SH)
+        yield
+    finally:
+        os.close(fd)
+
+
+def _copy_held(path: Path) -> bool:
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return True  # not a file to read (a link): kept
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return False
+    except BlockingIOError:
+        return True
+    finally:
+        os.close(fd)
+
+
+def sweep_copies(folder: Path, now: float | None = None) -> list[str]:
+    """Delete each copy of the indexes in ``folder`` (``cache_dir/peer``) a killed ``peer sync`` or ``peer import``
+    left (``COPY``: its own names alone, regular files, no link followed), untouched for ``EXPIRES``, unless a command
+    holds it (``holding_copy``: a side file goes by its copy's hold); the names deleted. A copy downloaded or written
+    has its time moving: an export's ``.part`` is held by nothing else. Called in a process that holds none of them
+    open in SQLite (as a command starts, and by caracole serve)."""
+    now = time.time() if now is None else now
+    try:
+        entries = list(os.scandir(folder))
+    except OSError:
+        return []
+    gone = []
+    for entry in entries:
+        named = COPY.fullmatch(entry.name)
+        try:
+            if not (named and entry.is_file(follow_symlinks=False)
+                    and now - entry.stat(follow_symlinks=False).st_mtime > EXPIRES):
+                continue
+            if _copy_held(Path(folder) / named.group(1)):
+                continue
+            os.unlink(entry.path)
+            gone.append(entry.name)
+        except OSError:
+            continue
     return gone
 
 
@@ -460,11 +572,15 @@ class Push:
 
 
 def read_push_document(data: Any) -> Push:
-    """``POST /peer/push``'s document read: ``{"format", "from", "name", "caracole", "at", "units": {id: {label,
-    digest}}, "take": [{id, expected, digest, unit}]}``, each unit given once, a document with each digest and none
-    without, and each digest the one its state gives it. PushError for anything else."""
+    """``POST /peer/push``'s document read: ``{"format", "from", "name", "caracole", "key_version", "at", "units": {id:
+    {label, digest}}, "take": [{id, expected, digest, unit}]}``, each unit given once, a document with each digest and
+    none without, and each digest the one its state gives it. PushError for anything else; 409 (``OTHER_KEYS``) for a
+    push of a caracole whose songs are keyed by other rules (``peer_sync.other_keys``: one that says none is an older
+    caracole's, read as before)."""
     if not isinstance(data, Mapping) or data.get("format") != sync.FORMAT:
         raise PushError(f"That isn't a push of format {sync.FORMAT} (the other caracole may be of another version).")
+    if sync.other_keys(data.get("key_version")):
+        raise PushError(sync.OTHER_KEYS, 409)
     sender, name, version, at = data.get("from"), data.get("name"), data.get("caracole"), data.get("at")
     if not isinstance(sender, str) or not ID.fullmatch(sender):
         raise PushError("Who pushes? Its caracole's id is 16 hex.")
@@ -613,8 +729,10 @@ class StagedSource:
 NEW_PATH = "/peer/push/new"
 FILE_PATH = "/peer/push/file"
 PUSH_PATH = "/peer/push"
+DROP_PATH = "/peer/push/drop"
 JOBS_PATH = "/api/jobs/"
 WAIT = 600.0  # seconds a push's take is waited for, at most
+DROP_TIMEOUT = 5.0  # seconds a push's drop is waited for, at most: a live server answers it at once
 POLL = 1.0  # seconds between two asks of how it goes
 
 
@@ -679,6 +797,21 @@ class Pusher(sync.Peer):
             raise sync.PeerError(f"{self.address} took the push but named no Journal entry for it.")
         return job["id"]
 
+    def push_drop(self, push: str, sender: str) -> bool:
+        """``POST /peer/push/drop``: the push ``push`` there, never sent, let go of; whether it was (an error, or its
+        refusal, is no more than that: the sender's next push lets go of it, or it is swept within the hour). Asked
+        once, with the token held, within ``DROP_TIMEOUT``: a drop is what a failure or a Ctrl-C does last, and a
+        server that doesn't answer it at once is let be, never waited on for the client's minute nor its state read
+        again for a token."""
+        try:
+            response = self._client.post(self.address + DROP_PATH, content=_json({"push": push, "from": sender}),
+                                         timeout=DROP_TIMEOUT, headers={
+                                             "Content-Type": "application/json", "Accept": "application/json",
+                                             "X-Caracole-Form-Token": self.token or ""})
+        except Exception:  # whatever went wrong, the push's own failure is the one said
+            return False
+        return response.status_code == 200
+
     def job(self, job_id: int) -> dict[str, Any]:
         """``GET /api/jobs/<id>``: how a job there goes."""
         response = self._get(f"{JOBS_PATH}{job_id}")
@@ -707,27 +840,60 @@ def _says_reload(response) -> bool:
 
 @dataclass(frozen=True)
 class Pushed:
-    """A push sent (``push_units``): the job that takes it there (0: nothing was sent), the units it gives, and
-    those left out, each with why."""
+    """A push sent (each of ``push_units``'): the job that takes it there (0: nothing was sent), the units it gives,
+    and those left out here, each with why (the first push's hold those the give left before any was sent)."""
 
     job: int
     given: tuple[str, ...]
     left: tuple[tuple[str, str], ...]
+    push: int = 1  # which of the give's pushes it is, from 1
+    pushes: int = 1  # of how many
 
 
-def push_units(pusher: Pusher, conn: sqlite3.Connection, cfg, overrides, books: Sequence, give: Mapping[str, str | None],
+class PushStopped(sync.PeerError):
+    """A give stopped at one of its pushes (``push_units``): why, and how far it got: ``sent`` of its ``pushes``
+    pushes taken there before it (each handed to ``between``), and the units left out of the give that no
+    ``between`` was handed, each with why (``left``)."""
+
+    def __init__(self, message: str, *, sent: int, pushes: int, left: Sequence[tuple[str, str]] = ()):
+        super().__init__(message)
+        self.sent, self.pushes, self.left = sent, pushes, tuple(left)
+
+
+TOO_LONG = "its document is longer than a push carries (16 MiB)"  # one unit's, alone past DOCUMENT_MAX
+TOO_HEAVY = "its files are more than a push carries (2 GiB)"  # one song's, alone past PUSH_MAX (or NEW_MAX's names)
+_NAMED = 67  # a SHA-256 in push/new's "files", as _json writes it: 64 hex, its quotes and a comma
+
+
+def push_units(pusher: Pusher, conn: sqlite3.Connection, cfg, overrides, books, give: Mapping[str, str | None],
                *, own: str, at: str, name: str, version: str,
-               compared_here: Mapping[str, str | None] | None = None) -> Pushed:
+               compared_here: Mapping[str, str | None] | None = None,
+               between: Callable[[Pushed], Any] | None = None,
+               again: Callable[[], Mapping[str, sync.Unit] | None] | None = None) -> Pushed:
     """Give the other side the units of ``give`` (each unit's id, and the other side's digest of it as compared,
     None for one it hadn't), as the phone gives them: their files, then the push document, this side's whole state
     with it, ``at`` the other side's time in the state compared. A unit whose digest here differs from
     ``compared_here``'s is left out (``CHANGED_HERE``), and so is a song with a kept file this side can no longer
-    read as kept. The caller holds caracole's lock; the other side takes the push as a job of its own
-    (``wait_for``)."""
+    read as kept, one with a kept file past ``FILE_MAX`` (peer_file's ``TOO_BIG``, the export's words for it), and a
+    unit that alone passes what a push carries (``TOO_LONG``, ``TOO_HEAVY``).
+
+    The units go in as many pushes as the other side's limits ask (``_cut``: each document within
+    ``DOCUMENT_MAX``, each ``push/new`` within ``NEW_MAX``, each push's files within ``PUSH_MAX``, a song and its
+    tombstone in one), one at a time: each but the last is handed to ``between`` once sent, which returns once its
+    take is over there (``wait_for``, its default), the take agreeing on what it took as it ends and its push's slot
+    let go of, and only then is the next opened. The last is returned, for the caller to wait for. A push that fails
+    is let go of there (``Pusher.push_drop``) and the give stops there, ``PushStopped`` saying how far it got; an
+    interrupt (Ctrl-C) lets go of it too, then goes on. The caller holds caracole's lock, which ``between`` may hand
+    to a lookup as it waits: after each wait ``again`` gives this side's state anew when it may have moved meanwhile
+    (None: it didn't), and each unit still to push whose digest moved since is left out (``CHANGED_HERE``), the
+    pushes after it sent with that state."""
+    from caracole.peer_file import TOO_BIG
+
     units = sync.library_state(conn, overrides, books)
     take: list[dict[str, Any]] = []
     left: list[tuple[str, str]] = []
     files_of: dict[str, set[str]] = {}
+    sizes: dict[str, int] = {}
     for unit_id, expected in give.items():
         mine = units.get(unit_id)
         digest = mine.digest if mine is not None else None
@@ -737,25 +903,141 @@ def push_units(pusher: Pusher, conn: sqlite3.Connection, cfg, overrides, books: 
         doc = sync.unit_document(conn, cfg, overrides, books, unit_id) if mine is not None else None
         unit = doc["unit"] if doc is not None else None
         if unit is not None and unit_id.partition("/")[0] == "song":
-            files_of[unit_id] = {f["sha256"] for v in unit["versions"] for f in v["files"]}
+            kept = _kept_sizes(conn, cfg.library_dir, unit_id.partition("/")[2], unit)
+            if any(size > FILE_MAX for size in kept.values()):
+                left.append((unit_id, TOO_BIG))
+                continue
+            files_of[unit_id] = set(kept)
+            sizes.update(kept)
         take.append({"id": unit_id, "expected": expected, "digest": digest, "unit": unit})
-    if not take:
+    header = {"format": sync.FORMAT, "from": own, "name": name, "caracole": version,
+              "key_version": normalize.KEY_VERSION, "at": at,
+              "units": {u.id: {"label": u.label, "digest": u.digest} for u in units.values()}, "take": []}
+    pushes, too_much = _cut(header, take, files_of, sizes, own)
+    left += too_much
+    if not pushes:
         return Pushed(0, (), tuple(left))
-    push_id, need = pusher.push_new(own, sorted(set().union(*files_of.values())))
-    unreadable = set()
-    for sha256 in need:
-        data = kept_copy(conn, cfg.library_dir, sha256)
-        if data is None:
-            unreadable.add(sha256)
+    wait = between if between is not None else (lambda sent: wait_for(pusher, sent.job))
+    n = 0
+    while n < len(pushes):
+        which = "" if len(pushes) == 1 else f"push {n + 1} of {len(pushes)}: "
+        try:
+            pushed = _push_one(pusher, conn, cfg, own, header, pushes[n], files_of)
+        except sync.PeerError as e:
+            raise PushStopped(which + str(e), sent=n, pushes=len(pushes), left=left) from None
+        pushed = Pushed(pushed.job, pushed.given, tuple(left) + pushed.left, n + 1, len(pushes))
+        left = []
+        if not any(pushes[n + 1:]):
+            return pushed
+        try:
+            wait(pushed)
+        except sync.PeerError as e:
+            raise PushStopped(which + str(e), sent=n, pushes=len(pushes), left=pushed.left) from None
+        fresh = again() if again is not None else None
+        if fresh is not None:  # the lock was handed to a lookup meanwhile: what it changed stays here
+            header = {**header, "units": {u.id: {"label": u.label, "digest": u.digest} for u in fresh.values()}}
+            for later in pushes[n + 1:]:
+                for entry in list(later):
+                    now = fresh.get(entry["id"])
+                    if (now.digest if now is not None else None) != entry["digest"]:
+                        later.remove(entry)
+                        left.append((entry["id"], sync.CHANGED_HERE))
+        n += 1
+        while n < len(pushes) and not pushes[n]:
+            n += 1
+    return Pushed(0, (), tuple(left), len(pushes), len(pushes))  # every unit after a wait left
+
+
+def _kept_sizes(conn: sqlite3.Connection, library_dir: Path, key: str, unit: Mapping[str, Any]) -> dict[str, int]:
+    """Each file a song's document keeps, by its SHA-256, and its size in the song's folder now (no link followed;
+    0 for one that can't be read there, which its push then finds changed)."""
+    found: dict[str, int] = {}
+    for version in unit["versions"]:
+        for f in version["files"]:
+            row = conn.execute("SELECT files.path FROM files JOIN songs ON songs.id = files.song_id "
+                               "WHERE songs.key = ? AND files.name = ?", (key, f["name"])).fetchone()
+            try:
+                entry = os.lstat(library_dir / row[0]) if row is not None else None
+            except OSError:
+                entry = None
+            size = entry.st_size if entry is not None and stat.S_ISREG(entry.st_mode) else 0
+            found[f["sha256"]] = max(found.get(f["sha256"], 0), size)
+    return found
+
+
+def _cut(header: Mapping[str, Any], take: Sequence[dict[str, Any]], files_of: Mapping[str, set[str]],
+         sizes: Mapping[str, int], own: str, *, document_max: int | None = None, new_max: int | None = None,
+         files_max: int | None = None) -> tuple[list[list[dict[str, Any]]], list[tuple[str, str]]]:
+    """``take`` cut into pushes within the other side's limits, in order: each push's document (``header`` with its
+    entries as ``take``) within ``DOCUMENT_MAX``, its ``push/new`` within ``NEW_MAX`` and its files' bytes within
+    ``PUSH_MAX``, a song and its tombstone (``song/K``, ``removed/K``) in the same push, where the first of the two
+    came; and the units that alone pass one of them, each with why (``TOO_LONG``, ``TOO_HEAVY``). Lengths are those
+    of the bytes ``_json`` sends. The limits are those three constants as they are now, unless given."""
+    most_document = DOCUMENT_MAX if document_max is None else document_max
+    most_new = NEW_MAX if new_max is None else new_max
+    most_files = PUSH_MAX if files_max is None else files_max
+    base = len(_json(header))  # its "take": [] counted
+    new_base = len(_json({"format": sync.FORMAT, "from": own, "files": []}))
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for entry in take:
+        kind, _, key = entry["id"].partition("/")
+        groups.setdefault(f"song/{key}" if kind in ("song", "removed") else entry["id"], []).append(entry)
+    pushes: list[list[dict[str, Any]]] = []
+    too_much: list[tuple[str, str]] = []
+    batch: list[dict[str, Any]] = []
+    length, named, weight = 0, set(), 0
+    for group in groups.values():
+        more = sum(len(_json(e)) + 1 for e in group)  # each entry and its comma
+        files = set().union(*(files_of.get(e["id"], set()) for e in group))
+        if base + more - 1 > most_document:
+            too_much += [(e["id"], TOO_LONG) for e in group]
             continue
-        pusher.push_file(push_id, sha256, data)
-    if unreadable:
-        for entry in [e for e in take if files_of.get(e["id"], set()) & unreadable]:
-            take.remove(entry)
-            left.append((entry["id"], "a file it keeps changed here since we kept it"))
-    document = {"format": sync.FORMAT, "from": own, "name": name, "caracole": version, "at": at,
-                "units": {u.id: {"label": u.label, "digest": u.digest} for u in units.values()}, "take": take}
-    return Pushed(pusher.push(push_id, document), tuple(e["id"] for e in take), tuple(left))
+        if new_base + _NAMED * len(files) - 1 > most_new or sum(sizes.get(f, 0) for f in files) > most_files:
+            too_much += [(e["id"], TOO_HEAVY) for e in group]
+            continue
+        new = files - named
+        if batch and (base + length + more - 1 > most_document
+                      or new_base + _NAMED * (len(named) + len(new)) - 1 > most_new
+                      or weight + sum(sizes.get(f, 0) for f in new) > most_files):
+            pushes.append(batch)
+            batch, length, named, weight = [], 0, set(), 0
+            new = files
+        batch += group
+        length += more
+        named |= new
+        weight += sum(sizes.get(f, 0) for f in new)
+    if batch:
+        pushes.append(batch)
+    return pushes, too_much
+
+
+def _push_one(pusher: Pusher, conn: sqlite3.Connection, cfg, own: str, header: Mapping[str, Any],
+              batch: list[dict[str, Any]], files_of: Mapping[str, set[str]]) -> Pushed:
+    """One push of ``push_units``': opened, the files the other side needs sent, then its document (``header``
+    with ``batch`` as its ``take``); any failure before its document is taken, an interrupt's too, lets go of it
+    there (``Pusher.push_drop``: refused, 409, once its document was taken: its take goes on there) before it is
+    raised as it was."""
+    take = list(batch)
+    files = sorted(set().union(*(files_of.get(e["id"], set()) for e in take)))
+    push_id, need = pusher.push_new(own, files)
+    left: list[tuple[str, str]] = []
+    try:
+        unreadable = set()
+        for sha256 in need:
+            data = kept_copy(conn, cfg.library_dir, sha256)
+            if data is None:
+                unreadable.add(sha256)
+                continue
+            pusher.push_file(push_id, sha256, data)
+        if unreadable:
+            for entry in [e for e in take if files_of.get(e["id"], set()) & unreadable]:
+                take.remove(entry)
+                left.append((entry["id"], "a file it keeps changed here since we kept it"))
+        job = pusher.push(push_id, {**header, "take": take})
+    except BaseException:
+        pusher.push_drop(push_id, own)
+        raise
+    return Pushed(job, tuple(e["id"] for e in take), tuple(left))
 
 
 def wait_for(pusher: Pusher, job_id: int, *, timeout: float = WAIT, every: float = POLL,

@@ -32,18 +32,28 @@ from it alone (``value_of_document``), so a side checks what it is given before 
 side keeps. It hashes a version's raw record without UG's ratings and votes, which FORMAT 2 hashed, so that a tab
 one side read again a day later no longer differs. A side refuses a document of another format; a base kept by another format
 is no base (``base_of``), so the first sync after an upgrade compares as a first sync, with no translation. The state document says when it
-was made by its side's clock (``now``), which both sides stamp their agreement with, and the newest read of each of
-its site indexes (``indexes``: ``index_transfer.newest``); a reader ignores what it doesn't know.
+was made by its side's clock (``now``), which both sides stamp their agreement with, the schema its database is at
+(``schema``, ``db.SCHEMA_VERSION``: an index export of another is refused at its merge, so a sync asks for none
+before it downloads one; a state that says none is an older caracole's, asked as before), and the newest read of
+each of its site indexes (``indexes``: ``index_transfer.newest``); a reader ignores what it doesn't know.
 
-**Comparing** (``compare``) is three-way once the two have synced: for each unit, its digest when the two last held
-it the same, the **base**. Each side keeps its own (kv ``sync:base:<peer id>``, ``{"format": 3, "units": {unit:
-[digest or None, when]}}``: None for a unit both lacked, ``record_agreement``), written at the end of every sync it
-makes; the other's comes with its state (``GET /api/peer/state?peer=<id>``), and the later of the two counts
-(``merged_base``), so a unit one side pushed to the other is known as synced on both, whichever side took it. A
-unit only one side changed since is that side's; a unit both changed, differently, a ``CONFLICT`` for the owner to
-settle; one both changed the same way, or neither, no difference at all. With no base (the first sync), a unit on
-one side alone is that side's, and one both hold, differently, a conflict. ``compared_hash`` names a comparison, so
-that a change made on what was compared is refused once either side moved on.
+**The song keys' rules.** Units are named by identity keys, so two caracoles that key songs by different rules (a
+``normalize.KEY_VERSION`` bump on one side alone) would read a song the upgraded side re-keyed as removed and a new
+one: the state document says its side's (``key_version``), as do the push document and a file's manifest, and one of
+other rules (``other_keys``) is refused before anything changes (``Peer.state``'s ``OtherKeys``, ``OTHER_KEYS``),
+the bases left as they are, never re-keyed. A document that says none is an older caracole's, read as before.
+
+**Comparing** (``compare``) is three-way once the two have synced: for each unit, its digest when the two last held it
+the same, the **base**. Each side keeps its own (kv ``sync:base:<peer id>``, ``{"format": 3, "units": {unit: [digest or
+None, when]}}``: None for a unit both lacked, ``record_agreement``), written at the end of every sync it makes, and for
+each unit a take made this side's as that take ends (``record_taken``), whichever took it: a pull, a sync, a push's
+take, an import, so that one stopped after its take (its give refused, the network gone, its render failing or killed)
+leaves what it took agreed; the other's comes with its state (``GET /api/peer/state?peer=<id>``), and the later of the
+two counts (``merged_base``), so a unit one side pushed to the other is known as synced on both, whichever side took it.
+A unit only one side changed since is that side's; a unit both changed, differently, a ``CONFLICT`` for the owner to
+settle; one both changed the same way, or neither, no difference at all. With no base (the first sync), a unit on one
+side alone is that side's, and one both hold, differently, a conflict. ``compared_hash`` names a comparison, so that a
+change made on what was compared is refused once either side moved on.
 
 **The remembered answer.** A file of the other's imported can't take this side's version back, so a conflict the
 owner answers "keep mine" in an import is remembered beside the base (``record_kept``: its ``"kept"`` member,
@@ -51,8 +61,9 @@ owner answers "keep mine" in an import is remembered beside the base (``record_k
 document gives the asker the entries kept for it (``"kept"``, read into ``PeerState.kept``), and for each unit the
 latest of the four records (each side's agreement and kept answer) counts, an agreement on a tie (``merged_kept``,
 the other side's read with its two digests swapped): a kept answer that counts makes the unit, while neither side has
-changed it since, the chooser's, ``KEPT_HERE`` or ``KEPT_THERE``, never a conflict asked again; a change on either
-side after it is compared as usual (``compare``'s ``kept``). An agreement drops the kept answer of every unit it
+changed it since, the chooser's, ``KEPT_HERE`` or ``KEPT_THERE``, never a conflict asked again; a change after it on
+the chooser's side alone keeps it the chooser's, and one on the other side, whose version still lacks the one kept,
+is a ``CONFLICT``, never taken unasked (``compare``'s ``kept``). An agreement drops the kept answer of every unit it
 agrees on, both sides' versions alike or both lacking it (``record_agreement``), and a base with no kept answer is
 written as before, with no ``"kept"``; the state document carries ``"kept"`` only when given one.
 
@@ -100,10 +111,13 @@ from pathlib import Path
 from pathlib import PurePosixPath
 from typing import Any, Callable, Iterable, Mapping, Protocol, Sequence
 
-from caracole import canonical
+from caracole import canonical, normalize
 from caracole.db import kv_get, kv_get_json, kv_set, kv_set_json, savepoint
 
 FORMAT = 3  # of every document a side answers, and of the base it keeps: changes with their shapes and digests
+# Why two caracoles whose songs are keyed by different rules (another normalize.KEY_VERSION) never sync: units are named
+# by those keys, so a song one side re-keyed would read as removed there and a new one here.
+OTHER_KEYS = "This caracole and the other name songs by different rules: update both to the same version, then sync."
 ID_KEY = "sync:id"
 # kv, then a peer's id: {"format": FORMAT, "units": {unit: [digest or None, when]}} as of the last time the two agreed,
 # and "kept": {unit: [digest here, digest there, when]}, the answers an import remembered (none: no member)
@@ -131,6 +145,9 @@ VOLATILE_RAW = {"ug": ("rating", "votes")}
 # Why a unit is left: either side holds it otherwise than when the two were compared.
 CHANGED_HERE = "changed here since compared"
 CHANGED_THERE = "changed there since compared"
+# Why a tombstone there is left: its song stays here (kept here, or its own difference left), so taking it would change
+# nothing, and saying it taken would read as the song gone.
+SONG_HERE = "its song is here: its removal there is not taken"
 # Why a unit is one side's though both hold it otherwise than the base: an import's "keep mine", remembered.
 KEPT_HERE = "ours kept, as you chose when reading their file"
 KEPT_THERE = "theirs kept, as you chose when they read our file"
@@ -349,6 +366,25 @@ def record_agreement(conn: sqlite3.Connection, peer: str, mine: Mapping[str, Uni
     return agreed
 
 
+def record_taken(conn: sqlite3.Connection, peer: str, mine: Mapping[str, Unit], taken: Mapping[str, str | None],
+                 at: str) -> int:
+    """Keep, as agreed with ``peer`` at ``at``, each unit a take just made this side's (``taken``: its digest there as
+    taken, None for a unit it had none of) that this side now holds so (``mine``, its whole state), or lacks as the
+    peer does, dropping its kept answer. A sync keeps them as its take ends, so that what it took stays agreed
+    whatever comes of the rest (its give, the agree's own read of the peer); every other unit's base and kept answer
+    stay as they were, and none agreed writes nothing. Return how many were agreed."""
+    agreed = {unit_id: digest for unit_id, digest in taken.items()
+              if (mine[unit_id].digest if unit_id in mine else None) == digest}
+    if not agreed:
+        return 0
+    base, kept = base_of(conn, peer) or {}, kept_of(conn, peer)
+    for unit_id, digest in agreed.items():
+        base[unit_id] = (digest, at)
+        kept.pop(unit_id, None)
+    _write_base(conn, peer, base, kept)
+    return len(agreed)
+
+
 # --- a library's units -------------------------------------------------------------------------------------------
 
 
@@ -441,15 +477,18 @@ def state_document(server: str | None, version: str, name: str, units: Mapping[s
                    base: Base | None = None, *, now: str | None = None,
                    indexes: Mapping[str, str] | None = None,
                    kept: Mapping[str, tuple] | None = None) -> dict[str, Any]:
-    """``GET /api/peer/state``'s answer: who this side is, its units by id, and, for the peer that asked, what this
-    side last agreed on with it (``base``, null if never) and the answers its imports of that peer's files remembered
-    (``kept``, ``kept_of``'s, as stored: ``here`` this side's; no member unless given); ``now``, this side's clock (a
-    stamp; the time it answers, unless given), which a sync stamps its agreement with on both sides, and ``indexes``,
-    the newest read of each of its site indexes (``index_transfer.newest``), so the other side asks only for what is
-    newer."""
-    from caracole import stamps
+    """``GET /api/peer/state``'s answer: who this side is (with the schema its database is at, ``schema``), the rules
+    its songs are keyed by (``key_version``, ``normalize.KEY_VERSION``), its units by id, and, for the peer that asked,
+    what this side last agreed on with it (``base``, null if never) and the answers its imports of that peer's files
+    remembered (``kept``, ``kept_of``'s, as stored: ``here`` this side's; no member unless given); ``now``, this side's
+    clock (a stamp; the time it answers, unless given), which a sync stamps its agreement with on both sides, and
+    ``indexes``, the newest read of each of its site indexes (``index_transfer.newest``), so the other side asks only
+    for what is newer, and for none at all of another schema. Of the two, ``key_version`` is the one that refuses the
+    whole comparison (``other_keys``), before the schema's refusal of the indexes alone is ever reached."""
+    from caracole import db, stamps
 
-    doc = {"format": FORMAT, "server": server, "caracole": version, "name": name,
+    doc = {"format": FORMAT, "server": server, "caracole": version, "schema": db.SCHEMA_VERSION, "name": name,
+           "key_version": normalize.KEY_VERSION,
            "now": now if now is not None else stamps.stamp(datetime.now(UTC)),
            "indexes": dict(indexes or {}),
            "units": {u.id: {"label": u.label, "digest": u.digest} for u in sorted(units.values(), key=_order)},
@@ -472,10 +511,20 @@ class PeerState:
     now: str | None = None  # its clock when it answered
     indexes: dict[str, str] = field(default_factory=dict)  # the newest read of each of its site indexes
     kept: Kept = field(default_factory=dict)  # the answers its imports of the asker's files remembered, as kept
+    schema: int | None = None  # the schema its database is at; None: it says none (an older caracole)
+    key_version: Any = None  # the rules its songs are keyed by, as it says them; None: it says none (an older one)
 
 
 class StateError(ValueError):
     """A peer's answer that isn't a document this caracole reads."""
+
+
+def other_keys(said: Any) -> bool:
+    """Whether a document's ``key_version`` (``said``: a state's, a push's, a file's manifest's) names other rules
+    than this caracole keys its songs by: any value but its ``normalize.KEY_VERSION``, as ``!=`` compares it. None (no
+    member, or null: a caracole older than the member, which says none) is read as before, the one gap that closes
+    only once both sides are updated. Such a document is refused before anything changes (``OTHER_KEYS``)."""
+    return said is not None and said != normalize.KEY_VERSION
 
 
 def read_state_document(data: Any) -> PeerState:
@@ -495,9 +544,12 @@ def read_state_document(data: Any) -> PeerState:
     token, now, indexes = data.get("token"), data.get("now"), data.get("indexes")
     stamps = {site: stamp for site, stamp in (indexes.items() if isinstance(indexes, Mapping) else ())
               if isinstance(site, str) and isinstance(stamp, str)}
+    schema = data.get("schema")  # an integer, or none: never a schema guessed from another value
     return PeerState(server, str(version or "?"), str(name or ""), read, _read_units(data.get("base")),
                      token if isinstance(token, str) and token else None, now if isinstance(now, str) else None, stamps,
-                     _read_kept(data.get("kept")))
+                     _read_kept(data.get("kept")),
+                     schema if isinstance(schema, int) and not isinstance(schema, bool) else None,
+                     data.get("key_version"))
 
 
 def unit_document(conn: sqlite3.Connection, cfg, overrides, books: Iterable, unit_id: str) -> dict[str, Any] | None:
@@ -690,7 +742,8 @@ def compare(mine: Mapping[str, Unit], theirs: Mapping[str, Unit],
     """Every unit the two sides hold differently, with what the sync proposes for it (see the module's docstring),
     in ``_order``: songs first, by their label. A unit ``kept`` names (``merged_kept``) is compared with the two
     versions kept, whatever the base says: changed on neither side since, the chooser's (``KEPT_HERE``,
-    ``KEPT_THERE``); else as usual."""
+    ``KEPT_THERE``); on the chooser's side alone, the chooser's, in the usual words; on the other side, a
+    ``CONFLICT`` (``_since_kept``)."""
     found = []
     for unit_id in set(mine) | set(theirs):
         a, b = mine.get(unit_id), theirs.get(unit_id)
@@ -717,14 +770,17 @@ def compare(mine: Mapping[str, Unit], theirs: Mapping[str, Unit],
 
 
 def _since_kept(a: Unit | None, b: Unit | None, pair: KeptPair) -> tuple[str, str]:
+    """A kept unit against the two versions the owner chose between: changed on neither side since, the chooser's;
+    on the chooser's side alone, the chooser's still; on the other side, whose version still lacks the one kept, a
+    conflict, as both books then changed it since they last agreed."""
     was_here, was_there, chooser = pair
     a_changed = (a.digest if a else None) != was_here
     b_changed = (b.digest if b else None) != was_there
     if not a_changed and not b_changed:
         return (MINE, KEPT_HERE) if chooser == MINE else (THEIRS, KEPT_THERE)
-    if a_changed and not b_changed:
+    if chooser == MINE and not b_changed:
         return MINE, _changed("here", a, was_here)
-    if b_changed and not a_changed:
+    if chooser != MINE and not a_changed:
         return THEIRS, _changed("there", b, was_there)
     return CONFLICT, "both books changed it since the last share"
 
@@ -768,6 +824,15 @@ def decide(found: Sequence[Difference], prefer: str | None = None,
         elif side == MINE:
             there.append(d)
     return here, there
+
+
+def answered_by_its_song(take: Sequence[Difference], kept: Iterable[Difference]) -> list[Difference]:
+    """The removals of ``take`` (``removed/<key>``) whose song the owner settled this side's (``kept``: ``decide``'s
+    second list, its ``song/<key>`` given in a sync, kept at an import): part of that same answer, so never taken nor
+    left. In a sync the song given clears the other side's tombstone; an import remembers the removal's answer with
+    the song's. A removal whose song's difference is left unsettled stays in the take, left ``SONG_HERE``."""
+    songs = {d.id.partition("/")[2] for d in kept if d.id.startswith("song/")}
+    return [d for d in take if d.id.startswith("removed/") and d.id.partition("/")[2] in songs]
 
 
 def compared_hash(found: Iterable[Difference]) -> str:
@@ -936,6 +1001,11 @@ class PeerError(Exception):
     """The other caracole couldn't be asked, or answered with something else: what to tell the owner."""
 
 
+class OtherKeys(PeerError):
+    """The other caracole keys its songs by other rules than this one (its state's ``key_version``, ``other_keys``):
+    the two never compare nor take from each other until both are updated to one version (``OTHER_KEYS``)."""
+
+
 class UnitSource(Protocol):
     """Where a take reads the units it takes and their songs' kept files: another caracole (``Peer``), or a push it
     sent, staged here."""
@@ -1006,7 +1076,8 @@ class Peer:
                          + (f": {said}" if said else "."))
 
     def state(self, asking: str | None = None) -> PeerState:
-        """Its ``state_document``, with its base for ``asking`` (this side's id)."""
+        """Its ``state_document``, with its base for ``asking`` (this side's id); ``OtherKeys`` for one whose songs
+        are keyed by other rules than this side's, so that no comparison, pull or push follows it."""
         response = self._get(STATE_PATH, {"peer": asking} if asking else None)
         if response.status_code == 404:
             raise PeerError(f"{self.address} answered, but not as a caracole that shares. An older caracole, "
@@ -1014,9 +1085,12 @@ class Peer:
         if response.status_code != 200:
             raise self._refused(response)
         try:
-            return read_state_document(response.json())
+            state = read_state_document(response.json())
         except (ValueError, StateError) as e:
             raise PeerError(f"{self.address} answered {e}.") from None
+        if other_keys(state.key_version):
+            raise OtherKeys(OTHER_KEYS)
+        return state
 
     def unit(self, unit_id: str) -> dict[str, Any] | None:
         """The unit's document (its ``unit_document``'s ``"unit"``), or None for a unit it hasn't got."""
@@ -1119,14 +1193,16 @@ class Peer:
 @dataclass
 class Applied:
     """What ``apply_units`` did: the units taken, those left (with why), the songs whose files or names changed (to
-    render again), by id; the songs respelled to the artist's spelling a song taken writes (their unit ids); whether
-    songbooks.toml changed."""
+    render again), by id; the songs respelled to the artist's spelling a song taken writes (their unit ids), and each
+    one's digest as the take ended (None: this library couldn't be read then), the change being the take's own, so
+    that a give in the same sync sends it as it is now; whether songbooks.toml changed."""
 
     taken: list[str] = field(default_factory=list)
     left: list[tuple[str, str]] = field(default_factory=list)
     songs: set[int] = field(default_factory=set)
     songbooks: bool = False
     respelled: list[str] = field(default_factory=list)
+    respelled_digests: dict[str, str | None] = field(default_factory=dict)
 
 
 class UnitError(Exception):
@@ -1141,7 +1217,8 @@ def apply_units(conn: sqlite3.Connection, cfg, source: UnitSource, wanted: Seque
     and the rest. A unit is left, saying why, when its document no longer has the digest compared
     (``CHANGED_THERE``), when this side's digest of it differs from ``expected_here``'s (``CHANGED_HERE``: the
     digests this side had when compared, None for a unit it hadn't; a unit it doesn't name isn't checked), or when
-    it can't be taken. ``on_unit(unit id, "taken" or "left", why)`` is told of each, as it is done."""
+    it can't be taken, a tombstone among them whose song stays here (``SONG_HERE``). ``on_unit(unit id, "taken" or
+    "left", why)`` is told of each, as it is done."""
     from caracole.overrides import OverridesError
     from caracole.songbook import SongbookError
 
@@ -1172,11 +1249,15 @@ def apply_units(conn: sqlite3.Connection, cfg, source: UnitSource, wanted: Seque
         done.taken.append(unit_id)
         if on_unit is not None:
             on_unit(unit_id, "taken", "")
+    if done.respelled:
+        now_here, _ = _digests_here(conn, cfg)
+        done.respelled_digests = {unit_id: now_here.get(unit_id) for unit_id in done.respelled}
     return done
 
 
 def _digests_here(conn: sqlite3.Connection, cfg) -> tuple[dict[str, str], str | None]:
-    """Each unit's digest on this side now, before the take changes any; or why this library can't be read."""
+    """Each unit's digest on this side now (before the take changes any, and once it ends for the songs it
+    respelled); or why this library can't be read."""
     from caracole.overrides import Overrides, OverridesError, load_overrides
     from caracole.songbook import SongbookError, load_songbooks, songbooks_file
 
@@ -1203,11 +1284,13 @@ def _apply(conn, cfg, source: UnitSource, unit_id: str, doc: Mapping[str, Any] |
     elif kind == "removed":
         if doc is None:
             forget_removed(conn, rest)
-        elif find_song(conn, rest) is None and removed_song(conn, rest) is None:
+        elif find_song(conn, rest) is not None:  # kept here, or its song's difference left: nothing to take
+            raise UnitError(SONG_HERE)
+        elif removed_song(conn, rest) is None:
             conn.execute("INSERT INTO removed (key, artist, title, source_ids, removed_at) VALUES (?, ?, ?, ?, ?)",
                          (rest, str(doc["artist"]), str(doc["title"]),
                           json.dumps(doc.get("source_ids") or {}, ensure_ascii=False), str(doc["removed_at"])))
-        elif find_song(conn, rest) is None:  # a tombstone here under other names: theirs, its unit's names alone
+        else:  # a tombstone here under other names: theirs, its unit's names alone
             conn.execute("UPDATE removed SET artist = ?, title = ? WHERE key = ?",
                          (str(doc["artist"]), str(doc["title"]), rest))
     elif kind == "songbook":

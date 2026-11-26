@@ -68,10 +68,11 @@ object JobViewsReplay : AreaReplay {
             "READ_TONES" to texts(Status.READ_TONES), "SONGBOOK_DONE" to texts(Status.DONE),
             "SONGBOOK_OPENS" to JsonArray(Status.OPENS.sorted().map(::JsonPrimitive)),
             "LOOKUP_STEPS" to steps(Outcomes.LOOKUP_STEPS), "YOUTUBE_STEPS" to steps(Outcomes.YOUTUBE_STEPS),
-            "TRANSCRIBE_STEPS" to steps(Outcomes.TRANSCRIBE_STEPS),
+            "TRANSCRIBE_STEPS" to steps(Outcomes.TRANSCRIBE_STEPS), "AUDIO_STEPS" to steps(Outcomes.AUDIO_STEPS),
             "COMMAND_STEPS" to texts(Outcomes.COMMAND_STEPS), "PEER_STEPS" to texts(Outcomes.PEER_STEPS),
             "ASKS" to texts(Outcomes.ASKS), "ELSEWHERE" to texts(Outcomes.ELSEWHERE),
             "SITE_NAMES" to texts(Outcomes.SITE_NAMES),
+            "INDEXES_SKIPPED" to JsonArray(Outcomes.INDEXES_SKIPPED.map(::JsonPrimitive)),
             "WHAT" to JsonObject(Outcomes.WHAT.mapValues { (_, said) ->
                 JsonArray(listOf(JsonPrimitive(said.first), JsonPrimitive(said.second)))
             }),

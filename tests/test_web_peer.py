@@ -7,8 +7,9 @@ import json
 import pytest
 from conftest import add_song
 
+from caracole import normalize, stamps
 from caracole import peer_sync as sync
-from caracole import stamps
+from caracole import db
 from caracole.db import kv_set, kv_set_json
 from caracole.library import keep_file
 from caracole.overrides import add_version
@@ -49,9 +50,11 @@ def test_the_state_lists_each_unit_with_this_sides_id_and_its_base_with_the_peer
     assert status == 200
     assert doc["format"] == sync.FORMAT == 3 and doc["server"] == sync.own_id(conn) and doc["caracole"] == "0.1.0"
     assert doc["name"] == cfg.library_name and doc["token"] == "tok" and doc["base"] is None
+    assert doc["schema"] == db.SCHEMA_VERSION  # its database's: a sync of another asks for no index (sync_routes)
     assert stamps.parse(doc["now"]) is not None and stamps.stamp(stamps.parse(doc["now"])) == doc["now"]
     assert isinstance(doc["indexes"], dict)
     assert sync.read_state_document(doc).now == doc["now"]
+    assert doc["key_version"] == sync.read_state_document(doc).key_version == normalize.KEY_VERSION  # its keys' rules
     assert set(doc["units"]) == {f"song/{song.key}", "songbook/campfire"}
     assert doc["units"][f"song/{song.key}"]["label"] == "Radiohead - Creep"
     assert answer(app, "/api/peer/state?peer=phone")[1]["base"] == {f"song/{song.key}": ["d", NOW]}
@@ -112,7 +115,8 @@ def test_nothing_of_this_sides_politeness_is_in_the_state_or_a_unit(cfg, conn):
 
     state = get(app, "/api/peer/state")
     doc = json.loads(state.body)
-    assert set(doc) == {"format", "server", "caracole", "name", "now", "indexes", "units", "base", "settings", "token"}
+    assert set(doc) == {"format", "server", "caracole", "schema", "name", "key_version", "now", "indexes", "units",
+                        "base", "settings", "token"}
     assert doc["format"] == sync.FORMAT and doc["units"] == before
     unit = get(app, f"/api/peer/unit?id=song/{song.key}")
     assert json.loads(unit.body) == unit_before
@@ -237,6 +241,28 @@ def phone_side(cfg):
     serving.runner = runner
     yield serving
     serving.close()
+
+
+def test_a_push_is_dropped_by_its_sender_until_its_document_is_taken_and_its_take_queued(phone_side, cfg):
+    from test_peer_push import PHONE, a_push_document, pushes
+
+    from caracole import peer_push
+
+    push = phone_side.new([])[1]["push"]
+    assert phone_side.drop(push) == (200, {"dropped": push}) and pushes(cfg) == []
+
+    push = phone_side.new([])[1]["push"]
+    status, _, body = phone_side.ask("POST", f"/peer/push?push={push}", json.dumps(a_push_document({}, [])).encode(),
+                                     kind="application/json")
+    assert status == 200, body
+    [job] = phone_side.app.queue.snapshot()
+    assert job.song_key == f"peer-push:{PHONE}" and job.state == "queued"
+    status, answer = phone_side.drop(push)
+    assert status == 409 and answer["error"] == "That push is sent: its take waits or runs here."
+    assert pushes(cfg) == [f"push-{push}"]
+    # and the sender's next push leaves it as it is, its take's
+    assert phone_side.new([])[0] == 200 and f"push-{push}" in pushes(cfg)
+    assert (cfg.state_dir / "peer" / f"push-{push}" / peer_push.DOCUMENT).exists()
 
 
 def _staged(cfg):
@@ -380,3 +406,86 @@ def test_index_pages_merged_by_the_queued_command_reach_this_library_and_the_fil
     assert _staged(computer.cfg) == []
     assert [tuple(r) for r in computer.conn.execute("SELECT title FROM harptabs_artist_tabs")] == [("Piano Man",)]
     computer.conn.close()
+
+
+# --- POST /peer/index/newer: the part of the indexes the phone doesn't hold ------------------------------------------
+
+
+def _newer(phone_side, doc, **options):
+    return phone_side.ask("POST", "/peer/index/newer", json.dumps(doc).encode(), kind="application/json", **options)
+
+
+def test_the_part_of_the_indexes_the_phone_lacks_is_streamed_from_a_temporary_export(phone_side, cfg, conn, tmp_path):
+    import sqlite3
+    import stat
+
+    import test_index_transfer as tt
+    from test_index_transfer_newer import have_of
+
+    from caracole import index_transfer
+
+    tt.ug_sitemap(conn, "1", ["radiohead/creep-chords-4169"], tt.EARLY)
+    tt.ug_sitemap(conn, "2", ["blur/song-2-chords-1001"], tt.EARLY)
+    tt.ug_listed(conn, ["1", "2"], tt.EARLY)
+    phone = tt.database(tmp_path, "phone")
+    try:
+        last = tmp_path / "last.sqlite"
+        index_transfer.export(conn, last, ["ug"], now=tt.NOW)
+        index_transfer.merge(phone, last, state_dir=tmp_path / "phone-state", now=tt.NOW)
+        tt.ug_sitemap(conn, "2", ["blur/song-2-chords-1001", "blur/beetlebum-chords-1003"], tt.NOW)
+        have = have_of(phone, ["ug"], since="2026-10-29T18:00:00Z")
+    finally:
+        phone.close()
+    doc = {"sites": ["ug"], "have": {"ug": {"sitemaps": have["ug"].sitemaps, "since": have["ug"].since}}}
+
+    status, headers, body = _newer(phone_side, doc)
+
+    assert status == 200 and headers["Content-Type"] == "application/vnd.sqlite3", body
+    assert body.startswith(b"SQLite format 3\x00")
+    assert list((cfg.cache_dir / "peer").iterdir()) == []  # the export gone once sent
+    assert stat.S_IMODE((cfg.cache_dir / "peer").stat().st_mode) == 0o700
+    fetched = tmp_path / "newer.sqlite"
+    fetched.write_bytes(body)
+    with sqlite3.connect(fetched) as file:
+        assert {r[0] for r in file.execute("SELECT sitemap FROM ug_index")} == {"2"}
+        cut = json.loads(file.execute("SELECT value FROM caracole_export WHERE key = 'partial'").fetchone()[0])
+    assert cut["ug"]["same"] == ["1"] and cut["ug"]["since"] == "2026-10-29T18:00:00Z"
+    assert phone_side.runner.calls == []  # a read: nothing queued
+
+
+def test_the_newer_part_needs_the_form_token_and_comes_from_no_other_site(phone_side, cfg):
+    doc = {"sites": ["ug"]}
+    status, _, body = _newer(phone_side, doc, token=None)
+    assert status == 403 and json.loads(body)["reload"] is True
+    assert _newer(phone_side, doc, Origin="http://evil.example")[0] == 403
+    assert phone_side.ask("POST", "/peer/index/newer", b"{}", kind="application/octet-stream")[0] == 415
+    assert phone_side.ask("GET", "/peer/index/newer", token=None)[0] in (404, 405)
+    assert not (cfg.cache_dir / "peer").exists() or list((cfg.cache_dir / "peer").iterdir()) == []
+
+
+def test_a_newer_part_asked_with_a_body_past_its_limit_or_of_what_this_side_cant_read_is_refused(phone_side, cfg):
+    import http.client
+
+    from caracole.web import peer_routes
+
+    conn = http.client.HTTPConnection("127.0.0.1", phone_side.server.server_address[1], timeout=10)
+    try:  # past the limit, claimed: answered at once, unread
+        conn.putrequest("POST", "/peer/index/newer")
+        conn.putheader("Content-Type", "application/json")
+        conn.putheader("X-Caracole-Form-Token", "tok")
+        conn.putheader("Content-Length", str(peer_routes.HAVE_MAX + 1))
+        conn.endheaders()
+        assert conn.getresponse().status == 413
+    finally:
+        conn.close()
+    for doc, said in (({"sites": ["spotify"]}, "no site 'spotify'"),
+                      ({"sites": ["ug"], "have": {"ug": {"since": "soon"}}}, "no time"),
+                      ({"sites": ["ug"], "have": {"ug": {"sitemaps": {"../../x": [1]}}}}, "plain values")):
+        status, _, body = _newer(phone_side, doc)
+        assert status == 400 and said in json.loads(body)["error"]
+    assert not (cfg.cache_dir / "peer").exists() or list((cfg.cache_dir / "peer").iterdir()) == []
+
+
+def test_a_newer_part_asked_since_the_first_day_answers_every_row_never_a_500(phone_side, cfg):
+    status, headers, body = _newer(phone_side, {"sites": ["ug"], "have": {"ug": {"since": "0001-01-01T00:00:00Z"}}})
+    assert status == 200 and headers["Content-Type"] == "application/vnd.sqlite3", body
