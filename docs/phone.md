@@ -41,7 +41,9 @@ before it takes anything.
 
 A sync downloads a site's index only when the computer has read that site since the phone's
 copy, whether that copy came from an earlier sync, a file or the downloaded catalogues; the pages
-your lookups sent it don't count. The **Site indexes** line lists those, and the pages your
+your lookups sent it don't count. It then downloads only what the phone doesn't hold: the
+sitemaps read again and the pages read since, a few MB after a night rather than the whole
+index. The **Site indexes** line lists those, and the pages your
 lookups read that go to the computer. When the computer runs a caracole of another database
 version than the app, no index goes either way, and the line says which to update. Once done,
 the sync says how many tabs each index brought that the phone didn't have ("+231 new tabs"),

@@ -44,8 +44,12 @@ import java.io.File
  *   the file's was, the listing of UG's sitemaps the later refresh's, a directory listing's round where the file's got
  *   further (its last whole read, its start, its next page).
  *
+ * A partial export (META's `partial`) is merged by the same rules, a sitemap it says it left out never read as gone:
+ * neither its rows nor its record taken unless the database's record says it holds those rows already
+ * (index_transfer._held; IndexTransfer's `unheld` else).
+ *
  * When nothing changes, nothing is written and [merge]'s `backup` is never called; else it is called once, before
- * the first change; once UG's sitemaps' rows changed by many (an import: Warmup.optimizes), UG's full-text indexes
+ * the first change of a row (a merge that moves records alone backs nothing up); once UG's sitemaps' rows changed by many (an import: Warmup.optimizes), UG's full-text indexes
  * are made one segment each as the merge ends (Warmup.optimize), for the searches after it. Each site is one savepoint: its actions, its kv records, then its
  * keys made current (ensure_current_keys, whole where the file's keys record differs from the database's, which is let
  * go first). A
@@ -120,11 +124,16 @@ object IndexTransfer {
             val read = newest(db, Merge.THEIRS, names).filterValues { stamp ->
                 notAfter == null || Stamps.parse(stamp)!! <= notAfter
             }
-            val plans = names.map { Merge.plan(db, it, now, notAfter, chunk) }
+            val partial = partial(export, meta)
+            val plans = names.map { Merge.plan(db, it, now, notAfter, chunk, partial?.get(it)?.same.orEmpty().toSet()) }
+            val unheld = plans.filter { it.unheld.isNotEmpty() }.associateTo(LinkedHashMap()) { it.site to it.unheld.toList() }
+            val exported = meta["exported_at"]
             if (plans.none { it.changes }) {
-                return Merged(names.associateWithTo(LinkedHashMap()) { emptyMap<String, Int>() }, false, listed, read)
+                return Merged(names.associateWithTo(LinkedHashMap()) { emptyMap<String, Int>() }, false, listed, read,
+                              partial = partial, exported = exported, unheld = unheld)
             }
-            backup?.invoke()
+            // The backup is there to undo rows: a merge that moves records alone makes none (index_transfer.merge).
+            if (plans.any { it.actions.isNotEmpty() }) backup?.invoke()
             val taken = LinkedHashMap<String, Map<String, Int>>()
             val checked = LinkedHashMap<String, Long>()
             var ugChanges = 0L
@@ -139,7 +148,7 @@ object IndexTransfer {
                 progress?.invoke(MergeProgress("ug", MergeProgress.OPTIMIZE, 0, 0))
                 Warmup.optimize(db)  // one segment each (prep-db)
             }
-            return Merged(taken, true, listed, read, checked)
+            return Merged(taken, true, listed, read, checked, partial, exported, unheld)
         } finally {
             db.detach(Merge.THEIRS)
         }
@@ -270,6 +279,33 @@ object IndexTransfer {
         return meta
     }
 
+    /** index_transfer._left: a partial export's cut (META's `partial`: by site, the `since` and the bound it was
+     * cut by, and the sitemaps it left out, the asker's alike), none for a whole export; a [TransferError] for one
+     * that can't be read, in Python's words: a file cut that way can't be merged as a whole one, which would read its
+     * sitemaps left out as gone. */
+    private fun partial(export: File, meta: Map<String, String?>): Map<String, PartialSite>? {
+        if (PARTIAL !in meta) return null
+        val said = try {
+            meta[PARTIAL]?.let(Canonical::parse)
+        } catch (_: CanonicalError) {
+            null
+        }
+        val sites = (said as? JsonObject)?.mapValues { (_, cut) ->
+            val o = cut as? JsonObject ?: return@mapValues null
+            val same = (o["same"] as? JsonArray)?.map { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content }
+            if (same == null || same.any { it == null }) null
+            else PartialSite(o["since"].text(), o["from"].text(), same.filterNotNull())
+        }
+        if (sites == null || sites.values.any { it == null }) {
+            throw TransferError("$export is part of the indexes, and doesn't say which part in a form this caracole " +
+                                    "reads: nothing changed")
+        }
+        return sites.mapValuesTo(LinkedHashMap()) { it.value!! }
+    }
+
+    /** index_transfer.PARTIAL: META's key of a partial export. */
+    const val PARTIAL = "partial"
+
     private fun repr(value: String?): String = if (value == null) "None" else "'$value'"
 
     private fun noExport(export: File, e: Exception) =
@@ -319,10 +355,21 @@ object IndexTransfer {
  * records that late never taken: what MergedIndexes records; [checked], each site merged's rows of its first table the
  * file held in what it took (index_transfer's `SiteMerge.checked`; none for a merge that changed nothing): for UG and the
  * sitemap sites the rows of the sitemaps taken, read whether new or not; for LaCuerda its listing pages' rows, and the
- * rows of its artist pages and search the phone lacked, inserted (new by construction). */
+ * rows of its artist pages and search the phone lacked, inserted (new by construction); [partial], a partial export's
+ * cut by site (META's `partial`, null for a whole export), which the merge took no sitemap it left out by and the
+ * sync's index stage checks against what it asked ([PartialSite]); [exported], META's `exported_at`, the computer's
+ * clock as it made the file (kv `sync:cut:`); [unheld], by site, the sitemaps a partial export left out that this
+ * side's records say it holds otherwise, neither their rows nor their records taken: a file that isn't the part asked
+ * for, after which nothing may be recorded as held. */
 data class Merged(val sites: Map<String, Map<String, Int>>, val changed: Boolean,
                   val listed: List<String> = emptyList(), val newest: Map<String, String> = emptyMap(),
-                  val checked: Map<String, Long> = emptyMap())
+                  val checked: Map<String, Long> = emptyMap(), val partial: Map<String, PartialSite>? = null,
+                  val exported: String? = null, val unheld: Map<String, List<String>> = emptyMap())
+
+/** What a partial export (index_transfer.export(have=)) says it was cut by, of a site: [since], the time of the
+ * computer's export the asker said it last merged (null: none); [from], the earliest read of the tables read a page at
+ * a time it sends (null: every row); [same], the sitemaps (listing pages) it left out, the asker's alike. */
+data class PartialSite(val since: String?, val from: String?, val same: List<String>)
 
 /**
  * How far a merge has got (IndexTransfer.merge's `progress`), index_transfer.merge's `progress(site, action, done,

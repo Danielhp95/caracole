@@ -602,15 +602,35 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 - `caracole index export` and `merge` (commands/index.py).
 - **Export**: every site's index (`SITES`: its tables and the kv records of its progress) into a new SQLite file, in
   one read transaction, with its `caracole_export` table (format, schema, sites).
+- **A partial export** (`export(have=)`, `POST /peer/index/newer`: the phone's take of the computer's indexes alone;
+  a `peer sync` between computers and `.caracole` files keep whole exports): for an asker that says what it holds
+  (`read_have`, data from another device: `Have`, its record of each sitemap it holds but its `checked_at`, and
+  `since`, the computer's own `exported_at` of the last export of its the asker merged, null for none), each site's
+  sitemaps (LaCuerda's listing pages) whose record differs from the asker's or that it lacks, each with all of its
+  rows (`SITEMAPPED`, by `_unchanged` over the site's fields: a site_index.py record's etag, date, rows and keys;
+  UG's etag, date, rows and `indexed_at`, its record having no keys; a listing page's etag, date, rows, pages, total
+  and `gone`), LaCuerda's artist pages' and search's rows whole (no time), the rows of the tables read a row or a page
+  at a time (`_TIMED`: UG's artist pages' tabs and directory, harptabs.com's artist pages, gametabs.net's game pages,
+  each page with all its tabs) read or seen at or after `_bound` (`since` less `SINCE_MARGIN`, an hour, for a read
+  stamped before an export's snapshot and stored after it; and earlier, to the earliest time of their rows, for each
+  merge here since that took rows of those tables, kv `index:arrived`, `ARRIVED_KEY`, this side's own: a phone's
+  pushed pages, another caracole's, a file's, whose times are another clock's; every row with no `since`: a
+  catalogue's stamp is no bound), and the kv records whole; META's `partial` says what it was cut by (`{site:
+  {since, from, same}}`). `merge(arrivals=)` notes the arrivals (kv `index:arrived`, at most `ARRIVALS_KEPT` a site,
+  the oldest two made one); the phone, which makes no export, and the corpus's merges note none.
 - **Merge**: such a file into the database under the lock:
   - refused whole (`TransferError`, status 2) for another schema or other columns, its words naming a copy caracole
     keeps (a sync's download, a staged export or import) as the file it is, never by its path, wherever they reach the
     Journal or the Sync sheet (`refusal_words`: "The other side's index export", "The file", "The index export");
   - else per site what the file read more recently:
     - a sitemap or LaCuerda listing page by its record's time (UG's rows upserted as a refresh stores them, its new
-      tabs' songs marked); a site_index.py sitemap whose record differs only there (a re-check found it unchanged:
-      its etag, date, rows and keys alike, `_unchanged`) its record alone, no row written and no site of a sync's
-      report;
+      tabs' songs marked); a site_index.py sitemap or a listing page whose record differs only there (a re-check
+      found it unchanged: its etag, date, rows and keys alike, or a listing's etag, date, rows, pages and total,
+      `_unchanged`) its record alone, no row written and no site of a sync's report;
+    - of a partial export, a sitemap its META's `partial` says it left out (`_left`, refused whole when it can't be
+      read) never read as gone: neither its rows nor its record taken unless the database's record says it holds
+      those rows already (`_held`; the phone's Merged.unheld names the others, after which the sync records nothing
+      as held);
     - harptabs.com's artist and gametabs.net's game pages by `read_at`;
     - UG's artist pages' tabs a row at a time;
     - UG's artist directory (`ug_directory`): a row seen later in a listing (`seen_at`) its listing columns, a page
@@ -618,7 +638,8 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
       (`_round`: its last whole read, its round's start, its next page), never back; no row is removed;
     - LaCuerda's artist pages and search rows only where the database has none;
   - progress records move on, never back;
-  - backed up first (backup.py, `before-merge`) only when something changes, so a second merge writes nothing;
+  - backed up first (backup.py, `before-merge`) only when a row changes (one that moves records alone makes no
+    backup, the copy being there to undo rows), so a second merge writes nothing;
   - each index's `ensure_current_keys` after, whole where the file's keys record differs;
   - its progress, `merge(progress=, backing_up=)`, which the phone's merge mirrors: `progress(site, action, done,
     total)` once before it plans (`("", PLANNING, 0, sites)`), and once anything changes, `backing_up()`, then
@@ -1822,6 +1843,12 @@ It is rows.js's, shared by both pages:
     routes with the form token in their header, then `caracole peer take --progress DIR` queued.
   - `GET /api/peer/index[?sites=]`: this library's site indexes as `caracole index export` writes them, a SQLite file
     streamed from a temporary export (`cache_dir/peer/`), one at a time.
+  - `POST /peer/index/newer`: the part of them the phone doesn't hold (`index_transfer.export(have=)`), a `json`
+    route (the form token, `HAVE_MAX` 1 MiB) that is a read: what the body says is data (`index_transfer.read_have`,
+    400 in its words), compared with this side's records alone, nothing written but the temporary export, no lock;
+    streamed as the whole is, one copy at a time. The phone asks it first (PeerClient.indexNewer, its document
+    core.index.Have) and the whole on a 404 or 405 alone (an older computer), any other refusal its index stage's
+    failure.
 - **sync_routes.py** is the library page's Sync tab (its label Share; library_assets/sync.js, sync-tab.html,
   sync-panel.html), the sync redesign's §3.4.1:
   - `GET /api/sync`: this caracole, its `device` (`computer`, the phone's `phone`), its songs and songbooks counted;
@@ -2671,6 +2698,16 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   Reads noted for the next push ("here"), a site of both twice, so the Sync sheet says what the Sync does: where
   sync_routes._waiting compares newest reads, the phone answers otherwise (vectors/web/sync_routes.jsonl's scene holds
   both records, so the two answers agree).
+- **Only the part it doesn't hold** of each site taken (SyncEngine.merge): `POST /peer/index/newer` with core.index's
+  `Have` document (the phone's record of each sitemap but its `checked_at`, and `since`, kv `sync:cut:<computer id>`,
+  `Have.CUT_KEY`: the computer's own `exported_at` of the last export of its the phone merged, whole or partial, kept
+  apart from `sync:index:`, whose stamps the phone's own pushed pages move: a page the computer read meanwhile is
+  later than the cut, so it comes whatever the push did); a computer that answers 404 or 405 (older) the whole, any
+  other refusal the stage's failure. Once merged, the file's META `partial` is checked to be the cut asked for
+  (`Have.mismatch`: every site, its `since`, nothing left out the phone lacks) and no sitemap it left out held
+  otherwise (`Merged.unheld`), else the stage fails in "… isn't the part asked for" and nothing is recorded (its merge
+  lost no row); else `sync:index:`, `index:merged` (the file's newest, a part's no later than the whole's) and
+  `sync:cut:` move on, true as after a whole export: the phone holds every row the computer held as of it.
 - **A computer of another schema** (its state's `schema`, `PeerState.schema`, read as an integer, none else): none
   taken and none of the pages read here given (`SyncEngine.indexesSkipped`, the index stage skipped in
   `INDEXES_NEWER`'s or `INDEXES_OLDER`'s words before anything is downloaded or pushed, the notes kept), the

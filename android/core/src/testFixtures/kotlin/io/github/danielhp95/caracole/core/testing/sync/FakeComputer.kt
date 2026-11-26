@@ -65,6 +65,10 @@ import java.util.concurrent.TimeUnit
  * - `GET /api/jobs/<id>`: the request as Job.as_json gives it; it answers "running" to [runningPolls] polls first,
  *   then (without [holdTakes]) as it is once over.
  * - `GET /api/peer/index?sites=`: [index]'s bytes for the sites asked, recorded in [indexAsked].
+ * - `POST /peer/index/newer`: the part of the indexes the phone lacks, as peer_routes.index_newer answers it: the
+ *   token in its header (403 with `reload` else), its document recorded in [newerAsked], then [newer]'s bytes for it
+ *   (a partial export Python made, a test's fixture), 404 while [newer] is null, as a caracole older than the route
+ *   answers; [newerRefusal], a status it answers instead (a 503, say), `{error}`.
  * - `GET /api/sync/indexes`: each site's newest read (IndexTransfer.newest, [indexes] over it) and its tabs
  *   (TabCounts), as web/sync_routes.py answers it (the sync redesign's §3.4.1); 404 while [countsIndexes] is false,
  *   as a caracole older than the route answers.
@@ -92,6 +96,8 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
     @Volatile var indexes: Map<String, String>? = null
     @Volatile var settings: JsonObject? = null
     @Volatile var index: (List<String>?) -> ByteArray = { ByteArray(0) }
+    @Volatile var newer: ((JsonObject) -> ByteArray)? = null
+    @Volatile var newerRefusal: Int? = null
     @Volatile var takeFails: String? = null
     @Volatile var mergeFails: String? = null
     @Volatile var holdTakes: CountDownLatch? = null
@@ -106,6 +112,7 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
     val pushes = CopyOnWriteArrayList<JsonObject>()
     val taken = CopyOnWriteArrayList<Applied>()
     val indexAsked = CopyOnWriteArrayList<List<String>?>()
+    val newerAsked = CopyOnWriteArrayList<JsonObject>()
     val indexPushes = CopyOnWriteArrayList<ByteArray>()
 
     private val random = SecureRandom()
@@ -244,6 +251,8 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
             "POST /peer/push/file" -> if (tokenOk(exchange)) pushFile(exchange, query["push"].orEmpty(), query["sha256"].orEmpty())
             "POST /peer/push" -> if (tokenOk(exchange)) push(exchange, query["push"].orEmpty())
             "POST /peer/index" -> if (tokenOk(exchange)) pushIndex(exchange)
+            "POST /peer/index/newer" -> if (newer == null) json(exchange, 404, obj("error" to JsonPrimitive("no such route")))
+                                        else if (tokenOk(exchange)) indexNewer(exchange)
             "GET /api/sync/indexes" -> if (countsIndexes) json(exchange, 200, indexCounts())
                                        else json(exchange, 404, obj("error" to JsonPrimitive("no such route")))
             else -> if (method == "GET" && path.startsWith("/api/jobs/")) job(exchange, path.removePrefix("/api/jobs/"))
@@ -318,6 +327,13 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
         val asked = sites?.split(',')?.map { Py.strip(it) }?.filter { it.isNotEmpty() }
         indexAsked.add(asked)
         send(exchange, 200, index(asked), "application/vnd.sqlite3")
+    }
+
+    private fun indexNewer(exchange: HttpExchange) {
+        val doc = body(exchange) as? JsonObject ?: throw Refusal(400, "the request is no object")
+        newerAsked.add(doc)
+        newerRefusal?.let { throw Refusal(it, "Couldn't copy the indexes: the disk is full") }
+        send(exchange, 200, newer!!(doc), "application/vnd.sqlite3")
     }
 
     private fun tokenOk(exchange: HttpExchange): Boolean {

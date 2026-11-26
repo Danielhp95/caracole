@@ -24,7 +24,14 @@ made ``BUILT``:
   ``columns-export``: ``gtptabs_index`` with a column more; ``nometa-export``: no ``caracole_export`` table.
   ``rechecked-export``: the sitemap sites of ``full-export`` as the next re-check left their records: some found
   unchanged (``checked_at`` alone moved: merged into ``phone-after``, their records move on and no row of theirs is
-  written), the others differing beside it (an etag, no validators, a field lacking: taken).
+  written), the others differing beside it (an etag, no validators, a field lacking: taken), and LaCuerda's listing
+  page of e found unchanged too (its record alone moves). ``records-export``: gtptabs.com alone, one sitemap of
+  ``full-export`` re-checked and found unchanged: a merge that moves a record alone and backs nothing up.
+- ``tonight-export``, ``newer-export``: the computer one night after ``full-export`` (``night``: two sitemaps read
+  again, two found unchanged, pages read a page at a time), whole, and partial for ``phone-after``
+  (``index_transfer.export(have=)``: its records, ``since`` ``full-export``'s time): merged into ``phone-after`` both
+  end alike; ``uncut-export`` the same with no ``since`` (every page read a page at a time sent). ``lying-export``: ``newer-export`` saying it left out two sitemaps it holds otherwise, their rows gone (a
+  merge reads neither as gone); ``unreadable-export``: its ``partial`` in no form a merge reads (refused).
 - ``fresh-before``: a new phone database, ``fresh_kv.json`` seeded; ``unseeded-before``: the same without it (its
   first merge re-keys every index whole); ``phone-before``: a phone's indexes, some pages read later than the
   computer's, some earlier, some the computer never read, a time written with an offset (``gtptabs:sitemaps``' second
@@ -50,7 +57,9 @@ made ``BUILT``:
   ``updated_at``); ``after`` is the phone's dump then (for a refusal, ``before``: nothing written). ``out``:
   ``{changed, backup, sites: [{site, taken: [[noun, count]…], records: […], rows: {table: [before, after]}, checked}…]}``,
   Python's ``Merged``, ``backup`` whether it backed the database up first (the Kotlin merge's callback, called once,
-  before the first change, or never). ``err``: ``"TransferError"``, nothing written.
+  before the first change of a row, or never: a merge that moves records alone backs nothing up). ``err``:
+  ``"TransferError"``, nothing written. Merged as the phone merges, noting no arrival (``arrivals=False``: the
+  computer's own record, for the partial exports it makes, which the phone never does).
 - ``newest.jsonl``: ``{fn: "caracole.index_transfer.newest", fixture, out | err}``, over each phone fixture replayed.
 - ``sites.jsonl``: ``{fn: "caracole.index_transfer.SITES", args: [name], out: {name, title, tables, kv}}``, each site
   in caracole's order.
@@ -178,6 +187,44 @@ def computer(conn: sqlite3.Connection) -> None:
     conn.execute("UPDATE harptabs_index SET key = ? WHERE path = 'tab/26/can-t-help-falling'", (STALE,))
     conn.execute("UPDATE harptabs_artist_tabs SET song_key = ? WHERE title = 'Honesty'", (STALE,))
     conn.execute("UPDATE gametabs_game_tabs SET title_key = ? WHERE title = 'Bloodpool'", (STALE,))
+
+
+NIGHT = NOW + timedelta(hours=15)  # one more night's reads on the computer, after full's export
+NIGHT_EXPORT = NOW + timedelta(days=1)  # this sync's export
+
+
+def night(conn: sqlite3.Connection) -> None:
+    """One more night on the computer after ``full``'s export: UG's sitemap 3 and gtptabs.com's second read again,
+    gtptabs.com's first and LaCuerda's listing page of e re-checked and found unchanged (a 304), a tab of Soda
+    Stereo's page, Toto's listing and Billy Joel's page read again."""
+    import test_index_transfer as tt
+
+    tt.ug_sitemap(conn, "3", ["muse/uprising-chords-555", "muse/starlight-chords-556"], NIGHT)
+    tt.sitemap(conn, gtptabs_fetch.SITE, "sitemap-tabs-2.xml", [f"{GTP}18/radiohead.html",
+                                                                f"{GTP}18/radiohead/creep.html",
+                                                                f"{GTP}18/radiohead/karma-police.html"], NIGHT)
+    tt.rechecked(conn, gtptabs_fetch.SITE, "sitemap-tabs-1.xml", NIGHT)
+    pages = lacuerda_index.pages(conn)
+    lacuerda_index._record(conn, "tabs/e/index0.html", {**pages["tabs/e/index0.html"], "checked_at": _stamp(NIGHT)})
+    tt.artist_tab(conn, SODA, 3002, "Persiana Americana", NIGHT)
+    tt.directory_page(conn, "t", 1, 9, [(90, "Toto", "toto", 301)], NIGHT)
+    tt.harp_page(conn, "artist/1178/billy-joel", ["Piano Man", "Honesty", "Vienna"], NIGHT)
+
+
+def _patch_lying(c: sqlite3.Connection) -> None:
+    """``newer`` saying it left out gtptabs.com's second sitemap and UG's sitemap 3, which it read again, their rows
+    deleted: a merge reads neither as gone, nor takes their records."""
+    cut = json.loads(c.execute(f"SELECT value FROM {index_transfer.META} WHERE key = 'partial'").fetchone()[0])
+    cut["gtptabs"]["same"].append("sitemap-tabs-2.xml")
+    cut["ug"]["same"].append("3")
+    c.execute(f"UPDATE {index_transfer.META} SET value = ? WHERE key = 'partial'", (json.dumps(cut),))
+    c.execute("DELETE FROM gtptabs_index WHERE sitemap = 'sitemap-tabs-2.xml'")
+    c.execute("DELETE FROM ug_index WHERE sitemap = '3'")
+
+
+def _patch_unreadable(c: sqlite3.Connection) -> None:
+    """``newer`` whose ``partial`` says what it left out in no form a merge reads: refused."""
+    c.execute(f"UPDATE {index_transfer.META} SET value = ? WHERE key = 'partial'", ('{"ug": {"same": "3"}}',))
 
 
 def phone(conn: sqlite3.Connection) -> None:
@@ -398,6 +445,16 @@ def newest_source(k: int) -> Any:
 # --- the exports -----------------------------------------------------------------------------------------------------
 
 
+def _patch_records(c: sqlite3.Connection) -> None:
+    """gtptabs.com's first sitemap re-checked and found unchanged a week after ``full``'s, nothing else: a merge that
+    moves a record alone, and backs nothing up."""
+    (text,) = c.execute("SELECT value FROM kv WHERE key = ?", (gtptabs_fetch.SITE.sitemaps_key,)).fetchone()
+    records = json.loads(text)
+    records["sitemap-tabs-1.xml"]["checked_at"] = "2026-11-01T03:30:00Z"
+    c.execute("UPDATE kv SET value = ? WHERE key = ?", (json.dumps(records, ensure_ascii=False),
+                                                        gtptabs_fetch.SITE.sitemaps_key))
+
+
 def _patch_rekey(c: sqlite3.Connection) -> None:
     c.execute(f"UPDATE {index_transfer.META} SET value = '1' WHERE key = 'keys'")
     c.execute("UPDATE kv SET value = '1' WHERE key IN ('ug:artist_tabs:keys', 'ug:directory:keys', "
@@ -409,7 +466,8 @@ def _patch_rechecked(c: sqlite3.Connection) -> None:
     """The sitemap sites' records as the computer's next re-check left them, a week after ``full``'s: gtptabs.com's
     first sitemap, MuseScore's (its rows written ``1.0``, which json.loads reads equal to 1) found unchanged, only their
     ``checked_at`` moved; gtptabs.com's second checked too (its etag the computer's, the phone's own another);
-    harptabs.com's re-read with no validators, and gametabs.net's record written without its ``keys``."""
+    harptabs.com's re-read with no validators, and gametabs.net's record written without its ``keys``; LaCuerda's
+    listing page of e re-checked and found unchanged too, its ``checked_at`` alone moved."""
     def recheck(key: str, edit) -> None:
         (text,) = c.execute("SELECT value FROM kv WHERE key = ?", (key,)).fetchone()
         records = json.loads(text)
@@ -431,7 +489,11 @@ def _patch_rechecked(c: sqlite3.Connection) -> None:
         r["sitemap-games.xml"]["checked_at"] = later
         del r["sitemap-games.xml"]["keys"]
 
+    def lacuerda(r: dict) -> None:
+        r["tabs/e/index0.html"]["checked_at"] = later
+
     recheck(gtptabs_fetch.SITE.sitemaps_key, gtptabs)
+    recheck(lacuerda_index.PAGES_KEY, lacuerda)
     recheck(musescore_fetch.SITE.sitemaps_key, musescore)
     recheck(harptabs_fetch.SITE.sitemaps_key, harptabs)
     recheck(gametabs_fetch.SITE.sitemaps_key, gametabs)
@@ -439,7 +501,8 @@ def _patch_rechecked(c: sqlite3.Connection) -> None:
 
 EXPORTS: dict[str, tuple[tuple[str, ...] | None, Any]] = {
     "full": (None, None),
-    "rechecked": (("gtptabs", "musescore", "harptabs", "gametabs"), _patch_rechecked),
+    "rechecked": (("lacuerda", "gtptabs", "musescore", "harptabs", "gametabs"), _patch_rechecked),
+    "records": (("gtptabs",), _patch_records),
     "partial": (("gtptabs", "musescore"), None),
     "rekey": (None, _patch_rekey),
     "schema": (None, lambda c: c.execute(f"UPDATE {index_transfer.META} SET value = '14' WHERE key = 'schema'")),
@@ -465,6 +528,7 @@ MERGES: list[tuple[str, str, str, list[str] | None]] = [
     ("phone", "full", "phone-before", None),
     ("again", "full", "phone-after", None),
     ("rechecked", "rechecked", "phone-after", None),
+    ("records", "records", "phone-after", None),
     ("phone-sites", "full", "phone-before", ["musescore", "gtptabs"]),
     ("rekey", "rekey", "phone-before", None),
     ("fresh-rekey", "rekey", "fresh-before", None),
@@ -476,6 +540,15 @@ MERGES: list[tuple[str, str, str, list[str] | None]] = [
     ("nometa", "nometa", "phone-before", None),
     ("not-held", "partial", "phone-before", ["ug"]),
     ("unknown", "partial", "phone-before", ["spotify"]),
+]
+
+# A night after ``full``'s export: the computer's exports of it merged into the phone that merged ``full``.
+NIGHT_MERGES: list[tuple[str, str, str, list[str] | None]] = [
+    ("tonight", "tonight", "phone-after", None),
+    ("newer", "newer", "phone-after", None),
+    ("uncut", "uncut", "phone-after", None),
+    ("lying", "lying", "phone-after", None),
+    ("unreadable", "unreadable", "phone-after", None),
 ]
 
 NEWEST = ["fresh-before", "unseeded-before", "phone-before", "phone-after", "fresh-after", "unseeded-after",
@@ -562,8 +635,35 @@ class Corpus:
                 self.texts[f"{name}-before"] = _fixture(dump_fixture(conn), f"{name}-before")
         for name, export, before, sites in MERGES:
             self._merge(name, export, before, sites)
+        self._night()
+        for name, export, before, sites in NIGHT_MERGES:
+            self._merge(name, export, before, sites)
         for name, peer, pages, note in EXPORT_CASES:
             self._export(name, peer, pages, note)
+
+    def _night(self) -> None:
+        """One more night on the computer (``night``), then its exports for the phone that merged ``full``
+        (``phone-after``): ``tonight`` whole, ``newer`` partial (its ``have`` that phone's records, its ``since`` the
+        full export's time), ``uncut`` partial with no ``since`` (a phone that took the site catalogues), and ``newer`` as a file that lies about what it left out (``lying``) or can't say it
+        (``unreadable``)."""
+        import test_index_transfer_newer as tn
+
+        where = self.workdir / "night"
+        where.mkdir()
+        with closing(self.replayed("phone-after", where / "phone")) as phone:
+            cut, uncut = tn.have_of(phone, since=_stamp(NOW)), tn.have_of(phone)
+        with closing(db.connect(self.workdir / "computer" / "caracole.sqlite")) as conn:
+            night(conn)
+            for name, have, patch in (("tonight", None, None), ("newer", cut, None), ("uncut", uncut, None),
+                                      ("lying", cut, _patch_lying), ("unreadable", cut, _patch_unreadable)):
+                path = where / f"{name}.sqlite"
+                index_transfer.export(conn, path, now=NIGHT_EXPORT, have=have)
+                with closing(sqlite3.connect(path, isolation_level=None)) as out:
+                    out.execute(f"UPDATE {index_transfer.META} SET value = ? WHERE key = 'source'", (SOURCE,))
+                    if patch is not None:
+                        patch(out)
+                    out.execute("VACUUM")
+                    self.texts[f"{name}-export"] = _fixture(dump_fixture(out, raw=True), f"{name}-export")
 
     def replayed_export(self, name: str, where: Path) -> Path:
         path = where / "export.sqlite"
@@ -585,7 +685,7 @@ class Corpus:
             self._clock(_stamp(NOW))
             replayed = dump_fixture(conn)
             try:
-                merged = index_transfer.merge(conn, path, sites, state_dir=where / "state", now=NOW)
+                merged = index_transfer.merge(conn, path, sites, state_dir=where / "state", now=NOW, arrivals=False)
             except index_transfer.TransferError:
                 record["err"] = "TransferError"
                 after = before
@@ -732,7 +832,9 @@ def test_fresh_kv_json_is_what_a_new_database_holds_once_each_index_made_its_key
                                   *(f"{c[0]}-export" for c in EXPORT_CASES if c[0] not in ("reads-sitemaps",
                                                                                              "reads-unknown")),
                                   *(f"{m[0]}-after" for m in MERGES if m[0] not in
-                                    ("schema", "format", "columns", "nometa", "not-held", "unknown"))])
+                                    ("schema", "format", "columns", "nometa", "not-held", "unknown")),
+                                  *(f"{m[0]}-export" for m in NIGHT_MERGES),
+                                  *(f"{m[0]}-after" for m in NIGHT_MERGES if m[0] != "unreadable")])
 def test_a_fixture_is_its_database_dumped(corpus, name):
     check(FIXTURES / f"{name}.jsonl", corpus.texts[name])
 
@@ -819,4 +921,50 @@ def test_the_phone_merge_takes_what_was_read_later_and_marks_the_songs_new_tabs_
 def test_each_refusal_changes_nothing(corpus):
     refused = {m["fixture"]["export"] + str(m["kw"]["sites"]) for m in corpus.merges if "err" in m}
     assert refused == {"schema-exportNone", "format-exportNone", "columns-exportNone", "nometa-exportNone",
-                       "partial-export['ug']", "partial-export['spotify']"}
+                       "partial-export['ug']", "partial-export['spotify']", "unreadable-exportNone"}
+
+
+def _tables(corpus, fixture: str) -> list[dict[str, Any]]:
+    """A phone fixture's index tables' rows and its sites' progress records (its songs, which a merge of new tabs
+    marks, and kv apart)."""
+    tables = {t for site in index_transfer.SITES.values() for t in site.tables}
+    keys = {k for site in index_transfer.SITES.values() for k in site.kv}
+    return [r for r in read_fixture(corpus.texts[fixture])
+            if r.get("table") in tables or r.get("kv") in keys]
+
+
+def test_the_phone_merging_the_computers_newer_part_ends_where_its_whole_export_takes_it(corpus):
+    assert _tables(corpus, "newer-after") == _tables(corpus, "tonight-after")
+    assert _tables(corpus, "uncut-after") == _tables(corpus, "tonight-after")
+    rows = read_fixture(corpus.texts["newer-export"])
+    # UG's 3, read again tonight, and its 2, which the phone holds a later read of (a record unlike the computer's: sent,
+    # and the merge keeps the phone's): never 1, which the phone holds alike.
+    assert {r["row"]["sitemap"] for r in rows if r.get("table") == "ug_index"} == {"2", "3"}
+    assert {r["row"]["sitemap"] for r in rows if r.get("table") == "gtptabs_index"} == {"sitemap-tabs-2.xml"}
+    newer = next(m for m in corpus.merges if m["fixture"]["export"] == "newer-export")["out"]
+    tonight = next(m for m in corpus.merges if m["fixture"]["export"] == "tonight-export")["out"]
+    assert [s["taken"] for s in newer["sites"]] == [s["taken"] for s in tonight["sites"]]
+
+
+def test_a_sitemap_a_partial_export_says_it_left_out_is_never_read_as_gone(corpus):
+    def of(fixture: str, table: str, sitemap: str) -> list[dict[str, Any]]:
+        return [r for r in read_fixture(corpus.texts[fixture])
+                if r.get("table") == table and r["row"]["sitemap"] == sitemap]
+
+    assert of("lying-after", "gtptabs_index", "sitemap-tabs-2.xml") == of("phone-after", "gtptabs_index",
+                                                                           "sitemap-tabs-2.xml")
+    assert of("lying-after", "ug_index", "3") == of("phone-after", "ug_index", "3")
+    records = {r["kv"]: json.loads(r["value"]) for r in read_fixture(corpus.texts["lying-after"])
+               if r.get("kv") in ("ug:sitemaps", gtptabs_fetch.SITE.sitemaps_key)}
+    before = {r["kv"]: json.loads(r["value"]) for r in read_fixture(corpus.texts["phone-after"])
+              if r.get("kv") in ("ug:sitemaps", gtptabs_fetch.SITE.sitemaps_key)}
+    assert records["ug:sitemaps"]["3"] == before["ug:sitemaps"]["3"]
+    assert records[gtptabs_fetch.SITE.sitemaps_key]["sitemap-tabs-2.xml"] == \
+        before[gtptabs_fetch.SITE.sitemaps_key]["sitemap-tabs-2.xml"]
+
+
+def test_a_merge_that_moves_records_alone_backs_nothing_up(corpus):
+    merged = next(m for m in corpus.merges if m["fixture"]["export"] == "records-export")["out"]
+    assert merged["changed"] and not merged["backup"]
+    assert merged["sites"] == [{"site": "gtptabs", "taken": [], "records": ["sitemaps found unchanged"],
+                                "rows": {"gtptabs_index": [3, 3]}, "checked": 0}]

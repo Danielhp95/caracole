@@ -48,7 +48,8 @@ internal object Merge {
     fun completeKey(provider: String) = "$provider:index:complete_at"
 
     /** _Plan: what a merge takes of a site; [chunk], how many of UG's sitemaps' rows a statement takes. */
-    class Plan(val site: String, val notAfter: Long? = null, val chunk: Int = IndexTransfer.UG_CHUNK) {
+    class Plan(val site: String, val notAfter: Long? = null, val chunk: Int = IndexTransfer.UG_CHUNK,
+               val left: Set<String> = emptySet()) {
         /** An action: what it takes and how many ([count], Merged's, which [apply] tells before it runs), and what
          * does it, told how far its rows have got ([run]'s second argument, rows done of rows: UG's sitemaps' chunks,
          * MergeProgress.TAB). */
@@ -63,6 +64,10 @@ internal object Merge {
         var checked = 0L
 
         val changes: Boolean get() = actions.isNotEmpty() || kv.isNotEmpty()
+
+        /** The sitemaps (listing pages) a partial export left out though the database's record says it holds them
+         * otherwise ([held]): neither their rows nor their records taken (the phone's own, Python's has none). */
+        val unheld = ArrayList<String>()
 
         fun take(noun: String, count: Int, run: (Db) -> Unit) {
             if (count != 0) actions.add(Action(noun, count) { db, _ -> run(db) })
@@ -143,8 +148,9 @@ internal object Merge {
 
     // --- deciding --------------------------------------------------------------------------------------------------
 
-    fun plan(db: Db, name: String, now: String, notAfter: Long? = null, chunk: Int = IndexTransfer.UG_CHUNK): Plan {
-        val plan = Plan(name, notAfter, chunk)
+    fun plan(db: Db, name: String, now: String, notAfter: Long? = null, chunk: Int = IndexTransfer.UG_CHUNK,
+             left: Set<String> = emptySet()): Plan {
+        val plan = Plan(name, notAfter, chunk, left)
         when (name) {
             "ug" -> planUg(db, plan, now)
             "lacuerda" -> planLacuerda(db, plan)
@@ -170,13 +176,17 @@ internal object Merge {
     /** _SAME_SITEMAP: a site_index.py record's fields beside its `checked_at`. */
     private val SAME_SITEMAP = listOf("etag", "last_modified", "rows", "keys")
 
-    /** _unchanged: whether the file's record of a sitemap says its rows are the database's: each of [SAME_SITEMAP]
-     * alike as Python's `==` (a field one record lacks and the other holds differs), with a validator to tell by. A
-     * re-check that found it unchanged (a 304) moves its `checked_at` alone; with no etag and no date, a re-read of as
-     * many rows may hold others. */
-    private fun unchanged(theirs: JsonElement?, mine: JsonElement?): Boolean {
+    /** _SAME_LISTING: a LaCuerda listing page's record beside its `checked_at`, what identifies its content (a 304
+     * moves its `checked_at` alone), and a page found gone. */
+    private val SAME_LISTING = listOf("etag", "last_modified", "rows", "pages", "total", "gone")
+
+    /** _unchanged: whether the file's record of a sitemap says its rows are the database's: each of [same] alike as
+     * Python's `==` (a field one record lacks and the other holds differs), with a validator to tell by. A re-check
+     * that found it unchanged (a 304) moves its `checked_at` alone; with no etag and no date, a re-read of as many
+     * rows may hold others. The one rule a merge and a partial export tell a sitemap that differs by. */
+    private fun unchanged(theirs: JsonElement?, mine: JsonElement?, same: List<String> = SAME_SITEMAP): Boolean {
         if (theirs !is JsonObject || mine !is JsonObject) return false
-        val alike = SAME_SITEMAP.all { k ->
+        val alike = same.all { k ->
             val a = theirs[k]
             val b = mine[k]
             if (a == null || b == null) a == null && b == null else PyJson.equal(a, b)
@@ -184,13 +194,23 @@ internal object Merge {
         return alike && listOf("etag", "last_modified").any { theirs[it].let { v -> v != null && v !is JsonNull } }
     }
 
+    /** _held: of the sitemaps (listing pages) [read] more recently by the file, those it holds: a partial export's
+     * sitemap it left out ([Plan.left]) only where the database's record says it holds those rows already
+     * ([unchanged]), its record then moved on alone; else neither its rows nor its record is taken, never read as
+     * gone ([Plan.unheld]). */
+    private fun Plan.held(theirs: Map<String, JsonElement>, mine: Map<String, JsonElement>, read: List<String>,
+                          same: List<String> = SAME_SITEMAP): List<String> =
+        read.filter { name ->
+            (name !in left || unchanged(theirs[name], mine[name], same)).also { if (!it) unheld.add(name) }
+        }
+
     /** _sitemaps: a site_index.py site's sitemaps the file read later, and its `complete_at`: one whose rows differ
      * taken ([unchanged]), one the file merely checked again only its record moved on, no row of it written. */
     private fun sitemaps(db: Db, plan: Plan, provider: String, table: String) {
         val key = sitemapsKey(provider)
-        val read = plan.newerRecords(db, key, "checked_at")
         val mine = records(db, "main", key)
         val theirs = records(db, THEIRS, key)
+        val read = plan.held(theirs, mine, plan.newerRecords(db, key, "checked_at"))
         val names = read.filter { !unchanged(theirs[it], mine[it]) }
         plan.take("sitemap", names.size) { c ->
             taken(c, names)
@@ -234,11 +254,20 @@ internal object Merge {
     }
 
     private fun planLacuerda(db: Db, plan: Plan) {
-        val listings = plan.newerRecords(db, LC_PAGES, "checked_at")
-        plan.take("listing page", listings.size) { c ->
-            taken(c, listings)
+        val mine = records(db, "main", LC_PAGES)
+        val theirs = records(db, THEIRS, LC_PAGES)
+        val listings = plan.held(theirs, mine, plan.newerRecords(db, LC_PAGES, "checked_at"), SAME_LISTING)
+        // A page the file merely checked again and found unchanged (a 304: its checked_at alone moved) moves its
+        // record alone, as a sitemap does: none of its rows written.
+        val changed = listings.filter { !unchanged(theirs[it], mine[it], SAME_LISTING) }
+        plan.take("listing page", changed.size) { c ->
+            taken(c, changed)
             plan.checked += replace(c, "lacuerda_index", "page")
-            takeRecords(c, LC_PAGES, listings)
+        }
+        if (listings.isNotEmpty()) {
+            val merged = LinkedHashMap(mine)
+            for (name in listings) merged[name] = theirs.getValue(name)
+            plan.kv[LC_PAGES] = PyJson.dumps(pyLoaded(JsonObject(merged)))  // json.dumps, ensure_ascii=False
         }
         // An artist page's rows have no time of their own: the file's are taken where the database has none.
         val artists = db.query(
@@ -262,7 +291,9 @@ internal object Merge {
     }
 
     private fun planUg(db: Db, plan: Plan, now: String) {
-        val names = plan.newerRecords(db, UG_SITEMAPS, "indexed_at")
+        val newer = plan.newerRecords(db, UG_SITEMAPS, "indexed_at")
+        val names = newer.filter { it !in plan.left }
+        plan.unheld.addAll(newer.filter { it in plan.left })  // a sitemap it left out but read later: unlike the database's
         plan.takeInChunks("sitemap", names.size) { c, said ->
             taken(c, names)
             // The tabs the database never had, kept for the songs they may be for (none on a new phone).

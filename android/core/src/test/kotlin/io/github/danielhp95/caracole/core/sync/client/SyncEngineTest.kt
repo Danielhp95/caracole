@@ -3,6 +3,7 @@ package io.github.danielhp95.caracole.core.sync.client
 import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.index.Have
 import io.github.danielhp95.caracole.core.index.Merge
 import io.github.danielhp95.caracole.core.index.MergeProgress
 import io.github.danielhp95.caracole.core.index.MergedIndexes
@@ -29,6 +30,7 @@ import io.github.danielhp95.caracole.core.sync.SyncOutcome
 import io.github.danielhp95.caracole.core.sync.Units
 import io.github.danielhp95.caracole.core.sync.file.IndexFile
 import io.github.danielhp95.caracole.core.sync.file.SyncFiles
+import io.github.danielhp95.caracole.core.testing.Dumps
 import io.github.danielhp95.caracole.core.testing.TestDb
 import io.github.danielhp95.caracole.core.testing.sync.FakeComputer
 import io.github.danielhp95.caracole.mirror.ServerAddress
@@ -1351,6 +1353,110 @@ class SyncEngineTest {
                                          "${Database.SCHEMA_VERSION}"), detail)
         assertFalse(stateDir.path in detail || "TransferError" in detail, detail)
         assertEquals(emptyList(), File(stateDir, "cache").listFiles().orEmpty().toList(), "the file fetched is gone")
+    }
+
+    // --- the part of the computer's indexes the phone doesn't hold (POST /peer/index/newer) -------------------------
+
+    private val indexTables = listOf("ug_index", "ug_artist_tabs", "ug_directory", "lacuerda_index", "gtptabs_index",
+                                     "musescore_index", "harptabs_index", "harptabs_artists", "harptabs_artist_tabs",
+                                     "gametabs_index", "gametabs_games", "gametabs_game_tabs")
+
+    /** A dump's lines of the index tables' rows, in order (Dumps' lines). */
+    private fun indexRows(lines: List<String>): List<String> =
+        lines.filter { line -> indexTables.any { line.endsWith("\"table\":\"$it\"}") } }
+
+    private fun corpusExport(name: String): ByteArray {
+        val file = File(tmp.root, "$name-${System.nanoTime()}.sqlite")
+        io.github.danielhp95.caracole.core.testing.Fixtures.loadRaw(file, "index/fixtures/$name-export.jsonl")
+        return file.readBytes().also { file.delete() }
+    }
+
+    /** The phone that merged the computer's whole export of the corpus (index/fixtures/phone-after), the computer a
+     * night on (tonight-export, newer-export: test_conformance_index.py's night) answering its state with stamps later
+     * than any the phone holds; [cut], the phone's record of that whole export's time, as a sync that took it keeps. */
+    private fun aNightOn(cut: Boolean) {
+        engine.clock = { Instant.parse("2026-11-05T10:00:00Z") }
+        phone.writeBlocking { db ->
+            io.github.danielhp95.caracole.core.testing.Fixtures.load(db, "index/fixtures/phone-after.jsonl")
+            if (cut) {
+                db.kvSetJson(Have.CUT_KEY + computer.id, JsonObject(IndexTransfer.SITES.associateWith {
+                    JsonPrimitive("2026-11-03T12:00:00Z")  // full-export's exported_at
+                }))
+            }
+        }
+        computer.indexes = IndexTransfer.SITES.associateWith { "2026-11-04T03:30:00Z" }
+        computer.index = { corpusExport("tonight") }
+    }
+
+    @Test fun `a computer one night newer is asked for the part the phone doesn't hold, and the phone ends with the computer's rows`() {
+        aNightOn(cut = true)
+        computer.newer = { corpusExport("newer") }
+        val outcome = apply(engine.compare(computer.address.toString()))
+        assertEquals("done", ended()["index"], stages.joinToString("\n"))
+        assertEquals(IndexTransfer.SITES, outcome.indexed)
+        assertEquals(emptyList(), computer.indexAsked, "never the whole export")
+        val asked = computer.newerAsked.single()
+        assertEquals(JsonArray(IndexTransfer.SITES.map(::JsonPrimitive)), asked["sites"])
+        val ug = (asked["have"] as JsonObject)["ug"] as JsonObject
+        assertEquals(JsonPrimitive("2026-11-03T12:00:00Z"), ug["since"], "the time of the export it took last")
+        val records = ug["sitemaps"] as JsonObject
+        assertEquals(setOf("1", "2", "3", "4"), records.keys, "its own record of each sitemap it holds")
+        assertTrue(records.values.none { "checked_at" in (it as JsonObject) }, "never a re-check's time")
+        // As the computer's whole export of that night would leave it (the corpus holds the two alike).
+        assertEquals(indexRows(Dumps.fixture("tonight-after")), indexRows(phone.read { Dumps.lines(it) }))
+        assertEquals(IndexTransfer.SITES.associateWith { "2026-11-04T12:00:00Z" },
+                     phone.read { Have.cuts(it, computer.id) }, "the cut moved on to the part's own time")
+        assertEquals(emptyList(), File(stateDir, "cache").listFiles().orEmpty().toList())
+    }
+
+    @Test fun `after the site catalogues, the part asked for sends every page read a page at a time, and its cut is kept`() {
+        aNightOn(cut = false)  // a phone that took the computer's index as the catalogues: no export of its own merged
+        computer.newer = { corpusExport("uncut") }
+        apply(engine.compare(computer.address.toString()))
+        assertEquals("done", ended()["index"], stages.joinToString("\n"))
+        val have = computer.newerAsked.single()["have"] as JsonObject
+        assertTrue(IndexTransfer.SITES.all { (have[it] as JsonObject)["since"] == JsonNull }, have.toString())
+        assertEquals(indexRows(Dumps.fixture("tonight-after")), indexRows(phone.read { Dumps.lines(it) }))
+        assertEquals(IndexTransfer.SITES.associateWith { "2026-11-04T12:00:00Z" }, phone.read { Have.cuts(it, computer.id) })
+    }
+
+    @Test fun `a computer older than the part's route is asked for the whole export, as before`() {
+        aNightOn(cut = true)  // newer unset: the route answers 404
+        apply(engine.compare(computer.address.toString()))
+        assertEquals("done", ended()["index"], stages.joinToString("\n"))
+        assertTrue("POST /peer/index/newer" in computer.requests.map { it.substringBefore('?') }, computer.requests.toString())
+        assertEquals(listOf<List<String>?>(IndexTransfer.SITES), computer.indexAsked)
+        assertEquals(indexRows(Dumps.fixture("tonight-after")), indexRows(phone.read { Dumps.lines(it) }))
+        assertEquals(IndexTransfer.SITES.associateWith { "2026-11-04T12:00:00Z" }, phone.read { Have.cuts(it, computer.id) },
+                     "a whole export of the computer's is a cut too")
+    }
+
+    @Test fun `any other refusal of the part fails the index stage, and the whole is never asked for in its place`() {
+        aNightOn(cut = true)
+        computer.newer = { corpusExport("newer") }
+        computer.newerRefusal = 503
+        val before = phone.read { Dumps.lines(it) }
+        apply(engine.compare(computer.address.toString()))
+        val (_, state, detail) = stages.last { it.first == "index" }
+        assertEquals("failed", state)
+        assertTrue("503" in detail && "the disk is full" in detail, detail)
+        assertEquals(emptyList(), computer.indexAsked)
+        assertEquals(indexRows(before), indexRows(phone.read { Dumps.lines(it) }))
+    }
+
+    @Test fun `a part that left out a sitemap the phone holds otherwise loses no row and notes nothing as taken`() {
+        aNightOn(cut = true)
+        computer.newer = { corpusExport("lying") }
+        val cut = phone.read { Have.cuts(it, computer.id) }
+        apply(engine.compare(computer.address.toString()))
+        val (_, state, detail) = stages.last { it.first == "index" }
+        assertEquals("failed", state, stages.joinToString("\n"))
+        assertTrue("isn't the part asked for" in detail && "holds otherwise" in detail, detail)
+        // The merge read neither as gone (the corpus's lying-after), and nothing says the phone holds them.
+        assertEquals(indexRows(Dumps.fixture("lying-after")), indexRows(phone.read { Dumps.lines(it) }))
+        assertEquals(cut, phone.read { Have.cuts(it, computer.id) })
+        assertNull(phone.read { it.kvGet(SyncEngine.INDEX_KEY + computer.id) })
+        assertEquals(emptyMap(), phone.read { MergedIndexes.of(it) })
     }
 
     private companion object {

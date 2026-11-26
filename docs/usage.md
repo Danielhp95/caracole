@@ -3796,12 +3796,14 @@ and the file lacks stays, and how far an index has got never moves back.
 - New Ultimate Guitar tabs mark their songs to be fetched again, as a refresh does.
 - LaCuerda's artist pages and search answers carry no time, so only those the database lacks come
   in.
-- A gtptabs.com, MuseScore, harptabs.com or gametabs.net sitemap the file only checked again and
-  found unchanged moves its record on, and none of its rows is written ("its progress (sitemaps
-  found unchanged)"); a sync's report leaves such a site out.
+- A gtptabs.com, MuseScore, harptabs.com or gametabs.net sitemap, or a LaCuerda listing page, the
+  file only checked again and found unchanged moves its record on, and none of its rows is written
+  ("its progress (sitemaps found unchanged)"); a sync's report leaves such a site out.
+- A file that holds only part of an index (the phone's download, `POST /peer/index/newer`) says
+  which sitemaps it left out. Those are never read as gone.
 
-Before it changes anything it backs the database up into `backups/` (`…-before-merge.sqlite`), and
-without room for that copy it merges nothing. While it works it says how far it has got on stderr:
+Before it changes a row it backs the database up into `backups/` (`…-before-merge.sqlite`), and
+without room for that copy it merges nothing. A merge that only moves records on makes no backup. While it works it says how far it has got on stderr:
 the comparison, the backup, each site's sitemaps or pages, and Ultimate Guitar's tabs as they go in
 (`Ultimate Guitar · 41 sitemaps · 600,000 of 1,367,059 tabs`, 50,000 at a time). In a terminal
 that is one live line, taken off for a warning; in a journal or a pipe, or with `-v`, a line a step
@@ -3956,6 +3958,14 @@ a whole push 2 GiB. A push left for an hour is deleted.
 
 `GET /api/peer/index` serves the site indexes as `caracole index export` writes them
 (`?sites=ug,lacuerda` for some). It serves one copy at a time and answers 503 meanwhile.
+
+`POST /peer/index/newer` serves only the part the phone doesn't hold, which is what the phone
+asks for. The phone sends its record of each sitemap it holds and the time of the last export it
+merged from this computer (JSON, with the form token, 1 MiB at most). The answer holds each
+sitemap whose record differs, with all of its rows, the pages read a page at a time since then
+(less an hour, and earlier for pages a merge brought in meanwhile), and every progress record.
+After a night's refresh that is a few sitemaps of Ultimate Guitar's instead of all of them. A
+computer older than the route answers 404, and the phone downloads the whole index as before.
 
 ### Syncing by hand: peer sync --push, --choose, --compared
 

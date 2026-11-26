@@ -3,6 +3,7 @@ package io.github.danielhp95.caracole.core.sync
 import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.index.Have
 import io.github.danielhp95.caracole.core.index.IndexExport
 import io.github.danielhp95.caracole.core.index.IndexTransfer
 import io.github.danielhp95.caracole.core.index.Merged
@@ -126,8 +127,11 @@ class SameCaracole(message: String) : Exception(message)
  *      `sync:index:<computer id>`'s (what the phone took of it last) and MergedIndexes' (the newest read of the whole
  *      exports the phone merged: the site catalogues, a file's indexes, an index imported, a sync's own), never the
  *      phone's own newest, which its lookups' reads move ([newerThere], the comparison's rule too), fetched into
- *      `stateDir/cache/` and merged (IndexTransfer.merge) inside Database.write, both records brought up to date,
- *      then the WAL checkpointed; the stage says each step as it goes
+ *      `stateDir/cache/`, only the part of them the phone doesn't hold (`POST /peer/index/newer`, [merge]: the
+ *      sitemaps whose record differs from the phone's, each whole, and the pages read since the last export of the
+ *      computer's it merged, kv `sync:cut:<computer id>`; the whole, `GET /api/peer/index`, from a computer older than
+ *      the route), and merged (IndexTransfer.merge) inside Database.write, the records brought up to date once the
+ *      file is the part asked for, then the WAL checkpointed; the stage says each step as it goes
  *      ("The computer is copying its indexes…" until the answer begins, "Downloading the computer's indexes · 120 of
  *      274 MB", the merge's MergeProgress.words, "Tidying the database…"), a count at most once a second ([ticks]),
  *      each step's words the stage's detail with one "…" at their end left off ([detail]: its line adds its own);
@@ -743,7 +747,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         var failed = false
         if (newer.isNotEmpty()) {
             try {
-                done.reported.addAll(merge(client, computer, had, newer, indexes, pacer))
+                done.reported.addAll(merge(client, computer, had, newer, indexes, pacer, token))
                 done.indexed.addAll(newer)
                 parts.add("merged ${newer.joinToString(", ")}")
             } catch (e: Exception) {
@@ -765,15 +769,31 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         stage(INDEX, if (failed) FAILED else DONE, parts.joinToString("; "))
     }
 
-    /** The computer's indexes of [newer] fetched into `stateDir/cache/` and merged, the kv's stamps and what the file
+    /**
+     * The computer's indexes of [newer] fetched into `stateDir/cache/` and merged, the kv's stamps and what the file
      * read (MergedIndexes) brought up to date, the WAL checkpointed; the file gone after, whatever came of it. The
-     * report's entries of the sites the merge changed, each site's tabs counted before and after (TabCounts). */
+     * report's entries of the sites the merge changed, each site's tabs counted before and after (TabCounts).
+     *
+     * Only the part the phone doesn't hold is asked for (`POST /peer/index/newer`, Have's document of [newer]: its
+     * records of each sitemap, and kv [Have.CUT_KEY]'s time of the last export it merged from this computer); a
+     * computer older than the route (404, 405) is asked for the whole (`GET /api/peer/index`), any other refusal the
+     * stage's failure. A partial export is checked to be the part asked for once merged (its META's `partial`:
+     * Have.mismatch; no sitemap it left out held otherwise, Merged.unheld), else a TransferError: its merge lost no row
+     * (a sitemap it left out is never read as gone), and nothing is recorded as held, so the next sync asks again.
+     * Once it is (or the export is whole), the phone holds every row the computer held as of the export, as a whole
+     * export's merge leaves it: kv `sync:index:`, MergedIndexes and kv [Have.CUT_KEY] (its META's `exported_at`, the
+     * computer's own clock) move on.
+     */
     private suspend fun merge(client: PeerClient, computer: String, had: Map<String, String>, newer: List<String>,
-                              indexes: Map<String, String>, pacer: Paced): List<JsonObject> {
+                              indexes: Map<String, String>, pacer: Paced, token: String): List<JsonObject> {
         val file = File(cache(), "index-${KeptById.newId()}.sqlite")
         try {
-            pacer.say(COPYING_THERE)  // the computer exports the whole of them before it sends a byte
-            io { client.index(file, newer) { got, total -> pacer.say(downloading(got, total), DOWNLOADING) } }
+            pacer.say(COPYING_THERE)  // the computer exports them before it sends a byte
+            val asked = database.read { Have.document(it, computer, newer) }
+            val partial = io {
+                val said = { got: Long, total: Long -> pacer.say(downloading(got, total), DOWNLOADING) }
+                client.indexNewer(token, file, asked, said) || run { client.index(file, newer, said); false }
+            }
             return io {
                 val counted = database.write { db ->
                     val before = TabCounts.of(db)
@@ -783,8 +803,20 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
                         IndexTransfer.merge(db, file, Stamps.of(clock()), newer, notAfter = notAfter(),
                                             progress = { pacer.say(words.words(it), it.step) })
                     }
+                    if (partial) {
+                        val cut = merged.partial
+                        val why = if (cut == null) "it says nothing of a part" else Have.mismatch(cut, asked)
+                        val unheld = merged.unheld.entries.firstOrNull()?.let { (site, names) ->
+                            "it left out $site's ${names.first()}, which the phone holds otherwise"
+                        }
+                        if (why != null || unheld != null) {
+                            throw TransferError("$THE_COMPUTERS isn't the part asked for: ${why ?: unheld}. Nothing " +
+                                                    "is noted as taken: the next sync asks again.")
+                        }
+                    }
                     db.kvSetJson(INDEX_KEY + computer, IndexStamps.json(had + newer.associateWith { indexes.getValue(it) }))
                     MergedIndexes.record(db, merged)
+                    merged.exported?.let { Have.record(db, computer, newer, it) }
                     taken(merged, before, TabCounts.of(db), newer) { indexes[it] }
                 }
                 pacer.say(MergeProgress.TIDYING)
