@@ -18,7 +18,7 @@ from caracole.web.jobs import (
     remove_steps,
     version_steps,
 )
-from caracole.web.outcome import SITE_NAMES, Action, Chip, Outcome, elsewhere, outcome, progress, steps
+from caracole.web.outcome import INTERRUPTED_RAN, SITE_NAMES, Action, Chip, Outcome, elsewhere, outcome, progress, steps
 from caracole.web.status import SongFacts, job_line
 
 from conftest import add_song
@@ -921,3 +921,41 @@ def test_a_sync_whose_indexes_or_pages_failed_after_its_changes_says_what_it_sha
     # Nothing shared: the failure's words, as before.
     assert said("done", {"index": ("failed", index)}, []) == ("waiting", "Not taken", f"{index}.", "Compare again")
     assert said("failed", {"index": ("failed", index)}, []) == ("failed", "Failed", f"{index}.", "Compare again")
+
+
+def test_a_sync_that_failed_at_any_stage_after_its_changes_says_what_it_shared_first():
+    """Whatever stage failed after the changes went (the give, a push of several, the agreement), and a sync the
+    server interrupted after it took some: what was shared said first, then the failure, as the Sync sheet's title
+    says "Synced with" for the same job (test_sync_sheet.py); with nothing shared, the failure's words alone."""
+    from caracole.commands.peer import TAKEN_STAY
+
+    from test_web_sync import peer_job
+
+    took = [("song/oasis/wonderwall", "taken", ""), ("song/muse/hysteria", "taken", ""),
+            ("song/blur/song-2", "taken", "")]
+    done = {"compare": ("done", "4 differences"), "take": ("done", "took 3")}
+    give = "Couldn't give them 2: No answer from http://192.168.1.20:8737: timed out"
+    pushed = (f"Couldn't give them 3: 1 of 3 pushes taken; push 2 of 3: the computer answered 503. {TAKEN_STAY}")
+
+    def said(state, stages, units=took, output=()):
+        job = peer_job("sync", state, dict(done, **stages), units=units, output=output)
+        over = outcome(job, job_line(job, None))
+        return over.tone, over.word, over.reason, over.action.label
+
+    assert said("failed", {"give": ("failed", give)}, output=(f"error: {give}",)) == (
+        "failed", "Failed", f"3 changes taken. {give}.", "Compare again")
+    stopped = took[:1] + [("song/abba/sos", "given", "")]
+    assert said("failed", {"give": ("failed", pushed)}, stopped, output=(f"error: {pushed}",)) == (
+        "failed", "Failed", "1 change taken, 1 change given. " + pushed.split(f" {TAKEN_STAY}")[0], "Compare again")
+    agree = "Couldn't note where the books agree: database is locked"
+    assert said("failed", {"give": ("done", "gave 0"), "agree": ("failed", agree)},
+                output=(f"error: {agree}",)) == ("failed", "Failed", f"3 changes taken. {agree}.", "Compare again")
+    # Nothing shared: the give's failure alone, as before.
+    assert said("failed", {"take": ("done", "took 0"), "give": ("failed", give)}, [],
+                output=(f"error: {give}",)) == ("failed", "Failed", f"{give}.", "Compare again")
+    # Interrupted after it took some: those said, then the server's words.
+    job = peer_job("sync", "running", dict(done, give=("running", "1 of 2")), units=took)
+    job.state = INTERRUPTED
+    assert job.started_at is not None
+    over = outcome(job, job_line(job, None))
+    assert (over.word, over.reason) == ("Interrupted", f"3 changes taken. {INTERRUPTED_RAN}")

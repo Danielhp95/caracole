@@ -552,10 +552,14 @@ def _bound(conn: sqlite3.Connection, site: str, since: str | None, now: datetime
     another caracole's, a file's: ``ARRIVED_KEY``), to the earliest of them, so that none is missed. None with no
     ``since``: a stamp of another caracole's (a catalogue's) is never a bound for this side's rows; nor with a
     ``since`` later than ``now``, this side's clock as it exports (its clock stepped back since, or a cut of another
-    clock's): every row, once, META's ``partial`` saying the ``since`` asked and no ``from``."""
+    clock's), nor one within ``SINCE_MARGIN`` of the first day: every row, once, META's ``partial`` saying the
+    ``since`` asked and no ``from``."""
     if since is None or stamps.parse(since) > stamps.utc(now):
         return None
-    floor = stamps.parse(since) - SINCE_MARGIN
+    try:
+        floor = stamps.parse(since) - SINCE_MARGIN
+    except OverflowError:  # within the margin of the first day: before every row
+        return None
     bounds = [stamps.stamp(floor)]
     arrivals = _records(conn, "main", ARRIVED_KEY).get(site)
     for entry in arrivals if isinstance(arrivals, list) else []:
@@ -693,7 +697,7 @@ def merge(conn: sqlite3.Connection, path: Path, sites: Iterable[str] | None = No
     with _attached(conn, path):
         for i, plan in enumerate(plans):
             tell(plan.site, "", i, len(plans))
-            done.append(_apply(conn, plan, arrivals))
+            done.append(_apply(conn, plan, now if arrivals else None))
     return Merged(done, copy)
 
 
@@ -1295,7 +1299,7 @@ def _counts(conn: sqlite3.Connection, site: Site) -> dict[str, int]:
     return {t: conn.execute(f"SELECT COUNT(*) FROM main.{t}").fetchone()[0] for t in site.tables}
 
 
-def _apply(conn: sqlite3.Connection, plan: _Plan, arrivals: bool = False) -> SiteMerge:
+def _apply(conn: sqlite3.Connection, plan: _Plan, arrived: datetime | None = None) -> SiteMerge:
     site = SITES[plan.site]
     before = _counts(conn, site)
     with db.savepoint(conn, "index_merge"):
@@ -1307,8 +1311,8 @@ def _apply(conn: sqlite3.Connection, plan: _Plan, arrivals: bool = False) -> Sit
                 db.kv_delete(conn, key)
             else:
                 db.kv_set(conn, key, value)
-        if arrivals and any(noun in _TIMED_NOUNS.get(plan.site, ()) for noun, _, _ in plan.actions):
-            _note_arrival(conn, plan.site)
+        if arrived is not None and any(noun in _TIMED_NOUNS.get(plan.site, ()) for noun, _, _ in plan.actions):
+            _note_arrival(conn, plan.site, arrived)
         _current_keys(conn, plan.site)
         conn.execute(f"DROP TABLE IF EXISTS {_TAKEN}")
     after = _counts(conn, site)
@@ -1316,8 +1320,8 @@ def _apply(conn: sqlite3.Connection, plan: _Plan, arrivals: bool = False) -> Sit
                      {t: (before[t], after[t]) for t in site.tables}, plan.checked)
 
 
-def _note_arrival(conn: sqlite3.Connection, site: str) -> None:
-    """kv ``ARRIVED_KEY``: this merge's time (this side's clock, as it writes) and the earliest time the file holds in
+def _note_arrival(conn: sqlite3.Connection, site: str, at: datetime) -> None:
+    """kv ``ARRIVED_KEY``: this merge's time (``at``, the merge's own ``now``, this side's clock) and the earliest time the file holds in
     the site's tables read a row or a page at a time (text alone; "" for none, every row), appended to the site's
     list, the oldest two made one (the later time, the earlier low) past ``ARRIVALS_KEPT``: whatever a merge took,
     a partial export made after it sends (``_bound``), the rows of other caracoles' times among them."""
@@ -1327,7 +1331,7 @@ def _note_arrival(conn: sqlite3.Connection, site: str) -> None:
     held = _records(conn, "main", ARRIVED_KEY)
     kept = held.get(site)
     entries = [e[:2] for e in kept if isinstance(e, list) and len(e) >= 2] if isinstance(kept, list) else []
-    entries.append([stamps.stamp(datetime.now(UTC)), low])
+    entries.append([stamps.stamp(at), low])
     while len(entries) > ARRIVALS_KEPT:
         (_, first), (at, second) = entries[0][:2], entries[1][:2]
         entries[:2] = [[at, min(first, second) if isinstance(first, str) and isinstance(second, str) else ""]]

@@ -1503,3 +1503,48 @@ def test_a_sync_that_took_and_gave_nothing_before_its_indexes_failed_is_not_sync
         assert page.js("document.getElementById('sync-title').textContent") == "Not synced with: Studio"
         assert page.js("document.getElementById('sync-check').hidden") is True
         assert page.js(STATUS) == INDEX_FAILED + "."
+
+
+GIVE_FAILED = "Couldn't give them 3: timed out"
+
+
+def journal(state: str, stages: dict[str, tuple[str, str]], units=()) -> tuple[str, str]:
+    """The word and the reason the Journal says of the same job ``sync_view`` views (outcome.outcome of its line)."""
+    from caracole.web.outcome import outcome
+    from caracole.web.status import job_line
+
+    from test_web_sync import peer_job
+
+    job = peer_job("sync", state, stages, units=units, job_id=JOB)
+    said = outcome(job, job_line(job, None))
+    return said.word, said.reason
+
+
+@in_chromium
+@pytest.mark.parametrize("phone", [True, False], ids=["phone", "computer"])
+def test_a_sync_whose_give_failed_after_its_take_is_synced_on_the_sheet_and_shared_first_in_the_journal(
+        served, tmp_path, phone):
+    # The take ran before the give, which failed: the job failed. The sheet's title and the same view's outcome (the
+    # Journal's words) say one thing: the changes taken, then the failure; never "Synced with" over a bare "Failed".
+    units = [u for u in TAKEN_GIVEN if u[1] == "taken"]
+    stages = {"compare": ("done", "9 differences"), "take": ("done", "took 6"), "give": ("failed", GIVE_FAILED)}
+    over = sync_view("failed", stages, units, dict(PHONE_REPORT if phone else REPORT, indexes=[]))
+    assert journal("failed", stages, units) == ("Failed", f"{len(units)} changes taken. {GIVE_FAILED}.")
+    fake = FakeSync(state=PHONE_STATE if phone else STATE, views=(PHONE_VIEWS if phone else VIEWS)[:-1] + [over])
+    url = served(fake, sync="sheet" if phone else "tab") + "#sheet=sync"
+    with opened(tmp_path, url, width=390 if phone else 1280, height=844, mobile=phone) as page:
+        sync_through(page, fake)
+        assert page.js("document.getElementById('sync-title').textContent") == "Synced with: Studio"
+        assert page.js("document.getElementById('sync-check').hidden") is True
+
+
+@in_chromium
+def test_a_sync_whose_give_failed_with_nothing_shared_is_not_synced_on_the_sheet_and_failed_in_the_journal(
+        served, tmp_path):
+    stages = {"compare": ("done", "3 differences"), "take": ("done", "took 0"), "give": ("failed", GIVE_FAILED)}
+    over = sync_view("failed", stages)
+    assert journal("failed", stages) == ("Failed", f"{GIVE_FAILED}.")
+    fake = FakeSync(views=VIEWS[:-1] + [over])
+    with opened(tmp_path, served(fake) + "#sheet=sync") as page:
+        sync_through(page, fake)
+        assert page.js("document.getElementById('sync-title').textContent") == "Not synced with: Studio"

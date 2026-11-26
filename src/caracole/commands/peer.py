@@ -1287,7 +1287,7 @@ def _merge_indexes(cfg, conn, file, source, said: _Said, parts: tuple[str, ...],
         told.close()
         why = str(e) if merged_from is None else index_transfer.refusal_words(e, merged_from, "The file")
         said.stage("index", "failed", why)
-        typer.echo(f"The file's indexes weren't merged: {why}")
+        typer.echo(f"The file's indexes weren't merged: {why[:1].lower()}{why[1:]}")
         return None
     finally:
         if copy is not None:

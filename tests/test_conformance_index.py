@@ -66,6 +66,9 @@ made ``BUILT``:
   receives them (``json.dumps(ensure_ascii=False, separators=(",", ":"))``, core.json.PyJson's compact ``dumps``):
   test_index_transfer_newer.have_document, which the route reads (``read_have``) and ``_night``'s partial exports
   are asked with. The Kotlin replay builds ``Have.document`` of the same database and compares it byte for byte.
+- ``route.jsonl``: ``{fn: "caracole.web.peer_routes.ROUTES", note, out: {method, path, body, limit, token_header,
+  content_type, whole_instead}}``: ``POST /peer/index/newer`` as caracole serve answers it and the phone asks it
+  (core.sync.PeerClient.indexNewer and its ``WHOLE_INSTEAD``, held to it by IndexTransferTest).
 - ``newest.jsonl``: ``{fn: "caracole.index_transfer.newest", fixture, out | err}``, over each phone fixture replayed.
 - ``sites.jsonl``: ``{fn: "caracole.index_transfer.SITES", args: [name], out: {name, title, tables, kv}}``, each site
   in caracole's order.
@@ -934,6 +937,38 @@ def test_each_have_document_is_read_by_the_route_and_a_computer_holding_the_same
                     assert sent <= named - validated, (name, site, sent)  # rows of those with no validators alone
     whole = next(r for r in corpus.haves() if r["kw"]["name"] == "whole-cut")
     assert whole["out"]["have"]["ug"]["since"] == _stamp(NOW)  # newer-export was asked with it (_night)
+
+
+# The HTTP seam the phone asks the part it lacks over (web/peer_routes.py; core.sync.PeerClient.indexNewer): stated
+# once, so that a route moved or a fallback widened shows on both sides, never as a silent whole download.
+NEWER_ROUTE = {"method": "POST", "path": "/peer/index/newer", "body": "json", "limit": 1024 * 1024,
+               "token_header": "X-Caracole-Form-Token", "content_type": "application/json",
+               "whole_instead": [404, 405, 413]}
+
+
+def test_route_jsonl_states_the_route_the_phone_asks_its_part_over():
+    record = {"fn": "caracole.web.peer_routes.ROUTES", "note": "POST /peer/index/newer: the phone asks the part of "
+              "the indexes it lacks; whole_instead, the statuses after which it asks for the whole", "out": NEWER_ROUTE}
+    check(INDEX / "route.jsonl", jsonl([record], corpus="index/route", made_by=MADE_BY))
+
+
+def test_the_route_is_where_the_record_says_and_never_answers_a_fallback_status_but_for_its_own_reason(cfg, conn):
+    from caracole.web import app as web_app
+    from caracole.web import peer_routes
+    from caracole.web.app import WebApp
+    from caracole.web.jobs import JobQueue
+
+    from test_web_app import ALLOWED, Recorder
+
+    [route] = [r for r in peer_routes.ROUTES if r.path == NEWER_ROUTE["path"]]
+    assert (route.method, route.body, route.limit) == (NEWER_ROUTE["method"], NEWER_ROUTE["body"],
+                                                       NEWER_ROUTE["limit"])
+    assert web_app.TOKEN_HEADER == NEWER_ROUTE["token_header"].lower()
+    app = WebApp(cfg, JobQueue(Recorder(), limit=3), allowed=ALLOWED, csrf="tok")
+    assert app.body_limit("POST", NEWER_ROUTE["path"]) == NEWER_ROUTE["limit"]  # past it, 413: the whole instead
+    # A document it can't read is a 400, never a status the phone reads as an older computer's.
+    answer = peer_routes.index_newer(app, {"sites": ["spotify"]})
+    assert answer.status == 400 and answer.status not in NEWER_ROUTE["whole_instead"]
 
 
 def test_newest_jsonl_is_what_index_transfer_newest_says(corpus):

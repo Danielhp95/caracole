@@ -45,6 +45,9 @@ import java.time.ZonedDateTime
  * with no steps, Outcomes.steps with no facts; a request over with neither line nor outcome says its state.
  */
 object Feed {
+    /** The label of the Output's step of what a request of the phone's own said ([said]). */
+    const val SAID = "What it said"
+
     val STATE_TEXT: Map<String, String> = linkedMapOf(
         "queued" to "Queued", "running" to "Running", "done" to "Done", "failed" to "Failed", "waiting" to "Waiting",
         "skipped" to "Skipped", "cancelled" to "Cancelled", "interrupted" to "Cut short",
@@ -201,8 +204,20 @@ object Feed {
             "stages" to JsonArray(job.stages.map {
                 stage(it, picking = picking && it.name == "sheet" && it.state == Job.SKIPPED)
             }),
-            "steps" to JsonArray(job.steps.map { step(it, opened, picking = picking && it.state == Job.FAILED) }),
+            "steps" to JsonArray(job.steps.map { step(it, opened, picking = picking && it.state == Job.FAILED) } +
+                                 listOfNotNull(said(job, opened))),
         ))
+    }
+
+    /** What a request of the phone's own said as it ran (JobContext.say with no step: a sync's units left as they
+     * were, each with its why, SyncRoutes.sayLeft), as one more step of its Output, [SAID] its label: where the
+     * Journal holds what the Wi-Fi line's "the Journal says why" names. None for a request that said nothing, or of
+     * commands (caracole serve's alike: feed.py has no such step). */
+    private fun said(job: Job, opened: Boolean): JsonObject? {
+        if (job.steps.isNotEmpty() || job.said.isEmpty()) return null
+        val shown = linkedMapOf<String, JsonElement>("label" to JsonPrimitive(SAID), "badge" to badge(job.state, false))
+        if (opened) shown["lines"] = JsonArray(job.said.map(::JsonPrimitive))
+        return JsonObject(shown)
     }
 
     private fun stage(stage: Stage, picking: Boolean): JsonObject {

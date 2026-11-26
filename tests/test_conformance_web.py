@@ -1131,6 +1131,27 @@ def peer_jobs() -> list[tuple[str, _Job, int | None, int, _status.SongFacts | No
         jobs.append((f"sync, its index stage failed after its changes: {note}",
                      peer_job("sync", state, dict(shared, index=("failed", index)), units=units), None, 0, None,
                      None))
+    # Any stage after the changes failed (the give, a push of several, the agreement), or the server stopped it after
+    # some were taken: what was shared said first, then the failure (the Sync sheet's "Synced with" for the same job);
+    # with nothing shared, the give's failure alone.
+    from caracole.commands.peer import TAKEN_STAY
+
+    give = "Couldn't give them 2: No answer from http://192.168.1.20:8737: timed out"
+    pushed = f"Couldn't give them 3: 1 of 3 pushes taken; push 2 of 3: the computer answered 503. {TAKEN_STAY}"
+    agree = "Couldn't note where the books agree: database is locked"
+    taken = {"compare": ("done", "4 differences"), "take": ("done", "took 1")}
+    for note, stages, units, said in (
+            ("taken, then the give failed", dict(taken, give=("failed", give)), took[:1], give),
+            ("taken, then a push of three failed after one", dict(taken, give=("failed", pushed)), took, pushed),
+            ("taken, then the agreement failed",
+             dict(taken, give=("done", "gave 1"), agree=("failed", agree)), took, agree),
+            ("nothing shared, the give failed", dict(taken, give=("failed", give)), [], give)):
+        jobs.append((f"sync, failed after its changes: {note}",
+                     peer_job("sync", "failed", stages, units=units, output=(f"error: {said}",)), None, 0, None,
+                     None))
+    jobs.append(("sync, interrupted after it took a change",
+                 _interrupted(peer_job("sync", "running", dict(taken, give=("running", "1 of 2")), units=took[:1])),
+                 None, 0, None, None))
     # A sync's agree stage counted in another script's digits, as Python's \d and int() read them.
     jobs.append(("sync, done, its count in Arabic-Indic digits", peer_job("sync", "done", {
         "compare": ("done", ""), "agree": ("done", " ١٢ units the books agree on\n")}, units=took),

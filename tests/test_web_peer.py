@@ -484,3 +484,8 @@ def test_a_newer_part_asked_with_a_body_past_its_limit_or_of_what_this_side_cant
         status, _, body = _newer(phone_side, doc)
         assert status == 400 and said in json.loads(body)["error"]
     assert not (cfg.cache_dir / "peer").exists() or list((cfg.cache_dir / "peer").iterdir()) == []
+
+
+def test_a_newer_part_asked_since_the_first_day_answers_every_row_never_a_500(phone_side, cfg):
+    status, headers, body = _newer(phone_side, {"sites": ["ug"], "have": {"ug": {"since": "0001-01-01T00:00:00Z"}}})
+    assert status == 200 and headers["Content-Type"] == "application/vnd.sqlite3", body

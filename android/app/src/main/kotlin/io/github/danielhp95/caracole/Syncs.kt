@@ -170,9 +170,12 @@ object Syncs {
 
     /**
      * What a sync did, in the bar's line's words: "Up to date" when nothing changed, "Up to date · 1 taken, 2 given";
-     * with conflicts left, "1 taken, 2 changed on both sides: tap Sync to choose"; with units left for another reason
-     * (a file that won't come, a unit changed since compared, one the computer's take left), "1 taken · 1 not synced:
-     * tap Sync to see why" (the sheet's left section says why): never "Up to date" with anything left but a removal
+     * with conflicts left, "1 taken, 2 changed on both sides: tap Sync to choose" (true: the sheet Sync opens compares
+     * afresh and shows a card for each conflict still there); with units left for another reason (a file that won't
+     * come, a unit changed since compared, one the computer's take left), "1 taken · 1 not synced: the Journal says
+     * why" (that sync's entry in the Journal lists each unit left and its why in its Output, SyncRoutes.sayLeft; the
+     * sheet, comparing afresh, wouldn't): never
+     * "Up to date" with anything left but a removal
      * whose song is here (Take.SONG_HERE, the sync's answer). [indexes], why
      * the index stage took and gave none (the computer's database of another schema, Outcomes.indexesSkipped), said
      * after the rest in place of "Up to date", and before what to do: the line ends with that.
@@ -269,7 +272,7 @@ object Syncs {
     private const val SONG = "song/"
     private const val UP_TO_DATE = "Up to date"
     private const val TO_CHOOSE = ": tap Sync to choose"
-    private const val TO_SEE_WHY = ": tap Sync to see why"
+    private const val TO_SEE_WHY = ": the Journal says why"
     /** How the phone's queue says what a failed job threw: its last line of output (JobQueue). */
     private const val ERROR_LINE = "error: "
 }

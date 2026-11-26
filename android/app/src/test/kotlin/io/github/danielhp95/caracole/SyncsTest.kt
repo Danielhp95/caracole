@@ -218,14 +218,14 @@ class SyncsTest {
         val why = "http://192.168.1.20:8737 sent score-1.pdf changed since compared. The song stays as it was here."
         val alone = outcome("""{"taken": [], "given": [], "left": [["song/bach/mass in b minor", "$why"]],
             "agreed": 9, "indexed": []}""")
-        assertEquals("1 not synced: tap Sync to see why", Syncs.said(alone))
+        assertEquals("1 not synced: the Journal says why", Syncs.said(alone))
         val done = Syncs.run(settings("http://192.168.1.20:8737"), probe = true, http = Http(), ask = {},
                              cleared = { cleared++ },
                              phone = { phone(outcome("""{"taken": ["song/a/b"], "given": [],
                                  "left": [["song/bach/mass in b minor", "$why"]], "agreed": 9}""")) }) { n, songs ->
             notified.add(n to songs)
         }!!
-        assertEquals("1 taken · 1 not synced: tap Sync to see why", done.text)
+        assertEquals("1 taken · 1 not synced: the Journal says why", done.text)
         assertEquals(emptyList(), notified, "no conflict to choose: no notification")
         val both = outcome("""{"taken": [], "given": [], "left": [["song/a/b", "${SyncEngine.UNSETTLED}"],
             ["song/c/d", "${SyncEngine.UNSETTLED}"], ["song/e/f", "$why"]]}""")
@@ -240,7 +240,7 @@ class SyncsTest {
         assertEquals("Up to date", Syncs.said(kept))
         val more = outcome("""{"taken": ["song/c/d"], "given": [], "left": [["removed/a/b", "${Take.SONG_HERE}"],
             ["song/e/f", "changed since compared"]]}""")
-        assertEquals("1 taken · 1 not synced: tap Sync to see why", Syncs.said(more))
+        assertEquals("1 taken · 1 not synced: the Journal says why", Syncs.said(more))
     }
 
     @Test
@@ -265,7 +265,7 @@ class SyncsTest {
         assertEquals("2 changed on both sides · ${SyncEngine.INDEXES_NEWER}: tap Sync to choose",
                      Syncs.said(conflicts, SyncEngine.INDEXES_NEWER))
         val other = outcome("""{"taken": ["song/a/b"], "given": [], "left": [["song/c/d", "changed since compared"]]}""")
-        assertEquals("1 taken · 1 not synced · ${SyncEngine.INDEXES_OLDER}: tap Sync to see why",
+        assertEquals("1 taken · 1 not synced · ${SyncEngine.INDEXES_OLDER}: the Journal says why",
                      Syncs.said(other, SyncEngine.INDEXES_OLDER))
     }
 

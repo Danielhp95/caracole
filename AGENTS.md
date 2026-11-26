@@ -1391,8 +1391,12 @@ It is rows.js's, shared by both pages:
   "Nothing was taken or given.". A stage that failed though the sync went on past it (the phone's indexes or its copy
   of the computer's pages, its job done; the computer's indexes, its job failed) is said in its words, with no tick,
   the title "Synced with:" where changes were taken or given ("Not synced with:" only where none was), and a row of
-  its own (`indexes` "Indexes not brought up to date", `pages` "Pages not brought up to date"); the Journal's outcome
-  then says what was shared before the failure (outcome.py `_peer_outcome`, `Outcomes.peerOutcome`). Indexes skipped
+  its own (`indexes` "Indexes not brought up to date", `pages` "Pages not brought up to date"). The Journal's
+  outcome agrees with that title for any sync that took or gave changes and then failed, whatever stage (the give or
+  one of its pushes, the agreement, the pages, the indexes) or the server stopping it: what was shared first, then the
+  failure ("Failed" where the job failed, "Shared" waiting where it is done but a stage failed, "Interrupted"),
+  never doubling a sentence the failure's words say; with nothing shared the failure alone (outcome.py
+  `_peer_outcome`, `Outcomes.peerOutcome`). Indexes skipped
   for the other's database of another schema (the report's `indexes_skipped`, commands/peer.py's and SyncEngine's)
   are its indexes row, "Indexes not synced". The headline's tone is the one its sides share, none when they differ.
   Sending a file says both numbers in the size's unit (sync-words.js `sizeOf`, "1.5 of
@@ -2476,7 +2480,10 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   last outcome and the bar's, `Syncs.said`: "Up to date" only with nothing left and no index skipped, else what it
   took and gave, each conflict left "changed on both sides", every other unit left "not synced", and the index
   stage's words where the computer's database is of another schema (`Outcomes.indexesSkipped`), the line ending with
-  what to do, ": tap Sync to choose" or ": tap Sync to see why"; a stage that failed, its words); the queue's work, a
+  what to do, ": tap Sync to choose" for conflicts (the sheet the tap opens compares afresh and shows each) or ": the
+  Journal says why" for the rest (that sync's entry's Output lists each unit left and its why: SyncRoutes.sayLeft,
+  `NOT_SYNCED`, Feed's step of what a request of the phone's own said, `Feed.SAID`; a fresh comparison wouldn't);
+  a stage that failed, its words); the queue's work, a
   sync among it, in a foreground service (`SyncService`).
   - Its debug build is an app of its own beside F-Droid's release (`io.github.danielhp95.caracole`, the release key):
     `io.github.danielhp95.caracole.debug` (`applicationIdSuffix`, versionName `…-debug`), "Debug caracole" with an

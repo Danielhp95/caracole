@@ -394,3 +394,19 @@ def test_no_body_the_route_takes_names_more_sitemaps_than_read_have_allows():
     # The smallest sitemap a have can name, '"":{},', is 6 bytes: a body within the route's limit stays within
     # read_have's count, so the one size refusal is the route's 413, after which the phone asks for the whole.
     assert transfer.HAVE_SITEMAPS * 6 >= peer_routes.HAVE_MAX
+
+
+def test_a_since_before_the_first_day_less_its_margin_sends_every_row_never_an_error(week, tmp_path):
+    home, phone, _ = week
+    path = tmp_path / "first-day.sqlite"
+    transfer.export(home, path, now=TONIGHT, have=have_of(phone, since="0001-01-01T00:00:00Z"))
+    assert len(exported(path)["ug_artist_tabs"]) == 3 and json.loads(meta(path)[transfer.PARTIAL])["ug"]["from"] is None
+
+
+def test_an_arrival_is_stamped_with_the_merges_own_clock(home, conn, tmp_path):
+    tt.game_page(home, "tabs/ys", ["Feena"], tt.EARLY)
+    pages = tmp_path / "pages.sqlite"
+    transfer.export(home, pages, now=tt.NOW, pages={"gametabs": ["tabs/ys"]})
+    transfer.merge(conn, pages, state_dir=tmp_path / "state", now=TONIGHT)
+    [[at, _]] = json.loads(tt.kv(conn, transfer.ARRIVED_KEY))["gametabs"]
+    assert at == stamps.stamp(TONIGHT)

@@ -1,5 +1,7 @@
 package io.github.danielhp95.caracole.core.index
 
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import androidx.sqlite.execSQL
 import io.github.danielhp95.caracole.core.db.Db
@@ -134,6 +136,21 @@ class IndexTransferTest {
     @Test fun newestIsWhatIndexTransferNewestSays() = Misses(IndexReplay.NEWEST).also { IndexReplay.newest(it) }.assertNone()
 
     @Test fun theHaveDocumentIsPythons() = Misses(IndexReplay.HAVE).also { IndexReplay.have(it) }.assertNone()
+
+    /** route.jsonl: the route the phone asks its part over is the one caracole serve answers (method, path, its
+     * token's header, JSON), and the statuses after which it asks for the whole are those the record names, no
+     * other (a route that answered 404 by mistake falls back; one that answers 400 must show). */
+    @Test fun theNewerRouteIsTheOneTheRecordStates() {
+        val out = io.github.danielhp95.caracole.core.testing.Corpus.records("index/route.jsonl").single().out!!
+            .jsonObject
+        fun text(key: String) = out.getValue(key).jsonPrimitive.content
+        assertEquals("POST" to "json", text("method") to text("body"))
+        assertEquals(text("path"), io.github.danielhp95.caracole.core.sync.PeerClient.INDEX_NEWER_PATH)
+        assertEquals(text("token_header"), io.github.danielhp95.caracole.core.sync.PeerClient.TOKEN_HEADER)
+        assertEquals(out.getValue("whole_instead").jsonArray.map { it.jsonPrimitive.int }.toSet(),
+                     io.github.danielhp95.caracole.core.sync.PeerClient.WHOLE_INSTEAD)
+        assertEquals(text("limit").toLong(), 1024L * 1024)
+    }
 
     @Test fun theSitesAreIndexTransfersSites() = Misses(IndexReplay.SITES).also { IndexReplay.sites(it) }.assertNone()
 

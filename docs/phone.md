@@ -51,7 +51,9 @@ or "up to date".
 
 **Sync on Wi-Fi**, in Settings, does this every 6 hours. It leaves conflicts for you and sends a
 notification. Its line says "Up to date" only when nothing was left; otherwise it counts what
-wasn't synced ("1 taken · 1 not synced: tap Sync to see why").
+wasn't synced. Conflicts end it with "tap Sync to choose": the sheet shows each one. Anything
+else left ends it with "the Journal says why" ("1 taken · 1 not synced: the Journal says
+why"): open that sync's Output in the Journal to see each one and why.
 
 Both sides must run versions of caracole that name songs by the same rules. When they don't, the
 sync refuses before taking anything: "This caracole and the other name songs by different rules:

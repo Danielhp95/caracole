@@ -559,10 +559,11 @@ def test_indexes_that_cant_be_merged_say_so_and_the_import_exits_1(libraries, tm
     f = exported(desk, tmp_path / "i.caracole", "--parts", "library,songbooks,indexes")
 
     def refused(*args, **kw):
-        raise index_transfer.TransferError("the disk is full")
+        raise index_transfer.TransferError("The disk is full")  # a refusal's words begin with a capital, as most do
 
     monkeypatch.setattr(index_transfer, "merge", refused)
     out = run(studio, "peer", "import", "--yes", "--progress", str(f))
+    # Appended mid-sentence, its first letter lower.
     assert out.exit_code == 1 and "The file's indexes weren't merged: the disk is full" in out.output
     assert ("index", "failed") in [(e["stage"], e["state"]) for e in events(out.output) if "stage" in e]
     [report] = [e["report"] for e in events(out.output) if e.get("event") == "report"]

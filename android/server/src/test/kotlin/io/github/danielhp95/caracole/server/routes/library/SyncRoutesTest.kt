@@ -486,6 +486,13 @@ class SyncRoutesTest {
                      outcome["left"])
         assertEquals(before, computer.state().getValue(unit) to app.database.read { Units.libraryState(it) }.getValue(unit),
                      "the conflict as it was on both sides")
+        assertEquals(listOf("${SyncRoutes.NOT_SYNCED}$unit: ${SyncEngine.UNSETTLED}"), ended.said,
+                     "each unit left said, which the Journal's Output shows (Feed's step of what it said), where the " +
+                         "Wi-Fi line sends the owner")
+        val feed = io.github.danielhp95.caracole.server.jobs.Feed.feed(listOf(ended), emptyMap(), opened = setOf(ended.id))
+        val shown = feed.toString()
+        assertTrue(io.github.danielhp95.caracole.server.jobs.Feed.SAID in shown &&
+                       "${SyncRoutes.NOT_SYNCED}$unit" in shown, shown)
         assertEquals(1, synced.get())
         assertTrue(routes.alone(address) != null, "once over, another may be queued")
     }
