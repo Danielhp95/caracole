@@ -830,7 +830,13 @@ def names_records(corpus: Corpus) -> list[dict]:
               *_parametrized(tsn.test_an_underscore_between_spaces_parts_the_text),
               (*tsn.VIKINGOS_VIDEO, None), (*tsn.SILVANA_VIDEO, None), ("Wonderwall - Oasis", "Oasis", None),
               ("Silvana Estrada Que problema", "kintanedu", None), ("Love Me Tender", "Elvis Presley - Topic", None),
-              *_parametrized(tsn.test_a_cjk_lyric_videos_title_names_its_song)]
+              *_parametrized(tsn.test_a_cjk_lyric_videos_title_names_its_song),
+              *_parametrized(tsn.test_a_parts_tags_are_no_words_of_its_own_only_beside_a_title_bracket),
+              *_parametrized(tsn.test_a_tag_bracket_is_never_the_title),
+              *_parametrized(tsn.test_a_subtitles_bracket_is_a_videos_words),
+              *_parametrized(tsn.test_a_bracketed_title_yields_to_an_artist_it_can_know),
+              *_parametrized(tsn.test_a_bracketed_titles_artist_loses_its_loose_tail_as_clean_cuts_one),
+              *_parametrized(tsn.test_a_bracketed_titles_artist_loses_a_leading_by)]
     videos = list(dict.fromkeys((title, channel) for title, channel, *_ in videos))  # a title of two tests once
     texts = ["Silvana Estrada - Que problema", "Silvana Estrada – Que problema", "Silvana Estrada — Que problema",
              "Silvana Estrada | Que problema", "Muse - Hysteria - Live", "Nick Cani – Vikingos veganos",
@@ -851,7 +857,8 @@ def names_records(corpus: Corpus) -> list[dict]:
                               tsn.test_a_part_less_its_title_brackets_is_its_own_words,
                               tsn.test_a_bracket_is_the_title_when_no_mark_parts_the_text)
                for t, _ in _parametrized(test)),
-             "周杰倫 Jay Chou【告白氣球 Love Confession】Official MV", "周杰倫 七里香"]
+             "周杰倫 Jay Chou【告白氣球 Love Confession】Official MV", "周杰倫 七里香", "周杰倫 七里香【Live】",
+             "周杰倫 七里香《周杰倫的床邊故事》"]
     for name in [None, *FIXTURES]:
         with corpus.conn(name) if name else _no_conn() as conn:
             songs = list_songs(conn) if conn is not None else ()

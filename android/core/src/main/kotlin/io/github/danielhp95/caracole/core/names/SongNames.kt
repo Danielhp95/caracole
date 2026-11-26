@@ -27,17 +27,23 @@ object SongNames {
             if (!noise(t.substring(last.range.last + 1))) break
             t = t.substring(0, last.range.first)
         }
-        val words = tokens(t)
+        looseAt(tokens(t))?.let { at -> t = Py.strip(t.substring(0, at)) }
+        t = unquoted(t)
+        return if (noise(t)) "" else t
+    }
+
+    /** Where a video's words loose at the end of [words] ([tokens]') begin: two or more, one strong among them, or one
+     * of a format's ("HD"); null where there are none, or they stay (one alone: "Radio Video"). */
+    private fun looseAt(words: List<Token>): Int? {
         var cut = words.size
         while (cut > 1 && !words[cut - 1].group && noiseWord(words[cut - 1].word)) cut -= 1
         val loose = words.subList(cut, words.size).map { it.word }
         if (loose.size > 1 && noise(loose.joinToString(" ")) ||
             loose.size == 1 && wordsOf(loose[0]).let { w -> w.isNotEmpty() && w.all { it in FORMAT } }
         ) {
-            t = Py.strip(t.substring(0, words[cut].at))
+            return words[cut].at
         }
-        t = unquoted(t)
-        return if (noise(t)) "" else t
+        return null
     }
 
     /** A channel's name as an artist's: no " - Topic", no VEVO, Official or Oficial at its end. */
@@ -57,8 +63,8 @@ object SongNames {
     fun readNames(db: Db?, text: String, songs: List<SongRow>, channel: String? = null): Pair<String, String>? {
         val hints = listOfNotNull(channel).filter { it.isNotEmpty() }.map { cleanChannel(it) }.filter { it.isNotEmpty() }
         val known = Known(db, songs, hints)
-        val cleaned = clean(text)
-        val named = twoParts(cleaned, known) ?: bracketed(cleaned) ?: knownArtistIn(cleaned, known)
+        val cleaned = untagged(clean(text))
+        val named = twoParts(cleaned, known) ?: bracketed(cleaned, known) ?: knownArtistIn(cleaned, known)
         if (named != null) return named
         if (channel != null) return cleanChannel(channel) to own(cleaned)
         return null
@@ -85,8 +91,16 @@ object SongNames {
     private val CJK_NOISE = listOf(
         "动态歌词", "動態歌詞", "歌词", "歌詞", "字幕", "中英字幕", "拼音", "官方", "完整版", "高音质", "高音質", "高画质", "高畫質",
         "高清", "无损", "無損", "纯音乐", "純音樂", "抖音", "热门", "熱門", "循环", "循環", "版",
+        "中文字幕", "繁體字幕", "简体字幕", "中字", "字幕版",
         "公式", "歌詞付き", "フル",
         "가사", "뮤직비디오", "공식",
+    )
+
+    /** A version's or an upload's tag, no title's: a bracket of them alone is never the title ("DJ版" is dj and 版). */
+    private val TAGS = setOf(
+        "live", "cover", "remix", "demo", "acoustic", "instrumental", "piano", "version", "ver", "dj",
+        "翻唱", "现场", "現場", "现场版", "現場版", "伴奏", "纯享", "純享", "纯享版", "純享版", "合唱", "合唱版", "钢琴版", "鋼琴版",
+        "吉他版", "女声版", "女聲版", "男声版", "男聲版", "加长版", "加長版", "重制版", "重製版", "原唱", "原版",
     )
 
     /** The longest first, then in code point order, as Python sorts `(-len(p), p)`. */
@@ -257,9 +271,28 @@ object SongNames {
         return first to second
     }
 
-    /** [text]'s CJK title groups (【】《》「」『』〈〉), in order. */
+    /** Whether [wordsOf]' words are a version's or an upload's tag ([TAGS]) alone, a video's beside them. */
+    private fun tagged(words: List<String>): Boolean =
+        words.any { it in TAGS } && words.all { it in TAGS || isNoise(it) }
+
+    /** Whether a group is a CJK title group of a tag's words alone ("【Live】", "【现场版】", "【DJ版】"): never a title. */
+    private fun tag(group: MatchResult): Boolean = group.value[0] in TITLE_OPENERS && tagged(wordsOf(inner(group)))
+
+    /** [text]'s CJK title groups (【】《》「」『』〈〉), in order, but a tag's ([tag]). */
     private fun titles(text: String): List<MatchResult> =
-        PyRe.finditer(GROUPS, text).filter { it.value[0] in TITLE_OPENERS }.toList()
+        PyRe.finditer(GROUPS, text).filter { it.value[0] in TITLE_OPENERS && !tag(it) }.toList()
+
+    /** [text] less the tag groups that lead it where words follow them, the upload's ("【翻唱】大鱼" is 大鱼); a tag group
+     * after the song's words is the song's, as written ("大鱼【Live】"). */
+    private fun untagged(text: String): String {
+        var t = text
+        while (true) {
+            val group = PyRe.match(GROUPS, t) ?: break
+            if (!tag(group) || Normalize.nameWords(t.substring(group.range.last + 1)).isEmpty()) break
+            t = t.substring(group.range.last + 1).trimStart(' ')
+        }
+        return t
+    }
 
     /** A group's content, its spaces stripped. */
     private fun inner(group: MatchResult): String = Py.strip(group.value.substring(1, group.value.length - 1))
@@ -267,22 +300,51 @@ object SongNames {
     /** [text] less every group, its spaces folded. */
     private fun ungrouped(text: String): String = Py.split(PyRe.sub(GROUPS, text) { " " }).joinToString(" ")
 
-    /** Whether [text] has words of its own outside its groups: a video's alone ("MV") are none. */
+    /** Whether [text] has words of its own outside its groups: a video's or a tag's alone ("MV", "Live") are none. */
     private fun ownWords(text: String): Boolean {
         val words = ungrouped(text)
-        return Normalize.nameWords(words).isNotEmpty() && !noiseWord(words)
+        val found = wordsOf(words)
+        return Normalize.nameWords(words).isNotEmpty() &&
+            !(found.isNotEmpty() && found.all { it in TAGS || isNoise(it) })
     }
 
-    /** [text], its spaces folded, less a video's words loose at its end ("米津玄師 MV" is 米津玄師). */
-    private fun lessLooseNoise(text: String): String {
-        val words = Py.split(text).toMutableList()
-        while (words.isNotEmpty() && noiseWord(words.last())) words.removeAt(words.lastIndex)
-        return words.joinToString(" ")
+    /** [tokens]' words of [text], one holding CJK cut where its runs of CJK meet other letters ("米津玄師MV" is 米津玄師
+     * and MV). */
+    private fun pieces(text: String): List<Token> {
+        val out = ArrayList<Token>()
+        for (token in tokens(text)) {
+            if (!token.group && PyRe.search(CJK, token.word) != null) {
+                for (piece in PyRe.finditer(PIECE, token.word)) {
+                    out += Token(token.at + piece.range.first, piece.value, false)
+                }
+            } else {
+                out += token
+            }
+        }
+        return out
     }
 
-    /** A part's own words (rule 1): the part less its CJK title groups where words of its own are outside its groups,
-     * else its first title group's content, its spaces folded; a part with no title group as it is. */
-    private fun own(part: String): String {
+    /** [text], its spaces folded, less a video's words loose at its end as [clean] cuts them ([looseAt]), one glued to
+     * a CJK name too: "米津玄師 MV" and "米津玄師MV" are 米津玄師, "Bethel Music" stays. */
+    private fun artistWords(text: String): String {
+        val t = Py.split(text).joinToString(" ")
+        val at = looseAt(pieces(t)) ?: return t
+        return Py.strip(t.substring(0, at))
+    }
+
+    /** [artist] less a leading "by", in any case, a whole word ("by 陈奕迅" is 陈奕迅). */
+    private fun withoutBy(artist: String): String {
+        val space = artist.indexOf(' ')
+        val first = if (space < 0) artist else artist.substring(0, space)
+        if (PyUnicode.casefold(first) != "by") return artist
+        return if (space < 0) "" else artist.substring(space + 1)
+    }
+
+    /** A part's own words (rule 1): less the tag groups that lead it ([untagged]); then less its CJK title groups where
+     * words of its own are outside its groups, else its first title group's content, its spaces folded; a part with
+     * no title group as it is, its words a tag's or a video's or not ("Music「Live」"). */
+    private fun own(text: String): String {
+        val part = untagged(text)
         val titles = titles(part)
         if (titles.isEmpty()) return part
         if (!ownWords(part)) return inner(titles[0])
@@ -296,14 +358,23 @@ object SongNames {
     }
 
     /** Rule 2: a text no mark parts, its first CJK title group the title; the words before it the artist, less a
-     * video's words loose at their end, else the words after it, less their groups; none for a title group alone. */
-    private fun bracketed(text: String): Pair<String, String>? {
+     * video's words loose at their end, but where they begin with an artist [known] knows and go on, those words the
+     * title; else the words after it, less their groups; less a leading "by"; none for a title group alone. */
+    private fun bracketed(text: String, known: Known): Pair<String, String>? {
         val titles = titles(text)
         if (PyRe.search(MARK, text) != null || titles.isEmpty()) return null
         val title = inner(titles[0])
-        val before = lessLooseNoise(text.substring(0, titles[0].range.first))
-        val after = text.substring(titles[0].range.last + 1)
-        val artist = if (ownWords(before)) before else lessLooseNoise(ungrouped(after))
+        val before = artistWords(text.substring(0, titles[0].range.first))
+        var artist: String
+        if (ownWords(before)) {
+            if (known.artist(before) == null && !known.title(before)) {
+                first(before, known)?.let { return it } // "陈奕迅 孤勇者《英雄联盟：双城之战》" from 陈奕迅's channel
+            }
+            artist = before
+        } else {
+            artist = artistWords(ungrouped(text.substring(titles[0].range.last + 1)))
+        }
+        artist = withoutBy(artist)
         if (Normalize.nameWords(artist).isEmpty() || Normalize.nameWords(title).isEmpty()) return null
         return artist to title
     }

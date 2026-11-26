@@ -116,6 +116,8 @@ def test_a_quoted_lyric_goes_wherever_it_is_but_a_short_quote_is_a_title(text, c
     ("夜に駆ける [フル]", "夜に駆ける"),
     ("밤편지 [가사]", "밤편지"),
     ("Dynamite (공식 뮤직비디오)", "Dynamite"),
+    # Subtitles are a video's words (one text for four brackets: each literal here costs the keys corpus its records).
+    ("Hello【繁體字幕】 (简体字幕)【中字】「字幕版」", "Hello"),
     # A group of Latin words alone: every word a video's, one strong among them, a lyric channel's beside them too.
     ("Bohemian Rhapsody (Karaoke Version)", "Bohemian Rhapsody"),
     ("Creep [8D Audio]", "Creep"),
@@ -286,6 +288,20 @@ def test_a_part_less_its_title_brackets_is_its_own_words(conn, text, expected):
 
 
 @pytest.mark.parametrize("title,channel,expected", [
+    # A part's words that are a version's or a video's alone are none of its own beside a title bracket to take...
+    ("周深 - 《大鱼》 Live", None, ("周深", "大鱼")),
+    ("周深 - Live《大鱼》", None, ("周深", "大鱼")),
+    ("周深 - MV《大鱼》 现场版", None, ("周深", "大鱼")),
+    # ...and with none to take, its words: a title that is itself such a word stays, a tag bracket after it too.
+    ("Madonna - Music【中文字幕】", None, ("Madonna", "Music")),
+    ("Madonna - Music「Live」", None, ("Madonna", "Music「Live」")),
+    ("周深 - 大鱼【Live】", None, ("周深", "大鱼【Live】")),
+])
+def test_a_parts_tags_are_no_words_of_its_own_only_beside_a_title_bracket(conn, title, channel, expected):
+    assert read_names(conn, title, channel=channel) == expected
+
+
+@pytest.mark.parametrize("title,channel,expected", [
     ("[MV] IU(아이유) _ Blueming(블루밍)", "1theK (원더케이)", ("IU(아이유)", "Blueming(블루밍)")),
     ("[MV] BTS(방탄소년단) _ Dynamite", "1theK (원더케이)", ("BTS(방탄소년단)", "Dynamite")),
     ("Hot_Chip - Over and Over", "Hot Chip", ("Hot_Chip", "Over and Over")),  # one inside a word parts nothing
@@ -344,6 +360,76 @@ def test_a_bracket_is_the_title_before_a_known_artist_counts(conn):
     assert read_names(conn, "周杰倫 Jay Chou【告白氣球 Love Confession】Official MV") == (
         "周杰倫 Jay Chou", "告白氣球 Love Confession")
     assert read_names(conn, "周杰倫 七里香") == ("周杰倫", "七里香")  # no bracket: the known artist, as before
+    # A version's bracket is no title: the known artist's, as written (rule 3).
+    assert read_names(conn, "周杰倫 七里香【Live】") == ("周杰倫", "七里香【Live】")
+    # Words before the title bracket that begin with a known artist and go on: those words the title (rule 2).
+    assert read_names(conn, "周杰倫 七里香《周杰倫的床邊故事》") == ("周杰倫", "七里香")
+
+
+@pytest.mark.parametrize("title,channel,expected", [
+    # A bracket of a version's or a tag's words alone is never the title: after the song's words it is the song's, as
+    # written, as "(Live)" is; leading the text, the upload's tag, it goes.
+    ("周深 大鱼【Live】", "周深", ("周深", "大鱼【Live】")),
+    ("周深 大鱼【现场版】", "周深", ("周深", "大鱼【现场版】")),
+    ("林俊傑 江南「Live」", "林俊傑", ("林俊傑", "江南「Live」")),
+    ("周深 大鱼【钢琴版 Cover】", "周深", ("周深", "大鱼【钢琴版 Cover】")),
+    ("周深 大鱼【DJ版】", "周深", ("周深", "大鱼【DJ版】")),
+    ("【翻唱】大鱼", "周深", ("周深", "大鱼")),
+    ("【翻唱】周深 大鱼", "周深", ("周深", "大鱼")),
+    ("【翻唱】【Live】周深《大鱼》", None, ("周深", "大鱼")),
+    ("【Live】", "周深", ("周深", "【Live】")),  # a tag alone: words follow none
+])
+def test_a_tag_bracket_is_never_the_title(conn, title, channel, expected):
+    assert read_names(conn, title, channel=channel) == expected
+
+
+@pytest.mark.parametrize("title,channel,expected", [
+    # Subtitles are a video's words: their bracket goes, as 【动态歌词】 does, and names no title.
+    ("Adele Hello【中文字幕】", "Adele", ("Adele", "Hello")),
+    ("【中文字幕】Hello", "Adele", ("Adele", "Hello")),
+])
+def test_a_subtitles_bracket_is_a_videos_words(conn, title, channel, expected):
+    assert read_names(conn, title, channel=channel) == expected
+
+
+@pytest.mark.parametrize("title,channel,expected", [
+    # Words before the title bracket that begin with the channel's name and go on: those words are the title, the
+    # bracket and all after it decoration (a show's name, a theme song's words).
+    ("陈奕迅 孤勇者《英雄联盟：双城之战》动画主题曲", "陈奕迅", ("陈奕迅", "孤勇者")),
+    ("陈奕迅 孤勇者 MV《英雄联盟：双城之战》", "陈奕迅", ("陈奕迅", "孤勇者")),
+    # The channel's name whole, in its two scripts: the artist, as rule 2 reads it.
+    ("周深 Zhou Shen《大鱼》Big Fish", "周深", ("周深 Zhou Shen", "大鱼")),
+    ("周杰倫 Jay Chou【告白氣球 Love Confession】", "周杰倫 Jay Chou", ("周杰倫 Jay Chou", "告白氣球 Love Confession")),
+    # With no channel and no known artist, it can't know where the artist ends: the words before the bracket.
+    ("陈奕迅 孤勇者《英雄联盟：双城之战》动画主题曲", None, ("陈奕迅 孤勇者", "英雄联盟：双城之战")),
+])
+def test_a_bracketed_title_yields_to_an_artist_it_can_know(conn, title, channel, expected):
+    assert read_names(conn, title, channel=channel) == expected
+
+
+@pytest.mark.parametrize("title,channel,expected", [
+    # The artist's loose tail is clean's: a lone word that is no format word stays, one glued to the name goes.
+    ("Maverick City Music「Jireh」", None, ("Maverick City Music", "Jireh")),
+    ("Bethel Music「Goodness of God」", None, ("Bethel Music", "Goodness of God")),
+    ("Radio Video「Song」", None, ("Radio Video", "Song")),
+    ("米津玄師MV「Lemon」", None, ("米津玄師", "Lemon")),
+    ("米津玄師 Official Video「Lemon」", None, ("米津玄師", "Lemon")),
+    ("IU(Live MV)「Blueming」", None, ("IU(Live MV)", "Blueming")),  # a group whole, never cut into
+])
+def test_a_bracketed_titles_artist_loses_its_loose_tail_as_clean_cuts_one(conn, title, channel, expected):
+    assert read_names(conn, title, channel=channel) == expected
+
+
+@pytest.mark.parametrize("title,channel,expected", [
+    # The artist after the title bracket loses a leading "by", in any case; "by" alone names no one.
+    ("《孤勇者》 by 陈奕迅", None, ("陈奕迅", "孤勇者")),
+    ("《孤勇者》 BY 陈奕迅 Official MV", None, ("陈奕迅", "孤勇者")),
+    ("《孤勇者》 By 陈奕迅", None, ("陈奕迅", "孤勇者")),
+    ("《孤勇者》 Byron Bay", None, ("Byron Bay", "孤勇者")),  # a whole word alone
+    ("《孤勇者》 by", None, None),
+])
+def test_a_bracketed_titles_artist_loses_a_leading_by(conn, title, channel, expected):
+    assert read_names(conn, title, channel=channel) == expected
 
 
 # --- rule 3: a known artist first, or after " by " ----------------------------------------------------------------

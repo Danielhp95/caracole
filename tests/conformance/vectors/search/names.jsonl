@@ -56,6 +56,7 @@
 {"args":["夜に駆ける [フル]"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"夜に駆ける"}
 {"args":["밤편지 [가사]"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"밤편지"}
 {"args":["Dynamite (공식 뮤직비디오)"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"Dynamite"}
+{"args":["Hello【繁體字幕】 (简体字幕)【中字】「字幕版」"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"Hello"}
 {"args":["Bohemian Rhapsody (Karaoke Version)"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"Bohemian Rhapsody"}
 {"args":["Creep [8D Audio]"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"Creep"}
 {"args":["起风了 (Pinyin Lyrics)"],"fixture":null,"fn":"caracole.song_names.clean","kw":{},"out":"起风了"}
@@ -184,6 +185,8 @@
 {"args":["陈奕迅【】"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["周杰倫 Jay Chou【告白氣球 Love Confession】Official MV"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
 {"args":["周杰倫 七里香"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["周杰倫 七里香【Live】"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["周杰倫 七里香《周杰倫的床邊故事》"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{},"out":["周杰倫 七里香","周杰倫的床邊故事"]}
 {"args":["Radiohead - Creep"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"Radiohead"},"out":["Radiohead","Creep"]}
 {"args":["Oasis - Wonderwall (Official Video)"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"Oasis"},"out":["Oasis","Wonderwall"]}
 {"args":["Queen – Bohemian Rhapsody (Official Video Remastered)"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"Queen Official"},"out":["Queen","Bohemian Rhapsody"]}
@@ -232,6 +235,39 @@
 {"args":["YOASOBI「夜に駆ける」Official Music Video"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"Ayase / YOASOBI"},"out":["YOASOBI","夜に駆ける"]}
 {"args":["米津玄師 MV「Lemon」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
 {"args":["宋冬野「斑马，斑马」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马，斑马"]}
+{"args":["周深 - 《大鱼》 Live"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["周深 - Live《大鱼》"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["周深 - MV《大鱼》 现场版"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["Madonna - Music【中文字幕】"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Madonna","Music"]}
+{"args":["Madonna - Music「Live」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Madonna","Music「Live」"]}
+{"args":["周深 - 大鱼【Live】"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼【Live】"]}
+{"args":["周深 大鱼【Live】"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【Live】"]}
+{"args":["周深 大鱼【现场版】"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【现场版】"]}
+{"args":["林俊傑 江南「Live」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"林俊傑"},"out":["林俊傑","江南「Live」"]}
+{"args":["周深 大鱼【钢琴版 Cover】"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【钢琴版 Cover】"]}
+{"args":["周深 大鱼【DJ版】"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【DJ版】"]}
+{"args":["【翻唱】大鱼"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼"]}
+{"args":["【翻唱】周深 大鱼"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼"]}
+{"args":["【翻唱】【Live】周深《大鱼》"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["【Live】"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","【Live】"]}
+{"args":["Adele Hello【中文字幕】"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"Adele"},"out":["Adele","Hello"]}
+{"args":["【中文字幕】Hello"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"Adele"},"out":["Adele","Hello"]}
+{"args":["陈奕迅 孤勇者《英雄联盟：双城之战》动画主题曲"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["陈奕迅 孤勇者 MV《英雄联盟：双城之战》"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["周深 Zhou Shen《大鱼》Big Fish"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深 Zhou Shen","大鱼"]}
+{"args":["周杰倫 Jay Chou【告白氣球 Love Confession】"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫 Jay Chou"},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
+{"args":["陈奕迅 孤勇者《英雄联盟：双城之战》动画主题曲"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅 孤勇者","英雄联盟：双城之战"]}
+{"args":["Maverick City Music「Jireh」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Maverick City Music","Jireh"]}
+{"args":["Bethel Music「Goodness of God」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Bethel Music","Goodness of God"]}
+{"args":["Radio Video「Song」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Radio Video","Song"]}
+{"args":["米津玄師MV「Lemon」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["米津玄師","Lemon"]}
+{"args":["米津玄師 Official Video「Lemon」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["米津玄師","Lemon"]}
+{"args":["IU(Live MV)「Blueming」"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["IU(Live MV)","Blueming"]}
+{"args":["《孤勇者》 by 陈奕迅"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《孤勇者》 BY 陈奕迅 Official MV"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《孤勇者》 By 陈奕迅"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《孤勇者》 Byron Bay"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Byron Bay","孤勇者"]}
+{"args":["《孤勇者》 by"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
 {"args":["Silvana Estrada - Que problema"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -316,6 +352,8 @@
 {"args":["陈奕迅【】"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["周杰倫 Jay Chou【告白氣球 Love Confession】Official MV"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
 {"args":["周杰倫 七里香"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["周杰倫 七里香【Live】"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["周杰倫 七里香《周杰倫的床邊故事》"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["周杰倫 七里香","周杰倫的床邊故事"]}
 {"args":[" — "],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["a"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["x"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":null}
@@ -435,6 +473,39 @@
 {"args":["YOASOBI「夜に駆ける」Official Music Video"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"Ayase / YOASOBI"},"out":["YOASOBI","夜に駆ける"]}
 {"args":["米津玄師 MV「Lemon」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
 {"args":["宋冬野「斑马，斑马」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马，斑马"]}
+{"args":["周深 - 《大鱼》 Live"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["周深 - Live《大鱼》"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["周深 - MV《大鱼》 现场版"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["Madonna - Music【中文字幕】"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Madonna","Music"]}
+{"args":["Madonna - Music「Live」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Madonna","Music「Live」"]}
+{"args":["周深 - 大鱼【Live】"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼【Live】"]}
+{"args":["周深 大鱼【Live】"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【Live】"]}
+{"args":["周深 大鱼【现场版】"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【现场版】"]}
+{"args":["林俊傑 江南「Live」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"林俊傑"},"out":["林俊傑","江南「Live」"]}
+{"args":["周深 大鱼【钢琴版 Cover】"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【钢琴版 Cover】"]}
+{"args":["周深 大鱼【DJ版】"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【DJ版】"]}
+{"args":["【翻唱】大鱼"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼"]}
+{"args":["【翻唱】周深 大鱼"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼"]}
+{"args":["【翻唱】【Live】周深《大鱼》"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["【Live】"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","【Live】"]}
+{"args":["Adele Hello【中文字幕】"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"Adele"},"out":["Adele","Hello"]}
+{"args":["【中文字幕】Hello"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"Adele"},"out":["Adele","Hello"]}
+{"args":["陈奕迅 孤勇者《英雄联盟：双城之战》动画主题曲"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["陈奕迅 孤勇者 MV《英雄联盟：双城之战》"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["周深 Zhou Shen《大鱼》Big Fish"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深 Zhou Shen","大鱼"]}
+{"args":["周杰倫 Jay Chou【告白氣球 Love Confession】"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫 Jay Chou"},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
+{"args":["陈奕迅 孤勇者《英雄联盟：双城之战》动画主题曲"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅 孤勇者","英雄联盟：双城之战"]}
+{"args":["Maverick City Music「Jireh」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Maverick City Music","Jireh"]}
+{"args":["Bethel Music「Goodness of God」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Bethel Music","Goodness of God"]}
+{"args":["Radio Video「Song」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Radio Video","Song"]}
+{"args":["米津玄師MV「Lemon」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["米津玄師","Lemon"]}
+{"args":["米津玄師 Official Video「Lemon」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["米津玄師","Lemon"]}
+{"args":["IU(Live MV)「Blueming」"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["IU(Live MV)","Blueming"]}
+{"args":["《孤勇者》 by 陈奕迅"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《孤勇者》 BY 陈奕迅 Official MV"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《孤勇者》 By 陈奕迅"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《孤勇者》 Byron Bay"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Byron Bay","孤勇者"]}
+{"args":["《孤勇者》 by"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
 {"args":["Silvana Estrada - Que problema"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -519,6 +590,8 @@
 {"args":["陈奕迅【】"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["周杰倫 Jay Chou【告白氣球 Love Confession】Official MV"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
 {"args":["周杰倫 七里香"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["周杰倫 七里香【Live】"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["周杰倫 七里香《周杰倫的床邊故事》"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["周杰倫 七里香","周杰倫的床邊故事"]}
 {"args":[" — "],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["a"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["x"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":null}
@@ -636,6 +709,39 @@
 {"args":["YOASOBI「夜に駆ける」Official Music Video"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"Ayase / YOASOBI"},"out":["YOASOBI","夜に駆ける"]}
 {"args":["米津玄師 MV「Lemon」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
 {"args":["宋冬野「斑马，斑马」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马，斑马"]}
+{"args":["周深 - 《大鱼》 Live"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["周深 - Live《大鱼》"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["周深 - MV《大鱼》 现场版"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["Madonna - Music【中文字幕】"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Madonna","Music"]}
+{"args":["Madonna - Music「Live」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Madonna","Music「Live」"]}
+{"args":["周深 - 大鱼【Live】"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼【Live】"]}
+{"args":["周深 大鱼【Live】"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【Live】"]}
+{"args":["周深 大鱼【现场版】"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【现场版】"]}
+{"args":["林俊傑 江南「Live」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"林俊傑"},"out":["林俊傑","江南「Live」"]}
+{"args":["周深 大鱼【钢琴版 Cover】"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【钢琴版 Cover】"]}
+{"args":["周深 大鱼【DJ版】"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【DJ版】"]}
+{"args":["【翻唱】大鱼"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼"]}
+{"args":["【翻唱】周深 大鱼"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼"]}
+{"args":["【翻唱】【Live】周深《大鱼》"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["【Live】"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","【Live】"]}
+{"args":["Adele Hello【中文字幕】"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"Adele"},"out":["Adele","Hello"]}
+{"args":["【中文字幕】Hello"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"Adele"},"out":["Adele","Hello"]}
+{"args":["陈奕迅 孤勇者《英雄联盟：双城之战》动画主题曲"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["陈奕迅 孤勇者 MV《英雄联盟：双城之战》"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["周深 Zhou Shen《大鱼》Big Fish"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深 Zhou Shen","大鱼"]}
+{"args":["周杰倫 Jay Chou【告白氣球 Love Confession】"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫 Jay Chou"},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
+{"args":["陈奕迅 孤勇者《英雄联盟：双城之战》动画主题曲"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅 孤勇者","英雄联盟：双城之战"]}
+{"args":["Maverick City Music「Jireh」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Maverick City Music","Jireh"]}
+{"args":["Bethel Music「Goodness of God」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Bethel Music","Goodness of God"]}
+{"args":["Radio Video「Song」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Radio Video","Song"]}
+{"args":["米津玄師MV「Lemon」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["米津玄師","Lemon"]}
+{"args":["米津玄師 Official Video「Lemon」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["米津玄師","Lemon"]}
+{"args":["IU(Live MV)「Blueming」"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["IU(Live MV)","Blueming"]}
+{"args":["《孤勇者》 by 陈奕迅"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《孤勇者》 BY 陈奕迅 Official MV"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《孤勇者》 By 陈奕迅"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《孤勇者》 Byron Bay"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Byron Bay","孤勇者"]}
+{"args":["《孤勇者》 by"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
 {"args":["Silvana Estrada - Que problema"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -720,6 +826,8 @@
 {"args":["陈奕迅【】"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["周杰倫 Jay Chou【告白氣球 Love Confession】Official MV"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
 {"args":["周杰倫 七里香"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["周杰倫 七里香【Live】"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["周杰倫 七里香《周杰倫的床邊故事》"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["周杰倫 七里香","周杰倫的床邊故事"]}
 {"args":[" — "],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["a"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["x"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":null}
@@ -821,6 +929,39 @@
 {"args":["YOASOBI「夜に駆ける」Official Music Video"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"Ayase / YOASOBI"},"out":["YOASOBI","夜に駆ける"]}
 {"args":["米津玄師 MV「Lemon」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
 {"args":["宋冬野「斑马，斑马」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马，斑马"]}
+{"args":["周深 - 《大鱼》 Live"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["周深 - Live《大鱼》"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["周深 - MV《大鱼》 现场版"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["Madonna - Music【中文字幕】"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Madonna","Music"]}
+{"args":["Madonna - Music「Live」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Madonna","Music「Live」"]}
+{"args":["周深 - 大鱼【Live】"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼【Live】"]}
+{"args":["周深 大鱼【Live】"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【Live】"]}
+{"args":["周深 大鱼【现场版】"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【现场版】"]}
+{"args":["林俊傑 江南「Live」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"林俊傑"},"out":["林俊傑","江南「Live」"]}
+{"args":["周深 大鱼【钢琴版 Cover】"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【钢琴版 Cover】"]}
+{"args":["周深 大鱼【DJ版】"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【DJ版】"]}
+{"args":["【翻唱】大鱼"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼"]}
+{"args":["【翻唱】周深 大鱼"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼"]}
+{"args":["【翻唱】【Live】周深《大鱼》"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["【Live】"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","【Live】"]}
+{"args":["Adele Hello【中文字幕】"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"Adele"},"out":["Adele","Hello"]}
+{"args":["【中文字幕】Hello"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"Adele"},"out":["Adele","Hello"]}
+{"args":["陈奕迅 孤勇者《英雄联盟：双城之战》动画主题曲"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["陈奕迅 孤勇者 MV《英雄联盟：双城之战》"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["周深 Zhou Shen《大鱼》Big Fish"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深 Zhou Shen","大鱼"]}
+{"args":["周杰倫 Jay Chou【告白氣球 Love Confession】"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫 Jay Chou"},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
+{"args":["陈奕迅 孤勇者《英雄联盟：双城之战》动画主题曲"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅 孤勇者","英雄联盟：双城之战"]}
+{"args":["Maverick City Music「Jireh」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Maverick City Music","Jireh"]}
+{"args":["Bethel Music「Goodness of God」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Bethel Music","Goodness of God"]}
+{"args":["Radio Video「Song」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Radio Video","Song"]}
+{"args":["米津玄師MV「Lemon」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["米津玄師","Lemon"]}
+{"args":["米津玄師 Official Video「Lemon」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["米津玄師","Lemon"]}
+{"args":["IU(Live MV)「Blueming」"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["IU(Live MV)","Blueming"]}
+{"args":["《孤勇者》 by 陈奕迅"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《孤勇者》 BY 陈奕迅 Official MV"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《孤勇者》 By 陈奕迅"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《孤勇者》 Byron Bay"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Byron Bay","孤勇者"]}
+{"args":["《孤勇者》 by"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
 {"args":["Silvana Estrada - Que problema"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -905,6 +1046,8 @@
 {"args":["陈奕迅【】"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["周杰倫 Jay Chou【告白氣球 Love Confession】Official MV"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
 {"args":["周杰倫 七里香"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["周杰倫 七里香【Live】"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["周杰倫 七里香《周杰倫的床邊故事》"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["周杰倫 七里香","周杰倫的床邊故事"]}
 {"args":[" — "],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["a"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["x"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":null}
@@ -1016,6 +1159,39 @@
 {"args":["YOASOBI「夜に駆ける」Official Music Video"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"Ayase / YOASOBI"},"out":["YOASOBI","夜に駆ける"]}
 {"args":["米津玄師 MV「Lemon」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
 {"args":["宋冬野「斑马，斑马」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马，斑马"]}
+{"args":["周深 - 《大鱼》 Live"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["周深 - Live《大鱼》"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["周深 - MV《大鱼》 现场版"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["Madonna - Music【中文字幕】"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Madonna","Music"]}
+{"args":["Madonna - Music「Live」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Madonna","Music「Live」"]}
+{"args":["周深 - 大鱼【Live】"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼【Live】"]}
+{"args":["周深 大鱼【Live】"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【Live】"]}
+{"args":["周深 大鱼【现场版】"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【现场版】"]}
+{"args":["林俊傑 江南「Live」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"林俊傑"},"out":["林俊傑","江南「Live」"]}
+{"args":["周深 大鱼【钢琴版 Cover】"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【钢琴版 Cover】"]}
+{"args":["周深 大鱼【DJ版】"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【DJ版】"]}
+{"args":["【翻唱】大鱼"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼"]}
+{"args":["【翻唱】周深 大鱼"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼"]}
+{"args":["【翻唱】【Live】周深《大鱼》"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["【Live】"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","【Live】"]}
+{"args":["Adele Hello【中文字幕】"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"Adele"},"out":["Adele","Hello"]}
+{"args":["【中文字幕】Hello"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"Adele"},"out":["Adele","Hello"]}
+{"args":["陈奕迅 孤勇者《英雄联盟：双城之战》动画主题曲"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["陈奕迅 孤勇者 MV《英雄联盟：双城之战》"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["周深 Zhou Shen《大鱼》Big Fish"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深 Zhou Shen","大鱼"]}
+{"args":["周杰倫 Jay Chou【告白氣球 Love Confession】"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫 Jay Chou"},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
+{"args":["陈奕迅 孤勇者《英雄联盟：双城之战》动画主题曲"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅 孤勇者","英雄联盟：双城之战"]}
+{"args":["Maverick City Music「Jireh」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Maverick City Music","Jireh"]}
+{"args":["Bethel Music「Goodness of God」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Bethel Music","Goodness of God"]}
+{"args":["Radio Video「Song」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Radio Video","Song"]}
+{"args":["米津玄師MV「Lemon」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["米津玄師","Lemon"]}
+{"args":["米津玄師 Official Video「Lemon」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["米津玄師","Lemon"]}
+{"args":["IU(Live MV)「Blueming」"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["IU(Live MV)","Blueming"]}
+{"args":["《孤勇者》 by 陈奕迅"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《孤勇者》 BY 陈奕迅 Official MV"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《孤勇者》 By 陈奕迅"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《孤勇者》 Byron Bay"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Byron Bay","孤勇者"]}
+{"args":["《孤勇者》 by"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
 {"args":["Silvana Estrada - Que problema"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -1100,6 +1276,8 @@
 {"args":["陈奕迅【】"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["周杰倫 Jay Chou【告白氣球 Love Confession】Official MV"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
 {"args":["周杰倫 七里香"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["周杰倫 七里香【Live】"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["周杰倫 七里香《周杰倫的床邊故事》"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["周杰倫 七里香","周杰倫的床邊故事"]}
 {"args":[" — "],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["a"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["x"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":null}
@@ -1215,6 +1393,39 @@
 {"args":["YOASOBI「夜に駆ける」Official Music Video"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"Ayase / YOASOBI"},"out":["YOASOBI","夜に駆ける"]}
 {"args":["米津玄師 MV「Lemon」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
 {"args":["宋冬野「斑马，斑马」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马，斑马"]}
+{"args":["周深 - 《大鱼》 Live"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["周深 - Live《大鱼》"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["周深 - MV《大鱼》 现场版"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["Madonna - Music【中文字幕】"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Madonna","Music"]}
+{"args":["Madonna - Music「Live」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Madonna","Music「Live」"]}
+{"args":["周深 - 大鱼【Live】"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼【Live】"]}
+{"args":["周深 大鱼【Live】"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【Live】"]}
+{"args":["周深 大鱼【现场版】"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【现场版】"]}
+{"args":["林俊傑 江南「Live」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"林俊傑"},"out":["林俊傑","江南「Live」"]}
+{"args":["周深 大鱼【钢琴版 Cover】"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【钢琴版 Cover】"]}
+{"args":["周深 大鱼【DJ版】"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【DJ版】"]}
+{"args":["【翻唱】大鱼"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼"]}
+{"args":["【翻唱】周深 大鱼"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼"]}
+{"args":["【翻唱】【Live】周深《大鱼》"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["【Live】"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","【Live】"]}
+{"args":["Adele Hello【中文字幕】"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"Adele"},"out":["Adele","Hello"]}
+{"args":["【中文字幕】Hello"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"Adele"},"out":["Adele","Hello"]}
+{"args":["陈奕迅 孤勇者《英雄联盟：双城之战》动画主题曲"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["陈奕迅 孤勇者 MV《英雄联盟：双城之战》"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["周深 Zhou Shen《大鱼》Big Fish"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深 Zhou Shen","大鱼"]}
+{"args":["周杰倫 Jay Chou【告白氣球 Love Confession】"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫 Jay Chou"},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
+{"args":["陈奕迅 孤勇者《英雄联盟：双城之战》动画主题曲"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅 孤勇者","英雄联盟：双城之战"]}
+{"args":["Maverick City Music「Jireh」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Maverick City Music","Jireh"]}
+{"args":["Bethel Music「Goodness of God」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Bethel Music","Goodness of God"]}
+{"args":["Radio Video「Song」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Radio Video","Song"]}
+{"args":["米津玄師MV「Lemon」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["米津玄師","Lemon"]}
+{"args":["米津玄師 Official Video「Lemon」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["米津玄師","Lemon"]}
+{"args":["IU(Live MV)「Blueming」"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["IU(Live MV)","Blueming"]}
+{"args":["《孤勇者》 by 陈奕迅"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《孤勇者》 BY 陈奕迅 Official MV"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《孤勇者》 By 陈奕迅"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《孤勇者》 Byron Bay"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Byron Bay","孤勇者"]}
+{"args":["《孤勇者》 by"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
 {"args":["Silvana Estrada - Que problema"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -1299,6 +1510,8 @@
 {"args":["陈奕迅【】"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["周杰倫 Jay Chou【告白氣球 Love Confession】Official MV"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
 {"args":["周杰倫 七里香"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["周杰倫 七里香【Live】"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["周杰倫 七里香《周杰倫的床邊故事》"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["周杰倫 七里香","周杰倫的床邊故事"]}
 {"args":[" — "],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["a"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["x"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":null}
@@ -1378,6 +1591,39 @@
 {"args":["YOASOBI「夜に駆ける」Official Music Video"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"Ayase / YOASOBI"},"out":["YOASOBI","夜に駆ける"]}
 {"args":["米津玄師 MV「Lemon」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
 {"args":["宋冬野「斑马，斑马」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马，斑马"]}
+{"args":["周深 - 《大鱼》 Live"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["周深 - Live《大鱼》"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["周深 - MV《大鱼》 现场版"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["Madonna - Music【中文字幕】"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Madonna","Music"]}
+{"args":["Madonna - Music「Live」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Madonna","Music「Live」"]}
+{"args":["周深 - 大鱼【Live】"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼【Live】"]}
+{"args":["周深 大鱼【Live】"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【Live】"]}
+{"args":["周深 大鱼【现场版】"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【现场版】"]}
+{"args":["林俊傑 江南「Live」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"林俊傑"},"out":["林俊傑","江南「Live」"]}
+{"args":["周深 大鱼【钢琴版 Cover】"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【钢琴版 Cover】"]}
+{"args":["周深 大鱼【DJ版】"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【DJ版】"]}
+{"args":["【翻唱】大鱼"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼"]}
+{"args":["【翻唱】周深 大鱼"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼"]}
+{"args":["【翻唱】【Live】周深《大鱼》"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["【Live】"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","【Live】"]}
+{"args":["Adele Hello【中文字幕】"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"Adele"},"out":["Adele","Hello"]}
+{"args":["【中文字幕】Hello"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"Adele"},"out":["Adele","Hello"]}
+{"args":["陈奕迅 孤勇者《英雄联盟：双城之战》动画主题曲"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["陈奕迅 孤勇者 MV《英雄联盟：双城之战》"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["周深 Zhou Shen《大鱼》Big Fish"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深 Zhou Shen","大鱼"]}
+{"args":["周杰倫 Jay Chou【告白氣球 Love Confession】"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫 Jay Chou"},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
+{"args":["陈奕迅 孤勇者《英雄联盟：双城之战》动画主题曲"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅 孤勇者","英雄联盟：双城之战"]}
+{"args":["Maverick City Music「Jireh」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Maverick City Music","Jireh"]}
+{"args":["Bethel Music「Goodness of God」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Bethel Music","Goodness of God"]}
+{"args":["Radio Video「Song」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Radio Video","Song"]}
+{"args":["米津玄師MV「Lemon」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["米津玄師","Lemon"]}
+{"args":["米津玄師 Official Video「Lemon」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["米津玄師","Lemon"]}
+{"args":["IU(Live MV)「Blueming」"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["IU(Live MV)","Blueming"]}
+{"args":["《孤勇者》 by 陈奕迅"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《孤勇者》 BY 陈奕迅 Official MV"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《孤勇者》 By 陈奕迅"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《孤勇者》 Byron Bay"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Byron Bay","孤勇者"]}
+{"args":["《孤勇者》 by"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
 {"args":["Silvana Estrada - Que problema"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -1462,6 +1708,8 @@
 {"args":["陈奕迅【】"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["周杰倫 Jay Chou【告白氣球 Love Confession】Official MV"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
 {"args":["周杰倫 七里香"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["周杰倫 七里香【Live】"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["周杰倫 七里香《周杰倫的床邊故事》"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["周杰倫 七里香","周杰倫的床邊故事"]}
 {"args":[" — "],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["a"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["x"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
@@ -1552,6 +1800,39 @@
 {"args":["YOASOBI「夜に駆ける」Official Music Video"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Ayase / YOASOBI"},"out":["YOASOBI","夜に駆ける"]}
 {"args":["米津玄師 MV「Lemon」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
 {"args":["宋冬野「斑马，斑马」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马，斑马"]}
+{"args":["周深 - 《大鱼》 Live"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["周深 - Live《大鱼》"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["周深 - MV《大鱼》 现场版"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["Madonna - Music【中文字幕】"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Madonna","Music"]}
+{"args":["Madonna - Music「Live」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Madonna","Music「Live」"]}
+{"args":["周深 - 大鱼【Live】"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼【Live】"]}
+{"args":["周深 大鱼【Live】"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【Live】"]}
+{"args":["周深 大鱼【现场版】"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【现场版】"]}
+{"args":["林俊傑 江南「Live」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"林俊傑"},"out":["林俊傑","江南「Live」"]}
+{"args":["周深 大鱼【钢琴版 Cover】"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【钢琴版 Cover】"]}
+{"args":["周深 大鱼【DJ版】"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【DJ版】"]}
+{"args":["【翻唱】大鱼"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼"]}
+{"args":["【翻唱】周深 大鱼"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼"]}
+{"args":["【翻唱】【Live】周深《大鱼》"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["【Live】"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","【Live】"]}
+{"args":["Adele Hello【中文字幕】"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Adele"},"out":["Adele","Hello"]}
+{"args":["【中文字幕】Hello"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Adele"},"out":["Adele","Hello"]}
+{"args":["陈奕迅 孤勇者《英雄联盟：双城之战》动画主题曲"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["陈奕迅 孤勇者 MV《英雄联盟：双城之战》"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["周深 Zhou Shen《大鱼》Big Fish"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深 Zhou Shen","大鱼"]}
+{"args":["周杰倫 Jay Chou【告白氣球 Love Confession】"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫 Jay Chou"},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
+{"args":["陈奕迅 孤勇者《英雄联盟：双城之战》动画主题曲"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅 孤勇者","英雄联盟：双城之战"]}
+{"args":["Maverick City Music「Jireh」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Maverick City Music","Jireh"]}
+{"args":["Bethel Music「Goodness of God」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Bethel Music","Goodness of God"]}
+{"args":["Radio Video「Song」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Radio Video","Song"]}
+{"args":["米津玄師MV「Lemon」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["米津玄師","Lemon"]}
+{"args":["米津玄師 Official Video「Lemon」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["米津玄師","Lemon"]}
+{"args":["IU(Live MV)「Blueming」"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["IU(Live MV)","Blueming"]}
+{"args":["《孤勇者》 by 陈奕迅"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《孤勇者》 BY 陈奕迅 Official MV"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《孤勇者》 By 陈奕迅"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《孤勇者》 Byron Bay"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Byron Bay","孤勇者"]}
+{"args":["《孤勇者》 by"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
 {"args":["Silvana Estrada - Que problema"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -1636,6 +1917,8 @@
 {"args":["陈奕迅【】"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["周杰倫 Jay Chou【告白氣球 Love Confession】Official MV"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
 {"args":["周杰倫 七里香"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["周杰倫 七里香【Live】"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["周杰倫 七里香《周杰倫的床邊故事》"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["周杰倫 七里香","周杰倫的床邊故事"]}
 {"args":[" — "],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["a"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":null}
 {"args":["x"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":null}
@@ -1711,3 +1994,36 @@
 {"args":["YOASOBI「夜に駆ける」Official Music Video"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"Ayase / YOASOBI"},"out":["YOASOBI","夜に駆ける"]}
 {"args":["米津玄師 MV「Lemon」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"米津玄師"},"out":["米津玄師","Lemon"]}
 {"args":["宋冬野「斑马，斑马」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马，斑马"]}
+{"args":["周深 - 《大鱼》 Live"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["周深 - Live《大鱼》"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["周深 - MV《大鱼》 现场版"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["Madonna - Music【中文字幕】"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Madonna","Music"]}
+{"args":["Madonna - Music「Live」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Madonna","Music「Live」"]}
+{"args":["周深 - 大鱼【Live】"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼【Live】"]}
+{"args":["周深 大鱼【Live】"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【Live】"]}
+{"args":["周深 大鱼【现场版】"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【现场版】"]}
+{"args":["林俊傑 江南「Live」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"林俊傑"},"out":["林俊傑","江南「Live」"]}
+{"args":["周深 大鱼【钢琴版 Cover】"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【钢琴版 Cover】"]}
+{"args":["周深 大鱼【DJ版】"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼【DJ版】"]}
+{"args":["【翻唱】大鱼"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼"]}
+{"args":["【翻唱】周深 大鱼"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","大鱼"]}
+{"args":["【翻唱】【Live】周深《大鱼》"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["周深","大鱼"]}
+{"args":["【Live】"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深","【Live】"]}
+{"args":["Adele Hello【中文字幕】"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"Adele"},"out":["Adele","Hello"]}
+{"args":["【中文字幕】Hello"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"Adele"},"out":["Adele","Hello"]}
+{"args":["陈奕迅 孤勇者《英雄联盟：双城之战》动画主题曲"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["陈奕迅 孤勇者 MV《英雄联盟：双城之战》"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"陈奕迅"},"out":["陈奕迅","孤勇者"]}
+{"args":["周深 Zhou Shen《大鱼》Big Fish"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"周深"},"out":["周深 Zhou Shen","大鱼"]}
+{"args":["周杰倫 Jay Chou【告白氣球 Love Confession】"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":"周杰倫 Jay Chou"},"out":["周杰倫 Jay Chou","告白氣球 Love Confession"]}
+{"args":["陈奕迅 孤勇者《英雄联盟：双城之战》动画主题曲"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅 孤勇者","英雄联盟：双城之战"]}
+{"args":["Maverick City Music「Jireh」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Maverick City Music","Jireh"]}
+{"args":["Bethel Music「Goodness of God」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Bethel Music","Goodness of God"]}
+{"args":["Radio Video「Song」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Radio Video","Song"]}
+{"args":["米津玄師MV「Lemon」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["米津玄師","Lemon"]}
+{"args":["米津玄師 Official Video「Lemon」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["米津玄師","Lemon"]}
+{"args":["IU(Live MV)「Blueming」"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["IU(Live MV)","Blueming"]}
+{"args":["《孤勇者》 by 陈奕迅"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《孤勇者》 BY 陈奕迅 Official MV"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《孤勇者》 By 陈奕迅"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["陈奕迅","孤勇者"]}
+{"args":["《孤勇者》 Byron Bay"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Byron Bay","孤勇者"]}
+{"args":["《孤勇者》 by"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":null}
