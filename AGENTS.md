@@ -2196,6 +2196,16 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   copied byte for byte at build time (`copyViewerAssets`).
 - `:e2e`: the end-to-end phases against a real caracole serve (`PhoneScenarioTest`, driven by
   tests/test_android_e2e.py, below).
+- `:ml` (Android library, stage B0 of the chords-on-the-phone design): BTC and beat_this on ONNX Runtime 1.32.0's
+  Maven AAR (`OrtModels`: `chords`, `beats`, a chunk at a time, `padding` the graph's mean, `RUNTIME`), the app's
+  `debugImplementation` alone, so no release carries a runtime; its manifest removes the AAR's
+  `ai.onnxruntime.TelemetryInitializer` (a provider that gives the runtime's 1DS telemetry an HTTP client at the app's
+  start), `ORT_DISABLE_TELEMETRY` set before the first environment (the app's `NoTelemetryTest`); no arena and no
+  memory pattern (beat_this's peak RSS halved). Its `ModelParityTest` (its own test APK) holds it to
+  vectors/autochords/models.jsonl on the emulator, every threshold the records' `gates`, beat_this's chunking,
+  postprocessor and F-measure ported in the test alone (`BeatThis`, held to the computer's beats over its own logits),
+  the models `.#chord-models` (`./android#ml`'s `CARACOLE_CHORD_MODELS`), pushed by `device-test.sh --ml`. It handles
+  no text: no ForbiddenApiTest.
 - Milestones 1–6 are built (docs/android_port.md's status, "Built: milestones 4 to 6"), each route a module of its
   own:
   - `server/routes/Stubs.kt` keeps YouTube's routes and `GET /lookup` alone, answering "…: not on the phone yet."
@@ -3435,9 +3445,10 @@ nix flake check
   transport that refuses every site unless a test sets another. `PhoneDeps.transport` has no default: every `Phone` a
   test builds names its transport.
 - **The device**: a lane's device tests run only through `android/scripts/device-test.sh` (`--area NAME` for a
-  corpus area, `--app` for the app's classes, `CLASS[=DIR]` for its own), which builds first, then takes the first
-  free emulator of a pool (`CARACOLE_EMULATORS`, 3 by default, the owner's choice of 2026-11-10: emulator-5554, -5556,
-  -5558, each one caller at a time) and holds its lock (emulator-5554's
+  corpus area, `--app` for the app's classes, `--ml` for `:ml`'s ModelParityTest, `CLASS[=DIR]` for its own;
+  `--tcpdump FILE` the emulator's packets while they run, Wi-Fi off, any to or from a host but 10.0.2.2 a failure),
+  which builds first, then takes the first free emulator of a pool (`CARACOLE_EMULATORS`, 3 by default, the owner's
+  choice of 2026-11-10: emulator-5554, -5556, -5558, each one caller at a time) and holds its lock (emulator-5554's
   `${CARACOLE_EMULATOR_LOCK:-${XDG_RUNTIME_DIR:-/tmp}/caracole-emulator.lock}`, the others' the same name with their
   port) while it installs and runs, starts that emulator if it isn't up (each read-only, so several run on the one AVD) and leaves
   it up.

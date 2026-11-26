@@ -37,6 +37,10 @@
       # alphaTab's three files (../nix/alphatab.nix, the computer's own fixed-output fetch), for the Guitar Pro
       # page's assets and the tests that read them (lane guitar-alphatab).
       alphatab = pkgs.callPackage ../nix/alphatab.nix { };
+      # BTC's graph and weights and beat_this's two graphs (../nix/autochords-onnx.nix, the computer's
+      # `.#chord-models`), which :ml's ModelParityTest runs on the emulator (scripts/device-test.sh --ml): in the ml
+      # shell alone, so the other shells never build them (torch exports them).
+      chordModels = pkgs.callPackage ../nix/autochords-onnx.nix { };
 
       # Headless: the full jdk17 links gtk3, which brings nixpkgs' libsqlite3, whose sqlite3_* symbols then
       # silently take the place of the bundled SQLite's (core's DatabaseTest asserts sqlite_source_id()).
@@ -67,6 +71,8 @@
         default = shellFor false;
         # The same, with the emulator and an Android ${platformVersion} system image (x86_64, Google APIs).
         emulator = shellFor true;
+        # The emulator's, with CARACOLE_CHORD_MODELS: the models' folder, for `scripts/device-test.sh --ml`.
+        ml = (shellFor true).overrideAttrs { CARACOLE_CHORD_MODELS = "${chordModels}"; };
       };
     };
 }

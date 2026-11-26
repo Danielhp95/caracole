@@ -116,6 +116,9 @@ dependencies {
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.work:work-runtime-ktx:2.10.5")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+    // The chord and beat models on ONNX Runtime, the debug build's alone until the owner chooses the runtime that
+    // ships (the design's stage S): no release carries it.
+    debugImplementation(project(":ml"))
 
     // The app's own logic that needs no device (the text size, Settings over its preferences, a file read from the
     // phone's server and copied for another app, an index fetched): `gradle :app:test`.

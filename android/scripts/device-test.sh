@@ -2,7 +2,8 @@
 # The phone's device tests on a pool of emulators, one caller an emulator at a time (AGENTS.md, "How work is done
 # here"):
 #
-#   android/scripts/device-test.sh [--computer DIR] [--sites SCENARIO] [--area NAME[,NAME...]] [--app] [CLASS[=DIR]]...
+#   android/scripts/device-test.sh [--computer DIR] [--sites SCENARIO] [--area NAME[,NAME...]] [--app] [--ml]
+#                                  [--tcpdump FILE] [CLASS[=DIR]]...
 #
 #   --area NAMES    CorpusOnDeviceTest's areas (core, server and viewer.testing's Replays); "all" or an empty
 #                   list: every one
@@ -14,6 +15,13 @@
 #   --computer DIR  one computer for every class that names none
 #   --sites S       the fake sites server of scenario S (tests/helpers/fake_sites.py serve S PORT, on the host, a
 #                   free port never 8737) for every class run, named to each as -e sites http://10.0.2.2:PORT
+#   --ml            :ml's ModelParityTest (its own test APK, io.github.danielhp95.caracole.ml.test) over the chord and
+#                   beat models in $CARACOLE_CHORD_MODELS (`nix build .#chord-models`; unset, the ./android#ml
+#                   shell's), pushed into /data/local/tmp/caracole-models (a file again only when its SHA-256 differs)
+#   --tcpdump FILE  every packet the emulator sends or gets while the classes run, into FILE (pcap), with Wi-Fi off
+#                   so that all of it goes through the one interface the emulator's console captures (its cellular
+#                   network); any packet to or from a host but 10.0.2.2 fails the run (ARP between the emulator and
+#                   10.0.2.2, and link-local multicast, which reaches no host, are listed and allowed)
 #
 # It builds assembleDebug and assembleDebugAndroidTest first (the debug build, io.github.danielhp95.caracole.debug, and
 # its tests, io.github.danielhp95.caracole.debug.test), outside the lock, then takes the first free emulator of
@@ -38,6 +46,8 @@ logs="${CARACOLE_DEVICE_LOGS:-${XDG_RUNTIME_DIR:-/tmp}/caracole-device-test}"
 areas=""
 want_areas=0
 want_app=0
+want_ml=0
+tcpdump=""
 computer=""
 sites=""
 classes=()
@@ -49,6 +59,8 @@ while [ $# -gt 0 ]; do
         --area) want_areas=1; areas="${2-}"; [ $# -ge 2 ] || usage; shift 2 ;;
         --area=*) want_areas=1; areas="${1#--area=}"; shift ;;
         --app) want_app=1; shift ;;
+        --ml) want_ml=1; shift ;;
+        --tcpdump) tcpdump="${2-}"; [ -n "$tcpdump" ] || usage; shift 2 ;;
         --computer) computer="${2-}"; [ -n "$computer" ] || usage; shift 2 ;;
         --sites) sites="${2-}"; [ -n "$sites" ] || usage; shift 2 ;;
         -h|--help) usage ;;
@@ -56,13 +68,22 @@ while [ $# -gt 0 ]; do
         *) classes+=("$1"); shift ;;
     esac
 done
-[ "$want_areas" = 1 ] || [ "$want_app" = 1 ] || [ ${#classes[@]} -gt 0 ] || usage
+[ "$want_areas" = 1 ] || [ "$want_app" = 1 ] || [ "$want_ml" = 1 ] || [ ${#classes[@]} -gt 0 ] || usage
 [ "$areas" = all ] && areas=""
+[ -z "$tcpdump" ] || tcpdump="$(realpath -m "$tcpdump")"
 
 # 1. The build, outside the lock, so a lane that builds never holds the emulator.
-(cd "$repo" && nix develop ./android -c gradle -p android assembleDebug assembleDebugAndroidTest --console=plain -q)
+tasks=(assembleDebug assembleDebugAndroidTest)
+[ "$want_ml" = 1 ] && tasks+=(:ml:assembleDebugAndroidTest)
+(cd "$repo" && nix develop ./android -c gradle -p android "${tasks[@]}" --console=plain -q)
 apk="$android/app/build/outputs/apk/debug/app-debug.apk"
 test_apk="$android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
+ml_apk="$android/ml/build/outputs/apk/androidTest/debug/ml-debug-androidTest.apk"
+ml_models=/data/local/tmp/caracole-models
+if [ "$want_ml" = 1 ]; then
+    models="${CARACOLE_CHORD_MODELS:-$(cd "$repo" && nix develop ./android#ml -c printenv CARACOLE_CHORD_MODELS)}"
+    [ -f "$models/btc-graph.onnx" ] || { echo "device-test.sh: no chord models in '$models'" >&2; exit 2; }
+fi
 
 # 2. A free emulator of the pool and its lock, held until the script ends.
 mkdir -p "$(dirname "$lock")" "$logs"
@@ -119,10 +140,27 @@ adb() { adb_cmd -s "$serial" "$@"; }
 # 3. Both APKs.
 adb install -r -t "$apk" >/dev/null
 adb install -r -t "$test_apk" >/dev/null
+if [ "$want_ml" = 1 ]; then
+    adb install -r -t "$ml_apk" >/dev/null
+    adb shell mkdir -p "$ml_models"
+    for file in "$models"/*; do
+        name="$(basename "$file")"
+        there="$(adb shell sha256sum "$ml_models/$name" 2>/dev/null | awk '{ print $1 }' || true)"
+        [ "$there" = "$(sha256sum "$file" | awk '{ print $1 }')" ] || adb push "$file" "$ml_models/$name" >/dev/null
+    done
+fi
 
 # The computers this run started, stopped as it ends.
 servers=()
-cleanup() { for pid in "${servers[@]:-}"; do [ -n "$pid" ] && kill "$pid" 2>/dev/null || true; done; }
+capturing=0
+cleanup() {
+    for pid in "${servers[@]:-}"; do [ -n "$pid" ] && kill "$pid" 2>/dev/null || true; done
+    # A run cut short while it captured leaves the emulator as it found it: capturing nothing, its Wi-Fi on.
+    if [ "$capturing" = 1 ]; then
+        adb emu network capture stop >/dev/null 2>&1 || true
+        adb shell svc wifi enable || true
+    fi
+}
 trap cleanup EXIT
 
 free_port() { python3 -c 'import socket; s = socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()'; }
@@ -177,6 +215,17 @@ fi
 failed=0
 results=()
 
+# The capture, with Wi-Fi off (the console captures the cellular network alone), once the network has settled.
+capture=""
+if [ -n "$tcpdump" ]; then
+    capturing=1
+    adb shell svc wifi disable
+    sleep 15
+    capture="$(adb emu network capture start "caracole-$$.pcap" | tr -d '\r' | sed -n 's/^OK: capturing to //p')"
+    [ -n "$capture" ] || { echo "device-test.sh: the emulator wouldn't capture" >&2; exit 3; }
+    echo "device-test.sh: capturing into $tcpdump" >&2
+fi
+
 # One class run: `am instrument -w`, its args; the app's data cleared, the print spooler and choosers closed after.
 run_class() {
     local name="$1"; shift
@@ -212,6 +261,18 @@ run_with_computer() {
     run_class "$name" -e server "$url"
 }
 
+if [ "$want_ml" = 1 ]; then
+    out="$(adb shell am instrument -w -e class "$ns.ml.ModelParityTest" -e models "$ml_models" \
+        "$ns.ml.test/androidx.test.runner.AndroidJUnitRunner" 2>&1 | tr -d '\r')" || true
+    echo "$out"
+    if grep -q '^OK (' <<<"$out" && ! grep -qE 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed' <<<"$out"; then
+        results+=("PASS ModelParityTest")
+    else
+        results+=("FAIL ModelParityTest")
+        failed=1
+    fi
+fi
+
 if [ "$want_app" = 1 ]; then
     base="$(mktemp -d "${TMPDIR:-/tmp}/caracole-device-XXXXXX")"
     for name in EndToEndTest PinchTest SyncSheetTest ExportImportTest PhoneEndToEndTest; do
@@ -226,6 +287,52 @@ for spec in "${classes[@]:-}"; do
     name="${name#"$ns".}"  # a class named in full is the same class
     run_with_computer "$name" "$dir"
 done
+
+# The capture read: a packet to or from a host but 10.0.2.2 fails the run.
+if [ -n "$capture" ]; then
+    adb emu network capture stop >/dev/null
+    adb shell svc wifi enable
+    capturing=0
+    mv "$capture" "$tcpdump"
+    if python3 - "$tcpdump" <<'EOF'; then results+=("PASS tcpdump"); else results+=("FAIL tcpdump"); failed=1; fi
+import ipaddress, struct, sys
+
+data = open(sys.argv[1], "rb").read()
+assert data[:4] == bytes.fromhex("d4c3b2a1") and struct.unpack("<I", data[20:24])[0] == 1, "not an Ethernet pcap"
+guest, host = ipaddress.ip_address("10.0.2.15"), ipaddress.ip_address("10.0.2.2")
+packets, others, allowed = 0, [], []
+at = 24
+while at < len(data):
+    length = struct.unpack("<I", data[at + 8:at + 12])[0]
+    frame = data[at + 16:at + 16 + length]
+    at += 16 + length
+    packets += 1
+    kind = frame[12:14].hex()
+    if kind == "0806":
+        src, dst = ipaddress.ip_address(frame[28:32]), ipaddress.ip_address(frame[38:42])
+        (allowed if {src, dst} <= {guest, host} else others).append(f"ARP {src} -> {dst}")
+        continue
+    if kind == "0800":
+        src, dst = ipaddress.ip_address(frame[26:30]), ipaddress.ip_address(frame[30:34])
+    elif kind == "86dd":
+        src, dst = ipaddress.ip_address(frame[22:38]), ipaddress.ip_address(frame[38:54])
+    else:
+        others.append(f"ethertype {kind}")
+        continue
+    if {src, dst} == {guest, host}:
+        continue
+    if any(dst in ipaddress.ip_network(net) for net in ("224.0.0.0/24", "ff02::/16")):
+        allowed.append(f"link-local multicast {src} -> {dst}")
+        continue
+    others.append(f"{src} -> {dst}")
+print(f"tcpdump: {packets} packets, {len(others)} to or from a host but 10.0.2.2")
+for line in sorted(set(allowed)):
+    print(f"  allowed: {line}")
+for line in others:
+    print(f"  {line}")
+sys.exit(1 if others else 0)
+EOF
+fi
 
 echo
 printf '%s\n' "${results[@]}"

@@ -416,6 +416,7 @@ port for the others), starting that emulator if it isn't up (each read-only, so 
     android/scripts/device-test.sh --app                  # EndToEndTest, PinchTest, SyncSheetTest, ExportImportTest,
                                                           # PhoneEndToEndTest, each against a computer of its own
     android/scripts/device-test.sh LocalServerTest NoSitesTest SyncSheetTest=/tmp/lib   # classes, one a computer
+    android/scripts/device-test.sh --ml --tcpdump /tmp/ml.pcap NoTelemetryTest   # the chord models (below), captured
 
 ## Lookups on the phone
 
@@ -731,3 +732,28 @@ file once however many backups hold it. The indexes aren't backed up: they come 
 
 A backup, its daily one and a restore are requests like a lookup, one at a time in the Journal ("Backed up
 (by-hand)", "Restored the book of 2026-11-10 09:14"), never run beside a lookup.
+
+## Chords from audio: the models (debug build)
+
+The chord model (BTC) and the beat model (beat_this) run on the phone in `:ml`, on ONNX Runtime 1.32.0 from Maven
+Central (`OrtModels`). It is the design's prototype, linked into the debug build alone (`debugImplementation`): the
+release carries no runtime until the owner chooses the one that ships. The AAR brings its native libraries for
+arm64-v8a, armeabi-v7a, x86 and x86_64; the debug APK keeps arm64-v8a and x86_64, about 81.5 MB of them uncompressed
+(36.4 MB and 45.1 MB).
+
+The runtime phones home unless told not to: its AAR declares a content provider, `ai.onnxruntime.TelemetryInitializer`,
+which at the app's start gives the runtime's native telemetry (Microsoft's 1DS, `mobile.events.data.microsoft.com`)
+an HTTP client. `:ml`'s manifest removes it, `OrtModels` sets `ORT_DISABLE_TELEMETRY=1` before the first environment
+and turns its events off, and `NoTelemetryTest` checks that the installed app declares no provider of the runtime's.
+
+The models are the computer's own, `nix build .#chord-models` (`CARACOLE_CHORD_MODELS` in the `./android#ml` shell);
+the APK carries none of them. `ModelParityTest` runs them on the emulator over the computer's records
+(`tests/conformance/vectors/autochords/models.jsonl`), every threshold read from the records' `gates`: BTC's chords
+frame for frame, beat_this's fp32 logits, and the fp16-stored file's beats and downbeats by their F-measure:
+
+    android/scripts/device-test.sh --ml --tcpdump /tmp/ml.pcap NoTelemetryTest
+
+`--ml` pushes the four files into the emulator's `/data/local/tmp/caracole-models` (again only when one changed) and
+runs `ModelParityTest` from `:ml`'s own test APK, which reports each model's load, each clip's time and its peak RSS.
+`--tcpdump FILE` turns the emulator's Wi-Fi off, so that everything goes through the network its console captures,
+keeps the capture in FILE, and fails the run on any packet to or from a host but 10.0.2.2.

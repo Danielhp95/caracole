@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- ONNX Runtime's AAR declares a content provider, ai.onnxruntime.TelemetryInitializer, that loads the runtime at
+         the app's start and hands its native telemetry (Microsoft's 1DS, mobile.events.data.microsoft.com) an HTTP
+         client: removed, so the runtime has none ("Android telemetry is unavailable because the 1DS Java HttpClient
+         was not initialized"). OrtModels also sets ORT_DISABLE_TELEMETRY before the first environment. The AAR's
+         INTERNET and ACCESS_NETWORK_STATE are the app's own already. NoTelemetryTest holds the installed app to it. -->
+    <application>
+        <provider
+            android:name="ai.onnxruntime.TelemetryInitializer"
+            android:authorities="${applicationId}.onnxruntime_telemetry_initializer"
+            tools:node="remove" />
+    </application>
+</manifest>
