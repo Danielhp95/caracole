@@ -706,6 +706,13 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     `SONG_COLUMNS`, versions, kept files checked by SHA-256 (`song_file`), `CARRIED_KV`, lyrics files and
     `overrides.put_song_entries`.
   - A song gone there is removed as `caracole remove` does.
+  - A tombstone there whose song stays here (kept here, or its song's own difference left) is left, `SONG_HERE`
+    ("its song is here: its removal there is not taken"), never said taken, so nothing agrees it and the next sync
+    shows it again (the phone's `Take.SONG_HERE`, its unattended sync's too).
+  - The songs the take respells as it writes a song's artist (`Applied.respelled`) come with their digest as it ended
+    (`respelled_digests`, the phone's `respelledDigests`): `peer sync` gives one in its give at that digest (its push's
+    `compared_here`, `--here`'s pull line), the change being the sync's own; any change after the take (a lookup's,
+    once the lock is let go of, or in a hand-over between two pushes) still leaves it `CHANGED_HERE`.
   - `songbook.put_songbook`, `overrides.put_alias`, `put_artist_url`, `put_block`.
   - Then each command that takes (`peer pull`, `sync`, `take`, `import`), after a backup (`before-sync`), records what
     it took as agreed (`record_taken`, above), and renders the songs taken, the songbooks and the pages, songbooks.toml

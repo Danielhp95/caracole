@@ -8,6 +8,7 @@ import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.SongRow
+import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.index.IndexTransfer
 import io.github.danielhp95.caracole.core.index.Sizes as CataloguesSizes
 import io.github.danielhp95.caracole.core.sync.Compare
@@ -23,6 +24,7 @@ import io.github.danielhp95.caracole.core.sync.Side
 import io.github.danielhp95.caracole.core.sync.SyncEngine
 import io.github.danielhp95.caracole.core.sync.SyncFailed
 import io.github.danielhp95.caracole.core.sync.SyncOutcome
+import io.github.danielhp95.caracole.core.sync.Take
 import io.github.danielhp95.caracole.core.sync.Units
 import io.github.danielhp95.caracole.core.testing.TestDb
 import io.github.danielhp95.caracole.core.testing.sync.FakeComputer
@@ -1063,6 +1065,33 @@ class SyncEngineTest {
         assertEquals("done", ended()["agree"])
         // Asked of the owner, the same comparison is refused before any change.
         assertFailsWith<SyncFailed> { apply(engine.compare(computer.address.toString())) }
+    }
+
+    @Test fun `a removal on the computer of a song the unattended sync leaves in conflict is left saying so, never taken`() {
+        val creep = onComputer("Radiohead", "Creep")
+        apply(engine.compare(computer.address.toString()))  // the phone takes Creep, agreed
+        computer.database.writeBlocking { computer.store.remove(it, creep.key, "2026-11-03T11:00:00Z") }
+        phone.writeBlocking { it.execute("UPDATE songs SET album = 'Pablo Honey' WHERE key = ?", creep.key) }
+        val removal = "removed/${creep.key}"
+
+        repeat(2) { n ->  // Sync on Wi-Fi, and again with nothing changed since
+            val outcome = apply(engine.compare(computer.address.toString()), conflicts = Conflicts.LEAVE)
+            assertEquals(emptyList(), outcome.taken, "sync ${n + 1} took ${outcome.taken}")
+            assertEquals(setOf(unitOf(creep) to SyncEngine.UNSETTLED, removal to Take.SONG_HERE), outcome.left.toSet())
+            assertTrue(phone.read { Songs.byKey(it, creep.key) } != null, "the song still here")
+        }
+    }
+
+    @Test fun `a song the take respells as the computer writes its artist is given as the take left it`() {
+        val desperado = onPhone("eagles", "Desperado")
+        val hotel = onComputer("Eagles", "Hotel California")
+        val outcome = apply(engine.compare(computer.address.toString()))
+        assertEquals(listOf(unitOf(hotel)), outcome.taken)
+        assertEquals(listOf(unitOf(desperado)), outcome.given, "left: ${outcome.left}")
+        assertEquals(emptyList(), outcome.left)
+        assertEquals("Eagles", phone.read { Songs.byKey(it, desperado.key) }!!.artist)
+        assertEquals(phoneState().getValue(unitOf(desperado)).digest, computer.state().getValue(unitOf(desperado)).digest)
+        assertEquals(emptyList(), engine.compare(computer.address.toString()).differences)
     }
 
     @Test fun `a unit kept at an import is given at the next sync without asking`() {

@@ -273,14 +273,16 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         }
 
         // 2. take
+        var took: Applied? = null
         if (toTake.isEmpty()) stage(TAKE, SKIPPED_STATE, "")
         else {
             val at = fresh.peer.now ?: Stamps.of(clock())
-            take(client, stage, done, toTake) { db, mine, taken -> Compare.recordTaken(db, computer, mine, taken, at) }
+            took = take(client, stage, done, toTake) { db, mine, taken -> Compare.recordTaken(db, computer, mine, taken, at) }
         }
 
         // 3. give
-        if (toGive.isEmpty()) stage(GIVE, SKIPPED_STATE, "") else give(client, stage, done, me, fresh, toGive)
+        if (toGive.isEmpty()) stage(GIVE, SKIPPED_STATE, "")
+        else give(client, stage, done, me, fresh, toGive, took?.respelledDigests.orEmpty())
 
         // 4. mirror
         val refresh = mirrorRefresh
@@ -655,9 +657,12 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
      * given, or left with why. A song with a kept file past 64 MiB is left out ([FileError.TOO_BIG], the export's
      * words for it), and so is a unit that alone passes what a push carries (Give.TOO_LONG, Give.TOO_HEAVY). A push
      * that fails stops the give there, its pushes before it taken (and agreed there as their takes ended), saying how
-     * far it got; one that fails, or is cancelled, before its document is taken is let go of there first. */
+     * far it got; one that fails, or is cancelled, before its document is taken is let go of there first. A unit
+     * whose digest here differs from the one compared is left ([CHANGED_HERE]), but for a song this sync's take
+     * respelled ([respelled]: its digest as the take ended, in the take's own write), which is given as the take left
+     * it: that change is the sync's own, and any other since still leaves it. */
     private suspend fun give(client: PeerClient, stage: (String, String, String) -> Unit, done: Done, me: String,
-                             fresh: Compared, toGive: List<Difference>) {
+                             fresh: Compared, toGive: List<Difference>, respelled: Map<String, String?>) {
         stage(GIVE, RUNNING, plural(toGive.size, "change"))
         val (state, documents) = database.read { db ->
             Units.libraryState(db) to toGive.associate { d -> d.id to Units.document(db, store.libraryDir, d.id) }
@@ -668,7 +673,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         val sizes = HashMap<String, Long>()
         for (d in toGive) {
             val now = state[d.id]?.digest
-            if (now != d.mine?.digest) {
+            if (now != (if (d.id in respelled) respelled[d.id] else d.mine?.digest)) {
                 done.left.add(d.id to CHANGED_HERE)
                 continue
             }

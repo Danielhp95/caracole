@@ -525,6 +525,32 @@ def test_a_song_taken_forgets_the_tombstone_this_side_had_of_it(libraries):
     assert find_song(here.conn, gone.key) is not None and here.digests() == there.digests()
 
 
+def test_a_removal_whose_song_stays_here_is_left_saying_so_never_taken(libraries):
+    here, there = libraries("here"), libraries("there")
+    creep = here.song("Radiohead", "Creep")
+    there.removed("Radiohead", "Creep")
+    unit = f"removed/{creep.key}"
+    done = here.take(there, [unit])  # its song's difference kept here, or left
+    assert done.taken == [] and done.left == [(unit, sync.SONG_HERE)]
+    assert sync.SONG_HERE == "its song is here: its removal there is not taken"
+    assert find_song(here.conn, creep.key) is not None and removed_song(here.conn, creep.key) is None
+    # Nothing agreed of it, so the next comparison shows it again, never hidden.
+    sync.record_agreement(here.conn, "0123456789abcdef", here.units(), there.units(), "2026-11-15T00:00:00Z")
+    base = {u: d for u, (d, _) in (sync.base_of(here.conn, "0123456789abcdef") or {}).items()}
+    assert unit in {d.id for d in sync.compare(here.units(), there.units(), base)}
+
+
+def test_a_song_the_take_respells_says_its_digest_as_the_take_ended(libraries):
+    here, there = libraries("here"), libraries("there")
+    desperado = here.song("eagles", "Desperado")
+    hotel = there.song("Eagles", "Hotel California")
+    before = here.digests()[f"song/{desperado.key}"]
+    done = here.take(there, [f"song/{hotel.key}"])
+    assert done.respelled == [f"song/{desperado.key}"]
+    assert done.respelled_digests == {f"song/{desperado.key}": here.digests()[f"song/{desperado.key}"]}
+    assert done.respelled_digests[f"song/{desperado.key}"] != before
+
+
 def test_a_kept_file_whose_name_no_folder_holds_is_refused(libraries):
     here, there = libraries("here"), libraries("there")
     creep = there.song("Radiohead", "Creep")

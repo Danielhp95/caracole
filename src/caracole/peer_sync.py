@@ -143,6 +143,9 @@ VOLATILE_RAW = {"ug": ("rating", "votes")}
 # Why a unit is left: either side holds it otherwise than when the two were compared.
 CHANGED_HERE = "changed here since compared"
 CHANGED_THERE = "changed there since compared"
+# Why a tombstone there is left: its song stays here (kept here, or its own difference left), so taking it would change
+# nothing, and saying it taken would read as the song gone.
+SONG_HERE = "its song is here: its removal there is not taken"
 # Why a unit is one side's though both hold it otherwise than the base: an import's "keep mine", remembered.
 KEPT_HERE = "ours kept, as you chose when reading their file"
 KEPT_THERE = "theirs kept, as you chose when they read our file"
@@ -1173,14 +1176,16 @@ class Peer:
 @dataclass
 class Applied:
     """What ``apply_units`` did: the units taken, those left (with why), the songs whose files or names changed (to
-    render again), by id; the songs respelled to the artist's spelling a song taken writes (their unit ids); whether
-    songbooks.toml changed."""
+    render again), by id; the songs respelled to the artist's spelling a song taken writes (their unit ids), and each
+    one's digest as the take ended (None: this library couldn't be read then), the change being the take's own, so
+    that a give in the same sync sends it as it is now; whether songbooks.toml changed."""
 
     taken: list[str] = field(default_factory=list)
     left: list[tuple[str, str]] = field(default_factory=list)
     songs: set[int] = field(default_factory=set)
     songbooks: bool = False
     respelled: list[str] = field(default_factory=list)
+    respelled_digests: dict[str, str | None] = field(default_factory=dict)
 
 
 class UnitError(Exception):
@@ -1195,7 +1200,8 @@ def apply_units(conn: sqlite3.Connection, cfg, source: UnitSource, wanted: Seque
     and the rest. A unit is left, saying why, when its document no longer has the digest compared
     (``CHANGED_THERE``), when this side's digest of it differs from ``expected_here``'s (``CHANGED_HERE``: the
     digests this side had when compared, None for a unit it hadn't; a unit it doesn't name isn't checked), or when
-    it can't be taken. ``on_unit(unit id, "taken" or "left", why)`` is told of each, as it is done."""
+    it can't be taken, a tombstone among them whose song stays here (``SONG_HERE``). ``on_unit(unit id, "taken" or
+    "left", why)`` is told of each, as it is done."""
     from caracole.overrides import OverridesError
     from caracole.songbook import SongbookError
 
@@ -1226,11 +1232,15 @@ def apply_units(conn: sqlite3.Connection, cfg, source: UnitSource, wanted: Seque
         done.taken.append(unit_id)
         if on_unit is not None:
             on_unit(unit_id, "taken", "")
+    if done.respelled:
+        now_here, _ = _digests_here(conn, cfg)
+        done.respelled_digests = {unit_id: now_here.get(unit_id) for unit_id in done.respelled}
     return done
 
 
 def _digests_here(conn: sqlite3.Connection, cfg) -> tuple[dict[str, str], str | None]:
-    """Each unit's digest on this side now, before the take changes any; or why this library can't be read."""
+    """Each unit's digest on this side now (before the take changes any, and once it ends for the songs it
+    respelled); or why this library can't be read."""
     from caracole.overrides import Overrides, OverridesError, load_overrides
     from caracole.songbook import SongbookError, load_songbooks, songbooks_file
 
@@ -1257,11 +1267,13 @@ def _apply(conn, cfg, source: UnitSource, unit_id: str, doc: Mapping[str, Any] |
     elif kind == "removed":
         if doc is None:
             forget_removed(conn, rest)
-        elif find_song(conn, rest) is None and removed_song(conn, rest) is None:
+        elif find_song(conn, rest) is not None:  # kept here, or its song's difference left: nothing to take
+            raise UnitError(SONG_HERE)
+        elif removed_song(conn, rest) is None:
             conn.execute("INSERT INTO removed (key, artist, title, source_ids, removed_at) VALUES (?, ?, ?, ?, ?)",
                          (rest, str(doc["artist"]), str(doc["title"]),
                           json.dumps(doc.get("source_ids") or {}, ensure_ascii=False), str(doc["removed_at"])))
-        elif find_song(conn, rest) is None:  # a tombstone here under other names: theirs, its unit's names alone
+        else:  # a tombstone here under other names: theirs, its unit's names alone
             conn.execute("UPDATE removed SET artist = ?, title = ? WHERE key = ?",
                          (str(doc["artist"]), str(doc["title"]), rest))
     elif kind == "songbook":

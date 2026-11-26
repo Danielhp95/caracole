@@ -120,6 +120,39 @@ class TakeTest {
         assertEquals(wanted.single().second, now, "taken, the two sides agree")
     }
 
+    @Test fun aRemovalWhoseSongStaysHereIsLeftSayingSoNeverTaken() {
+        val phone = phone()
+        phone.write { db -> phone.store.add(db, "Oasis", "Wonderwall", now = NOW) }
+        val (source, wanted) = documents("removed/oasis/wonderwall" to json(
+            """{"artist": "Oasis", "title": "Wonderwall", "source_ids": {}, "removed_at": "2026-11-02T10:00:00Z"}"""))
+        val told = mutableListOf<Pair<String, String>>()
+        val done = phone.write { db -> Take.applyUnits(db, phone.store, source, wanted, emptyMap(), NOW) { id, what -> told += id to what } }
+        assertEquals("its song is here: its removal there is not taken", Take.SONG_HERE)
+        assertEquals(emptyList(), done.taken)
+        assertEquals(listOf("removed/oasis/wonderwall" to Take.SONG_HERE), done.left)
+        assertEquals(listOf("removed/oasis/wonderwall" to "left"), told)
+        phone.write { db ->
+            assertNotNull(Songs.byKey(db, "oasis/wonderwall"))
+            assertEquals(emptyList(), Songs.removed(db), "no tombstone made beside the song")
+        }
+    }
+
+    @Test fun aSongTheTakeRespellsSaysItsDigestAsTheTakeEnded() {
+        val phone = phone()
+        val desperado = phone.write { db -> phone.store.add(db, "eagles", "Desperado", now = NOW) }
+        val before = phone.database.read { Units.libraryState(it) }.getValue("song/${desperado.key}").digest
+        val computer = phone()
+        computer.write { db -> computer.store.add(db, "Eagles", "Hotel California", now = NOW) }
+        val unit = "song/eagles/hotel-california"
+        val doc = computer.database.read { db -> Units.document(db, computer.library, unit) }
+        val (source, wanted) = documents(unit to doc)
+        val done = phone.write { db -> Take.applyUnits(db, phone.store, source, wanted, emptyMap(), NOW) { _, _ -> } }
+        val now = phone.database.read { Units.libraryState(it) }.getValue("song/${desperado.key}").digest
+        assertEquals(listOf("song/${desperado.key}"), done.respelled)
+        assertEquals(mapOf("song/${desperado.key}" to now), done.respelledDigests)
+        assertTrue(now != before, "respelled as the computer writes the artist")
+    }
+
     @Test fun aLibraryThatCantBeReadLeavesEveryUnitTheComparisonNamedSayingWhy() {
         val phone = phone()
         phone.write { db ->

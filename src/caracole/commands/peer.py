@@ -233,6 +233,10 @@ def register(app: typer.Typer) -> None:
             raise typer.Exit(1)
         for unit_id, why in left:
             said.unit(unit_id, "left", why)
+        # This side's digest of each unit to give as compared, but for a song the take respells (as it writes their
+        # artist): that change is the sync's own, so the give sends it as the take left it, measured as the take ended
+        # under the lock; a change after that (a lookup's, once the lock is let go of) still leaves it CHANGED_HERE.
+        here_now = {d.id: d.mine.digest if d.mine else None for d in give}
         if take:
             said.stage("take", "running", _count(len(take)))
             done = _pull(cfg, address, [d.id for d in take],
@@ -241,13 +245,14 @@ def register(app: typer.Typer) -> None:
                          on_unit=said.unit, on_song=_rendering(said, "take"), agree=False)
             said.stage("take", "done", _taken_detail(done))
             typer.echo(_pulled(done, units=False))
+            here_now.update({u: digest for u, digest in done.respelled_digests.items() if u in here_now})
         else:
             said.stage("take", "skipped")
         if not give:
             said.stage("give", "skipped")
         elif push:
             said.stage("give", "running", _count(len(give)))
-            given, left_there = _push(cfg, address, state, give, said)
+            given, left_there = _push(cfg, address, state, give, here_now, said)
             said.stage("give", "done", f"gave {given}" + (f", left {left_there}" if left_there else ""))
             typer.echo(f"Gave {_count(given)} to {address}.")
         else:
@@ -261,8 +266,8 @@ def register(app: typer.Typer) -> None:
                 said.stage("give", "running", _count(len(ids)))
                 with sync.Peer(address, transport=transport_for_peer()) as peer:
                     try:
-                        job = peer.ask_to_pull(here, [(d.id, d.mine.digest if d.mine else None,
-                                                        d.theirs.digest if d.theirs else None) for d in give],
+                        job = peer.ask_to_pull(here, [(d.id, here_now[d.id], d.theirs.digest if d.theirs else None)
+                                                      for d in give],
                                                peer.state().token or "")
                     except sync.PeerError as e:
                         said.stage("give", "failed", str(e))
@@ -621,9 +626,10 @@ def _taken(done, wanted: list[tuple[str, str | None]]) -> dict[str, str | None]:
     return {unit_id: digests[unit_id] for unit_id in done.taken}
 
 
-def _push(cfg, address: str, state, give: list, said: _Said) -> tuple[int, int]:
+def _push(cfg, address: str, state, give: list, here_now: dict[str, str | None], said: _Said) -> tuple[int, int]:
     """Give the caracole at ``address`` the differences of ``give`` by pushing them (``peer_push.push_units``: what
-    it compared there, ``state``, and here), under caracole's lock, in as many pushes as its limits ask, each followed
+    it compared there, ``state``, and here as it is to be, ``here_now``: each unit's digest as compared, or as this
+    sync's take left it), under caracole's lock, in as many pushes as its limits ask, each followed
     to its take's end before the next, the last with the lock let go of; each unit said given or left (with why) as
     the take of its push ends: (how many it took, how many were left). A push that fails stops the give there, saying
     how far it got: the pushes taken before it stay taken, and agreed there."""
@@ -688,7 +694,7 @@ def _push(cfg, address: str, state, give: list, said: _Said) -> tuple[int, int]:
                 pushed = peer_push.push_units(
                     pusher, conn, cfg, overrides, books, {d.id: d.theirs.digest if d.theirs else None for d in give},
                     own=me, at=state.now or utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"), name=cfg.library_name,
-                    version=__version__, compared_here={d.id: d.mine.digest if d.mine else None for d in give},
+                    version=__version__, compared_here=here_now,
                     between=lambda sent: ended(sent, peer_push.wait_for(pusher, sent.job,
                                                                         sleep=_handing_over(cfg, conn))),
                     again=again)

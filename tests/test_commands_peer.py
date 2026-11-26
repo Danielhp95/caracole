@@ -834,3 +834,86 @@ def test_the_units_a_give_left_before_its_first_push_are_said_when_that_push_is_
     result = run(here, "peer", "sync", HOST, "--push", "--yes")
     assert result.exit_code == 1 and "answered 503" in result.output, result.output[-600:]
     assert f"Left song/{creep.key}: {peer_file.TOO_BIG}" in result.output
+
+
+def test_a_removal_there_of_a_song_kept_here_is_left_saying_so_never_taken(two):
+    """Creep changed here and removed there, the owner keeping here's: its removal there is left, with why, never
+    said taken (nothing of it was), and the song given."""
+    from caracole.get import read_progress_line
+    from caracole.removal import plan_removal, remove_song
+
+    here, there, _, _ = two
+    creep = there.song()
+    assert run(here, "peer", "sync", HOST, "--push", "--yes").exit_code == 0  # synced: Creep on both
+    add_version(here.cfg.overrides_file, "Radiohead - Creep", "key=Em&capo=0")  # changed here
+    remove_song(there.conn, there.cfg, plan_removal(there.conn, there.cfg, find_song(there.conn, creep.key)))
+    result = run(here, "peer", "sync", HOST, "--push", "--yes", "--progress", f"--choose=here:song/{creep.key}")
+    assert result.exit_code == 0, result.output
+    units = [(e["id"], e["outcome"], e.get("why", "")) for e in map(read_progress_line, result.output.splitlines())
+             if e is not None and e.get("event") == "unit"]
+    assert (f"removed/{creep.key}", "left", sync.SONG_HERE) in units, units
+    assert (f"song/{creep.key}", "given", "") in units, units
+    assert find_song(here.conn, creep.key) is not None and removed_song(here.conn, creep.key) is None
+
+
+def test_a_removal_left_beside_its_songs_conflict_is_left_again_never_taken_at_the_next_sync(two):
+    here, there, _, _ = two
+    creep = there.song()
+    assert run(here, "peer", "sync", HOST, "--push", "--yes").exit_code == 0
+    add_version(here.cfg.overrides_file, "Radiohead - Creep", "key=Em&capo=0")
+    from caracole.removal import plan_removal, remove_song
+
+    remove_song(there.conn, there.cfg, plan_removal(there.conn, there.cfg, find_song(there.conn, creep.key)))
+    for _ in range(2):  # the song's conflict left each time, unsettled
+        result = run(here, "peer", "sync", HOST, "--push", "--yes")
+        assert result.exit_code == 0, result.output
+        assert f"Left removed/{creep.key}: {sync.SONG_HERE}" in result.output
+        assert f"Took removed/{creep.key}" not in result.output
+    found = {d["id"]: d["proposal"] for d in json.loads(run(here, "peer", "diff", HOST, "--json").output)["differences"]}
+    assert found == {f"song/{creep.key}": "conflict", f"removed/{creep.key}": "theirs"}
+
+
+def test_a_song_the_take_respells_is_given_as_the_take_left_it(two):
+    """here's "eagles - Desperado", there's "Eagles - Hotel California": the take respells Desperado as there writes
+    the artist, a change of the sync's own, and the give then pushes it as it is now."""
+    here, there, _, _ = two
+    desperado = here.song("eagles", "Desperado", version=None)
+    there.song("Eagles", "Hotel California", version=None)
+    result = run(here, "peer", "sync", HOST, "--push", "--yes")
+    assert result.exit_code == 0, result.output
+    assert find_song(here.conn, desperado.key).artist == "Eagles"
+    assert sync.CHANGED_HERE not in result.output
+    assert find_song(there.conn, desperado.key) is not None
+    assert json.loads(run(here, "peer", "diff", HOST, "--json").output)["differences"] == []
+
+
+def test_a_song_the_take_respells_and_a_lookup_then_changes_is_left_changed_here(two, monkeypatch):
+    """The respelling the take wrote is the sync's own; a change after it, a lookup's, still leaves the song."""
+    from caracole.commands import peer as peer_cmd
+
+    here, there, _, _ = two
+    desperado = here.song("eagles", "Desperado", version=None)
+    there.song("Eagles", "Hotel California", version=None)
+    push = peer_cmd._push
+
+    def after_a_lookup(cfg, *args, **kw):  # the lock let go of between the take and the give: a lookup pins a key
+        add_version(here.cfg.overrides_file, "Eagles - Desperado", "key=Em&capo=2")
+        return push(cfg, *args, **kw)
+
+    monkeypatch.setattr(peer_cmd, "_push", after_a_lookup)
+    result = run(here, "peer", "sync", HOST, "--push", "--yes")
+    assert result.exit_code == 0, result.output
+    assert f"Left song/{desperado.key}: {sync.CHANGED_HERE}" in result.output
+    assert find_song(there.conn, desperado.key) is None
+
+
+def test_a_song_the_take_respells_is_asked_there_at_its_digest_as_the_take_left_it(two):
+    here, there, _, _ = two
+    desperado = here.song("eagles", "Desperado", version=None)
+    there.song("Eagles", "Hotel California", version=None)
+    result = run(here, "peer", "sync", HOST, "--yes", "--here", "192.168.1.10:8737")
+    assert result.exit_code == 0, result.output
+    unit = f"song/{desperado.key}"
+    job = there.app.queue.snapshot()[0]
+    assert [list(s.args) for s in job.steps] == [["peer", "pull", f"--unit={here.units()[unit].digest}:-:{unit}",
+                                                  "--", "http://192.168.1.10:8737"]]
