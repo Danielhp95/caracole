@@ -26,12 +26,17 @@ import java.util.concurrent.atomic.AtomicLong
  * connects, the bytes each way, the refusals. It is a check and a measurement: only the argv routes yt-dlp through it.
  *
  * - [Mode.LOOPBACK] (tests and instrumentation): `127.0.0.1` and `10.0.2.2` alone, any port, CONNECT and GET; nothing
- *   is looked up, the rule unused. [Mode.NETWORK]: the [rule], each name looked up by [resolver] only once allowed.
+ *   is looked up, the rule unused. [Mode.NETWORK]: the [rule], each name looked up by [resolver] only once allowed;
+ *   under YOUTUBE a name that resolves to an address that isn't public ([isPublic]) is refused, and the socket is
+ *   connected ([connector]) to the very address checked.
  * - `jnn-pa.googleapis.com` (and any name under it) is refused in every mode and by every rule.
- * - A refused host: 403, logged `refused`. A wrong or missing `Proxy-Authorization`: 407 with `Proxy-Authenticate`,
- *   nothing logged. A target that isn't `host:port` (an `@`, a control character, a byte past ASCII, a bad port or IP
- *   literal): 400, logged under [MALFORMED]. A method but CONNECT and GET: 405. An upstream that won't connect: 502, or
- *   504 past [connectTimeoutMs]. More than [maxConnections] at once: 503.
+ * - A refused host: 403, logged `refused` with [HostUse.why]. A wrong or missing `Proxy-Authorization`: 407 with
+ *   `Proxy-Authenticate`, nothing logged. A target that isn't `host:port` (an `@`, a control character, a byte past
+ *   ASCII, a bad port or IP literal): 400, logged under [MALFORMED]; a head line with a bare CR or a control character
+ *   but a tab: 400. A method but CONNECT and GET: 405. An upstream that won't connect: 502, or 504 past
+ *   [connectTimeoutMs]. More than [maxConnections] at once: 503.
+ * - Time: a client's whole head by [headTimeoutMs] from its accept (a deadline: closed at it, with no answer); a
+ *   tunnel or a relay in which nothing moves either way for [idleTimeoutMs] (a read or a write) is closed.
  * - The gate reads no property: the main process passes the mode ([Mode.of] `caracole.network`'s value).
  * - The secret is kept as a digest; only [Opened.proxyArg] holds it, and no `toString`, log or message here names it.
  */
@@ -43,6 +48,7 @@ class HostGate(
     private val connectTimeoutMs: Int = CONNECT_TIMEOUT_MS,
     private val idleTimeoutMs: Int = IDLE_TIMEOUT_MS,
     private val headTimeoutMs: Int = HEAD_TIMEOUT_MS,
+    private val connector: Connector = Connector.DIRECT,
 ) : Closeable {
     enum class Mode {
         LOOPBACK, NETWORK;
@@ -109,6 +115,15 @@ class HostGate(
         }
     }
 
+    /** Connects a fresh socket to an address the gate checked (tests dial loopback in its place). */
+    fun interface Connector {
+        fun connect(socket: Socket, address: InetSocketAddress, timeoutMs: Int)
+
+        companion object {
+            val DIRECT = Connector { socket, address, timeoutMs -> socket.connect(address, timeoutMs) }
+        }
+    }
+
     /** One host's use, keyed in [log] by its name as asked, lowercased; [apart] for a host [HostRule.reportsApart]. */
     data class HostUse(
         val connects: Int = 0,
@@ -116,6 +131,7 @@ class HostGate(
         val bytesDown: Long = 0,
         val refused: Int = 0,
         val apart: Boolean = false,
+        val why: String? = null,
     )
 
     /** A started gate: its port, and the `--proxy` value yt-dlp is given, which holds the user and the secret. */
@@ -128,13 +144,14 @@ class HostGate(
         val up = AtomicLong()
         val down = AtomicLong()
         val refused = AtomicInteger()
-        fun snapshot() = HostUse(connects.get(), up.get(), down.get(), refused.get(), apart)
+        @Volatile var why: String? = null
+        fun snapshot() = HostUse(connects.get(), up.get(), down.get(), refused.get(), apart, why)
     }
 
     /** A target as asked: [key] the log's name for it, [address] an IP literal's bytes (none for a name). */
     private class Authority(val key: String, val port: Int, val address: ByteArray?)
 
-    private class Refusal(val status: Int, val key: String?) : Exception(null, null, false, false)
+    private class Refusal(val status: Int, val key: String?, val why: String? = null) : Exception(null, null, false, false)
 
     private val uses = LinkedHashMap<String, Use>()
     private val sockets: MutableSet<Socket> = ConcurrentHashMap.newKeySet()
@@ -159,7 +176,7 @@ class HostGate(
         val socket = ServerSocket(0, 50, LOOPBACK_ADDRESS)
         server = socket
         val port = socket.localPort
-        acceptor = spawn("caracole-gate-$port-accept") { accept(socket) }
+        acceptor = spawn("caracole-gate-$port-accept") { accept(socket) }!!
         return Opened(port, "http://$user:$secret@127.0.0.1:$port")
     }
 
@@ -180,6 +197,7 @@ class HostGate(
             }
             toJoin = listOfNotNull(acceptor)
         }
+        // No thread is spawned and no client registered once closed is set (both under this lock): the snapshot is all.
         sockets.forEach { quietly(it) }
         for (t in toJoin + threads.toList()) t.join(JOIN_MS)
         threads.removeIf { !it.isAlive }
@@ -194,10 +212,7 @@ class HostGate(
             } catch (_: IOException) {
                 break
             }
-            if (closed) {
-                quietly(client)
-                break
-            }
+            val acceptedAt = System.nanoTime()
             if (active.incrementAndGet() > maxConnections) {
                 active.decrementAndGet()
                 try {
@@ -208,30 +223,48 @@ class HostGate(
                 quietly(client)
                 continue
             }
-            sockets += client
-            spawn("caracole-gate-${socket.localPort}-${serial.incrementAndGet()}") {
-                try {
-                    serve(client)
-                } finally {
-                    quietly(client)
-                    sockets -= client
-                    active.decrementAndGet()
-                }
+            val started = synchronized(this) {
+                if (closed) return@synchronized false
+                sockets += client
+                spawn("caracole-gate-${socket.localPort}-${serial.incrementAndGet()}") {
+                    try {
+                        serve(client, acceptedAt)
+                    } finally {
+                        quietly(client)
+                        sockets -= client
+                        active.decrementAndGet()
+                    }
+                } != null
+            }
+            if (!started) {
+                quietly(client)
+                active.decrementAndGet()
+                break
             }
         }
     }
 
-    private fun serve(client: Socket) {
-        client.soTimeout = headTimeoutMs
-        val input = BufferedInputStream(client.getInputStream())
-        val output = client.getOutputStream()
+    /**
+     * One client: its head read by [headTimeoutMs] from [acceptedAt] (a deadline, not a timeout a read: a client that
+     * trickles is closed at it, with no answer), then its request.
+     */
+    private fun serve(client: Socket, acceptedAt: Long) {
+        val (input, output) = try {
+            BufferedInputStream(client.getInputStream()) to client.getOutputStream()
+        } catch (_: IOException) {
+            return // closed by close() before it began
+        }
         try {
             val head = try {
-                readHead(input) ?: return
+                readHead(input, client, acceptedAt + headTimeoutMs * 1_000_000L, overflow = 400) ?: return
             } catch (_: SocketTimeoutException) {
                 return
             }
+            if (head.any { (it.code < 0x20 && it != '\t' && it != '\r' && it != '\n') || it.code == 0x7f }) {
+                throw Refusal(400, null)
+            }
             val lines = head.split('\n').map { it.removeSuffix("\r") }.dropLast(2)
+            if (lines.any { '\r' in it }) throw Refusal(400, null)
             val parts = lines.firstOrNull()?.split(' ') ?: throw Refusal(400, null)
             if (parts.size != 3 || parts[2] !in VERSIONS) throw Refusal(400, null)
             val headers = lines.drop(1).map { line ->
@@ -241,14 +274,15 @@ class HostGate(
             }
             if (!authorized(headers)) throw Refusal(407, null)
             val (method, target) = parts
-            if (target.any { it.code < 0x21 || it.code > 0x7e }) throw Refusal(400, MALFORMED)
+            if (target.any { it.code < 0x21 || it.code > 0x7e }) throw Refusal(400, MALFORMED, WHY_MALFORMED)
             when (method) {
-                "CONNECT" -> tunnel(client, input, output, authority(target, defaultPort = null) ?: throw Refusal(400, MALFORMED))
-                "GET" -> relay(client, input, output, target, headers)
-                else -> throw Refusal(405, MALFORMED)
+                "CONNECT" -> tunnel(client, input, output,
+                                    authority(target, defaultPort = null) ?: throw Refusal(400, MALFORMED, WHY_MALFORMED))
+                "GET" -> relay(client, output, target, headers)
+                else -> throw Refusal(405, MALFORMED, WHY_METHOD)
             }
         } catch (r: Refusal) {
-            if (r.key != null) use(r.key).refused.incrementAndGet()
+            if (r.key != null) use(r.key).let { it.refused.incrementAndGet(); if (r.why != null) it.why = r.why }
             try {
                 reply(output, r.status)
             } catch (_: IOException) {
@@ -271,16 +305,24 @@ class HostGate(
         }
     }
 
-    private fun relay(client: Socket, input: InputStream, output: OutputStream, target: String, headers: List<Pair<String, String>>) {
-        if (target.length < 7 || Py.asciiLower(target.substring(0, 7)) != "http://") throw Refusal(400, MALFORMED)
+    /**
+     * A plain GET in origin-form, its Host the URL's authority (RFC 9112 §3.2.2), the hop-by-hop headers dropped and
+     * `Connection: close`; the answer relayed as it comes, less the same. An upstream that closes before its head, or
+     * sends one past [HEAD_MAX], is 502; one silent past [idleTimeoutMs] before its head, 504.
+     */
+    private fun relay(client: Socket, output: OutputStream, target: String, headers: List<Pair<String, String>>) {
+        if (target.length < 7 || Py.asciiLower(target.substring(0, 7)) != "http://") throw Refusal(400, MALFORMED, WHY_MALFORMED)
         val rest = target.substring(7)
         val end = rest.indexOfFirst { it == '/' || it == '?' }.let { if (it < 0) rest.length else it }
-        if ('#' in rest) throw Refusal(400, MALFORMED)
-        val at = authority(rest.substring(0, end), defaultPort = 80) ?: throw Refusal(400, MALFORMED)
+        if ('#' in rest) throw Refusal(400, MALFORMED, WHY_MALFORMED)
+        val authorityText = rest.substring(0, end)
+        val at = authority(authorityText, defaultPort = 80) ?: throw Refusal(400, MALFORMED, WHY_MALFORMED)
         val path = rest.substring(end).let { if (it.isEmpty() || it[0] == '?') "/$it" else it }
         for ((name, value) in headers) {
             val lower = Py.asciiLower(name)
-            if (lower == "transfer-encoding" || (lower == "content-length" && value != "0")) throw Refusal(400, at.key)
+            if (lower == "transfer-encoding" || (lower == "content-length" && value != "0")) {
+                throw Refusal(400, at.key, "a GET with a body")
+            }
         }
         val use = allowed(at, connect = false)
         val upstream = open(at)
@@ -288,15 +330,21 @@ class HostGate(
             use.connects.incrementAndGet()
             val sent = buildString {
                 append("GET ").append(path).append(' ').append("HTTP/1.1\r\n")
-                for ((name, value) in withoutHopByHop(headers)) append(name).append(": ").append(value).append("\r\n")
+                append("Host: ").append(authorityText).append("\r\n")
+                for ((name, value) in withoutHopByHop(headers)) {
+                    if (Py.asciiLower(name) != "host") append(name).append(": ").append(value).append("\r\n")
+                }
                 append("Connection: close\r\n\r\n")
             }.toByteArray(Charsets.ISO_8859_1)
             upstream.getOutputStream().write(sent)
             upstream.getOutputStream().flush()
             use.up.addAndGet(sent.size.toLong())
-            upstream.soTimeout = idleTimeoutMs
             val fromUpstream = BufferedInputStream(upstream.getInputStream())
-            val answer = readHead(fromUpstream) ?: return
+            val answer = try {
+                readHead(fromUpstream, upstream, System.nanoTime() + idleTimeoutMs * 1_000_000L, overflow = 502)
+            } catch (_: SocketTimeoutException) {
+                throw Refusal(504, null)
+            } ?: throw Refusal(502, null)
             val lines = answer.split('\n').map { it.removeSuffix("\r") }.dropLast(2)
             val answerHeaders = lines.drop(1).mapNotNull { line ->
                 val colon = line.indexOf(':')
@@ -307,12 +355,20 @@ class HostGate(
                 for ((name, value) in withoutHopByHop(answerHeaders)) append(name).append(": ").append(value).append("\r\n")
                 append("Connection: close\r\n\r\n")
             }.toByteArray(Charsets.ISO_8859_1)
-            output.write(back)
-            output.flush()
-            use.down.addAndGet(back.size.toLong())
             val activity = AtomicLong(System.nanoTime())
-            pump(fromUpstream, output, upstream, use.down, activity) { quietly(client); quietly(upstream) }
-            client.shutdownOutput()
+            val stop = { quietly(client); quietly(upstream) }
+            val down = spawn("caracole-gate-${server?.localPort}-${serial.incrementAndGet()}-down") {
+                try {
+                    output.write(back)
+                    output.flush()
+                    use.down.addAndGet(back.size.toLong())
+                    activity.set(System.nanoTime())
+                    pump(fromUpstream, output, upstream, use.down, activity, stop)
+                    client.shutdownOutput()
+                } catch (_: IOException) {
+                }
+            } ?: throw IOException("closed")
+            awaitOrStop(down, activity, stop)
         } finally {
             quietly(upstream)
             sockets -= upstream
@@ -321,35 +377,54 @@ class HostGate(
 
     /** The log's entry for [at] once the mode and the rule allow it, else a 403 refusal. */
     private fun allowed(at: Authority, connect: Boolean): Use {
-        val ok = when {
-            HostRule.refusedByName(at.key) -> false
-            mode == Mode.LOOPBACK -> at.address != null && LOOPBACK_HOSTS.any { it.contentEquals(at.address) }
-            at.address != null -> rule === HostRule.OBSERVE && rule.allows(at.key, at.port, connect)
-            else -> rule.allows(at.key, at.port, connect)
+        val why = when {
+            HostRule.refusedByName(at.key) -> WHY_BY_NAME
+            mode == Mode.LOOPBACK ->
+                if (at.address != null && LOOPBACK_HOSTS.any { it.contentEquals(at.address) }) null else WHY_NOT_LOOPBACK
+            at.address != null -> if (rule === HostRule.OBSERVE) null else WHY_LITERAL
+            else -> if (rule.allows(at.key, at.port, connect)) null else WHY_OFF_RULE
         }
-        if (!ok) throw Refusal(403, at.key)
+        if (why != null) throw Refusal(403, at.key, why)
         return use(at.key)
     }
 
-    /** The upstream, connected: an IP literal as given, a name through [resolver] (in [Mode.NETWORK] alone). */
+    /**
+     * The upstream, connected: an IP literal as given, a name through [resolver] (in [Mode.NETWORK] alone). Under any
+     * rule but OBSERVE a name that resolves to an address that isn't public ([isPublic]) is refused, every address
+     * checked; the socket is connected to the very address checked, never looked up again.
+     */
     private fun open(at: Authority): Socket {
         val addresses = if (at.address != null) {
             listOf(InetSocketAddress(InetAddress.getByAddress(at.address), at.port))
         } else {
             check(mode == Mode.NETWORK)
-            try {
+            val resolved = try {
                 resolver.resolve(at.key, at.port)
             } catch (_: IOException) {
                 throw Refusal(502, null)
             }
+            if (rule !== HostRule.OBSERVE) {
+                for (address in resolved) {
+                    val ip = address.address
+                    if (ip == null || !isPublic(ip)) {
+                        throw Refusal(403, at.key, "resolves to ${ip?.hostAddress ?: "an unresolved address"}, not a public address")
+                    }
+                }
+            }
+            resolved
         }
         var timedOut = false
         for (address in addresses) {
             val socket = Socket()
             sockets += socket
             if (closed) quietly(socket)
+            if (address.isUnresolved) {
+                quietly(socket)
+                sockets -= socket
+                continue
+            }
             try {
-                socket.connect(address, connectTimeoutMs)
+                connector.connect(socket, address, connectTimeoutMs)
                 return socket
             } catch (_: SocketTimeoutException) {
                 timedOut = true
@@ -371,14 +446,26 @@ class HostGate(
             } catch (_: IOException) {
             }
             stop()
-        }
+        } ?: throw IOException("closed")
         try {
             pump(input, upstream.getOutputStream(), client, use.up, activity, stop)
             upstream.shutdownOutput()
         } catch (_: IOException) {
             stop()
         }
-        down.join()
+        awaitOrStop(down, activity, stop)
+    }
+
+    /**
+     * Waits for [pumping] to end, and [stop]s it once nothing moved either way for [idleTimeoutMs]: a pump blocked in a
+     * write (a peer that half-closed and stopped reading) is cut so, as a write has no timeout of its own.
+     */
+    private fun awaitOrStop(pumping: Thread, activity: AtomicLong, stop: () -> Unit) {
+        val tick = minOf(idleTimeoutMs, TICK_MS).toLong()
+        while (pumping.isAlive) {
+            pumping.join(tick)
+            if (pumping.isAlive && System.nanoTime() - activity.get() > idleTimeoutMs * 1_000_000L) stop()
+        }
     }
 
     /** Copies [from] to [to] until its end, counting into [count]; idle past [idleTimeoutMs] both ways, [stop]. */
@@ -396,7 +483,6 @@ class HostGate(
                 continue
             }
             if (n < 0) return
-            activity.set(System.nanoTime())
             to.write(buffer, 0, n)
             to.flush()
             count.addAndGet(n.toLong())
@@ -425,7 +511,10 @@ class HostGate(
         }
     }
 
-    private fun spawn(name: String, body: () -> Unit): Thread {
+    /** A daemon thread of the gate, or none once closed (under the lock [close] sets `closed` under). */
+    @Synchronized
+    private fun spawn(name: String, body: () -> Unit): Thread? {
+        if (closed) return null
         threads.removeIf { !it.isAlive }
         val t = Thread(body, name)
         t.isDaemon = true
@@ -449,6 +538,37 @@ class HostGate(
         const val LOG_HOSTS = 256
         const val OTHER_HOSTS = "(other hosts)"
         const val MALFORMED = "(malformed)"
+
+        /** Why a host was refused, its log's [HostUse.why] (the last refusal's). */
+        const val WHY_BY_NAME = "refused by name"
+        const val WHY_OFF_RULE = "off the rule"
+        const val WHY_NOT_LOOPBACK = "not 127.0.0.1 or 10.0.2.2"
+        const val WHY_LITERAL = "an IP literal"
+        const val WHY_MALFORMED = "malformed"
+        const val WHY_METHOD = "not CONNECT or GET"
+
+        /**
+         * Whether [ip] is a public address: not loopback, any-local, link-local, site-local or multicast (the JDK's
+         * checks), nor 0.0.0.0/8, 100.64.0.0/10 (shared, CGNAT), 255.255.255.255, fc00::/7 (unique local), nor an
+         * IPv4-mapped (::ffff:0:0/96) or IPv4-compatible (::/96) IPv6 address of one of those.
+         */
+        fun isPublic(ip: InetAddress): Boolean {
+            val b = ip.address
+            if (b.size == 16) {
+                val v4Tail = (0 until 10).all { b[it] == 0.toByte() } &&
+                    ((b[10] == 0xff.toByte() && b[11] == 0xff.toByte()) || (b[10] == 0.toByte() && b[11] == 0.toByte()))
+                if (v4Tail && !(b[10] == 0.toByte() && (12 until 15).all { b[it] == 0.toByte() } && b[15] < 2)) {
+                    return isPublic(InetAddress.getByAddress(b.copyOfRange(12, 16)))
+                }
+                if ((b[0].toInt() and 0xfe) == 0xfc) return false
+            } else {
+                val first = b[0].toInt() and 0xff
+                val second = b[1].toInt() and 0xff
+                if (first == 0 || (first == 100 && second in 64..127) || b.all { it == 0xff.toByte() }) return false
+            }
+            return !(ip.isLoopbackAddress || ip.isAnyLocalAddress || ip.isLinkLocalAddress || ip.isSiteLocalAddress ||
+                ip.isMulticastAddress)
+        }
 
         private const val TICK_MS = 1_000
         private const val JOIN_MS = 2_000L
@@ -504,16 +624,22 @@ class HostGate(
             return headers.filter { Py.asciiLower(it.first).let { n -> n !in HOP_BY_HOP && n !in named } }
         }
 
-        /** A head to its blank line, as Latin-1 (each byte one char); none at an end before it; 400 past [HEAD_MAX]. */
-        private fun readHead(input: InputStream): String? {
+        /**
+         * A head to its blank line, as Latin-1 (each byte one char); none at an end before it; [overflow] past
+         * [HEAD_MAX]; SocketTimeoutException at [deadline] (System.nanoTime), each read given the time left.
+         */
+        private fun readHead(input: InputStream, socket: Socket, deadline: Long, overflow: Int): String? {
             val out = ByteArrayOutputStream()
             var last = -1
             var beforeLast = -1
             while (true) {
+                val left = (deadline - System.nanoTime()) / 1_000_000L
+                if (left <= 0) throw SocketTimeoutException("past the head's deadline")
+                socket.soTimeout = minOf(left, Int.MAX_VALUE.toLong()).toInt()
                 val b = input.read()
                 if (b < 0) return null
                 out.write(b)
-                if (out.size() > HEAD_MAX) throw Refusal(400, null)
+                if (out.size() > HEAD_MAX) throw Refusal(overflow, null)
                 if (b == '\n'.code && (last == '\n'.code || (last == '\r'.code && beforeLast == '\n'.code))) break
                 beforeLast = last
                 last = b
