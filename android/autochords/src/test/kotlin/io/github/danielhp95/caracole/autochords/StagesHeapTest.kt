@@ -15,8 +15,10 @@ import kotlin.test.assertTrue
 /**
  * [Stages] hold no song whole: a song of [SECONDS] at 48 kHz mono (as the decoder and the mixdown leave it, a file)
  * resampled, its chords and its beats heard (the graphs faked: [Zeros]), in a JVM of its own whose heap ([HEAP_MB]) is
- * smaller than the song's samples and their resampled copy, which the old one-call pipeline held at once: that one
- * (`whole`, its control) runs out of memory there; the stages don't.
+ * a fifth of the song's samples alone. Its control (`whole`) is the old one-call pipeline's resample, in a JVM whose
+ * old generation ([CONTROL_MB] less [CONTROL_YOUNG_MB], the serial collector's, so the sizes are what they say) holds
+ * the song's samples but not their resampled copy beside them: it holds the song whole (it says so), then runs out of
+ * memory in the resample, as that pipeline did on a long song; the stages, in far less, don't.
  */
 class StagesHeapTest {
     @get:Rule val tmp = TemporaryFolder()
@@ -26,9 +28,11 @@ class StagesHeapTest {
         val mono = tmp.newFile("mono.f32")
         write48k(mono)
         assertTrue(mono.length() > HEAP_MB * 1024L * 1024, "the song is ${mono.length() / 1024 / 1024} MB")
-        val whole = child("whole", mono)
-        assertTrue(whole.second.contains("OutOfMemoryError"), "the control: ${whole.second}")
-        val streamed = child("stages", mono)
+        val whole = child("whole", mono, listOf("-XX:+UseSerialGC", "-Xmn${CONTROL_YOUNG_MB}m", "-Xmx${CONTROL_MB}m"))
+        assertTrue(whole.second.contains("held the song whole"), "the control: ${whole.second}")
+        assertTrue(whole.second.contains("OutOfMemoryError") && !whole.second.contains("resampled"),
+            "the control: ${whole.second}")
+        val streamed = child("stages", mono, listOf("-Xmx${HEAP_MB}m"))
         assertEquals(0, streamed.first, streamed.second)
         assertTrue(streamed.second.contains("heard"), streamed.second)
         // BTC heard the whole song: its last chord ends at its end, 900 s, to a frame.
@@ -47,12 +51,12 @@ class StagesHeapTest {
         }
     }
 
-    /** `StagesHeapMain MODE MONO WORK` in a JVM of [HEAP_MB]: its exit status and its output. */
-    private fun child(mode: String, mono: File): Pair<Int, String> {
+    /** `StagesHeapMain MODE MONO WORK` in a JVM of [heap]'s options: its exit status and its output. */
+    private fun child(mode: String, mono: File, heap: List<String>): Pair<Int, String> {
         val java = File(System.getProperty("java.home"), "bin/java").path
-        val process = ProcessBuilder(java, "-Xmx${HEAP_MB}m", "-cp", System.getProperty("java.class.path"),
+        val process = ProcessBuilder(listOf(java) + heap + listOf("-cp", System.getProperty("java.class.path"),
             "-Djava.library.path=${System.getProperty("java.library.path")}",
-            "io.github.danielhp95.caracole.autochords.StagesHeapMain", mode, mono.path, tmp.newFolder().path)
+            "io.github.danielhp95.caracole.autochords.StagesHeapMain", mode, mono.path, tmp.newFolder().path))
             .redirectErrorStream(true).start()
         val out = process.inputStream.readBytes().toString(Charsets.UTF_8)
         return process.waitFor() to out
@@ -61,6 +65,11 @@ class StagesHeapTest {
     companion object {
         const val SECONDS = 900
         const val HEAP_MB = 40
+
+        /** The control's heap: a young generation of [CONTROL_YOUNG_MB], and an old one of 203 MB, which holds the
+         * song's 165 MB of samples, not those and their 76 MB resampled at once. */
+        const val CONTROL_MB = 211
+        const val CONTROL_YOUNG_MB = 8
     }
 }
 
@@ -72,8 +81,8 @@ private object Zeros : ChordsGraph, BeatsGraph {
     override fun close() {}
 }
 
-/** StagesHeapTest's child: `whole` resamples as the old pipeline did (the song and its copy in arrays at once);
- * `stages` hears it through [Stages]. */
+/** StagesHeapTest's child: `whole` resamples as the old pipeline did (the song read whole into an array, then its
+ * resampled copy made beside it); `stages` hears it through [Stages]. */
 object StagesHeapMain {
     @JvmStatic fun main(args: Array<String>) {
         val (mode, path, work) = args
@@ -82,6 +91,8 @@ object StagesHeapMain {
         val started = System.nanoTime()
         if (mode == "whole") {
             val b = Stages.mapped(mono) { FloatArray(it.remaining()).also { a -> it.get(a) } }
+            println("held the song whole: ${b.size} samples")
+            System.out.flush()
             println("resampled ${Soxr.resample(b, 48000.0, Stages.RATE.toDouble()).size}")
             return
         }

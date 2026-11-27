@@ -73,4 +73,37 @@ class SoxrTest {
             assertFailsWith<IllegalArgumentException> { Soxr.resample(FloatArray(10), from, to) }
         }
     }
+
+    @Test
+    fun `a stream's block longer than its array, or of fewer than no samples, is refused before it is read`() {
+        val open = Soxr::class.java.getDeclaredMethod("streamOpen", Double::class.java, Double::class.java)
+        val process = Soxr::class.java.getDeclaredMethod("streamProcess", Long::class.java, FloatArray::class.java,
+            Int::class.java, FloatArray::class.java)
+        val close = Soxr::class.java.getDeclaredMethod("streamClose", Long::class.java)
+        for (m in listOf(open, process, close)) m.isAccessible = true
+        val handle = open.invoke(null, 44100.0, 22050.0) as Long
+        try {
+            for (n in listOf(11, -1)) {
+                val e = assertFailsWith<java.lang.reflect.InvocationTargetException> {
+                    process.invoke(null, handle, FloatArray(10), n, FloatArray(Soxr.ROOM))
+                }.targetException
+                assertTrue(e is IllegalArgumentException, "$n samples of 10: $e")
+                assertTrue("10" in e.message.orEmpty(), "$n samples of 10: ${e.message}")
+            }
+            // The stream is still whole: a block within its array goes through.
+            assertTrue((process.invoke(null, handle, FloatArray(10), 10, FloatArray(Soxr.ROOM)) as Int) >= 0)
+        } finally {
+            close.invoke(null, handle)
+        }
+    }
+
+    @Test
+    fun `a file's resample asks before each piece whether to go on`() {
+        val input = tmp.newFile().apply { writeBytes(ByteArray(4 * 10 * Soxr.piece(44100.0, 22050.0))) }
+        var pieces = 0
+        assertFailsWith<IllegalStateException> {
+            Soxr.resample(input, 44100.0, 22050.0, tmp.newFile()) { if (++pieces == 3) throw IllegalStateException() }
+        }
+        assertEquals(3, pieces)
+    }
 }

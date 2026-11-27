@@ -10,10 +10,14 @@ import android.os.Message
 import android.os.Messenger
 import android.os.Process
 import android.os.RemoteException
+import android.system.ErrnoException
+import android.system.Os
+import android.system.OsConstants
 import io.github.danielhp95.caracole.autochords.AudioUnreadable
 import io.github.danielhp95.caracole.autochords.Checkpoints
 import io.github.danielhp95.caracole.autochords.ChordsUnavailable
 import java.io.File
+import java.io.IOException
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
@@ -45,21 +49,30 @@ object MlProtocol {
     const val BUG_KIND = "bug"
 
     /** The `:ml` process's name's end, as the manifest declares it (`android:process`): Caracole.MODELS_PROCESS's,
-     * which the app's ModelsProcessTest holds them to. */
+     * which the app's MlProcessTest holds them to. */
     const val PROCESS_SUFFIX = ":ml"
 
     /** A failure's kind and words, as the client says them: the known causes in their own words, an out of memory
-     * named as such, anything else caracole's own bug ("a bug in caracole: …", the computer's staged jobs' words). */
+     * named as such, a full disk ([NO_ROOM]: 30 minutes of 48 kHz stereo decode to about 690 MB) and a file of the
+     * hearing's that can't be written or moved ([CANT_WRITE]) too, anything else caracole's own bug ("a bug in
+     * caracole: …", the computer's staged jobs' words). */
     fun failure(e: Throwable): Pair<String, String> = when (e) {
         is AudioUnreadable -> AUDIO_KIND to (e.message ?: "the audio can't be read")
         is ChordsUnavailable -> SETUP_KIND to (e.message ?: "the chord models can't hear it now")
         is TooHot -> SETUP_KIND to (e.message ?: HeatRules.TOO_HOT)
         is Pipeline.Cancelled -> SETUP_KIND to (e.message ?: "the hearing was stopped")
         is OutOfMemoryError -> SETUP_KIND to OUT_OF_MEMORY
+        is IOException -> SETUP_KIND to if (noRoom(e)) "$NO_ROOM (${e.message})" else "$CANT_WRITE: ${e.message}"
         else -> BUG_KIND to "a bug in caracole: $e"
     }
 
+    /** ENOSPC, by its name or its words, in [e] or what caused it. */
+    private fun noRoom(e: Throwable): Boolean = generateSequence(e) { it.cause }.take(8)
+        .any { "ENOSPC" in it.message.orEmpty() || "No space left" in it.message.orEmpty() }
+
     const val OUT_OF_MEMORY = "the chord models ran out of memory (OutOfMemoryError); try again"
+    const val NO_ROOM = "no room on the phone for the hearing's files: free some space and try again"
+    const val CANT_WRITE = "a file of the hearing's can't be written"
 }
 
 /**
@@ -118,7 +131,7 @@ class MlService : Service() {
                 val work = File(request.getString(MlProtocol.WORK)!!)
                 val audio = File(request.getString(MlProtocol.AUDIO)!!)
                 val pipeline = Pipeline(File(request.getString(MlProtocol.MODELS)!!), Heat(this),
-                    request.getInt(MlProtocol.THREADS, 0), cancelled = cancelled::get)
+                    request.getInt(MlProtocol.THREADS, 0), cancelled = cancelled::get, syncFolder = ::syncFolder)
                 val result = pipeline.hear(audio, work) { words -> send(client, MlProtocol.STEP, Bundle().apply {
                     putString(MlProtocol.WORDS, words)
                 }) }
@@ -147,6 +160,20 @@ class MlService : Service() {
             client.send(Message.obtain(null, what).apply { this.data = data })
         } catch (e: RemoteException) {
             // The client is gone: nothing to tell.
+        }
+    }
+
+    /** [folder] forced to the disk: Android's FileChannel won't open a folder, its `Os` will (an error quiet). */
+    private fun syncFolder(folder: File) {
+        try {
+            val fd = Os.open(folder.path, OsConstants.O_RDONLY, 0)
+            try {
+                Os.fsync(fd)
+            } finally {
+                Os.close(fd)
+            }
+        } catch (e: ErrnoException) {
+            // Not this folder, not here: the rename stands, forced or not.
         }
     }
 

@@ -149,10 +149,13 @@ object HeatRules {
 
     /** [between] waited out: the threads the next stage takes, once [gauge] says go; [waiting] told [COOLING] once a
      * wait begins, [sleep] for [COOL_POLL_MS] between readings, by [now]'s clock; [TooHot] after [COOL_MOST_MS] of
-     * waiting, or at a reading that says stop. */
-    fun cool(gauge: HeatGauge, sleep: (Long) -> Unit, now: () -> Long, waiting: (String) -> Unit): Int {
+     * waiting, or at a reading that says stop; [check] called before each reading (a cancel: what it throws ends the
+     * wait there). */
+    fun cool(gauge: HeatGauge, sleep: (Long) -> Unit, now: () -> Long, waiting: (String) -> Unit,
+             check: () -> Unit = {}): Int {
         var since: Long? = null
         while (true) {
+            check()
             when (val v = between(gauge.read())) {
                 is Go -> return v.threads
                 is Stop -> throw TooHot(v.words)

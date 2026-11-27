@@ -85,9 +85,13 @@ class PipelineTest {
             // The clip's inputs are the parity tests' own (22,050 Hz mono): each frame BTC's argmax, the computer's but
             // where its top two were within the parity gate's margin, so a frame a wrong pad flips can't hide.
             val margin = btc.getJSONArray("margin")
+            // As many frames as the computer's, never fewer or more, then each the computer's.
+            val phone = harte(chords, audio(name))
+            val frames = framesOf(phone)
+            if (frames != argmax.size) failures += "$name: BTC heard $frames frames, the computer ${argmax.size}"
             val reference = frameLabels(Labels.spellForKey(Labels.framesToSegments(argmax, Labels.FRAME_SECONDS,
-                Labels.vocabulary(OrtModels.CLASSES))), argmax.size)
-            val got = frameLabels(harte(chords, audio(name)), argmax.size)
+                Labels.vocabulary(OrtModels.CLASSES))), maxOf(frames, argmax.size))
+            val got = frameLabels(phone, maxOf(frames, argmax.size))
             val differ = reference.indices.filter { reference[it] != got[it] }
             for (t in differ) {
                 if (margin.getDouble(t) >= parity.getDouble("margin_under")) failures += "$name: frame $t is ${got[t]}"
@@ -124,6 +128,8 @@ class PipelineTest {
                 "${record.getDouble("duration")}); ${"%.1f".format(took)} s end to end, :ml's peak RSS " +
                 "${chords.lastPeakKb?.let { it / 1024 }} MB")
             if (pcm.btcSamples != btc.getLong("samples")) failures += "$name: BTC read ${pcm.btcSamples} samples"
+            val frames = framesOf(harte(chords, audio(name)))
+            if (frames != argmax.size) failures += "$name: BTC heard $frames frames, the computer ${argmax.size}"
             if (Mel.frames(pcm.samples.toInt()) != beats.getInt("frames")) failures += "$name: the mel's frames"
             if (heard.duration != record.getDouble("duration")) failures += "$name: its length ${heard.duration}"
             failures += scores.failures.map { "$name: $it" }
@@ -315,6 +321,13 @@ class PipelineTest {
             }
             while (out.size < frames) out += "?"
             return out
+        }
+
+        /** The frames [segments] cover: the one whose time ([Labels.time]) is their last end. */
+        fun framesOf(segments: List<ChordSegment>): Int {
+            val end = segments.last().end
+            val near = Math.round(end / Labels.FRAME_SECONDS).toInt()
+            return (near - 1..near + 1).first { Labels.time(it, Labels.FRAME_SECONDS) == end }
         }
 
         fun doubles(array: JSONArray) = List(array.length()) { array.getDouble(it) }

@@ -78,12 +78,8 @@ class MlChordModels(
     override fun hear(audio: File, onStep: (String) -> Unit, waiting: () -> Unit): Heard {
         ready()?.let { throw ChordsUnavailable(it) }
         // The process of an earlier hearing ends once its client let go of it: a bind meanwhile could reach it as
-        // it goes, so it is let finish first.
-        val gone = System.currentTimeMillis() + PROCESS_GONE_MS
-        while (mlPid() != null && System.currentTimeMillis() < gone) {
-            waiting()
-            Thread.sleep(100)
-        }
+        // it goes, so it is let finish first, or the hearing refused in words.
+        awaitGone(::mlPid, System::currentTimeMillis, Thread::sleep, waiting)
         val replies = LinkedBlockingQueue<Message>()
         val looper = HandlerThread("caracole-chords-replies").apply { start() }
         val inbox = Messenger(Handler(looper.looper) { m -> replies.put(Message.obtain(m)); true })
@@ -193,7 +189,21 @@ class MlChordModels(
         const val DIED = "the chord models stopped (the phone may have run out of memory); try again"
 
         /** How long a hearing waits for the process of the one before it to end. */
-        private const val PROCESS_GONE_MS = 10_000L
+        const val PROCESS_GONE_MS = 10_000L
+
+        const val STILL_ENDING = "the chord models' process of the last hearing is still ending; try again"
+
+        /** Waits, polling [pid] every 100 ms of [clock] (`waiting` at each), for the last hearing's process to be gone;
+         * still there after [PROCESS_GONE_MS], [ChordsUnavailable] in [STILL_ENDING]'s words: a bind then could reach
+         * that process as it dies, read as this hearing's death. */
+        internal fun awaitGone(pid: () -> Int?, clock: () -> Long, sleep: (Long) -> Unit, waiting: () -> Unit) {
+            val gone = clock() + PROCESS_GONE_MS
+            while (pid() != null) {
+                if (clock() >= gone) throw ChordsUnavailable(STILL_ENDING)
+                waiting()
+                sleep(100)
+            }
+        }
 
         private data class Checked(val length: Long, val modified: Long, val sha256: String)
 

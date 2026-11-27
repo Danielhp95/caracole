@@ -9,6 +9,7 @@ import io.github.danielhp95.caracole.autochords.Heard
 import io.github.danielhp95.caracole.autochords.Labels
 import io.github.danielhp95.caracole.autochords.Stages
 import java.io.File
+import java.io.IOException
 
 /**
  * The whole hearing of an audio file (the design's §3.3), the computer's path step for step
@@ -32,15 +33,19 @@ import java.io.File
  * One model at a time ([graphs]: each opened at its stage's start and closed at its end, BTC's first, so the first
  * checkpoint after the pcm comes soonest). The steps are told to [say] as they start, in run.py's words ([STEPS]); the
  * heat ([HeatRules]) is read before each stage (waited out there, "waiting for the phone to cool") and before each
- * chunk and window batch (stopping there when critical), where [cancelled] is asked too ([Cancelled]). [most] caps
+ * chunk and window batch (stopping there when critical), where [cancelled] is asked too ([Cancelled]), as it is in
+ * the decode's, the mixdown's and the resample's loops and at each reading of a heat waited out. [most] caps
  * the threads the heat allows (0: none). One hearing at a time under a work folder: [hear] first sweeps what a
- * hearing cut off left there ([Checkpoints.sweep]).
+ * hearing cut off left there ([Checkpoints.sweep]). A file between stages that can't be moved into place is an
+ * [IOException], as a full disk's is (MlProtocol's words for both). [syncFolder] forces the checkpoints' folder after
+ * each rename (the platform's: [Checkpoints.syncFolder] on a JVM, MlService's `Os.fsync` on Android).
  */
 class Pipeline(
     private val models: File, private val gauge: HeatGauge, private val most: Int = 0,
     private val sleep: (Long) -> Unit = Thread::sleep, private val clock: () -> Long = System::currentTimeMillis,
     private val cancelled: () -> Boolean = { false },
     private val graphs: Graphs = OrtGraphs(models),
+    private val syncFolder: (File) -> Unit = Checkpoints::syncFolder,
 ) {
     /** The two models, each opened for its stage on so many threads. */
     interface Graphs {
@@ -58,7 +63,7 @@ class Pipeline(
     fun hear(audio: File, work: File, say: (String) -> Unit): Result {
         if (!audio.isFile) throw AudioUnreadable("no audio file: $audio")
         Checkpoints.sweep(work)
-        val points = Checkpoints.of(work, audio)
+        val points = Checkpoints.of(work, audio, syncFolder)
         points.parsed(Checkpoints.HEARD, Heard::read)?.let { return Result(it, points) }
         say(STEPS[0])
         HeatRules.start(gauge.read())?.let { throw ChordsUnavailable(it) }
@@ -90,13 +95,18 @@ class Pipeline(
     }
 
     private fun check() {
-        if (cancelled()) throw Cancelled()
+        stop()
         HeatRules.check(gauge)
     }
 
-    private fun threads(say: (String) -> Unit): Int {
+    /** [Cancelled], once [cancelled] says so. */
+    private fun stop() {
         if (cancelled()) throw Cancelled()
-        val allowed = HeatRules.cool(gauge, sleep, clock, say)
+    }
+
+    private fun threads(say: (String) -> Unit): Int {
+        stop()
+        val allowed = HeatRules.cool(gauge, sleep, clock, say, ::stop)
         return if (most > 0) minOf(most, allowed) else allowed
     }
 
@@ -108,33 +118,37 @@ class Pipeline(
         val mono = points.file(MONO)
         try {
             val d = try {
-                Decoder.decode(audio, decoded)
+                Decoder.decode(audio, decoded, ::stop)
             } catch (e: UndecodableAudio) {
                 throw AudioUnreadable(e.message ?: "the audio can't be decoded", e)
             }
             val duration = d.durationS ?: throw AudioUnreadable("its length can't be read")
-            if (d.channels == 1) check(decoded.renameTo(mono)) { "can't move $decoded" }
-            else Mixdown.mono(decoded, d.channels, mono)
+            if (d.channels == 1) move(decoded, mono)
+            else Mixdown.mono(decoded, d.channels, mono, ::stop)
             decoded.delete()
             val frames = mono.length() / 4
             val meta: Checkpoints.Pcm
             if (d.rate == RATE) {
                 meta = Checkpoints.Pcm(duration, frames, frames)
                 points.write(Checkpoints.PCM_META, Checkpoints.pcmJson(meta))
-                points.into(Checkpoints.PCM) { part -> check(mono.renameTo(part)) { "can't move $mono" } }
+                points.into(Checkpoints.PCM) { part -> move(mono, part) }
             } else {
                 val resampled = points.file(RESAMPLED)
-                val samples = Stages.resample(mono, d.rate, resampled)
+                val samples = Stages.resample(mono, d.rate, resampled, ::stop)
                 mono.delete()
                 meta = Checkpoints.Pcm(duration, samples, Stages.btcSamples(frames, d.rate))
                 points.write(Checkpoints.PCM_META, Checkpoints.pcmJson(meta))
-                points.into(Checkpoints.PCM) { part -> check(resampled.renameTo(part)) { "can't move $resampled" } }
+                points.into(Checkpoints.PCM) { part -> move(resampled, part) }
             }
             return meta
         } finally {
             decoded.delete()
             mono.delete()
         }
+    }
+
+    private fun move(from: File, to: File) {
+        if (!from.renameTo(to)) throw IOException("can't move $from to $to")
     }
 
     companion object {

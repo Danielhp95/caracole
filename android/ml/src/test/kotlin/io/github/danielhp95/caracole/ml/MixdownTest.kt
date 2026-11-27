@@ -2,6 +2,7 @@ package io.github.danielhp95.caracole.ml
 
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -30,5 +31,14 @@ class MixdownTest {
         assertEquals(20_001L, Mixdown.mono(source, 2, out))
         val got = ByteBuffer.wrap(out.readBytes()).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer()
         assertArrayEquals(Mixdown.mono(pcm, 2), FloatArray(got.remaining()).also { got.get(it) }, 0f)
+    }
+
+    @Test fun aStopAskedBetweenBlocksEndsTheMixdownThere() {
+        val source = tmp.newFile("in.f32").apply { writeBytes(ByteArray(4 * 2 * 50_000)) }
+        var blocks = 0
+        assertThrows(IllegalStateException::class.java) {
+            Mixdown.mono(source, 2, tmp.newFile("out.f32")) { if (++blocks == 2) throw IllegalStateException("stop") }
+        }
+        assertEquals(2, blocks)
     }
 }

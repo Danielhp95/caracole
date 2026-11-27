@@ -2856,15 +2856,19 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     song. One model at a time (`Pipeline.Graphs`, `OrtGraphs`), BTC's first. Checkpoints (`:autochords`'
     `Checkpoints`, `stateDir/cache/autochords/<sha16>-c<contract>/`: `pcm.json`, `pcm.f32` (deleted once the beats
     are kept), `chords.json` (Harte labels, before common names), `beats.json`, `heard.json`), each written to a
-    `.part`, forced to the disk and renamed; one that won't parse, or a pcm shorter than its meta, is made again;
+    `.part`, forced to the disk and renamed, the folder then forced too (`Checkpoints.syncFolder` on a JVM, `Os.fsync`
+    in `:ml`; quiet where refused); one that won't parse, or a pcm shorter than its meta, is made again;
     what a cut-off stage left anywhere under the folder is swept as a hearing starts. `MlChordModels` is
     `ChordModels` in the main process: `ready()` checks the three files (BTC's graph and weights, beat_this fp16) by
     models.json's sizes and SHA-256 (hashed once a process; the download is a later task's, the emulator's are
-    device-test.sh's push); `hear` waits for an earlier `:ml` to end, binds the service, sends paths over a
+    device-test.sh's push); `hear` waits for an earlier `:ml` to end (`awaitGone`: 10 s, then refused in words,
+    `STILL_ENDING`), binds the service, sends paths over a
     `Messenger` (`MlProtocol`), polls its replies a second at a time calling `waiting`, holds `caracole:chords`'s
     wake lock (its 10 minutes begun again each step and minute), cancels on its way out unanswered, and reads a dead
     process as `ChordsUnavailable` (`MlChordModels.DIED`); a bug in the process is an IllegalStateException "a bug in
-    caracole: …", an OutOfMemoryError said as one. `HeatRules` (Heat.kt, the design's §3.4 table over a
+    caracole: …", an OutOfMemoryError said as one, an IOException too (`MlProtocol.NO_ROOM` for a full disk, else
+    `CANT_WRITE`). A cancel is asked in the decode's, the mixdown's and the resample's loops and at each reading of a
+    heat waited out, as before each chunk. `HeatRules` (Heat.kt, the design's §3.4 table over a
     `Heat.Reading`, `HeatGauge` behind it, `HeatTest` on the JVM): 4 threads, 2 at moderate, headroom ≥ 0.85 or
     Battery Saver; severe waits before a stage (10 s polls, 5 minutes at most); critical stops at the next window batch
     or chunk; under 15 % and not charging refused. `Caracole.phone` refuses to start in the `:ml` process, by its name

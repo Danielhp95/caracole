@@ -104,6 +104,19 @@ class CodecLoopTest {
         assertEquals(2, run(early).first.channels)
     }
 
+    @Test(timeout = 10_000) fun aStopAskedWhileTheCodecDecodesEndsTheLoopThere() {
+        val codec = FakeCodec(List(50) { Answer.Buffer(shorts(1, 2)) } + Answer.Buffer(shorts(3), end = true))
+        var turns = 0
+        assertThrows(IllegalStateException::class.java) {
+            FloatWriter(tmp.newFile()).use { out ->
+                CodecLoop { 0L }.run(codec, Samples(3), out, { 0L }, null) {
+                    if (++turns == 5) throw IllegalStateException("stop")
+                }
+            }
+        }
+        assertEquals(5, turns)
+    }
+
     @Test(timeout = 10_000) fun aCodecThatNeverEndsItsStreamIsGivenUpAfterTheInputEnds() {
         val codec = FakeCodec(listOf(Answer.Buffer(shorts(1))))
         val e = assertThrows(UndecodableAudio::class.java) { run(codec) }

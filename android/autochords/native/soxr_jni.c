@@ -3,14 +3,20 @@
 
 #include <jni.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 #include "caracole_soxr.h"
 
+static void throw_named(JNIEnv *env, char const *name, char const *words)
+{
+    jclass cls = (*env)->FindClass(env, name);
+    if (cls) (*env)->ThrowNew(env, cls, words);
+}
+
 static void throw_runtime(JNIEnv *env, char const *words)
 {
-    jclass cls = (*env)->FindClass(env, "java/lang/RuntimeException");
-    if (cls) (*env)->ThrowNew(env, cls, words);
+    throw_named(env, "java/lang/RuntimeException", words);
 }
 
 JNIEXPORT jfloatArray JNICALL
@@ -69,6 +75,15 @@ Java_io_github_danielhp95_caracole_autochords_frontend_Soxr_streamProcess(
     char const *err;
     (void)cls;
 
+    /* A block within its array, or nothing is read: thrown before anything else is done, so no JNI call is made
+     * with the exception pending. */
+    if (input && (ilen < 0 || ilen > (*env)->GetArrayLength(env, input))) {
+        char words[96];
+        snprintf(words, sizeof words, "a block of %d samples of an array of %d", (int)ilen,
+                 (int)(*env)->GetArrayLength(env, input));
+        throw_named(env, "java/lang/IllegalArgumentException", words);
+        return 0;
+    }
     y = malloc((ocap ? ocap : 1) * sizeof *y);
     if (input) x = malloc((ilen ? (size_t)ilen : 1) * sizeof *x);
     if (!y || (input && !x)) {

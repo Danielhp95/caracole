@@ -116,6 +116,30 @@ class PipelineCheckpointsTest {
         assertEquals(0, graphs.chords)
     }
 
+    /** A cancel during the decode, the mixdown or the resample stops it there, never once the pcm is whole: a 44.1 kHz
+     * stereo WAV, its samples mixed down and resampled, cancelled at the second time it is asked (the first is the
+     * stage's start). */
+    private fun stereo44k(seconds: Int): File {
+        val n = 44100 * seconds
+        val b = ByteBuffer.allocate(44 + 4 * n).order(ByteOrder.LITTLE_ENDIAN)
+        b.put("RIFF".toByteArray()).putInt(36 + 4 * n).put("WAVE".toByteArray()).put("fmt ".toByteArray())
+        b.putInt(16).putShort(1).putShort(2).putInt(44100).putInt(4 * 44100).putShort(4).putShort(16)
+        b.put("data".toByteArray()).putInt(4 * n)
+        for (i in 0 until 2 * n) b.putShort((8000 * sin(2 * PI * 220 * (i / 2) / 44100)).toInt().toShort())
+        return tmp.newFile("stereo$seconds.wav").apply { writeBytes(b.array()) }
+    }
+
+    @Test fun aCancelDuringThePcmStopsItThereNotOnceItIsWhole() {
+        val audio = stereo44k(30)
+        var asked = 0
+        val work = tmp.newFolder()
+        val pipeline = Pipeline(File("no-models"), cool, graphs = Counted(), cancelled = { ++asked >= 2 })
+        assertThrows(Pipeline.Cancelled::class.java) { pipeline.hear(audio, work) {} }
+        val points = Checkpoints.of(work, audio)
+        assertFalse("cancelled before the pcm was whole", points.has(Checkpoints.PCM_META))
+        assertTrue(points.folder.list().orEmpty().none { it in Checkpoints.STAGE_FILES })
+    }
+
     @Test fun theStagesShapesAreTheModelsOwn() {
         assertEquals(OrtModels.WINDOW, Stages.WINDOW)
         assertEquals(OrtModels.CLASSES, Stages.CLASSES)

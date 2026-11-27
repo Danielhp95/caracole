@@ -77,7 +77,8 @@ object Decoder {
      * measured: Android's own, Codec2's and OMX's. */
     val DROPS_MP3_DELAY = setOf("c2.android.mp3.decoder", "OMX.google.mp3.decoder")
 
-    fun decode(file: File, into: File): Decoded {
+    /** [file] decoded into [into]; [check] called as it goes (each buffer, each block: a cancel, which ends it). */
+    fun decode(file: File, into: File, check: () -> Unit = {}): Decoded {
         if (!file.isFile) throw UndecodableAudio("no audio file: $file")
         try {
             val format = try {
@@ -85,19 +86,19 @@ object Decoder {
             } catch (e: Pcm.Unreadable) {
                 throw UndecodableAudio("a WAV or AIFF caracole can't read: ${e.message}", e)
             }
-            return if (format != null) pcm(file, format, into) else coded(file, into)
+            return if (format != null) pcm(file, format, into, check) else coded(file, into, check)
         } catch (e: Throwable) {
             into.delete()
             throw e
         }
     }
 
-    private fun pcm(file: File, format: Pcm.Format, into: File): Decoded {
-        FloatWriter(into).use { out -> Pcm.read(file, format) { block, n -> out.write(block, n) } }
+    private fun pcm(file: File, format: Pcm.Format, into: File, check: () -> Unit): Decoded {
+        FloatWriter(into).use { out -> Pcm.read(file, format) { block, n -> check(); out.write(block, n) } }
         return Decoded(format.rate, format.frames, format.channels, format.seconds)
     }
 
-    private fun coded(file: File, into: File): Decoded {
+    private fun coded(file: File, into: File, check: () -> Unit): Decoded {
         val extractor = MediaExtractor()
         try {
             try {
@@ -161,7 +162,7 @@ object Decoder {
                 codec.start()
                 return FloatWriter(into).use { out ->
                     val result = CodecLoop().run(Port(codec), Source(extractor), out, { r -> trim.at(r).skip },
-                        silence?.first)
+                        silence?.first, check)
                     val applied = trim.at(result.rate)
                     val given = out.samples / result.channels
                     val frames = applied.frames(given)

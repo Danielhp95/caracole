@@ -31,9 +31,10 @@ object Soxr {
      * [input], little-endian float32 samples at [from] Hz, resampled to [to] Hz into [output], a block at a time:
      * [resample]'s answer sample for sample (the same soxr_t, fed the same pieces, [piece], drained [ROOM] samples a
      * call, flushed until it gives nothing, cut to the one-shot's room, `n · to / from + 1`), so no song is held
-     * whole: its buffers are a piece's and [ROOM]'s, whatever its length. The samples written.
+     * whole: its buffers are a piece's and [ROOM]'s, whatever its length. [check] is called before each piece (a
+     * cancel: what it throws ends the resample there). The samples written.
      */
-    fun resample(input: File, from: Double, to: Double, output: File): Long {
+    fun resample(input: File, from: Double, to: Double, output: File, check: () -> Unit = {}): Long {
         require(from > 0 && to > 0) { "Sample rate should be over 0" }
         require(from.isFinite() && to.isFinite()) { "Sample rate should be finite" }
         val n = input.length() / 4
@@ -60,6 +61,7 @@ object Soxr {
                     }
                     var at = 0L
                     while (true) {
+                        check()
                         val flushing = at >= n
                         val take = if (flushing) 0 else minOf(piece.toLong(), n - at).toInt()
                         if (!flushing) {

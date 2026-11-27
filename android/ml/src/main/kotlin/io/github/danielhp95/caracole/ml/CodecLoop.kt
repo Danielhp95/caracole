@@ -122,7 +122,8 @@ fun <T> readContainer(what: String, block: () -> T): T = try {
  * MediaCodec's loop over a track, its decisions plain code: the input fed (a [first] buffer before the track's, where
  * given), every output buffer read in its encoding ([PcmEncoding]) to float32 and written, the first frames [skip]
  * says for the output's rate passed over (decided at each of the output's formats until the codec gives a sample); it
- * ends at the codec's end of stream. It never hangs and never mixes layouts:
+ * ends at the codec's end of stream, or at what `check`, called each turn (a cancel), throws. It never hangs and never
+ * mixes layouts:
  *
  * - after the input's end, [IDLE_MOST] answers in a row with no output and no end of stream is a decoder that stopped
  *   ([UndecodableAudio]), and so is [STALL_NS] of the clock with neither an input taken nor an output given;
@@ -132,8 +133,8 @@ fun <T> readContainer(what: String, block: () -> T): T = try {
 class CodecLoop(private val nanos: () -> Long = System::nanoTime) {
     class Result(val rate: Int, val channels: Int, val encoding: PcmEncoding)
 
-    fun run(codec: CodecPort, source: SamplePort, out: FloatWriter, skip: (rate: Int) -> Long, first: ByteArray?):
-        Result {
+    fun run(codec: CodecPort, source: SamplePort, out: FloatWriter, skip: (rate: Int) -> Long, first: ByteArray?,
+            check: () -> Unit = {}): Result {
         val info = OutBuffer()
         var inputDone = false
         var primed = first == null
@@ -144,6 +145,7 @@ class CodecLoop(private val nanos: () -> Long = System::nanoTime) {
         var idle = 0
         var progress = nanos()
         while (true) {
+            check()
             if (!inputDone) {
                 val i = codec.dequeueInput(TIMEOUT_US)
                 if (i >= 0) {
