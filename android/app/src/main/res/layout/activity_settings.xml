@@ -213,6 +213,39 @@
                 android:textColor="@color/muted"
                 android:textSize="13sp" />
 
+            <!-- YouTube audio (YouTubeRow, the phone-youtube design's §7): what sheets from a YouTube video stand on
+                 now, "On · yt-dlp 2026.11.23 · 2 of 50 runs today"; gone in a build that carries no yt-dlp. -->
+            <LinearLayout
+                android:id="@+id/youtube_row"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    android:text="@string/youtube_label"
+                    android:textColor="@color/muted"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:id="@+id/youtube_line"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:accessibilityLiveRegion="polite"
+                    android:textColor="@color/text"
+                    android:textSize="15sp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/youtube_hint"
+                    android:textColor="@color/muted"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
             <!-- The phone's backups (BackupsActivity), apart from the sync's rows. -->
             <TextView
                 android:layout_width="wrap_content"

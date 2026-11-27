@@ -3150,7 +3150,14 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     request's `verbose` leave.
   - The engine (Y1.5): `PhoneDeps.youtube: YouTubeEngine?` (core.youtube: `ready()`, `process()`, `gate()`, `qjs`,
     `cacheDir`), the debug build's `YtDlpEngine` (src/debug's `DebugYouTube`, which `Caracole.youtube` reaches by name,
-    so the main source set names no `:youtube` class), null in a release. `process()` is a `ProcessYtDlp`, core's
+    so the main source set names no `:youtube` class), null in a release; a device test's process in its place while
+    `Caracole.youtubeForTests` is set (the engine's gate, readiness and folder kept: YouTubeEndToEndTest's yt-dlp of
+    the committed clip, `device-test.sh --models --sites chords YouTubeEndToEndTest`: Ready, "chords over the lyrics",
+    requests LRCLIB's and its own, the audio gone after). Settings' YouTube audio row (`YouTubeRow`, the design's §7,
+    `BuildConfig.YTDLP_VERSION` pins.json's): "On · yt-dlp 2026.11.23 · N of 50 runs today" (the UTC day's `events`
+    of `youtube` against PhoneConfig's budget), "Off (the computer's settings)", "Needs the chord models", "Cooling down
+    until …", "Out of date: …" (kv `youtube-outdated` of this version), none without an engine; YouTubeRowTest on the
+    JVM. `process()` is a `ProcessYtDlp`, core's
     `YtDlpProcess` over `YtDlpClient`, a client of its own a run, closed with it: the argv the runner built, its
     folders read off the templates; `Ran` its exit, stdout and stderr (its first 64 KiB, then the client's tail);
     `NotStarted` for nothing sent (no bind, a refusal, another process's run, a stop before its turn); cut off, thrown

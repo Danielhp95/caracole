@@ -5,6 +5,11 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+/** youtube/pins.json's yt-dlp version, the one place it is pinned. */
+val ytdlpVersion: String = ((groovy.json.JsonSlurper().parse(rootProject.file("youtube/pins.json")) as Map<*, *>)["ytdlp"]
+    as Map<*, *>)["version"] as String
+
+
 /** The short hash of the commit the checkout is at (`git rev-parse --short HEAD`, read as Gradle configures the
  * build), for the debug build's version; none outside a git checkout or with no git (a source tarball, a sandbox). */
 val commit: String? = try {
@@ -40,6 +45,8 @@ android {
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
         // The port the phone's own server asks for first (Caracole.PORT).
         buildConfigField("int", "SERVER_PORT", "8738")
+        // The yt-dlp :youtube packages (youtube/pins.json's), which Settings' YouTube audio row names (YouTubeRow).
+        buildConfigField("String", "YTDLP_VERSION", "\"$ytdlpVersion\"")
     }
 
     // The release key, from outside the repo: ~/.gradle/gradle.properties (or -P / ORG_GRADLE_PROJECT_*) names the

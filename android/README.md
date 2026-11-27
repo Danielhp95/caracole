@@ -1173,6 +1173,24 @@ setuptools (MIT) and pyelftools (public domain) in its bootstrap, whose texts ar
 (Unlicense, their texts there); and yt-dlp-ejs's bundled meriyah (ISC) and astring (MIT), whose texts its wheel doesn't
 carry.
 
+## A sheet from a YouTube video (debug build)
+
+Paste a video into the library page's request form (its YouTube field), use a card's Sheet from a YouTube video, or
+share a YouTube link to the app and press Make its sheet from this video: the phone takes the video's audio with its
+yt-dlp, asks the lyrics sites for the words, hears the chords with its own models and keeps the sheet, then lets the
+audio go. Nothing downloads before you press the button. Settings' **YouTube audio** row says where it stands: "On ·
+yt-dlp 2026.11.23 · 2 of 50 runs today", "Off (the computer's settings)", "Needs the chord models", "Cooling down until
+…" or "Out of date: …" (`YouTubeRow`); a build without yt-dlp has no row.
+
+`YouTubeEndToEndTest` runs it whole on the emulator, with the real models and a yt-dlp of the test's own
+(`Caracole.youtubeForTests`: its one download the committed clip, `tests/fixtures/autochords/hearing.m4a`, nothing
+sent to YouTube) and LRCLIB the fake sites':
+
+    android/scripts/device-test.sh --models --sites chords YouTubeEndToEndTest
+
+It asserts Ready, "chords over the lyrics", requests to LRCLIB and the test's yt-dlp alone, the audio gone after Ready,
+and the Settings row's line.
+
 ## The YouTube bench (debug build)
 
 Gate Y0 asks whether yt-dlp works on your phone: whether YouTube answers it, how long the player's challenge takes on

@@ -11,6 +11,7 @@ import io.github.danielhp95.caracole.core.http.RealTransport
 import io.github.danielhp95.caracole.core.http.Transport
 import io.github.danielhp95.caracole.core.index.IndexTransfer
 import io.github.danielhp95.caracole.core.youtube.YouTubeEngine
+import io.github.danielhp95.caracole.core.youtube.YtDlpProcess
 import io.github.danielhp95.caracole.core.library.AudioStore
 import io.github.danielhp95.caracole.mirror.Http
 import io.github.danielhp95.caracole.mirror.Mirror
@@ -90,6 +91,11 @@ object Caracole {
      * file refused, PhoneDeps.NO_EXAMINER) until the app has its own (the audio routes'). */
     @Volatile var examinerForTests: AudioStore.Examiner? = null
 
+    /** A device test's yt-dlp (YouTubeEndToEndTest: a FakeYtDlpProcess whose download is the committed clip), read
+     * each time a job takes the engine's process: in place of `:youtube`'s, the app's own gate, readiness and folder
+     * kept; null, `:youtube`'s own. A release has no engine to put it in. */
+    @Volatile var youtubeForTests: YtDlpProcess? = null
+
     /** Where the catalogues' job lists the release: GitHub's API, or [cataloguesForTests]. */
     private fun catalogues(http: Http): CatalogueSource =
         cataloguesForTests?.let { CatalogueSource.Api(http, base = it) } ?: CatalogueSource.Api(http)
@@ -161,7 +167,7 @@ object Caracole {
                 settings = SavedAddress(Settings(context)), secret = secret, csrf = csrf,
                 transport = { _ -> transport() }, version = BuildConfig.VERSION_NAME, alerts = alerts,
                 searchesLacuerda = searchesLacuerdaForTests, catalogues = ::catalogues, metered = { metered(context) },
-                youtube = youtube(context),
+                youtube = youtube(context)?.let(::withTestsProcess),
                 // The debug build's `:ml` (src/debug's PhoneChords), none in the release's; the models' source is
                 // PhoneDeps' own default, this build's pins (ModelFiles.carried: the release carries none).
                 chords = PhoneChords.of(context, state),
@@ -226,6 +232,11 @@ object Caracole {
         } catch (_: ClassNotFoundException) {
             null
         }
+    }
+
+    /** [real], its process [youtubeForTests]'s while a test sets one. */
+    private fun withTestsProcess(real: YouTubeEngine): YouTubeEngine = object : YouTubeEngine by real {
+        override fun process(): YtDlpProcess = youtubeForTests ?: real.process()
     }
 
     private const val PACKAGE = "io.github.danielhp95.caracole"

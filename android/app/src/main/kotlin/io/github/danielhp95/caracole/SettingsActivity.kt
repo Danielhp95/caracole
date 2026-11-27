@@ -47,7 +47,10 @@ import java.time.Instant
  * it (the Journal's Try again too), Download then the owner's go-ahead, the question kept for the next screen until it
  * is answered (a rotation's). Download asks to show notifications first, the download's own with its bar. A
  * phone's caracole that can't start is said under the catalogues' button ("Couldn't start · …"), never a crash, and
- * its start tried again as the screen comes back. The library screen's bar has the same sync button.
+ * its start tried again as the screen comes back. YouTube audio ([YouTubeRow], the phone-youtube design's §7) says
+ * what a sheet from a YouTube video stands on now ("On · yt-dlp 2026.11.23 · 2 of 50 runs today", off, the chord
+ * models needed, a cooldown, out of date), none in a build without yt-dlp. The library screen's bar has the same sync
+ * button.
  * No item's text ends in "…".
  */
 class SettingsActivity : Activity() {
@@ -136,6 +139,26 @@ class SettingsActivity : Activity() {
         showStorage()
         showCatalogues()
         followCatalogues()
+        showYouTube()
+    }
+
+    /** Settings' YouTube audio row (YouTubeRow): its line read off the main thread, as the screen comes back; gone
+     * in a build that carries no yt-dlp, or while the phone's caracole can't start. */
+    private fun showYouTube() {
+        scope.launch {
+            val phone = phone() ?: return@launch
+            val line = withContext(Dispatchers.IO) {
+                runCatching {
+                    val problem = phone.youtubeProblem()
+                    phone.parts.database.read { db ->
+                        YouTubeRow.line(YouTubeRow.of(db, phone.parts.config(), problem, BuildConfig.YTDLP_VERSION,
+                                                      Instant.now()))
+                    }
+                }.getOrNull()
+            }
+            findViewById<View>(R.id.youtube_row).visibility = if (line == null) View.GONE else View.VISIBLE
+            findViewById<TextView>(R.id.youtube_line).text = line.orEmpty()
+        }
     }
 
     override fun onStart() {
