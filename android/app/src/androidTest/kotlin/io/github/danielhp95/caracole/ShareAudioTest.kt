@@ -38,7 +38,8 @@ import java.util.concurrent.TimeUnit
  * file staged as an upload, read once, and the library screen opened at its page, `/share/audio?upload=ID`, its guess
  * in Artist and Title; Make sheet queues `caracole audio --upload=ID` and lands on the Journal; Cancel drops the file
  * and takes the screen back behind the app that shared; two audio files shared together are each answered "Share one
- * audio file at a time.", a PDF beside them still filed by the inbox; with no chord models, the page says why, naming
+ * audio file at a time.", a PDF beside them still filed by the inbox (and one audio file beside a PDF opens its page,
+ * the PDF the inbox's); a `file:` address is never read ("Not filed: …", the inbox's words); with no chord models, the page says why, naming
  * Settings, and nothing is staged. Each test sets the models' state it needs: installed from the files device-test.sh
  * pushed (`-e models`, ChordsEndToEndTest's way; skipped without), or removed.
  */
@@ -171,6 +172,28 @@ class ShareAudioTest {
         assertNull(ShareActivity.opened)
         assertTrue("Share Audio - A Score.pdf" in InboxShare.folder(phone.parts).waiting())
         InboxShare.folder(phone.parts).drop("Share Audio - A Score.pdf")
+    }
+
+    @Test fun oneAudioFileSharedWithAPdfOpensItsPageAndThePdfGoesToTheInbox() {
+        installed()
+        share("*/*", uri("Calla Lake - With A Score.mp3", clip()), uri("Share Audio - Beside.pdf", "%PDF-1.4 s".toByteArray()))
+        shownAt("the audio file's page", "/share/audio?upload=")
+        assertEquals(1, staged().size)
+        assertEquals("Waiting for its song: Share Audio - Beside.pdf", waitForToast())
+        InboxShare.folder(phone.parts).drop("Share Audio - Beside.pdf")
+    }
+
+    @Test fun anAudioFileAtAFileAddressIsNotFiledInTheInboxsWords() {
+        val private = File(context.filesDir, "Calla Lake - Private.mp3").apply { writeBytes(clip()) }
+        try {
+            share("audio/mpeg", Uri.fromFile(private))
+            assertEquals("Not filed: caracole reads a shared file from the app that shares it alone, never a file: " +
+                             "address", waitForToast())
+            assertEquals(emptyList<String>(), staged())
+            assertNull(ShareActivity.opened)
+        } finally {
+            private.delete()
+        }
     }
 
     @Test fun withNoChordModelsThePageSaysWhyAndNothingIsStaged() {

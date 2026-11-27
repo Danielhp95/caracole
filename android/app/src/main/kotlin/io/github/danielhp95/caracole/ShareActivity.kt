@@ -34,9 +34,10 @@ import java.io.IOException
  * and queues its filing as the inbox runner's job (server's InboxShare, PhoneKinds' inbox kind), as `_inbox/` files a
  * file on the computer, while the activity is still in front (so the queue's foreground service may start); then it
  * finishes. An audio file (AudioShare.isAudio: an audio type but MIDI's, or an audio extension under a type that says
- * nothing) shared alone is staged as an upload instead, read once from its stream into `state/audio/` (never held
- * whole: AudioRoutes.stageShared), and the library screen opens its page (`/share/audio?upload=ID`: the guess, Make
- * sheet, Cancel); one of a share of several is answered [ONE_AT_A_TIME].
+ * nothing), the one audio file of its share, is staged as an upload instead, read once from its stream into
+ * `state/audio/` (never held whole: AudioRoutes.stageShared), and the library screen opens its page
+ * (`/share/audio?upload=ID`: the guess, Make sheet, Cancel), the share's other files the inbox's; each audio file of
+ * a share of several audio files is answered [ONE_AT_A_TIME].
  * Once each job is over (or [WAIT_MS] on), a toast says how each went, its line on the Requests tab: "Filed as
  * guitar-1.gp5 of Oasis - Wonderwall", "Waiting for a song that fits: …" (tried again after each sync and lookup, for
  * 30 days), "Not filed: …", a line a file.
@@ -59,11 +60,12 @@ class ShareActivity : Activity() {
             // audio file shared alone is staged as an upload (streamed, never held whole) and its page opened.
             val queued = try {
                 val phone = runCatching { Caracole.phone(app) }
-                streams.map { uri ->
-                    val about = about(uri, type)
+                val abouts = streams.map { it to about(it, type) }
+                val audios = abouts.count { (_, about) -> AudioShare.isAudio(about.type, about.name) }
+                abouts.map { (uri, about) ->
                     when {
                         !AudioShare.isAudio(about.type, about.name) -> queue(uri, about, phone)
-                        streams.size > 1 -> Queued(ONE_AT_A_TIME)
+                        audios > 1 -> Queued(ONE_AT_A_TIME)
                         else -> audio(uri, about, phone)
                     }
                 }
@@ -81,14 +83,14 @@ class ShareActivity : Activity() {
     }
 
     /**
-     * The audio file at [uri], shared alone: staged through the phone's audio routes (AudioRoutes.stageShared, its
+     * The audio file at [uri], its share's one: staged through the phone's audio routes (AudioRoutes.stageShared, its
      * stream read once, a chunk at a time), then the library screen opened at its page (`/share/audio?upload=ID`);
      * where the phone makes no sheet, nothing read and the page of its name, which says why; what is said of it
      * where the store refuses it (the store's words) or it can't be read.
      */
     private suspend fun audio(uri: Uri, about: About, phone: Result<Phone>): Queued {
         val name = about.name ?: "the file"
-        refused(uri)?.let { return Queued(it) }
+        refused(uri)?.let { return Queued(notFiled(it)) }
         if (about.size != null && about.size > AudioStore.AUDIO_MAX) return Queued(AudioStore.WORDS.getValue("too_big"))
         val page = try {
             val routes = phone.getOrThrow().audioRoutes

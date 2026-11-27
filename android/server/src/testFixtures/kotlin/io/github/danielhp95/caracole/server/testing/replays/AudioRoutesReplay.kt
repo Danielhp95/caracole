@@ -166,6 +166,12 @@ object AudioRoutesReplay {
                 misses.check(answer.status == status && mask(out) == want) {
                     "$note: ${answer.status} ${mask(out)}\n   Python: $status $want"
                 }
+                // A JsonObject's == is a map's, order-blind, and `out` is written with sorted keys: the members' order
+                // is held by `keys`, Python's as it wrote them.
+                val wantKeys = step["keys"]?.jsonArray?.map { it.jsonPrimitive.content }
+                misses.check(wantKeys != null && keyOrder(out) == wantKeys) {
+                    "$note: members in the order ${keyOrder(out)}\n   Python: $wantKeys"
+                }
             }
             val staged = folder.list().orEmpty().mapNotNull { AudioStore.STAGED_AUDIO.matchEntire(it)?.groupValues?.get(1) }
                 .map { ids[it] ?: it }.sorted()
@@ -239,6 +245,13 @@ object AudioRoutesReplay {
         return PhoneParts(database, store, state, config, queue, PhonePageData(MirrorPageData(null), store),
                           { Clients(config(), File(state, "cache"), { RefusingTransport }, Pacing.REAL) },
                           SongPages.NONE, SongbookPages.NONE, Alerts.NONE, Pacing.REAL, searchesLacuerda = false)
+    }
+
+    /** Every member of [value] in its order, by its path ("song.id", "jobs.0.id"): the generator's key_order. */
+    private fun keyOrder(value: JsonElement, at: String = ""): List<String> = when (value) {
+        is JsonObject -> value.entries.flatMap { (key, member) -> listOf(at + key) + keyOrder(member, "$at$key.") }
+        is JsonArray -> value.withIndex().flatMap { (n, item) -> keyOrder(item, "$at$n.") }
+        else -> emptyList()
     }
 
     private fun <T> inFolder(prefix: String, block: (File) -> T): T {

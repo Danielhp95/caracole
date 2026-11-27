@@ -4382,20 +4382,25 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   the format the store gives (a spool has no extension): an MP3's `MpegFrames` count (mpeg_frames.py's port) where
   its first frame names none, else `MpegHeader`'s; an M4A's sound track's `mdhd` (`Mp4.Track.sound`: none with no
   sound track, refused); FLAC's STREAMINFO; `Ogg`; `Pcm`. Its tags Android's (MediaMetadataRetriever: artist, then
-  album artist, title, album; none where it can't read them, a WAV's and an AIFF's ID3 chunk among them). AudioLengthsTest holds each length to the computer's
-  store's over vectors/web/audio_routes.jsonl's `examine` records, to the bit; AudioRoutesOnDeviceTest the real one.
+  album artist, title, album; none where it can't read them). A known divergence, kept: a WAV's and an AIFF's ID3
+  chunk, which mutagen reads on the computer, Android doesn't, so their guess comes from the file's name (the
+  dialog's fields are editable). AudioLengthsTest holds each length to the computer's store's over
+  vectors/web/audio_routes.jsonl's `examine` records, to the bit; AudioRoutesOnDeviceTest the real one.
 - server/routes' `AudioRoutes(parts, store, problem)`, web/audio_routes.py's three routes: `POST /audio/upload`
   (`Route(spool = true)`: App hands its answer the body as a stream, a test's bytes wrapped, refused 413 by its
   Content-Length past the limit; LocalServer streams it from the socket, never whole in the heap, 413 in server.py's
-  words before reading a body past it, and an answer that left it unread says `Connection: close`, CIO dropping the
-  rest, never reading it as a request), `POST /audio`, `POST /audio/drop`, in their words and statuses (the store's
+  words before reading a body past it, a body ended short of its Content-Length a 400 in server.py's words ("That
+  body is shorter than it said it was."), never a whole upload, and an answer that left it unread says `Connection:
+  close`, CIO dropping the rest, never reading it as a request; a chunked one past the limit is drained uncapped,
+  behind the launch secret), `POST /audio`, `POST /audio/drop`, in their words and statuses (the store's
   refusals; `NOT_HERE` with `Phone.audioProblem()`'s reason; a song with a sheet or ignored; `WAITS`); the store's
   `held` from what Make sheet and a drop read of the queue to what they change, an upload's `named`
   (`JobCommands.uploadsNamed`, jobs.uploads_named) read under it; `sweep` at each upload; the route closes the
   stream on every end. A song by name is the job's to add (the phone writes no wanted.txt, so its note is none).
   `namesOf` is audio_sheet.names_of (`bareName`: pathlib's stem, music.py's track number). `server.audio`
   (`ServerControls.audio`, `Phone.audioProblem()`): `audio_member`'s shape, `ok` true with `AUDIO_MAX` and
-  `too_big` where it is null. vectors/web/audio_routes.jsonl (tests/test_conformance_audio_routes.py, area `web`):
+  `too_big` where it is null. vectors/web/audio_routes.jsonl (tests/test_conformance_audio_routes.py, area `web`; each step's `keys` its
+  answer's members in Python's order, `out` being written with sorted keys):
   each route over scenes of one library (a sheet, ignored, a purchase, YouTube's audio, a file given), the computer's
   reader's reads recorded for the phone's fake examiner, the routes' limits, `audio_member` where it makes sheets,
   and `examine` over the fixtures; `WebReplay.audioRoutes` (AudioRoutesReplay), AudioRoutesTest, LibraryPageTest,

@@ -24,6 +24,8 @@ chords-on-the-phone design's §8.2, the plan's E24) to answer as caracole serve 
   reason is ``<reason>``, which the phone's replay gives as its own. ``staged``: the uploads staged after the last
   step; ``jobs``: the queue's jobs after it, ``{title, key, steps: [[label, [args]]], display, note, wanted}``,
   ``wanted`` that caracole serve wrote wanted.txt for it (its ``note`` names the line; the phone writes none).
+- each scene step's ``keys``: its answer's members in the order Python wrote them (``key_order``), ``out`` being
+  written with sorted keys.
 - ``{"fn": "limits", "out": {"<METHOD> <path>": [body, limit]}}``: each route's declared kind and limit.
 - ``{"fn": "caracole.library_page.audio_member", "out"}``: ``server.audio`` where this caracole makes sheets from
   audio files (its ``limit`` and ``too_big``), as the phone's page gives it then.
@@ -71,6 +73,20 @@ EXAMINED = ("autochords/decode.mp3", "autochords/decode-headerless.mp3", "autoch
             "autochords/decode.wav", "autochords/decode.aiff", "audio/cbr.mp3", "audio/cbr-22k.mp3",
             "audio/long-guess.mp3", "audio/short-guess.mp3", "audio/xing.mp3", "audio/tone.m4a")
 
+
+
+def key_order(value: Any, at: str = "") -> list[str]:
+    """Every member of an answer as it came, in its order, by its path ("song.id", "jobs.0.id"): the vector's ``out``
+    is written with sorted keys, so this is how the phone's answer is held to Python's member order too."""
+    if isinstance(value, dict):
+        out: list[str] = []
+        for key, member in value.items():
+            out.append(at + key)
+            out += key_order(member, f"{at}{key}.")
+        return out
+    if isinstance(value, list):
+        return [path for n, item in enumerate(value) for path in key_order(item, f"{at}{n}.")]
+    return []
 
 class Library:
     """The scenes' library, in a folder of its own: its config, its database, its songs by title."""
@@ -248,7 +264,7 @@ class Scene:
         ask = {"method": "POST", "target": self.mask(self.target("/audio/upload", **asked)), "kind": "bytes",
                "body": {"length": len(body)} if oversized is not None else base64.b64encode(data).decode("ascii"),
                "headers": headers or {}}
-        step = {"ask": ask, "status": status, "out": self.mask(out)}
+        step = {"ask": ask, "status": status, "out": self.mask(out), "keys": key_order(out)}
         if read and read[0] != "refused":
             step["audio"] = read[0]
         self.steps.append(step)
@@ -268,7 +284,7 @@ class Scene:
                 self.wanted.add(out["job"]["id"])
         step = {"ask": {"method": "POST", "target": path, "kind": "form",
                         "body": [[k, self.mask(v)] for k, v in sent], "headers": headers or {}},
-                "status": status, "out": self.mask(out)}
+                "status": status, "out": self.mask(out), "keys": key_order(out)}
         self.steps.append(step)
         return out
 
@@ -277,7 +293,8 @@ class Scene:
         sent = {k: real.get(v, v) if isinstance(v, str) else v for k, v in doc.items()} if isinstance(doc, dict) else doc
         status, out = self._ask("POST", "/audio/drop", "json", json.dumps(sent).encode(), headers or {})
         self.steps.append({"ask": {"method": "POST", "target": "/audio/drop", "kind": "json", "body": doc,
-                                   "headers": headers or {}}, "status": status, "out": self.mask(out)})
+                                   "headers": headers or {}}, "status": status, "out": self.mask(out),
+                            "keys": key_order(out)})
         return out
 
     def record(self) -> dict[str, Any]:

@@ -10,14 +10,15 @@ import io.github.danielhp95.caracole.server.http.Response
  * What the page of an audio file shared to the app shows ([AudioSharePage]): the staged upload's id ([upload], null
  * where none was staged), its [name], [format] and length ([length], "3:18"), the names its tags or its name give
  * ([artist], [title]: the guess, editable), the library's song of them ([song], its display, and [sheet]: what it
- * holds now, [SHEET_SITES], [SHEET_AUTO] or [SHEET_NONE]), whether its auto sheet has words heard on the computer
+ * holds now, [SHEET_SITES], [SHEET_AUTO] or [SHEET_NONE]; [replaces]: the audio this file replaces as its source,
+ * "purchase", "youtube", "upload" or none, the upload's answer's `song.audio`), whether its auto sheet has words heard on the computer
  * ([heard]: a transcript's, which a sheet made here can't have), and why no sheet can be made here ([why], the
  * refusal's words whole), or why there is no upload to make it of ([gone]).
  */
 internal data class AudioShareView(
     val upload: String?, val name: String, val format: String = "", val length: String = "",
     val artist: String = "", val title: String = "", val song: String? = null, val sheet: String = SHEET_NONE,
-    val heard: Boolean = false, val why: String? = null, val gone: String? = null,
+    val heard: Boolean = false, val why: String? = null, val gone: String? = null, val replaces: String? = null,
 ) {
     companion object {
         const val SHEET_SITES = "sites"
@@ -43,6 +44,13 @@ internal object AudioSharePage {
         "lyrics site has them."
 
     private const val TITLE = "Sheet from an audio file"
+
+    /** What the file replaces as its song's audio, in the computer's dialog's words (library.js's `replaces`). */
+    val REPLACES = mapOf(
+        "purchase" to "This file will replace its bought audio (the file in Music/ stays).",
+        "youtube" to "This file will replace its audio from YouTube.",
+        "upload" to "This file will replace the file you gave it before.",
+    )
 
     fun page(view: AudioShareView, csrf: String, name: LibraryName, status: Int = 200): Response {
         val html = MessagePage.html(TITLE, "<div class=\"pick-page\">\n${body(view, csrf)}</div>", name)
@@ -90,6 +98,7 @@ internal object AudioSharePage {
                 else -> "no sheet yet"
             }
             append("<p class=\"message\">In your library: <strong>${esc(song)}</strong> · ${esc(state)}.</p>\n")
+            REPLACES[v.replaces]?.let { append("<p class=\"message\">${esc(it)}</p>\n") }
         }
         if (v.heard) append("<p class=\"message\">${esc(HEARD)}</p>\n")
         append("<p class=\"confirm\"><button class=\"btn primary\" type=\"submit\">Make sheet</button></p>\n")

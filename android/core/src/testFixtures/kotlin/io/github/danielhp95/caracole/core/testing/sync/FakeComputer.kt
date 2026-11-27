@@ -373,8 +373,8 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
 
     private fun tokenOk(exchange: HttpExchange): Boolean {
         if (exchange.requestHeaders.getFirst("X-Caracole-Form-Token") == token) return true
-        json(exchange, 403, obj("error" to JsonPrimitive("This is older than the server, or not from it: read its " +
-                                                        "form token again and try again."),
+        json(exchange, 403, obj("error" to JsonPrimitive("Older than the server, or not from it. Read its form token " +
+                                                        "again and retry."),
                                 "reload" to JsonPrimitive(true)))
         return false
     }
@@ -520,7 +520,7 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
     /** peer_routes.push_index: the phone's index pages staged, and their merge queued. */
     private fun pushIndex(exchange: HttpExchange) {
         val type = exchange.requestHeaders.getFirst("Content-Type").orEmpty().substringBefore(';').trim()
-        if (type != "application/octet-stream") throw Refusal(415, "caracole reads only application/octet-stream here.")
+        if (type != "application/octet-stream") throw Refusal(415, "Only application/octet-stream here.")
         val length = exchange.requestHeaders.getFirst("Content-Length")?.toLongOrNull() ?: -1
         if (length > INDEX_MAX) throw Refusal(413, "That is too long.")
         val bytes = exchange.requestBody.readBytes()

@@ -516,7 +516,7 @@ def audio_member(cfg: Config) -> dict[str, Any]:
     (``why``, in a few words), and the most an upload takes (``limit``, ``audio_store.AUDIO_MAX``; 0 where none is
     taken), and the upload route's words for a file past it (``too_big``, ``audio_store.TOO_BIG``, which the page
     says before sending one). Where it is, the bar has its "+" and a song's card Sheet from an audio file… (library.js ``audioSheet``).
-    The phone's (LibraryPage.kt) is the same shape, saying it can't."""
+    The phone's (LibraryPage.kt) is the same shape, its ``why`` the phone's own (Phone.audioProblem)."""
     from caracole.audio_store import AUDIO_MAX, TOO_BIG
     from caracole.youtube_fetch import autochords_problem, autochords_reason
 

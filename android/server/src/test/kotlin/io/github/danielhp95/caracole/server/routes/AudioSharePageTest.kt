@@ -21,6 +21,7 @@ import io.github.danielhp95.caracole.server.jobs.JobQueue
 import io.github.danielhp95.caracole.server.page.MirrorPageData
 import io.github.danielhp95.caracole.server.page.PhonePageData
 import io.github.danielhp95.caracole.server.routes.share.AudioSharePage
+import io.github.danielhp95.caracole.server.routes.share.AudioShareView
 import io.github.danielhp95.caracole.server.testing.TestApp
 import io.github.danielhp95.caracole.server.testing.header
 import io.github.danielhp95.caracole.server.testing.text
@@ -206,5 +207,36 @@ class AudioSharePageTest {
         val html = page(app.get("/share/audio?upload=${up.id}"))
         assertTrue(AudioStore.WORDS.getValue("gone") in html, html)
         assertFalse("action=\"/audio\"" in html)
+    }
+
+    @Test fun `the page names the audio the file replaces, in the computer's dialog's words`() {
+        val app = phone()
+        val song = song("Calla Lake", "River Road")
+        app.database.writeBlocking { db -> Versions.updateSong(db, song.id, mapOf("audio_path" to "/music/river.mp3"),
+                                                                "2026-11-27T00:00:00Z") }
+        val html = page(app.get("/share/audio?upload=${shared().id}"))
+        assertTrue("<p class=\"message\">This file will replace its bought audio (the file in Music/ stays).</p>" in html,
+                   html)
+        assertEquals(listOf("purchase", "youtube", "upload"), AudioSharePage.REPLACES.keys.toList())
+        for ((audio, words) in AudioSharePage.REPLACES) {
+            val shown = AudioSharePage.page(AudioShareView("0123456789abcdef", "a.mp3", song = "A - B", replaces = audio),
+                                            TestApp.CSRF, io.github.danielhp95.caracole.server.http.LibraryName.phone(""))
+            assertTrue(words in shown.text, audio)
+        }
+    }
+
+    @Test fun `a page another site sends the phone to writes nothing`() {
+        val app = phone()
+        val up = shared()
+        val before = staged()
+        val response = app.get("/share/audio?upload=${up.id}", "sec-fetch-site" to "cross-site")
+        assertTrue(response.status == 200 || response.status == 403, response.text)
+        assertEquals(before, staged(), "nothing staged or dropped")
+        assertTrue(queue.snapshot().isEmpty(), "nothing queued")
+        // Its forms post with the form token: another site's can't (403), and nothing is dropped or queued.
+        val forged = app.post(AudioSharePage.CANCEL, listOf("upload" to up.id), "sec-fetch-site" to "cross-site",
+                              "origin" to "https://evil.example", token = null)
+        assertEquals(403, forged.status, forged.text)
+        assertEquals(before, staged())
     }
 }

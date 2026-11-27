@@ -192,6 +192,27 @@ class LocalServerTest {
         }
     }
 
+    /** A spooled body the client ends before its Content-Length is never taken whole: server.py's 400, its words. */
+    @Test fun aSpooledBodyCutShortBeforeItsLengthIsRefused() {
+        TestApp(tmp.root, { listOf(echo) }).use { test ->
+            val (server, port) = server(test)
+            server.use {
+                val cookie = "caracole-launch=${test.secret}"
+                val said = Socket(InetAddress.getByName("127.0.0.1"), port).use { socket ->
+                    socket.soTimeout = 10_000
+                    socket.getOutputStream().apply {
+                        write(spoolHead(port, "/spool", cookie, test.csrf, 1000) + ByteArray(10))
+                        flush()
+                    }
+                    socket.shutdownOutput()  // the client ends it 990 bytes early
+                    socket.getInputStream().readBytes().toString(Charsets.ISO_8859_1)
+                }
+                assertTrue(said.startsWith("HTTP/1.1 400"), said.take(300))
+                assertTrue(said.endsWith("That body is shorter than it said it was.\n"), said.takeLast(300))
+            }
+        }
+    }
+
     /** A body of [size] bytes with a request inside it, which must never be read as one. */
     private fun smuggling(port: Int, cookie: String, size: Int): ByteArray {
         val smuggled = "\r\n\r\nGET /echo/smuggled HTTP/1.1\r\nHost: 127.0.0.1:$port\r\nCookie: $cookie\r\n\r\n"

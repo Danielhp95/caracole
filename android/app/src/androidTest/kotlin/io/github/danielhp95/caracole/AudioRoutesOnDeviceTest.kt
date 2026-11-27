@@ -8,6 +8,8 @@ import io.github.danielhp95.caracole.core.models.ModelFiles
 import io.github.danielhp95.caracole.server.Phone
 import io.github.danielhp95.caracole.server.http.Security
 import io.github.danielhp95.caracole.server.jobs.Job
+import io.github.danielhp95.caracole.server.jobs.JobSpec
+import kotlinx.coroutines.CompletableDeferred
 import io.github.danielhp95.caracole.server.routes.AudioRoutes
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -35,11 +37,12 @@ import java.util.Base64
  *   committed fixtures, and tiny tagged files of every format) as the computer's store does: each length to the bit,
  *   each tag the computer read Android's too (MediaMetadataRetriever's) but a WAV's and an AIFF's, whose ID3 chunk
  *   Android doesn't read, the differences reported;
- * - with the chord models not installed, an upload is refused in the route's words with the phone's reason, its body
+ * - with the chord models removed (each test sets the models' state it needs), an upload is refused in the route's words with the phone's reason, its body
  *   never staged;
  * - with them installed (`-e models`, as ChordsEndToEndTest installs them; skipped without), the library page says
  *   `server.audio.ok`, a committed clip is uploaded over HTTP (its guess and length the store's), Make sheet queues
- *   `caracole audio --upload=ID` for it, and a drop of it is refused while that job waits.
+ *   `caracole audio --upload=ID` for it (a job held ahead of it, so it surely waits), and a drop of it is refused
+ *   409 while it waits.
  */
 @RunWith(AndroidJUnit4::class)
 class AudioRoutesOnDeviceTest {
@@ -84,8 +87,9 @@ class AudioRoutesOnDeviceTest {
 
     @Test fun anUploadIsRefusedWithThePhonesReasonWhereItMakesNoSheet() {
         val phone = Caracole.phone(context)
+        assertNull(phone.models.remove())  // each test sets the models' state it needs: none here
         val why = phone.audioProblem()
-        Assume.assumeTrue("the chord models are installed here", why != null)
+        assertTrue("a phone with no models makes no sheet", why != null)
         val (status, out) = upload(phone, asset("fixtures/autochords/decode.flac"), "decode.flac")
         assertEquals(409, status)
         assertEquals("${AudioRoutes.NOT_HERE}: $why.", out.getString("error"))
@@ -107,16 +111,26 @@ class AudioRoutesOnDeviceTest {
         assertEquals(20.035918367346937, up.getDouble("duration"), 0.0)  // the computer's store's (examine records)
         assertEquals("Calla Lake", up.getJSONObject("guess").getString("artist"))
         val id = up.getString("upload")
-        val (made, job) = post(phone, "/audio", "upload" to id, "artist" to "Calla Lake", "title" to "River Road")
-        assertEquals(job.toString(), 200, made)
-        val queued = phone.queue.snapshot().first { it.id == job.getJSONObject("job").getInt("id") }
-        assertEquals(listOf("audio", "--progress", "--upload=$id", "--song=Calla Lake - River Road"),
-                     queued.steps.single().args)
-        if (queued.state == Job.QUEUED || queued.state == Job.RUNNING) {
+        // A job of the queue's ahead of the sheet, held until the drop is asked: the sheet surely waits, its upload
+        // staged and named.
+        val hold = CompletableDeferred<Unit>()
+        val ahead = phone.queue.submit(JobSpec("Hold the queue", "test:hold", "test", emptyList(),
+                                               run = { hold.await() })).first
+        try {
+            val (made, job) = post(phone, "/audio", "upload" to id, "artist" to "Calla Lake", "title" to "River Road")
+            assertEquals(job.toString(), 200, made)
+            val queued = phone.queue.snapshot().first { it.id == job.getJSONObject("job").getInt("id") }
+            assertEquals(listOf("audio", "--progress", "--upload=$id", "--song=Calla Lake - River Road"),
+                         queued.steps.single().args)
+            assertEquals(Job.QUEUED, phone.queue.job(queued.id)!!.state)
             val (dropped, said) = json(phone, "/audio/drop", JSONObject().put("upload", id).toString())
-            assertTrue(said.toString(), dropped == 409 || dropped == 404)  // 404: the job kept it already
+            assertEquals(said.toString(), 409, dropped)
+            hold.complete(Unit)
+            runBlocking { withTimeout(300_000) { phone.queue.await(queued.id) } }
+        } finally {
+            hold.complete(Unit)
+            runBlocking { withTimeout(60_000) { phone.queue.await(ahead.id) } }
         }
-        runBlocking { withTimeout(300_000) { phone.queue.await(queued.id) } }
     }
 
     /** The phone with the chord models device-test.sh pushed installed by its own job (ChordsEndToEndTest's). */
