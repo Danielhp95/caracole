@@ -2882,13 +2882,18 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     `AcrossProcessesTest` (`device-test.sh --youtube`), `GlueRefusalTest` (JVM): the downloads through the gate, every refusal, the secret
     in no logcat line, a stop of every kind that leaves no process of the uid but the main one.
     The debug build's YouTube bench (android/README.md, "The YouTube bench"): `YouTubeBenchActivity` in `:ytbench`
-    (app/src/debug, never Python there), Settings' row by class name; its session `BenchRun` drives `YtDlpClient`
-    itself, not core's runner (stamped lines, process timings, PSS, an observing gate, loopback targets), and holds
-    the terms on the runner's records (`DbLedger`, through the main process's `YouTubeBenchLedger`: 6 runs in 24 h by
-    kv `ytbench:runs` and `events`, the pause, a block's `events` row and strike and the session's stop, a cooldown
-    refused, the provider off); its report `BenchReport.of`/`summary` (BenchReportTest, YouTubeBenchTest); an
-    observing gate only for `:ytbench` and never under loopback (GateService `OPEN_OBSERVING`), `-v` under the
-    network only by the request's `verbose` leave.
+    (app/src/debug, never Python there), Settings' row by class name, one session a process, started by a tap alone on
+    the network (an intent's `go` under loopback only, never from Recents); its session `BenchRun` drives
+    `YtDlpClient` itself, not core's runner (stamped lines, process timings, PSS, an observing gate, loopback
+    targets), and holds the terms on the runner's records through the main process's `YouTubeBenchLedger`
+    (`DbLedger`): each run RESERVED before its gate opens (one write: provider on, no cooldown, under 6 in 24 h by kv
+    `ytbench:runs` and `events`, its stamp kept; given back only for a run that never started), its `events` row
+    written in a `finally`, Pace.pauseAfterLastRequest for the first pause, a block's strike and the session's stop,
+    the gate's `stopped` bucket an error; the kill check on a gate that reaches 127.0.0.1 alone (GateService
+    `OPEN_LOOPBACK`) on every phone, none of the six spent; its report `BenchReport.of`/`summary` (BenchReportTest,
+    YouTubeBenchTest); an observing gate only for an ask naming `:ytbench` and never under loopback (GateService
+    `OPEN_OBSERVING`; HostGate's OBSERVE reaches no address that isn't public), `-v` under the network only by the
+    request's `verbose` leave.
 - Milestones 1–6 are built (docs/android_port.md's status, "Built: milestones 4 to 6"), each route a module of its
   own:
   - `server/routes/Stubs.kt` keeps YouTube's routes and `GET /lookup` alone, answering "…: not on the phone yet."

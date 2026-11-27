@@ -1,6 +1,7 @@
 package io.github.danielhp95.caracole
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.os.SystemClock
@@ -28,6 +29,7 @@ import io.github.danielhp95.caracole.youtube.utc
 import java.io.File
 import java.security.SecureRandom
 import java.time.Instant
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 
@@ -38,8 +40,12 @@ import kotlinx.serialization.json.JsonObject
  * queries, Start (the gate enforcing YouTube's hosts), Start, observing every host (the button alone: never an
  * intent), and what the runs say; then the report, `getExternalFilesDir("ytbench")/caracole-ytbench-<UTC>.json`.
  *
- * By intent (the owner's word over adb): `queries` (lines) and `go`; a `gate` of `observe` from an intent runs
- * `enforce`, and says so. What it shows and writes is what came back from the client (redacted), never the argv.
+ * On the real network a session starts by a tap on Start alone: an intent's `go` is honoured under the tests'
+ * loopback only ([BenchRun.startsByIntent]), consumed as it is read (so a recreated screen starts nothing), and
+ * passed over on a relaunch from Recents; an intent may still fill the queries (`queries`), and a `gate` of `observe`
+ * is said and passed over. One session a process ([Bench]): a second Start while one runs is refused in words, and a
+ * screen made again (a rotation, a new start) shows the running session's lines. What it shows and writes is what
+ * came back from the client (redacted), never the argv.
  */
 class YouTubeBenchActivity : Activity() {
     private lateinit var queries: EditText
@@ -48,8 +54,6 @@ class YouTubeBenchActivity : Activity() {
     private lateinit var scroll: ScrollView
     private lateinit var start: Button
     private lateinit var observe: Button
-    private val lines = mutableListOf<String>()
-    @Volatile private var running = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -77,7 +81,14 @@ class YouTubeBenchActivity : Activity() {
             view.setPadding(sys.left, sys.top, sys.right, sys.bottom)
             WindowInsetsCompat.CONSUMED
         }
+        Bench.screen = this
+        show()
         if (savedInstanceState == null) asked(intent) else showLeft()
+    }
+
+    override fun onDestroy() {
+        if (Bench.screen === this) Bench.screen = null
+        super.onDestroy()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -86,121 +97,163 @@ class YouTubeBenchActivity : Activity() {
         asked(intent)
     }
 
-    /** An intent's extras: its queries in the box, a `gate` of `observe` said and passed over, `go` a start
-     * (enforcing). */
+    /** An intent's extras: its queries in the box; a `gate` of `observe` said and passed over; `go` consumed, and a
+     * start only where [BenchRun.startsByIntent] says (the tests' loopback, not from Recents). */
     private fun asked(intent: Intent) {
         intent.getStringExtra(QUERIES)?.let { queries.setText(it.replace("\\n", "\n")) }
-        if (intent.getStringExtra(GATE) == BenchRun.OBSERVE) say(INTENT_NEVER_OBSERVES)
-        if (intent.getBooleanExtra(GO, false)) begin(observing = false) else showLeft()
+        if (intent.getStringExtra(GATE) == BenchRun.OBSERVE) Bench.say(INTENT_NEVER_OBSERVES)
+        val go = intent.getBooleanExtra(GO, false)
+        intent.removeExtra(GO)
+        val fromHistory = intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0
+        if (!go) return showLeft()
+        val app = applicationContext
+        Thread {
+            val mode = try {
+                GateService.Client(app).use { it.mode() }
+            } catch (e: Exception) {
+                null
+            }
+            runOnUiThread {
+                if (mode != null && BenchRun.startsByIntent(mode, true, fromHistory)) begin(observing = false)
+                else {
+                    Bench.say(if (fromHistory) GO_FROM_HISTORY else GO_NOT_HERE)
+                    showLeft()
+                }
+            }
+        }.start()
     }
 
-    private fun showLeft() = Thread {
-        val words = try {
-            YouTubeBenchLedger.Client(this).use { ledger ->
-                val s = ledger.state()
-                "${maxOf(s.budget - s.runs, 0)} of ${s.budget} runs left in the last 24 hours"
+    private fun showLeft() {
+        val app = applicationContext
+        Thread {
+            val words = try {
+                YouTubeBenchLedger.Client(app).use { ledger ->
+                    val s = ledger.state()
+                    "${maxOf(s.budget - s.runs, 0)} of ${s.budget} runs left in the last 24 hours"
+                }
+            } catch (e: Exception) {
+                "the phone's record of runs: ${e.message}"
             }
-        } catch (e: Exception) {
-            "the phone's record of runs: ${e.message}"
-        }
-        runOnUiThread { left.text = words }
-    }.start()
+            runOnUiThread { left.text = words }
+        }.start()
+    }
 
     private fun begin(observing: Boolean) {
-        if (running) return
-        running = true
-        start.isEnabled = false
-        observe.isEnabled = false
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        if (!Bench.running.compareAndSet(false, true)) {
+            Bench.say(ALREADY)
+            return
+        }
+        show()
         val asked = queries.text.toString().lines()
-        Thread({ session(asked, observing) }, "ytbench-session").start()
+        val app = applicationContext
+        Thread({ Bench.session(app, asked, observing) }, "ytbench-session").start()
     }
 
-    private fun session(asked: List<String>, observing: Boolean) {
-        val gates = GateService.Client(this)
-        val ledger = YouTubeBenchLedger.Client(this)
-        try {
-            val mode = gates.mode()
-            val client = YtDlpClient(this, mode)
-            val bench = BenchRun(runner(client), gates(gates, mode), ledger, YouTubeBenchProbe(this), clock(),
-                                 BenchRun.Folders(File(cacheDir, "ytbench")), Qjs.path(this).path, ::say)
-            val session = try {
-                bench.session(asked, observing)
-            } catch (e: BenchRun.Refused) {
-                say("refused: ${e.words}")
-                return
+    /** The process's session as it stands: its lines, the buttons off and the screen kept on while it runs. */
+    internal fun show() {
+        val running = Bench.running.get()
+        start.isEnabled = !running
+        observe.isEnabled = !running
+        if (running) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        log.text = Bench.text()
+        scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
+        if (!running) showLeft()
+    }
+
+    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+
+    /** The bench's one session of this process, and its lines, whatever screen shows them. */
+    internal object Bench {
+        val running = AtomicBoolean(false)
+        private val lines = mutableListOf<String>()
+        @Volatile var screen: YouTubeBenchActivity? = null
+
+        fun text(): String = synchronized(lines) { lines.joinToString("\n") }
+
+        fun say(line: String) {
+            synchronized(lines) { lines += BenchReport.scrub(line) }
+            redraw()
+        }
+
+        private fun redraw() {
+            val shown = screen ?: return
+            shown.runOnUiThread { if (!shown.isDestroyed) shown.show() }
+        }
+
+        fun session(app: Context, asked: List<String>, observing: Boolean) {
+            val gates = GateService.Client(app)
+            val ledger = YouTubeBenchLedger.Client(app)
+            try {
+                val mode = gates.mode()
+                val client = YtDlpClient(app, mode)
+                val loopback = YtDlpClient(app, HostGate.Mode.LOOPBACK)
+                val bench = BenchRun(runner(client), runner(loopback), gates(gates, mode), ledger, YouTubeBenchProbe(app),
+                                     clock(), BenchRun.Folders(File(app.cacheDir, FOLDER)), Qjs.path(app).path, ::say)
+                val session = try {
+                    bench.session(asked, observing)
+                } catch (e: BenchRun.Refused) {
+                    say("refused: ${e.words}")
+                    return
+                } finally {
+                    client.close()
+                    loopback.close()
+                }
+                val probe = YouTubeBenchProbe(app)
+                val report = BenchReport.of(probe.device(), probe.network(), session.gate, session.mode.name,
+                    utc(session.startedAt), session.idle, session.budgetBefore to session.budgetAfter,
+                    session.budgetOf, session.runs, session.killCheck, session.firstStart, session.stopped)
+                val name = "caracole-ytbench-${utc(session.startedAt).replace(":", "")}.json"
+                val file = File(app.getExternalFilesDir(FOLDER), name)
+                file.writeText(PRETTY.encodeToString(JsonObject.serializer(), report) + "\n")
+                for (line in BenchReport.said(report)) say(line)
+                say("$DONE ${file.path}")
+            } catch (e: Exception) {
+                say("the bench failed: ${BenchReport.scrub(e.message ?: e.javaClass.simpleName)}")
             } finally {
-                client.close()
+                ledger.close()
+                gates.close()
+                running.set(false)
+                redraw()
             }
-            val probe = YouTubeBenchProbe(this)
-            val report = BenchReport.of(probe.device(), probe.network(), session.gate, session.mode.name,
-                utc(session.startedAt), session.idle, session.budgetBefore to session.budgetAfter,
-                session.budgetOf, session.runs, session.killCheck, session.firstStart, session.stopped)
-            val name = "caracole-ytbench-${utc(session.startedAt).replace(":", "")}.json"
-            val file = File(getExternalFilesDir(FOLDER), name)
-            file.writeText(PRETTY.encodeToString(JsonObject.serializer(), report) + "\n")
-            for (line in BenchReport.said(report)) say(line)
-            say("$DONE ${file.path}")
-        } catch (e: Exception) {
-            say("the bench failed: ${BenchReport.scrub(e.message ?: e.javaClass.simpleName)}")
-        } finally {
-            ledger.close()
-            gates.close()
-            running = false
-            runOnUiThread {
-                start.isEnabled = true
-                observe.isEnabled = true
-                window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            }
-            showLeft()
-        }
-    }
-
-    private fun runner(client: YtDlpClient) = object : BenchRun.Runner {
-        override fun run(argv: List<String>, folders: RunFolders, timeoutS: Double, verbose: Boolean): BenchRan {
-            val stamped = mutableListOf<Stamped>()
-            val ran = client.run(argv, timeoutS, { ms, line -> synchronized(stamped) { stamped += Stamped(ms, line) } },
-                                 { say("waiting for another run of the app's to end…") }, folders, verbose)
-            return BenchRan(ran, synchronized(stamped) { stamped.toList() })
         }
 
-        override fun cancel() = client.cancel()
-    }
+        private fun runner(client: YtDlpClient) = object : BenchRun.Runner {
+            override fun run(argv: List<String>, folders: RunFolders, timeoutS: Double, verbose: Boolean): BenchRan {
+                val stamped = mutableListOf<Stamped>()
+                val ran = client.run(argv, timeoutS, { ms, line -> synchronized(stamped) { stamped += Stamped(ms, line) } },
+                                     { say("waiting for another run of the app's to end…") }, folders, verbose)
+                return BenchRan(ran, synchronized(stamped) { stamped.toList() })
+            }
 
-    private fun gates(client: GateService.Client, mode: HostGate.Mode) = object : BenchRun.Gates {
-        override val mode = mode
+            override fun cancel() = client.cancel()
+        }
 
-        override fun open(observe: Boolean): BenchRun.Gate {
-            val gate = if (observe) client.openObserving() else client.open()
-            return object : BenchRun.Gate {
+        private fun gates(client: GateService.Client, mode: HostGate.Mode) = object : BenchRun.Gates {
+            override val mode = mode
+
+            override fun open(observe: Boolean) = wrap(if (observe) client.openObserving() else client.open())
+
+            override fun openLoopback() = wrap(client.openLoopback())
+
+            private fun wrap(gate: GateService.Gate) = object : BenchRun.Gate {
                 override val proxyArg = gate.proxyArg
                 override fun log() = gate.log()
                 override fun close() = gate.close()
             }
         }
-    }
 
-    private fun clock(): BenchRun.Clock {
-        val random = SecureRandom()
-        return BenchRun.Clock(
-            now = { Instant.now() },
-            wall = { System.currentTimeMillis() / 1000.0 },
-            monotonic = { SystemClock.elapsedRealtime() / 1000.0 },
-            sleep = { s -> SystemClock.sleep((s * 1000).toLong()) },
-            draws = Draws { low, high -> low + (high - low) * random.nextDouble() },
-        )
-    }
-
-    private fun say(line: String) {
-        val clean = BenchReport.scrub(line)
-        synchronized(lines) { lines += clean }
-        runOnUiThread {
-            log.text = synchronized(lines) { lines.joinToString("\n") }
-            scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
+        private fun clock(): BenchRun.Clock {
+            val random = SecureRandom()
+            return BenchRun.Clock(
+                now = { Instant.now() },
+                wall = { System.currentTimeMillis() / 1000.0 },
+                monotonic = { SystemClock.elapsedRealtime() / 1000.0 },
+                sleep = { s -> SystemClock.sleep((s * 1000).toLong()) },
+                draws = Draws { low, high -> low + (high - low) * random.nextDouble() },
+            )
         }
     }
-
-    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
     companion object {
         const val QUERIES = "queries"
@@ -210,7 +263,10 @@ class YouTubeBenchActivity : Activity() {
         const val START = "Start"
         const val START_OBSERVING = "Start, observing every host"
         const val DONE = "report:"
+        const val ALREADY = "A session is running already: one at a time."
         const val INTENT_NEVER_OBSERVES = "An intent never observes every host: this session enforces YouTube's."
+        const val GO_NOT_HERE = "An intent starts no session on the real network: press Start."
+        const val GO_FROM_HISTORY = "A relaunch from Recents starts no session: press Start."
         private val PRETTY = Json { prettyPrint = true }
     }
 }

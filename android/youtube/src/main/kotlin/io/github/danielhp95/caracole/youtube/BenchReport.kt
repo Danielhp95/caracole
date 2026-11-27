@@ -59,7 +59,8 @@ data class BenchIdle(val servedBefore: Long, val servedAfter: Long, val jobsBefo
  * `Running QuickJS`); yt-dlp's own sleeps, its `Sleeping N seconds` lines; the clients, its `Downloading <client>
  * player API JSON` lines; the pins, its `-v` header (`[debug] yt-dlp version`, `[debug] Python`, `JS runtimes:`); and
  * each run's `ERROR:` and `WARNING:` lines, kept whole (the first real sessions confirm Y1.1's provisional patterns
- * by them). No `[debug]` line is kept, and every text is scrubbed of a gate-shaped address ([HostGate.PROXY_PATTERN])
+ * by them). These patterns are typed here, not exported to youtube.json: they are the debug bench's own reading of
+ * what it measures, no rule of caracole's for a run. No `[debug]` line is kept, and every text is scrubbed of a gate-shaped address ([HostGate.PROXY_PATTERN])
  * as a second guard: the client's redaction is the first.
  */
 object BenchReport {
@@ -102,7 +103,9 @@ object BenchReport {
         return obj("ytdlp" to first(YTDLP), "python" to first(PYTHON), "js_runtimes" to first(RUNTIMES))
     }
 
-    /** Requests the gates saw after the first blocked run: the connects of every run after it. */
+    /** Requests the gates saw after the first blocked run: the connects of every run after it. 0 by construction (a
+     * session stops at its block): it says the bench sent nothing after one, never how YouTube treats the phone
+     * afterwards. */
     fun afterBlockRequests(runs: List<BenchRunRecord>): Int {
         val blocked = runs.indexOfFirst { it.outcome == BLOCKED }
         if (blocked < 0) return 0

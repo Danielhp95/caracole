@@ -168,7 +168,7 @@ class YtDlpServiceTest {
     }
 
     /** A request let go of before it began runs nothing: the service asks whether it is still bound before Python,
-     * the check and the run, and ends. */
+     * the check and the run, and ends; or, unbound before its handler read the request, it ends with no answer. */
     @Test
     fun aRequestLetGoOfRunsNothing() {
         Env.err(context).delete()
@@ -179,7 +179,8 @@ class YtDlpServiceTest {
                 putLong(YtDlpService.Wire.DELAY_STARTED, 2_000)
             }
             raw.unbind()
-            assertNotNull("STARTED never came", raw.next(YtDlpService.Wire.STARTED, 20))
+            // Either order holds: the service took the request (STARTED, then it ends, still let go of) or it ended on
+            // the unbind before its handler read it (no answer at all). What matters: no READY, no yt-dlp, no process.
             assertEquals(emptyMap<Int, String>(), Runs.settle(10_000))
             assertEquals(null, raw.next(YtDlpService.Wire.READY, 1))
         }

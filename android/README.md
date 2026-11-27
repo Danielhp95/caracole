@@ -1017,40 +1017,44 @@ QuickJS, how much memory and how many bytes a song costs, which hosts it asks. T
 measures it, run by hand, a few songs at a time. No test runs on your phone, and no test reaches YouTube: on the
 emulator the bench reaches a loopback clip alone (`YouTubeBenchTest`, `device-test.sh --youtube`).
 
-It keeps the owner's terms by itself, on the phone's own records: at most 6 yt-dlp runs in any 24 hours, every run of
-the phone's counted (kv `ytbench:runs` and the `events` rows of provider `youtube`, the larger: a session that would
-pass them is refused, and says how many runs are left); the computer's pause between runs (3.75–7.5 s, and after the
-phone's last run, kv `http:last_request:youtube`); one run at a time (the client's lock, across the app's
-processes); and a block honoured (recorded as the runner records one, the session stops, and none starts until the
-cooldown ends). YouTube turned off, no session. Each song is a search (`ytsearch8:`), the computer's `choose`, and a
-download, or a download alone for a video id; yt-dlp's cache is emptied as a session starts, so the first download
-solves the player cold and the others warm. Runs add `-v` (the service's leave for the bench under the network): what
-the screen and the report keep came back from the client, the gate's secret taken out, and no `[debug]` line.
+It keeps the owner's terms by itself, on the phone's own records. At most 6 yt-dlp runs in any 24 hours, every run of
+the phone's counted (kv `ytbench:runs` and the `events` rows of provider `youtube`, the larger): each run reserves its
+slot in the main process before its gate opens, so it counts whatever ends it, and only a run that never started gives
+its slot back; a session that would pass the six is refused and says how many runs are left; a clock set back only
+counts more runs, never fewer. The computer's pause between runs (3.75–7.5 s, and after the phone's last run, kv
+`http:last_request:youtube`). One run at a time (the client's lock, across the app's processes) and one session at a
+time. A block honoured: recorded as the runner records one, the session stops, and none starts until the cooldown
+ends. YouTube turned off, no session. Each song is a search (`ytsearch8:`), the computer's `choose`, and a download,
+or a download alone for a video id; yt-dlp's cache is emptied as a session starts, so the first download solves the
+player cold and the others warm, and each download is deleted once measured. Runs add `-v` (the service's leave for
+the bench under the network): what the screen and the report keep came back from the client, the gate's secret taken
+out, and no `[debug]` line.
 
 The screen (`YouTubeBenchActivity`) runs in a process of its own, `:ytbench`, which never starts Python: its runs are
-`:youtube`'s, its gates and its record of runs the main process's (`GateService`, `YouTubeBenchLedger`). Start
-enforces YouTube's hosts; Start, observing every host logs every host the run asks (`jnn-pa.googleapis.com` still
-refused), and is that button's alone: an intent never observes, and the main process opens such a gate for
-`:ytbench` alone and never under the tests' network. The kill check (a trickled loopback download stopped, no
-`:youtube` or qjs left 2 s after) runs on the emulator alone: your phone's gate never reaches a loopback clip, so a
-real session's report says `kill_check.run: false`, and KillTest's measure stands for it.
+`:youtube`'s, its gates and its record of runs the main process's (`GateService`, `YouTubeBenchLedger`). On your phone
+a session starts by a tap alone. Start enforces YouTube's hosts; Start, observing every host logs every host the run
+asks but reaches no address that isn't public (`jnn-pa.googleapis.com` still refused), and is that button's alone. The
+kill check runs at the end of every session, on your phone too, and never leaves it: a trickled download from a small
+server inside the bench, through a gate that can reach 127.0.0.1 alone, stopped 2 s in, then no `:youtube` or qjs
+process may be left and the next run must work. It spends none of the six.
 
-1. **Install the debug build**: `android/scripts/phone-install.sh` (above), the app otherwise idle (no sync, no
-   library page open: the report's `idle` says whether it was).
+What three songs can't show: a success rate, how the timings spread across player versions, and what YouTube does
+after days of a phone asking. `after_block_requests` is 0 by construction (a session stops at a block): it says the
+bench sent nothing after one, not how YouTube treats the phone afterwards.
+
+1. **Install the debug build**: `android/scripts/phone-install.sh` (above), and leave the app otherwise idle (no sync,
+   no library page open: the report's `idle` says whether it was).
 2. **Open the bench**: Debug caracole › Settings › YouTube bench. It says how many runs are left in the last 24 hours.
-3. **Type up to three songs**, a line each, "Artist - Title" or a YouTube video id. Three songs are six runs, the
-   day's whole budget: the next session goes on another day.
-4. **Start**: Start on mobile data (enforce), or Start, observing every host on Wi-Fi. Or, at your word, over adb:
-
-       adb -s SERIAL shell am start -n io.github.danielhp95.caracole.debug/io.github.danielhp95.caracole.YouTubeBenchActivity \
-           --es queries "Artist - Title\nOther - Song\nThird - One" --ez go true
-
+3. **Type or paste up to three songs**, a line each: "Artist - Title" (AC/DC's slash is fine) or a YouTube video id.
+   Three songs are six runs, the day's whole budget: the next session goes on another day.
+4. **Tap Start** on mobile data (enforce), or **Start, observing every host** on Wi-Fi. Keep the screen open until it
+   says `report:`; a session started again while one runs is refused.
 5. **Bring the report back**: `caracole-ytbench-<UTC>.json` (§4.3 of the design: the device and the app, the pins as
    the running code reports them, the network's kind, `idle`, the day's runs before and after, each run's timings,
    challenge, sleeps and pause, clients, outcome, ERROR and WARNING lines, hosts and bytes, PSS, and a download's file
-   and what MediaCodec decoded of it; `summary`, each gate's numbers):
+   and what MediaCodec decoded of it; the kill check; `summary`, each gate's numbers). The folder whole:
 
-       adb -s SERIAL pull /sdcard/Android/data/io.github.danielhp95.caracole.debug/files/ytbench/
+       adb -s SERIAL pull /sdcard/Android/data/io.github.danielhp95.caracole.debug/files/ytbench/ .
 
    It names your songs as typed, nothing else of yours.
 

@@ -724,14 +724,36 @@ class HostGateTest {
         assertEquals(403, status(ask(opened, connectLine("www.youtube.com:443", auth(opened)))))
     }
 
+    /** OBSERVE logs every host but reaches no address that isn't public, as YOUTUBE: a name that resolves to one, or
+     * an IP literal of one (loopback, site-local, link-local), is refused and logged; the LAN and another app's local
+     * service stay out of an observed session's reach, a redirect's too. */
     @Test
-    fun observeConnectsToALocalAddressAsResolved() {
+    fun observeRefusesANameThatResolvesToALocalAddressAndLogsIt() {
         val server = upstream(0, ByteArray(0))
         val ten = InetAddress.getByAddress(byteArrayOf(10, 0, 0, 1))
         val net = ToLoopback(server.port, ten)
-        val (_, opened) = gate(HostGate.Mode.NETWORK, HostGate.HostRule.OBSERVE, net)
-        assertEquals(200, status(ask(opened, connectLine("example.com:443", auth(opened)))))
-        assertEquals(listOf(InetSocketAddress(ten, 443)), net.dialled.toList())
+        val (gate, opened) = gate(HostGate.Mode.NETWORK, HostGate.HostRule.OBSERVE, net)
+        assertEquals(403, status(ask(opened, connectLine("example.com:443", auth(opened)))))
+        assertEquals(emptyList(), net.dialled.toList())
+        assertEquals(1, gate.log()["example.com"]?.refused, gate.log().toString())
+    }
+
+    @Test
+    fun observeRefusesAnIpLiteralThatIsntPublicAndTakesAPublicOne() {
+        val server = upstream(0, ByteArray(0))
+        val net = ToLoopback(server.port)
+        val (gate, opened) = gate(HostGate.Mode.NETWORK, HostGate.HostRule.OBSERVE, net)
+        for (target in listOf("127.0.0.1:80", "10.0.2.2:80", "192.168.1.1:443", "169.254.1.1:80", "[::1]:80",
+                              "[fe80::1]:80")) {
+            assertEquals(403, status(ask(opened, connectLine(target, auth(opened)))), target)
+        }
+        assertEquals(emptyList(), net.dialled.toList())
+        assertEquals(6, gate.log().values.sumOf { it.refused }, gate.log().toString())
+        assertEquals(200, status(ask(opened, connectLine("203.0.113.7:443", auth(opened)))))
+        assertEquals(1, net.dialled.size)
+        // YOUTUBE takes no literal at all, as before.
+        val (_, youtube) = gate(HostGate.Mode.NETWORK, HostGate.HostRule.YOUTUBE, net)
+        assertEquals(403, status(ask(youtube, connectLine("203.0.113.7:443", auth(youtube)))))
     }
 
     @Test

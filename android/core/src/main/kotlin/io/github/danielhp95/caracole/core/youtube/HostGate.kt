@@ -63,8 +63,9 @@ class HostGate(
 
     /**
      * Which hosts a [Mode.NETWORK] gate allows: [YOUTUBE] (the design's §3.3 list, CONNECT on 443 alone) or [OBSERVE]
-     * (the bench's, set by a button press alone: every host and port, CONNECT and GET, logged). Names are compared
-     * lowercased as ASCII with no trailing dot; an IP literal never matches a name. The names, the suffixes, the port,
+     * (the bench's, set by a button press alone: every host and port, CONNECT and GET, logged, but no address that
+     * isn't public, a name's or a literal's). Names are compared lowercased as ASCII with no trailing dot; an IP literal
+     * never matches a name. The names, the suffixes, the port,
      * the hosts reported apart and those refused by name are youtube.py's PHONE_GATE (youtube.json's `gate`).
      */
     class HostRule private constructor(
@@ -445,7 +446,9 @@ class HostGate(
             HostRule.refusedByName(at.key) -> WHY_BY_NAME
             mode == Mode.LOOPBACK ->
                 if (at.address != null && LOOPBACK_HOSTS.any { it.contentEquals(at.address) }) null else WHY_NOT_LOOPBACK
-            at.address != null -> if (rule === HostRule.OBSERVE) null else WHY_LITERAL
+            at.address != null ->
+                if (rule !== HostRule.OBSERVE) WHY_LITERAL
+                else if (isPublic(InetAddress.getByAddress(at.address))) null else WHY_NOT_PUBLIC
             else -> if (rule.allows(at.key, at.port, connect)) null else WHY_OFF_RULE
         }
         if (why != null) throw Refusal(403, at.key, why)
@@ -453,9 +456,10 @@ class HostGate(
     }
 
     /**
-     * The upstream, connected: an IP literal as given, a name through [resolver] (in [Mode.NETWORK] alone). Under any
-     * rule but OBSERVE a name that resolves to an address that isn't public ([isPublic]) is refused, every address
-     * checked; the socket is connected to the very address checked, never looked up again.
+     * The upstream, connected: an IP literal as given, a name through [resolver] (in [Mode.NETWORK] alone). Under
+     * every rule, OBSERVE's too, a name that resolves to an address that isn't public ([isPublic]) is refused, every
+     * address checked (an observed session reaches no LAN or local service either); the socket is connected to the very
+     * address checked, never looked up again.
      */
     private fun open(at: Authority): Socket {
         val addresses = if (at.address != null) {
@@ -467,12 +471,10 @@ class HostGate(
             } catch (_: IOException) {
                 throw Refusal(502, null)
             }
-            if (rule !== HostRule.OBSERVE) {
-                for (address in resolved) {
-                    val ip = address.address
-                    if (ip == null || !isPublic(ip)) {
-                        throw Refusal(403, at.key, "resolves to ${ip?.hostAddress ?: "an unresolved address"}, not a public address")
-                    }
+            for (address in resolved) {
+                val ip = address.address
+                if (ip == null || !isPublic(ip)) {
+                    throw Refusal(403, at.key, "resolves to ${ip?.hostAddress ?: "an unresolved address"}, not a public address")
                 }
             }
             resolved
@@ -636,6 +638,7 @@ class HostGate(
         const val WHY_OFF_RULE = "off the rule"
         const val WHY_NOT_LOOPBACK = "not 127.0.0.1 or 10.0.2.2"
         const val WHY_LITERAL = "an IP literal"
+        const val WHY_NOT_PUBLIC = "an IP literal that isn't a public address"
         const val WHY_MALFORMED = "malformed"
         const val WHY_METHOD = "not CONNECT or GET"
 

@@ -26,8 +26,10 @@ import java.util.concurrent.atomic.AtomicLong
 /**
  * The YouTube bench's record of runs, in the app's main process (no `android:process`), where the phone's database,
  * server and queue are: the bench's `:ytbench` asks it [STATE] (DbLedger's, with the server's requests served and the
- * queue's jobs for `idle`) and [RECORD] (one run's `events` row, kv `http:last_request:youtube` and `ytbench:runs`,
- * a block's strike), each in one read or write of the phone's database. The debug build's alone. Nothing it is asked
+ * queue's jobs for `idle`), [RESERVE] (a run's slot of the day's six, before its gate opens: the provider on, no
+ * cooldown, fewer runs than the budget, its stamp kept, and the first run's pause), [RELEASE] (a run that never
+ * started gives its slot back) and [RECORD] (a sent run's `events` row, kv `http:last_request:youtube`, a block's
+ * strike), each in one read or write of the phone's database. The debug build's alone. Nothing it is asked
  * throws on its thread (the main process's server and queue would end with it): a failure is said in the answer.
  */
 class YouTubeBenchLedger : Service() {
@@ -65,6 +67,16 @@ class YouTubeBenchLedger : Service() {
                     answer.putLong("jobs", state.jobs)
                     answer.putBoolean("running", state.running)
                 }
+                RESERVE -> {
+                    val r = database.writeBlocking { db ->
+                        DbLedger.reserve(db, Instant.now(), data.getBoolean("first"), draws,
+                                         { System.currentTimeMillis() / 1000.0 })
+                    }
+                    r.stamp?.let { answer.putString("stamp", it) }
+                    r.refused?.let { answer.putString("refused", it) }
+                    answer.putDouble("pause", r.pause)
+                }
+                RELEASE -> database.writeBlocking { db -> DbLedger.release(db, data.getString("stamp")!!) }
                 RECORD -> {
                     val entry = BenchRun.Entry(data.getString("runId")!!, data.getString("target")!!,
                         data.getInt("status", -1).takeIf { it >= 0 }, data.getString("decision")!!,
@@ -116,6 +128,15 @@ class YouTubeBenchLedger : Service() {
                 a.getBoolean("running"))
         }
 
+        override fun reserve(first: Boolean): BenchRun.Reservation {
+            val a = ask(RESERVE, Bundle().apply { putBoolean("first", first) })
+            return BenchRun.Reservation(a.getString("stamp"), a.getString("refused"), a.getDouble("pause"))
+        }
+
+        override fun release(stamp: String) {
+            ask(RELEASE, Bundle().apply { putString("stamp", stamp) })
+        }
+
         override fun record(entry: BenchRun.Entry, sessionStart: Instant) {
             ask(RECORD, Bundle().apply {
                 putString("runId", entry.runId)
@@ -159,6 +180,13 @@ class YouTubeBenchLedger : Service() {
     companion object {
         const val STATE = 1
         const val RECORD = 2
+        const val RESERVE = 3
+        const val RELEASE = 4
+
+        /** The first run's pause's draw (Pace.pauseAfterLastRequest's), in this process. */
+        private val draws = io.github.danielhp95.caracole.core.http.Draws { low, high ->
+            low + (high - low) * java.security.SecureRandom().nextDouble()
+        }
         private const val ASK = "ask"
         private const val FAILED = "failed"
         private const val WAIT_S = 30L

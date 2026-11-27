@@ -144,18 +144,40 @@ class BenchReportTest {
     private var exit = 0
     private val ran = mutableListOf<List<String>>()
 
+    /** What the fakes do wrong, a test at a time: the run's own exception, the gate's log or close, the record. */
+    private var runThrows: (() -> Exception)? = null
+    private var logThrows = false
+    private var closeThrows = false
+    private var recordThrows = false
+    private var gateLog: Map<String, HostGate.HostUse> = emptyMap()
+    private val killed = mutableListOf<List<String>>()
+    private val loopbackGates = mutableListOf<String>()
+    /** The day's runs as the ledger counted them while each run went. */
+    private val countedDuring = mutableListOf<Int>()
+
     private val ledger = object : BenchRun.Ledger {
         override fun state() = db.read { DbLedger.state(it, now, 0, 0, false) }
-        override fun record(entry: BenchRun.Entry, sessionStart: Instant) =
+        override fun reserve(first: Boolean) =
+            db.writeBlocking { DbLedger.reserve(it, now, first, Draws { low, _ -> low }) { now.epochSecond.toDouble() } }
+        override fun release(stamp: String) = db.writeBlocking { DbLedger.release(it, stamp) }
+        override fun record(entry: BenchRun.Entry, sessionStart: Instant) {
+            if (recordThrows) throw java.io.IOException("the bench's ledger didn't answer")
             db.writeBlocking { DbLedger.record(it, entry, now, now.epochSecond.toDouble(), sessionStart) }
+        }
     }
+
+    private fun runs(): Int = db.read { DbLedger.runs(it, now) }
+
+    private fun events(): Long = db.read { d -> d.one("SELECT COUNT(*) FROM events WHERE provider = 'youtube'") { it.long(0) }!! }
 
     private fun bench(mode: HostGate.Mode = HostGate.Mode.NETWORK): BenchRun {
         val runner = object : BenchRun.Runner {
             override fun run(argv: List<String>, folders: RunFolders, timeoutS: Double, verbose: Boolean): BenchRan {
                 ran += argv
+                countedDuring += runs()
                 monotonic += 2.0
                 now = now.plusSeconds(2)
+                runThrows?.let { throw it() }
                 val search = argv.last().startsWith("ytsearch")
                 // A search finds the song it asked for: its title and its artist's channel.
                 val parts = argv.last().substringAfter(":").split(" - ")
@@ -168,14 +190,35 @@ class BenchReportTest {
 
             override fun cancel() {}
         }
+        val killRunner = object : BenchRun.Runner {
+            override fun run(argv: List<String>, folders: RunFolders, timeoutS: Double, verbose: Boolean): BenchRan {
+                killed += argv
+                return BenchRan(Ran(if ("--version" in argv) 0 else -1, "", "", "--version" !in argv, false, 1, 1),
+                                emptyList())
+            }
+
+            override fun cancel() {}
+        }
         val gates = object : BenchRun.Gates {
             override val mode = mode
             override fun open(observe: Boolean): BenchRun.Gate {
                 opened += if (observe) "observe" else "enforce"
-                return object : BenchRun.Gate {
-                    override val proxyArg = "http://${"a".repeat(32)}:${"b".repeat(32)}@127.0.0.1:4000"
-                    override fun log() = emptyMap<String, HostGate.HostUse>()
-                    override fun close() {}
+                return gate()
+            }
+
+            override fun openLoopback(): BenchRun.Gate {
+                loopbackGates += "loopback"
+                return gate()
+            }
+
+            private fun gate() = object : BenchRun.Gate {
+                override val proxyArg = "http://${"a".repeat(32)}:${"b".repeat(32)}@127.0.0.1:4000"
+                override fun log(): Map<String, HostGate.HostUse> {
+                    if (logThrows) throw java.io.IOException("the gate's service didn't answer")
+                    return gateLog
+                }
+                override fun close() {
+                    if (closeThrows) throw java.io.IOException("the gate's service didn't answer")
                 }
             }
         }
@@ -188,7 +231,7 @@ class BenchReportTest {
             override fun pythonExtracted() = true
             override fun leftover() = emptyList<String>()
         }
-        return BenchRun(runner, gates, ledger, probe, clock, BenchRun.Folders(File(dir, "bench")), "/qjs")
+        return BenchRun(runner, killRunner, gates, ledger, probe, clock, BenchRun.Folders(File(dir, "bench")), "/qjs")
     }
 
     /** [n] runs of provider youtube in `events`, as a product job would have sent them, [ago] before now. */
@@ -214,19 +257,101 @@ class BenchReportTest {
     }
 
     @Test
-    fun `the seventh run is refused, the bench's own runs and the phone's counted together`() {
+    fun `six reservations then a seventh refused across two sessions, the bench's own and the phone's runs together`() {
         val s1 = bench().session(listOf("A - T", "B - U", "C - V"), false)
         assertEquals(6, s1.runs.size)
         assertEquals(6, s1.budgetAfter)
-        assertEquals(6, db.read { DbLedger.state(it, now, 0, 0, false) }.runs)
+        assertEquals(6, runs())
         val e = assertFailsWith<BenchRun.Refused> { bench().session(listOf("aaaaaaaaaaa"), false) }
         assertEquals(BenchRun.budgetWords(1, 0, 6), e.words)
         assertEquals(6, ran.size)
-        // The bench's own record counts its runs even where events lost them.
+        // The bench's own record counts its runs even where events lost them: still none left.
         db.writeBlocking { it.execute("DELETE FROM events") }
-        assertEquals(6, db.read { DbLedger.state(it, now, 0, 0, false) }.runs)
-        // Each run is an events row, a search's under youtube-search:, and moves the last sent run.
-        db.writeBlocking { it.execute("DELETE FROM kv WHERE key = ?", DbLedger.RUNS) }
+        assertEquals(6, runs())
+        assertEquals(BenchRun.budgetWords(1, 0, 6), db.writeBlocking {
+            DbLedger.reserve(it, now, false, Draws { low, _ -> low }) { 0.0 }
+        }.refused)
+    }
+
+    @Test
+    fun `a run is counted from its reservation, before it starts, whatever ends it`() {
+        val cases = listOf<Pair<String, () -> Unit>>(
+            "the process dying mid-run" to { runThrows = { IllegalStateException("killed") } },
+            "the client's stop" to { runThrows = { YtDlpStopped("yt-dlp stopped") } },
+            "an IOException of the run's" to { runThrows = { java.io.IOException("a socket") } },
+            "the gate's log throwing" to { logThrows = true },
+            "the gate's close throwing" to { closeThrows = true },
+            "the record failing" to { recordThrows = true },
+        )
+        for ((what, fail) in cases) {
+            db.writeBlocking { it.execute("DELETE FROM events"); it.execute("DELETE FROM kv WHERE key = ?", DbLedger.RUNS) }
+            runThrows = null; logThrows = false; closeThrows = false; recordThrows = false
+            countedDuring.clear()
+            fail()
+            runCatching { bench().session(listOf("aaaaaaaaaaa"), false) }
+            assertEquals(listOf(1), countedDuring, "$what: counted while it ran")
+            assertEquals(1, runs(), "$what: counted after")
+            if (!recordThrows) assertEquals(1L, events(), "$what: its events row")
+        }
+    }
+
+    @Test
+    fun `a run that never started gives its slot back`() {
+        for (thrown in listOf<() -> Exception>({ YtDlpNotStarted("no bind") }, { Refused("the glue's words") })) {
+            runThrows = thrown
+            val s = bench().session(listOf("aaaaaaaaaaa"), false)
+            assertEquals(1, countedDuring.last(), "reserved while it went")
+            assertEquals(0, runs())
+            assertEquals(0L, events())
+            assertEquals("error", s.runs.single().outcome)
+        }
+    }
+
+    @Test
+    fun `the gate's stopped bucket is an error in the data's words, never a block`() {
+        val data = YouTubeData.read()
+        gateLog = mapOf(data.text("stopped", data.gate) to HostGate.HostUse())
+        val s = bench().session(listOf("aaaaaaaaaaa"), false)
+        assertEquals("error", s.runs.single().outcome)
+        assertEquals(data.text("stopped_said", data.gate), s.runs.single().reason)
+        assertFalse(db.read { Health.isCooling(it, "youtube", now) })
+    }
+
+    @Test
+    fun `the kill check runs on the network too, on a loopback gate, spending none of the six`() {
+        val kill = bench().killCheck()
+        assertTrue(kill.getValue("run").jsonPrimitive.boolean, kill.toString())
+        assertTrue(kill.getValue("killed").jsonPrimitive.boolean)
+        assertTrue(kill.getValue("next_run_ok").jsonPrimitive.boolean)
+        assertEquals(listOf("loopback"), loopbackGates)
+        assertTrue(opened.isEmpty())
+        assertEquals(0, runs())
+        assertTrue("--exec" in killed[0] && killed[0].last().startsWith("http://127.0.0.1:"), killed[0].toString())
+        assertEquals("--version", killed[1].last())
+    }
+
+    @Test
+    fun `an intent starts a session under loopback alone, never from Recents`() {
+        assertTrue(BenchRun.startsByIntent(HostGate.Mode.LOOPBACK, go = true, fromHistory = false))
+        assertFalse(BenchRun.startsByIntent(HostGate.Mode.NETWORK, go = true, fromHistory = false))
+        assertFalse(BenchRun.startsByIntent(HostGate.Mode.LOOPBACK, go = true, fromHistory = true))
+        assertFalse(BenchRun.startsByIntent(HostGate.Mode.LOOPBACK, go = false, fromHistory = false))
+    }
+
+    @Test
+    fun `a query with a slash is a query, an address is not`() {
+        val songs = bench().plan(listOf("AC/DC - Back in Black", "Sigur Rós - Hoppípolla", "aaaaaaaaaaa"), false)
+        assertEquals(listOf(true, true, false), songs.map { it.search != null })
+        for (q in listOf("https://www.youtube.com/watch?v=aaaaaaaaaaa", "youtube.com/watch?v=x", "ytsearch8:x",
+                         "www.youtube.com")) {
+            assertFailsWith<BenchRun.Refused>(q) { bench().plan(listOf(q), false) }
+        }
+    }
+
+    @Test
+    fun `nothing of a session's download stays but its report`() {
+        bench().session(listOf("aaaaaaaaaaa"), false)
+        assertEquals(emptyList(), File(dir, "bench").listFiles().orEmpty().filter { it.name.startsWith("into-") || it.name == "kill" })
     }
 
     @Test
@@ -267,7 +392,7 @@ class BenchReportTest {
         assertTrue(rows[1].first!!.startsWith(BenchRun.DOWNLOAD_RUN), rows.toString())
         // The first pause: the delay's draw (3.75) less the second since the phone's last run; then the draw less the
         // time since the search ended (none here).
-        assertEquals(listOf(2.75, 3.75), slept)
+        assertEquals(listOf(2.75, 3.75), slept.take(2))  // then the kill check's own wait
         // The search's argv: the phone's template, with the bench's -v; the download the chosen video's address.
         assertTrue("-v" in ran[0], ran[0].toString())
         assertEquals(YouTubeData.read().searchTarget("A - T"), ran[0].last())
@@ -290,13 +415,10 @@ class BenchReportTest {
     }
 
     @Test
-    fun `a loopback address is the search's and the download's target, the kill check skipped on the network`() {
+    fun `a loopback address is the search's and the download's target`() {
         val url = "http://10.0.2.2:8000/clip.m4a"
         val s = bench(HostGate.Mode.LOOPBACK).session(listOf(url), false)
         assertEquals(listOf(url, url), ran.take(2).map { it.last() })
         assertEquals("loopback", s.runs[1].chosenBy)
-        val network = bench().killCheck()
-        assertFalse(network.getValue("run").jsonPrimitive.boolean)
-        assertTrue(network["why"] !is JsonNull)
     }
 }

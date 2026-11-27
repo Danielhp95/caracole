@@ -39,7 +39,8 @@ import org.junit.runner.RunWith
  * runner's loopback: a report of §4.3's shape whose runs' hosts name 10.0.2.2 alone, no gate-shaped address in it or
  * on the screen after its `-v` runs, the kill check over the bench's own loopback clip leaving no `:youtube` or qjs,
  * each run an `events` row and a stamp of kv `ytbench:runs`, and no Python in `:ytbench`; an intent asking `observe`
- * runs `enforce`; a public host's query refused before any run; Settings' row opening the bench in `:ytbench`.
+ * runs `enforce`; a public host's query refused before any run; a screen recreated mid-session showing it, a second
+ * start refused; a relaunch from Recents starting nothing; Settings' row opening the bench in `:ytbench`.
  */
 @RunWith(AndroidJUnit4::class)
 class YouTubeBenchTest {
@@ -73,10 +74,10 @@ class YouTubeBenchTest {
     private fun benchPid(): Int? = context.getSystemService(ActivityManager::class.java).runningAppProcesses.orEmpty()
         .firstOrNull { it.processName == bench }?.pid
 
-    private fun start(queries: String, vararg extra: Pair<String, String>) {
+    private fun start(queries: String, vararg extra: Pair<String, String>, flags: Int = Intent.FLAG_ACTIVITY_CLEAR_TASK) {
         val intent = Intent(context, YouTubeBenchActivity::class.java)
             .putExtra(YouTubeBenchActivity.QUERIES, queries).putExtra(YouTubeBenchActivity.GO, true)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or flags)
         for ((k, v) in extra) intent.putExtra(k, v)
         context.startActivity(intent)
     }
@@ -149,6 +150,12 @@ class YouTubeBenchTest {
         assertTrue(kill.toString(), kill["run"]!!.jsonPrimitive.boolean && kill["killed"]!!.jsonPrimitive.boolean)
         assertTrue(kill.toString(), kill["qjs_seen"]!!.jsonPrimitive.boolean)
         assertEquals(kill.toString(), 0, kill["left"]!!.jsonArray.size)
+        assertTrue(kill.toString(), kill["next_run_ok"]!!.jsonPrimitive.boolean)
+        assertEquals(kill.toString(), 0, kill["spends"]!!.jsonPrimitive.content.toInt())
+        // Nothing of the session's audio stays.
+        val left = File(context.cacheDir, YouTubeBenchActivity.FOLDER).listFiles().orEmpty()
+            .filter { it.name.startsWith("into-") || it.name == "kill" }
+        assertEquals("the session's audio left: $left", emptyList<File>(), left)
         assertEquals(0, report["after_block_requests"]!!.jsonPrimitive.content.toInt())
         // Each run an events row of provider youtube, a search's under youtube-search:, and a stamp of the bench's own.
         assertEquals(1L, count("SELECT COUNT(*) FROM events WHERE provider = 'youtube' AND run LIKE ?",
@@ -165,6 +172,38 @@ class YouTubeBenchTest {
         val pid = checkNotNull(benchPid()) { "no :ytbench process" }
         val maps = File("/proc/$pid/maps").readText()
         assertFalse("Python is loaded in :ytbench", "libpython" in maps || "libchaquopy" in maps)
+    }
+
+    /** One session a process: the screen made again mid-session (a rotation) shows the running session, and a
+     * second start (a new screen on top, `go`) is refused in words; one report, two runs. */
+    @Test
+    fun aRecreatedScreenShowsTheRunningSessionAndASecondStartIsRefused() {
+        start(clip())
+        waitFor(120_000, "the session's first run") { "search of" in screen() }
+        try {
+            instrumentation.uiAutomation.setRotation(android.app.UiAutomation.ROTATION_FREEZE_90)
+            waitFor(30_000, "the recreated screen's lines") { "search of" in screen() }
+            start(clip(), flags = Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            waitFor(60_000, "the second start's refusal") { YouTubeBenchActivity.ALREADY in screen() }
+        } finally {
+            instrumentation.uiAutomation.setRotation(android.app.UiAutomation.ROTATION_UNFREEZE)
+        }
+        waitFor(600_000, "the report") { reports.listFiles().orEmpty().any { it.name.endsWith(".json") } }
+        Thread.sleep(2_000)
+        assertEquals(1, reports.listFiles()!!.count { it.name.endsWith(".json") })
+        assertEquals(2L, count("SELECT COUNT(*) FROM events WHERE provider = 'youtube'"))
+    }
+
+    /** A relaunch from Recents re-delivers `go`: it starts nothing, and says why. */
+    @Test
+    fun aRelaunchFromRecentsStartsNothing() {
+        val gates = GateService.gatesOpened
+        start(clip(), flags = Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY)
+        waitFor(60_000, "the words") { YouTubeBenchActivity.GO_FROM_HISTORY in screen() }
+        Thread.sleep(3_000)
+        assertFalse(screen(), "search of" in screen())
+        assertEquals(gates, GateService.gatesOpened)
+        assertEquals(0L, count("SELECT COUNT(*) FROM events WHERE provider = 'youtube'"))
     }
 
     @Test

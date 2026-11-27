@@ -147,6 +147,27 @@ class GateServiceTest {
         }
     }
 
+    /** The kill check's gate is LOOPBACK's whatever this process's mode: with `caracole.network` taken off here (the
+     * network's mode), an ordinary open makes a NETWORK gate and openLoopback a LOOPBACK one (the gates made seen
+     * through the seam; neither reaches a host). */
+    @Test
+    fun aLoopbackGateIsLoopbacksWhateverTheProcesssMode() {
+        val modes = java.util.Collections.synchronizedList(mutableListOf<HostGate.Mode>())
+        GateService.makeGate = { mode -> modes += mode; HostGate(mode, HostGate.HostRule.YOUTUBE) }
+        val was = System.getProperty(YtDlpClient.NETWORK)
+        try {
+            System.clearProperty(YtDlpClient.NETWORK)
+            GateService.Client(context).use { client ->
+                assertEquals(HostGate.Mode.NETWORK, client.mode())
+                client.open().close()
+                client.openLoopback().close()
+            }
+        } finally {
+            if (was == null) System.clearProperty(YtDlpClient.NETWORK) else System.setProperty(YtDlpClient.NETWORK, was)
+        }
+        assertEquals(listOf(HostGate.Mode.NETWORK, HostGate.Mode.LOOPBACK), modes.toList())
+    }
+
     private fun assertThrowsIo(block: () -> Unit): IOException = try {
         block()
         fail("not refused")

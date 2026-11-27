@@ -28,7 +28,7 @@
 #                   clip the test serves on 127.0.0.1 (HTTP and HTTPS), its refusals, a stop that leaves no
 #                   process, and one run at a time across two processes of the app; then the app's YouTubeBenchTest
 #                   (the debug build's YouTube bench), its query a clip served on the host as 10.0.2.2; no request
-#                   leaves the device
+#                   leaves the device (CARACOLE_YOUTUBE_REPEAT=CLASS:N runs one of :youtube's classes N times)
 #   --tcpdump FILE  the gate that caracole sends nothing to any host but 10.0.2.2 (and loopback) while the classes
 #                   run, by caracole's own uids: on the rooted emulator (`su 0`), a chain of iptables and ip6tables
 #                   rules at the head of OUTPUT (caracole_own) counts, for each of caracole's packages installed (the
@@ -381,7 +381,12 @@ fi
 if [ "$want_youtube" = 1 ]; then
     # Each class in an `am instrument` of its own: yt-dlp keeps module state, one run a process (the glue's rule), and
     # the instrumentation's process is where QjsTest and YtDlpVersionTest run theirs.
-    for name in YtDlpVersionTest QjsTest YtDlpServiceTest KillTest GateServiceTest AcrossProcessesTest; do
+    # CARACOLE_YOUTUBE_REPEAT=CLASS:N runs that class N times over (a flaky test's check), each run a result.
+    youtube_runs=(YtDlpVersionTest QjsTest YtDlpServiceTest KillTest GateServiceTest AcrossProcessesTest)
+    if [ -n "${CARACOLE_YOUTUBE_REPEAT:-}" ]; then
+        for _ in $(seq 2 "${CARACOLE_YOUTUBE_REPEAT#*:}"); do youtube_runs+=("${CARACOLE_YOUTUBE_REPEAT%%:*}"); done
+    fi
+    for name in "${youtube_runs[@]}"; do
         out="$(adb shell am instrument -w -e class "$ns.youtube.$name" \
             "$ns.youtube.test/$ns.youtube.YoutubeTestRunner" 2>&1 | tr -d '\r')" || true
         echo "$out"

@@ -19,11 +19,12 @@ import java.util.concurrent.TimeUnit
  * A run stopped leaves nothing behind: a trickled download stopped 2 s into its body by a cancel, by a close and by
  * its timeout, then, 2 s later, no process of this app's uid but this one (the main); a run whose yt-dlp started a
  * child, qjs (the glue's one `--exec` form, under LOOPBACK alone), cancelled 2 s after the child appears, the child gone
- * with it; a run stopped before its STARTED came (the service's seam holds it back), its process killed all the same;
- * a run cancelled or closed while it waits its turn, which starts nothing; and the `:youtube` process killed by another
- * (a SIGKILL from outside the client, as the low-memory killer sends one: `am kill` leaves a process a foreground one
- * binds) is [YtDlpStopped], this process answering after it. Each time the next run works. Run by
- * `android/scripts/device-test.sh --youtube`, on the emulator alone.
+ * with it; a run stopped before its STARTED came (the service's seam holds it back), no process left (the client's
+ * kill or the service's own exit once unbound: those two tests don't tell which); a run cancelled or closed while it
+ * waits its turn, which starts nothing; and the `:youtube` process killed by another (a SIGKILL from outside the
+ * client, as the low-memory killer sends one: `am kill` leaves a process a foreground one binds) is [YtDlpStopped],
+ * this process answering after it. Each time the next run works. Run by `android/scripts/device-test.sh --youtube`, on
+ * the emulator alone.
  */
 @RunWith(AndroidJUnit4::class)
 class KillTest {
@@ -141,9 +142,11 @@ class KillTest {
         theNextRunWorks()
     }
 
-    /** Stopped once the request was sent and before STARTED came: the client waits for it, then kills. */
+    /** Stopped once the request was sent and before STARTED came: no process is left and the next run works. What it
+     * doesn't tell: whether the client's wait-and-kill ended `:youtube` or the service's own exit did (unbound, it runs
+     * nothing and kills its process): either leaves the same nothing, which is what this holds. */
     @Test
-    fun aRunStoppedBeforeItsStartIsKilledWhenItsStartComes() {
+    fun aRunStoppedBeforeItsStartLeavesNoProcess() {
         client.startedDelayMs = 2_500
         val ran = client.run(Runs.version(gate.proxyArg), 1.0, { _, _ -> }, {})
         assertTrue(ran.killed && ran.timedOut)
@@ -152,9 +155,11 @@ class KillTest {
         theNextRunWorks()
     }
 
-    /** Stopped before STARTED, which comes after the client's wait: the client finds the process by its name. */
+    /** Stopped before STARTED, which comes after the client's wait: no process is left and the next run works.
+     * Whether by the client's kill (finding the process by its name) or by the service's own exit once unbound, this
+     * doesn't tell apart. */
     @Test
-    fun aRunStoppedLongBeforeItsStartIsFoundByItsName() {
+    fun aRunStoppedLongBeforeItsStartLeavesNoProcess() {
         client.startedDelayMs = YtDlpClient.START_WAIT_MS + 3_000
         val ran = client.run(Runs.version(gate.proxyArg), 1.0, { _, _ -> }, {})
         assertTrue(ran.killed && ran.timedOut)

@@ -20,7 +20,10 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
+import io.github.danielhp95.caracole.core.http.ProviderBlocked
 import java.io.File
 import java.io.IOException
 import java.net.InetAddress
@@ -49,19 +52,28 @@ data class BenchRan(val ran: Ran, val lines: List<Stamped>)
  *
  * - the day's runs: at most the provider's budget (PhoneConfig's `youtube`, 6) in any 24 hours, every yt-dlp run the
  *   phone sent counted ([DbLedger]: kv `ytbench:runs` and `events`' sent runs of provider `youtube`, the larger), the
- *   session refused when it would pass them and each run refused when another job spent them meanwhile;
- * - the pause: before its first run the delay's draw after the phone's last run (kv `http:last_request:youtube`, as
- *   Pace's), before each later one the draw less the time since the last ended, each said in `pause_seconds`;
+ *   session refused when it would pass them; and each run RESERVED before its gate opens ([Ledger.reserve]: in one
+ *   write of the main process, the provider on, no cooldown, fewer than the budget, and its stamp appended to
+ *   `ytbench:runs`), so a run is counted whatever ends it (this process killed, a gate's log or close that throws,
+ *   its record that fails); only a run the client says never started (`YtDlpNotStarted`, `Refused`, or its gate that
+ *   wouldn't open) gives its slot back ([Ledger.release]);
+ * - every run sent is an `events` row (its decision the runner's), written in a `finally` whatever followed it;
+ * - the pause: before its first run Pace.pauseAfterLastRequest's own (asked with the reservation, computed in the
+ *   main process from kv `http:last_request:youtube`), before each later one the delay's draw less the time since the
+ *   last ended (the runner's `_pause`), each said in `pause_seconds`;
  * - one run at a time: the client's (its file lock, across the app's processes);
  * - a block: a run whose stderr classifies as blocked is recorded as the runner records it (an `events` row,
- *   `Health.recordBlock` at the session's start), and the session stops there; a session or run while `youtube`
+ *   `Health.recordBlock` at the session's start, its status kept only where it is one of the data's block statuses),
+ *   and the session stops there; the gate's log read first (a refusal, then its `stopped` bucket: an error in the
+ *   data's words, never a block); a session or run while `youtube`
  *   cools down is refused, so no run follows a block until its cooldown ends; no alert is sent (the screen says it);
  * - the provider off: no session;
- * - every run is an `events` row of provider `youtube` (its decision the runner's), a search's under a run id of
- *   `youtube-search:`, so SearchGate's hour counts it, and a sent run moves kv `http:last_request:youtube`.
+ * - a search's run id is `youtube-search:…`, so SearchGate's hour counts it, and a sent run moves kv
+ *   `http:last_request:youtube`.
  *
  * Its queries ([plan]): 1 to [MOST_QUERIES] lines. Under the network: "Artist - Title" (a search, the computer's
- * `choose`, then a download) or a video id (a download). Under loopback (the main process's mode, the gate's): each an
+ * `choose`, then a download; "AC/DC - Back in Black" too) or a video id (a download); a line shaped as an address (a
+ * scheme, or a host name and a path) is refused. Under loopback (the main process's mode, the gate's): each an
  * http(s) address of a loopback host, else the session is refused before any run; a search there is the address's
  * metadata, its download the address. `observe` is refused under loopback.
  *
@@ -69,12 +81,19 @@ data class BenchRan(val ran: Ran, val lines: List<Stamped>)
  * cold and the later ones warm. Every run adds `-v` ([Runner.run]'s `verbose`); its lines come redacted from the
  * client, and the report keeps no `[debug]` line.
  *
- * The kill check ([killCheck]): under loopback alone, a trickled download of [TrickleServer]'s on 127.0.0.1 in this
- * process, with the qjs child of the glue's one `--exec` form, cancelled 2 s into its body, then 2 s later the
- * processes of `:youtube` and qjs the [Probe] finds: none must be left. It is no YouTube run and is not counted.
+ * The kill check ([killCheck]), on the emulator and on the owner's phone alike: a gate of the main process's that can
+ * only reach 127.0.0.1 ([Gates.openLoopback], LOOPBACK whatever the process's mode) and a run sent as LOOPBACK
+ * ([killRunner]: the glue then takes a loopback target and its one `--exec` form, which starts the qjs child a real
+ * download would have: yt-dlp's own solver starts qjs for YouTube alone), a trickled download of [TrickleServer]'s
+ * bytes on 127.0.0.1 in this process, cancelled 2 s into its body; 2 s later the `:youtube` and qjs processes the
+ * [Probe] finds (none must be left), then a `--version` run through the same gate (the next run works). It never
+ * leaves the phone: no reservation, none of the six spent; it keeps one run at a time (the client's lock).
+ *
+ * The downloaded audio is deleted once it is measured: nothing of a session but its report stays.
  */
 class BenchRun(
     private val runner: Runner,
+    private val killRunner: Runner,
     private val gates: Gates,
     private val ledger: Ledger,
     private val probe: Probe,
@@ -104,6 +123,9 @@ class BenchRun(
         val mode: HostGate.Mode
 
         fun open(observe: Boolean): Gate
+
+        /** A gate that can reach 127.0.0.1 alone, in any process's mode: the kill check's. */
+        fun openLoopback(): Gate
     }
 
     /** What the phone's records say now: whether `youtube` is on, its budget and delay, the sent runs of the last
@@ -115,9 +137,20 @@ class BenchRun(
     data class Entry(val runId: String, val target: String, val status: Int?, val decision: String,
                      val message: String?, val blocked: Boolean)
 
+    /** A run's slot of the day's: its [stamp] in `ytbench:runs`, or why none ([refused]); [pause], the first run's
+     * pause after the phone's last (Pace.pauseAfterLastRequest's), 0 for a later one. */
+    data class Reservation(val stamp: String?, val refused: String?, val pause: Double)
+
     interface Ledger {
         fun state(): State
 
+        /** One write: the provider on, no cooldown, fewer runs than the budget in 24 h, then this run's stamp kept. */
+        fun reserve(first: Boolean): Reservation
+
+        /** A reserved run that never started: its stamp taken back, in one write. */
+        fun release(stamp: String)
+
+        /** A sent run's `events` row, kv `http:last_request:youtube`, and a block's strike. */
         fun record(entry: Entry, sessionStart: Instant)
     }
 
@@ -173,7 +206,7 @@ class BenchRun(
             if (loopback) {
                 if (!isLoopback(q)) throw Refused(notLoopback(q))
                 Song(q, q, null, null)
-            } else if ("://" in q || q.contains('/')) {
+            } else if (looksLikeAnAddress(q)) {
                 throw Refused(notAQuery(q))
             } else if (PyRe.fullmatch(data.videoId, q) != null) {
                 Song(q, null, data.watchUrl(q), null)
@@ -255,68 +288,86 @@ class BenchRun(
                                                 after.running), kill, firstStart, stopped)
     }
 
-    /** One run: refused while cooling, past the day's budget or turned off (no record, the words its stop), paused,
-     * run through a fresh gate, classified and recorded. Its record with its stdout, and the session's stop if it
-     * stops it. */
+    /** One run: reserved first (refused: no record, the words its stop), paused, run through a fresh gate, its gate's
+     * log read, its `events` row written in a `finally` for a run sent whatever followed, classified. Its record with
+     * its stdout, and the session's stop if it stops it. */
     private fun one(song: String, kind: String, cache: String?, target: String, into: File?, runId: String,
                     lastEnd: Double?, sessionStart: Instant, observe: Boolean,
                     chosenBy: String? = null): Pair<Pair<BenchRunRecord, String>?, String?> {
         val state = ledger.state()
-        if (!state.enabled) return null to OFF
-        state.cooling?.let { return null to it }
-        if (state.runs >= state.budget) return null to budgetWords(1, 0, state.budget)
-        val draw = clock.draws.uniform(state.delay.first, state.delay.second)
-        val pause = if (lastEnd == null) {
-            state.lastSent?.let { minOf(draw - (clock.wall() - it), state.delay.second) } ?: 0.0
-        } else {
-            draw - (clock.monotonic() - lastEnd)
-        }
-        if (pause > 0) clock.sleep(pause)
-        val cacheDir = folders.cache
-        val startedAt = utc(clock.now())
-        say("${kind}${cache?.let { " ($it)" } ?: ""} of “$song”…")
-        val gate = gates.open(observe)
+        val reservation = ledger.reserve(first = lastEnd == null)
+        val stamp = reservation.stamp ?: return null to (reservation.refused ?: OFF)
+        val pause = if (lastEnd == null) reservation.pause
+            else clock.draws.uniform(state.delay.first, state.delay.second) - (clock.monotonic() - lastEnd)
+        var sent = false
         var ran: BenchRan? = null
-        var thrown: IOException? = null
-        val uid0 = probe.uidBytes()
-        val peaks = probe.sample()
-        val t0 = clock.monotonic()
-        val log: Map<String, HostGate.HostUse>
+        var thrown: Exception? = null
+        var log: Map<String, HostGate.HostUse> = emptyMap()
+        var outcome = ERROR
+        var reason: String? = null
+        var stderr = ""
+        var startedAt = utc(clock.now())
+        var seconds = 0.0
+        var pss: Map<String, Double> = emptyMap()
+        var uid0: Long? = null
         try {
+            if (pause > 0) clock.sleep(pause)
+            val cacheDir = folders.cache
+            startedAt = utc(clock.now())
+            say("${kind}${cache?.let { " ($it)" } ?: ""} of “$song”…")
+            val gate = gates.open(observe)
+            uid0 = probe.uidBytes()
+            val peaks = probe.sample()
+            val t0 = clock.monotonic()
             try {
-                ran = runner.run(argv(kind, target, cacheDir, into, gate.proxyArg, verbose = true), RunFolders(cacheDir, into),
+                sent = true
+                ran = runner.run(argv(kind, target, cacheDir, into, gate.proxyArg, verbose = true),
+                                 RunFolders(cacheDir, into),
                                  if (kind == SEARCH) data.number("search_timeout") else data.number("download_timeout"),
                                  verbose = true)
+            } catch (e: YtDlpNotStarted) {
+                sent = false
+                thrown = e
+            } catch (e: io.github.danielhp95.caracole.youtube.Refused) {
+                sent = false
+                thrown = e
             } catch (e: IOException) {
                 thrown = e
+            } finally {
+                seconds = clock.monotonic() - t0
+                pss = peaks()
+                log = try { gate.log() } finally { gate.close() }
             }
+            stderr = ran?.lines?.joinToString("\n") { it.text }.orEmpty()
+            val refused = log.filterValues { it.refused > 0 }.keys
+            val decided = when {
+                refused.isNotEmpty() ->
+                    GATE_REFUSED to YouTubeData.fillAll(data.text("refusal", data.gate), mapOf("host" to refused.first()))
+                data.text("stopped", data.gate) in log -> ERROR to data.text("stopped_said", data.gate)
+                thrown != null -> ERROR to (thrown.message ?: thrown.javaClass.simpleName)
+                ran!!.ran.timedOut || ran.ran.killed -> ERROR to "timed out or stopped"
+                ran.ran.exit == Classify.OK_EXIT -> OK to null
+                else -> Classify.of(stderr) to YtDlp.reason(stderr)
+            }
+            outcome = decided.first
+            reason = decided.second
         } finally {
-            log = try { gate.log() } finally { gate.close() }
-        }
-        val seconds = clock.monotonic() - t0
-        val pss = peaks()
-        val uid1 = probe.uidBytes()
-        val stderr = ran?.lines?.joinToString("\n") { it.text }.orEmpty()
-        val refused = log.filterValues { it.refused > 0 }.keys
-        val (outcome, reason) = when {
-            refused.isNotEmpty() ->
-                GATE_REFUSED to YouTubeData.fillAll(data.text("refusal", data.gate), mapOf("host" to refused.first()))
-            thrown != null -> ERROR to (thrown.message ?: thrown.javaClass.simpleName)
-            ran!!.ran.timedOut || ran.ran.killed -> ERROR to "timed out or stopped"
-            ran.ran.exit == Classify.OK_EXIT -> OK to null
-            else -> Classify.of(stderr) to YtDlp.reason(stderr)
-        }
-        // Sent: anything but a refusal of the service or a run that never started (no process: nothing asked).
-        val sent = thrown == null || thrown is YtDlpStopped
-        if (sent) {
-            val decision = when (outcome) {
-                OK, UNAVAILABLE -> OK
-                BenchReport.BLOCKED -> BenchReport.BLOCKED
-                else -> ERROR
+            if (sent) {
+                val decision = when (outcome) {
+                    OK, UNAVAILABLE -> OK
+                    BenchReport.BLOCKED -> BenchReport.BLOCKED
+                    else -> ERROR
+                }
+                // A run cut off by anything (the gate's log or close, an exception of the run's own) is still an
+                // events row: an error in words, as the runner writes one.
+                val words = reason ?: if (outcome == OK) null else CUT_OFF
+                val status = PyRe.search(data.pattern("status"), stderr)?.groupValues?.get(1)?.toInt()
+                ledger.record(Entry(runId, target, status, decision, words, outcome == BenchReport.BLOCKED), sessionStart)
+            } else {
+                ledger.release(stamp)
             }
-            val status = PyRe.search(data.pattern("status"), stderr)?.groupValues?.get(1)?.toInt()
-            ledger.record(Entry(runId, target, status, decision, reason, outcome == BenchReport.BLOCKED), sessionStart)
         }
+        val uid1 = probe.uidBytes()
         var file: JsonObject? = null
         var decoded: JsonObject? = null
         if (kind == DOWNLOAD && outcome == OK) {
@@ -332,6 +383,8 @@ class BenchRun(
                 decoded = probe.decode(path)
             }
         }
+        // Measured: the audio goes, nothing of the session but its report stays.
+        into?.deleteRecursively()
         val record = BenchRunRecord(
             song, kind, cache, startedAt, ran?.ran?.processStartMs ?: -1, ran?.ran?.pythonReadyMs ?: -1, seconds,
             maxOf(pause, 0.0), ran?.lines.orEmpty(), outcome, reason, log,
@@ -351,40 +404,61 @@ class BenchRun(
         return argv.subList(0, dash) + (if (verbose) listOf(VERBOSE) else emptyList()) + listOf("--", target)
     }
 
-    /** The kill check over a trickled loopback clip: under loopback alone (its gate allows 127.0.0.1 alone there). */
+    /** The kill check over a trickled loopback clip, on a loopback gate whatever the main process's mode. */
     fun killCheck(): JsonObject {
-        if (gates.mode != HostGate.Mode.LOOPBACK) {
-            return JsonObject(linkedMapOf("run" to JsonPrimitive(false), "why" to JsonPrimitive(KILL_NOT_HERE)))
-        }
         TrickleServer().use { server ->
             val into = File(folders.root, "kill").apply { deleteRecursively(); mkdirs() }
             val script = File(into, "loop.js").apply { writeText("while (true);\n") }
-            val gate = gates.open(false)
+            val gate = try {
+                gates.openLoopback()
+            } catch (e: IOException) {
+                return JsonObject(linkedMapOf("run" to JsonPrimitive(false),
+                                              "why" to JsonPrimitive("its gate: ${e.message}")))
+            }
             var qjsSeen = false
+            val over = java.util.concurrent.atomic.AtomicBoolean(false)
             val stopper = Thread {
-                if (server.begun.await(120, TimeUnit.SECONDS)) {
-                    clock.sleep(2.0)
-                    qjsSeen = probe.leftover().any { it.contains(QJS) }
-                    runner.cancel()
+                // Its body begun (or the run over without it: nothing to stop), then 2 s, then the stop.
+                val until = System.nanoTime() + TimeUnit.SECONDS.toNanos(120)
+                while (!over.get() && System.nanoTime() < until) {
+                    if (server.begun.await(100, TimeUnit.MILLISECONDS)) {
+                        clock.sleep(2.0)
+                        qjsSeen = probe.leftover().any { it.contains(QJS) }
+                        killRunner.cancel()
+                        break
+                    }
                 }
-            }.apply { start() }
+            }
+            var next = false
             val killed = try {
+                stopper.start()
                 val base = argv(DOWNLOAD, server.url, folders.cache, into, gate.proxyArg)
                 val dash = base.lastIndexOf("--")
-                val argv = base.subList(0, dash) + listOf("--exec", "before_dl:$qjs ${script.path}") + base.subList(dash, base.size)
-                runner.run(argv, RunFolders(folders.cache, into), 120.0, verbose = false).ran.killed
+                val argv = base.subList(0, dash) + listOf("--exec", "before_dl:$qjs ${script.path}") +
+                    base.subList(dash, base.size)
+                killRunner.run(argv, RunFolders(folders.cache, into), 120.0, verbose = false).ran.killed
             } catch (e: IOException) {
                 say("the kill check's run: ${e.message}")
                 false
             } finally {
+                over.set(true)
                 stopper.join()
-                gate.close()
             }
             clock.sleep(2.0)
             val left = probe.leftover()
+            try {
+                val version = listOf("--ignore-config", "--no-plugin-dirs", "--proxy", gate.proxyArg, "--version")
+                next = killRunner.run(version, RunFolders(), 120.0, verbose = false).ran.exit == Classify.OK_EXIT
+            } catch (e: IOException) {
+                say("the run after the kill check: ${e.message}")
+            } finally {
+                gate.close()
+                into.deleteRecursively()
+            }
             return JsonObject(linkedMapOf(
-                "run" to JsonPrimitive(true), "killed" to JsonPrimitive(killed), "qjs_seen" to JsonPrimitive(qjsSeen),
-                "left" to JsonArray(left.map(::JsonPrimitive)),
+                "run" to JsonPrimitive(true), "spends" to JsonPrimitive(0), "killed" to JsonPrimitive(killed),
+                "qjs_seen" to JsonPrimitive(qjsSeen), "left" to JsonArray(left.map(::JsonPrimitive)),
+                "next_run_ok" to JsonPrimitive(next),
             ))
         }
     }
@@ -457,8 +531,7 @@ class BenchRun(
         const val NO_OBSERVE = "Observing every host is never asked under the tests' network: loopback alone is reached."
         const val OFF = "YouTube is turned off on this phone (its provider's switch): no run."
         const val BLOCKED_STOP = "YouTube blocked a run: the session stops, and no run starts until its cooldown ends."
-        const val KILL_NOT_HERE = "The kill check runs under the tests' network alone (a loopback clip, which the " +
-            "phone's YouTube gate never reaches): KillTest's, on the emulator."
+        const val CUT_OFF = "the run was cut off before its end was read"
 
         fun notLoopback(q: String) = "“$q” isn't a loopback address: under the tests' network the bench asks " +
             "loopback alone (127.0.0.1, 10.0.2.2), so no run is made."
@@ -467,6 +540,18 @@ class BenchRun(
 
         fun budgetWords(needed: Int, left: Int, budget: Int) =
             "This session's $needed runs would pass the day's $budget: ${maxOf(left, 0)} left in the last 24 hours."
+
+        private val SCHEME = Regex("^[A-Za-z][A-Za-z0-9+.-]*:")
+        private val HOST_PATH = Regex("^(?:[A-Za-z0-9-]+\\.)+[A-Za-z]{2,}(?:[:/?#]|$)")
+
+        /** Whether [q] is shaped as an address, not a query: a scheme (`https:`, `ytsearch:`), or a host name then a
+         * path, port or end (`youtube.com/watch?v=…`). "AC/DC - Back in Black" is a query. */
+        fun looksLikeAnAddress(q: String): Boolean = SCHEME.containsMatchIn(q) || HOST_PATH.containsMatchIn(q)
+
+        /** Whether an intent starts a session: `go`, not a relaunch from Recents (FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY),
+         * and the tests' loopback alone; on the network a session starts only by a tap on Start. */
+        fun startsByIntent(mode: HostGate.Mode, go: Boolean, fromHistory: Boolean): Boolean =
+            go && !fromHistory && mode == HostGate.Mode.LOOPBACK
 
         /** Whether [q] is an http(s) address of a loopback host the gate allows (HostGate's names), no user in it. */
         fun isLoopback(q: String): Boolean = try {
@@ -479,15 +564,18 @@ class BenchRun(
 }
 
 /**
- * The phone's record of the bench's runs, on its database ([Db], the main process's): [state] and [record] as
- * [BenchRun.Ledger] asks them, each in one read or write of the caller's.
+ * The phone's record of the bench's runs, on its database ([Db], the main process's): [state], [reserve], [release]
+ * and [record] as [BenchRun.Ledger] asks them, each in one read or write of the caller's.
  *
  * - The day's runs: the larger of kv `ytbench:runs` (the bench's own, a JSON list of UTC stamps, those of the last
  *   24 hours kept) and `events`' sent runs of provider `youtube` of the last 24 hours (every run the phone sent: the
- *   bench's own are rows there too, so a later product job and the bench share the six).
+ *   bench's own are rows there too, so a later product job and the bench share the six). A clock set back only
+ *   counts more runs, never fewer (a stamp later than now is still within 24 hours of it).
+ * - A reservation: the provider on, no cooldown, fewer runs than its budget, then the run's stamp appended, in one
+ *   write; the first run's pause asked of Pace.pauseAfterLastRequest itself (its sleep taken as the answer).
  * - A record: the run's `events` row under its run id (EventLog), kv `http:last_request:youtube` for a sent decision
- *   (as the runner writes it), its stamp in `ytbench:runs`, and for a block `Health.recordBlock` at the session's
- *   start (one strike), as the runner records one.
+ *   (as the runner writes it), and for a block `Health.recordBlock` at the session's start (one strike), its message
+ *   the runner's ProviderBlocked's, its status kept only where it is one of the data's `block_statuses`.
  */
 object DbLedger {
     const val RUNS = "ytbench:runs"
@@ -496,27 +584,55 @@ object DbLedger {
 
     fun state(db: Db, now: Instant, served: Long, jobs: Long, running: Boolean): BenchRun.State {
         val policy = PhoneConfig.read(db).provider(PROVIDER)
+        return BenchRun.State(policy.enabled, policy.budget.toInt(), policy.delay, runs(db, now), cooling(db, now),
+                              Pace.lastRequest(db, PROVIDER), served, jobs, running)
+    }
+
+    /** The sent runs of the last 24 hours before [now]: the larger of the bench's own stamps and `events`'. */
+    fun runs(db: Db, now: Instant): Int {
         val since = utc(now.minus(DAY))
         val sent = db.one("SELECT COUNT(*) FROM events WHERE provider = ? AND at >= ? AND decision IN " +
                           "(${Pace.SENT.joinToString(", ") { "?" }})", PROVIDER, since, *Pace.SENT.toTypedArray()) {
             it.long(0)
         }!!.toInt()
-        val own = stamps(db).count { it >= since }
-        val cooling = if (Health.isCooling(db, PROVIDER, now)) {
-            val until = Health.state(db, PROVIDER).cooldownUntil?.let { utc(it) }
-            "YouTube is cooling down after a block${until?.let { " until $it" } ?: ""}: no run."
-        } else null
-        return BenchRun.State(policy.enabled, policy.budget.toInt(), policy.delay, maxOf(sent, own), cooling,
-                              Pace.lastRequest(db, PROVIDER), served, jobs, running)
+        return maxOf(sent, stamps(db).count { it >= since })
+    }
+
+    private fun cooling(db: Db, now: Instant): String? = if (Health.isCooling(db, PROVIDER, now)) {
+        val until = Health.state(db, PROVIDER).cooldownUntil?.let { utc(it) }
+        "YouTube is cooling down after a block${until?.let { " until $it" } ?: ""}: no run."
+    } else null
+
+    /** One write (the caller's): the run's slot, or why none. */
+    fun reserve(db: Db, now: Instant, first: Boolean, draws: Draws, wall: () -> Double): BenchRun.Reservation {
+        val policy = PhoneConfig.read(db).provider(PROVIDER)
+        if (!policy.enabled) return BenchRun.Reservation(null, BenchRun.OFF, 0.0)
+        cooling(db, now)?.let { return BenchRun.Reservation(null, it, 0.0) }
+        val budget = policy.budget.toInt()
+        if (runs(db, now) >= budget) return BenchRun.Reservation(null, BenchRun.budgetWords(1, 0, budget), 0.0)
+        val stamp = utc(now)
+        val since = utc(now.minus(DAY))
+        db.kvSet(RUNS, JsonArray((stamps(db).filter { it >= since } + stamp).map(::JsonPrimitive)).toString())
+        var pause = 0.0
+        if (first) Pace.pauseAfterLastRequest(db, PROVIDER, policy.delay, draws, { pause = it }, wall)
+        return BenchRun.Reservation(stamp, null, pause)
+    }
+
+    /** One write: [stamp] taken back (one of it), for a run that never started. */
+    fun release(db: Db, stamp: String) {
+        val kept = stamps(db).toMutableList()
+        if (kept.remove(stamp)) db.kvSet(RUNS, JsonArray(kept.map(::JsonPrimitive)).toString())
     }
 
     fun record(db: Db, entry: BenchRun.Entry, now: Instant, wall: Double, sessionStart: Instant) {
         EventLog(db, entry.runId) { now }(Event(PROVIDER, entry.target, entry.status, entry.decision, entry.message))
         if (entry.decision in Pace.SENT) db.kvSet(Pace.LAST_SENT + PROVIDER, PyFormat.fixed(wall, 3))
-        val since = utc(now.minus(DAY))
-        val kept = stamps(db).filter { it >= since } + utc(now)
-        db.kvSet(RUNS, JsonArray(kept.map(::JsonPrimitive)).toString())
-        if (entry.blocked) Health.recordBlock(db, PROVIDER, sessionStart, entry.message ?: "blocked")
+        if (entry.blocked) {
+            val statuses = YouTubeData.read().runner.getValue("block_statuses").jsonArray.map { it.jsonPrimitive.int }
+            val blocked = ProviderBlocked(PROVIDER, entry.target, entry.status?.takeIf { it in statuses },
+                                          entry.message ?: "blocked")
+            Health.recordBlock(db, PROVIDER, sessionStart, blocked.message!!)
+        }
     }
 
     private fun stamps(db: Db): List<String> = db.kvGet(RUNS)?.let { text ->

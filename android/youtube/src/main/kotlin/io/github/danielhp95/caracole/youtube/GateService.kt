@@ -33,9 +33,12 @@ import java.util.concurrent.atomic.AtomicLong
  * Over a [Messenger]: [MODE] answers the gates' mode (a client of another process sends it to `:youtube`, the
  * main process's, as its own has no test runner to set it); [OPEN] starts a gate and answers its id, port and
  * `proxyArg` (which holds its secret, carried in the answer alone, never logged); [OPEN_OBSERVING] the same of an
- * OBSERVE gate (the bench's every host logged), opened only for the bench's own process (`:ytbench`, by the pid the
- * ask names, which the app's ActivityManager must list under that name) and only where the mode is the network's:
- * under the tests' LOOPBACK it is never opened, so no test can ask one; the bench asks it from its button alone; [LOG] answers a gate's [HostGate.log] and [HostGate.refusedAny]; [CLOSE] closes one;
+ * OBSERVE gate (the bench's every host logged), opened only where the mode is the network's (under the tests'
+ * LOOPBACK never, so no test can ask one) and for an ask that names the bench's own process (`:ytbench`): the pid is
+ * the asker's own claim, which the app's ActivityManager must list under that name (a Messenger carries no calling
+ * pid), so it guards against a mistake inside the app's own uid, never against another process of the app; the bench
+ * asks it from its button alone; [OPEN_LOOPBACK] a gate of LOOPBACK's mode whatever this process's, which can reach
+ * 127.0.0.1 and 10.0.2.2 alone (the bench's kill check, on the owner's phone too: always safe to open); [LOG] answers a gate's [HostGate.log] and [HostGate.refusedAny]; [CLOSE] closes one;
  * [CLOSE_ALL] a client's every gate (its close), each gate is closed too when the process that asked for it dies, and
  * every gate when the service ends. Nothing it is asked throws on its thread (where an uncaught
  * exception would end the main process, its server and queue with it): a gate that won't start is said in the answer,
@@ -99,7 +102,7 @@ class GateService : Service() {
         var opened = -1
         when (msg.what) {
             MODE -> answer.putString(MODE_NAME, mode().name)
-            OPEN, OPEN_OBSERVING -> {
+            OPEN, OPEN_OBSERVING, OPEN_LOOPBACK -> {
                 if (msg.what == OPEN_OBSERVING) {
                     observeRefusal(msg.data.getInt(PID, -1))?.let { why ->
                         answer.putString(FAILED, why)
@@ -109,7 +112,11 @@ class GateService : Service() {
                 }
                 var gate: HostGate? = null
                 val open = try {
-                    (if (msg.what == OPEN_OBSERVING) makeObserving else makeGate)(mode()).also { gate = it }.start()
+                    when (msg.what) {
+                        OPEN_OBSERVING -> makeObserving(mode())
+                        OPEN_LOOPBACK -> makeGate(HostGate.Mode.LOOPBACK)
+                        else -> makeGate(mode())
+                    }.also { gate = it }.start()
                 } catch (e: Exception) {
                     // A gate that won't listen (no port, a socket refused): said to the asker, never thrown here,
                     // where an uncaught exception would end the main process.
@@ -246,6 +253,9 @@ class GateService : Service() {
         /** A fresh OBSERVE gate: every host logged; the bench's alone, its button's (refused otherwise, in words). */
         fun openObserving(): Gate = gate(ask(OPEN_OBSERVING, -1) { putInt(PID, android.os.Process.myPid()) })
 
+        /** A fresh gate of LOOPBACK's mode, whatever the main process's: it reaches 127.0.0.1 and 10.0.2.2 alone. */
+        fun openLoopback(): Gate = gate(ask(OPEN_LOOPBACK, -1))
+
         /** The gates' mode, the main process's. */
         fun mode(): HostGate.Mode = HostGate.Mode.valueOf(requireNotNull(ask(MODE, -1).getString(MODE_NAME)))
 
@@ -319,6 +329,7 @@ class GateService : Service() {
         const val CLOSE_ALL = 4
         const val MODE = 5
         const val OPEN_OBSERVING = 6
+        const val OPEN_LOOPBACK = 7
 
         /** The bench's process, after the package's name (the debug app's manifest). */
         const val BENCH_PROCESS = ":ytbench"
