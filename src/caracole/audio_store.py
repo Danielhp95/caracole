@@ -55,7 +55,7 @@ from shutil import disk_usage
 from typing import IO, Any
 
 from caracole.config import Config
-from caracole.db import kv_delete, kv_get, kv_set
+from caracole.db import kv_delete, kv_get, kv_set, savepoint
 from caracole.songs import Song, get_song, update_song
 
 log = logging.getLogger(__name__)
@@ -747,16 +747,17 @@ def _sent_name(root: Path, upload_id: str) -> str:
 def _named(conn: sqlite3.Connection, root: Path, current: Song, kept: Path, upload_id: str | None,
            name: str = "") -> Path:
     """The song's row naming the kept file, and the name it was given under (``NAME_KEY``: a staged upload's, else
-    ``name``), then the staged record let go (a moved upload's keep over), then the file the song had there before,
+    ``name``), in one savepoint, then the staged record let go (a moved upload's keep over), then the file the song had there before,
     unless another song's row names it."""
     mtime = os.lstat(kept).st_mtime
     shown = _sent_name(root, upload_id) if upload_id is not None else _display_name(name)
-    if (current.audio_path, current.audio_mtime) != (str(kept), mtime):
-        update_song(conn, current.id, audio_path=str(kept), audio_mtime=mtime)
-    if shown:
-        kv_set(conn, f"{NAME_KEY}{current.id}", shown)
-    else:
-        kv_delete(conn, f"{NAME_KEY}{current.id}")
+    with savepoint(conn, "audio_named"):  # the row and its file's name together: never the new file, the old name
+        if (current.audio_path, current.audio_mtime) != (str(kept), mtime):
+            update_song(conn, current.id, audio_path=str(kept), audio_mtime=mtime)
+        if shown:
+            kv_set(conn, f"{NAME_KEY}{current.id}", shown)
+        else:
+            kv_delete(conn, f"{NAME_KEY}{current.id}")
     if upload_id is not None:
         _unlink(root / f"{_STAGED}{upload_id}.json")  # the row names the kept file now
     earlier = kept_in(root, current.audio_path)

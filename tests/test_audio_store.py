@@ -360,6 +360,33 @@ def test_keep_remembers_the_name_the_file_was_given_under(conn, cfg, tmp_path):
     assert given_name(conn, song) == "creep take 2.wav"  # the name it was sent under, shown: no folder, no control
 
 
+def test_the_row_and_the_name_are_written_together_or_not_at_all(conn, cfg, tmp_path, monkeypatch):
+    # One upload replacing another: a failure between the row's update and the name's write left the row naming the
+    # new file under the old file's name, which the next auto sheet's raw would carry (audio_name).
+    from caracole.audio_store import given_name
+
+    song = add_song(conn, "Radiohead", "Creep")
+    first = keep(cfg, conn, song, write(tmp_path / "home" / "Creep (Live).flac", "FLAC", 2.0), move=False)
+    before = get_song(conn, song.id)
+
+    def failing(conn, key, value):
+        raise OSError("the name's write fails")
+
+    monkeypatch.setattr(audio_store, "kv_set", failing)
+    with pytest.raises(OSError):
+        keep(cfg, conn, before, write(tmp_path / "home" / "Creep (Studio).flac", "FLAC", 3.0), move=False)
+    after = get_song(conn, song.id)
+    assert (after.audio_path, after.audio_mtime) == (str(first), before.audio_mtime)
+    assert given_name(conn, after) == "Creep (Live).flac"
+
+
+def test_the_name_key_is_one_of_the_per_song_records_a_merge_or_removal_deletes():
+    from caracole.audio_store import NAME_KEY
+    from caracole.songs import _PER_SONG_KV
+
+    assert NAME_KEY in _PER_SONG_KV
+
+
 def test_a_keep_finished_after_its_cut_off_remembers_the_name_too(conn, cfg, monkeypatch):
     from caracole.audio_store import adopt, given_name
 
