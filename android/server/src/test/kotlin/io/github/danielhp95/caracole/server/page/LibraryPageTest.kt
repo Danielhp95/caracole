@@ -123,7 +123,7 @@ class LibraryPageTest {
         assertEquals(obj("csrf" to "tok", "busy" to listOf(3, 9), "active" to 2, "removing" to listOf(5),
                          "jobs" to listOf(obj("id" to 1, "kind" to "sync")), "guitar" to false,
                          "youtube" to obj("ok" to false, "why" to LibraryPage.YOUTUBE_PROBLEM, "off" to true),
-                         "transcribe" to obj("ok" to false, "why" to LibraryPage.YOUTUBE_PROBLEM,
+                         "transcribe" to obj("ok" to false, "why" to LibraryPage.TRANSCRIBE_PROBLEM,
                                              "songs" to emptyList<Int>(), "nothing" to emptyList<Int>(),
                                              "unsung" to emptyList<Int>(), "transcribed" to emptyList<Int>(),
                                              "time" to ""),

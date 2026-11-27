@@ -3,8 +3,10 @@ package io.github.danielhp95.caracole.server.page
 import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.keys.SafeName
+import io.github.danielhp95.caracole.core.library.Kept
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.Songs
+import io.github.danielhp95.caracole.core.library.Versions
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.Fixtures
 import io.github.danielhp95.caracole.core.testing.Misses
@@ -199,6 +201,32 @@ class PhonePageDataTest {
         // Changed on the phone since the computer listed it: the phone's own card, its PDF moved by nothing it knows.
         val moved = made { "f".repeat(64) }
         assertEquals(JsonPrimitive(0), moved.getValue(queen.getValue("id").jsonPrimitive.long).getValue("transpose"))
+    }
+
+    @Test
+    fun `a chords-only sheet the phone made has the card and the server member that say where its words are heard`() {
+        // As AudioRunner keeps it: the auto version, its sheet (auto).txt, and every lyrics site having missed it.
+        val store = LibraryStore(library)
+        val id = database.writeBlocking { db ->
+            val song = store.add(db, "Calla Lake", "River Road", now = now)
+            Versions.updateSong(db, song.id, mapOf("lyrics_status" to "missing"))
+            val version = Versions.upsert(db, "auto", song.id.toString(), song.id, "sheet", "auto", 0.0, 0, 1, null,
+                                          "file:///audio.m4a", JsonObject(emptyMap()), now)
+            Kept.keepFile(db, store, Songs.byId(db, song.id)!!, version, Versions.SHEET_FILE_NAMES[1],
+                          "[Am]River [F]road\n".toByteArray(), 1, now)
+            song.id
+        }
+        val made = database.read { db -> data().data(db, now) }
+        val card = made.getValue("songs").jsonArray.map { it.jsonObject }.single { it.getValue("id").jsonPrimitive.long == id }
+        // library.js's hint: an auto sheet, no lyrics found, and server.transcribe not ok, its why the line it shows.
+        assertEquals(JsonPrimitive(true), card.getValue("auto"))
+        assertEquals(JsonPrimitive("missing"), card.getValue("lyrics"))
+        val transcribe = LibraryPage(LibraryAssets.load()).withServer(made, ServerControls("tok"))
+            .getValue("server").jsonObject.getValue("transcribe").jsonObject
+        assertEquals(JsonPrimitive(false), transcribe.getValue("ok"))
+        assertEquals(JsonPrimitive("No lyrics site has its words. The computer hears them from its own audio of this song."),
+                     transcribe.getValue("why"))
+        assertEquals(JsonPrimitive(LibraryPage.TRANSCRIBE_PROBLEM), transcribe.getValue("why"))
     }
 
     @Test

@@ -67,7 +67,8 @@ class LibraryPage(val assets: LibraryAssets, val requests: RequestsTab = Request
     /**
      * build_library_page's part of the served page: [data] with the server's own member (`server`, where caracole
      * serve puts it: before the songbooks), the form token, the songs a request waits or runs for, the requests, no
-     * Guitar Pro page, no sheet from YouTube, a sheet from an audio file where [ServerControls.audio] says so
+     * Guitar Pro page, no sheet from YouTube, no lyrics transcribed ([TRANSCRIBE_PROBLEM]: where they are), a sheet
+     * from an audio file where [ServerControls.audio] says so
      * (library_page.audio_member's shape: `ok`, `why`, `limit`, `too_big`, the "+" and a card's entry drawn by
      * library.js where `ok`), lyrics looked up under another name (`lyricsSearch` true: LyricsRoutes), and the
      * tests' timers if any; and each song's
@@ -84,7 +85,7 @@ class LibraryPage(val assets: LibraryAssets, val requests: RequestsTab = Request
             put("guitar", JsonPrimitive(controls.guitar))
             put("youtube", JsonObject(mapOf("ok" to JsonPrimitive(false), "why" to JsonPrimitive(YOUTUBE_PROBLEM),
                                             "off" to JsonPrimitive(true))))
-            put("transcribe", JsonObject(mapOf("ok" to JsonPrimitive(false), "why" to JsonPrimitive(YOUTUBE_PROBLEM),
+            put("transcribe", JsonObject(mapOf("ok" to JsonPrimitive(false), "why" to JsonPrimitive(TRANSCRIBE_PROBLEM),
                                                "songs" to JsonArray(emptyList()), "nothing" to JsonArray(emptyList()),
                                                "unsung" to JsonArray(emptyList()),
                                                "transcribed" to JsonArray(emptyList()), "time" to JsonPrimitive(""))))
@@ -131,6 +132,11 @@ class LibraryPage(val assets: LibraryAssets, val requests: RequestsTab = Request
         /** Why the phone makes no sheet from a YouTube video, as youtube_fetch.route_reason says why a caracole makes
          * none: the request form's line, and the server member's `youtube.why`. */
         const val YOUTUBE_PROBLEM = "YouTube isn't on the phone"
+
+        /** Where the words of a song no lyrics site has are heard, the phone hearing none: the server member's
+         * `transcribe.why`, which library.js says on the card of a song with a chords-only auto sheet. */
+        const val TRANSCRIBE_PROBLEM =
+            "No lyrics site has its words. The computer hears them from its own audio of this song."
 
         /** Why a phone with nothing to hear with makes no sheet from an audio file (the release; AudioRunner.problemOf
          * with no chords): the server member's `audio.why`, its page then with no "+". */

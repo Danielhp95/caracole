@@ -3077,7 +3077,10 @@ has run against about how long it takes here, how far Whisper has heard the song
 transcribed lyrics.". If it fails, the Journal gives the reason ("no singing heard.", "the GPU
 failed: …") with Try again. One runs at a time per song, and never beside another transcription
 or a lookup. A song no longer offered one is refused ("… isn't offered a transcription: its lyrics
-are found."). Where caracole can't transcribe, no card offers it. The phone never offers it.
+are found."). Where caracole can't transcribe, no card offers it. The phone never offers it. There a
+song with an auto sheet of chords alone and no lyrics found says, in one line, "No lyrics site has
+its words. The computer hears them from its own audio of this song." (on a computer that can't
+transcribe, the card says why in the same place).
 
 Your word over caracole's goes on the card too. A song in which nothing sung was heard says so, with
 **Transcribe anyway** (`caracole transcribe --force`). One whose sheet is over its transcript has
