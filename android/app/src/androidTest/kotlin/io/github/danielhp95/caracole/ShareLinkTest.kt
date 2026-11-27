@@ -43,7 +43,8 @@ import java.util.concurrent.atomic.AtomicInteger
  * and behind the app that shared; a link alone of Spotify's is read from its track page, asked once (a fake site's
  * answer: tests/fixtures/spotify/track.html) by the page itself, as is one a link of caracole's own page leads to (the
  * WebView's `Sec-Fetch-Site` none and same-origin: ShareRoutes.asks), and one Spotify won't answer (every site refused) says so in one line
- * and offers Edit, whose names are searched again.
+ * and offers Edit, whose names are searched again; a YouTube video offers Make its sheet from this video, or the one
+ * hint of why not.
  *
  * The library screen is reached through the lifecycle monitor, never ActivityScenario, which loses track of a
  * single-task activity that gets a new intent.
@@ -216,6 +217,44 @@ class ShareLinkTest {
         shownAt("the names searched", "artist=Eagles")
         assertEquals("We searched for Eagles – Hotel California.", text(".lede"))
         assertTrue(text(".reading.now").contains("Hotel California"))
+    }
+
+    /** A YouTube video shared from YouTube's app (the phone-youtube design's §5.2): its names read by YouTube's oEmbed,
+     * asked once (a fake answer: tests/fixtures/youtube/oembed.json), and Make its sheet from this video where this
+     * phone makes one (Phone.youtubeOffered), posting the library page's request with `youtube` and the form token,
+     * else no button and the one hint that says why; nothing of yt-dlp run by the page. Edit carries the video. */
+    @Test fun aYouTubeVideoSharedOffersItsSheetFromTheVideoOrSaysWhyNot() {
+        val oembed = "https://www.youtube.com/oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DfJ9rUzIMcZQ&format=json"
+        val asked = AtomicInteger()
+        Caracole.sitesForTests = Transport { request ->
+            asked.incrementAndGet()
+            if (request.url != oembed) throw TransportError("refused", request.url)
+            HttpAnswer(200, listOf("content-type" to "application/json"), Corpus.fixture("youtube/oembed.json"))
+        }
+        val phone = Caracole.phone(context)
+        val queue = phone.queue
+        val before = queue.snapshot().map { it.id }.toSet()
+        share("https://youtu.be/fJ9rUzIMcZQ?si=Qx1")
+        shownAt("the share's page", "/share?")
+        assertEquals("Read from the video's title on YouTube: Queen – Bohemian Rhapsody.", text(".lede"))
+        assertEquals(1, asked.get())
+        val why = phone.youtubeOffered()
+        val button = "form[method=post][action=\"/request\"] button"
+        if (why == null) {
+            assertEquals("Make its sheet from this video", evaluate("document.querySelector('$button').textContent"))
+            assertEquals("https://www.youtube.com/watch?v=fJ9rUzIMcZQ",
+                         evaluate("document.querySelector('form[action=\"/request\"] input[name=youtube]').value"))
+            assertEquals(true, evaluate("document.querySelector('form[action=\"/request\"] input[name=csrf]').value.length > 0"))
+        } else {
+            assertEquals(false, evaluate("document.querySelector('$button') !== null"))
+            val hint = "No sheets from YouTube here: $why."
+            assertEquals(1, (evaluate("Array.from(document.querySelectorAll('p.message')).filter(p => p.textContent === " +
+                                          "${JSONObject.quote(hint)}).length") as Number).toInt())
+        }
+        assertEquals(true, evaluate("document.querySelector('details.picker form[action=\"/share\"] input[name=youtube]')" +
+                                        ".value === 'https://www.youtube.com/watch?v=fJ9rUzIMcZQ'"))
+        assertEquals("nothing queued by the page", before, queue.snapshot().map { it.id }.toSet())
+        assertEquals(1, asked.get())
     }
 
     @Test fun eachShareIsLoggedAsItCame() {

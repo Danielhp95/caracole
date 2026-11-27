@@ -89,6 +89,14 @@ internal class SongLine(val key: String) {
         return if (href.isNotEmpty() && !href.startsWith("/") && ':' !in href.substringBefore('/')) "/$href" else "/#song=$id"
     }
 
+    /** Whether a site has this song's chords: Ultimate Guitar's chords or ukulele chords counted, or LaCuerda's sheet
+     * (the share page's Make its sheet from this video then comes second to Fetch). */
+    fun sheetOnSites(): Boolean {
+        val counts = (ug?.get("counts") as? JsonObject).orEmpty()
+        val ugChords = listOf("chords", "ukulele").any { ((counts[it] as? JsonPrimitive)?.longOrNull ?: 0) > 0 }
+        return ugChords || chords()
+    }
+
     /** LaCuerda's row with a sheet to keep (indexLine's `chords`). */
     private fun chords(): Boolean = lacuerda?.let { https(it.text("sheet")) && https(it.text("url")) } == true
 

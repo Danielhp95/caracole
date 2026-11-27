@@ -4325,8 +4325,17 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     caracole's pages), the owner's choice of 2026-11-15; else (cross-site, same-site, or no header) the cache's answer
     alone, or Read the link, a form that posts the share again to `POST /share` with the form token, which asks once.
     So no other site's page makes the phone ask a service or write (the one write with no token stays `mine=1`).
+  - A YouTube video shared (its link's id, `OverrideUrls.videoIdFromUrl`; through Edit as `youtube`): Make its sheet
+    from this video (the phone-youtube design's §5.2, `SharePage.MAKE`), a form posting the library page's `POST
+    /request` with `artist`, `title`, `youtube` and the form token (YouTubeRoutes' `youtube --sheet --url` queued),
+    where `YouTubeRoutes.whyNotFromVideo` offers it: the route ready (`Phone.youtubeProblem`, then a cooldown), the
+    names read, the song not ignored, with no human sheet and no audio of its own; first and the page's main button
+    where no site has the song's sheet (`SongLine.sheetOnSites`), else second to Fetch. Otherwise no button and one
+    hint, the route's words ("No sheets from YouTube here: …", "… already has a sheet.", `NO_NAMES`). Nothing
+    downloads before the owner presses it, a share by mistake spends no run; the names come of oEmbed still, the
+    page's one request, and Edit's names are the ones the sheet is made under.
 - ShareRoutesTest and SharedLinkTest on the JVM, ShareLinkTest on the device (the WebView's loadUrl of a share and a
-  link of caracole's page both ask by themselves).
+  link of caracole's page both ask by themselves; a YouTube video's button or its hint).
 
 ##### Files shared to the app
 

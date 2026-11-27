@@ -127,6 +127,32 @@ class YouTubeRoutes(
         return YouTubeData.read().watchUrl(video ?: throw notAVideo())
     }
 
+    /**
+     * Why the share page offers no Make its sheet from this video for the song [names] names (the phone-youtube
+     * design's §5.2), in the words this route would refuse it in, null where it offers one: the route not ready now
+     * ([offered]: [problem], then YouTube cooling down, "No sheets from YouTube here: …"), no names read ([NO_NAMES]),
+     * or a song of the library it isn't for (ignored, a human sheet, audio of its own: [youtubeIsFor]'s words). Asks
+     * nothing and writes nothing.
+     */
+    fun whyNotFromVideo(names: Pair<String, String>?): String? {
+        val why = problem()  // read before: no read nested in the one below
+        return parts.database.read { db ->
+            val notNow = offered(why, db, clock())
+            when {
+                notNow != null -> "$NOT_HERE: $notNow."
+                names == null || Py.strip(names.first).isEmpty() || Py.strip(names.second).isEmpty() -> NO_NAMES
+                else -> Songs.byKey(db, Normalize.identityKey(names.first, names.second))?.let { song ->
+                    try {
+                        youtubeIsFor(db, song, LookupForms.overrides(db))
+                        null
+                    } catch (e: Refused) {
+                        e.message
+                    }
+                }
+            }
+        }
+    }
+
     /** youtube_is_for: 409 for a song a sheet from YouTube isn't for, in `caracole youtube --sheet`'s words. */
     private fun youtubeIsFor(db: Db, song: SongRow, overrides: Overrides) {
         LookupForms.notIgnored(song, overrides)
@@ -285,6 +311,8 @@ class YouTubeRoutes(
         const val VIDEO_LIMIT = 600
         /** youtube_routes.NOT_HERE: how a refusal begins where no sheet from YouTube can be made. */
         const val NOT_HERE = "No sheets from YouTube here"
+        /** The share page's hint for a video whose song's names caracole couldn't read: Edit's names make its sheet. */
+        const val NO_NAMES = "Type the artist and the title (Edit) to make its sheet from this video."
         const val THUMB = "/youtube/thumb/"
         private const val JPG = ".jpg"
         private const val FRAMES = "frame-ancestors 'none'"

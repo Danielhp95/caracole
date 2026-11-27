@@ -334,7 +334,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         GuitarRoutes(parts),
         youtubeRoutes,
         ShareRoutes(deps.database, search, deps.csrf, libraryName = { config().libraryName.orEmpty() },
-                    links = ShareReader(parts)),
+                    links = ShareReader(parts), youtube = youtubeRoutes),
     )
 
     val app: App = App(

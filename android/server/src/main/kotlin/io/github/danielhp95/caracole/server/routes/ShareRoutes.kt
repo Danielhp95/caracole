@@ -1,12 +1,14 @@
 package io.github.danielhp95.caracole.server.routes
 
 import io.github.danielhp95.caracole.core.db.Database
+import io.github.danielhp95.caracole.core.library.OverrideUrls
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.names.SongNames
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.py.PyUrl
 import io.github.danielhp95.caracole.core.share.ShareLinks
 import io.github.danielhp95.caracole.core.share.SharedText
+import io.github.danielhp95.caracole.core.youtube.YouTubeData
 import io.github.danielhp95.caracole.server.http.Body
 import io.github.danielhp95.caracole.server.http.GetAnswer
 import io.github.danielhp95.caracole.server.http.LibraryName
@@ -17,6 +19,7 @@ import io.github.danielhp95.caracole.server.http.Route
 import io.github.danielhp95.caracole.server.http.RouteModule
 import io.github.danielhp95.caracole.server.routes.search.Looked
 import io.github.danielhp95.caracole.server.routes.search.SearchQuery
+import io.github.danielhp95.caracole.server.routes.share.FromVideo
 import io.github.danielhp95.caracole.server.routes.share.SharePage
 import io.github.danielhp95.caracole.server.routes.share.ShareView
 import io.github.danielhp95.caracole.server.routes.share.SongLine
@@ -45,10 +48,16 @@ import kotlinx.serialization.json.JsonPrimitive
  * Read the link, a form that POSTs the share with the form token, so that no other page makes the phone ask a service
  * or write. Nothing is asked of a tab site: the page ([SharePage]) offers the best match, its sites and your song when the
  * library has it, and Fetch posts the library page's own `POST /lookup`, the one that asks the sites, at a lookup's
- * pace, once the owner taps it.
+ * pace, once the owner taps it. A YouTube video shared ([youtube]: its link's id, kept through Edit as `youtube`)
+ * offers Make its sheet from this video where this phone makes one for the song named (the phone-youtube design's
+ * §5.2, YouTubeRoutes.whyNotFromVideo), first where no site has the song's sheet, else second to Fetch; it posts the
+ * library page's own `POST /request` with `youtube` and the form token, which queues `youtube --sheet --url`: nothing
+ * downloads before the owner presses it, and its names are Edit's to change first. Where none can be made, one hint
+ * says why in its place. The video's names are still oEmbed's, the page's one request.
  */
 class ShareRoutes(private val database: Database, private val search: SearchRoutes, private val csrf: String,
-                  private val libraryName: () -> String = { "" }, private val links: LinkReader = LinkReader.NONE) :
+                  private val libraryName: () -> String = { "" }, private val links: LinkReader = LinkReader.NONE,
+                  private val youtube: YouTubeRoutes? = null) :
     RouteModule {
     /** What a shared link's service says of it ([ShareLinks.Read]): what is known with no request (the service off,
      * the cache's answer), else, when [ask], the service asked once; null for none known and none asked. [NONE] asks
@@ -87,7 +96,9 @@ class ShareRoutes(private val database: Database, private val search: SearchRout
         val sent: List<Pair<String, String>>
         var said: String?
         val link: String?
+        val video: String?
         if (typed) {
+            video = field(asked, "youtube").takeIf { Py.len(it) <= YouTubeRoutes.VIDEO_LIMIT }?.let(OverrideUrls::videoIdFromUrl)
             app = field(asked, "app").ifEmpty { null }
             sent = emptyList()
             said = listOf(artist, title).filter { it.isNotEmpty() }.joinToString(" ").ifEmpty { null }
@@ -101,6 +112,7 @@ class ShareRoutes(private val database: Database, private val search: SearchRout
             sent = listOf("Text" to text, "Subject" to subject, "Title" to extra).filter { it.second.isNotEmpty() }
             said = shared.said
             link = shared.link
+            video = link?.takeIf { Py.len(it) <= YouTubeRoutes.VIDEO_LIMIT }?.let(OverrideUrls::videoIdFromUrl)
         }
         // A link alone of a service caracole may ask: its answer's names, as a text that said them would give them.
         val linked = if (typed || said != null) null else link?.let { ShareLinks.of(it) }
@@ -120,12 +132,18 @@ class ShareRoutes(private val database: Database, private val search: SearchRout
         val lines = answer?.let { SongLine.of(it) }.orEmpty()
         val best = answer?.let { SongLine.best(it, lines, names) }
         val ugEmpty = (answer?.get("hint") as? JsonPrimitive)?.content == Looked.UG_EMPTY
+        val unread = if (linked != null && read == null && !ask) linked.service else null
+        // A video's sheet offered once its names are known (none while Read the link is still to be pressed).
+        val fromVideo = if (video == null || youtube == null || unread != null) null else {
+            FromVideo(youtube.whyNotFromVideo(names), first = best?.sheetOnSites() != true)
+        }
         return ShareView(
             app = app, sent = sent, said = said, names = names, link = link, typed = typed, read = read, best = best,
             others = lines.filter { it !== best }.take(OTHERS), note = if (ugEmpty) NO_INDEX else null,
             artist = names?.first ?: artist, title = names?.second ?: if (typed) title else said.orEmpty(),
-            unread = if (linked != null && read == null && !ask) linked.service else null,
+            unread = unread,
             fields = if (typed) emptyList() else SHARED.map { it to field(asked, it) }.filter { it.second.isNotEmpty() },
+            video = video?.let { YouTubeData.read().watchUrl(it) }, fromVideo = fromVideo,
         )
     }
 
