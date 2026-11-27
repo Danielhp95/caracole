@@ -17,7 +17,9 @@ import kotlin.test.assertNotNull
  * SHA-256, of the version pinned; and yt-dlp-ejs's version is the one yt-dlp's own wheel requires (its METADATA's
  * `yt-dlp-ejs==…`), as yt-dlp refuses another (the design's §3.1). QuickJS-NG is pinned by its tag's tree (the commit
  * and the NAR hash of its files, `fetchFromGitHub`'s), never by GitHub's archive tarball, a generated file whose bytes
- * GitHub has changed before; CARACOLE_QUICKJS_SRC (`caracole.youtube.quickjs`) is that tree, of the tag's version.
+ * GitHub has changed before; CARACOLE_QUICKJS_SRC (`caracole.youtube.quickjs`) is that tree, of the tag's version:
+ * the tag is checked against the source's version macros alone (quickjs.h's `QJS_VERSION_*`), never against the commit
+ * or the NAR hash, which Nix's fixed-output fetch checks.
  */
 class PinsTest {
     private val pins: JsonObject =

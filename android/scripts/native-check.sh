@@ -2,13 +2,16 @@
 # What the debug APK's own native code must be, for each ABI (arm64-v8a, x86_64): libcaracole_soxr.so
 # (autochords/native/, packaged by :ml) and libqjs.so (QuickJS-NG's qjs, youtube/native/, packaged by :youtube):
 #
-#   android/scripts/native-check.sh [APK]      # default: android/app/build/outputs/apk/debug/app-debug.apk
+#   android/scripts/native-check.sh [--expect extracted|stored] [APK]
+#                                  # default: android/app/build/outputs/apk/debug/app-debug.apk
 #
 # run inside `nix develop ./android` after `gradle -p android :app:assembleDebug`:
 #
 # - either stored uncompressed and 16 KB aligned (zipalign -c -P 16), or compressed in an APK whose manifest says
 #   android:extractNativeLibs="true" (the debug build's useLegacyPackaging, app/build.gradle.kts: the package manager
-#   extracts it at install, and the zip's alignment is nothing to it); and its every LOAD segment aligned 0x4000;
+#   extracts it at install, and the zip's alignment is nothing to it); with --expect, the one of the two named
+#   (extracted: compressed under extractNativeLibs="true", the debug build's; stored: uncompressed and aligned, the
+#   release's), the other a failure; and its every LOAD segment aligned 0x4000;
 # - stripped: no .debug_* or .symtab section, no .comment, no build-id note;
 # - no path of the machine that built it: no "/home/", "/nix/store/", ".cxx/" or "/tmp/" among its strings;
 # - libqjs.so a position-independent executable (ELF type DYN with an interpreter, /system/bin/linker64), which
@@ -19,6 +22,15 @@
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")/.." && pwd)
+expect=""
+case "${1-}" in
+  --expect) expect="${2-}"; shift 2 || true ;;
+  --expect=*) expect="${1#--expect=}"; shift ;;
+esac
+case "$expect" in
+  ""|extracted|stored) ;;
+  *) echo "native-check.sh: --expect takes extracted or stored, not '$expect'" >&2; exit 2 ;;
+esac
 apk=${1:-$here/app/build/outputs/apk/debug/app-debug.apk}
 : "${ANDROID_HOME:?run inside nix develop ./android}"
 ndk=$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin
@@ -42,8 +54,10 @@ for entry in lib/{arm64-v8a,x86_64}/{libcaracole_soxr,libqjs}.so; do
   fi
   if grep -qF "$entry (OK - compressed)" <<< "$aligned"; then
     [ "$extracted" = 1 ] || fail "$entry: compressed in an APK whose native libraries aren't extracted"
+    [ "$expect" != stored ] || fail "$entry: compressed and extracted at install, where --expect stored"
   else
     grep -qF "$entry (OK)" <<< "$aligned" || fail "$entry: not stored uncompressed and 16 KB aligned"
+    [ "$expect" != extracted ] || fail "$entry: stored in the APK, where --expect extracted"
   fi
   if "$ndk/llvm-readelf" -lW "$so" | awk '$1 == "LOAD" && $NF != "0x4000"' | grep -q .; then
     fail "$entry: a LOAD segment not aligned 0x4000"

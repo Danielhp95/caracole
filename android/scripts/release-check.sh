@@ -21,8 +21,9 @@
 #   (lib<name>_python.so, lib<name>_chaquopy.so: OpenSSL's, SQLite's), no class under com/chaquo/ (Chaquopy's) in its
 #   dex and no entry under assets/chaquopy/ (the standard library, yt-dlp, the glue);
 # - and of QuickJS-NG: no lib/*/libqjs.so; and its native libraries packaged as before the debug build's
-#   useLegacyPackaging (app/build.gradle.kts): each lib/*/*.so stored uncompressed and 16 KB aligned (zipalign -c -P
-#   16), none compressed, and no android:extractNativeLibs="true" in its manifest;
+#   useLegacyPackaging (app/build.gradle.kts): every lib/*/*.so entry of the APK stored uncompressed and 16 KB aligned
+#   (zipalign -c -P 16's "(OK)", counted against the APK's own lib/*/*.so entries, so one zipalign leaves unsaid
+#   fails too), none compressed, and no android:extractNativeLibs="true" in its manifest;
 #
 # and the controls, so that no probe passes for nothing:
 #
@@ -106,16 +107,18 @@ probes() {
         "$(grep -c '^assets/chaquopy/' "$probe/entries" || true)"
 }
 
-# One APK's native libraries: "qjs stored compressed extracted" (libqjs.so entries; lib/*/*.so stored uncompressed and
-# 16 KB aligned, and compressed; 1 when its manifest says android:extractNativeLibs="true"), after probes of the same
-# APK, whose entries and manifest it reads.
+# One APK's native libraries: "qjs stored compressed extracted total" (libqjs.so entries; lib/*/*.so stored
+# uncompressed and 16 KB aligned, and compressed; 1 when its manifest says android:extractNativeLibs="true"; every
+# lib/*/*.so entry of the APK, whatever zipalign said of it), after probes of the same APK, whose entries and manifest
+# it reads.
 natives() {
     local aligned
     aligned="$(nix develop ./android -c sh -c '"$ANDROID_HOME"/build-tools/36.0.0/zipalign -c -P 16 -v 4 "$1"' sh "$1")"
     echo "$(grep -c '^lib/[^/]*/libqjs\.so$' "$probe/entries" || true)" \
         "$(grep -c -E '^ *[0-9]+ lib/[^/]+/[^/]+\.so \(OK\)$' <<<"$aligned" || true)" \
         "$(grep -c -E '^ *[0-9]+ lib/[^/]+/[^/]+\.so \(OK - compressed\)$' <<<"$aligned" || true)" \
-        "$(grep -c -F 'android:extractNativeLibs(0x010104ea)=true' "$probe/manifest" || true)"
+        "$(grep -c -F 'android:extractNativeLibs(0x010104ea)=true' "$probe/manifest" || true)" \
+        "$(grep -c -E '^lib/[^/]+/[^/]+\.so$' "$probe/entries" || true)"
 }
 
 failed=0
@@ -162,12 +165,17 @@ check "release APK holds no libchaquopy_java.so" "$(yes_if '[ "$chaquojni" = 0 ]
 check "release APK holds no lib*_python.so or lib*_chaquopy.so" "$(yes_if '[ "$chaquolinked" = 0 ]')"
 check "release APK holds no class under com/chaquo/" "$(yes_if '[ "$chaquoclasses" = 0 ]')"
 check "release APK holds nothing under assets/chaquopy/" "$(yes_if '[ "$chaquoassets" = 0 ]')"
-read -r qjs stored compressed extracted < <(natives "$release")
-echo "release APK: $qjs libqjs.so, native libraries $stored stored and aligned, $compressed compressed," \
-    "extractNativeLibs=true $extracted"
+read -r qjs stored compressed extracted total < <(natives "$release")
+echo "release APK: $qjs libqjs.so, native libraries $stored stored and aligned, $compressed compressed, of $total" \
+    "lib/*/*.so entries, extractNativeLibs=true $extracted"
 check "release APK holds no libqjs.so" "$(yes_if '[ "$qjs" = 0 ]')"
-check "release APK's native libraries are stored uncompressed and 16 KB aligned, none compressed" \
-    "$(yes_if '[ "$stored" -gt 0 ] && [ "$compressed" = 0 ]')"
+check "release APK holds native libraries (lib/*/*.so)" "$(yes_if '[ "$total" -gt 0 ]')"
+if [ "$total" -gt 0 ] && [ "$stored" != "$total" ]; then
+    echo "      $((total - stored)) of the release's $total lib/*/*.so entries aren't stored uncompressed and 16 KB" \
+        "aligned (zipalign's (OK)): compressed, misaligned, or not read by zipalign"
+fi
+check "release APK's native libraries are every one stored uncompressed and 16 KB aligned" \
+    "$(yes_if '[ "$total" -gt 0 ] && [ "$stored" = "$total" ] && [ "$compressed" = 0 ]')"
 check "release APK's manifest says no extractNativeLibs=true" "$(yes_if '[ "$extracted" = 0 ]')"
 
 read -r libs ortclasses mlclasses benchdex rowwords autochords assets modelfiles weights provider benchmanifest \
@@ -198,9 +206,9 @@ check "the control: the debug APK holds lib*_python.so and lib*_chaquopy.so" \
     "$(yes_if '[ "$chaquolinked" -gt 0 ]')"
 check "the control: the debug APK holds classes under com/chaquo/" "$(yes_if '[ "$chaquoclasses" -gt 0 ]')"
 check "the control: the debug APK holds assets/chaquopy/" "$(yes_if '[ "$chaquoassets" -gt 0 ]')"
-read -r qjs stored compressed extracted < <(natives "$debug")
+read -r qjs stored compressed extracted total < <(natives "$debug")
 echo "debug APK (the control): $qjs libqjs.so, native libraries $stored stored and aligned, $compressed compressed," \
-    "extractNativeLibs=true $extracted"
+    "of $total lib/*/*.so entries, extractNativeLibs=true $extracted"
 check "the control: the debug APK holds libqjs.so" "$(yes_if '[ "$qjs" -gt 0 ]')"
 check "the control: the debug APK's native libraries are compressed, extracted at install" \
     "$(yes_if '[ "$compressed" -gt 0 ] && [ "$extracted" = 1 ]')"
