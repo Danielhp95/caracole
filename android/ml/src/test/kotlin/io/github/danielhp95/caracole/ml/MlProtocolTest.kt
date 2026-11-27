@@ -19,6 +19,7 @@ class MlProtocolTest {
         val (kind, words) = MlProtocol.failure(IOException("can't move /x/decoded.f32"))
         assertEquals(MlProtocol.SETUP_KIND, kind)
         assertEquals("${MlProtocol.CANT_WRITE}: can't move /x/decoded.f32", words)
+        assertEquals("a file of the hearing's can't be read or written", MlProtocol.CANT_WRITE)
     }
 
     @Test fun anythingElseIsStillABug() {

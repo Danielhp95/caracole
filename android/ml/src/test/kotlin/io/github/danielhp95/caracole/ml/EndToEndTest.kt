@@ -84,4 +84,42 @@ class EndToEndTest {
         assertEquals(parted.majmin, all["wcsr_majmin_least"]!!.jsonPrimitive.double, 1e-6)
         assertTrue(EndToEnd.overAll(listOf(same), g)["pass"]!!.jsonPrimitive.boolean)
     }
+
+    private val g = EndToEnd.Gates(0.99, 0.98, 0.99, 0.07, 5.0)
+
+    private fun scored(file: String = "x", duration: Double = 100.0, computerDuration: Double? = duration,
+                       mel: Int = 501, majmin: Double = 1.0, beatsF: Double? = 1.0) =
+        EndToEnd.Scored(file, majmin, 1.0, beatsF, 1.0, 10, 10, 2205, 2205, mel, 501, duration, computerDuration,
+            EndToEnd.Differ(10, 0, List(10) { 0 }, emptyList()))
+
+    @Test fun aReferenceWithNoBeatsAfterTheTrimIsNoPass() {
+        val record = """{"kind": "hearing", "file": {"name": "x.mp3"}, "duration": 10.0,
+            "btc": {"samples": 220500, "frames": 108, "argmax": [[2, 108]], "segments": []},
+            "beats": {"frames": 501, "beats": [1.0, 2.0, 4.5], "downbeats": [1.0]}}"""
+        val h = EndToEnd.Hearing.read(record)
+        val s = EndToEnd.score(h, h.harte, heard(h.harte, listOf(1.0, 2.0, 4.5), 10.0),
+            Checkpoints.Pcm(10.0, 220500, 220500), g)
+        assertNull(s.beatsF)
+        assertNull(s.downbeatsF)
+        assertTrue(s.failures(g).toString(), "no reference beats after 5.0 s" in s.failures(g))
+        assertFalse(s.pass(g))
+    }
+
+    @Test fun aMelOrADurationThatIsntTheComputersFails() {
+        assertEquals(listOf("beat_this read 502 frames, the computer 501"), scored(mel = 502).failures(g))
+        assertEquals(listOf("its length 100.0 s, read_audio's 100.5 s"),
+            scored(computerDuration = 100.5).failures(g))
+        assertTrue(scored(computerDuration = null).pass(g))
+    }
+
+    @Test fun overAllOfNoFilesPassesNothingAndItsMeansWeighByLength() {
+        val none = EndToEnd.overAll(emptyList(), g)
+        assertFalse(none["pass"]!!.jsonPrimitive.boolean)
+        assertEquals(kotlinx.serialization.json.JsonNull, none["wcsr_majmin_mean"])
+        val all = EndToEnd.overAll(listOf(scored(duration = 300.0, majmin = 1.0),
+            scored(duration = 100.0, majmin = 0.96)), g)
+        assertEquals(0.99, all["wcsr_majmin_mean"]!!.jsonPrimitive.double, 1e-9)
+        assertEquals(0.96, all["wcsr_majmin_least"]!!.jsonPrimitive.double, 0.0)
+        assertEquals(400.0, all["seconds"]!!.jsonPrimitive.double, 0.0)
+    }
 }

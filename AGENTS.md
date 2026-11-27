@@ -2815,9 +2815,10 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     copied into `no_backup/bench-models/`, `BenchModels`; the references; the report) and the clips as debug assets
     (`autochords/`, app/build.gradle.kts). Its whole-pipeline mode (Gate B1, the screen's Hear the songs (B1),
     `BenchService.HEARINGS`): the folder's songs and its `hearings` folder copied into `no_backup/bench-hearings/`,
-    each song heard whole through `MlChordModels` (a fresh `:ml` a song, no checkpoint kept), scored by `EndToEnd`
-    (`BenchHearings`), the report's `hearings` member (`BenchReport.hearings`, `HeardSong`: each song's scores against
-    the thresholds, lengths, stages, `ml_peak_mb`, and over all; null where it didn't run). `ChordsBenchTest`
+    each song heard whole through `MlChordModels` (a fresh `:ml` a song, no checkpoint kept, Stop sent as its CANCEL),
+    scored by `EndToEnd` (`BenchHearings`), the report's `hearings` member (`BenchReport.hearings`, `HeardSong`: each
+    song's scores against the thresholds, lengths, stages, `ml_peak_mb`, and over all, no pass while a song wasn't
+    heard, `not_heard`; null where it didn't run; no report file where the run threw). `ChordsBenchTest`
     (`device-test.sh --ml`) runs its sessions over the clips on the emulator, a process each, and the B1 mode over
     hearing.mp3 and hearing.m4a.
   - `android/scripts/release-check.sh` holds the release to none of it: no onnxruntime or `:ml` on its runtime classpath
@@ -2891,14 +2892,17 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     files pushed to `/data/local/tmp/caracole-data`, removed however the run ends; skipped with no `-e data`) runs it
     over songs outside the repository, the owner's, against autochords_reference's `--hearings`, each stage's time
     (`Pipeline.STAGES`: decode, mixdown, resample, chords, beats, told by `hear`'s `timed`, `MlProtocol.STAGES` and
-    `STAGE_NANOS` in its DONE, `MlChordModels.lastStagesNanos`), `:ml`'s peak, the platform's encoder delay and padding
-    and the decoder's trim.
+    `STAGE_NANOS` in its DONE, `MlChordModels.lastStagesNanos`), `:ml`'s peak and its `RssAnon`/`RssFile` at the
+    highest RSS (`PEAK_ANON_KB`, `PEAK_FILE_KB`, `lastPeakSplitKb`), the platform's encoder delay and padding and the
+    decoder's trim; each song's copy and checkpoints removed in a `finally` and an `@After`, and the EXIT trap clears
+    `:ml`'s test APK's data after a `--data` run.
 - `:autochords` (plain JVM, stage B1): the front ends of the chords from audio, `frontend.Soxr`, `Cqt` and `Mel`;
   `Pcm`, a WAV's or an AIFF's PCM read as libsndfile reads it as float32 (`format`, then `read` a block at a time; a
   header cut short or absurd `Pcm.Unreadable`), `PcmTest` holding it to decode.jsonl's lossless files sample for
   sample; `Mp4`, `MpegHeader` and `Ogg`, what a container's boxes, first frame and last page say of its length as
   mutagen and FFmpeg read them (`ContainerLengthTest`, to the bit against decode.jsonl; an MP4's edit that runs past
-  its media ends with the media, `keptFrames`, as FFmpeg's does).
+  its media ends with the media, `keptFrames`, as FFmpeg's does: bounded by the sample table's total, else `mdhd`'s
+  positive duration, never in a fragmented file (`mvex`) nor by a length of 0; an edit of no length is none).
   `Cqt.logFeatures(y)` is btc.py's `cqt_features` (`[frames, 144]`, its 10 s chunks and tail rule), each chunk
   frontend.json's steps replayed: a resample by `Soxr` (librosa's length fix to `ceil(n · ratio)` and its √ratio
   scale on top, the samples kept float32), an octave's STFT in librosa 1.0's centred framing (`Stft.librosa`: only

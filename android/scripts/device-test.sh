@@ -28,7 +28,8 @@
 #                   songs) with the computer's hearing of each beside it (tests/helpers/autochords_reference.py
 #                   --hearings: meta.json and <stem>.hearing.json): its files (a link pushed as the file it names, under
 #                   the link's name) pushed into /data/local/tmp/caracole-data, named to the class (-e data), on the
-#                   models --ml pushes, and that folder removed from the emulator however the run ends. With --ml, in
+#                   models --ml pushes, and that folder and :ml's test APK's data (its copies of the songs and their
+#                   checkpoints) cleared on the emulator however the run ends. With --ml, in
 #                   its place in that run; alone, ParityRunTest alone
 #   --tcpdump FILE  the gate that caracole sends nothing to any host but 10.0.2.2 (and loopback) while the classes
 #                   run, by caracole's own uids: on the rooted emulator (`su 0`), a chain of iptables and ip6tables
@@ -209,8 +210,12 @@ unown() {
 }
 cleanup() {
     for pid in "${servers[@]:-}"; do [ -n "$pid" ] && kill "$pid" 2>/dev/null || true; done
-    # The folder --data pushed never stays on the emulator.
-    if [ "$data_pushed" = 1 ]; then adb shell rm -rf "$ml_data" >/dev/null 2>&1 || true; fi
+    # The folder --data pushed never stays on the emulator, nor what ParityRunTest made of it in :ml's test APK (its
+    # copies of the songs and their checkpoints, the pcm among them), even where its instrumentation was killed.
+    if [ "$data_pushed" = 1 ]; then
+        adb shell rm -rf "$ml_data" >/dev/null 2>&1 || true
+        adb shell pm clear "$ns.ml.test" >/dev/null 2>&1 || true
+    fi
     if [ "$owned" = 1 ]; then unown; fi
     # A run cut short while it captured leaves the emulator as it found it: capturing nothing, its Wi-Fi on.
     if [ "$capturing" = 1 ]; then

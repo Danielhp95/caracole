@@ -26,8 +26,9 @@ import kotlin.concurrent.thread
  * [HEAR] (`replyTo` its client's messenger) of paths in the app's own storage, which both processes read ([AUDIO],
  * [MODELS], [WORK], and [THREADS], at most so many, 0 for the heat's choice), or [CANCEL] of the hearing under way;
  * then the replies [STEP] (a step's or a wait's words, [WORDS]), and one of [DONE] (the heard file's path, [HEARD],
- * the process's peak RSS while it heard, [PEAK_KB], and each stage that ran with its time, [STAGES] and
- * [STAGE_NANOS], Pipeline's) or [FAILED] ([KIND]: [AUDIO_KIND], [SETUP_KIND] or
+ * the process's peak RSS while it heard, [PEAK_KB], its anonymous and file-backed parts at the highest RSS a look
+ * every 200 ms saw ([PEAK_ANON_KB], [PEAK_FILE_KB]: `RssAnon`, `RssFile`), and each stage that ran with its time,
+ * [STAGES] and [STAGE_NANOS], Pipeline's) or [FAILED] ([KIND]: [AUDIO_KIND], [SETUP_KIND] or
  * [BUG_KIND]; and [WORDS]). The binder never carries the audio, nor what was heard.
  */
 object MlProtocol {
@@ -44,6 +45,8 @@ object MlProtocol {
     const val WORDS = "words"
     const val HEARD = "heard"
     const val PEAK_KB = "peak_kb"
+    const val PEAK_ANON_KB = "peak_anon_kb"
+    const val PEAK_FILE_KB = "peak_file_kb"
     const val STAGES = "stages"
     const val STAGE_NANOS = "stage_nanos"
     const val KIND = "kind"
@@ -57,7 +60,7 @@ object MlProtocol {
 
     /** A failure's kind and words, as the client says them: the known causes in their own words, an out of memory
      * named as such, a full disk ([NO_ROOM]: 30 minutes of 48 kHz stereo decode to about 690 MB) and a file of the
-     * hearing's that can't be written or moved ([CANT_WRITE]) too, anything else caracole's own bug ("a bug in
+     * hearing's that can't be read, written or moved ([CANT_WRITE]) too, anything else caracole's own bug ("a bug in
      * caracole: …", the computer's staged jobs' words). */
     fun failure(e: Throwable): Pair<String, String> = when (e) {
         is AudioUnreadable -> AUDIO_KIND to (e.message ?: "the audio can't be read")
@@ -75,7 +78,7 @@ object MlProtocol {
 
     const val OUT_OF_MEMORY = "the chord models ran out of memory (OutOfMemoryError); try again"
     const val NO_ROOM = "no room on the phone for the hearing's files: free some space and try again"
-    const val CANT_WRITE = "a file of the hearing's can't be written"
+    const val CANT_WRITE = "a file of the hearing's can't be read or written"
 }
 
 /**
@@ -131,6 +134,7 @@ class MlService : Service() {
         thread(name = "caracole-ml-hearing") {
             try {
                 resetPeak()
+                val split = RssSplit().apply { start() }
                 val work = File(request.getString(MlProtocol.WORK)!!)
                 val audio = File(request.getString(MlProtocol.AUDIO)!!)
                 val pipeline = Pipeline(File(request.getString(MlProtocol.MODELS)!!), Heat(this),
@@ -142,6 +146,10 @@ class MlService : Service() {
                 send(client, MlProtocol.DONE, Bundle().apply {
                     putString(MlProtocol.HEARD, result.points.file(Checkpoints.HEARD).path)
                     putLong(MlProtocol.PEAK_KB, peakKb())
+                    split.stop()?.let { (anon, file) ->
+                        putLong(MlProtocol.PEAK_ANON_KB, anon)
+                        putLong(MlProtocol.PEAK_FILE_KB, file)
+                    }
                     putStringArray(MlProtocol.STAGES, stages.map { it.first }.toTypedArray())
                     putLongArray(MlProtocol.STAGE_NANOS, stages.map { it.second }.toLongArray())
                 })
@@ -180,6 +188,43 @@ class MlService : Service() {
             }
         } catch (e: ErrnoException) {
             // Not this folder, not here: the rename stands, forced or not.
+        }
+    }
+
+    /** `RssAnon` and `RssFile` at the highest `VmRSS` seen, a look every 200 ms while the hearing runs: what the peak
+     * is made of (the heap's and the models' pages, or the memory-mapped pcm's, file-backed). */
+    private class RssSplit {
+        @Volatile private var running = true
+        private var best: Triple<Long, Long, Long>? = null
+        private lateinit var looker: Thread
+
+        fun start() {
+            looker = thread(name = "caracole-ml-rss", isDaemon = true) {
+                while (running) {
+                    take()
+                    Thread.sleep(200)
+                }
+            }
+        }
+
+        fun stop(): Pair<Long, Long>? {
+            running = false
+            take()
+            return synchronized(this) { best?.let { it.second to it.third } }
+        }
+
+        private fun take() {
+            val now = look() ?: return
+            synchronized(this) { if (best.let { it == null || now.first > it.first }) best = now }
+        }
+
+        private fun look(): Triple<Long, Long, Long>? = try {
+            val lines = File("/proc/self/status").readLines()
+            fun kb(key: String) = lines.first { it.startsWith("$key:") }.substringAfter(':').trim()
+                .removeSuffix("kB").trim().toLong()
+            Triple(kb("VmRSS"), kb("RssAnon"), kb("RssFile"))
+        } catch (e: Exception) {
+            null
         }
     }
 

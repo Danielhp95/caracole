@@ -266,8 +266,8 @@ object BenchReport {
      * The whole-pipeline mode's member, Gate B1's (§4.2): its [gates] (the hearings' meta's), a song a [HeardSong]
      * (each score against its threshold, the lengths each model read against the computer's, where the frames part,
      * its seconds and RTF, each stage's seconds, the `:ml` process's peak), those over all ([EndToEnd.overAll], with
-     * the slowest RTF and the highest peak), the audio files and records that found no partner ([unmatched]), and
-     * whether every song was heard and passed.
+     * the slowest RTF and the highest peak; its `pass` false while a song wasn't heard, `not_heard` how many), the
+     * audio files and records that found no partner ([unmatched]), and whether every song was heard and passed.
      */
     fun hearings(heard: List<HeardSong>, gates: EndToEnd.Gates, unmatched: List<String>): JsonObject {
         val scored = heard.mapNotNull { it.scored }
@@ -288,7 +288,12 @@ object BenchReport {
                 }
             }))
             put("over_all", buildJsonObject {
-                for ((k, v) in EndToEnd.overAll(scored, gates)) put(k, v)
+                // A song not heard (or not scored) is no pass over all, whatever the others scored.
+                val notHeard = heard.count { it.scored == null }
+                for ((k, v) in EndToEnd.overAll(scored, gates)) {
+                    put(k, if (k == "pass") JsonPrimitive(v.toString() == "true" && notHeard == 0) else v)
+                }
+                put("not_heard", notHeard)
                 put("rtf_max", heard.mapNotNull { h -> h.seconds?.let { s -> h.scored?.let { s / it.duration } } }
                     .maxOrNull()?.let { JsonPrimitive(rounded(it, 10_000)) } ?: JsonNull)
                 put("ml_peak_mb_max", mb(heard.mapNotNull { it.peakKb }.maxOrNull()))

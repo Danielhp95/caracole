@@ -8,6 +8,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import io.github.danielhp95.caracole.autochords.Checkpoints
 import java.io.File
 import org.junit.Assert.assertTrue
+import org.junit.After
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -44,7 +45,6 @@ class ParityRunTest {
         val failures = mutableListOf<String>()
         val scored = mutableListOf<EndToEnd.Scored>()
         val matched = mutableSetOf<File>()
-        val work = File(context.filesDir, "state/cache/autochords")
         PipelineTest.report("B1 over ${hearings.size} file(s): ${EndToEnd.gatesJson(gates)}")
         for (hearing in hearings) {
             val file = audio.firstOrNull { it.name == hearing.name }
@@ -54,38 +54,38 @@ class ParityRunTest {
                 continue
             }
             matched += file
-            work.deleteRecursively()
-            // A copy of the app's own, as the app's audio is (its decoders never read the shell's folder).
-            val own = File(context.filesDir, "parity/" + file.name)
-            own.parentFile!!.mkdirs()
-            file.copyTo(own, overwrite = true)
-            PipelineTest.report("${file.name}: ${decoding(own)}")
-            val chords = MlChordModels(context, models, work, threads)
-            val started = System.nanoTime()
-            val heard = try {
-                chords.hear(own, {}, {})
+            // A copy of the app's own, as the app's audio is (its decoders never read the shell's folder); it and
+            // its checkpoints (the pcm among them) gone whatever happens.
+            val own = File(parity, file.name)
+            try {
+                work.deleteRecursively()
+                parity.mkdirs()
+                file.copyTo(own, overwrite = true)
+                PipelineTest.report("${file.name}: ${decoding(own)}")
+                val chords = MlChordModels(context, models, work, threads)
+                val started = System.nanoTime()
+                val heard = chords.hear(own, {}, {})
+                val took = (System.nanoTime() - started) / 1e9
+                val points = chords.checkpoints(own)
+                val pcm = Checkpoints.readPcm(points.read(Checkpoints.PCM_META)!!)
+                val harte = Checkpoints.readChords(points.read(Checkpoints.CHORDS)!!)
+                val s = EndToEnd.score(hearing, harte, heard, pcm, gates)
+                scored += s
+                val stages = Pipeline.STAGES.mapNotNull { stage ->
+                    chords.lastStagesNanos[stage]?.let { "$stage ${"%.1f".format(it / 1e9)} s" }
+                }
+                PipelineTest.report("${file.name}: ${s.line()}; ${"%.1f".format(took)} s end to end (RTF " +
+                    "${"%.3f".format(took / heard.duration)}: ${stages.joinToString()}), :ml's " +
+                    PipelineTest.peak(chords))
+                failures += s.failures(gates).map { "${file.name}: $it" }
             } catch (e: Exception) {
-                failures += "${file.name}: not heard: $e"
+                failures += "${file.name}: not heard or scored: $e"
+            } finally {
                 own.delete()
-                continue
+                work.deleteRecursively()
             }
-            val took = (System.nanoTime() - started) / 1e9
-            val points = chords.checkpoints(own)
-            val pcm = Checkpoints.readPcm(points.read(Checkpoints.PCM_META)!!)
-            val harte = Checkpoints.readChords(points.read(Checkpoints.CHORDS)!!)
-            val s = EndToEnd.score(hearing, harte, heard, pcm, gates)
-            scored += s
-            val stages = Pipeline.STAGES.mapNotNull { stage ->
-                chords.lastStagesNanos[stage]?.let { "$stage ${"%.1f".format(it / 1e9)} s" }
-            }
-            PipelineTest.report("${file.name}: ${s.line()}; ${"%.1f".format(took)} s end to end (RTF " +
-                "${"%.3f".format(took / heard.duration)}: ${stages.joinToString()}), :ml's peak RSS " +
-                "${chords.lastPeakKb?.let { it / 1024 }} MB")
-            failures += s.failures(gates).map { "${file.name}: $it" }
-            own.delete()
         }
         for (file in audio - matched) failures += "${file.name}: no hearing record of it"
-        work.deleteRecursively()
         PipelineTest.report("over all: ${EndToEnd.overAll(scored, gates)}")
         assertTrue(failures.joinToString("\n"), failures.isEmpty())
     }
@@ -106,7 +106,7 @@ class ParityRunTest {
         } finally {
             extractor.release()
         }
-        val pcm = File(context.cacheDir, "parity-decode.f32")
+        val pcm = File(context.cacheDir, DECODE_FILE)
         return try {
             val d = Decoder.decode(audio, pcm)
             "$said (API ${Build.VERSION.SDK_INT}); decoded by ${d.codec}, ${d.delay} frames trimmed first and " +
@@ -116,8 +116,19 @@ class ParityRunTest {
         }
     }
 
+    /** Nothing of the songs stays in this APK's storage, however a test ends: their copies, their checkpoints (the
+     * 22,050 Hz pcm among them), a decode's file (device-test.sh's EXIT trap clears this APK's data too). */
+    @After fun forget() {
+        parity.deleteRecursively()
+        File(context.filesDir, "state").deleteRecursively()
+        File(context.cacheDir, DECODE_FILE).delete()
+    }
+
     companion object {
         private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
+        private val parity get() = File(context.filesDir, "parity")
+        private val work get() = File(context.filesDir, "state/cache/autochords")
+        private const val DECODE_FILE = "parity-decode.f32"
         const val META = "meta.json"
         const val HEARING = ".hearing.json"
         val AUDIO = setOf("wav", "flac", "mp3", "ogg", "opus", "m4a", "aac", "aiff", "aif")

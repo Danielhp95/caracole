@@ -97,7 +97,7 @@ class PipelineTest {
                 if (margin.getDouble(t) >= parity.getDouble("margin_under")) failures += "$name: frame $t is ${got[t]}"
             }
             report("$name: ${scores.line}; frames differing ${differ}; ${"%.1f".format(took)} s end to end, :ml's " +
-                "peak RSS ${chords.lastPeakKb?.let { it / 1024 }} MB")
+                peak(chords))
             failures += scores.failures.map { "$name: $it" }
         }
         assertTrue(failures.joinToString("\n"), failures.isEmpty())
@@ -125,8 +125,8 @@ class PipelineTest {
             report("$name: ${scores.line}; BTC read ${pcm.btcSamples} samples (the computer's " +
                 "${btc.getLong("samples")}), beat_this ${Mel.frames(pcm.samples.toInt())} frames of ${pcm.samples} " +
                 "samples (the computer's ${beats.getInt("frames")} frames); ${heard.duration} s (read_audio's " +
-                "${record.getDouble("duration")}); ${"%.1f".format(took)} s end to end, :ml's peak RSS " +
-                "${chords.lastPeakKb?.let { it / 1024 }} MB")
+                "${record.getDouble("duration")}); ${"%.1f".format(took)} s end to end, :ml's " +
+                peak(chords))
             if (pcm.btcSamples != btc.getLong("samples")) failures += "$name: BTC read ${pcm.btcSamples} samples"
             val frames = framesOf(harte(chords, audio(name)))
             if (frames != argmax.size) failures += "$name: BTC heard $frames frames, the computer ${argmax.size}"
@@ -311,24 +311,14 @@ class PipelineTest {
             return out.toIntArray()
         }
 
-        /** Each of [frames] frames' label, from segments whose times are [Labels.time]'s of their first frames. */
-        fun frameLabels(segments: List<ChordSegment>, frames: Int): List<String> {
-            val out = ArrayList<String>(frames)
-            var i = 0
-            for (s in segments) while (i < frames && Labels.time(i, Labels.FRAME_SECONDS) < s.end) {
-                out += s.label
-                i++
-            }
-            while (out.size < frames) out += "?"
-            return out
-        }
+        fun frameLabels(segments: List<ChordSegment>, frames: Int) = EndToEnd.frameLabels(segments, frames)
 
-        /** The frames [segments] cover: the one whose time ([Labels.time]) is their last end. */
-        fun framesOf(segments: List<ChordSegment>): Int {
-            val end = segments.last().end
-            val near = Math.round(end / Labels.FRAME_SECONDS).toInt()
-            return (near - 1..near + 1).first { Labels.time(it, Labels.FRAME_SECONDS) == end }
-        }
+        fun framesOf(segments: List<ChordSegment>) = EndToEnd.framesOf(segments)
+
+        /** `:ml`'s peak RSS while it heard, and what it was made of at its highest (anonymous, file-backed). */
+        fun peak(chords: MlChordModels): String = "peak RSS ${chords.lastPeakKb?.let { it / 1024 }} MB" +
+            (chords.lastPeakSplitKb?.let { (anon, file) -> " (RssAnon ${anon / 1024} MB, RssFile ${file / 1024} MB)" }
+                ?: "")
 
         fun doubles(array: JSONArray) = List(array.length()) { array.getDouble(it) }
 

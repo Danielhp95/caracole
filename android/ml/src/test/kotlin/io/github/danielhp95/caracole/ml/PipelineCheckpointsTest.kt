@@ -127,9 +127,7 @@ class PipelineCheckpointsTest {
         assertTrue(timed.all { it.second > 0 })
     }
 
-    /** A cancel during the decode, the mixdown or the resample stops it there, never once the pcm is whole: a 44.1 kHz
-     * stereo WAV, its samples mixed down and resampled, cancelled at the second time it is asked (the first is the
-     * stage's start). */
+    /** A 44.1 kHz stereo WAV of [seconds]: its samples mixed down and resampled. */
     private fun stereo44k(seconds: Int): File {
         val n = 44100 * seconds
         val b = ByteBuffer.allocate(44 + 4 * n).order(ByteOrder.LITTLE_ENDIAN)
@@ -140,16 +138,34 @@ class PipelineCheckpointsTest {
         return tmp.newFile("stereo$seconds.wav").apply { writeBytes(b.array()) }
     }
 
-    @Test fun aCancelDuringThePcmStopsItThereNotOnceItIsWhole() {
+    /** A cancel asked from inside one of the pcm stage's loops, [stage] the file that stage writes, [during] true while
+     * the stage runs (the file it reads still there): the hearing stops there (each fails once that loop's `::stop`
+     * is dropped: the stage then runs whole, its input goes, and the cancel never comes), nothing of the pcm kept. */
+    private fun cancelInside(during: (File) -> Boolean) {
         val audio = stereo44k(30)
-        var asked = 0
         val work = tmp.newFolder()
-        val pipeline = Pipeline(File("no-models"), cool, graphs = Counted(), cancelled = { ++asked >= 2 })
+        val folder = Checkpoints.of(work, audio).folder
+        var fired = false
+        val pipeline = Pipeline(File("no-models"), cool, graphs = Counted(),
+            cancelled = { during(folder).also { if (it) fired = true } })
         assertThrows(Pipeline.Cancelled::class.java) { pipeline.hear(audio, work) {} }
+        assertTrue("the cancel came from inside the stage", fired)
         val points = Checkpoints.of(work, audio)
         assertFalse("cancelled before the pcm was whole", points.has(Checkpoints.PCM_META))
-        assertTrue(points.folder.list().orEmpty().none { it in Checkpoints.STAGE_FILES })
+        assertTrue(points.folder.list().orEmpty().toList().toString(),
+            points.folder.list().orEmpty().none { it in Checkpoints.STAGE_FILES })
     }
+
+    private fun File.has(name: String) = File(this, name).let { it.isFile && it.length() > 0 }
+
+    @Test fun aCancelDuringTheDecodeStopsItThere() =
+        cancelInside { it.has("decoded.f32") && !File(it, "mono.f32").exists() }
+
+    @Test fun aCancelDuringTheMixdownStopsItThere() =
+        cancelInside { it.has("mono.f32") && File(it, "decoded.f32").exists() }
+
+    @Test fun aCancelDuringTheResampleStopsItThere() =
+        cancelInside { it.has("resampled.f32") && File(it, "mono.f32").exists() }
 
     @Test fun theStagesShapesAreTheModelsOwn() {
         assertEquals(OrtModels.WINDOW, Stages.WINDOW)

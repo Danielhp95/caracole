@@ -122,6 +122,7 @@ class Pipeline(
         points.folder.mkdirs()
         val decoded = points.file(DECODED)
         val mono = points.file(MONO)
+        val resampled = points.file(RESAMPLED)
         try {
             val d = time(DECODE, timed) {
                 try {
@@ -141,7 +142,6 @@ class Pipeline(
                 points.write(Checkpoints.PCM_META, Checkpoints.pcmJson(meta))
                 points.into(Checkpoints.PCM) { part -> move(mono, part) }
             } else {
-                val resampled = points.file(RESAMPLED)
                 val samples = time(RESAMPLE, timed) { Stages.resample(mono, d.rate, resampled, ::stop) }
                 mono.delete()
                 meta = Checkpoints.Pcm(duration, samples, Stages.btcSamples(frames, d.rate))
@@ -152,6 +152,7 @@ class Pipeline(
         } finally {
             decoded.delete()
             mono.delete()
+            resampled.delete()
         }
     }
 

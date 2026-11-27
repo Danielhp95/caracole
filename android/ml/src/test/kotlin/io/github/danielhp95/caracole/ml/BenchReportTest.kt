@@ -460,6 +460,12 @@ class BenchReportTest {
         assertEquals("AudioUnreadable: no", c.str("failure"))
         val all = h.getValue("over_all").jsonObject
         assertFalse(all.getValue("pass").jsonPrimitive.boolean)
+        assertEquals(1, all.getValue("not_heard").jsonPrimitive.int)
+        // Every song scored passing, but one not heard: over all is no pass.
+        val unheard = BenchReport.hearings(listOf(heard[0], heard[2]), g, emptyList())
+            .getValue("over_all").jsonObject
+        assertFalse("$unheard", unheard.getValue("pass").jsonPrimitive.boolean)
+        assertEquals(1, unheard.getValue("not_heard").jsonPrimitive.int)
         assertEquals(0.9, all.num("wcsr_majmin_least"), 0.0)
         assertEquals((200 * 1.0 + 100 * 0.9) / 300, all.num("wcsr_majmin_mean"), 1e-6)
         assertEquals(0.3, all.num("rtf_max"), 0.0)

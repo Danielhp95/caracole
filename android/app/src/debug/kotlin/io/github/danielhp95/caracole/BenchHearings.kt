@@ -28,6 +28,13 @@ internal object BenchHearings {
     const val FOLDER = "hearings"
     val AUDIO = setOf("wav", "flac", "mp3", "ogg", "opus", "m4a", "aac", "aiff", "aif")
 
+    /** Where a song's checkpoints are kept while it is heard (`no_backup/`), emptied before and after each. */
+    const val WORK = "bench-hearing-work"
+
+    const val STOPPED = "stopped by the owner (Stop) before it was heard whole"
+
+    private class Stopped : Exception(STOPPED)
+
     fun isAudio(name: String) = name.substringAfterLast('.', "").lowercase() in AUDIO
 
     fun run(context: Context, models: File, folder: File, say: (String) -> Unit,
@@ -37,7 +44,7 @@ internal object BenchHearings {
             .map { EndToEnd.Hearing.read(it.readText(Charsets.UTF_8)) }
         val audio = folder.listFiles().orEmpty().filter { it.isFile && isAudio(it.name) }.sortedBy { it.name }
         val shas by lazy { audio.associateWith { MlChordModels.sha256(it) } }
-        val work = File(context.applicationContext.noBackupFilesDir, "bench-hearing-work")
+        val work = File(context.applicationContext.noBackupFilesDir, WORK)
         val heard = mutableListOf<HeardSong>()
         val unmatched = mutableListOf<String>()
         val matched = mutableSetOf<File>()
@@ -50,7 +57,7 @@ internal object BenchHearings {
             }
             matched += file
             if (stopped()) {
-                heard += HeardSong(file.name, null, emptyMap(), null, null, "stopped before it was heard")
+                heard += HeardSong(file.name, null, emptyMap(), null, null, STOPPED)
                 continue
             }
             say("hearing ${file.name} whole…")
@@ -58,15 +65,21 @@ internal object BenchHearings {
             val chords = MlChordModels(context, models, work)
             val started = System.nanoTime()
             val song = try {
-                val result = chords.hear(file, {}, {})
+                // Stop is honoured within the hearing: `waiting` (a look a second) throwing sends `:ml` its CANCEL.
+                val result = chords.hear(file, {}, { if (stopped()) throw Stopped() })
                 val seconds = (System.nanoTime() - started) / 1e9
                 val points = chords.checkpoints(file)
                 val scored = EndToEnd.score(record, Checkpoints.readChords(points.read(Checkpoints.CHORDS)!!), result,
                     Checkpoints.readPcm(points.read(Checkpoints.PCM_META)!!), gates)
                 HeardSong(file.name, seconds, chords.lastStagesNanos, chords.lastPeakKb, scored)
+            } catch (e: Stopped) {
+                HeardSong(file.name, null, emptyMap(), null, null, STOPPED)
             } catch (e: Exception) {
                 HeardSong(file.name, null, emptyMap(), chords.lastPeakKb, null,
                     "${e.javaClass.simpleName}: ${e.message}")
+            } finally {
+                // Its checkpoints (its pcm among them) never left behind, whatever ended it.
+                work.deleteRecursively()
             }
             heard += song
             say("${file.name}: " + (song.scored?.let { s ->
@@ -76,7 +89,6 @@ internal object BenchHearings {
                 }.joinToString() + "), :ml's peak ${song.peakKb?.let { it / 1024 }} MB"
             } ?: "not heard: ${song.failure}"))
         }
-        work.deleteRecursively()
         for (file in audio - matched) unmatched += "${file.name}: no hearing of it"
         return BenchReport.hearings(heard, gates, unmatched)
     }

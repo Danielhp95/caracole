@@ -53,6 +53,11 @@ class MlChordModels(
     @Volatile var lastPeakKb: Long? = null
         private set
 
+    /** What the `:ml` process's RSS was made of at its highest while it heard the last song: `RssAnon` and `RssFile`,
+     * in kB (null where the process gave none). */
+    @Volatile var lastPeakSplitKb: Pair<Long, Long>? = null
+        private set
+
     /** The last song's stages that ran, each with its time in ns, in their order (Pipeline's [Pipeline.STAGES]). */
     @Volatile var lastStagesNanos: Map<String, Long> = emptyMap()
         private set
@@ -81,6 +86,7 @@ class MlChordModels(
 
     override fun hear(audio: File, onStep: (String) -> Unit, waiting: () -> Unit): Heard {
         lastPeakKb = null
+        lastPeakSplitKb = null
         lastStagesNanos = emptyMap()
         ready()?.let { throw ChordsUnavailable(it) }
         // The process of an earlier hearing ends once its client let go of it: a bind meanwhile could reach it as
@@ -148,6 +154,8 @@ class MlChordModels(
                     MlProtocol.DONE -> {
                         answered = true
                         lastPeakKb = m.data.getLong(MlProtocol.PEAK_KB).takeIf { it >= 0 }
+                        if (m.data.containsKey(MlProtocol.PEAK_ANON_KB)) lastPeakSplitKb =
+                            m.data.getLong(MlProtocol.PEAK_ANON_KB) to m.data.getLong(MlProtocol.PEAK_FILE_KB)
                         val names = m.data.getStringArray(MlProtocol.STAGES).orEmpty()
                         val nanos = m.data.getLongArray(MlProtocol.STAGE_NANOS) ?: LongArray(0)
                         lastStagesNanos = names.zip(nanos.toList()).toMap()

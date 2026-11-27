@@ -234,24 +234,27 @@ class BenchService : Service() {
                 folder.open(entry).use { input -> File(local, entry.name).outputStream().use { input.copyTo(it) } }
             }
             val made = Instant.now().truncatedTo(ChronoUnit.SECONDS)
-            val name = REPORT_PREFIX + DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").withZone(ZoneOffset.UTC)
-                .format(made) + ".json"
-            val report = folder.create(name, "application/json")
             val probe = AndroidProbe(this)
             val start = probe.heat()
             BenchSession.keepScreenOn = true
             say("${songs.size} song(s), each heard whole in a fresh :ml process")
+            // The report is made once there is one: a run that throws leaves no empty report, and says why.
             val heard = BenchHearings.run(this, models, local, say) { BenchSession.stopAsked }
             val now = probe.heat()
             val battery = Battery(start.chargeUah, now.chargeUah, start.percent, now.percent, start.plugged)
             val text = JSON.encodeToString(JsonObject.serializer(), BenchReport.ofSessions(emptyList(),
                 BenchClips.read(this).gates, Device.here(BuildConfig.VERSION_NAME), made.toString(), battery,
                 heard)) + "\n"
-            folder.write(report, text.toByteArray(Charsets.UTF_8))
+            val name = REPORT_PREFIX + DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").withZone(ZoneOffset.UTC)
+                .format(made) + ".json"
+            folder.write(folder.create(name, "application/json"), text.toByteArray(Charsets.UTF_8))
             val pass = heard.getValue("pass").jsonPrimitive.boolean
             say("done: $name, in the folder: B1 ${if (pass) "passes" else "fails"} over all")
+        } catch (e: Exception) {
+            say("the whole pipeline stopped, no report written: ${e.javaClass.simpleName}: ${e.message}")
         } finally {
             local.deleteRecursively()
+            File(noBackupFilesDir, BenchHearings.WORK).deleteRecursively()
         }
     }
 
