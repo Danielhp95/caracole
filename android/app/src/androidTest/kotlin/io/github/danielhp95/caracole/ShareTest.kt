@@ -32,8 +32,9 @@ import java.io.File
  * content URI of the app's own FileProvider): each file is filed as `_inbox/` files one, for the song its name is of,
  * and the toast says so in the Requests tab's words; one no song fits waits in `state/inbox/` and is filed once a song
  * that fits is added (the phone's afterJob); a file of a kind caracole keeps nothing of is never staged; a `file:`
- * address is never read (it could name caracole's own files); and the share filters offer caracole for files, and for
- * a share of mixed types (Android matches a wildcard type against any a filter names), never for a text or a VIEW.
+ * address is never read (it could name caracole's own files); a MIDI file shared as audio is the inbox's (an audio
+ * file's own page is ShareAudioTest's); and the share filters offer caracole for files, an audio file among them, and
+ * for a share of mixed types (Android matches a wildcard type against any a filter names), never for a text or a VIEW.
  */
 @RunWith(AndroidJUnit4::class)
 class ShareTest {
@@ -126,6 +127,15 @@ class ShareTest {
         assertFalse("notes.txt" in waiting())
     }
 
+    @Test fun aMidiFileSharedAsAudioIsTheInboxsNeverAnAudioFilesPage() {
+        ShareActivity.opened = null
+        val said = share("audio/*", uri("Share Test - A Midi Score.mid", "MThd".toByteArray() + ByteArray(10)))
+        assertEquals("Waiting for its song: Share Test - A Midi Score.mid", said)
+        assertTrue("Share Test - A Midi Score.mid" in waiting())
+        assertEquals(null, ShareActivity.opened)
+        InboxShare.folder(phone.parts).drop("Share Test - A Midi Score.mid")  // the tests of a class share the inbox
+    }
+
     @Test fun aFileAddressIsNeverReadThoughItNamesASongsFile() {
         val song = add("Share Test", "A Private File")
         val private = File(context.filesDir, "Share Test - A Private File.gp5").apply { writeBytes(gp5) }
@@ -154,6 +164,12 @@ class ShareTest {
             .any { it.activityInfo.name == share.className }
         for (type in listOf("application/x-guitar-pro", "application/octet-stream", "application/pdf", "audio/midi",
                             "application/vnd.recordare.musicxml", "application/x-musescore")) {
+            assertTrue(type, offered(Intent(Intent.ACTION_SEND).setType(type)))
+            assertTrue(type, offered(Intent(Intent.ACTION_SEND_MULTIPLE).setType(type)))
+            assertFalse(type, offered(Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse("content://x/y"), type)))
+        }
+        // An audio file, for its sheet (AudioShare.TYPES, the design's §8.2): SEND and SEND_MULTIPLE, never VIEW.
+        for (type in AudioShare.TYPES) {
             assertTrue(type, offered(Intent(Intent.ACTION_SEND).setType(type)))
             assertTrue(type, offered(Intent(Intent.ACTION_SEND_MULTIPLE).setType(type)))
             assertFalse(type, offered(Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse("content://x/y"), type)))

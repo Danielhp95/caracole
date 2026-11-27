@@ -111,7 +111,8 @@ class AssemblyTest {
                                        "POST /sync/import/drop"),
         )
         // The phone's own page of a song shared to the app, which caracole serve has none of.
-        assertEquals(listOf("GET /share", "POST /share", "GET /share/cancel"),
+        assertEquals(listOf("GET /share", "POST /share", "GET /share/cancel", "GET /share/audio",
+                            "POST /share/audio/cancel"),
                      phone.modules.filterIsInstance<ShareRoutes>().single().routes.map { "${it.method} ${it.path}" })
         val ownerOf = owners.associate { (route, module) -> route to module::class.simpleName }
         for ((module, routes) in moved) {

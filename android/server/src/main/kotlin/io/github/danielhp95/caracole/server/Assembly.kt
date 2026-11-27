@@ -139,7 +139,8 @@ data class PhoneDeps(val database: Database, val libraryDir: File, val stateDir:
  * box), then milestone 6's, SongbookRoutes, VersionsRoutes,
  * HarmonicaRoutes, ReviewRoutes, ExportRoutes and GuitarRoutes, AudioRoutes (a sheet from an audio file: the "+" and a
  * card's entry, its uploads staged in [audio], refused while [audioProblem] says why), then the phone's own
- * ShareRoutes (a song shared to the app, a link alone read by asking its service once: ShareReader), then Stubs for every route no module answers; the
+ * ShareRoutes (a song shared to the app, a link alone read by asking its service once: ShareReader; an audio file
+ * shared, its page, through [audioRoutes]), then Stubs for every route no module answers; the
  * library's files behind them; one job queue for every write, its requests kept in `stateDir/requests.jsonl`
  * (JobHistory.at) across the app's restarts, its command runners (`get`, `versions`, `lacuerda`,
  * `harptabs`, `ug`, `review`, `harmonica`, `render`, `songbook`, `inbox`, `backup`, `catalogues`: [catalogues],
@@ -230,6 +231,10 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         deps.database.writeBlocking { db -> audio.tidy(db) }
     }
 
+    /** The audio routes (a sheet from an audio file: the "+", a card's entry), and an audio file shared to the app
+     * staged through them (AudioRoutes.stageShared, the app's ShareActivity) for ShareRoutes' `/share/audio`. */
+    val audioRoutes: AudioRoutes = AudioRoutes(parts, audio, ::audioProblem)
+
     /** The files shared to the app that wait for a song, tried again after each job. */
     private val inbox = InboxRetry(parts)
 
@@ -288,9 +293,9 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         ReviewRoutes(parts, deps.csrf),
         ExportRoutes(parts),
         GuitarRoutes(parts),
-        AudioRoutes(parts, audio, ::audioProblem),
+        audioRoutes,
         ShareRoutes(deps.database, search, deps.csrf, libraryName = { config().libraryName.orEmpty() },
-                    links = ShareReader(parts)),
+                    links = ShareReader(parts), audio = audioRoutes),
     )
 
     val app: App = App(

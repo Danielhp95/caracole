@@ -26,6 +26,8 @@ import io.github.danielhp95.caracole.server.jobs.JobCommands
 import io.github.danielhp95.caracole.server.routes.library.Answers
 import io.github.danielhp95.caracole.server.routes.library.SongForm
 import io.github.danielhp95.caracole.server.routes.lookup.LookupForms
+import io.github.danielhp95.caracole.server.routes.share.AudioShareView
+import io.github.danielhp95.caracole.viewer.autochords.SheetHalf
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -213,6 +215,74 @@ class AudioRoutes(val parts: PhoneParts, val store: AudioStore, private val prob
         return Answers.queued(LookupForms.view(parts.database, parts.queue, parts.cards, job, clock()))
     }
 
+    // --- a file shared to the app (ShareActivity, ShareRoutes' /share/audio) -------------------------------------
+
+    /**
+     * An audio file shared to the app, staged as an upload is ([upload]'s): refused ([Refused] 409, the routes' words)
+     * where no sheet is made here, before a byte is read; else the store swept and [input] staged a chunk at a time,
+     * never held whole, every other upload no job names let go (AudioStore.stage); the store's refusals as they are
+     * (AudioStore.AudioError). [input] is read once and left open: its caller closes it.
+     */
+    fun stageShared(input: InputStream, name: String): AudioStore.Staged {
+        canMake()
+        store.sweep(::named)
+        return store.stage(input, name, ::named)
+    }
+
+    /**
+     * What the share's page shows ([AudioShareView]): with [uploadId], the staged upload (its name, format and
+     * length), the names it gives (audio_sheet.names_of, [namesOf]), the library's song of them and its sheet now,
+     * and whether its auto sheet has words heard on the computer (its version's `lyrics_source`, a transcript); with
+     * none, the file's [name] alone. Where no sheet is made here, why, in the routes' words; an upload that isn't
+     * there, the store's words of it.
+     */
+    internal fun shareView(uploadId: String?, name: String): AudioShareView {
+        val why = problem()?.let { "$NOT_HERE: $it." }
+        val up = uploadId?.let {
+            try {
+                store.staged(it)
+            } catch (e: AudioStore.AudioError) {
+                return AudioShareView(null, name, why = why, gone = e.message.orEmpty())
+            }
+        } ?: return AudioShareView(null, name, why = why ?: AudioStore.WORDS.getValue("gone"))
+        val length = if (up.durationS > 0) JobCommands.formatDuration(PyFormat.roundHalfEven(up.durationS * 1000)) else ""
+        return parts.database.read { db ->
+            val (artist, title) = namesOf(db, up.name, up.tags)
+            val song = artist?.let { Songs.byKey(db, Normalize.identityKey(it, title)) }
+            val auto = song?.let { autoRaw(db, it) }
+            AudioShareView(
+                up.id, up.name, up.format, length, artist.orEmpty(), title, song?.display,
+                sheet = when {
+                    song == null -> AudioShareView.SHEET_NONE
+                    hasSheet(db, song) -> AudioShareView.SHEET_SITES
+                    auto != null -> AudioShareView.SHEET_AUTO
+                    else -> AudioShareView.SHEET_NONE
+                },
+                heard = auto?.let { (it["lyrics_source"] as? JsonPrimitive)?.content == SheetHalf.LYRICS_SOURCE } == true,
+                why = why,
+            )
+        }
+    }
+
+    /** The raw record of the song's auto version that names a kept file (its sheet), or null for none. */
+    private fun autoRaw(db: Db, song: SongRow): JsonObject? =
+        db.one("SELECT v.raw FROM versions v WHERE v.song_id = ? AND v.provider = ? AND EXISTS (SELECT 1 FROM files f " +
+                   "WHERE f.version_id = v.id) ORDER BY v.id LIMIT 1", song.id, AUTO) { it.text(0) }
+            ?.let { runCatching { PyJson.loads(it) as? JsonObject }.getOrNull() }
+
+    /** The share page's Cancel: the staged upload [uploadId] names deleted, whatever is left of it; 409 while a job
+     * names it (its Make sheet was pressed), 400 for no id; one gone already is no refusal (the share is left). */
+    internal fun cancelShared(uploadId: String) {
+        store.held {
+            if (uploadId in named()) throw Refused(409, "Not dropped", WAITS)
+            try {
+                store.drop(uploadId)
+            } catch (e: AudioStore.AudioError) {
+                if (e.status != 404) throw Refused(e.status, "Not dropped", e.message.orEmpty())
+            }
+        }
+    }
+
     /** drop: the staged upload `upload` names deleted now; 409 while a job names it, 404 none, 400 no id. */
     private fun drop(doc: JsonElement): Response {
         val id = ((doc as? JsonObject)?.get("upload") as? JsonPrimitive)?.takeIf { it.isString }?.content
@@ -238,6 +308,9 @@ class AudioRoutes(val parts: PhoneParts, val store: AudioStore, private val prob
         const val FULL = "The queue is full: nothing queued. Ask again once it empties."
 
         private const val HUMAN_SHEET = "sheet.txt"
+
+        /** The auto sheet's provider (AudioRunner's). */
+        private const val AUTO = "auto"
 
         /** music._TRACK_PREFIX: a track number before a file's name. */
         private val TRACK_PREFIX = PyRegex.compile("""^\d{1,3}(?:\s*[-.]\s*|\s+)""")
