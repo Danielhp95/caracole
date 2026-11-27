@@ -1,13 +1,18 @@
 package io.github.danielhp95.caracole.server.lookups
 
 import io.github.danielhp95.caracole.core.library.AudioStore
+import io.github.danielhp95.caracole.core.library.OverrideUrls
+import io.github.danielhp95.caracole.core.library.OverridesError
 import io.github.danielhp95.caracole.core.library.Songs
+import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.lookup.sites.LyricsSearchCommands
 import io.github.danielhp95.caracole.core.py.PyStr
 import io.github.danielhp95.caracole.server.PhoneParts
 import io.github.danielhp95.caracole.server.jobs.CommandExit
 import io.github.danielhp95.caracole.server.jobs.CommandRunner
 import io.github.danielhp95.caracole.server.jobs.JobContext
+import io.github.danielhp95.caracole.viewer.autochords.ChordModels
+import io.github.danielhp95.caracole.viewer.autochords.Heard
 import java.io.File
 
 /**
@@ -16,11 +21,19 @@ import java.io.File
  * `database.writeBlocking` through LookupJobs.context at the lookup's run, its lines said, its last the one the
  * Journal reads. A lookup (JobCommands.isLookup), so a long job of the phone's own lets it go first. The name typed is
  * read as the command reads it (lyrics_search.typed_name), a text that names no artist and title refused (exit 2), as
- * a song not in the library or ignored is (LookupJobs.songNamed), and the audio's length is its own audio file's
- * where its line names none ([store]'s examiner). The computer's bulk `caracole lyrics` (no --song) and its passes are
- * the nightly run's.
+ * a song not in the library or ignored is (LookupJobs.songNamed). `--record SITE:ID` (or `--pick N`) is the queue's
+ * staged job of lyrics_pick.py ([LyricsPickJob]): its chords a re-lay where the auto sheet keeps what was heard, else
+ * [chords] over the phone's own audio. The computer's bulk `caracole lyrics` (no --song) and its passes are the
+ * nightly run's.
  */
-class LyricsRunner(val parts: PhoneParts, private val store: AudioStore? = null) : CommandRunner {
+class LyricsRunner(
+    val parts: PhoneParts,
+    private val chords: ChordModels? = null,
+    private val store: AudioStore? = null,
+    private val problem: () -> String? = { AudioRunner.problemOf(chords, null) },
+    private val names: () -> Map<String, String> = { emptyMap() },
+    private val hold: (() -> Heard) -> Heard = { it() },
+) : CommandRunner {
     override suspend fun run(args: List<String>, context: JobContext) {
         val line = LookupJobs.line(args, setOf("--song", "--as", "--pick", "--record"))
         val o = line.options
@@ -40,6 +53,7 @@ class LyricsRunner(val parts: PhoneParts, private val store: AudioStore? = null)
         if (asks.size > 1) throw CommandExit(2, "${asks.joinToString(" and ")} don't go together: give one.")
         when (asks.single()) {
             "--as" -> search(display, o.getValue("--as").orEmpty(), args, context)
+            "--record", "--pick" -> pick(display, o["--record"], o["--pick"], args, context)
             else -> throw CommandExit(2, "caracole lyrics ${asks.single()} isn't on the phone yet")
         }
     }
@@ -49,6 +63,19 @@ class LyricsRunner(val parts: PhoneParts, private val store: AudioStore? = null)
     private fun fileLength(path: String): Double? {
         val file = File(path).takeIf { it.isFile } ?: return null
         return runCatching { store?.formatAndLength(file)?.second }.getOrNull()
+    }
+
+    /** commands/lyrics.py's `_lyrics_pick`: the song's name checked, then the job of stages ([LyricsPickJob]). */
+    private fun pick(display: String, record: String?, pick: String?, args: List<String>, context: JobContext) {
+        try {
+            OverrideUrls.overrideKey(display)
+        } catch (e: OverridesError) {
+            throw CommandExit(2, e.message.orEmpty())
+        }
+        val n = pick?.let { it.toIntOrNull()?.takeIf { v -> v >= 1 } ?: throw CommandExit(2, "--pick takes a row's number, 1 or more") }
+        val artist = Py.strip(display.substringBefore(" - "))
+        val title = Py.strip(display.substringAfter(" - "))
+        LyricsPickJob(parts, args, context, artist, title, record, n, chords, problem, names, hold, store, ::fileLength).run()
     }
 
     /** commands/lyrics.py's `_lyrics_as`: the name read, the song found, the sites asked, the lines said. */

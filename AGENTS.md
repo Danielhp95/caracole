@@ -184,7 +184,7 @@ sitemaps list by bare ids alone, and the fetch their page.
     a lyric file that can't be removed is said, the clear standing.
   - A search's reset, a pick or a clear changes the song unit's `lyrics_status`, `lyrics_json` and `lyrics_at`
     (peer_sync.py `SONG_COLUMNS`) and its `[lyrics]` entry: a sync carries them; the kv it deletes is no unit's.
-    Nothing of it runs on the phone.
+    On the phone, the search and `--record` run (android/'s "Lookups on the phone"); `--clear` doesn't yet.
 
 #### megalobiz
 
@@ -3403,6 +3403,13 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   every lookup's on the phone; the audio's length is the line's, its YouTube video's, else its own file's by the
   phone's examiner (`AudioStore.formatAndLength`, LyricsRunner's hook). Its read-back (`lastSearch`, `keptSearch`,
   `rowOf`, `askedLine`) is held by vectors/lookup/lyrics_kept.jsonl.
+- A row of that search made the song's lyrics (lyrics-pick, E30): core.lookup.sites' `LyricsPickCommands`,
+  lyrics_pick.py's song and lyrics stages (`findSong`, `cachedLrclib`: LRCLIB's record from the search's answers in
+  the phone's HTTP cache, no request; `lyrics`: the files, `setLyricsRecord`, then `askAnew` and the song found in one
+  savepoint), and server/lookups' `LyricsPickJob` (`lyrics --song --record --progress`, `lyricsPickSteps`, the
+  queue's): its chords `Relay.onto` where the auto sheet keeps what was heard, else the phone's own audio through
+  `ChordModels` (`AudioRunner.keepAutoSheet`, the audio job's keep), else skipped in lyrics_pick.py's words; pdf and
+  pages PhoneRender's. tests/test_conformance_lyrics_pick.py writes vectors/lookup/lyrics_pick.jsonl (LyricsRunnerTest).
 - harptabs.com (harptabs): core.sites' `HarpTabsFetch` and `HarpTabsPages`, harptabs.py, harptabs_fetch.py for a
   lookup's song and harptabs_index.py's `read_artist`, over the index the computer's sync brings (the phone reads no
   sitemap and makes no artist pass):

@@ -251,6 +251,11 @@ object JobCommands {
     fun lyricsSearchSteps(display: String, name: String): List<Command> =
         listOf(Command("Looking for lyrics under “$name”", listOf("lyrics", "--song=$display", "--as=$name")))
 
+    /** Make a record of the song's kept lyrics search its lyrics now, and its auto sheet again over them: `caracole
+     * lyrics --song --record --progress`, one process for every stage (jobs.lyrics_pick_steps). */
+    fun lyricsPickSteps(display: String, record: String): List<Command> =
+        listOf(Command("Taking the lyrics", listOf("lyrics", "--song=$display", "--record=$record", "--progress")))
+
     /** Read a harptabs.com artist's page into its index now: `caracole harptabs --artist`, one request. */
     fun harptabsArtistSteps(path: String, name: String): List<Command> =
         listOf(Command("Reading $name's page on harptabs", listOf("harptabs", "--artist=$path")))

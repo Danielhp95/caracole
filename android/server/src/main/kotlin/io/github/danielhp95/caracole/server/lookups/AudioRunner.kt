@@ -473,39 +473,11 @@ class AudioRunner(
         private fun keepSheet(db: Db, heard: Heard, audio: File): Pair<String, String> {
             val s = again(db)
             stillOurs(db, s)
-            val lyrics = lyricsFromJson(s.lyricsJson)
-            val maker = Maker(MADE_ON, db.kvGet(SYNC_ID)?.ifEmpty { null }, names(), chords.runtime,
-                              store.givenName(db, s), sha16(audio))
-            val made = SheetHalf.make(s, lyrics, heard)
-            val raw = SheetHalf.raw(s, lyrics, made, maker = maker)
-            db.savepoint("audio_sheet") {
-                val current = autoVersionOf(db, s.id)
-                val versionId = Versions.upsert(db, PROVIDER, current ?: s.id.toString(), s.id, "sheet", "auto", 0.0, 0,
-                                                1, null, "file://" + audio.absolutePath, raw, stamp)
-                Kept.keepFile(db, parts.store, s, versionId, Versions.SHEET_FILE_NAMES[1],
-                              made.text.toByteArray(Charsets.UTF_8), 1, stamp)
-                db.execute("DELETE FROM versions WHERE song_id = ? AND provider = ? AND id != ? AND NOT EXISTS " +
-                               "(SELECT 1 FROM files f WHERE f.version_id = versions.id)", s.id, PROVIDER, versionId)
-                Versions.refreshStatus(db, s.id, ignored = false, now = stamp)
-            }
+            val (ended, info) = keepAutoSheet(parts, store, chords, names, db, s, heard, audio)
             sheetKept = true
-            val info = try {
-                InfoJson.write(db, parts.store.libraryDir, Songs.byId(db, s.id) ?: s)
-                null
-            } catch (e: Exception) {  // the sheet is kept: said so, and made of this audio (no hearing again)
-                if (e is CancellationException) throw e
-                e.message ?: e.javaClass.simpleName
-            }
-            Versions.updateSong(db, s.id, mapOf("autochords_mtime" to s.audioMtime), stamp)
             again(db)
-            info?.let { return fail(INFO_FAILED.replace("{held}", holds(raw)).replace("{why}", it)) }
-            return "done" to holds(raw)
+            return info?.let { fail(it) } ?: ended
         }
-
-        /** versions.auto_version_of: the tab id of the song's one auto version, the one a kept file names first. */
-        private fun autoVersionOf(db: Db, songId: Long): String? =
-            db.one("SELECT tab_id FROM versions v WHERE song_id = ? AND provider = ? ORDER BY EXISTS (SELECT 1 FROM " +
-                       "files f WHERE f.version_id = v.id) DESC, id LIMIT 1", songId, PROVIDER) { it.text(0) }
 
         // --- the pages --------------------------------------------------------------------------------------------
 
@@ -542,6 +514,47 @@ class AudioRunner(
     }
 
     companion object {
+        /**
+         * run.py's `_generate` past the models and `_keep`: the sheet laid out from what was [heard], over the song's
+         * lyrics now, kept under the song's one auto version, the song found, its info.json, then its
+         * `autochords_mtime` last; the chords stage's end, and info.json's failure in [INFO_FAILED]'s words (the
+         * sheet kept all the same). The audio job's and a lyrics pick's (LyricsPickJob) alike.
+         */
+        internal fun keepAutoSheet(parts: PhoneParts, store: AudioStore, chords: ChordModels,
+                                   names: () -> Map<String, String>, db: Db, s: SongRow, heard: Heard,
+                                   audio: File): Pair<Pair<String, String>, String?> {
+            val stamp = Stamps.of(parts.pacing.clock().truncatedTo(ChronoUnit.SECONDS))
+            val lyrics = lyricsFromJson(s.lyricsJson)
+            val maker = Maker(MADE_ON, db.kvGet(SYNC_ID)?.ifEmpty { null }, names(), chords.runtime,
+                              store.givenName(db, s), sha16(audio))
+            val made = SheetHalf.make(s, lyrics, heard)
+            val raw = SheetHalf.raw(s, lyrics, made, maker = maker)
+            db.savepoint("audio_sheet") {
+                val current = autoVersionOf(db, s.id)
+                val versionId = Versions.upsert(db, PROVIDER, current ?: s.id.toString(), s.id, "sheet", "auto", 0.0, 0,
+                                                1, null, "file://" + audio.absolutePath, raw, stamp)
+                Kept.keepFile(db, parts.store, s, versionId, Versions.SHEET_FILE_NAMES[1],
+                              made.text.toByteArray(Charsets.UTF_8), 1, stamp)
+                db.execute("DELETE FROM versions WHERE song_id = ? AND provider = ? AND id != ? AND NOT EXISTS " +
+                               "(SELECT 1 FROM files f WHERE f.version_id = versions.id)", s.id, PROVIDER, versionId)
+                Versions.refreshStatus(db, s.id, ignored = false, now = stamp)
+            }
+            val info = try {
+                InfoJson.write(db, parts.store.libraryDir, Songs.byId(db, s.id) ?: s)
+                null
+            } catch (e: Exception) {  // the sheet is kept: said so, and made of this audio (no hearing again)
+                if (e is CancellationException) throw e
+                e.message ?: e.javaClass.simpleName
+            }
+            Versions.updateSong(db, s.id, mapOf("autochords_mtime" to s.audioMtime), stamp)
+            return ("done" to holds(raw)) to info?.let { INFO_FAILED.replace("{held}", holds(raw)).replace("{why}", it) }
+        }
+
+        /** versions.auto_version_of: the tab id of the song's one auto version, the one a kept file names first. */
+        private fun autoVersionOf(db: Db, songId: Long): String? =
+            db.one("SELECT tab_id FROM versions v WHERE song_id = ? AND provider = ? ORDER BY EXISTS (SELECT 1 FROM " +
+                       "files f WHERE f.version_id = v.id) DESC, id LIMIT 1", songId, PROVIDER) { it.text(0) }
+
         const val COMMAND = "audio"
         const val DATA = "caracole/library/audio_sheet.json"
         private val KNOWN = setOf("--upload", "--song", "--progress")
