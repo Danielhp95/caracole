@@ -118,16 +118,24 @@ A release is a signed APK in the F-Droid repository at `docs/fdroid/`, which Git
        caracole.release.storePassword=…
 
    (`caracole.release.keyAlias` is `caracole` and `caracole.release.keyPassword` the store's password unless
-   given.) Then:
+   given.) Then, in the `ml` shell, as the release carries the chord models (`:ml` and ONNX Runtime built from its
+   source, below):
 
-       nix develop ./android -c gradle -p android :app:assembleRelease
+       nix develop ./android#ml -c gradle -p android :app:assembleRelease
 
-   Without those properties the release APK is built unsigned.
+   Without those properties the release APK is built unsigned. Outside the `ml` shell `assembleRelease` refuses (the
+   app would say auto-chords isn't on the phone). Every release build ends with `checkApkSize`, which fails an APK
+   over 100 MiB, the most the repository's Pages site takes (about 19.5 MB today). The chord models' libraries are
+   arm64-v8a's alone in the release (`releaseMlAbis`): an x86_64 phone gets SQLite's and no chords, saying "no chord
+   models for this phone's processor". `android/scripts/release-check.sh` checks all of it.
 3. Add it to the repository and sign the index (the repository's own key and its passwords are
    `docs/fdroid/keystore.p12` and `docs/fdroid/config.yml`, kept out of git):
 
        cp android/app/build/outputs/apk/release/app-release.apk docs/fdroid/repo/io.github.danielhp95.caracole_<versionCode>.apk
        cd docs/fdroid && nix develop ../../android -c nix shell nixpkgs#fdroidserver -c fdroid update
+
+   `docs/fdroid/config.yml` keeps the last four APKs in the repository (`archive_older: 4`, the older ones moved to
+   `archive/`, which isn't published), so that at about 20 MB an APK the Pages site stays far under its 1 GB.
 
 4. After a schema bump (`SCHEMA_VERSION`), publish the site catalogues once before releasing the APK, so that the new
    app finds a file of its own schema: update the laptop's service, run `sudo caracole-admin index publish
@@ -137,6 +145,22 @@ A release is a signed APK in the F-Droid repository at `docs/fdroid/`, which Git
    out). That includes what `fdroid update` writes besides the APK and the index: `repo/diff/` and the app's icon
    under `repo/io.github.danielhp95.caracole/`. The index names them, and F-Droid fails to update from the last
    index when they're missing. The app's page in F-Droid (its description, screenshots) is `docs/fdroid/metadata/`.
+
+The chord models themselves are no part of the APK: the app downloads beat_this's two converted graphs from this
+repository's GitHub prerelease `models`, and BTC's weights from its authors' repository, at a tap. The owner uploads the
+first with `publish-models`, by hand, once a model changes (it checks the two files against `models.json`'s pins,
+uploads each only once, and touches no other asset):
+
+    nix run .#publish-models -- "$(nix build --print-out-paths .#chord-models)"
+
+**For f-droid.org** (never done: the repository here is self-hosted), its build server would need, besides the Android
+SDK and the NDK r28c: ONNX Runtime 1.27.1's source as a srclib, the tree nixpkgs pins
+(`sha256-i2u/JnfbJ/srsZY3ATb2YsBBXEhTGhatsr3+9eHVV3M=`, 702,144,272 bytes as a NAR), hosted somewhere it can fetch,
+since github.com/microsoft/onnxruntime answers 404; the 13 zips `cmake/deps.txt` names (each still on GitHub, pinned
+in `nix/onnxruntime-android.nix`); protoc 21.12, built from protobuf's own source; and a prebuild that runs
+`scripts/build-onnxruntime.sh` (java, native for arm64-v8a, aar) with no network and puts the AAR where
+`CARACOLE_ONNXRUNTIME` names it. Its Anti-Features would be NonFreeNet (the models' downloads) and, while BTC's weights
+have no licence, NonFreeAssets; no Tracking.
 
 Losing either key ends the updates: the release key's APKs install over no other, and F-Droid refuses an index
 signed with another key. Keep a copy of both outside the repository.
@@ -747,15 +771,15 @@ file once however many backups hold it. The indexes aren't backed up: they come 
 A backup, its daily one and a restore are requests like a lookup, one at a time in the Journal ("Backed up
 (by-hand)", "Restored the book of 2026-11-10 09:14"), never run beside a lookup.
 
-## Chords from audio: the models (debug build)
+## Chords from audio: the models
 
 The chord model (BTC) and the beat model (beat_this) run on the phone in `:ml`, on ONNX Runtime 1.27.1 built from its
-source (`OrtModels`; the owner's Gate R of 2026-11-27, "Build 1.27.1"). It is linked into the debug build alone
-(`debugImplementation`) until the release takes it (stage S), and only in the `./android#ml` shell:
-`../nix/onnxruntime-android.nix` builds it with no network, for arm64-v8a and x86_64, and makes an AAR of the two in a
-Maven folder of its own, which that shell names as `$CARACOLE_ONNXRUNTIME`. Without the variable `settings.gradle.kts`
-leaves `:ml` out, and the debug build has no chord models and no Chords bench (`src/debugMl`, `src/testDebugMl` and
-`src/androidTestMl` come with `:ml`), so the other shells build and test the rest with no ONNX Runtime.
+source (`OrtModels`; the owner's Gate R of 2026-11-27, "Build 1.27.1"). Both builds carry it (stage S; the release its
+libraries for arm64-v8a alone, Release above), and only in the `./android#ml` shell: `../nix/onnxruntime-android.nix`
+builds it with no network, for arm64-v8a and x86_64, and makes an AAR of the two in a Maven folder of its own, which
+that shell names as `$CARACOLE_ONNXRUNTIME`. Without the variable `settings.gradle.kts` leaves `:ml` out, and the debug
+build has no chord models and no Chords bench (`src/ml`, `src/debugMl`, `src/testDebugMl` and `src/androidTestMl` come
+with `:ml`, `src/noMl` without it), so the other shells build and test the rest with no ONNX Runtime.
 
 - The source is nixpkgs' pin of the tag v1.27.1 (`sha256-i2u/JnfbJ/srsZY3ATb2YsBBXEhTGhatsr3+9eHVV3M=`), which
   cache.nixos.org serves: github.com/microsoft/onnxruntime answers 404. Each CMake dependency is the zip `deps.txt`
@@ -944,8 +968,9 @@ are kept.
 
 ## Chords from audio: a sheet from a file (debug build)
 
-In the debug build the phone's audio job (`caracole audio --upload=ID --song=…`) hears with the real `:ml` process
-(src/debugMl's `PhoneChords`, a debug build of the `ml` shell; the release has none, and says auto-chords isn't on the phone). The models are those
+The phone's audio job (`caracole audio --upload=ID --song=…`) hears with the real `:ml` process (src/ml's
+`PhoneChords`, both builds of the `ml` shell; a build without `:ml` has none, and says auto-chords isn't on the phone).
+The models are those
 Settings' download installs in `files/state/models/c1/`. A hearing refuses under 15 % of battery when not charging,
 holds a partial wake lock while it runs, goes one at a time (a job's and the Chords bench's never together), and
 removes its checkpoints once the sheet's chords are heard; a hearing that failed keeps them for Try again, and the app

@@ -17,9 +17,18 @@ val commit: String? = try {
     null
 }
 
-/** Whether :ml is in the build (settings.gradle.kts includes it in flake.nix's ml shell alone): the debug build's chord
- * models and Chords bench come with it. */
+/** Whether :ml is in the build (settings.gradle.kts includes it in flake.nix's ml shell alone): the chord models (both
+ * builds) and the debug build's Chords bench come with it, and a release is made with it alone. */
 val chordsOnPhone = findProject(":ml") != null
+
+/** The release's ABIs for the chord models' libraries (ONNX Runtime, libsoxr): arm64-v8a alone, the phones that make
+ * chords (the design's §7: x86_64 phones are few, and the APK would carry 13.6 MB more), while SQLite's ships for both;
+ * a debug build keeps both, for the emulator. MlChordModels.deviceProblem says "no chord models for this phone's
+ * processor" on the others (BuildConfig.ML_ABIS). */
+val releaseMlAbis = listOf("arm64-v8a")
+
+/** The largest release APK the self-hosted F-Droid repository takes (its Pages site: no file over 100 MB). */
+val apkMost = 100L * 1024 * 1024
 
 android {
     namespace = "io.github.danielhp95.caracole"
@@ -46,6 +55,8 @@ android {
         buildConfigField("int", "SERVER_PORT", "8738")
         // Settings' Chords bench row: a debug build with :ml alone (below).
         buildConfigField("boolean", "CHORDS_BENCH", "false")
+        // The ABIs whose chord models' libraries the APK carries ([releaseMlAbis]; a debug build's below).
+        buildConfigField("String", "ML_ABIS", "\"${releaseMlAbis.joinToString(",")}\"")
     }
 
     // The release key, from outside the repo: ~/.gradle/gradle.properties (or -P / ORG_GRADLE_PROJECT_*) names the
@@ -71,6 +82,7 @@ android {
             versionNameSuffix = "-debug" + (commit?.let { "+$it" } ?: "")
             buildConfigField("int", "SERVER_PORT", "8739")
             buildConfigField("boolean", "CHORDS_BENCH", chordsOnPhone.toString())
+            buildConfigField("String", "ML_ABIS", "\"arm64-v8a,x86_64\"")
         }
         release {
             signingConfig = releaseSigning
@@ -107,18 +119,19 @@ android {
     // The conformance vectors, as the device tests' assets (conformance/…): CorpusOnDeviceTest reads them through
     // the instrumentation's AssetManager.
     sourceSets.getByName("androidTest").assets.srcDir(layout.buildDirectory.dir("generated/conformanceAssets"))
-    // The chord models in the debug build, where :ml is (settings.gradle.kts: the ml shell's source-built ONNX Runtime):
-    // src/debugMl's PhoneChords, the Chords bench and its manifest, src/testDebugMl's and src/androidTestMl's tests of
-    // them.
-    // Elsewhere the debug build has the release's PhoneChords (none) and no bench, so the other shells build and test
-    // the app with no ONNX Runtime ([chordsOnPhone], BuildConfig.CHORDS_BENCH).
+    // The chord models, where :ml is (settings.gradle.kts: the ml shell's source-built ONNX Runtime): src/ml's
+    // PhoneChords and PhoneExaminer in both builds; the debug build's Chords bench and its manifest (src/debugMl), and
+    // src/testDebugMl's and src/androidTestMl's tests. Elsewhere src/noMl's (none: auto-chords isn't on the phone) and
+    // no bench, so the other shells build and test the app with no ONNX Runtime ([chordsOnPhone],
+    // BuildConfig.CHORDS_BENCH); a release is never made so (below).
     if (chordsOnPhone) {
+        sourceSets.getByName("main").java.srcDir("src/ml/kotlin")
         sourceSets.getByName("debug").java.srcDir("src/debugMl/kotlin")
         sourceSets.getByName("debug").manifest.srcFile("src/debugMl/AndroidManifest.xml")
         sourceSets.getByName("androidTest").java.srcDir("src/androidTestMl/kotlin")
         sourceSets.getByName("testDebug").java.srcDir("src/testDebugMl/kotlin")
     } else {
-        sourceSets.getByName("debug").java.srcDir("src/release/kotlin")
+        sourceSets.getByName("main").java.srcDir("src/noMl/kotlin")
     }
     // The Chords bench's committed clips (src/debugMl's ChordsBenchActivity): the computer's features and model outputs
     // of them, autochords/models.jsonl and frontend.jsonl (2.7 MB), the debug build's assets alone. No model file:
@@ -148,6 +161,47 @@ kotlin {
     compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
 }
 
+// The release's chord models' libraries for [releaseMlAbis] alone: ONNX Runtime's and libsoxr's of every other ABI left
+// out of its APK (SQLite's kept).
+androidComponents {
+    onVariants(selector().withBuildType("release")) { variant ->
+        for (abi in listOf("x86_64").filter { it !in releaseMlAbis }) {
+            variant.packaging.jniLibs.excludes.addAll(
+                "**/$abi/libonnxruntime.so", "**/$abi/libonnxruntime4j_jni.so", "**/$abi/libcaracole_soxr.so")
+        }
+    }
+}
+
+// A release carries the chord models: one made without :ml (outside the ml shell) would ship an app that says
+// auto-chords isn't on the phone, so it is refused.
+tasks.matching { it.name == "assembleRelease" || it.name == "bundleRelease" }.configureEach {
+    doFirst {
+        if (!chordsOnPhone) {
+            throw GradleException("a release carries the chord models: build it in flake.nix's ml shell " +
+                "(nix develop ./android#ml), whose CARACOLE_ONNXRUNTIME brings :ml")
+        }
+    }
+}
+
+// The release APK's size against [apkMost], after every release build (release-check.sh too): the APK its
+// output-metadata.json names, never a stale one beside it.
+val checkApkSize by tasks.registering {
+    description = "Fails a release APK over 100 MiB, the most the self-hosted F-Droid repository takes."
+    group = "verification"
+    dependsOn("assembleRelease")
+    val folder = layout.buildDirectory.dir("outputs/apk/release")
+    doLast {
+        val dir = folder.get().asFile
+        val name = Regex("\"outputFile\"\\s*:\\s*\"([^\"]+)\"").find(File(dir, "output-metadata.json").readText())
+            ?.groupValues?.get(1) ?: throw GradleException("no outputFile in $dir/output-metadata.json")
+        val apk = File(dir, name)
+        val size = apk.length()
+        if (size > apkMost) throw GradleException("$apk is $size bytes, over 100 MiB ($apkMost)")
+        logger.lifecycle("checkApkSize: ${apk.name} is $size bytes, under 100 MiB")
+    }
+}
+tasks.matching { it.name == "assembleRelease" }.configureEach { finalizedBy(checkApkSize) }
+
 // ApkScanTest (Gate R's string scan): the runtime built from its source, the AAR in $CARACOLE_ONNXRUNTIME, in every
 // unit test run; the release and debug APKs by apkScan alone, which builds them (release-check.sh runs it).
 tasks.withType<Test>().configureEach {
@@ -174,12 +228,15 @@ dependencies {
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.work:work-runtime-ktx:2.10.5")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
-    // The chord and beat models on ONNX Runtime, the debug build's alone until the release takes them (the design's
-    // stage S, E33): no release carries it, and a debug build only where :ml is (the ml shell).
-    if (chordsOnPhone) debugImplementation(project(":ml"))
-    // Its hearing's types (Heard, Checkpoints), which the Chords bench's whole-pipeline mode reads: :ml's own, the
-    // debug build's alone too.
-    debugImplementation(project(":autochords"))
+    // The chord and beat models on ONNX Runtime (the design's stage S), both builds, where :ml is (the ml shell), and
+    // :autochords' audio lengths (PhoneExaminer) and hearing's types (the Chords bench's whole-pipeline mode); without
+    // :ml, :autochords for the debug build's device tests alone (the corpus's autochords area).
+    if (chordsOnPhone) {
+        implementation(project(":ml"))
+        implementation(project(":autochords"))
+    } else {
+        debugImplementation(project(":autochords"))
+    }
 
     // The app's own logic that needs no device (the text size, Settings over its preferences, a file read from the
     // phone's server and copied for another app, an index fetched): `gradle :app:test`.

@@ -6,8 +6,8 @@ import io.github.danielhp95.caracole.core.library.AudioStore
 import java.io.File
 
 /**
- * The debug build's reader of an audio file the owner gives (src/debugMl, beside `:ml`'s PhoneChords: the release, which
- * makes no sheet from audio, has none, src/release's): the audio store's [AudioStore.Examiner] (its contract there).
+ * The app's reader of an audio file the owner gives (src/ml, beside `:ml`'s PhoneChords, both builds of the ml shell;
+ * a build without :ml has none, src/noMl's): the audio store's [AudioStore.Examiner] (its contract there).
  *
  * - Its length is the computer's, by the format the store gives (a spool has no audio extension): `:autochords`'
  *   [AudioLengths], from the file's own headers, an MP3 whose first frame names no length its frames counted as

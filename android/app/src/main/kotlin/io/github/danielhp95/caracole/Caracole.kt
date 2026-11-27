@@ -163,8 +163,8 @@ object Caracole {
                 settings = SavedAddress(Settings(context)), secret = secret, csrf = csrf,
                 transport = { _ -> transport() }, version = BuildConfig.VERSION_NAME, alerts = alerts,
                 searchesLacuerda = searchesLacuerdaForTests, catalogues = ::catalogues, metered = { metered(context) },
-                // The debug build's `:ml` (src/debugMl's PhoneChords), none in the release's; the models' source this
-                // build's pins (ModelFiles.carried: the release carries none), asked of GitHub, or a test's.
+                // `:ml`'s chord models (src/ml's PhoneChords, both builds of the ml shell; src/noMl's none); the models'
+                // source this build's pins (ModelFiles.carried, `:ml`'s), asked of GitHub, or a test's.
                 chords = PhoneChords.of(context, state),
                 models = ModelFiles.carried()?.let { pins ->
                     modelsForTests?.let { ModelsSource(base = it, redirects = emptySet(), pins = { pins }) }

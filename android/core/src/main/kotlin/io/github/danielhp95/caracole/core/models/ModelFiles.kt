@@ -81,9 +81,8 @@ object ModelFiles {
 
     private const val MANIFEST_MOST = 64 * 1024
 
-    /** The one probe of whether this build has the chord models: models.json's pins from [loader]'s classpath (the
-     * debug build's `:ml` puts them there; `:core`, so the release, ships none), or null for a build that carries
-     * none. */
+    /** The one probe of whether this build has the chord models: models.json's pins from [loader]'s classpath (`:ml`
+     * puts them there, in both builds of the ml shell; `:core` ships none), or null for a build that carries none. */
     fun carried(loader: ClassLoader? = ModelFiles::class.java.classLoader): Pins? =
         loader?.getResourceAsStream(RESOURCE)?.use { it.readBytes() }?.let(::read)
 

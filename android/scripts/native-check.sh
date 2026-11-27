@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# What an APK's own native libraries (lib/*/libcaracole_*.so: autochords/native/'s libcaracole_soxr.so, packaged by
-# :ml) must be, run inside `nix develop ./android` after `gradle -p android :app:assembleDebug`:
+# What the native libraries the chord models bring must be (autochords/native/'s libcaracole_soxr.so, packaged by
+# :ml, and ONNX Runtime's libonnxruntime.so and libonnxruntime4j_jni.so, built from its source), run inside
+# `nix develop ./android` after a build in the ml shell:
 #
 #   android/scripts/native-check.sh [APK]              # default: android/app/build/outputs/apk/debug/app-debug.apk
-#   android/scripts/native-check.sh --release APK      # the release's: none of ours today, which passes, saying so
+#   android/scripts/native-check.sh --release APK      # the release's: arm64-v8a's alone, and no other ABI's
 #
-# release-check.sh runs it on both APKs it builds. Each library (in the debug APK, libcaracole_soxr.so for arm64-v8a
-# and x86_64, both required) must be:
+# release-check.sh runs it on both APKs it builds. Each library (in the debug APK the three for arm64-v8a and x86_64,
+# in the release the three for arm64-v8a, all required) must be:
 #
 # - stored uncompressed and 16 KB aligned (zipalign -c -P 16), its every LOAD segment aligned 0x4000;
 # - stripped: no .debug_* or .symtab section, no .comment, no build-id note;
@@ -31,16 +32,17 @@ work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT
 # zipalign's own verdict is the whole APK's: each entry's line decides below, saying which and why.
 aligned=$("$zipalign" -c -P 16 -v 4 "$apk" || true)
-ours=$(unzip -Z1 "$apk" | grep -E '^lib/[^/]+/libcaracole_[^/]*\.so$' || true)
+ours=$(unzip -Z1 "$apk" | grep -E '^lib/[^/]+/(libcaracole_[^/]*|libonnxruntime|libonnxruntime4j_jni)\.so$' || true)
+libs="libcaracole_soxr.so libonnxruntime.so libonnxruntime4j_jni.so"
 if [ "$release" = 1 ]; then
-  entries=$ours
-  if [ -z "$entries" ]; then
-    echo "OK: no libcaracole_* in the release"
-    exit 0
-  fi
+  abis="arm64-v8a"
+  # The release's chord models' libraries are arm64-v8a's alone (app/build.gradle.kts's releaseMlAbis).
+  others=$(grep -v '^lib/arm64-v8a/' <<< "$ours" || true)
+  [ -z "$others" ] || fail "the release carries another ABI's: $(tr '\n' ' ' <<< "$others")"
 else
-  entries="lib/arm64-v8a/libcaracole_soxr.so lib/x86_64/libcaracole_soxr.so"
+  abis="arm64-v8a x86_64"
 fi
+entries=$(for abi in $abis; do for lib in $libs; do echo "lib/$abi/$lib"; done; done)
 
 for entry in $entries; do
   so=$work/$(tr / _ <<< "$entry")

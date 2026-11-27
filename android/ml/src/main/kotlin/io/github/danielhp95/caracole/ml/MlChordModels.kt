@@ -339,19 +339,21 @@ class MlChordModels(
         private const val CANT_TAKE_TURN = "the chord models' turn can't be taken"
 
         /** The phone's reasons not to hear here (the design's §8.1), the first that holds: Android before 13 (API 33),
-         * no processor the app carries the libraries of ([ABIS]), under [LEAST_MEMORY] of memory; null for none. */
-        fun deviceProblem(sdk: Int, totalMem: Long, abis: List<String>): String? = when {
+         * no processor the app carries the libraries of ([carried]: [ABIS] in a debug build, arm64-v8a alone in the
+         * release), under [LEAST_MEMORY] of memory; null for none. */
+        fun deviceProblem(sdk: Int, totalMem: Long, abis: List<String>, carried: Set<String> = ABIS): String? = when {
             sdk < LEAST_SDK -> "chords from audio need Android 13 or later"
-            abis.none { it in ABIS } -> "no chord models for this phone's processor"
+            abis.none { it in carried } -> "no chord models for this phone's processor"
             totalMem < LEAST_MEMORY -> "chords from audio need 6 GB of memory or more"
             else -> null
         }
 
-        /** [deviceProblem] of this phone: its Android, its ABIs, its memory as ActivityManager tells it. */
-        fun deviceProblem(context: Context): String? {
+        /** [deviceProblem] of this phone: its Android, its ABIs against those the app [carried] the libraries of, its
+         * memory as ActivityManager tells it. */
+        fun deviceProblem(context: Context, carried: Set<String> = ABIS): String? {
             val memory = ActivityManager.MemoryInfo()
             context.getSystemService(ActivityManager::class.java).getMemoryInfo(memory)
-            return deviceProblem(Build.VERSION.SDK_INT, memory.totalMem, Build.SUPPORTED_ABIS.toList())
+            return deviceProblem(Build.VERSION.SDK_INT, memory.totalMem, Build.SUPPORTED_ABIS.toList(), carried)
         }
 
         const val LEAST_SDK = 33
@@ -360,7 +362,8 @@ class MlChordModels(
          * modem's carve-outs left out), so the floor is 5 GiB. */
         const val LEAST_MEMORY = 5L shl 30
 
-        /** The ABIs the debug build carries the libraries of (app/build.gradle.kts's abiFilters). */
+        /** The ABIs a debug build carries the libraries of (app/build.gradle.kts's abiFilters); the release's are
+         * arm64-v8a alone (BuildConfig.ML_ABIS). */
         val ABIS = setOf("arm64-v8a", "x86_64")
 
         const val DAY_MS = 24 * 60 * 60_000L

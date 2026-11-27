@@ -114,6 +114,11 @@ class HearingGuardTest {
                      MlChordModels.deviceProblem(34, big, listOf("armeabi-v7a", "armeabi")))
         assertEquals("chords from audio need 6 GB of memory or more",
                      MlChordModels.deviceProblem(34, MlChordModels.LEAST_MEMORY - 1, listOf("arm64-v8a")))
+        // The release carries the libraries for arm64-v8a alone (app/build.gradle.kts): an x86_64 phone has none.
+        val release = setOf("arm64-v8a")
+        assertEquals("no chord models for this phone's processor",
+                     MlChordModels.deviceProblem(34, big, listOf("x86_64"), carried = release))
+        assertNull(MlChordModels.deviceProblem(34, big, listOf("arm64-v8a", "armeabi-v7a"), carried = release))
         // Android's version first, then the processor, then the memory.
         assertEquals("chords from audio need Android 13 or later",
                      MlChordModels.deviceProblem(30, 1L shl 30, listOf("armeabi-v7a")))

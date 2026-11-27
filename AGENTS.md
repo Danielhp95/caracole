@@ -2826,6 +2826,11 @@ It is rows.js's, shared by both pages:
     `published.json`, and the 0710 dataDir refuses the user's inotify watch. A publish by hand (`caracole-admin index
     publish`) starts no upload.
 - **module-check.nix**: `checks.module`, which loads the marker with service.py.
+- **publish-models.sh** (`.#publish-models`, publish-models.nix): the owner's upload, by hand, of beat_this's two
+  converted graphs (`.#chord-models`' `beat_this-final0.onnx` and `-fp16.onnx`) to the GitHub prerelease `models`
+  the phone's models' job fetches from: the files checked against models.json's pins (PINS) first, each uploaded once
+  and read back, one already there with the pinned digest left, one of another digest never replaced, no other asset
+  touched; tests/test_publish_models.py against helpers/fake_gh.py.
 
 #### `docs/`
 
@@ -2909,11 +2914,14 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   tests/test_android_e2e.py, below).
 - `:ml` (Android library, the chords-on-the-phone design): BTC and beat_this on ONNX Runtime 1.27.1 built from its
   source (`OrtModels`: `chords`, `beats`, a chunk at a time, `padding` the graph's mean, `RUNTIME` "onnxruntime
-  1.27.1"; Gate R, the owner's "Build 1.27.1" of 2026-11-27), the app's `debugImplementation` alone, so no release
-  carries a runtime; and only in the `./android#ml` shell, whose `CARACOLE_ONNXRUNTIME` names the runtime's Maven folder:
-  without it settings.gradle.kts includes no `:ml`, and the app's debug build takes src/release's `PhoneChords` (none),
-  no Chords bench (`BuildConfig.CHORDS_BENCH`), and leaves out src/debugMl, src/testDebugMl and src/androidTestMl, so
-  the other shells build and test the rest with no ONNX Runtime.
+  1.27.1"; Gate R, the owner's "Build 1.27.1" of 2026-11-27), an `implementation` of the app, both builds (stage S,
+  E33), and only in the `./android#ml` shell, whose `CARACOLE_ONNXRUNTIME` names the runtime's Maven folder: without it
+  settings.gradle.kts includes no `:ml`, and the app takes src/noMl's `PhoneChords` and `PhoneExaminer` (none) for
+  src/ml's, no Chords bench (`BuildConfig.CHORDS_BENCH`), and leaves out src/debugMl, src/testDebugMl and
+  src/androidTestMl, so the other shells build and test the rest with no ONNX Runtime; `assembleRelease` refuses
+  there. The release carries the chord models' libraries for arm64-v8a alone (app/build.gradle.kts `releaseMlAbis`,
+  `BuildConfig.ML_ABIS`; SQLite's for both): `MlChordModels.deviceProblem(carried=)` says "no chord models for this
+  phone's processor" on an x86_64 phone; `checkApkSize` (after every release build) fails an APK over 100 MiB.
   - The runtime: nix/onnxruntime-android.nix, with no network: nixpkgs' pin of the v1.27.1 source
     (`sha256-i2u/JnfbJ/srsZY3ATb2YsBBXEhTGhatsr3+9eHVV3M=`, cache.nixos.org's: github.com/microsoft/onnxruntime answers
     404), its CMake dependencies deps.txt's zips by SHA-256 in a local mirror; android/scripts/build-onnxruntime.sh's
@@ -2976,13 +2984,15 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     heard, `not_heard`; null where it didn't run; no report file where the run threw). `ChordsBenchTest`
     (`device-test.sh --ml`) runs its sessions over the clips on the emulator, a process each, and the B1 mode over
     hearing.mp3 and hearing.m4a.
-  - `android/scripts/release-check.sh` holds the release to none of it: no onnxruntime or `:ml` on its runtime classpath
-    (which names `:core`: read), no `libonnxruntime*`, class under `ai/onnxruntime/` or of `:ml`, bench name or
-    Settings' row's words in its dex, `caracole/autochords/` or `assets/autochords/` entry, model file (`.onnx`, `.pt`),
-    TelemetryInitializer or bench entry in its manifest; each APK by output-metadata.json's name, both built in the ml
-    shell (the debug build with `:ml`); the controls: the debug classpath and APK (no weights' file there either),
-    `.#chord-models`' names, the runtime's AAR declaring no provider, and `gradle :app:apkScan` (ApkScanTest's control
-    finding each string where it would be). It handles
+  - `android/scripts/release-check.sh` holds the release to it: onnxruntime and `:ml` on its runtime classpath (which
+    names `:core`: read); ONNX Runtime's libraries for arm64-v8a and no chord models' library for x86_64 (SQLite's
+    kept); classes under `ai/onnxruntime/` and of `:ml`; `caracole/autochords/`; one model file, BTC's graph, no
+    weights' file; MlService in its `:ml` process; no bench name or Settings' row's words in its dex, no
+    `assets/autochords/` entry, no TelemetryInitializer or bench entry in its manifest; 100 MiB at most; each APK by
+    output-metadata.json's name, both built in the ml shell; the controls: the debug APK's bench and x86_64 libraries,
+    `.#chord-models`' names, the runtime's AAR declaring no provider, `gradle :app:apkScan` (ApkScanTest's control
+    finding each string where it would be), and native-check.sh over both APKs' runtime and libsoxr (both ABIs in
+    the debug one, arm64-v8a's alone in the release). It handles
     no text: no ForbiddenApiTest.
   - Its native build (stage B1): `externalNativeBuild` of autochords/native/CMakeLists.txt for arm64-v8a and x86_64,
     NDK r28c (`ndkVersion`, the app's too, whose strip needs it; android/flake.nix's `ndkVersion` and `cmakeVersion`
@@ -4429,12 +4439,12 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 - The phone notes no transcript or nothing-sung verdict of its own: `Relay.notedOf` of its own audio is the empty
   `Noted`, which is `notedIn` of a phone-made raw (it holds neither), so the computer's re-lay of a phone-made sheet
   is the phone's.
-- The app's chords (E22): `PhoneDeps.chords` is `PhoneChords.of` (src/debugMl's, the ml shell's debug build: `:ml`'s `MlChordModels` over the
-  folder the models' job installs, `forgetHeard`, the device's reasons; src/release's: null, so the release's main
-  source set names nothing of `:ml`, a debugImplementation, and `audioProblem()` says auto-chords isn't on the phone,
-  release-check.sh holding the APK to it); `PhoneDeps.models` is its default (`ModelFiles.carried()`: the debug's
-  pins). `PhoneChords.sweep` after `Phone.start`, a failure logged (`guarded`). A device test sets
-  `PhoneChords.anyPhoneHearsForTests` (src/debugMl's, the emulator's 2 GB) and `Caracole.examinerForTests`.
+- The app's chords (E22): `PhoneDeps.chords` is `PhoneChords.of` (src/ml's, both builds of the ml shell: `:ml`'s
+  `MlChordModels` over the folder the models' job installs, `forgetHeard`, the device's reasons with this APK's ABIs,
+  `BuildConfig.ML_ABIS`; src/noMl's, a build without `:ml`: null, and `audioProblem()` says auto-chords isn't on the
+  phone); `PhoneDeps.models` is its default (`ModelFiles.carried()`: `:ml`'s pins). `PhoneChords.sweep` after
+  `Phone.start`, a failure logged (`guarded`). A device test sets `PhoneChords.anyPhoneHearsForTests` (the emulator's
+  2 GB) and `Caracole.examinerForTests`.
   ChordsEndToEndTest (`device-test.sh --models --sites chords
   ChordsEndToEndTest`; `--models` pushes the models with none of `:ml`'s classes) installs the pushed models through
   the models' job (copied into `stateDir/models/.c1.kept/`, hashed again by `ModelsSource.fetch`, nothing asked, the
@@ -4445,8 +4455,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   answering; and `hear`'s contract on the real process (what `waiting` throws, as itself; `BUSY`).
 - `Phone.audio` (`AudioStore(stateDir, PhoneDeps.examiner)`, by default `NO_EXAMINER`, which reads no file); `tidy`
   runs as the phone starts and after a sync's take, a write of its own, never under `held`.
-- The app's examiner, `PhoneExaminer`, the debug build's with `:ml` alone (src/debugMl, as `:autochords` is a
-  debugImplementation; src/release's refuses every file, its routes refusing first anyway): its length `:autochords`' `AudioLengths` by
+- The app's examiner, `PhoneExaminer`, a build with `:ml`'s (src/ml, beside `:autochords`, an implementation then;
+  src/noMl's refuses every file, its routes refusing first anyway): its length `:autochords`' `AudioLengths` by
   the format the store gives (a spool has no extension): an MP3's `MpegFrames` count (mpeg_frames.py's port) where
   its first frame names none, else `MpegHeader`'s; an M4A's sound track's `mdhd` (`Mp4.Track.sound`: none with no
   sound track, refused); FLAC's STREAMINFO; `Ogg`; `Pcm`. Its tags Android's (MediaMetadataRetriever: artist, then
