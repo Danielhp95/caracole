@@ -1,5 +1,6 @@
 package io.github.danielhp95.caracole
 
+import org.junit.Assume.assumeTrue
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -18,15 +19,16 @@ import kotlin.test.assertTrue
  * manifest's string pool).
  *
  * - the runtime built from its source (nix/onnxruntime-android.nix: the AAR in `$CARACOLE_ONNXRUNTIME`, Gradle's
- *   `caracole.onnxruntime`), in every `gradle test`;
+ *   `caracole.onnxruntime`), in every `gradle test` of flake.nix's ml shell (elsewhere no runtime is built in: skipped,
+ *   saying so);
  * - the release APK and the debug one, which carries the runtime, by `gradle :app:apkScan` alone (it builds both:
  *   release-check.sh runs it), each read by the name its output-metadata.json gives.
  */
 class ApkScanTest {
     @Test fun theScanFindsEachNeedleWhereItWouldBe() {
         val manifest = "<provider android:name=\"ai.onnxruntime.TelemetryInitializer\"/>".toByteArray(Charsets.UTF_16LE)
-        val classes = zip("ai/onnxruntime/telemetry/HttpClient.class" to "\u00ca\u00feLai/onnxruntime/telemetry/HttpClient;"
-            .toByteArray(Charsets.ISO_8859_1))
+        val classes = zip("ai/onnxruntime/telemetry/HttpClient.class" to
+            "\u00ca\u00feLai/onnxruntime/telemetry/HttpClient;".toByteArray(Charsets.ISO_8859_1))
         val apk = zip(
             "AndroidManifest.xml" to manifest,
             "lib/arm64-v8a/libonnxruntime.so" to "\u0000https://mobile.events.data.microsoft.com/OneCollector\u0000"
@@ -44,7 +46,11 @@ class ApkScanTest {
     }
 
     @Test fun theRuntimeBuiltFromSourceHoldsNoTelemetry() {
-        val folder = File(System.getProperty("caracole.onnxruntime") ?: error("no caracole.onnxruntime"))
+        val given = System.getProperty("caracole.onnxruntime").orEmpty()
+        // Outside flake.nix's ml shell there is no runtime in the build (no :ml), so none to scan.
+        assumeTrue("CARACOLE_ONNXRUNTIME is unset: no ONNX Runtime in this build (the ml shell's: " +
+            "nix develop ./android#ml)", given.isNotEmpty())
+        val folder = File(given)
         val aars = folder.walk().filter { it.isFile && it.name.endsWith(".aar") }.toList()
         assertEquals(1, aars.size, "one AAR in $folder: $aars")
         val bytes = aars.single().readBytes()
@@ -92,8 +98,8 @@ class ApkScanTest {
             }
         }
 
-        fun isZip(bytes: ByteArray) = bytes.size > 4 && bytes[0] == 'P'.code.toByte() && bytes[1] == 'K'.code.toByte() &&
-            bytes[2] == 3.toByte() && bytes[3] == 4.toByte()
+        fun isZip(bytes: ByteArray) = bytes.size > 4 && bytes[0] == 'P'.code.toByte() &&
+            bytes[1] == 'K'.code.toByte() && bytes[2] == 3.toByte() && bytes[3] == 4.toByte()
 
         fun holds(haystack: ByteArray, needle: ByteArray): Boolean {
             outer@ for (i in 0..haystack.size - needle.size) {

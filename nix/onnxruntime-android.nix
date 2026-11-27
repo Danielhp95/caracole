@@ -1,7 +1,7 @@
 # ONNX Runtime 1.27.1 for the phone's chords (the chords-on-the-phone design's §3.5, Gate R: the owner's "Build 1.27.1"
 # of 2026-11-27), built from its source with no network: android/scripts/build-onnxruntime.sh for each ABI the app ships,
 # then an AAR of the two (its Java bindings compiled from the same tree) in a Maven folder of its own, which
-# android/settings.gradle.kts reads in Maven Central's place (the variable android/flake.nix sets for every shell).
+# android/settings.gradle.kts reads in Maven Central's place (the variable android/flake.nix's ml shell sets).
 #
 # The source is nixpkgs' pin of the tag v1.27.1 (its fixed-output hash, below), which cache.nixos.org serves:
 # github.com/microsoft/onnxruntime answers 404 since 2026-11. Each CMake dependency is the zip deps.txt names, pinned
@@ -65,9 +65,13 @@ let
   python = python3.withPackages (ps: [ ps.flatbuffers ]);
 
   ops = ../android/ml/onnxruntime-ops.config;
+  # Its one date of every output (EPOCH), the jobs it runs (at most 8) and each zip's order are its own.
   script = ../android/scripts/build-onnxruntime.sh;
-  # Any fixed time (1980-01-01T00:00:02Z, the earliest a jar takes): the outputs never depend on the clock.
-  epoch = "315532802";
+
+  # The Java bindings, compiled once: the JNI headers each ABI's library is built against, and the AAR's classes.
+  java = runCommand "onnxruntime-android-java-${version}" { nativeBuildInputs = [ python3 jdk17_headless ]; } ''
+    bash ${script} java --source ${src} --out $out
+  '';
 
   native =
     abi:
@@ -86,9 +90,9 @@ let
       dontUseNinjaInstall = true;
       buildPhase = ''
         runHook preBuild
-        export SOURCE_DATE_EPOCH=${epoch} HOME=$TMPDIR
-        bash ${script} --source ${src} --mirror ${mirror} --ndk ${ndk} --protoc ${lib.getExe protobuf_21} \
-          --ops ${ops} --abi ${abi} --work $TMPDIR/ort --out $out --jobs ''${NIX_BUILD_CORES:-8}
+        export HOME=$TMPDIR
+        bash ${script} native --source ${src} --java ${java} --mirror ${mirror} --ndk ${ndk} \
+          --protoc ${lib.getExe protobuf_21} --ops ${ops} --abi ${abi} --work $TMPDIR/ort --out $out
         runHook postBuild
       '';
       dontInstall = true;
@@ -104,15 +108,13 @@ let
 in
 runCommand "onnxruntime-android-${version}"
   {
-    nativeBuildInputs = [
-      python3
-      jdk17_headless
-    ];
+    nativeBuildInputs = [ python3 ];
     passthru = {
       inherit
         version
         src
         mirror
+        java
         natives
         group
         artifact
@@ -120,44 +122,8 @@ runCommand "onnxruntime-android-${version}"
     };
   }
   ''
-    export SOURCE_DATE_EPOCH=${epoch} LC_ALL=C
-    work=$TMPDIR/aar
-    mkdir -p $work/classes $work/aar/jni $out/${folder}
-    find ${src}/java/src/main/java ${src}/java/src/main/android -name '*.java' | sort > $work/sources
-    javac --release 17 -encoding UTF-8 -nowarn -d $work/classes @$work/sources
-    jar --create --date=1980-01-01T00:00:02Z --file $work/aar/classes.jar -C $work/classes .
-    ${lib.concatMapStrings (abi: ''
-      mkdir -p $work/aar/jni/${abi}
-      cp ${natives.${abi}}/jni/${abi}/*.so $work/aar/jni/${abi}/
-    '') abis}
-    # No provider, no permission: this build sends nothing anywhere.
-    cat > $work/aar/AndroidManifest.xml <<'EOF'
-    <?xml version="1.0" encoding="utf-8"?>
-    <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="ai.onnxruntime">
-        <uses-sdk android:minSdkVersion="26" />
-    </manifest>
-    EOF
-    # The JNI side makes and reads ai.onnxruntime's objects by name.
-    echo '-keep class ai.onnxruntime.** { *; }' > $work/aar/proguard.txt
-    : > $work/aar/R.txt
-    mkdir -p $work/aar/META-INF/com/android/build/gradle
-    printf 'aarFormatVersion=1.0\naarMetadataVersion=1.0\nminCompileSdk=1\n' \
-      > $work/aar/META-INF/com/android/build/gradle/aar-metadata.properties
-    cp ${src}/LICENSE $work/aar/LICENSE
-    cp ${src}/ThirdPartyNotices.txt $work/aar/ThirdPartyNotices.txt
-    python3 -B - $work/aar $out/${folder}/${artifact}-${version}.aar <<'EOF'
-    import os, sys, zipfile
-    root, target = sys.argv[1], sys.argv[2]
-    names = sorted(os.path.relpath(os.path.join(d, f), root) for d, _, fs in os.walk(root) for f in fs)
-    with zipfile.ZipFile(target, "w") as z:
-        for name in names:
-            info = zipfile.ZipInfo(name, (1980, 1, 1, 0, 0, 0))
-            info.external_attr = 0o644 << 16
-            stored = name.endswith(".so")
-            info.compress_type = zipfile.ZIP_STORED if stored else zipfile.ZIP_DEFLATED
-            with open(os.path.join(root, name), "rb") as f:
-                z.writestr(info, f.read())
-    EOF
+    bash ${script} aar --source ${src} --java ${java} --out $out/${folder}/${artifact}-${version}.aar \
+      ${lib.concatMapStringsSep " " (abi: "${natives.${abi}}") abis}
     cat > $out/${folder}/${artifact}-${version}.pom <<'EOF'
     <?xml version="1.0" encoding="UTF-8"?>
     <project xmlns="http://maven.apache.org/POM/4.0.0">

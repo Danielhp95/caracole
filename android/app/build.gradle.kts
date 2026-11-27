@@ -17,6 +17,10 @@ val commit: String? = try {
     null
 }
 
+/** Whether :ml is in the build (settings.gradle.kts includes it in flake.nix's ml shell alone): the debug build's chord
+ * models and Chords bench come with it. */
+val chordsOnPhone = findProject(":ml") != null
+
 android {
     namespace = "io.github.danielhp95.caracole"
     // flake.nix's platformVersion and buildToolsVersion: the SDK the shell provides.
@@ -40,6 +44,8 @@ android {
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
         // The port the phone's own server asks for first (Caracole.PORT).
         buildConfigField("int", "SERVER_PORT", "8738")
+        // Settings' Chords bench row: a debug build with :ml alone (below).
+        buildConfigField("boolean", "CHORDS_BENCH", "false")
     }
 
     // The release key, from outside the repo: ~/.gradle/gradle.properties (or -P / ORG_GRADLE_PROJECT_*) names the
@@ -64,6 +70,7 @@ android {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug" + (commit?.let { "+$it" } ?: "")
             buildConfigField("int", "SERVER_PORT", "8739")
+            buildConfigField("boolean", "CHORDS_BENCH", chordsOnPhone.toString())
         }
         release {
             signingConfig = releaseSigning
@@ -100,7 +107,20 @@ android {
     // The conformance vectors, as the device tests' assets (conformance/…): CorpusOnDeviceTest reads them through
     // the instrumentation's AssetManager.
     sourceSets.getByName("androidTest").assets.srcDir(layout.buildDirectory.dir("generated/conformanceAssets"))
-    // The Chords bench's committed clips (src/debug's ChordsBenchActivity): the computer's features and model outputs
+    // The chord models in the debug build, where :ml is (settings.gradle.kts: the ml shell's source-built ONNX Runtime):
+    // src/debugMl's PhoneChords, the Chords bench and its manifest, src/testDebugMl's and src/androidTestMl's tests of
+    // them.
+    // Elsewhere the debug build has the release's PhoneChords (none) and no bench, so the other shells build and test
+    // the app with no ONNX Runtime ([chordsOnPhone], BuildConfig.CHORDS_BENCH).
+    if (chordsOnPhone) {
+        sourceSets.getByName("debug").java.srcDir("src/debugMl/kotlin")
+        sourceSets.getByName("debug").manifest.srcFile("src/debugMl/AndroidManifest.xml")
+        sourceSets.getByName("androidTest").java.srcDir("src/androidTestMl/kotlin")
+        sourceSets.getByName("testDebug").java.srcDir("src/testDebugMl/kotlin")
+    } else {
+        sourceSets.getByName("debug").java.srcDir("src/release/kotlin")
+    }
+    // The Chords bench's committed clips (src/debugMl's ChordsBenchActivity): the computer's features and model outputs
     // of them, autochords/models.jsonl and frontend.jsonl (2.7 MB), the debug build's assets alone. No model file:
     // the owner's folder holds those (android/README.md, "The Chords bench").
     sourceSets.getByName("debug").assets.srcDir(layout.buildDirectory.dir("generated/benchAssets"))
@@ -154,9 +174,9 @@ dependencies {
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.work:work-runtime-ktx:2.10.5")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
-    // The chord and beat models on ONNX Runtime, the debug build's alone until the owner chooses the runtime that
-    // ships (the design's stage S): no release carries it.
-    debugImplementation(project(":ml"))
+    // The chord and beat models on ONNX Runtime, the debug build's alone until the release takes them (the design's
+    // stage S, E33): no release carries it, and a debug build only where :ml is (the ml shell).
+    if (chordsOnPhone) debugImplementation(project(":ml"))
     // Its hearing's types (Heard, Checkpoints), which the Chords bench's whole-pipeline mode reads: :ml's own, the
     // debug build's alone too.
     debugImplementation(project(":autochords"))

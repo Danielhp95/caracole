@@ -156,7 +156,7 @@ object Caracole {
                 settings = SavedAddress(Settings(context)), secret = secret, csrf = csrf,
                 transport = { _ -> transport() }, version = BuildConfig.VERSION_NAME, alerts = alerts,
                 searchesLacuerda = searchesLacuerdaForTests, catalogues = ::catalogues, metered = { metered(context) },
-                // The debug build's `:ml` (src/debug's PhoneChords), none in the release's; the models' source is
+                // The debug build's `:ml` (src/debugMl's PhoneChords), none in the release's; the models' source is
                 // PhoneDeps' own default, this build's pins (ModelFiles.carried: the release carries none).
                 chords = PhoneChords.of(context, state),
                 examiner = { file, format -> (examinerForTests ?: PhoneDeps.NO_EXAMINER).examine(file, format) },

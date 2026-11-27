@@ -122,7 +122,7 @@ class SettingsActivity : Activity() {
         }
 
         findViewById<Button>(R.id.backups).setOnClickListener { startActivity(Intent(this, BackupsActivity::class.java)) }
-        if (BuildConfig.DEBUG) addChordsBench()
+        if (BuildConfig.CHORDS_BENCH) addChordsBench()
         findViewById<Button>(R.id.catalogues_download).setOnClickListener { downloadCatalogues(meteredOk = false) }
         // The first start's Download (MainActivity), which queued the job and opened this screen: asked here, on top.
         if (savedInstanceState == null && intent.getBooleanExtra(ASK_TO_NOTIFY, false)) askToNotify()
@@ -358,8 +358,9 @@ class SettingsActivity : Activity() {
         resetTextSize.isEnabled = zoom != TextZoom.DEFAULT
     }
 
-    /** The debug build's Chords bench (src/debug's ChordsBenchActivity, the chords-on-the-phone design's §9.1), a
-     * button after Backups' row; a release has neither (BuildConfig.DEBUG is false there, and R8 drops this). */
+    /** The debug build's Chords bench (src/debugMl's ChordsBenchActivity, the chords-on-the-phone design's §9.1), a
+     * button after Backups' row: a debug build with :ml alone (BuildConfig.CHORDS_BENCH, false in a release and in a
+     * debug build of another shell, and R8 drops this). */
     private fun addChordsBench() {
         val backups = findViewById<Button>(R.id.backups)
         val rows = backups.parent as android.view.ViewGroup

@@ -751,26 +751,35 @@ A backup, its daily one and a restore are requests like a lookup, one at a time 
 
 The chord model (BTC) and the beat model (beat_this) run on the phone in `:ml`, on ONNX Runtime 1.27.1 built from its
 source (`OrtModels`; the owner's Gate R of 2026-11-27, "Build 1.27.1"). It is linked into the debug build alone
-(`debugImplementation`) until the release takes it (stage S). `../nix/onnxruntime-android.nix` builds it with no
-network, for arm64-v8a and x86_64, and makes an AAR of the two, in a Maven folder of its own that `settings.gradle.kts`
-reads in Maven Central's place (`$CARACOLE_ONNXRUNTIME`, every shell of `flake.nix`):
+(`debugImplementation`) until the release takes it (stage S), and only in the `./android#ml` shell:
+`../nix/onnxruntime-android.nix` builds it with no network, for arm64-v8a and x86_64, and makes an AAR of the two in a
+Maven folder of its own, which that shell names as `$CARACOLE_ONNXRUNTIME`. Without the variable `settings.gradle.kts`
+leaves `:ml` out, and the debug build has no chord models and no Chords bench (`src/debugMl`, `src/testDebugMl` and
+`src/androidTestMl` come with `:ml`), so the other shells build and test the rest with no ONNX Runtime.
 
-- the source is nixpkgs' pin of the tag v1.27.1 (`sha256-i2u/JnfbJ/srsZY3ATb2YsBBXEhTGhatsr3+9eHVV3M=`), which
-  cache.nixos.org serves: github.com/microsoft/onnxruntime answers 404; each CMake dependency is the zip `deps.txt`
-  names, pinned by its SHA-256 in a local mirror (CMake checks `deps.txt`'s SHA-1 too);
-- `scripts/build-onnxruntime.sh` builds one ABI with the NDK r28c: the CPU execution provider alone, the kernels of the
-  graphs' ops alone (`ml/onnxruntime-ops.config`, the graphs and their optimized forms), telemetry off (1.27.1's is
-  opt-in, never set, and it has no Android telemetry at all), every path of the build mapped, no build id,
-  `SOURCE_DATE_EPOCH` fixed, so two folders give the same bytes; ORT's Java path runs Gradle, which fetches, so javac
-  makes the JNI headers and the AAR's classes instead;
-- built once a machine (about ten minutes an ABI on 8 cores: `nix build ./android#onnxruntime-android --cores 8`), then the
-  store's; every shell needs it, as `:ml`'s classes compile against it in `gradle test`.
+- The source is nixpkgs' pin of the tag v1.27.1 (`sha256-i2u/JnfbJ/srsZY3ATb2YsBBXEhTGhatsr3+9eHVV3M=`), which
+  cache.nixos.org serves: github.com/microsoft/onnxruntime answers 404. Each CMake dependency is the zip `deps.txt`
+  names, pinned by its SHA-256 in a local mirror (CMake checks `deps.txt`'s SHA-1 too).
+- `scripts/build-onnxruntime.sh` compiles the Java bindings once (javac: ORT's own Java path runs Gradle, which
+  fetches), builds each ABI with the NDK r28c, and zips the AAR. Each ABI gets the CPU execution provider alone, the
+  kernels of the graphs' ops alone, and telemetry off (1.27.1's is opt-in, never set, and it has no Android telemetry
+  at all). Every path of the build is mapped, there is no build id, one date (`EPOCH`) and every zip's entries sorted,
+  so two folders give the same bytes. It runs at most 8 compile jobs, whatever Nix's `--cores` says.
+- The ops are `ml/onnxruntime-ops.config`, made by `scripts/onnxruntime-ops.sh` from `nix build .#chord-models`'
+  graphs, each as it is and as ONNX Runtime 1.27.1 optimizes it on x86_64 and on aarch64. The aarch64 run is
+  cache.nixos.org's build of it under qemu-user (`./android#onnxruntime-ops-aarch64`), so arm64's own fusions are in
+  the list. `onnxruntime-ops.sh --check` holds the committed list to the graphs. An op left out would fail loudly at
+  session load, never silently; the owner's bench on the phone is the last check.
+- It is built once a machine, about ten minutes an ABI, then kept in the store:
+  `nix build ./android#onnxruntime-android` builds it alone. Entering the `ml` shell roots it against Nix's garbage
+  collector (`$XDG_STATE_HOME/caracole/gcroots/onnxruntime-android`); `nix build ./android#onnxruntime-android -o PATH`
+  roots it at PATH instead.
 
-Its AAR declares no provider and no permission, and `ApkScanTest` scans it in every `gradle test` for what made Maven's
-AAR phone home (`mobile.events.data.microsoft.com`, `ai.onnxruntime.TelemetryInitializer`,
-`ai/onnxruntime/telemetry/`), and the release and debug APKs with `gradle :app:apkScan`. `OrtModels` still sets
-`ORT_DISABLE_TELEMETRY=1` before the first environment and turns its events off, and `NoTelemetryTest` checks that the
-installed app declares no provider of the runtime's.
+Its AAR declares no provider and no permission. `ApkScanTest` scans it in the `ml` shell's `gradle test` for what made
+Maven's AAR phone home: `mobile.events.data.microsoft.com`, `ai.onnxruntime.TelemetryInitializer` and
+`ai/onnxruntime/telemetry/`. Elsewhere that test is skipped, saying so. `gradle :app:apkScan` scans the release and
+debug APKs the same way. `OrtModels` still sets `ORT_DISABLE_TELEMETRY=1` before the first environment and turns its
+events off, and `NoTelemetryTest` checks that the installed app declares no provider of the runtime's.
 
 The models are the computer's own, `nix build .#chord-models` (`CARACOLE_CHORD_MODELS` in the `./android#ml` shell);
 the APK carries none of them. `ModelParityTest` runs them on the emulator over the computer's records
@@ -779,7 +788,9 @@ frame for frame, beat_this's fp32 logits, and the fp16-stored file's beats and d
 
     android/scripts/device-test.sh --ml --tcpdump /tmp/ml.pcap NoTelemetryTest
 
-`--ml` pushes the four files into the emulator's `/data/local/tmp/caracole-models` (again only when one changed) and
+`--ml`, `--models`, `--data` and the corpus's `autochords` area build in the `ml` shell (the debug build with `:ml`);
+every other run builds in the default one. `--ml` pushes the four files into the emulator's
+`/data/local/tmp/caracole-models` (again only when one changed) and
 runs `ModelParityTest` from `:ml`'s own test APK, which reports each model's load, each clip's time and its peak RSS,
 `DecoderTest` and `PipelineTest` (below), then the app's `ChordsBenchTest` (the Chords bench, below) over the same
 files.
@@ -810,14 +821,16 @@ release is a check to run again:
 
     android/scripts/release-check.sh
 
-It builds the release (unsigned without the release key: the same packaged output) and the debug build, reads each
+It builds the release (unsigned without the release key: the same packaged output) and the debug build in the `ml`
+shell (the debug build with `:ml`), reads each
 APK by the name its `output-metadata.json` gives, and checks that the release's runtime classpath names no
 `onnxruntime` and no `:ml`, and that its APK holds no `libonnxruntime*`, no class under `ai/onnxruntime/` or of `:ml`
 (dexdump), no `ChordsBench` or `BenchService` in its dex, nothing under `caracole/autochords/` or
 `assets/autochords/`, no `.onnx` or `.pt` file, and nothing of the runtime's telemetry or the bench in its manifest
 (aapt2). Every probe has a control that shows it can see what it looks for: the debug build's classpath and APK
 (which hold all of it but the provider, and none of the weights' files), the names of the files `.#chord-models`
-makes, and the runtime's own AAR, whose manifest declares the provider.
+makes, the runtime's own AAR, whose manifest declares no provider, and `gradle :app:apkScan`, whose own control finds
+each string it looks for where it would be.
 
 ## Chords from audio: the decoder
 
@@ -932,7 +945,7 @@ are kept.
 ## Chords from audio: a sheet from a file (debug build)
 
 In the debug build the phone's audio job (`caracole audio --upload=ID --song=…`) hears with the real `:ml` process
-(src/debug's `PhoneChords`; the release has none, and says auto-chords isn't on the phone). The models are those
+(src/debugMl's `PhoneChords`, a debug build of the `ml` shell; the release has none, and says auto-chords isn't on the phone). The models are those
 Settings' download installs in `files/state/models/c1/`. A hearing refuses under 15 % of battery when not charging,
 holds a partial wake lock while it runs, goes one at a time (a job's and the Chords bench's never together), and
 removes its checkpoints once the sheet's chords are heard; a hearing that failed keeps them for Try again, and the app

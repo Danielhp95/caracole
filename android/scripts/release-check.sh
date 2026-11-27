@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# What the debug build carries for chords on the phone (:ml, ONNX Runtime, the models' graph and pins, the Chords
-# bench and its clips) and the release doesn't, until the owner chooses what ships (the chords-on-the-phone design's
-# stage S):
+# What the debug build carries for chords on the phone (:ml, ONNX Runtime 1.27.1 built from its source, the models'
+# graph and pins, the Chords bench and its clips) and the release doesn't, until the release takes them (the
+# chords-on-the-phone design's stage S, E33):
 #
 #   android/scripts/release-check.sh
 #
 # It builds assembleRelease (unsigned without the release key, android/README.md's "Release": the same packaged
-# output, its signature aside) and assembleDebug, each APK read by the name its output-metadata.json gives (never a
-# stale one beside it), then checks the release:
+# output, its signature aside) and assembleDebug in flake.nix's ml shell, the one with :ml (its CARACOLE_ONNXRUNTIME:
+# the runtime's one-off build a machine), each APK read by the name its output-metadata.json gives (never a stale one
+# beside it), then checks the release:
 #
 # - its runtime classpath names no onnxruntime and no project :ml (and names project :core: the tree was read);
 # - its APK holds no lib/*/libonnxruntime*, no class under ai/onnxruntime/ or of :ml (io/github/danielhp95/caracole/ml/)
@@ -20,14 +21,15 @@
 # and the controls, so that no probe passes for nothing:
 #
 # - the debug classpath names onnxruntime;
-# - the debug APK holds every one of them but the provider (which :ml's manifest removes from it too) and the model
+# - the debug APK holds every one of them but the provider (the runtime built from source declares none) and the model
 #   files: it carries BTC's graph (an .onnx) and never the weights' files, btc_model_large_voca.pt and beat_this's,
 #   which no APK holds (the owner's folder does: android/README.md, "The Chords bench");
 # - the model files' names, those `nix build .#chord-models` makes ($CARACOLE_CHORD_MODELS, else the ./android#ml
 #   shell's), are each one the model-file probe matches;
-# - the runtime's AAR (ONNX Runtime built from its source, $CARACOLE_ONNXRUNTIME) declares no provider at all;
-# - and ApkScanTest (`gradle :app:apkScan`) finds none of what made Maven's AAR phone home in either APK, nor in the
-#   runtime's AAR, its scan's own control finding each where it would be.
+# - the runtime's AAR (ONNX Runtime built from its source, the ml shell's $CARACOLE_ONNXRUNTIME) declares no provider;
+# - and ApkScanTest (`gradle :app:apkScan`, in the ml shell) finds none of what made Maven's AAR phone home
+#   (mobile.events.data.microsoft.com, ai.onnxruntime.TelemetryInitializer, its ai/onnxruntime/telemetry/ client) in
+#   either APK, nor in the runtime's AAR, its own control finding each where it would be.
 #
 # - and native-check.sh on both APKs: the debug one's libcaracole_soxr.so (both ABIs) stored aligned, stripped and
 #   naming no path of the build; the release's libcaracole_*, none today, which passes saying so.
@@ -40,7 +42,7 @@ android="$(dirname "$here")"
 repo="$(dirname "$android")"
 
 cd "$repo"
-nix develop ./android -c gradle -p android :app:assembleRelease :app:assembleDebug --console=plain -q
+nix develop ./android#ml -c gradle -p android :app:assembleRelease :app:assembleDebug --console=plain -q
 # The APK of a variant, by the name the build wrote it under (output-metadata.json's outputFile).
 apk_of() {
     local out="$android/app/build/outputs/apk/$1" name
@@ -51,7 +53,7 @@ apk_of() {
 release="$(apk_of release)"
 debug="$(apk_of debug)"
 classpath_of() {
-    nix develop ./android -c gradle -p android :app:dependencies --configuration "$1RuntimeClasspath" \
+    nix develop ./android#ml -c gradle -p android :app:dependencies --configuration "$1RuntimeClasspath" \
         --console=plain -q
 }
 classpath="$(classpath_of release)"
@@ -162,14 +164,14 @@ check "the control: the weights' probe matches each but btc-graph.onnx" \
     "$(yes_if '[ "$(grep -v -E "$weights_file" <<<"$names" || true)" = btc-graph.onnx ]')"
 
 # The runtime's AAR, built from its source, declares no provider (Maven's declared ai.onnxruntime.TelemetryInitializer).
-ort_maven="$(nix develop ./android -c printenv CARACOLE_ONNXRUNTIME)"
+ort_maven="$(nix develop ./android#ml -c printenv CARACOLE_ONNXRUNTIME)"
 aar="$(find "$ort_maven" -name '*.aar' | head -1)"
 providers_declared=1
 [ -n "$aar" ] && providers_declared="$(unzip -p "$aar" AndroidManifest.xml | grep -c '<provider' || true)"
 echo "ONNX Runtime's AAR: ${aar:-none in $ort_maven}"
 check "the runtime's AAR (from source) declares no provider" "$(yes_if '[ -n "$aar" ] && [ "$providers_declared" = 0 ]')"
 echo "ApkScanTest (gradle :app:apkScan):"
-if nix develop ./android -c gradle -p android :app:apkScan --console=plain -q; then scanned=1; else scanned=0; fi
+if nix develop ./android#ml -c gradle -p android :app:apkScan --console=plain -q; then scanned=1; else scanned=0; fi
 check "ApkScanTest: no telemetry host, provider or client in the APKs or the runtime's AAR" "$scanned"
 
 # Our own native libraries (native-check.sh): the debug APK's libcaracole_soxr.so, both ABIs, stored aligned,
