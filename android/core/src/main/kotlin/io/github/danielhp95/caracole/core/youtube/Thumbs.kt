@@ -19,7 +19,7 @@ import java.time.Instant
 /**
  * youtube_search.py's thumbnail on the phone: a video's `hqdefault.jpg` from YouTube's image host (provider `ytimg`,
  * youtube.json's `thumb` member: its address, its folder, its limits), asked once through the caller's PoliteClient
- * ([fetch]: robots.txt's rules, `/sb/` closed, the cache forever, the caller's budget and events), kept only when its
+ * ([keep], then [note] in a write: robots.txt's rules, `/sb/` closed, the cache forever, the caller's budget and events), kept only when its
  * bytes are a JPEG ([checkedJpeg]) as `<cacheRoot>/youtube-thumbs/<id>.jpg`, never in the library, and read back
  * checked again ([get], [read]) for `GET /youtube/thumb/<id>.jpg`. vectors/youtube/video_cmd.jsonl's `checked_jpeg`
  * records hold [checkedJpeg] to Python's answers (YouTubeReplay).
@@ -46,32 +46,35 @@ class Thumbs(private val cacheRoot: File) {
     }
 
     /**
-     * fetch_thumbnail: [videoId]'s thumbnail, once (one request through [client]; none once it is kept), kept when its
-     * bytes are a JPEG, and the record of [key] (a pasted video's, a query's) said to have it when its video is this
-     * one; whether it is kept now. A 404 or bytes that are no JPEG are none; a block or an error propagates.
+     * fetch_thumbnail's request: [videoId]'s thumbnail, once (one request through [client]; none once it is kept),
+     * kept when its bytes are a JPEG; whether it is kept now. A 404 or bytes that are no JPEG are none; a block or an
+     * error propagates. It touches no database: the client logs its own events; [note] records what came of it.
      */
-    fun fetch(db: Db, client: Client, videoId: String, key: String, now: Instant): Boolean {
+    fun keep(client: Client, videoId: String): Boolean {
         if (PyRe.fullmatch(YouTubeData.read().videoId, videoId) == null) return false
         val path = path(videoId)
-        if (!path.isFile) {
-            val resp = client.get(YouTubeData.fillOnce(text("url"), ID, videoId), accept = setOf(200, 404))
-            val image = if (resp.status == 200) checkedJpeg(resp.content) else null
-            image ?: return false
-            path.parentFile.mkdirs()
-            val part = Files.createTempFile(path.parentFile.toPath(), text("part"), "-" + path.name)  // the phone's cache
-            try {
-                Files.write(part, image)
-                Files.move(part, path.toPath(), StandardCopyOption.ATOMIC_MOVE)
-            } finally {
-                Files.deleteIfExists(part)
-            }
+        if (path.isFile) return true
+        val resp = client.get(YouTubeData.fillOnce(text("url"), ID, videoId), accept = setOf(200, 404))
+        val image = (if (resp.status == 200) checkedJpeg(resp.content) else null) ?: return false
+        path.parentFile.mkdirs()
+        val part = Files.createTempFile(path.parentFile.toPath(), text("part"), "-" + path.name)  // the phone's cache
+        try {
+            Files.write(part, image)
+            Files.move(part, path.toPath(), StandardCopyOption.ATOMIC_MOVE)
+        } finally {
+            Files.deleteIfExists(part)
         }
+        return true
+    }
+
+    /** fetch_thumbnail's record: the record of [key] (a pasted video's, a query's) said to have [videoId]'s thumbnail
+     * when its video is this one, once [keep] kept it. */
+    fun note(db: Db, videoId: String, key: String, now: Instant) {
         val said = SearchGate.searched(db, key, now)
         val video = said?.get("video") as? JsonObject
         if (said != null && video != null && video["id"] == JsonPrimitive(videoId)) {
             db.kvSetJson(SearchGate.kvKey(key), JsonObject(LinkedHashMap(said).apply { put("thumb", JsonPrimitive(true)) }))
         }
-        return true
     }
 
     companion object {

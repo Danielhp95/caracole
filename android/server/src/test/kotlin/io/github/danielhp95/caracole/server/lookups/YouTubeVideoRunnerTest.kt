@@ -46,6 +46,7 @@ import java.util.Base64
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /** `caracole youtube --video` on the phone: the computer's command replayed (vectors/youtube/video_cmd.jsonl, area
@@ -115,9 +116,15 @@ class YouTubeVideoRunnerTest {
         val database = TestDb.fresh(dir).also { opened += it }
         val state = File(dir, "state").apply { mkdirs() }
         val runs = ArrayList<List<String>>()
+        val log = ArrayList<String>()  // the pauses and the runs, in order
+        var answer: () -> Ran = {
+            Ran(0, """{"_type": "video", "id": "$id", "title": "Somos vikingos veganos", """ +
+                """"channel": "kintanedu", "duration": 222}""" + "\n", "")
+        }
+        var refused = 0  // the gate's refusals its log says, after the run
         val transport = FakeTransport(mapOf("GET https://i.ytimg.com/vi/$id/hqdefault.jpg" to
                                                 HttpAnswer(200, listOf("content-type" to "image/jpeg"), jpeg)))
-        val pacing = Pacing(sleep = {}, draws = { low, _ -> low }, wallSeconds = { now.epochSecond.toDouble() },
+        val pacing = Pacing(sleep = { log += "slept $it" }, draws = { low, _ -> low }, wallSeconds = { now.epochSecond.toDouble() },
                             monotonic = { 0.0 }, clock = { now })
         val parts = PhoneParts(database, LibraryStore(File(dir, "library")), state, { database.read(config) },
                                JobQueue(scope), MirrorPageData(null),
@@ -127,25 +134,29 @@ class YouTubeVideoRunnerTest {
             override fun ready(): String? = null
             override fun process(): YtDlpProcess = object : YtDlpProcess {
                 override fun run(argv: List<String>, timeoutS: Double, onLine: (String) -> Unit, waiting: () -> Unit): Ran {
+                    val ran = answer()
                     runs += argv
-                    return Ran(0, """{"_type": "video", "id": "$id", "title": "Somos vikingos veganos", """ +
-                        """"channel": "kintanedu", "duration": 222}""" + "\n", "")
+                    log += "ran"
+                    return ran
                 }
             }
             override fun gate(): YtDlpGate = object : YtDlpGate {
                 override val proxyArg = "http://test:secret@127.0.0.1:9"
-                override fun log(): Map<String, HostGate.HostUse> = emptyMap()
+                override fun log(): Map<String, HostGate.HostUse> =
+                    if (runs.isEmpty() || refused == 0) emptyMap() else mapOf("ads.example" to HostGate.HostUse(refused = refused))
                 override fun close() {}
             }
             override val qjs = File("/qjs")
             override val cacheDir = File(state, "cache")
         }
 
-        fun read(link: String): List<String> {
+        fun read(link: String, why: String? = null, engine: YouTubeEngine? = this.engine): List<String> {
             val lines = Lines()
-            runBlocking { YouTubeVideoRunner(parts, engine, routeWhy = { null }).run(listOf("youtube", "--video=$link"), lines) }
+            runBlocking { YouTubeVideoRunner(parts, engine, routeWhy = { why }).run(listOf("youtube", "--video=$link"), lines) }
             return lines.said
         }
+
+        fun kv(key: String): String? = database.read { it.kvGet(key) }
     }
 
     /** The gate's 30 days: asked again by any link to it, a read video asks neither yt-dlp nor the image host. */
@@ -166,7 +177,7 @@ class YouTubeVideoRunnerTest {
         assertNotNull(Robots.disallows("https://i.ytimg.com/sb/$id/storyboard3_L0/default.jpg"))
         val w = World()
         w.database.writeBlocking { db ->
-            val client = w.parts.clients().named(db, Thumbs.PROVIDER, "youtube-search:video:x")
+            val client = w.parts.clients().named(Clients.Writes.of(db), Thumbs.PROVIDER, "youtube-search:video:x")
             assertFailsWith<RobotsClosed> { client.get("https://i.ytimg.com/sb/$id/storyboard3_L0/default.jpg") }
         }
         assertEquals(emptyList(), w.transport.said)
@@ -183,6 +194,48 @@ class YouTubeVideoRunnerTest {
         assertEquals(listOf("Not searched: YouTube is off. Try again later."), w.read(id))
         assertEquals(0, w.runs.size)
         assertEquals(emptyList(), w.transport.said)
+    }
+
+    /** The pause after the last yt-dlp run this side sent (kv `http:last_request:youtube`), before the run. */
+    @Test fun theRunWaitsThePauseAfterTheLastRunFirst() {
+        val w = World()
+        w.database.writeBlocking { it.kvSet("http:last_request:youtube", (now.epochSecond - 1).toString() + ".000") }
+        w.read(id)
+        val low = PhoneConfig.DEFAULTS.provider("youtube").delay.first
+        val slept = w.log.takeWhile { it != "ran" }.sumOf { it.removePrefix("slept ").toDouble() }
+        assertEquals(low - 1, slept, 1e-9)
+        assertTrue("ran" in w.log)
+    }
+
+    /** The phone's own reason it makes no sheet from a video (Phone.youtubeProblem): not read, in the gate's words. */
+    @Test fun thePhonesOwnReasonIsARefusalWithNothingAsked() {
+        val w = World()
+        assertEquals(listOf("Not searched: the chord models aren't downloaded yet. Try again later."),
+                     w.read(id, why = "the chord models aren't downloaded yet"))
+        assertEquals(0, w.runs.size)
+        val e = assertFailsWith<CommandExit> { w.read(id, engine = null) }  // a caller that let no yt-dlp through
+        assertEquals(1, e.code)
+    }
+
+    /** No yt-dlp started (the bench's run going), yt-dlp out of date, the gate refusing a host: each said in its
+     * words, nothing counted against the video or the hour (no failure, no error of YouTube's), no record. */
+    @Test fun thePhonesOwnErrorsAreCountedAgainstNothing() {
+        val cases = listOf<Pair<(World) -> Unit, String>>(
+            { w: World -> w.answer = { throw YtDlpProcess.NotStarted("another run is going in the app") } } to
+                "Not searched: yt-dlp didn't start (another run is going in the app); try again in a moment.",
+            { w: World -> w.answer = { Ran(1, "", "ERROR: [youtube] $id: Unable to extract yt initial data\n") } } to
+                "Not searched: [youtube] $id: Unable to extract yt initial data.",
+            { w: World -> w.refused = 1; w.answer = { Ran(0, "{}\n", "") } } to "Not searched: ",
+        )
+        for ((set, said) in cases) {
+            val w = World()
+            set(w)
+            val lines = w.read(id)
+            assertTrue(lines.single().startsWith(said), "$lines")
+            assertNull(w.kv("youtube-search:failed"))
+            assertNull(w.kv("youtube-search:video:$id"))
+            assertTrue(w.kv("provider:youtube")?.contains("\"last_error\": null") ?: true, "${w.kv("provider:youtube")}")
+        }
     }
 
     /** A link that names no video exits 2 in the computer's words, asking nothing. */
